@@ -1,0 +1,23 @@
+{"client":"ui-good","i":1,"pid":83139,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"check_validity\"}","tag":""}
+client=ui-good exit=2
+{"client":"ui-other-id","i":1,"pid":83140,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"check_validity\"}","tag":""}
+client=ui-other-id exit=2
+{"client":"ui-helper-id","i":1,"pid":83141,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"check_validity\"}","tag":""}
+client=ui-helper-id exit=2
+{"client":"ui-other-team","i":1,"pid":83142,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"check_validity\"}","tag":""}
+client=ui-other-team exit=2
+{"client":"ui-noruntime","i":1,"pid":83143,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"check_validity\"}","tag":""}
+client=ui-noruntime exit=2
+{"client":"ui-gta","i":1,"pid":83144,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"check_validity\"}","tag":""}
+client=ui-gta exit=2
+{"client":"ui-adhoc","i":1,"pid":83145,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"check_validity\"}","tag":""}
+client=ui-adhoc exit=2
+{"client":"ui-linker","i":1,"pid":83146,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"check_validity\"}","tag":""}
+client=ui-linker exit=2
+client=ui-unsigned exit=137
+{"accept":false,"msg_index":1,"verdict_stage":"check_validity"}
+client=node exit=0
+{"accept":false,"msg_index":1
+client=python3 exit=0
+{"accept":false,"msg_index":1,"verdict_stage":"check_validity"}
+client=nc exit=0

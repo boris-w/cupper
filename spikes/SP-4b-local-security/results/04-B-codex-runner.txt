@@ -1,0 +1,64 @@
+## unsandboxed
+tmpdir python3 CONNECTED
+tmpdir nc CONNECTED
+workspace python3 CONNECTED
+workspace nc CONNECTED
+cache python3 CONNECTED
+cache nc CONNECTED
+server saw: 6 connection(s)
+## codex-read-only
+python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+python3: error: couldn't create cache file '/tmp/xcrun_db-vKtAyV1B' (errno=Operation not permitted)
+2026-10-16 15:53:59.069 xcodebuild[59205:128896186]  DVTFilePathFSEvents: Failed to start fs event stream.
+2026-10-16 15:53:59.254 xcodebuild[59205:128896185] [MT] DVTDeveloperPaths: Failed to get length of DARWIN_USER_CACHE_DIR from confstr(3), error = Error Domain=NSPOSIXErrorDomain Code=5 "Input/output error". Using NSCachesDirectory instead.
+python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+python3: error: couldn't create cache file '/tmp/xcrun_db-zPUSbXBA' (errno=Operation not permitted)
+2026-10-16 15:53:59.767 xcodebuild[59272:128896315]  DVTFilePathFSEvents: Failed to start fs event stream.
+2026-10-16 15:53:59.919 xcodebuild[59272:128896312] [MT] DVTDeveloperPaths: Failed to get length of DARWIN_USER_CACHE_DIR from confstr(3), error = Error Domain=NSPOSIXErrorDomain Code=5 "Input/output error". Using NSCachesDirectory instead.
+tmpdir python3 FAILED: [Errno 1] Operation not permitted
+tmpdir nc FAILED (exit 1)
+python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+python3: error: couldn't create cache file '/tmp/xcrun_db-oE4iQVlo' (errno=Operation not permitted)
+2026-10-16 15:54:00.938 xcodebuild[59430:128896822]  DVTFilePathFSEvents: Failed to start fs event stream.
+2026-10-16 15:54:01.065 xcodebuild[59430:128896821] [MT] DVTDeveloperPaths: Failed to get length of DARWIN_USER_CACHE_DIR from confstr(3), error = Error Domain=NSPOSIXErrorDomain Code=5 "Input/output error". Using NSCachesDirectory instead.
+python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+python3: error: couldn't create cache file '/tmp/xcrun_db-MTRXlAbX' (errno=Operation not permitted)
+2026-10-16 15:54:01.532 xcodebuild[59465:128896947]  DVTFilePathFSEvents: Failed to start fs event stream.
+2026-10-16 15:54:01.685 xcodebuild[59465:128896945] [MT] DVTDeveloperPaths: Failed to get length of DARWIN_USER_CACHE_DIR from confstr(3), error = Error Domain=NSPOSIXErrorDomain Code=5 "Input/output error". Using NSCachesDirectory instead.
+workspace python3 FAILED: [Errno 1] Operation not permitted
+workspace nc FAILED (exit 1)
+python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+python3: error: couldn't create cache file '/tmp/xcrun_db-VQupfify' (errno=Operation not permitted)
+2026-10-16 15:54:02.897 xcodebuild[59584:128897468]  DVTFilePathFSEvents: Failed to start fs event stream.
+2026-10-16 15:54:03.054 xcodebuild[59584:128897444] [MT] DVTDeveloperPaths: Failed to get length of DARWIN_USER_CACHE_DIR from confstr(3), error = Error Domain=NSPOSIXErrorDomain Code=5 "Input/output error". Using NSCachesDirectory instead.
+python3: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+python3: error: couldn't create cache file '/tmp/xcrun_db-rakCFpwR' (errno=Operation not permitted)
+2026-10-16 15:54:03.639 xcodebuild[59676:128897615]  DVTFilePathFSEvents: Failed to start fs event stream.
+2026-10-16 15:54:03.787 xcodebuild[59676:128897611] [MT] DVTDeveloperPaths: Failed to get length of DARWIN_USER_CACHE_DIR from confstr(3), error = Error Domain=NSPOSIXErrorDomain Code=5 "Input/output error". Using NSCachesDirectory instead.
+cache python3 FAILED: [Errno 1] Operation not permitted
+cache nc FAILED (exit 1)
+server saw: 0 connection(s)
+## codex-workspace-write
+tmpdir python3 FAILED: [Errno 1] Operation not permitted
+tmpdir nc FAILED (exit 1)
+workspace python3 FAILED: [Errno 1] Operation not permitted
+workspace nc FAILED (exit 1)
+cache python3 FAILED: [Errno 1] Operation not permitted
+cache nc FAILED (exit 1)
+server saw: 0 connection(s)
+## codex-workspace-write+network
+tmpdir python3 CONNECTED
+tmpdir nc CONNECTED
+workspace python3 CONNECTED
+workspace nc CONNECTED
+cache python3 CONNECTED
+cache nc CONNECTED
+server saw: 6 connection(s)
+## codex-workspace-write+allow-unix-socket(tmpdir)
+tmpdir python3 CONNECTED
+tmpdir nc CONNECTED
+workspace python3 FAILED: [Errno 1] Operation not permitted
+workspace nc FAILED (exit 1)
+cache python3 FAILED: [Errno 1] Operation not permitted
+cache nc FAILED (exit 1)
+server saw: 2 connection(s)

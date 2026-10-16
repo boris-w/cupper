@@ -1,0 +1,42 @@
+== ui-adhoc
+Identifier=dev.cupper.spike.ui
+CodeDirectory v=20500 size=1492 flags=0x10002(adhoc,runtime) hashes=41+2 location=embedded
+Signature=adhoc
+TeamIdentifier=not set
+== ui-good
+Identifier=dev.cupper.spike.ui
+CodeDirectory v=20500 size=1503 flags=0x10000(runtime) hashes=41+2 location=embedded
+Signature size=4777
+TeamIdentifier=<TEAM_A>
+== ui-gta
+Identifier=dev.cupper.spike.ui
+CodeDirectory v=20500 size=1663 flags=0x10000(runtime) hashes=41+7 location=embedded
+Signature size=4777
+TeamIdentifier=<TEAM_A>
+== ui-helper-id
+Identifier=dev.cupper.spike.ui.helper
+CodeDirectory v=20500 size=1510 flags=0x10000(runtime) hashes=41+2 location=embedded
+Signature size=4777
+TeamIdentifier=<TEAM_A>
+== ui-linker
+Identifier=peer_client-f751d156eeeafb72
+CodeDirectory v=20400 size=5272 flags=0x20002(adhoc,linker-signed) hashes=161+0 location=embedded
+Signature=adhoc
+TeamIdentifier=not set
+== ui-noruntime
+Identifier=dev.cupper.spike.ui
+CodeDirectory v=20400 size=1495 flags=0x0(none) hashes=41+2 location=embedded
+Signature size=4777
+TeamIdentifier=<TEAM_A>
+== ui-other-id
+Identifier=dev.cupper.spike.cli
+CodeDirectory v=20500 size=1504 flags=0x10000(runtime) hashes=41+2 location=embedded
+Signature size=4777
+TeamIdentifier=<TEAM_A>
+== ui-other-team
+Identifier=dev.cupper.spike.ui
+CodeDirectory v=20500 size=1503 flags=0x10000(runtime) hashes=41+2 location=embedded
+Signature size=4779
+TeamIdentifier=<TEAM_B>
+== ui-unsigned
+(no signature)

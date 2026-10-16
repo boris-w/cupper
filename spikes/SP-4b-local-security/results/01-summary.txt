@@ -1,0 +1,144 @@
+
+### A-team
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+ui-good  #1 | 83025 | chk | ACCEPT | accepted |  |  | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=ACCEPT
+ui-other-id  #1 | 83053 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.cli | valid+hard+kill+runtime | conn=reject
+ui-helper-id  #1 | 83072 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui.helper | valid+hard+kill+runtime | conn=reject
+ui-other-team  #1 | 83086 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=reject
+ui-noruntime  #1 | 83090 | chk | reject | flags |  | hardened runtime not enabled | dev.cupper.spike.ui | valid+kill | conn=reject
+ui-gta  #1 | 83094 | chk | reject | flags |  | get-task-allow present | dev.cupper.spike.ui | valid+get-task-allow+hard+kill+runtime | conn=reject
+ui-adhoc  #1 | 83096 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=reject
+ui-linker  #1 | 83097 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | peer_client-f751d156eeeafb72 | valid+kill+linker-signed | conn=reject
+node | 83100 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | node | valid+get-task-allow+kill+runtime | conn=reject
+python3 | 83103 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | com.apple.python3 | valid+kill+platform | conn=reject
+nc | 83105 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | com.apple.nc | valid+hard+kill+runtime+platform | conn=reject
+
+### B-team-kernel
+policy: {"check_flags": "0x800000", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+ui-good  #1 | 83109 | chk | reject | check_validity | -67052 | The operation couldn’t be completed. (OSStatus error -67052.) | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=reject
+ui-other-id  #1 | 83110 | chk | reject | check_validity | -67052 | The operation couldn’t be completed. (OSStatus error -67052.) | dev.cupper.spike.cli | valid+hard+kill+runtime | conn=reject
+ui-helper-id  #1 | 83111 | chk | reject | check_validity | -67052 | The operation couldn’t be completed. (OSStatus error -67052.) | dev.cupper.spike.ui.helper | valid+hard+kill+runtime | conn=reject
+ui-other-team  #1 | 83112 | chk | reject | check_validity | -67052 | The operation couldn’t be completed. (OSStatus error -67052.) | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=reject
+ui-noruntime  #1 | 83113 | chk | reject | check_validity | -67052 | The operation couldn’t be completed. (OSStatus error -67052.) | dev.cupper.spike.ui | valid+kill | conn=reject
+ui-gta  #1 | 83114 | chk | reject | check_validity | -67052 | The operation couldn’t be completed. (OSStatus error -67052.) | dev.cupper.spike.ui | valid+get-task-allow+hard+kill+runtime | conn=reject
+ui-adhoc  #1 | 83115 | chk | reject | check_validity | -67052 | The operation couldn’t be completed. (OSStatus error -67052.) | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=reject
+ui-linker  #1 | 83116 | chk | reject | check_validity | -67052 | The operation couldn’t be completed. (OSStatus error -67052.) | peer_client-f751d156eeeafb72 | valid+kill+linker-signed | conn=reject
+node | 83118 | chk | reject | check_validity | -67052 | The operation couldn’t be completed. (OSStatus error -67052.) | node | valid+get-task-allow+kill+runtime | conn=reject
+python3 | 83119 | chk | reject | check_validity | -67052 | The operation couldn’t be completed. (OSStatus error -67052.) | com.apple.python3 | valid+kill+platform | conn=reject
+nc | 83135 | chk | reject | check_validity | -67052 | The operation couldn’t be completed. (OSStatus error -67052.) | com.apple.nc | valid+hard+kill+runtime+platform | conn=reject
+
+### C-devid
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\" and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists"}
+ui-good  #1 | 83139 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=reject
+ui-other-id  #1 | 83140 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.cli | valid+hard+kill+runtime | conn=reject
+ui-helper-id  #1 | 83141 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui.helper | valid+hard+kill+runtime | conn=reject
+ui-other-team  #1 | 83142 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=reject
+ui-noruntime  #1 | 83143 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+kill | conn=reject
+ui-gta  #1 | 83144 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+get-task-allow+hard+kill+runtime | conn=reject
+ui-adhoc  #1 | 83145 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=reject
+ui-linker  #1 | 83146 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | peer_client-f751d156eeeafb72 | valid+kill+linker-signed | conn=reject
+node | 83148 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | node | valid+get-task-allow+kill+runtime | conn=reject
+python3 | 83150 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | com.apple.python3 | valid+kill+platform | conn=reject
+nc | 83152 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | com.apple.nc | valid+hard+kill+runtime+platform | conn=reject
+
+### D-idonly
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "identifier \"dev.cupper.spike.ui\""}
+ui-good  #1 | 83156 | chk | ACCEPT | accepted |  |  | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=ACCEPT
+ui-other-id  #1 | 83157 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.cli | valid+hard+kill+runtime | conn=reject
+ui-helper-id  #1 | 83158 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui.helper | valid+hard+kill+runtime | conn=reject
+ui-other-team  #1 | 83159 | chk | ACCEPT | accepted |  |  | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=ACCEPT
+ui-noruntime  #1 | 83160 | chk | reject | flags |  | hardened runtime not enabled | dev.cupper.spike.ui | valid+kill | conn=reject
+ui-gta  #1 | 83161 | chk | reject | flags |  | get-task-allow present | dev.cupper.spike.ui | valid+get-task-allow+hard+kill+runtime | conn=reject
+ui-adhoc  #1 | 83162 | chk | ACCEPT | accepted |  |  | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=ACCEPT
+ui-linker  #1 | 83163 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | peer_client-f751d156eeeafb72 | valid+kill+linker-signed | conn=reject
+node | 83165 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | node | valid+get-task-allow+kill+runtime | conn=reject
+python3 | 83166 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | com.apple.python3 | valid+kill+platform | conn=reject
+nc | 83168 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | com.apple.nc | valid+hard+kill+runtime+platform | conn=reject
+
+### E-cdhash-adhoc
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "cdhash H\"f28e0a9155d22e8551380d4bc1812cab5825dedc\""}
+ui-good  #1 | 83172 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=reject
+ui-other-id  #1 | 83173 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.cli | valid+hard+kill+runtime | conn=reject
+ui-helper-id  #1 | 83174 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui.helper | valid+hard+kill+runtime | conn=reject
+ui-other-team  #1 | 83175 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=reject
+ui-noruntime  #1 | 83176 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+kill | conn=reject
+ui-gta  #1 | 83177 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+get-task-allow+hard+kill+runtime | conn=reject
+ui-adhoc  #1 | 83178 | chk | ACCEPT | accepted |  |  | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=ACCEPT
+ui-linker  #1 | 83179 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | peer_client-f751d156eeeafb72 | valid+kill+linker-signed | conn=reject
+node | 83181 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | node | valid+get-task-allow+kill+runtime | conn=reject
+python3 | 83183 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | com.apple.python3 | valid+kill+platform | conn=reject
+nc | 83194 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | com.apple.nc | valid+hard+kill+runtime+platform | conn=reject
+
+### F-reverse
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+ui-good  #1 | 83260 | chk | ACCEPT | accepted |  |  | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=ACCEPT
+
+### G1
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+G1-exited (exiting without waiting) | None | chk | reject | peer_token |  | Socket is not connected (os error 57) |  |  | conn=reject
+
+### G2
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+G2-genuine-after-exec  #1 | 83420 | chk | ACCEPT | accepted |  |  | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=ACCEPT
+
+### G3
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+G3-attacker pre-exec | 83427 | chk | ACCEPT | accepted |  |  | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=ACCEPT
+
+### G4
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+G4-attacker child pre-exec | 83674 | chk | ACCEPT | accepted |  |  | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=ACCEPT
+G4-attacker parent-after-fork #1 | 83673 | - |  |  |  |  |  |  | conn=ACCEPT
+G4-attacker parent-after-fork #2 | 83673 | - |  |  |  |  |  |  | conn=ACCEPT
+
+### G5
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+G5-attacker child pre-exec | 83740 | chk | ACCEPT | accepted |  |  | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=ACCEPT
+G5-attacker parent-after-fork #1 | 83738 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=reject
+G5-attacker parent-after-fork #2 | 83738 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=reject
+
+### G6
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+G6-genuine pre-exec | 83827 | chk | reject | copy_guest | -67065 | host has no guest with the requested attributes |  |  | conn=reject
+G6-child-on-leaked-fd  #1 | 83827 | - |  |  |  |  |  |  | conn=reject
+G6-child-on-leaked-fd  #2 | 83827 | - |  |  |  |  |  |  | conn=reject
+
+### G7
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+G7-genuine pre-exec | 83833 | chk | reject | copy_guest | -67065 | host has no guest with the requested attributes |  |  | conn=reject
+G7-child-on-leaked-fd  #1 | 83833 | chk | reject | check_validity | -67050 | The operation couldn’t be completed. (OSStatus error -67050.) | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=reject
+G7-child-on-leaked-fd  #2 | 83833 | chk | reject | copy_guest | -67065 | host has no guest with the requested attributes |  |  | conn=reject
+
+### G8
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+G8-(version 1)(allow default)(deny process-i | 84034 | chk | ACCEPT | accepted |  |  | dev.cupper.spike.ui | valid+hard+kill+runtime | conn=ACCEPT
+
+### H-timing
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+n=20 copy_guest median=141.5us; copy+check median=840.0us max=3314us
+
+### P1
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+53125f4de70965d5 | 83837 | chk | ACCEPT | accepted |  |  |  |  | conn=ACCEPT
+P1-genuine  #1 | 83837 | chk | ACCEPT | accepted |  |  |  |  | conn=ACCEPT
+P1-genuine  #2 | 83837 | chk | ACCEPT | accepted |  |  |  |  | conn=ACCEPT
+f6715fdf4baecb36 | 83838 | chk | reject | pinned_token_rejected |  |  |  |  | conn=reject
+P1-adhoc  #1 | 83838 | chk | reject | pinned_token_rejected |  |  |  |  | conn=reject
+
+### P2
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+32bc748baa883d4b | 83846 | chk | reject | pinned_token_rejected |  |  |  |  | conn=reject
+P2-attacker pre-exec | 83846 | chk | reject | pinned_token_rejected |  |  |  |  | conn=reject
+
+### P3
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+P3-attacker child pre-exec | 83963 | chk | reject | pinned_token_rejected |  |  |  |  | conn=reject
+P3-attacker parent-after-fork #1 | 83962 | chk | reject | pinned_token_rejected |  |  |  |  | conn=reject
+P3-attacker parent-after-fork #2 | 83962 | chk | reject | pinned_token_rejected |  |  |  |  | conn=reject
+
+### P4
+policy: {"check_flags": "0x0", "forbid_get_task_allow": true, "require_runtime": true, "requirement": "anchor apple generic and identifier \"dev.cupper.spike.ui\" and certificate leaf[subject.OU] = \"<TEAM>\""}
+57077c0fabad3e9c | 84027 | chk | ACCEPT | accepted |  |  |  |  | conn=ACCEPT
+P4-genuine pre-exec | 84027 | chk | ACCEPT | accepted |  |  |  |  | conn=ACCEPT
+P4-child-on-leaked-fd  #1 | 84027 | chk | reject | token_changed |  |  |  |  | conn=reject
+P4-child-on-leaked-fd  #2 | 84027 | chk | reject | token_changed |  |  |  |  | conn=reject
