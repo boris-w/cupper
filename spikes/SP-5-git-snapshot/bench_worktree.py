@@ -16,7 +16,7 @@ import sys
 import time
 
 from edge_worktree import safety
-from lib import REPOS, SCRATCH, git, save_result, timed
+from lib import REPOS, SCRATCH, git, load_result, save_result, timed
 
 WT = SCRATCH / "bench-wt"
 
@@ -45,11 +45,17 @@ class Pool:
         self.live = []
 
 
+def drop_bench_branches(repo) -> None:
+    for b in git(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads/cupper/bench-*").stdout.split():
+        git(repo, "branch", "-D", b.decode())
+
+
 def bench(name: str, runs: int) -> dict:
     repo = REPOS / name
     shutil.rmtree(WT / name, ignore_errors=True)
     (WT / name).mkdir(parents=True, exist_ok=True)
     git(repo, "worktree", "prune")
+    drop_bench_branches(repo)  # leftovers from an interrupted run
     p = Pool(repo, name)
     out = {"repo": name}
     out["add_b"] = timed(lambda: p.add(), runs=runs, warmup=1, setup=p.drop_all)
@@ -61,9 +67,21 @@ def bench(name: str, runs: int) -> dict:
     time.sleep(1.1)
     git(p.path(i), "update-index", "-q", "--refresh", check=False)
     out["safety_check"] = timed(lambda: safety(repo, p.path(i), p.branch(i)), runs=runs)
-    # remove: a fresh clean worktree is created (untimed) before every run
-    out["remove"] = timed(lambda: git(repo, "worktree", "remove", str(p.path(p.live.pop()))), runs=runs,
-                          warmup=0, setup=lambda _: (p.drop_all(), p.add()))
+    # A fresh worktree is not always clean: on case-insensitive APFS the linux tree has
+    # case-colliding paths that always show as modified. Record what the gate says.
+    out["fresh_worktree_blockers"] = safety(repo, p.path(i), p.branch(i))["blockers"]
+    # remove: a fresh worktree is created (untimed) before every run. Plain remove first;
+    # if git refuses (dirty), fall back to --force and record that it was needed.
+    forced = {"n": 0}
+
+    def remove_one():
+        path = str(p.path(p.live.pop()))
+        if git(repo, "worktree", "remove", path, check=False).returncode != 0:
+            forced["n"] += 1
+            git(repo, "worktree", "remove", "--force", path)
+
+    out["remove"] = timed(remove_one, runs=runs, warmup=0, setup=lambda _: (p.drop_all(), p.add()))
+    out["remove_needed_force"] = forced["n"] > 0
     # rebuild from the existing branch: worktree removed (untimed), branch kept
     keep = p.add()
     out["rebuild"] = timed(lambda: git(repo, "worktree", "add", "-q", str(p.path(keep)), p.branch(keep)),
@@ -74,8 +92,7 @@ def bench(name: str, runs: int) -> dict:
     out["add_no_checkout"] = timed(lambda: p.add("--no-checkout"), runs=runs, warmup=1, setup=p.drop_all)
     p.drop_all()
     git(repo, "worktree", "prune")
-    for b in git(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads/cupper/bench-*").stdout.split():
-        git(repo, "branch", "-D", b.decode())
+    drop_bench_branches(repo)
     print(f"  {name}: add={out['add_b']['median_ms']}ms safety={out['safety_check']['median_ms']}ms "
           f"remove={out['remove']['median_ms']}ms rebuild={out['rebuild']['median_ms']}ms "
           f"no-checkout={out['add_no_checkout']['median_ms']}ms", flush=True)
@@ -86,10 +103,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repos", default="syn-1k,syn-10k,syn-100k,linux")
     ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--merge", action="store_true", help="replace only these repos in an existing result file")
     a = ap.parse_args()
-    res = {"runs": a.runs, "repos": []}
+    res = (load_result("bench_worktree") if a.merge else None) or {"runs": a.runs, "repos": []}
     for name in a.repos.split(","):
-        res["repos"].append(bench(name, a.runs))
+        r = bench(name, a.runs)
+        res["repos"] = [x for x in res["repos"] if x["repo"] != name] + [r]
         save_result("bench_worktree", res)
     shutil.rmtree(WT, ignore_errors=True)
 

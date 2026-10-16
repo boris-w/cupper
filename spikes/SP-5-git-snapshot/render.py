@@ -78,9 +78,12 @@ def main() -> None:
     if w:
         out += [f"## Worktree operations (median of {w['runs']} runs, ms)", ""]
         out += [md_table(["repo", "add -b (checkout)", "add --no-checkout", "safety check (1st, racy)",
-                          "safety check", "remove (clean)", "rebuild from branch"],
+                          "safety check", "remove", "remove needed --force", "rebuild from branch"],
                          [(r["repo"], ms(r, "add_b"), ms(r, "add_no_checkout"), ms(r, "safety_check_first"),
-                           ms(r, "safety_check"), ms(r, "remove"), ms(r, "rebuild")) for r in w["repos"]]), ""]
+                           ms(r, "safety_check"), ms(r, "remove"),
+                           ("yes: " + ", ".join(r.get("fresh_worktree_blockers") or ["dirty"]))
+                           if r.get("remove_needed_force") else "no",
+                           ms(r, "rebuild")) for r in w["repos"]]), ""]
     sh = load_result("bench_shadow")
     if sh:
         out += ["## Alternative: separate shadow repository (ms)", ""]
