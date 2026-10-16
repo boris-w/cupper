@@ -6,7 +6,7 @@
 ## 5.1.1 总体原则
 
 - **一个仓库，两套工作区**：根目录同时是 Rust workspace（`Cargo.toml`）和 pnpm workspace（`pnpm-workspace.yaml`）。两边只通过两类提交到仓库的产物耦合：`protocol/schema/v<N>.json`（协议契约）和 `runtime/manifest.json`（运行时清单）。
-- **产品代码不依赖 `spikes/`**（`CLAUDE.md`）。SP-4a 中可以沿用的代码，由 M1a 的任务迁移进 `crates/`，迁移时按本设计调整；`spikes/` 原样保留，只作参考。迁移清单见 [5.2.12](02-host.md#5212-sp-4a-代码的沿用与改动)。
+- **产品代码不依赖 `spikes/`**（`CLAUDE.md`）。SP-4a 中可以沿用的代码，由 M1a 的任务迁移进 `crates/`，迁移时按本设计调整；`spikes/` 原样保留，只作参考。迁移清单见 [5.2.15](02-host.md#5215-sp-4a-代码的沿用与改动)。
 - **共享 crate 不做 I/O**（ADR-02）：`cupper-protocol` 只有类型、帧、同步规则和纯视图，CI 验证它能编译到 `aarch64-apple-ios-sim`。
 - **`unsafe` 只出现在 `cupper-sys` 一个 crate 里**（ADR-02 的"只在 sys 模块"在多 crate 下的落法）。宿主、CLI 和桌面端的原生扩展都通过它调用系统接口。
 
@@ -148,6 +148,6 @@ flowchart LR
 
 - 每个协议方法必须声明 `SCOPE` 和 `IDEMPOTENCY`；新增方法不声明就编译不过。
 - 每条事件流只有一个写者（见 [5.2.3](02-host.md#523-并发模型)）；其他模块只能通过消息请求写者追加事件。
-- 宿主运行期间不读取 App 包内的任何文件（ADR-01），唯一的例外是运行时安装器在通过自检之后、按内嵌清单逐文件核对哈希的复制（[5.2.10](02-host.md#5210-运行时安装器)）。
+- 宿主运行期间不读取 App 包内的任何文件（ADR-01），唯一的例外是运行时安装器在通过自检之后、按内嵌清单逐文件核对哈希的复制（[5.2.12](02-host.md#5212-运行时安装器)）。
 - `ui-core` 不 import `electron`、`node:*`；渲染进程不出现 `innerHTML`、`dangerouslySetInnerHTML`、`eval`、`new Function`。
 - 界面文案一律走 `@cupper/i18n`，宿主下发语义码，不下发文案（瘦客户端）。

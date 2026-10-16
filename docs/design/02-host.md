@@ -1,0 +1,428 @@
+# 5.2 组件设计：会话宿主与 cupper-cli
+
+- 所属：`docs/02-design.md` 第 5 节
+- 依据：ADR-01、02、04、05、06、07、09、10；SP-4a 骨架（`spikes/SP-4a-host-skeleton/`）；对齐会架构师意见议题 2
+- 相关：驱动层单独成节（[5.6](06-agent-driver.md)）；桌面端见 [5.7](07-desktop.md)；协议契约见 [5.3](03-protocol-v1.md)；表结构见 [5.4](04-data-model.md)
+
+## 5.2.1 模块总览
+
+宿主是一个 Rust 二进制 `cupper-host`，打包在 `Cupper.app/Contents/Helpers/CupperHost.app` 里（ADR-01）。下表是 `cupper-host` crate 内部的模块，每个模块对应一个 Rust 模块目录，模块之间只通过本表"对外接口"一栏的类型交互。
+
+| 模块 | 职责 | 对外接口 | 依赖 | 关键数据结构 | 形态 |
+|---|---|---|---|---|---|
+| `gateway` 网关 | 接受连接、对端认证（固定令牌）、`host/hello` 与 `initialize`、请求分发、订阅登记、发送队列、blob 传输 | Unix 套接字；内部 `ConnHandle` | policy、ledger、store、各执行者 | `Conn`、`Outbox`、`Principal`、`PinnedPeer`、`Upload` | 每连接 2 个 task |
+| `policy` 策略 | `authorize(principal, method, params)`：方法级 scope 加资源级规则 | 纯函数 | protocol（`SCOPE` 常量）、各执行者提供的资源描述 | `Scope`、`Role`、`Rule` | 无状态 |
+| `ledger` 命令账本 | 命令幂等：`(principal, command_id)` → 结果 | `begin` / `complete` / `lookup` | store | 内存表 + `commands` 表 | 共享结构 |
+| `orchestrator` 会话编排 | 会话的创建、归档、恢复；回合状态机；宿主队列；Steer；中断与超时兜底；崩溃后 resume；配置项 | `SessionManager`、`SessionHandle` | driver、interaction、store、git、attention | `SessionActor`、`Turn`、`Queue` | 每个活跃会话一个 actor |
+| `interaction` 交互代理 | 审批和提问对象：分类、选项生效范围、摘要、`actionable_by`、先到先得、撤回与失效 | 由会话 actor 调用 | driver 的选项对照表 | `Interaction`、`OptionEffect` | 会话 actor 内的组件 |
+| `store` 事件存储 | 写线程、读连接池、流（seq、视图、扇出）、检查点、回合快照、blob、原始帧、迁移 | `Streams::append` / `subscribe` / `read_page`；`BlobStore` | SQLite | `StreamState`、`WriteOp` | 1 个写线程 + 每流一把锁 |
+| `attention` 关注度与通知 | 索引流的唯一写者：会话状态、未读、通知意图、客户端列表、agent 和宿主状态 | `IndexHandle` | store、notifier | `IndexView` | 1 个 actor |
+| `notifier` 系统通知 | 用 UserNotifications 弹通知，点击后打开 `cupper://session/<id>` | channel | cupper-sys | — | 主线程 run loop |
+| `driver` 驱动层 | 适配器进程、ACP 连接、线路分接、提取层、能力缓存、CLI 发现 | `AgentRuntimeHandle` | runtime、supervisor | 见 [5.6](06-agent-driver.md) | 每种 agent 一个 actor |
+| `git` Git 与 worktree | 快照、diff、hunk 操作、提交、推送、worktree 生命周期 | async 函数 | git 命令行 | `RepoLock`、`DiffCache` | 子进程 + 每仓库锁 |
+| `files` 文件服务 | `@` 引用的模糊搜索 | async 函数 | ignore、nucleo-matcher | `FileIndex` | 按需构建、短期缓存 |
+| `settings` 设置 | 宿主级设置的读写 | get / update | store | `settings` 表 | 共享结构 |
+| `runtime` 运行时安装器 | 安装和校验 Node、适配器（ADR-08） | `RuntimeHandle` | reqwest、cupper-sys | `Manifest`（编译期内嵌） | 1 个 actor |
+| `supervisor` 进程监护 | 子进程登记与清理、自检、空闲退出、防休眠、有序退出 | `SupervisorHandle` | cupper-sys、store | `ChildRecord` | 1 个 actor |
+| `diag` 诊断 | 日志初始化、脱敏层、诊断包 | — | tracing | — | — |
+
+## 5.2.2 模块关系
+
+```mermaid
+flowchart TB
+  subgraph GW["gateway"]
+    ACC["accept + 对端校验"] --> CONN["连接 reader / writer"]
+  end
+  CONN -->|"每个请求"| POL["policy"]
+  POL --> LED["ledger"]
+  LED -->|"会话命令（按会话有序）"| SA["SessionActor × N"]
+  LED -->|"项目、已读、在场"| IA["IndexActor（attention）"]
+  LED -->|"git / files / settings / 控制"| EXE["一次性执行任务"]
+  SA <-->|"命令 / 驱动事件"| AR["AgentRuntime × 2（driver）"]
+  SA --> ST["store：Streams + 写线程"]
+  SA -->|"状态变化"| IA
+  SA -->|"回合开始 / 结束快照"| GIT["git"]
+  EXE --> GIT & FIL["files"] & SET["settings"]
+  IA --> ST
+  IA --> NOT["notifier"]
+  AR --> TAP["线路分接"] -->|"原始帧"| ST
+  AR --> RT["runtime 安装器"]
+  AR --> SUP["supervisor"]
+  ST -->|"扇出（不等待）"| CONN
+```
+
+## 5.2.3 并发模型
+
+**线程**
+
+| 线程 | 数量 | 用途 |
+|---|---|---|
+| 主线程 | 1 | 运行 `CFRunLoop`，承载 UserNotifications 的代理回调和 IOKit 通知。tokio 运行时不在主线程上 |
+| tokio 工作线程 | min(4, 核数) | 所有 actor、连接、子进程 I/O |
+| 存储写线程 | 1 | 唯一的 SQLite 写连接（`host.db` 和 `raw.db`），组提交 |
+| 阻塞线程池 | 按需（读池用信号量限 4 个并发） | SQLite 只读查询、`waitpid`、文件哈希、tar 解包 |
+
+**actor**（tokio task + mpsc 邮箱；actor 内部顺序处理消息，不 await 耗时操作，耗时操作另起 task，完成后以消息回送）
+
+| actor | 数量 | 邮箱输入 | 它是谁的唯一写者 |
+|---|---|---|---|
+| `SessionActor` | 每个活跃会话 1 个；空闲 10 分钟后退出 | 网关转来的会话命令；驱动事件；git 快照完成；定时器 | 该会话的会话流；`sessions`、`turns`、`interactions`、`queue` 中属于该会话的行 |
+| `IndexActor` | 1 | 会话状态变化、项目命令、已读、在场、客户端连接与断开、agent 和宿主状态、提权请求 | 索引流；`projects` 表 |
+| `AgentRuntime` | 每种 agent 1 个（ADR-09） | 会话发来的驱动命令；适配器退出；资源采样定时器 | 适配器进程；`adapters` 表 |
+| `RuntimeInstaller` | 1 | 安装、校验请求 | `runtime/` 目录 |
+| `Supervisor` | 1 | 子进程登记、自检请求、空闲计时、防休眠引用计数 | 进程记录、电源断言 |
+
+**channel**
+
+| 发送方 → 接收方 | 类型 | 说明 |
+|---|---|---|
+| 网关 → `SessionActor` | 无界 mpsc，消息带 oneshot 回复 | 同一会话的命令按到达顺序进入邮箱（见下文"命令顺序"） |
+| ACP 回调 → `AgentRuntime` → `SessionActor` | 无界 mpsc | ADR-02：ACP 回调里只做 channel 发送，读 ACP 的路径永远不等待任何下游 |
+| 各写者 → 存储写线程 | std mpsc（写线程阻塞接收），每个操作带 oneshot 确认 | 写线程攒批：最多 2 ms 或 256 个操作提交一次事务 |
+| 线路分接 → 存储写线程 | 有界队列（4,096 条），满了就丢弃并计数 | 原始帧只用于诊断和重算，不能反压 ACP 读路径 |
+| 流 → 连接 `Outbox` | 加锁 push，不等待 | 超出该连接的字节预算时重置这条流（SP-4a 已实现） |
+
+**锁**
+
+| 锁 | 类型 | 保护的内容 | 规则 |
+|---|---|---|---|
+| 每条流的 `StreamState` | std `Mutex` | head、视图、订阅者列表 | 持锁时只做内存操作，不做 I/O、不 await |
+| 流注册表 | std `Mutex` | `HashMap<StreamId, Arc<StreamState>>` | 只在查找和懒加载登记时短暂持有 |
+| `Outbox` | std `Mutex` + `Notify` | 每连接的发送队列 | 生产者只 push |
+| 会话句柄表、账本的进行中表 | std `Mutex` | 查找表 | 极短 |
+| `RepoLock` | 每个仓库一把 `tokio::sync::Mutex` | 会修改用户 index 或 worktree 的 git 操作 | 允许跨 await；只读操作和快照不拿这把锁 |
+
+**规则**
+
+1. **每条流只有一个写者。** seq 的分配在写者 actor 内部完成，不需要锁。
+2. **追加的三步**：写者给事件分配 seq 并组装成批 → 交给写线程，等待提交确认（不持任何锁） → 拿流锁，把事件应用到视图、推进 head、推给订阅者。订阅也在流锁内读取 head 和视图，所以订阅和追加之间不会漏也不会重（SP-4a 的不变式）。宿主在第二步之后、第三步之前崩溃，重启后从数据库加载，状态一致。
+3. **命令结果和它产生的事件在同一个事务里落盘**（见 [5.2.5](#525-策略与命令账本)），这样崩溃后重试不会重复执行。
+4. clippy 的 `await_holding_lock` 设为 deny。
+5. actor 不 await 长操作：回合开始的快照、连接适配器、建立 agent 会话都另起 task，用完成消息驱动状态机（这是对 SP-4a 的改动：SP-4a 的会话 actor 会 await 适配器启动，期间处理不了中断）。
+
+## 5.2.4 网关
+
+**连接建立**（细节见 [5.8.1](08-security.md#581-认证握手固定令牌)）
+
+1. `accept` 后先用 `peer_cred()` 核对 uid，不同用户直接关闭。
+2. 用 `cupper-sys` 取对端审计令牌并做签名校验，得到 `PeerVerdict`：`desktop_ui`（满足 UI 的签名要求）或 `other`，同时记下令牌作为固定令牌。校验出错按 SP-4b 的四类错误码记审计日志，一律按 `other` 处理。
+3. 宿主发出第一帧：`host/hello` 通知，带 32 字节随机 nonce 和协议版本区间。
+4. 客户端的第一条消息必须是带同一个 nonce 的 `initialize`，否则断开。
+5. 之后每次 `read()` 返回数据，都先比对当前令牌（含 pidversion）与固定令牌，不一致立即断开并记审计日志（SP-4b）。
+
+**每连接的状态**：`Conn { id, principal, role, pinned, outbox, subs: HashSet<StreamId>, uploads, inflight: 计数 }`。
+
+**分发**
+
+- 读循环解析请求 → `policy` 检查 → 查询类请求另起 task 执行；命令类请求先过 `ledger`，再按目标路由：
+  - 带 `session_id` 的会话命令：**由读循环直接投递到该会话 actor 的邮箱**（非阻塞），保证同一连接发往同一会话的命令按顺序执行（例如先 `session/send` 后 `session/interrupt`）。SP-4a 是每个请求一个 task，顺序没有保证，这里要改。
+  - 项目、已读、在场：投递到 `IndexActor`。
+  - git、files、settings、宿主控制：另起 task 执行。
+- 每连接最多 64 个进行中的请求，超出返回 `rate_limited`。
+
+**写循环**：沿用 SP-4a 的 `write_loop`：按握手协商的 `coalesce_ms` 攒批；连续的可合并事件做发送时合并；`Replay` 项由写循环从读池分页读取；blob 分片帧原样写出。
+
+**blob 上传**：客户端先发 `0x02` 分片帧，再发 `blob/put` 请求。网关按 hash 把分片收进连接内的缓冲（单个 blob 不超过 32 MiB，每连接未完成的上传合计不超过 64 MiB），`blob/put` 到达时校验长度和 sha-256，写入 `BlobStore`。连接断开时丢弃未完成的上传。
+
+**断开**：从所有流注销订阅；丢弃上传缓冲；撤销这条连接上的提权（ADR-05）；通知 `IndexActor` 更新 `clients`。
+
+## 5.2.5 策略与命令账本
+
+**策略**分两层，都在宿主内执行，客户端（包括桌面主进程）的检查只是第一道防线：
+
+1. **方法级**：每个方法在 `cupper-protocol` 中声明 `SCOPE`（`read`、`write`、`approve`、`privileged`、`ui_local`），principal 的 scope 集合必须包含它。
+2. **资源级**：按方法注册的规则，需要读取参数和宿主状态才能判断，例如：
+   - `interaction/respond` 选中的选项 `requires = privileged`（`allow_always` 类）时，只接受 `desktop_ui` 的 `control` 角色；
+   - `session/create`、`session/set_config` 把权限模式设成风险级别为 `full_access` 的值时，同上；
+   - `settings/update` 修改安全相关的键（CLI 路径）时，同上；
+   - `interaction/respond` 来自 `desktop_ui` 的 `window` 角色时，距请求创建不足 400 ms 的一律拒绝（`conflict`，`reason: too_early`），把 ADR-03 的"约 500 ms 输入保护"落到宿主侧，不依赖渲染进程。
+
+完整的权限矩阵见 [5.8.3](08-security.md#583-权限矩阵)。
+
+**命令账本**
+
+- 键是 `(principal 的稳定 ID, command_id)`。稳定 ID 不随连接变化：`pr_desktop`、`pr_cli`、`pr_test`，M3 起 `pr_dev_<设备 ID>`。这样 UI 断线重连后重试同一条命令，仍然能命中（SP-4a 用的是会变化的 principal ID，要改）。
+- 内存里保存最近 48 小时的全部记录（启动时从 `commands` 表加载），读循环可以同步查询，不需要等数据库。
+- 状态：
+  - `inflight`：同一个命令的重复请求挂在第一次执行上等待结果；
+  - `done`：直接回放结果，加 `replayed: true`；参数哈希不同则返回 `idempotency_mismatch`；
+  - `pending_external`：会改动用户仓库的 git 命令（`git/commit`、`git/stage` 等）在执行前先写一条这种记录。宿主在执行中途崩溃后，重试会得到 `conflict`（`reason: outcome_unknown`），客户端刷新状态后由用户决定。
+- **"受理"语义**：会话类命令的结果表示"已受理并落盘"，实际效果从事件里看（对齐会议题 2.3）。执行者把命令结果和它产生的第一批事件放进同一个事务提交。执行前就失败的命令（参数错误、前置条件不满足）不记录，重试会重新判断。
+- 每小时清理一次超过 48 小时的记录（ADR-04 要求至少 24 小时）。
+
+## 5.2.6 会话编排
+
+### SessionManager
+
+- `HashMap<SessionId, SessionHandle>`，actor 按需启动，空闲（没有回合、没有排队、没有待处理请求）10 分钟后退出，退出前对 agent 会话调用 `session/close`，释放 Claude 的 CLI 进程（ADR-09）。
+- **新建**（`session/create`，详细时序见 [5.5.2](05-flows.md#552-新建会话含新建-worktree)）：校验项目和 agent → 生成 `session_id` → 一个事务写入：`sessions` 行、会话流的首批事件（`session.configured`、`workspace.preparing`）、命令结果 → 回复 `session_id` → 启动 actor，由它异步准备工作区、连接 agent、发出第一个回合。按 ADR-09，**会话总是和第一条消息一起创建**，不存在没有消息的空会话。
+- **归档**：先由客户端调用 `worktree/check` 取得能否清理的结论；`session/archive` 关闭 agent 会话，按参数保留或删除 worktree（规则见 [5.2.10](#5210-git-与-worktree-服务)），会话从索引流移除。
+- **恢复**：分支还在就重建 worktree；分支不在就把会话标为只读（PS-3）。
+
+### SessionActor 的状态
+
+```
+SessionActor {
+  rec: SessionRecord,            // 持久化的会话元数据
+  writer: StreamWriter,          // 会话流的 next_seq
+  link: AgentLink,               // Detached | Attaching | Attached{agent_session_id, instance} | Unavailable{reason}
+  turn: Option<Turn>,            // 见下面的状态机
+  queue: Queue { version, paused: Option<reason>, entries },
+  broker: InteractionBroker,
+  config: CurrentConfig, caps: SessionCapabilities,
+}
+Turn { turn_id, origin: user | queued | steer_new_turn | autonomous,
+       phase, prompt_inflight, normalizer, cause, started_at, snapshot_start }
+```
+
+### 回合状态机
+
+```mermaid
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Preparing: 发送或出队（写 turn.started 和用户消息）
+  Preparing --> Prompting: 起始快照完成或超时（3 s），agent 已连接
+  Preparing --> Cancelled: 中断（还没发 prompt）
+  Preparing --> Failed: agent 不可用
+  Prompting --> Completed: prompt 返回 end_turn 等
+  Prompting --> Cancelling: 中断（发 session/cancel，截止 10 s）
+  Prompting --> Failed: prompt 出错或适配器退出
+  Cancelling --> Cancelled: prompt 返回 cancelled 或截止时间到
+  Idle --> Autonomous: 回合外的 session/update
+  Autonomous --> Idle: Codex threadStatus 变为 idle，或 10 s 无更新且没有运行中的工具
+  Completed --> Idle: 异步拍结束快照；队列未暂停则出队
+  Cancelled --> Idle: 队列暂停
+  Failed --> Idle: 队列暂停
+```
+
+- **回合由宿主推导**（ADR-06）：以 `session/prompt` 的请求和响应为界；Codex 有 `threadStatus` 时优先采用；回合外的更新开一个 `origin: autonomous` 的回合。回合结束时还没完成的工具调用标为 `abandoned`。
+- **起始快照**：进入 `Preparing` 时另起 task 拍快照（ADR-10 要求回合开始时同步拍，这里的"同步"指 prompt 等快照完成再发），超过 3 s 就不等了，这个回合的 diff 标为不可用。
+
+### 排队、Steer、中断（CP-6、CP-7）
+
+| 情况 | 处理 |
+|---|---|
+| 空闲时发送 | 开新回合 |
+| 回合进行中（含 `Autonomous`）发送，`mode: queue` | 追加到队列，写 `queue.updated`；回复 `disposition: queued` |
+| 回合进行中发送，`mode: steer` | 前提：能力里有 `steer`、`expected_turn_id` 等于当前回合、处于 `Prompting`。调用驱动的 steer（超时 5 s）：`injected` → 在当前回合写一条 `steered: true` 的用户消息；`started_new_turn` → 开一个 `origin: steer_new_turn` 的回合；`prompt_required`、不支持、超时、出错 → **自动转为排队**，回复里带原因 |
+| 回合正常结束 | 队列未暂停就取出队首，开 `origin: queued` 的新回合 |
+| 回合被取消、失败或中断 | 队列暂停（`queue.paused`），等用户发新消息或调用 `session/queue_resume`。Codex 拒绝审批导致的取消（#556）不暂停，因为这是用户主动拒绝，后面排着的消息正是"换个做法" |
+| 中断 | 发 `session/cancel`；把挂着的交互请求标为 `cancelled`，对 ACP 回复 `Cancelled`（Codex 不会自己撤回）；进入 `Cancelling`，截止 10 s。截止后宿主把回合标为 `cancelled`（`stop_reason: host_timeout`），之后这个 prompt 的响应直接忽略 |
+| 上一个 prompt 一直没有返回，用户又发了消息 | 先对这个 agent 会话执行 `session/close` 再 `session/resume`，然后才发新的 prompt。**同一个 agent 会话绝不同时有两个 prompt**（SP-1：Claude 会丢回复，Codex 会永久挂起） |
+
+### 崩溃与恢复（NFR-9）
+
+| 情况 | 会话 actor 的处理 |
+|---|---|
+| 适配器进程退出（`AgentRuntime` 广播 `AdapterExited`） | 当前回合标为 `failed`（`adapter_exited`）；挂着的交互请求标为 `expired`（SEC-10）；`link` 变为 `Detached`；写一条 `notice`（`agent_restarted`）。下一次发送时重新连接并 `session/resume` |
+| Claude 的 CLI 在回合中崩溃（`-32603`） | 回合标为 `failed`，写 `notice`。下一次发送收到 "Session not found" 时，自动 `session/resume` 再重发一次（只在这个 prompt 还没有产生任何更新时重发） |
+| Codex 的 app-server 被杀（`1001`，`restartable: true`） | 回合标为 `failed`，写 `notice`；下一个 prompt 由 codex-acp 自动重启 app-server |
+| 宿主崩溃 | 见 [5.2.13](#5213-进程监护与宿主生命周期) 的启动恢复 |
+
+### 配置项
+
+`session/set_config` 由 actor 转给驱动的 `set_config`，用返回的最新配置写 `session.configured`。回合进行中也允许修改，由 agent 决定何时生效。新建会话时的初始配置在 `session/new` 之后立即应用（SP-4a 的 `apply_prefs`；resume 之后也要重新应用，因为 agent 会恢复 transcript 里的模式）。
+
+## 5.2.7 交互代理
+
+交互代理是会话 actor 内部的一个组件，不单独起 actor。先到先得依赖的正是会话 actor 的顺序处理（SP-4a 已验证）。
+
+**收到 agent 的请求时**
+
+1. 用驱动层的提取器分类：`permission`、`question`、`plan_confirm`、`auth_url`（[5.3.6](03-protocol-v1.md#536-交互请求模型)）。
+2. 用选项对照表（[5.6.4](06-agent-driver.md#564-选项-id-与生效范围对照表)）给每个选项标出 `effect` 和 `requires`。
+3. 计算 `digest`；按选项的 `requires` 和请求类型算出 `actionable_by`。
+4. 先刷出 normalizer 里缓冲的文本（保证因果顺序），再写 `interaction.requested` 和 `interactions` 行；通知 `IndexActor`。
+5. 在内存里保存 ACP 的应答句柄，记下它属于哪个适配器实例。
+
+**收到 `interaction/respond` 时**依次检查：请求存在且为 `pending`（否则 `conflict/already_resolved` 带 `resolved_by`，或 `expired`）→ 摘要一致 → principal 在 `actionable_by` 内 → 选项存在、`requires` 满足 → 提问的答案符合字段定义。全部通过后应答 ACP，写 `interaction.resolved`（带 `resolved_by`），回复成功。
+
+**失效与撤回**
+
+| 触发 | 结果状态 |
+|---|---|
+| Claude 发 `$/cancel_request` 撤回 | `cancelled`（`reason: agent_withdrew`） |
+| 回合被中断（Codex 不撤回，宿主替它应答 `Cancelled`） | `cancelled` |
+| 请求所属的适配器实例退出 | `expired`（SEC-10） |
+| 宿主重启 | `expired` |
+
+不设超时：用户可能几小时后才回来处理。回合之外也允许出现交互请求（ADR-06 要求放开 SP-4a 的限制），这时 `turn_id` 为空。
+
+## 5.2.8 事件存储
+
+| 组件 | 说明 |
+|---|---|
+| 写线程 | 持有唯一的写连接；从 channel 攒批（≤ 2 ms 或 ≤ 256 个操作），每个数据库一个事务，提交后逐个回复确认。操作类型：追加事件、行级 upsert（会话、回合、交互、队列、账本）、检查点、回合快照、原始帧（不需要确认）、审计、清理 |
+| 读连接池 | 4 个只读连接（WAL 允许并发读），供补发、历史分页、查询使用，经 `spawn_blocking` 调用 |
+| `Streams` | 沿用 SP-4a 的 `hub`，但把 `append` 拆成上文的三步；流状态懒加载（检查点 + 其后的事件） |
+| 视图 | `IndexView`、`SessionView` 放在 `cupper-protocol::view`，宿主、CLI 和 TS 客户端（另一份实现，用金样例交叉验证）共用同一套语义 |
+| 会话视图窗口 | 内存里只保留最近 20 个回合（或不超过 2,000 个条目）、进行中的回合、全部待处理的交互请求、配置、能力和队列。更早的回合在 `turn_snapshots` 表里，通过 `history/page` 获取 |
+| 检查点 | 每个回合结束时，在同一个事务里写入：流检查点（窗口视图 + `at_seq`）和这个回合的快照（重建该回合所需的事件体序列） |
+| 淘汰 | 会话流状态在没有订阅者、也没有 actor 10 分钟后从内存移除 |
+| `BlobStore` | 按内容寻址的文件 `blobs/sha256/<前 2 位>/<hash>`：写临时文件、fsync、改名；`blobs` 表记录大小、媒体类型和引用 |
+| 原始帧 | 线路分接的输出进入有界队列，写线程批量写入 `raw.db`；队列满了就丢弃并计数（ADR-06 的用途是重算和排障，不能反压 ACP） |
+| 升级器与迁移 | 见 [5.4.6](04-data-model.md#546-迁移) |
+| 持久性 | `synchronous=NORMAL`；M1 做断电测试后再决定是否改 `FULL`（ADR-06） |
+
+## 5.2.9 关注度与通知
+
+`IndexActor` 是索引流的唯一写者，它维护每个会话的摘要，并据此计算状态和通知：
+
+| 会话状态 | 条件（从上到下优先） |
+|---|---|
+| `needs_action` 需要处理 | 有待处理的交互请求 |
+| `running` 运行中 | 有进行中的回合（含 `Autonomous`、`Preparing`） |
+| `error` 出错 | 最近一个回合失败或 agent 不可用，且之后还没有成功的回合、也还没被查看 |
+| `unread` 完成未读 | 有回合在最近一次标记已读之后结束 |
+| `idle` 空闲 | 其他 |
+
+- **已读**（U4）：客户端在会话可见且窗口在前台时调用 `session/mark_read`，`up_to_seq` 取已看到的最新 seq，宿主只前移不后退，全局生效。
+- **在场**：每个客户端用 `client/presence` 上报是否在前台、正在看哪个会话。`IndexActor` 据此判断某个会话"此刻有人在看"。
+- **通知意图**：会话进入 `needs_action`、回合结束、出错时，如果此刻没有前台客户端在看这个会话，就写一条 `notification.intent` 事件，同时交给 `notifier` 弹系统通知（按设置开关）。M3 的推送也从这些事件生成。
+- **通知由宿主弹出**（ADR-01）。宿主内置一小份通知文案（中英文，跟随系统语言），这是"宿主不下发文案"原则的唯一例外，因为通知不经过客户端。helper 的通知身份要由 SP-10 在 M1b 前核实，不行就退回"UI 在时由 UI 弹"（技术选型讨论会的后备方案），见待定问题 Q2。
+- 同时维护 `clients`（连接列表）、`agents`（CLI、适配器、运行时、登录状态、资源占用）、`host`（版本、是否弱认证、是否待升级、防休眠）和提权请求，都写在索引流里。
+
+## 5.2.10 Git 与 worktree 服务
+
+全部通过 git 命令行实现（ADR-10）。
+
+**调用约定**
+
+- `GitCmd` 构造器：每类命令一组固定参数，统一 `-z`；只读命令加 `--no-optional-locks`；固定加 `-c core.quotepath=false`。
+- 环境：PATH 用从登录 shell 取得的值（[5.6.6](06-agent-driver.md#566-cli-的发现与版本检查)）；`LC_ALL=C`，便于解析报错；`GIT_TERMINAL_PROMPT=0`；继承 `SSH_AUTH_SOCK`。
+- 超时：只读命令 30 s；快照 60 s；`worktree add` 10 分钟（输出进度事件）；`push` 5 分钟。
+- 启动时检测 git 版本（暂定最低 2.39）和 git-lfs，结果放进索引流的 `agents` 状态里一起显示。
+
+**快照**（ADR-10）：复制 `rev-parse --git-path index` 指向的文件作临时 index → 预检排除超过 50 MB 的未跟踪文件、嵌套仓库、超大未跟踪目录 → `git -c core.safecrlf=false -c advice.addEmbeddedRepo=false add -A --ignore-errors -- <排除用的 pathspec>` → `write-tree`。对象写进 `<数据目录>/git/<repo_key>/objects`（`GIT_OBJECT_DIRECTORY`），通过 `GIT_ALTERNATE_OBJECT_DIRECTORIES` 读仓库原有对象；tree id 写进 `turns` 表，排除的路径写进 `snapshot.recorded` 事件。
+
+**diff 与 hunk**
+
+- `git/diff` 按范围生成文件列表（`unstaged`、`staged`、`last_turn`、`turn:<id>`），同时返回 `diff_token`。`last_turn` 用两次快照的 `diff-tree -r -z --raw -M` 加 `--numstat`；回合还在进行时，对比起始快照和现在再拍的一次快照。
+- `git/file_diff` 用固定参数（`--no-color --no-ext-diff --no-textconv --full-index --binary -U3`）生成单个文件的补丁，切成 hunk。用于暂存的补丁用 `--no-renames` 生成。每个 hunk 有按内容寻址的 `hunk_id`，标明操作单位：`hunk`、`mode`（权限位单独一个单位）、`whole_file`（新增、删除、二进制、符号链接、子模块指针、LFS）。
+- `DiffCache`：`diff_token` → 这次 diff 的全部补丁，每个工作区保留最近 32 个，10 分钟过期。`git/stage`、`git/unstage`、`git/revert` 带 `diff_token` 和 `hunk_id`，宿主取出原始补丁执行 `git apply --whitespace=nowarn [--cached] [-R]`。token 不存在或补丁应用失败都返回 `conflict`（`reason: stale_diff`），客户端刷新后重试，不做模糊匹配（ADR-10）。这就是 ADR-04 所说"`hunk_id` 加 diff 基线"的具体做法：基线就是 `diff_token`。
+- 说明：GT-3 要求能取消暂存，取消暂存需要看到已暂存的内容，所以 `staged` 范围在 M1 就提供，尽管 PRD 把"其余审查范围"（F2）放在 P1。
+
+**提交与推送**：`commit -F -` 从 stdin 读提交信息，会运行用户自己的 hooks；`push` 默认推当前分支，必要时 `--set-upstream`。失败时把 stderr 末尾（脱敏后）放进错误的 `data`。
+
+**worktree**（ADR-10）：位置 `~/.cupper/worktrees/<仓库名>-<短哈希>/<会话短名>`，可在设置中修改；分支 `cupper/<短名>`，先 `check-ref-format --branch` 校验，冲突时加后缀；会话存续期间 `worktree lock --reason "cupper session <id>"`；建好后等 1 秒执行一次 `update-index --refresh`；不用 `--relative-paths`。`worktree/check` 按 ADR-10 的 7 条规则只读检查，返回阻止删除的原因和只提示不阻止的情况（被忽略文件的数量、只因大小写冲突显示为"脏"）。删除用 `git worktree remove`，不加 `--force`；只有"仅大小写冲突"且用户确认时才加 `--force`；默认保留分支。
+
+**并发**：会修改用户 index 或 worktree 的操作（stage、unstage、commit、worktree add/remove）按仓库拿 `RepoLock`；快照用临时 index，不拿锁，可以与其他会话的快照并行。
+
+## 5.2.11 文件服务与设置
+
+**文件服务**（CP-2 的 `@` 引用）
+
+- git 仓库：`git ls-files -z --cached --others --exclude-standard` 得到文件列表；非 git 目录：用 `ignore` crate 遍历（遵守 `.gitignore`），最多 20 万个文件。
+- 列表按工作区缓存 5 秒，回合结束时失效；用 nucleo-matcher 做模糊匹配，返回相对路径、分数和匹配区间（UTF-16 偏移，方便 JS 高亮）。
+- 发送时，`@` 引用作为 `resource_link` 内容块传给 agent（ACP 基础能力）。
+
+**设置**
+
+| 键 | 含义 | 修改需要 |
+|---|---|---|
+| `agents.<agent>.cli_path` | 手动指定 CLI 路径 | `privileged`（等于决定 agent 运行哪个程序） |
+| `worktrees.root` | worktree 根目录 | `write` |
+| `notifications.needs_action` / `.turn_completed` / `.error` | 通知开关 | `write` |
+| `apps.terminal` / `apps.editor` | UI-0 用哪个应用打开工作区（从内置的应用清单里选） | `write` |
+| `sessions.default_agent` | 新建会话默认 agent | `write` |
+| `host.idle_exit_minutes` | 空闲退出时间 | `write` |
+| `diagnostics.verbose` | 详细日志（可能包含消息内容），默认关 | `privileged` |
+
+只属于界面的偏好（发送快捷键、主题覆盖、面板尺寸、语言覆盖）由桌面主进程存在 App 自己的 userData 里，不是会话数据，不经过宿主。
+
+## 5.2.12 运行时安装器
+
+按 ADR-08 实现，补充以下细化：
+
+- **清单内嵌在宿主二进制里**（编译期由 `runtime/manifest.json` 生成）。宿主不在运行中读取包内的清单文件，清单的签名就是宿主二进制自身的签名。
+- **随包携带的组件**放在 `CupperHost.app/Contents/Resources/runtime/`：重签过的 Node（tar.xz）、codex-acp 的 `index.mjs` 与许可证、esbuild-wasm 和打包脚本。claude-agent-acp 的依赖在用户机器上从 npm 下载（ADR-11 红线）。
+- **读取包内文件的例外**：只在启动后、通过 cdhash 自检之后做复制，并且逐文件按内嵌清单核对 sha-256。复制到一半包被替换，哈希就对不上，安装失败、宿主转入"待升级"。
+- **状态机**（每个组件）：`missing` → `installing` → `ready`；失败为 `failed{reason}`（`network`、`hash_mismatch`、`disk`、`bundle_changed`）。状态写进索引流的 `agents` 里，界面据此提示"首次使用 Claude 需要联网安装适配器（约 6–8 秒）"。
+- **时机**：宿主启动后在后台校验和安装；某个 agent 需要启动适配器而组件还没就绪时，等待安装完成（Codex 的组件全部随包，不需要联网）。
+- **网络请求**：只访问 `registry.npmjs.org`；User-Agent 为 `cupper-runtime-installer/<版本>`，不带任何用户信息；遵守登录 shell 里的 `HTTPS_PROXY`。
+- 目录布局、校验、原子提交、旧版本回收按 ADR-08。tar 解包用 Rust 的 `tar` + `lzma-rs`，逐项检查路径不越界（SP-2 原型调用的系统 tar 不沿用）。
+
+## 5.2.13 进程监护与宿主生命周期
+
+**启动顺序**（目标：前 9 步合计不超过 50 ms，SP-4a 实测 p95 为 4.6 ms，不含签名校验）
+
+1. 解析参数：`--data-dir`（默认 `~/Library/Application Support/cupper`）；`--dev-key-stdin`（仅 `dev-auth` 构建）；`--harness-key-stdin`（仅 `test-harness` 构建）。
+2. 初始化日志（轮转、脱敏，见 [5.11](11-diagnostics.md)）。
+3. 数据目录和子目录建成 0700，并检查属主。
+4. 对 `host.lock` 加 `flock`；已被占用就以退出码 3 退出（UI 改为直接连接）。
+5. 打开数据库，必要时先备份再迁移；数据库版本比本程序新就以退出码 4 退出（不支持降级，NFR-10）。
+6. 崩溃恢复（NFR-9）：按 `adapters` 表的进程组和启动时间清理残留（SP-4a 的 `reap_group`）；运行中的回合写 `turn.completed{status: interrupted}`；待处理的交互请求写 `expired`；账本里 `pending_external` 的记录保留，供重试时返回 `outcome_unknown`。
+7. 加载索引流（检查点 + 其后的事件）。
+8. 绑定套接字：`run/host.sock`；路径超过 104 字节时退到 `/tmp/cupper-<uid>/<数据目录哈希>/`，使用前检查属主和 0700（SP-4a）；套接字文件 0600。
+9. 启动 actor：`IndexActor`、`Supervisor`、`RuntimeInstaller`（后台校验）；`AgentRuntime` 按需启动。
+10. 进入 accept 循环。
+
+**自检**（ADR-01 的 SP-4b 修订）：每次有新连接、每次拉起子进程之前，`Supervisor` 比较宿主自己运行中的 cdhash（`csops`）和磁盘上包的 cdhash。不一致或包不存在时进入**待升级**：拒绝新建会话和新回合（`unavailable`，`reason: pending_upgrade`），空闲时退出。
+
+**空闲退出**（非后台模式）：没有客户端连接、没有进行中的回合、没有待处理请求、没有排队消息、安装器空闲，持续 10 分钟（可设置）后有序退出。
+
+**有序退出**（`host/exit`、SIGTERM、空闲、升级）：停止 accept → 向所有连接发 `host/shutdown` 通知 → 如果是强制退出，运行中的回合标为 `interrupted` → 按 ADR-09 的顺序关闭适配器（逐个 `session/close` → 关闭 stdin → 等进程组退出 3 s → SIGTERM → 2 s → SIGKILL）→ 写检查点、清空写线程队列 → 释放电源断言 → 删除套接字 → 释放锁。
+
+**防休眠**（NFR-13，M1 为 P1）：有进行中的回合或待处理的交互请求时，持有 `PreventUserIdleSystemSleep` 断言，没有时立即释放。
+
+**资源采样**：每 30 秒采样一次各适配器进程组的常驻内存，写进 `agents` 状态（NFR-11、ADR-09 的设置页显示），并交给驱动层的回收策略（[5.6.8](06-agent-driver.md#568-资源回收)）。
+
+**退出码**：0 正常；3 已有实例；4 数据来自更新的版本；5 数据目录不可用；1 其他错误。
+
+## 5.2.14 cupper-cli
+
+第二客户端，用于 NFR-1 验收、端到端测试和开发调试。可执行文件随 App 放在 `Cupper.app/Contents/Resources/bin/cupper`，签名的 identifier 与 UI 不同（ADR-05）。
+
+| 命令 | 协议方法 | 需要的权限 |
+|---|---|---|
+| `cupper status` | `host/status`、订阅索引流 | read |
+| `cupper sessions [--watch]` | 订阅索引流 | read |
+| `cupper watch <session>` | 订阅会话流，持续输出 | read |
+| `cupper history <session>` | `history/page` | read |
+| `cupper new --agent <a> --project <path> [--worktree --base <ref>] <message>` | `project/add`、`session/create` | write |
+| `cupper send <session> <text> [--steer] [--wait]` | `session/send` | write |
+| `cupper interrupt <session>` | `session/interrupt` | write |
+| `cupper pending [<session>]` | 读视图 | read |
+| `cupper approve <session> <request> [--option <id>]` / `reject` | `interaction/respond` | approve |
+| `cupper answer <session> <request> --field k=v ...` | `interaction/respond` | approve |
+| `cupper elevate --scopes write,approve` | `auth/elevate` | — |
+| `cupper repl` | 保持一条连接，交互式执行以上命令 | — |
+| `cupper diff <session> [--scope last-turn]` | `git/diff`、`git/file_diff` | read |
+
+- 默认是只读的 `cli` principal。写操作需要先 `elevate`，由用户在桌面端的原生确认框里批准；授权只在这条连接上有效，最长 15 分钟（ADR-05），所以连续的写操作用 `cupper repl`。
+- 输出：默认是人读的格式；`--json` 输出 JSON Lines，供测试断言。
+- 连接时默认校验宿主的签名（发布构建），校验失败就拒绝连接。
+- 测试构建可以用 `--harness-key-fd <n>` 以 `test_harness` 身份连接。
+- 库部分保留 SP-4a 的 `Client` 和 `Mirror`（检查 `from` 等于上一个 seq 加 1），供宿主集成测试直接使用。
+
+## 5.2.15 SP-4a 代码的沿用与改动
+
+SP-4a 的代码由 M1a 的任务迁移进 `crates/`（复制后按下表调整），`spikes/` 原样保留。总体判断：**协议 crate 基本沿用，宿主的连接、发送队列、账本、恢复、系统调用沿用，存储、会话编排和驱动需要重构**。
+
+| SP-4a 文件 | 去向 | 结论 | 需要的改动 |
+|---|---|---|---|
+| `protocol/frame.rs` | `cupper-protocol` | 原样沿用 | — |
+| `protocol/rpc.rs` | 同上 | 沿用 | 补充错误码的 `reason` 清单（[5.3.8](03-protocol-v1.md#538-错误码)）；`Method` trait 增加 `SCOPE`、`IDEMPOTENCY` |
+| `protocol/open_enum.rs`、`text.rs`、`coalesce.rs`、`sync.rs`、`schema.rs`、`transport.rs` | 同上 | 沿用 | `schema.rs` 输出 `x-scope`、`x-idempotent`；`sync.rs` 不变 |
+| `protocol/events.rs` | 同上 | 沿用框架，扩充内容 | 按 [5.3.5](03-protocol-v1.md#535-事件类型目录) 扩充事件和条目；删除 `agent.notice`（未知的 ACP 更新只进原始帧）；`turn_id` 在交互请求上改为可选 |
+| `protocol/messages.rs` | 同上 | 沿用框架，扩充内容 | 增加 `host/hello`、nonce、`role`、`codesign`/`dev_key` 认证方式；补齐方法清单 |
+| `protocol/view.rs` | 同上 | 沿用，改造 | 会话视图加窗口（最近 20 个回合）；条目加工具详情、计划、提示、错误；加队列、配置、能力；索引视图加项目、agents、clients、host、提权请求 |
+| `host/conn.rs`、`outbox.rs`、`wire.rs` | `gateway` | 沿用 | 加固定令牌、`host/hello`、角色；会话命令改为由读循环按顺序投递；加 `blob/put`、`stream/unsubscribe`、在场 |
+| `host/commands.rs` | `ledger` | 沿用逻辑 | principal 改用稳定 ID；结果与事件同事务落盘；增加 `pending_external`；内存表常驻 |
+| `host/auth.rs` | `policy` + `gateway` | 部分沿用 | 加签名校验、`dev_key`、提权、角色；scope 表改由协议常量驱动 |
+| `host/hub.rs` | `store::streams` | 沿用不变式，重构实现 | `append` 拆成"分配 → 写线程提交 → 加锁应用与扇出"；单写者；懒加载与淘汰 |
+| `host/store.rs` | `store` | 重写 | 改为写线程加读池；新的表结构（[5.4](04-data-model.md)）；迁移与备份；blob 改为文件 |
+| `host/session.rs` | `orchestrator` + `interaction` | 重构 | 状态机不再 await 长操作；加队列、Steer、自发回合、中断超时；交互代理独立成组件，允许回合外的请求；不再自己持有驱动，改为挂到共享的 `AgentRuntime` |
+| `host/driver.rs` | `driver` | 重构 | 每种 agent 一个适配器进程（ADR-09），按 ACP sessionId 路由；加线路分接、扩展方法、提取层、能力缓存（[5.6](06-agent-driver.md)） |
+| `host/normalize.rs` | `driver::normalize` | 沿用写入时合并逻辑 | 输出改为新的条目模型；按 agent 的提取层取退出码、输出、diff |
+| `host/host.rs` | `orchestrator::manager` + `supervisor` | 拆分 | 恢复逻辑和 `reap_group` 沿用 |
+| `host/sys.rs` | `cupper-sys` | 沿用 | 合并 SP-4b 的 Security FFI；stderr 改为管道（由宿主读出后经脱敏写日志，便于轮转）；加 csops、IOPM、血缘信息 |
+| `host/main.rs` | `cupper-host` bin | 沿用流程 | 加迁移、自检、运行时安装、`CFRunLoop` 主线程 |
+| `host/util.rs` | `cupper-host::util` | 沿用 | — |
+| `host/tests/e2e.rs`、`support/` | 宿主集成测试 | 沿用 | 改用新方法；作为 NFR-1 验收测试的基础 |
+| `host/tests/measure.rs` | 性能测试 | 沿用 | 加入签名校验后的冷启动 |
+| `cupper-cli` | `cupper-cli` | 沿用 | 扩充命令；加 `elevate`、`repl`、宿主签名校验 |
+| `cupper-fake-agent` | 同名 crate | 沿用脚本模式 | 增加录制回放模式（[5.9.2](09-testing.md#592-假-agent)） |
+| `ts/` 生成链 | `tools/gen-protocol-ts` + `packages/protocol` | 沿用 | 补 SP-4a 报告提出的三处后处理 |
+| `protocol/fixtures/events.json` | `protocol/fixtures/` | 沿用 | 扩充到每种消息和事件 |
+| `smoke/*.sh` | 兼容套件 | 不沿用脚本 | 改由 `cargo xtask compat` 实现 |
