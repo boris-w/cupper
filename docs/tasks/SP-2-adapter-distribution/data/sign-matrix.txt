@@ -1,0 +1,51 @@
+# official node 24.22.0 (adapter bundle = claude-agent-acp esbuild single file)
+E0 ()
+  codesign --verify --strict: OK
+  node -e (JIT): FAIL(rc=133) 12: 0x185ecfda4 start [/usr/lib/dyld]
+  node --jitless -e: OK
+  WebAssembly: FAIL(rc=133) 12: 0x185ecfda4 start [/usr/lib/dyld]
+  adapter bundle --version: FAIL(rc=133) 12: 0x185ecfda4 start [/usr/lib/dyld]
+E1 (allow-jit )
+  codesign --verify --strict: OK
+  node -e (JIT): OK
+  node --jitless -e: OK
+  WebAssembly: OK
+  adapter bundle --version: OK
+E2 (allow-jit allow-unsigned-executable-memory )
+  codesign --verify --strict: OK
+  node -e (JIT): OK
+  node --jitless -e: OK
+  WebAssembly: OK
+  adapter bundle --version: OK
+E3 (allow-jit allow-unsigned-executable-memory disable-library-validation )
+  codesign --verify --strict: OK
+  node -e (JIT): OK
+  node --jitless -e: OK
+  WebAssembly: OK
+  adapter bundle --version: OK
+# claude-agent-acp Node SEA
+E0 ()
+  codesign --verify --strict: OK
+  exe --version: FAIL(rc=133) 12: 0x185ecfda4 start [/usr/lib/dyld]
+E1 (allow-jit )
+  codesign --verify --strict: OK
+  exe --version: OK
+E2 (allow-jit allow-unsigned-executable-memory )
+  codesign --verify --strict: OK
+  exe --version: OK
+E3 (allow-jit allow-unsigned-executable-memory disable-library-validation )
+  codesign --verify --strict: OK
+  exe --version: OK
+# claude-agent-acp bun --compile
+E0 ()
+  codesign --verify --strict: OK
+  exe --version: FAIL(rc=1) Bun v1.4.3 (macOS arm64)
+E1 (allow-jit )
+  codesign --verify --strict: OK
+  exe --version: OK
+E2 (allow-jit allow-unsigned-executable-memory )
+  codesign --verify --strict: OK
+  exe --version: OK
+E3 (allow-jit allow-unsigned-executable-memory disable-library-validation )
+  codesign --verify --strict: OK
+  exe --version: OK

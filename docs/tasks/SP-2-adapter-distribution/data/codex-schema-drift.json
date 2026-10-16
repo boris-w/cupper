@@ -1,0 +1,5827 @@
+{
+ "versions": [
+  {
+   "label": "v0140",
+   "version": "codex-cli 0.140.0"
+  },
+  {
+   "label": "v0150",
+   "version": "codex-cli 0.150.1"
+  },
+  {
+   "label": "v0159",
+   "version": "codex-cli 0.159.2"
+  },
+  {
+   "label": "v0160",
+   "version": "codex-cli 0.160.1"
+  },
+  {
+   "label": "v0163",
+   "version": "codex-cli 0.163.0"
+  }
+ ],
+ "baseline": "v0160",
+ "usedMethodCount": 127,
+ "methods": [
+  {
+   "method": "account/gatewayOAuth/changed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": false
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "bedc5b13c0ed"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "bedc5b13c0ed"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "bedc5b13c0ed"
+    }
+   }
+  },
+  {
+   "method": "account/login/cancel",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "670beb9b58fb"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "670beb9b58fb"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "670beb9b58fb"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "670beb9b58fb"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "670beb9b58fb"
+    }
+   }
+  },
+  {
+   "method": "account/login/completed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "46e05fbf9df9",
+     "changedDefs": [
+      {
+       "def": "AccountLoginCompletedNotification",
+       "propsRemoved": [
+        "onboardingEntrypoint"
+       ]
+      },
+      {
+       "def": "DesktopOnboardingEntrypoint",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6452dd6edde9"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6452dd6edde9"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6452dd6edde9"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6452dd6edde9"
+    }
+   }
+  },
+  {
+   "method": "account/login/start",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "1ea3fd233018",
+     "changedDefs": [
+      {
+       "def": "LoginAccountParams",
+       "propsRemoved": [
+        "appBrand",
+        "useHostedLoginSuccessPage",
+        "region",
+        "accessKeyId",
+        "secretAccessKey",
+        "sessionToken"
+       ],
+       "enumRemoved": [
+        "amazonBedrock",
+        "amazonBedrockAccessKeys"
+       ]
+      },
+      {
+       "def": "LoginAppBrand",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8ce736d878f6"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8ce736d878f6"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8ce736d878f6"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8ce736d878f6"
+    }
+   }
+  },
+  {
+   "method": "account/logout",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    }
+   }
+  },
+  {
+   "method": "account/rateLimits/read",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    }
+   }
+  },
+  {
+   "method": "account/rateLimits/updated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "868c66982857",
+     "changedDefs": [
+      {
+       "def": "RateLimitSnapshot",
+       "propsRemoved": [
+        "normalModelSlug",
+        "spendControlReached"
+       ]
+      },
+      {
+       "def": "PlanType",
+       "enumRemoved": [
+        "promax",
+        "self_serve_business_prolite",
+        "ent26",
+        "enterprise_cbp_automation",
+        "edu_plus",
+        "edu_pro"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "54f6d51993c4",
+     "changedDefs": [
+      {
+       "def": "RateLimitSnapshot",
+       "propsRemoved": [
+        "normalModelSlug"
+       ]
+      },
+      {
+       "def": "PlanType",
+       "enumRemoved": [
+        "promax"
+       ]
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "369ec623dc64"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "369ec623dc64"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "369ec623dc64"
+    }
+   }
+  },
+  {
+   "method": "account/read",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "9a292e72f5f1"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "9a292e72f5f1"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "9a292e72f5f1"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "9a292e72f5f1"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "9a292e72f5f1"
+    }
+   }
+  },
+  {
+   "method": "account/updated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f2559a1e53eb",
+     "changedDefs": [
+      {
+       "def": "AuthMode",
+       "enumRemoved": [
+        "headers",
+        "bedrockAccessKeys"
+       ]
+      },
+      {
+       "def": "PlanType",
+       "enumRemoved": [
+        "promax",
+        "self_serve_business_prolite",
+        "ent26",
+        "enterprise_cbp_automation",
+        "edu_plus",
+        "edu_pro"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "bb98e343aa32",
+     "changedDefs": [
+      {
+       "def": "PlanType",
+       "enumRemoved": [
+        "promax"
+       ]
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4cad75381d92"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4cad75381d92"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4cad75381d92"
+    }
+   }
+  },
+  {
+   "method": "app/list/updated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f247b65f12bc",
+     "changedDefs": [
+      {
+       "def": "AppInfo",
+       "propsRemoved": [
+        "iconAssets",
+        "iconDarkAssets"
+       ]
+      },
+      {
+       "def": "AppMetadata",
+       "propsAdded": [
+        "firstPartyType"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4b50cbfd035b"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4b50cbfd035b"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4b50cbfd035b"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4b50cbfd035b"
+    }
+   }
+  },
+  {
+   "method": "autoApprovalReview/strictReviewRequired",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ab0524597f5e"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ab0524597f5e"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ab0524597f5e"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ab0524597f5e"
+    }
+   }
+  },
+  {
+   "method": "command/exec/outputDelta",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fb2b7791d6cf"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fb2b7791d6cf"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fb2b7791d6cf"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fb2b7791d6cf"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fb2b7791d6cf"
+    }
+   }
+  },
+  {
+   "method": "config/batchWrite",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "98075959ca82"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "98075959ca82"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "98075959ca82"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "98075959ca82"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "98075959ca82"
+    }
+   }
+  },
+  {
+   "method": "config/mcpServer/reload",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4f53cda18c2b"
+    }
+   }
+  },
+  {
+   "method": "config/read",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "225fa9d0c4e1"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "225fa9d0c4e1"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "225fa9d0c4e1"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "225fa9d0c4e1"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "225fa9d0c4e1"
+    }
+   }
+  },
+  {
+   "method": "configWarning",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "3e1226023b53"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "3e1226023b53"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "3e1226023b53"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "3e1226023b53"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "3e1226023b53"
+    }
+   }
+  },
+  {
+   "method": "deprecationNotice",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fd7045a7c2a0"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fd7045a7c2a0"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fd7045a7c2a0"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fd7045a7c2a0"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fd7045a7c2a0"
+    }
+   }
+  },
+  {
+   "method": "error",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a907a9270de1",
+     "changedDefs": [
+      {
+       "def": "TurnError",
+       "propsRemoved": [
+        "misalignment"
+       ]
+      },
+      {
+       "def": "CodexErrorInfo",
+       "enumRemoved": [
+        "sessionBudgetExceeded",
+        "rateLimitExceeded",
+        "flexUnavailable",
+        "misalignmentPolicyViolation",
+        "tooManyDenials"
+       ]
+      },
+      {
+       "def": "MisalignmentErrorDetails",
+       "change": "removed"
+      },
+      {
+       "def": "MisalignmentSteer",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "670acd5e66d4",
+     "changedDefs": [
+      {
+       "def": "TurnError",
+       "propsRemoved": [
+        "misalignment"
+       ]
+      },
+      {
+       "def": "CodexErrorInfo",
+       "enumRemoved": [
+        "rateLimitExceeded",
+        "flexUnavailable",
+        "tooManyDenials"
+       ]
+      },
+      {
+       "def": "MisalignmentErrorDetails",
+       "change": "removed"
+      },
+      {
+       "def": "MisalignmentSteer",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "5d52e570df11"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "5d52e570df11"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "454c976b8177",
+     "changedDefs": [
+      {
+       "def": "CodexErrorInfo"
+      },
+      {
+       "def": "MisalignmentErrorDetails",
+       "propsAdded": [
+        "reviewTarget"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "method": "externalAgentConfig/import/completed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "37f1169725ac",
+     "changedDefs": [
+      {
+       "def": "ExternalAgentConfigImportCompletedNotification",
+       "propsRemoved": [
+        "importId",
+        "itemTypeResults"
+       ]
+      },
+      {
+       "def": "ExternalAgentConfigImportTypeResult",
+       "change": "removed"
+      },
+      {
+       "def": "ExternalAgentConfigImportItemTypeFailure",
+       "change": "removed"
+      },
+      {
+       "def": "ExternalAgentConfigMigrationItemType",
+       "change": "removed"
+      },
+      {
+       "def": "ExternalAgentConfigImportItemTypeSuccess",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7b14f5d7a86b"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7b14f5d7a86b"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7b14f5d7a86b"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7b14f5d7a86b"
+    }
+   }
+  },
+  {
+   "method": "externalAgentConfig/import/progress",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "97878f204da3"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "97878f204da3"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "97878f204da3"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "97878f204da3"
+    }
+   }
+  },
+  {
+   "method": "fs/changed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f14e004e61d5"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f14e004e61d5"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f14e004e61d5"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f14e004e61d5"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f14e004e61d5"
+    }
+   }
+  },
+  {
+   "method": "fuzzyFileSearch/sessionCompleted",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "23831bb5eac4"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "23831bb5eac4"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "23831bb5eac4"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "23831bb5eac4"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "23831bb5eac4"
+    }
+   }
+  },
+  {
+   "method": "fuzzyFileSearch/sessionUpdated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c3f28a5984b9"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c3f28a5984b9"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c3f28a5984b9"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c3f28a5984b9"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c3f28a5984b9"
+    }
+   }
+  },
+  {
+   "method": "guardianWarning",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "63cd7bb64f88"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "63cd7bb64f88"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "63cd7bb64f88"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "63cd7bb64f88"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "63cd7bb64f88"
+    }
+   }
+  },
+  {
+   "method": "hook/completed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f13a83210c82",
+     "changedDefs": [
+      {
+       "def": "HookEventName",
+       "enumRemoved": [
+        "sessionEnd",
+        "interrupt"
+       ]
+      },
+      {
+       "def": "HookHandlerType",
+       "enumRemoved": [
+        "mcpTool"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c98b5a593e3d"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c98b5a593e3d"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c98b5a593e3d"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c98b5a593e3d"
+    }
+   }
+  },
+  {
+   "method": "hook/started",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "06a377216ac4",
+     "changedDefs": [
+      {
+       "def": "HookEventName",
+       "enumRemoved": [
+        "sessionEnd",
+        "interrupt"
+       ]
+      },
+      {
+       "def": "HookHandlerType",
+       "enumRemoved": [
+        "mcpTool"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ee5738d37759"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ee5738d37759"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ee5738d37759"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ee5738d37759"
+    }
+   }
+  },
+  {
+   "method": "hooks/list",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "163bd01b9d83"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "163bd01b9d83"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "163bd01b9d83"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "163bd01b9d83"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "163bd01b9d83"
+    }
+   }
+  },
+  {
+   "method": "initialize",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "3f1971e44fbe",
+     "changedDefs": [
+      {
+       "def": "InitializeCapabilities",
+       "propsRemoved": [
+        "explicitGatewayOauth",
+        "extensions",
+        "mcpServerOpenaiFormElicitation"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "623e4d33a8f3",
+     "changedDefs": [
+      {
+       "def": "InitializeCapabilities",
+       "propsRemoved": [
+        "explicitGatewayOauth"
+       ]
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2d096f78d55b"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2d096f78d55b"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2d096f78d55b"
+    }
+   }
+  },
+  {
+   "method": "item/agentMessage/delta",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "55b49de91c27"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "55b49de91c27"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "55b49de91c27"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "55b49de91c27"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "55b49de91c27"
+    }
+   }
+  },
+  {
+   "method": "item/autoApprovalReview/completed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "9ce4c5f5a6d1",
+     "changedDefs": [
+      {
+       "def": "GuardianApprovalReviewAction",
+       "propsRemoved": [
+        "approvalId",
+        "processId",
+        "stdin"
+       ],
+       "enumRemoved": [
+        "writeStdin"
+       ]
+      },
+      {
+       "def": "LegacyAppPathString",
+       "change": "removed"
+      },
+      {
+       "def": "AdditionalFileSystemPermissions"
+      },
+      {
+       "def": "FileSystemPath"
+      },
+      {
+       "def": "FileSystemSpecialPath"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7873c3fb930f",
+     "changedDefs": [
+      {
+       "def": "GuardianApprovalReviewAction"
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "05b2b9a95d06"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "05b2b9a95d06"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "05b2b9a95d06"
+    }
+   }
+  },
+  {
+   "method": "item/autoApprovalReview/started",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f813610633bf",
+     "changedDefs": [
+      {
+       "def": "GuardianApprovalReviewAction",
+       "propsRemoved": [
+        "approvalId",
+        "processId",
+        "stdin"
+       ],
+       "enumRemoved": [
+        "writeStdin"
+       ]
+      },
+      {
+       "def": "LegacyAppPathString",
+       "change": "removed"
+      },
+      {
+       "def": "AdditionalFileSystemPermissions"
+      },
+      {
+       "def": "FileSystemPath"
+      },
+      {
+       "def": "FileSystemSpecialPath"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "09f0673a0f77",
+     "changedDefs": [
+      {
+       "def": "GuardianApprovalReviewAction"
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "d0d66f54b1fb"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "d0d66f54b1fb"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "d0d66f54b1fb"
+    }
+   }
+  },
+  {
+   "method": "item/commandExecution/outputDelta",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b5d107b347cc"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b5d107b347cc"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b5d107b347cc"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b5d107b347cc"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b5d107b347cc"
+    }
+   }
+  },
+  {
+   "method": "item/commandExecution/requestApproval",
+   "kind": "serverRequest",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b49c8802b548",
+     "changedDefs": [
+      {
+       "def": "CommandExecutionRequestApprovalParams",
+       "propsRemoved": [
+        "environmentId",
+        "kind"
+       ]
+      },
+      {
+       "def": "AdditionalFileSystemPermissions"
+      },
+      {
+       "def": "FileSystemPath"
+      },
+      {
+       "def": "LegacyAppPathString",
+       "change": "removed"
+      },
+      {
+       "def": "FileSystemSpecialPath"
+      },
+      {
+       "def": "CommandAction"
+      },
+      {
+       "def": "CommandExecutionApprovalKind",
+       "change": "removed"
+      },
+      {
+       "def": "AbsolutePathBuf",
+       "change": "added"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "37005e78dd4c"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "37005e78dd4c"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "37005e78dd4c"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "37005e78dd4c"
+    }
+   }
+  },
+  {
+   "method": "item/commandExecution/terminalInteraction",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6f31034e2edb"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6f31034e2edb"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6f31034e2edb"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6f31034e2edb"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6f31034e2edb"
+    }
+   }
+  },
+  {
+   "method": "item/completed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c007bbb1ff16",
+     "changedDefs": [
+      {
+       "def": "ThreadItem",
+       "propsRemoved": [
+        "delivery",
+        "questions",
+        "name",
+        "output",
+        "scriptPath",
+        "appContext",
+        "mcpAppUi",
+        "readOnlyHint",
+        "results",
+        "failure",
+        "transparentBackground"
+       ],
+       "enumRemoved": [
+        "functionCallOutput",
+        "sleep"
+       ]
+      },
+      {
+       "def": "UserInput",
+       "enumRemoved": [
+        "audio",
+        "localAudio"
+       ]
+      },
+      {
+       "def": "AgentMessageDelivery",
+       "change": "removed"
+      },
+      {
+       "def": "AsyncUserInputQuestion",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputBody",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "change": "removed"
+      },
+      {
+       "def": "CommandAction"
+      },
+      {
+       "def": "LegacyAppPathString",
+       "change": "removed"
+      },
+      {
+       "def": "McpToolCallAppContext",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppUi",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppDisplayMode",
+       "change": "removed"
+      },
+      {
+       "def": "DynamicToolCallOutputContentItem",
+       "propsRemoved": [
+        "audioUrl"
+       ],
+       "enumRemoved": [
+        "inputAudio"
+       ]
+      },
+      {
+       "def": "CollabAgentToolCallStatus",
+       "enumRemoved": [
+        "interrupted"
+       ]
+      },
+      {
+       "def": "CollabAgentTool",
+       "enumRemoved": [
+        "sendMessage",
+        "followupTask",
+        "interruptAgent",
+        "listAgents"
+       ]
+      },
+      {
+       "def": "SubAgentActivityKind",
+       "enumRemoved": [
+        "completed"
+       ]
+      },
+      {
+       "def": "ImageGenerationFailure",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4b92281b9972",
+     "changedDefs": [
+      {
+       "def": "ThreadItem",
+       "propsRemoved": [
+        "questions",
+        "name",
+        "output",
+        "mcpAppUi"
+       ],
+       "enumRemoved": [
+        "functionCallOutput"
+       ]
+      },
+      {
+       "def": "UserInput"
+      },
+      {
+       "def": "AsyncUserInputQuestion",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputBody",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppUi",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppDisplayMode",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "757ee648273b"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "757ee648273b"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "5d00244be23c",
+     "changedDefs": [
+      {
+       "def": "ThreadItem"
+      },
+      {
+       "def": "MessagePhase",
+       "enumAdded": [
+        "partial_answer"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "method": "item/fileChange/outputDelta",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "d9e35790d97c"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "d9e35790d97c"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "d9e35790d97c"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "d9e35790d97c"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "d9e35790d97c"
+    }
+   }
+  },
+  {
+   "method": "item/fileChange/patchUpdated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7e541e087b36"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7e541e087b36"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7e541e087b36"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7e541e087b36"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7e541e087b36"
+    }
+   }
+  },
+  {
+   "method": "item/fileChange/requestApproval",
+   "kind": "serverRequest",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7411bc1bc320"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7411bc1bc320"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7411bc1bc320"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7411bc1bc320"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7411bc1bc320"
+    }
+   }
+  },
+  {
+   "method": "item/mcpToolCall/progress",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "cb94d65d901c"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "cb94d65d901c"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "cb94d65d901c"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "cb94d65d901c"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "cb94d65d901c"
+    }
+   }
+  },
+  {
+   "method": "item/permissions/requestApproval",
+   "kind": "serverRequest",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c70ba79cf5cb",
+     "changedDefs": [
+      {
+       "def": "PermissionsRequestApprovalParams"
+      },
+      {
+       "def": "LegacyAppPathString",
+       "change": "removed"
+      },
+      {
+       "def": "AdditionalFileSystemPermissions"
+      },
+      {
+       "def": "FileSystemPath"
+      },
+      {
+       "def": "FileSystemSpecialPath"
+      },
+      {
+       "def": "AbsolutePathBuf",
+       "change": "added"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7435bb27ea18",
+     "changedDefs": [
+      {
+       "def": "PermissionsRequestApprovalParams"
+      },
+      {
+       "def": "AbsolutePathBuf",
+       "change": "added"
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7c9988838022"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7c9988838022"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7c9988838022"
+    }
+   }
+  },
+  {
+   "method": "item/plan/delta",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "1feda62ce9d2"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "1feda62ce9d2"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "1feda62ce9d2"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "1feda62ce9d2"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "1feda62ce9d2"
+    }
+   }
+  },
+  {
+   "method": "item/reasoning/summaryPartAdded",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "decead6ebb60"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "decead6ebb60"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "decead6ebb60"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "decead6ebb60"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "decead6ebb60"
+    }
+   }
+  },
+  {
+   "method": "item/reasoning/summaryTextDelta",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2eb0cd907943"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2eb0cd907943"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2eb0cd907943"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2eb0cd907943"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2eb0cd907943"
+    }
+   }
+  },
+  {
+   "method": "item/reasoning/textDelta",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "115362ad4442"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "115362ad4442"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "115362ad4442"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "115362ad4442"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "115362ad4442"
+    }
+   }
+  },
+  {
+   "method": "item/started",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "61f761f8f4cd",
+     "changedDefs": [
+      {
+       "def": "ThreadItem",
+       "propsRemoved": [
+        "delivery",
+        "questions",
+        "name",
+        "output",
+        "scriptPath",
+        "appContext",
+        "mcpAppUi",
+        "readOnlyHint",
+        "results",
+        "failure",
+        "transparentBackground"
+       ],
+       "enumRemoved": [
+        "functionCallOutput",
+        "sleep"
+       ]
+      },
+      {
+       "def": "UserInput",
+       "enumRemoved": [
+        "audio",
+        "localAudio"
+       ]
+      },
+      {
+       "def": "AgentMessageDelivery",
+       "change": "removed"
+      },
+      {
+       "def": "AsyncUserInputQuestion",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputBody",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "change": "removed"
+      },
+      {
+       "def": "CommandAction"
+      },
+      {
+       "def": "LegacyAppPathString",
+       "change": "removed"
+      },
+      {
+       "def": "McpToolCallAppContext",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppUi",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppDisplayMode",
+       "change": "removed"
+      },
+      {
+       "def": "DynamicToolCallOutputContentItem",
+       "propsRemoved": [
+        "audioUrl"
+       ],
+       "enumRemoved": [
+        "inputAudio"
+       ]
+      },
+      {
+       "def": "CollabAgentToolCallStatus",
+       "enumRemoved": [
+        "interrupted"
+       ]
+      },
+      {
+       "def": "CollabAgentTool",
+       "enumRemoved": [
+        "sendMessage",
+        "followupTask",
+        "interruptAgent",
+        "listAgents"
+       ]
+      },
+      {
+       "def": "SubAgentActivityKind",
+       "enumRemoved": [
+        "completed"
+       ]
+      },
+      {
+       "def": "ImageGenerationFailure",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "9c331c0f45e0",
+     "changedDefs": [
+      {
+       "def": "ThreadItem",
+       "propsRemoved": [
+        "questions",
+        "name",
+        "output",
+        "mcpAppUi"
+       ],
+       "enumRemoved": [
+        "functionCallOutput"
+       ]
+      },
+      {
+       "def": "UserInput"
+      },
+      {
+       "def": "AsyncUserInputQuestion",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputBody",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppUi",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppDisplayMode",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "10a674f01c1e"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "10a674f01c1e"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "123d5c739c5f",
+     "changedDefs": [
+      {
+       "def": "ThreadItem"
+      },
+      {
+       "def": "MessagePhase",
+       "enumAdded": [
+        "partial_answer"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "method": "item/tool/requestUserInput",
+   "kind": "serverRequest",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "46a211354877",
+     "changedDefs": [
+      {
+       "def": "ToolRequestUserInputParams",
+       "propsRemoved": [
+        "isBlocking"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8f71507f67cc"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8f71507f67cc"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8f71507f67cc"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8f71507f67cc"
+    }
+   }
+  },
+  {
+   "method": "mcpServer/elicitation/request",
+   "kind": "serverRequest",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7c5b87b040f4",
+     "changedDefs": [
+      {
+       "def": "McpServerElicitationRequestParams",
+       "propsRemoved": [
+        "challenge",
+        "description",
+        "title"
+       ],
+       "enumRemoved": [
+        "openai/userVerification",
+        "openai/form",
+        "openaiForm"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b40db6a4fac4",
+     "changedDefs": [
+      {
+       "def": "McpServerElicitationRequestParams",
+       "propsRemoved": [
+        "challenge",
+        "description",
+        "title"
+       ],
+       "enumRemoved": [
+        "openai/userVerification",
+        "openaiForm"
+       ]
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7c6bda804453"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7c6bda804453"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7c6bda804453"
+    }
+   }
+  },
+  {
+   "method": "mcpServer/event/stream/notification",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "9596ce810f3a"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "9596ce810f3a"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "9596ce810f3a"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "9596ce810f3a"
+    }
+   }
+  },
+  {
+   "method": "mcpServer/oauth/login",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e3f8e1f012b7",
+     "changedDefs": [
+      {
+       "def": "McpServerOauthLoginParams",
+       "propsRemoved": [
+        "clientRegistration",
+        "threadId"
+       ]
+      },
+      {
+       "def": "McpServerOauthClientRegistration",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "91f97fa1cad7"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "91f97fa1cad7"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "91f97fa1cad7"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "91f97fa1cad7"
+    }
+   }
+  },
+  {
+   "method": "mcpServer/oauthLogin/completed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e8694c85ef53",
+     "changedDefs": [
+      {
+       "def": "McpServerOauthLoginCompletedNotification",
+       "propsRemoved": [
+        "threadId"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b3685590cb20"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b3685590cb20"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b3685590cb20"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "5f5cd10fcf03",
+     "changedDefs": [
+      {
+       "def": "McpServerOauthLoginCompletedNotification",
+       "propsAdded": [
+        "loginId"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "method": "mcpServer/startupStatus/updated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "285dc31ba4ba",
+     "changedDefs": [
+      {
+       "def": "McpServerStatusUpdatedNotification",
+       "propsRemoved": [
+        "failureReason"
+       ]
+      },
+      {
+       "def": "McpServerStartupFailureReason",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6ff676ea01e9"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6ff676ea01e9"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6ff676ea01e9"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6ff676ea01e9"
+    }
+   }
+  },
+  {
+   "method": "mcpServerStatus/list",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "96bc50c95990",
+     "changedDefs": [
+      {
+       "def": "ListMcpServerStatusParams",
+       "propsRemoved": [
+        "serverName"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "96bc50c95990",
+     "changedDefs": [
+      {
+       "def": "ListMcpServerStatusParams",
+       "propsRemoved": [
+        "serverName"
+       ]
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "87881516f590"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "87881516f590"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "87881516f590"
+    }
+   }
+  },
+  {
+   "method": "model/list",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "19f278537103"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "19f278537103"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "19f278537103"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "19f278537103"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "19f278537103"
+    }
+   }
+  },
+  {
+   "method": "model/rerouted",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6c9f3d240dc1"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6c9f3d240dc1"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6c9f3d240dc1"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6c9f3d240dc1"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6c9f3d240dc1"
+    }
+   }
+  },
+  {
+   "method": "model/safetyBuffering/updated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e33995f1e998"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e33995f1e998"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e33995f1e998"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e33995f1e998"
+    }
+   }
+  },
+  {
+   "method": "model/verification",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a346a63f25ff"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a346a63f25ff"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a346a63f25ff"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a346a63f25ff"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a346a63f25ff"
+    }
+   }
+  },
+  {
+   "method": "modelProvider/authRecoveryCompleted",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": false
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2f03e007d32d"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2f03e007d32d"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2f03e007d32d"
+    }
+   }
+  },
+  {
+   "method": "modelProvider/authRecoveryStarted",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": false
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2f03e007d32d"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2f03e007d32d"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2f03e007d32d"
+    }
+   }
+  },
+  {
+   "method": "process/exited",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "012d62ce255f"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "012d62ce255f"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "012d62ce255f"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "012d62ce255f"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "012d62ce255f"
+    }
+   }
+  },
+  {
+   "method": "process/outputDelta",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "0a86cb33ec3f"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "0a86cb33ec3f"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "0a86cb33ec3f"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "0a86cb33ec3f"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "0a86cb33ec3f"
+    }
+   }
+  },
+  {
+   "method": "project/changed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2b7b78c60e71"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2b7b78c60e71"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2b7b78c60e71"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2b7b78c60e71"
+    }
+   }
+  },
+  {
+   "method": "remoteControl/status/changed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "871d45f14c4e"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "871d45f14c4e"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "871d45f14c4e"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "871d45f14c4e"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "871d45f14c4e"
+    }
+   }
+  },
+  {
+   "method": "review/start",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "62565b12f65e"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "62565b12f65e"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "62565b12f65e"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "62565b12f65e"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "62565b12f65e"
+    }
+   }
+  },
+  {
+   "method": "serverRequest/resolved",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "16a444822128"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "16a444822128"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "16a444822128"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "16a444822128"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "16a444822128"
+    }
+   }
+  },
+  {
+   "method": "skills/changed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6a6f922e2d0d"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6a6f922e2d0d"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6a6f922e2d0d"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6a6f922e2d0d"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6a6f922e2d0d"
+    }
+   }
+  },
+  {
+   "method": "skills/extraRoots/set",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f0adc2c0f637"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f0adc2c0f637"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f0adc2c0f637"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f0adc2c0f637"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f0adc2c0f637"
+    }
+   }
+  },
+  {
+   "method": "skills/list",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "972a7551d64c"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "972a7551d64c"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "972a7551d64c"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "972a7551d64c"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "972a7551d64c"
+    }
+   }
+  },
+  {
+   "method": "thread/archive",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7bd10106a8dc"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7bd10106a8dc"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7bd10106a8dc"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7bd10106a8dc"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7bd10106a8dc"
+    }
+   }
+  },
+  {
+   "method": "thread/archived",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "86b12ed17815"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "86b12ed17815"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "86b12ed17815"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "86b12ed17815"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "86b12ed17815"
+    }
+   }
+  },
+  {
+   "method": "thread/attachment/updated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": false
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ee0e5af72984"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ee0e5af72984"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ee0e5af72984"
+    }
+   }
+  },
+  {
+   "method": "thread/backgroundTerminals/list",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "60162dfae26e"
+    },
+    "v0150": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "60162dfae26e"
+    },
+    "v0159": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "60162dfae26e"
+    },
+    "v0160": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "60162dfae26e"
+    },
+    "v0163": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "60162dfae26e"
+    }
+   }
+  },
+  {
+   "method": "thread/backgroundTerminals/terminate",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "44a7f3f38def"
+    },
+    "v0150": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "44a7f3f38def"
+    },
+    "v0159": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "44a7f3f38def"
+    },
+    "v0160": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "44a7f3f38def"
+    },
+    "v0163": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "44a7f3f38def"
+    }
+   }
+  },
+  {
+   "method": "thread/closed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "128200a7c454"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "128200a7c454"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "128200a7c454"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "128200a7c454"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "128200a7c454"
+    }
+   }
+  },
+  {
+   "method": "thread/compact/start",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "1791804fbda0"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "1791804fbda0"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "1791804fbda0"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "1791804fbda0"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "1791804fbda0"
+    }
+   }
+  },
+  {
+   "method": "thread/compacted",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "33a8862c0d00"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "33a8862c0d00"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "33a8862c0d00"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "33a8862c0d00"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "33a8862c0d00"
+    }
+   }
+  },
+  {
+   "method": "thread/delete",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "544ec3316e2e"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "544ec3316e2e"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "544ec3316e2e"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "544ec3316e2e"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "544ec3316e2e"
+    }
+   }
+  },
+  {
+   "method": "thread/deleted",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "09a20a1a4432"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "09a20a1a4432"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "09a20a1a4432"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "09a20a1a4432"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "09a20a1a4432"
+    }
+   }
+  },
+  {
+   "method": "thread/environment/connected",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "31db5253a5e8"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "31db5253a5e8"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "31db5253a5e8"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "31db5253a5e8"
+    }
+   }
+  },
+  {
+   "method": "thread/environment/disconnected",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "31db5253a5e8"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "31db5253a5e8"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "31db5253a5e8"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "31db5253a5e8"
+    }
+   }
+  },
+  {
+   "method": "thread/fork",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "78cad2eb0887",
+     "changedDefs": [
+      {
+       "def": "ThreadForkParams",
+       "propsRemoved": [
+        "beforeTurnId",
+        "deferGoalContinuation",
+        "lastTurnId"
+       ]
+      },
+      {
+       "def": "AskForApproval",
+       "enumAdded": [
+        "on-failure"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "39bef8704bc0"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "39bef8704bc0"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "39bef8704bc0"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ce94a7221161",
+     "changedDefs": [
+      {
+       "def": "ThreadForkParams",
+       "propsAdded": [
+        "experimentalPredictionMode"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "method": "thread/goal/clear",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fdb2d0a2c2db"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fdb2d0a2c2db"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fdb2d0a2c2db"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fdb2d0a2c2db"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "99e84657dbf3",
+     "changedDefs": [
+      {
+       "def": "ThreadGoalClearParams",
+       "propsAdded": [
+        "origin"
+       ]
+      },
+      {
+       "def": "ThreadGoalMutationOrigin",
+       "change": "added"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "method": "thread/goal/cleared",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a6c34b5944d7"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a6c34b5944d7"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a6c34b5944d7"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a6c34b5944d7"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a6c34b5944d7"
+    }
+   }
+  },
+  {
+   "method": "thread/goal/get",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8614916c7b63"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8614916c7b63"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8614916c7b63"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8614916c7b63"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8614916c7b63"
+    }
+   }
+  },
+  {
+   "method": "thread/goal/set",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e28cc421bd30"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e28cc421bd30"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e28cc421bd30"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e28cc421bd30"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2091984001d3",
+     "changedDefs": [
+      {
+       "def": "ThreadGoalSetParams",
+       "propsAdded": [
+        "origin"
+       ]
+      },
+      {
+       "def": "ThreadGoalMutationOrigin",
+       "change": "added"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "method": "thread/goal/updated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7a19e8871dc8"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7a19e8871dc8"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7a19e8871dc8"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7a19e8871dc8"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7a19e8871dc8"
+    }
+   }
+  },
+  {
+   "method": "thread/items/list",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "edb5a3fc0f5b",
+     "changedDefs": [
+      {
+       "def": "ThreadItemsListParams"
+      },
+      {
+       "def": "ThreadItemsListCursor",
+       "change": "removed"
+      },
+      {
+       "def": "ThreadItemsListAnchor",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4ce0034c34cf"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4ce0034c34cf"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4ce0034c34cf"
+    }
+   }
+  },
+  {
+   "method": "thread/list",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "65b16ed0a45f",
+     "changedDefs": [
+      {
+       "def": "ThreadListParams",
+       "propsRemoved": [
+        "ancestorThreadId",
+        "originators",
+        "parentThreadId",
+        "projectId",
+        "sectionId"
+       ]
+      },
+      {
+       "def": "ThreadSortKey",
+       "enumRemoved": [
+        "recency_at",
+        "section_position"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "359a66c17ab2",
+     "changedDefs": [
+      {
+       "def": "ThreadListParams",
+       "propsRemoved": [
+        "originators"
+       ]
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "0168da0e8844"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "0168da0e8844"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "91c0c488bdaf",
+     "changedDefs": [
+      {
+       "def": "ThreadListParams",
+       "propsAdded": [
+        "excludedThreadIds"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "method": "thread/loaded/list",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "36716c6a45ac"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "36716c6a45ac"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "36716c6a45ac"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "36716c6a45ac"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "36716c6a45ac"
+    }
+   }
+  },
+  {
+   "method": "thread/name/set",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "51e5c7120bb2"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "51e5c7120bb2"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "51e5c7120bb2"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "51e5c7120bb2"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "51e5c7120bb2"
+    }
+   }
+  },
+  {
+   "method": "thread/name/updated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "84875955306b"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "84875955306b"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "84875955306b"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "84875955306b"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "84875955306b"
+    }
+   }
+  },
+  {
+   "method": "thread/project/updated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ddde5e44fd3e"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ddde5e44fd3e"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ddde5e44fd3e"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ddde5e44fd3e"
+    }
+   }
+  },
+  {
+   "method": "thread/queue/changed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4de905964c3e"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4de905964c3e"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4de905964c3e"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4de905964c3e"
+    }
+   }
+  },
+  {
+   "method": "thread/read",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "61fa05d4d98d"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "61fa05d4d98d"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "61fa05d4d98d"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "61fa05d4d98d"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "61fa05d4d98d"
+    }
+   }
+  },
+  {
+   "method": "thread/realtime/closed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "455c3d216bd7"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "455c3d216bd7"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "455c3d216bd7"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "455c3d216bd7"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "455c3d216bd7"
+    }
+   }
+  },
+  {
+   "method": "thread/realtime/error",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "661008c7237f"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "661008c7237f"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "661008c7237f"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "661008c7237f"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "661008c7237f"
+    }
+   }
+  },
+  {
+   "method": "thread/realtime/item/completed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2133c97f38dd"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2133c97f38dd"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2133c97f38dd"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2133c97f38dd"
+    }
+   }
+  },
+  {
+   "method": "thread/realtime/item/started",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8d3086dabab9"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8d3086dabab9"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8d3086dabab9"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "8d3086dabab9"
+    }
+   }
+  },
+  {
+   "method": "thread/realtime/item/transcript/delta",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b31db3b2f642"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b31db3b2f642"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b31db3b2f642"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b31db3b2f642"
+    }
+   }
+  },
+  {
+   "method": "thread/realtime/itemAdded",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e381f82f53a1"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e381f82f53a1"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e381f82f53a1"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e381f82f53a1"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e381f82f53a1"
+    }
+   }
+  },
+  {
+   "method": "thread/realtime/outputAudio/delta",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "53065771f151"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "53065771f151"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "53065771f151"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "53065771f151"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "53065771f151"
+    }
+   }
+  },
+  {
+   "method": "thread/realtime/sdp",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ca29b5731587"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ca29b5731587"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ca29b5731587"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ca29b5731587"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ca29b5731587"
+    }
+   }
+  },
+  {
+   "method": "thread/realtime/started",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f9a0f35b54e0",
+     "changedDefs": [
+      {
+       "def": "RealtimeConversationVersion",
+       "enumRemoved": [
+        "v3"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c1483c66163e"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c1483c66163e"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c1483c66163e"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c1483c66163e"
+    }
+   }
+  },
+  {
+   "method": "thread/realtime/transcript/delta",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e6d8dbe7de48"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e6d8dbe7de48"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e6d8dbe7de48"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e6d8dbe7de48"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e6d8dbe7de48"
+    }
+   }
+  },
+  {
+   "method": "thread/realtime/transcript/done",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c787ea7b63cd"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c787ea7b63cd"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c787ea7b63cd"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c787ea7b63cd"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c787ea7b63cd"
+    }
+   }
+  },
+  {
+   "method": "thread/resume",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "882cf6e542cb",
+     "changedDefs": [
+      {
+       "def": "AskForApproval",
+       "enumAdded": [
+        "on-failure"
+       ]
+      },
+      {
+       "def": "ResponseItem",
+       "propsRemoved": [
+        "internal_chat_message_metadata_passthrough",
+        "encrypted_function_args",
+        "reasoning"
+       ],
+       "enumRemoved": [
+        "configuration_update"
+       ]
+      },
+      {
+       "def": "ContentItem",
+       "propsAdded": [
+        "image_url"
+       ],
+       "propsRemoved": [
+        "audio_url"
+       ],
+       "enumRemoved": [
+        "input_audio"
+       ]
+      },
+      {
+       "def": "InternalChatMessageMetadataPassthrough",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "propsAdded": [
+        "image_url"
+       ],
+       "propsRemoved": [
+        "audio_url"
+       ],
+       "enumRemoved": [
+        "input_audio"
+       ]
+      },
+      {
+       "def": "ConfigurationReasoning",
+       "change": "removed"
+      },
+      {
+       "def": "ReasoningEffort",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b81d70e1575b",
+     "changedDefs": [
+      {
+       "def": "ResponseItem",
+       "propsRemoved": [
+        "reasoning"
+       ],
+       "enumRemoved": [
+        "configuration_update"
+       ]
+      },
+      {
+       "def": "ContentItem",
+       "propsAdded": [
+        "image_url"
+       ]
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "propsAdded": [
+        "image_url"
+       ]
+      },
+      {
+       "def": "ConfigurationReasoning",
+       "change": "removed"
+      },
+      {
+       "def": "ReasoningEffort",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "d067e0aa140a"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "d067e0aa140a"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4918a99bbdc4",
+     "changedDefs": [
+      {
+       "def": "ResponseItem",
+       "enumAdded": [
+        "additional_tools"
+       ]
+      },
+      {
+       "def": "ContentItem",
+       "propsAdded": [
+        "annotations",
+        "logprobs"
+       ]
+      },
+      {
+       "def": "MessagePhase",
+       "enumAdded": [
+        "partial_answer"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "method": "thread/reverted",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": false
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "53408392e533"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "53408392e533"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "53408392e533"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "53408392e533"
+    }
+   }
+  },
+  {
+   "method": "thread/settings/update",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "838af0caea52",
+     "changedDefs": [
+      {
+       "def": "ThreadSettingsUpdateParams",
+       "propsRemoved": [
+        "disabledPluginIds",
+        "multiAgentMode"
+       ]
+      },
+      {
+       "def": "AskForApproval",
+       "enumAdded": [
+        "on-failure"
+       ]
+      },
+      {
+       "def": "MultiAgentMode",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "a5f5c25e4974",
+     "changedDefs": [
+      {
+       "def": "ThreadSettingsUpdateParams",
+       "propsRemoved": [
+        "disabledPluginIds"
+       ]
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "3212f656cef7"
+    },
+    "v0160": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "3212f656cef7"
+    },
+    "v0163": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "3212f656cef7"
+    }
+   }
+  },
+  {
+   "method": "thread/settings/updated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "fe50f759e8b7",
+     "changedDefs": [
+      {
+       "def": "ThreadSettings",
+       "propsRemoved": [
+        "disabledPluginIds",
+        "multiAgentMode"
+       ]
+      },
+      {
+       "def": "AskForApproval",
+       "enumAdded": [
+        "on-failure"
+       ]
+      },
+      {
+       "def": "MultiAgentMode",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "101c047bb493",
+     "changedDefs": [
+      {
+       "def": "ThreadSettings",
+       "propsRemoved": [
+        "disabledPluginIds"
+       ]
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a3013293b9d4"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a3013293b9d4"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a3013293b9d4"
+    }
+   }
+  },
+  {
+   "method": "thread/start",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "caa2359feabf",
+     "changedDefs": [
+      {
+       "def": "ThreadStartParams",
+       "propsRemoved": [
+        "allowProviderModelFallback",
+        "daybreakEnabled",
+        "historyMode",
+        "multiAgentMode",
+        "projectId"
+       ]
+      },
+      {
+       "def": "AskForApproval",
+       "enumAdded": [
+        "on-failure"
+       ]
+      },
+      {
+       "def": "DynamicToolSpec",
+       "propsAdded": [
+        "namespace"
+       ],
+       "propsRemoved": [
+        "type",
+        "tools"
+       ],
+       "enumRemoved": [
+        "function",
+        "namespace"
+       ],
+       "newlyRequired": [
+        "description",
+        "inputSchema",
+        "name"
+       ]
+      },
+      {
+       "def": "DynamicToolNamespaceTool",
+       "change": "removed"
+      },
+      {
+       "def": "TurnEnvironmentParams",
+       "propsRemoved": [
+        "runtimeWorkspaceRoots"
+       ]
+      },
+      {
+       "def": "LegacyAppPathString",
+       "change": "removed"
+      },
+      {
+       "def": "ThreadHistoryMode",
+       "change": "removed"
+      },
+      {
+       "def": "MultiAgentMode",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "20be82c80b7a",
+     "changedDefs": [
+      {
+       "def": "ThreadStartParams",
+       "propsRemoved": [
+        "daybreakEnabled"
+       ]
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "02188d34c7e3"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "02188d34c7e3"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "02188d34c7e3"
+    }
+   }
+  },
+  {
+   "method": "thread/started",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "9af49d33fec0",
+     "changedDefs": [
+      {
+       "def": "Thread",
+       "propsRemoved": [
+        "canAcceptDirectInput",
+        "daybreakEnabled",
+        "environments",
+        "extra",
+        "historyMode",
+        "model",
+        "originator",
+        "projectId",
+        "reasoningEffort",
+        "recencyAt",
+        "section",
+        "sectionEnteredAt"
+       ]
+      },
+      {
+       "def": "ThreadEnvironment",
+       "change": "removed"
+      },
+      {
+       "def": "LegacyAppPathString",
+       "change": "removed"
+      },
+      {
+       "def": "ThreadExtra",
+       "change": "removed"
+      },
+      {
+       "def": "ThreadHistoryMode",
+       "change": "removed"
+      },
+      {
+       "def": "ThreadSection",
+       "change": "removed"
+      },
+      {
+       "def": "ThreadSectionAppearance",
+       "change": "removed"
+      },
+      {
+       "def": "TurnError",
+       "propsRemoved": [
+        "misalignment"
+       ]
+      },
+      {
+       "def": "CodexErrorInfo",
+       "enumRemoved": [
+        "sessionBudgetExceeded",
+        "rateLimitExceeded",
+        "flexUnavailable",
+        "misalignmentPolicyViolation",
+        "tooManyDenials"
+       ]
+      },
+      {
+       "def": "MisalignmentErrorDetails",
+       "change": "removed"
+      },
+      {
+       "def": "MisalignmentSteer",
+       "change": "removed"
+      },
+      {
+       "def": "ThreadItem",
+       "propsRemoved": [
+        "delivery",
+        "questions",
+        "name",
+        "output",
+        "scriptPath",
+        "appContext",
+        "mcpAppUi",
+        "readOnlyHint",
+        "results",
+        "failure",
+        "transparentBackground"
+       ],
+       "enumRemoved": [
+        "functionCallOutput",
+        "sleep"
+       ]
+      },
+      {
+       "def": "UserInput",
+       "enumRemoved": [
+        "audio",
+        "localAudio"
+       ]
+      },
+      {
+       "def": "AgentMessageDelivery",
+       "change": "removed"
+      },
+      {
+       "def": "AsyncUserInputQuestion",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputBody",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "change": "removed"
+      },
+      {
+       "def": "CommandAction"
+      },
+      {
+       "def": "McpToolCallAppContext",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppUi",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppDisplayMode",
+       "change": "removed"
+      },
+      {
+       "def": "DynamicToolCallOutputContentItem",
+       "propsRemoved": [
+        "audioUrl"
+       ],
+       "enumRemoved": [
+        "inputAudio"
+       ]
+      },
+      {
+       "def": "CollabAgentToolCallStatus",
+       "enumRemoved": [
+        "interrupted"
+       ]
+      },
+      {
+       "def": "CollabAgentTool",
+       "enumRemoved": [
+        "sendMessage",
+        "followupTask",
+        "interruptAgent",
+        "listAgents"
+       ]
+      },
+      {
+       "def": "SubAgentActivityKind",
+       "enumRemoved": [
+        "completed"
+       ]
+      },
+      {
+       "def": "ImageGenerationFailure",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e1bcc085892b",
+     "changedDefs": [
+      {
+       "def": "Thread",
+       "propsRemoved": [
+        "daybreakEnabled",
+        "environments",
+        "model",
+        "originator",
+        "reasoningEffort"
+       ]
+      },
+      {
+       "def": "ThreadEnvironment",
+       "change": "removed"
+      },
+      {
+       "def": "TurnError",
+       "propsRemoved": [
+        "misalignment"
+       ]
+      },
+      {
+       "def": "CodexErrorInfo",
+       "enumRemoved": [
+        "rateLimitExceeded",
+        "flexUnavailable",
+        "tooManyDenials"
+       ]
+      },
+      {
+       "def": "MisalignmentErrorDetails",
+       "change": "removed"
+      },
+      {
+       "def": "MisalignmentSteer",
+       "change": "removed"
+      },
+      {
+       "def": "ThreadItem",
+       "propsRemoved": [
+        "questions",
+        "name",
+        "output",
+        "mcpAppUi"
+       ],
+       "enumRemoved": [
+        "functionCallOutput"
+       ]
+      },
+      {
+       "def": "UserInput"
+      },
+      {
+       "def": "AsyncUserInputQuestion",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputBody",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppUi",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppDisplayMode",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e6e7e1c3965e"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "e6e7e1c3965e"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "7fed534f1f6f",
+     "changedDefs": [
+      {
+       "def": "Turn",
+       "propsAdded": [
+        "rootTurnId"
+       ]
+      },
+      {
+       "def": "CodexErrorInfo"
+      },
+      {
+       "def": "MisalignmentErrorDetails",
+       "propsAdded": [
+        "reviewTarget"
+       ]
+      },
+      {
+       "def": "ThreadItem"
+      },
+      {
+       "def": "MessagePhase",
+       "enumAdded": [
+        "partial_answer"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "method": "thread/status/changed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "de38434f6020"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "de38434f6020"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "de38434f6020"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "de38434f6020"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "de38434f6020"
+    }
+   }
+  },
+  {
+   "method": "thread/tokenUsage/updated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6ed35a6cde21",
+     "changedDefs": [
+      {
+       "def": "TokenUsageBreakdown",
+       "propsRemoved": [
+        "cacheWriteInputTokens"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4bc64872edf3"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4bc64872edf3"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4bc64872edf3"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4bc64872edf3"
+    }
+   }
+  },
+  {
+   "method": "thread/turns/list",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "98daa1a62ecd"
+    },
+    "v0150": {
+     "present": true,
+     "stable": false,
+     "paramsHash": "98daa1a62ecd"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "98daa1a62ecd"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "98daa1a62ecd"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "98daa1a62ecd"
+    }
+   }
+  },
+  {
+   "method": "thread/unarchive",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "3fc99926160b"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "3fc99926160b"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "3fc99926160b"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "3fc99926160b"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "3fc99926160b"
+    }
+   }
+  },
+  {
+   "method": "thread/unarchived",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "308720526bea"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "308720526bea"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "308720526bea"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "308720526bea"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "308720526bea"
+    }
+   }
+  },
+  {
+   "method": "thread/unsubscribe",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "75e15c3c5ac6"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "75e15c3c5ac6"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "75e15c3c5ac6"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "75e15c3c5ac6"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "75e15c3c5ac6"
+    }
+   }
+  },
+  {
+   "method": "turn/completed",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f17c109a5b93",
+     "changedDefs": [
+      {
+       "def": "TurnError",
+       "propsRemoved": [
+        "misalignment"
+       ]
+      },
+      {
+       "def": "CodexErrorInfo",
+       "enumRemoved": [
+        "sessionBudgetExceeded",
+        "rateLimitExceeded",
+        "flexUnavailable",
+        "misalignmentPolicyViolation",
+        "tooManyDenials"
+       ]
+      },
+      {
+       "def": "MisalignmentErrorDetails",
+       "change": "removed"
+      },
+      {
+       "def": "MisalignmentSteer",
+       "change": "removed"
+      },
+      {
+       "def": "ThreadItem",
+       "propsRemoved": [
+        "delivery",
+        "questions",
+        "name",
+        "output",
+        "scriptPath",
+        "appContext",
+        "mcpAppUi",
+        "readOnlyHint",
+        "results",
+        "failure",
+        "transparentBackground"
+       ],
+       "enumRemoved": [
+        "functionCallOutput",
+        "sleep"
+       ]
+      },
+      {
+       "def": "UserInput",
+       "enumRemoved": [
+        "audio",
+        "localAudio"
+       ]
+      },
+      {
+       "def": "AgentMessageDelivery",
+       "change": "removed"
+      },
+      {
+       "def": "AsyncUserInputQuestion",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputBody",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "change": "removed"
+      },
+      {
+       "def": "CommandAction"
+      },
+      {
+       "def": "LegacyAppPathString",
+       "change": "removed"
+      },
+      {
+       "def": "McpToolCallAppContext",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppUi",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppDisplayMode",
+       "change": "removed"
+      },
+      {
+       "def": "DynamicToolCallOutputContentItem",
+       "propsRemoved": [
+        "audioUrl"
+       ],
+       "enumRemoved": [
+        "inputAudio"
+       ]
+      },
+      {
+       "def": "CollabAgentToolCallStatus",
+       "enumRemoved": [
+        "interrupted"
+       ]
+      },
+      {
+       "def": "CollabAgentTool",
+       "enumRemoved": [
+        "sendMessage",
+        "followupTask",
+        "interruptAgent",
+        "listAgents"
+       ]
+      },
+      {
+       "def": "SubAgentActivityKind",
+       "enumRemoved": [
+        "completed"
+       ]
+      },
+      {
+       "def": "ImageGenerationFailure",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6b3dda43938c",
+     "changedDefs": [
+      {
+       "def": "TurnError",
+       "propsRemoved": [
+        "misalignment"
+       ]
+      },
+      {
+       "def": "CodexErrorInfo",
+       "enumRemoved": [
+        "rateLimitExceeded",
+        "flexUnavailable",
+        "tooManyDenials"
+       ]
+      },
+      {
+       "def": "MisalignmentErrorDetails",
+       "change": "removed"
+      },
+      {
+       "def": "MisalignmentSteer",
+       "change": "removed"
+      },
+      {
+       "def": "ThreadItem",
+       "propsRemoved": [
+        "questions",
+        "name",
+        "output",
+        "mcpAppUi"
+       ],
+       "enumRemoved": [
+        "functionCallOutput"
+       ]
+      },
+      {
+       "def": "UserInput"
+      },
+      {
+       "def": "AsyncUserInputQuestion",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputBody",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppUi",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppDisplayMode",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "739e7b8c2155"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "739e7b8c2155"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "1fd7ff3a1cd6",
+     "changedDefs": [
+      {
+       "def": "Turn",
+       "propsAdded": [
+        "rootTurnId"
+       ]
+      },
+      {
+       "def": "CodexErrorInfo"
+      },
+      {
+       "def": "MisalignmentErrorDetails",
+       "propsAdded": [
+        "reviewTarget"
+       ]
+      },
+      {
+       "def": "ThreadItem"
+      },
+      {
+       "def": "MessagePhase",
+       "enumAdded": [
+        "partial_answer"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "method": "turn/diff/updated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "05e17ea567eb"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "05e17ea567eb"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "05e17ea567eb"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "05e17ea567eb"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "05e17ea567eb"
+    }
+   }
+  },
+  {
+   "method": "turn/interrupt",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "38ed6bb6cc04"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "38ed6bb6cc04"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "38ed6bb6cc04"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "38ed6bb6cc04"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "38ed6bb6cc04"
+    }
+   }
+  },
+  {
+   "method": "turn/moderationMetadata",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "627b9d5ba898"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "627b9d5ba898"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "627b9d5ba898"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "627b9d5ba898"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "627b9d5ba898"
+    }
+   }
+  },
+  {
+   "method": "turn/plan/updated",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6fb068036062"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6fb068036062"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6fb068036062"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6fb068036062"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "6fb068036062"
+    }
+   }
+  },
+  {
+   "method": "turn/start",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b4cf90f924bd",
+     "changedDefs": [
+      {
+       "def": "TurnStartParams",
+       "propsRemoved": [
+        "cyberAccessProgram",
+        "disabledPluginIds",
+        "multiAgentMode",
+        "serviceTierForTurn",
+        "toolOutput",
+        "turnTrigger"
+       ]
+      },
+      {
+       "def": "AskForApproval",
+       "enumAdded": [
+        "on-failure"
+       ]
+      },
+      {
+       "def": "CyberAccessProgram",
+       "change": "removed"
+      },
+      {
+       "def": "TurnEnvironmentParams",
+       "propsRemoved": [
+        "runtimeWorkspaceRoots"
+       ]
+      },
+      {
+       "def": "LegacyAppPathString",
+       "change": "removed"
+      },
+      {
+       "def": "UserInput",
+       "enumRemoved": [
+        "audio",
+        "localAudio"
+       ]
+      },
+      {
+       "def": "MultiAgentMode",
+       "change": "removed"
+      },
+      {
+       "def": "TurnToolOutput",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputBody",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "c43bd99b5c5e",
+     "changedDefs": [
+      {
+       "def": "TurnStartParams",
+       "propsRemoved": [
+        "cyberAccessProgram",
+        "disabledPluginIds",
+        "serviceTierForTurn",
+        "toolOutput",
+        "turnTrigger"
+       ]
+      },
+      {
+       "def": "CyberAccessProgram",
+       "change": "removed"
+      },
+      {
+       "def": "UserInput"
+      },
+      {
+       "def": "TurnToolOutput",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputBody",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2e7d6a9b8624"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2e7d6a9b8624"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "db3a0eec81d2",
+     "changedDefs": [
+      {
+       "def": "TurnStartParams",
+       "propsAdded": [
+        "parentTurnId",
+        "rootTurnId"
+       ]
+      },
+      {
+       "def": "TurnToolOutput",
+       "propsAdded": [
+        "retain"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "method": "turn/started",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "a9dcd9962016",
+     "changedDefs": [
+      {
+       "def": "TurnError",
+       "propsRemoved": [
+        "misalignment"
+       ]
+      },
+      {
+       "def": "CodexErrorInfo",
+       "enumRemoved": [
+        "sessionBudgetExceeded",
+        "rateLimitExceeded",
+        "flexUnavailable",
+        "misalignmentPolicyViolation",
+        "tooManyDenials"
+       ]
+      },
+      {
+       "def": "MisalignmentErrorDetails",
+       "change": "removed"
+      },
+      {
+       "def": "MisalignmentSteer",
+       "change": "removed"
+      },
+      {
+       "def": "ThreadItem",
+       "propsRemoved": [
+        "delivery",
+        "questions",
+        "name",
+        "output",
+        "scriptPath",
+        "appContext",
+        "mcpAppUi",
+        "readOnlyHint",
+        "results",
+        "failure",
+        "transparentBackground"
+       ],
+       "enumRemoved": [
+        "functionCallOutput",
+        "sleep"
+       ]
+      },
+      {
+       "def": "UserInput",
+       "enumRemoved": [
+        "audio",
+        "localAudio"
+       ]
+      },
+      {
+       "def": "AgentMessageDelivery",
+       "change": "removed"
+      },
+      {
+       "def": "AsyncUserInputQuestion",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputBody",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "change": "removed"
+      },
+      {
+       "def": "CommandAction"
+      },
+      {
+       "def": "LegacyAppPathString",
+       "change": "removed"
+      },
+      {
+       "def": "McpToolCallAppContext",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppUi",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppDisplayMode",
+       "change": "removed"
+      },
+      {
+       "def": "DynamicToolCallOutputContentItem",
+       "propsRemoved": [
+        "audioUrl"
+       ],
+       "enumRemoved": [
+        "inputAudio"
+       ]
+      },
+      {
+       "def": "CollabAgentToolCallStatus",
+       "enumRemoved": [
+        "interrupted"
+       ]
+      },
+      {
+       "def": "CollabAgentTool",
+       "enumRemoved": [
+        "sendMessage",
+        "followupTask",
+        "interruptAgent",
+        "listAgents"
+       ]
+      },
+      {
+       "def": "SubAgentActivityKind",
+       "enumRemoved": [
+        "completed"
+       ]
+      },
+      {
+       "def": "ImageGenerationFailure",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "d6aaf9c7e883",
+     "changedDefs": [
+      {
+       "def": "TurnError",
+       "propsRemoved": [
+        "misalignment"
+       ]
+      },
+      {
+       "def": "CodexErrorInfo",
+       "enumRemoved": [
+        "rateLimitExceeded",
+        "flexUnavailable",
+        "tooManyDenials"
+       ]
+      },
+      {
+       "def": "MisalignmentErrorDetails",
+       "change": "removed"
+      },
+      {
+       "def": "MisalignmentSteer",
+       "change": "removed"
+      },
+      {
+       "def": "ThreadItem",
+       "propsRemoved": [
+        "questions",
+        "name",
+        "output",
+        "mcpAppUi"
+       ],
+       "enumRemoved": [
+        "functionCallOutput"
+       ]
+      },
+      {
+       "def": "UserInput"
+      },
+      {
+       "def": "AsyncUserInputQuestion",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputBody",
+       "change": "removed"
+      },
+      {
+       "def": "FunctionCallOutputContentItem",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppUi",
+       "change": "removed"
+      },
+      {
+       "def": "McpAppDisplayMode",
+       "change": "removed"
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b81ac883a74c"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "b81ac883a74c"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "4b81ccb9d8d0",
+     "changedDefs": [
+      {
+       "def": "Turn",
+       "propsAdded": [
+        "rootTurnId"
+       ]
+      },
+      {
+       "def": "CodexErrorInfo"
+      },
+      {
+       "def": "MisalignmentErrorDetails",
+       "propsAdded": [
+        "reviewTarget"
+       ]
+      },
+      {
+       "def": "ThreadItem"
+      },
+      {
+       "def": "MessagePhase",
+       "enumAdded": [
+        "partial_answer"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "method": "turn/steer",
+   "kind": "request",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "19568ea6cb96",
+     "changedDefs": [
+      {
+       "def": "UserInput",
+       "enumRemoved": [
+        "audio",
+        "localAudio"
+       ]
+      }
+     ]
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "f4286cdf8832",
+     "changedDefs": [
+      {
+       "def": "UserInput"
+      }
+     ]
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ff8b32aad6c0"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ff8b32aad6c0"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "ff8b32aad6c0"
+    }
+   }
+  },
+  {
+   "method": "warning",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "aff24c38bc8e"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "aff24c38bc8e"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "aff24c38bc8e"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "aff24c38bc8e"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "aff24c38bc8e"
+    }
+   }
+  },
+  {
+   "method": "windows/worldWritableWarning",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2694cf34b08b"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2694cf34b08b"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2694cf34b08b"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2694cf34b08b"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "2694cf34b08b"
+    }
+   }
+  },
+  {
+   "method": "windowsSandbox/setupCompleted",
+   "kind": "notification",
+   "perVersion": {
+    "v0140": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "cf58a5226ccd"
+    },
+    "v0150": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "cf58a5226ccd"
+    },
+    "v0159": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "cf58a5226ccd"
+    },
+    "v0160": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "cf58a5226ccd"
+    },
+    "v0163": {
+     "present": true,
+     "stable": true,
+     "paramsHash": "cf58a5226ccd"
+    }
+   }
+  }
+ ],
+ "methodCounts": {
+  "v0140": {
+   "all": 193,
+   "stable": 160
+  },
+  "v0150": {
+   "all": 243,
+   "stable": 184
+  },
+  "v0159": {
+   "all": 261,
+   "stable": 197
+  },
+  "v0160": {
+   "all": 261,
+   "stable": 197
+  },
+  "v0163": {
+   "all": 268,
+   "stable": 200
+  }
+ }
+}
