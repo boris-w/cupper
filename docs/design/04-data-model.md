@@ -49,7 +49,7 @@ CREATE TABLE projects (
   added_at       INTEGER NOT NULL,
   removed_at     INTEGER,
   trust_state    TEXT NOT NULL DEFAULT 'untrusted',  -- untrusted | trusted | stale（5.2.6 项目信任）
-  trust_digest   TEXT,                     -- 信任时的摘要：.claude/、.mcp.json、.codex/ 全部文件的完整内容
+  trust_digest   TEXT,                     -- 信任时的摘要：工作区到 git 根目录各级的 .claude/、.mcp.json、.codex/，链接按目标内容（5.2.6）
   trusted_at     INTEGER,
   trusted_by     TEXT                      -- pr_desktop、pr_test，或 auto_empty（扫描范围里没有任何文件）
 );

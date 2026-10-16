@@ -187,7 +187,7 @@ sequenceDiagram
 | 进程 | 会话与进程组 | 文件描述符 | 环境变量 | 其他 |
 |---|---|---|---|---|
 | 适配器（node + adapter.mjs） | `POSIX_SPAWN_SETSID`：自成会话和进程组；拉起后立即记录 pid、pgid、启动时间 | 只有 0、1、2 三个管道 | 白名单（[5.6.6](06-agent-driver.md#566-cli-的发现与版本检查)），去掉所有 `CUPPER_*` | 拉起前核对 Node 的 cdhash 和 adapter.mjs 的 sha-256（ADR-08）；关闭和崩溃后按进程组清理；ACP 客户端能力里的 `fs`、`terminal` 永远声明为不支持，要改必须经过安全评审 |
-| git | 短命子进程 | stdin 为 `/dev/null` | 宿主的白名单环境加 `LC_ALL=C`、`GIT_TERMINAL_PROMPT=0` | 按三档调用（[5.2.10](02-host.md#5210-git-与-worktree-服务)）：宿主自动发起的调用不执行仓库配置指定的任何程序；只有用户点"提交""推送"时运行仓库的 hooks；超时后终止 |
+| git | 短命子进程；用启动时解析出的绝对路径，工作目录是 cupper 自己的目录 | stdin 为 `/dev/null` | 宿主的白名单环境加 `LC_ALL=C`、`GIT_TERMINAL_PROMPT=0`；PATH 只保留可信条目（不在任何项目、工作区、临时目录下的绝对路径） | 按三档调用（[5.2.10](02-host.md#5210-git-与-worktree-服务)）：宿主自动发起的调用不执行仓库配置指定的任何程序；只有用户点"提交""推送"时运行仓库的 hooks；超时后终止 |
 | CLI `--version`、登录 shell 探测 | 独立进程组 | stdin 为 `/dev/null` | 白名单 | 5 秒超时，超时后杀整个进程组；登录 shell 取到的环境只放在内存里，不写日志，不进诊断包 |
 | 宿主自身 | 桌面主进程经原生扩展调用 `cupper-sys::spawn` 拉起，`POSIX_SPAWN_SETSID` | 主进程到宿主的连接 fd 设 CLOEXEC，不会漏给 UI 的子进程；宿主读完启动载荷后，把自己的 stdio 指向 `/dev/null` | 环境变量白名单，不含任何秘密；密钥只经启动载荷 | 只用 `read(2)` 读套接字，不接收 `SCM_RIGHTS` 传来的 fd（实现时用测试确认会被内核丢弃，SP-4b 遗留项） |
 | 数据与套接字 | — | — | — | 数据目录、日志目录 `~/Library/Logs/cupper`、worktree 根目录都建成 0700 并检查属主；套接字 0600；路径过长时回退到每个用户自己的 `DARWIN_USER_TEMP_DIR`（[5.2.13](02-host.md#5213-进程监护与宿主生命周期)） |
@@ -219,7 +219,7 @@ M1b 在用户文档里写清 SEC-8 能做到和做不到的（ADR-05、SP-4b 草
 - agent 的沙箱开着时，agent 执行的命令连不上宿主；前提是 Codex 没有为工作区模式打开网络访问（打开后放行所有 Unix 套接字），Claude Code 没有配置 `allowUnixSockets`。
 - 不在沙箱里的命令（用户批准过的、MCP、hooks）能连上，但只有只读权限；写操作和审批都要用户在桌面端确认。
 - 冒充宿主会被 UI 识破；认证不依赖可被偷走的静态凭据。
-- 未经信任的项目，Claude 只加载用户级配置，Codex 不能使用；项目自带的 hooks、MCP 服务器、`env`、`apiKeyHelper` 在用户确认信任之前不会生效。信任之后项目配置又变了，cupper 最迟在下一个 prompt 之前发现并要求再次确认；但会话进行中被改写的配置，CLI 可能在当前回合内就加载（[5.2.6](02-host.md#项目信任)）。
+- 未经信任的项目，Claude 只加载用户级配置，Codex 不能使用；项目自带的 hooks、MCP 服务器、`env`、`apiKeyHelper` 在用户确认信任之前不会生效。扫描覆盖从工作区到 git 根目录的各级目录，并跟随符号链接；来自工作区之外的链接目标在确认框里醒目标出。信任之后项目配置又变了，cupper 最迟在下一个 prompt 之前发现并要求再次确认；但会话进行中被改写的配置，CLI 可能在当前回合内就加载（[5.2.6](02-host.md#项目信任)）。
 - 宿主自动执行的 git 不会运行仓库配置里的程序（fsmonitor、hooks、过滤器、diff 驱动）。用户在 cupper 里点"提交"时会运行仓库的 hooks，风险与在终端里提交相同；本会话期间仓库的 hooks 或配置有变化时，cupper 会在提交前提示。
 - `elevated` 档位（Claude 的 auto、acceptEdits，Codex 的 Auto review）由分类器代替用户审批；切到这一档需要审批权限。
 - **系统权限会被 agent 继承**（安全 #13）：agent、它运行的命令、MCP 和 hooks 触发的系统授权提示（辅助功能、自动化、文件夹访问等）都显示成 Cupper，授权也记在 Cupper 名下。cupper 自己永远不申请辅助功能、自动化、屏幕录制权限，两个 Info.plist 都不写这几项的用途说明（对自动化有效；辅助功能没有对应的用途说明键，提示照样会弹，未核实）。**不要因为 agent 的操作而授予 Cupper 辅助功能权限**：有了它，agent 能合成点击，替你点掉 cupper 的原生确认框。给适配器做 disclaim 由 SP-10 评估。

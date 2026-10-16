@@ -70,3 +70,9 @@ B 去掉准备工作后，`add -A` 加 `write-tree` 与 A 相当。实验脚本�
   - 其他自定义过滤器（如 git-crypt）不执行，这些路径在 `unstaged`、`staged` 范围里标为 `filter_unsupported`，不提供 hunk 操作，避免把明文暂存进去。
 - **对仓库档的启示**：`write-tree` 这类命令也会因为 racy 检测执行 clean 过滤器，并触发 fsmonitor 和 `post-index-change` hook，所以仓库档的防护必须覆盖每一次调用，包括辅助命令。
 - **Q32 的部分结论**：`-c filter.<名>.clean=` 置空后按原样处理内容；`required=true` 时 git 报错退出，按纪要 D8 当作失败，不去掉覆盖重试。`diff.*.textconv`、`merge.*.driver` 等其他键的置空效果，仍按 Q32 在 M1b 的 git 服务任务里用"恶意配置仓库"样例逐键确认。
+
+### 1.5 合并前的补充（安全核对）
+
+- **快照档改为复制 `info/attributes`**：实验时 B 方案没有复制它。属性本身不执行程序，属性引用的过滤器和 diff 驱动在 B 的配置里都没有定义，复制后照样不会执行（实验里 `info/attributes` 引用的过滤器，正是因为驱动只定义在用户仓库的配置里才被 A 方案执行）。复制的好处是 `text`、`eol` 等转换与用户的 git 一致，并且 `check-attr` 能看到全部属性来源，`filter_unsupported` 的检测不会漏掉只在 `info/attributes` 里声明的过滤器。这一点没有单独实测，按 git 的属性机制推断，M1a 的"恶意配置仓库"用例会覆盖。
+- **自定义过滤器的路径在快照里只存占位**，不存明文；`git/stage` 之前在用户仓库里用 `check-attr` 再核对一次。
+- **git 和 git-lfs 改为启动时解析的绝对路径**，只从 PATH 的可信条目里找，子进程的工作目录设为 cupper 自己的目录。

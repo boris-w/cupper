@@ -140,7 +140,7 @@ ACP 的 `configOptions` 按 `category` 映射到 cupper 的配置项，具体取
 **查找顺序**（ADR-08）
 
 1. 设置里指定的路径（`agents.<agent>.cli_path`，修改需要原生确认）；
-2. 登录 shell 的 PATH 里的 `claude`、`codex`；
+2. 登录 shell 的 PATH 里的 `claude`、`codex`，只在可信条目里找：绝对路径，并且不在任何项目、工作区、worktree 根目录或临时目录下（规则同 git，[5.2.10](02-host.md#5210-git-与-worktree-服务)），避免执行 agent 放在工作区里的同名程序；
 3. 常见位置：Homebrew（`/opt/homebrew/bin`）、原生安装器（`~/.local/bin`）、npm 全局目录、nvm 当前版本的 bin 目录。
 
 **解析成原生二进制**：先 `realpath`。是 Mach-O 就直接用；是 `#!/usr/bin/env node` 的 npm shim，按该 agent 的包布局找到包内的平台二进制（ADR-08：不能直接传 shim，GUI 环境里没有 node）；只找到 JS 入口、没有原生二进制的，状态为 `unsupported_install`，提示安装原生版本。各种安装方式的目录布局做成数据驱动的解析器，用目录树样例做单元测试（实际布局在实现时核实，待定问题 Q19）。

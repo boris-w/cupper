@@ -247,16 +247,19 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
 结论：cupper 接手 CLI 的工作区信任对话框。项目经用户在原生确认框里信任之后，会话才加载项目自带的 agent 配置；未信任时，Claude 只加载用户级配置，Codex 不能使用。用户级的 MCP、hooks、插件照常继承（AG-6）。
 
 - **为什么需要**：经 ACP 运行时，SDK 会话不显示信任对话框，仓库里的 hooks、`env`、`apiKeyHelper`、`.mcp.json` 照常生效（Claude Code 文档）。已核实：claude-agent-acp 0.91.0 默认 `settingSources: ["user","project","local"]`；codex-acp 2.2.2 在每个会话的配置覆盖里把 cwd 设为 `trust_level = "trusted"`。
-- **扫描**（`trust` 模块）：对象是会话实际使用的工作区（本地模式是项目目录，worktree 模式是 worktree）。
+- **扫描**（`trust` 模块）：
+  - **范围**：从会话实际使用的工作区（本地模式是项目目录，worktree 模式是 worktree）一直到它所在 git 仓库的根目录（`rev-parse --show-toplevel`），**每一级目录**里的 `.claude/`、`.mcp.json`、`.codex/`；不是 git 仓库时只看工作区本身。理由：CLI 可能按层级加载上级目录的项目配置，Codex 的 `.codex/` 就是分层加载的；CLI 是否还会越过 git 根目录向上加载，未核实（待定问题 Q34），核实之前以 git 根目录为界。
+  - **符号链接一律跟随**（安全核对 1）：CLI 加载配置时会跟随链接，扫描也必须看链接目标的内容。目录链接递归进入；摘要和 findings 都按解析后的目标内容计算，并记录链接本身和目标的路径。链接悬空、成环，或者目标不是普通文件和目录时，扫描失败。
 
-  | 范围 | 用途 |
+  | 用途 | 内容 |
   |---|---|
-  | `.claude/` 下的全部文件、`.mcp.json`、`.codex/` 下的全部文件（递归，不跟随符号链接，符号链接记录它指向的路径） | **信任摘要**：按相对路径排序，对每个文件的路径和完整内容做 sha-256。按完整内容算，不按已知的键算，CLI 以后新增的可执行键同样会被覆盖（安全确认 ①） |
-  | 从上述文件里解析出的 hooks、`env`、`apiKeyHelper`、`statusLine`、MCP 服务器、skills、agents、commands，以及 `.codex/` 里的配置项和 hooks | **findings**：只用于在原生确认框里展示 |
+  | **信任摘要** | 对扫描范围里的每个文件（链接按目标），按"相对路径、目标的 realpath、完整内容"做 sha-256，按相对路径排序后合并。按完整内容算，不按已知的键算，CLI 以后新增的可执行键同样会被覆盖（安全确认 ①）；链接目标被改写，摘要随之变化，项目转为 `stale` |
+  | **findings** | 从上述文件里解析出的 hooks、`env`、`apiKeyHelper`、`statusLine`、MCP 服务器、skills、agents、commands，以及 `.codex/` 里的配置项和 hooks；只用于在原生确认框里展示 |
+  | **工作区外的目标** | 链接目标在工作区之外的，确认框里醒目标出"此配置来自工作区之外：<路径>"，并逐项列出目标里的 findings。不禁止信任：把项目配置链接到用户自己的 dotfiles 是常见做法；目标内容已经计入摘要，之后每次发送 prompt 前都会重新扫描，目标一被改写就转为 `stale`，并不会因为在工作区外而失去保护 |
 
-  文件超过 2,000 个或合计超过 16 MB 时扫描失败，项目保持未信任，确认框说明原因。
+  文件超过 2,000 个或合计超过 16 MB（含链接目标）时扫描失败，项目保持未信任，确认框说明原因。
 - **状态**：`untrusted`（默认）→ 用户在原生确认框里信任 → `trusted`（记下摘要）；之后重新扫描时摘要变了 → `stale`，按未信任处理，直到再次确认。扫描范围里一个文件都没有的项目，添加时直接记为 `trusted`（`trusted_by: auto_empty`），不弹确认框；以后出现了这些文件，摘要变化，照样转为 `stale`。流程见 [5.5.10](05-flows.md#5510-添加项目与信任)。
-- **重新扫描的时机**：添加项目时；每次 Attach（新建或 resume）之前；**每次发送 prompt 之前**（安全确认 ②：用户在两个回合之间切换分支后，下一个回合会带着新的项目配置运行）；每个回合结束时。
+- **重新扫描的时机**（范围和规则同上）：添加项目时；每次 Attach（新建或 resume）之前；**每次发送 prompt 之前**（安全确认 ②：用户在两个回合之间切换分支后，下一个回合会带着新的项目配置运行）；每个回合结束时。
 - **未信任或 `stale` 时**：
   - Claude：Attach 时在 `session/new` 和 `session/resume` 的 `_meta.claudeCode.options` 里传入 `settingSources: ["user"]`（[5.6.2](06-agent-driver.md#562-驱动接口)），`session.configured` 写 `project_config: ignored`，界面显示"未信任：项目配置未加载"。
   - Codex：Attach 返回 `unavailable`（`reason: project_untrusted`），因为 codex-acp 无法关闭项目配置。
@@ -272,6 +275,10 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
 - **事后核对**（安全 #3）：Attach、resume 之后，以及收到 `ConfigChanged` 时，核对实际档位。出现以下任一情况，会话进入 `config_unconfirmed`：
   - 实际是 `full_access`，但没有经原生确认的记录；
   - 实际档位高于设定者按档位规则（[5.8.2](08-security.md#582-principal角色与-scope)）能设定的档位。例如只有 write 的 CLI 新建了一个 Codex 会话，而 Codex 的默认档位是 `agent`。
+- **回合进行中发现越权**（安全核对 4）：回合进行中收到 `ConfigChanged`，发现实际档位越权（不是经有权限的 `session/set_config` 或选项设定的）时，不能让当前回合在越权档位下跑完：
+  1. 先用驱动的 `SetConfig` 把档位改回变化之前的值，等待最多 2 s（经 `Clock`）；
+  2. 改回失败、超时，或者 agent 再次改到越权档位时，中断当前回合（与 `session/interrupt` 相同的流程）；
+  3. 然后进入 `config_unconfirmed`，写 `notice{code: config_unconfirmed}` 和审计。
 - **`config_unconfirmed` 时**：队列暂停（原因 `config_unconfirmed`），新的消息照常排队但不发出；写 `session.configured{confirmation_required: {reason}}` 和审计。解除方式有两种：
   - 桌面端经原生确认调用 `session/confirm_config`；
   - 有权限的一方用 `session/set_config` 把档位降到它有权设定的范围（降档只需要 write）。
@@ -348,7 +355,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 | 档位 | 在哪里执行 | 用于 | 防护 |
 |---|---|---|---|
-| 快照档 | cupper 自己的 GIT_DIR，`GIT_WORK_TREE` 指向工作区 | 回合快照；`last_turn`、`turn:<id>`、`unstaged`、`staged` 四种范围的文件列表和补丁；`@` 引用的文件列表；`worktree/check` 中关于工作区内容的规则；`git/status` 的文件状态 | 不读仓库本地的配置、hooks、`info/attributes`，配置只放行白名单 |
+| 快照档 | cupper 自己的 GIT_DIR，`GIT_WORK_TREE` 指向工作区 | 回合快照；`last_turn`、`turn:<id>`、`unstaged`、`staged` 四种范围的文件列表和补丁；`@` 引用的文件列表；`worktree/check` 中关于工作区内容的规则；`git/status` 的文件状态 | 不读仓库本地的配置和 hooks，配置只放行白名单；属性文件照常读取，但属性引用的过滤器和 diff 驱动都没有定义 |
 | 仓库档 | 用户仓库 | 只读引用类：`rev-parse`、`for-each-ref`、`rev-list`、`symbolic-ref`、`merge-base`、`check-ref-format`、`branch --list`；会改动用户仓库的：`apply --cached`（暂存、取消暂存）、`apply -R`（还原）、`update-index --refresh`、`worktree add/lock/unlock/remove/prune/repair` | 每次调用前读配置并覆盖，调用后比对指纹，配置来源在工作区内时拒绝 |
 | 用户档 | 用户仓库 | 只用于用户在界面上点"提交""推送"：`commit`、`push` | 与在终端里执行一致：保留 hooks、签名、凭据助手。按钮旁注明"将运行仓库的 hooks"；本会话期间指纹变过时，确认文案带上这条提示 |
 
@@ -356,7 +363,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 - **目录**：
   - 每个仓库一个私有对象库 `<数据目录>/git/<repo_key>/objects/`，写入快照产生的 blob 和 tree；
-  - 每个工作区一个 GIT_DIR `<数据目录>/git/<repo_key>/ws/<workspace_key>/`，里面有：cupper 生成的 `config`；从仓库复制的 `info/exclude`；从该工作区的 git 目录复制的 `info/sparse-checkout`；仓库使用 split index 时，从同一目录复制 index 引用的 `sharedindex.*`；临时 index。没有 `hooks/`。
+  - 每个工作区一个 GIT_DIR `<数据目录>/git/<repo_key>/ws/<workspace_key>/`，里面有：cupper 生成的 `config`；从仓库复制的 `info/exclude` 和 `info/attributes`（只是忽略规则和属性，本身不执行程序；复制属性是为了让 `text`、`eol` 等转换与用户的 git 一致，也让下文的过滤器检测覆盖全部属性来源）；从该工作区的 git 目录复制的 `info/sparse-checkout`；仓库使用 split index 时，从同一目录复制 index 引用的 `sharedindex.*`；临时 index。没有 `hooks/`。
   - 全部目录权限 0700。
 - **环境**：`GIT_DIR=<工作区的 GIT_DIR>`、`GIT_WORK_TREE=<工作区>`、`GIT_INDEX_FILE=<临时 index>`、`GIT_OBJECT_DIRECTORY=<私有对象库>`、`GIT_ALTERNATE_OBJECT_DIRECTORIES=<仓库的对象目录及其 alternates>`、`GIT_CONFIG_NOSYSTEM=1`、`GIT_CONFIG_GLOBAL=<cupper 的空文件>`。命令行仍固定加 `-c core.fsmonitor=false -c core.hooksPath=<数据目录>/git/empty-hooks`。
 - **配置白名单**：每次调用前，从用户的有效配置（`git config --list --show-origin --includes -z`，含系统、全局、仓库、worktree 四级）里只取下列无害键写入 `config`（写临时文件后改名），其余一概不带。这些键只决定"工作区内容怎样变成对象"，不会执行程序；读配置本身也不执行程序。
@@ -364,9 +371,12 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
   - `core.excludesFile`、`core.attributesFile`（只是文件路径）；
   - `core.untrackedCache`、`core.splitIndex`、`core.sparseCheckout`、`core.sparseCheckoutCone`、`index.sparse`、`index.version`、`index.skipHash`、`feature.manyFiles`；
   - `extensions.objectFormat`（取值不是 sha1 时同时写 `core.repositoryFormatVersion=1`）。
-- **过滤器**：工作区 `.gitattributes` 引用的 filter 和 diff 驱动在这份配置里都没有定义，git 按原样处理内容，不执行任何程序。
-  - 例外只有 Git LFS：用户有效配置里的 `filter.lfs.*` 恰好是 git-lfs 的标准取值时，cupper 写入同样的标准取值，程序按登录 shell 的 PATH 解析。这条路径未实测（待定问题 Q32）。
-  - 其他自定义过滤器（例如 git-crypt）不执行。这些路径在快照里记录的是工作区的原始内容；在 `unstaged`、`staged` 范围里标为 `filter_unsupported`，不提供 hunk 操作，避免把明文暂存进去。是否命中用 `check-attr filter` 判断，这条命令不执行程序。
+- **过滤器**：属性文件引用的 filter 和 diff 驱动在这份配置里都没有定义，git 按原样处理内容，不执行任何程序。
+  - 例外只有 Git LFS：用户有效配置里的 `filter.lfs.*` 恰好是 git-lfs 的标准取值时，cupper 写入同样的取值，但程序一律写成宿主启动时解析出的 git-lfs **绝对路径**（见下文"调用约定"），不按 PATH 查找。这条路径未实测（待定问题 Q32）。
+  - 其他自定义过滤器（例如 git-crypt）不执行。**检测**：快照前在快照档执行 `check-attr -z --stdin filter`，覆盖全部属性来源：工作区的 `.gitattributes`、复制过来的 `info/attributes`、`core.attributesFile`；属性来源里没有任何 `filter=` 时跳过这一步。命中的路径标为 `filter_unsupported`：
+    - **快照里只存占位**：这些路径不经 `add -A` 写入，而是用 `update-index --cacheinfo` 放一个占位 blob，内容是"未保存（自定义过滤器 <名称>），sha-256 <工作区内容的哈希>"。快照对象库里不出现明文（M1 不回收快照对象），回合 diff 上这类文件只显示"已变化"；
+    - 在 `unstaged`、`staged` 范围里不提供 hunk 操作；
+    - 仓库档执行 `git/stage` 之前，在用户仓库里对目标路径再用 `check-attr filter` 核对一次（这条命令不执行程序），发现白名单以外的过滤器就拒绝，返回 `git_error`（`reason: filter_unsupported`），避免把工作区的明文暂存进去（安全核对 3）。
 - **复制 index 时保留 mtime**（等价 `cp -p`）。实验发现：换成新的 mtime 后，同一秒内改过、大小又没变的文件会被当成未修改，快照里留下旧内容（git 的 racy 检测失效）。SP-5 的临时 index 方案同样受影响，这里一并改正。
 - **快照**：预检排除超过 50 MB 的未跟踪文件、嵌套仓库、超大未跟踪目录 → `add -A --ignore-errors -- <排除用的 pathspec>`（固定加 `-c core.safecrlf=false -c advice.addEmbeddedRepo=false`）→ `write-tree`。tree id 写进 `turns` 表，排除的路径写进 `snapshot.recorded` 事件。
 - **与 SP-5 的关系**：仍然是"从用户 index 播种的临时 index + 私有对象库 + alternates"，只是 GIT_DIR 换成了 cupper 自己的。SP-5 否决的"影子仓库"是空 index 起步、没有 alternates，所以首次要 72 s、占 360 MB，还漏掉"被忽略但已跟踪"的文件；这里播种了 index、读仓库原有的对象，这三个问题都不存在（实验验证）。
@@ -375,7 +385,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 **仓库档：每次调用前读配置**（安全 #1 ① ②，纪要 D8）
 
 1. **每次**调用前执行 `git config --list --show-origin --includes -z`，得到有效配置和每个键的来源文件。
-2. 任何一个配置来源位于工作区内，或位于其他 agent 可写的位置（任一会话的工作区、任一项目目录）时，不执行这次调用，返回 `git_error`（`reason: unsafe_repo_config`），并在会话流里写 `notice{code: unsafe_repo_config}`。`core.hooksPath` 指向工作区的情况不受此限，因为它总被无条件覆盖。
+2. 任何一个配置来源位于工作区内，或位于其他 agent 可写的位置（任一会话的工作区、任一项目目录）时，不执行这次调用，返回 `git_error`（`reason: unsafe_repo_config`），并在会话流里写 `notice{code: unsafe_repo_config}`。**仓库自己的 git 目录除外**：本地模式下 `.git/config`、worktree 的 `config.worktree` 本来就在项目目录里，这部分由第 3、4 条的覆盖和第 6 条的指纹兜底（两个 agent 的沙箱也都保护 `.git`）；例外只限这几个文件，`include.path` 指向 git 目录之外的工作区文件时，仍按本条拒绝。`core.hooksPath` 指向工作区的情况也不受此限，因为它总被无条件覆盖。
 3. 无条件覆盖：`-c core.fsmonitor=false -c core.hooksPath=<数据目录>/git/empty-hooks`；加 `--no-pager`（并设 `GIT_PAGER=cat`）；生成补丁的命令一律加 `--no-ext-diff --no-textconv`。
 4. 可执行类键：`filter.*.clean`、`filter.*.smudge`、`filter.*.process`、`diff.*.command`、`diff.*.textconv`、`merge.*.driver`、`core.sshCommand`、`core.pager`、`core.editor`、`core.askPass`、`core.gitProxy`、`sequence.editor`、`gpg.program`、`gpg.*.program`、`credential.helper`、`credential.*.helper`、`uploadpack.packObjectsHook`、`remote.*.receivepack`、`remote.*.uploadpack`。取值不在白名单里的（白名单只有 git-lfs 的标准取值），一律用 `-c <键>=` 置空。实验确认：置空的过滤器按原样处理内容、不执行程序。
 5. 覆盖后 git 报错（例如过滤器设了 `required=true`，置空后 git 会直接报错退出）：这次调用失败，返回 `git_error`（`reason: unsafe_repo_config`），**不去掉覆盖重试**。
@@ -418,7 +428,10 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 **调用约定**（三档共用）
 
 - `GitCmd` 构造器：每类命令一组固定参数，统一 `-z`；只读命令加 `--no-optional-locks`；固定加 `-c core.quotepath=false`。
-- 环境：PATH 用从登录 shell 取得的值（[5.6.6](06-agent-driver.md#566-cli-的发现与版本检查)）；`LC_ALL=C`，便于解析报错；`GIT_TERMINAL_PROMPT=0`；继承 `SSH_AUTH_SOCK`。所有 git 子进程都经 `cupper-sys::spawn` 拉起（[5.8.5](08-security.md#585-进程卫生)）。
+- **程序的路径**（安全核对 2）：宿主启动时（以及 `agents/refresh` 时）把 `git` 和 `git-lfs` 解析成绝对路径，之后只用这两个绝对路径，不在每次调用时按 PATH 查找。解析时只看登录 shell 的 PATH 里的**可信条目**：是绝对路径，并且不在任何项目、工作区、worktree 根目录下，也不在临时目录（`$TMPDIR`、`/tmp`、`/private/var/folders`）下。解析结果和来源目录写进索引流的 `agents` 状态。
+- **环境**：git 子进程的 PATH 只保留上述可信条目（git 自己再拉起的 `ssh`、`gpg` 等也只能从这些目录里找到）；`LC_ALL=C`，便于解析报错；`GIT_TERMINAL_PROMPT=0`；继承 `SSH_AUTH_SOCK`。
+- **工作目录**：git 子进程的工作目录设为 cupper 自己的目录（`<数据目录>/git/`），目标仓库经 `-C <路径>`（仓库档、用户档）或 `GIT_DIR`、`GIT_WORK_TREE`（快照档）指定。
+- 所有 git 子进程都经 `cupper-sys::spawn` 拉起（[5.8.5](08-security.md#585-进程卫生)）。
 - 超时：只读命令 30 s；快照 60 s；`worktree add` 10 分钟（输出进度事件）；`push` 5 分钟。
 - 启动时检测 git 版本（暂定最低 2.39）和 git-lfs，结果放进索引流的 `agents` 状态里一起显示。
 

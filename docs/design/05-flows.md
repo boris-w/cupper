@@ -395,13 +395,13 @@ sequenceDiagram
   R->>M: ShellAPI.requestPrivileged（add_project）
   M->>U: 系统的选择目录对话框
   M->>H: project/add（control 连接）
-  H->>H: realpath；扫描 .claude/、.mcp.json、.codex/，算信任摘要
+  H->>H: realpath；扫描工作区到 git 根目录各级的 .claude/、.mcp.json、.codex/（跟随符号链接），算信任摘要
   alt 扫描范围里没有任何文件
     H->>H: 直接记为 trusted（auto_empty）
     H-->>M: project_id、trust（trusted）
   else 有项目配置
     H-->>M: project_id、trust（untrusted、findings、trust_digest）
-    M->>U: 原生确认框：逐项列出 hooks、env、apiKeyHelper、MCP 服务器、skills 等，默认按钮"不信任"
+    M->>U: 原生确认框：逐项列出 hooks、env、apiKeyHelper、MCP 服务器、skills 等，醒目标出来自工作区外的链接目标，默认按钮"不信任"
     alt 用户选择信任
       M->>H: project/trust（trust_digest）
       H->>H: 重新扫描，摘要一致才写 trusted；不一致返回 digest_mismatch，主进程重新取内容再确认
