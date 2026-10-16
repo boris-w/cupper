@@ -49,14 +49,16 @@ cupper/
 │   ├── manifest.json             锁定的 Node、codex-acp、esbuild-wasm、claude-agent-acp 版本与哈希
 │   └── locks/                    claude-agent-acp 的 package-lock（只是元数据，不含 SDK 本体）
 ├── testdata/
-│   ├── recordings/<adapter>/<adapter-ver>/<cli-ver>/<scenario>.jsonl   脱敏录制（SP-1 格式）
-│   ├── golden/<adapter>/<scenario>.events.json                        回放后应得到的规范化事件
+│   ├── recordings/<adapter>/<adapter-ver>/<cli-ver>/<scenario>.jsonl   脱敏录制（格式规格见 5.9.3）
+│   ├── golden/<a\|b>/<adapter>/<adapter-ver>/<scenario>.jsonl          A 层、B 层的规范化金样例
+│   ├── compat-reports/            兼容套件的报告（JSON，有 schema）
 │   └── repos/                    git 边界用例的生成脚本（不放二进制仓库）
 ├── tools/
 │   ├── gen-protocol-ts/          hey-api 生成 + 后处理（字面量列表、守卫、`.loose()`、开放枚举）
 │   ├── schema-compat/            方向敏感的 schema 兼容性检查
 │   ├── license-gate/             npm 与 runtime 组件的许可证门禁、THIRD_PARTY_NOTICES 生成
-│   ├── sanitize/                 录制脱敏（由 SP-1 的 sanitize.ts 迁移）
+│   ├── sanitize/                 录制脱敏（由 SP-1 的 sanitize.ts 迁移）和 testdata 的通用个人信息扫描
+│   ├── rec-shape-diff/           新旧录制的形态差异报告（升级适配器时评审用）
 │   └── codex-drift/              codex 新版本的 app-server 方法 schema 漂移检查（由 SP-2 迁移）
 ├── spikes/                       原型实测代码（只读参考，产品代码不依赖）
 └── docs/
@@ -68,17 +70,17 @@ cupper/
 |---|---|---|---|
 | `cupper-protocol` | Rust lib | serde、schemars、sha2、thiserror | 每个方法用一个类型实现 `Method` trait，并声明 `SCOPE`、`IDEMPOTENCY` 两个关联常量，schema 导出时写成 `x-scope`、`x-idempotent`，策略层和权限矩阵测试都从这里读 |
 | `cupper-sys` | Rust lib | libc、core-foundation | 全部 `unsafe` 在这里。由 SP-4a 的 `sys.rs` 和 SP-4b 的 Security FFI（约 60 行）合并而来 |
-| `cupper-host` | Rust lib + bin | protocol、sys、agent-client-protocol `=3.3.0`、tokio、rusqlite（bundled）、reqwest（rustls）、tar、lzma-rs、nucleo-matcher、ignore、tracing | 模块见 [5.2](02-host.md)。特性：`dev-auth`（开发和 e2e 构建用的一次性密钥认证）、`test-harness`（测试 principal，发布构建永不开启） |
-| `cupper-cli` | Rust lib + bin | protocol、sys、tokio、clap | 库部分（连接、请求关联、`Mirror`）供宿主集成测试复用 |
+| `cupper-host` | Rust lib + bin | protocol、sys、agent-client-protocol `=3.3.0`、tokio、rusqlite（bundled）、reqwest（rustls）、tar、flate2、nucleo-matcher、ignore、tracing | 模块见 [5.2](02-host.md)。特性：`dev-auth`（开发和 e2e 构建用的一次性密钥认证）、`test-harness`（测试 principal、测试方法、注入点和故障点，发布构建永不开启）。`--build-info` 输出启用了哪些特性，发布流水线据此断言 |
+| `cupper-cli` | Rust lib + bin | protocol、sys、tokio、clap | 库部分（连接、请求关联、`Mirror`）供宿主集成测试复用。特性 `test-harness` 才有 `--harness-key-fd`；`--build-info` 同宿主 |
 | `cupper-fake-agent` | Rust bin | agent-client-protocol | 两种模式见 [5.9](09-testing.md) |
 | `cupper-desktop-native` | Rust cdylib（napi-rs） | sys、napi | 产物 `cupper_native.node`，放在 asar 外（`asarUnpack`），由 electron-builder 一并签名 |
 | `xtask` | Rust bin | — | 只在开发和 CI 使用 |
 | `@cupper/protocol` | TS | zod | 生成物入库；CI 检查与 schema 一致 |
 | `@cupper/host-client` | TS | protocol | 渲染进程使用；视图 reducer 与 Rust 视图用同一批金样例交叉验证 |
 | `@cupper/shell-api` | TS | — | 接口见 [5.7.3](07-desktop.md#573-shellapi) |
-| `@cupper/ui-core` | TS/React | host-client、shell-api、i18n、React 19、Tailwind v4、Radix、streamdown、Shiki、@pierre/diffs、TanStack Virtual/Query、zustand | lint 规则禁止 import `electron` 和 Node 内置模块 |
+| `@cupper/ui-core` | TS/React | host-client、shell-api、i18n、React 19、Tailwind v4、Radix、streamdown、Shiki、@pierre/diffs、TanStack Virtual/Query、zustand | lint 规则禁止 import `electron` 和 Node 内置模块。两个入口：主文档和审查文档（独立源，[5.7.5](07-desktop.md#审查文档m1b)），共用一份设计 token 的 CSS |
 | `@cupper/i18n` | TS | i18next | 文案以语义码为键 |
-| `apps/desktop` | Electron | ui-core、shell-api、i18n、electron-updater | 打包工具见 [5.10.4](10-release.md#5104-打包工具electron-builder-还是-electron-forge) |
+| `apps/desktop` | Electron | ui-core、shell-api、i18n、electron-updater | 打包工具见 [5.10.4](10-release.md#5104-打包工具electron-builder-还是-electron-forge)。主进程、preload、渲染进程的运行时依赖（含 electron-updater）全部由 Vite 打进 bundle，`apps/desktop` 不声明 `dependencies`；preload 打成单个 CommonJS 文件（沙箱 preload 不支持 ESM）；asar 里只有构建产物，原生扩展放在 asar 外（桌面建议 #19） |
 
 `cupper-client`（不做 I/O 的客户端同步核心）不在 M1 建立：M1 的客户端同步规则（游标、`from` 连续性检查、视图）已经在 `cupper-protocol` 里，CLI 直接使用。是否为 iOS 抽出这个 crate，由 ADR-15 决定。
 
@@ -102,45 +104,53 @@ cupper/
 
 | 命令 | 作用 |
 |---|---|
-| `pnpm i` | 安装 TS 依赖（`--frozen-lockfile` 用于 CI） |
-| `pnpm dev` | 以 `dev-auth` 特性构建 debug 宿主和 CLI，启动 Vite（渲染进程热重载）和 Electron 开发构建（名称 "cupper Dev"，独立的 bundle id 和数据目录） |
+| `pnpm i` | 安装 TS 依赖。CI 用 `--frozen-lockfile`；保留 pnpm 10 默认不运行依赖脚本的行为，只有白名单里的包（如 `electron` 的下载脚本、`esbuild`）可以运行 |
+| `pnpm dev` | 以 `dev-auth` 特性构建 debug 宿主和 CLI，启动 Vite（渲染进程热重载）和 Electron 开发构建（名称 "cupper Dev"，独立的 bundle id 和数据目录）；重启 Electron 时一并重启宿主（Q22 的局限） |
 | `pnpm gen` | `cargo xtask schema` 导出 `protocol/schema/v1.json`，再运行 `tools/gen-protocol-ts` 生成 `packages/protocol` |
 | `pnpm lint` | `cargo fmt --check`、`cargo clippy -D warnings`、ESLint、Prettier 检查、`tsc -b` |
-| `pnpm test` | `cargo test --workspace --features cupper-host/test-harness` 加 Vitest |
+| `pnpm test` | `cargo test --workspace --features cupper-host/test-harness`、一次不带任何特性的 `cargo test -p cupper-host -p cupper-cli`，加 Vitest |
 | `pnpm test:golden` | 用录制回放跑宿主，比对金样例；`UPDATE_GOLDEN=1` 时更新 |
 | `pnpm test:ui` | Playwright（Chromium）+ mock 宿主的界面截图回归 |
-| `pnpm build:e2e` | 构建 e2e 版 App（与发布版同样的打包方式和 fuses，只放开调试） |
+| `pnpm build:e2e` | 构建 e2e 版 App（与发布版同样的打包方式；签名和 fuses 的差异见 [5.7.9](07-desktop.md#579-构建种类)） |
 | `pnpm test:e2e` | Playwright `_electron` 驱动 e2e 版 App + 真实宿主 + 假 agent |
 | `pnpm build:release` | 完整发布构建（需要签名证书），步骤见 [5.10.7](10-release.md#5107-发布流水线) |
-| `cargo xtask runtime-pack` | 下载并校验 Node、codex-acp、esbuild-wasm，重签 Node，计算 claude-agent-acp 本机打包产物的固定哈希，写回 `runtime/manifest.json` |
+| `cargo xtask runtime-pack` | 下载并校验 Node、codex-acp、esbuild-wasm，重签 Node，计算 claude-agent-acp 本机打包产物的固定哈希，写回 `runtime/manifest.json`；从锁定的适配器产物里提取环境变量读取点，出现未归类的新名字就失败（[5.6.6](06-agent-driver.md#566-cli-的发现与版本检查)） |
 | `cargo xtask host-bundle` | 组装并签名 `CupperHost.app` |
-| `cargo xtask compat --adapter <a> --cli <path>` | 兼容套件：用真实 CLI 跑剧本并录制（只在维护者机器上运行，会消耗少量额度） |
+| `cargo xtask compat --adapter <a> --cli <path>` | 兼容套件：用真实 CLI 跑剧本、录制并产出报告（只由维护者在本机手动运行，会消耗少量额度，[5.9.5](09-testing.md#595-兼容矩阵)）；`--fake` 用假 agent 跑框架本身 |
 
 ## 5.1.6 CI 流水线
 
-托管在 GitHub Actions，macOS arm64 runner。所有 job 都不需要登录任何 agent。
+托管在 GitHub Actions。所有 job 都不需要登录任何 agent；不使用任何 self-hosted runner（测试 #8、安全 #10）。
 
-| job | 触发 | 步骤 | 失败即阻止合并 |
-|---|---|---|---|
-| `rust` | 每个 PR | fmt、clippy（`-D warnings`，所有 target 和特性组合）、`cargo test`（含 `test-harness`）、`cargo build -p cupper-protocol --target aarch64-apple-ios-sim`、`cargo deny check` | 是 |
-| `protocol` | 每个 PR | `pnpm gen` 后 `git diff --exit-code`（schema 和 TS 生成物都必须是最新的）；整数安全检查（schema 中不得出现超过 2^53−1 的整数类型）；`tools/schema-compat` 与 `protocol/released/` 中最近一个版本做方向敏感的比对；`protocol/fixtures/` 在 Rust 和 TS 中各做一次往返；TS 视图 reducer 与 Rust 视图对同一批事件序列给出相同结果 | 是 |
-| `ts` | 每个 PR | `tsc -b`、ESLint（含安全规则，见 [5.7.8](07-desktop.md#578-安全加固的落点)）、Vitest、`pnpm test:ui` 截图回归 | 是 |
-| `golden` | 每个 PR | `pnpm test:golden`：全部录制经假 agent 回放，宿主输出与金样例逐字段比对；严格模式，"类型已知但数据残缺"的事件直接判失败（ADR-04 修订第 4 条） | 是 |
-| `license` | 每个 PR | `cargo deny check licenses`；`tools/license-gate`：npm 依赖白名单、runtime 组件的许可证文本齐全、**打包输入中出现 `@anthropic-ai/claude-agent-sdk` 直接失败**（ADR-11 红线） | 是 |
-| `e2e` | 每个 PR（冒烟子集）；每晚（全集） | `pnpm build:e2e`，检查 fuses（`@electron/fuses read`）；`pnpm test:e2e` | 是 |
-| `security-macos14` | 每晚 | 在 macOS 14 runner 上跑 `cupper-sys` 的对端校验测试（`LOCAL_PEERTOKEN` 的"最后一次 I/O 进程"语义、csops、错误码），补 SP-4b 没覆盖的最低系统版本 | 否（失败开 issue） |
-| `codex-drift` | 每天定时 | 发现新的 codex 版本时，检查 codex-acp 引用的 app-server 方法有没有变化（ADR-08） | 否（失败开 issue） |
-| `release` | 推送 `release/v*` tag | 见 [5.10.7](10-release.md#5107-发布流水线) | — |
-| `compat` | 手动 | 只在维护者机器（self-hosted runner）上运行，用真实 CLI 跑兼容套件，产出新录制供评审 | — |
+**通用加固**（安全 #10）：第三方 Action 按提交 SHA 固定；workflow 默认 `permissions: contents: read`，需要更多权限的 job 单独声明；不用 `pull_request_target`；依赖安装用 `pnpm install --frozen-lockfile` 和 `cargo --locked`；macOS runner 固定标签（`macos-15`、`macos-14`），不用 `macos-latest`。
+
+| job | runner | 触发 | 步骤 | 失败即阻止合并 |
+|---|---|---|---|---|
+| `rust` | `macos-15` | 每个 PR | fmt、clippy（`-D warnings`，所有 target 和特性组合，含 `disallowed-methods`）、`cargo test`（含 `test-harness`）、一次不带任何特性的 `cargo test -p cupper-host -p cupper-cli`（断言发布构建的行为）、`cargo build -p cupper-protocol --target aarch64-apple-ios-sim`；`pnpm test:golden`（A 层和 B 层，严格模式，"类型已知但数据残缺"的事件直接判失败）。`rust` 和 `golden` 合成一个作业，共用构建缓存：金样例要编译依赖 `cupper-sys` 的 `cupper-host`，只能在 macOS 上跑 | 是 |
+| `protocol` | ubuntu | 每个 PR | `pnpm gen` 后 `git diff --exit-code`（schema 和 TS 生成物都必须是最新的）；整数安全检查；`tools/schema-compat` 与 `protocol/released/` 中最近一个版本（含 M1a 冻结时的快照）做方向敏感的比对；ShellAPI 类型声明的快照比对（[5.12.5](12-milestones.md#5125-契约冻结清单)）；`protocol/fixtures/` 在 Rust 和 TS 中各做一次往返；TS 视图 reducer 与 Rust 视图对同一批事件序列给出相同结果（`cupper-protocol` 不做 I/O，可以在 Linux 上编译） | 是 |
+| `ts` | ubuntu | 每个 PR | `tsc -b`、ESLint（含安全规则，见 [5.7.8](07-desktop.md#578-安全加固的落点)）、Vitest | 是 |
+| `ui` | `macos-15` | 每个 PR（按改动路径过滤） | `pnpm test:ui` 截图回归；基线只由 CI 的专用工作流生成（截图依赖系统字体） | 是 |
+| `license` | ubuntu | 每个 PR | `cargo deny check`；`tools/license-gate` 第一层：对每个进入 App 的 JS 入口（main、preload、两个渲染入口、runtime 脚本），按 pnpm 锁文件和打包器的 metafile 求出生产依赖的完整闭包，闭包里出现 `@anthropic-ai/claude-agent-sdk` 或 `@anthropic-ai/claude-code` 就失败；runtime 组件的许可证文本齐全。负面测试：故意引入这个依赖的样例工程，门禁必须失败（安全 #11） | 是 |
+| `testdata-scan` | ubuntu | 每个 PR | 对 `testdata/` 做通用模式的个人信息扫描（[5.9.3](09-testing.md#593-录制与金样例)）；校验兼容报告符合 schema，并从报告重新生成"已验证 CLI 范围"与清单比对 | 是 |
+| `e2e` | `macos-15` | 每个 PR（冒烟子集，按改动路径过滤）；每晚（全集） | `pnpm build:e2e`；`pnpm test:e2e` | 是 |
+| `release-config` | `macos-15` | 每晚 | 发布配置、不签名的构建：`@electron/fuses read` 逐项断言、Info.plist 里有 `ElectronAsarIntegrity`、`asarUnpack` 只有 `cupper_native.node`、asar 文件清单、带未知命令行开关启动应立即退出、产物里扫描测试钩子的标记串、宿主和 CLI 的 `--build-info` 不含 `dev-auth` 和 `test-harness`、许可证门禁第二层（[5.10.7](10-release.md#5107-发布流水线)）；`cargo xtask runtime-pack --verify` | 否（失败开 issue） |
+| `security-macos14` | `macos-14` | 每晚；改动 `cupper-sys` 的 PR 按路径过滤直接跑 | `cupper-sys` 的对端校验测试：`LOCAL_PEERTOKEN` 的"最后一次 I/O 进程"语义、exec 后 pidversion 变化被拒、fork 出的进程共用 fd 被拒、`SCM_RIGHTS` 被丢弃、csops、错误码。macOS 15 由 `rust` 作业覆盖 | 按路径过滤的 PR 上：是；每晚：开 issue。发布前最近一次必须通过（Q24） |
+| `compat-framework` | `macos-15` | 每晚；改动 `xtask` 兼容套件的 PR | `cargo xtask compat --fake`：用假 agent 跑兼容套件的框架和报告生成 | 是（PR 上） |
+| `codex-drift` | ubuntu | 每天定时 | 发现新的 codex 版本时，检查 codex-acp 引用的 app-server 方法有没有变化（ADR-08） | 否（失败开 issue） |
+| `release` | `macos-15` | 推送受保护的 `release/v*` tag（含 `release/vX.Y.Z-rc.N`） | 见 [5.10.7](10-release.md#5107-发布流水线)；放在需要人工批准的 protected environment 里，签名证书和 App Store Connect API key 只对它可见 | — |
+
+兼容套件（`compat`）不在 CI 上运行：由维护者在本机手动执行 `cargo xtask compat`，录制和报告以 PR 提交（[5.9.5](09-testing.md#595-兼容矩阵)）。
 
 ```mermaid
 flowchart LR
-  PR["PR"] --> R["rust"] & P["protocol"] & T["ts"] & G["golden"] & L["license"] & E["e2e 冒烟"]
-  R & P & T & G & L & E --> M{"全部通过"}
+  PR["PR"] --> R["rust（含金样例）"] & P["protocol"] & T["ts"] & U["ui"] & L["license"] & D["testdata-scan"] & E["e2e 冒烟"]
+  R & P & T & U & L & D & E --> M{"全部通过"}
   M -->|是| MERGE["merge --no-ff"]
-  NIGHT["每晚"] --> E2["e2e 全集"] & S14["security-macos14"]
-  TAG["release/v* tag"] --> REL["release：构建 → 签名 → 公证 → 验证 → 草稿发布"]
+  NIGHT["每晚"] --> E2["e2e 全集"] & RC["release-config"] & S14["security-macos14"] & CF["compat-framework"]
+  TAG["受保护的 release/v* tag"] --> REL["release（人工批准）：构建 → 签名 → 公证 → 签名后冒烟 → 验证 → 草稿发布"]
 ```
+
+**代价**：每个 PR 的 macOS 作业控制在 3 个（`rust`、`ui`、`e2e`），后两个按改动路径过滤；Free、Pro、Team 计划下标准 macOS runner 最多同时跑 5 个作业（测试 #21）。
 
 ## 5.1.7 代码约束（gate/design 通过后写进 `CLAUDE.md`）
 

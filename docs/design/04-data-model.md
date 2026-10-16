@@ -248,7 +248,7 @@ CREATE TABLE raw_frames (
   ts               INTEGER NOT NULL,
   dir              TEXT NOT NULL,              -- send | recv | recv_nonjson | stderr | note
   agent_session_id TEXT,                       -- 从 params.sessionId 提取，方便按会话导出
-  frame            TEXT NOT NULL,              -- 已脱敏
+  frame            TEXT NOT NULL,              -- 已做结构化脱敏（只处理账号字段和已知格式的凭据，5.11.2）
   PRIMARY KEY (instance_id, seq)
 ) WITHOUT ROWID;
 CREATE INDEX raw_by_ts ON raw_frames(ts);

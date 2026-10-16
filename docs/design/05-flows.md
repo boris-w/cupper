@@ -297,16 +297,24 @@ sequenceDiagram
   H->>H: 逐个 session/close，关闭适配器，写检查点
   H-->>M: host/shutdown（upgrade）
   H->>H: 删除套接字，释放锁，退出
-  M->>M: 确认连接已关闭、锁已释放
-  M->>SQ: quitAndInstall
-  SQ->>SQ: 新包移入、旧包移走（不原地覆盖可执行文件）
-  SQ->>M2: 启动新版本
+  M->>M: 确认连接已关闭、锁已释放；进入安装空窗：不自动拉起宿主，界面显示"正在安装更新"
+  M->>SQ: quitAndInstall（before-quit-for-update，跳过 NFR-8 的退出检查）
+  SQ->>SQ: 经本地代理取 zip、解包、校验签名
+  alt 校验或解包失败（签名不符、磁盘满）
+    SQ-->>M: 报错
+    M->>M: 重新拉起旧宿主，恢复界面并提示
+  else 成功
+    SQ->>SQ: 新包移入、旧包移走（不原地覆盖可执行文件）
+    SQ->>M2: 启动新版本
+  end
   M2->>H2: 连接失败，拉起新宿主
   H2->>H2: 备份 host.db，执行迁移
   H2->>H2: 按内嵌清单安装新版本运行时（Claude 适配器需要联网）
   M2->>H2: hello、initialize，按游标重新订阅
   Note over H2: 旧版本的运行时目录在没有进程使用后回收
 ```
+
+安装空窗、本地代理端口和安装位置检查的细节见 [5.10.5](10-release.md#5105-更新流程)。
 
 其他升级路径（ADR-01 的 SP-4b 修订）：
 

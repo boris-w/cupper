@@ -450,12 +450,13 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
 按 ADR-08 实现，补充以下细化：
 
 - **清单内嵌在宿主二进制里**（编译期由 `runtime/manifest.json` 生成）。宿主不在运行中读取包内的清单文件，清单的签名就是宿主二进制自身的签名。
-- **随包携带的组件**放在 `CupperHost.app/Contents/Resources/runtime/`：重签过的 Node（tar.xz）、codex-acp 的 `index.mjs` 与许可证、esbuild-wasm 和打包脚本。claude-agent-acp 的依赖在用户机器上从 npm 下载（ADR-11 红线）。
-- **读取包内文件的例外**：只在启动后、通过 cdhash 自检之后做复制，并且逐文件按内嵌清单核对 sha-256。复制到一半包被替换，哈希就对不上，安装失败、宿主转入"待升级"。
+- **随包携带的组件**：重签过的 Node 作为普通 Mach-O 放在 `CupperHost.app/Contents/Helpers/node`，随 App 一起公证（U-R3，已定（2026-10-16），见 `docs/meetings/2026-10-16-gate-design-decisions/minutes.md`）；codex-acp 的 `index.mjs` 与许可证、esbuild-wasm 和打包脚本放在 `CupperHost.app/Contents/Resources/runtime/`（[5.10.1](10-release.md#5101-包结构)）。claude-agent-acp 的依赖在用户机器上从 npm 下载（ADR-11 红线）。清单覆盖所有会被执行或加载的文件，包括打包脚本。
+- **读取包内文件的例外**：只在启动后、通过 cdhash 自检之后做复制，并且逐文件按内嵌清单核对 sha-256（Node 另核对 cdhash）。复制到一半包被替换，哈希就对不上，安装失败、宿主转入"待升级"。
 - **状态机**（每个组件）：`missing` → `installing` → `ready`；失败为 `failed{reason}`（`network`、`hash_mismatch`、`disk`、`bundle_changed`）。状态写进索引流的 `agents` 里，界面据此提示"首次使用 Claude 需要联网安装适配器（约 6–8 秒）"。
 - **时机**：宿主启动后在后台校验和安装；某个 agent 需要启动适配器而组件还没就绪时，等待安装完成（Codex 的组件全部随包，不需要联网）。
 - **网络请求**：只访问 `registry.npmjs.org`；User-Agent 为 `cupper-runtime-installer/<版本>`，不带任何用户信息；遵守登录 shell 里的 `HTTPS_PROXY`。
-- 目录布局、校验、原子提交、旧版本回收按 ADR-08。tar 解包用 Rust 的 `tar` + `lzma-rs`，逐项检查路径不越界（SP-2 原型调用的系统 tar 不沿用）。
+- **从 npm 安装**：按锁文件直接下载各个包的 tarball，不调用 npm，不运行任何生命周期脚本；先核对 SRI，再解包。tar 解包用 Rust 的 `tar` + `flate2`，逐项检查路径不越界（SP-2 原型调用的系统 tar 不沿用）。registry 地址在 test-harness 构建里可以注入（[5.9.9](09-testing.md#599-测试替身与注入点)）。
+- 目录布局、校验、原子提交、旧版本回收按 ADR-08。
 
 ## 5.2.13 进程监护与宿主生命周期
 
