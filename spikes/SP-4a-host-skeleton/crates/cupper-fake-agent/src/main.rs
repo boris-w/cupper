@@ -16,6 +16,7 @@
 //! | `question <prompt>` | elicit a one-field form, then `say answer:<value>` |
 //! | `sleep <ms>` / `wait_cancel` | wait (the latter until `session/cancel`) |
 //! | `whoami` | `say session=<id> resumed=<bool>` |
+//! | `probe` | `say fds=<fds open at process start> env=<variable names>` |
 //! | `spawn_child` | start a long-lived grandchild in our process group |
 //! | `exit <code>` | exit the process immediately |
 
@@ -42,8 +43,26 @@ struct SessionState {
 
 type Sessions = Arc<Mutex<HashMap<String, SessionState>>>;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+/// File descriptors open when the process started, i.e. the ones it inherited.
+static INHERITED_FDS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+fn inherited_fds() -> String {
+    // Opening /dev/null takes the lowest free fd; reading /dev/fd reuses it.
+    let lowest_free = std::fs::File::open("/dev/null").map(|f| std::os::fd::AsRawFd::as_raw_fd(&f)).unwrap_or(-1);
+    let mut fds: Vec<i32> = std::fs::read_dir("/dev/fd")
+        .map(|d| d.filter_map(|e| e.ok()?.file_name().to_str()?.parse().ok()).collect())
+        .unwrap_or_default();
+    fds.retain(|fd| *fd != lowest_free);
+    fds.sort();
+    fds.iter().map(i32::to_string).collect::<Vec<_>>().join(",")
+}
+
+fn main() -> anyhow::Result<()> {
+    INHERITED_FDS.get_or_init(inherited_fds);
+    tokio::runtime::Builder::new_multi_thread().enable_all().build()?.block_on(serve())
+}
+
+async fn serve() -> anyhow::Result<()> {
     let sessions: Sessions = Arc::default();
     let (s_new, s_resume, s_prompt, s_cancel) = (sessions.clone(), sessions.clone(), sessions.clone(), sessions);
     Agent
@@ -185,6 +204,12 @@ impl Script {
                     let line = format!("session={} resumed={}", self.session_id, self.resumed);
                     self.say(&line)?;
                 }
+                "probe" => {
+                    let mut names: Vec<String> = std::env::vars().map(|(k, _)| k).collect();
+                    names.sort();
+                    let line = format!("fds={} env={}", INHERITED_FDS.get().map_or("?", String::as_str), names.join(","));
+                    self.say(&line)?;
+                }
                 "spawn_child" => {
                     // Simulates a CLI child that outlives its adapter; the host must reap it by process group.
                     std::process::Command::new("/bin/sleep")
@@ -250,7 +275,7 @@ impl Script {
 fn is_command(c: &str) -> bool {
     const NAMES: &[&str] = &[
         "say", "think", "flood", "flood_mixed", "big", "tool", "long_tool", "tool_done", "permission", "question", "sleep",
-        "wait_cancel", "whoami", "spawn_child", "exit",
+        "wait_cancel", "whoami", "probe", "spawn_child", "exit",
     ];
     NAMES.contains(&c.split_once(' ').map_or(c, |(n, _)| n))
 }

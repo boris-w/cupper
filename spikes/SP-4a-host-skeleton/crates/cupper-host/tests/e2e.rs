@@ -344,6 +344,27 @@ async fn t7_frames_stay_within_limit() {
     println!("largest frame seen: {} bytes", late.c.max_frame_seen.load(std::sync::atomic::Ordering::Relaxed));
 }
 
+/// Adapter isolation (ADR-05): only fds 0-2 are inherited even though the host
+/// holds the database, the socket and client connections; the environment is
+/// the allow-list (no `CUPPER_*`, nothing unlisted).
+#[tokio::test(flavor = "multi_thread")]
+async fn adapter_gets_only_stdio_and_allowed_env() {
+    let h = Harness::new(&[]);
+    let mut a = h.client().await;
+    let _other = h.client().await;
+    let sid = a.create_session().await;
+    a.subscribe(&ss(&sid), None).await;
+    let t = a.send(&sid, "probe").await;
+    a.wait_turn(&sid, &t).await;
+    let text = turn_text(a.session_view(&sid), &t);
+    let (fds, env) = text.trim_start_matches("fds=").split_once(" env=").expect("probe output");
+    assert_eq!(fds, "0,1,2", "inherited fds");
+    let names: Vec<&str> = env.split(',').collect();
+    assert!(names.iter().all(|n| !n.starts_with("CUPPER_")), "{env}");
+    assert!(!names.contains(&"UNLISTED_TEST_VAR"), "{env}");
+    assert!(names.contains(&"PATH") && names.contains(&"HOME"), "{env}");
+}
+
 /// Protocol edge cases: handshake order, unknown session, unknown method.
 #[tokio::test(flavor = "multi_thread")]
 async fn protocol_errors() {

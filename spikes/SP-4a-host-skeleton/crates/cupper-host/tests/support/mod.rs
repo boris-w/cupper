@@ -79,6 +79,9 @@ impl Harness {
             .arg("--harness-key-stdin")
             .args(&self.extra_args)
             .env("CUPPER_LOG", std::env::var("CUPPER_LOG").unwrap_or_else(|_| "warn".into()))
+            // Must never reach an adapter (env allow-list).
+            .env("CUPPER_TEST_SECRET", "s3cret")
+            .env("UNLISTED_TEST_VAR", "x")
             .stdin(Stdio::piped())
             .spawn()
             .expect("spawn host");
