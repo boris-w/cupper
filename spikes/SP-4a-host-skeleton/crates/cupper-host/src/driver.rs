@@ -17,7 +17,8 @@ use agent_client_protocol::schema::v1::{
     ElicitationFormCapabilities, ElicitationMode, ElicitationPropertySchema, Implementation, InitializeRequest,
     NewSessionRequest, PermissionOptionKind as AcpOptionKind, PromptRequest, RequestPermissionOutcome,
     RequestPermissionRequest, RequestPermissionResponse, ResumeSessionRequest, SelectedPermissionOutcome,
-    SessionConfigKind, SessionConfigOptionCategory, SessionConfigSelectOptions, SessionNotification, SessionUpdate,
+    SessionConfigId, SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory, SessionConfigSelectOptions,
+    SessionConfigValueId, SessionNotification, SessionUpdate,
     SetSessionConfigOptionRequest, TextContent, ToolCallContent, ToolCallStatus,
 };
 use agent_client_protocol::{Agent, ByteStreams, Client, ConnectionTo};
@@ -41,6 +42,10 @@ pub struct AgentSpec {
     /// Preferred model: the first model option whose value contains this text.
     #[serde(default)]
     pub model: Option<String>,
+    /// Permission mode to select after `session/new` (exact option value).
+    /// Sessions fail to start if the agent does not offer it.
+    #[serde(default)]
+    pub mode: Option<String>,
 }
 
 /// Host environment variables an adapter may inherit. Everything else,
@@ -133,10 +138,17 @@ impl From<agent_client_protocol::Error> for DriverError {
 }
 
 enum Cmd {
-    NewSession { cwd: PathBuf, model: Option<String>, reply: oneshot::Sender<Result<String, DriverError>> },
-    Resume { session: String, cwd: PathBuf, reply: oneshot::Sender<Result<(), DriverError>> },
+    NewSession { cwd: PathBuf, prefs: Prefs, reply: oneshot::Sender<Result<String, DriverError>> },
+    Resume { session: String, cwd: PathBuf, prefs: Prefs, reply: oneshot::Sender<Result<(), DriverError>> },
     Prompt { session: String, text: String },
     Cancel { session: String },
+}
+
+/// Session settings applied right after `session/new`.
+#[derive(Debug, Clone, Default)]
+struct Prefs {
+    model: Option<String>,
+    mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -151,7 +163,7 @@ pub struct Driver {
     pub pid: i32,
     pub start_us: u64,
     pub caps: AgentCaps,
-    model: Option<String>,
+    prefs: Prefs,
 }
 
 const START_TIMEOUT: Duration = Duration::from_secs(60);
@@ -185,7 +197,8 @@ impl Driver {
                 return Err(DriverError::Timeout);
             }
         };
-        Ok(Driver { cmd_tx, pid, start_us: spawned.start_us, caps, model: spec.model.clone() })
+        let prefs = Prefs { model: spec.model.clone(), mode: spec.mode.clone() };
+        Ok(Driver { cmd_tx, pid, start_us: spawned.start_us, caps, prefs })
     }
 
     async fn call<T>(&self, make: impl FnOnce(oneshot::Sender<Result<T, DriverError>>) -> Cmd) -> Result<T, DriverError> {
@@ -195,12 +208,13 @@ impl Driver {
     }
 
     pub async fn new_session(&self, cwd: &Path) -> Result<String, DriverError> {
-        let model = self.model.clone();
-        self.call(|reply| Cmd::NewSession { cwd: cwd.to_path_buf(), model, reply }).await
+        let prefs = self.prefs.clone();
+        self.call(|reply| Cmd::NewSession { cwd: cwd.to_path_buf(), prefs, reply }).await
     }
 
     pub async fn resume(&self, session: &str, cwd: &Path) -> Result<(), DriverError> {
-        self.call(|reply| Cmd::Resume { session: session.to_owned(), cwd: cwd.to_path_buf(), reply }).await
+        let prefs = self.prefs.clone();
+        self.call(|reply| Cmd::Resume { session: session.to_owned(), cwd: cwd.to_path_buf(), prefs, reply }).await
     }
 
     /// Start a turn; completion arrives as [`DriverEvent::PromptDone`].
@@ -307,13 +321,16 @@ async fn run_connection<O, I>(
             let _ = ready_tx.send(AgentCaps { resume: init.agent_capabilities.session_capabilities.resume.is_some() });
             while let Some(cmd) = cmd_rx.recv().await {
                 match cmd {
-                    Cmd::NewSession { cwd, model, reply } => {
-                        let r = new_session(&cx, cwd, model.as_deref()).await;
+                    Cmd::NewSession { cwd, prefs, reply } => {
+                        let r = new_session(&cx, cwd, &prefs).await;
                         let _ = reply.send(r);
                     }
-                    Cmd::Resume { session, cwd, reply } => {
-                        let r = cx.send_request(ResumeSessionRequest::new(session, cwd)).block_task().await;
-                        let _ = reply.send(r.map(|_| ()).map_err(DriverError::from));
+                    Cmd::Resume { session, cwd, prefs, reply } => {
+                        let r = match cx.send_request(ResumeSessionRequest::new(session.clone(), cwd)).block_task().await {
+                            Ok(resp) => apply_prefs(&cx, &session, resp.config_options.as_ref(), &prefs).await,
+                            Err(e) => Err(e.into()),
+                        };
+                        let _ = reply.send(r);
                     }
                     Cmd::Prompt { session, text } => {
                         let (cx2, ev) = (cx.clone(), events.clone());
@@ -338,29 +355,49 @@ async fn run_connection<O, I>(
     }
 }
 
-async fn new_session(cx: &ConnectionTo<Agent>, cwd: PathBuf, model: Option<&str>) -> Result<String, DriverError> {
+/// Find a select option of `category` whose value satisfies `pick`.
+fn find_option(
+    options: Option<&Vec<SessionConfigOption>>,
+    category: SessionConfigOptionCategory,
+    pick: impl Fn(&str) -> bool,
+) -> Option<(SessionConfigId, SessionConfigValueId)> {
+    options.into_iter().flatten().find_map(|o| {
+        let SessionConfigKind::Select(sel) = &o.kind else { return None };
+        if o.category.as_ref() != Some(&category) {
+            return None;
+        }
+        let SessionConfigSelectOptions::Ungrouped(opts) = &sel.options else { return None };
+        opts.iter().find(|v| pick(&v.value.to_string())).map(|v| (o.id.clone(), v.value.clone()))
+    })
+}
+
+async fn new_session(cx: &ConnectionTo<Agent>, cwd: PathBuf, prefs: &Prefs) -> Result<String, DriverError> {
     let resp = cx.send_request(NewSessionRequest::new(cwd)).block_task().await?;
     let session = resp.session_id.to_string();
-    if let Some(want) = model {
-        let pick = resp.config_options.iter().flatten().find_map(|o| {
-            let SessionConfigKind::Select(sel) = &o.kind else { return None };
-            if o.category != Some(SessionConfigOptionCategory::Model) {
-                return None;
-            }
-            let SessionConfigSelectOptions::Ungrouped(opts) = &sel.options else { return None };
-            opts.iter()
-                .find(|v| v.value.to_string().to_lowercase().contains(&want.to_lowercase()))
-                .map(|v| (o.id.clone(), v.value.clone()))
-        });
-        match pick {
+    apply_prefs(cx, &session, resp.config_options.as_ref(), prefs).await?;
+    Ok(session)
+}
+
+/// Select the configured permission mode and model (also after a resume, where
+/// the agent would otherwise restore whatever mode the transcript had).
+async fn apply_prefs(cx: &ConnectionTo<Agent>, session: &str, options: Option<&Vec<SessionConfigOption>>, prefs: &Prefs) -> Result<(), DriverError> {
+    if let Some(want) = &prefs.mode {
+        let (id, value) = find_option(options, SessionConfigOptionCategory::Mode, |v| v == want)
+            .ok_or_else(|| DriverError::Acp(format!("agent does not offer mode {want}")))?;
+        cx.send_request(SetSessionConfigOptionRequest::new(session.to_owned(), id, value)).block_task().await?;
+        tracing::info!(mode = %want, "selected permission mode");
+    }
+    if let Some(want) = &prefs.model {
+        let want = want.to_lowercase();
+        match find_option(options, SessionConfigOptionCategory::Model, |v| v.to_lowercase().contains(&want)) {
             Some((id, value)) => {
-                cx.send_request(SetSessionConfigOptionRequest::new(session.clone(), id, value)).block_task().await?;
-                tracing::info!(model = want, "selected model");
+                cx.send_request(SetSessionConfigOptionRequest::new(session.to_owned(), id, value.clone())).block_task().await?;
+                tracing::info!(model = %value, "selected model");
             }
-            None => tracing::warn!(model = want, "no matching model option"),
+            None => tracing::warn!(model = %want, "no matching model option"),
         }
     }
-    Ok(session)
+    Ok(())
 }
 
 /// snake_case wire name of a serde enum value.
