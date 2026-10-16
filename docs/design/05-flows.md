@@ -14,29 +14,34 @@ sequenceDiagram
   participant H as 宿主
   participant R as 渲染进程
   U->>M: 打开 App
-  M->>M: 发布构建检查启动参数，出现调试参数就退出
+  M->>M: 发布构建按白名单检查命令行开关，出现不认识的开关就退出
   M->>H: 连接 run/host.sock
   alt 连接失败（宿主没有运行）
-    M->>H: posix_spawn 加 SETSID 拉起 CupperHost.app（dev 构建经 stdin 传一次性密钥）
-    H->>H: flock、迁移（先备份）、崩溃恢复、加载索引流、绑定套接字
+    M->>H: 经原生扩展 cupper-sys::spawn 加 SETSID 拉起 CupperHost.app，stdin 写入启动载荷后关闭
+    H->>H: 读启动载荷，flock、迁移（先备份）、判定 data_epoch、崩溃恢复、加载索引流、绑定套接字
     loop 每 10 ms 重试，总预算 500 ms
       M->>H: 连接
     end
   end
   H->>H: accept：核对 uid，取审计令牌校验签名，记下固定令牌
-  H-->>M: host/hello（nonce）
+  H-->>M: host/hello（h_nonce）
   M->>M: 原生扩展校验宿主签名，记下宿主的令牌
-  M->>H: initialize（role control，auth codesign，nonce）
-  H-->>M: principal desktop_ui、features、limits
-  M->>R: 创建窗口（sandbox、contextIsolation、app 协议加 CSP）
-  M->>H: 为窗口新建数据连接并 initialize（role window）
-  M->>R: 经 preload 交给窗口一个 MessagePort
-  R->>H: stream/subscribe index
+  M->>H: initialize（role control，auth codesign；退化模式为 dev_key 证明）
+  H-->>M: principal desktop_ui、features、limits、data_epoch（退化模式另带 host_proof，主进程校验）
+  par 并行
+    M->>R: 创建窗口（show false；sandbox、contextIsolation、app 协议加 CSP、codeCache）
+  and
+    M->>H: 为窗口新建数据连接，代发 initialize（role window），先缓存入方向的数据
+  end
+  R->>M: ShellAPI.init()、host.open()
+  M-->>R: ShellInfo；MessagePort 和握手结果
+  R->>H: stream/subscribe index（经主进程转发）
   H-->>R: mode snapshot，随后 stream/snapshot 分页
   R->>R: 渲染侧边栏：项目、会话、状态
   R->>H: stream/subscribe 上次打开的会话
-  H-->>R: 会话快照（最近 20 个回合）
-  R->>R: 可以输入，冷启动结束
+  H-->>R: 会话快照（最近 20 个回合加进行中的回合）
+  R->>M: ready-to-show，窗口显示
+  R->>R: performance.mark('cupper:ready')：可以输入，冷启动结束
   Note over H: agent 适配器不在这条路径上，按需启动（NFR-6）
 ```
 

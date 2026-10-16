@@ -150,5 +150,8 @@ flowchart LR
 - 每条事件流只有一个写者（见 [5.2.3](02-host.md#523-并发模型)）；其他模块只能通过消息请求写者追加事件。
 - 宿主里的时间只经 `Clock` 获取、定时只经 `Clock` 设置、UUIDv7 只经 `IdGen` 生成；禁用清单由 clippy `disallowed-methods` 强制（[5.2.16](02-host.md#5216-时间与可测性)）。有状态的决策逻辑写成纯核心，不在其中做 I/O 或 await。
 - 宿主运行期间不读取 App 包内的任何文件（ADR-01），唯一的例外是运行时安装器在通过自检之后、按内嵌清单逐文件核对哈希的复制（[5.2.12](02-host.md#5212-运行时安装器)）。
-- `ui-core` 不 import `electron`、`node:*`；渲染进程不出现 `innerHTML`、`dangerouslySetInnerHTML`、`eval`、`new Function`。
+- `ui-core` 不 import `electron`、`node:*`；渲染进程不出现 `innerHTML`、`dangerouslySetInnerHTML`、`insertAdjacentHTML`、`eval`、`new Function`。
+- 只有 `ui-core/src/security/policies.ts` 可以调用 `trustedTypes.createPolicy`，禁止名为 `default` 的策略；agent 给出的字符串不能进入 `<style>` 的文本、`insertRule` 或 CSS 自定义属性（[5.7.8](07-desktop.md#578-安全加固的落点)）。
+- 主进程在调用时才经 `dialog.showMessageBox` 等取函数，不在模块加载时解构保存（e2e 要在主进程里替换它们）。
+- 宿主、CLI、原生扩展拉起任何子进程都经 `cupper-sys::spawn`（[5.8.5](08-security.md#585-进程卫生)）。
 - 界面文案一律走 `@cupper/i18n`，宿主下发语义码，不下发文案（瘦客户端）。
