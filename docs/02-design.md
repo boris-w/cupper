@@ -1,6 +1,6 @@
 # cupper 技术设计
 
-- 版本：v0.3（ADR-01、02、04、05 已提议；ADR-03 讨论中）
+- 版本：v0.4（ADR-01 至 ADR-05 已提议）
 - 日期：2026-10-16
 - 状态：进行中
 - 依据：PRD v1.0（tag `gate/prd`）；产品-架构对齐会 `docs/meetings/2026-10-16-prd-arch-alignment/`
@@ -30,7 +30,7 @@
 |---|---|---|---|---|
 | ADR-01 | 会话宿主的进程形态与生命周期 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-01-host-process.md` |
 | ADR-02 | 会话宿主的实现语言 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-02-host-language.md` |
-| ADR-03 | 桌面 UI 技术 | 讨论中（用户要求先看同类产品的框架选择） | R04；用户讨论；必要时 SP-6 | `docs/decisions/ADR-03-desktop-ui.md` |
+| ADR-03 | 桌面 UI 技术 | 提议（编排者结论：Electron + React；R05 补充证据待追加） | R04；用户讨论；必要时 SP-6 | `docs/decisions/ADR-03-desktop-ui.md` |
 | ADR-04 | 宿主与客户端之间的协议 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-04-host-protocol.md` |
 | ADR-05 | 本地传输与本地客户端认证 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会；SP-4 | `docs/decisions/ADR-05-local-transport-auth.md` |
 | ADR-06 | 事件模型与存储 | 待定 | SP-1、SP-4 | — |

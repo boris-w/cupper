@@ -1,6 +1,6 @@
 # ADR-03 桌面 UI 技术
 
-- 状态：讨论中（2026-10-16 用户要求先调研同类产品的框架选择，见 R04 和 `docs/meetings/2026-10-16-tech-selection-feedback/`；下文为技术选型讨论会的提议，暂不生效）
+- 状态：提议（编排者结论，2026-10-16；依据技术选型讨论会和 R04，R05 的补充证据待追加；最终在 gate/design 确认）
 - 日期：2026-10-16
 - 来源：`docs/meetings/2026-10-16-tech-selection/`（`minutes.md`，尤其是 C5；`desktop-engineer.md`；`desktop-engineer-round2.md`；`architect.md` ADR-03；`mobile-security-engineer-round2.md` 问题 2、3）
 
@@ -30,7 +30,7 @@ PRD 要求复刻 Codex 视图（UI-6），包括：
 **采用 Electron + React 19 + TypeScript。Tauri 2 为备选。**
 
 选择理由：
-- Codex 本身就是 Electron + React，复刻保真度最高；
+- Codex 本身是按 Electron 编程模型写的 React 应用（macOS 版现在跑在 OpenAI 自研的 Chromium 运行时 OWL 上，见 R04），用同一套技术复刻，保真度最高；
 - Web 生态有成熟的组件；
 - 测试和生产用的是同一个引擎；
 - AI agent 可以用 Playwright 和 CDP 自己验证界面效果。
@@ -97,3 +97,31 @@ PRD 要求复刻 Codex 视图（UI-6），包括：
 - **改变条件**：
   - SP-6 测得 Electron 冷启动或内存不达标，改用 Tauri；
   - 用户更看重原生 Mac 的观感，或者对包体有硬性要求。
+
+## 编排者结论（2026-10-16）
+
+用户在技术选型讨论会之后，要求先看同类产品用什么框架，并请编排者直接给出结论（`docs/meetings/2026-10-16-tech-selection-feedback/` 中的 D7）。R04 调研了约 40 个产品和 20 个框架，结论如下。
+
+**维持 Electron + React 19 + TypeScript。** 界面核心（`ui-core`）不依赖外壳，Tauri 3 的 CEF 版本作为长期观察的后路。
+
+理由：
+1. **和复刻对象同构。** Codex 的界面代码就是按 Electron 编程模型写的 React，用到的组件也一样：Pierre diffs、Shiki、xterm、mermaid、KaTeX。编排者已在本机只读核实过它的运行时。
+2. **符合用户的工程原则"不写补丁代码"。** 用系统自带的 WebKit（Tauri 2、原生外壳加 WebView 的方案），要为输入法回车、后台节流、闪烁等问题专门写绕过代码。opencode、Happy 已经因为这些问题从 Tauri 换回了 Electron；Raycast 改用 WKWebView 后，内存反而升高了。
+3. **主流选择。** 编码 agent 客户端里，Claude、Cursor、VS Code、Goose、opencode 都用 Electron；ACP 客户端中，按 star 数排名前 6 的也都是 Electron。
+4. **AI 编码效率最高，而且 AI 能自己验证结果。** React 和 TS 的训练语料最多；测试和生产用的是同一个 Chromium，可以用 Playwright 和 CDP 自动截图、检查。
+
+代价和应对：
+- **安装包较大**：运行时约 250 MB，加上 Node 和适配器，整包有几百 MB。用户本来就希望"像 Codex"，接受这个代价。
+- **内存**：公开报告的高内存问题，根源大多在应用代码里（React effect 死循环、长会话一次性全部挂载），不在外壳。应对措施：lint 规则、性能预算、长会话窗口化，并由 SP-6 做长时间运行测试。
+- **Electron 大约每 8 周出一个大版本**：跟着官方支持的最新 3 个大版本走，每次升级都经过回归测试。
+- **安全加固**：按本 ADR 前文列出的清单执行。另外两种做法明确禁止：在发布构建里打开 CDP 调试端口；从远端加载渲染层的页面。
+
+不采用的方案：
+- **Tauri 2**：要写 WKWebView 的补丁代码，而且已有产品从它迁走。
+- **Tauri 3 + CEF**：还在 alpha 阶段，长期观察。
+- **原生外壳加 WKWebView（Raycast 2 的模式）**：要维护两套界面技术，AI 写起来效率低。
+- **GPUI 全 Rust 界面**：界面工作量估计是 Electron 方案的 1.5 到 2.5 倍；API 不稳定，AI 可参考的资料少；Zed 的终端、Markdown 等组件是 GPL，不能直接用。
+
+补充：
+- 终端组件以 xterm.js 为主，ghostty-web 作为备选。
+- 打包工具在 electron-builder 和 Electron Forge 之间选，在详细设计阶段确定。Codex、Claude 用的是 Forge，前提是能满足 ADR-01 对"自己控制安装时机"的要求。
