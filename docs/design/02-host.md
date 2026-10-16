@@ -133,12 +133,15 @@ flowchart TB
 
 **策略**分两层，都在宿主内执行，客户端（包括桌面主进程）的检查只是第一道防线：
 
-1. **方法级**：每个方法在 `cupper-protocol` 中声明 `SCOPE`（`read`、`write`、`approve`、`privileged`、`ui_local`），principal 的 scope 集合必须包含它。
-2. **资源级**：按方法注册的规则，需要读取参数和宿主状态才能判断，例如：
-   - `interaction/respond` 选中的选项 `requires = privileged`（`allow_always` 类）时，只接受 `desktop_ui` 的 `control` 角色；
-   - `session/create`、`session/set_config` 把权限模式设成风险级别为 `full_access` 的值时，同上；
-   - `settings/update` 修改安全相关的键（CLI 路径）时，同上；
-   - `interaction/respond` 来自 `desktop_ui` 的 `window` 角色时，距请求创建不足 400 ms 的一律拒绝（`conflict`，`reason: too_early`），把 ADR-03 的"约 500 ms 输入保护"落到宿主侧，不依赖渲染进程。
+1. **方法级**：每个方法在 `cupper-protocol` 中声明 `SCOPE`（`read`、`write`、`approve`、`privileged`、`ui_local`、`test`），principal 的 scope 集合必须包含它。
+2. **资源级**：按方法注册的规则，需要读取参数和宿主状态才能判断：
+   - **审批档位**：`session/create` 的 `config`、`session/set_config`、`interaction/respond` 选中带 `mode_after` 的选项，凡是把会话放宽到更高档位的，按 [5.8.2](08-security.md#582-principal角色与-scope) 的档位规则判定；
+   - `interaction/respond` 选中的选项 `requires = privileged`（`allow_always` 类、效果未知的选项）时，只接受 `desktop_ui` 的 `control` 角色；
+   - `settings/update` 修改安全相关的键（`agents.<agent>.cli_path`、`agents.env_passthrough`、`diagnostics.verbose`）时，同上；
+   - **真实输入证据**：来自 `desktop_ui` 的 `window` 角色的 `interaction/respond` 和 `git/revert`，必须带主进程写入的 `input` 参数（[5.7.8](07-desktop.md#578-安全加固的落点)），缺了一律拒绝（`forbidden`，`reason: user_activation_required`），不因为缺参数而跳过检查。`input.key` 为 `escape` 时，只能用于 `dismissed`，或者 `effect.scope` 为 `reject`、`plan_revise` 的选项；
+   - `interaction/respond` 来自 `window` 角色时，距请求创建不足 400 ms 的一律拒绝（`conflict`，`reason: too_early`），把 ADR-03 的"约 500 ms 输入保护"落到宿主侧，不依赖渲染进程；
+   - **项目信任**：Attach 和发送 prompt 前按信任状态决定能否运行、怎样运行（[5.2.6](#项目信任)）；
+   - M3 的 `remote_device` 按 SEC-9 收窄。
 
 完整的权限矩阵见 [5.8.3](08-security.md#583-权限矩阵)。
 
@@ -225,7 +228,7 @@ stateDiagram-v2
 
 ### 项目信任
 
-安全 #2，纪要 D9。**是否增加这一步，待用户确认（U-R1）；本设计按建议"采用"来写。**
+安全 #2，纪要 D9。是否增加这一步已定（2026-10-16）：采用（U-R1，见 `docs/meetings/2026-10-16-gate-design-decisions/minutes.md`），对应 PRD v1.2 的 PS-2。
 
 结论：cupper 接手 CLI 的工作区信任对话框。项目经用户在原生确认框里信任之后，会话才加载项目自带的 agent 配置；未信任时，Claude 只加载用户级配置，Codex 不能使用。用户级的 MCP、hooks、插件照常继承（AG-6）。
 
@@ -250,7 +253,14 @@ stateDiagram-v2
 
 ### 配置项
 
-`session/set_config` 由 actor 转给驱动的 `set_config`，用返回的最新配置写 `session.configured`。回合进行中也允许修改，由 agent 决定何时生效。新建会话时的初始配置在 `session/new` 之后立即应用（SP-4a 的 `apply_prefs`；resume 之后也要重新应用，因为 agent 会恢复 transcript 里的模式）。
+- `session/set_config` 由 actor 转给驱动的 `set_config`，用返回的最新配置写 `session.configured`。回合进行中也允许修改，由 agent 决定何时生效。新建会话时的初始配置在 `session/new` 之后立即应用（SP-4a 的 `apply_prefs`；resume 之后也要重新应用，因为 agent 会恢复 transcript 里的模式）。
+- **档位的设定者**：每次档位变化都记下设定它的 principal（`sessions.mode_set_by`）。新会话的默认档位来自用户自己的 CLI 配置时，视为由创建会话的 principal 设定（安全 #3，纪要 D10）。经原生确认进入 `full_access` 时，记下 `sessions.full_access_confirmed_at`。
+- **事后核对**（安全 #3）：Attach、resume 之后，以及收到 `ConfigChanged` 时，核对实际档位。出现以下任一情况，会话进入 `config_unconfirmed`：
+  - 实际是 `full_access`，但没有经原生确认的记录；
+  - 实际档位高于设定者按档位规则（[5.8.2](08-security.md#582-principal角色与-scope)）能设定的档位。例如只有 write 的 CLI 新建了一个 Codex 会话，而 Codex 的默认档位是 `agent`。
+- **`config_unconfirmed` 时**：队列暂停（原因 `config_unconfirmed`），新的消息照常排队但不发出；写 `session.configured{confirmation_required: {reason}}` 和审计。解除方式有两种：
+  - 桌面端经原生确认调用 `session/confirm_config`；
+  - 有权限的一方用 `session/set_config` 把档位降到它有权设定的范围（降档只需要 write）。
 
 ## 5.2.7 交互代理
 
@@ -371,7 +381,7 @@ stateDiagram-v2
 - `git/file_diff` 在快照档里对同一对树执行 `diff-tree -p`，固定参数 `--no-color --no-ext-diff --no-textconv --full-index --binary -U3`，切成 hunk。用于暂存的补丁用 `--no-renames` 生成。每个 hunk 有按内容寻址的 `hunk_id`，标明操作单位：`hunk`、`mode`（权限位单独一个单位）、`whole_file`（新增、删除、二进制、符号链接、子模块指针、LFS）；`filter_unsupported` 的路径没有可操作的单位。
 - `DiffCache`：`diff_token` → 这次 diff 的全部补丁，每个工作区保留最近 32 个，10 分钟过期。`git/stage`、`git/unstage`、`git/revert` 带 `diff_token` 和 `hunk_id`，宿主取出原始补丁，在仓库档执行 `git apply --whitespace=nowarn [--cached] [-R]`。实验验证：快照档生成的补丁可以直接用 `apply --cached` 应用到用户仓库，结果与 `git add` 相同。token 不存在或补丁应用失败都返回 `conflict`（`reason: stale_diff`），客户端刷新后重试，不做模糊匹配（ADR-10）。这就是 ADR-04 所说"`hunk_id` 加 diff 基线"的具体做法：基线就是 `diff_token`。
 - `git/revert` 会丢掉用户的改动，来自 window 角色时必须带主进程记录的真实输入证据（[5.2.5](#525-策略与命令账本)、[5.7.8](07-desktop.md#578-安全加固的落点)）。
-- 说明：GT-3 要求能取消暂存，取消暂存需要看到已暂存的内容，所以 `staged` 范围在 M1 就提供，尽管 PRD 把"其余审查范围"（F2）放在 P1（待定问题 Q13，待用户确认）。
+- 说明：GT-3 要求能取消暂存，取消暂存需要看到已暂存的内容，所以 `staged` 范围在 M1 就提供，尽管 PRD 把"其余审查范围"（F2）放在 P1。这个口径已定（2026-10-16，Q13，见 `docs/meetings/2026-10-16-gate-design-decisions/minutes.md`），记录在 PRD v1.2 第 10 节。
 
 **git/status**：分支、上游、领先落后用仓库档的只读引用类命令；进行中的操作（合并、cherry-pick、revert、rebase、bisect）直接检查 git 目录里的标记文件；文件状态由快照档计算。
 
@@ -408,6 +418,7 @@ stateDiagram-v2
 | 键 | 含义 | 修改需要 |
 |---|---|---|
 | `agents.<agent>.cli_path` | 手动指定 CLI 路径 | `privileged`（等于决定 agent 运行哪个程序） |
+| `agents.env_passthrough` | 额外传给适配器的环境变量名（API key 等），规则见 [5.6.6](06-agent-driver.md#566-cli-的发现与版本检查) | `privileged`（等于能影响适配器加载的代码） |
 | `worktrees.root` | worktree 根目录 | `write` |
 | `notifications.needs_action` / `.turn_completed` / `.error` | 通知开关 | `write` |
 | `apps.terminal` / `apps.editor` | UI-0 用哪个应用打开工作区（从内置的应用清单里选） | `write` |

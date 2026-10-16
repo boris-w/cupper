@@ -129,7 +129,8 @@
 | `session/interrupt` | 请求 | `{command_id, session_id, expected_turn_id?}` | `{turn_id?}` | `conflict/turn_mismatch` | 命令 | write | M1a |
 | `session/queue_resume` | 请求 | `{command_id, session_id}` | `{}`：恢复已暂停的队列 | — | 命令 | write | M1a |
 | `session/queue_edit` | 请求 | `{command_id, session_id, expected_version, ops}` | `{version}` | `conflict/version_mismatch` | 命令 | write | M2（CP-8） |
-| `session/set_config` | 请求 | `{command_id, session_id, option, value}` | `{config}` | `unsupported`、`agent_error` | 命令 | write；值为完全访问时 privileged | M1b |
+| `session/set_config` | 请求 | `{command_id, session_id, option, value}` | `{config}` | `unsupported`、`agent_error`、`forbidden/scope` | 命令 | write；放宽档位时按档位规则（[5.8.2](08-security.md#582-principal角色与-scope)） | M1b |
+| `session/confirm_config` | 请求 | `{command_id, session_id, config_digest}` | `{}`：确认会话当前的档位，解除 `config_unconfirmed`（[5.2.6](02-host.md#配置项)） | `conflict/digest_mismatch`（确认期间配置又变了） | 命令 | privileged（只能经原生确认） | M1a |
 | `session/rename` | 请求 | `{command_id, session_id, title}` | `{}` | — | 命令 | write | M1b |
 | `session/archive` | 请求 | `{command_id, session_id, worktree: keep\|remove\|remove_case_only_dirty}` | `{worktree: kept\|removed\|blocked, blockers?}` | `conflict`（有运行中的回合） | 命令 | write | M1b |
 | `session/restore` | 请求 | `{command_id, session_id}` | `{mode: full\|read_only}` | — | 命令 | write | M1b |
@@ -144,7 +145,7 @@
 
 | 方法 | 类型 | 参数要点 | 结果要点 | 可能的错误 | 幂等 | scope | 里程碑 |
 |---|---|---|---|---|---|---|---|
-| `interaction/respond` | 请求 | `{command_id, session_id, request_id, request_digest, outcome}` | `{request_id}` | `conflict/already_resolved`（带 `resolved_by`）、`conflict/digest_mismatch`、`conflict/too_early`、`expired`、`forbidden` | 命令 | approve；选项 `requires: privileged` 时 privileged | M1a |
+| `interaction/respond` | 请求 | `{command_id, session_id, request_id, request_digest, outcome, input?}`；`input: {kind: click\|key\|native_confirm, key?: enter\|space\|escape\|cmd_enter}` 由桌面主进程写入，来自 window 角色时必须有（[5.7.8](07-desktop.md#578-安全加固的落点)），其他 principal 忽略 | `{request_id}` | `conflict/already_resolved`（带 `resolved_by`）、`conflict/digest_mismatch`、`conflict/too_early`、`expired`、`forbidden`（含 `user_activation_required`） | 命令 | approve；选项 `requires: privileged` 时 privileged；带 `mode_after` 的选项另按档位规则 | M1a |
 | `interaction/get` | 请求 | `{session_id, request_id}` | 完整的交互请求和当前状态（供主进程弹原生确认框） | `not_found` | 天然 | read | M1a |
 
 ### Git、工作区与文件（M1b）
@@ -154,7 +155,7 @@
 | `git/status` | 请求 | `{session_id}` | `{branch, upstream?, ahead, behind, in_progress?, files: [{path, index, worktree}]}` | `unsupported/not_a_repo` | 天然 | read |
 | `git/diff` | 请求 | `{session_id, scope: unstaged\|staged\|last_turn\|{turn: id}}` | `{diff_token, files: [{path, old_path?, change, additions, deletions, binary}], snapshot?: {status, excluded}, mixed_changes_warning}` | `unavailable/snapshot_missing` | 天然 | read |
 | `git/file_diff` | 请求 | `{session_id, diff_token, path}` | `{path, hunks: [{hunk_id, unit: hunk\|mode\|whole_file, header, lines \| lines_blob}]}` | `conflict/stale_diff` | 天然 | read |
-| `git/stage`、`git/unstage`、`git/revert` | 请求 | `{command_id, session_id, diff_token, target: {all} \| {paths} \| {hunk_ids}}` | `{}` | `conflict/stale_diff`、`conflict/outcome_unknown`、`git_error` | 命令 | write |
+| `git/stage`、`git/unstage`、`git/revert` | 请求 | `{command_id, session_id, diff_token, target: {all} \| {paths} \| {hunk_ids}, input?}`；`git/revert` 来自 window 角色时必须带 `input`（同 `interaction/respond`） | `{}` | `conflict/stale_diff`、`conflict/outcome_unknown`、`git_error`（含 `unsafe_repo_config`、`filter_unsupported`）、`forbidden`（含 `user_activation_required`） | 命令 | write |
 | `git/commit` | 请求 | `{command_id, session_id, message}` | `{oid}` | `git_error`（`hook_failed`、`nothing_to_commit`）、`conflict/outcome_unknown` | 命令 | write |
 | `git/push` | 请求 | `{command_id, session_id, set_upstream?}` | `{remote, branch}` | `git_error`（`auth_failed`、`rejected`） | 命令 | write |
 | `git/branches` | 请求 | `{project_id}` | `{current, local, remote}` | — | 天然 | read |
@@ -200,7 +201,7 @@
 
 | type | 可合并 | data 要点 | 何时写入 |
 |---|---|---|---|
-| `session.configured` | 否 | `{agent, workspace: {kind, path, branch?, base_ref?}, config: {<option>: value}, read_only, project_config: loaded\|ignored}`；后写的覆盖先写的 | 创建、配置变化、恢复、项目信任状态变化 |
+| `session.configured` | 否 | `{agent, workspace: {kind, path, branch?, base_ref?}, config: {<option>: value}, read_only, project_config: loaded\|ignored, confirmation_required?: {reason: full_access_unconfirmed\|tier_above_setter, config_digest}}`；后写的覆盖先写的 | 创建、配置变化、恢复、项目信任状态变化 |
 | `session.capabilities` | 否 | 能力描述（[5.3.7](#537-会话能力描述)） | agent 会话建立或 resume 后；能力变化时 |
 | `workspace.preparing` | 否 | `{phase: worktree_add\|checkout\|refresh, progress?}` | 创建 worktree 期间 |
 | `workspace.ready` / `workspace.failed` | 否 | `{path, branch?}` / `{code}` | 准备完成或失败 |
@@ -329,7 +330,7 @@ ConfigOption {
 
 - 不支持的功能不出现（AG-4）：例如 `steer.supported` 为 false 时，界面不显示"插话"。
 - `steer.side_effects` 为 true（Claude）时，界面默认仍然排队，插话需要用户明确选择（ADR-07）。
-- `risk` 由宿主按配置项映射表给出（[5.6.5](06-agent-driver.md#565-配置项映射)），`full_access` 的值只能经原生确认框选择。
+- `risk` 由宿主按配置项映射表给出（[5.6.5](06-agent-driver.md#565-配置项映射)），档位有序：`normal` < `elevated` < `full_access`。谁能放宽到哪一档见 [5.8.2](08-security.md#582-principal角色与-scope)。
 
 ## 5.3.8 错误码
 
@@ -342,7 +343,7 @@ ConfigOption {
 | `unauthenticated` | `bad_nonce`、`signature_invalid`、`bad_key` | 否 | 断开 |
 | `forbidden` | `scope`（`data.scope` 指出缺哪项）、`lineage`、`role`（需要控制连接）、`user_activation_required`（主进程本地产生） | 否 | CLI 申请提权；界面走原生确认 |
 | `not_found` | — | 否 | 刷新 |
-| `conflict` | `already_resolved`、`turn_mismatch`、`digest_mismatch`、`too_early`、`version_mismatch`、`stale_diff`、`outcome_unknown`、`turn_running` | 否 | 收起或刷新；`already_resolved` 显示"已在别处处理"（AP-4） |
+| `conflict` | `already_resolved`、`turn_mismatch`、`digest_mismatch`、`too_early`、`version_mismatch`、`stale_diff`、`outcome_unknown`、`turn_running`、`config_unconfirmed` | 否 | 收起或刷新；`already_resolved` 显示"已在别处处理"（AP-4） |
 | `expired` | `adapter_exited`、`host_restarted` | 否 | 收起卡片 |
 | `unsupported` | `data.capability` 指出能力；`not_a_repo` | 否 | 隐藏功能 |
 | `unavailable` | `cli_missing`、`cli_not_logged_in`、`cli_too_old`、`runtime_installing`、`runtime_failed`、`adapter_starting`、`adapter_crashed`、`pending_upgrade`、`quota_exhausted`、`app_not_found`、`snapshot_missing`、`project_untrusted`、`scan_failed` | 视 reason | 显示恢复指引（AG-2、MS-5） |
@@ -373,7 +374,7 @@ ConfigOption {
 | `blob/put` | 单个 32 MiB；每连接未完成上传合计 64 MiB；图片另受 agent 限制，默认 10 MiB |
 | 每会话排队消息 | 50 条 |
 | 命令记录保留 | 48 小时（ADR-04 下限 24 小时） |
-| 提权 | 每次最长 15 分钟；每个可执行文件最多 3 个未决申请，10 秒内最多 1 次 |
+| 提权 | 每次最长 15 分钟；非 UI 的申请全局同一时间最多 1 个未决；10 分钟内被拒 2 次后静默 10 分钟（[5.8.4](08-security.md#584-cli-提权)） |
 | 中断兜底 / Steer 超时 | 10 s / 5 s |
 
 ## 5.3.10 兼容与代码生成

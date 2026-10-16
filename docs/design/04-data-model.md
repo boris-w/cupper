@@ -65,6 +65,8 @@ CREATE TABLE sessions (
   base_ref          TEXT,
   base_oid          TEXT,
   config_json       TEXT NOT NULL DEFAULT '{}',    -- 当前的模式、模型、推理强度
+  mode_set_by       TEXT,                    -- 设定当前审批档位的 principal 稳定 ID；默认档位记为创建者（5.2.6）
+  full_access_confirmed_at INTEGER,          -- 经原生确认进入 full_access 的时间
   state             TEXT NOT NULL,           -- idle | running | error | interrupted；供崩溃恢复使用的粗粒度状态
   read_only         INTEGER NOT NULL DEFAULT 0,    -- 分支已不存在的已恢复会话（PS-3）
   queue_version     INTEGER NOT NULL DEFAULT 0,

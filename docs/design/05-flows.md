@@ -361,7 +361,9 @@ sequenceDiagram
   Note over R,H: 恢复时：分支还在就 worktree add 重建（必要时先 prune），否则会话只读
 ```
 
-## 5.5.10 添加项目与信任（安全 #2，待用户确认 U-R1）
+## 5.5.10 添加项目与信任
+
+安全 #2；PRD v1.2 的 PS-2（项目信任已定，U-R1）。规则见 [5.2.6](02-host.md#项目信任)。
 
 ```mermaid
 sequenceDiagram
