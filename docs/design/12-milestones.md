@@ -69,9 +69,9 @@
 | CP-6 | 运行中追加消息：宿主排队；支持时可以 Steer，失败转排队 | 会话编排（队列、Steer） | `session/send.mode`、`queue.updated` | 排队 M1a；Steer M1b | PROP-queue-fifo〔PR〕；IT-K10、IT-K11〔PR〕；E2E-NFR1-2〔PR〕 |
 | CP-7 | 中断；agent 没响应时超时兜底 | 会话编排（`Cancelling`，10 s） | `session/interrupt` | M1a | PROP-interrupt-10s〔PR〕；IT-K1-close-resume（`hang`）〔PR〕；E2E-NFR1-2〔PR〕 |
 | MS-1 | 流式 Markdown、代码高亮、表格 | 消息流组件（streamdown、Shiki）；写入时合并 | `item.delta` | 基本 M1a；高亮 M1b | 截图回归〔PR〕；Markdown 注入金样例〔PR〕 |
-| MS-2 | 思考过程可折叠 | 提取层、`thought` 条目 | `item.*` | M1a | GOLD-A-codex-s02、GOLD-A-claude-s02d〔PR〕 |
+| MS-2 | 思考过程可折叠 | 提取层、`thought` 条目 | `item.*` | M1a | IT-thought-claude（claude 形态的 `think`）〔PR〕；GOLD-A-codex-s02（Codex 的录制里有 `agent_thought_chunk`）〔PR〕。SP-1 的 Claude 录制里没有思考帧（s02d 也没有），真实的 Claude 思考流录制由兼容矩阵用 sonnet 或 opus 补（COMPAT-claude-thinking〔人〕） |
 | MS-3 | 工具活动单行摘要，可展开看输出、diff、退出码；按回合折叠显示耗时；拿不到时降级 | 提取层、`ToolCall`、`group_id`、`final_item_ids` | `item.*`、`turn.*` | M1a（Claude）/ M1b（Codex、折叠） | GOLD-A（各 `tool_kind` 的必填字段）〔PR〕；UNIT-final-items、UNIT-grouping〔PR〕；截图回归〔PR〕 |
-| MS-4 | 计划和待办清单 | 提取层、`plan` 条目 | `item.*` | M1b | GOLD-A-claude-s05、GOLD-A-codex-s02b〔PR〕；Claude 的口径见 PRD v1.2 第 10 节（Q12） |
+| MS-4 | 计划和待办清单 | 提取层、`plan` 条目 | `item.*` | M1b | GOLD-A-claude-s05、GOLD-A-codex-s05（两边的 `plan_update` 都在 s05 里）〔PR〕；IT-plan-entries（假 agent 的 `plan_update`）〔PR〕；Claude 的口径见 PRD v1.2 第 10 节（Q12） |
 | MS-5 | 错误和恢复指引；agent 崩溃后自动重启并提示 | 统一错误条目、`notice`、`AgentRuntime` 重启 | `error`、`notice` 条目 | M1a | IT-K6、IT-K7、IT-K17〔PR〕；E2E-error-guidance〔晚〕 |
 | AP-1 | 消息流内的审批卡片，Enter 批准、Esc 拒绝 | 交互代理、审批卡片、真实输入检查 | `interaction.*`、`interaction/respond` | M1a | E2E-SEC-real-input、E2E-approve-enter-esc〔PR〕；MAN-keyboard〔人〕 |
 | AP-2 | 选项和文案以 agent 为准；持久选项要标明 | 选项对照表（`effect`、`requires`）、原生确认 | `Option.effect` | M1a（Claude）/ M1b（Codex） | GOLD-A（选项对照表）〔PR〕；UNIT-option-map〔PR〕；E2E-persistent-option-native〔晚〕 |

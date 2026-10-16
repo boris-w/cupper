@@ -210,7 +210,7 @@
 | `policy/describe` | 请求 | `{method, params}` | `{action, details}`：主进程弹原生确认框前，用它取得要确认的操作的语义描述 | — | 天然 | privileged | M1a |
 | `diag/export` | 请求 | `{command_id, include_sessions?}` | `{blob}`（zip） | — | 命令 | ui_local | M2（NFR-12 P1） |
 | `diag/recording_export` | 请求 | `{session_id}` | `{blob}`（录制格式的 JSONL，[5.9.3](09-testing.md#593-录制与金样例)） | — | 天然 | 仅 `test-harness` 和 `dev-auth` 构建 | M1a |
-| `test/clock_advance`、`test/run_maintenance` 等 | 请求 | 见 [5.2.16](02-host.md#5216-时间与可测性)、[5.9.9](09-testing.md#599-测试替身与注入点) | — | — | — | test（仅 `test-harness` 构建） | M1a |
+| `test/clock_advance`、`test/run_maintenance`、`test/seed` 等 | 请求 | 见 [5.2.16](02-host.md#5216-时间与可测性)、[5.9.9](09-testing.md#599-测试替身与注入点) | — | — | — | test（仅 `test-harness` 构建） | M1a |
 
 ## 5.3.5 事件类型目录
 
