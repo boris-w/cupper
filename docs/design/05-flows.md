@@ -14,29 +14,34 @@ sequenceDiagram
   participant H as 宿主
   participant R as 渲染进程
   U->>M: 打开 App
-  M->>M: 发布构建检查启动参数，出现调试参数就退出
+  M->>M: 发布构建按白名单检查命令行开关，出现不认识的开关就退出
   M->>H: 连接 run/host.sock
   alt 连接失败（宿主没有运行）
-    M->>H: posix_spawn 加 SETSID 拉起 CupperHost.app（dev 构建经 stdin 传一次性密钥）
-    H->>H: flock、迁移（先备份）、崩溃恢复、加载索引流、绑定套接字
+    M->>H: 经原生扩展 cupper-sys::spawn 加 SETSID 拉起 CupperHost.app，stdin 写入启动载荷后关闭
+    H->>H: 读启动载荷，flock、迁移（先备份）、判定 data_epoch、崩溃恢复、加载索引流、绑定套接字
     loop 每 10 ms 重试，总预算 500 ms
       M->>H: 连接
     end
   end
   H->>H: accept：核对 uid，取审计令牌校验签名，记下固定令牌
-  H-->>M: host/hello（nonce）
+  H-->>M: host/hello（h_nonce）
   M->>M: 原生扩展校验宿主签名，记下宿主的令牌
-  M->>H: initialize（role control，auth codesign，nonce）
-  H-->>M: principal desktop_ui、features、limits
-  M->>R: 创建窗口（sandbox、contextIsolation、app 协议加 CSP）
-  M->>H: 为窗口新建数据连接并 initialize（role window）
-  M->>R: 经 preload 交给窗口一个 MessagePort
-  R->>H: stream/subscribe index
+  M->>H: initialize（role control，auth codesign；退化模式为 dev_key 证明）
+  H-->>M: principal desktop_ui、features、limits、data_epoch（退化模式另带 host_proof，主进程校验）
+  par 并行
+    M->>R: 创建窗口（show false；sandbox、contextIsolation、app 协议加 CSP、codeCache）
+  and
+    M->>H: 为窗口新建数据连接，代发 initialize（role window），先缓存入方向的数据
+  end
+  R->>M: ShellAPI.init()、host.open()
+  M-->>R: ShellInfo；MessagePort 和握手结果
+  R->>H: stream/subscribe index（经主进程转发）
   H-->>R: mode snapshot，随后 stream/snapshot 分页
   R->>R: 渲染侧边栏：项目、会话、状态
   R->>H: stream/subscribe 上次打开的会话
-  H-->>R: 会话快照（最近 20 个回合）
-  R->>R: 可以输入，冷启动结束
+  H-->>R: 会话快照（最近 20 个回合加进行中的回合）
+  R->>M: ready-to-show，窗口显示
+  R->>R: performance.mark('cupper:ready')：可以输入，冷启动结束
   Note over H: agent 适配器不在这条路径上，按需启动（NFR-6）
 ```
 
@@ -65,7 +70,7 @@ sequenceDiagram
   H-->>R: 缓存的模型、推理强度、权限模式、斜杠命令
   Note over R: 用户选 agent、项目、新建 worktree、起始分支，输入第一条消息
   R->>H: session/create（agent、project、worktree 和 base_ref、config、message）
-  H->>H: 一个事务：sessions 行、session.configured、workspace.preparing、命令结果
+  H->>H: 一个事务：sessions 行（含第一条消息 initial_prompt_json）、session.configured、workspace.preparing、命令结果
   H-->>R: session_id（已受理）
   R->>H: stream/subscribe 该会话
   alt 新建 worktree
@@ -77,7 +82,8 @@ sequenceDiagram
   else 本地模式
     H-->>R: workspace.ready（项目目录）
   end
-  H->>A: Attach New（cwd 的 realpath、config）
+  H->>H: 重新扫描项目信任（5.2.6），决定 project_config
+  H->>A: Attach New（cwd 的 realpath、config、project_config）
   opt 该 agent 的适配器还没运行
     A->>A: 等运行时就绪，核对 node 的 cdhash 和 adapter.mjs 的 sha256
     A->>AD: posix_spawn（独立进程组、环境变量白名单），立即写 adapters 表
@@ -90,7 +96,7 @@ sequenceDiagram
   AD-->>A: available_commands_update
   A-->>H: AttachInfo
   H-->>R: session.capabilities
-  H->>H: 进入 Preparing：turn.started、用户消息
+  H->>H: 进入 Preparing：一个事务写 turn.started、用户消息，并清空 initial_prompt_json
   H->>G: 起始快照（临时 index，私有对象库）
   G-->>H: tree id（超过 3 s 就不等，diff 标为不可用）
   H->>A: Prompt
@@ -159,10 +165,10 @@ sequenceDiagram
     C->>S: interaction/respond（allow_once，digest）
   and
     R->>M: interaction/respond（allow_once，digest）
-    M->>M: 方法白名单，并且 1 秒内观察到真实的按键或点击
-    M->>S: 经 window 数据连接转发
+    M->>M: 方法白名单；1 秒内有尚未用掉的真实输入（规则见 5.7.8），用掉它
+    M->>S: 重新序列化后经 window 数据连接转发，写入 input 证据
   end
-  S->>S: 先到的一条：仍是 pending、摘要一致、在 actionable_by 内、距创建不少于 400 ms
+  S->>S: 先到的一条：仍是 pending、摘要一致、在 actionable_by 内；window 角色还要求带 input 证据、距创建不少于 400 ms
   S->>A: 应答 ACP（selected allow_once）
   A->>AD: 响应
   S->>S: interaction.resolved（resolved_by cupper-cli）和命令结果同一事务落盘
@@ -200,10 +206,12 @@ sequenceDiagram
     S-->>R: turn.completed（cancelled，stop_reason host_timeout）
     Note over S: 之后这个 prompt 的响应直接忽略，下次发送前先对该 agent 会话 close 再 resume（K1）
   end
+  Note over S: interrupt_stops_commands 为 false（Codex）时，还在运行的命令标 abandoned 加 may_still_run
   opt Codex 取消后命令仍在运行（K3）
-    AD-->>A: t1 工具的输出和 completed 晚到
+    AD-->>A: t1 工具的输出和 completed 晚到（通常在下一个回合 t2 里）
     A-->>S: Update（toolCallId 属于已取消的 t1）
-    S-->>R: 不进入新回合，原条目标 late_output_discarded
+    S-->>R: 在当前回合 t2 新建 late_tool_output 条目（ref 指向 t1 的原条目），之后的输出都追加到它上面
+    Note over S: t1 的回合快照不改；没有进行中的回合时开一个 autonomous 回合承载它（5.2.6）
   end
   S->>S: 队列暂停，等用户发送或 session/queue_resume
 ```
@@ -229,8 +237,12 @@ sequenceDiagram
   H2->>H2: t1 写 turn.completed（interrupted），r1 写 expired
   H2->>H2: 加载索引流，绑定套接字
   M->>H2: hello、initialize（control、window 两条连接）
-  M->>H2: 按游标重新订阅 index 和当前会话
-  H2-->>M: mode replay，补发断开期间的事件
+  M->>H2: 按游标（含 data_epoch）重新订阅 index 和当前会话
+  alt 进程崩溃（kill -9），data_epoch 不变
+    H2-->>M: mode replay，补发断开期间的事件
+  else 异常退出后系统重启过（可能断电丢了事务），data_epoch 已加 1
+    H2-->>M: mode snapshot（reason epoch_changed），客户端丢弃视图和游标后重建
+  end
   Note over M: 审批卡片收起，消息流提示"回合已中断"
   M->>H2: 用户再次发送
   H2->>AD: 拉起适配器，session/resume
@@ -285,16 +297,24 @@ sequenceDiagram
   H->>H: 逐个 session/close，关闭适配器，写检查点
   H-->>M: host/shutdown（upgrade）
   H->>H: 删除套接字，释放锁，退出
-  M->>M: 确认连接已关闭、锁已释放
-  M->>SQ: quitAndInstall
-  SQ->>SQ: 新包移入、旧包移走（不原地覆盖可执行文件）
-  SQ->>M2: 启动新版本
+  M->>M: 确认连接已关闭、锁已释放；进入安装空窗：不自动拉起宿主，界面显示"正在安装更新"
+  M->>SQ: quitAndInstall（before-quit-for-update，跳过 NFR-8 的退出检查）
+  SQ->>SQ: 经本地代理取 zip、解包、校验签名
+  alt 校验或解包失败（签名不符、磁盘满）
+    SQ-->>M: 报错
+    M->>M: 重新拉起旧宿主，恢复界面并提示
+  else 成功
+    SQ->>SQ: 新包移入、旧包移走（不原地覆盖可执行文件）
+    SQ->>M2: 启动新版本
+  end
   M2->>H2: 连接失败，拉起新宿主
   H2->>H2: 备份 host.db，执行迁移
   H2->>H2: 按内嵌清单安装新版本运行时（Claude 适配器需要联网）
   M2->>H2: hello、initialize，按游标重新订阅
   Note over H2: 旧版本的运行时目录在没有进程使用后回收
 ```
+
+安装空窗、本地代理端口和安装位置检查的细节见 [5.10.5](10-release.md#5105-更新流程)。
 
 其他升级路径（ADR-01 的 SP-4b 修订）：
 
@@ -312,25 +332,25 @@ sequenceDiagram
   participant S as 会话 actor
   R->>H: git/diff（scope last_turn）
   H->>H: 从 turns 表取最近回合的起止快照（结束快照未完成时先等它）
-  H->>GIT: diff-tree -r -z --raw -M 加 --numstat（私有对象库）
-  H-->>R: diff_token dt1、文件列表、mixed_changes_warning
+  H->>GIT: 快照档：diff-tree -r -z --raw -M 加 --numstat（cupper 自己的 GIT_DIR）
+  H-->>R: diff_token dt1、文件列表、caveats（mixed_changes 等）
   R->>H: git/file_diff（dt1，某个文件）
-  H->>GIT: 固定参数生成补丁并切成 hunk
+  H->>GIT: 快照档：固定参数生成补丁并切成 hunk
   H-->>R: hunks（hunk_id）
   Note over R: 用户在某一行写评论，点"发给 agent"
   R->>S: session/send（content 含 review_comment）
   S->>S: 把评论排成给 agent 的文本，开新回合或排队
   R->>H: git/diff（scope unstaged）得到 dt2，再 git/file_diff
   R->>H: git/stage（dt2，hunk_ids）
-  H->>H: 账本写 pending_external，拿 RepoLock
-  H->>GIT: apply --cached --whitespace=nowarn（用 --no-renames 生成的补丁）
+  H->>H: 账本写 pending_external（强制同步后才执行 git），拿 RepoLock
+  H->>GIT: 仓库档：读配置、覆盖可执行类键后 apply --cached --whitespace=nowarn（用 --no-renames 生成的补丁）
   alt 应用成功
     H-->>R: 成功，客户端刷新 diff
   else 状态已变
     H-->>R: conflict stale_diff，客户端刷新后重试
   end
   R->>H: git/commit（message）
-  H->>GIT: commit -F -（会运行用户的 hooks）
+  H->>GIT: 用户档：commit -F -（会运行用户的 hooks，确认文案已提示）
   GIT-->>H: 新提交的 oid
   H-->>R: oid
   R->>H: git/push（set_upstream）
@@ -358,4 +378,37 @@ sequenceDiagram
   H-->>R: 结果（removed、kept 或 blocked）
   H-->>R: 索引流 session.removed（archived）
   Note over R,H: 恢复时：分支还在就 worktree add 重建（必要时先 prune），否则会话只读
+```
+
+## 5.5.10 添加项目与信任
+
+安全 #2；PRD v1.2 的 PS-2（项目信任已定，U-R1）。规则见 [5.2.6](02-host.md#项目信任)。
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as 用户
+  participant R as 渲染进程
+  participant M as 桌面主进程
+  participant H as 宿主
+  U->>R: 点"添加项目"（真实输入）
+  R->>M: ShellAPI.requestPrivileged（add_project）
+  M->>U: 系统的选择目录对话框
+  M->>H: project/add（control 连接）
+  H->>H: realpath；扫描工作区到 git 根目录各级的 .claude/、.mcp.json、.codex/（跟随符号链接），算信任摘要
+  alt 扫描范围里没有任何文件
+    H->>H: 直接记为 trusted（auto_empty）
+    H-->>M: project_id、trust（trusted）
+  else 有项目配置
+    H-->>M: project_id、trust（untrusted、findings、trust_digest）
+    M->>U: 原生确认框：逐项列出 hooks、env、apiKeyHelper、MCP 服务器、skills 等，醒目标出来自工作区外的链接目标，默认按钮"不信任"
+    alt 用户选择信任
+      M->>H: project/trust（trust_digest）
+      H->>H: 重新扫描，摘要一致才写 trusted；不一致返回 digest_mismatch，主进程重新取内容再确认
+    else 不信任
+      Note over H: 保持 untrusted：Claude 只加载用户级配置，Codex 不能用
+    end
+  end
+  H-->>R: 索引流 project.upserted（trust_state）
+  Note over H: 之后每次 Attach、每次发送 prompt 之前、每个回合结束时都重新扫描；摘要变了就转为 stale，暂停队列，经原生确认框展示差异
 ```

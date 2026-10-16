@@ -17,7 +17,7 @@
 | `interaction` 交互代理 | 审批和提问对象：分类、选项生效范围、摘要、`actionable_by`、先到先得、撤回与失效 | 由会话 actor 调用 | driver 的选项对照表 | `Interaction`、`OptionEffect` | 会话 actor 内的组件 |
 | `store` 事件存储 | 写线程、读连接池、流（seq、视图、扇出）、检查点、回合快照、blob、原始帧、迁移 | `Streams::append` / `subscribe` / `read_page`；`BlobStore` | SQLite | `StreamState`、`WriteOp` | 1 个写线程 + 每流一把锁 |
 | `attention` 关注度与通知 | 索引流的唯一写者：会话状态、未读、通知意图、客户端列表、agent 和宿主状态 | `IndexHandle` | store、notifier | `IndexView` | 1 个 actor |
-| `notifier` 系统通知 | 用 UserNotifications 弹通知，点击后打开 `cupper://session/<id>` | channel | cupper-sys | — | 主线程 run loop |
+| `notifier` 系统通知 | 用 UserNotifications 弹通知；点击后经 control 连接发 `ui/navigate`，并按 bundle id 激活 Cupper（[5.2.9](#529-关注度与通知)） | channel | cupper-sys | — | 主线程 run loop |
 | `driver` 驱动层 | 适配器进程、ACP 连接、线路分接、提取层、能力缓存、CLI 发现 | `AgentRuntimeHandle` | runtime、supervisor | 见 [5.6](06-agent-driver.md) | 每种 agent 一个 actor |
 | `git` Git 与 worktree | 快照、diff、hunk 操作、提交、推送、worktree 生命周期 | async 函数 | git 命令行 | `RepoLock`、`DiffCache` | 子进程 + 每仓库锁 |
 | `files` 文件服务 | `@` 引用的模糊搜索 | async 函数 | ignore、nucleo-matcher | `FileIndex` | 按需构建、短期缓存 |
@@ -25,6 +25,8 @@
 | `runtime` 运行时安装器 | 安装和校验 Node、适配器（ADR-08） | `RuntimeHandle` | reqwest、cupper-sys | `Manifest`（编译期内嵌） | 1 个 actor |
 | `supervisor` 进程监护 | 子进程登记与清理、自检、空闲退出、防休眠、有序退出 | `SupervisorHandle` | cupper-sys、store | `ChildRecord` | 1 个 actor |
 | `diag` 诊断 | 日志初始化、脱敏层、诊断包 | — | tracing | — | — |
+| `trust` 项目信任 | 扫描项目自带的 agent 配置、计算信任摘要、判定信任状态（[5.2.6](#项目信任)） | 纯函数加只读文件访问 | — | `TrustScan`、`TrustState` | 由 `IndexActor` 和会话 actor 调用 |
+| `clock` 时间 | 宿主内唯一的时间来源和 ID 生成器（[5.2.16](#5216-时间与可测性)） | `Clock`、`IdGen` | — | `SystemClock`、`ManualClock` | 共享结构 |
 
 ## 5.2.2 模块关系
 
@@ -78,7 +80,7 @@ flowchart TB
 |---|---|---|
 | 网关 → `SessionActor` | 无界 mpsc，消息带 oneshot 回复 | 同一会话的命令按到达顺序进入邮箱（见下文"命令顺序"） |
 | ACP 回调 → `AgentRuntime` → `SessionActor` | 无界 mpsc | ADR-02：ACP 回调里只做 channel 发送，读 ACP 的路径永远不等待任何下游 |
-| 各写者 → 存储写线程 | std mpsc（写线程阻塞接收），每个操作带 oneshot 确认 | 写线程攒批：最多 2 ms 或 256 个操作提交一次事务 |
+| 各写者 → 存储写线程 | std mpsc（写线程阻塞接收），每个操作带 oneshot 确认 | 写线程攒批（组提交），规则见 [5.2.8](#528-事件存储) |
 | 线路分接 → 存储写线程 | 有界队列（4,096 条），满了就丢弃并计数 | 原始帧只用于诊断和重算，不能反压 ACP 读路径 |
 | 流 → 连接 `Outbox` | 加锁 push，不等待 | 超出该连接的字节预算时重置这条流（SP-4a 已实现） |
 
@@ -99,6 +101,7 @@ flowchart TB
 3. **命令结果和它产生的事件在同一个事务里落盘**（见 [5.2.5](#525-策略与命令账本)），这样崩溃后重试不会重复执行。
 4. clippy 的 `await_holding_lock` 设为 deny。
 5. actor 不 await 长操作：回合开始的快照、连接适配器、建立 agent 会话都另起 task，用完成消息驱动状态机（这是对 SP-4a 的改动：SP-4a 的会话 actor 会 await 适配器启动，期间处理不了中断）。
+6. **时间只经 `Clock` 获取，定时只经 `Clock` 设置，ID 只经 `IdGen` 生成**（[5.2.16](#5216-时间与可测性)）。有状态的决策逻辑写成不做 I/O 的纯核心，actor 只负责执行它给出的动作。
 
 ## 5.2.4 网关
 
@@ -107,7 +110,7 @@ flowchart TB
 1. `accept` 后先用 `peer_cred()` 核对 uid，不同用户直接关闭。
 2. 用 `cupper-sys` 取对端审计令牌并做签名校验，得到 `PeerVerdict`：`desktop_ui`（满足 UI 的签名要求）或 `other`，同时记下令牌作为固定令牌。校验出错按 SP-4b 的四类错误码记审计日志，一律按 `other` 处理。
 3. 宿主发出第一帧：`host/hello` 通知，带 32 字节随机 nonce 和协议版本区间。
-4. 客户端的第一条消息必须是带同一个 nonce 的 `initialize`，否则断开。
+4. 客户端的第一条消息必须是带同一个 nonce 的 `initialize`，否则断开。每条连接只接受一次 `initialize`，再收到就返回 `forbidden`（`already_initialized`）并断开；角色确定后不可变（安全 #4，[5.8.1](08-security.md#581-认证握手固定令牌)）。
 5. 之后每次 `read()` 返回数据，都先比对当前令牌（含 pidversion）与固定令牌，不一致立即断开并记审计日志（SP-4b）。
 
 **每连接的状态**：`Conn { id, principal, role, pinned, outbox, subs: HashSet<StreamId>, uploads, inflight: 计数 }`。
@@ -130,12 +133,15 @@ flowchart TB
 
 **策略**分两层，都在宿主内执行，客户端（包括桌面主进程）的检查只是第一道防线：
 
-1. **方法级**：每个方法在 `cupper-protocol` 中声明 `SCOPE`（`read`、`write`、`approve`、`privileged`、`ui_local`），principal 的 scope 集合必须包含它。
-2. **资源级**：按方法注册的规则，需要读取参数和宿主状态才能判断，例如：
-   - `interaction/respond` 选中的选项 `requires = privileged`（`allow_always` 类）时，只接受 `desktop_ui` 的 `control` 角色；
-   - `session/create`、`session/set_config` 把权限模式设成风险级别为 `full_access` 的值时，同上；
-   - `settings/update` 修改安全相关的键（CLI 路径）时，同上；
-   - `interaction/respond` 来自 `desktop_ui` 的 `window` 角色时，距请求创建不足 400 ms 的一律拒绝（`conflict`，`reason: too_early`），把 ADR-03 的"约 500 ms 输入保护"落到宿主侧，不依赖渲染进程。
+1. **方法级**：每个方法在 `cupper-protocol` 中声明 `SCOPE`（`read`、`write`、`approve`、`privileged`、`ui_local`、`test`），principal 的 scope 集合必须包含它。
+2. **资源级**：按方法注册的规则，需要读取参数和宿主状态才能判断：
+   - **审批档位**：`session/create` 的 `config`、`session/set_config`、`interaction/respond` 选中带 `mode_after` 的选项，凡是把会话放宽到更高档位的，按 [5.8.2](08-security.md#582-principal角色与-scope) 的档位规则判定；
+   - `interaction/respond` 选中的选项 `requires = privileged`（`allow_always` 类、效果未知的选项）时，只接受 `desktop_ui` 的 `control` 角色；
+   - `settings/update` 修改安全相关的键（`agents.<agent>.cli_path`、`agents.env_passthrough`、`diagnostics.verbose`）时，同上；
+   - **真实输入证据**：来自 `desktop_ui` 的 `window` 角色的 `interaction/respond` 和 `git/revert`，必须带主进程写入的 `input` 参数（[5.7.8](07-desktop.md#578-安全加固的落点)），缺了一律拒绝（`forbidden`，`reason: user_activation_required`），不因为缺参数而跳过检查。`input.key` 为 `escape` 时，只能用于 `dismissed`，或者 `effect.scope` 为 `reject`、`plan_revise` 的选项；
+   - `interaction/respond` 来自 `window` 角色时，距请求创建不足 400 ms 的一律拒绝（`conflict`，`reason: too_early`），把 ADR-03 的"约 500 ms 输入保护"落到宿主侧，不依赖渲染进程；
+   - **项目信任**：Attach 和发送 prompt 前按信任状态决定能否运行、怎样运行（[5.2.6](#项目信任)）；
+   - M3 的 `remote_device` 按 SEC-9 收窄。
 
 完整的权限矩阵见 [5.8.3](08-security.md#583-权限矩阵)。
 
@@ -146,7 +152,7 @@ flowchart TB
 - 状态：
   - `inflight`：同一个命令的重复请求挂在第一次执行上等待结果；
   - `done`：直接回放结果，加 `replayed: true`；参数哈希不同则返回 `idempotency_mismatch`；
-  - `pending_external`：会改动用户仓库的 git 命令（`git/commit`、`git/stage` 等）在执行前先写一条这种记录。宿主在执行中途崩溃后，重试会得到 `conflict`（`reason: outcome_unknown`），客户端刷新状态后由用户决定。
+  - `pending_external`：会改动用户仓库的 git 命令（`git/commit`、`git/stage` 等）在执行前先写一条这种记录，并且这一批用 `synchronous=FULL` 加 `fullfsync` 提交，确认真正落盘后才执行 git（[5.2.8](#528-事件存储)）。宿主在执行中途崩溃后，重试会得到 `conflict`（`reason: outcome_unknown`），客户端刷新状态后由用户决定。
 - **"受理"语义**：会话类命令的结果表示"已受理并落盘"，实际效果从事件里看（对齐会议题 2.3）。执行者把命令结果和它产生的第一批事件放进同一个事务提交。执行前就失败的命令（参数错误、前置条件不满足）不记录，重试会重新判断。
 - 每小时清理一次超过 48 小时的记录（ADR-04 要求至少 24 小时）。
 
@@ -155,7 +161,7 @@ flowchart TB
 ### SessionManager
 
 - `HashMap<SessionId, SessionHandle>`，actor 按需启动，空闲（没有回合、没有排队、没有待处理请求）10 分钟后退出，退出前对 agent 会话调用 `session/close`，释放 Claude 的 CLI 进程（ADR-09）。
-- **新建**（`session/create`，详细时序见 [5.5.2](05-flows.md#552-新建会话含新建-worktree)）：校验项目和 agent → 生成 `session_id` → 一个事务写入：`sessions` 行、会话流的首批事件（`session.configured`、`workspace.preparing`）、命令结果 → 回复 `session_id` → 启动 actor，由它异步准备工作区、连接 agent、发出第一个回合。按 ADR-09，**会话总是和第一条消息一起创建**，不存在没有消息的空会话。
+- **新建**（`session/create`，详细时序见 [5.5.2](05-flows.md#552-新建会话含新建-worktree)）：校验项目和 agent → 生成 `session_id` → 一个事务写入：`sessions` 行（**第一条消息写进 `initial_prompt_json`**）、会话流的首批事件（`session.configured`、`workspace.preparing`）、命令结果 → 回复 `session_id` → 启动 actor，由它异步准备工作区、连接 agent、发出第一个回合。第一个回合开始时，`turn.started`、用户消息和清空 `initial_prompt_json` 在同一个事务里提交。这样宿主在准备工作区期间（`worktree add` 可能要几分钟）崩溃，已受理的消息也不会丢（测试 #10）。按 ADR-09，**会话总是和第一条消息一起创建**，不存在没有消息的空会话。
 - **归档**：先由客户端调用 `worktree/check` 取得能否清理的结论；`session/archive` 关闭 agent 会话，按参数保留或删除 worktree（规则见 [5.2.10](#5210-git-与-worktree-服务)），会话从索引流移除。
 - **恢复**：分支还在就重建 worktree；分支不在就把会话标为只读（PS-3）。
 
@@ -195,7 +201,8 @@ stateDiagram-v2
   Failed --> Idle: 队列暂停
 ```
 
-- **回合由宿主推导**（ADR-06）：以 `session/prompt` 的请求和响应为界；回合外的更新开一个 `origin: autonomous` 的回合。Codex 的 `threadStatus` 只用于显示运行状态和界定自发回合，有 prompt 在途时以 prompt 的响应为准（SP-1 s05：计划确认请求发出时线程状态已是 `idle`，见 K12 和待定问题 Q11）。回合结束时还没完成的工具调用标为 `abandoned`。
+- **回合由宿主推导**（ADR-06）：以 `session/prompt` 的请求和响应为界；回合外的更新开一个 `origin: autonomous` 的回合。Codex 的 `threadStatus` 只用于显示运行状态和界定自发回合，有 prompt 在途时以 prompt 的响应为准（SP-1 s05：计划确认请求发出时线程状态已是 `idle`，见 K12 和待定问题 Q11）。回合结束时还没完成的工具调用标为 `abandoned`；能力里 `interrupt_stops_commands` 为 false（Codex）时，被中断回合里还在运行的 `execute` 类工具同时标 `may_still_run: true`，界面立刻提示"命令可能仍在运行"。
+- **自发回合的结束与出队**（`AutonomousJudge`，待定问题 Q10）：Codex 以 `threadStatus` 变为 idle 为准；Claude 收到带 `cost` 的 `usage_update`，或 10 s 没有更新且没有运行中的工具，就结束自发回合。由静默判定结束的自发回合，结束后再静默 30 s 才允许出队，避免 Claude 其实还在自发工作时就发出新 prompt（K1）。两个时长都经 `Clock`，可以在测试中覆盖。
 - **起始快照**：进入 `Preparing` 时另起 task 拍快照（ADR-10 要求回合开始时同步拍，这里的"同步"指 prompt 等快照完成再发），超过 3 s 就不等了，这个回合的 diff 标为不可用。
 
 ### 排队、Steer、中断（CP-6、CP-7）
@@ -219,9 +226,62 @@ stateDiagram-v2
 | Codex 的 app-server 被杀（`1001`，`restartable: true`） | 回合标为 `failed`，写 `notice`；下一个 prompt 由 codex-acp 自动重启 app-server |
 | 宿主崩溃 | 见 [5.2.13](#5213-进程监护与宿主生命周期) 的启动恢复 |
 
+### 晚到的工具输出
+
+Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信息一律写成当前流里的新事件，不修改旧回合的条目。
+
+- **中断时**：见上文，`interrupt_stops_commands` 为 false 时标 `may_still_run`。
+- **输出晚到时**（K3：Codex 取消后命令仍在运行，它的输出和 `completed` 在之后才到）：
+  - 在当前回合里新建一个 `late_tool_output` 条目（[5.3.5](03-protocol-v1.md#535-事件类型目录)），`ref` 指向原条目，带原条目的标题和命令，信息自足；没有进行中的回合时，按 K9 开一个 `autonomous` 回合承载它，命令确实还在运行，会话显示"运行中"也是准确的；这个自发回合在晚到的条目结束（收到 `completed`）后结束，或者按自发回合的静默规则结束。
+  - 每个原工具只建一个这样的条目，之后的输出都追加到它上面（`field: output` 的 delta），收到 `completed` 时结束，带退出码。
+  - 输出不丢弃，按普通工具输出的规则内联或转成 blob；原始帧照常保留。
+  - 原条目的事件不改。TS 和 Rust 的视图维护反向索引 `late_by_ref`，原条目在内存里时，界面在原条目旁显示"最终退出码 N"和跳转链接（[5.7.6](07-desktop.md#576-状态管理)）。
+- **回合快照与历史**：两个回合各自完整，`history/page` 不需要特殊处理。
+- **diff**：这个回合的 `git/diff` 带 `caveats: [late_tool_effects]`（[5.2.10](#5210-git-与-worktree-服务)）。
+- **不变式**（性质测试和金样例检查，[5.9.8](09-testing.md#598-其他关键测试)）：回合快照写入之后，日志里不再出现 `turn_id` 指向这个回合的事件。
+
+### 项目信任
+
+安全 #2，纪要 D9。是否增加这一步已定（2026-10-16）：采用（U-R1，见 `docs/meetings/2026-10-16-gate-design-decisions/minutes.md`），对应 PRD v1.2 的 PS-2。
+
+结论：cupper 接手 CLI 的工作区信任对话框。项目经用户在原生确认框里信任之后，会话才加载项目自带的 agent 配置；未信任时，Claude 只加载用户级配置，Codex 不能使用。用户级的 MCP、hooks、插件照常继承（AG-6）。
+
+- **为什么需要**：经 ACP 运行时，SDK 会话不显示信任对话框，仓库里的 hooks、`env`、`apiKeyHelper`、`.mcp.json` 照常生效（Claude Code 文档）。已核实：claude-agent-acp 0.91.0 默认 `settingSources: ["user","project","local"]`；codex-acp 2.2.2 在每个会话的配置覆盖里把 cwd 设为 `trust_level = "trusted"`。
+- **扫描**（`trust` 模块）：
+  - **范围**：从会话实际使用的工作区（本地模式是项目目录，worktree 模式是 worktree）一直到它所在 git 仓库的根目录（`rev-parse --show-toplevel`），**每一级目录**里的 `.claude/`、`.mcp.json`、`.codex/`；不是 git 仓库时只看工作区本身。理由：CLI 可能按层级加载上级目录的项目配置，Codex 的 `.codex/` 就是分层加载的；CLI 是否还会越过 git 根目录向上加载，未核实（待定问题 Q34），核实之前以 git 根目录为界。
+  - **符号链接一律跟随**（安全核对 1）：CLI 加载配置时会跟随链接，扫描也必须看链接目标的内容。目录链接递归进入；摘要和 findings 都按解析后的目标内容计算，并记录链接本身和目标的路径。链接悬空、成环，或者目标不是普通文件和目录时，扫描失败。
+
+  | 用途 | 内容 |
+  |---|---|
+  | **信任摘要** | 对扫描范围里的每个文件（链接按目标），按"相对路径、目标的 realpath、完整内容"做 sha-256，按相对路径排序后合并。按完整内容算，不按已知的键算，CLI 以后新增的可执行键同样会被覆盖（安全确认 ①）；链接目标被改写，摘要随之变化，项目转为 `stale` |
+  | **findings** | 从上述文件里解析出的 hooks、`env`、`apiKeyHelper`、`statusLine`、MCP 服务器、skills、agents、commands，以及 `.codex/` 里的配置项和 hooks；只用于在原生确认框里展示 |
+  | **工作区外的目标** | 链接目标在工作区之外的，确认框里醒目标出"此配置来自工作区之外：<路径>"，并逐项列出目标里的 findings。不禁止信任：把项目配置链接到用户自己的 dotfiles 是常见做法；目标内容已经计入摘要，之后每次发送 prompt 前都会重新扫描，目标一被改写就转为 `stale`，并不会因为在工作区外而失去保护 |
+
+  文件超过 2,000 个或合计超过 16 MB（含链接目标）时扫描失败，项目保持未信任，确认框说明原因。
+- **状态**：`untrusted`（默认）→ 用户在原生确认框里信任 → `trusted`（记下摘要）；之后重新扫描时摘要变了 → `stale`，按未信任处理，直到再次确认。扫描范围里一个文件都没有的项目，添加时直接记为 `trusted`（`trusted_by: auto_empty`），不弹确认框；以后出现了这些文件，摘要变化，照样转为 `stale`。流程见 [5.5.10](05-flows.md#5510-添加项目与信任)。
+- **重新扫描的时机**（范围和规则同上）：添加项目时；每次 Attach（新建或 resume）之前；**每次发送 prompt 之前**（安全确认 ②：用户在两个回合之间切换分支后，下一个回合会带着新的项目配置运行）；每个回合结束时。
+- **未信任或 `stale` 时**：
+  - Claude：Attach 时在 `session/new` 和 `session/resume` 的 `_meta.claudeCode.options` 里传入 `settingSources: ["user"]`（[5.6.2](06-agent-driver.md#562-驱动接口)），`session.configured` 写 `project_config: ignored`，界面显示"未信任：项目配置未加载"。
+  - Codex：Attach 返回 `unavailable`（`reason: project_untrusted`），因为 codex-acp 无法关闭项目配置。
+  - 已经信任、运行中变为 `stale`：暂停队列（原因 `project_config_changed`），写 `notice{code: project_config_changed}`；界面经原生确认框展示差异。用户可以重新信任；Claude 会话也可以选择"不加载项目配置继续"，宿主先 `session/close` 再带 `settingSources: ["user"]` resume（适配器发现这个选项变了会重建会话，已核实）。
+- **谁能信任**：`project/trust` 的 scope 是 privileged，只能由桌面主进程在原生确认后经 control 连接发送（[5.8.3](08-security.md#583-权限矩阵)）。CLI 提权后可以添加项目，但添加的项目是未信任的。
+- **能力探测目录**：每次探测前把 `<数据目录>/probe/<agent>/` 删掉重建为空目录（0700），视为已信任（安全确认 ④）。
+- **残余风险**：回合进行中 agent 改写了项目配置，CLI 可能在回合内就加载它（是否热加载，未核实，待定问题 Q28）；cupper 最迟在下一个 prompt 之前发现并暂停。安全边界说明写明这一点，并建议开启 agent 自带的沙箱（[5.8.7](08-security.md#587-安全边界说明)）。
+
 ### 配置项
 
-`session/set_config` 由 actor 转给驱动的 `set_config`，用返回的最新配置写 `session.configured`。回合进行中也允许修改，由 agent 决定何时生效。新建会话时的初始配置在 `session/new` 之后立即应用（SP-4a 的 `apply_prefs`；resume 之后也要重新应用，因为 agent 会恢复 transcript 里的模式）。
+- `session/set_config` 由 actor 转给驱动的 `set_config`，用返回的最新配置写 `session.configured`。回合进行中也允许修改，由 agent 决定何时生效。新建会话时的初始配置在 `session/new` 之后立即应用（SP-4a 的 `apply_prefs`；resume 之后也要重新应用，因为 agent 会恢复 transcript 里的模式）。
+- **档位的设定者**：每次档位变化都记下设定它的 principal（`sessions.mode_set_by`）。新会话的默认档位来自用户自己的 CLI 配置时，视为由创建会话的 principal 设定（安全 #3，纪要 D10）。经原生确认进入 `full_access` 时，记下 `sessions.full_access_confirmed_at`。
+- **事后核对**（安全 #3）：Attach、resume 之后，以及收到 `ConfigChanged` 时，核对实际档位。出现以下任一情况，会话进入 `config_unconfirmed`：
+  - 实际是 `full_access`，但没有经原生确认的记录；
+  - 实际档位高于设定者按档位规则（[5.8.2](08-security.md#582-principal角色与-scope)）能设定的档位。例如只有 write 的 CLI 新建了一个 Codex 会话，而 Codex 的默认档位是 `agent`。
+- **回合进行中发现越权**（安全核对 4）：回合进行中收到 `ConfigChanged`，发现实际档位越权（不是经有权限的 `session/set_config` 或选项设定的）时，不能让当前回合在越权档位下跑完：
+  1. 先用驱动的 `SetConfig` 把档位改回变化之前的值，等待最多 2 s（经 `Clock`）；
+  2. 改回失败、超时，或者 agent 再次改到越权档位时，中断当前回合（与 `session/interrupt` 相同的流程）；
+  3. 然后进入 `config_unconfirmed`，写 `notice{code: config_unconfirmed}` 和审计。
+- **`config_unconfirmed` 时**：队列暂停（原因 `config_unconfirmed`），新的消息照常排队但不发出；写 `session.configured{confirmation_required: {reason}}` 和审计。解除方式有两种：
+  - 桌面端经原生确认调用 `session/confirm_config`；
+  - 有权限的一方用 `session/set_config` 把档位降到它有权设定的范围（降档只需要 write）。
 
 ## 5.2.7 交互代理
 
@@ -235,7 +295,7 @@ stateDiagram-v2
 4. 先刷出 normalizer 里缓冲的文本（保证因果顺序），再写 `interaction.requested` 和 `interactions` 行；通知 `IndexActor`。
 5. 在内存里保存 ACP 的应答句柄，记下它属于哪个适配器实例。
 
-**收到 `interaction/respond` 时**依次检查：请求存在且为 `pending`（否则 `conflict/already_resolved` 带 `resolved_by`，或 `expired`）→ 摘要一致 → principal 在 `actionable_by` 内 → 选项存在、`requires` 满足 → 提问的答案符合字段定义。全部通过后应答 ACP，写 `interaction.resolved`（带 `resolved_by`），回复成功。
+**收到 `interaction/respond` 时**依次检查：请求存在且为 `pending`（否则 `conflict/already_resolved` 带 `resolved_by`，或 `expired`）→ 摘要一致 → principal 在 `actionable_by` 内 → 选项存在、`requires` 满足，带 `mode_after` 的选项另按档位规则 → 来自 window 角色时带 `input` 证据、按键与选项相符、距创建不少于 400 ms（[5.2.5](#525-策略与命令账本)）→ 提问的答案符合字段定义。全部通过后应答 ACP，写 `interaction.resolved`（带 `resolved_by`），回复成功。
 
 **失效与撤回**
 
@@ -246,13 +306,15 @@ stateDiagram-v2
 | 请求所属的适配器实例退出 | `expired`（SEC-10） |
 | 宿主重启 | `expired` |
 
+Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起，只有上表的四种情况会（Q11，纪要 D3）。
+
 不设超时：用户可能几小时后才回来处理。回合之外也允许出现交互请求（ADR-06 要求放开 SP-4a 的限制），这时 `turn_id` 为空。
 
 ## 5.2.8 事件存储
 
 | 组件 | 说明 |
 |---|---|
-| 写线程 | 持有唯一的写连接；从 channel 攒批（≤ 2 ms 或 ≤ 256 个操作），每个数据库一个事务，提交后逐个回复确认。操作类型：追加事件、行级 upsert（会话、回合、交互、队列、账本）、检查点、回合快照、原始帧（不需要确认）、审计、清理 |
+| 写线程 | 持有唯一的写连接，组提交：<br>- 取出队列里现有的操作，最多 256 个；队列为空或攒够 256 个就提交。生产环境（`SystemClock`）在队列为空时最多再等 2 ms 凑批，测试环境（`ManualClock`）不等，但攒批逻辑照常开着，组提交在测试里同样被覆盖；<br>- 每个数据库一个事务，每个操作包在自己的 savepoint 里：某个操作失败只回滚它自己，并单独回复错误，同批的其他操作照常提交；<br>- 提交后逐个回复确认。<br>操作类型：追加事件、行级 upsert（会话、回合、交互、队列、账本）、检查点、回合快照、原始帧（不需要确认）、审计、清理 |
 | 读连接池 | 4 个只读连接（WAL 允许并发读），供补发、历史分页、查询使用，经 `spawn_blocking` 调用 |
 | `Streams` | 沿用 SP-4a 的 `hub`，但把 `append` 拆成上文的三步；流状态懒加载（检查点 + 其后的事件） |
 | 视图 | `IndexView`、`SessionView` 放在 `cupper-protocol::view`，宿主、CLI 和 TS 客户端（另一份实现，用金样例交叉验证）共用同一套语义 |
@@ -262,7 +324,9 @@ stateDiagram-v2
 | `BlobStore` | 按内容寻址的文件 `blobs/sha256/<前 2 位>/<hash>`：写临时文件、fsync、改名；`blobs` 表记录大小、媒体类型和引用 |
 | 原始帧 | 线路分接的输出进入有界队列，写线程批量写入 `raw.db`；队列满了就丢弃并计数（ADR-06 的用途是重算和排障，不能反压 ACP） |
 | 升级器与迁移 | 见 [5.4.6](04-data-model.md#546-迁移) |
-| 持久性 | `synchronous=NORMAL`；M1 做断电测试后再决定是否改 `FULL`（ADR-06） |
+| 持久性 | 按 SQLite 和 macOS 的文档决定，不做 VM 断电实验（Q15 关闭，纪要 D5）：<br>- 默认 `journal_mode=WAL`、`synchronous=NORMAL`，并开启 `checkpoint_fullfsync`。进程崩溃不丢已提交的事务；断电可能丢最近的事务，但数据库不会损坏；<br>- 写 `pending_external` 的那一批，写线程临时改用 `synchronous=FULL` 加 `fullfsync` 提交（macOS 上普通 fsync 不保证写入盘内缓存），确认后才执行 git；<br>- `raw.db` 不开 fullfsync |
+| 数据代次 `data_epoch` | 断电丢事务后，seq 可能被重用，客户端的游标会指向已经不存在的事件。宿主每次启动记下 `kern.bootsessionuuid`（每次开机不同）；**上次运行没有正常退出（`meta.last_clean_exit_at` 早于上次的 `last_start_at`），并且启动会话的 UUID 变了**，就把 `meta.data_epoch` 加 1。`kill -9` 不加：进程崩溃时 WAL 不丢数据。`initialize` 的结果下发 `data_epoch`，订阅时游标的 epoch 不同就走快照（[5.3.3](03-protocol-v1.md#533-流与同步)）。代价是"`kill -9` 之后用户又正常重启了电脑"也会被判成断电，只多一次全量快照。两个输入（启动会话的 UUID、上次是否正常退出）在 test-harness 构建里都可以注入 |
+| 回合快照不可变 | 回合快照写入后不再修改，事后的信息写成新事件（[5.2.6](#晚到的工具输出)） |
 
 ## 5.2.9 关注度与通知
 
@@ -277,42 +341,107 @@ stateDiagram-v2
 | `idle` 空闲 | 其他 |
 
 - **已读**（U4）：客户端在会话可见且窗口在前台时调用 `session/mark_read`，`up_to_seq` 取已看到的最新 seq，宿主只前移不后退，全局生效。
-- **在场**：每个客户端用 `client/presence` 上报是否在前台、正在看哪个会话。`IndexActor` 据此判断某个会话"此刻有人在看"。
+- **在场**：每个客户端用 `client/presence` 上报是否在前台、正在看哪个会话。`IndexActor` 判断某个会话"此刻有人在看"时，只采信 `desktop_ui` 的在场（M3 再加上 `remote_device`），沙箱外的命令以只读身份上报在场，压不掉"需要处理"的通知（安全建议 #16）。CLI 的 `session/mark_read` 按 U4 照常推进已读位置，但不影响"需要处理"的通知。
 - **通知意图**：会话进入 `needs_action`、回合结束、出错时，如果此刻没有前台客户端在看这个会话，就写一条 `notification.intent` 事件，同时交给 `notifier` 弹系统通知（按设置开关）。M3 的推送也从这些事件生成。
+- **通知的点击**：通知由宿主 helper 弹出，点击后回调到宿主。宿主经 control 连接给已连接的桌面主进程发 `ui/navigate`，并经 LaunchServices 按 bundle id 激活 Cupper；UI 没在运行时，按 bundle id 启动它并只把 URL 交给它，不走任何应用都能注册的 `cupper://` 通用路由（安全 #7）。导航只切换到对应的会话，不把焦点移到交互卡片上。
 - **通知由宿主弹出**（ADR-01）。宿主内置一小份通知文案（中英文，跟随系统语言），这是"宿主不下发文案"原则的唯一例外，因为通知不经过客户端。helper 的通知身份要由 SP-10 在 M1b 前核实，不行就退回"UI 在时由 UI 弹"（技术选型讨论会的后备方案），见待定问题 Q2。
 - 同时维护 `clients`（连接列表）、`agents`（CLI、适配器、运行时、登录状态、资源占用）、`host`（版本、是否弱认证、是否待升级、防休眠）和提权请求，都写在索引流里。
 
 ## 5.2.10 Git 与 worktree 服务
 
-全部通过 git 命令行实现（ADR-10）。
+全部通过 git 命令行实现（ADR-10）。宿主运行在所有 agent 沙箱之外，而仓库里的配置（fsmonitor、hooks、filter、diff 驱动、include）可能被 agent 写过，所以**宿主自己发起的 git 调用不执行仓库配置指定的任何程序**（安全 #1，纪要 D8）。为此按"在哪里执行"把调用分成三档。
 
-**调用约定**
+**三档调用**
 
-- `GitCmd` 构造器：每类命令一组固定参数，统一 `-z`；只读命令加 `--no-optional-locks`；固定加 `-c core.quotepath=false`。
-- 环境：PATH 用从登录 shell 取得的值（[5.6.6](06-agent-driver.md#566-cli-的发现与版本检查)）；`LC_ALL=C`，便于解析报错；`GIT_TERMINAL_PROMPT=0`；继承 `SSH_AUTH_SOCK`。
-- 超时：只读命令 30 s；快照 60 s；`worktree add` 10 分钟（输出进度事件）；`push` 5 分钟。
-- 启动时检测 git 版本（暂定最低 2.39）和 git-lfs，结果放进索引流的 `agents` 状态里一起显示。
+| 档位 | 在哪里执行 | 用于 | 防护 |
+|---|---|---|---|
+| 快照档 | cupper 自己的 GIT_DIR，`GIT_WORK_TREE` 指向工作区 | 回合快照；`last_turn`、`turn:<id>`、`unstaged`、`staged` 四种范围的文件列表和补丁；`@` 引用的文件列表；`worktree/check` 中关于工作区内容的规则；`git/status` 的文件状态 | 不读仓库本地的配置和 hooks，配置只放行白名单；属性文件照常读取，但属性引用的过滤器和 diff 驱动都没有定义 |
+| 仓库档 | 用户仓库 | 只读引用类：`rev-parse`、`for-each-ref`、`rev-list`、`symbolic-ref`、`merge-base`、`check-ref-format`、`branch --list`；会改动用户仓库的：`apply --cached`（暂存、取消暂存）、`apply -R`（还原）、`update-index --refresh`、`worktree add/lock/unlock/remove/prune/repair` | 每次调用前读配置并覆盖，调用后比对指纹，配置来源在工作区内时拒绝 |
+| 用户档 | 用户仓库 | 只用于用户在界面上点"提交""推送"：`commit`、`push` | 与在终端里执行一致：保留 hooks、签名、凭据助手。按钮旁注明"将运行仓库的 hooks"；本会话期间指纹变过时，确认文案带上这条提示 |
 
-**快照**（ADR-10）：复制 `rev-parse --git-path index` 指向的文件作临时 index → 预检排除超过 50 MB 的未跟踪文件、嵌套仓库、超大未跟踪目录 → `git -c core.safecrlf=false -c advice.addEmbeddedRepo=false add -A --ignore-errors -- <排除用的 pathspec>` → `write-tree`。对象写进 `<数据目录>/git/<repo_key>/objects`（`GIT_OBJECT_DIRECTORY`），通过 `GIT_ALTERNATE_OBJECT_DIRECTORIES` 读仓库原有对象；tree id 写进 `turns` 表，排除的路径写进 `snapshot.recorded` 事件。
+**快照档：cupper 自己的 GIT_DIR**（纪要 D8 要求评估的方案。结论：采用；实验记录见 `docs/tasks/D02-design-revision/notes.md`）
+
+- **目录**：
+  - 每个仓库一个私有对象库 `<数据目录>/git/<repo_key>/objects/`，写入快照产生的 blob 和 tree；
+  - 每个工作区一个 GIT_DIR `<数据目录>/git/<repo_key>/ws/<workspace_key>/`，里面有：cupper 生成的 `config`；从仓库复制的 `info/exclude` 和 `info/attributes`（只是忽略规则和属性，本身不执行程序；复制属性是为了让 `text`、`eol` 等转换与用户的 git 一致，也让下文的过滤器检测覆盖全部属性来源）；从该工作区的 git 目录复制的 `info/sparse-checkout`；仓库使用 split index 时，从同一目录复制 index 引用的 `sharedindex.*`；临时 index。没有 `hooks/`。
+  - 全部目录权限 0700。
+- **环境**：`GIT_DIR=<工作区的 GIT_DIR>`、`GIT_WORK_TREE=<工作区>`、`GIT_INDEX_FILE=<临时 index>`、`GIT_OBJECT_DIRECTORY=<私有对象库>`、`GIT_ALTERNATE_OBJECT_DIRECTORIES=<仓库的对象目录及其 alternates>`、`GIT_CONFIG_NOSYSTEM=1`、`GIT_CONFIG_GLOBAL=<cupper 的空文件>`。命令行仍固定加 `-c core.fsmonitor=false -c core.hooksPath=<数据目录>/git/empty-hooks`。
+- **配置白名单**：每次调用前，从用户的有效配置（`git config --list --show-origin --includes -z`，含系统、全局、仓库、worktree 四级）里只取下列无害键写入 `config`（写临时文件后改名），其余一概不带。这些键只决定"工作区内容怎样变成对象"，不会执行程序；读配置本身也不执行程序。
+  - `core.autocrlf`、`core.eol`、`core.ignoreCase`、`core.precomposeUnicode`、`core.fileMode`、`core.symlinks`、`core.checkStat`、`core.trustCtime`、`core.bigFileThreshold`、`core.protectHFS`、`core.protectNTFS`；
+  - `core.excludesFile`、`core.attributesFile`（只是文件路径）；
+  - `core.untrackedCache`、`core.splitIndex`、`core.sparseCheckout`、`core.sparseCheckoutCone`、`index.sparse`、`index.version`、`index.skipHash`、`feature.manyFiles`；
+  - `extensions.objectFormat`（取值不是 sha1 时同时写 `core.repositoryFormatVersion=1`）。
+- **过滤器**：属性文件引用的 filter 和 diff 驱动在这份配置里都没有定义，git 按原样处理内容，不执行任何程序。
+  - 例外只有 Git LFS：用户有效配置里的 `filter.lfs.*` 恰好是 git-lfs 的标准取值时，cupper 写入同样的取值，但程序一律写成宿主启动时解析出的 git-lfs **绝对路径**（见下文"调用约定"），不按 PATH 查找。这条路径未实测（待定问题 Q32）。
+  - 其他自定义过滤器（例如 git-crypt）不执行。**检测**：快照前在快照档执行 `check-attr -z --stdin filter`，覆盖全部属性来源：工作区的 `.gitattributes`、复制过来的 `info/attributes`、`core.attributesFile`；属性来源里没有任何 `filter=` 时跳过这一步。命中的路径标为 `filter_unsupported`：
+    - **快照里只存占位**：这些路径不经 `add -A` 写入，而是用 `update-index --cacheinfo` 放一个占位 blob，内容是"未保存（自定义过滤器 <名称>），sha-256 <工作区内容的哈希>"。快照对象库里不出现明文（M1 不回收快照对象），回合 diff 上这类文件只显示"已变化"；
+    - 在 `unstaged`、`staged` 范围里不提供 hunk 操作；
+    - 仓库档执行 `git/stage` 之前，在用户仓库里对目标路径再用 `check-attr filter` 核对一次（这条命令不执行程序），发现白名单以外的过滤器就拒绝，返回 `git_error`（`reason: filter_unsupported`），避免把工作区的明文暂存进去（安全核对 3）。
+- **复制 index 时保留 mtime**（等价 `cp -p`）。实验发现：换成新的 mtime 后，同一秒内改过、大小又没变的文件会被当成未修改，快照里留下旧内容（git 的 racy 检测失效）。SP-5 的临时 index 方案同样受影响，这里一并改正。
+- **快照**：预检排除超过 50 MB 的未跟踪文件、嵌套仓库、超大未跟踪目录 → `add -A --ignore-errors -- <排除用的 pathspec>`（固定加 `-c core.safecrlf=false -c advice.addEmbeddedRepo=false`）→ `write-tree`。tree id 写进 `turns` 表，排除的路径写进 `snapshot.recorded` 事件。
+- **与 SP-5 的关系**：仍然是"从用户 index 播种的临时 index + 私有对象库 + alternates"，只是 GIT_DIR 换成了 cupper 自己的。SP-5 否决的"影子仓库"是空 index 起步、没有 alternates，所以首次要 72 s、占 360 MB，还漏掉"被忽略但已跟踪"的文件；这里播种了 index、读仓库原有的对象，这三个问题都不存在（实验验证）。
+- **性能**（实验，合成仓库，热缓存）：`add -A` 加 `write-tree` 本身与 SP-5 方案相当；额外开销是每次重新生成配置，读一次有效配置约 10 ms，加一次 `rev-parse`，预计每次多 15–25 ms，远在 [5.9.6](09-testing.md#596-性能预算) 的预算之内。
+
+**仓库档：每次调用前读配置**（安全 #1 ① ②，纪要 D8）
+
+1. **每次**调用前执行 `git config --list --show-origin --includes -z`，得到有效配置和每个键的来源文件。
+2. 任何一个配置来源位于工作区内，或位于其他 agent 可写的位置（任一会话的工作区、任一项目目录）时，不执行这次调用，返回 `git_error`（`reason: unsafe_repo_config`），并在会话流里写 `notice{code: unsafe_repo_config}`。**仓库自己的 git 目录除外**：本地模式下 `.git/config`、worktree 的 `config.worktree` 本来就在项目目录里，这部分由第 3、4 条的覆盖和第 6 条的指纹兜底（两个 agent 的沙箱也都保护 `.git`）；例外只限这几个文件，`include.path` 指向 git 目录之外的工作区文件时，仍按本条拒绝。`core.hooksPath` 指向工作区的情况也不受此限，因为它总被无条件覆盖。
+3. 无条件覆盖：`-c core.fsmonitor=false -c core.hooksPath=<数据目录>/git/empty-hooks`；加 `--no-pager`（并设 `GIT_PAGER=cat`）；生成补丁的命令一律加 `--no-ext-diff --no-textconv`。
+4. 可执行类键：`filter.*.clean`、`filter.*.smudge`、`filter.*.process`、`diff.*.command`、`diff.*.textconv`、`merge.*.driver`、`core.sshCommand`、`core.pager`、`core.editor`、`core.askPass`、`core.gitProxy`、`sequence.editor`、`gpg.program`、`gpg.*.program`、`credential.helper`、`credential.*.helper`、`uploadpack.packObjectsHook`、`remote.*.receivepack`、`remote.*.uploadpack`。取值不在白名单里的（白名单只有 git-lfs 的标准取值），一律用 `-c <键>=` 置空。实验确认：置空的过滤器按原样处理内容、不执行程序。
+5. 覆盖后 git 报错（例如过滤器设了 `required=true`，置空后 git 会直接报错退出）：这次调用失败，返回 `git_error`（`reason: unsafe_repo_config`），**不去掉覆盖重试**。
+6. 调用结束后再算一次指纹（下文）。指纹变了：只读命令丢弃结果、返回 `git_error`（`reason: repo_config_changed`）；写操作已经发生，结果照常返回；两种情况都写 `notice{code: repo_config_changed}`。
+
+实验还发现，`write-tree` 这类看似不碰工作区的命令也会因为 racy 检测去读文件、运行 clean 过滤器，也会触发 fsmonitor 和 `post-index-change` hook。所以仓库档的防护对**每一次**调用都适用，包括辅助命令。
+
+**仓库可执行配置指纹**
+
+- 内容：仓库的 `config` 及其 include 的文件、worktree 的 `config.worktree`、`hooks/` 和 `core.hooksPath` 指向的目录下的文件（名称和哈希）、`info/attributes`、工作区里的全部 `.gitattributes`。
+- 计算时机：回合开始和结束时（随快照），以及每次仓库档调用的前后。
+- 回合前后不同时，在回合里写 `notice{code: repo_config_changed, params: {paths}}`；审查面板顶部醒目提示；用户档的确认文案带上这一条。
 
 **diff 与 hunk**
 
-- `git/diff` 按范围生成文件列表（`unstaged`、`staged`、`last_turn`、`turn:<id>`），同时返回 `diff_token`。`last_turn` 用两次快照的 `diff-tree -r -z --raw -M` 加 `--numstat`；回合还在进行时，对比起始快照和现在再拍的一次快照。
-- `git/file_diff` 用固定参数（`--no-color --no-ext-diff --no-textconv --full-index --binary -U3`）生成单个文件的补丁，切成 hunk。用于暂存的补丁用 `--no-renames` 生成。每个 hunk 有按内容寻址的 `hunk_id`，标明操作单位：`hunk`、`mode`（权限位单独一个单位）、`whole_file`（新增、删除、二进制、符号链接、子模块指针、LFS）。
-- `DiffCache`：`diff_token` → 这次 diff 的全部补丁，每个工作区保留最近 32 个，10 分钟过期。`git/stage`、`git/unstage`、`git/revert` 带 `diff_token` 和 `hunk_id`，宿主取出原始补丁执行 `git apply --whitespace=nowarn [--cached] [-R]`。token 不存在或补丁应用失败都返回 `conflict`（`reason: stale_diff`），客户端刷新后重试，不做模糊匹配（ADR-10）。这就是 ADR-04 所说"`hunk_id` 加 diff 基线"的具体做法：基线就是 `diff_token`。
-- 说明：GT-3 要求能取消暂存，取消暂存需要看到已暂存的内容，所以 `staged` 范围在 M1 就提供，尽管 PRD 把"其余审查范围"（F2）放在 P1。
+- `git/diff` 按范围生成文件列表，同时返回 `diff_token`，全部在快照档里计算：
+  - `last_turn`、`turn:<id>`：两次快照之间 `diff-tree -r -z --raw -M` 加 `--numstat`；回合还在进行时，对比起始快照和现在再拍的一次快照。
+  - `unstaged`：用户 index 的树（复制 index 后 `write-tree`）对比现在再拍的一次快照，未跟踪文件自然包含在内。
+  - `staged`：`HEAD` 的树对比用户 index 的树。
+  - index 里有未合并的条目时（合并冲突中），`unstaged` 和 `staged` 返回 `unavailable`（`reason: index_unmerged`），界面提示先在终端解决冲突。
+  - 结果带 `caveats`：`mixed_changes`（本地模式下可能混入用户自己或其他会话的改动，GT-1）；`late_tool_effects`（这个回合里有 `late_tool_output` 条目，或者回合进行期间还有 `may_still_run` 的命令，界面注明"包含取消后仍在运行的命令造成的改动"，纪要 D4）。
+- `git/file_diff` 在快照档里对同一对树执行 `diff-tree -p`，固定参数 `--no-color --no-ext-diff --no-textconv --full-index --binary -U3`，切成 hunk。用于暂存的补丁用 `--no-renames` 生成。每个 hunk 有按内容寻址的 `hunk_id`，标明操作单位：`hunk`、`mode`（权限位单独一个单位）、`whole_file`（新增、删除、二进制、符号链接、子模块指针、LFS）；`filter_unsupported` 的路径没有可操作的单位。
+- `DiffCache`：`diff_token` → 这次 diff 的全部补丁，每个工作区保留最近 32 个，10 分钟过期。`git/stage`、`git/unstage`、`git/revert` 带 `diff_token` 和 `hunk_id`，宿主取出原始补丁，在仓库档执行 `git apply --whitespace=nowarn [--cached] [-R]`。实验验证：快照档生成的补丁可以直接用 `apply --cached` 应用到用户仓库，结果与 `git add` 相同。token 不存在或补丁应用失败都返回 `conflict`（`reason: stale_diff`），客户端刷新后重试，不做模糊匹配（ADR-10）。这就是 ADR-04 所说"`hunk_id` 加 diff 基线"的具体做法：基线就是 `diff_token`。
+- `git/revert` 会丢掉用户的改动，来自 window 角色时必须带主进程记录的真实输入证据（[5.2.5](#525-策略与命令账本)、[5.7.8](07-desktop.md#578-安全加固的落点)）。
+- 说明：GT-3 要求能取消暂存，取消暂存需要看到已暂存的内容，所以 `staged` 范围在 M1 就提供，尽管 PRD 把"其余审查范围"（F2）放在 P1。这个口径已定（2026-10-16，Q13，见 `docs/meetings/2026-10-16-gate-design-decisions/minutes.md`），记录在 PRD v1.2 第 10 节。
 
-**提交与推送**：`commit -F -` 从 stdin 读提交信息，会运行用户自己的 hooks；`push` 默认推当前分支，必要时 `--set-upstream`。失败时把 stderr 末尾（脱敏后）放进错误的 `data`。
+**git/status**：分支、上游、领先落后用仓库档的只读引用类命令；进行中的操作（合并、cherry-pick、revert、rebase、bisect）直接检查 git 目录里的标记文件；文件状态由快照档计算。
 
-**worktree**（ADR-10）：位置 `~/.cupper/worktrees/<仓库名>-<短哈希>/<会话短名>`，可在设置中修改；分支 `cupper/<短名>`，先 `check-ref-format --branch` 校验，冲突时加后缀；会话存续期间 `worktree lock --reason "cupper session <id>"`；建好后等 1 秒执行一次 `update-index --refresh`；不用 `--relative-paths`。`worktree/check` 按 ADR-10 的 7 条规则只读检查，返回阻止删除的原因和只提示不阻止的情况（被忽略文件的数量、只因大小写冲突显示为"脏"）。删除用 `git worktree remove`，不加 `--force`；只有"仅大小写冲突"且用户确认时才加 `--force`；默认保留分支。
+**提交与推送**（用户档）：`commit -F -` 从 stdin 读提交信息，会运行用户自己的 hooks；`push` 默认推当前分支，必要时 `--set-upstream`。失败时把 stderr 末尾（脱敏后）放进错误的 `data`。
 
-**并发**：会修改用户 index 或 worktree 的操作（stage、unstage、commit、worktree add/remove）按仓库拿 `RepoLock`；快照用临时 index，不拿锁，可以与其他会话的快照并行。
+**worktree**（ADR-10，仓库档）
+
+- 位置 `~/.cupper/worktrees/<仓库名>-<短哈希>/<会话短名>`，可在设置中修改；根目录建成 0700。
+- 分支 `cupper/<短名>`，先 `check-ref-format --branch` 校验，冲突时加后缀。
+- 会话存续期间 `worktree lock --reason "cupper session <id>"`；建好后等 1 秒执行一次 `update-index --refresh`；不用 `--relative-paths`。
+- `worktree add` 的检出不运行自定义过滤器和 post-checkout hook（仓库档的覆盖）。过滤器设了 `required` 时检出会失败，界面提示"这个仓库配置了自定义过滤器，cupper 不会代为运行；请在终端创建 worktree，或改用本地模式"。
+- `worktree/check` 按 ADR-10 的 7 条规则只读检查：第 1、2 条（修改、暂存、未跟踪）由快照档计算；第 3 条检查 git 目录里的标记文件；第 4 条检查锁文件；第 5、6 条用 `rev-list`；第 7 条检查子模块的 git 目录是否存在。返回阻止删除的原因和只提示不阻止的情况（被忽略文件的数量、只因大小写冲突显示为"脏"）。
+- 删除用 `git worktree remove`，不加 `--force`；只有"仅大小写冲突"且用户确认时才加 `--force`；默认保留分支。
+
+**调用约定**（三档共用）
+
+- `GitCmd` 构造器：每类命令一组固定参数，统一 `-z`；只读命令加 `--no-optional-locks`；固定加 `-c core.quotepath=false`。
+- **程序的路径**（安全核对 2）：宿主启动时（以及 `agents/refresh` 时）把 `git` 和 `git-lfs` 解析成绝对路径，之后只用这两个绝对路径，不在每次调用时按 PATH 查找。解析时只看登录 shell 的 PATH 里的**可信条目**：是绝对路径，并且不在任何项目、工作区、worktree 根目录下，也不在临时目录（`$TMPDIR`、`/tmp`、`/private/var/folders`）下。解析结果和来源目录写进索引流的 `agents` 状态。
+- **环境**：git 子进程的 PATH 只保留上述可信条目（git 自己再拉起的 `ssh`、`gpg` 等也只能从这些目录里找到）；`LC_ALL=C`，便于解析报错；`GIT_TERMINAL_PROMPT=0`；继承 `SSH_AUTH_SOCK`。
+- **工作目录**：git 子进程的工作目录设为 cupper 自己的目录（`<数据目录>/git/`），目标仓库经 `-C <路径>`（仓库档、用户档）或 `GIT_DIR`、`GIT_WORK_TREE`（快照档）指定。
+- 所有 git 子进程都经 `cupper-sys::spawn` 拉起（[5.8.5](08-security.md#585-进程卫生)）。
+- 超时：只读命令 30 s；快照 60 s；`worktree add` 10 分钟（输出进度事件）；`push` 5 分钟。
+- 启动时检测 git 版本（暂定最低 2.39）和 git-lfs，结果放进索引流的 `agents` 状态里一起显示。
+
+**并发**：会修改用户 index 或 worktree 的操作（stage、unstage、revert、commit、worktree add/remove）按仓库拿 `RepoLock`。快照档的每次调用使用自己的临时 index，不拿锁，可以与其他会话的快照并行；`config` 的重新生成写临时文件后改名。
 
 ## 5.2.11 文件服务与设置
 
 **文件服务**（CP-2 的 `@` 引用）
 
-- git 仓库：`git ls-files -z --cached --others --exclude-standard` 得到文件列表；非 git 目录：用 `ignore` crate 遍历（遵守 `.gitignore`），最多 20 万个文件。
+- git 仓库：在快照档（[5.2.10](#5210-git-与-worktree-服务)）执行 `git ls-files -z --cached --others --exclude-standard` 得到文件列表；非 git 目录：用 `ignore` crate 遍历（遵守 `.gitignore`），最多 20 万个文件。
 - 列表按工作区缓存 5 秒，回合结束时失效；用 nucleo-matcher 做模糊匹配，返回相对路径、分数和匹配区间（UTF-16 偏移，方便 JS 高亮）。
 - 发送时，`@` 引用作为 `resource_link` 内容块传给 agent（ACP 基础能力）。
 
@@ -321,6 +450,7 @@ stateDiagram-v2
 | 键 | 含义 | 修改需要 |
 |---|---|---|
 | `agents.<agent>.cli_path` | 手动指定 CLI 路径 | `privileged`（等于决定 agent 运行哪个程序） |
+| `agents.env_passthrough` | 额外传给适配器的环境变量名（API key 等），规则见 [5.6.6](06-agent-driver.md#566-cli-的发现与版本检查) | `privileged`（等于能影响适配器加载的代码） |
 | `worktrees.root` | worktree 根目录 | `write` |
 | `notifications.needs_action` / `.turn_completed` / `.error` | 通知开关 | `write` |
 | `apps.terminal` / `apps.editor` | UI-0 用哪个应用打开工作区（从内置的应用清单里选） | `write` |
@@ -335,25 +465,26 @@ stateDiagram-v2
 按 ADR-08 实现，补充以下细化：
 
 - **清单内嵌在宿主二进制里**（编译期由 `runtime/manifest.json` 生成）。宿主不在运行中读取包内的清单文件，清单的签名就是宿主二进制自身的签名。
-- **随包携带的组件**放在 `CupperHost.app/Contents/Resources/runtime/`：重签过的 Node（tar.xz）、codex-acp 的 `index.mjs` 与许可证、esbuild-wasm 和打包脚本。claude-agent-acp 的依赖在用户机器上从 npm 下载（ADR-11 红线）。
-- **读取包内文件的例外**：只在启动后、通过 cdhash 自检之后做复制，并且逐文件按内嵌清单核对 sha-256。复制到一半包被替换，哈希就对不上，安装失败、宿主转入"待升级"。
+- **随包携带的组件**：重签过的 Node 作为普通 Mach-O 放在 `CupperHost.app/Contents/Helpers/node`，随 App 一起公证（U-R3，已定（2026-10-16），见 `docs/meetings/2026-10-16-gate-design-decisions/minutes.md`）；codex-acp 的 `index.mjs` 与许可证、esbuild-wasm 和打包脚本放在 `CupperHost.app/Contents/Resources/runtime/`（[5.10.1](10-release.md#5101-包结构)）。claude-agent-acp 的依赖在用户机器上从 npm 下载（ADR-11 红线）。清单覆盖所有会被执行或加载的文件，包括打包脚本。
+- **读取包内文件的例外**：只在启动后、通过 cdhash 自检之后做复制，并且逐文件按内嵌清单核对 sha-256（Node 另核对 cdhash）。复制到一半包被替换，哈希就对不上，安装失败、宿主转入"待升级"。
 - **状态机**（每个组件）：`missing` → `installing` → `ready`；失败为 `failed{reason}`（`network`、`hash_mismatch`、`disk`、`bundle_changed`）。状态写进索引流的 `agents` 里，界面据此提示"首次使用 Claude 需要联网安装适配器（约 6–8 秒）"。
 - **时机**：宿主启动后在后台校验和安装；某个 agent 需要启动适配器而组件还没就绪时，等待安装完成（Codex 的组件全部随包，不需要联网）。
 - **网络请求**：只访问 `registry.npmjs.org`；User-Agent 为 `cupper-runtime-installer/<版本>`，不带任何用户信息；遵守登录 shell 里的 `HTTPS_PROXY`。
-- 目录布局、校验、原子提交、旧版本回收按 ADR-08。tar 解包用 Rust 的 `tar` + `lzma-rs`，逐项检查路径不越界（SP-2 原型调用的系统 tar 不沿用）。
+- **从 npm 安装**：按锁文件直接下载各个包的 tarball，不调用 npm，不运行任何生命周期脚本；先核对 SRI，再解包。tar 解包用 Rust 的 `tar` + `flate2`，逐项检查路径不越界（SP-2 原型调用的系统 tar 不沿用）。registry 地址在 test-harness 构建里可以注入（[5.9.9](09-testing.md#599-测试替身与注入点)）。
+- 目录布局、校验、原子提交、旧版本回收按 ADR-08。
 
 ## 5.2.13 进程监护与宿主生命周期
 
 **启动顺序**（目标：前 9 步合计不超过 50 ms，SP-4a 实测 p95 为 4.6 ms，不含签名校验）
 
-1. 解析参数：`--data-dir`（默认 `~/Library/Application Support/cupper`）；`--dev-key-stdin`（仅 `dev-auth` 构建）；`--harness-key-stdin`（仅 `test-harness` 构建）。
+1. 解析参数：`--data-dir`（默认 `~/Library/Application Support/cupper`）；`--build-info`（输出版本和启用的编译特性后退出，发布流水线据此断言）；`--self-test`。`dev-auth`、`test-harness` 构建读取 stdin 上的启动载荷（`dev_key`、`harness_key`、`test_config`，格式、超时和编译期门控见 [5.8.1](08-security.md#581-认证握手固定令牌)）；之后（发布构建一开始就）把 stdio 指向 `/dev/null`。
 2. 初始化日志（轮转、脱敏，见 [5.11](11-diagnostics.md)）。
 3. 数据目录和子目录建成 0700，并检查属主。
 4. 对 `host.lock` 加 `flock`；已被占用就以退出码 3 退出（UI 改为直接连接）。
-5. 打开数据库，必要时先备份再迁移；数据库版本比本程序新就以退出码 4 退出（不支持降级，NFR-10）。
-6. 崩溃恢复（NFR-9）：按 `adapters` 表的进程组和启动时间清理残留（SP-4a 的 `reap_group`）；运行中的回合写 `turn.completed{status: interrupted}`；待处理的交互请求写 `expired`；账本里 `pending_external` 的记录保留，供重试时返回 `outcome_unknown`。
+5. 打开数据库，必要时先备份再迁移（每个迁移脚本在自己的事务里同时更新 `schema_version`，[5.4.6](04-data-model.md#546-迁移)）；数据库版本比本程序新就以退出码 4 退出（不支持降级，NFR-10）；迁移失败以退出码 6 退出。按 [5.2.8](#528-事件存储) 的规则判定是否把 `data_epoch` 加 1，并记下这次的 `last_start_at` 和启动会话的 UUID。
+6. 崩溃恢复（NFR-9）：按 `adapters` 表的进程组和启动时间清理残留（SP-4a 的 `reap_group`）；运行中的回合写 `turn.completed{status: interrupted}`；待处理的交互请求写 `expired`；账本里 `pending_external` 的记录保留，供重试时返回 `outcome_unknown`；`initial_prompt_json` 不为空、停在准备工作区阶段的会话，交给会话 actor 重新准备工作区（已登记的 worktree 直接复用），失败就写 `workspace.failed`，并把这条消息转成一条暂停中的排队消息，不丢弃。
 7. 加载索引流（检查点 + 其后的事件）。
-8. 绑定套接字：`run/host.sock`；路径超过 104 字节时退到 `/tmp/cupper-<uid>/<数据目录哈希>/`，使用前检查属主和 0700（SP-4a）；套接字文件 0600。
+8. 绑定套接字：`run/host.sock`；路径超过 104 字节时退到每个用户自己的临时目录 `confstr(_CS_DARWIN_USER_TEMP_DIR)` 下的 `cupper-<数据目录哈希>/`（系统创建、权限 0700，别的用户无法抢先创建；客户端用同一个算法找到套接字），使用前检查属主和 0700；套接字文件 0600（安全建议 #18）。
 9. 启动 actor：`IndexActor`、`Supervisor`、`RuntimeInstaller`（后台校验）；`AgentRuntime` 按需启动。
 10. 进入 accept 循环。
 
@@ -361,17 +492,17 @@ stateDiagram-v2
 
 **空闲退出**（非后台模式）：没有客户端连接、没有进行中的回合、没有待处理请求、没有排队消息、安装器空闲，持续 10 分钟（可设置）后有序退出。
 
-**有序退出**（`host/exit`、SIGTERM、空闲、升级）：停止 accept → 向所有连接发 `host/shutdown` 通知 → 如果是强制退出，运行中的回合标为 `interrupted` → 按 ADR-09 的顺序关闭适配器（逐个 `session/close` → 关闭 stdin → 等进程组退出 3 s → SIGTERM → 2 s → SIGKILL）→ 写检查点、清空写线程队列 → 释放电源断言 → 删除套接字 → 释放锁。
+**有序退出**（`host/exit`、SIGTERM、空闲、升级）：停止 accept → 向所有连接发 `host/shutdown` 通知 → 如果是强制退出，运行中的回合标为 `interrupted` → 按 ADR-09 的顺序关闭适配器（逐个 `session/close` → 关闭 stdin → 等进程组退出 3 s → SIGTERM → 2 s → SIGKILL）→ 写检查点、清空写线程队列、写 `meta.last_clean_exit_at` → 释放电源断言 → 删除套接字 → 释放锁。
 
 **防休眠**（NFR-13，M1 为 P1）：有进行中的回合或待处理的交互请求时，持有 `PreventUserIdleSystemSleep` 断言，没有时立即释放。
 
 **资源采样**：每 30 秒采样一次各适配器进程组的常驻内存，写进 `agents` 状态（NFR-11、ADR-09 的设置页显示），并交给驱动层的回收策略（[5.6.8](06-agent-driver.md#568-资源回收)）。
 
-**退出码**：0 正常；3 已有实例；4 数据来自更新的版本；5 数据目录不可用；1 其他错误。
+**退出码**：0 正常；3 已有实例；4 数据来自更新的版本；5 数据目录不可用；6 迁移失败（界面给出备份位置和诊断包入口）；1 其他错误（含启动载荷读取超时或格式错误）。
 
 ## 5.2.14 cupper-cli
 
-第二客户端，用于 NFR-1 验收、端到端测试和开发调试。可执行文件随 App 放在 `Cupper.app/Contents/Resources/bin/cupper`，签名的 identifier 与 UI 不同（ADR-05）。
+第二客户端，用于 NFR-1 验收、端到端测试和开发调试。可执行文件随 App 放在 `Cupper.app/Contents/Helpers/cupper`（Apple 的 bundle 布局：可执行代码不放 `Resources`），签名的 identifier 为 `dev.cupper.cli`，与 UI 不同（ADR-05）。设置页提供"安装命令行工具"，在用户选择的目录里建符号链接。
 
 | 命令 | 协议方法 | 需要的权限 |
 |---|---|---|
@@ -392,7 +523,7 @@ stateDiagram-v2
 - 默认是只读的 `cli` principal。写操作需要先 `elevate`，由用户在桌面端的原生确认框里批准；授权只在这条连接上有效，最长 15 分钟（ADR-05），所以连续的写操作用 `cupper repl`。
 - 输出：默认是人读的格式；`--json` 输出 JSON Lines，供测试断言。
 - 连接时默认校验宿主的签名（发布构建），校验失败就拒绝连接。
-- 测试构建可以用 `--harness-key-fd <n>` 以 `test_harness` 身份连接。
+- 测试构建可以用 `--harness-key-fd <n>` 以 `test_harness` 身份连接；这个参数在编译期门控，发布版 CLI 没有它。`--build-info` 输出启用的编译特性。
 - 库部分保留 SP-4a 的 `Client` 和 `Mirror`（检查 `from` 等于上一个 seq 加 1），供宿主集成测试直接使用。
 
 ## 5.2.15 SP-4a 代码的沿用与改动
@@ -412,9 +543,9 @@ SP-4a 的代码由 M1a 的任务迁移进 `crates/`（复制后按下表调整�
 | `host/auth.rs` | `policy` + `gateway` | 部分沿用 | 加签名校验、`dev_key`、提权、角色；scope 表改由协议常量驱动 |
 | `host/hub.rs` | `store::streams` | 沿用不变式，重构实现 | `append` 拆成"分配 → 写线程提交 → 加锁应用与扇出"；单写者；懒加载与淘汰 |
 | `host/store.rs` | `store` | 重写 | 改为写线程加读池；新的表结构（[5.4](04-data-model.md)）；迁移与备份；blob 改为文件 |
-| `host/session.rs` | `orchestrator` + `interaction` | 重构 | 状态机不再 await 长操作；加队列、Steer、自发回合、中断超时；交互代理独立成组件，允许回合外的请求；不再自己持有驱动，改为挂到共享的 `AgentRuntime` |
-| `host/driver.rs` | `driver` | 重构 | 每种 agent 一个适配器进程（ADR-09），按 ACP sessionId 路由；加线路分接、扩展方法、提取层、能力缓存（[5.6](06-agent-driver.md)） |
-| `host/normalize.rs` | `driver::normalize` | 沿用写入时合并逻辑 | 输出改为新的条目模型；按 agent 的提取层取退出码、输出、diff |
+| `host/session.rs` | `orchestrator` + `interaction` | 重构 | 状态机、队列、交互代理改写成纯核心（[5.2.16](#5216-时间与可测性)），actor 只做 I/O 适配；不再直接调用 `Instant::now` 和 `sleep_until`；加队列、Steer、自发回合、中断超时；允许回合外的请求；不再自己持有驱动，改为挂到共享的 `AgentRuntime` |
+| `host/driver.rs` | `driver` | 重构 | 每种 agent 一个适配器进程（ADR-09），按 ACP sessionId 路由；传输改为 `AcpTransport` 接口；加线路分接、扩展方法、提取层、能力缓存（[5.6](06-agent-driver.md)） |
+| `host/normalize.rs` | `driver::normalize` | 沿用写入时合并逻辑 | 已经把 `now` 作为参数，改成 `Coalescer` 纯核心；输出改为新的条目模型；按 agent 的提取层取退出码、输出、diff |
 | `host/host.rs` | `orchestrator::manager` + `supervisor` | 拆分 | 恢复逻辑和 `reap_group` 沿用 |
 | `host/sys.rs` | `cupper-sys` | 沿用 | 合并 SP-4b 的 Security FFI；stderr 改为管道（由宿主读出后经脱敏写日志，便于轮转）；加 csops、IOPM、血缘信息 |
 | `host/main.rs` | `cupper-host` bin | 沿用流程 | 加迁移、自检、运行时安装、`CFRunLoop` 主线程 |
@@ -426,3 +557,44 @@ SP-4a 的代码由 M1a 的任务迁移进 `crates/`（复制后按下表调整�
 | `ts/` 生成链 | `tools/gen-protocol-ts` + `packages/protocol` | 沿用 | 补 SP-4a 报告提出的三处后处理 |
 | `protocol/fixtures/events.json` | `protocol/fixtures/` | 沿用 | 扩充到每种消息和事件 |
 | `smoke/*.sh` | 兼容套件 | 不沿用脚本 | 改由 `cargo xtask compat` 实现 |
+
+## 5.2.16 时间与可测性
+
+结论：宿主里所有和时间有关的规则都经 `Clock` 实现；回合状态机等有状态的决策写成不做 I/O 的纯核心；驱动的传输做成接口。这样性质测试、金样例和故障点测试都可以用虚拟时间确定性地运行，不依赖 CI 的负载（测试 #1）。tokio 的 `time::pause` 只适用于 current_thread runtime，管不到 std 线程和 `spawn_blocking`，所以不用它。
+
+**Clock 与 IdGen**
+
+| 项 | 规格 |
+|---|---|
+| 接口 | `now_mono()`、`now_wall_ms()`、`timer_at(deadline)`（返回可取消的定时器） |
+| 实现 | `SystemClock`（生产）；`ManualClock`（测试，只在显式推进时前进） |
+| 使用者 | 全部 actor 的定时器；normalizer 的 40 ms 写入合并；`IndexActor` 的 100 ms 合并；Preparing 3 s、Steer 5 s、中断兜底 10 s、自发回合判定；400 ms 最短回答间隔；actor 空闲 10 分钟；账本 48 小时；各类保留清理；supervisor 的空闲退出、重启退避、"5 分钟内失败 5 次"、资源采样、Codex 回收 |
+| `IdGen` | 生成全部 UUIDv7（[5.4.4](04-data-model.md#544-id-规则)），时间部分取自同一个 Clock，ID 里的时间和事件的 `ts` 一致 |
+| 例外 | 写线程在队列为空时等待凑批的 2 ms 只影响吞吐，不经 Clock（[5.2.8](#528-事件存储)） |
+| 禁用清单 | clippy `disallowed-methods`，在 `clock` 模块之外禁止调用：`std::time::Instant::now`、`Instant::elapsed`、`SystemTime::now`、`SystemTime::elapsed`、`tokio::time::Instant::now`、`tokio::time::{sleep, sleep_until, interval, interval_at, timeout, timeout_at}`、`std::thread::sleep`、`uuid::Uuid::now_v7` |
+
+**纯核心**
+
+形式统一为 `step(&mut self, input, now) -> Vec<Action>`：不做 I/O，不 await，不读 Clock（`now` 由调用方传入）。
+
+| 纯核心 | 输入 | 输出的动作 |
+|---|---|---|
+| `TurnMachine` | 发送、Steer、中断；驱动事件；快照完成；定时器到期 | 写事件、发驱动命令、设或取消定时器、回复命令 |
+| `QueueCore` | 入队、出队、暂停、恢复 | `queue.updated`、出队开回合 |
+| `InteractionBroker` | agent 的请求、`interaction/respond`、撤回、适配器实例退出 | 写交互事件、应答 ACP、回复命令 |
+| `AutonomousJudge` | 回合外的更新、带 `cost` 的 `usage_update`、静默计时、工具状态 | 开始或结束自发回合、是否允许出队（待定问题 Q10） |
+| `Coalescer` | 文本片段、其他事件到达、定时器 | 刷出合并后的 delta |
+
+`SessionActor` 是适配层：把邮箱里的消息转成 input，执行动作（写存储、调驱动、设定时器），再把执行结果作为新的 input 送回。性质测试直接驱动纯核心（[5.9.8](09-testing.md#598-其他关键测试)）。
+
+**传输接口 `AcpTransport`**：两种实现，子进程 stdio（生产）和内存双工（测试）。线路分接层（[5.6.10](06-agent-driver.md#5610-线路分接层)）位于它之上，内存实现同样经过分接层。金样例的 B 层在进程内运行宿主核心，用内存传输回放录制，以录制里的 `t` 推进 `ManualClock`（[5.9.3](09-testing.md#593-录制与金样例)）。
+
+**test-harness 构建的测试接口**（只在 `test-harness` 特性下编译；方法的 scope 为 `test`，只有 `test_harness` principal 拥有；全部注入点见 [5.9.9](09-testing.md#599-测试替身与注入点)）
+
+| 接口 | 规格 |
+|---|---|
+| `--test-config`（经 stdin 传入，格式见 [5.8.1](08-security.md#581-认证握手固定令牌)） | `clock: system \| manual`；全部时长的覆盖值；故障点；其余注入点 |
+| `test/clock_advance {ms}` | 推进 `ManualClock`。到期的定时器按到期时间的先后全部触发，由此产生的动作全部执行、相关写入已提交、事件已扇出之后才返回。等待外部进程（假 agent）的场合不用它，仍用事件做屏障 |
+| `test/run_maintenance {task}` | 立即运行一次保留清理、账本清理、孤儿 blob 清理等后台任务，完成后返回 |
+| `test/seed {profile}` | 经正常的写入路径（写线程、回合快照、检查点）灌入合成数据：会话数、每个会话的回合数和条目数、条目类型的比例、文本长度、单个超大回合，按 `profile` 给出；SP-1 录制的分布做成一个现成的 profile。供冷启动、长会话滚动、SP-6 的夹具使用（[5.9.9](09-testing.md#599-测试替身与注入点)） |
+| 进程内回放 | 同一规则：当前帧引起的动作全部处理完，才推进到下一帧的 `t` |
