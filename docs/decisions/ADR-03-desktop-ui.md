@@ -125,3 +125,22 @@ PRD 要求复刻 Codex 视图（UI-6），包括：
 补充：
 - 终端组件以 xterm.js 为主，ghostty-web 作为备选。
 - 打包工具在 electron-builder 和 Electron Forge 之间选，在详细设计阶段确定。Codex、Claude 用的是 Forge，前提是能满足 ADR-01 对"自己控制安装时机"的要求。
+
+## R05 补充证据（2026-10-16）
+
+R05 调研了 33 个热门 App，包括 Manus、豆包、Kimi、元宝、飞书、微信、Teams、Figma、Slack、Discord、Notion 等。结论支持 Electron + React，没有反例：
+
+- 32 个已知框架的 App 中，16 个用 Electron，另有 9 个也用 Web 技术渲染主界面（自研 Chromium 运行时、CEF、原生外壳加 WebView2、Tauri），合计 78%。
+- **大厂"超出 Electron"之后，换的是自己掌握的 Chromium 运行时，界面仍然是 Web**：
+  - 飞书改用自研的 Lark Framework，bundle id 还是 `com.electron.lark`；
+  - 豆包用自研的 Chromium 运行时；
+  - Teams 改用 WebView2，在 Mac 上自带了一整份 Edge（853 MB）；
+  - Codex 改用 OWL。
+
+  32 个 App 里，只有元宝把主界面放在 WKWebView 里。
+- **AI 新产品**：创业公司和国内厂商默认用 Electron，例如 Manus、Kimi、千问、智谱、DeepSeek Harness、Granola；三家国内大厂的 AI IDE 都是 VS Code fork 加 Electron。原生派只有美国平台大厂（Gemini、Perplexity、Copilot）。
+- **留在 Electron 的老牌产品都在框架内优化**，没有一个离开。Slack、Discord、Figma、Notion、Obsidian 都跟进到了 Electron 42–44。
+
+另外补充两项决策：
+- **Electron 的最低版本**：要避开 macOS 26 上已知的卡顿问题。Qoder 为此从 Electron 34 升到了 37。具体版本在详细设计时核实，并始终跟随官方支持的版本。
+- **分发渠道**：只做官网直接下载，不上 Mac App Store。cupper 需要操作本地文件和进程，与 App Store 的沙箱要求冲突；同类 agent 产品（Perplexity 新版、Gemini、Manus、Granola）也都不上商店。

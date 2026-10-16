@@ -1,11 +1,11 @@
 # cupper 技术栈总览
 
 - 日期：2026-10-16
-- 状态：ADR-01 至 ADR-05 已提议，在 `gate/design` 时交用户确认。其余各层等原型实测（SP 系列）的结果出来后再定。
+- 状态：M1 前需要的 ADR-01 至 ADR-11 已全部提议，在 `gate/design` 时交用户确认。原型实测 SP-1、2、4a、4b、5 已完成。
 - 依据：
   - 技术选型讨论会：`docs/meetings/2026-10-16-tech-selection/`
-  - 调研：R04（桌面框架与同类产品）；R05（热门 App 技术栈，进行中）
-  - 实测：SP-4b（macOS 本地安全）
+  - 调研：R04（桌面框架与同类产品）；R05（热门 App 技术栈）
+  - 实测：SP-1（适配器行为）、SP-2（分发）、SP-4a（宿主骨架）、SP-4b（本地安全）、SP-5（Git）
 
 ## 一图看懂
 
@@ -55,7 +55,10 @@ flowchart LR
 - **全 Rust 界面（GPUI）**：可行，但界面工作量估计是 Electron 方案的 1.5 到 2.5 倍，API 不稳定，AI 可参考的资料少。
 - **代价**：安装包几百 MB，Electron 大约每 8 周一个大版本要跟进，安全加固要做到位。
 
-完整对比见 `docs/tasks/R04-desktop-framework-survey/report.md`。Manus、豆包、Kimi、Figma、Slack 等热门 App 的数据由 R05 补充，回来后追加到这里。
+- **热门 App（R05，33 个）**：78% 用 Web 技术渲染主界面。Manus、Kimi、千问、智谱、Granola、Figma、Slack、Discord、Notion、Obsidian 用 Electron。飞书、豆包用自研的 Chromium 运行时；Teams 在 Mac 上自带了一整份 Edge。大厂离开 Electron 后，换的是自己掌握的 Chromium，**界面仍然是 Web，没有一家改用系统自带的 WebKit**（元宝除外）。
+- **分发**：只做官网直接下载，不上 Mac App Store，与同类 agent 产品一致。
+
+完整对比见 `docs/tasks/R04-desktop-framework-survey/report.md` 和 `docs/tasks/R05-hot-apps-desktop-stack/report.md`。
 
 ## 还在验证中的
 
