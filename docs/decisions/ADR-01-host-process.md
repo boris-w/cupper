@@ -29,6 +29,8 @@ PRD v1.0 要求会话、历史、审批、Git、worktree 都由一个与界面�
 
 **M1 采用方案 3；M2 增加方案 4，作为可选的后台常驻模式。两种模式使用同一个二进制、同一个套接字和同一套协议，区别只在于由谁来启动。**
 
+用户已接受：开启后台常驻后，系统会提示"已添加后台项目"，cupper 也会出现在登录项设置里（2026-10-16，U-T3）。
+
 **打包形态**：宿主做成 app-like 的 helper bundle，放在 `Cupper.app/Contents/Helpers/CupperHost.app`，设置 LSUIElement，有自己的 identifier。这样做有三个好处：
 - 宿主有独立的 TCC 身份和通知身份；
 - M3 可以在这里嵌入描述文件，使用数据保护钥匙串；

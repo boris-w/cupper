@@ -1,6 +1,6 @@
 # ADR-03 桌面 UI 技术
 
-- 状态：提议
+- 状态：讨论中（2026-10-16 用户要求先调研同类产品的框架选择，见 R04 和 `docs/meetings/2026-10-16-tech-selection-feedback/`；下文为技术选型讨论会的提议，暂不生效）
 - 日期：2026-10-16
 - 来源：`docs/meetings/2026-10-16-tech-selection/`（`minutes.md`，尤其是 C5；`desktop-engineer.md`；`desktop-engineer-round2.md`；`architect.md` ADR-03；`mobile-security-engineer-round2.md` 问题 2、3）
 
