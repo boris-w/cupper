@@ -7,7 +7,7 @@
 | 文件 | 作用 |
 |---|---|
 | `acp-client.ts` | 最小 ACP 客户端：stdio 上的换行分隔 JSON-RPC，录下每一帧；自动应答审批和 elicitation；进程树和内存采样 |
-| `scenarios.ts` | 12 个场景（另有 `s02b` 计划补测），每个场景对每个适配器写一个 JSONL |
+| `scenarios.ts` | brief 的 12 个场景，另有几个补充场景：`s02b` 明确要求使用计划工具，`s02c`/`s02d` 是 Claude 的任务工具和思考流补充实验，`s04b` 拒绝命令审批，`s07b` CLI 进程在空闲时被杀后的恢复。每个场景对每个适配器写一个 JSONL |
 | `run.ts` | 入口：准备临时测试仓库、组装环境变量、按顺序跑场景 |
 | `sanitize.ts` | 脱敏：把原始录制转换成可以提交的 `recordings/` |
 | `inspect.ts` | 把一个录制文件打印成紧凑的时间线，方便人工查看 |
@@ -45,7 +45,7 @@ mkdir -p $BASE/adapters/claude $BASE/adapters/codex
 (cd $BASE/adapters/claude && npm init -y && npm install @agentclientprotocol/claude-agent-acp@0.91.0)
 (cd $BASE/adapters/codex  && npm init -y && npm install @agentclientprotocol/codex-acp@2.2.2)
 
-node run.ts --base $BASE --adapter claude        --scenarios s01,s02,s02b,s03,s04,s05,s06,s07,s09,s10,s11,s12,s08
+node run.ts --base $BASE --adapter claude        --scenarios s01,s02,s02b,s02c,s02d,s03,s04,s04b,s05,s06,s07,s07b,s09,s10,s11,s12,s08
 node run.ts --base $BASE --adapter codex-bundled --scenarios ...   # 适配器自带的 codex
 node run.ts --base $BASE --adapter codex-local   --scenarios ...   # CODEX_PATH 指向本机 codex
 

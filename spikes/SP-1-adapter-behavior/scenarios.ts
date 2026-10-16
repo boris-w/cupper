@@ -223,11 +223,11 @@ async function waitSleepRunning(ctx: Ctx, c: AcpConn, sid: string) {
   return true;
 }
 
-/** Resolve when no session/update arrived for `quietMs`, capped at `maxMs`. */
-async function waitQuiet(c: AcpConn, sid: string, quietMs = 8000, maxMs = 120_000) {
+/** Resolve when nothing arrived from the adapter for `quietMs`, capped at `maxMs`. */
+async function waitQuiet(c: AcpConn, quietMs = 8000, maxMs = 120_000) {
   const start = c.now();
   while (c.now() - start < maxMs) {
-    const f = await c.waitFor((fr) => isUpdate(fr, sid) || fr.dir === "recv", quietMs);
+    const f = await c.waitFor((fr) => fr.dir === "recv", quietMs);
     if (!f) return true;
   }
   return false;
@@ -259,24 +259,18 @@ export function storageCheck(ctx: Ctx, sid: string, configDir?: string) {
       }
     }
   } else {
+    // Rollouts live in sessions/YYYY/MM/DD/; only yesterday..tomorrow can hold a session made now.
     const root = join(configDir ?? join(homedir(), ".codex"), "sessions");
-    const walk = (dir: string, depth: number) => {
-      if (!existsSync(dir) || depth > 4) return;
-      for (const name of readdirSync(dir)) {
+    for (const offset of [-1, 0, 1]) {
+      const d = new Date(Date.now() + offset * 86_400_000);
+      const dir = join(root, String(d.getFullYear()), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0"));
+      if (!existsSync(dir)) continue;
+      for (const name of readdirSync(dir).filter((n) => n.includes(sid) && n.endsWith(".jsonl"))) {
         const p = join(dir, name);
-        if (name.includes(sid) && name.endsWith(".jsonl")) {
-          const lines = readFileSync(p, "utf8").split("\n").filter(Boolean);
-          found.push({ where: "codex-sessions", bytes: statSync(p).size, lines: lines.length });
-        } else if (depth < 4 && statSync(p).isDirectory()) {
-          // only today's partition and its neighbours are relevant
-          if (depth === 0 && name !== "2026") continue;
-          if (depth === 1 && name !== "10") continue;
-          if (depth === 2 && !["15", "16", "17"].includes(name)) continue;
-          walk(p, depth + 1);
-        }
+        const lines = readFileSync(p, "utf8").split("\n").filter(Boolean);
+        found.push({ where: "codex-sessions", bytes: statSync(p).size, lines: lines.length });
       }
-    };
-    walk(root, 0);
+    }
     const index = join(configDir ?? join(homedir(), ".codex"), "session_index.jsonl");
     if (existsSync(index) && readFileSync(index, "utf8").includes(sid)) found.push({ where: "codex-session-index" });
   }
@@ -395,7 +389,7 @@ export async function s02(ctx: Ctx) {
     ),
     "normal-turn",
   );
-  await waitQuiet(c, sid, 5000, 30_000);
+  await waitQuiet(c, 5000, 30_000);
   ctx.state.s02 = { sessionId: sid };
   ctx.saveState();
   await c.stop();
@@ -414,7 +408,7 @@ export async function s02b(ctx: Ctx) {
     ),
     "plan",
   );
-  await waitQuiet(c, sid, 4000, 20_000);
+  await waitQuiet(c, 4000, 20_000);
   await c.stop();
   c.close();
 }
@@ -429,7 +423,7 @@ export async function s02c(ctx: Ctx) {
     text("Use the TaskCreate tool to create two tasks named 'step one' and 'step two', then use TaskUpdate to mark both completed. Do nothing else."),
     "plan",
   );
-  await waitQuiet(c, sid, 4000, 20_000);
+  await waitQuiet(c, 4000, 20_000);
   await c.stop();
   c.close();
 }
@@ -441,7 +435,7 @@ export async function s02d(ctx: Ctx) {
   const effort = tracker.option(sid, "thought_level");
   await setOption(c, sid, effort.id, "high");
   await prompt(ctx, c, tracker, sid, text("Think it through step by step, then reply with only the result: what is 17 * 23 - 19?"), "thinking");
-  await waitQuiet(c, sid, 4000, 20_000);
+  await waitQuiet(c, 4000, 20_000);
   await c.stop();
   c.close();
 }
@@ -458,7 +452,7 @@ export async function s03(ctx: Ctx) {
     ),
     "exec",
   );
-  await waitQuiet(c, sid, 4000, 20_000);
+  await waitQuiet(c, 4000, 20_000);
   await c.stop();
   c.close();
 }
@@ -476,7 +470,7 @@ export async function s04(ctx: Ctx) {
     ),
     "allow-then-reject",
   );
-  await waitQuiet(c, sid, 5000, 30_000);
+  await waitQuiet(c, 5000, 30_000);
   await c.stop();
   c.close();
 }
@@ -491,7 +485,7 @@ export async function s04b(ctx: Ctx) {
     text("Create a file named d.txt by running exactly this shell command: `printf d > d.txt`. Then tell me whether it worked."),
     "reject-command",
   );
-  await waitQuiet(c, sid, 5000, 30_000);
+  await waitQuiet(c, 5000, 30_000);
   await c.stop();
   c.close();
 }
@@ -508,7 +502,7 @@ export async function s05(ctx: Ctx) {
       ),
       "ask-user-question",
     );
-    await waitQuiet(c, sid, 4000, 20_000);
+    await waitQuiet(c, 4000, 20_000);
     await setOption(c, sid, tracker.option(sid, "mode").id, "plan");
     await prompt(
       ctx, c, tracker, sid,
@@ -534,7 +528,7 @@ export async function s05(ctx: Ctx) {
       "request-user-input-and-plan",
     );
   }
-  await waitQuiet(c, sid, 8000, 120_000);
+  await waitQuiet(c, 8000, 120_000);
   await c.stop();
   c.close();
 }
@@ -550,7 +544,7 @@ export async function s06(ctx: Ctx) {
   const p2 = promptAsync(ctx, c, tracker, sid, text("Reply with exactly: second-done"), "queue-second");
   const [r1, r2] = await Promise.all([p1.done, p2.done]);
   c.note("queue-order", { firstEndedAt: r1.t, secondEndedAt: r2.t, first: r1.result?.stopReason ?? r1.error, second: r2.result?.stopReason ?? r2.error });
-  await waitQuiet(c, sid, 4000, 30_000);
+  await waitQuiet(c, 4000, 30_000);
 
   // B: steer while the tool call is still being produced (first tool_call frame).
   const p3 = promptAsync(ctx, c, tracker, sid, text("Run the shell command `sleep 10`, then reply with exactly: third-done"), "steer-early");
@@ -558,7 +552,7 @@ export async function s06(ctx: Ctx) {
   const s1 = await c.request("_session/steering", { sessionId: sid, prompt: text("Also append the word STEERED to your final reply.") }, 60_000);
   c.note("steer-early-result", { ok: s1.ok, result: s1.result, error: s1.error, elapsedMs: s1.elapsedMs });
   await p3.done;
-  await waitQuiet(c, sid, 5000, 60_000);
+  await waitQuiet(c, 5000, 60_000);
 
   // C: steer while the command executes.
   const p4 = promptAsync(ctx, c, tracker, sid, text("Run the shell command `sleep 10`, then reply with exactly: fourth-done"), "steer-running");
@@ -566,7 +560,7 @@ export async function s06(ctx: Ctx) {
   const s2 = await c.request("_session/steering", { sessionId: sid, prompt: text("Also append the word STEERED2 to your final reply.") }, 60_000);
   c.note("steer-running-result", { ok: s2.ok, result: s2.result, error: s2.error, elapsedMs: s2.elapsedMs });
   await p4.done;
-  await waitQuiet(c, sid, 5000, 60_000);
+  await waitQuiet(c, 5000, 60_000);
 
   // D: steer while idle, opting into the host-owned fallback.
   assertSafe(ctx, c, tracker, sid);
@@ -576,14 +570,14 @@ export async function s06(ctx: Ctx) {
     60_000,
   );
   c.note("steer-idle-optin-result", { ok: s3.ok, result: s3.result, error: s3.error });
-  await waitQuiet(c, sid, 8000, 60_000);
+  await waitQuiet(c, 8000, 60_000);
 
   // E: steer while idle without the opt-in (only if D did not already start a turn).
   if (s3.result?.outcome === "promptRequired") {
     assertSafe(ctx, c, tracker, sid);
     const s4 = await c.request("_session/steering", { sessionId: sid, prompt: text("Reply with exactly: idle-steer-2") }, 60_000);
     c.note("steer-idle-default-result", { ok: s4.ok, result: s4.result, error: s4.error });
-    await waitQuiet(c, sid, 8000, 60_000);
+    await waitQuiet(c, 8000, 60_000);
   }
   await c.stop();
   c.close();
@@ -609,7 +603,7 @@ export async function s07(ctx: Ctx) {
   c.note("cancel-latency", { case: "running", ms: ra.t - tA, stopReason: ra.result?.stopReason });
   await c.settle(3000);
   c.sample("after-cancel");
-  await waitQuiet(c, sid, 4000, 30_000);
+  await waitQuiet(c, 4000, 30_000);
 
   // B: cancel while an approval is pending.
   if (ctx.family === "codex") await setOption(c, sid, tracker.option(sid, "mode").id, "read-only");
@@ -629,7 +623,7 @@ export async function s07(ctx: Ctx) {
   c.note("cancel-latency", { case: "pending-approval", heldSeen: !!held, ms: rb.t - tB, stopReason: rb.result?.stopReason });
   c.policy = DEFAULT_POLICY;
   if (ctx.family === "codex") await setOption(c, sid, tracker.option(sid, "mode").id, "workspace-write");
-  await waitQuiet(c, sid, 4000, 30_000);
+  await waitQuiet(c, 4000, 30_000);
 
   // C: the session still works after cancelling.
   await prompt(ctx, c, tracker, sid, text("Reply with exactly: after-cancel"), "after-cancel");
@@ -658,7 +652,7 @@ export async function s07(ctx: Ctx) {
 export async function s07b(ctx: Ctx) {
   const { c, tracker, sid } = await fresh(ctx, "s07b-cli-crash-recovery", WORK_MODE[ctx.family]);
   await prompt(ctx, c, tracker, sid, text("Reply with exactly: one"), "before-kill");
-  await waitQuiet(c, sid, 3000, 15_000);
+  await waitQuiet(c, 3000, 15_000);
   const victim = findCliChild(ctx, c.child.pid!);
   c.note("kill-cli", { victim, idle: true });
   if (victim) process.kill(victim.pid, "SIGKILL");
@@ -675,7 +669,7 @@ export async function s07b(ctx: Ctx) {
       c.note("after-resume-prompt", { ok: r3.ok, stopReason: r3.result?.stopReason, error: r3.error });
     }
   }
-  await waitQuiet(c, sid, 3000, 15_000);
+  await waitQuiet(c, 3000, 15_000);
   await c.stop();
   c.close();
 }
@@ -764,7 +758,7 @@ export async function s09(ctx: Ctx) {
     await c.settle(3000);
     await configure(ctx, c, tracker, target, WORK_MODE[ctx.family]);
     await prompt(ctx, c, tracker, target, text("/compact"), "compact", 240_000);
-    await waitQuiet(c, target, 5000, 60_000);
+    await waitQuiet(c, 5000, 60_000);
     await c.crash();
     c.close();
   }
@@ -795,7 +789,7 @@ export async function s09(ctx: Ctx) {
       text("Without using any tools: what is the name of the first file you created in this conversation? Answer with the file name only."),
       "continue-after-resume",
     );
-    await waitQuiet(c, target, 4000, 20_000);
+    await waitQuiet(c, 4000, 20_000);
     await c.stop();
     c.close();
   }
@@ -846,7 +840,7 @@ export async function s11(ctx: Ctx) {
     ],
     "image",
   );
-  await waitQuiet(c, sid, 4000, 20_000);
+  await waitQuiet(c, 4000, 20_000);
   await c.stop();
   c.close();
 }
