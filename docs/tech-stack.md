@@ -35,11 +35,11 @@ flowchart LR
 | 会话宿主 | **Rust** 写的独立无界面进程，打包成 helper App 放在 App 包内；M1 由 App 拉起，M2 改为开机常驻 | 提议 | 签名干净，适合作信任锚；Rust ACP SDK 有 Zed 的生产验证；M3 可以和 iOS 共享代码 | ADR-01、ADR-02 |
 | 宿主与客户端的协议 | 自有 JSON-RPC。帧格式：长度 + 类型 + 负载，单帧不超过 64 KB；seq 连续，并支持合并的区间事件；命令幂等；由 Rust 类型生成 JSON Schema，再生成 TS 和 zod | 提议 | 和 ACP、Codex 的做法一致；M3 能直接套上加密，不用返工 | ADR-04 |
 | 本地认证 | Unix 套接字；用审计令牌加代码签名识别 UI；**每条消息都核对对端身份**；命令行工具默认只读 | 提议，已有 SP-4b 实测支持 | 不存可以被偷走的凭据；实测能挡住 exec 和 fork 冒充 | ADR-05 |
-| agent 接入 | ACP：`claude-agent-acp` 驱动本机的 claude，`codex-acp` 驱动本机的 codex；**排队、历史、崩溃恢复都由宿主负责**；每种 agent 只起一个适配器进程，多个会话共用 | 提议，有 SP-1 实测支撑；分发方式待 SP-2 | 实测：并发发送 prompt 会丢回复或卡死；适配器回放的历史没有时间戳，也不完整；Codex 拒绝审批会结束整个回合 | ADR-07、ADR-09；ADR-08（待定） |
+| agent 接入 | ACP：`claude-agent-acp` 驱动本机的 claude，`codex-acp` 驱动本机的 codex；**排队、历史、崩溃恢复都由宿主负责**；每种 agent 只起一个适配器进程，多个会话共用 | 提议，有 SP-1 实测支撑；分发方式见下一行（ADR-08） | 实测：并发发送 prompt 会丢回复或卡死；适配器回放的历史没有时间戳，也不完整；Codex 拒绝审批会结束整个回合 | ADR-07、ADR-09、ADR-08 |
 | Node 运行时与适配器分发 | 随 App 带一份官方 Node LTS，**用 cupper 的身份重新签名，只保留 allow-jit**，只用来运行适配器；每个适配器打包成一个 JS 单文件；claude 适配器在用户机器上从 npm 安装、本机打包，并核对固定哈希；runtime 清单随 App 签名 | 提议，有 SP-2 实测支持 | Anthropic 的 SDK 绝不由 cupper 分发；entitlement 最少；单文件在升级替换时不会出错 | ADR-08、ADR-11 |
 | 存储与事件模型 | SQLite WAL，只有宿主写入；每条流 seq 连续；事件按条目 upsert；回合由宿主推导；快照就是一串事件，分页下发；原始 ACP 帧保留 14 天；历史以宿主的日志为准，不依赖适配器回放 | 提议，有 SP-4a 实测支持 | 骨架实测：冷启动 p95 4.6 ms；宿主常驻内存 6–23 MiB；`kill -9` 后能恢复 | ADR-06 |
 | Git | **git 命令行**（不用 libgit2，暂不用 gix）；快照用临时 index，写入 cupper 私有的对象库，用户的 `.git` 一个字节都不写；hunk 操作用 `git apply`；worktree 放在仓库外，清理前按 7 条规则检查 | 提议，SP-5 实测支持 | libgit2 在 linux 等仓库上直接失败；git 命令行最正确，9.6 万个文件的仓库快照约 0.3 s | ADR-10 |
-| 打包与更新 | Developer ID 签名、公证；更新时先让宿主退出再安装，不原地覆盖可执行文件；electron-builder 还是 Forge 在详细设计时定 | 提议 | SP-4b 实测：宿主运行时替换 App 包会出问题 | ADR-01、ADR-03 |
+| 打包与更新 | Developer ID 签名、公证；更新时先让宿主退出再安装，不原地覆盖可执行文件；**electron-builder 26.x + electron-updater 6.8.x**，关闭 `autoInstallOnAppQuit`，由我们调用 `quitAndInstall()` 决定安装时机；Electron 起始版本 44.8.0 | 提议（详细设计 5.10.4） | SP-4b 实测：宿主运行时替换 App 包会出问题；Forge 默认的更新路径会在下次启动时自动应用，无法暂缓 | ADR-01、ADR-03；`docs/design/10-release.md` |
 | 测试 | Rust 单元测试和集成测试；假 agent 回放录制的会话；Vitest；Playwright 截图回归和端到端测试 | 提议 | 确定性回归；AI 能自己验证 | ADR-03、ADR-04 |
 | 最低系统 | macOS 14+；不为兼容旧系统写任何代码 | 已确认 | 用户决定 | 设计文档"平台约束" |
 | 开源许可证 | cupper 自身用 **Apache-2.0**（`LICENSE` 已加入仓库）；CI 设许可证门禁；绝不分发 Anthropic 的 SDK 和 Claude Code 二进制 | Apache-2.0 已确认；门禁和再分发规则为提议 | 与 ACP 生态一致，带专利授权 | ADR-11 |

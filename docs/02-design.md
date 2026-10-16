@@ -131,7 +131,7 @@ flowchart TB
 |---|---|---|---|---|
 | ADR-01 | 会话宿主的进程形态与生命周期 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-01-host-process.md` |
 | ADR-02 | 会话宿主的实现语言 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-02-host-language.md` |
-| ADR-03 | 桌面 UI 技术 | 提议（编排者结论：Electron + React；R05 补充证据待追加） | R04；用户讨论；必要时 SP-6 | `docs/decisions/ADR-03-desktop-ui.md` |
+| ADR-03 | 桌面 UI 技术 | 提议（编排者结论：Electron + React；已补充 R05 证据） | R04；用户讨论；必要时 SP-6 | `docs/decisions/ADR-03-desktop-ui.md` |
 | ADR-04 | 宿主与客户端之间的协议 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-04-host-protocol.md` |
 | ADR-05 | 本地传输与本地客户端认证 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会；SP-4 | `docs/decisions/ADR-05-local-transport-auth.md` |
 | ADR-06 | 事件模型与存储 | 提议（依据 SP-4a、SP-1） | SP-1、SP-4 | `docs/decisions/ADR-06-event-model-storage.md` |
@@ -139,7 +139,7 @@ flowchart TB
 | ADR-08 | Agent 程序来源、适配器分发与版本锁定 | 提议（依据 SP-2） | SP-2 | `docs/decisions/ADR-08-agent-runtime-distribution.md` |
 | ADR-09 | 适配器进程拓扑 | 提议（依据 SP-1） | SP-1 | `docs/decisions/ADR-09-adapter-topology.md` |
 | ADR-10 | Git 与 worktree | 提议（依据 SP-5） | SP-5 | `docs/decisions/ADR-10-git-worktree.md` |
-| ADR-11 | 开源许可证与第三方依赖的再分发 | 提议（cupper 的许可证待用户确认） | SP-2 | `docs/decisions/ADR-11-license-redistribution.md` |
+| ADR-11 | 开源许可证与第三方依赖的再分发 | 提议（cupper 采用 Apache-2.0，用户已确认） | SP-2 | `docs/decisions/ADR-11-license-redistribution.md` |
 | ADR-12 | 配对与 E2EE 通道 | M3 前 | SP-8 | — |
 | ADR-13 | 中继设计 | M3 前 | — | — |
 | ADR-14 | 推送方案 | M3 前 | SP-7 | — |
@@ -155,7 +155,7 @@ flowchart TB
 | SP-4a | 宿主骨架走通（Rust） | M1 前 | 已完成（维持 Rust；已据此起草 ADR-06） | `docs/tasks/SP-4a-host-skeleton/` |
 | SP-4b | macOS 本地安全实测 | M1 前 | 已完成（ADR-05 方案成立，已据此修订 ADR-01、ADR-05） | `docs/tasks/SP-4b-local-security/` |
 | SP-5 | Git 快照与审查操作 | M1 前 | 已完成（git 命令行方案，已据此起草 ADR-10） | `docs/tasks/SP-5-git-snapshot/` |
-| SP-6 | UI 渲染压力测试 | 视情况 | 待定 | — |
+| SP-6 | UI 渲染压力测试 | M1b 开头 | 待定（测试计划见 [5.9.7](design/09-testing.md#597-sp-6-测试计划ui-渲染压力测试)） | — |
 | SP-7 | iOS 自建与推送链路 | M3 前 | — | — |
 | SP-8 | E2EE 通道互通 | M3 前 | — | — |
 | SP-9 | 睡眠与网络切换 | M3 前 | — | — |
