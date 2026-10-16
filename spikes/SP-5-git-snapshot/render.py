@@ -37,14 +37,16 @@ def main() -> None:
         rows = []
         for r in b["repos"]:
             for sc, d in r["scenarios"].items():
+                same = d.get("same_tree", {})
                 rows.append((r["repo"], sc, ch(d["changes"]), ms(d, "status"), ms(d, "snap_seed"), ms(d, "snap_keep"),
-                             ms(d, "snap_private"), ms(d, "snap_empty"), ms(d, "stash_create"),
+                             ms(d, "snap_private"), ms(d, "snap_guided"), ms(d, "snap_empty"), ms(d, "stash_create"),
+                             "yes" if same and all(same.values()) else "NO " + str(same),
                              "yes" if d.get("user_index_untouched") else "NO",
                              "yes" if d.get("stash_create_touched_index") else "no",
                              f"{d['odb_growth']['loose_objects']} / {d['odb_growth']['loose_kb']} KB"))
-        out += [md_table(["repo", "scenario", "changes", "status", "snap seed", "snap keep", "snap private ODB",
-                          "snap empty", "stash create", "user index untouched", "stash touched index",
-                          "new loose objects / size"], rows), ""]
+        out += [md_table(["repo", "scenario", "changes", "status -uall", "snap seed", "snap keep", "snap private ODB",
+                          "snap guided", "snap empty", "stash create", "same tree (keep/private/guided)",
+                          "user index untouched", "stash touched index", "new loose objects / size"], rows), ""]
         out += ["## Diff cost (ms)", "", "T0 = clean snapshot, T1 = scenario snapshot.", ""]
         rows = []
         for r in b["repos"]:
@@ -72,8 +74,11 @@ def main() -> None:
             rows = []
             for r in b["fsmonitor"]:
                 for sc, d in r["scenarios"].items():
-                    rows.append((r["repo"], sc, ms(d, "status"), ms(d, "snap_seed"), ms(d, "snap_keep")))
-            out += [md_table(["repo", "scenario", "status", "snap seed", "snap keep"], rows), ""]
+                    rows.append((r["repo"], sc, ms(d, "status"), ms(d, "status_normal"), ms(d, "snap_seed"),
+                                 ms(d, "snap_keep"), ms(d, "snap_guided"),
+                                 "yes" if d.get("guided_same_tree") else "NO"))
+            out += [md_table(["repo", "scenario", "status -uall", "status -unormal", "snap seed", "snap keep",
+                              "snap guided", "guided = seed tree"], rows), ""]
     w = load_result("bench_worktree")
     if w:
         out += [f"## Worktree operations (median of {w['runs']} runs, ms)", ""]
@@ -107,8 +112,10 @@ def main() -> None:
                              f"ERROR ({err.split(': ', 1)[-1]})" if err else ms(d, "lg2_snapshot"),
                              ms(c, "snap_seed"),
                              "–" if d["same_tree_as_cli"] is None else ("yes" if d["same_tree_as_cli"] else "NO"),
-                             ms(d, "lg2_diff_with_hunks"), ms(d, "cli_diff_patch"),
-                             ms(d, "lg2_hunk_stage"), ms(d, "cli_hunk_stage")))
+                             "ERROR" if d.get("lg2_diff_error") else ms(d, "lg2_diff_with_hunks"),
+                             ms(d, "cli_diff_patch"),
+                             "ERROR" if d.get("lg2_hunk_stage_error") else ms(d, "lg2_hunk_stage"),
+                             ms(d, "cli_hunk_stage")))
         out += [md_table(["repo", "scenario", "lg2 status", "cli status", "lg2 snapshot", "cli snapshot",
                           "same tree id", "lg2 diff+hunks", "cli diff -p", "lg2 hunk stage", "cli hunk stage"],
                          rows), ""]
@@ -118,6 +125,9 @@ def main() -> None:
                           for r in lg["repos"]]), ""]
         if lg.get("lfs"):
             out += [f"LFS filter check: `{lg['lfs']}`", ""]
+        if lg.get("drivers"):
+            out += [md_table(["libgit2 with built-in diff driver", "status", "add_all", "patch"],
+                             [(c["case"], c["status"], c["add_all"], c["patch"]) for c in lg["drivers"]]), ""]
         if lg.get("compat"):
             out += [md_table(["libgit2 on special repo", "result", "detail"],
                              [(c["case"], c["result"], str(c.get("detail", "")).replace("|", "\\|").replace("\n", " "))

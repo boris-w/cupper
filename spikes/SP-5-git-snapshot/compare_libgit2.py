@@ -21,7 +21,7 @@ import pygit2
 
 import hunks
 from bench_snapshot import SCENARIOS, Scenario
-from lib import REPOS, SCRATCH, STATE, file_state, git, git_out, git_path, save_result, timed
+from lib import REPOS, SCRATCH, STATE, commit_all, file_state, git, git_out, git_path, new_repo, save_result, timed
 from snapshot import snapshot
 
 EMPTY = STATE / "libgit2-empty-config"
@@ -78,7 +78,10 @@ def bench_repo(name: str, runs: int) -> dict:
                 n += len(p.hunks)
             return n
 
-        res["lg2_diff_with_hunks"] = timed(lg2_diff, runs=runs)
+        try:
+            res["lg2_diff_with_hunks"] = timed(lg2_diff, runs=runs)
+        except Exception as e:
+            res["lg2_diff_error"] = f"{type(e).__name__}: {e}"
         res["cli_diff_patch"] = timed(lambda: git(repo, "diff-tree", "-r", "-p", "-M", t0_cli, t_cli), runs=runs)
         if sc_name == "small":
             path = sc.modify[0]
@@ -91,7 +94,11 @@ def bench_repo(name: str, runs: int) -> dict:
                 rr = pygit2.Repository(str(repo))
                 rr.apply(pygit2.Diff.parse_diff(patch), INDEX_LOC)
 
-            res["lg2_hunk_stage"] = timed(lg2_stage, runs=runs, setup=lambda i: git(repo, "reset", "-q", "--", path))
+            try:
+                res["lg2_hunk_stage"] = timed(lg2_stage, runs=runs,
+                                              setup=lambda i: git(repo, "reset", "-q", "--", path))
+            except Exception as e:
+                res["lg2_hunk_stage_error"] = f"{type(e).__name__}: {e}"
             res["cli_hunk_stage"] = timed(lambda: hunks.apply(repo, patch, "--cached"), runs=runs,
                                           setup=lambda i: git(repo, "reset", "-q", "--", path))
             git(repo, "reset", "-q", "--", path)
@@ -146,6 +153,30 @@ def lfs_check() -> dict:
             "cli_blob_size": len(cli_blob)}
 
 
+def driver_check() -> list:
+    """Built-in diff drivers set via .gitattributes (linux uses diff=cpp). On macOS some of
+    libgit2's built-in driver regexes fail to compile ("illegal byte sequence")."""
+    out = []
+    for driver in ("cpp", "python", "rust", "none"):
+        repo = new_repo(f"lg2-driver-{driver}")
+        if driver != "none":
+            (repo / ".gitattributes").write_text(f"*.c diff={driver}\n")
+        (repo / "a.c").write_text("int main(void) {\n  return 0;\n}\n")
+        commit_all(repo)
+        (repo / "a.c").write_text("int main(void) {\n  return 1;\n}\n")
+        r = pygit2.Repository(str(repo))
+        row = {"case": f".gitattributes diff={driver}"}
+        for label, fn in [("status", lambda: r.status()), ("add_all", lambda: r.index.add_all()),
+                          ("patch", lambda: [p.text for p in r.diff()])]:
+            try:
+                fn()
+                row[label] = "ok"
+            except Exception as e:
+                row[label] = f"ERROR: {e}"
+        out.append(row)
+    return out
+
+
 def compat_check() -> list:
     """Open the special repos created by edge_snapshot.py / edge_worktree.py with libgit2."""
     out = []
@@ -192,6 +223,9 @@ def main() -> None:
     res["compat"] = compat_check()
     for c in res["compat"]:
         print("compat:", c)
+    res["drivers"] = driver_check()
+    for c in res["drivers"]:
+        print("driver:", c)
     save_result("compare_libgit2", res)
 
 
