@@ -88,9 +88,11 @@ def main() -> None:
     if sh:
         out += ["## Alternative: separate shadow repository (ms)", ""]
         out += [md_table(["repo", "first snapshot", "shadow store MB", "next (clean)", "next (small)",
-                          "same tree as temp-index snapshot"],
+                          "same tree as temp-index snapshot", "paths only in temp-index snapshot"],
                          [(r["repo"], r["first_snapshot_ms"], r["shadow_store_mb"], ms(r, "next_clean"),
-                           ms(r, "next_small"), "yes" if r["same_tree_as_temp_index"] else "NO")
+                           ms(r, "next_small"), "yes" if r["same_tree_as_temp_index"] else "NO",
+                           f"{len(r.get('only_in_temp_index', []))}: " + ", ".join(r.get("only_in_temp_index", [])[:3])
+                           if r.get("only_in_temp_index") else "")
                           for r in sh["repos"]]), ""]
     lg = load_result("compare_libgit2")
     if lg:
@@ -100,8 +102,11 @@ def main() -> None:
         for r in lg["repos"]:
             for sc, d in r["scenarios"].items():
                 c = cli.get(r["repo"], {}).get("scenarios", {}).get(sc, {})
-                rows.append((r["repo"], sc, ms(d, "lg2_status"), ms(c, "status"), ms(d, "lg2_snapshot"),
-                             ms(c, "snap_seed"), "yes" if d["same_tree_as_cli"] else "NO",
+                err = d.get("lg2_snapshot_error")
+                rows.append((r["repo"], sc, ms(d, "lg2_status"), ms(c, "status"),
+                             f"ERROR ({err.split(': ', 1)[-1]})" if err else ms(d, "lg2_snapshot"),
+                             ms(c, "snap_seed"),
+                             "–" if d["same_tree_as_cli"] is None else ("yes" if d["same_tree_as_cli"] else "NO"),
                              ms(d, "lg2_diff_with_hunks"), ms(d, "cli_diff_patch"),
                              ms(d, "lg2_hunk_stage"), ms(d, "cli_hunk_stage")))
         out += [md_table(["repo", "scenario", "lg2 status", "cli status", "lg2 snapshot", "cli snapshot",

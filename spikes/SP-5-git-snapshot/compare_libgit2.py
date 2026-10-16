@@ -54,14 +54,20 @@ def bench_repo(name: str, runs: int) -> dict:
         res = {"changes": sc.actual}
         before = file_state(index_path)
         res["lg2_status"] = timed(lambda: pygit2.Repository(str(repo)).status(), runs=runs, setup=sc.apply)
-        res["lg2_snapshot"] = timed(lambda: lg2_snapshot(repo), runs=runs, setup=sc.apply)
+        try:
+            res["lg2_snapshot"] = timed(lambda: lg2_snapshot(repo), runs=runs, setup=sc.apply)
+        except Exception as e:  # e.g. add_all() failing on the linux checkout - that is the finding
+            res["lg2_snapshot_error"] = f"{type(e).__name__}: {e}"
         res["user_index_untouched"] = file_state(index_path) == before
         sc.apply(4242)
-        t_lg2 = lg2_snapshot(repo)
         t_cli = snapshot(repo, state / "cmp")
-        res["same_tree_as_cli"] = t_lg2 == t_cli
-        if t_lg2 != t_cli:
-            res["tree_diff_vs_cli"] = git_out(repo, "diff", "--stat", t_cli, t_lg2)[-300:]
+        if "lg2_snapshot_error" in res:
+            res["same_tree_as_cli"] = None
+        else:
+            t_lg2 = lg2_snapshot(repo)
+            res["same_tree_as_cli"] = t_lg2 == t_cli
+            if t_lg2 != t_cli:
+                res["tree_diff_vs_cli"] = git_out(repo, "diff", "--stat", t_cli, t_lg2)[-300:]
         r = pygit2.Repository(str(repo))
 
         def lg2_diff():
@@ -91,7 +97,8 @@ def bench_repo(name: str, runs: int) -> dict:
             git(repo, "reset", "-q", "--", path)
         sc.restore()
         out["scenarios"][sc_name] = res
-        print(f"  {name}/{sc_name}: lg2 snap={res['lg2_snapshot']['median_ms']}ms "
+        snap = res["lg2_snapshot"]["median_ms"] if "lg2_snapshot" in res else "ERROR"
+        print(f"  {name}/{sc_name}: lg2 snap={snap}ms "
               f"status={res['lg2_status']['median_ms']}ms same_tree={res['same_tree_as_cli']}", flush=True)
     # worktree via libgit2 (checkout done by libgit2)
     wt = SCRATCH / "lg2-wt" / name

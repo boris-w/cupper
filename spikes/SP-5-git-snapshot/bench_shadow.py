@@ -40,7 +40,13 @@ def bench(name: str, runs: int) -> dict:
     first = snap()
     out["first_snapshot_ms"] = round((time.perf_counter() - t) * 1000)
     out["shadow_store_mb"] = du_mb(shadow)
-    out["same_tree_as_temp_index"] = first == snapshot(repo, STATE / f"shadow-cmp-{name}")
+    ref = snapshot(repo, STATE / f"shadow-cmp-{name}")
+    out["same_tree_as_temp_index"] = first == ref
+    if first != ref:  # both trees are in different object stores; compare path lists
+        a = set(git(repo, "ls-tree", "-r", "--name-only", "-z", first, env=env).stdout.split(b"\0"))
+        b = set(git(repo, "ls-tree", "-r", "--name-only", "-z", ref).stdout.split(b"\0"))
+        out["only_in_temp_index"] = sorted(p.decode(errors="replace") for p in b - a)[:20]
+        out["only_in_shadow"] = sorted(p.decode(errors="replace") for p in a - b)[:20]
     out["next_clean"] = timed(snap, runs=runs)
     sc = Scenario(repo, SCENARIOS["small"])
     out["next_small"] = timed(snap, runs=runs, setup=sc.apply)
