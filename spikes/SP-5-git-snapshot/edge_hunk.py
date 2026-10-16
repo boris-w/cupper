@@ -597,6 +597,27 @@ def case_turn_revert(c):
          expect_fail=True)
 
 
+def case_index_lock(c):
+    """The user has a git command running (.git/index.lock exists)."""
+    repo = c.repo
+    base = L(30)
+    (repo / "k.txt").write_bytes(b"".join(base))
+    commit_all(repo)
+    full = edit(base, EDITS)
+    (repo / "k.txt").write_bytes(full)
+    stage_b = pick(c.patch("stage", "k.txt"), b"EDIT-B")
+    revert_a = pick(c.patch("revert", "k.txt"), b"EDIT-A")
+    lock = git_path(repo, "index.lock")
+    lock.write_bytes(b"")
+    try:
+        c.op("stage while index.lock is held -> refuse, nothing changed", "stage", stage_b,
+             lambda: chk_index(c, "k.txt", b"".join(base)), expect_fail=True)
+        c.op("revert (worktree only) while index.lock is held", "revert", revert_a,
+             lambda: chk_wt(c, "k.txt", edit(base, EDITS[1:])))
+    finally:
+        lock.unlink()
+
+
 CASES = [
     ("multi_hunk", case_multi_hunk),
     ("crlf_raw", case_crlf_raw),
@@ -615,6 +636,7 @@ CASES = [
     ("conflict", case_conflict),
     ("whitespace_cfg", case_whitespace_cfg),
     ("turn_revert", case_turn_revert),
+    ("index_lock", case_index_lock),
 ]
 
 
