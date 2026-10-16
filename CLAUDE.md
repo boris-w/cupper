@@ -19,7 +19,7 @@
 
 - `main` 始终保持可用。代码改动不直接提交到 `main`，统一走"任务分支 → review → 合并"。
 - 阶段文档（PRD / 设计 / 计划 / ADR）由编排者直接提交到 `main`。
-- 一个任务一条分支、一个 worktree。分支名：`<type>/<任务ID>-<简短英文描述>`，例如 `feat/T03-login-api`。
+- 一个任务一条分支、一个 worktree。分支名：`<type>/<任务ID>-<简短英文描述>`，例如 `feat/T03-login-api`；调研任务用 `research/R01-codex-ui-teardown` 这种形式。
 - 合并统一用 `git merge --no-ff`，让每个任务在历史里保留成一个完整的合并节点。合并后删除 worktree 和分支。
 - 每个阶段闸门通过后打 annotated tag：`gate/prd`、`gate/design`、`gate/plan`、`release/vX.Y.Z`。
 
