@@ -46,6 +46,8 @@ def main():
         v = os.environ.get(var)
         if v:
             text = text.replace(v, tag)
+    # Claude Code encodes cwd paths into project directory names.
+    text = re.sub(r"var-folders-[a-z0-9]+-[a-z0-9_]+-[TC]-", "<tmp-encoded>-", text)
     text = re.sub(r"TeamIdentifier=[A-Z0-9]{10}", "TeamIdentifier=<TEAM>", text)
     text = re.sub(r'subject\.OU\] = "?[A-Z0-9]{10}"?', 'subject.OU] = "<TEAM>"', text)
     text = re.sub(r"(Apple Development|Apple Distribution|Developer ID Application|Mac Developer): [^\n\"(]*\([A-Z0-9]{10}\)",

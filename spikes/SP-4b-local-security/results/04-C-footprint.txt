@@ -1,0 +1,18 @@
+config fingerprints identical before/after: NO
+changed: $HOME/.claude.json (Claude Code state file, also written by other sessions running concurrently)
+changed: $HOME/.codex/config.toml (codex exec added [projects."<work>/agent/repo"] trust_level = "trusted")
+entries under ~/.claude and ~/.codex created during the runs that belong to this spike:
+$HOME/.claude/projects/-private-<tmp-encoded>-sp4b-run-agent-repo/memory/   (empty directories, no session file)
+Codex state/log files touched during the runs (shared with other sessions):
+$HOME/.codex/.codex-global-state.json
+$HOME/.codex/.codex-global-state.json.bak
+$HOME/.codex/goals_1.sqlite-wal
+$HOME/.codex/logs_2.sqlite
+$HOME/.codex/logs_2.sqlite-wal
+$HOME/.codex/memories_1.sqlite-wal
+$HOME/.codex/queue_1.sqlite-wal
+$HOME/.codex/session_index.jsonl
+$HOME/.codex/state_5.sqlite-wal
+$HOME/.codex/thread_history_1.sqlite-wal
+(one rollout file under ~/.codex/sessions/ is timestamped 15:53:59, before the first codex exec
+ started; the runs used --ephemeral, so it belongs to a concurrent session and is not listed)
