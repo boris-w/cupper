@@ -42,7 +42,7 @@ flowchart LR
 | 打包与更新 | Developer ID 签名、公证；更新时先让宿主退出再安装，不原地覆盖可执行文件；electron-builder 还是 Forge 在详细设计时定 | 提议 | SP-4b 实测：宿主运行时替换 App 包会出问题 | ADR-01、ADR-03 |
 | 测试 | Rust 单元测试和集成测试；假 agent 回放录制的会话；Vitest；Playwright 截图回归和端到端测试 | 提议 | 确定性回归；AI 能自己验证 | ADR-03、ADR-04 |
 | 最低系统 | macOS 14+；不为兼容旧系统写任何代码 | 已确认 | 用户决定 | 设计文档"平台约束" |
-| 开源许可证 | cupper 自身用 Apache-2.0；CI 设许可证门禁；绝不分发 Anthropic 的 SDK 和 Claude Code 二进制 | 提议（许可证待用户确认） | 与 ACP 生态一致，带专利授权 | ADR-11 |
+| 开源许可证 | cupper 自身用 **Apache-2.0**（`LICENSE` 已加入仓库）；CI 设许可证门禁；绝不分发 Anthropic 的 SDK 和 Claude Code 二进制 | Apache-2.0 已确认；门禁和再分发规则为提议 | 与 ACP 生态一致，带专利授权 | ADR-11 |
 | iOS（M3） | SwiftUI 原生；要不要和桌面共用 Rust 客户端代码（UniFFI），M3 前再定 | 方向 | — | ADR-15（M3 前） |
 | 中继与加密（M3） | 自建的无状态中继；Noise 协议，扫码配对，用一次性 psk 认证；推送由桌面按设备加密 | 方向 | — | ADR-12 至 ADR-14（M3 前） |
 
