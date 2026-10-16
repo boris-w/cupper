@@ -52,7 +52,7 @@
 | SP-2 | 本机 CLI 与适配器的版本耦合、分发 | M1 前 | 进行中 | `docs/tasks/SP-2-adapter-distribution/` |
 | SP-3 | 直连 Codex app-server 的对照 | 视情况 | 待定 | — |
 | SP-4a | 宿主骨架走通（Rust） | M1 前 | 进行中 | `docs/tasks/SP-4a-host-skeleton/` |
-| SP-4b | macOS 本地安全实测 | M1 前 | 进行中 | `docs/tasks/SP-4b-local-security/` |
+| SP-4b | macOS 本地安全实测 | M1 前 | 已完成（ADR-05 方案成立，已据此修订 ADR-01、ADR-05） | `docs/tasks/SP-4b-local-security/` |
 | SP-5 | Git 快照与审查操作 | M1 前 | 进行中 | `docs/tasks/SP-5-git-snapshot/` |
 | SP-6 | UI 渲染压力测试 | 视情况 | 待定 | — |
 | SP-7 | iOS 自建与推送链路 | M3 前 | — | — |
