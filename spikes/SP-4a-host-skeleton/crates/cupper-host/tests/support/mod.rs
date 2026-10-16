@@ -66,6 +66,13 @@ impl Harness {
     /// Spawn the host, hand it the key over stdin, and wait until it accepts.
     pub fn start(&mut self) -> Duration {
         let t0 = Instant::now();
+        self.spawn();
+        self.wait_ready(Duration::from_millis(5));
+        t0.elapsed()
+    }
+
+    /// Spawn the host without waiting for it.
+    pub fn spawn(&mut self) {
         let mut child = Command::new(env!("CARGO_BIN_EXE_cupper-host"))
             .arg("--data-dir")
             .arg(self.data_dir())
@@ -79,15 +86,18 @@ impl Harness {
         stdin.write_all(self.key.as_bytes()).expect("write key");
         drop(stdin);
         self.host = Some(child);
+    }
+
+    /// Poll until the socket accepts connections.
+    pub fn wait_ready(&mut self, poll: Duration) {
         let deadline = Instant::now() + TIMEOUT;
         while std::os::unix::net::UnixStream::connect(self.socket()).is_err() {
             assert!(Instant::now() < deadline, "host did not start");
             if let Some(status) = self.host.as_mut().and_then(|c| c.try_wait().ok().flatten()) {
                 panic!("host exited early: {status}");
             }
-            std::thread::sleep(Duration::from_millis(5));
+            std::thread::sleep(poll);
         }
-        t0.elapsed()
     }
 
     pub fn host_pid(&self) -> i32 {

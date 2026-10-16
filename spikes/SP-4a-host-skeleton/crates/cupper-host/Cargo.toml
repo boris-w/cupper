@@ -39,3 +39,7 @@ tempfile.workspace = true
 [[test]]
 name = "e2e"
 required-features = ["test-harness"]
+
+[[test]]
+name = "measure"
+required-features = ["test-harness"]
