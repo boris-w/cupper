@@ -230,7 +230,7 @@ stateDiagram-v2
 **收到 agent 的请求时**
 
 1. 用驱动层的提取器分类：`permission`、`question`、`plan_confirm`、`auth_url`（[5.3.6](03-protocol-v1.md#536-交互请求模型)）。
-2. 用选项对照表（[5.6.4](06-agent-driver.md#564-选项-id-与生效范围对照表)）给每个选项标出 `effect` 和 `requires`。
+2. 用选项对照表（[5.3.6](03-protocol-v1.md#536-交互请求模型)，数据由驱动层维护）给每个选项标出 `effect` 和 `requires`。
 3. 计算 `digest`；按选项的 `requires` 和请求类型算出 `actionable_by`。
 4. 先刷出 normalizer 里缓冲的文本（保证因果顺序），再写 `interaction.requested` 和 `interactions` 行；通知 `IndexActor`。
 5. 在内存里保存 ACP 的应答句柄，记下它属于哪个适配器实例。
