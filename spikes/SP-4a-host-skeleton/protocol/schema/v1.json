@@ -1,0 +1,1806 @@
+{
+  "$defs": {
+    "AgentNotice": {
+      "description": "Agent-side updates the host does not model yet (usage, commands, config, ...).",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "summary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "AuthParams": {
+      "anyOf": [
+        {
+          "description": "Same-user peer credentials only; yields the read-only `cli` principal.",
+          "properties": {
+            "type": {
+              "const": "peer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "One-time key handed to the host over an inherited fd (test builds only).",
+          "properties": {
+            "token": {
+              "type": "string"
+            },
+            "type": {
+              "const": "harness",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "token"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/UnknownTagged"
+        }
+      ],
+      "description": "How the client proves who it is, tagged by `type`."
+    },
+    "BlobGetParams": {
+      "properties": {
+        "hash": {
+          "type": "string"
+        },
+        "length": {
+          "description": "Bytes to read; omit for \"to the end\".",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "hash"
+      ],
+      "type": "object"
+    },
+    "BlobGetResult": {
+      "description": "Sent after the `0x02` chunk frames that carry the requested range.",
+      "properties": {
+        "chunks": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "hash": {
+          "type": "string"
+        },
+        "length": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "hash",
+        "size",
+        "offset",
+        "length",
+        "chunks"
+      ],
+      "type": "object"
+    },
+    "BlobRef": {
+      "properties": {
+        "hash": {
+          "description": "Hex sha-256 of the blob bytes.",
+          "type": "string"
+        },
+        "media_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "hash",
+        "size"
+      ],
+      "type": "object"
+    },
+    "Cause": {
+      "description": "Which client command caused an event, so a client can match its own commands.",
+      "properties": {
+        "command_id": {
+          "type": "string"
+        },
+        "principal": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command_id",
+        "principal"
+      ],
+      "type": "object"
+    },
+    "ClientInfo": {
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ClientKind"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "ClientKind": {
+      "anyOf": [
+        {
+          "enum": [
+            "desktop",
+            "cli",
+            "ios",
+            "test"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Open enum: unknown values must be accepted. Known: desktop cli ios test "
+    },
+    "Content": {
+      "anyOf": [
+        {
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "const": "text",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "blob": {
+              "$ref": "#/$defs/BlobRef"
+            },
+            "preview": {
+              "type": "string"
+            },
+            "type": {
+              "const": "blob",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "blob",
+            "preview"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/UnknownTagged"
+        }
+      ],
+      "description": "Content that is either inline or, above the inline threshold, a blob reference."
+    },
+    "ErrorCode": {
+      "anyOf": [
+        {
+          "enum": [
+            "version_unsupported",
+            "not_initialized",
+            "unauthenticated",
+            "forbidden",
+            "not_found",
+            "conflict",
+            "expired",
+            "unsupported",
+            "unavailable",
+            "agent_error",
+            "idempotency_mismatch",
+            "too_large",
+            "rate_limited",
+            "timeout",
+            "shutting_down",
+            "internal"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Open enum: unknown values must be accepted. Known: version_unsupported not_initialized unauthenticated forbidden not_found conflict expired unsupported unavailable agent_error idempotency_mismatch too_large rate_limited timeout shutting_down internal "
+    },
+    "ErrorData": {
+      "additionalProperties": true,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "retryable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "type": "object"
+    },
+    "Event": {
+      "anyOf": [
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/SessionSummary"
+            },
+            "type": {
+              "const": "session.upsert",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/TurnStarted"
+            },
+            "type": {
+              "const": "turn.started",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/TurnCompleted"
+            },
+            "type": {
+              "const": "turn.completed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/ItemStarted"
+            },
+            "type": {
+              "const": "item.started",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Mergeable: consecutive deltas of one item may be concatenated.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/ItemDelta"
+            },
+            "type": {
+              "const": "item.delta",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/ItemUpdated"
+            },
+            "type": {
+              "const": "item.updated",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/ItemCompleted"
+            },
+            "type": {
+              "const": "item.completed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/InteractionRequested"
+            },
+            "type": {
+              "const": "interaction.requested",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/InteractionResolved"
+            },
+            "type": {
+              "const": "interaction.resolved",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/AgentNotice"
+            },
+            "type": {
+              "const": "agent.notice",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/UnknownEvent",
+          "description": "Any type this version does not know."
+        }
+      ],
+      "description": "Event body, tagged by `type` with the payload in `data`.",
+      "properties": {
+        "cause": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cause"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fallback": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Fallback"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Placeholder a reader shows when it does not understand `type`."
+        },
+        "from": {
+          "description": "Present on a range event produced by send-time coalescing: this event\ncovers `from..=seq`. Readers treat a missing `from` as `from = seq`.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "seq": {
+          "description": "Sequence number in its stream. Contiguous in the host log.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ts": {
+          "description": "UTC milliseconds.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "v": {
+          "description": "Schema version of this event type.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "seq",
+        "v",
+        "ts"
+      ],
+      "type": "object"
+    },
+    "EventBody": {
+      "anyOf": [
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/SessionSummary"
+            },
+            "type": {
+              "const": "session.upsert",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/TurnStarted"
+            },
+            "type": {
+              "const": "turn.started",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/TurnCompleted"
+            },
+            "type": {
+              "const": "turn.completed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/ItemStarted"
+            },
+            "type": {
+              "const": "item.started",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Mergeable: consecutive deltas of one item may be concatenated.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/ItemDelta"
+            },
+            "type": {
+              "const": "item.delta",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/ItemUpdated"
+            },
+            "type": {
+              "const": "item.updated",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/ItemCompleted"
+            },
+            "type": {
+              "const": "item.completed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/InteractionRequested"
+            },
+            "type": {
+              "const": "interaction.requested",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/InteractionResolved"
+            },
+            "type": {
+              "const": "interaction.resolved",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/AgentNotice"
+            },
+            "type": {
+              "const": "agent.notice",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/UnknownEvent",
+          "description": "Any type this version does not know."
+        }
+      ],
+      "description": "Event body, tagged by `type` with the payload in `data`."
+    },
+    "Fallback": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "HostInfo": {
+      "properties": {
+        "host_id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "host_id",
+        "version"
+      ],
+      "type": "object"
+    },
+    "InitializeParams": {
+      "properties": {
+        "auth": {
+          "$ref": "#/$defs/AuthParams"
+        },
+        "client": {
+          "$ref": "#/$defs/ClientInfo"
+        },
+        "coalesce_ms": {
+          "description": "Requested send-time coalescing window. The host clamps it.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "features": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "protocol": {
+          "$ref": "#/$defs/VersionRange"
+        }
+      },
+      "required": [
+        "protocol",
+        "client",
+        "auth"
+      ],
+      "type": "object"
+    },
+    "InitializeResult": {
+      "properties": {
+        "features": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "host": {
+          "$ref": "#/$defs/HostInfo"
+        },
+        "limits": {
+          "$ref": "#/$defs/Limits"
+        },
+        "principal": {
+          "$ref": "#/$defs/PrincipalInfo"
+        },
+        "protocol": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "protocol",
+        "host",
+        "principal",
+        "features",
+        "limits"
+      ],
+      "type": "object"
+    },
+    "InteractionOutcome": {
+      "anyOf": [
+        {
+          "description": "Pick one of the permission options.",
+          "properties": {
+            "option_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "selected",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "option_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Answer a question.",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "const": "answer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Decline to answer (the agent sees a cancellation).",
+          "properties": {
+            "type": {
+              "const": "dismissed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/UnknownTagged"
+        }
+      ],
+      "description": "A client's answer to an interaction request, tagged by `type`."
+    },
+    "InteractionRequest": {
+      "anyOf": [
+        {
+          "properties": {
+            "detail": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Content"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "options": {
+              "items": {
+                "$ref": "#/$defs/PermissionOption"
+              },
+              "type": "array"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "const": "permission",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "title",
+            "options"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "choices": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "free_text": {
+              "type": "boolean"
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "type": {
+              "const": "question",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "prompt",
+            "free_text"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/UnknownTagged"
+        }
+      ],
+      "description": "What the agent is asking for, tagged by `type`."
+    },
+    "InteractionRequested": {
+      "properties": {
+        "actionable_by": {
+          "description": "Principal kinds allowed to answer. The host re-checks on respond.",
+          "items": {
+            "$ref": "#/$defs/PrincipalKind"
+          },
+          "type": "array"
+        },
+        "digest": {
+          "description": "Computed by the host; clients echo it back verbatim in `interaction/respond`.",
+          "type": "string"
+        },
+        "item_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "request": {
+          "$ref": "#/$defs/InteractionRequest"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "turn_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "turn_id",
+        "digest",
+        "actionable_by",
+        "request"
+      ],
+      "type": "object"
+    },
+    "InteractionResolved": {
+      "properties": {
+        "outcome": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InteractionOutcome"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "resolved_by": {
+          "description": "Principal id that answered, for \"already handled elsewhere\" hints.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/InteractionStatus"
+        }
+      },
+      "required": [
+        "request_id",
+        "status"
+      ],
+      "type": "object"
+    },
+    "InteractionRespondParams": {
+      "description": "Fields every command carries.",
+      "properties": {
+        "attestation": {
+          "description": "Reserved for device signatures (M3/M4)."
+        },
+        "command_id": {
+          "description": "Client-generated UUIDv7. Retries reuse it; the host replays the first result.",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/InteractionOutcome"
+        },
+        "request_digest": {
+          "description": "The `digest` from `interaction.requested`, echoed verbatim.",
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command_id",
+        "session_id",
+        "request_id",
+        "request_digest",
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "InteractionRespondResult": {
+      "properties": {
+        "replayed": {
+          "type": "boolean"
+        },
+        "request_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "InteractionStatus": {
+      "anyOf": [
+        {
+          "enum": [
+            "pending",
+            "resolved",
+            "expired",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Open enum: unknown values must be accepted. Known: pending resolved expired cancelled "
+    },
+    "ItemCompleted": {
+      "properties": {
+        "item_id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ItemStatus"
+        }
+      },
+      "required": [
+        "item_id",
+        "status"
+      ],
+      "type": "object"
+    },
+    "ItemDelta": {
+      "properties": {
+        "item_id": {
+          "type": "string"
+        },
+        "text": {
+          "description": "Appended text. Never an offset, so no UTF-8/UTF-16 conversions.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id",
+        "text"
+      ],
+      "type": "object"
+    },
+    "ItemKind": {
+      "anyOf": [
+        {
+          "enum": [
+            "user_message",
+            "agent_message",
+            "thought",
+            "tool_call",
+            "plan"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Open enum: unknown values must be accepted. Known: user_message agent_message thought tool_call plan "
+    },
+    "ItemStarted": {
+      "properties": {
+        "item_id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ItemKind"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tool_kind": {
+          "description": "Semantic tool kind for tool calls (read, edit, execute, ...), open set.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "turn_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id",
+        "turn_id",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "ItemStatus": {
+      "anyOf": [
+        {
+          "enum": [
+            "running",
+            "completed",
+            "failed",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Open enum: unknown values must be accepted. Known: running completed failed cancelled "
+    },
+    "ItemUpdated": {
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Content"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "item_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "type": "object"
+    },
+    "Limits": {
+      "properties": {
+        "coalesce_ms": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_frame_bytes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_queue_bytes": {
+          "description": "Per-connection live event backlog above which a stream is reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_frame_bytes",
+        "coalesce_ms",
+        "max_queue_bytes"
+      ],
+      "type": "object"
+    },
+    "PermissionOption": {
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PermissionOptionKind"
+        },
+        "name": {
+          "type": "string"
+        },
+        "option_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "option_id",
+        "name",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "PermissionOptionKind": {
+      "anyOf": [
+        {
+          "enum": [
+            "allow_once",
+            "allow_always",
+            "reject_once",
+            "reject_always"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Open enum: unknown values must be accepted. Known: allow_once allow_always reject_once reject_always "
+    },
+    "PrincipalInfo": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/PrincipalKind"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "scopes"
+      ],
+      "type": "object"
+    },
+    "PrincipalKind": {
+      "anyOf": [
+        {
+          "enum": [
+            "desktop_ui",
+            "cli",
+            "cli_elevated",
+            "test_harness",
+            "remote_device"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Open enum: unknown values must be accepted. Known: desktop_ui cli cli_elevated test_harness remote_device "
+    },
+    "ResetReason": {
+      "anyOf": [
+        {
+          "enum": [
+            "slow_consumer",
+            "rebuilt"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Open enum: unknown values must be accepted. Known: slow_consumer rebuilt "
+    },
+    "RpcError": {
+      "properties": {
+        "code": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorData"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "SessionCreateParams": {
+      "description": "Fields every command carries.",
+      "properties": {
+        "agent": {
+          "description": "Agent name from the host configuration (e.g. `claude`, `fake`).",
+          "type": "string"
+        },
+        "attestation": {
+          "description": "Reserved for device signatures (M3/M4)."
+        },
+        "command_id": {
+          "description": "Client-generated UUIDv7. Retries reuse it; the host replays the first result.",
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command_id",
+        "agent",
+        "cwd"
+      ],
+      "type": "object"
+    },
+    "SessionCreateResult": {
+      "properties": {
+        "replayed": {
+          "type": "boolean"
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "type": "object"
+    },
+    "SessionInterruptParams": {
+      "description": "Fields every command carries.",
+      "properties": {
+        "attestation": {
+          "description": "Reserved for device signatures (M3/M4)."
+        },
+        "command_id": {
+          "description": "Client-generated UUIDv7. Retries reuse it; the host replays the first result.",
+          "type": "string"
+        },
+        "expected_turn_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command_id",
+        "session_id"
+      ],
+      "type": "object"
+    },
+    "SessionInterruptResult": {
+      "properties": {
+        "replayed": {
+          "type": "boolean"
+        },
+        "turn_id": {
+          "description": "The turn that was asked to stop, if one was running.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "SessionSendParams": {
+      "description": "Fields every command carries.",
+      "properties": {
+        "attestation": {
+          "description": "Reserved for device signatures (M3/M4)."
+        },
+        "command_id": {
+          "description": "Client-generated UUIDv7. Retries reuse it; the host replays the first result.",
+          "type": "string"
+        },
+        "expected_turn_id": {
+          "description": "Steer precondition: only accepted while this turn is running.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command_id",
+        "session_id",
+        "text"
+      ],
+      "type": "object"
+    },
+    "SessionSendResult": {
+      "properties": {
+        "replayed": {
+          "type": "boolean"
+        },
+        "turn_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id"
+      ],
+      "type": "object"
+    },
+    "SessionStatus": {
+      "anyOf": [
+        {
+          "enum": [
+            "starting",
+            "idle",
+            "running",
+            "awaiting_input",
+            "interrupted",
+            "error"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Open enum: unknown values must be accepted. Known: starting idle running awaiting_input interrupted error "
+    },
+    "SessionSummary": {
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "pending_interactions": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/SessionStatus"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "updated_at": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "session_id",
+        "agent",
+        "cwd",
+        "status",
+        "pending_interactions",
+        "updated_at"
+      ],
+      "type": "object"
+    },
+    "StreamEventsParams": {
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/Event"
+          },
+          "type": "array"
+        },
+        "stream": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "stream",
+        "events"
+      ],
+      "type": "object"
+    },
+    "StreamResetParams": {
+      "description": "The host dropped this subscription; resubscribe with your cursor.",
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/ResetReason"
+        },
+        "stream": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "stream",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "StreamSnapshotParams": {
+      "description": "One page of a snapshot. Pages are ordered; applying `ops` in order to an\nempty view yields the stream state at `at_seq`.",
+      "properties": {
+        "at_seq": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last": {
+          "type": "boolean"
+        },
+        "ops": {
+          "items": {
+            "$ref": "#/$defs/EventBody"
+          },
+          "type": "array"
+        },
+        "page": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stream": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "stream",
+        "at_seq",
+        "page",
+        "last",
+        "ops"
+      ],
+      "type": "object"
+    },
+    "SubscribeMode": {
+      "anyOf": [
+        {
+          "enum": [
+            "replay",
+            "snapshot"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Open enum: unknown values must be accepted. Known: replay snapshot "
+    },
+    "SubscribeParams": {
+      "properties": {
+        "after_seq": {
+          "description": "Last seq the client has applied. Omit to start from a snapshot.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stream": {
+          "description": "`index` or `session/<session_id>`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stream"
+      ],
+      "type": "object"
+    },
+    "SubscribeResult": {
+      "properties": {
+        "at_seq": {
+          "description": "Seq the snapshot reflects, or the replay starting point (`after_seq`).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "head_seq": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "$ref": "#/$defs/SubscribeMode"
+        },
+        "stream": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "stream",
+        "mode",
+        "at_seq",
+        "head_seq"
+      ],
+      "type": "object"
+    },
+    "TurnCompleted": {
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/TurnStatus"
+        },
+        "stop_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "turn_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "status"
+      ],
+      "type": "object"
+    },
+    "TurnStarted": {
+      "properties": {
+        "turn_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id"
+      ],
+      "type": "object"
+    },
+    "TurnStatus": {
+      "anyOf": [
+        {
+          "enum": [
+            "running",
+            "completed",
+            "cancelled",
+            "failed",
+            "interrupted"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Open enum: unknown values must be accepted. Known: running completed cancelled failed interrupted "
+    },
+    "UnknownEvent": {
+      "properties": {
+        "data": {
+          "default": null
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "UnknownTagged": {
+      "additionalProperties": true,
+      "description": "Fallback for an internally tagged union member this version does not know.",
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "VersionRange": {
+      "properties": {
+        "max": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "min": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "min",
+        "max"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cupper host protocol",
+  "x-max-frame-bytes": 64000,
+  "x-mergeable-event-types": [
+    "item.delta"
+  ],
+  "x-methods": {
+    "blob/get": {
+      "params": {
+        "$ref": "#/$defs/BlobGetParams"
+      },
+      "result": {
+        "$ref": "#/$defs/BlobGetResult"
+      }
+    },
+    "initialize": {
+      "params": {
+        "$ref": "#/$defs/InitializeParams"
+      },
+      "result": {
+        "$ref": "#/$defs/InitializeResult"
+      }
+    },
+    "interaction/respond": {
+      "params": {
+        "$ref": "#/$defs/InteractionRespondParams"
+      },
+      "result": {
+        "$ref": "#/$defs/InteractionRespondResult"
+      }
+    },
+    "session/create": {
+      "params": {
+        "$ref": "#/$defs/SessionCreateParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionCreateResult"
+      }
+    },
+    "session/interrupt": {
+      "params": {
+        "$ref": "#/$defs/SessionInterruptParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionInterruptResult"
+      }
+    },
+    "session/send": {
+      "params": {
+        "$ref": "#/$defs/SessionSendParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionSendResult"
+      }
+    },
+    "stream/subscribe": {
+      "params": {
+        "$ref": "#/$defs/SubscribeParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SubscribeResult"
+      }
+    }
+  },
+  "x-notifications": {
+    "stream/events": {
+      "params": {
+        "$ref": "#/$defs/StreamEventsParams"
+      }
+    },
+    "stream/reset": {
+      "params": {
+        "$ref": "#/$defs/StreamResetParams"
+      }
+    },
+    "stream/snapshot": {
+      "params": {
+        "$ref": "#/$defs/StreamSnapshotParams"
+      }
+    }
+  },
+  "x-protocol-version": 1
+}
