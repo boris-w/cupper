@@ -77,7 +77,8 @@ sequenceDiagram
   else 本地模式
     H-->>R: workspace.ready（项目目录）
   end
-  H->>A: Attach New（cwd 的 realpath、config）
+  H->>H: 重新扫描项目信任（5.2.6），决定 project_config
+  H->>A: Attach New（cwd 的 realpath、config、project_config）
   opt 该 agent 的适配器还没运行
     A->>A: 等运行时就绪，核对 node 的 cdhash 和 adapter.mjs 的 sha256
     A->>AD: posix_spawn（独立进程组、环境变量白名单），立即写 adapters 表
@@ -358,4 +359,35 @@ sequenceDiagram
   H-->>R: 结果（removed、kept 或 blocked）
   H-->>R: 索引流 session.removed（archived）
   Note over R,H: 恢复时：分支还在就 worktree add 重建（必要时先 prune），否则会话只读
+```
+
+## 5.5.10 添加项目与信任（安全 #2，待用户确认 U-R1）
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as 用户
+  participant R as 渲染进程
+  participant M as 桌面主进程
+  participant H as 宿主
+  U->>R: 点"添加项目"（真实输入）
+  R->>M: ShellAPI.requestPrivileged（add_project）
+  M->>U: 系统的选择目录对话框
+  M->>H: project/add（control 连接）
+  H->>H: realpath；扫描 .claude/、.mcp.json、.codex/，算信任摘要
+  alt 扫描范围里没有任何文件
+    H->>H: 直接记为 trusted（auto_empty）
+    H-->>M: project_id、trust（trusted）
+  else 有项目配置
+    H-->>M: project_id、trust（untrusted、findings、trust_digest）
+    M->>U: 原生确认框：逐项列出 hooks、env、apiKeyHelper、MCP 服务器、skills 等，默认按钮"不信任"
+    alt 用户选择信任
+      M->>H: project/trust（trust_digest）
+      H->>H: 重新扫描，摘要一致才写 trusted；不一致返回 digest_mismatch，主进程重新取内容再确认
+    else 不信任
+      Note over H: 保持 untrusted：Claude 只加载用户级配置，Codex 不能用
+    end
+  end
+  H-->>R: 索引流 project.upserted（trust_state）
+  Note over H: 之后每次 Attach、每次发送 prompt 之前、每个回合结束时都重新扫描；摘要变了就转为 stale，暂停队列，经原生确认框展示差异
 ```

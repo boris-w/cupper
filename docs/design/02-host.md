@@ -25,6 +25,7 @@
 | `runtime` 运行时安装器 | 安装和校验 Node、适配器（ADR-08） | `RuntimeHandle` | reqwest、cupper-sys | `Manifest`（编译期内嵌） | 1 个 actor |
 | `supervisor` 进程监护 | 子进程登记与清理、自检、空闲退出、防休眠、有序退出 | `SupervisorHandle` | cupper-sys、store | `ChildRecord` | 1 个 actor |
 | `diag` 诊断 | 日志初始化、脱敏层、诊断包 | — | tracing | — | — |
+| `trust` 项目信任 | 扫描项目自带的 agent 配置、计算信任摘要、判定信任状态（[5.2.6](#项目信任)） | 纯函数加只读文件访问 | — | `TrustScan`、`TrustState` | 由 `IndexActor` 和会话 actor 调用 |
 | `clock` 时间 | 宿主内唯一的时间来源和 ID 生成器（[5.2.16](#5216-时间与可测性)） | `Clock`、`IdGen` | — | `SystemClock`、`ManualClock` | 共享结构 |
 
 ## 5.2.2 模块关系
@@ -221,6 +222,31 @@ stateDiagram-v2
 | Claude 的 CLI 在回合中崩溃（`-32603`） | 回合标为 `failed`，写 `notice`。下一次发送收到 "Session not found" 时，自动 `session/resume` 再重发一次（只在这个 prompt 还没有产生任何更新时重发） |
 | Codex 的 app-server 被杀（`1001`，`restartable: true`） | 回合标为 `failed`，写 `notice`；下一个 prompt 由 codex-acp 自动重启 app-server |
 | 宿主崩溃 | 见 [5.2.13](#5213-进程监护与宿主生命周期) 的启动恢复 |
+
+### 项目信任
+
+安全 #2，纪要 D9。**是否增加这一步，待用户确认（U-R1）；本设计按建议"采用"来写。**
+
+结论：cupper 接手 CLI 的工作区信任对话框。项目经用户在原生确认框里信任之后，会话才加载项目自带的 agent 配置；未信任时，Claude 只加载用户级配置，Codex 不能使用。用户级的 MCP、hooks、插件照常继承（AG-6）。
+
+- **为什么需要**：经 ACP 运行时，SDK 会话不显示信任对话框，仓库里的 hooks、`env`、`apiKeyHelper`、`.mcp.json` 照常生效（Claude Code 文档）。已核实：claude-agent-acp 0.91.0 默认 `settingSources: ["user","project","local"]`；codex-acp 2.2.2 在每个会话的配置覆盖里把 cwd 设为 `trust_level = "trusted"`。
+- **扫描**（`trust` 模块）：对象是会话实际使用的工作区（本地模式是项目目录，worktree 模式是 worktree）。
+
+  | 范围 | 用途 |
+  |---|---|
+  | `.claude/` 下的全部文件、`.mcp.json`、`.codex/` 下的全部文件（递归，不跟随符号链接，符号链接记录它指向的路径） | **信任摘要**：按相对路径排序，对每个文件的路径和完整内容做 sha-256。按完整内容算，不按已知的键算，CLI 以后新增的可执行键同样会被覆盖（安全确认 ①） |
+  | 从上述文件里解析出的 hooks、`env`、`apiKeyHelper`、`statusLine`、MCP 服务器、skills、agents、commands，以及 `.codex/` 里的配置项和 hooks | **findings**：只用于在原生确认框里展示 |
+
+  文件超过 2,000 个或合计超过 16 MB 时扫描失败，项目保持未信任，确认框说明原因。
+- **状态**：`untrusted`（默认）→ 用户在原生确认框里信任 → `trusted`（记下摘要）；之后重新扫描时摘要变了 → `stale`，按未信任处理，直到再次确认。扫描范围里一个文件都没有的项目，添加时直接记为 `trusted`（`trusted_by: auto_empty`），不弹确认框；以后出现了这些文件，摘要变化，照样转为 `stale`。流程见 [5.5.10](05-flows.md#5510-添加项目与信任)。
+- **重新扫描的时机**：添加项目时；每次 Attach（新建或 resume）之前；**每次发送 prompt 之前**（安全确认 ②：用户在两个回合之间切换分支后，下一个回合会带着新的项目配置运行）；每个回合结束时。
+- **未信任或 `stale` 时**：
+  - Claude：Attach 时在 `session/new` 和 `session/resume` 的 `_meta.claudeCode.options` 里传入 `settingSources: ["user"]`（[5.6.2](06-agent-driver.md#562-驱动接口)），`session.configured` 写 `project_config: ignored`，界面显示"未信任：项目配置未加载"。
+  - Codex：Attach 返回 `unavailable`（`reason: project_untrusted`），因为 codex-acp 无法关闭项目配置。
+  - 已经信任、运行中变为 `stale`：暂停队列（原因 `project_config_changed`），写 `notice{code: project_config_changed}`；界面经原生确认框展示差异。用户可以重新信任；Claude 会话也可以选择"不加载项目配置继续"，宿主先 `session/close` 再带 `settingSources: ["user"]` resume（适配器发现这个选项变了会重建会话，已核实）。
+- **谁能信任**：`project/trust` 的 scope 是 privileged，只能由桌面主进程在原生确认后经 control 连接发送（[5.8.3](08-security.md#583-权限矩阵)）。CLI 提权后可以添加项目，但添加的项目是未信任的。
+- **能力探测目录**：每次探测前把 `<数据目录>/probe/<agent>/` 删掉重建为空目录（0700），视为已信任（安全确认 ④）。
+- **残余风险**：回合进行中 agent 改写了项目配置，CLI 可能在回合内就加载它（是否热加载，未核实，待定问题 Q28）；cupper 最迟在下一个 prompt 之前发现并暂停。安全边界说明写明这一点，并建议开启 agent 自带的沙箱（[5.8.7](08-security.md#587-安全边界说明)）。
 
 ### 配置项
 

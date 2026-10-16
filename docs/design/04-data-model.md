@@ -45,7 +45,11 @@ CREATE TABLE projects (
   repo_key       TEXT,                     -- sha256(git_common_dir) 前 16 位，快照对象库的目录名
   position       INTEGER NOT NULL,
   added_at       INTEGER NOT NULL,
-  removed_at     INTEGER
+  removed_at     INTEGER,
+  trust_state    TEXT NOT NULL DEFAULT 'untrusted',  -- untrusted | trusted | stale（5.2.6 项目信任）
+  trust_digest   TEXT,                     -- 信任时的摘要：.claude/、.mcp.json、.codex/ 全部文件的完整内容
+  trusted_at     INTEGER,
+  trusted_by     TEXT                      -- pr_desktop、pr_test，或 auto_empty（扫描范围里没有任何文件）
 );
 
 CREATE TABLE sessions (

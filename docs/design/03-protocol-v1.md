@@ -112,7 +112,9 @@
 
 | 方法 | 类型 | 参数要点 | 结果要点 | 可能的错误 | 幂等 | scope | 里程碑 |
 |---|---|---|---|---|---|---|---|
-| `project/add` | 请求 | `{command_id, path}` | `{project_id}`（同一路径重复添加返回已有的 ID） | `not_found`（路径不存在） | 命令 | write | M1a |
+| `project/add` | 请求 | `{command_id, path}` | `{project_id, trust: {state, findings, trust_digest}}`（同一路径重复添加返回已有的 ID；新项目总是 `untrusted`） | `not_found`（路径不存在） | 命令 | write | M1a |
+| `project/trust` | 请求 | `{command_id, project_id, trust_digest}` | `{trust_state}` | `conflict/digest_mismatch`（确认之后项目配置又变了）、`unavailable/scan_failed` | 命令 | privileged（只能经原生确认，[5.2.6](02-host.md#项目信任)） | M1a |
+| `project/trust_info` | 请求 | `{project_id}` | `{state, findings, trust_digest, diff_from_trusted?}`：重新扫描，供主进程弹原生确认框 | `not_found` | 天然 | read | M1a |
 | `project/remove` | 请求 | `{command_id, project_id}` | `{}`（项目下的会话一并归档） | `conflict`（有运行中的回合） | 命令 | write | M1b |
 | `agents/capabilities` | 请求 | `{agent}` | 该 agent 最近一次的能力描述（[5.3.7](#537-会话能力描述)）及其采集时间 | `unavailable`（CLI 或运行时不可用，带 `reason`） | 天然 | read | M1a |
 | `agents/refresh` | 请求 | `{agent}` | `{status}`：重新发现 CLI、检查版本；能力缓存为空时做一次探测 | `unavailable` | 天然 | write | M1a |
@@ -183,7 +185,7 @@
 
 | type | 可合并 | data 要点 | 何时写入 |
 |---|---|---|---|
-| `project.upserted` | 否 | `{project_id, name, path, is_git, added_at, position}` | 添加、改名、排序 |
+| `project.upserted` | 否 | `{project_id, name, path, is_git, added_at, position, trust_state}`（`trust_state` 见 [5.2.6](02-host.md#项目信任)） | 添加、改名、排序、信任状态变化 |
 | `project.removed` | 否 | `{project_id}` | 移除 |
 | `session.upserted` | 否 | `SessionSummary {session_id, project_id, agent, title, title_source, workspace_kind, branch?, status, unread, pending_interactions, last_activity_at, error_code?, read_only}` | 状态、标题、分支、未读变化（`IndexActor` 合并 100 ms 内的连续变化） |
 | `session.removed` | 否 | `{session_id, reason: archived}` | 归档 |
@@ -198,7 +200,7 @@
 
 | type | 可合并 | data 要点 | 何时写入 |
 |---|---|---|---|
-| `session.configured` | 否 | `{agent, workspace: {kind, path, branch?, base_ref?}, config: {<option>: value}, read_only}`；后写的覆盖先写的 | 创建、配置变化、恢复 |
+| `session.configured` | 否 | `{agent, workspace: {kind, path, branch?, base_ref?}, config: {<option>: value}, read_only, project_config: loaded\|ignored}`；后写的覆盖先写的 | 创建、配置变化、恢复、项目信任状态变化 |
 | `session.capabilities` | 否 | 能力描述（[5.3.7](#537-会话能力描述)） | agent 会话建立或 resume 后；能力变化时 |
 | `workspace.preparing` | 否 | `{phase: worktree_add\|checkout\|refresh, progress?}` | 创建 worktree 期间 |
 | `workspace.ready` / `workspace.failed` | 否 | `{path, branch?}` / `{code}` | 准备完成或失败 |
@@ -343,7 +345,7 @@ ConfigOption {
 | `conflict` | `already_resolved`、`turn_mismatch`、`digest_mismatch`、`too_early`、`version_mismatch`、`stale_diff`、`outcome_unknown`、`turn_running` | 否 | 收起或刷新；`already_resolved` 显示"已在别处处理"（AP-4） |
 | `expired` | `adapter_exited`、`host_restarted` | 否 | 收起卡片 |
 | `unsupported` | `data.capability` 指出能力；`not_a_repo` | 否 | 隐藏功能 |
-| `unavailable` | `cli_missing`、`cli_not_logged_in`、`cli_too_old`、`runtime_installing`、`runtime_failed`、`adapter_starting`、`adapter_crashed`、`pending_upgrade`、`quota_exhausted`、`app_not_found`、`snapshot_missing` | 视 reason | 显示恢复指引（AG-2、MS-5） |
+| `unavailable` | `cli_missing`、`cli_not_logged_in`、`cli_too_old`、`runtime_installing`、`runtime_failed`、`adapter_starting`、`adapter_crashed`、`pending_upgrade`、`quota_exhausted`、`app_not_found`、`snapshot_missing`、`project_untrusted`、`scan_failed` | 视 reason | 显示恢复指引（AG-2、MS-5） |
 | `agent_error` | `data.agent_code`、`data.agent_message`（截断、脱敏） | 否 | 显示 |
 | `git_error` | `hook_failed`、`nothing_to_commit`、`auth_failed`、`rejected`、`lock_held`（M1 新增） | 视 reason | 显示 stderr 摘要 |
 | `idempotency_mismatch` | — | 否 | 程序错误 |

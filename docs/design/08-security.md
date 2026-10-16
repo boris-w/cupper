@@ -75,6 +75,8 @@ sequenceDiagram
 | `session/mark_read` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `blob/put` | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ | ✓（MB-9 附图，P1） |
 | `project/add`、`project/remove` | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ | ✗（SEC-9：只能在已有项目里新建会话） |
+| `project/trust_info` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `project/trust`（[5.2.6](02-host.md#项目信任)） | 原生确认 | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ |
 | `session/create`（普通配置）、`session/send`、`session/interrupt`、`session/queue_resume` | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ | ✓（MB-4、MB-7；新建会话为 MB-9，P1） |
 | `session/set_config`（普通值）、`session/rename`、`session/archive`、`session/restore`、`agents/refresh`、`agents/restart` | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ | 仅 `set_config` 的普通值（MB-9，P1） |
 | `session/create`、`session/set_config` 选择完全访问 | 原生确认 | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ |
@@ -161,6 +163,7 @@ M1b 在用户文档里写清 SEC-8 能做到和做不到的（ADR-05、SP-4b 草
 - agent 的沙箱开着时，agent 执行的命令连不上宿主；前提是 Codex 没有为工作区模式打开网络访问（打开后放行所有 Unix 套接字），Claude Code 没有配置 `allowUnixSockets`。
 - 不在沙箱里的命令（用户批准过的、MCP、hooks）能连上，但只有只读权限；写操作和审批都要用户在桌面端确认。
 - 冒充宿主会被 UI 识破；认证不依赖可被偷走的静态凭据。
+- 未经信任的项目，Claude 只加载用户级配置，Codex 不能使用；项目自带的 hooks、MCP 服务器、`env`、`apiKeyHelper` 在用户确认信任之前不会生效。信任之后项目配置又变了，cupper 最迟在下一个 prompt 之前发现并要求再次确认；但会话进行中被改写的配置，CLI 可能在当前回合内就加载（[5.2.6](02-host.md#项目信任)）。
 - 宿主自动执行的 git 不会运行仓库配置里的程序（fsmonitor、hooks、过滤器、diff 驱动）。用户在 cupper 里点"提交"时会运行仓库的 hooks，风险与在终端里提交相同；本会话期间仓库的 hooks 或配置有变化时，cupper 会在提交前提示。
 - 挡不住同一用户下、在沙箱外有明确恶意的进程：它可以改 agent 自己的权限配置和 cupper 的数据目录、杀掉宿主、经 launchd 或 `open` 绕过血缘检查、对确认框做社会工程。
 - 开发构建和自行构建的本地鉴权较弱。

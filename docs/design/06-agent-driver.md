@@ -40,7 +40,7 @@ flowchart LR
 
 | 命令 | 参数 | 回复 / 后续事件 | 说明 |
 |---|---|---|---|
-| `Attach`（请求） | `session_id`、`New {cwd, config}` 或 `Resume {agent_session_id, cwd, config}`、事件发送端 | `AttachInfo {agent_session_id, instance_id, config_options, commands, caps}` | 需要时先拉起适配器（等待运行时就绪）；`New` 对应 `session/new`，`Resume` 对应 `session/resume`；之后立即应用 `config`（SP-4a 的 `apply_prefs`，resume 后也要重新应用） |
+| `Attach`（请求） | `session_id`、`New {cwd, config}` 或 `Resume {agent_session_id, cwd, config}`、`project_config: load \| ignore`、事件发送端 | `AttachInfo {agent_session_id, instance_id, config_options, commands, caps}` | 需要时先拉起适配器（等待运行时就绪）；`New` 对应 `session/new`，`Resume` 对应 `session/resume`；之后立即应用 `config`（SP-4a 的 `apply_prefs`，resume 后也要重新应用）。`project_config` 由项目信任决定（[5.2.6](02-host.md#项目信任)）：Claude 为 `ignore` 时在 `_meta.claudeCode.options` 里传 `settingSources: ["user"]`；Codex 为 `ignore` 时直接返回 `unavailable`（`project_untrusted`） |
 | `Prompt` | `agent_session_id`、`content: [PromptBlock]` | 之后发 `PromptDone` 或 `PromptFailed` | 文本、图片（base64）、`resource_link`；评论块由宿主排成文本 |
 | `Steer`（请求） | `agent_session_id`、`content` | `SteerOutcome: Injected \| StartedNewTurn \| PromptRequired \| Unsupported`，5 s 超时 | 走 `_session/steering` 扩展；总是带 `idleBehavior: promptRequired`（Codex 会忽略它，见规避清单） |
 | `Cancel` | `agent_session_id` | — | `session/cancel` 通知 |
@@ -151,7 +151,7 @@ ACP 的 `configOptions` 按 `category` 映射到 cupper 的配置项，具体取
 - **来源**：`initialize` 的响应（会话能力、`_meta.steering.supported`、`_meta.claudeCode.promptQueueing`）；`session/new` 或 `session/resume` 的响应（`configOptions`）；随后 2–5 ms 到达的 `available_commands_update`（Claude 在每个回合开始时还会再推一次）。
 - **存放**：`agent_capabilities` 表，每种 agent 一行；适配器版本或 CLI 版本变化时作废。每次有会话 `Attach` 成功都刷新。
 - **新建会话页**（AG-4、ADR-09）：调用 `agents/capabilities` 取缓存，第一条消息发出之前就能显示模型、推理强度、权限模式和斜杠命令。
-- **缓存为空时**（首次使用）：`agents/refresh` 做一次探测：在 `<数据目录>/probe/<agent>/` 这个空目录里 `session/new`，读取配置和命令（等 `available_commands_update` 最多 200 ms），然后 `session/close`。Claude 的代价约 0.8 秒；Codex 的探测会拉起用户的 MCP 且不释放，所以探测后把 Codex 适配器标为"空闲时回收"。只建会话不发 prompt，两边都不会留下会话记录（SP-1）。
+- **缓存为空时**（首次使用）：`agents/refresh` 做一次探测：先把 `<数据目录>/probe/<agent>/` 删掉重建为空目录（0700，[5.2.6](02-host.md#项目信任)），在里面 `session/new`，读取配置和命令（等 `available_commands_update` 最多 200 ms），然后 `session/close`。Claude 的代价约 0.8 秒；Codex 的探测会拉起用户的 MCP 且不释放，所以探测后把 Codex 适配器标为"空闲时回收"。只建会话不发 prompt，两边都不会留下会话记录（SP-1）。
 
 ## 5.6.8 资源回收
 
