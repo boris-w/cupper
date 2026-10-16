@@ -35,7 +35,7 @@ flowchart LR
 | 会话宿主 | **Rust** 写的独立无界面进程，打包成 helper App 放在 App 包内；M1 由 App 拉起，M2 改为开机常驻 | 提议 | 签名干净，适合作信任锚；Rust ACP SDK 有 Zed 的生产验证；M3 可以和 iOS 共享代码 | ADR-01、ADR-02 |
 | 宿主与客户端的协议 | 自有 JSON-RPC。帧格式：长度 + 类型 + 负载，单帧不超过 64 KB；seq 连续，并支持合并的区间事件；命令幂等；由 Rust 类型生成 JSON Schema，再生成 TS 和 zod | 提议 | 和 ACP、Codex 的做法一致；M3 能直接套上加密，不用返工 | ADR-04 |
 | 本地认证 | Unix 套接字；用审计令牌加代码签名识别 UI；**每条消息都核对对端身份**；命令行工具默认只读 | 提议，已有 SP-4b 实测支持 | 不存可以被偷走的凭据；实测能挡住 exec 和 fork 冒充 | ADR-05 |
-| agent 接入 | ACP；`claude-agent-acp` 驱动本机的 claude，`codex-acp` 驱动本机的 codex；适配器锁定版本 | 方向已定，细节待 SP-1、SP-2 | 不再分发受 Anthropic 商业条款约束的组件 | ADR-07、ADR-08（待定） |
+| agent 接入 | ACP：`claude-agent-acp` 驱动本机的 claude，`codex-acp` 驱动本机的 codex；**排队、历史、崩溃恢复都由宿主负责**；每种 agent 只起一个适配器进程，多个会话共用 | 提议，有 SP-1 实测支撑；分发方式待 SP-2 | 实测：并发发送 prompt 会丢回复或卡死；适配器回放的历史没有时间戳，也不完整；Codex 拒绝审批会结束整个回合 | ADR-07、ADR-09；ADR-08（待定） |
 | Node 运行时 | 只给适配器用，与 Electron 自带的 Node 分开；具体从哪里来待 SP-2 定 | 待定 | 官方 Node 带着放宽注入防护的 entitlement，不能跑可信代码 | ADR-08（待定） |
 | 存储 | SQLite（只由宿主写入）；事件日志；blob；全文检索 FTS5 | 方向已定，细节待定 | — | ADR-06（待定） |
 | Git | **git 命令行**（不用 libgit2，暂不用 gix）；快照用临时 index，写入 cupper 私有的对象库，用户的 `.git` 一个字节都不写；hunk 操作用 `git apply`；worktree 放在仓库外，清理前按 7 条规则检查 | 提议，SP-5 实测支持 | libgit2 在 linux 等仓库上直接失败；git 命令行最正确，9.6 万个文件的仓库快照约 0.3 s | ADR-10 |
@@ -60,7 +60,6 @@ flowchart LR
 
 | 实测 | 验证什么 | 影响 |
 |---|---|---|
-| SP-1 | 两个适配器的真实行为：审批、提问、排队、插话、取消、恢复 | ADR-06、07、09 |
 | SP-2 | 本机 CLI 与适配器的版本耦合；Node 从哪里来；许可证 | ADR-08、11 |
 | SP-4a | Rust 宿主骨架：双客户端、断线补齐、`kill -9` 后恢复 | ADR-02 是否成立，以及 ADR-04、06 |
 | SP-6 | Electron 界面的长时间运行和多会话性能（M1b 前做） | ADR-03 的性能门槛 |

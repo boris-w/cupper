@@ -44,3 +44,11 @@
 ### 合并
 
 - 合并提交：`e139013`
+
+## 勘误（2026-10-16，来自 SP-1 实测）
+
+以下三处与 SP-1 的实测结果不符，以实测为准。R02 报告原文是历史记录，不做修改。
+
+- 能力矩阵第 18 项"单次编辑的 diff"：Claude 给出的**不是整个文件的全文**，而是带上下文的片段，`_meta` 里另有 `structuredPatch`。Codex 是每个 hunk 一条；如果模型通过 shell 执行 `apply_patch`，就完全没有 diff。
+- 第 34 项"运行状态"：Codex 在 v1 协议下就已经通过 `session_info_update._meta.codex.threadStatus` 提供运行状态（active、idle、systemError，并带有等待审批和等待输入的标记），而不是"只有 v2 才有"。Claude 没有对应的信号。
+- 第 22 项"计划"：在 Claude Code 2.1.296 的 SDK 会话里，TodoWrite 和 Task 系列工具都不可用，所以**拿不到** `plan`。两个 agent 都能稳定拿到的，只有 plan 模式下的 `plan_update`（unstable）。

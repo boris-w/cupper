@@ -34,9 +34,9 @@
 | ADR-04 | 宿主与客户端之间的协议 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-04-host-protocol.md` |
 | ADR-05 | 本地传输与本地客户端认证 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会；SP-4 | `docs/decisions/ADR-05-local-transport-auth.md` |
 | ADR-06 | 事件模型与存储 | 待定 | SP-1、SP-4 | — |
-| ADR-07 | Agent 驱动路径 | 待定 | SP-1；必要时 SP-3 | — |
+| ADR-07 | Agent 驱动路径 | 提议（依据 SP-1） | SP-1；必要时 SP-3 | `docs/decisions/ADR-07-agent-driver.md` |
 | ADR-08 | Agent 程序来源、适配器分发与版本锁定 | 待定 | SP-2 | — |
-| ADR-09 | 适配器进程拓扑 | 待定 | SP-1 | — |
+| ADR-09 | 适配器进程拓扑 | 提议（依据 SP-1） | SP-1 | `docs/decisions/ADR-09-adapter-topology.md` |
 | ADR-10 | Git 与 worktree | 提议（依据 SP-5） | SP-5 | `docs/decisions/ADR-10-git-worktree.md` |
 | ADR-11 | 开源许可证与第三方依赖的再分发 | 待定 | SP-2 | — |
 | ADR-12 | 配对与 E2EE 通道 | M3 前 | SP-8 | — |
@@ -48,7 +48,7 @@
 
 | 编号 | 内容 | 时间 | 状态 | 任务目录 |
 |---|---|---|---|---|
-| SP-1 | 适配器行为实测 | M1 前 | 进行中 | `docs/tasks/SP-1-adapter-behavior/` |
+| SP-1 | 适配器行为实测 | M1 前 | 已完成（已据此起草 ADR-07、ADR-09，并为 ADR-06 提供依据） | `docs/tasks/SP-1-adapter-behavior/` |
 | SP-2 | 本机 CLI 与适配器的版本耦合、分发 | M1 前 | 进行中 | `docs/tasks/SP-2-adapter-distribution/` |
 | SP-3 | 直连 Codex app-server 的对照 | 视情况 | 待定 | — |
 | SP-4a | 宿主骨架走通（Rust） | M1 前 | 进行中 | `docs/tasks/SP-4a-host-skeleton/` |
