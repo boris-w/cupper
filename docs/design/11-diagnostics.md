@@ -1,0 +1,50 @@
+# 5.11 诊断
+
+- 所属：`docs/02-design.md` 第 5 节
+- 依据：NFR-12（日志按大小轮转并脱敏、收集适配器的错误输出为 P0；诊断包为 P1；不上传任何数据）、SEC-6、ADR-06（原始帧的脱敏要求和日志相同）、SP-1（`_auth/status_update` 带账号信息）
+
+## 5.11.1 日志
+
+| 文件（`~/Library/Logs/cupper/`） | 写入方 | 格式 | 轮转 |
+|---|---|---|---|
+| `host.log` | 宿主（tracing） | JSON Lines：时间、级别、模块、消息、结构化字段 | 10 MB × 5 |
+| `adapter-claude.log`、`adapter-codex.log` | 宿主读取适配器的 stderr 管道后写入 | 每行加实例 ID 和时间 | 5 MB × 3 |
+| `main.log` | 桌面主进程；渲染进程的错误经主进程转写 | JSON Lines | 5 MB × 3 |
+
+- 默认级别 `info`；`diagnostics.verbose` 打开后为 `debug`，并允许记录消息内容（默认关闭，修改需要原生确认）。
+- 适配器的 stderr 改为管道由宿主读取（SP-4a 是直接写文件），这样才能脱敏、轮转，并在内存里为每个实例保留最后 64 KB，用于 `error` 条目的错误详情（MS-5）和诊断包。
+- 开发构建同时输出到终端。
+
+## 5.11.2 脱敏
+
+一个脱敏层，同时用于日志、原始帧（ADR-06）、诊断包和录制导出（录制另有 `tools/sanitize` 的更严格规则）。
+
+| 类别 | 规则 |
+|---|---|
+| 路径 | 家目录写成 `~`；用户名写成 `<user>`；`/var/folders/...` 写成 `<tmpdir>` |
+| 主机名 | 写成 `<host>` |
+| 账号 | `_auth/status_update` 只保留 `kind` 和套餐名，去掉 `email`、`organization` 等字段 |
+| 凭据 | `sk-`、`ghp_` 等常见前缀的密钥，JWT，`Bearer` 令牌，URL 里的 userinfo 和查询参数 |
+| 长串 | 40 个字符以上、字母数字混合的 base64 或十六进制串；宿主自己的 blob 哈希、ID 按字段名放行 |
+| 内容 | `info` 级别不记录 prompt、消息正文、命令输出和文件内容；只记录长度和类型 |
+
+脱敏规则有一组样例测试（[5.9.8](09-testing.md#598-其他关键测试)）。
+
+## 5.11.3 诊断包（P1，M2）
+
+`diag/export` 生成一个 zip，经主进程的保存对话框存到用户选择的位置，不上传。
+
+| 内容 | 说明 |
+|---|---|
+| 版本信息 | App、宿主、Node、两个适配器、两个 CLI、git、macOS |
+| 日志 | 上述日志文件（已脱敏） |
+| 适配器错误尾部 | 每个最近的实例保留的最后 64 KB stderr |
+| 状态 | agent 状态、运行时安装状态、设置（不含安全相关的值）、数据库各表的行数和文件大小 |
+| 审计 | 最近 7 天的审计记录 |
+| 可选：会话原始帧 | 用户逐个勾选会话后，才导出这些会话的原始帧（已脱敏） |
+
+## 5.11.4 崩溃信息
+
+- **宿主**：panic hook 把 panic 信息和 backtrace 写进 `host.log` 和 `crash/panic-<时间>.txt`；下次启动时在 `host.updated` 里带"上次异常退出"，界面提示一次，并引导导出诊断包。
+- **桌面端**：Electron 的 `crashReporter` 只在本地保存 minidump（`uploadToServer: false`，SEC-6），诊断包里包含最近的几份。
+- **适配器**：退出状态写进 `adapters` 表和日志，stderr 尾部进入 `error` 条目和诊断包。
