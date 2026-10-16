@@ -148,6 +148,7 @@ flowchart LR
 
 - 每个协议方法必须声明 `SCOPE` 和 `IDEMPOTENCY`；新增方法不声明就编译不过。
 - 每条事件流只有一个写者（见 [5.2.3](02-host.md#523-并发模型)）；其他模块只能通过消息请求写者追加事件。
+- 宿主里的时间只经 `Clock` 获取、定时只经 `Clock` 设置、UUIDv7 只经 `IdGen` 生成；禁用清单由 clippy `disallowed-methods` 强制（[5.2.16](02-host.md#5216-时间与可测性)）。有状态的决策逻辑写成纯核心，不在其中做 I/O 或 await。
 - 宿主运行期间不读取 App 包内的任何文件（ADR-01），唯一的例外是运行时安装器在通过自检之后、按内嵌清单逐文件核对哈希的复制（[5.2.12](02-host.md#5212-运行时安装器)）。
 - `ui-core` 不 import `electron`、`node:*`；渲染进程不出现 `innerHTML`、`dangerouslySetInnerHTML`、`eval`、`new Function`。
 - 界面文案一律走 `@cupper/i18n`，宿主下发语义码，不下发文案（瘦客户端）。

@@ -25,6 +25,7 @@
 | `runtime` 运行时安装器 | 安装和校验 Node、适配器（ADR-08） | `RuntimeHandle` | reqwest、cupper-sys | `Manifest`（编译期内嵌） | 1 个 actor |
 | `supervisor` 进程监护 | 子进程登记与清理、自检、空闲退出、防休眠、有序退出 | `SupervisorHandle` | cupper-sys、store | `ChildRecord` | 1 个 actor |
 | `diag` 诊断 | 日志初始化、脱敏层、诊断包 | — | tracing | — | — |
+| `clock` 时间 | 宿主内唯一的时间来源和 ID 生成器（[5.2.16](#5216-时间与可测性)） | `Clock`、`IdGen` | — | `SystemClock`、`ManualClock` | 共享结构 |
 
 ## 5.2.2 模块关系
 
@@ -78,7 +79,7 @@ flowchart TB
 |---|---|---|
 | 网关 → `SessionActor` | 无界 mpsc，消息带 oneshot 回复 | 同一会话的命令按到达顺序进入邮箱（见下文"命令顺序"） |
 | ACP 回调 → `AgentRuntime` → `SessionActor` | 无界 mpsc | ADR-02：ACP 回调里只做 channel 发送，读 ACP 的路径永远不等待任何下游 |
-| 各写者 → 存储写线程 | std mpsc（写线程阻塞接收），每个操作带 oneshot 确认 | 写线程攒批：最多 2 ms 或 256 个操作提交一次事务 |
+| 各写者 → 存储写线程 | std mpsc（写线程阻塞接收），每个操作带 oneshot 确认 | 写线程攒批（组提交），规则见 [5.2.8](#528-事件存储) |
 | 线路分接 → 存储写线程 | 有界队列（4,096 条），满了就丢弃并计数 | 原始帧只用于诊断和重算，不能反压 ACP 读路径 |
 | 流 → 连接 `Outbox` | 加锁 push，不等待 | 超出该连接的字节预算时重置这条流（SP-4a 已实现） |
 
@@ -99,6 +100,7 @@ flowchart TB
 3. **命令结果和它产生的事件在同一个事务里落盘**（见 [5.2.5](#525-策略与命令账本)），这样崩溃后重试不会重复执行。
 4. clippy 的 `await_holding_lock` 设为 deny。
 5. actor 不 await 长操作：回合开始的快照、连接适配器、建立 agent 会话都另起 task，用完成消息驱动状态机（这是对 SP-4a 的改动：SP-4a 的会话 actor 会 await 适配器启动，期间处理不了中断）。
+6. **时间只经 `Clock` 获取，定时只经 `Clock` 设置，ID 只经 `IdGen` 生成**（[5.2.16](#5216-时间与可测性)）。有状态的决策逻辑写成不做 I/O 的纯核心，actor 只负责执行它给出的动作。
 
 ## 5.2.4 网关
 
@@ -196,6 +198,7 @@ stateDiagram-v2
 ```
 
 - **回合由宿主推导**（ADR-06）：以 `session/prompt` 的请求和响应为界；回合外的更新开一个 `origin: autonomous` 的回合。Codex 的 `threadStatus` 只用于显示运行状态和界定自发回合，有 prompt 在途时以 prompt 的响应为准（SP-1 s05：计划确认请求发出时线程状态已是 `idle`，见 K12 和待定问题 Q11）。回合结束时还没完成的工具调用标为 `abandoned`。
+- **自发回合的结束与出队**（`AutonomousJudge`，待定问题 Q10）：Codex 以 `threadStatus` 变为 idle 为准；Claude 收到带 `cost` 的 `usage_update`，或 10 s 没有更新且没有运行中的工具，就结束自发回合。由静默判定结束的自发回合，结束后再静默 30 s 才允许出队，避免 Claude 其实还在自发工作时就发出新 prompt（K1）。两个时长都经 `Clock`，可以在测试中覆盖。
 - **起始快照**：进入 `Preparing` 时另起 task 拍快照（ADR-10 要求回合开始时同步拍，这里的"同步"指 prompt 等快照完成再发），超过 3 s 就不等了，这个回合的 diff 标为不可用。
 
 ### 排队、Steer、中断（CP-6、CP-7）
@@ -252,7 +255,7 @@ stateDiagram-v2
 
 | 组件 | 说明 |
 |---|---|
-| 写线程 | 持有唯一的写连接；从 channel 攒批（≤ 2 ms 或 ≤ 256 个操作），每个数据库一个事务，提交后逐个回复确认。操作类型：追加事件、行级 upsert（会话、回合、交互、队列、账本）、检查点、回合快照、原始帧（不需要确认）、审计、清理 |
+| 写线程 | 持有唯一的写连接，组提交：<br>- 取出队列里现有的操作，最多 256 个；队列为空或攒够 256 个就提交。生产环境（`SystemClock`）在队列为空时最多再等 2 ms 凑批，测试环境（`ManualClock`）不等，但攒批逻辑照常开着，组提交在测试里同样被覆盖；<br>- 每个数据库一个事务，每个操作包在自己的 savepoint 里：某个操作失败只回滚它自己，并单独回复错误，同批的其他操作照常提交；<br>- 提交后逐个回复确认。<br>操作类型：追加事件、行级 upsert（会话、回合、交互、队列、账本）、检查点、回合快照、原始帧（不需要确认）、审计、清理 |
 | 读连接池 | 4 个只读连接（WAL 允许并发读），供补发、历史分页、查询使用，经 `spawn_blocking` 调用 |
 | `Streams` | 沿用 SP-4a 的 `hub`，但把 `append` 拆成上文的三步；流状态懒加载（检查点 + 其后的事件） |
 | 视图 | `IndexView`、`SessionView` 放在 `cupper-protocol::view`，宿主、CLI 和 TS 客户端（另一份实现，用金样例交叉验证）共用同一套语义 |
@@ -412,9 +415,9 @@ SP-4a 的代码由 M1a 的任务迁移进 `crates/`（复制后按下表调整�
 | `host/auth.rs` | `policy` + `gateway` | 部分沿用 | 加签名校验、`dev_key`、提权、角色；scope 表改由协议常量驱动 |
 | `host/hub.rs` | `store::streams` | 沿用不变式，重构实现 | `append` 拆成"分配 → 写线程提交 → 加锁应用与扇出"；单写者；懒加载与淘汰 |
 | `host/store.rs` | `store` | 重写 | 改为写线程加读池；新的表结构（[5.4](04-data-model.md)）；迁移与备份；blob 改为文件 |
-| `host/session.rs` | `orchestrator` + `interaction` | 重构 | 状态机不再 await 长操作；加队列、Steer、自发回合、中断超时；交互代理独立成组件，允许回合外的请求；不再自己持有驱动，改为挂到共享的 `AgentRuntime` |
-| `host/driver.rs` | `driver` | 重构 | 每种 agent 一个适配器进程（ADR-09），按 ACP sessionId 路由；加线路分接、扩展方法、提取层、能力缓存（[5.6](06-agent-driver.md)） |
-| `host/normalize.rs` | `driver::normalize` | 沿用写入时合并逻辑 | 输出改为新的条目模型；按 agent 的提取层取退出码、输出、diff |
+| `host/session.rs` | `orchestrator` + `interaction` | 重构 | 状态机、队列、交互代理改写成纯核心（[5.2.16](#5216-时间与可测性)），actor 只做 I/O 适配；不再直接调用 `Instant::now` 和 `sleep_until`；加队列、Steer、自发回合、中断超时；允许回合外的请求；不再自己持有驱动，改为挂到共享的 `AgentRuntime` |
+| `host/driver.rs` | `driver` | 重构 | 每种 agent 一个适配器进程（ADR-09），按 ACP sessionId 路由；传输改为 `AcpTransport` 接口；加线路分接、扩展方法、提取层、能力缓存（[5.6](06-agent-driver.md)） |
+| `host/normalize.rs` | `driver::normalize` | 沿用写入时合并逻辑 | 已经把 `now` 作为参数，改成 `Coalescer` 纯核心；输出改为新的条目模型；按 agent 的提取层取退出码、输出、diff |
 | `host/host.rs` | `orchestrator::manager` + `supervisor` | 拆分 | 恢复逻辑和 `reap_group` 沿用 |
 | `host/sys.rs` | `cupper-sys` | 沿用 | 合并 SP-4b 的 Security FFI；stderr 改为管道（由宿主读出后经脱敏写日志，便于轮转）；加 csops、IOPM、血缘信息 |
 | `host/main.rs` | `cupper-host` bin | 沿用流程 | 加迁移、自检、运行时安装、`CFRunLoop` 主线程 |
@@ -426,3 +429,43 @@ SP-4a 的代码由 M1a 的任务迁移进 `crates/`（复制后按下表调整�
 | `ts/` 生成链 | `tools/gen-protocol-ts` + `packages/protocol` | 沿用 | 补 SP-4a 报告提出的三处后处理 |
 | `protocol/fixtures/events.json` | `protocol/fixtures/` | 沿用 | 扩充到每种消息和事件 |
 | `smoke/*.sh` | 兼容套件 | 不沿用脚本 | 改由 `cargo xtask compat` 实现 |
+
+## 5.2.16 时间与可测性
+
+结论：宿主里所有和时间有关的规则都经 `Clock` 实现；回合状态机等有状态的决策写成不做 I/O 的纯核心；驱动的传输做成接口。这样性质测试、金样例和故障点测试都可以用虚拟时间确定性地运行，不依赖 CI 的负载（测试 #1）。tokio 的 `time::pause` 只适用于 current_thread runtime，管不到 std 线程和 `spawn_blocking`，所以不用它。
+
+**Clock 与 IdGen**
+
+| 项 | 规格 |
+|---|---|
+| 接口 | `now_mono()`、`now_wall_ms()`、`timer_at(deadline)`（返回可取消的定时器） |
+| 实现 | `SystemClock`（生产）；`ManualClock`（测试，只在显式推进时前进） |
+| 使用者 | 全部 actor 的定时器；normalizer 的 40 ms 写入合并；`IndexActor` 的 100 ms 合并；Preparing 3 s、Steer 5 s、中断兜底 10 s、自发回合判定；400 ms 最短回答间隔；actor 空闲 10 分钟；账本 48 小时；各类保留清理；supervisor 的空闲退出、重启退避、"5 分钟内失败 5 次"、资源采样、Codex 回收 |
+| `IdGen` | 生成全部 UUIDv7（[5.4.4](04-data-model.md#544-id-规则)），时间部分取自同一个 Clock，ID 里的时间和事件的 `ts` 一致 |
+| 例外 | 写线程在队列为空时等待凑批的 2 ms 只影响吞吐，不经 Clock（[5.2.8](#528-事件存储)） |
+| 禁用清单 | clippy `disallowed-methods`，在 `clock` 模块之外禁止调用：`std::time::Instant::now`、`Instant::elapsed`、`SystemTime::now`、`SystemTime::elapsed`、`tokio::time::Instant::now`、`tokio::time::{sleep, sleep_until, interval, interval_at, timeout, timeout_at}`、`std::thread::sleep`、`uuid::Uuid::now_v7` |
+
+**纯核心**
+
+形式统一为 `step(&mut self, input, now) -> Vec<Action>`：不做 I/O，不 await，不读 Clock（`now` 由调用方传入）。
+
+| 纯核心 | 输入 | 输出的动作 |
+|---|---|---|
+| `TurnMachine` | 发送、Steer、中断；驱动事件；快照完成；定时器到期 | 写事件、发驱动命令、设或取消定时器、回复命令 |
+| `QueueCore` | 入队、出队、暂停、恢复 | `queue.updated`、出队开回合 |
+| `InteractionBroker` | agent 的请求、`interaction/respond`、撤回、适配器实例退出 | 写交互事件、应答 ACP、回复命令 |
+| `AutonomousJudge` | 回合外的更新、带 `cost` 的 `usage_update`、静默计时、工具状态 | 开始或结束自发回合、是否允许出队（待定问题 Q10） |
+| `Coalescer` | 文本片段、其他事件到达、定时器 | 刷出合并后的 delta |
+
+`SessionActor` 是适配层：把邮箱里的消息转成 input，执行动作（写存储、调驱动、设定时器），再把执行结果作为新的 input 送回。性质测试直接驱动纯核心（[5.9.8](09-testing.md#598-其他关键测试)）。
+
+**传输接口 `AcpTransport`**：两种实现，子进程 stdio（生产）和内存双工（测试）。线路分接层（[5.6.10](06-agent-driver.md#5610-线路分接层)）位于它之上，内存实现同样经过分接层。金样例的 B 层在进程内运行宿主核心，用内存传输回放录制，以录制里的 `t` 推进 `ManualClock`（[5.9.3](09-testing.md#593-录制与金样例)）。
+
+**test-harness 构建的测试接口**（只在 `test-harness` 特性下编译；方法的 scope 为 `test`，只有 `test_harness` principal 拥有；全部注入点见 [5.9.9](09-testing.md#599-测试替身与注入点)）
+
+| 接口 | 规格 |
+|---|---|
+| `--test-config`（经 stdin 传入，格式见 [5.8.1](08-security.md#581-认证握手固定令牌)） | `clock: system \| manual`；全部时长的覆盖值；故障点；其余注入点 |
+| `test/clock_advance {ms}` | 推进 `ManualClock`。到期的定时器按到期时间的先后全部触发，由此产生的动作全部执行、相关写入已提交、事件已扇出之后才返回。等待外部进程（假 agent）的场合不用它，仍用事件做屏障 |
+| `test/run_maintenance {task}` | 立即运行一次保留清理、账本清理、孤儿 blob 清理等后台任务，完成后返回 |
+| 进程内回放 | 同一规则：当前帧引起的动作全部处理完，才推进到下一帧的 `t` |
