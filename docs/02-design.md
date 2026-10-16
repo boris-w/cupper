@@ -205,7 +205,7 @@ flowchart TB
 | 5.10 构建与发布 | [design/10-release.md](design/10-release.md) | 包结构；签名与公证；Node 运行时与清单；**打包工具的决定**；更新流程（安装空窗）；Electron 版本；发布流水线（产物检查、签名后冒烟） |
 | 5.11 诊断 | [design/11-diagnostics.md](design/11-diagnostics.md) | 日志与轮转；脱敏；诊断包；崩溃信息 |
 | 5.12 M1a 与 M1b | [design/12-milestones.md](design/12-milestones.md) | 两步的范围与退出标准；**M1 全部 P0 需求的追溯矩阵**（验证列引用用例编号）；**契约冻结清单** |
-| 5.13 待定问题 | [design/13-open-issues.md](design/13-open-issues.md) | 待定问题（已关闭 11 个，仍待定 22 个，含 Q26–Q33）；对 ADR-01 至 ADR-11 的修订建议；对 PRD 的影响（已在 PRD v1.2 落实） |
+| 5.13 待定问题 | [design/13-open-issues.md](design/13-open-issues.md) | 待定问题（已关闭 11 个，仍待定 23 个，含 Q26–Q34）；对 ADR-01 至 ADR-11 的修订建议；对 PRD 的影响（已在 PRD v1.2 落实） |
 
 **本节的主要结论**
 
