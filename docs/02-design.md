@@ -1,6 +1,6 @@
 # cupper 技术设计
 
-- 版本：v0.7（M1 前的 ADR-01 至 ADR-11 全部提议；实测 SP-1、2、4a、4b、5 已完成；第 5 节详细设计已按设计评审的结论修订（D02），合并后交用户确认，再打 `gate/design`）
+- 版本：v0.7（M1 前的 ADR-01 至 ADR-11 全部提议；实测 SP-1、2、4a、4b、5 已完成；第 5 节详细设计已按设计评审的结论修订（D02），ADR-01 至 ADR-11 已按评审修订，待用户确认后打 `gate/design`）
 - 日期：2026-10-16
 - 状态：进行中
 - 依据：PRD v1.2（v1.0 打 tag `gate/prd`）；产品-架构对齐会 `docs/meetings/2026-10-16-prd-arch-alignment/`；设计评审会 `docs/meetings/2026-10-16-design-review/`；`gate/design` 前的用户决定 `docs/meetings/2026-10-16-gate-design-decisions/`
@@ -139,17 +139,17 @@ flowchart TB
 
 | 编号 | 主题 | 状态 | 依赖 | 文件 |
 |---|---|---|---|---|
-| ADR-01 | 会话宿主的进程形态与生命周期 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-01-host-process.md` |
-| ADR-02 | 会话宿主的实现语言 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-02-host-language.md` |
-| ADR-03 | 桌面 UI 技术 | 提议（编排者结论：Electron + React；已补充 R05 证据） | R04；用户讨论；必要时 SP-6 | `docs/decisions/ADR-03-desktop-ui.md` |
-| ADR-04 | 宿主与客户端之间的协议 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-04-host-protocol.md` |
-| ADR-05 | 本地传输与本地客户端认证 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会；SP-4 | `docs/decisions/ADR-05-local-transport-auth.md` |
-| ADR-06 | 事件模型与存储 | 提议（依据 SP-4a、SP-1） | SP-1、SP-4 | `docs/decisions/ADR-06-event-model-storage.md` |
-| ADR-07 | Agent 驱动路径 | 提议（依据 SP-1） | SP-1；必要时 SP-3 | `docs/decisions/ADR-07-agent-driver.md` |
-| ADR-08 | Agent 程序来源、适配器分发与版本锁定 | 提议（依据 SP-2） | SP-2 | `docs/decisions/ADR-08-agent-runtime-distribution.md` |
-| ADR-09 | 适配器进程拓扑 | 提议（依据 SP-1） | SP-1 | `docs/decisions/ADR-09-adapter-topology.md` |
-| ADR-10 | Git 与 worktree | 提议（依据 SP-5） | SP-5 | `docs/decisions/ADR-10-git-worktree.md` |
-| ADR-11 | 开源许可证与第三方依赖的再分发 | 提议（cupper 采用 Apache-2.0，用户已确认） | SP-2 | `docs/decisions/ADR-11-license-redistribution.md` |
+| ADR-01 | 会话宿主的进程形态与生命周期 | 提议（技术选型讨论会，2026-10-16）；已按设计评审修订（2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-01-host-process.md` |
+| ADR-02 | 会话宿主的实现语言 | 提议（技术选型讨论会，2026-10-16）；已按设计评审修订（2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-02-host-language.md` |
+| ADR-03 | 桌面 UI 技术 | 提议（编排者结论：Electron + React；已补充 R05 证据）；已按设计评审修订（2026-10-16） | R04；用户讨论；必要时 SP-6 | `docs/decisions/ADR-03-desktop-ui.md` |
+| ADR-04 | 宿主与客户端之间的协议 | 提议（技术选型讨论会，2026-10-16）；已按设计评审修订（2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-04-host-protocol.md` |
+| ADR-05 | 本地传输与本地客户端认证 | 提议（技术选型讨论会，2026-10-16）；已按设计评审修订（2026-10-16） | 技术选型讨论会；SP-4 | `docs/decisions/ADR-05-local-transport-auth.md` |
+| ADR-06 | 事件模型与存储 | 提议（依据 SP-4a、SP-1）；已按设计评审修订（2026-10-16） | SP-1、SP-4 | `docs/decisions/ADR-06-event-model-storage.md` |
+| ADR-07 | Agent 驱动路径 | 提议（依据 SP-1）；已按设计评审修订（2026-10-16） | SP-1；必要时 SP-3 | `docs/decisions/ADR-07-agent-driver.md` |
+| ADR-08 | Agent 程序来源、适配器分发与版本锁定 | 提议（依据 SP-2）；已按设计评审修订（2026-10-16） | SP-2 | `docs/decisions/ADR-08-agent-runtime-distribution.md` |
+| ADR-09 | 适配器进程拓扑 | 提议（依据 SP-1）；已按设计评审修订（2026-10-16） | SP-1 | `docs/decisions/ADR-09-adapter-topology.md` |
+| ADR-10 | Git 与 worktree | 提议（依据 SP-5）；已按设计评审修订（2026-10-16） | SP-5 | `docs/decisions/ADR-10-git-worktree.md` |
+| ADR-11 | 开源许可证与第三方依赖的再分发 | 提议（cupper 采用 Apache-2.0，用户已确认）；已按设计评审修订（2026-10-16） | SP-2 | `docs/decisions/ADR-11-license-redistribution.md` |
 | ADR-12 | 配对与 E2EE 通道 | M3 前 | SP-8 | — |
 | ADR-13 | 中继设计 | M3 前 | — | — |
 | ADR-14 | 推送方案 | M3 前 | SP-7 | — |
