@@ -1,0 +1,286 @@
+{
+  "rows": [
+    {
+      "case": "clean",
+      "check": "safety gate",
+      "result": "safe",
+      "detail": "ok"
+    },
+    {
+      "case": "clean",
+      "check": "plain `git worktree remove`",
+      "result": "REMOVED",
+      "detail": ""
+    },
+    {
+      "case": "modified",
+      "check": "safety gate",
+      "result": "BLOCK: uncommitted changes",
+      "detail": "ok"
+    },
+    {
+      "case": "modified",
+      "check": "plain `git worktree remove`",
+      "result": "refused: fatal: '<tmp>/scratch/wt-root/modified' contains modified or untracked files, use --force to delete it",
+      "detail": ""
+    },
+    {
+      "case": "staged",
+      "check": "safety gate",
+      "result": "BLOCK: uncommitted changes",
+      "detail": "ok"
+    },
+    {
+      "case": "staged",
+      "check": "plain `git worktree remove`",
+      "result": "refused: fatal: '<tmp>/scratch/wt-root/staged' contains modified or untracked files, use --force to delete it",
+      "detail": ""
+    },
+    {
+      "case": "untracked",
+      "check": "safety gate",
+      "result": "BLOCK: untracked files",
+      "detail": "ok"
+    },
+    {
+      "case": "untracked",
+      "check": "plain `git worktree remove`",
+      "result": "refused: fatal: '<tmp>/scratch/wt-root/untracked' contains modified or untracked files, use --force to delete it",
+      "detail": ""
+    },
+    {
+      "case": "ignored-only",
+      "check": "safety gate",
+      "result": "safe",
+      "detail": "ok"
+    },
+    {
+      "case": "ignored-only",
+      "check": "plain `git worktree remove`",
+      "result": "REMOVED",
+      "detail": ""
+    },
+    {
+      "case": "ignored-only",
+      "check": "ignored files reported (warn, not block)",
+      "result": "1 ignored",
+      "detail": ""
+    },
+    {
+      "case": "committed-unpushed",
+      "check": "safety gate",
+      "result": "BLOCK: commits not on any other ref, unpushed commits",
+      "detail": "ok"
+    },
+    {
+      "case": "committed-unpushed",
+      "check": "plain `git worktree remove`",
+      "result": "REMOVED",
+      "detail": ""
+    },
+    {
+      "case": "committed-pushed",
+      "check": "safety gate",
+      "result": "safe",
+      "detail": "ok"
+    },
+    {
+      "case": "committed-pushed",
+      "check": "plain `git worktree remove`",
+      "result": "REMOVED",
+      "detail": ""
+    },
+    {
+      "case": "detached-commits",
+      "check": "safety gate",
+      "result": "BLOCK: commits not on any other ref, unpushed commits",
+      "detail": "ok"
+    },
+    {
+      "case": "detached-commits",
+      "check": "plain `git worktree remove`",
+      "result": "REMOVED",
+      "detail": ""
+    },
+    {
+      "case": "detached-commits",
+      "check": "branch switched / detached detected",
+      "result": "DETACHED",
+      "detail": ""
+    },
+    {
+      "case": "merge-in-progress",
+      "check": "safety gate",
+      "result": "BLOCK: uncommitted changes, operation in progress, commits not on any other ref, unpushed commits",
+      "detail": "ok"
+    },
+    {
+      "case": "merge-in-progress",
+      "check": "plain `git worktree remove`",
+      "result": "refused: fatal: '<tmp>/scratch/wt-root/merge-in-progress' contains modified or untracked files, use --force to delete i",
+      "detail": ""
+    },
+    {
+      "case": "locked",
+      "check": "safety gate",
+      "result": "BLOCK: locked",
+      "detail": "ok"
+    },
+    {
+      "case": "locked",
+      "check": "plain `git worktree remove`",
+      "result": "refused: fatal: cannot remove a locked working tree, lock reason: cupper session running",
+      "detail": ""
+    },
+    {
+      "case": "with-submodule",
+      "check": "safety gate",
+      "result": "BLOCK: initialized submodules",
+      "detail": "ok"
+    },
+    {
+      "case": "with-submodule",
+      "check": "plain `git worktree remove`",
+      "result": "refused: fatal: working trees containing submodules cannot be moved or removed",
+      "detail": ""
+    },
+    {
+      "case": "local-only repo",
+      "check": "unique commits before / after merging into main",
+      "result": "1 -> 0 (unpushed=None)",
+      "detail": "safe after merge"
+    },
+    {
+      "case": "branch-del",
+      "check": "`git branch -d` on unmerged cupper branch",
+      "result": "refused",
+      "detail": "error: the branch 'cupper/branch-del' is not fully merged"
+    },
+    {
+      "case": "branch-del",
+      "check": "worktree removed but branch (and its commits) kept",
+      "result": "yes",
+      "detail": ""
+    },
+    {
+      "case": "rebuild",
+      "check": "`worktree add <path> <existing branch>` restores committed work",
+      "result": "ok",
+      "detail": ""
+    },
+    {
+      "case": "rm -rf",
+      "check": "`worktree list` marks it prunable",
+      "result": "yes",
+      "detail": ""
+    },
+    {
+      "case": "rm -rf",
+      "check": "re-add branch at a new path before prune",
+      "result": "refused",
+      "detail": "fatal: 'cupper/branch-del' is already used by worktree at '<tmp>/scratch/wt-root/branch-del'"
+    },
+    {
+      "case": "rm -rf",
+      "check": "re-add at the SAME path before prune",
+      "result": "refused",
+      "detail": "fatal: '<tmp>/scratch/wt-root/branch-del' is a missing but already registered worktree;"
+    },
+    {
+      "case": "rm -rf",
+      "check": "after `git worktree prune`",
+      "result": "ok",
+      "detail": ""
+    },
+    {
+      "case": "branch in use",
+      "check": "add a 2nd worktree on the same branch",
+      "result": "refused",
+      "detail": "fatal: 'cupper/branch-del' is already used by worktree at '<tmp>/scratch/wt-root/branch-del'"
+    },
+    {
+      "case": "naming",
+      "check": "existing `cupper/*` branches block a branch named `cupper`",
+      "result": "refused",
+      "detail": "fatal: cannot lock ref 'refs/heads/cupper': 'refs/heads/cupper/branch-del' exists; cannot create 'refs/heads/cupper'"
+    },
+    {
+      "case": "naming",
+      "check": "existing branch `cupper` blocks `cupper/x` (D/F ref conflict)",
+      "result": "refused",
+      "detail": "fatal: cannot lock ref 'refs/heads/cupper/x': 'refs/heads/cupper' exists; cannot create 'refs/heads/cupper/x'"
+    },
+    {
+      "case": "naming",
+      "check": "`-b` with an existing branch name",
+      "result": "refused",
+      "detail": "fatal: a branch named 'cupper/branch-del' already exists"
+    },
+    {
+      "case": "naming",
+      "check": "check-ref-format cupper/'fix login'",
+      "result": "invalid",
+      "detail": ""
+    },
+    {
+      "case": "naming",
+      "check": "check-ref-format cupper/'修复-登录'",
+      "result": "valid",
+      "detail": ""
+    },
+    {
+      "case": "naming",
+      "check": "check-ref-format cupper/'a..b'",
+      "result": "invalid",
+      "detail": ""
+    },
+    {
+      "case": "naming",
+      "check": "check-ref-format cupper/'x.lock'",
+      "result": "invalid",
+      "detail": ""
+    },
+    {
+      "case": "naming",
+      "check": "check-ref-format cupper/'ok-name_1'",
+      "result": "valid",
+      "detail": ""
+    },
+    {
+      "case": "inside repo",
+      "check": "main repo status shows the nested worktree",
+      "result": "yes",
+      "detail": "?? .cupper/worktrees/in/"
+    },
+    {
+      "case": "inside repo",
+      "check": "main repo snapshot records it as gitlink (160000)",
+      "result": "yes",
+      "detail": ""
+    },
+    {
+      "case": "move main repo",
+      "check": "worktree usable after the main repo moved",
+      "result": "broken",
+      "detail": "fatal: not a git repository: <tmp>/scratch/wt-main/.git/worktrees/move-test"
+    },
+    {
+      "case": "move main repo",
+      "check": "`git worktree repair <wt>` from the moved repo fixes it",
+      "result": "ok",
+      "detail": "repair: .git file broken: <tmp>/scratch/wt-root/untracked"
+    },
+    {
+      "case": "relative paths",
+      "check": "`worktree add --relative-paths` supported",
+      "result": "yes",
+      "detail": ""
+    },
+    {
+      "case": "relative paths",
+      "check": "side effect on the user's repo config",
+      "result": "extensions.relativeWorktrees=true, repositoryformatversion=1",
+      "detail": "older git / libgit2 may refuse a repo with unknown extensions"
+    }
+  ]
+}

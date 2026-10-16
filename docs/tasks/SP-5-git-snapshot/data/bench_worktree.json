@@ -1,0 +1,165 @@
+{
+  "runs": 3,
+  "repos": [
+    {
+      "repo": "syn-1k",
+      "add_b": {
+        "median_ms": 123.6,
+        "min_ms": 120.8,
+        "max_ms": 129.4,
+        "runs": 3
+      },
+      "safety_check_first": {
+        "median_ms": 178.8,
+        "min_ms": 178.8,
+        "max_ms": 178.8,
+        "runs": 1
+      },
+      "safety_check": {
+        "median_ms": 140.7,
+        "min_ms": 136.8,
+        "max_ms": 142.3,
+        "runs": 3
+      },
+      "remove": {
+        "median_ms": 79.9,
+        "min_ms": 72.3,
+        "max_ms": 93.0,
+        "runs": 3
+      },
+      "rebuild": {
+        "median_ms": 117.8,
+        "min_ms": 117.1,
+        "max_ms": 118.3,
+        "runs": 3
+      },
+      "add_no_checkout": {
+        "median_ms": 16.4,
+        "min_ms": 16.0,
+        "max_ms": 16.7,
+        "runs": 3
+      }
+    },
+    {
+      "repo": "syn-10k",
+      "add_b": {
+        "median_ms": 607.8,
+        "min_ms": 597.3,
+        "max_ms": 620.7,
+        "runs": 3
+      },
+      "safety_check_first": {
+        "median_ms": 282.4,
+        "min_ms": 282.4,
+        "max_ms": 282.4,
+        "runs": 1
+      },
+      "safety_check": {
+        "median_ms": 162.4,
+        "min_ms": 162.4,
+        "max_ms": 164.0,
+        "runs": 3
+      },
+      "remove": {
+        "median_ms": 601.2,
+        "min_ms": 503.1,
+        "max_ms": 712.3,
+        "runs": 3
+      },
+      "rebuild": {
+        "median_ms": 607.3,
+        "min_ms": 585.8,
+        "max_ms": 630.7,
+        "runs": 3
+      },
+      "add_no_checkout": {
+        "median_ms": 17.9,
+        "min_ms": 17.0,
+        "max_ms": 18.0,
+        "runs": 3
+      }
+    },
+    {
+      "repo": "syn-100k",
+      "add_b": {
+        "median_ms": 6239.9,
+        "min_ms": 5933.6,
+        "max_ms": 6273.9,
+        "runs": 3
+      },
+      "safety_check_first": {
+        "median_ms": 799.1,
+        "min_ms": 799.1,
+        "max_ms": 799.1,
+        "runs": 1
+      },
+      "safety_check": {
+        "median_ms": 408.6,
+        "min_ms": 395.8,
+        "max_ms": 409.1,
+        "runs": 3
+      },
+      "remove": {
+        "median_ms": 5095.0,
+        "min_ms": 5010.2,
+        "max_ms": 5126.3,
+        "runs": 3
+      },
+      "rebuild": {
+        "median_ms": 6409.0,
+        "min_ms": 5999.9,
+        "max_ms": 6919.4,
+        "runs": 3
+      },
+      "add_no_checkout": {
+        "median_ms": 15.6,
+        "min_ms": 15.5,
+        "max_ms": 16.0,
+        "runs": 3
+      }
+    },
+    {
+      "repo": "linux",
+      "add_b": {
+        "median_ms": 8253.5,
+        "min_ms": 8098.1,
+        "max_ms": 8575.8,
+        "runs": 3
+      },
+      "safety_check_first": {
+        "median_ms": 1289.1,
+        "min_ms": 1289.1,
+        "max_ms": 1289.1,
+        "runs": 1
+      },
+      "safety_check": {
+        "median_ms": 599.8,
+        "min_ms": 588.1,
+        "max_ms": 613.3,
+        "runs": 3
+      },
+      "fresh_worktree_blockers": [
+        "uncommitted changes"
+      ],
+      "remove": {
+        "median_ms": 5558.2,
+        "min_ms": 5258.2,
+        "max_ms": 5669.5,
+        "runs": 3
+      },
+      "remove_needed_force": true,
+      "rebuild": {
+        "median_ms": 7945.3,
+        "min_ms": 7822.2,
+        "max_ms": 8654.5,
+        "runs": 3
+      },
+      "add_no_checkout": {
+        "median_ms": 18.7,
+        "min_ms": 18.4,
+        "max_ms": 19.0,
+        "runs": 3
+      }
+    }
+  ]
+}

@@ -1,0 +1,580 @@
+{
+  "backend": "git-cli",
+  "version": "git version 2.50.1 (Apple Git-155)",
+  "rows": [
+    {
+      "case": "multi_hunk",
+      "op": "stage hunk B (middle)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "multi_hunk",
+      "op": "stage hunk C (after B staged)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "multi_hunk",
+      "op": "unstage hunk C",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "multi_hunk",
+      "op": "revert hunk A (worktree)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_raw",
+      "op": "stage hunk B (middle)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_raw",
+      "op": "stage hunk C (after B staged)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_raw",
+      "op": "unstage hunk C",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_raw",
+      "op": "revert hunk A (worktree)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_eol_attr",
+      "op": "stage hunk B (middle)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_eol_attr",
+      "op": "stage hunk C (after B staged)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_eol_attr",
+      "op": "unstage hunk C",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_eol_attr",
+      "op": "revert hunk A (worktree)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_autocrlf",
+      "op": "stage hunk B (middle)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_autocrlf",
+      "op": "stage hunk C (after B staged)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_autocrlf",
+      "op": "unstage hunk C",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_autocrlf",
+      "op": "revert hunk A (worktree)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mixed_eol",
+      "op": "stage hunk B",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mixed_eol",
+      "op": "revert hunk A",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "no_eol",
+      "op": "stage last-line hunk (no EOL)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "no_eol",
+      "op": "unstage it",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "no_eol",
+      "op": "revert last-line hunk",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "no_eol",
+      "op": "stage 'add trailing newline'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "no_eol",
+      "op": "revert 'remove trailing newline'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "new_file",
+      "op": "unstage staged new file",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "new_file",
+      "op": "untracked file shows in `git diff`?",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "no (expected): untracked files need `git diff --no-index /dev/null <path>` or status"
+    },
+    {
+      "case": "new_file",
+      "op": "stage untracked file via --no-index patch",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "new_file",
+      "op": "revert untracked file (apply -R deletes it)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "empty_file",
+      "op": "empty new file patch has hunks?",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "hunks=0"
+    },
+    {
+      "case": "empty_file",
+      "op": "stage empty untracked file",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "empty_file",
+      "op": "stage truncation to empty",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "empty_file",
+      "op": "unstage truncation",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "empty_file",
+      "op": "revert truncation",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "deleted_file",
+      "op": "stage deletion",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "deleted_file",
+      "op": "unstage deletion",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "deleted_file",
+      "op": "revert deletion (recreate file + exec bit)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "rename",
+      "op": "staged diff shows rename",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "rename=True hunks=2"
+    },
+    {
+      "case": "rename",
+      "op": "unstage hunk A of a rename (-M patch); want rename+C kept",
+      "backend": "git-cli",
+      "ok": false,
+      "detail": "index[new.txt]: want b'line 00\\nline 01\\nline 02\\nline 03\\nline 04\\nline 05\\nline 06\\nline'… got None; index[old.txt]: want None got b'line 00\\nline 01\\nline 02\\nline 03\\nline 04\\nline 05\\nline 06\\nline'…"
+    },
+    {
+      "case": "rename",
+      "op": "unstage hunk C of the same rename patch afterwards",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "expected failure: error: new.txt: does not exist in index"
+    },
+    {
+      "case": "rename",
+      "op": "--no-renames staged diff",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "new / deleted"
+    },
+    {
+      "case": "rename",
+      "op": "unstage the add side only (--no-renames)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "rename",
+      "op": "unstaged view of a plain `mv`",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "git diff shows: ['deleted']; new path is untracked (only visible via status/snapshot)"
+    },
+    {
+      "case": "binary",
+      "op": "binary patch present",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "GIT binary patch"
+    },
+    {
+      "case": "binary",
+      "op": "stage binary (--binary patch)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "binary",
+      "op": "unstage binary",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "binary",
+      "op": "revert binary",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "binary",
+      "op": "stage binary WITHOUT --binary (expected to fail)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "expected failure: error: img.bin: patch does not apply"
+    },
+    {
+      "case": "mode_change",
+      "op": "units offered for s.sh",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "hunk0,hunk1,mode"
+    },
+    {
+      "case": "mode_change",
+      "op": "stage hunk A (mode lines stripped)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mode_change",
+      "op": "stage mode pseudo-hunk",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mode_change",
+      "op": "stage hunk C",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mode_change",
+      "op": "stage mode-only change",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mode_change",
+      "op": "unstage mode-only change",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mode_change",
+      "op": "revert mode-only change (chmod -x)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mode_change",
+      "op": "[keep mode lines] stage hunk A",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mode_change",
+      "op": "[keep mode lines] stage hunk C from the same (stale) diff",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "symlink",
+      "op": "stage symlink retarget",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "symlink",
+      "op": "unstage symlink retarget",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "symlink",
+      "op": "revert symlink retarget",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "stage 'dir with space/file name.txt'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "unstage 'dir with space/file name.txt'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "revert 'dir with space/file name.txt'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "stage 'unicode/文件-名.txt'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "unstage 'unicode/文件-名.txt'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "revert 'unicode/文件-名.txt'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "stage 'quote/a\"b.txt'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "unstage 'quote/a\"b.txt'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "revert 'quote/a\"b.txt'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "stage 'tab/a\\tb.txt'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "unstage 'tab/a\\tb.txt'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "revert 'tab/a\\tb.txt'",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "conflict",
+      "op": "stage: index changed in the same lines -> refuse",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "expected failure: error: x.txt: patch does not apply"
+    },
+    {
+      "case": "conflict",
+      "op": "revert: worktree changed in the same lines -> refuse",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "expected failure: error: x.txt: patch does not apply"
+    },
+    {
+      "case": "conflict",
+      "op": "revert: unrelated edits + 3-line offset -> applies",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "conflict",
+      "op": "revert 2-file patch, 2nd conflicts -> atomic, x untouched",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "expected failure: error: y.txt: patch does not apply"
+    },
+    {
+      "case": "whitespace_cfg",
+      "op": "stage with user's apply.whitespace=fix (raw git apply)",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "index[w.txt]: want b'line 00\\nline 01\\nline 02 trailing   \\nline 03\\nline 04\\nline 05\\n'… got b'line 00\\nline 01\\nline 02 trailing\\nline 03\\nline 04\\nline 05\\nlin'… | expected: content altered -> must pass --whitespace=nowarn"
+    },
+    {
+      "case": "whitespace_cfg",
+      "op": "stage with --whitespace=nowarn",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "turn_revert",
+      "op": "turn diff includes untracked file created in the turn",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "turn_revert",
+      "op": "revert turn hunk A after unrelated user edit",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "turn_revert",
+      "op": "revert turn-created untracked file",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "turn_revert",
+      "op": "revert turn hunk B after user rewrote it -> refuse",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "expected failure: error: t.txt: patch does not apply"
+    },
+    {
+      "case": "index_lock",
+      "op": "stage while index.lock is held -> refuse, nothing changed",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": "expected failure: remove the file manually to continue."
+    },
+    {
+      "case": "index_lock",
+      "op": "revert (worktree only) while index.lock is held",
+      "backend": "git-cli",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

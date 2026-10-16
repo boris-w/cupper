@@ -1,0 +1,1841 @@
+{
+  "runs": 5,
+  "repos": [
+    {
+      "repo": "syn-1k",
+      "scenarios": {
+        "clean": {
+          "changes": {
+            "modify": 0,
+            "add": 0,
+            "delete": 0
+          },
+          "status": {
+            "median_ms": 13.2,
+            "min_ms": 12.9,
+            "max_ms": 13.7,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 35.5,
+            "min_ms": 34.3,
+            "max_ms": 50.1,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 23.6,
+            "min_ms": 23.1,
+            "max_ms": 23.9,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 44.9,
+            "min_ms": 44.3,
+            "max_ms": 45.3,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 34.3,
+            "min_ms": 34.0,
+            "max_ms": 34.9,
+            "runs": 5
+          },
+          "snap_empty": {
+            "median_ms": 61.6,
+            "min_ms": 60.8,
+            "max_ms": 62.7,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 11.5,
+            "min_ms": 11.4,
+            "max_ms": 11.9,
+            "runs": 5
+          },
+          "stash_create_touched_index": false,
+          "odb_growth": {
+            "loose_objects": 0,
+            "loose_kb": 0
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 9.8,
+            "min_ms": 9.4,
+            "max_ms": 10.9,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 10.2,
+            "min_ms": 9.1,
+            "max_ms": 10.6,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 10.2,
+            "min_ms": 9.7,
+            "max_ms": 11.2,
+            "runs": 5,
+            "bytes": 0
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 47.4,
+            "min_ms": 45.8,
+            "max_ms": 49.0,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 12.1,
+            "min_ms": 11.2,
+            "max_ms": 12.8,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 11.2,
+            "min_ms": 10.3,
+            "max_ms": 11.2,
+            "runs": 5
+          }
+        },
+        "small": {
+          "changes": {
+            "modify": 10,
+            "add": 5,
+            "delete": 1
+          },
+          "status": {
+            "median_ms": 12.9,
+            "min_ms": 12.0,
+            "max_ms": 13.1,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 45.7,
+            "min_ms": 45.0,
+            "max_ms": 46.5,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 36.0,
+            "min_ms": 34.8,
+            "max_ms": 37.9,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 60.1,
+            "min_ms": 58.8,
+            "max_ms": 61.3,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 59.3,
+            "min_ms": 56.7,
+            "max_ms": 69.2,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 31.6,
+            "min_ms": 30.2,
+            "max_ms": 34.6,
+            "runs": 5
+          },
+          "stash_create_touched_index": true,
+          "odb_growth": {
+            "loose_objects": 26,
+            "loose_kb": 104
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 11.5,
+            "min_ms": 11.3,
+            "max_ms": 11.9,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 12.7,
+            "min_ms": 12.6,
+            "max_ms": 12.9,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 12.6,
+            "min_ms": 12.5,
+            "max_ms": 12.9,
+            "runs": 5,
+            "bytes": 13137
+          },
+          "diff_one_file": {
+            "median_ms": 10.8,
+            "min_ms": 10.7,
+            "max_ms": 11.3,
+            "runs": 5
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 47.8,
+            "min_ms": 44.6,
+            "max_ms": 55.2,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 13.9,
+            "min_ms": 13.2,
+            "max_ms": 14.5,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 12.2,
+            "min_ms": 12.1,
+            "max_ms": 12.3,
+            "runs": 5
+          },
+          "hunk_diff_file": {
+            "median_ms": 9.8,
+            "min_ms": 9.1,
+            "max_ms": 10.0,
+            "runs": 5
+          },
+          "hunk_stage": {
+            "median_ms": 10.1,
+            "min_ms": 10.0,
+            "max_ms": 10.7,
+            "runs": 5
+          },
+          "hunk_unstage": {
+            "median_ms": 10.4,
+            "min_ms": 10.1,
+            "max_ms": 10.8,
+            "runs": 5
+          },
+          "hunk_revert": {
+            "median_ms": 9.8,
+            "min_ms": 9.5,
+            "max_ms": 10.1,
+            "runs": 5
+          },
+          "hunk_ops_correct": true
+        },
+        "medium": {
+          "changes": {
+            "modify": 500,
+            "add": 100,
+            "delete": 10
+          },
+          "status": {
+            "median_ms": 13.9,
+            "min_ms": 13.5,
+            "max_ms": 14.9,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 329.5,
+            "min_ms": 315.9,
+            "max_ms": 361.1,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 344.2,
+            "min_ms": 316.7,
+            "max_ms": 398.2,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 351.2,
+            "min_ms": 322.8,
+            "max_ms": 393.8,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 343.5,
+            "min_ms": 329.1,
+            "max_ms": 369.3,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 275.2,
+            "min_ms": 253.4,
+            "max_ms": 328.2,
+            "runs": 5
+          },
+          "stash_create_touched_index": true,
+          "odb_growth": {
+            "loose_objects": 623,
+            "loose_kb": 2492
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 13.2,
+            "min_ms": 12.8,
+            "max_ms": 13.5,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 64.7,
+            "min_ms": 62.7,
+            "max_ms": 68.8,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 47.9,
+            "min_ms": 45.9,
+            "max_ms": 50.0,
+            "runs": 5,
+            "bytes": 386927
+          },
+          "diff_one_file": {
+            "median_ms": 10.1,
+            "min_ms": 9.7,
+            "max_ms": 10.4,
+            "runs": 5
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 83.6,
+            "min_ms": 81.0,
+            "max_ms": 84.5,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 69.4,
+            "min_ms": 68.7,
+            "max_ms": 71.3,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 62.6,
+            "min_ms": 60.2,
+            "max_ms": 78.1,
+            "runs": 5
+          }
+        },
+        "large": {
+          "changes": {
+            "modify": 500,
+            "add": 1000,
+            "delete": 50
+          },
+          "status": {
+            "median_ms": 14.6,
+            "min_ms": 13.7,
+            "max_ms": 15.1,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 716.0,
+            "min_ms": 681.6,
+            "max_ms": 791.9,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 699.3,
+            "min_ms": 680.7,
+            "max_ms": 764.6,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 670.4,
+            "min_ms": 663.5,
+            "max_ms": 680.7,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 725.7,
+            "min_ms": 701.9,
+            "max_ms": 744.9,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 268.3,
+            "min_ms": 251.6,
+            "max_ms": 280.2,
+            "runs": 5
+          },
+          "stash_create_touched_index": true,
+          "odb_growth": {
+            "loose_objects": 1523,
+            "loose_kb": 6116
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 42.0,
+            "min_ms": 37.2,
+            "max_ms": 58.0,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 162.4,
+            "min_ms": 142.2,
+            "max_ms": 275.0,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 105.5,
+            "min_ms": 100.9,
+            "max_ms": 114.7,
+            "runs": 5,
+            "bytes": 1507388
+          },
+          "diff_one_file": {
+            "median_ms": 11.8,
+            "min_ms": 11.5,
+            "max_ms": 12.5,
+            "runs": 5
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 189.0,
+            "min_ms": 159.1,
+            "max_ms": 201.5,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 93.7,
+            "min_ms": 85.4,
+            "max_ms": 100.2,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 73.2,
+            "min_ms": 71.4,
+            "max_ms": 74.0,
+            "runs": 5
+          }
+        }
+      }
+    },
+    {
+      "repo": "syn-10k",
+      "scenarios": {
+        "clean": {
+          "changes": {
+            "modify": 0,
+            "add": 0,
+            "delete": 0
+          },
+          "status": {
+            "median_ms": 25.2,
+            "min_ms": 23.8,
+            "max_ms": 26.8,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 44.5,
+            "min_ms": 44.1,
+            "max_ms": 44.9,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 34.8,
+            "min_ms": 34.1,
+            "max_ms": 35.5,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 54.6,
+            "min_ms": 53.4,
+            "max_ms": 58.4,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 46.2,
+            "min_ms": 44.9,
+            "max_ms": 46.5,
+            "runs": 5
+          },
+          "snap_empty": {
+            "median_ms": 230.1,
+            "min_ms": 222.8,
+            "max_ms": 273.0,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 25.4,
+            "min_ms": 25.1,
+            "max_ms": 32.2,
+            "runs": 5
+          },
+          "stash_create_touched_index": false,
+          "odb_growth": {
+            "loose_objects": 0,
+            "loose_kb": 0
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 11.6,
+            "min_ms": 10.3,
+            "max_ms": 18.0,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 11.6,
+            "min_ms": 10.9,
+            "max_ms": 13.9,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 11.4,
+            "min_ms": 11.1,
+            "max_ms": 12.1,
+            "runs": 5,
+            "bytes": 0
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 60.5,
+            "min_ms": 59.5,
+            "max_ms": 62.8,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 18.6,
+            "min_ms": 17.8,
+            "max_ms": 19.0,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 17.3,
+            "min_ms": 17.2,
+            "max_ms": 18.0,
+            "runs": 5
+          }
+        },
+        "small": {
+          "changes": {
+            "modify": 10,
+            "add": 5,
+            "delete": 1
+          },
+          "status": {
+            "median_ms": 25.3,
+            "min_ms": 24.0,
+            "max_ms": 25.6,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 64.9,
+            "min_ms": 64.2,
+            "max_ms": 67.6,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 59.4,
+            "min_ms": 54.7,
+            "max_ms": 69.1,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 75.2,
+            "min_ms": 74.4,
+            "max_ms": 81.1,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 78.5,
+            "min_ms": 74.4,
+            "max_ms": 86.0,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 49.1,
+            "min_ms": 46.9,
+            "max_ms": 64.3,
+            "runs": 5
+          },
+          "stash_create_touched_index": true,
+          "odb_growth": {
+            "loose_objects": 32,
+            "loose_kb": 128
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 11.2,
+            "min_ms": 11.2,
+            "max_ms": 11.5,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 12.2,
+            "min_ms": 11.9,
+            "max_ms": 12.5,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 11.9,
+            "min_ms": 11.2,
+            "max_ms": 12.9,
+            "runs": 5,
+            "bytes": 13154
+          },
+          "diff_one_file": {
+            "median_ms": 10.4,
+            "min_ms": 9.8,
+            "max_ms": 10.6,
+            "runs": 5
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 62.4,
+            "min_ms": 60.0,
+            "max_ms": 66.7,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 20.9,
+            "min_ms": 20.5,
+            "max_ms": 21.1,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 17.5,
+            "min_ms": 17.3,
+            "max_ms": 17.7,
+            "runs": 5
+          },
+          "hunk_diff_file": {
+            "median_ms": 10.8,
+            "min_ms": 10.6,
+            "max_ms": 11.6,
+            "runs": 5
+          },
+          "hunk_stage": {
+            "median_ms": 12.9,
+            "min_ms": 12.6,
+            "max_ms": 13.2,
+            "runs": 5
+          },
+          "hunk_unstage": {
+            "median_ms": 12.2,
+            "min_ms": 11.9,
+            "max_ms": 12.4,
+            "runs": 5
+          },
+          "hunk_revert": {
+            "median_ms": 9.2,
+            "min_ms": 8.9,
+            "max_ms": 9.8,
+            "runs": 5
+          },
+          "hunk_ops_correct": true
+        },
+        "medium": {
+          "changes": {
+            "modify": 1000,
+            "add": 100,
+            "delete": 10
+          },
+          "status": {
+            "median_ms": 26.4,
+            "min_ms": 26.2,
+            "max_ms": 26.8,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 659.2,
+            "min_ms": 635.9,
+            "max_ms": 692.7,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 642.3,
+            "min_ms": 627.3,
+            "max_ms": 659.6,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 634.4,
+            "min_ms": 607.9,
+            "max_ms": 673.1,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 743.2,
+            "min_ms": 714.7,
+            "max_ms": 758.2,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 599.1,
+            "min_ms": 588.6,
+            "max_ms": 607.3,
+            "runs": 5
+          },
+          "stash_create_touched_index": true,
+          "odb_growth": {
+            "loose_objects": 1307,
+            "loose_kb": 5228
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 20.4,
+            "min_ms": 19.8,
+            "max_ms": 20.8,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 79.5,
+            "min_ms": 78.3,
+            "max_ms": 92.0,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 62.6,
+            "min_ms": 62.0,
+            "max_ms": 64.5,
+            "runs": 5,
+            "bytes": 635413
+          },
+          "diff_one_file": {
+            "median_ms": 9.9,
+            "min_ms": 9.8,
+            "max_ms": 10.5,
+            "runs": 5
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 139.1,
+            "min_ms": 137.5,
+            "max_ms": 139.7,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 118.6,
+            "min_ms": 116.9,
+            "max_ms": 119.5,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 63.7,
+            "min_ms": 62.5,
+            "max_ms": 66.3,
+            "runs": 5
+          }
+        },
+        "large": {
+          "changes": {
+            "modify": 5000,
+            "add": 1000,
+            "delete": 100
+          },
+          "status": {
+            "median_ms": 40.1,
+            "min_ms": 39.2,
+            "max_ms": 41.3,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 2787.4,
+            "min_ms": 2717.8,
+            "max_ms": 2830.7,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 2771.4,
+            "min_ms": 2749.5,
+            "max_ms": 2855.2,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 2652.6,
+            "min_ms": 2610.1,
+            "max_ms": 3055.2,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 3505.9,
+            "min_ms": 3234.4,
+            "max_ms": 3788.9,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 2467.1,
+            "min_ms": 2435.4,
+            "max_ms": 2530.3,
+            "runs": 5
+          },
+          "stash_create_touched_index": true,
+          "odb_growth": {
+            "loose_objects": 6207,
+            "loose_kb": 24848
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 37.4,
+            "min_ms": 36.9,
+            "max_ms": 38.3,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 299.2,
+            "min_ms": 297.6,
+            "max_ms": 317.6,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 236.9,
+            "min_ms": 229.4,
+            "max_ms": 239.6,
+            "runs": 5,
+            "bytes": 3869944
+          },
+          "diff_one_file": {
+            "median_ms": 10.0,
+            "min_ms": 9.5,
+            "max_ms": 10.2,
+            "runs": 5
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 353.7,
+            "min_ms": 342.9,
+            "max_ms": 357.4,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 203.1,
+            "min_ms": 202.1,
+            "max_ms": 205.7,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 241.9,
+            "min_ms": 241.2,
+            "max_ms": 243.6,
+            "runs": 5
+          }
+        }
+      }
+    },
+    {
+      "repo": "syn-100k",
+      "scenarios": {
+        "clean": {
+          "changes": {
+            "modify": 0,
+            "add": 0,
+            "delete": 0
+          },
+          "status": {
+            "median_ms": 139.0,
+            "min_ms": 136.1,
+            "max_ms": 141.7,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 184.2,
+            "min_ms": 179.1,
+            "max_ms": 208.7,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 170.7,
+            "min_ms": 167.0,
+            "max_ms": 184.3,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 188.1,
+            "min_ms": 185.1,
+            "max_ms": 225.4,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 184.3,
+            "min_ms": 177.3,
+            "max_ms": 187.1,
+            "runs": 5
+          },
+          "snap_empty": {
+            "median_ms": 6594.0,
+            "min_ms": 6567.8,
+            "max_ms": 6985.7,
+            "runs": 3
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 138.9,
+            "min_ms": 137.1,
+            "max_ms": 146.9,
+            "runs": 5
+          },
+          "stash_create_touched_index": false,
+          "odb_growth": {
+            "loose_objects": 0,
+            "loose_kb": 0
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 14.3,
+            "min_ms": 14.1,
+            "max_ms": 15.3,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 14.5,
+            "min_ms": 13.8,
+            "max_ms": 14.8,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 14.2,
+            "min_ms": 14.0,
+            "max_ms": 15.2,
+            "runs": 5,
+            "bytes": 0
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 209.8,
+            "min_ms": 207.7,
+            "max_ms": 218.5,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 75.1,
+            "min_ms": 74.0,
+            "max_ms": 76.6,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 75.5,
+            "min_ms": 74.2,
+            "max_ms": 80.3,
+            "runs": 5
+          }
+        },
+        "small": {
+          "changes": {
+            "modify": 10,
+            "add": 5,
+            "delete": 1
+          },
+          "status": {
+            "median_ms": 146.2,
+            "min_ms": 144.9,
+            "max_ms": 213.7,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 227.5,
+            "min_ms": 223.6,
+            "max_ms": 232.4,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 225.7,
+            "min_ms": 213.6,
+            "max_ms": 278.5,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 234.5,
+            "min_ms": 230.8,
+            "max_ms": 243.6,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 253.5,
+            "min_ms": 252.2,
+            "max_ms": 309.6,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 209.1,
+            "min_ms": 206.4,
+            "max_ms": 215.5,
+            "runs": 5
+          },
+          "stash_create_touched_index": true,
+          "odb_growth": {
+            "loose_objects": 37,
+            "loose_kb": 148
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 14.1,
+            "min_ms": 13.9,
+            "max_ms": 15.2,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 14.6,
+            "min_ms": 14.1,
+            "max_ms": 14.9,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 14.4,
+            "min_ms": 14.1,
+            "max_ms": 14.8,
+            "runs": 5,
+            "bytes": 13141
+          },
+          "diff_one_file": {
+            "median_ms": 10.1,
+            "min_ms": 9.8,
+            "max_ms": 10.3,
+            "runs": 5
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 213.0,
+            "min_ms": 211.2,
+            "max_ms": 217.8,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 80.5,
+            "min_ms": 79.9,
+            "max_ms": 81.8,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 74.4,
+            "min_ms": 73.3,
+            "max_ms": 75.2,
+            "runs": 5
+          },
+          "hunk_diff_file": {
+            "median_ms": 15.9,
+            "min_ms": 15.2,
+            "max_ms": 16.2,
+            "runs": 5
+          },
+          "hunk_stage": {
+            "median_ms": 33.4,
+            "min_ms": 31.2,
+            "max_ms": 39.2,
+            "runs": 5
+          },
+          "hunk_unstage": {
+            "median_ms": 33.4,
+            "min_ms": 32.0,
+            "max_ms": 37.4,
+            "runs": 5
+          },
+          "hunk_revert": {
+            "median_ms": 10.2,
+            "min_ms": 8.9,
+            "max_ms": 11.7,
+            "runs": 5
+          },
+          "hunk_ops_correct": true
+        },
+        "medium": {
+          "changes": {
+            "modify": 1000,
+            "add": 100,
+            "delete": 10
+          },
+          "status": {
+            "median_ms": 148.5,
+            "min_ms": 142.4,
+            "max_ms": 155.4,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 1246.8,
+            "min_ms": 1152.6,
+            "max_ms": 1343.0,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 1082.3,
+            "min_ms": 1061.9,
+            "max_ms": 1112.6,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 1037.2,
+            "min_ms": 1022.5,
+            "max_ms": 1083.7,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 1705.6,
+            "min_ms": 1664.5,
+            "max_ms": 1789.4,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 1081.2,
+            "min_ms": 1051.4,
+            "max_ms": 1119.5,
+            "runs": 5
+          },
+          "stash_create_touched_index": true,
+          "odb_growth": {
+            "loose_objects": 1952,
+            "loose_kb": 7808
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 42.7,
+            "min_ms": 40.7,
+            "max_ms": 43.0,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 103.6,
+            "min_ms": 94.1,
+            "max_ms": 105.3,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 86.5,
+            "min_ms": 80.8,
+            "max_ms": 111.7,
+            "runs": 5,
+            "bytes": 635409
+          },
+          "diff_one_file": {
+            "median_ms": 10.1,
+            "min_ms": 9.7,
+            "max_ms": 10.6,
+            "runs": 5
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 326.6,
+            "min_ms": 317.3,
+            "max_ms": 341.5,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 241.0,
+            "min_ms": 231.7,
+            "max_ms": 252.8,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 124.2,
+            "min_ms": 123.3,
+            "max_ms": 125.1,
+            "runs": 5
+          }
+        },
+        "large": {
+          "changes": {
+            "modify": 10000,
+            "add": 1000,
+            "delete": 100
+          },
+          "status": {
+            "median_ms": 180.1,
+            "min_ms": 174.0,
+            "max_ms": 205.8,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 6099.0,
+            "min_ms": 5900.0,
+            "max_ms": 6199.5,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 6350.1,
+            "min_ms": 6229.3,
+            "max_ms": 6384.9,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 6092.1,
+            "min_ms": 5708.2,
+            "max_ms": 6430.4,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 12916.7,
+            "min_ms": 12479.6,
+            "max_ms": 14871.1,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 5969.6,
+            "min_ms": 5931.7,
+            "max_ms": 6037.9,
+            "runs": 5
+          },
+          "stash_create_touched_index": true,
+          "odb_growth": {
+            "loose_objects": 13046,
+            "loose_kb": 52208
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 100.6,
+            "min_ms": 97.6,
+            "max_ms": 101.7,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 613.7,
+            "min_ms": 610.6,
+            "max_ms": 635.3,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 486.3,
+            "min_ms": 480.2,
+            "max_ms": 492.3,
+            "runs": 5,
+            "bytes": 6354151
+          },
+          "diff_one_file": {
+            "median_ms": 11.0,
+            "min_ms": 10.8,
+            "max_ms": 11.2,
+            "runs": 5
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 984.3,
+            "min_ms": 913.9,
+            "max_ms": 1345.0,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 454.6,
+            "min_ms": 444.5,
+            "max_ms": 479.5,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 569.8,
+            "min_ms": 560.0,
+            "max_ms": 609.7,
+            "runs": 5
+          }
+        }
+      }
+    },
+    {
+      "repo": "linux",
+      "scenarios": {
+        "clean": {
+          "changes": {
+            "modify": 0,
+            "add": 0,
+            "delete": 0
+          },
+          "status": {
+            "median_ms": 233.2,
+            "min_ms": 229.6,
+            "max_ms": 241.6,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 327.6,
+            "min_ms": 298.8,
+            "max_ms": 384.4,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 268.5,
+            "min_ms": 256.0,
+            "max_ms": 287.4,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 307.9,
+            "min_ms": 299.9,
+            "max_ms": 338.6,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 345.1,
+            "min_ms": 321.1,
+            "max_ms": 346.4,
+            "runs": 5
+          },
+          "snap_empty": {
+            "median_ms": 13375.2,
+            "min_ms": 11731.0,
+            "max_ms": 15157.3,
+            "runs": 3
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 269.3,
+            "min_ms": 258.5,
+            "max_ms": 273.8,
+            "runs": 5
+          },
+          "stash_create_touched_index": true,
+          "odb_growth": {
+            "loose_objects": 0,
+            "loose_kb": 0
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 14.1,
+            "min_ms": 13.7,
+            "max_ms": 16.1,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 13.6,
+            "min_ms": 12.7,
+            "max_ms": 13.7,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 14.1,
+            "min_ms": 12.8,
+            "max_ms": 14.7,
+            "runs": 5,
+            "bytes": 0
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 315.9,
+            "min_ms": 312.3,
+            "max_ms": 328.5,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 150.6,
+            "min_ms": 146.4,
+            "max_ms": 178.7,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 76.3,
+            "min_ms": 75.8,
+            "max_ms": 103.8,
+            "runs": 5
+          }
+        },
+        "small": {
+          "changes": {
+            "modify": 10,
+            "add": 5,
+            "delete": 1
+          },
+          "status": {
+            "median_ms": 230.5,
+            "min_ms": 228.5,
+            "max_ms": 297.6,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 346.3,
+            "min_ms": 331.2,
+            "max_ms": 358.8,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 329.6,
+            "min_ms": 320.1,
+            "max_ms": 339.1,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 339.3,
+            "min_ms": 335.2,
+            "max_ms": 343.6,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 367.2,
+            "min_ms": 362.7,
+            "max_ms": 385.7,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 256.5,
+            "min_ms": 244.8,
+            "max_ms": 271.7,
+            "runs": 5
+          },
+          "stash_create_touched_index": true,
+          "odb_growth": {
+            "loose_objects": 53,
+            "loose_kb": 304
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 15.8,
+            "min_ms": 15.7,
+            "max_ms": 16.1,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 17.0,
+            "min_ms": 16.7,
+            "max_ms": 17.1,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 17.0,
+            "min_ms": 16.6,
+            "max_ms": 17.3,
+            "runs": 5,
+            "bytes": 17626
+          },
+          "diff_one_file": {
+            "median_ms": 10.3,
+            "min_ms": 9.9,
+            "max_ms": 11.4,
+            "runs": 5
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 320.6,
+            "min_ms": 316.3,
+            "max_ms": 323.5,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 154.9,
+            "min_ms": 153.8,
+            "max_ms": 157.8,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 77.7,
+            "min_ms": 77.0,
+            "max_ms": 113.6,
+            "runs": 5
+          },
+          "hunk_diff_file": {
+            "median_ms": 15.4,
+            "min_ms": 15.1,
+            "max_ms": 16.6,
+            "runs": 5
+          },
+          "hunk_stage": {
+            "median_ms": 36.4,
+            "min_ms": 35.8,
+            "max_ms": 37.2,
+            "runs": 5
+          },
+          "hunk_unstage": {
+            "median_ms": 36.5,
+            "min_ms": 36.1,
+            "max_ms": 38.2,
+            "runs": 5
+          },
+          "hunk_revert": {
+            "median_ms": 9.5,
+            "min_ms": 9.1,
+            "max_ms": 10.0,
+            "runs": 5
+          },
+          "hunk_ops_correct": true
+        },
+        "medium": {
+          "changes": {
+            "modify": 1000,
+            "add": 100,
+            "delete": 10
+          },
+          "status": {
+            "median_ms": 232.9,
+            "min_ms": 230.0,
+            "max_ms": 268.1,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 1672.2,
+            "min_ms": 1546.4,
+            "max_ms": 1786.4,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 1488.4,
+            "min_ms": 1429.7,
+            "max_ms": 1498.0,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 1419.1,
+            "min_ms": 1402.2,
+            "max_ms": 1437.5,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 2202.2,
+            "min_ms": 2084.4,
+            "max_ms": 2308.9,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 1410.9,
+            "min_ms": 1385.2,
+            "max_ms": 1516.8,
+            "runs": 5
+          },
+          "stash_create_touched_index": true,
+          "odb_growth": {
+            "loose_objects": 2162,
+            "loose_kb": 12800
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 52.3,
+            "min_ms": 51.1,
+            "max_ms": 52.7,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 213.1,
+            "min_ms": 208.9,
+            "max_ms": 217.3,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 363.9,
+            "min_ms": 355.7,
+            "max_ms": 397.0,
+            "runs": 5,
+            "bytes": 746085
+          },
+          "diff_one_file": {
+            "median_ms": 12.5,
+            "min_ms": 11.5,
+            "max_ms": 13.9,
+            "runs": 5
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 494.7,
+            "min_ms": 482.4,
+            "max_ms": 512.0,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 338.1,
+            "min_ms": 331.2,
+            "max_ms": 348.3,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 274.7,
+            "min_ms": 266.3,
+            "max_ms": 309.8,
+            "runs": 5
+          }
+        },
+        "large": {
+          "changes": {
+            "modify": 10000,
+            "add": 1000,
+            "delete": 100
+          },
+          "status": {
+            "median_ms": 284.3,
+            "min_ms": 281.6,
+            "max_ms": 298.4,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 8337.6,
+            "min_ms": 8006.7,
+            "max_ms": 8780.0,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 8286.7,
+            "min_ms": 7968.8,
+            "max_ms": 10832.6,
+            "runs": 5
+          },
+          "snap_private": {
+            "median_ms": 8227.2,
+            "min_ms": 8017.4,
+            "max_ms": 9032.6,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 16546.1,
+            "min_ms": 14747.8,
+            "max_ms": 16755.0,
+            "runs": 5
+          },
+          "user_index_untouched": true,
+          "stash_create": {
+            "median_ms": 8816.6,
+            "min_ms": 8570.1,
+            "max_ms": 8954.2,
+            "runs": 5
+          },
+          "stash_create_touched_index": true,
+          "odb_growth": {
+            "loose_objects": 14624,
+            "loose_kb": 84820
+          },
+          "same_tree": {
+            "keep": true,
+            "private_odb": true,
+            "guided": true
+          },
+          "diff_raw": {
+            "median_ms": 154.0,
+            "min_ms": 149.0,
+            "max_ms": 156.2,
+            "runs": 5
+          },
+          "diff_numstat": {
+            "median_ms": 1336.2,
+            "min_ms": 1328.3,
+            "max_ms": 1343.0,
+            "runs": 5
+          },
+          "diff_patch_all": {
+            "median_ms": 1961.6,
+            "min_ms": 1943.3,
+            "max_ms": 1992.5,
+            "runs": 5,
+            "bytes": 6811566
+          },
+          "diff_one_file": {
+            "median_ms": 15.8,
+            "min_ms": 15.7,
+            "max_ms": 16.6,
+            "runs": 5
+          },
+          "snapshot_vs_worktree": {
+            "median_ms": 1392.9,
+            "min_ms": 1377.9,
+            "max_ms": 1400.6,
+            "runs": 5
+          },
+          "tree_vs_worktree_tracked_only": {
+            "median_ms": 542.8,
+            "min_ms": 523.3,
+            "max_ms": 554.8,
+            "runs": 5
+          },
+          "unstaged_numstat": {
+            "median_ms": 1429.1,
+            "min_ms": 1424.1,
+            "max_ms": 1464.0,
+            "runs": 5
+          }
+        }
+      }
+    }
+  ],
+  "fsmonitor": [
+    {
+      "repo": "syn-100k",
+      "scenarios": {
+        "clean": {
+          "changes": {
+            "modify": 0,
+            "add": 0,
+            "delete": 0
+          },
+          "status": {
+            "median_ms": 95.2,
+            "min_ms": 88.7,
+            "max_ms": 97.4,
+            "runs": 5
+          },
+          "status_normal": {
+            "median_ms": 30.5,
+            "min_ms": 29.8,
+            "max_ms": 31.5,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 154.8,
+            "min_ms": 151.7,
+            "max_ms": 162.5,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 143.1,
+            "min_ms": 135.9,
+            "max_ms": 145.8,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 93.9,
+            "min_ms": 88.3,
+            "max_ms": 95.0,
+            "runs": 5
+          },
+          "guided_same_tree": true
+        },
+        "small": {
+          "changes": {
+            "modify": 10,
+            "add": 5,
+            "delete": 1
+          },
+          "status": {
+            "median_ms": 96.9,
+            "min_ms": 93.9,
+            "max_ms": 101.7,
+            "runs": 5
+          },
+          "status_normal": {
+            "median_ms": 32.6,
+            "min_ms": 31.7,
+            "max_ms": 32.7,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 213.0,
+            "min_ms": 208.1,
+            "max_ms": 227.5,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 190.4,
+            "min_ms": 188.1,
+            "max_ms": 202.3,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 171.2,
+            "min_ms": 169.8,
+            "max_ms": 191.0,
+            "runs": 5
+          },
+          "guided_same_tree": true
+        }
+      }
+    },
+    {
+      "repo": "linux",
+      "scenarios": {
+        "clean": {
+          "changes": {
+            "modify": 0,
+            "add": 0,
+            "delete": 0
+          },
+          "status": {
+            "median_ms": 187.6,
+            "min_ms": 185.1,
+            "max_ms": 219.3,
+            "runs": 5
+          },
+          "status_normal": {
+            "median_ms": 40.4,
+            "min_ms": 39.6,
+            "max_ms": 41.9,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 269.4,
+            "min_ms": 262.8,
+            "max_ms": 285.3,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 249.9,
+            "min_ms": 242.7,
+            "max_ms": 262.7,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 162.2,
+            "min_ms": 161.6,
+            "max_ms": 163.2,
+            "runs": 5
+          },
+          "guided_same_tree": true
+        },
+        "small": {
+          "changes": {
+            "modify": 10,
+            "add": 5,
+            "delete": 1
+          },
+          "status": {
+            "median_ms": 183.9,
+            "min_ms": 181.8,
+            "max_ms": 186.6,
+            "runs": 5
+          },
+          "status_normal": {
+            "median_ms": 46.3,
+            "min_ms": 45.5,
+            "max_ms": 46.9,
+            "runs": 5
+          },
+          "snap_seed": {
+            "median_ms": 322.6,
+            "min_ms": 307.9,
+            "max_ms": 348.3,
+            "runs": 5
+          },
+          "snap_keep": {
+            "median_ms": 287.0,
+            "min_ms": 283.8,
+            "max_ms": 308.6,
+            "runs": 5
+          },
+          "snap_guided": {
+            "median_ms": 220.5,
+            "min_ms": 215.4,
+            "max_ms": 240.4,
+            "runs": 5
+          },
+          "guided_same_tree": true
+        }
+      }
+    }
+  ]
+}
