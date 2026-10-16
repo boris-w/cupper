@@ -1,0 +1,24 @@
+
+### adapter spawned with POSIX_SPAWN_SETSID, responsibility disclaimed: False
+label | ancestor_chain | same_pgid | same_sid | same_responsible_pid | detected | chain
+background-child-of-adapter | True | True | True | True | True | Python<bash<lineage-host<bash<zsh
+bash-disown | False | True | True | True | True | Python
+control-not-a-descendant | False | False | False | True | True | Python<bash<zsh<claude<zsh
+direct-child | True | True | True | True | True | Python<bash<lineage-host<bash<zsh
+double-fork | False | True | True | True | True | Python
+fork-setsid | False | False | False | True | True | Python
+nohup | False | True | True | True | True | Python
+orphan-after-parent-exit | False | True | True | True | True | Python
+zsh-disown | False | True | True | True | True | Python
+
+### adapter spawned with POSIX_SPAWN_SETSID, responsibility disclaimed: True
+label | ancestor_chain | same_pgid | same_sid | same_responsible_pid | detected | chain
+background-child-of-adapter | True | True | True | True | True | Python<bash<lineage-host<bash<zsh
+bash-disown | False | True | True | True | True | Python
+control-not-a-descendant | False | False | False | False | False | Python<bash<zsh<claude<zsh
+direct-child | True | True | True | True | True | Python<bash<lineage-host<bash<zsh
+double-fork | False | True | True | True | True | Python
+fork-setsid | False | False | False | True | True | Python
+nohup | False | True | True | True | True | Python
+orphan-after-parent-exit | False | True | True | True | True | Python
+zsh-disown | False | True | True | True | True | Python
