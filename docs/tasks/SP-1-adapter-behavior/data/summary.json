@@ -1,0 +1,4352 @@
+{
+ "claude": {
+  "s01-init-session": {
+   "frames": 42,
+   "updateKinds": {
+    "available_commands_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 2
+   },
+   "notes": [
+    {
+     "t": 170,
+     "note": "initialize-latency",
+     "elapsedMs": 169,
+     "ok": true
+    },
+    {
+     "t": 4965,
+     "note": "session-new-latency",
+     "elapsedMs": 717,
+     "ok": true
+    },
+    {
+     "t": 13008,
+     "note": "storage-check",
+     "sessionId": "0dff108c-07ea-46b7-b75d-da00c0b0c79f",
+     "found": []
+    },
+    {
+     "t": 13023,
+     "note": "listed-empty-session",
+     "listed": false,
+     "elapsedMs": 15
+    },
+    {
+     "t": 15054,
+     "note": "session-close",
+     "ok": true,
+     "elapsedMs": 3
+    },
+    {
+     "t": 16054,
+     "note": "storage-check-after-close",
+     "sessionId": "0dff108c-07ea-46b7-b75d-da00c0b0c79f",
+     "found": []
+    },
+    {
+     "t": 16099,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 16099,
+     "note": "orphans-after-exit",
+     "count": 0,
+     "procs": []
+    },
+    {
+     "t": 170,
+     "note": "initialize-latency",
+     "elapsedMs": 170,
+     "ok": true
+    },
+    {
+     "t": 187,
+     "note": "listed-after-restart",
+     "listed": false
+    },
+    {
+     "t": 233,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 272,
+     "note": "orphans-after-exit",
+     "count": 1,
+     "procs": [
+      {
+       "pid": 36449,
+       "ppid": 1,
+       "rssKB": 121072,
+       "label": "claude auth status"
+      }
+     ]
+    }
+   ],
+   "samples": [
+    {
+     "t": 211,
+     "label": "after-initialize",
+     "totalMB": 124,
+     "processes": 2,
+     "byRoleMB": {
+      "adapter (node)": 117,
+      "claude auth status": 8
+     }
+    },
+    {
+     "t": 4248,
+     "label": "idle-no-session",
+     "totalMB": 117,
+     "processes": 1,
+     "byRoleMB": {
+      "adapter (node)": 117
+     }
+    },
+    {
+     "t": 13004,
+     "label": "idle-one-session",
+     "totalMB": 631,
+     "processes": 5,
+     "byRoleMB": {
+      "adapter (node)": 97,
+      "claude CLI": 261,
+      "user-configured tool or MCP server": 273
+     }
+    }
+   ]
+  },
+  "s02-normal-turn": {
+   "frames": 117,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "usage_update": 10,
+    "agent_message_chunk": 38,
+    "tool_call": 6,
+    "tool_call_update": 26,
+    "session_info_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 3,
+    "session/request_permission": 3
+   },
+   "notes": [
+    {
+     "t": 184,
+     "note": "initialize-latency",
+     "elapsedMs": 183,
+     "ok": true
+    },
+    {
+     "t": 1350,
+     "note": "session-new-latency",
+     "elapsedMs": 1166,
+     "ok": true
+    },
+    {
+     "t": 15952,
+     "note": "prompt-result",
+     "label": "normal-turn",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 14506,
+     "timedOut": false
+    },
+    {
+     "t": 21004,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 21043,
+     "note": "orphans-after-exit",
+     "count": 4,
+     "procs": [
+      {
+       "pid": 40064,
+       "ppid": 1,
+       "rssKB": 350736,
+       "label": "claude CLI"
+      },
+      {
+       "pid": 40231,
+       "ppid": 40064,
+       "rssKB": 43328,
+       "label": "user-configured tool or MCP server"
+      },
+      {
+       "pid": 40251,
+       "ppid": 40231,
+       "rssKB": 108624,
+       "label": "user-configured tool or MCP server"
+      }
+     ]
+    }
+   ],
+   "samples": [
+    {
+     "t": 1446,
+     "label": "idle",
+     "totalMB": 613,
+     "processes": 7,
+     "byRoleMB": {
+      "adapter (node)": 118,
+      "claude CLI": 240,
+      "user-configured tool or MCP server": 254
+     }
+    },
+    {
+     "t": 3260,
+     "label": "running",
+     "totalMB": 653,
+     "processes": 5,
+     "byRoleMB": {
+      "adapter (node)": 119,
+      "claude CLI": 278,
+      "user-configured tool or MCP server": 256
+     }
+    }
+   ]
+  },
+  "s02b-plan": {
+   "frames": 97,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "usage_update": 9,
+    "tool_call": 4,
+    "tool_call_update": 16,
+    "agent_message_chunk": 39,
+    "session_info_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 3
+   },
+   "notes": [
+    {
+     "t": 193,
+     "note": "initialize-latency",
+     "elapsedMs": 191,
+     "ok": true
+    },
+    {
+     "t": 1011,
+     "note": "session-new-latency",
+     "elapsedMs": 818,
+     "ok": true
+    },
+    {
+     "t": 20662,
+     "note": "prompt-result",
+     "label": "plan",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 19604,
+     "timedOut": false
+    },
+    {
+     "t": 24715,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 25507,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 3,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 47536,
+       "ppid": 1,
+       "rssKB": 271456,
+       "label": "claude --output-format stream-json"
+      },
+      {
+       "pid": 47630,
+       "ppid": 47536,
+       "rssKB": 36384,
+       "label": "uv tool uvx"
+      },
+      {
+       "pid": 47711,
+       "ppid": 47630,
+       "rssKB": 98096,
+       "label": "python postgres-mcp --access-mode=restricted"
+      }
+     ],
+     "waitedMs": 791
+    }
+   ],
+   "samples": []
+  },
+  "s02c-plan-tasks-enabled": {
+   "frames": 78,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "usage_update": 5,
+    "agent_message_chunk": 38,
+    "tool_call": 1,
+    "tool_call_update": 4,
+    "session_info_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 3
+   },
+   "notes": [
+    {
+     "t": 181,
+     "note": "initialize-latency",
+     "elapsedMs": 180,
+     "ok": true
+    },
+    {
+     "t": 1330,
+     "note": "session-new-latency",
+     "elapsedMs": 1149,
+     "ok": true
+    },
+    {
+     "t": 11991,
+     "note": "prompt-result",
+     "label": "plan",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 10491,
+     "timedOut": false
+    },
+    {
+     "t": 16046,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 16838,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 4,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 87248,
+       "ppid": 1,
+       "rssKB": 300016,
+       "label": "claude --output-format stream-json"
+      },
+      {
+       "pid": 87287,
+       "ppid": 87248,
+       "rssKB": 55232,
+       "label": "uv tool uvx"
+      },
+      {
+       "pid": 87289,
+       "ppid": 87248,
+       "rssKB": 0,
+       "label": "<defunct>"
+      },
+      {
+       "pid": 87325,
+       "ppid": 87287,
+       "rssKB": 108928,
+       "label": "python postgres-mcp --access-mode=restricted"
+      }
+     ],
+     "waitedMs": 792
+    }
+   ],
+   "samples": []
+  },
+  "s02d-thinking": {
+   "frames": 37,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "usage_update": 4,
+    "agent_message_chunk": 1,
+    "session_info_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 3
+   },
+   "notes": [
+    {
+     "t": 169,
+     "note": "initialize-latency",
+     "elapsedMs": 168,
+     "ok": true
+    },
+    {
+     "t": 914,
+     "note": "session-new-latency",
+     "elapsedMs": 745,
+     "ok": true
+    },
+    {
+     "t": 3199,
+     "note": "prompt-result",
+     "label": "thinking",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 2221,
+     "timedOut": false
+    },
+    {
+     "t": 7253,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 8044,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 4,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 87884,
+       "ppid": 1,
+       "rssKB": 292080,
+       "label": "claude --output-format stream-json"
+      },
+      {
+       "pid": 87909,
+       "ppid": 87884,
+       "rssKB": 138096,
+       "label": "uv tool uvx"
+      },
+      {
+       "pid": 87910,
+       "ppid": 87884,
+       "rssKB": 0,
+       "label": "<defunct>"
+      },
+      {
+       "pid": 87929,
+       "ppid": 87909,
+       "rssKB": 109088,
+       "label": "python postgres-mcp --access-mode=restricted"
+      }
+     ],
+     "waitedMs": 791
+    }
+   ],
+   "samples": []
+  },
+  "s03-exec": {
+   "frames": 56,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "usage_update": 7,
+    "tool_call": 2,
+    "tool_call_update": 9,
+    "agent_message_chunk": 7,
+    "session_info_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 3,
+    "session/request_permission": 1
+   },
+   "notes": [
+    {
+     "t": 190,
+     "note": "initialize-latency",
+     "elapsedMs": 189,
+     "ok": true
+    },
+    {
+     "t": 1002,
+     "note": "session-new-latency",
+     "elapsedMs": 812,
+     "ok": true
+    },
+    {
+     "t": 8795,
+     "note": "prompt-result",
+     "label": "exec",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 7745,
+     "timedOut": false
+    },
+    {
+     "t": 12843,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 12881,
+     "note": "orphans-after-exit",
+     "count": 4,
+     "procs": [
+      {
+       "pid": 41821,
+       "ppid": 1,
+       "rssKB": 300368,
+       "label": "claude CLI"
+      },
+      {
+       "pid": 41847,
+       "ppid": 41821,
+       "rssKB": 43552,
+       "label": "user-configured tool or MCP server"
+      },
+      {
+       "pid": 41867,
+       "ppid": 41847,
+       "rssKB": 108928,
+       "label": "user-configured tool or MCP server"
+      }
+     ]
+    }
+   ],
+   "samples": []
+  },
+  "s04-approval": {
+   "frames": 69,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "usage_update": 7,
+    "agent_message_chunk": 20,
+    "tool_call": 2,
+    "tool_call_update": 7,
+    "session_info_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 3,
+    "session/request_permission": 2
+   },
+   "notes": [
+    {
+     "t": 154,
+     "note": "initialize-latency",
+     "elapsedMs": 153,
+     "ok": true
+    },
+    {
+     "t": 917,
+     "note": "session-new-latency",
+     "elapsedMs": 763,
+     "ok": true
+    },
+    {
+     "t": 7312,
+     "note": "prompt-result",
+     "label": "allow-then-reject",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 6351,
+     "timedOut": false
+    },
+    {
+     "t": 12362,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 12401,
+     "note": "orphans-after-exit",
+     "count": 4,
+     "procs": [
+      {
+       "pid": 42385,
+       "ppid": 1,
+       "rssKB": 306944,
+       "label": "claude CLI"
+      },
+      {
+       "pid": 42420,
+       "ppid": 42385,
+       "rssKB": 42912,
+       "label": "user-configured tool or MCP server"
+      },
+      {
+       "pid": 42442,
+       "ppid": 42420,
+       "rssKB": 108592,
+       "label": "user-configured tool or MCP server"
+      }
+     ]
+    }
+   ],
+   "samples": []
+  },
+  "s04b-reject-command": {
+   "frames": 79,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "usage_update": 5,
+    "agent_message_chunk": 33,
+    "tool_call": 2,
+    "tool_call_update": 8,
+    "session_info_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 3,
+    "session/request_permission": 1
+   },
+   "notes": [
+    {
+     "t": 188,
+     "note": "initialize-latency",
+     "elapsedMs": 187,
+     "ok": true
+    },
+    {
+     "t": 1037,
+     "note": "session-new-latency",
+     "elapsedMs": 849,
+     "ok": true
+    },
+    {
+     "t": 10851,
+     "note": "prompt-result",
+     "label": "reject-command",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 4667,
+     "timedOut": false
+    },
+    {
+     "t": 15902,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 16944,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 5,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 2242,
+       "ppid": 1,
+       "rssKB": 303376,
+       "label": "claude --output-format stream-json"
+      },
+      {
+       "pid": 2268,
+       "ppid": 2242,
+       "rssKB": 50992,
+       "label": "uv tool uvx"
+      },
+      {
+       "pid": 2270,
+       "ppid": 2242,
+       "rssKB": 155808,
+       "label": "uv tool uvx"
+      },
+      {
+       "pid": 2310,
+       "ppid": 2268,
+       "rssKB": 109184,
+       "label": "python postgres-mcp --access-mode=restricted"
+      },
+      {
+       "pid": 2424,
+       "ppid": 2270,
+       "rssKB": 125824,
+       "label": "python browser-use --cli-mcp"
+      }
+     ],
+     "waitedMs": 1042
+    }
+   ],
+   "samples": []
+  },
+  "s05-questions": {
+   "frames": 102,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "usage_update": 14,
+    "agent_message_chunk": 16,
+    "tool_call": 5,
+    "tool_call_update": 18,
+    "session_info_update": 1,
+    "current_mode_update": 2,
+    "config_option_update": 3,
+    "plan_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 3,
+    "elicitation/create": 1,
+    "session/request_permission": 2
+   },
+   "notes": [
+    {
+     "t": 162,
+     "note": "initialize-latency",
+     "elapsedMs": 161,
+     "ok": true
+    },
+    {
+     "t": 904,
+     "note": "session-new-latency",
+     "elapsedMs": 742,
+     "ok": true
+    },
+    {
+     "t": 6066,
+     "note": "prompt-result",
+     "label": "ask-user-question",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 5114,
+     "timedOut": false
+    },
+    {
+     "t": 23239,
+     "note": "prompt-result",
+     "label": "plan-confirmation",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 13168,
+     "timedOut": false
+    },
+    {
+     "t": 31286,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 32337,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 5,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 48298,
+       "ppid": 1,
+       "rssKB": 360288,
+       "label": "claude --output-format stream-json"
+      },
+      {
+       "pid": 48324,
+       "ppid": 48298,
+       "rssKB": 43904,
+       "label": "uv tool uvx"
+      },
+      {
+       "pid": 48326,
+       "ppid": 48298,
+       "rssKB": 64928,
+       "label": "uv tool uvx"
+      },
+      {
+       "pid": 48345,
+       "ppid": 48324,
+       "rssKB": 108688,
+       "label": "python postgres-mcp --access-mode=restricted"
+      },
+      {
+       "pid": 48375,
+       "ppid": 48326,
+       "rssKB": 125280,
+       "label": "python browser-use --cli-mcp"
+      }
+     ],
+     "waitedMs": 1051
+    }
+   ],
+   "samples": []
+  },
+  "s06-queue-steer": {
+   "frames": 126,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "usage_update": 25,
+    "agent_message_chunk": 16,
+    "tool_call": 5,
+    "tool_call_update": 20,
+    "session_info_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 3
+   },
+   "notes": [
+    {
+     "t": 165,
+     "note": "initialize-latency",
+     "elapsedMs": 165,
+     "ok": true
+    },
+    {
+     "t": 952,
+     "note": "session-new-latency",
+     "elapsedMs": 787,
+     "ok": true
+    },
+    {
+     "t": 13609,
+     "note": "prompt-result",
+     "label": "queue-first",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 12598,
+     "timedOut": false
+    },
+    {
+     "t": 16440,
+     "note": "prompt-result",
+     "label": "queue-second",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 6688,
+     "timedOut": false
+    },
+    {
+     "t": 16440,
+     "note": "queue-order",
+     "firstEndedAt": 13609,
+     "secondEndedAt": 16440,
+     "first": "end_turn",
+     "second": "end_turn"
+    },
+    {
+     "t": 21627,
+     "note": "steer-early-result",
+     "ok": true,
+     "result": {
+      "outcome": "injected"
+     },
+     "elapsedMs": 1
+    },
+    {
+     "t": 34539,
+     "note": "prompt-result",
+     "label": "steer-early",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 14094,
+     "timedOut": false
+    },
+    {
+     "t": 47370,
+     "note": "steer-running-result",
+     "ok": true,
+     "result": {
+      "outcome": "injected"
+     },
+     "elapsedMs": 1
+    },
+    {
+     "t": 51924,
+     "note": "prompt-result",
+     "label": "steer-running",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 12384,
+     "timedOut": false
+    },
+    {
+     "t": 57946,
+     "note": "steer-idle-optin-result",
+     "ok": true,
+     "result": {
+      "outcome": "promptRequired",
+      "reason": "noRunningTurn"
+     }
+    },
+    {
+     "t": 65948,
+     "note": "steer-idle-default-result",
+     "ok": true,
+     "result": {
+      "outcome": "startedNewTurn"
+     }
+    },
+    {
+     "t": 75281,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 76162,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 4,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 49457,
+       "ppid": 1,
+       "rssKB": 340672,
+       "label": "claude --output-format stream-json"
+      },
+      {
+       "pid": 49484,
+       "ppid": 49457,
+       "rssKB": 5200,
+       "label": "(Python)"
+      },
+      {
+       "pid": 49485,
+       "ppid": 49457,
+       "rssKB": 35520,
+       "label": "uv tool uvx"
+      },
+      {
+       "pid": 49548,
+       "ppid": 49485,
+       "rssKB": 60560,
+       "label": "python browser-use --cli-mcp"
+      }
+     ],
+     "waitedMs": 881
+    }
+   ],
+   "samples": [
+    {
+     "t": 9752,
+     "label": "running",
+     "totalMB": 944,
+     "processes": 9,
+     "byRoleMB": {
+      "adapter (node)": 98,
+      "claude CLI": 293,
+      "zsh": 3,
+      "sleep": 1,
+      "user-configured tool or MCP server": 549
+     }
+    }
+   ]
+  },
+  "s07-cancel": {
+   "frames": 95,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "usage_update": 10,
+    "agent_message_chunk": 5,
+    "tool_call": 3,
+    "tool_call_update": 11,
+    "session_info_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 3,
+    "session/request_permission": 3,
+    "$/cancel_request": 1
+   },
+   "notes": [
+    {
+     "t": 368,
+     "note": "initialize-latency",
+     "elapsedMs": 366,
+     "ok": true
+    },
+    {
+     "t": 1139,
+     "note": "session-new-latency",
+     "elapsedMs": 771,
+     "ok": true
+    },
+    {
+     "t": 4857,
+     "note": "prompt-result",
+     "label": "cancel-running",
+     "ok": true,
+     "stopReason": "cancelled",
+     "elapsedMs": 3672,
+     "timedOut": false
+    },
+    {
+     "t": 4857,
+     "note": "cancel-latency",
+     "case": "running",
+     "ms": 20,
+     "stopReason": "cancelled"
+    },
+    {
+     "t": 15567,
+     "note": "prompt-result",
+     "label": "cancel-pending-approval",
+     "ok": true,
+     "stopReason": "cancelled",
+     "elapsedMs": 3656,
+     "timedOut": false
+    },
+    {
+     "t": 15862,
+     "note": "cancel-latency",
+     "case": "pending-approval",
+     "heldSeen": true,
+     "ms": 5,
+     "stopReason": "cancelled"
+    },
+    {
+     "t": 21184,
+     "note": "prompt-result",
+     "label": "after-cancel",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 1321,
+     "timedOut": false
+    },
+    {
+     "t": 24349,
+     "note": "kill-cli",
+     "victim": {
+      "pid": 58891,
+      "ppid": 58876,
+      "rssKB": 277232,
+      "label": "claude CLI"
+     }
+    },
+    {
+     "t": 24357,
+     "note": "prompt-result",
+     "label": "cli-killed",
+     "ok": false,
+     "elapsedMs": 3173,
+     "timedOut": false
+    },
+    {
+     "t": 24357,
+     "note": "after-cli-kill",
+     "ms": 8,
+     "ok": false,
+     "error": {
+      "code": -32603,
+      "message": "Internal error: The Claude Agent process exited unexpectedly. Please start a new session."
+     },
+     "timedOut": false
+    },
+    {
+     "t": 27400,
+     "note": "prompt-result",
+     "label": "after-cli-kill-followup",
+     "ok": false,
+     "elapsedMs": 1,
+     "timedOut": false
+    },
+    {
+     "t": 27400,
+     "note": "followup-after-kill",
+     "ok": false,
+     "error": {
+      "code": -32603,
+      "message": "Internal error",
+      "data": {
+       "details": "Session not found"
+      }
+     }
+    },
+    {
+     "t": 27452,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    }
+   ],
+   "samples": [
+    {
+     "t": 4836,
+     "label": "running",
+     "totalMB": 666,
+     "processes": 7,
+     "byRoleMB": {
+      "adapter (node)": 120,
+      "claude CLI": 284,
+      "zsh": 3,
+      "sleep": 1,
+      "user-configured tool or MCP server": 258
+     }
+    },
+    {
+     "t": 7910,
+     "label": "after-cancel",
+     "totalMB": 664,
+     "processes": 5,
+     "byRoleMB": {
+      "adapter (node)": 120,
+      "claude CLI": 285,
+      "user-configured tool or MCP server": 258
+     }
+    },
+    {
+     "t": 27399,
+     "label": "after-cli-kill",
+     "totalMB": 82,
+     "processes": 1,
+     "byRoleMB": {
+      "adapter (node)": 82
+     }
+    }
+   ]
+  },
+  "s07b-cli-crash-recovery": {
+   "frames": 66,
+   "updateKinds": {
+    "available_commands_update": 6,
+    "usage_update": 6,
+    "agent_message_chunk": 2,
+    "session_info_update": 2
+   },
+   "agentRequests": {
+    "_auth/status_update": 5
+   },
+   "notes": [
+    {
+     "t": 182,
+     "note": "initialize-latency",
+     "elapsedMs": 180,
+     "ok": true
+    },
+    {
+     "t": 1003,
+     "note": "session-new-latency",
+     "elapsedMs": 821,
+     "ok": true
+    },
+    {
+     "t": 2845,
+     "note": "prompt-result",
+     "label": "before-kill",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 1786,
+     "timedOut": false
+    },
+    {
+     "t": 5888,
+     "note": "kill-cli",
+     "victim": {
+      "pid": 61619,
+      "ppid": 61590,
+      "rssKB": 285984,
+      "label": "claude CLI"
+     },
+     "idle": true
+    },
+    {
+     "t": 9930,
+     "note": "prompt-result",
+     "label": "after-kill",
+     "ok": false,
+     "elapsedMs": 1,
+     "timedOut": false
+    },
+    {
+     "t": 12192,
+     "note": "prompt-result",
+     "label": "after-resume",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 1374,
+     "timedOut": false
+    },
+    {
+     "t": 15239,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 16280,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 3,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 61933,
+       "ppid": 1,
+       "rssKB": 285440,
+       "label": "claude --output-format stream-json"
+      },
+      {
+       "pid": 61956,
+       "ppid": 61933,
+       "rssKB": 138896,
+       "label": "uv tool uvx"
+      },
+      {
+       "pid": 61964,
+       "ppid": 61956,
+       "rssKB": 108384,
+       "label": "python postgres-mcp --access-mode=restricted"
+      }
+     ],
+     "waitedMs": 1041
+    }
+   ],
+   "samples": [
+    {
+     "t": 9929,
+     "label": "after-cli-kill",
+     "totalMB": 99,
+     "processes": 1,
+     "byRoleMB": {
+      "adapter (node)": 99
+     }
+    }
+   ]
+  },
+  "s07x-sleep-backgrounded": {
+   "frames": 133,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "usage_update": 23,
+    "agent_message_chunk": 28,
+    "tool_call": 4,
+    "tool_call_update": 20,
+    "session_info_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 3
+   },
+   "notes": [
+    {
+     "t": 336,
+     "note": "initialize-latency",
+     "elapsedMs": 335,
+     "ok": true
+    },
+    {
+     "t": 1185,
+     "note": "session-new-latency",
+     "elapsedMs": 849,
+     "ok": true
+    },
+    {
+     "t": 8284,
+     "note": "prompt-result",
+     "label": "cancel-running",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 7052,
+     "timedOut": false
+    },
+    {
+     "t": 9768,
+     "note": "cancel-latency",
+     "case": "running",
+     "ms": -1484,
+     "stopReason": "end_turn"
+    },
+    {
+     "t": 22691,
+     "note": "prompt-result",
+     "label": "cancel-pending-approval",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 5794,
+     "timedOut": false
+    },
+    {
+     "t": 107700,
+     "note": "cancel-latency",
+     "case": "pending-approval",
+     "heldSeen": false,
+     "ms": -84708,
+     "stopReason": "end_turn"
+    },
+    {
+     "t": 113628,
+     "note": "prompt-result",
+     "label": "after-cancel",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 1926,
+     "timedOut": false
+    },
+    {
+     "t": 117817,
+     "note": "prompt-result",
+     "label": "cli-killed",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 4189,
+     "timedOut": false
+    },
+    {
+     "t": 122053,
+     "note": "kill-cli",
+     "victim": {
+      "pid": 53591,
+      "ppid": 53586,
+      "rssKB": 265632,
+      "label": "claude CLI"
+     }
+    },
+    {
+     "t": 122054,
+     "note": "after-cli-kill",
+     "ms": -4237,
+     "ok": true,
+     "stopReason": "end_turn",
+     "timedOut": false
+    },
+    {
+     "t": 125207,
+     "note": "prompt-result",
+     "label": "after-cli-kill-followup",
+     "ok": false,
+     "elapsedMs": 2,
+     "timedOut": false
+    },
+    {
+     "t": 125207,
+     "note": "followup-after-kill",
+     "ok": false,
+     "error": {
+      "code": -32603,
+      "message": "Internal error",
+      "data": {
+       "details": "Session not found"
+      }
+     }
+    },
+    {
+     "t": 125361,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    }
+   ],
+   "samples": [
+    {
+     "t": 9767,
+     "label": "running",
+     "totalMB": 651,
+     "processes": 7,
+     "byRoleMB": {
+      "adapter (node)": 99,
+      "claude CLI": 295,
+      "zsh": 3,
+      "sleep": 1,
+      "user-configured tool or MCP server": 254
+     }
+    },
+    {
+     "t": 12898,
+     "label": "after-cancel",
+     "totalMB": 559,
+     "processes": 7,
+     "byRoleMB": {
+      "adapter (node)": 100,
+      "claude CLI": 295,
+      "zsh": 3,
+      "sleep": 1,
+      "user-configured tool or MCP server": 161
+     }
+    },
+    {
+     "t": 125205,
+     "label": "after-cli-kill",
+     "totalMB": 66,
+     "processes": 1,
+     "byRoleMB": {
+      "adapter (node)": 66
+     }
+    }
+   ]
+  },
+  "s08-list": {
+   "frames": 17,
+   "updateKinds": {},
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 164,
+     "note": "initialize-latency",
+     "elapsedMs": 162,
+     "ok": true
+    },
+    {
+     "t": 296,
+     "note": "list-summary",
+     "pages": 1,
+     "total": 179,
+     "fromThisSpike": 10,
+     "elapsedMs": 132,
+     "shapes": [
+      {
+       "count": 179,
+       "shape": {
+        "cwd": "string",
+        "sessionId": "string",
+        "title": "string",
+        "updatedAt": "string"
+       }
+      }
+     ]
+    },
+    {
+     "t": 315,
+     "note": "list-filtered",
+     "cwd": "as passed to session/new",
+     "count": 10,
+     "nextCursor": false
+    },
+    {
+     "t": 332,
+     "note": "list-filtered",
+     "cwd": "realpath",
+     "count": 10,
+     "nextCursor": false
+    },
+    {
+     "t": 378,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    }
+   ],
+   "samples": []
+  },
+  "s09-load-resume": {
+   "frames": 105,
+   "updateKinds": {
+    "user_message_chunk": 1,
+    "agent_message_chunk": 7,
+    "tool_call": 6,
+    "tool_call_update": 7,
+    "available_commands_update": 7,
+    "compaction_update": 4,
+    "usage_update": 5,
+    "session_info_update": 2
+   },
+   "agentRequests": {
+    "_auth/status_update": 8
+   },
+   "notes": [
+    {
+     "t": 0,
+     "note": "process",
+     "n": 1,
+     "plan": "load, /compact, SIGKILL"
+    },
+    {
+     "t": 159,
+     "note": "initialize-latency",
+     "elapsedMs": 158,
+     "ok": true
+    },
+    {
+     "t": 1078,
+     "note": "load-result",
+     "ok": true,
+     "elapsedMs": 919,
+     "replayed": 18
+    },
+    {
+     "t": 11101,
+     "note": "prompt-result",
+     "label": "compact",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 6995,
+     "timedOut": false
+    },
+    {
+     "t": 16144,
+     "note": "crash",
+     "procs": 5
+    },
+    {
+     "t": 16148,
+     "note": "exit",
+     "code": null,
+     "signal": "SIGKILL"
+    },
+    {
+     "t": 19148,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    },
+    {
+     "t": 19149,
+     "note": "process",
+     "n": 2,
+     "plan": "load after compaction"
+    },
+    {
+     "t": 19333,
+     "note": "initialize-latency",
+     "elapsedMs": 184,
+     "ok": true
+    },
+    {
+     "t": 20262,
+     "note": "load-result",
+     "ok": true,
+     "elapsedMs": 929,
+     "replayed": 2
+    },
+    {
+     "t": 23312,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 26613,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 4,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 62830,
+       "ppid": 1,
+       "rssKB": 267760,
+       "label": "claude --output-format stream-json"
+      },
+      {
+       "pid": 62857,
+       "ppid": 62830,
+       "rssKB": 141776,
+       "label": "uv tool uvx"
+      },
+      {
+       "pid": 62858,
+       "ppid": 62830,
+       "rssKB": 0,
+       "label": "<defunct>"
+      },
+      {
+       "pid": 62866,
+       "ppid": 62857,
+       "rssKB": 108496,
+       "label": "python postgres-mcp --access-mode=restricted"
+      }
+     ],
+     "waitedMs": 3301
+    },
+    {
+     "t": 26613,
+     "note": "process",
+     "n": 3,
+     "plan": "resume and continue"
+    },
+    {
+     "t": 26753,
+     "note": "initialize-latency",
+     "elapsedMs": 139,
+     "ok": true
+    },
+    {
+     "t": 27741,
+     "note": "resume-result",
+     "ok": true,
+     "elapsedMs": 988,
+     "updatesDuringResume": 0
+    },
+    {
+     "t": 38983,
+     "note": "prompt-result",
+     "label": "continue-after-resume",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 8208,
+     "timedOut": false
+    },
+    {
+     "t": 43033,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 43826,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 3,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 63084,
+       "ppid": 1,
+       "rssKB": 291424,
+       "label": "claude --output-format stream-json"
+      },
+      {
+       "pid": 63140,
+       "ppid": 63084,
+       "rssKB": 42816,
+       "label": "uv tool uvx"
+      },
+      {
+       "pid": 63151,
+       "ppid": 63140,
+       "rssKB": 108656,
+       "label": "python postgres-mcp --access-mode=restricted"
+      }
+     ],
+     "waitedMs": 793
+    }
+   ],
+   "samples": []
+  },
+  "s10-unauthenticated": {
+   "frames": 27,
+   "updateKinds": {
+    "available_commands_update": 2,
+    "session_info_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 152,
+     "note": "initialize-latency",
+     "elapsedMs": 152,
+     "ok": true
+    },
+    {
+     "t": 5349,
+     "note": "session-new",
+     "ok": true,
+     "elapsedMs": 197
+    },
+    {
+     "t": 5434,
+     "note": "prompt-result",
+     "ok": false,
+     "error": {
+      "code": -32000,
+      "message": "Authentication required"
+     },
+     "elapsedMs": 36,
+     "timedOut": false
+    },
+    {
+     "t": 5434,
+     "note": "storage-check",
+     "sessionId": "b8a4ed8c-9855-46cf-a87b-777878502638",
+     "found": []
+    },
+    {
+     "t": 7482,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 8022,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 1,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 64247,
+       "ppid": 1,
+       "rssKB": 255200,
+       "label": "claude --output-format stream-json"
+      }
+     ],
+     "waitedMs": 540
+    }
+   ],
+   "samples": []
+  },
+  "s11-image": {
+   "frames": 32,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "usage_update": 2,
+    "agent_message_chunk": 1,
+    "session_info_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 3
+   },
+   "notes": [
+    {
+     "t": 132,
+     "note": "initialize-latency",
+     "elapsedMs": 131,
+     "ok": true
+    },
+    {
+     "t": 879,
+     "note": "session-new-latency",
+     "elapsedMs": 747,
+     "ok": true
+    },
+    {
+     "t": 3058,
+     "note": "prompt-result",
+     "label": "image",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 2138,
+     "timedOut": false
+    },
+    {
+     "t": 7111,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 7903,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 3,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 64413,
+       "ppid": 1,
+       "rssKB": 291536,
+       "label": "claude --output-format stream-json"
+      },
+      {
+       "pid": 64441,
+       "ppid": 64413,
+       "rssKB": 142224,
+       "label": "uv tool uvx"
+      },
+      {
+       "pid": 64462,
+       "ppid": 64441,
+       "rssKB": 108608,
+       "label": "python postgres-mcp --access-mode=restricted"
+      }
+     ],
+     "waitedMs": 792
+    }
+   ],
+   "samples": []
+  },
+  "s12-resources": {
+   "frames": 33,
+   "updateKinds": {
+    "available_commands_update": 3
+   },
+   "agentRequests": {
+    "_auth/status_update": 2
+   },
+   "notes": [
+    {
+     "t": 130,
+     "note": "initialize-latency",
+     "elapsedMs": 128,
+     "ok": true
+    },
+    {
+     "t": 130,
+     "note": "time-to-initialized",
+     "ms": 130
+    },
+    {
+     "t": 5877,
+     "note": "session-new-latency",
+     "elapsedMs": 708,
+     "ok": true
+    },
+    {
+     "t": 12641,
+     "note": "session-new-latency",
+     "elapsedMs": 725,
+     "ok": true
+    },
+    {
+     "t": 19640,
+     "note": "session-new-latency",
+     "elapsedMs": 936,
+     "ok": true
+    },
+    {
+     "t": 29901,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    }
+   ],
+   "samples": [
+    {
+     "t": 5169,
+     "label": "idle-0-sessions",
+     "totalMB": 118,
+     "processes": 1,
+     "byRoleMB": {
+      "adapter (node)": 118
+     }
+    },
+    {
+     "t": 11916,
+     "label": "idle-1-sessions",
+     "totalMB": 612,
+     "processes": 5,
+     "byRoleMB": {
+      "adapter (node)": 97,
+      "claude CLI": 259,
+      "user-configured tool or MCP server": 257
+     }
+    },
+    {
+     "t": 18704,
+     "label": "idle-2-sessions",
+     "totalMB": 948,
+     "processes": 9,
+     "byRoleMB": {
+      "adapter (node)": 79,
+      "claude CLI": 480,
+      "user-configured tool or MCP server": 389
+     }
+    },
+    {
+     "t": 25753,
+     "label": "idle-3-sessions",
+     "totalMB": 1336,
+     "processes": 13,
+     "byRoleMB": {
+      "adapter (node)": 79,
+      "claude CLI": 722,
+      "user-configured tool or MCP server": 537
+     }
+    },
+    {
+     "t": 29828,
+     "label": "after-close-all",
+     "totalMB": 80,
+     "processes": 1,
+     "byRoleMB": {
+      "adapter (node)": 80
+     }
+    }
+   ]
+  }
+ },
+ "codex-bundled": {
+  "s01-init-session": {
+   "frames": 44,
+   "updateKinds": {
+    "available_commands_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 2
+   },
+   "notes": [
+    {
+     "t": 4273,
+     "note": "initialize-latency",
+     "elapsedMs": 4272,
+     "ok": true
+    },
+    {
+     "t": 8478,
+     "note": "session-new-latency",
+     "elapsedMs": 125,
+     "ok": true
+    },
+    {
+     "t": 16522,
+     "note": "storage-check",
+     "sessionId": "01a143ab-db07-7f62-82de-159adcec1cce",
+     "found": []
+    },
+    {
+     "t": 16537,
+     "note": "listed-empty-session",
+     "listed": false,
+     "elapsedMs": 15
+    },
+    {
+     "t": 18542,
+     "note": "session-close",
+     "ok": true,
+     "elapsedMs": 3
+    },
+    {
+     "t": 19543,
+     "note": "storage-check-after-close",
+     "sessionId": "01a143ab-db07-7f62-82de-159adcec1cce",
+     "found": []
+    },
+    {
+     "t": 21595,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 21596,
+     "note": "orphans-after-exit",
+     "count": 0,
+     "procs": []
+    },
+    {
+     "t": 123,
+     "note": "initialize-latency",
+     "elapsedMs": 123,
+     "ok": true
+    },
+    {
+     "t": 139,
+     "note": "listed-after-restart",
+     "listed": false
+    },
+    {
+     "t": 2190,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    }
+   ],
+   "samples": [
+    {
+     "t": 4313,
+     "label": "after-initialize",
+     "totalMB": 205,
+     "processes": 4,
+     "byRoleMB": {
+      "adapter (node)": 84,
+      "codex wrapper (node)": 46,
+      "codex app-server": 69,
+      "git": 6
+     }
+    },
+    {
+     "t": 8353,
+     "label": "idle-no-session",
+     "totalMB": 198,
+     "processes": 3,
+     "byRoleMB": {
+      "adapter (node)": 77,
+      "codex wrapper (node)": 46,
+      "codex app-server": 74
+     }
+    },
+    {
+     "t": 16520,
+     "label": "idle-one-session",
+     "totalMB": 711,
+     "processes": 8,
+     "byRoleMB": {
+      "adapter (node)": 77,
+      "codex wrapper (node)": 46,
+      "codex app-server": 123,
+      "user-configured tool or MCP server": 465
+     }
+    }
+   ]
+  },
+  "s02-normal-turn": {
+   "frames": 145,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 3,
+    "agent_thought_chunk": 10,
+    "agent_message_chunk": 85,
+    "usage_update": 7,
+    "tool_call": 5,
+    "tool_call_update": 7
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 277,
+     "note": "initialize-latency",
+     "elapsedMs": 276,
+     "ok": true
+    },
+    {
+     "t": 556,
+     "note": "session-new-latency",
+     "elapsedMs": 279,
+     "ok": true
+    },
+    {
+     "t": 42507,
+     "note": "prompt-result",
+     "label": "normal-turn",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 41884,
+     "timedOut": false
+    },
+    {
+     "t": 49554,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    }
+   ],
+   "samples": [
+    {
+     "t": 623,
+     "label": "idle",
+     "totalMB": 383,
+     "processes": 10,
+     "byRoleMB": {
+      "adapter (node)": 84,
+      "codex wrapper (node)": 47,
+      "codex app-server": 114,
+      "user-configured tool or MCP server": 112,
+      "git": 26
+     }
+    },
+    {
+     "t": 14657,
+     "label": "running",
+     "totalMB": 710,
+     "processes": 10,
+     "byRoleMB": {
+      "adapter (node)": 63,
+      "codex wrapper (node)": 37,
+      "codex app-server": 139,
+      "zsh": 3,
+      "user-configured tool or MCP server": 469
+     }
+    }
+   ]
+  },
+  "s02b-plan": {
+   "frames": 51,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 3,
+    "agent_thought_chunk": 2,
+    "agent_message_chunk": 18,
+    "usage_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 285,
+     "note": "initialize-latency",
+     "elapsedMs": 283,
+     "ok": true
+    },
+    {
+     "t": 478,
+     "note": "session-new-latency",
+     "elapsedMs": 193,
+     "ok": true
+    },
+    {
+     "t": 5951,
+     "note": "prompt-result",
+     "label": "plan",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 5470,
+     "timedOut": false
+    },
+    {
+     "t": 12001,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 12001,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": []
+  },
+  "s03-exec": {
+   "frames": 61,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 7,
+    "agent_thought_chunk": 4,
+    "tool_call": 2,
+    "tool_call_update": 2,
+    "usage_update": 5,
+    "agent_message_chunk": 14
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 114,
+     "note": "initialize-latency",
+     "elapsedMs": 114,
+     "ok": true
+    },
+    {
+     "t": 238,
+     "note": "session-new-latency",
+     "elapsedMs": 124,
+     "ok": true
+    },
+    {
+     "t": 85638,
+     "note": "prompt-result",
+     "label": "exec",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 85398,
+     "timedOut": false
+    },
+    {
+     "t": 91700,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 91701,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 1
+    }
+   ],
+   "samples": []
+  },
+  "s04-approval": {
+   "frames": 46,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 6,
+    "agent_thought_chunk": 4,
+    "tool_call": 2,
+    "tool_call_update": 1,
+    "usage_update": 2
+   },
+   "agentRequests": {
+    "_auth/status_update": 1,
+    "session/request_permission": 2
+   },
+   "notes": [
+    {
+     "t": 132,
+     "note": "initialize-latency",
+     "elapsedMs": 131,
+     "ok": true
+    },
+    {
+     "t": 313,
+     "note": "session-new-latency",
+     "elapsedMs": 181,
+     "ok": true
+    },
+    {
+     "t": 13364,
+     "note": "prompt-result",
+     "label": "allow-then-reject",
+     "ok": true,
+     "stopReason": "cancelled",
+     "elapsedMs": 13049,
+     "timedOut": false
+    },
+    {
+     "t": 20410,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 20410,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": []
+  },
+  "s04b-reject-command": {
+   "frames": 48,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 4,
+    "agent_thought_chunk": 2,
+    "agent_message_chunk": 11,
+    "tool_call": 1,
+    "tool_call_update": 1,
+    "usage_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 1,
+    "session/request_permission": 1
+   },
+   "notes": [
+    {
+     "t": 243,
+     "note": "initialize-latency",
+     "elapsedMs": 240,
+     "ok": true
+    },
+    {
+     "t": 1169,
+     "note": "session-new-latency",
+     "elapsedMs": 926,
+     "ok": true
+    },
+    {
+     "t": 8652,
+     "note": "prompt-result",
+     "label": "reject-command",
+     "ok": true,
+     "stopReason": "cancelled",
+     "elapsedMs": 7479,
+     "timedOut": false
+    },
+    {
+     "t": 15706,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    }
+   ],
+   "samples": []
+  },
+  "s05-questions": {
+   "frames": 137,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 7,
+    "usage_update": 4,
+    "agent_thought_chunk": 4,
+    "plan_update": 3,
+    "tool_call_update": 2,
+    "config_option_update": 1,
+    "agent_message_chunk": 80,
+    "tool_call": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 1,
+    "elicitation/create": 1,
+    "session/request_permission": 1
+   },
+   "notes": [
+    {
+     "t": 135,
+     "note": "initialize-latency",
+     "elapsedMs": 135,
+     "ok": true
+    },
+    {
+     "t": 338,
+     "note": "session-new-latency",
+     "elapsedMs": 203,
+     "ok": true
+    },
+    {
+     "t": 25848,
+     "note": "prompt-result",
+     "label": "request-user-input-and-plan",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 25506,
+     "timedOut": false
+    },
+    {
+     "t": 35901,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 35901,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": []
+  },
+  "s06-queue-steer": {
+   "frames": 100,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 14,
+    "tool_call": 3,
+    "tool_call_update": 3,
+    "usage_update": 9,
+    "agent_message_chunk": 17
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 129,
+     "note": "initialize-latency",
+     "elapsedMs": 129,
+     "ok": true
+    },
+    {
+     "t": 275,
+     "note": "session-new-latency",
+     "elapsedMs": 146,
+     "ok": true
+    },
+    {
+     "t": 59599,
+     "note": "prompt-result",
+     "label": "queue-second",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 38922,
+     "timedOut": false
+    },
+    {
+     "t": 180310,
+     "note": "request-timeout",
+     "id": 6,
+     "method": "session/prompt",
+     "timeoutMs": 180000
+    },
+    {
+     "t": 180310,
+     "note": "prompt-result",
+     "label": "queue-first",
+     "ok": false,
+     "elapsedMs": 180033,
+     "timedOut": true
+    },
+    {
+     "t": 180310,
+     "note": "queue-order",
+     "firstEndedAt": 180310,
+     "secondEndedAt": 59599,
+     "second": "end_turn"
+    },
+    {
+     "t": 192289,
+     "note": "steer-early-result",
+     "ok": true,
+     "result": {
+      "outcome": "injected"
+     },
+     "elapsedMs": 4
+    },
+    {
+     "t": 211237,
+     "note": "prompt-result",
+     "label": "steer-early",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 26926,
+     "timedOut": false
+    },
+    {
+     "t": 227080,
+     "note": "steer-running-result",
+     "ok": true,
+     "result": {
+      "outcome": "injected"
+     },
+     "elapsedMs": 2
+    },
+    {
+     "t": 244534,
+     "note": "prompt-result",
+     "label": "steer-running",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 28297,
+     "timedOut": false
+    },
+    {
+     "t": 249545,
+     "note": "steer-idle-optin-result",
+     "ok": true,
+     "result": {
+      "outcome": "startedNewTurn"
+     }
+    },
+    {
+     "t": 259604,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 259605,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": [
+    {
+     "t": 20677,
+     "label": "running",
+     "totalMB": 736,
+     "processes": 9,
+     "byRoleMB": {
+      "adapter (node)": 76,
+      "codex wrapper (node)": 47,
+      "codex app-server": 145,
+      "sleep": 1,
+      "user-configured tool or MCP server": 467
+     }
+    }
+   ]
+  },
+  "s07-cancel": {
+   "frames": 93,
+   "updateKinds": {
+    "available_commands_update": 2,
+    "session_info_update": 11,
+    "tool_call": 3,
+    "usage_update": 4,
+    "agent_thought_chunk": 2,
+    "agent_message_chunk": 4,
+    "tool_call_update": 2
+   },
+   "agentRequests": {
+    "_auth/status_update": 1,
+    "session/request_permission": 1
+   },
+   "notes": [
+    {
+     "t": 122,
+     "note": "initialize-latency",
+     "elapsedMs": 121,
+     "ok": true
+    },
+    {
+     "t": 248,
+     "note": "session-new-latency",
+     "elapsedMs": 126,
+     "ok": true
+    },
+    {
+     "t": 12991,
+     "note": "prompt-result",
+     "label": "cancel-running",
+     "ok": true,
+     "stopReason": "cancelled",
+     "elapsedMs": 12740,
+     "timedOut": false
+    },
+    {
+     "t": 12991,
+     "note": "cancel-latency",
+     "case": "running",
+     "ms": 9,
+     "stopReason": "cancelled"
+    },
+    {
+     "t": 28274,
+     "note": "prompt-result",
+     "label": "cancel-pending-approval",
+     "ok": true,
+     "stopReason": "cancelled",
+     "elapsedMs": 8237,
+     "timedOut": false
+    },
+    {
+     "t": 28566,
+     "note": "cancel-latency",
+     "case": "pending-approval",
+     "heldSeen": true,
+     "ms": 9,
+     "stopReason": "cancelled"
+    },
+    {
+     "t": 40256,
+     "note": "prompt-result",
+     "label": "after-cancel",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 7689,
+     "timedOut": false
+    },
+    {
+     "t": 51242,
+     "note": "kill-cli",
+     "victim": {
+      "pid": 68017,
+      "ppid": 68016,
+      "rssKB": 152928,
+      "label": "codex app-server"
+     }
+    },
+    {
+     "t": 51252,
+     "note": "prompt-result",
+     "label": "cli-killed",
+     "ok": false,
+     "elapsedMs": 10996,
+     "timedOut": false
+    },
+    {
+     "t": 51252,
+     "note": "after-cli-kill",
+     "ms": 10,
+     "ok": false,
+     "error": {
+      "code": 1001,
+      "message": "The Codex app-server was killed by SIGKILL, which usually means it ran out of memory. The agent starts it again on the next request.\n\u001b[2m2026-10-16T07:57:21.822280Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_app_server\u001b[0m\u001b[2m:\u001b[0m Codex is ignoring 2 unrecognized configuration settings. Check for typos or deprecated settings.\n  user ($HOME/.codex/config.toml): `disable_response_storage` is ignored.\n  user ($HOME/.codex/config.toml): `mcp_servers.computer-use.type` is ignored.\n\u001b[2m2026-10-16T07:57:22.830835Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_rmcp_client::oauth::refresh_transaction\u001b[0m\u001b[2m:\u001b[0m \u001b[3merror\u001b[0m\u001b[2m=\u001b[0mfailed to refresh OAuth tokens for server canva: OAuth refresh token was rejected: Server returned error response: invalid_grant: Grant not found\n\u001b[2m2026-10-16T07:57:42.284546Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_rmcp_client::oauth::refresh_transaction\u001b[0m\u001b[2m:\u001b[0m \u001b[3merror\u001b[0m\u001b[2m=\u001b[0mfailed to refresh OAuth tokens for server canva: OAuth refresh token was rejected: Server returned error response: invalid_grant: Grant not found\n\u001b[2m2026-10-16T07:57:54.934000Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_rmcp_client::oauth::refresh_transaction\u001b[0m\u001b[2m:\u001b[0m \u001b[3merror\u001b[0m\u001b[2m=\u001b[0mfailed to refresh OAuth tokens for server canva: OAuth refresh token was rejected: Server returned error response: invalid_grant: Grant not found\n\u001b[2m2026-10-16T07:58:02.583713Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_rmcp_client::oauth::refresh_transaction\u001b[0m\u001b[2m:\u001b[0m \u001b[3merror\u001b[0m\u001b[2m=\u001b[0mfailed to refresh OAuth tokens for server canva: OAuth refresh token was rejected: Server returned error response: invalid_grant: Grant not found",
+      "data": {
+       "exitCode": null,
+       "signal": "SIGKILL",
+       "restartable": true
+      }
+     },
+     "timedOut": false
+    },
+    {
+     "t": 61617,
+     "note": "prompt-result",
+     "label": "after-cli-kill-followup",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 7328,
+     "timedOut": false
+    },
+    {
+     "t": 61617,
+     "note": "followup-after-kill",
+     "ok": true,
+     "stopReason": "end_turn"
+    },
+    {
+     "t": 63665,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 66709,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 1,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 71522,
+       "ppid": 1,
+       "rssKB": 15168,
+       "label": "Codex Computer SkyComputerUseClient"
+      }
+     ],
+     "waitedMs": 3044
+    }
+   ],
+   "samples": [
+    {
+     "t": 12982,
+     "label": "running",
+     "totalMB": 745,
+     "processes": 9,
+     "byRoleMB": {
+      "adapter (node)": 76,
+      "codex wrapper (node)": 47,
+      "codex app-server": 148,
+      "sleep": 1,
+      "user-configured tool or MCP server": 472
+     }
+    },
+    {
+     "t": 16035,
+     "label": "after-cancel",
+     "totalMB": 742,
+     "processes": 9,
+     "byRoleMB": {
+      "adapter (node)": 76,
+      "codex wrapper (node)": 47,
+      "codex app-server": 145,
+      "sleep": 1,
+      "user-configured tool or MCP server": 473
+     }
+    },
+    {
+     "t": 54289,
+     "label": "after-cli-kill",
+     "totalMB": 62,
+     "processes": 1,
+     "byRoleMB": {
+      "adapter (node)": 62
+     }
+    }
+   ]
+  },
+  "s07b-cli-crash-recovery": {
+   "frames": 45,
+   "updateKinds": {
+    "available_commands_update": 2,
+    "session_info_update": 5,
+    "agent_message_chunk": 2,
+    "usage_update": 2
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 116,
+     "note": "initialize-latency",
+     "elapsedMs": 115,
+     "ok": true
+    },
+    {
+     "t": 241,
+     "note": "session-new-latency",
+     "elapsedMs": 125,
+     "ok": true
+    },
+    {
+     "t": 4183,
+     "note": "prompt-result",
+     "label": "before-kill",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 3939,
+     "timedOut": false
+    },
+    {
+     "t": 7226,
+     "note": "kill-cli",
+     "victim": {
+      "pid": 74022,
+      "ppid": 74021,
+      "rssKB": 141136,
+      "label": "codex app-server"
+     },
+     "idle": true
+    },
+    {
+     "t": 15606,
+     "note": "prompt-result",
+     "label": "after-kill",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 4341,
+     "timedOut": false
+    },
+    {
+     "t": 20658,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 20951,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 1,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 75728,
+       "ppid": 1,
+       "rssKB": 15216,
+       "label": "Codex Computer SkyComputerUseClient"
+      }
+     ],
+     "waitedMs": 293
+    }
+   ],
+   "samples": [
+    {
+     "t": 11265,
+     "label": "after-cli-kill",
+     "totalMB": 63,
+     "processes": 1,
+     "byRoleMB": {
+      "adapter (node)": 63
+     }
+    }
+   ]
+  },
+  "s08-list": {
+   "frames": 27,
+   "updateKinds": {},
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 127,
+     "note": "initialize-latency",
+     "elapsedMs": 125,
+     "ok": true
+    },
+    {
+     "t": 197,
+     "note": "list-summary",
+     "pages": 6,
+     "total": 136,
+     "fromThisSpike": 20,
+     "elapsedMs": 70,
+     "shapes": [
+      {
+       "count": 136,
+       "shape": {
+        "cwd": "string",
+        "sessionId": "string",
+        "title": "string",
+        "updatedAt": "string"
+       }
+      }
+     ]
+    },
+    {
+     "t": 202,
+     "note": "list-filtered",
+     "cwd": "as passed to session/new",
+     "count": 0,
+     "nextCursor": true
+    },
+    {
+     "t": 208,
+     "note": "list-filtered",
+     "cwd": "realpath",
+     "count": 14,
+     "nextCursor": true
+    },
+    {
+     "t": 2253,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    }
+   ],
+   "samples": []
+  },
+  "s09-load-resume": {
+   "frames": 117,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "session_info_update": 6,
+    "user_message_chunk": 2,
+    "agent_thought_chunk": 10,
+    "agent_message_chunk": 8,
+    "tool_call": 10,
+    "tool_call_update": 6,
+    "compaction_update": 3,
+    "usage_update": 2
+   },
+   "agentRequests": {
+    "_auth/status_update": 3
+   },
+   "notes": [
+    {
+     "t": 0,
+     "note": "process",
+     "n": 1,
+     "plan": "load, /compact, SIGKILL"
+    },
+    {
+     "t": 105,
+     "note": "initialize-latency",
+     "elapsedMs": 105,
+     "ok": true
+    },
+    {
+     "t": 201,
+     "note": "load-result",
+     "ok": true,
+     "elapsedMs": 96,
+     "replayed": 19
+    },
+    {
+     "t": 21920,
+     "note": "prompt-result",
+     "label": "compact",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 18715,
+     "timedOut": false
+    },
+    {
+     "t": 26964,
+     "note": "crash",
+     "procs": 8
+    },
+    {
+     "t": 26967,
+     "note": "exit",
+     "code": null,
+     "signal": "SIGKILL"
+    },
+    {
+     "t": 29968,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    },
+    {
+     "t": 29968,
+     "note": "process",
+     "n": 2,
+     "plan": "load after compaction"
+    },
+    {
+     "t": 30085,
+     "note": "initialize-latency",
+     "elapsedMs": 116,
+     "ok": true
+    },
+    {
+     "t": 30179,
+     "note": "load-result",
+     "ok": true,
+     "elapsedMs": 93,
+     "replayed": 20
+    },
+    {
+     "t": 35225,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 35225,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    },
+    {
+     "t": 35225,
+     "note": "process",
+     "n": 3,
+     "plan": "resume and continue"
+    },
+    {
+     "t": 35530,
+     "note": "initialize-latency",
+     "elapsedMs": 305,
+     "ok": true
+    },
+    {
+     "t": 35624,
+     "note": "resume-result",
+     "ok": true,
+     "elapsedMs": 94,
+     "updatesDuringResume": 0
+    },
+    {
+     "t": 42754,
+     "note": "prompt-result",
+     "label": "continue-after-resume",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 4129,
+     "timedOut": false
+    },
+    {
+     "t": 49123,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 49123,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": []
+  },
+  "s10-unauthenticated": {
+   "frames": 13,
+   "updateKinds": {},
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 142,
+     "note": "initialize-latency",
+     "elapsedMs": 141,
+     "ok": true
+    },
+    {
+     "t": 5149,
+     "note": "session-new",
+     "ok": false,
+     "error": {
+      "code": -32000,
+      "message": "Authentication required"
+     },
+     "elapsedMs": 6
+    },
+    {
+     "t": 9220,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 9220,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": []
+  },
+  "s10x-model-unsupported": {
+   "frames": 33,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 4,
+    "agent_message_chunk": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 104,
+     "note": "initialize-latency",
+     "elapsedMs": 102,
+     "ok": true
+    },
+    {
+     "t": 220,
+     "note": "session-new-latency",
+     "elapsedMs": 116,
+     "ok": true
+    },
+    {
+     "t": 3726,
+     "note": "prompt-result",
+     "label": "normal-turn",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 3430,
+     "timedOut": false
+    },
+    {
+     "t": 127344,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 127345,
+     "note": "orphans-after-exit",
+     "count": 0,
+     "procs": []
+    }
+   ],
+   "samples": [
+    {
+     "t": 295,
+     "label": "idle",
+     "totalMB": 342,
+     "processes": 10,
+     "byRoleMB": {
+      "adapter (node)": 84,
+      "codex wrapper (node)": 47,
+      "codex app-server": 113,
+      "user-configured tool or MCP server": 72,
+      "git": 26
+     }
+    }
+   ]
+  },
+  "s11-image": {
+   "frames": 32,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 3,
+    "agent_message_chunk": 1,
+    "usage_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 123,
+     "note": "initialize-latency",
+     "elapsedMs": 122,
+     "ok": true
+    },
+    {
+     "t": 272,
+     "note": "session-new-latency",
+     "elapsedMs": 149,
+     "ok": true
+    },
+    {
+     "t": 4735,
+     "note": "prompt-result",
+     "label": "image",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 4458,
+     "timedOut": false
+    },
+    {
+     "t": 10789,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 10789,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": []
+  },
+  "s12-resources": {
+   "frames": 33,
+   "updateKinds": {
+    "available_commands_update": 3
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 180,
+     "note": "initialize-latency",
+     "elapsedMs": 180,
+     "ok": true
+    },
+    {
+     "t": 180,
+     "note": "time-to-initialized",
+     "ms": 180
+    },
+    {
+     "t": 5366,
+     "note": "session-new-latency",
+     "elapsedMs": 143,
+     "ok": true
+    },
+    {
+     "t": 11567,
+     "note": "session-new-latency",
+     "elapsedMs": 157,
+     "ok": true
+    },
+    {
+     "t": 17739,
+     "note": "session-new-latency",
+     "elapsedMs": 110,
+     "ok": true
+    },
+    {
+     "t": 29886,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 29887,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": [
+    {
+     "t": 5223,
+     "label": "idle-0-sessions",
+     "totalMB": 209,
+     "processes": 3,
+     "byRoleMB": {
+      "adapter (node)": 84,
+      "codex wrapper (node)": 47,
+      "codex app-server": 79
+     }
+    },
+    {
+     "t": 11410,
+     "label": "idle-1-sessions",
+     "totalMB": 670,
+     "processes": 8,
+     "byRoleMB": {
+      "adapter (node)": 62,
+      "codex wrapper (node)": 36,
+      "codex app-server": 111,
+      "user-configured tool or MCP server": 460
+     }
+    },
+    {
+     "t": 17629,
+     "label": "idle-2-sessions",
+     "totalMB": 1057,
+     "processes": 13,
+     "byRoleMB": {
+      "adapter (node)": 64,
+      "codex wrapper (node)": 36,
+      "codex app-server": 119,
+      "user-configured tool or MCP server": 839
+     }
+    },
+    {
+     "t": 23788,
+     "label": "idle-3-sessions",
+     "totalMB": 1540,
+     "processes": 18,
+     "byRoleMB": {
+      "adapter (node)": 65,
+      "codex wrapper (node)": 36,
+      "codex app-server": 133,
+      "user-configured tool or MCP server": 1307
+     }
+    },
+    {
+     "t": 27835,
+     "label": "after-close-all",
+     "totalMB": 1540,
+     "processes": 18,
+     "byRoleMB": {
+      "adapter (node)": 65,
+      "codex wrapper (node)": 36,
+      "codex app-server": 133,
+      "user-configured tool or MCP server": 1307
+     }
+    }
+   ]
+  }
+ },
+ "codex-local": {
+  "s01-init-session": {
+   "frames": 45,
+   "updateKinds": {
+    "available_commands_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 2
+   },
+   "notes": [
+    {
+     "t": 180,
+     "note": "initialize-latency",
+     "elapsedMs": 177,
+     "ok": true
+    },
+    {
+     "t": 4489,
+     "note": "session-new-latency",
+     "elapsedMs": 194,
+     "ok": true
+    },
+    {
+     "t": 12528,
+     "note": "storage-check",
+     "sessionId": "01a143b7-3071-70f2-a961-c577f54a82e4",
+     "found": []
+    },
+    {
+     "t": 12542,
+     "note": "listed-empty-session",
+     "listed": false,
+     "elapsedMs": 14
+    },
+    {
+     "t": 14547,
+     "note": "session-close",
+     "ok": true,
+     "elapsedMs": 2
+    },
+    {
+     "t": 15547,
+     "note": "storage-check-after-close",
+     "sessionId": "01a143b7-3071-70f2-a961-c577f54a82e4",
+     "found": []
+    },
+    {
+     "t": 17593,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 17593,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    },
+    {
+     "t": 118,
+     "note": "initialize-latency",
+     "elapsedMs": 117,
+     "ok": true
+    },
+    {
+     "t": 134,
+     "note": "listed-after-restart",
+     "listed": false
+    },
+    {
+     "t": 2186,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 2186,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": [
+    {
+     "t": 252,
+     "label": "after-initialize",
+     "totalMB": 209,
+     "processes": 4,
+     "byRoleMB": {
+      "adapter (node)": 84,
+      "codex wrapper (node)": 47,
+      "codex app-server": 72,
+      "git": 7
+     }
+    },
+    {
+     "t": 4294,
+     "label": "idle-no-session",
+     "totalMB": 209,
+     "processes": 3,
+     "byRoleMB": {
+      "adapter (node)": 84,
+      "codex wrapper (node)": 47,
+      "codex app-server": 78
+     }
+    },
+    {
+     "t": 12527,
+     "label": "idle-one-session",
+     "totalMB": 715,
+     "processes": 8,
+     "byRoleMB": {
+      "adapter (node)": 75,
+      "codex wrapper (node)": 47,
+      "codex app-server": 123,
+      "user-configured tool or MCP server": 471
+     }
+    }
+   ]
+  },
+  "s02-normal-turn": {
+   "frames": 165,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 3,
+    "agent_thought_chunk": 8,
+    "agent_message_chunk": 108,
+    "usage_update": 7,
+    "tool_call": 4,
+    "tool_call_update": 6
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 102,
+     "note": "initialize-latency",
+     "elapsedMs": 101,
+     "ok": true
+    },
+    {
+     "t": 233,
+     "note": "session-new-latency",
+     "elapsedMs": 131,
+     "ok": true
+    },
+    {
+     "t": 42333,
+     "note": "prompt-result",
+     "label": "normal-turn",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 42046,
+     "timedOut": false
+    },
+    {
+     "t": 49377,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 49377,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": [
+    {
+     "t": 286,
+     "label": "idle",
+     "totalMB": 367,
+     "processes": 12,
+     "byRoleMB": {
+      "adapter (node)": 84,
+      "codex wrapper (node)": 46,
+      "codex app-server": 111,
+      "user-configured tool or MCP server": 98,
+      "git": 26
+     }
+    },
+    {
+     "t": 13988,
+     "label": "running",
+     "totalMB": 642,
+     "processes": 10,
+     "byRoleMB": {
+      "adapter (node)": 62,
+      "codex wrapper (node)": 35,
+      "codex app-server": 127,
+      "zsh": 3,
+      "user-configured tool or MCP server": 415
+     }
+    }
+   ]
+  },
+  "s03-exec": {
+   "frames": 54,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 4,
+    "agent_thought_chunk": 2,
+    "tool_call": 2,
+    "tool_call_update": 2,
+    "usage_update": 3,
+    "agent_message_chunk": 14
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 113,
+     "note": "initialize-latency",
+     "elapsedMs": 113,
+     "ok": true
+    },
+    {
+     "t": 227,
+     "note": "session-new-latency",
+     "elapsedMs": 114,
+     "ok": true
+    },
+    {
+     "t": 34288,
+     "note": "prompt-result",
+     "label": "exec",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 34059,
+     "timedOut": false
+    },
+    {
+     "t": 40340,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 40340,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": []
+  },
+  "s04-approval": {
+   "frames": 44,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 6,
+    "agent_thought_chunk": 2,
+    "tool_call": 2,
+    "tool_call_update": 1,
+    "usage_update": 2
+   },
+   "agentRequests": {
+    "_auth/status_update": 1,
+    "session/request_permission": 2
+   },
+   "notes": [
+    {
+     "t": 137,
+     "note": "initialize-latency",
+     "elapsedMs": 136,
+     "ok": true
+    },
+    {
+     "t": 267,
+     "note": "session-new-latency",
+     "elapsedMs": 130,
+     "ok": true
+    },
+    {
+     "t": 13481,
+     "note": "prompt-result",
+     "label": "allow-then-reject",
+     "ok": true,
+     "stopReason": "cancelled",
+     "elapsedMs": 13211,
+     "timedOut": false
+    },
+    {
+     "t": 20526,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 20527,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 1
+    }
+   ],
+   "samples": []
+  },
+  "s04b-reject-command": {
+   "frames": 45,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 4,
+    "agent_thought_chunk": 2,
+    "agent_message_chunk": 8,
+    "tool_call": 1,
+    "tool_call_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 1,
+    "session/request_permission": 1
+   },
+   "notes": [
+    {
+     "t": 97,
+     "note": "initialize-latency",
+     "elapsedMs": 95,
+     "ok": true
+    },
+    {
+     "t": 207,
+     "note": "session-new-latency",
+     "elapsedMs": 110,
+     "ok": true
+    },
+    {
+     "t": 11884,
+     "note": "prompt-result",
+     "label": "reject-command",
+     "ok": true,
+     "stopReason": "cancelled",
+     "elapsedMs": 11674,
+     "timedOut": false
+    },
+    {
+     "t": 18935,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 18935,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": []
+  },
+  "s05-questions": {
+   "frames": 132,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 7,
+    "agent_thought_chunk": 6,
+    "usage_update": 4,
+    "plan_update": 1,
+    "tool_call_update": 2,
+    "config_option_update": 1,
+    "agent_message_chunk": 75,
+    "tool_call": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 1,
+    "elicitation/create": 1,
+    "session/request_permission": 1
+   },
+   "notes": [
+    {
+     "t": 172,
+     "note": "initialize-latency",
+     "elapsedMs": 172,
+     "ok": true
+    },
+    {
+     "t": 378,
+     "note": "session-new-latency",
+     "elapsedMs": 206,
+     "ok": true
+    },
+    {
+     "t": 22354,
+     "note": "prompt-result",
+     "label": "request-user-input-and-plan",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 21970,
+     "timedOut": false
+    },
+    {
+     "t": 32407,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 32407,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": []
+  },
+  "s06-queue-steer": {
+   "frames": 109,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 18,
+    "tool_call": 3,
+    "tool_call_update": 3,
+    "usage_update": 14,
+    "agent_message_chunk": 17
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 151,
+     "note": "initialize-latency",
+     "elapsedMs": 151,
+     "ok": true
+    },
+    {
+     "t": 304,
+     "note": "session-new-latency",
+     "elapsedMs": 153,
+     "ok": true
+    },
+    {
+     "t": 123465,
+     "note": "prompt-result",
+     "label": "queue-second",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 82664,
+     "timedOut": false
+    },
+    {
+     "t": 180309,
+     "note": "request-timeout",
+     "id": 6,
+     "method": "session/prompt",
+     "timeoutMs": 180000
+    },
+    {
+     "t": 180309,
+     "note": "prompt-result",
+     "label": "queue-first",
+     "ok": false,
+     "elapsedMs": 180002,
+     "timedOut": true
+    },
+    {
+     "t": 180309,
+     "note": "queue-order",
+     "firstEndedAt": 180309,
+     "secondEndedAt": 123465,
+     "second": "end_turn"
+    },
+    {
+     "t": 235447,
+     "note": "steer-early-result",
+     "ok": true,
+     "result": {
+      "outcome": "injected"
+     },
+     "elapsedMs": 2
+    },
+    {
+     "t": 260386,
+     "note": "prompt-result",
+     "label": "steer-early",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 76075,
+     "timedOut": false
+    },
+    {
+     "t": 283865,
+     "note": "steer-running-result",
+     "ok": true,
+     "result": {
+      "outcome": "injected"
+     },
+     "elapsedMs": 1
+    },
+    {
+     "t": 320812,
+     "note": "prompt-result",
+     "label": "steer-running",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 55425,
+     "timedOut": false
+    },
+    {
+     "t": 325826,
+     "note": "steer-idle-optin-result",
+     "ok": true,
+     "result": {
+      "outcome": "startedNewTurn"
+     }
+    },
+    {
+     "t": 335877,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 335877,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": [
+    {
+     "t": 40801,
+     "label": "running",
+     "totalMB": 560,
+     "processes": 9,
+     "byRoleMB": {
+      "adapter (node)": 57,
+      "codex wrapper (node)": 35,
+      "codex app-server": 114,
+      "sleep": 1,
+      "user-configured tool or MCP server": 353
+     }
+    }
+   ]
+  },
+  "s07-cancel": {
+   "frames": 138,
+   "updateKinds": {
+    "available_commands_update": 2,
+    "session_info_update": 18,
+    "agent_thought_chunk": 4,
+    "tool_call": 3,
+    "tool_call_update": 32,
+    "usage_update": 9,
+    "agent_message_chunk": 4
+   },
+   "agentRequests": {
+    "_auth/status_update": 1,
+    "session/request_permission": 1
+   },
+   "notes": [
+    {
+     "t": 119,
+     "note": "initialize-latency",
+     "elapsedMs": 118,
+     "ok": true
+    },
+    {
+     "t": 281,
+     "note": "session-new-latency",
+     "elapsedMs": 162,
+     "ok": true
+    },
+    {
+     "t": 28469,
+     "note": "prompt-result",
+     "label": "cancel-running",
+     "ok": true,
+     "stopReason": "cancelled",
+     "elapsedMs": 28186,
+     "timedOut": false
+    },
+    {
+     "t": 28469,
+     "note": "cancel-latency",
+     "case": "running",
+     "ms": 6,
+     "stopReason": "cancelled"
+    },
+    {
+     "t": 88352,
+     "note": "prompt-result",
+     "label": "cancel-pending-approval",
+     "ok": true,
+     "stopReason": "cancelled",
+     "elapsedMs": 27435,
+     "timedOut": false
+    },
+    {
+     "t": 88647,
+     "note": "cancel-latency",
+     "case": "pending-approval",
+     "heldSeen": true,
+     "ms": 5,
+     "stopReason": "cancelled"
+    },
+    {
+     "t": 105711,
+     "note": "prompt-result",
+     "label": "after-cancel",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 13063,
+     "timedOut": false
+    },
+    {
+     "t": 195697,
+     "note": "request-timeout",
+     "id": 11,
+     "method": "session/prompt",
+     "timeoutMs": 90000
+    },
+    {
+     "t": 195697,
+     "note": "prompt-result",
+     "label": "cli-killed",
+     "ok": false,
+     "elapsedMs": 89986,
+     "timedOut": true
+    },
+    {
+     "t": 196578,
+     "note": "kill-cli",
+     "victim": {
+      "pid": 94201,
+      "ppid": 94199,
+      "rssKB": 131536,
+      "label": "codex app-server"
+     }
+    },
+    {
+     "t": 196578,
+     "note": "after-cli-kill",
+     "ms": -881,
+     "ok": false,
+     "timedOut": true
+    },
+    {
+     "t": 214884,
+     "note": "prompt-result",
+     "label": "after-cli-kill-followup",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 15268,
+     "timedOut": false
+    },
+    {
+     "t": 214884,
+     "note": "followup-after-kill",
+     "ok": true,
+     "stopReason": "end_turn"
+    },
+    {
+     "t": 216936,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 219981,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 1,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 5460,
+       "ppid": 1,
+       "rssKB": 15184,
+       "label": "Codex Computer SkyComputerUseClient"
+      }
+     ],
+     "waitedMs": 3045
+    }
+   ],
+   "samples": [
+    {
+     "t": 28463,
+     "label": "running",
+     "totalMB": 739,
+     "processes": 10,
+     "byRoleMB": {
+      "adapter (node)": 76,
+      "codex wrapper (node)": 46,
+      "codex app-server": 144,
+      "zsh": 3,
+      "sleep": 1,
+      "user-configured tool or MCP server": 470
+     }
+    },
+    {
+     "t": 31508,
+     "label": "after-cancel",
+     "totalMB": 740,
+     "processes": 10,
+     "byRoleMB": {
+      "adapter (node)": 76,
+      "codex wrapper (node)": 46,
+      "codex app-server": 145,
+      "zsh": 3,
+      "sleep": 1,
+      "user-configured tool or MCP server": 470
+     }
+    },
+    {
+     "t": 199616,
+     "label": "after-cli-kill",
+     "totalMB": 57,
+     "processes": 1,
+     "byRoleMB": {
+      "adapter (node)": 57
+     }
+    }
+   ]
+  },
+  "s07b-cli-crash-recovery": {
+   "frames": 45,
+   "updateKinds": {
+    "available_commands_update": 2,
+    "session_info_update": 5,
+    "agent_message_chunk": 2,
+    "usage_update": 2
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 128,
+     "note": "initialize-latency",
+     "elapsedMs": 127,
+     "ok": true
+    },
+    {
+     "t": 266,
+     "note": "session-new-latency",
+     "elapsedMs": 138,
+     "ok": true
+    },
+    {
+     "t": 4371,
+     "note": "prompt-result",
+     "label": "before-kill",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 4102,
+     "timedOut": false
+    },
+    {
+     "t": 7413,
+     "note": "kill-cli",
+     "victim": {
+      "pid": 5751,
+      "ppid": 5749,
+      "rssKB": 157168,
+      "label": "codex app-server"
+     },
+     "idle": true
+    },
+    {
+     "t": 15838,
+     "note": "prompt-result",
+     "label": "after-kill",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 4380,
+     "timedOut": false
+    },
+    {
+     "t": 20884,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 21173,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 1,
+     "aliveAfter5s": 0,
+     "procsAtExit": [
+      {
+       "pid": 7295,
+       "ppid": 1,
+       "rssKB": 15200,
+       "label": "Codex Computer SkyComputerUseClient"
+      }
+     ],
+     "waitedMs": 289
+    }
+   ],
+   "samples": [
+    {
+     "t": 11458,
+     "label": "after-cli-kill",
+     "totalMB": 76,
+     "processes": 1,
+     "byRoleMB": {
+      "adapter (node)": 76
+     }
+    }
+   ]
+  },
+  "s08-list": {
+   "frames": 27,
+   "updateKinds": {},
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 107,
+     "note": "initialize-latency",
+     "elapsedMs": 106,
+     "ok": true
+    },
+    {
+     "t": 173,
+     "note": "list-summary",
+     "pages": 6,
+     "total": 140,
+     "fromThisSpike": 24,
+     "elapsedMs": 66,
+     "shapes": [
+      {
+       "count": 140,
+       "shape": {
+        "cwd": "string",
+        "sessionId": "string",
+        "title": "string",
+        "updatedAt": "string"
+       }
+      }
+     ]
+    },
+    {
+     "t": 178,
+     "note": "list-filtered",
+     "cwd": "as passed to session/new",
+     "count": 0,
+     "nextCursor": true
+    },
+    {
+     "t": 183,
+     "note": "list-filtered",
+     "cwd": "realpath",
+     "count": 10,
+     "nextCursor": true
+    },
+    {
+     "t": 2227,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    }
+   ],
+   "samples": []
+  },
+  "s09-load-resume": {
+   "frames": 117,
+   "updateKinds": {
+    "available_commands_update": 3,
+    "session_info_update": 6,
+    "user_message_chunk": 2,
+    "agent_thought_chunk": 8,
+    "agent_message_chunk": 10,
+    "tool_call": 8,
+    "tool_call_update": 8,
+    "compaction_update": 3,
+    "usage_update": 2
+   },
+   "agentRequests": {
+    "_auth/status_update": 3
+   },
+   "notes": [
+    {
+     "t": 1,
+     "note": "process",
+     "n": 1,
+     "plan": "load, /compact, SIGKILL"
+    },
+    {
+     "t": 99,
+     "note": "initialize-latency",
+     "elapsedMs": 98,
+     "ok": true
+    },
+    {
+     "t": 183,
+     "note": "load-result",
+     "ok": true,
+     "elapsedMs": 84,
+     "replayed": 19
+    },
+    {
+     "t": 20704,
+     "note": "prompt-result",
+     "label": "compact",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 17519,
+     "timedOut": false
+    },
+    {
+     "t": 25753,
+     "note": "crash",
+     "procs": 8
+    },
+    {
+     "t": 25756,
+     "note": "exit",
+     "code": null,
+     "signal": "SIGKILL"
+    },
+    {
+     "t": 28758,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    },
+    {
+     "t": 28758,
+     "note": "process",
+     "n": 2,
+     "plan": "load after compaction"
+    },
+    {
+     "t": 28910,
+     "note": "initialize-latency",
+     "elapsedMs": 152,
+     "ok": true
+    },
+    {
+     "t": 29079,
+     "note": "load-result",
+     "ok": true,
+     "elapsedMs": 169,
+     "replayed": 20
+    },
+    {
+     "t": 34128,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 34128,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    },
+    {
+     "t": 34129,
+     "note": "process",
+     "n": 3,
+     "plan": "resume and continue"
+    },
+    {
+     "t": 34236,
+     "note": "initialize-latency",
+     "elapsedMs": 107,
+     "ok": true
+    },
+    {
+     "t": 34307,
+     "note": "resume-result",
+     "ok": true,
+     "elapsedMs": 70,
+     "updatesDuringResume": 0
+    },
+    {
+     "t": 45550,
+     "note": "prompt-result",
+     "label": "continue-after-resume",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 8240,
+     "timedOut": false
+    },
+    {
+     "t": 51597,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 51597,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": []
+  },
+  "s10-unauthenticated": {
+   "frames": 13,
+   "updateKinds": {},
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 131,
+     "note": "initialize-latency",
+     "elapsedMs": 131,
+     "ok": true
+    },
+    {
+     "t": 5135,
+     "note": "session-new",
+     "ok": false,
+     "error": {
+      "code": -32000,
+      "message": "Authentication required"
+     },
+     "elapsedMs": 4
+    },
+    {
+     "t": 9191,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 9191,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": []
+  },
+  "s11-image": {
+   "frames": 32,
+   "updateKinds": {
+    "available_commands_update": 1,
+    "session_info_update": 3,
+    "agent_message_chunk": 1,
+    "usage_update": 1
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 153,
+     "note": "initialize-latency",
+     "elapsedMs": 152,
+     "ok": true
+    },
+    {
+     "t": 282,
+     "note": "session-new-latency",
+     "elapsedMs": 129,
+     "ok": true
+    },
+    {
+     "t": 13634,
+     "note": "prompt-result",
+     "label": "image",
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 13349,
+     "timedOut": false
+    },
+    {
+     "t": 19682,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 19682,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": []
+  },
+  "s12-resources": {
+   "frames": 33,
+   "updateKinds": {
+    "available_commands_update": 3
+   },
+   "agentRequests": {
+    "_auth/status_update": 1
+   },
+   "notes": [
+    {
+     "t": 103,
+     "note": "initialize-latency",
+     "elapsedMs": 103,
+     "ok": true
+    },
+    {
+     "t": 103,
+     "note": "time-to-initialized",
+     "ms": 103
+    },
+    {
+     "t": 5300,
+     "note": "session-new-latency",
+     "elapsedMs": 129,
+     "ok": true
+    },
+    {
+     "t": 11437,
+     "note": "session-new-latency",
+     "elapsedMs": 89,
+     "ok": true
+    },
+    {
+     "t": 17568,
+     "note": "session-new-latency",
+     "elapsedMs": 88,
+     "ok": true
+    },
+    {
+     "t": 29695,
+     "note": "exit",
+     "code": 0,
+     "signal": null
+    },
+    {
+     "t": 29695,
+     "note": "orphans-after-exit",
+     "aliveAtExit": 0,
+     "aliveAfter5s": 0,
+     "procsAtExit": [],
+     "waitedMs": 0
+    }
+   ],
+   "samples": [
+    {
+     "t": 5171,
+     "label": "idle-0-sessions",
+     "totalMB": 206,
+     "processes": 3,
+     "byRoleMB": {
+      "adapter (node)": 84,
+      "codex wrapper (node)": 46,
+      "codex app-server": 76
+     }
+    },
+    {
+     "t": 11348,
+     "label": "idle-1-sessions",
+     "totalMB": 719,
+     "processes": 8,
+     "byRoleMB": {
+      "adapter (node)": 75,
+      "codex wrapper (node)": 46,
+      "codex app-server": 122,
+      "user-configured tool or MCP server": 476
+     }
+    },
+    {
+     "t": 17480,
+     "label": "idle-2-sessions",
+     "totalMB": 1208,
+     "processes": 13,
+     "byRoleMB": {
+      "adapter (node)": 76,
+      "codex wrapper (node)": 46,
+      "codex app-server": 133,
+      "user-configured tool or MCP server": 952
+     }
+    },
+    {
+     "t": 23608,
+     "label": "idle-3-sessions",
+     "totalMB": 1632,
+     "processes": 18,
+     "byRoleMB": {
+      "adapter (node)": 61,
+      "codex wrapper (node)": 35,
+      "codex app-server": 134,
+      "user-configured tool or MCP server": 1401
+     }
+    },
+    {
+     "t": 27650,
+     "label": "after-close-all",
+     "totalMB": 1585,
+     "processes": 18,
+     "byRoleMB": {
+      "adapter (node)": 60,
+      "codex wrapper (node)": 35,
+      "codex app-server": 130,
+      "user-configured tool or MCP server": 1359
+     }
+    }
+   ]
+  }
+ }
+}
