@@ -1,0 +1,27 @@
+## 1. argv / environment of another process owned by the same user
+-- target-plain
+ps args:          <w>/target-plain --idle-ms 6000 --name argv-canary-target-plain
+ps -E (env) shows canary: 1
+ps eww shows canary:      1
+from codex read-only sandbox, ps args: sandbox-exec: execvp() of '/bin/ps' failed: Operation not permitted
+from codex read-only sandbox, env canary: 0
+-- target-hardened
+ps args:          <w>/target-hardened --idle-ms 6000 --name argv-canary-target-hardened
+ps -E (env) shows canary: 1
+ps eww shows canary:      1
+from codex read-only sandbox, ps args: sandbox-exec: execvp() of '/bin/ps' failed: Operation not permitted
+from codex read-only sandbox, env canary: 0
+
+## 2. flags and entitlements that decide DYLD_* and task port access
+-- target-plain
+CodeDirectory v=20400 flags=0x20002(adhoc,linker-signed) location=embedded
+entitlements: none
+-- target-hardened
+CodeDirectory v=20500 flags=0x10000(runtime) location=embedded
+entitlements: none
+-- third-party runtimes on this machine (for ADR-08: what a bundled runtime would inherit)
+node: flags=0x10000(runtime) com.apple.security.cs.allow-dyld-environment-variables com.apple.security.cs.allow-jit com.apple.security.cs.allow-unsigned-executable-memory com.apple.security.cs.disable-executable-page-protection com.apple.security.cs.disable-library-validation com.apple.security.get-task-allow 
+python3: flags=0x0(none) 
+nc: flags=0x0(none) com.apple.security.network.client com.apple.security.network.server 
+-- developer tools security (task_for_pid for debugger-entitled callers needs admin auth when disabled)
+Developer mode is currently disabled.
