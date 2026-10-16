@@ -23,7 +23,7 @@ cupper 是开源项目（PRD 定位）。依赖里有三类许可证问题需要
 - Claude Code 的二进制；
 - 任何包含以上两者的打包产物，包括 SEA、bun 编译产物和 esbuild bundle。
 
-CI 在打包输入里发现 `@anthropic-ai/claude-agent-sdk` 时直接失败。claude-agent-acp 一律在用户机器上从 npm 安装并打包（见 ADR-08），App 里只放锁文件这类元数据。
+CI 门禁分两层（设计评审修订，原写法为"打包输入里发现这个 SDK 就失败"，打包后包名就不存在了，不可靠）：对每个进入 App 的 JS 入口，按锁文件和打包器的 metafile 求出生产依赖闭包，出现 `@anthropic-ai/claude-agent-sdk` 或 `@anthropic-ai/claude-code` 就失败；对最终产物按内容指纹扫描，锁文件这类元数据按哈希放行；另加一个故意引入依赖的负面测试。claude-agent-acp 一律在用户机器上从 npm 安装并打包（见 ADR-08），App 里只放锁文件这类元数据。
 
 **3. 可以随 App 分发的组件**
 
@@ -50,3 +50,10 @@ CI 在打包输入里发现 `@anthropic-ai/claude-agent-sdk` 时直接失败。c
 
 - **好处**：开源分发时没有许可证风险；第三方声明可以自动生成。
 - **代价**：claude-agent-acp 要在用户机器上安装和打包（见 ADR-08）；需要维护一个许可证门禁。
+
+## 设计评审修订（2026-10-16）
+
+来源：设计评审会（`docs/meetings/2026-10-16-design-review/minutes.md`）、用户决定（`docs/meetings/2026-10-16-gate-design-decisions/minutes.md`）、详细设计 v0.7 的 5.13.2。本节是细化，不推翻上文；上文中被替换的写法已就地改正并注明。
+
+- **门禁工具**：`cargo deny`、cargo-about、`tools/license-gate`；第一层每个 PR 跑，第二层在发布流水线和每晚的发布配置构建里跑（详细设计 5.1.6、5.10.7）。
+- CI 计算 claude-agent-acp 本机打包产物的哈希时用隔离目录，不进入任何打包输入。

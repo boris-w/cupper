@@ -85,3 +85,16 @@ Node 和适配器不放进包里，而是按锁定的版本装在 `~/Library/App
 
 - **适配器的进程组管理是必需的。** 拉起适配器之后立即记录它的进程组、pid 和启动时间。宿主启动时和正常退出时，都按进程组清理残留的进程。实测发现，在等待审批时 `kill -9` 宿主，node 适配器会退出，但 claude CLI（约 300 MB）会存活下来，靠进程组才能清理掉。
 - **冷启动**：宿主侧 p95 只有 4.6 ms，400 ms 的预算大部分可以留给签名校验和 UI。冷启动时只加载 index，会话的视图按需懒加载。
+
+## 设计评审修订（2026-10-16）
+
+来源：设计评审会（`docs/meetings/2026-10-16-design-review/minutes.md`）、用户决定（`docs/meetings/2026-10-16-gate-design-decisions/minutes.md`）、详细设计 v0.7 的 5.13.2。本节是细化，不推翻上文；上文中被替换的写法已就地改正并注明。
+
+- **载荷位置**：运行时载荷放在 `CupperHost.app/Contents/Resources/runtime/`；Node 作为普通 Mach-O 放在 `CupperHost.app/Contents/Helpers/`，随 App 一起公证（U-R3）。"运行中不读包内资源"只有一个例外：自检通过后，按内嵌清单逐文件核对哈希，复制到包外的运行时目录。
+- **拉起方式**：UI 经原生扩展调用 `cupper-sys::spawn` 拉起宿主（`POSIX_SPAWN_SETSID`、`CLOEXEC_DEFAULT`、环境变量白名单），一次性密钥等启动载荷经 stdin 传入（详细设计 5.2.13、5.7.2）。
+- **路径与数据目录**：Electron 的 userData 设到数据目录下的 `ui/`，避免与 "Cupper" 在大小写不敏感的卷上落到同一目录；套接字路径过长时回退到 `DARWIN_USER_TEMP_DIR`，不用 `/tmp`。
+- **退出码**：3、4、5 沿用 D01 的约定，新增 6 表示迁移失败（5.2.13）。
+- **通知**：点击通知后宿主经 control 连接发 `ui/navigate`，并按 bundle id 激活 Cupper，不走 `cupper://` 通用路由。helper 的通知身份在 M1b 开始前验证（Q2，SP-10 的通知部分），不通过就由 UI 主进程弹通知。
+- **更新**：`quitAndInstall()` 之后有一段"宿主已退出、App 还没退出"的空窗，期间不自动拉起宿主，Squirrel 报错时恢复；首次启动检查是否在"应用程序"文件夹（5.10.5）。
+- **TCC 归属**：范围扩大到 agent 的全部后代。SP-10 一并评估给适配器设置 disclaim；cupper 永远不申请辅助功能、自动化、屏幕录制权限（Q21）。
+- **bundle id**：前缀定为 `dev.cupper`，发布版为 `dev.cupper.app` 和 `dev.cupper.app.host`；M1b 首次签名发布之前可以无成本修改，之后不再改（Q5）。

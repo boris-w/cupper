@@ -36,6 +36,9 @@ SP-5 在 linux 内核仓库（9.6 万个文件）和多种合成仓库上做了�
 - 宿主启动时从用户的登录 shell 读取 PATH，检测 git 版本（暂定最低 2.39），同时检查有没有 git-lfs。
 
 **回合快照**
+
+> 设计评审修订（2026-10-16）：快照改在 cupper 自己的 GIT_DIR 里执行（用 alternates 指向仓库的对象，只拷贝白名单配置和 `info/exclude`），下面的步骤不变，但不再读取仓库本地的配置、hooks 和 `info/attributes`；复制 index 时保留 mtime。见文末。
+
 1. 把 `rev-parse --git-path index` 指向的文件复制一份，作为临时 index。
 2. 执行 `git -c core.safecrlf=false -c advice.addEmbeddedRepo=false add -A --ignore-errors`，带上用于排除的 pathspec。
 3. 执行 `write-tree`。
@@ -100,3 +103,17 @@ SP-5 在 linux 内核仓库（9.6 万个文件）和多种合成仓库上做了�
 - **待验证**：
   - 大小写敏感的卷、外置盘、较老的 git 版本、冷缓存的情况，在实现阶段的 CI 和用户实际使用中观察；
   - 如果以后用 gix 优化 status 轮询，要先做一致性校验。
+
+## 设计评审修订（2026-10-16）
+
+来源：设计评审会（`docs/meetings/2026-10-16-design-review/minutes.md`）、用户决定（`docs/meetings/2026-10-16-gate-design-decisions/minutes.md`）、详细设计 v0.7 的 5.13.2。本节是细化，不推翻上文；上文中被替换的写法已就地改正并注明。
+
+- **宿主自动调用 git 分三档**（纪要 D8，详细设计 5.2.10）：
+  - **快照档**：回合快照、`unstaged` 和 `staged` 两种 diff 范围、`git/status` 的文件状态、`@` 引用的文件列表，都在 cupper 自己的 GIT_DIR 里执行，配置只放行白名单（D02 实验验证与 SP-5 方案得到相同的 tree）；
+  - **仓库档**：在用户仓库上执行的其余自动调用，每次调用前读取配置并用 `-c` 覆盖可执行类键（`core.fsmonitor`、`core.hooksPath` 无条件覆盖），配置来源位于工作区或其他 agent 可写的位置时拒绝执行（仓库自己的 git 目录除外，由覆盖和指纹兜底），调用后比对指纹，覆盖后 git 报错一律不重试；
+  - **用户档**：只有用户在界面上点"提交""推送"时才运行仓库的 hooks、签名和凭据助手，与在终端里执行一致，按钮旁注明。
+- **仓库可执行配置的指纹**：回合前后计算，变化时在消息流和审查面板醒目提示。
+- **复制 index 时保留 mtime**：D02 实验发现，不保留时同一秒内改过、大小又没变的文件会被当成未修改，SP-5 的方案同样有这个问题。
+- 自定义过滤器（例如 git-crypt）的路径标 `filter_unsupported`：检测覆盖全部属性来源（快照档复制 `info/attributes`），快照里只存占位和哈希，不提供 hunk 操作，`git/stage` 前再用 `check-attr` 核对一次；LFS 只放行标准取值（Q32 实测）。
+- **git 和 git-lfs 的路径**：宿主启动时解析成绝对路径，只从 PATH 的可信条目里查找；git 子进程的 PATH 只留可信条目，工作目录设为 cupper 自己的目录；快照档的 LFS 过滤器写成绝对路径。
+- hunk 操作用 `diff_token` 指向宿主缓存的补丁；M1 提供最小的 `staged` 范围，只用于取消暂存（Q13）；按仓库加锁的范围；git 子进程的环境变量约定（`LC_ALL=C`、`GIT_TERMINAL_PROMPT=0`）。

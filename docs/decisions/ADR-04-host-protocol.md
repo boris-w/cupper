@@ -122,3 +122,14 @@ schema 的来源也有几种选择：Rust 类型、手写 JSON Schema、TypeSpec
 4. **"类型已知但数据残缺"的处理**：客户端把它降级成未知事件，并记日志；CI 对金样例做严格校验，不允许降级。
 5. **`blob/put` 在 M1 实现**：64 KB 的帧上限，对用户粘贴的长 prompt 会立刻起作用。
 6. **命令参数的摘要**：基于键排好序的规范 JSON 计算。
+
+## 设计评审修订（2026-10-16）
+
+来源：设计评审会（`docs/meetings/2026-10-16-design-review/minutes.md`）、用户决定（`docs/meetings/2026-10-16-gate-design-decisions/minutes.md`）、详细设计 v0.7 的 5.13.2。本节是细化，不推翻上文；上文中被替换的写法已就地改正并注明。
+
+- **握手**：增加 `host/hello`（下发 nonce）；`initialize` 每条连接只接受一次，角色确定后不可变，增加 `nonce`、`role`；退化模式的认证改为绑定信道的双向证明（方向标签、双方 nonce、各自看到的对端 pid），结果带 `host_proof` 和 `data_epoch`（5.3.2）。
+- **命令**："受理"语义，命令结果和它产生的事件在同一事务里落盘；账本按 principal 的稳定 ID 记；`session/create` 必须带第一条消息，并随受理事务落盘；window 角色的 `interaction/respond`、`git/revert` 必须带 `input` 证据。
+- **同步与历史**：`history/page` 读回合快照，游标细到回合内的位置 `{turn_no, op_index?}`；`stream/subscribe` 带 `epoch`，`epoch_changed` 或 `cursor_ahead` 时走快照。
+- **事件**：`item.delta` 带 `field: text|output`，合并键为 `(item_id, field)`；各条目带时间字段；`turn.completed.final_item_ids`；`late_tool_output` 条目；`ToolCall` 的必填字段按 `tool_kind` 列表。
+- **其他**：`blob/put` 先发分片再发请求；hunk 的前置条件具体化为 `diff_token`；错误码增加 `git_error` 并给出 reason 清单；规范 JSON 用 RFC 8785，摘要保留完整的 256 位；要批准的内容不截断，超长改为 blob。
+- **v1 契约在 M1a 冻结**：冻结清单和机制见详细设计 5.12.5；之后 M1b 只加方法、事件、可选字段和开放枚举的取值。方法清单以 5.3.4 为准。

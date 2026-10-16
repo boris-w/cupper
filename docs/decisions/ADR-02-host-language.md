@@ -66,3 +66,15 @@ TypeScript/Node、Rust、Swift，另以 Go 作为对照。
   - SDK 锁定精确版本；
   - 导出给其他语言的产物，不能依赖 serde_json 的 map 键顺序；
   - `unsafe` 只能出现在 `sys` 模块。
+
+## 设计评审修订（2026-10-16）
+
+来源：设计评审会（`docs/meetings/2026-10-16-design-review/minutes.md`）、用户决定（`docs/meetings/2026-10-16-gate-design-decisions/minutes.md`）、详细设计 v0.7 的 5.13.2。本节是细化，不推翻上文；上文中被替换的写法已就地改正并注明。
+
+- **crate 表补充**：`cupper-sys`（集中全部 `unsafe`，是"`unsafe` 只在 sys 模块"在多 crate 下的落法）、`cupper-desktop-native`（napi-rs，桌面主进程用来拉起和校验宿主）、`xtask`。
+- 协议的 `Method` trait 声明 `SCOPE` 和 `IDEMPOTENCY`，由表驱动测试逐格检查权限矩阵。
+- **写进 `CLAUDE.md` 的约束新增**：
+  - 时间只经 `Clock` 获取、ID 只经 `IdGen` 生成，clippy `disallowed-methods` 禁止直接调用 `Instant::now`、`SystemTime::now`、`tokio::time::*`、`std::thread::sleep` 等；
+  - 有状态的决策（回合状态机、队列、交互代理、自发回合判定、合并器）写成不做 I/O 的纯核心 `step(input, now) -> Vec<Action>`；
+  - 宿主的所有子进程一律经 `cupper-sys::spawn` 拉起。
+  详见详细设计 5.1.7、5.2.16。

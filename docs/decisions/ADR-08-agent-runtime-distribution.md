@@ -29,7 +29,7 @@ PRD 的 AG-1 和 NFR-5 要求：
 
 **2. Node 运行时：随 App 带一份官方 LTS，用 cupper 的身份重新签名**
 - 开启 hardened runtime，**只保留 `com.apple.security.cs.allow-jit`**，去掉官方二进制自带的其余 5 项 entitlement。
-- 首次运行时复制到 `runtime/node/<版本>/`，两个适配器共用这一份。
+- 作为普通 Mach-O 放在 `CupperHost.app/Contents/Helpers/`，随 App 一起公证；安装时复制到 `runtime/node/<版本>/` 并核对 cdhash，两个适配器共用这一份（设计评审修订，U-R3；原写法为首次运行时从随包的 tar.xz 复制）。
 - 这份 Node 只用来运行适配器，**永远不跑可信代码**，也不持有任何秘密。
 
 **3. 适配器的形态：每个都是一个 ESM 单文件，由 cupper 自己的 Node 运行**
@@ -66,7 +66,7 @@ PRD 的 AG-1 和 NFR-5 要求：
 
 - **好处**：
   - 不再分发 Anthropic 的 SDK 和二进制；
-  - App 只增加约 24 MB（Node xz 压缩后）加 14 MB（esbuild-wasm）；
+  - App 增加 Node（不压缩，随 App 公证；下载包增加十几 MB，安装后约 100 MB，估计值）加 14 MB（esbuild-wasm）（设计评审修订，原写法为"约 24 MB（Node xz 压缩后）"）；
   - entitlement 最少；
   - 安装可以复现，也可以验证。
 - **代价**：
@@ -74,5 +74,17 @@ PRD 的 AG-1 和 NFR-5 要求：
   - Node 的安全更新跟着 App 一起发版；以后要不要单独为 runtime 开一个更新通道，等有需要时再定；
   - 依赖用户本机 CLI 的版本，需要维护兼容矩阵。
 - **待验证**：
-  - 在有 Developer ID 的 CI 上，只带 `allow-jit` 的 Node 能否通过公证；
+  - 在有 Developer ID 的 CI 上，只带 `allow-jit` 的 Node 随 App 公证的结果（U-R3 已改为随 App 公证）；
   - 公证过的 App 里，新文件首次执行的耗时。
+
+## 设计评审修订（2026-10-16）
+
+来源：设计评审会（`docs/meetings/2026-10-16-design-review/minutes.md`）、用户决定（`docs/meetings/2026-10-16-gate-design-decisions/minutes.md`）、详细设计 v0.7 的 5.13.2。本节是细化，不推翻上文；上文中被替换的写法已就地改正并注明。
+
+- **codex-acp 随包**（Q4）：CI 按 npm 的 SRI 校验上游文件，清单记录 sha-256，附带它内联的依赖的许可证声明，每晚执行 `runtime-pack --verify`。
+- **清单**在编译期内嵌进宿主二进制，覆盖所有会被执行或加载的文件（包括 `bundle-claude-acp.mjs`）；安装时按锁文件直接下载 tarball，不调用 npm，不运行生命周期脚本。
+- **已验证的 CLI 范围**由兼容报告生成并写进清单，不手填。
+- **未信任的项目**：驱动层经 `_meta.claudeCode.options` 传 `settingSources: ["user"]`（U-R1）。
+- `runtime-pack` 从锁定的适配器产物里提取环境变量的读取点，出现未分类的新变量就失败（ADR-05 的环境变量禁用清单）。
+- 安装器的解压依赖由 xz 改为 gzip（npm tarball），Node 不再需要解 xz。
+- **CLI 发现**只在 PATH 的可信条目里查找：绝对路径，并且不在任何项目、工作区、临时目录下（5.6.6）。

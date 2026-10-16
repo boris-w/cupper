@@ -50,11 +50,11 @@ PRD 要求复刻 Codex 视图（UI-6），包括：
 | 本地化 | i18next 或 FormatJS，加 Intl |
 
 **进程结构**
-- **主进程**是到宿主的唯一连接，所有窗口共用。每个窗口分到一个自己的 MessagePort。
-- 主进程只按长度前缀切帧，不解析 JSON；大约每 16 ms 批量转发一次；渲染进程跟不上时停止读取，交给宿主重新同步。
+- **主进程**持有到宿主的全部连接：一条自用的 control 连接，加上每个窗口一条数据连接（绑定到窗口的文档实例）；每个窗口经自己的 MessagePort 收发。套接字、令牌和签名校验都不进渲染进程。（设计评审修订，原写法为"唯一连接，所有窗口共用"：主进程不解析入方向的 JSON，就无法把事件分给多个窗口，见 Q1。）
+- 入方向按字节块转发，由渲染进程切帧；出方向由主进程解析、按白名单放行并重新序列化。渲染进程收到即应用、应用后确认；跟不上时主进程停止读取，交给宿主重新同步。（设计评审修订）
 - **渲染进程**开启 sandbox 和 contextIsolation。preload 只暴露有类型、有白名单的 API。
 - 外壳相关的能力都通过一个 `ShellAPI` 接口调用，同时提供一个浏览器 mock 实现，为将来换成 Tauri 留余地。
-- 如果 SP-6 测得主进程事件循环延迟的 p99 超过 5 ms，就改用"utilityProcess 宿主桥 + 委托票据"。
+- 如果 M1a 的 windowBridge 测量闸门（负载按一个窗口的订阅上限定义，见详细设计 5.7.1）测得主进程事件循环延迟的 p99 达到 5 ms，就在界面任务之前改用"utilityProcess 宿主桥 + 委托票据"。（设计评审修订：测量从 SP-6 前移到 M1a）
 
 **安全加固（必须做到）**
 - **Fuses**（发布构建）：
@@ -67,7 +67,7 @@ PRD 要求复刻 Codex 视图（UI-6），包括：
   - 不渲染原始 HTML，做内容清洗；
   - 链接在外部浏览器打开，并且只允许 http 和 https；
   - 禁止页面导航和新开窗口；
-  - 启用 Trusted Types。
+  - 主文档启用 Trusted Types，禁止 `default` 策略；审查面板的 diff 视图放在独立源的 iframe 里（设计评审修订，见文末）。
 - **防止"渲染进程替自己批准"**：
   - 下列操作只能走主进程弹出的原生确认框，确认框的内容由主进程直接从宿主获取：切换到完全访问或跳过审批、选择 `allow_always`、批准 CLI 提权、M3 中的设备配对和撤销。
   - 批准和回答提问，需要主进程在 1 秒内通过 `before-input-event` 观察到真实的用户输入，同时检查 `navigator.userActivation`。
@@ -124,7 +124,7 @@ PRD 要求复刻 Codex 视图（UI-6），包括：
 
 补充：
 - 终端组件以 xterm.js 为主，ghostty-web 作为备选。
-- 打包工具在 electron-builder 和 Electron Forge 之间选，在详细设计阶段确定。Codex、Claude 用的是 Forge，前提是能满足 ADR-01 对"自己控制安装时机"的要求。
+- 打包工具定为 **electron-builder 26.x + electron-updater 6.8.x**（详细设计 5.10.4）：`autoInstallOnAppQuit=false` 时，下载好的更新一直留到调用 `quitAndInstall()` 才交给 Squirrel，满足 ADR-01 的"自己控制安装时机"（已核对源码）；Forge 默认的更新路径会在下次启动时自动应用，无法暂缓。
 
 ## R05 补充证据（2026-10-16）
 
@@ -144,3 +144,14 @@ R05 调研了 33 个热门 App，包括 Manus、豆包、Kimi、元宝、飞书�
 另外补充两项决策：
 - **Electron 的最低版本**：要避开 macOS 26 上已知的卡顿问题。Qoder 为此从 Electron 34 升到了 37。具体版本在详细设计时核实，并始终跟随官方支持的版本。
 - **分发渠道**：只做官网直接下载，不上 Mac App Store。cupper 需要操作本地文件和进程，与 App Store 的沙箱要求冲突；同类 agent 产品（Perplexity 新版、Gemini、Manus、Granola）也都不上商店。
+
+## 设计评审修订（2026-10-16）
+
+来源：设计评审会（`docs/meetings/2026-10-16-design-review/minutes.md`）、用户决定（`docs/meetings/2026-10-16-gate-design-decisions/minutes.md`）、详细设计 v0.7 的 5.13.2。本节是细化，不推翻上文；上文中被替换的写法已就地改正并注明。
+
+- **Electron 起始版本 44.8.0**，始终在官方支持的最新三个大版本之内（5.10.6）。
+- **构建**：Vite 构建主进程、单文件 CommonJS 的 preload（沙箱 preload 不支持 ESM）、主文档和审查文档两个渲染入口；运行时依赖全部打进 bundle。
+- **数据连接的生命周期**：绑定到文档实例，导航、渲染进程崩溃、窗口关闭时关闭；重连先 control 后 window；window 连接的 `initialize` 由主进程代发后才交出端口（5.7.1）。
+- **Trusted Types 的落法**（纪要 D6）：主文档只有具名策略 `cupper-worker`，放行 `style-src 'unsafe-inline'` 以容纳组件库注入的样式，但 agent 给出的字符串不能进入 `<style>`、`insertRule` 或 CSS 自定义属性（ESLint 约束）；审查面板的 diff 视图放进 `app://cupper-review` 这个独立源的 iframe，原样使用 @pierre/diffs，有注入金样例、跨源隔离测试，`git/revert` 等破坏性操作只能由主文档的控件触发。验证不通过（Q29）时改用 `DiffHunksRenderer` 加自己的渲染。
+- **真实输入的细则**（纪要 D7）：键盘用 `before-input-event` 识别，只认 Enter、Space、Escape、⌘Enter，`isComposing`、自动重复和打字中的按键都不算；任何出方向命令都会用掉尚未消耗的输入；只记录主框架上的输入；窗口激活后 1 秒冷却；Escape 只能用于拒绝类选项；`requestPrivileged` 也要求真实输入，被取消后冷却逐次加长；同一个 `command_id` 只在未收到任何响应时免输入重发。宿主侧对 window 角色要求 `input` 证据，并保留 400 ms 最短回答间隔（5.7.8、5.2.5）。
+- **三种构建**：发布、开发、e2e 各有自己的 bundle id、数据目录和 URL scheme；e2e 构建的宿主开 `dev-auth` 和 `test-harness`，ad-hoc 签名，关闭 hardened runtime 和 cookie 加密；依赖 hardened runtime 和 codesign 的检查只在发布流水线的签名后冒烟里跑（5.7.9、5.10.7）。
