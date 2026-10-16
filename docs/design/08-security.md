@@ -92,7 +92,7 @@ bundle identifier 的前缀定为 `dev.cupper`（Q5，已定（2026-10-16），�
 - 档位是 `normal` < `elevated` < `full_access`，各取值属于哪一档见 [5.6.5](06-agent-driver.md#565-配置项映射)。`elevated` 的含义是由分类器代替用户审批（Claude 的 `auto`、`acceptEdits`，Codex 的 Auto review），所以放宽到它等于拿到 approve。
 - "放宽"指目标档位高于会话当前的档位。会改变档位的入口有三个：`session/create` 的 `config`、`session/set_config`、`interaction/respond` 选中带 `mode_after` 的选项。三者按同一条规则判定（下表）。
 - 宿主记录每次设定档位的 principal（`sessions.mode_set_by`）。**会话的默认档位来自用户自己的 CLI 配置时，视为由创建会话的 principal 设定。**
-- 实际档位与设定者的权限不符时（例如只有 write 的 CLI 新建了会话，而 Codex 的默认档位是 `agent`），会话进入 `config_unconfirmed`（[5.2.6](02-host.md#配置项)）：暂停发送，直到桌面端经原生确认，或者有权限的一方把档位降下来。
+- 实际档位与设定者的权限不符时（例如只有 write 的 CLI 新建了会话，而 Codex 的默认档位是 `agent`；M3 的手机新建会话（MB-9）时默认档位是 `elevated`，同样算放宽），会话进入 `config_unconfirmed`（[5.2.6](02-host.md#配置项)）：暂停发送，直到桌面端经原生确认，或者有权限的一方把档位降下来。
 
 | 目标档位 | UI control | UI window | cli + write | cli + write + approve | test_harness | remote_device（M3） |
 |---|---|---|---|---|---|---|

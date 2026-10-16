@@ -332,25 +332,25 @@ sequenceDiagram
   participant S as 会话 actor
   R->>H: git/diff（scope last_turn）
   H->>H: 从 turns 表取最近回合的起止快照（结束快照未完成时先等它）
-  H->>GIT: diff-tree -r -z --raw -M 加 --numstat（私有对象库）
-  H-->>R: diff_token dt1、文件列表、mixed_changes_warning
+  H->>GIT: 快照档：diff-tree -r -z --raw -M 加 --numstat（cupper 自己的 GIT_DIR）
+  H-->>R: diff_token dt1、文件列表、caveats（mixed_changes 等）
   R->>H: git/file_diff（dt1，某个文件）
-  H->>GIT: 固定参数生成补丁并切成 hunk
+  H->>GIT: 快照档：固定参数生成补丁并切成 hunk
   H-->>R: hunks（hunk_id）
   Note over R: 用户在某一行写评论，点"发给 agent"
   R->>S: session/send（content 含 review_comment）
   S->>S: 把评论排成给 agent 的文本，开新回合或排队
   R->>H: git/diff（scope unstaged）得到 dt2，再 git/file_diff
   R->>H: git/stage（dt2，hunk_ids）
-  H->>H: 账本写 pending_external，拿 RepoLock
-  H->>GIT: apply --cached --whitespace=nowarn（用 --no-renames 生成的补丁）
+  H->>H: 账本写 pending_external（强制同步后才执行 git），拿 RepoLock
+  H->>GIT: 仓库档：读配置、覆盖可执行类键后 apply --cached --whitespace=nowarn（用 --no-renames 生成的补丁）
   alt 应用成功
     H-->>R: 成功，客户端刷新 diff
   else 状态已变
     H-->>R: conflict stale_diff，客户端刷新后重试
   end
   R->>H: git/commit（message）
-  H->>GIT: commit -F -（会运行用户的 hooks）
+  H->>GIT: 用户档：commit -F -（会运行用户的 hooks，确认文案已提示）
   GIT-->>H: 新提交的 oid
   H-->>R: oid
   R->>H: git/push（set_upstream）
