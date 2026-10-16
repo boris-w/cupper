@@ -2,7 +2,7 @@
 # Run the whole SP-5 spike end to end. Safe to re-run: sample repos are reused,
 # scratch repos are recreated. Everything lives under $SP5_WORKDIR.
 #
-#   SP5_WORKDIR=/some/tmp/dir ./run_all.sh            # full run (~25 min, ~8 GB disk)
+#   SP5_WORKDIR=/some/tmp/dir ./run_all.sh            # full run (~60 min, ~8 GB disk)
 #   SKIP_LINUX=1 ./run_all.sh                          # synthetic repos only
 #   SKIP_LIBGIT2=1 ./run_all.sh                        # no pygit2/uv needed
 #   SKIP_GIX=1 ./run_all.sh                            # no cargo build of the gitoxide probe

@@ -16,7 +16,7 @@
 
 ```bash
 export SP5_WORKDIR=/path/outside/any/repo/cupper-sp5   # 默认 $TMPDIR/cupper-sp5
-./run_all.sh                 # 全部，约 25 分钟（首次含 linux 浅克隆）
+./run_all.sh                 # 全部，约 60 分钟（另加首次的 linux 浅克隆）
 SKIP_LINUX=1 ./run_all.sh    # 只用合成仓库，几分钟
 SKIP_LIBGIT2=1 ./run_all.sh  # 不跑 pygit2 对比
 SKIP_GIX=1 ./run_all.sh      # 不编译、不跑 gitoxide 对比
