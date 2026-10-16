@@ -7,7 +7,11 @@
 - **主会话（编排者）**：把控流程和阶段闸门；与用户沟通并撰写 PRD、技术设计、任务拆分；派发任务给子 agent；review 并合并分支。
 - **子 agent（执行者）**：每次只领一个任务，在独立 worktree 的独立分支上完成开发、测试和提交。
 
-流程和当前进度见 `docs/00-process.md`。
+流程、当前进度和留痕体系见 `docs/00-process.md`。
+
+## 留痕原则
+
+所有工作都要留痕并提交：与用户的讨论、与子 agent 的讨论会、同步会写成会议记录（`docs/meetings/`）；每次派发都有任务卷宗（`docs/tasks/<ID>-<slug>/`：brief、report、review 及物料）；重要技术决策写 ADR（`docs/decisions/`）。模板在 `docs/templates/`。
 
 ## Git 协作约定
 
@@ -39,7 +43,8 @@ Co-Authored-By: ...
 ## 子 agent 工作守则
 
 1. 只在分配给你的 worktree 和分支里工作。不切换到其他分支，不修改 `main`，不执行 merge、rebase 或 push。
-2. 开始前先读 `docs/01-prd.md`、`docs/02-design.md`、`docs/03-plan.md` 中与本任务相关的部分。
+2. 开始前先读本任务的 `docs/tasks/<ID>-<slug>/brief.md`，以及 `docs/01-prd.md`、`docs/02-design.md`、`docs/03-plan.md` 中的相关部分。
 3. 只做任务范围内的事。发现范围外的问题时记录下来，在汇报中提出，不要顺手改。
 4. 按任务的验收标准自测（构建、测试、lint 都通过）后再提交。
-5. 结束时汇报：分支名、提交列表（`git log --oneline main..HEAD`）、怎么验证的、遗留问题。
+5. 过程中的思路、试错和取舍可以记在同目录的 `notes.md`；调研数据、截图、基准结果等物料也放在该目录。
+6. 结束时按 `docs/templates/task-report.md` 写 `report.md` 并提交，然后在回复中给出同样的摘要。
