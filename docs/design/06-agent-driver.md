@@ -53,7 +53,7 @@ flowchart LR
 
 | 事件 | 内容 |
 |---|---|
-| `Update(NormUpdate)` | 规范化后的更新：`AgentText {message_id, text}`、`Thought {text}`、`ToolStart {tool_call_id, tool_kind, title, paths, command?}`、`ToolUpdate {tool_call_id, title?, status?, output: Append\|Replace?, exit_code?, diffs?}`、`Plan {entries \| markdown}`、`Compaction {phase, summary?}` |
+| `Update(NormUpdate)` | 规范化后的更新：`AgentText {message_id, text}`、`Thought {text}`、`ToolStart {tool_call_id, tool_kind, title, paths, command?}`、`ToolUpdate {tool_call_id, title?, status?, output: Append\|Replace?, exit_code?, diffs?}`（`Append` 映射为协议里 `field: output` 的 `item.delta`，`Replace` 映射为结束时给出的完整输出，[5.3.5](03-protocol-v1.md#535-事件类型目录)）、`Plan {entries \| markdown}`、`Compaction {phase, summary?}` |
 | `Permission(PermissionAsk, Responder)`、`Question(QuestionAsk, Responder)` | 已分类、已标好选项生效范围的交互请求（[5.6.4](#564-交互请求的分类与选项映射)） |
 | `RequestWithdrawn(ask_ref)` | Claude 发来 `$/cancel_request` |
 | `PromptDone {stop_reason, usage?}`、`PromptFailed(AgentError)` | prompt 的结果 |
@@ -104,6 +104,8 @@ flowchart LR
 
 - 对照表是代码里的静态数据（`driver/claude/options.rs`、`driver/codex/options.rs`），与锁定的适配器版本一起维护，每次升级适配器都用录制回归。
 - 查不到的选项按 ACP `kind` 保守兜底（`allow_always` 一律视为持久、需要原生确认），并记一条日志，提示更新对照表。
+- **kind 本身未知的选项**（安全 #5）：`effect.scope` 为 `unknown`、`persistent: true`、`requires: privileged`，`actionable_by` 只有 `desktop_ui`；协议里下发 agent 给的原值，不下发分接层改写后的值（[5.3.6](03-protocol-v1.md#536-交互请求模型)）。
+- 持久选项从选项原文或 `rawInput` 解析命令前缀，标出 `prefix_risk`；适配器在 `_meta` 里透出规则或写入位置时一并带上（[5.3.6](03-protocol-v1.md#536-交互请求模型)）。
 - **Claude 的 `allow-with-updates`** 在文件编辑上只对本会话有效，在 Bash 上会写入持久规则（SP-1 录制核实，两者的 option_id 相同），所以必须按工具区分，判断不出来时按持久处理。
 
 ## 5.6.5 配置项映射
@@ -186,40 +188,42 @@ ACP 的 `configOptions` 按 `category` 映射到 cupper 的配置项，具体取
 
 ## 5.6.9 已知问题的规避清单
 
+回归一列写成"测试层 + 用例编号"（测试 #4）。测试层：`GOLD-A`（提取层金样例，逐帧的纯函数，SP-1 的录制都可以用）、`IT`（宿主集成测试 + 假 agent）、`PROP`（纯核心的性质测试）、`UNIT`（单元测试）、`COMPAT`（兼容剧本，真实 CLI）。编号规则见 [5.9.10](09-testing.md#5910-测试编号与人工验证清单)。
+
 | # | 问题（来源） | 现象 | 规避 | 回归 |
 |---|---|---|---|---|
-| K1 | 并发 prompt（SP-1 s06） | Claude 并入当前回合并丢掉第一条回复；Codex 的第一个 prompt 永不返回 | 宿主自己排队；同一个 agent 会话同时最多一个 prompt；上一个 prompt 一直不返回时，先 `session/close` 再 `session/resume`，然后才发新 prompt | s06 回放 + 会话 actor 的性质测试 |
-| K2 | Codex #556（SP-1 s04、s04b） | 拒绝审批只有 `cancel`，整个回合以 `cancelled` 结束 | 选项标 `ends_turn: true`，界面写明"拒绝将结束本回合"；这种取消不暂停队列 | s04、s04b |
-| K3 | Codex 取消后命令不停（s07） | 命令继续运行，输出和 `completed` 在下一个回合到达 | 记下被取消回合的全部 `toolCallId`；之后到达的这些工具的更新不进入新回合，丢弃（ADR-07），并在原工具条目上标 `notice: late_output_discarded` | s07 |
-| K4 | Codex 取消不撤回审批（s07） | 挂起的审批请求留在适配器那边 | 宿主把请求标为 `cancelled`，并替用户应答 `Cancelled` | s07 |
-| K5 | Claude 撤回审批（s07） | 取消时先收到 `$/cancel_request` | 分接层识别后发 `RequestWithdrawn`，请求标为 `cancelled`（`agent_withdrew`） | s07 |
-| K6 | Claude CLI 崩溃（s07、s07b） | `-32603`，之后 "Session not found"，适配器不自动重启 CLI | 回合标为 `failed`；下一次发送时自动 `session/resume`，再重发一次（只在该 prompt 没有产生任何更新时） | s07b |
-| K7 | Codex app-server 被杀（s07） | `1001`，`restartable: true` | 回合标为 `failed` 并提示；下一个 prompt 由适配器自动重启 app-server | s07 |
-| K8 | 回放不完整、没有时间戳（#1297、#1307、#617） | 回放不能当历史 | 历史只用宿主自己的日志；`session/load` 只用于 PS-5 导入，导入内容标"可能不完整" | s09 |
-| K9 | 回合外的更新（s06） | 后台命令结束后 Claude 自发开回合；空闲时 steer 启动回合；Codex 补发遗留输出 | 开 `autonomous` 回合；K3 的遗留输出按 K3 处理 | s06 |
-| K10 | Claude steering 的副作用（s06） | 工具调用被丢弃、命令被移到后台 | 默认排队；只有用户明确选择"插话"才 steer（ADR-07） | s06 |
-| K11 | Codex 忽略 `idleBehavior`（s06） | 空闲时 steer 直接开新回合 | 宿主只在回合处于 `Prompting` 时 steer | s06 |
-| K12 | Codex 的计划确认请求发出时线程状态已是 `idle`（s05） | 若以 `threadStatus` 判断回合结束，会把还在等确认的回合提前结束 | **有 prompt 在途时，回合以 prompt 响应为准**；`threadStatus` 只用于显示运行状态和界定 `autonomous` 回合（这是对 ADR-06"优先采用 threadStatus"的细化，见待定问题） | s05 |
-| K13 | cwd 必须是真实路径（s08） | Codex 按 cwd 过滤时用 `/var/...` 得到 0 条 | 一律传 realpath | s08 |
-| K14 | CLI 太旧时报"需要认证"（SP-2） | codex 0.140 读不了新配置，报 `Authentication required` | 版本低于已验证范围时改判为 `cli_too_old` | SP-2 数据 |
-| K15 | `CODEX_PATH` 指向 npm shim（SP-2） | `env: node: No such file or directory`，`1001` | 解析到包内的原生二进制 | 解析器单元测试 |
-| K16 | 邮箱和组织（s01、s10） | `_auth/status_update` 带账号信息 | 分接层在写原始帧前脱敏；提取层只保留类型和套餐名 | s01 |
-| K17 | 文本形式的错误（s10x） | 模型不支持等错误以消息文本出现，`stopReason` 仍是 `end_turn` | 收到 `systemError` 时转成 `error` 条目，回合带 `error_code` | s10x |
-| K18 | 上游过载（Codex） | 自动重试最多 5 次 | `notice: upstream_retry` 显示进度 | 含重连的录制 |
-| K19 | SDK 的封闭枚举（SP-4a） | `StopReason`、`PermissionOptionKind`、`ToolCallStatus` 出现未知值时整条消息解析失败 | 分接层把未知值改写为可解析的兜底值，原值放进 `_meta.cupper.original`，提取层用原值判断；同时向上游反馈 | 含未知值的金样例 |
-| K20 | Codex 的 MCP 不随 `session/close` 释放（s12） | 内存只增不减 | 资源采样加回收（5.6.8） | — |
-| K21 | Claude 适配器退出不等子进程（s12、SP-4a） | `claude` CLI 残留约 300 MB | 进程组清理 | SP-4a 端到端测试 |
-| K22 | Claude 命令输出不流式（s03） | 命令结束前没有任何输出 | `output_streaming: false`，界面显示"运行中" | s03 |
-| K23 | Codex 偶发丢失第一行输出（s07，codex-local 一次） | — | 不做处理，记录在案 | — |
-| K24 | Codex 用 shell 运行 `apply_patch`（s05） | 没有 diff | 条目 `extraction: partial`；回合 diff 以 git 为准 | s05 |
-| K25 | Claude 的 TodoWrite 在 SDK 会话不可用（s02c） | 没有 `plan` 条目 | 能力里标 `plan: markdown_only` | s02c |
-| K26 | `clientInfo.name` 外发（SP-2） | 出现在 codex 发往 OpenAI 的 User-Agent 里 | 固定为 `cupper`，不带任何用户信息 | — |
+| K1 | 并发 prompt（SP-1 s06） | Claude 并入当前回合并丢掉第一条回复；Codex 的第一个 prompt 永不返回 | 宿主自己排队；同一个 agent 会话同时最多一个 prompt；上一个 prompt 一直不返回时，先 `session/close` 再 `session/resume`，然后才发新 prompt | PROP-turn-single-prompt；IT-K1-close-resume（假 agent `hang`）；假 agent 的全局不变式：同一会话收到第二个在途 prompt 立即报错退出，所有 IT 用例都会检查；GOLD-A-claude-s06、GOLD-A-codex-s06 |
+| K2 | Codex #556（SP-1 s04、s04b） | 拒绝审批只有 `cancel`，整个回合以 `cancelled` 结束 | 选项标 `ends_turn: true`，界面写明"拒绝将结束本回合"；这种取消不暂停队列 | GOLD-A-codex-s04、GOLD-A-codex-s04b；IT-K2-reject-ends-turn（codex 形态） |
+| K3 | Codex 取消后命令不停（s07） | 命令继续运行，输出和 `completed` 在下一个回合到达 | 中断时还在运行的命令标 `abandoned` 加 `may_still_run`；晚到的输出写成当前回合里的 `late_tool_output` 条目，原回合不改（Q14，纪要 D4，[5.2.6](02-host.md#晚到的工具输出)） | GOLD-A-codex-s07（只断言晚到的帧被提取成带原 `toolCallId` 的 ToolUpdate）；IT-K3-late-output（codex 形态的 `late_tool`，断言回合结构）；PROP-turn-snapshot-immutable；GOLD-B 等 M1b 用宿主重新录到 codex 的取消场景后再补 |
+| K4 | Codex 取消不撤回审批（s07） | 挂起的审批请求留在适配器那边 | 宿主把请求标为 `cancelled`，并替用户应答 `Cancelled` | IT-K4-cancel-pending-approval（codex 形态）；GOLD-A-codex-s07 |
+| K5 | Claude 撤回审批（s07） | 取消时先收到 `$/cancel_request` | 分接层识别后发 `RequestWithdrawn`，请求标为 `cancelled`（`agent_withdrew`） | GOLD-A-claude-s07；IT-K5-withdraw（经原始行通道发 `$/cancel_request`） |
+| K6 | Claude CLI 崩溃（s07、s07b） | `-32603`，之后 "Session not found"，适配器不自动重启 CLI | 回合标为 `failed`；下一次发送时自动 `session/resume`，再重发一次（只在该 prompt 没有产生任何更新时） | GOLD-A-claude-s07b；IT-K6-crash-resume（`crash_cli`）；IT-K6-output-then-crash（`output_then_crash`，断言不重发） |
+| K7 | Codex app-server 被杀（s07） | `1001`，`restartable: true` | 回合标为 `failed` 并提示；下一个 prompt 由适配器自动重启 app-server | GOLD-A-codex-s07；IT-K7-restartable |
+| K8 | 回放不完整、没有时间戳（#1297、#1307、#617） | 回放不能当历史 | 历史只用宿主自己的日志；`session/load` 只用于 PS-5 导入，导入内容标"可能不完整" | GOLD-A-claude-s09；IT-history-from-host（宿主重启后 `history/page` 来自回合快照） |
+| K9 | 回合外的更新（s06） | 后台命令结束后 Claude 自发开回合；空闲时 steer 启动回合；Codex 补发遗留输出 | 开 `autonomous` 回合；K3 的遗留输出按 K3 处理；自发回合结束后的出队保护见 [5.2.6](02-host.md#回合状态机) | GOLD-A-claude-s06；IT-K9-autonomous（`autonomous`，含"静默超过阈值后又继续输出"）；PROP-autonomous-dequeue-guard |
+| K10 | Claude steering 的副作用（s06） | 工具调用被丢弃、命令被移到后台 | 默认排队；只有用户明确选择"插话"才 steer（ADR-07） | IT-K10-steer-explicit-only；E2E-composer-steer-default |
+| K11 | Codex 忽略 `idleBehavior`（s06） | 空闲时 steer 直接开新回合 | 宿主只在回合处于 `Prompting` 时 steer | PROP-steer-only-prompting；IT-K11-steer-idle-queued |
+| K12 | Codex 的计划确认请求发出时线程状态已是 `idle`（s05） | 若以 `threadStatus` 判断回合结束，会把还在等确认的回合提前结束 | **有 prompt 在途时，回合以 prompt 响应为准**；`threadStatus` 只用于显示运行状态和界定 `autonomous` 回合，变成 idle 也不会让挂着的交互请求失效（纪要 D3） | GOLD-A-codex-s05；IT-K12-plan-confirm-idle（`thread_status idle` 加 `plan_confirm`）；PROP-prompt-inflight-no-end |
+| K13 | cwd 必须是真实路径（s08） | Codex 按 cwd 过滤时用 `/var/...` 得到 0 条 | 一律传 realpath | UNIT-realpath；IT-K13-echo-cwd（假 agent `echo_env` 回显 cwd） |
+| K14 | CLI 太旧时报"需要认证"（SP-2） | codex 0.140 读不了新配置，报 `Authentication required` | 版本低于已验证范围时改判为 `cli_too_old` | UNIT-version-classify（以 SP-2 的版本数据为样例）；IT-K14-old-cli-auth（`auth_none` 加低版本） |
+| K15 | `CODEX_PATH` 指向 npm shim（SP-2） | `env: node: No such file or directory`，`1001` | 解析到包内的原生二进制 | UNIT-cli-resolver（目录树样例） |
+| K16 | 邮箱和组织（s01、s10） | `_auth/status_update` 带账号信息 | 分接层在写原始帧前脱敏；提取层只保留类型和套餐名 | GOLD-A-claude-s01；UNIT-redact-auth-status |
+| K17 | 文本形式的错误（s10x） | 模型不支持等错误以消息文本出现，`stopReason` 仍是 `end_turn` | 收到 `systemError` 时转成 `error` 条目，回合带 `error_code` | GOLD-A-codex-s10x；IT-K17-text-error |
+| K18 | 上游过载（Codex） | 自动重试最多 5 次 | `notice: upstream_retry` 显示进度 | IT-K18-upstream-retry（`upstream_retry`）；有含重连的录制时加 GOLD-A |
+| K19 | SDK 的封闭枚举（SP-4a） | `StopReason`、`PermissionOptionKind`、`ToolCallStatus` 出现未知值时整条消息解析失败 | 分接层把未知值改写为可解析的兜底值，原值放进 `_meta.cupper.original`，提取层用原值判断；未知的选项 kind 按最严处理（安全 #5）；同时向上游反馈 | GOLD-A-unknown-enums（经原始行通道发送）；IT-K19-unknown-kind-privileged |
+| K20 | Codex 的 MCP 不随 `session/close` 释放（s12） | 内存只增不减 | 资源采样加回收（5.6.8） | IT-K20-reclaim（经注入点设定采样值） |
+| K21 | Claude 适配器退出不等子进程（s12、SP-4a） | `claude` CLI 残留约 300 MB | 进程组清理 | IT-K21-reap-group（沿用 SP-4a 的端到端测试） |
+| K22 | Claude 命令输出不流式（s03） | 命令结束前没有任何输出 | `output_streaming: false`，界面显示"运行中" | GOLD-A-claude-s03 |
+| K23 | Codex 偶发丢失第一行输出（s07，codex-local 一次） | — | 不做处理，记录在案 | 不测：上游的偶发行为，cupper 没有对应的规避逻辑可测 |
+| K24 | Codex 用 shell 运行 `apply_patch`（s05） | 没有 diff | 条目 `extraction: partial`；回合 diff 以 git 为准 | GOLD-A-codex-s05 |
+| K25 | Claude 的 TodoWrite 在 SDK 会话不可用（s02c） | 没有 `plan` 条目 | 能力里标 `plan: markdown_only` | GOLD-A-claude-s02c；UNIT-capabilities-plan |
+| K26 | `clientInfo.name` 外发（SP-2） | 出现在 codex 发往 OpenAI 的 User-Agent 里 | 固定为 `cupper`，不带任何用户信息 | IT-K26-client-info（假 agent 断言 `clientInfo.name == "cupper"`） |
 
 ## 5.6.10 线路分接层
 
 ACP 的 stdio 传输是按行分隔的 JSON-RPC。分接层把适配器的 stdout 和 stdin 包一层，每一行都经过它：
 
 1. **编号和记录**：给每行分配实例内的 `seq`，按 [5.11](11-diagnostics.md) 的规则脱敏后（重点是 `_auth/status_update` 的账号字段），送进原始帧队列；队列满了就丢弃并计数，不阻塞。
-2. **容错改写**（K19）：只在已知的几个字段上做：`session/prompt` 响应的 `stopReason`、权限请求选项的 `kind`、工具调用的 `status`。值不认识时改写成兜底值（分别为 `end_turn`、`reject_once`、`in_progress`），原值放进该对象的 `_meta.cupper.original`。其余内容一律原样转发。
+2. **容错改写**（K19）：只在已知的几个字段上做：`session/prompt` 响应的 `stopReason`、权限请求选项的 `kind`、工具调用的 `status`。值不认识时改写成兜底值（分别为 `end_turn`、`reject_once`、`in_progress`），原值放进该对象的 `_meta.cupper.original`。其余内容一律原样转发。改写只是为了让 SDK 能解析：提取层一律按原值判断，协议里下发的也是原值，未知的选项 kind 按最严处理（安全 #5，[5.6.4](#564-交互请求的分类与选项映射)）。
 3. **扩展消息**：`_auth/status_update`、`$/cancel_request`，以及 SDK 没有对应处理器的其他 `_` 开头的消息，解析后交给 `AgentRuntime`。`_session/steering` 是宿主发出的扩展请求，通过 SDK 的扩展方法接口发送；SDK 3.3 是否支持需要在实现时核实，不支持就由分接层在 stdin 侧发送并关联响应（待定问题 Q9）。
 4. 为了少做一次完整解析，只对包含上述关键字的行做 JSON 解析，其余的行只做编号和记录。

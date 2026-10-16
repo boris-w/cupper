@@ -65,7 +65,7 @@ sequenceDiagram
   H-->>R: 缓存的模型、推理强度、权限模式、斜杠命令
   Note over R: 用户选 agent、项目、新建 worktree、起始分支，输入第一条消息
   R->>H: session/create（agent、project、worktree 和 base_ref、config、message）
-  H->>H: 一个事务：sessions 行、session.configured、workspace.preparing、命令结果
+  H->>H: 一个事务：sessions 行（含第一条消息 initial_prompt_json）、session.configured、workspace.preparing、命令结果
   H-->>R: session_id（已受理）
   R->>H: stream/subscribe 该会话
   alt 新建 worktree
@@ -91,7 +91,7 @@ sequenceDiagram
   AD-->>A: available_commands_update
   A-->>H: AttachInfo
   H-->>R: session.capabilities
-  H->>H: 进入 Preparing：turn.started、用户消息
+  H->>H: 进入 Preparing：一个事务写 turn.started、用户消息，并清空 initial_prompt_json
   H->>G: 起始快照（临时 index，私有对象库）
   G-->>H: tree id（超过 3 s 就不等，diff 标为不可用）
   H->>A: Prompt
@@ -160,10 +160,10 @@ sequenceDiagram
     C->>S: interaction/respond（allow_once，digest）
   and
     R->>M: interaction/respond（allow_once，digest）
-    M->>M: 方法白名单，并且 1 秒内观察到真实的按键或点击
-    M->>S: 经 window 数据连接转发
+    M->>M: 方法白名单；1 秒内有尚未用掉的真实输入（规则见 5.7.8），用掉它
+    M->>S: 重新序列化后经 window 数据连接转发，写入 input 证据
   end
-  S->>S: 先到的一条：仍是 pending、摘要一致、在 actionable_by 内、距创建不少于 400 ms
+  S->>S: 先到的一条：仍是 pending、摘要一致、在 actionable_by 内；window 角色还要求带 input 证据、距创建不少于 400 ms
   S->>A: 应答 ACP（selected allow_once）
   A->>AD: 响应
   S->>S: interaction.resolved（resolved_by cupper-cli）和命令结果同一事务落盘
@@ -201,10 +201,12 @@ sequenceDiagram
     S-->>R: turn.completed（cancelled，stop_reason host_timeout）
     Note over S: 之后这个 prompt 的响应直接忽略，下次发送前先对该 agent 会话 close 再 resume（K1）
   end
+  Note over S: interrupt_stops_commands 为 false（Codex）时，还在运行的命令标 abandoned 加 may_still_run
   opt Codex 取消后命令仍在运行（K3）
-    AD-->>A: t1 工具的输出和 completed 晚到
+    AD-->>A: t1 工具的输出和 completed 晚到（通常在下一个回合 t2 里）
     A-->>S: Update（toolCallId 属于已取消的 t1）
-    S-->>R: 不进入新回合，原条目标 late_output_discarded
+    S-->>R: 在当前回合 t2 新建 late_tool_output 条目（ref 指向 t1 的原条目），之后的输出都追加到它上面
+    Note over S: t1 的回合快照不改；没有进行中的回合时开一个 autonomous 回合承载它（5.2.6）
   end
   S->>S: 队列暂停，等用户发送或 session/queue_resume
 ```
@@ -230,8 +232,12 @@ sequenceDiagram
   H2->>H2: t1 写 turn.completed（interrupted），r1 写 expired
   H2->>H2: 加载索引流，绑定套接字
   M->>H2: hello、initialize（control、window 两条连接）
-  M->>H2: 按游标重新订阅 index 和当前会话
-  H2-->>M: mode replay，补发断开期间的事件
+  M->>H2: 按游标（含 data_epoch）重新订阅 index 和当前会话
+  alt 进程崩溃（kill -9），data_epoch 不变
+    H2-->>M: mode replay，补发断开期间的事件
+  else 异常退出后系统重启过（可能断电丢了事务），data_epoch 已加 1
+    H2-->>M: mode snapshot（reason epoch_changed），客户端丢弃视图和游标后重建
+  end
   Note over M: 审批卡片收起，消息流提示"回合已中断"
   M->>H2: 用户再次发送
   H2->>AD: 拉起适配器，session/resume

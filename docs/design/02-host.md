@@ -17,7 +17,7 @@
 | `interaction` 交互代理 | 审批和提问对象：分类、选项生效范围、摘要、`actionable_by`、先到先得、撤回与失效 | 由会话 actor 调用 | driver 的选项对照表 | `Interaction`、`OptionEffect` | 会话 actor 内的组件 |
 | `store` 事件存储 | 写线程、读连接池、流（seq、视图、扇出）、检查点、回合快照、blob、原始帧、迁移 | `Streams::append` / `subscribe` / `read_page`；`BlobStore` | SQLite | `StreamState`、`WriteOp` | 1 个写线程 + 每流一把锁 |
 | `attention` 关注度与通知 | 索引流的唯一写者：会话状态、未读、通知意图、客户端列表、agent 和宿主状态 | `IndexHandle` | store、notifier | `IndexView` | 1 个 actor |
-| `notifier` 系统通知 | 用 UserNotifications 弹通知，点击后打开 `cupper://session/<id>` | channel | cupper-sys | — | 主线程 run loop |
+| `notifier` 系统通知 | 用 UserNotifications 弹通知；点击后经 control 连接发 `ui/navigate`，并按 bundle id 激活 Cupper（[5.2.9](#529-关注度与通知)） | channel | cupper-sys | — | 主线程 run loop |
 | `driver` 驱动层 | 适配器进程、ACP 连接、线路分接、提取层、能力缓存、CLI 发现 | `AgentRuntimeHandle` | runtime、supervisor | 见 [5.6](06-agent-driver.md) | 每种 agent 一个 actor |
 | `git` Git 与 worktree | 快照、diff、hunk 操作、提交、推送、worktree 生命周期 | async 函数 | git 命令行 | `RepoLock`、`DiffCache` | 子进程 + 每仓库锁 |
 | `files` 文件服务 | `@` 引用的模糊搜索 | async 函数 | ignore、nucleo-matcher | `FileIndex` | 按需构建、短期缓存 |
@@ -110,7 +110,7 @@ flowchart TB
 1. `accept` 后先用 `peer_cred()` 核对 uid，不同用户直接关闭。
 2. 用 `cupper-sys` 取对端审计令牌并做签名校验，得到 `PeerVerdict`：`desktop_ui`（满足 UI 的签名要求）或 `other`，同时记下令牌作为固定令牌。校验出错按 SP-4b 的四类错误码记审计日志，一律按 `other` 处理。
 3. 宿主发出第一帧：`host/hello` 通知，带 32 字节随机 nonce 和协议版本区间。
-4. 客户端的第一条消息必须是带同一个 nonce 的 `initialize`，否则断开。
+4. 客户端的第一条消息必须是带同一个 nonce 的 `initialize`，否则断开。每条连接只接受一次 `initialize`，再收到就返回 `forbidden`（`already_initialized`）并断开；角色确定后不可变（安全 #4，[5.8.1](08-security.md#581-认证握手固定令牌)）。
 5. 之后每次 `read()` 返回数据，都先比对当前令牌（含 pidversion）与固定令牌，不一致立即断开并记审计日志（SP-4b）。
 
 **每连接的状态**：`Conn { id, principal, role, pinned, outbox, subs: HashSet<StreamId>, uploads, inflight: 计数 }`。
@@ -161,7 +161,7 @@ flowchart TB
 ### SessionManager
 
 - `HashMap<SessionId, SessionHandle>`，actor 按需启动，空闲（没有回合、没有排队、没有待处理请求）10 分钟后退出，退出前对 agent 会话调用 `session/close`，释放 Claude 的 CLI 进程（ADR-09）。
-- **新建**（`session/create`，详细时序见 [5.5.2](05-flows.md#552-新建会话含新建-worktree)）：校验项目和 agent → 生成 `session_id` → 一个事务写入：`sessions` 行、会话流的首批事件（`session.configured`、`workspace.preparing`）、命令结果 → 回复 `session_id` → 启动 actor，由它异步准备工作区、连接 agent、发出第一个回合。按 ADR-09，**会话总是和第一条消息一起创建**，不存在没有消息的空会话。
+- **新建**（`session/create`，详细时序见 [5.5.2](05-flows.md#552-新建会话含新建-worktree)）：校验项目和 agent → 生成 `session_id` → 一个事务写入：`sessions` 行（**第一条消息写进 `initial_prompt_json`**）、会话流的首批事件（`session.configured`、`workspace.preparing`）、命令结果 → 回复 `session_id` → 启动 actor，由它异步准备工作区、连接 agent、发出第一个回合。第一个回合开始时，`turn.started`、用户消息和清空 `initial_prompt_json` 在同一个事务里提交。这样宿主在准备工作区期间（`worktree add` 可能要几分钟）崩溃，已受理的消息也不会丢（测试 #10）。按 ADR-09，**会话总是和第一条消息一起创建**，不存在没有消息的空会话。
 - **归档**：先由客户端调用 `worktree/check` 取得能否清理的结论；`session/archive` 关闭 agent 会话，按参数保留或删除 worktree（规则见 [5.2.10](#5210-git-与-worktree-服务)），会话从索引流移除。
 - **恢复**：分支还在就重建 worktree；分支不在就把会话标为只读（PS-3）。
 
@@ -201,7 +201,7 @@ stateDiagram-v2
   Failed --> Idle: 队列暂停
 ```
 
-- **回合由宿主推导**（ADR-06）：以 `session/prompt` 的请求和响应为界；回合外的更新开一个 `origin: autonomous` 的回合。Codex 的 `threadStatus` 只用于显示运行状态和界定自发回合，有 prompt 在途时以 prompt 的响应为准（SP-1 s05：计划确认请求发出时线程状态已是 `idle`，见 K12 和待定问题 Q11）。回合结束时还没完成的工具调用标为 `abandoned`。
+- **回合由宿主推导**（ADR-06）：以 `session/prompt` 的请求和响应为界；回合外的更新开一个 `origin: autonomous` 的回合。Codex 的 `threadStatus` 只用于显示运行状态和界定自发回合，有 prompt 在途时以 prompt 的响应为准（SP-1 s05：计划确认请求发出时线程状态已是 `idle`，见 K12 和待定问题 Q11）。回合结束时还没完成的工具调用标为 `abandoned`；能力里 `interrupt_stops_commands` 为 false（Codex）时，被中断回合里还在运行的 `execute` 类工具同时标 `may_still_run: true`，界面立刻提示"命令可能仍在运行"。
 - **自发回合的结束与出队**（`AutonomousJudge`，待定问题 Q10）：Codex 以 `threadStatus` 变为 idle 为准；Claude 收到带 `cost` 的 `usage_update`，或 10 s 没有更新且没有运行中的工具，就结束自发回合。由静默判定结束的自发回合，结束后再静默 30 s 才允许出队，避免 Claude 其实还在自发工作时就发出新 prompt（K1）。两个时长都经 `Clock`，可以在测试中覆盖。
 - **起始快照**：进入 `Preparing` 时另起 task 拍快照（ADR-10 要求回合开始时同步拍，这里的"同步"指 prompt 等快照完成再发），超过 3 s 就不等了，这个回合的 diff 标为不可用。
 
@@ -225,6 +225,20 @@ stateDiagram-v2
 | Claude 的 CLI 在回合中崩溃（`-32603`） | 回合标为 `failed`，写 `notice`。下一次发送收到 "Session not found" 时，自动 `session/resume` 再重发一次（只在这个 prompt 还没有产生任何更新时重发） |
 | Codex 的 app-server 被杀（`1001`，`restartable: true`） | 回合标为 `failed`，写 `notice`；下一个 prompt 由 codex-acp 自动重启 app-server |
 | 宿主崩溃 | 见 [5.2.13](#5213-进程监护与宿主生命周期) 的启动恢复 |
+
+### 晚到的工具输出
+
+Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信息一律写成当前流里的新事件，不修改旧回合的条目。
+
+- **中断时**：见上文，`interrupt_stops_commands` 为 false 时标 `may_still_run`。
+- **输出晚到时**（K3：Codex 取消后命令仍在运行，它的输出和 `completed` 在之后才到）：
+  - 在当前回合里新建一个 `late_tool_output` 条目（[5.3.5](03-protocol-v1.md#535-事件类型目录)），`ref` 指向原条目，带原条目的标题和命令，信息自足；没有进行中的回合时，按 K9 开一个 `autonomous` 回合承载它，命令确实还在运行，会话显示"运行中"也是准确的。
+  - 每个原工具只建一个这样的条目，之后的输出都追加到它上面（`field: output` 的 delta），收到 `completed` 时结束，带退出码。
+  - 输出不丢弃，按普通工具输出的规则内联或转成 blob；原始帧照常保留。
+  - 原条目的事件不改。TS 和 Rust 的视图维护反向索引 `late_by_ref`，原条目在内存里时，界面在原条目旁显示"最终退出码 N"和跳转链接（[5.7.6](07-desktop.md#576-状态管理)）。
+- **回合快照与历史**：两个回合各自完整，`history/page` 不需要特殊处理。
+- **diff**：这个回合的 `git/diff` 带 `caveats: [late_tool_effects]`（[5.2.10](#5210-git-与-worktree-服务)）。
+- **不变式**（性质测试和金样例检查，[5.9.8](09-testing.md#598-其他关键测试)）：回合快照写入之后，日志里不再出现 `turn_id` 指向这个回合的事件。
 
 ### 项目信任
 
@@ -301,7 +315,9 @@ stateDiagram-v2
 | `BlobStore` | 按内容寻址的文件 `blobs/sha256/<前 2 位>/<hash>`：写临时文件、fsync、改名；`blobs` 表记录大小、媒体类型和引用 |
 | 原始帧 | 线路分接的输出进入有界队列，写线程批量写入 `raw.db`；队列满了就丢弃并计数（ADR-06 的用途是重算和排障，不能反压 ACP） |
 | 升级器与迁移 | 见 [5.4.6](04-data-model.md#546-迁移) |
-| 持久性 | `synchronous=NORMAL`；M1 做断电测试后再决定是否改 `FULL`（ADR-06） |
+| 持久性 | 按 SQLite 和 macOS 的文档决定，不做 VM 断电实验（Q15 关闭，纪要 D5）：<br>- 默认 `journal_mode=WAL`、`synchronous=NORMAL`，并开启 `checkpoint_fullfsync`。进程崩溃不丢已提交的事务；断电可能丢最近的事务，但数据库不会损坏；<br>- 写 `pending_external` 的那一批，写线程临时改用 `synchronous=FULL` 加 `fullfsync` 提交（macOS 上普通 fsync 不保证写入盘内缓存），确认后才执行 git；<br>- `raw.db` 不开 fullfsync |
+| 数据代次 `data_epoch` | 断电丢事务后，seq 可能被重用，客户端的游标会指向已经不存在的事件。宿主每次启动记下 `kern.bootsessionuuid`（每次开机不同）；**上次是异常退出（没有 `last_clean_exit_at`），并且启动会话的 UUID 变了**，就把 `meta.data_epoch` 加 1。`kill -9` 不加：进程崩溃时 WAL 不丢数据。`initialize` 的结果下发 `data_epoch`，订阅时游标的 epoch 不同就走快照（[5.3.3](03-protocol-v1.md#533-流与同步)）。代价是"`kill -9` 之后用户又正常重启了电脑"也会被判成断电，只多一次全量快照。两个输入（启动会话的 UUID、上次是否正常退出）在 test-harness 构建里都可以注入 |
+| 回合快照不可变 | 回合快照写入后不再修改，事后的信息写成新事件（[5.2.6](#晚到的工具输出)） |
 
 ## 5.2.9 关注度与通知
 
@@ -316,8 +332,9 @@ stateDiagram-v2
 | `idle` 空闲 | 其他 |
 
 - **已读**（U4）：客户端在会话可见且窗口在前台时调用 `session/mark_read`，`up_to_seq` 取已看到的最新 seq，宿主只前移不后退，全局生效。
-- **在场**：每个客户端用 `client/presence` 上报是否在前台、正在看哪个会话。`IndexActor` 据此判断某个会话"此刻有人在看"。
+- **在场**：每个客户端用 `client/presence` 上报是否在前台、正在看哪个会话。`IndexActor` 判断某个会话"此刻有人在看"时，只采信 `desktop_ui` 的在场（M3 再加上 `remote_device`），沙箱外的命令以只读身份上报在场，压不掉"需要处理"的通知（安全建议 #16）。CLI 的 `session/mark_read` 按 U4 照常推进已读位置，但不影响"需要处理"的通知。
 - **通知意图**：会话进入 `needs_action`、回合结束、出错时，如果此刻没有前台客户端在看这个会话，就写一条 `notification.intent` 事件，同时交给 `notifier` 弹系统通知（按设置开关）。M3 的推送也从这些事件生成。
+- **通知的点击**：通知由宿主 helper 弹出，点击后回调到宿主。宿主经 control 连接给已连接的桌面主进程发 `ui/navigate`，并经 LaunchServices 按 bundle id 激活 Cupper；UI 没在运行时，按 bundle id 启动它并只把 URL 交给它，不走任何应用都能注册的 `cupper://` 通用路由（安全 #7）。导航只切换到对应的会话，不把焦点移到交互卡片上。
 - **通知由宿主弹出**（ADR-01）。宿主内置一小份通知文案（中英文，跟随系统语言），这是"宿主不下发文案"原则的唯一例外，因为通知不经过客户端。helper 的通知身份要由 SP-10 在 M1b 前核实，不行就退回"UI 在时由 UI 弹"（技术选型讨论会的后备方案），见待定问题 Q2。
 - 同时维护 `clients`（连接列表）、`agents`（CLI、适配器、运行时、登录状态、资源占用）、`host`（版本、是否弱认证、是否待升级、防休眠）和提权请求，都写在索引流里。
 
@@ -444,14 +461,14 @@ stateDiagram-v2
 
 **启动顺序**（目标：前 9 步合计不超过 50 ms，SP-4a 实测 p95 为 4.6 ms，不含签名校验）
 
-1. 解析参数：`--data-dir`（默认 `~/Library/Application Support/cupper`）；`--dev-key-stdin`（仅 `dev-auth` 构建）；`--harness-key-stdin`（仅 `test-harness` 构建）。
+1. 解析参数：`--data-dir`（默认 `~/Library/Application Support/cupper`）；`--build-info`（输出版本和启用的编译特性后退出，发布流水线据此断言）；`--self-test`。读取 stdin 上的启动载荷（`dev_key`、`harness_key`、`test_config`，格式、超时和编译期门控见 [5.8.1](08-security.md#581-认证握手固定令牌)），读完后把 stdio 指向 `/dev/null`。
 2. 初始化日志（轮转、脱敏，见 [5.11](11-diagnostics.md)）。
 3. 数据目录和子目录建成 0700，并检查属主。
 4. 对 `host.lock` 加 `flock`；已被占用就以退出码 3 退出（UI 改为直接连接）。
-5. 打开数据库，必要时先备份再迁移；数据库版本比本程序新就以退出码 4 退出（不支持降级，NFR-10）。
-6. 崩溃恢复（NFR-9）：按 `adapters` 表的进程组和启动时间清理残留（SP-4a 的 `reap_group`）；运行中的回合写 `turn.completed{status: interrupted}`；待处理的交互请求写 `expired`；账本里 `pending_external` 的记录保留，供重试时返回 `outcome_unknown`。
+5. 打开数据库，必要时先备份再迁移（每个迁移脚本在自己的事务里同时更新 `schema_version`，[5.4.6](04-data-model.md#546-迁移)）；数据库版本比本程序新就以退出码 4 退出（不支持降级，NFR-10）；迁移失败以退出码 6 退出。按上文的规则判定是否把 `data_epoch` 加 1。
+6. 崩溃恢复（NFR-9）：按 `adapters` 表的进程组和启动时间清理残留（SP-4a 的 `reap_group`）；运行中的回合写 `turn.completed{status: interrupted}`；待处理的交互请求写 `expired`；账本里 `pending_external` 的记录保留，供重试时返回 `outcome_unknown`；`initial_prompt_json` 不为空、停在准备工作区阶段的会话，交给会话 actor 重新准备工作区（已登记的 worktree 直接复用），失败就写 `workspace.failed`，并把这条消息转成一条暂停中的排队消息，不丢弃。
 7. 加载索引流（检查点 + 其后的事件）。
-8. 绑定套接字：`run/host.sock`；路径超过 104 字节时退到 `/tmp/cupper-<uid>/<数据目录哈希>/`，使用前检查属主和 0700（SP-4a）；套接字文件 0600。
+8. 绑定套接字：`run/host.sock`；路径超过 104 字节时退到每个用户自己的临时目录 `confstr(_CS_DARWIN_USER_TEMP_DIR)` 下的 `cupper-<数据目录哈希>/`（系统创建、权限 0700，别的用户无法抢先创建；客户端用同一个算法找到套接字），使用前检查属主和 0700；套接字文件 0600（安全建议 #18）。
 9. 启动 actor：`IndexActor`、`Supervisor`、`RuntimeInstaller`（后台校验）；`AgentRuntime` 按需启动。
 10. 进入 accept 循环。
 
@@ -465,11 +482,11 @@ stateDiagram-v2
 
 **资源采样**：每 30 秒采样一次各适配器进程组的常驻内存，写进 `agents` 状态（NFR-11、ADR-09 的设置页显示），并交给驱动层的回收策略（[5.6.8](06-agent-driver.md#568-资源回收)）。
 
-**退出码**：0 正常；3 已有实例；4 数据来自更新的版本；5 数据目录不可用；1 其他错误。
+**退出码**：0 正常；3 已有实例；4 数据来自更新的版本；5 数据目录不可用；6 迁移失败（界面给出备份位置和诊断包入口）；1 其他错误（含启动载荷读取超时或格式错误）。
 
 ## 5.2.14 cupper-cli
 
-第二客户端，用于 NFR-1 验收、端到端测试和开发调试。可执行文件随 App 放在 `Cupper.app/Contents/Resources/bin/cupper`，签名的 identifier 与 UI 不同（ADR-05）。
+第二客户端，用于 NFR-1 验收、端到端测试和开发调试。可执行文件随 App 放在 `Cupper.app/Contents/Helpers/cupper`（Apple 的 bundle 布局：可执行代码不放 `Resources`），签名的 identifier 为 `dev.cupper.cli`，与 UI 不同（ADR-05）。设置页提供"安装命令行工具"，在用户选择的目录里建符号链接。
 
 | 命令 | 协议方法 | 需要的权限 |
 |---|---|---|
@@ -490,7 +507,7 @@ stateDiagram-v2
 - 默认是只读的 `cli` principal。写操作需要先 `elevate`，由用户在桌面端的原生确认框里批准；授权只在这条连接上有效，最长 15 分钟（ADR-05），所以连续的写操作用 `cupper repl`。
 - 输出：默认是人读的格式；`--json` 输出 JSON Lines，供测试断言。
 - 连接时默认校验宿主的签名（发布构建），校验失败就拒绝连接。
-- 测试构建可以用 `--harness-key-fd <n>` 以 `test_harness` 身份连接。
+- 测试构建可以用 `--harness-key-fd <n>` 以 `test_harness` 身份连接；这个参数在编译期门控，发布版 CLI 没有它。`--build-info` 输出启用的编译特性。
 - 库部分保留 SP-4a 的 `Client` 和 `Mirror`（检查 `from` 等于上一个 seq 加 1），供宿主集成测试直接使用。
 
 ## 5.2.15 SP-4a 代码的沿用与改动
