@@ -51,8 +51,8 @@ class GitError(RuntimeError):
     def __init__(self, args: Sequence[str], proc: subprocess.CompletedProcess):
         self.proc = proc
         self.returncode = proc.returncode
-        self.stderr = proc.stderr.decode(errors="replace") if proc.stderr else ""
-        super().__init__(f"{' '.join(map(str, args))} -> {proc.returncode}: {self.stderr.strip()[:500]}")
+        self.stderr = sanitize(proc.stderr.decode(errors="replace")) if proc.stderr else ""
+        super().__init__(sanitize(f"{' '.join(map(str, args))} -> {proc.returncode}: {self.stderr.strip()[:500]}"))
 
 
 def base_env(extra: Optional[dict] = None) -> dict:
@@ -189,6 +189,8 @@ def sanitize(s: str) -> str:
     reps = []
     for p in {str(WORK), os.path.realpath(str(WORK))}:
         reps.append((p, "<tmp>"))
+        if p.startswith("/private/"):  # macOS: /tmp and /var are symlinks into /private
+            reps.append((p[len("/private"):], "<tmp>"))
     home = str(Path.home())
     reps.append((home, "$HOME"))
     reps.sort(key=lambda x: -len(x[0]))
@@ -198,6 +200,16 @@ def sanitize(s: str) -> str:
     if user and len(user) > 2:
         s = s.replace(user, "<user>")
     return s
+
+
+def err_text(stderr, n: int = 140, last: bool = False) -> str:
+    """One sanitized line of stderr. Sanitize BEFORE truncating, or partial paths leak."""
+    if isinstance(stderr, (bytes, bytearray)):
+        stderr = stderr.decode(errors="replace")
+    lines = [l for l in sanitize(stderr).strip().splitlines() if l.strip()]
+    if not lines:
+        return ""
+    return (lines[-1] if last else lines[0])[:n]
 
 
 def save_result(name: str, data) -> Path:
@@ -229,8 +241,6 @@ def write_bytes(path, data: bytes, mode: Optional[int] = None) -> None:
 
 def new_repo(name: str, *, bare: bool = False, initial_branch: str = "main") -> Path:
     """Fresh empty repo under SCRATCH/<name> (recreated each call)."""
-    import shutil
-
     path = SCRATCH / name
     if path.exists():
         _force_rmtree(path)
