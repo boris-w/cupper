@@ -1,6 +1,6 @@
 # cupper 技术设计
 
-- 版本：v0.4（ADR-01 至 ADR-05 已提议）
+- 版本：v0.5（M1 前的 ADR-01 至 ADR-11 全部提议；实测 SP-1、2、4a、4b、5 已完成）
 - 日期：2026-10-16
 - 状态：进行中
 - 依据：PRD v1.0（tag `gate/prd`）；产品-架构对齐会 `docs/meetings/2026-10-16-prd-arch-alignment/`
@@ -33,7 +33,7 @@
 | ADR-03 | 桌面 UI 技术 | 提议（编排者结论：Electron + React；R05 补充证据待追加） | R04；用户讨论；必要时 SP-6 | `docs/decisions/ADR-03-desktop-ui.md` |
 | ADR-04 | 宿主与客户端之间的协议 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会 | `docs/decisions/ADR-04-host-protocol.md` |
 | ADR-05 | 本地传输与本地客户端认证 | 提议（技术选型讨论会，2026-10-16） | 技术选型讨论会；SP-4 | `docs/decisions/ADR-05-local-transport-auth.md` |
-| ADR-06 | 事件模型与存储 | 待定 | SP-1、SP-4 | — |
+| ADR-06 | 事件模型与存储 | 提议（依据 SP-4a、SP-1） | SP-1、SP-4 | `docs/decisions/ADR-06-event-model-storage.md` |
 | ADR-07 | Agent 驱动路径 | 提议（依据 SP-1） | SP-1；必要时 SP-3 | `docs/decisions/ADR-07-agent-driver.md` |
 | ADR-08 | Agent 程序来源、适配器分发与版本锁定 | 提议（依据 SP-2） | SP-2 | `docs/decisions/ADR-08-agent-runtime-distribution.md` |
 | ADR-09 | 适配器进程拓扑 | 提议（依据 SP-1） | SP-1 | `docs/decisions/ADR-09-adapter-topology.md` |
@@ -51,7 +51,7 @@
 | SP-1 | 适配器行为实测 | M1 前 | 已完成（已据此起草 ADR-07、ADR-09，并为 ADR-06 提供依据） | `docs/tasks/SP-1-adapter-behavior/` |
 | SP-2 | 本机 CLI 与适配器的版本耦合、分发 | M1 前 | 已完成（已据此起草 ADR-08、ADR-11） | `docs/tasks/SP-2-adapter-distribution/` |
 | SP-3 | 直连 Codex app-server 的对照 | 视情况 | 待定 | — |
-| SP-4a | 宿主骨架走通（Rust） | M1 前 | 进行中 | `docs/tasks/SP-4a-host-skeleton/` |
+| SP-4a | 宿主骨架走通（Rust） | M1 前 | 已完成（维持 Rust；已据此起草 ADR-06） | `docs/tasks/SP-4a-host-skeleton/` |
 | SP-4b | macOS 本地安全实测 | M1 前 | 已完成（ADR-05 方案成立，已据此修订 ADR-01、ADR-05） | `docs/tasks/SP-4b-local-security/` |
 | SP-5 | Git 快照与审查操作 | M1 前 | 已完成（git 命令行方案，已据此起草 ADR-10） | `docs/tasks/SP-5-git-snapshot/` |
 | SP-6 | UI 渲染压力测试 | 视情况 | 待定 | — |

@@ -50,3 +50,19 @@ TypeScript/Node、Rust、Swift，另以 Go 作为对照。
 - **改变条件**：
   - SP-4 的 Rust 宿主骨架超出估算的 50% 以上，而且原因主要在语言本身。此时改为 TS 宿主，加密部分仍用 Rust crate，由宿主通过 napi-rs 调用，并自行签名一份收紧过 entitlement 的 Node 运行时。
   - ACP Rust SDK 在我们需要的功能上，连续一个以上的发版周期落后于 TS SDK。
+
+## SP-4a 实测结论（2026-10-16）
+
+**维持用 Rust。**
+
+- AI agent 写了约 7,000 行 Rust（含测试），编译修复 3 轮，共 4 个错误，每个都是一两行就修好；没有出现和借用检查器反复拉扯的情况。不满足"改变条件"。
+- **额外的成本**主要在三处，都不大：
+  - 约 150 行 `unsafe` 系统调用；
+  - cargo 合并依赖的特性时，会带来隐性的行为变化：实测中 serde_json 的特性被合并，导致导出 schema 的键顺序变了；
+  - ACP SDK 3.x 的新 API 需要读源码文档。
+- **注意**：ACP 的 Rust SDK 里有几个枚举是封闭的（`StopReason`、`PermissionOptionKind`、`ToolCallStatus`）。适配器发来未知的值时，整条消息会解析失败。M1 要在驱动层加一层容错，并向上游反馈。
+- **gate/design 通过后写进 CLAUDE.md 的约束**：
+  - ACP 回调里只做 channel 发送，耗时的任务另开 task；
+  - SDK 锁定精确版本；
+  - 导出给其他语言的产物，不能依赖 serde_json 的 map 键顺序；
+  - `unsafe` 只能出现在 `sys` 模块。
