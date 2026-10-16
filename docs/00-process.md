@@ -23,7 +23,7 @@
 ## 任务生命周期（阶段 ④）
 
 1. 编排者从 `docs/03-plan.md` 选出依赖已满足的任务，写好 `brief.md` 并提交到 `main`，再派给子 agent（互不依赖的任务可以并行）。
-2. 子 agent 在 `<type>/<任务ID>-<slug>` 分支的独立 worktree 中开发、自测、小步提交，最后提交 `report.md`。
+2. 子 agent 在 `<type>/<任务ID>-<slug>` 分支的独立 worktree 中开发、自测、小步提交，最后把汇报全文作为回复返回；编排者把它存为 `report.md` 并提交。
 3. 编排者 review diff 并跑测试，意见写入 `review.md`；不通过就打回给同一个子 agent 修改，每轮都记录。
 4. 通过后 `git merge --no-ff` 合入 `main`，在 `docs/03-plan.md` 中把任务标记为完成，然后清理 worktree。
 
@@ -44,7 +44,7 @@ docs/
 │   └── <ID>-<slug>/         T = 开发任务（来自 03-plan.md），R = 调研任务
 │       ├── brief.md         派发说明（编排者写，派发前提交）
 │       ├── notes.md         工作笔记（子 agent，可选）
-│       ├── report.md        汇报（子 agent，与代码一起提交）
+│       ├── report.md        汇报（子 agent 以回复形式返回，编排者存档）
 │       ├── review.md        review 记录（编排者，含每轮意见）
 │       └── ...              其他物料：调研原始数据、截图、基准结果等
 └── templates/               以上各类文档的模板

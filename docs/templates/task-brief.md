@@ -24,4 +24,4 @@
 
 ## 汇报要求
 
-完成后在本目录写 `report.md`（模板见 `docs/templates/task-report.md`），与代码一起提交。
+完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。其他物料（`notes.md`、资料摘录等）由执行者在任务分支上提交。
