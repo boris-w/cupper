@@ -1,36 +1,36 @@
 ## G1 peer exits before the host checks (server delay 300 ms)
 ## G2 attacker connects, then execs the genuine binary which talks on the inherited fd
-{"client":"G2-genuine-after-exec","i":1,"pid":46192,"reply":"{\"accept\":true,\"msg_index\":1,\"verdict_stage\":\"accepted\"}","tag":""}
+{"client":"G2-genuine-after-exec","i":1,"pid":83420,"reply":"{\"accept\":true,\"msg_index\":1,\"verdict_stage\":\"accepted\"}","tag":""}
 ## G3 attacker writes first, then execs the genuine binary (idle); host checks 300 ms later
 ## G4 fork+exec: child writes then execs the genuine binary; parent keeps talking (check once)
 {"client":"G4-attacker","reply":"{\"accept\":true,\"msg_index\":1,\"verdict_stage\":\"accepted\"}","tag":"reply-to-child-line"}
-{"client":"G4-attacker","i":1,"pid":46264,"reply":"{\"accept\":true,\"msg_index\":2,\"verdict_stage\":null}","tag":"parent-after-fork"}
-{"client":"G4-attacker","i":2,"pid":46264,"reply":"{\"accept\":true,\"msg_index\":3,\"verdict_stage\":null}","tag":"parent-after-fork"}
+{"client":"G4-attacker","i":1,"pid":83673,"reply":"{\"accept\":true,\"msg_index\":2,\"verdict_stage\":null}","tag":"parent-after-fork"}
+{"client":"G4-attacker","i":2,"pid":83673,"reply":"{\"accept\":true,\"msg_index\":3,\"verdict_stage\":null}","tag":"parent-after-fork"}
 ## G5 same as G4 but the host re-checks every message
 {"client":"G5-attacker","reply":"{\"accept\":true,\"msg_index\":1,\"verdict_stage\":\"accepted\"}","tag":"reply-to-child-line"}
-{"client":"G5-attacker","i":1,"pid":46344,"reply":"{\"accept\":false,\"msg_index\":2,\"verdict_stage\":\"check_validity\"}","tag":"parent-after-fork"}
-{"client":"G5-attacker","i":2,"pid":46344,"reply":"{\"accept\":false,\"msg_index\":3,\"verdict_stage\":\"check_validity\"}","tag":"parent-after-fork"}
+{"client":"G5-attacker","i":1,"pid":83738,"reply":"{\"accept\":false,\"msg_index\":2,\"verdict_stage\":\"check_validity\"}","tag":"parent-after-fork"}
+{"client":"G5-attacker","i":2,"pid":83738,"reply":"{\"accept\":false,\"msg_index\":3,\"verdict_stage\":\"check_validity\"}","tag":"parent-after-fork"}
 ## G6 genuine client leaks its authenticated fd to an exec'd child (no CLOEXEC); child talks
-{"client":"G6-child-on-leaked-fd","i":1,"pid":46371,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"copy_guest\"}","tag":""}
-{"client":"G6-child-on-leaked-fd","i":2,"pid":46371,"reply":"{\"accept\":false,\"msg_index\":2,\"verdict_stage\":null}","tag":""}
+{"client":"G6-child-on-leaked-fd","i":1,"pid":83827,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"copy_guest\"}","tag":""}
+{"client":"G6-child-on-leaked-fd","i":2,"pid":83827,"reply":"{\"accept\":false,\"msg_index\":2,\"verdict_stage\":null}","tag":""}
 ## G7 same as G6 with per-message re-check
-{"client":"G7-child-on-leaked-fd","i":1,"pid":46375,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"copy_guest\"}","tag":""}
-{"client":"G7-child-on-leaked-fd","i":2,"pid":46375,"reply":"{\"accept\":false,\"msg_index\":2,\"verdict_stage\":\"check_validity\"}","tag":""}
+{"client":"G7-child-on-leaked-fd","i":1,"pid":83833,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"copy_guest\"}","tag":""}
+{"client":"G7-child-on-leaked-fd","i":2,"pid":83833,"reply":"{\"accept\":false,\"msg_index\":2,\"verdict_stage\":\"check_validity\"}","tag":""}
 ## P1 pinned mode (--pin): genuine client answers the challenge
-{"client":"P1-genuine","pid":46393,"reply":"{\"accept\":true,\"msg_index\":1,\"verdict_stage\":\"accepted\"}","tag":"challenge"}
-{"client":"P1-genuine","i":1,"pid":46393,"reply":"{\"accept\":true,\"msg_index\":2,\"verdict_stage\":\"accepted\"}","tag":""}
-{"client":"P1-genuine","i":2,"pid":46393,"reply":"{\"accept\":true,\"msg_index\":3,\"verdict_stage\":\"accepted\"}","tag":""}
-{"client":"P1-adhoc","pid":46394,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"pinned_token_rejected\"}","tag":"challenge"}
-{"client":"P1-adhoc","i":1,"pid":46394,"reply":"{\"accept\":false,\"msg_index\":2,\"verdict_stage\":\"pinned_token_rejected\"}","tag":""}
+{"client":"P1-genuine","pid":83837,"reply":"{\"accept\":true,\"msg_index\":1,\"verdict_stage\":\"accepted\"}","tag":"challenge"}
+{"client":"P1-genuine","i":1,"pid":83837,"reply":"{\"accept\":true,\"msg_index\":2,\"verdict_stage\":\"accepted\"}","tag":""}
+{"client":"P1-genuine","i":2,"pid":83837,"reply":"{\"accept\":true,\"msg_index\":3,\"verdict_stage\":\"accepted\"}","tag":""}
+{"client":"P1-adhoc","pid":83838,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"pinned_token_rejected\"}","tag":"challenge"}
+{"client":"P1-adhoc","i":1,"pid":83838,"reply":"{\"accept\":false,\"msg_index\":2,\"verdict_stage\":\"pinned_token_rejected\"}","tag":""}
 ## P2 pinned mode vs G3 (write, then exec the genuine binary)
-{"client":"P2-attacker","pid":46398,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"pinned_token_rejected\"}","tag":"challenge"}
+{"client":"P2-attacker","pid":83846,"reply":"{\"accept\":false,\"msg_index\":1,\"verdict_stage\":\"pinned_token_rejected\"}","tag":"challenge"}
 ## P3 pinned mode vs G4 (fork; child execs the genuine binary; parent talks)
-{"client":"P3-attacker","reply":"{\"challenge\":\"8c39d8a6d124a115\"}","tag":"reply-to-child-line"}
-{"client":"P3-attacker","i":1,"pid":46410,"reply":"{\"accept\":false,\"msg_index\":2,\"verdict_stage\":\"pinned_token_rejected\"}","tag":"parent-after-fork"}
-{"client":"P3-attacker","i":2,"pid":46410,"reply":"{\"accept\":false,\"msg_index\":3,\"verdict_stage\":\"pinned_token_rejected\"}","tag":"parent-after-fork"}
+{"client":"P3-attacker","reply":"{\"challenge\":\"3232f31c2e36de9c\"}","tag":"reply-to-child-line"}
+{"client":"P3-attacker","i":1,"pid":83962,"reply":"{\"accept\":false,\"msg_index\":2,\"verdict_stage\":\"pinned_token_rejected\"}","tag":"parent-after-fork"}
+{"client":"P3-attacker","i":2,"pid":83962,"reply":"{\"accept\":false,\"msg_index\":3,\"verdict_stage\":\"pinned_token_rejected\"}","tag":"parent-after-fork"}
 ## P4 pinned mode vs G6 (genuine client leaks its fd to an exec'd child)
-{"client":"P4-genuine","pid":46424,"reply":"{\"accept\":true,\"msg_index\":1,\"verdict_stage\":\"accepted\"}","tag":"challenge"}
-{"client":"P4-child-on-leaked-fd","i":1,"pid":46424,"reply":"{\"accept\":true,\"msg_index\":2,\"verdict_stage\":\"accepted\"}","tag":""}
-{"client":"P4-child-on-leaked-fd","i":2,"pid":46424,"reply":"{\"accept\":false,\"msg_index\":3,\"verdict_stage\":\"token_changed\"}","tag":""}
+{"client":"P4-genuine","pid":84027,"reply":"{\"accept\":true,\"msg_index\":1,\"verdict_stage\":\"accepted\"}","tag":"challenge"}
+{"client":"P4-child-on-leaked-fd","i":1,"pid":84027,"reply":"{\"accept\":true,\"msg_index\":2,\"verdict_stage\":\"accepted\"}","tag":""}
+{"client":"P4-child-on-leaked-fd","i":2,"pid":84027,"reply":"{\"accept\":false,\"msg_index\":3,\"verdict_stage\":\"token_changed\"}","tag":""}
 ## G8 verifier itself runs in a sandbox: (version 1)(allow default)(deny process-info-codesignature)
-{"client":"G8-(version 1)(allow default)(deny process-info-codesignature)","i":1,"pid":46431,"reply":"{\"accept\":true,\"msg_index\":1,\"verdict_stage\":\"accepted\"}","tag":""}
+{"client":"G8-(version 1)(allow default)(deny process-info-codesignature)","i":1,"pid":84034,"reply":"{\"accept\":true,\"msg_index\":1,\"verdict_stage\":\"accepted\"}","tag":""}

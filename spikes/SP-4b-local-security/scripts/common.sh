@@ -38,7 +38,7 @@ need_identity() {
 build() {
   CARGO_TARGET_DIR="$SP4B_WORK/target" cargo build --release --quiet \
     --manifest-path "$SPIKE_DIR/rust/Cargo.toml"
-  for b in peer-server peer-client bundle-host lineage-host probe; do
+  for b in peer-server peer-client bundle-host lineage-host; do
     if [ -f "$SP4B_WORK/target/release/$b" ]; then
       cp -f "$SP4B_WORK/target/release/$b" "$BIN/$b"
     fi

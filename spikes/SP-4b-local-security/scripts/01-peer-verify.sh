@@ -185,7 +185,7 @@ stop_server
 python3 -I "$SCRIPTS/summarize.py" "$OUT" > "$OUT/summary.txt"
 cat "$OUT/summary.txt"
 
-for f in "$OUT"/*; do
+for f in "$OUT"/*.txt "$OUT"/*.jsonl; do
   sanitize < "$f" > "$RESULTS/01-$(basename "$f")"
 done
 echo "results written to results/01-*" >&2
