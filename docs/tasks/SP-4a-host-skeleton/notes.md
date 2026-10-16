@@ -154,7 +154,7 @@ claude-agent-acp 0.91.0 + 本机 claude，模型 haiku，权限模式显式选 `
 - 继续对话（resume）：问"hello.txt 是否创建了"，agent 答 "No … because I cancelled the earlier command"。resume 后 agent 把未回应的工具调用视为已取消。
 
 **本机留下的记录**（不删除，由用户决定）：
-- Claude 会话记录：`~/.claude/projects/<编码后的临时目录路径>/` 下各一个 `.jsonl` 和一个 `memory` 目录，会话 ID `c069bae1-824e-4a32-812e-b8cee8cc046e`、`99216f59-af74-4dc8-9940-94b7762fb86b`。
+- Claude 会话记录：`~/.claude/projects/<编码后的临时目录路径>/` 下各一个 `.jsonl` 和一个 `memory` 目录，会话 ID （已移到不入库的 .private 清单）。
 - `~/.claude.json` 的 `projects` 条目数前后都是 58，没有新增。没有修改 `~/.claude` 下的任何配置文件。
 - 临时目录：`<tmp>/tmp.nhaaWW72Fj`、`<tmp>/tmp.59qn4vLHJX`（含数据目录、测试仓库、宿主日志）；适配器安装在会话的临时草稿目录。
 
