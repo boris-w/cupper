@@ -1,6 +1,25 @@
 # cupper
 
-> 技术栈、目录结构、常用命令等在技术设计（阶段 ②）确认后补充到本文件。
+macOS 桌面 agent 客户端：复刻 Codex 桌面版的界面，经 ACP 驱动本机的 Claude Code 和 Codex CLI；M3 加 iOS 端（端到端加密）。PRD 见 `docs/01-prd.md`，技术设计见 `docs/02-design.md`（第 5 节索引 `docs/design/`），决策见 `docs/decisions/`。
+
+## 技术栈
+
+| 层 | 选型 | 依据 |
+|---|---|---|
+| 会话宿主 | Rust（tokio、rusqlite、`agent-client-protocol =3.3.0`），独立进程，打包为 `Cupper.app/Contents/Helpers/CupperHost.app` | ADR-01、ADR-02 |
+| 宿主协议 | 自有 JSON-RPC，分帧 `u32 长度 \| u8 类型 \| 负载`，单帧 ≤ 64,000 字节；schema 以 Rust 类型为源，生成 TS 类型和 zod | ADR-04 |
+| 本地认证 | Unix 套接字 + `LOCAL_PEERTOKEN` + 代码签名校验 + 固定令牌 | ADR-05 |
+| 事件与存储 | 宿主自己的事件日志（SQLite WAL）是唯一的历史来源 | ADR-06 |
+| Agent 接入 | 宿主经 ACP 驱动 claude-agent-acp 和 codex-acp，每种 agent 一个适配器进程；Node 运行时随 App 带、用 cupper 身份重签 | ADR-07、08、09 |
+| Git | 只用 git 命令行；自动调用分快照、仓库、用户三档 | ADR-10 |
+| 桌面 UI | Electron 44 + React 19 + TypeScript；electron-builder + electron-updater | ADR-03 |
+| 许可证 | Apache-2.0；Anthropic 的 SDK 和 Claude Code 二进制绝不进入仓库和产物 | ADR-11 |
+
+## 目录结构与常用命令
+
+产品代码从 M1a 起按 `docs/design/01-repo-build-ci.md` 5.1.2 建立：`crates/`（Rust：protocol、sys、host、cli、fake-agent、desktop-native、xtask）、`apps/desktop/`（Electron）、`packages/`（TS：protocol、host-client、shell-api、ui-core、i18n）、`protocol/`（schema 与样例）、`runtime/`、`testdata/`、`tools/`。`spikes/` 只是原型实测代码，产品代码不依赖它。
+
+常用命令（工程建立后可用，完整列表见 5.1.5）：`pnpm i`、`pnpm dev`、`pnpm gen`（导出 schema 并生成 TS）、`pnpm lint`、`pnpm test`、`pnpm test:golden`、`pnpm test:e2e`、`cargo xtask runtime-pack`。`cargo xtask compat` 会用真实 CLI 并消耗额度，只由维护者手动运行。
 
 ## 角色分工
 
@@ -45,6 +64,26 @@ Co-Authored-By: ...
 
 - 不为兼容旧系统写任何兼容分支、版本判断或补丁代码。需要新版本系统才有的 API 时，直接提高最低支持版本。目前最低支持 macOS 14。
 - 不留技术债：临时写法、被注释掉的代码、没人用的代码，不能进入 main。
+
+## 代码约束
+
+来源：ADR-02、SP-4a 的实测结论、详细设计 5.1.7。违反时 review 不通过。
+
+**Rust**
+- 运行时用 tokio，模块之间用 channel 通信；ACP 回调里只做 channel 发送，耗时的工作另开 task。
+- `unsafe` 只能出现在 `cupper-sys`；错误类型用 thiserror；共享的 crate（`cupper-protocol` 的库部分）不做 I/O。
+- 依赖 SDK 时锁定精确版本；导出给其他语言的产物不依赖 serde_json 的 map 键顺序。
+- 协议里的整数不超过 2^53−1。每个协议方法必须声明 `SCOPE` 和 `IDEMPOTENCY`。
+- 每条事件流只有一个写者，其他模块只能发消息请写者追加事件。
+- 时间只经 `Clock` 获取，定时只经 `Clock` 设置，UUIDv7 只经 `IdGen` 生成（clippy `disallowed-methods` 强制）。有状态的决策逻辑写成纯核心，核心里不做 I/O，也不 await。
+- 宿主运行期间不读取 App 包内的文件；唯一的例外是运行时安装器按内嵌清单核对哈希后的复制。
+- 宿主、CLI、原生扩展拉起任何子进程，都经 `cupper-sys::spawn`。
+
+**TypeScript / Electron**
+- `ui-core` 不 import `electron`、`node:*`；渲染进程不用 `innerHTML`、`dangerouslySetInnerHTML`、`insertAdjacentHTML`、`eval`、`new Function`。
+- 只有 `ui-core/src/security/policies.ts` 可以创建 Trusted Types 策略，禁止名为 `default` 的策略；agent 给出的字符串不能进入 `<style>` 文本、`insertRule` 或 CSS 自定义属性。
+- 主进程在调用时才取 `dialog.showMessageBox` 这类函数，不在模块加载时解构保存。
+- 界面文案一律走 `@cupper/i18n`；宿主只下发语义码，不下发文案。
 
 ## 子 agent 工作守则
 
