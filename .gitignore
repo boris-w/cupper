@@ -6,3 +6,6 @@
 # agent worktrees
 .worktrees/
 .claude/worktrees/
+
+# local-only materials (may contain personal or work data; never commit)
+.private/
