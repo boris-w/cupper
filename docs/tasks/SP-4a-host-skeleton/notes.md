@@ -82,6 +82,7 @@ smoke/claude-midturn.sh <adapter-dir>
 | TS 生成链 | `u64`/`i64` 字段在 zod 里成了 `z.coerce.bigint()`，TS 类型却是 `number` | schema 导出时把 `format: uint64/int64` 换成 JS 安全的上下界（≤ 2^53−1），和 ADR-04 的"seq 不超过 2^53"一致 |
 | 冒烟测试 | Claude 适配器会沿用用户 Claude 设置里的 `defaultMode`，resume 时还会沿用记录里的模式 | 驱动层在 `session/new` 和 `session/resume` 之后都按配置显式选择权限模式（找不到就拒绝启动会话） |
 | 冒烟测试 | 正常退出时 SQLite 里留下适配器记录（actor 先停了，收不到进程退出事件） | 退出流程复用启动时的按进程组清理逻辑 |
+| 写笔记时复查 | 适配器在 `initialize` 成功后才记入 SQLite；适配器启动期间（最长 60 s）宿主崩溃，会留下没有记录、无法清理的进程 | 改为拉起后立即记录 |
 
 ### 测试本身的错误（不是宿主的问题）
 
@@ -129,6 +130,8 @@ release 构建，`tests/measure.rs`。
 **慢客户端（t4）**：一个回合约 36,000 个事件。没有慢客户端 0.86 s；有一个完全不读的客户端 1.00 s。慢客户端的发送队列超过 256 KiB 后收到 `stream/reset`，恢复读取后按游标补齐，状态与快客户端一致。
 
 **帧大小**：t7（3 MB 消息、100 kB 标题、500 kB 工具输出）中客户端见到的最大帧 49,053 字节。
+
+**适配器隔离**（`adapter_gets_only_stdio_and_allowed_env`）：宿主此时持有数据库、套接字和多个客户端连接，假 agent 在运行时启动前列出的已继承 fd 只有 `0,1,2`；环境变量里没有 `CUPPER_*`，也没有白名单之外的变量。变异检查：去掉 `POSIX_SPAWN_CLOEXEC_DEFAULT` 和管道端的 `FD_CLOEXEC` 后，测试失败，泄漏了 fd 16–19。Rust 标准库、tokio、SQLite 自己打开的 fd 都带 `O_CLOEXEC`，`CLOEXEC_DEFAULT` 是第二道保险。
 
 ## 真实适配器冒烟测试
 
