@@ -115,3 +115,50 @@ c0a01fe docs(design): stop host git calls from running repo-configured programs
    - Q33：委托票据的草案。
 6. **测量闸门的负载数字**是按合并窗口换算的上限，M1a 开工时要按录制复核（5.7.1 已写明）。
 7. 主仓库的工作区没有改动；实验和检查用的临时目录都已删除。
+
+## 补充修订（评审者核对后，2026-10-16）
+
+安全、测试两位核对时提出的 10 处问题都已在 D02 分支上改完，分 3 个提交。逐条落点写在 `checklist.md` 第 7 节"核对后的补充"。
+
+**安全**
+1. **信任扫描（合并前必须改，已改，`02` 5.2.6）**：
+   - 符号链接一律跟随，摘要和 findings 都按链接目标的内容计算；目标被改写时，项目转为 stale。
+   - 目标在工作区外的，选择"醒目标出"而不是"禁止信任"：项目配置链接到 dotfiles 很常见，而目标内容已计入摘要，每次发 prompt 前都会重扫。
+   - 扫描范围扩大到"工作区到 git 根目录的每一级"。CLI 是否还会越过 git 根目录加载配置没有核实，记为新增的 Q34。
+2. **git 和 git-lfs 的路径（`02` 5.2.10）**：宿主启动时把两者解析成绝对路径，只在 PATH 的可信条目里查找（绝对路径，并且不在任何项目、工作区、临时目录下）。快照档的 LFS 过滤器写成绝对路径；git 子进程的 PATH 只留可信条目，工作目录设为 cupper 自己的目录。CLI 发现用同一条规则（`06` 5.6.6）。
+3. **`filter_unsupported`（`02` 5.2.10）**：快照档复制 `info/attributes`，检测覆盖全部属性来源。这类路径在快照里只存占位和哈希，不存明文；`git/stage` 之前再用 `check-attr` 核对一次。
+4. **回合中途档位越权（`02` 5.2.6"配置项"）**：先把档位改回原值（最多等 2 s），改不回就中断当前回合，然后再进入 `config_unconfirmed`。
+5. **仓库档第 2 条**：写明"仓库自己的 git 目录除外"，这部分由覆盖和指纹兜底。
+
+第 1、2、4 条（以及第 3、5 条）已写进 5.13.2 的 ADR-05、ADR-08、ADR-10 三行。
+
+**测试**
+6. **racy 用例**：显式设置文件和 index 的 mtime 来构造；另加单元断言：复制出的临时 index 的 mtime 等于原文件。
+7. **负载工具**：
+   - 假 agent 加 `flood_rate <每秒片段数> <秒> <长度>`；
+   - 宿主加 `test/seed {profile}`，写进 5.2.16 和 5.9.9 的注入点表；
+   - 测量闸门、冷启动数据集、SP-6 夹具都改为引用这两个工具。
+8. **SP-6 的场景定义**：
+   - 场景 8：用不透明的置顶窗口遮住 App，测前断言 `visibilityState === 'hidden'`；
+   - 场景 1：定义冷启动和热启动；
+   - 场景 2：输入延迟预算 p95 ≤ 50 ms；
+   - 场景 4：锚点位移不超过 1 px。
+9. **`protocol` 作业**：schema 导出改为 `cupper-protocol` 自己的 bin `export-schema`，不依赖 `cupper-sys`，能在 Linux 上编译；`xtask` 只在 macOS 上编译（`01` 5.1.1–5.1.6）。
+10. **用例引用**：
+    - MS-2 改为引用 IT-thought-claude 和 GOLD-A-codex-s02；真实的 Claude 思考流留给兼容矩阵补。
+    - 顺带修正一处：MS-4 原来引用的 GOLD-A-codex-s02b 里没有计划帧，改为 s05。
+    - 新增 `tools/trace-ids` 检查：文档里引用的用例编号，要么有同名测试，要么登记在 `tests/pending-ids.toml` 里并写明里程碑。
+
+**提交列表**
+```
+1e3874f docs(design): record Q34, ADR notes and checklist for the verification
+fbe0a33 docs(design): close testability gaps found in the revision check
+1bed8cb docs(design): close security gaps found in the revision check
+```
+
+**验证结果**
+- mermaid 11.4.1 解析 21 张图，0 失败，反向对照能检出错误。
+- 链接检查 323 个，0 失效。
+- 个人信息扫描：本轮的 diff 和提交信息都没有命中。
+- 临时工具目录已删除。
+- 主仓库的工作区里有 ADR 文件的改动，不是我做的，应是编排者在 main 上的修订，我没有动。
