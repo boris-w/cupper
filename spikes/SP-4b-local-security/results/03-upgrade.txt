@@ -1,0 +1,83 @@
+## S1 Sparkle-style: stage new copy, move old aside, move new in, delete old
+-- before
+alive=yes inode(TestHost on disk)=62800149
+{"cmd":"ping","reply":{"pid":53184,"version_at_start":"1.0"}}
+{"cmd":"selfcheck","reply":{"bundle_replaced":false,"check_self":"ok","on_disk_cdhash":"8af4cc656ee4e7fdb8597685410ab8c679cc0b3b","running_cdhash":"8af4cc656ee4e7fdb8597685410ab8c679cc0b3b"}}
+{"cmd":"spawn","reply":{"spawned":true,"status":"Ok(ExitStatus(unix_wait_status(0)))"}}
+{"cmd":"readres","reply":{"version_txt_now":"1"}}
+{"ui_check": "before", "flags": "default", "accept": true, "stage": "accepted", "status": null, "message": null}
+{"ui_check": "before", "flags": "kernel", "accept": false, "stage": "check_validity", "status": -67052, "message": "The operation couldn’t be completed. (OSStatus error -67052.)"}
+replace: ditto '<work>/upgrade/stage/v2/Test.app' '<work>/upgrade/inst/.Test.app.new' && mv '<work>/upgrade/inst/Test.app' '<work>/upgrade/old/Test.app' && mv '<work>/upgrade/inst/.Test.app.new' '<work>/upgrade/inst/Test.app' && rm -rf '<work>/upgrade/old/Test.app'
+-- after
+alive=yes inode(TestHost on disk)=62800171
+{"cmd":"ping","reply":{"pid":53184,"version_at_start":"1.0"}}
+{"cmd":"selfcheck","reply":{"bundle_replaced":true,"check_self":{"message":"UNIX[No such file or directory]","status":100002},"on_disk_cdhash":"a7f543e04785b874e21f90473b76a65b2674b1b6","running_cdhash":"8af4cc656ee4e7fdb8597685410ab8c679cc0b3b"}}
+{"cmd":"spawn","reply":{"on_disk":"003b7846dccadd0b4f00d3d3243645f9bb10824e","recorded":"c84415bdd488187ce5e6ffa1e0e670b3cd769015","spawned":false,"state":"pending_upgrade"}}
+{"cmd":"readres","reply":{"version_txt_now":"2"}}
+{"ui_check": "after", "flags": "default", "accept": false, "stage": "copy_guest", "status": 100002, "message": "UNIX[No such file or directory]"}
+{"ui_check": "after", "flags": "kernel", "accept": false, "stage": "copy_guest", "status": 100002, "message": "UNIX[No such file or directory]"}
+## S2 same, old bundle kept at another path (not deleted)
+-- before
+alive=yes inode(TestHost on disk)=62814120
+{"cmd":"ping","reply":{"pid":53353,"version_at_start":"1.0"}}
+{"cmd":"selfcheck","reply":{"bundle_replaced":false,"check_self":"ok","on_disk_cdhash":"8af4cc656ee4e7fdb8597685410ab8c679cc0b3b","running_cdhash":"8af4cc656ee4e7fdb8597685410ab8c679cc0b3b"}}
+{"cmd":"spawn","reply":{"spawned":true,"status":"Ok(ExitStatus(unix_wait_status(0)))"}}
+{"cmd":"readres","reply":{"version_txt_now":"1"}}
+{"ui_check": "before", "flags": "default", "accept": true, "stage": "accepted", "status": null, "message": null}
+{"ui_check": "before", "flags": "kernel", "accept": false, "stage": "check_validity", "status": -67052, "message": "The operation couldn’t be completed. (OSStatus error -67052.)"}
+replace: ditto '<work>/upgrade/stage/v2/Test.app' '<work>/upgrade/inst/.Test.app.new' && mv '<work>/upgrade/inst/Test.app' '<work>/upgrade/old/Test.app' && mv '<work>/upgrade/inst/.Test.app.new' '<work>/upgrade/inst/Test.app'
+-- after
+alive=yes inode(TestHost on disk)=62826511
+{"cmd":"ping","reply":{"pid":53353,"version_at_start":"1.0"}}
+{"cmd":"selfcheck","reply":{"bundle_replaced":true,"check_self":"ok","on_disk_cdhash":"a7f543e04785b874e21f90473b76a65b2674b1b6","running_cdhash":"8af4cc656ee4e7fdb8597685410ab8c679cc0b3b"}}
+{"cmd":"spawn","reply":{"on_disk":"003b7846dccadd0b4f00d3d3243645f9bb10824e","recorded":"c84415bdd488187ce5e6ffa1e0e670b3cd769015","spawned":false,"state":"pending_upgrade"}}
+{"cmd":"readres","reply":{"version_txt_now":"2"}}
+{"ui_check": "after", "flags": "default", "accept": true, "stage": "accepted", "status": null, "message": null}
+{"ui_check": "after", "flags": "kernel", "accept": false, "stage": "check_validity", "status": -67052, "message": "The operation couldn’t be completed. (OSStatus error -67052.)"}
+## S3 ditto v2 over the installed bundle in place
+-- before
+alive=yes inode(TestHost on disk)=62847853
+{"cmd":"ping","reply":{"pid":53441,"version_at_start":"1.0"}}
+{"cmd":"selfcheck","reply":{"bundle_replaced":false,"check_self":"ok","on_disk_cdhash":"8af4cc656ee4e7fdb8597685410ab8c679cc0b3b","running_cdhash":"8af4cc656ee4e7fdb8597685410ab8c679cc0b3b"}}
+{"cmd":"spawn","reply":{"spawned":true,"status":"Ok(ExitStatus(unix_wait_status(0)))"}}
+{"cmd":"readres","reply":{"version_txt_now":"1"}}
+{"ui_check": "before", "flags": "default", "accept": true, "stage": "accepted", "status": null, "message": null}
+{"ui_check": "before", "flags": "kernel", "accept": false, "stage": "check_validity", "status": -67052, "message": "The operation couldn’t be completed. (OSStatus error -67052.)"}
+replace: ditto '<work>/upgrade/stage/v2/Test.app' '<work>/upgrade/inst/Test.app'
+-- after
+alive=yes inode(TestHost on disk)=62864367
+{"cmd":"ping","reply":{"pid":53441,"version_at_start":"1.0"}}
+{"cmd":"selfcheck","reply":{"bundle_replaced":true,"check_self":{"message":"The operation couldn’t be completed. (OSStatus error -67034.)","status":-67034},"on_disk_cdhash":"a7f543e04785b874e21f90473b76a65b2674b1b6","running_cdhash":"8af4cc656ee4e7fdb8597685410ab8c679cc0b3b"}}
+{"cmd":"spawn","reply":{"on_disk":"003b7846dccadd0b4f00d3d3243645f9bb10824e","recorded":"c84415bdd488187ce5e6ffa1e0e670b3cd769015","spawned":false,"state":"pending_upgrade"}}
+{"cmd":"readres","reply":{"version_txt_now":"2"}}
+{"ui_check": "after", "flags": "default", "accept": false, "stage": "check_validity", "status": -67034, "message": "The operation couldn’t be completed. (OSStatus error -67034.)"}
+{"ui_check": "after", "flags": "kernel", "accept": false, "stage": "check_validity", "status": -67034, "message": "The operation couldn’t be completed. (OSStatus error -67034.)"}
+## S4 cp v2 helper executable over the running file in place (what an installer must never do)
+-- before
+alive=yes inode(TestHost on disk)=62880814
+{"cmd":"ping","reply":{"pid":53539,"version_at_start":"1.0"}}
+{"cmd":"selfcheck","reply":{"bundle_replaced":false,"check_self":"ok","on_disk_cdhash":"8af4cc656ee4e7fdb8597685410ab8c679cc0b3b","running_cdhash":"8af4cc656ee4e7fdb8597685410ab8c679cc0b3b"}}
+{"cmd":"spawn","reply":{"spawned":true,"status":"Ok(ExitStatus(unix_wait_status(0)))"}}
+{"cmd":"readres","reply":{"version_txt_now":"1"}}
+{"ui_check": "before", "flags": "default", "accept": true, "stage": "accepted", "status": null, "message": null}
+{"ui_check": "before", "flags": "kernel", "accept": false, "stage": "check_validity", "status": -67052, "message": "The operation couldn’t be completed. (OSStatus error -67052.)"}
+replace: cp '<work>/upgrade/stage/v2/Test.app/Contents/Helpers/TestHost.app/Contents/MacOS/TestHost' '<work>/upgrade/inst/Test.app/Contents/Helpers/TestHost.app/Contents/MacOS/TestHost'
+-- after
+alive=yes inode(TestHost on disk)=62880814
+
+spikes/SP-4b-local-security/scripts/03-upgrade.sh: line 52: 53539 Killed: 9               "$HEXE" --socket "$S" --bundle "$HAPP" --runtime "$HAPP/Contents/MacOS/tool" 2>> "$OUT/host.err"
+{"cmd": "selfcheck", "error": "[Errno 61] Connection refused"}
+{"cmd": "spawn", "error": "[Errno 61] Connection refused"}
+{"cmd": "readres", "error": "[Errno 61] Connection refused"}
+{"ui_check": "after", "raw": "{\"client\":\"ui-check-after\",\"connect_error\":\"Connection refused (os error 61)\"}"}
+{"ui_check": "after", "raw": "{\"client\":\"ui-check-after\",\"connect_error\":\"Connection refused (os error 61)\"}"}
+## S5 switch: old host gone, new UI launches the new host from the new bundle
+{"cmd":"selfcheck","reply":{"bundle_replaced":true,"check_self":{"message":"UNIX[No such file or directory]","status":100002},"on_disk_cdhash":"a7f543e04785b874e21f90473b76a65b2674b1b6","running_cdhash":"8af4cc656ee4e7fdb8597685410ab8c679cc0b3b"}}
+-- new host
+alive=yes inode(TestHost on disk)=62902445
+{"cmd":"ping","reply":{"pid":53673,"version_at_start":"2.0"}}
+{"cmd":"selfcheck","reply":{"bundle_replaced":false,"check_self":"ok","on_disk_cdhash":"a7f543e04785b874e21f90473b76a65b2674b1b6","running_cdhash":"a7f543e04785b874e21f90473b76a65b2674b1b6"}}
+{"cmd":"spawn","reply":{"spawned":true,"status":"Ok(ExitStatus(unix_wait_status(0)))"}}
+{"cmd":"readres","reply":{"version_txt_now":"2"}}
+{"ui_check": "new host", "flags": "default", "accept": true, "stage": "accepted", "status": null, "message": null}
+{"ui_check": "new host", "flags": "kernel", "accept": false, "stage": "check_validity", "status": -67052, "message": "The operation couldn’t be completed. (OSStatus error -67052.)"}
