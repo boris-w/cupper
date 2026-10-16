@@ -20,7 +20,6 @@ Usage: python3 bench_snapshot.py [--repos syn-1k,syn-10k,syn-100k,linux] [--runs
 from __future__ import annotations
 
 import argparse
-import os
 import random
 import shutil
 import sys
@@ -29,7 +28,7 @@ from pathlib import Path
 
 import hunks
 from lib import REPOS, STATE, file_state, git, git_out, git_path, save_result, timed
-from snapshot import snapshot, stash_create, odb_env
+from snapshot import snapshot, snapshot_guided, stash_create
 
 SCENARIOS = {
     "clean": dict(modify=0, add=0, delete=0),
@@ -81,8 +80,8 @@ class Scenario:
         git(self.repo, "update-index", "-q", "--refresh", check=False)
 
 
-def status(repo: Path) -> bytes:
-    return git(repo, "--no-optional-locks", "status", "--porcelain=v2", "-z", "--untracked-files=all").stdout
+def status(repo: Path, untracked: str = "all") -> bytes:
+    return git(repo, "--no-optional-locks", "status", "--porcelain=v2", "-z", f"--untracked-files={untracked}").stdout
 
 
 def count_objects(repo: Path, env=None) -> dict:
@@ -117,6 +116,8 @@ def bench_repo(name: str, runs: int, scenarios) -> dict:
                                  setup=sc.apply)
         res["snap_private"] = timed(lambda: snapshot(repo, state / "priv", private_odb=state / "odb"),
                                     runs=small_runs, setup=sc.apply)
+        res["snap_guided"] = timed(lambda: snapshot_guided(repo, state / "guided"), runs=small_runs,
+                                   setup=sc.apply)
         if sc_name == "clean":
             res["snap_empty"] = timed(lambda: snapshot(repo, state / "empty", seed="empty"),
                                       runs=3 if big else small_runs, setup=sc.apply)
@@ -131,6 +132,11 @@ def bench_repo(name: str, runs: int, scenarios) -> dict:
         t1 = snapshot(repo, state / "seed")
         c1 = count_objects(repo)
         res["odb_growth"] = {"loose_objects": c1["count"] - c0["count"], "loose_kb": c1["size"] - c0["size"]}
+        res["same_tree"] = {
+            "keep": snapshot(repo, state / "keep", seed="keep") == t1,
+            "private_odb": snapshot(repo, state / "priv", private_odb=state / "odb") == t1,
+            "guided": snapshot_guided(repo, state / "guided") == t1,
+        }
 
         # diffs between snapshots (T0 = clean, T1 = this scenario)
         res["diff_raw"] = timed(lambda: git(repo, "diff-tree", "-r", "-z", "--raw", "-M", t0, t1), runs=small_runs)
@@ -202,22 +208,30 @@ def bench_fsmonitor(name: str, runs: int) -> dict:
     try:
         git(repo, "fsmonitor--daemon", "start", check=False)
         time.sleep(2)
-        for _ in range(3):  # populate FSMN + UNTR extensions in the real index
-            git(repo, "status", "--porcelain=v2", "--untracked-files=all")
+        # populate FSMN + UNTR extensions in the real index. Must be -unormal: with -uall git
+        # neither uses nor writes the untracked cache.
+        for _ in range(3):
+            git(repo, "status", "--porcelain=v2")
         for sc_name in ("clean", "small"):
             sc = Scenario(repo, SCENARIOS[sc_name])
             res = {"changes": sc.actual}
             res["status"] = timed(lambda: status(repo), runs=runs, setup=sc.apply)
+            res["status_normal"] = timed(lambda: status(repo, "normal"), runs=runs, setup=sc.apply)
             res["snap_seed"] = timed(lambda: snapshot(repo, state / "seed"), runs=runs, setup=sc.apply)
             snapshot(repo, state / "keep")
             res["snap_keep"] = timed(lambda: snapshot(repo, state / "keep", seed="keep"), runs=runs,
                                      setup=sc.apply)
+            res["snap_guided"] = timed(lambda: snapshot_guided(repo, state / "guided"), runs=runs,
+                                       setup=sc.apply)
+            sc.apply(10_001)
+            res["guided_same_tree"] = snapshot_guided(repo, state / "guided") == snapshot(repo, state / "seed")
             sc.restore()
             for _ in range(2):
-                git(repo, "status", "--porcelain=v2", "--untracked-files=all")
+                git(repo, "status", "--porcelain=v2")
             out["scenarios"][sc_name] = res
             print(f"  {name}/fsmonitor/{sc_name}: seed={res['snap_seed']['median_ms']}ms "
-                  f"keep={res['snap_keep']['median_ms']}ms status={res['status']['median_ms']}ms", flush=True)
+                  f"guided={res['snap_guided']['median_ms']}ms status-uall={res['status']['median_ms']}ms "
+                  f"status-unormal={res['status_normal']['median_ms']}ms same={res['guided_same_tree']}", flush=True)
     finally:
         git(repo, "fsmonitor--daemon", "stop", check=False)
         git(repo, "config", "core.fsmonitor", "false")
@@ -234,18 +248,21 @@ def main() -> None:
     ap.add_argument("--scenarios", default="clean,small,medium,large")
     ap.add_argument("--runs", type=int, default=5)
     ap.add_argument("--no-fsmonitor", action="store_true")
+    ap.add_argument("--fsmonitor-only", action="store_true", help="only the fsmonitor pass (separate result file)")
     a = ap.parse_args()
+    out_name = "bench_snapshot_fsmonitor_only" if a.fsmonitor_only else "bench_snapshot"
     results = {"runs": a.runs, "repos": [], "fsmonitor": []}
-    for name in a.repos.split(","):
-        print(f"[{name}]", flush=True)
-        results["repos"].append(bench_repo(name, a.runs, a.scenarios.split(",")))
-        save_result("bench_snapshot", results)
+    if not a.fsmonitor_only:
+        for name in a.repos.split(","):
+            print(f"[{name}]", flush=True)
+            results["repos"].append(bench_repo(name, a.runs, a.scenarios.split(",")))
+            save_result(out_name, results)
     if not a.no_fsmonitor:
         for name in a.repos.split(","):
             if name in ("linux", "syn-100k"):
                 results["fsmonitor"].append(bench_fsmonitor(name, a.runs))
-                save_result("bench_snapshot", results)
-    save_result("bench_snapshot", results)
+                save_result(out_name, results)
+    save_result(out_name, results)
 
 
 if __name__ == "__main__":

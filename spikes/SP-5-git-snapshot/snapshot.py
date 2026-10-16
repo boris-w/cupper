@@ -96,6 +96,46 @@ def snapshot(repo, state_dir, *, seed: str = "index", private_odb: Optional[Path
     return git_out(repo, "write-tree", env=e)
 
 
+def status_paths(repo) -> list:
+    """Paths where index != worktree, plus untracked entries (collapsed dirs), via a fast
+    `status -unormal` (this mode can use fsmonitor + the untracked cache; -uall cannot)."""
+    out = git(repo, "--no-optional-locks", "status", "--porcelain=v2", "-z", "--untracked-files=normal",
+              "--ignore-submodules=none").stdout
+    paths, ents, i = [], out.split(b"\0"), 0
+    while i < len(ents):
+        e = ents[i]
+        if e.startswith(b"1 ") or e.startswith(b"u "):
+            paths.append(e.split(b" ", 8 if e[0:1] == b"1" else 10)[-1])
+        elif e.startswith(b"2 "):
+            paths.append(e.split(b" ", 9)[-1])
+            i += 1
+            paths.append(ents[i])  # original path of a rename/copy
+        elif e.startswith(b"? "):
+            paths.append(e[2:])
+        i += 1
+    return paths
+
+
+def snapshot_guided(repo, state_dir, *, private_odb: Optional[Path] = None) -> str:
+    """Seeded temp index, but `add -A` limited to the paths `status -unormal` reports."""
+    state_dir = Path(state_dir)
+    state_dir.mkdir(parents=True, exist_ok=True)
+    tmp_index = state_dir / "snap.index"
+    real = git_path(repo, "index")
+    if real.exists():
+        shutil.copyfile(real, tmp_index)
+    elif tmp_index.exists():
+        tmp_index.unlink()
+    e = {"GIT_INDEX_FILE": str(tmp_index)}
+    e.update(odb_env(repo, private_odb))
+    paths = status_paths(repo)
+    if paths:
+        spec = state_dir / "snap.pathspec"
+        spec.write_bytes(b"\0".join(b":(top,literal)" + p for p in paths) + b"\0")
+        git(repo, *SNAPSHOT_CFG, "add", "-A", f"--pathspec-from-file={spec}", "--pathspec-file-nul", env=e)
+    return git_out(repo, "write-tree", env=e)
+
+
 def anchor(repo, tree: str, ref: str, *, parent: Optional[str] = "HEAD", message: str = "cupper snapshot",
            private_odb: Optional[Path] = None) -> str:
     """Optionally wrap a snapshot tree in a commit and point a private ref at it."""
