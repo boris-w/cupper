@@ -85,7 +85,8 @@ sequenceDiagram
 | `settings/update`（安全相关的键） | 原生确认 | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ |
 | `workspace/open`、`diag/export` | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✗ |
 | `auth/elevate` | ✗ | ✗ | ✓ | ✓ | ✓ | ✗ | ✗ |
-| `auth/elevation_get`、`auth/elevation_respond`、`policy/describe` | 原生确认 | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ |
+| `auth/elevation_get`、`policy/describe`（主进程弹确认框前取内容） | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ |
+| `auth/elevation_respond` | 原生确认 | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ |
 | `host/prepare_upgrade`、`host/exit` | ✓（有运行中的回合时原生确认） | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ |
 | `diag/recording_export` | 仅 dev/e2e 构建 | 仅 dev/e2e 构建 | ✗ | ✗ | ✗ | ✓ | ✗ |
 

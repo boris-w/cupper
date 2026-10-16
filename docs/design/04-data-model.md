@@ -74,6 +74,7 @@ CREATE INDEX sessions_by_project ON sessions(project_id, archived_at, updated_at
 CREATE TABLE turns (
   session_id      TEXT NOT NULL,
   turn_id         TEXT NOT NULL,
+  turn_no         INTEGER NOT NULL,          -- 会话内从 1 递增，客户端视图按它排序（history/page 拼接用）
   origin          TEXT NOT NULL,             -- user | queued | steer_new_turn | autonomous
   status          TEXT NOT NULL,             -- running | completed | cancelled | failed | interrupted
   first_seq       INTEGER NOT NULL,          -- 会话流中 turn.started 的 seq
@@ -88,18 +89,19 @@ CREATE TABLE turns (
   PRIMARY KEY (session_id, turn_id)
 ) WITHOUT ROWID;
 CREATE INDEX turns_by_time ON turns(session_id, started_at);
+CREATE UNIQUE INDEX turns_by_no ON turns(session_id, turn_no);
 
 -- 回合结束时写入：重建这个回合所需的事件体序列。会话流的日志被裁剪后，历史从这里来（history/page）
 CREATE TABLE turn_snapshots (
   session_id TEXT NOT NULL,
   turn_id    TEXT NOT NULL,
-  started_at INTEGER NOT NULL,
+  turn_no    INTEGER NOT NULL,               -- history/page 按它向前翻页
   v          INTEGER NOT NULL,               -- 写入时的事件 schema 版本
   ops        TEXT NOT NULL,                  -- JSON 数组：事件体
   bytes      INTEGER NOT NULL,
   PRIMARY KEY (session_id, turn_id)
 ) WITHOUT ROWID;
-CREATE INDEX turn_snapshots_by_time ON turn_snapshots(session_id, started_at);
+CREATE UNIQUE INDEX turn_snapshots_by_no ON turn_snapshots(session_id, turn_no);
 
 -- 事件日志：同一条流 seq 连续（ADR-06）
 CREATE TABLE events (

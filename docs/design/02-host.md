@@ -195,7 +195,7 @@ stateDiagram-v2
   Failed --> Idle: 队列暂停
 ```
 
-- **回合由宿主推导**（ADR-06）：以 `session/prompt` 的请求和响应为界；Codex 有 `threadStatus` 时优先采用；回合外的更新开一个 `origin: autonomous` 的回合。回合结束时还没完成的工具调用标为 `abandoned`。
+- **回合由宿主推导**（ADR-06）：以 `session/prompt` 的请求和响应为界；回合外的更新开一个 `origin: autonomous` 的回合。Codex 的 `threadStatus` 只用于显示运行状态和界定自发回合，有 prompt 在途时以 prompt 的响应为准（SP-1 s05：计划确认请求发出时线程状态已是 `idle`，见 K12 和待定问题 Q11）。回合结束时还没完成的工具调用标为 `abandoned`。
 - **起始快照**：进入 `Preparing` 时另起 task 拍快照（ADR-10 要求回合开始时同步拍，这里的"同步"指 prompt 等快照完成再发），超过 3 s 就不等了，这个回合的 diff 标为不可用。
 
 ### 排队、Steer、中断（CP-6、CP-7）

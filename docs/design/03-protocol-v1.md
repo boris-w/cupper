@@ -72,7 +72,7 @@
 
 - **订阅**：`stream/subscribe {stream, after_seq?}`。`after_seq` 仍在日志保留范围内时，结果为 `mode: replay`，之后以 `stream/events` 补发；否则为 `mode: snapshot`，之后以若干页 `stream/snapshot` 下发状态（`at_seq` 为快照对应的 seq），再接增量。
 - **快照的内容**是一串事件体，客户端用处理增量时同一个 `apply` 应用（ADR-06）。会话流的快照只覆盖窗口：最近 20 个回合（或最多 2,000 个条目）、进行中的回合、全部待处理的交互请求、配置、能力和队列。
-- **历史**：`history/page {session_id, before?, max_bytes?}` 返回窗口之前的回合，内容同样是事件体序列，用同一个 `apply` 拼到视图前面；`next` 为空表示到头了。
+- **历史**：`history/page {session_id, before?, max_bytes?}` 返回窗口之前的回合，内容同样是事件体序列，用同一个 `apply` 应用；视图按 `turn.started` 里的 `turn_no` 排序，所以较早的回合会插到前面；`next` 为空表示到头了。
 - **连续性**：客户端检查 `event.from`（没有就取 `seq`）等于上一个事件的 `seq` 加 1，不满足就带着游标重新订阅（ADR-04）。
 - **重置**：`stream/reset {stream, reason}` 表示宿主丢弃了这条订阅（`slow_consumer`：该连接的发送队列超出预算；`rebuilt`：宿主重建了这条流），客户端带游标重新订阅。
 - **可合并的事件**：只有 `item.delta`。schema 中以 `x-mergeable: true` 标出。
@@ -202,7 +202,7 @@
 | `session.capabilities` | 否 | 能力描述（[5.3.7](#537-会话能力描述)） | agent 会话建立或 resume 后；能力变化时 |
 | `workspace.preparing` | 否 | `{phase: worktree_add\|checkout\|refresh, progress?}` | 创建 worktree 期间 |
 | `workspace.ready` / `workspace.failed` | 否 | `{path, branch?}` / `{code}` | 准备完成或失败 |
-| `turn.started` | 否 | `{turn_id, origin: user\|queued\|steer_new_turn\|autonomous}` | 回合开始 |
+| `turn.started` | 否 | `{turn_id, turn_no, origin: user\|queued\|steer_new_turn\|autonomous}`；`turn_no` 是会话内从 1 递增的序号，视图按它排序 | 回合开始 |
 | `turn.completed` | 否 | `{turn_id, status: completed\|cancelled\|failed\|interrupted, stop_reason?, duration_ms, usage?: {input, output, cached?, cost?}, error_code?}` | 回合结束 |
 | `item.started` | 否 | `{item_id, turn_id?, kind, group_id?, ...}`（按 `kind` 见下表） | 条目开始 |
 | `item.delta` | **是** | `{item_id, text}` | 文本流 |

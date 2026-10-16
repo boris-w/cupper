@@ -74,9 +74,10 @@ type PrivilegedAction =
   | { kind: 'set_config'; session_id: string; option: string; value: string }
   | { kind: 'create_session'; params: SessionCreateParams }
   | { kind: 'elevation'; elevation_id: string }
-  | { kind: 'settings'; patch: SettingsPatch }
-  | { kind: 'quit' };
+  | { kind: 'settings'; patch: SettingsPatch };
 ```
+
+退出 App 时的确认（NFR-8）由主进程的 `lifecycle` 模块在 `before-quit` 时自己发起，不经过渲染进程。
 
 ## 5.7.4 窗口与布局
 
