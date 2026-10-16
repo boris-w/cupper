@@ -106,6 +106,25 @@ class FilePatch:
         return b"".join(keep)
 
 
+def normalize_new_start(patch: bytes) -> bytes:
+    """Make a single-hunk patch self-consistent: new_start = old_start.
+
+    `git diff` numbers the new side assuming every earlier hunk is applied too. git apply
+    ignores that and searches around old_start, but libgit2 applies a hunk exactly at
+    new_start, so an extracted hunk after an unapplied one misses. (Needed for libgit2 only.)
+    """
+    out = []
+    for line in patch.splitlines(keepends=True):
+        m = HUNK_RE.match(line)
+        if m and m.group(2) != b"0" and m.group(1) != b"0":
+            old_start, old_n, new_n = m.group(1), m.group(2), m.group(4)
+            rest = line[m.end():]
+            line = b"@@ -" + old_start + (b"," + old_n if old_n is not None else b"") + \
+                b" +" + old_start + (b"," + new_n if new_n is not None else b"") + b" @@" + rest
+        out.append(line)
+    return b"".join(out)
+
+
 def parse(patch: bytes) -> List[FilePatch]:
     files: List[FilePatch] = []
     cur: Optional[FilePatch] = None

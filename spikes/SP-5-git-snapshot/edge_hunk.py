@@ -47,7 +47,10 @@ class Libgit2Backend:
     name = "libgit2"
     reversed_diff = True
 
-    def __init__(self):
+    def __init__(self, fix_header: bool = False):
+        self.fix_header = fix_header
+        if fix_header:
+            self.name = "libgit2+fix"
         import pygit2  # noqa: F401
 
         self.pygit2 = pygit2
@@ -65,8 +68,10 @@ class Libgit2Backend:
 
     def apply(self, repo, kind: str, patch: bytes, raw: bool = False) -> None:
         r = self.pygit2.Repository(str(repo))
-        d = self.pygit2.Diff.parse_diff(patch)
+        if self.fix_header:
+            patch = hunks.normalize_new_start(patch)
         try:
+            d = self.pygit2.Diff.parse_diff(patch)
             r.apply(d, self.INDEX if kind in ("stage", "unstage") else self.WORKDIR)
         except Exception as e:  # normalise to GitError-like failure
             raise GitError(["libgit2", "apply", kind], _Fake(str(e)))
@@ -154,6 +159,7 @@ class Ctx:
     def op(self, label: str, kind: str, patch: bytes, expect: Callable[[], List[tuple]],
            expect_fail: bool = False, raw: bool = False) -> bool:
         idx_before = file_state(git_path(self.repo, "index"))
+        entries_before = git_out(self.repo, "ls-files", "-s")
         err = ""
         try:
             self.b.apply(self.repo, kind, patch, raw=raw)
@@ -162,11 +168,13 @@ class Ctx:
             failed, err = True, e.stderr.strip().splitlines()[-1] if e.stderr.strip() else str(e)
         checks = expect()
         bad = [c for c in checks if c[1] != c[2]]
-        if kind == "revert":  # a worktree revert must never touch the index file
-            if file_state(git_path(self.repo, "index")) != idx_before:
-                bad.append(("index file touched by revert", "untouched", "touched"))
-        ok = (failed == expect_fail) and not bad
         detail = []
+        if kind == "revert":  # a worktree revert must never change index entries
+            if git_out(self.repo, "ls-files", "-s") != entries_before:
+                bad.append(("index entries changed by revert", "unchanged", "changed"))
+            elif file_state(git_path(self.repo, "index")) != idx_before:
+                detail.append("note: index file rewritten (stat refresh, entries unchanged)")
+        ok = (failed == expect_fail) and not bad
         if failed:
             detail.append(("expected failure: " if expect_fail else "FAILED: ") + err[:160])
         elif expect_fail:
@@ -612,10 +620,11 @@ CASES = [
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--backend", choices=["git-cli", "libgit2"], default="git-cli")
+    ap.add_argument("--backend", choices=["git-cli", "libgit2", "libgit2+fix"], default="git-cli",
+                    help="libgit2+fix rewrites each single-hunk header to new_start=old_start first")
     ap.add_argument("--only", default="")
     a = ap.parse_args()
-    backend = CliBackend() if a.backend == "git-cli" else Libgit2Backend()
+    backend = CliBackend() if a.backend == "git-cli" else Libgit2Backend(fix_header=a.backend == "libgit2+fix")
     rows: List[dict] = []
     for name, fn in CASES:
         if a.only and name not in a.only.split(","):
