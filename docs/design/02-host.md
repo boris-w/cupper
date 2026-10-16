@@ -152,7 +152,7 @@ flowchart TB
 - 状态：
   - `inflight`：同一个命令的重复请求挂在第一次执行上等待结果；
   - `done`：直接回放结果，加 `replayed: true`；参数哈希不同则返回 `idempotency_mismatch`；
-  - `pending_external`：会改动用户仓库的 git 命令（`git/commit`、`git/stage` 等）在执行前先写一条这种记录。宿主在执行中途崩溃后，重试会得到 `conflict`（`reason: outcome_unknown`），客户端刷新状态后由用户决定。
+  - `pending_external`：会改动用户仓库的 git 命令（`git/commit`、`git/stage` 等）在执行前先写一条这种记录，并且这一批用 `synchronous=FULL` 加 `fullfsync` 提交，确认真正落盘后才执行 git（[5.2.8](#528-事件存储)）。宿主在执行中途崩溃后，重试会得到 `conflict`（`reason: outcome_unknown`），客户端刷新状态后由用户决定。
 - **"受理"语义**：会话类命令的结果表示"已受理并落盘"，实际效果从事件里看（对齐会议题 2.3）。执行者把命令结果和它产生的第一批事件放进同一个事务提交。执行前就失败的命令（参数错误、前置条件不满足）不记录，重试会重新判断。
 - 每小时清理一次超过 48 小时的记录（ADR-04 要求至少 24 小时）。
 
@@ -232,7 +232,7 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
 
 - **中断时**：见上文，`interrupt_stops_commands` 为 false 时标 `may_still_run`。
 - **输出晚到时**（K3：Codex 取消后命令仍在运行，它的输出和 `completed` 在之后才到）：
-  - 在当前回合里新建一个 `late_tool_output` 条目（[5.3.5](03-protocol-v1.md#535-事件类型目录)），`ref` 指向原条目，带原条目的标题和命令，信息自足；没有进行中的回合时，按 K9 开一个 `autonomous` 回合承载它，命令确实还在运行，会话显示"运行中"也是准确的。
+  - 在当前回合里新建一个 `late_tool_output` 条目（[5.3.5](03-protocol-v1.md#535-事件类型目录)），`ref` 指向原条目，带原条目的标题和命令，信息自足；没有进行中的回合时，按 K9 开一个 `autonomous` 回合承载它，命令确实还在运行，会话显示"运行中"也是准确的；这个自发回合在晚到的条目结束（收到 `completed`）后结束，或者按自发回合的静默规则结束。
   - 每个原工具只建一个这样的条目，之后的输出都追加到它上面（`field: output` 的 delta），收到 `completed` 时结束，带退出码。
   - 输出不丢弃，按普通工具输出的规则内联或转成 blob；原始帧照常保留。
   - 原条目的事件不改。TS 和 Rust 的视图维护反向索引 `late_by_ref`，原条目在内存里时，界面在原条目旁显示"最终退出码 N"和跳转链接（[5.7.6](07-desktop.md#576-状态管理)）。
@@ -288,7 +288,7 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
 4. 先刷出 normalizer 里缓冲的文本（保证因果顺序），再写 `interaction.requested` 和 `interactions` 行；通知 `IndexActor`。
 5. 在内存里保存 ACP 的应答句柄，记下它属于哪个适配器实例。
 
-**收到 `interaction/respond` 时**依次检查：请求存在且为 `pending`（否则 `conflict/already_resolved` 带 `resolved_by`，或 `expired`）→ 摘要一致 → principal 在 `actionable_by` 内 → 选项存在、`requires` 满足 → 提问的答案符合字段定义。全部通过后应答 ACP，写 `interaction.resolved`（带 `resolved_by`），回复成功。
+**收到 `interaction/respond` 时**依次检查：请求存在且为 `pending`（否则 `conflict/already_resolved` 带 `resolved_by`，或 `expired`）→ 摘要一致 → principal 在 `actionable_by` 内 → 选项存在、`requires` 满足，带 `mode_after` 的选项另按档位规则 → 来自 window 角色时带 `input` 证据、按键与选项相符、距创建不少于 400 ms（[5.2.5](#525-策略与命令账本)）→ 提问的答案符合字段定义。全部通过后应答 ACP，写 `interaction.resolved`（带 `resolved_by`），回复成功。
 
 **失效与撤回**
 
@@ -298,6 +298,8 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
 | 回合被中断（Codex 不撤回，宿主替它应答 `Cancelled`） | `cancelled` |
 | 请求所属的适配器实例退出 | `expired`（SEC-10） |
 | 宿主重启 | `expired` |
+
+Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起，只有上表的四种情况会（Q11，纪要 D3）。
 
 不设超时：用户可能几小时后才回来处理。回合之外也允许出现交互请求（ADR-06 要求放开 SP-4a 的限制），这时 `turn_id` 为空。
 
@@ -316,7 +318,7 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
 | 原始帧 | 线路分接的输出进入有界队列，写线程批量写入 `raw.db`；队列满了就丢弃并计数（ADR-06 的用途是重算和排障，不能反压 ACP） |
 | 升级器与迁移 | 见 [5.4.6](04-data-model.md#546-迁移) |
 | 持久性 | 按 SQLite 和 macOS 的文档决定，不做 VM 断电实验（Q15 关闭，纪要 D5）：<br>- 默认 `journal_mode=WAL`、`synchronous=NORMAL`，并开启 `checkpoint_fullfsync`。进程崩溃不丢已提交的事务；断电可能丢最近的事务，但数据库不会损坏；<br>- 写 `pending_external` 的那一批，写线程临时改用 `synchronous=FULL` 加 `fullfsync` 提交（macOS 上普通 fsync 不保证写入盘内缓存），确认后才执行 git；<br>- `raw.db` 不开 fullfsync |
-| 数据代次 `data_epoch` | 断电丢事务后，seq 可能被重用，客户端的游标会指向已经不存在的事件。宿主每次启动记下 `kern.bootsessionuuid`（每次开机不同）；**上次是异常退出（没有 `last_clean_exit_at`），并且启动会话的 UUID 变了**，就把 `meta.data_epoch` 加 1。`kill -9` 不加：进程崩溃时 WAL 不丢数据。`initialize` 的结果下发 `data_epoch`，订阅时游标的 epoch 不同就走快照（[5.3.3](03-protocol-v1.md#533-流与同步)）。代价是"`kill -9` 之后用户又正常重启了电脑"也会被判成断电，只多一次全量快照。两个输入（启动会话的 UUID、上次是否正常退出）在 test-harness 构建里都可以注入 |
+| 数据代次 `data_epoch` | 断电丢事务后，seq 可能被重用，客户端的游标会指向已经不存在的事件。宿主每次启动记下 `kern.bootsessionuuid`（每次开机不同）；**上次运行没有正常退出（`meta.last_clean_exit_at` 早于上次的 `last_start_at`），并且启动会话的 UUID 变了**，就把 `meta.data_epoch` 加 1。`kill -9` 不加：进程崩溃时 WAL 不丢数据。`initialize` 的结果下发 `data_epoch`，订阅时游标的 epoch 不同就走快照（[5.3.3](03-protocol-v1.md#533-流与同步)）。代价是"`kill -9` 之后用户又正常重启了电脑"也会被判成断电，只多一次全量快照。两个输入（启动会话的 UUID、上次是否正常退出）在 test-harness 构建里都可以注入 |
 | 回合快照不可变 | 回合快照写入后不再修改，事后的信息写成新事件（[5.2.6](#晚到的工具输出)） |
 
 ## 5.2.9 关注度与通知
@@ -462,11 +464,11 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
 
 **启动顺序**（目标：前 9 步合计不超过 50 ms，SP-4a 实测 p95 为 4.6 ms，不含签名校验）
 
-1. 解析参数：`--data-dir`（默认 `~/Library/Application Support/cupper`）；`--build-info`（输出版本和启用的编译特性后退出，发布流水线据此断言）；`--self-test`。读取 stdin 上的启动载荷（`dev_key`、`harness_key`、`test_config`，格式、超时和编译期门控见 [5.8.1](08-security.md#581-认证握手固定令牌)），读完后把 stdio 指向 `/dev/null`。
+1. 解析参数：`--data-dir`（默认 `~/Library/Application Support/cupper`）；`--build-info`（输出版本和启用的编译特性后退出，发布流水线据此断言）；`--self-test`。`dev-auth`、`test-harness` 构建读取 stdin 上的启动载荷（`dev_key`、`harness_key`、`test_config`，格式、超时和编译期门控见 [5.8.1](08-security.md#581-认证握手固定令牌)）；之后（发布构建一开始就）把 stdio 指向 `/dev/null`。
 2. 初始化日志（轮转、脱敏，见 [5.11](11-diagnostics.md)）。
 3. 数据目录和子目录建成 0700，并检查属主。
 4. 对 `host.lock` 加 `flock`；已被占用就以退出码 3 退出（UI 改为直接连接）。
-5. 打开数据库，必要时先备份再迁移（每个迁移脚本在自己的事务里同时更新 `schema_version`，[5.4.6](04-data-model.md#546-迁移)）；数据库版本比本程序新就以退出码 4 退出（不支持降级，NFR-10）；迁移失败以退出码 6 退出。按上文的规则判定是否把 `data_epoch` 加 1。
+5. 打开数据库，必要时先备份再迁移（每个迁移脚本在自己的事务里同时更新 `schema_version`，[5.4.6](04-data-model.md#546-迁移)）；数据库版本比本程序新就以退出码 4 退出（不支持降级，NFR-10）；迁移失败以退出码 6 退出。按 [5.2.8](#528-事件存储) 的规则判定是否把 `data_epoch` 加 1，并记下这次的 `last_start_at` 和启动会话的 UUID。
 6. 崩溃恢复（NFR-9）：按 `adapters` 表的进程组和启动时间清理残留（SP-4a 的 `reap_group`）；运行中的回合写 `turn.completed{status: interrupted}`；待处理的交互请求写 `expired`；账本里 `pending_external` 的记录保留，供重试时返回 `outcome_unknown`；`initial_prompt_json` 不为空、停在准备工作区阶段的会话，交给会话 actor 重新准备工作区（已登记的 worktree 直接复用），失败就写 `workspace.failed`，并把这条消息转成一条暂停中的排队消息，不丢弃。
 7. 加载索引流（检查点 + 其后的事件）。
 8. 绑定套接字：`run/host.sock`；路径超过 104 字节时退到每个用户自己的临时目录 `confstr(_CS_DARWIN_USER_TEMP_DIR)` 下的 `cupper-<数据目录哈希>/`（系统创建、权限 0700，别的用户无法抢先创建；客户端用同一个算法找到套接字），使用前检查属主和 0700；套接字文件 0600（安全建议 #18）。
@@ -477,7 +479,7 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
 
 **空闲退出**（非后台模式）：没有客户端连接、没有进行中的回合、没有待处理请求、没有排队消息、安装器空闲，持续 10 分钟（可设置）后有序退出。
 
-**有序退出**（`host/exit`、SIGTERM、空闲、升级）：停止 accept → 向所有连接发 `host/shutdown` 通知 → 如果是强制退出，运行中的回合标为 `interrupted` → 按 ADR-09 的顺序关闭适配器（逐个 `session/close` → 关闭 stdin → 等进程组退出 3 s → SIGTERM → 2 s → SIGKILL）→ 写检查点、清空写线程队列 → 释放电源断言 → 删除套接字 → 释放锁。
+**有序退出**（`host/exit`、SIGTERM、空闲、升级）：停止 accept → 向所有连接发 `host/shutdown` 通知 → 如果是强制退出，运行中的回合标为 `interrupted` → 按 ADR-09 的顺序关闭适配器（逐个 `session/close` → 关闭 stdin → 等进程组退出 3 s → SIGTERM → 2 s → SIGKILL）→ 写检查点、清空写线程队列、写 `meta.last_clean_exit_at` → 释放电源断言 → 删除套接字 → 释放锁。
 
 **防休眠**（NFR-13，M1 为 P1）：有进行中的回合或待处理的交互请求时，持有 `PreventUserIdleSystemSleep` 断言，没有时立即释放。
 

@@ -47,7 +47,7 @@ bundle identifier 的前缀定为 `dev.cupper`（Q5，已定（2026-10-16），�
 
 - 拉起宿主的一方（桌面主进程）经 stdin 写一行 JSON 后立即关闭 stdin：`{"dev_key": "<64 位十六进制>", "harness_key"?: "...", "test_config"?: {...}}`。
 - 宿主读这一行，超时 2 s；超时或格式错误就记日志、以退出码 1 退出。读完后把自己的 stdin、stdout、stderr 指向 `/dev/null`。
-- 只有 `dev-auth` 构建读取 `dev_key`；只有 `test-harness` 构建读取 `harness_key` 和 `test_config`，这两段代码在编译期门控。发布构建不读 stdin。
+- 只有 `dev-auth` 构建读取 `dev_key`；只有 `test-harness` 构建读取 `harness_key` 和 `test_config`，这两段代码在编译期门控。发布版的 UI 不写启动载荷，发布版的宿主也不读 stdin，直接把它指向 `/dev/null`。
 - 密钥不出现在 argv、环境变量和任何文件里（SP-4b：同一用户能看到 argv 和环境变量）。
 
 **退化模式**（开发构建、e2e 构建、自行构建，ADR-05）

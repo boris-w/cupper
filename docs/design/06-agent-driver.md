@@ -223,7 +223,7 @@ ACP 的 `configOptions` 按 `category` 映射到 cupper 的配置项，具体取
 
 ACP 的 stdio 传输是按行分隔的 JSON-RPC。分接层把适配器的 stdout 和 stdin 包一层，每一行都经过它：
 
-1. **编号和记录**：给每行分配实例内的 `seq`，按 [5.11](11-diagnostics.md) 的规则脱敏后（重点是 `_auth/status_update` 的账号字段），送进原始帧队列；队列满了就丢弃并计数，不阻塞。
+1. **编号和记录**：给每行分配实例内的 `seq`，做结构化脱敏后（只处理账号字段和已知格式的凭据，重点是 `_auth/status_update`，[5.11.2](11-diagnostics.md#5112-脱敏)；不套用日志的长串规则，原始帧才能用于重算历史），送进原始帧队列；队列满了就丢弃并计数，不阻塞。
 2. **容错改写**（K19）：只在已知的几个字段上做：`session/prompt` 响应的 `stopReason`、权限请求选项的 `kind`、工具调用的 `status`。值不认识时改写成兜底值（分别为 `end_turn`、`reject_once`、`in_progress`），原值放进该对象的 `_meta.cupper.original`。其余内容一律原样转发。改写只是为了让 SDK 能解析：提取层一律按原值判断，协议里下发的也是原值，未知的选项 kind 按最严处理（安全 #5，[5.6.4](#564-交互请求的分类与选项映射)）。
 3. **扩展消息**：`_auth/status_update`、`$/cancel_request`，以及 SDK 没有对应处理器的其他 `_` 开头的消息，解析后交给 `AgentRuntime`。`_session/steering` 是宿主发出的扩展请求，通过 SDK 的扩展方法接口发送；SDK 3.3 是否支持需要在实现时核实，不支持就由分接层在 stdin 侧发送并关联响应（待定问题 Q9）。
 4. 为了少做一次完整解析，只对包含上述关键字的行做 JSON 解析，其余的行只做编号和记录。
