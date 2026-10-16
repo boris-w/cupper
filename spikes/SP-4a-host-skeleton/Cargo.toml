@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/cupper-protocol",
+    "crates/cupper-fake-agent",
 ]
 
 [workspace.package]
