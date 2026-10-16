@@ -1,21 +1,122 @@
 # cupper 技术设计
 
-- 版本：v0.5（M1 前的 ADR-01 至 ADR-11 全部提议；实测 SP-1、2、4a、4b、5 已完成）
+- 版本：v0.6（M1 前的 ADR-01 至 ADR-11 全部提议；实测 SP-1、2、4a、4b、5 已完成；第 5 节详细设计草案已完成，待设计评审）
 - 日期：2026-10-16
 - 状态：进行中
-- 依据：PRD v1.0（tag `gate/prd`）；产品-架构对齐会 `docs/meetings/2026-10-16-prd-arch-alignment/`
+- 依据：PRD v1.1（v1.0 打 tag `gate/prd`）；产品-架构对齐会 `docs/meetings/2026-10-16-prd-arch-alignment/`
 
 本文件在阶段 ② 中逐步填充：先通过 ADR 和原型实测确定关键选型，再写详细设计，最后经设计评审和用户确认后打 `gate/design`。
 
 ## 1. 架构概览
 
-起点是对齐会上架构师给出的骨架（`architect.md` 议题 2）：
+起点是对齐会上架构师给出的骨架（`architect.md` 议题 2），最终形态由 ADR-01 至 ADR-11 确定：
 
-- 会话宿主是一个与界面分离的进程，持有会话、事件日志、审批与提问、Git 和 worktree。
-- 桌面界面和命令行工具（cupper-cli）都是宿主的客户端；M3 起 iOS 通过远程桥接入。
-- 宿主通过 ACP 驱动 agent 适配器。
+- **会话宿主**是一个与界面分离的 Rust 进程（ADR-01、ADR-02），打包为 `Cupper.app/Contents/Helpers/CupperHost.app`。它持有会话、事件日志、审批与提问、Git 和 worktree，是唯一的事实来源，也是本地鉴权的信任锚。
+- **桌面界面**（Electron + React，ADR-03）和 **cupper-cli** 都是宿主的客户端，用同一套自有协议（ADR-04）经 Unix 套接字连接，宿主按代码签名和固定令牌认证客户端（ADR-05）。M3 起 iOS 经远程桥接入网关，作为又一个客户端。
+- 宿主通过 **ACP** 驱动 claude-agent-acp 和 codex-acp（ADR-07），每种 agent 一个适配器进程（ADR-09）。适配器跑在随 App 带的、用 cupper 身份重签的 Node 上，驱动用户本机已登录的 CLI（ADR-08）。
+- 事件日志存在 SQLite，只有宿主写入（ADR-06）；Git 操作全部通过 git 命令行（ADR-10）。
 
-最终形态以下面的 ADR 为准，确定后在这里补全组件图。
+### 1.1 进程与部署视图
+
+```mermaid
+flowchart LR
+  subgraph MAC["用户的 Mac（macOS 14+）"]
+    subgraph APP["Cupper.app"]
+      MAIN["Electron 主进程<br/>拉起宿主 · 连接 · 白名单 · 原生确认 · 更新"]
+      WIN["渲染进程（每个窗口）<br/>@cupper/ui-core"]
+      subgraph HELPER["Helpers/CupperHost.app"]
+        HOST["cupper-host<br/>Rust · tokio · SQLite"]
+      end
+    end
+    CLI["cupper-cli"]
+    subgraph DATA["~/Library/Application Support/cupper"]
+      DB[("host.db · raw.db · blob<br/>快照对象库 · run/host.sock")]
+      RUNTIME["runtime/：Node、claude-agent-acp、codex-acp"]
+    end
+    AD1["node + claude-agent-acp<br/>每个会话一个 claude CLI"]
+    AD2["node + codex-acp<br/>一个 codex app-server"]
+    GIT["git 命令行"]
+    REPO[("项目仓库与 worktree")]
+  end
+  WIN <-->|"MessagePort"| MAIN
+  MAIN <-->|"协议 v1：control 连接 + 每窗口一条数据连接<br/>Unix 套接字 · 签名校验 + 固定令牌"| HOST
+  CLI <-->|"协议 v1：默认只读，写操作需用户确认"| HOST
+  HOST <-->|"ACP · stdio · 经线路分接"| AD1
+  HOST <-->|"ACP · stdio · 经线路分接"| AD2
+  HOST --> DB
+  HOST -->|"安装与校验"| RUNTIME
+  HOST -->|"子进程"| GIT
+  GIT --> REPO
+  AD1 --> REPO
+  AD2 --> REPO
+  HOST -. "M3：远程桥 · Noise" .-> RELAY["自建中继（M3）"]
+  RELAY -.-> IOS["iOS App（M3）"]
+```
+
+### 1.2 宿主模块视图
+
+```mermaid
+flowchart TB
+  subgraph CLIENTS["客户端"]
+    UI["桌面 UI"]
+    CLIC["cupper-cli"]
+    RB["远程桥（M3）"]
+  end
+  subgraph H["cupper-host"]
+    GW["gateway 网关<br/>认证 · 订阅 · 发送队列 · blob"]
+    POL["policy 策略 + ledger 命令账本"]
+    ORC["orchestrator 会话编排<br/>每会话一个 actor：回合状态机 · 队列 · Steer · 中断"]
+    INT["interaction 交互代理<br/>审批 · 提问 · 先到先得"]
+    ATT["attention 关注度<br/>索引流 · 状态 · 未读 · 通知意图"]
+    NOT["notifier 系统通知"]
+    STO[("store 事件存储<br/>写线程 · 流与视图 · 检查点 · 回合快照 · blob · 原始帧")]
+    DRV["driver 驱动层<br/>每种 agent 一个 AgentRuntime · 线路分接 · 提取层 · 能力缓存"]
+    GITS["git 服务<br/>快照 · diff · hunk · worktree"]
+    FIL["files 文件服务"]
+    SETS["settings 设置"]
+    RTI["runtime 运行时安装器"]
+    SUP["supervisor 进程监护<br/>清理 · 自检 · 空闲退出 · 防休眠"]
+    TRM["终端服务（M2）"]
+    DEV["设备与配对（M3）"]
+  end
+  UI --> GW
+  CLIC --> GW
+  RB -.-> GW
+  GW --> POL
+  POL --> ORC
+  POL --> ATT
+  POL --> GITS
+  POL --> FIL
+  POL --> SETS
+  POL -.-> TRM
+  ORC --- INT
+  ORC <--> DRV
+  ORC --> GITS
+  ORC --> ATT
+  ORC --> STO
+  ATT --> STO
+  ATT --> NOT
+  DRV --> RTI
+  DRV --> SUP
+  DRV -->|"原始帧"| STO
+  STO -->|"扇出，不等待"| GW
+  DEV -.- RB
+```
+
+各模块的职责、接口和并发模型见 [5.2](design/02-host.md)。
+
+### 1.3 贯穿全局的约束
+
+| 约束 | 出处 | 落点 |
+|---|---|---|
+| 界面只经协议访问会话数据，不直接调用 agent、git 或终端 | NFR-1 | [5.7](design/07-desktop.md) |
+| 宿主输出语义，客户端只负责排版和本地化（瘦客户端） | 对齐会 1.3 第 8 条 | [5.3.5](design/03-protocol-v1.md#535-事件类型目录) |
+| 每条事件流只有一个写者；事件先落盘再下发 | ADR-06 | [5.2.3](design/02-host.md#523-并发模型) |
+| 读 ACP 的路径永远不等待客户端；慢客户端被重置后按游标重同步 | 对齐会 1.3 第 9 条、ADR-02 | [5.2.3](design/02-host.md#523-并发模型) |
+| ACP 的类型不出驱动层 | ADR-07 | [5.6](design/06-agent-driver.md) |
+| 宿主运行中不读取 App 包内的资源 | ADR-01 | [5.2.12](design/02-host.md#5212-运行时安装器) |
+| 写操作和审批必须由用户在桌面端确认；非 UI 的 principal 不能选择 `allow_always`、不能切到完全访问 | ADR-05 | [5.8](design/08-security.md) |
+| 不为兼容旧系统写任何代码，最低 macOS 14 | 平台约束 | 全文 |
 
 ## 平台约束
 
@@ -76,4 +177,30 @@
 
 ## 5. 详细设计
 
-待第二波完成后编写，计划包括：组件设计、宿主协议 schema 草案、领域与数据模型、Agent 驱动层、Git 与 worktree 服务、桌面 UI 结构、测试策略（假 agent 和录制回放）、构建与分发。
+- 状态：草案（D01，`docs/tasks/D01-detailed-design/`），待设计评审
+- 原则：只细化 ADR，不推翻；与 ADR 或实测不一致的地方列在 5.13，附建议
+- 用途：读完本节，应当能把 M1a 和 M1b 拆成可以独立完成、独立验证的开发任务（阶段 ③）
+
+| 小节 | 文件 | 内容 |
+|---|---|---|
+| 5.1 仓库与工程结构 | [design/01-repo-build-ci.md](design/01-repo-build-ci.md) | monorepo 目录布局；crate 与 package 清单；工具链锁定；构建命令；CI 流水线（构建、测试、lint、schema 与生成代码一致性、许可证门禁、iOS 编译检查）；写进 `CLAUDE.md` 的代码约束 |
+| 5.2 组件设计：宿主与 cupper-cli | [design/02-host.md](design/02-host.md) | 宿主的 15 个模块：职责、接口、依赖、数据结构；并发模型（线程、actor、channel、锁）；回合状态机、排队、Steer、中断兜底、崩溃恢复；交互代理；事件存储；关注度与通知；Git 与 worktree；文件服务与设置；运行时安装器；进程监护与生命周期；cupper-cli；**SP-4a 代码的沿用与改动** |
+| 5.3 宿主协议 v1 草案 | [design/03-protocol-v1.md](design/03-protocol-v1.md) | 通用约定；握手（`host/hello` 与 nonce）与版本协商；流与同步；**完整的方法清单**（参数、结果、错误、幂等、scope、里程碑）；事件类型目录；交互请求模型与 **SP-1 的选项生效范围对照表**；会话能力描述；错误码；限额 |
+| 5.4 数据模型 | [design/04-data-model.md](design/04-data-model.md) | 存储位置；**SQLite 表结构草案**（host.db、raw.db）；数据放在哪里；ID 规则；保留与回收；迁移与事件升级器 |
+| 5.5 关键流程 | [design/05-flows.md](design/05-flows.md) | 时序图：App 启动、新建会话（含 worktree）、发送/排队/插话、审批先到先得、中断、崩溃恢复（宿主、适配器）、升级、审查到提交、归档与 worktree 清理 |
+| 5.6 Agent 驱动层 | [design/06-agent-driver.md](design/06-agent-driver.md) | 驱动接口；Claude 与 Codex 的提取层对照；交互请求分类；配置项映射；CLI 发现与版本检查；能力缓存；资源回收；**已知问题规避清单（26 项）**；线路分接层 |
+| 5.7 桌面端 | [design/07-desktop.md](design/07-desktop.md) | 进程与连接；主进程模块；ShellAPI；窗口与布局；组件树；状态管理；快捷键、本地化与主题；**安全加固的具体落点**；三种构建 |
+| 5.8 安全实现 | [design/08-security.md](design/08-security.md) | 固定令牌认证握手；principal、角色与 scope；**命令 × principal 权限矩阵**；CLI 提权；进程卫生；审计日志；安全边界说明 |
+| 5.9 测试策略 | [design/09-testing.md](design/09-testing.md) | 测试分层；假 agent（脚本与回放）；录制与金样例；端到端与 NFR-1 验收；兼容矩阵；性能预算；**SP-6 测试计划** |
+| 5.10 构建与发布 | [design/10-release.md](design/10-release.md) | 包结构；签名与公证；Node 运行时与清单；**打包工具的决定**；更新流程；Electron 版本；发布流水线 |
+| 5.11 诊断 | [design/11-diagnostics.md](design/11-diagnostics.md) | 日志与轮转；脱敏；诊断包；崩溃信息 |
+| 5.12 M1a 与 M1b | [design/12-milestones.md](design/12-milestones.md) | 两步的范围与退出标准；**M1 全部 P0 需求的追溯矩阵** |
+| 5.13 待定问题 | [design/13-open-issues.md](design/13-open-issues.md) | 25 个待定问题（影响、建议、何时定）；对 ADR-01 至 ADR-11 的修订建议；对 PRD 验收口径的影响 |
+
+**本节的主要结论**
+
+- **打包工具：electron-builder + electron-updater**，不用 Electron Forge。决定性的理由是 electron-updater 可以把下载好的更新一直留到我们调用 `quitAndInstall()`，这正是 ADR-01"宿主先退出再安装"所需要的；Forge 默认的更新路径会在下次启动时自动应用（5.10.4）。
+- **Electron 起始版本 44.8.0**，始终在官方支持的最新三个大版本之内。
+- **M1a** 用 Claude 一个 agent、完整的 cupper-cli 和最简界面，把"宿主是唯一事实来源"做实，以 NFR-1 的自动化验收为退出标准；**M1b** 加入 Codex、Git 与 worktree、审查面板、界面打磨和签名发布，SP-6 在 M1b 开头完成。
+- **SP-4a 的代码**：协议 crate 基本沿用；连接、发送队列、账本、恢复、系统调用沿用；存储、会话编排、驱动层需要重构（5.2.15）。
+- 交 `gate/design` 时需要用户确认的事项：bundle identifier 前缀（Q5）、只出 arm64（Q6）、MS-4 和 GT-3 的验收口径（Q12、Q13）、退化认证模式的局限（Q22），以及 5.13.2 中的 ADR 修订。
