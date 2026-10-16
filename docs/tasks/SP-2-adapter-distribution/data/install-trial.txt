@@ -1,0 +1,53 @@
+## fresh install (<tmp>/runtime)
+{"t":2440,"event":"installed","name":"node","version":"24.22.0","files":1,"ms":2440}
+{"t":2964,"event":"installed","name":"codex-acp","version":"2.2.2","files":3,"ms":523}
+{"t":5717,"event":"lockfile-packages-installed","name":"claude-agent-acp","packages":107}
+{"t":6947,"event":"bundled","name":"claude-agent-acp","ms":1227,"bytes":3383822}
+{"t":7853,"event":"installed","name":"claude-agent-acp","version":"0.91.0","files":1,"ms":4889}
+
+## failure simulations
+## F1 integrity mismatch while upgrading codex-acp to 2.2.1 (2.2.2 already installed)
+{"t":566,"event":"failed","name":"codex-acp","version":"2.2.1","kind":"integrity","error":"integrity mismatch for https://registry.npmjs.org/@agentclientprotocol/codex-acp/-/codex-acp-2.2.1.tgz","stagingRemoved":true,"previousKept":"none-installed"}
+   exit=1
+   codex-acp dir: 2.2.2 
+## F2 network failure (unreachable host) while upgrading codex-acp to 2.2.1
+{"t":420,"event":"download-retry","url":"https://registry.npmjs.org/@agentclientprotocol/codex-acp/-/codex-acp-2.2.1.tgz","attempt":1,"error":"ENOTFOUND"}
+{"t":723,"event":"download-retry","url":"https://registry.npmjs.org/@agentclientprotocol/codex-acp/-/codex-acp-2.2.1.tgz","attempt":2,"error":"ENOTFOUND"}
+{"t":1326,"event":"download-retry","url":"https://registry.npmjs.org/@agentclientprotocol/codex-acp/-/codex-acp-2.2.1.tgz","attempt":3,"error":"ENOTFOUND"}
+{"t":2227,"event":"failed","name":"codex-acp","version":"2.2.1","kind":"other","error":"download failed after 3 attempts: https://registry.npmjs.org/@agentclientprotocol/codex-acp/-/codex-acp-2.2.1.tgz: ENOTFOUND","stagingRemoved":true,"previousKept":"none-installed"}
+   exit=1
+   codex-acp dir: 2.2.2 
+## F3 installer killed after staging, before commit
+{"t":404,"event":"simulated-crash","name":"codex-acp"}
+   exit=9
+   codex-acp dir: .staging-2.2.1-6154 2.2.2 
+{"t":0,"event":"verify","name":"codex-acp","version":"2.2.1","ok":false,"reason":"no marker"}
+   -> rerun without fault
+{"t":1,"event":"stale-staging-removed","dir":".staging-2.2.1-6154"}
+{"t":346,"event":"installed","name":"codex-acp","version":"2.2.1","files":3,"ms":345}
+   exit=0
+   codex-acp dir: 2.2.1 2.2.2 
+## F4 adapter file tampered after install (claude-agent-acp)
+{"t":2,"event":"verify","name":"claude-agent-acp","version":"0.91.0","ok":false,"reason":"hash mismatch adapter.mjs"}
+   -> install detects, moves aside, reinstalls
+{"t":2,"event":"broken-moved-aside","name":"claude-agent-acp","reason":"hash mismatch adapter.mjs"}
+{"t":2141,"event":"lockfile-packages-installed","name":"claude-agent-acp","packages":107}
+{"t":3274,"event":"bundled","name":"claude-agent-acp","ms":1130,"bytes":3383822}
+{"t":3967,"event":"installed","name":"claude-agent-acp","version":"0.91.0","files":1,"ms":3964}
+   exit=0
+   claude-agent-acp dir: .broken-0.91.0-1792138206545 0.91.0 
+{"t":60,"event":"verify","name":"node","version":"24.22.0","ok":true,"files":1,"ms":60}
+{"t":64,"event":"verify","name":"codex-acp","version":"2.2.2","ok":true,"files":3,"ms":2}
+{"t":66,"event":"verify","name":"claude-agent-acp","version":"0.91.0","ok":true,"files":1,"ms":2}
+## F5 second run is a no-op
+{"t":54,"event":"present","name":"node","version":"24.22.0","verifyMs":53}
+{"t":56,"event":"present","name":"codex-acp","version":"2.2.2","verifyMs":2}
+{"t":58,"event":"present","name":"claude-agent-acp","version":"0.91.0","verifyMs":2}
+   exit=0
+
+## clean install with pinned local-bundle hash (<tmp>/runtime-final)
+{"t":2077,"event":"installed","name":"node","version":"24.22.0","files":1,"ms":2077}
+{"t":2370,"event":"installed","name":"codex-acp","version":"2.2.2","files":3,"ms":293}
+{"t":4131,"event":"lockfile-packages-installed","name":"claude-agent-acp","packages":107}
+{"t":5202,"event":"bundled","name":"claude-agent-acp","ms":1068,"bytes":3347247,"sha256":"a8f29655155b8ddfc9dbee3ff6116b928caedb591d61e36afe2034352edcb261"}
+{"t":5617,"event":"installed","name":"claude-agent-acp","version":"0.91.0","files":1,"ms":3246}

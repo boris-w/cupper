@@ -1,0 +1,209 @@
+[
+ {
+  "name": "baseline: system node 24.13 -e 0",
+  "version_ms": {
+   "first": 21,
+   "median": 23,
+   "p90": 25,
+   "min": 20,
+   "max": 25
+  }
+ },
+ {
+  "name": "baseline: official node 24.22 re-signed allow-jit -e 0",
+  "version_ms": {
+   "first": 129,
+   "median": 24,
+   "p90": 28,
+   "min": 22,
+   "max": 28
+  }
+ },
+ {
+  "name": "claude | system node 24.13 | npm tree (multi-file)",
+  "version_ms": {
+   "first": 241,
+   "median": 140,
+   "p90": 170,
+   "min": 125,
+   "max": 170
+  },
+  "init_ms": {
+   "first": 146,
+   "median": 150,
+   "p90": 164,
+   "min": 138,
+   "max": 164
+  }
+ },
+ {
+  "name": "claude | system node 24.13 | esbuild single file",
+  "version_ms": {
+   "first": 109,
+   "median": 103,
+   "p90": 114,
+   "min": 99,
+   "max": 114
+  },
+  "init_ms": {
+   "first": 116,
+   "median": 115,
+   "p90": 141,
+   "min": 107,
+   "max": 141
+  }
+ },
+ {
+  "name": "claude | official node 24.22 re-signed (allow-jit) | esbuild single file",
+  "version_ms": {
+   "first": 165,
+   "median": 105,
+   "p90": 111,
+   "min": 99,
+   "max": 111
+  },
+  "init_ms": {
+   "first": 109,
+   "median": 111,
+   "p90": 130,
+   "min": 107,
+   "max": 130
+  }
+ },
+ {
+  "name": "claude | official node 24.22 re-signed (no entitlements) --jitless | esbuild single file",
+  "version_ms": {
+   "first": 210,
+   "median": 115,
+   "p90": 125,
+   "min": 113,
+   "max": 125
+  },
+  "init_ms": {
+   "first": 125,
+   "median": 128,
+   "p90": 142,
+   "min": 122,
+   "max": 142
+  }
+ },
+ {
+  "name": "claude | Node SEA 24.22 (allow-jit)",
+  "version_ms": {
+   "first": 194,
+   "median": 97,
+   "p90": 101,
+   "min": 94,
+   "max": 101
+  },
+  "init_ms": {
+   "first": 108,
+   "median": 107,
+   "p90": 125,
+   "min": 104,
+   "max": 125
+  }
+ },
+ {
+  "name": "claude | bun 1.4.3 --compile (allow-jit)",
+  "version_ms": {
+   "first": 127,
+   "median": 69,
+   "p90": 78,
+   "min": 67,
+   "max": 78
+  },
+  "init_ms": {
+   "first": 79,
+   "median": 82,
+   "p90": 83,
+   "min": 79,
+   "max": 83
+  }
+ },
+ {
+  "name": "codex | system node 24.13 | published single file",
+  "version_ms": {
+   "first": 61,
+   "median": 54,
+   "p90": 59,
+   "min": 51,
+   "max": 59
+  },
+  "init_ms": {
+   "first": 217,
+   "median": 76,
+   "p90": 83,
+   "min": 73,
+   "max": 83
+  }
+ },
+ {
+  "name": "codex | official node 24.22 re-signed (allow-jit) | single file",
+  "version_ms": {
+   "first": 165,
+   "median": 57,
+   "p90": 62,
+   "min": 54,
+   "max": 62
+  },
+  "init_ms": {
+   "first": 79,
+   "median": 115,
+   "p90": 223,
+   "min": 77,
+   "max": 223
+  }
+ },
+ {
+  "name": "codex | official node 24.22 re-signed (no entitlements) --jitless | single file",
+  "version_ms": {
+   "first": 155,
+   "median": 94,
+   "p90": 110,
+   "min": 73,
+   "max": 110
+  },
+  "init_ms": {
+   "first": 145,
+   "median": 93,
+   "p90": 107,
+   "min": 85,
+   "max": 107
+  }
+ },
+ {
+  "name": "codex | Node SEA 24.22 (allow-jit)",
+  "version_ms": {
+   "first": 178,
+   "median": 60,
+   "p90": 63,
+   "min": 57,
+   "max": 63
+  },
+  "init_ms": {
+   "first": 90,
+   "median": 83,
+   "p90": 237,
+   "min": 74,
+   "max": 237
+  }
+ },
+ {
+  "name": "codex | bun 1.4.3 --compile (allow-jit)",
+  "version_ms": {
+   "first": 88,
+   "median": 37,
+   "p90": 40,
+   "min": 36,
+   "max": 40
+  },
+  "init_ms": {
+   "first": 65,
+   "median": 62,
+   "p90": 86,
+   "min": 56,
+   "max": 86
+  }
+ }
+]

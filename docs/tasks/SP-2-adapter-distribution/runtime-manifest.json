@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "comment": "SP-2 trial manifest for spikes/SP-2-adapter-distribution/install-runtime.mjs. Every component is pinned by version plus hash; nothing here is fetched from a cupper server.",
+  "components": [
+    {
+      "name": "node",
+      "version": "24.22.0",
+      "kind": "archive-member",
+      "url": "https://nodejs.org/dist/v24.22.0/node-v24.22.0-darwin-arm64.tar.xz",
+      "sha256": "75ddfb875bbd868ebe57536f4442225f54dd10f6d2178dd439de869a5c648dc3",
+      "member": "node-v24.22.0-darwin-arm64/bin/node",
+      "dest": "bin/node",
+      "codesign": true
+    },
+    {
+      "name": "codex-acp",
+      "version": "2.2.2",
+      "kind": "npm-member",
+      "url": "https://registry.npmjs.org/@agentclientprotocol/codex-acp/-/codex-acp-2.2.2.tgz",
+      "integrity": "sha512-vNdeNV3jxbqaH7MYvVWzyB6cMOz+YGIV9W1xyBDsQfoii92DulZLM+ahCL2T2G6uohlaB1Yma347p2kLfAab2w==",
+      "member": "package/dist/index.js",
+      "dest": "adapter.mjs",
+      "keep": ["package/LICENSE", "package/package.json"]
+    },
+    {
+      "name": "claude-agent-acp",
+      "version": "0.91.0",
+      "kind": "npm-lockfile",
+      "lockfile": "locks/claude-agent-acp-0.91.0.package-lock.json",
+      "bundle": {
+        "entry": "node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js",
+        "dest": "adapter.mjs",
+        "pruneTree": true,
+        "bundler": "esbuild-wasm@0.28.2",
+        "sha256": "a8f29655155b8ddfc9dbee3ff6116b928caedb591d61e36afe2034352edcb261"
+      }
+    }
+  ]
+}

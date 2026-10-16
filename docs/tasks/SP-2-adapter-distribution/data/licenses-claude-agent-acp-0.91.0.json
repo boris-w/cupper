@@ -1,0 +1,1296 @@
+[
+ {
+  "name": "@agentclientprotocol/claude-agent-acp",
+  "version": "0.91.0",
+  "license": "Apache-2.0",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "@agentclientprotocol/sdk",
+  "version": "1.8.0",
+  "license": "Apache-2.0",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "@anthropic-ai/claude-agent-sdk",
+  "version": "0.3.300",
+  "license": "SEE LICENSE IN README.md",
+  "category": "custom",
+  "files": [
+   "LICENSE.md"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "@anthropic-ai/claude-agent-sdk-darwin-arm64",
+  "version": "0.3.300",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "category": "custom",
+  "files": [
+   "LICENSE.md"
+  ],
+  "hasNotice": false,
+  "optional": true,
+  "peer": false
+ },
+ {
+  "name": "@anthropic-ai/sdk",
+  "version": "0.135.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": true
+ },
+ {
+  "name": "@babel/runtime",
+  "version": "7.29.10",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "@hono/node-server",
+  "version": "2.1.5",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "@modelcontextprotocol/sdk",
+  "version": "1.32.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": true
+ },
+ {
+  "name": "@opentelemetry/api",
+  "version": "1.9.1",
+  "license": "Apache-2.0",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "@stablelib/base64",
+  "version": "1.0.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "accepts",
+  "version": "2.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "ajv",
+  "version": "8.20.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "ajv-formats",
+  "version": "3.0.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "body-parser",
+  "version": "2.3.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "bytes",
+  "version": "3.1.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "call-bind-apply-helpers",
+  "version": "1.0.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "call-bound",
+  "version": "1.0.4",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "content-disposition",
+  "version": "2.0.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "content-type",
+  "version": "2.1.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "content-type",
+  "version": "1.0.5",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "content-type",
+  "version": "2.1.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "content-type",
+  "version": "2.1.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "content-type",
+  "version": "2.1.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "cookie",
+  "version": "0.7.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "cookie-signature",
+  "version": "1.2.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "cors",
+  "version": "2.8.6",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "cross-spawn",
+  "version": "7.0.6",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "debug",
+  "version": "4.4.3",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "depd",
+  "version": "2.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "diff",
+  "version": "9.0.0",
+  "license": "BSD-3-Clause",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "dunder-proto",
+  "version": "1.0.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "ee-first",
+  "version": "1.1.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "encodeurl",
+  "version": "2.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "es-define-property",
+  "version": "1.0.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "es-errors",
+  "version": "1.3.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "es-object-atoms",
+  "version": "1.1.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "escape-html",
+  "version": "1.0.3",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "etag",
+  "version": "1.8.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "eventsource",
+  "version": "3.0.7",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "eventsource-parser",
+  "version": "3.1.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "express",
+  "version": "5.3.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "express-rate-limit",
+  "version": "8.7.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "fast-deep-equal",
+  "version": "3.1.3",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "fast-sha256",
+  "version": "1.3.0",
+  "license": "Unlicense",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "fast-uri",
+  "version": "3.1.8",
+  "license": "BSD-3-Clause",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "finalhandler",
+  "version": "2.1.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "forwarded",
+  "version": "0.2.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "fresh",
+  "version": "2.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "function-bind",
+  "version": "1.1.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "get-intrinsic",
+  "version": "1.3.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "get-proto",
+  "version": "1.0.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "gopd",
+  "version": "1.2.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "has-symbols",
+  "version": "1.1.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "hasown",
+  "version": "2.0.4",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "hono",
+  "version": "4.13.13",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": true
+ },
+ {
+  "name": "http-errors",
+  "version": "2.0.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "iconv-lite",
+  "version": "0.7.3",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "inherits",
+  "version": "2.0.4",
+  "license": "ISC",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "ip-address",
+  "version": "10.7.4",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "ipaddr.js",
+  "version": "1.9.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "is-promise",
+  "version": "4.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "isexe",
+  "version": "2.0.0",
+  "license": "ISC",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "jose",
+  "version": "6.2.12",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE.md"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "json-schema-to-ts",
+  "version": "3.1.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "json-schema-traverse",
+  "version": "1.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "json-schema-typed",
+  "version": "8.0.2",
+  "license": "BSD-2-Clause",
+  "category": "permissive",
+  "files": [
+   "LICENSE.md"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "math-intrinsics",
+  "version": "1.1.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "media-typer",
+  "version": "1.1.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "merge-descriptors",
+  "version": "2.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "mime-db",
+  "version": "1.54.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "mime-types",
+  "version": "3.0.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "ms",
+  "version": "2.1.3",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license.md"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "negotiator",
+  "version": "1.1.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "object-assign",
+  "version": "4.1.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "object-inspect",
+  "version": "1.13.4",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "on-finished",
+  "version": "2.4.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "once",
+  "version": "1.4.0",
+  "license": "ISC",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "parseurl",
+  "version": "1.3.3",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "path-key",
+  "version": "3.1.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "path-to-regexp",
+  "version": "8.4.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "pkce-challenge",
+  "version": "5.0.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "proxy-addr",
+  "version": "2.0.8",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "qs",
+  "version": "6.16.1",
+  "license": "BSD-3-Clause",
+  "category": "permissive",
+  "files": [
+   "LICENSE.md"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "range-parser",
+  "version": "1.3.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "raw-body",
+  "version": "3.0.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "require-from-string",
+  "version": "2.0.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "router",
+  "version": "2.2.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "safer-buffer",
+  "version": "2.1.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "send",
+  "version": "1.2.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "serve-static",
+  "version": "2.2.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "setprototypeof",
+  "version": "1.2.0",
+  "license": "ISC",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "shebang-command",
+  "version": "2.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "shebang-regex",
+  "version": "3.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "side-channel",
+  "version": "1.1.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "side-channel-list",
+  "version": "1.0.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "side-channel-map",
+  "version": "1.0.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "side-channel-weakmap",
+  "version": "1.0.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "standardwebhooks",
+  "version": "1.1.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "statuses",
+  "version": "2.0.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "toidentifier",
+  "version": "1.0.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "ts-algebra",
+  "version": "2.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "type-is",
+  "version": "2.1.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "unpipe",
+  "version": "1.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "vary",
+  "version": "1.1.2",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "which",
+  "version": "2.0.2",
+  "license": "ISC",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "wrappy",
+  "version": "1.0.2",
+  "license": "ISC",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "zod",
+  "version": "4.6.7",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": true
+ },
+ {
+  "name": "zod-to-json-schema",
+  "version": "3.25.2",
+  "license": "ISC",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ }
+]

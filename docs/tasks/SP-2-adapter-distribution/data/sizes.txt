@@ -1,0 +1,22 @@
+label                                                  raw        gzip9          xz9
+node 24.22 bin/node (official)                   122503472     39269888     24914300
+node 24.22 bin/node re-signed allow-jit          121790544     38553449     24206008
+claude-agent-acp esbuild ESM bundle                3378806       749385       594460
+codex-acp published dist/index.js                  1728337       314540       254500
+claude-agent-acp SEA                             124950464     39333940     24864236
+codex-acp SEA                                    123292432     38891857     24523644
+claude-agent-acp bun --compile                    73128480     31111117     19719420
+codex-acp bun --compile                           72110672     30773873     19451008
+bun 1.4.3 runtime                                 70469776     30494471     19235120
+stat: optional=<tmp>/work/claude-acp-noopt/node_modules: stat: No such file or directory
+gzip: can't stat: optional=<tmp>/work/claude-acp-noopt/node_modules (optional=<tmp>/work/claude-acp-noopt/node_modules): No such file or directory
+xz: optional=<tmp>/work/claude-acp-noopt/node_modules: No such file or directory
+claude npm tree --omit                                                0            0
+stat: optional=<tmp>/work/codex-acp-noopt/node_modules: stat: No such file or directory
+gzip: can't stat: optional=<tmp>/work/codex-acp-noopt/node_modules (optional=<tmp>/work/codex-acp-noopt/node_modules): No such file or directory
+xz: optional=<tmp>/work/codex-acp-noopt/node_modules: No such file or directory
+codex npm tree --omit                                                 0            0
+SDK bundled claude binary (not used)             249556880    107235754     73040888
+codex-acp bundled codex 0.160.1 (not used)       333045760    129578615     75244340  (dir, du)
+claude npm tree (omit optional)                   70266880     10078344      4678120  (dir, du)
+codex npm tree (omit optional)                    18636800      2470292      1257440  (dir, du)

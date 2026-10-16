@@ -1,0 +1,8 @@
+== 0.140.0, experimentalApi=true: method missing in old server
+{"method":"thread/items/list","reply":{"error":{"code":-32600,"message":"Invalid request: unknown variant `thread/items/list`, expected one of `initialize`, `thread/start`, `thread/resume`, `thread/fork`, `thread/archive`, `thread/delete`, `thread/unsubscribe`, `thread/increment_elicitation`, `thread/decrement_elicitation`, `thread/name/set`, `thread/goal/set`, `thread/goal/get`, `thread/goal/clea
+== 0.159.2, experimentalApi=false: experimental method without capability
+{"method":"thread/settings/update","reply":{"error":{"code":-32600,"message":"thread/settings/update requires experimentalApi capability"}}}
+{"method":"thread/backgroundTerminals/list","reply":{"error":{"code":-32600,"message":"thread/backgroundTerminals/list requires experimentalApi capability"}}}
+== 0.159.2, experimentalApi=true: same methods with capability (dummy threadId)
+{"method":"thread/settings/update","reply":{"error":{"code":-32600,"message":"thread not found: 00000000-0000-0000-0000-000000000000"}}}
+{"method":"thread/backgroundTerminals/list","reply":{"error":{"code":-32600,"message":"thread not found: 00000000-0000-0000-0000-000000000000"}}}

@@ -1,0 +1,299 @@
+[
+ {
+  "name": "@agentclientprotocol/codex-acp",
+  "version": "2.2.2",
+  "license": "Apache-2.0",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "@agentclientprotocol/sdk",
+  "version": "1.8.0",
+  "license": "Apache-2.0",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "@openai/codex",
+  "version": "0.160.1",
+  "license": "Apache-2.0",
+  "category": "permissive",
+  "files": [],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "@openai/codex",
+  "version": "0.160.1-darwin-arm64",
+  "license": "Apache-2.0",
+  "category": "permissive",
+  "files": [],
+  "hasNotice": false,
+  "optional": true,
+  "peer": false
+ },
+ {
+  "name": "bundle-name",
+  "version": "4.1.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "cross-spawn",
+  "version": "7.0.6",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "default-browser",
+  "version": "5.5.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "default-browser-id",
+  "version": "5.0.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "define-lazy-prop",
+  "version": "3.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "diff",
+  "version": "9.0.0",
+  "license": "BSD-3-Clause",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "is-docker",
+  "version": "3.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "is-in-ssh",
+  "version": "1.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "is-inside-container",
+  "version": "1.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "is-wsl",
+  "version": "3.1.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "isexe",
+  "version": "2.0.0",
+  "license": "ISC",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "open",
+  "version": "11.0.4",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "path-key",
+  "version": "3.1.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "powershell-utils",
+  "version": "0.2.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "run-applescript",
+  "version": "7.1.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "shebang-command",
+  "version": "2.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "shebang-regex",
+  "version": "3.0.0",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "vscode-jsonrpc",
+  "version": "9.0.3",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "License.txt",
+   "thirdpartynotices.txt"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "which",
+  "version": "2.0.2",
+  "license": "ISC",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "wsl-utils",
+  "version": "1.0.1",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "license"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": false
+ },
+ {
+  "name": "zod",
+  "version": "4.6.7",
+  "license": "MIT",
+  "category": "permissive",
+  "files": [
+   "LICENSE"
+  ],
+  "hasNotice": false,
+  "optional": false,
+  "peer": true
+ }
+]
