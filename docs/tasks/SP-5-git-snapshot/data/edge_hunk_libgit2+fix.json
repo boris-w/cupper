@@ -1,0 +1,573 @@
+{
+  "backend": "libgit2+fix",
+  "version": "pygit2 1.20.1 / libgit2 1.9.7",
+  "rows": [
+    {
+      "case": "multi_hunk",
+      "op": "stage hunk B (middle)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "multi_hunk",
+      "op": "stage hunk C (after B staged)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "multi_hunk",
+      "op": "unstage hunk C",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "multi_hunk",
+      "op": "revert hunk A (worktree)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "crlf_raw",
+      "op": "stage hunk B (middle)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_raw",
+      "op": "stage hunk C (after B staged)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_raw",
+      "op": "unstage hunk C",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_raw",
+      "op": "revert hunk A (worktree)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "crlf_eol_attr",
+      "op": "stage hunk B (middle)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_eol_attr",
+      "op": "stage hunk C (after B staged)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_eol_attr",
+      "op": "unstage hunk C",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_eol_attr",
+      "op": "revert hunk A (worktree)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "crlf_autocrlf",
+      "op": "stage hunk B (middle)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_autocrlf",
+      "op": "stage hunk C (after B staged)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_autocrlf",
+      "op": "unstage hunk C",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "crlf_autocrlf",
+      "op": "revert hunk A (worktree)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "mixed_eol",
+      "op": "stage hunk B",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mixed_eol",
+      "op": "revert hunk A",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "no_eol",
+      "op": "stage last-line hunk (no EOL)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "no_eol",
+      "op": "unstage it",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "no_eol",
+      "op": "revert last-line hunk",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "no_eol",
+      "op": "stage 'add trailing newline'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "no_eol",
+      "op": "revert 'remove trailing newline'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "new_file",
+      "op": "unstage staged new file",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "new_file",
+      "op": "untracked file shows in `git diff`?",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "no (expected): untracked files need `git diff --no-index /dev/null <path>` or status"
+    },
+    {
+      "case": "new_file",
+      "op": "stage untracked file via --no-index patch",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "new_file",
+      "op": "revert untracked file (apply -R deletes it)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "empty_file",
+      "op": "empty new file patch has hunks?",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "hunks=0"
+    },
+    {
+      "case": "empty_file",
+      "op": "stage empty untracked file",
+      "backend": "libgit2+fix",
+      "ok": false,
+      "detail": "FAILED: unexpected header line 4; index[e.txt]: want b'' got None"
+    },
+    {
+      "case": "empty_file",
+      "op": "stage truncation to empty",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "empty_file",
+      "op": "unstage truncation",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "empty_file",
+      "op": "revert truncation",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "deleted_file",
+      "op": "stage deletion",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "deleted_file",
+      "op": "unstage deletion",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "deleted_file",
+      "op": "revert deletion (recreate file + exec bit)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "rename",
+      "op": "staged diff shows rename",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "rename=True hunks=2"
+    },
+    {
+      "case": "rename",
+      "op": "unstage hunk A of a rename (-M patch); want rename+C kept",
+      "backend": "libgit2+fix",
+      "ok": false,
+      "detail": "index[new.txt]: want b'line 00\\nline 01\\nline 02\\nline 03\\nline 04\\nline 05\\nline 06\\nline'… got None; index[old.txt]: want None got b'line 00\\nline 01\\nline 02\\nline 03\\nline 04\\nline 05\\nline 06\\nline'…"
+    },
+    {
+      "case": "rename",
+      "op": "unstage hunk C of the same rename patch afterwards",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "expected failure: index does not contain 'new.txt'"
+    },
+    {
+      "case": "rename",
+      "op": "--no-renames staged diff",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "deleted / new"
+    },
+    {
+      "case": "rename",
+      "op": "unstage the add side only (--no-renames)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "rename",
+      "op": "unstaged view of a plain `mv`",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "git diff shows: ['deleted']; new path is untracked (only visible via status/snapshot)"
+    },
+    {
+      "case": "binary",
+      "op": "binary patch present",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "GIT binary patch"
+    },
+    {
+      "case": "binary",
+      "op": "stage binary (--binary patch)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "binary",
+      "op": "unstage binary",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "binary",
+      "op": "revert binary",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "binary",
+      "op": "stage binary WITHOUT --binary (expected to fail)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "expected failure: patch does not contain binary data"
+    },
+    {
+      "case": "mode_change",
+      "op": "units offered for s.sh",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "hunk0,hunk1,mode"
+    },
+    {
+      "case": "mode_change",
+      "op": "stage hunk A (mode lines stripped)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mode_change",
+      "op": "stage mode pseudo-hunk",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mode_change",
+      "op": "stage hunk C",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mode_change",
+      "op": "stage mode-only change",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mode_change",
+      "op": "unstage mode-only change",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mode_change",
+      "op": "revert mode-only change (chmod -x)",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "mode_change",
+      "op": "[keep mode lines] stage hunk A",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "mode_change",
+      "op": "[keep mode lines] stage hunk C from the same (stale) diff",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "symlink",
+      "op": "stage symlink retarget",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "symlink",
+      "op": "unstage symlink retarget",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "symlink",
+      "op": "revert symlink retarget",
+      "backend": "libgit2+fix",
+      "ok": false,
+      "detail": "FAILED: could not find '<tmp>/scratch/hunk-libgit2+fix-symlink/ln' to open: No such file or directory; worktree[ln]: want b'target-a' got b'target-b'"
+    },
+    {
+      "case": "special_names",
+      "op": "stage 'dir with space/file name.txt'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "unstage 'dir with space/file name.txt'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "revert 'dir with space/file name.txt'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "special_names",
+      "op": "stage 'unicode/文件-名.txt'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "unstage 'unicode/文件-名.txt'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "revert 'unicode/文件-名.txt'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "special_names",
+      "op": "stage 'quote/a\"b.txt'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "unstage 'quote/a\"b.txt'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "revert 'quote/a\"b.txt'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "special_names",
+      "op": "stage 'tab/a\\tb.txt'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "unstage 'tab/a\\tb.txt'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "special_names",
+      "op": "revert 'tab/a\\tb.txt'",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "conflict",
+      "op": "stage: index changed in the same lines -> refuse",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "expected failure: hunk at line 1 did not apply"
+    },
+    {
+      "case": "conflict",
+      "op": "revert: worktree changed in the same lines -> refuse",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "expected failure: hunk at line 1 did not apply"
+    },
+    {
+      "case": "conflict",
+      "op": "revert: unrelated edits + 3-line offset -> applies",
+      "backend": "libgit2+fix",
+      "ok": false,
+      "detail": "FAILED: hunk at line 14 did not apply; worktree[x.txt]: want b'new top 1\\nnew top 2\\nnew top 3\\nline 00\\nline 01\\nline 02 EDIT-A'… got b'new top 1\\nnew top 2\\nnew top 3\\nline 00\\nline 01\\nline 02 EDIT-A'…"
+    },
+    {
+      "case": "conflict",
+      "op": "revert 2-file patch, 2nd conflicts -> atomic, x untouched",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "expected failure: hunk at line 1 did not apply"
+    },
+    {
+      "case": "whitespace_cfg",
+      "op": "stage with --whitespace=nowarn",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "turn_revert",
+      "op": "turn diff includes untracked file created in the turn",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "turn_revert",
+      "op": "revert turn hunk A after unrelated user edit",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "turn_revert",
+      "op": "revert turn-created untracked file",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "note: index file rewritten (stat refresh, entries unchanged)"
+    },
+    {
+      "case": "turn_revert",
+      "op": "revert turn hunk B after user rewrote it -> refuse",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "expected failure: hunk at line 14 did not apply"
+    },
+    {
+      "case": "index_lock",
+      "op": "stage while index.lock is held -> refuse, nothing changed",
+      "backend": "libgit2+fix",
+      "ok": true,
+      "detail": "expected failure: the index is locked; this might be due to a concurrent or crashed process"
+    },
+    {
+      "case": "index_lock",
+      "op": "revert (worktree only) while index.lock is held",
+      "backend": "libgit2+fix",
+      "ok": false,
+      "detail": "FAILED: the index is locked; this might be due to a concurrent or crashed process; worktree[k.txt]: want b'line 00\\nline 01\\nline 02\\nline 03\\nline 04\\nline 05\\nline 06\\nline'… got b'line 00\\nline 01\\nline 02 EDIT-A\\nline 03\\nline 04\\nline 05\\nline '…"
+    }
+  ]
+}

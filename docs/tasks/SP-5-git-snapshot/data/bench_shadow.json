@@ -1,0 +1,63 @@
+{
+  "repos": [
+    {
+      "repo": "syn-10k",
+      "first_snapshot_ms": 7044,
+      "shadow_store_mb": 7,
+      "same_tree_as_temp_index": true,
+      "next_clean": {
+        "median_ms": 35.0,
+        "min_ms": 35.0,
+        "max_ms": 35.8,
+        "runs": 3
+      },
+      "next_small": {
+        "median_ms": 56.7,
+        "min_ms": 56.3,
+        "max_ms": 57.2,
+        "runs": 3
+      }
+    },
+    {
+      "repo": "linux",
+      "first_snapshot_ms": 71602,
+      "shadow_store_mb": 360,
+      "same_tree_as_temp_index": false,
+      "only_in_temp_index": [
+        "Documentation/.renames.txt",
+        "arch/alpha/boot/head.S",
+        "arch/alpha/kernel/entry.S",
+        "arch/alpha/kernel/head.S",
+        "arch/alpha/kernel/systbls.S",
+        "arch/alpha/kernel/vmlinux.lds.S",
+        "arch/alpha/lib/callback_srm.S",
+        "arch/alpha/lib/clear_page.S",
+        "arch/alpha/lib/clear_user.S",
+        "arch/alpha/lib/copy_page.S",
+        "arch/alpha/lib/copy_user.S",
+        "arch/alpha/lib/csum_ipv6_magic.S",
+        "arch/alpha/lib/dbg_current.S",
+        "arch/alpha/lib/dbg_stackcheck.S",
+        "arch/alpha/lib/dbg_stackkill.S",
+        "arch/alpha/lib/divide.S",
+        "arch/alpha/lib/ev6-clear_page.S",
+        "arch/alpha/lib/ev6-clear_user.S",
+        "arch/alpha/lib/ev6-copy_page.S",
+        "arch/alpha/lib/ev6-copy_user.S"
+      ],
+      "only_in_shadow": [],
+      "next_clean": {
+        "median_ms": 270.0,
+        "min_ms": 265.9,
+        "max_ms": 300.1,
+        "runs": 3
+      },
+      "next_small": {
+        "median_ms": 341.5,
+        "min_ms": 338.1,
+        "max_ms": 354.4,
+        "runs": 3
+      }
+    }
+  ]
+}

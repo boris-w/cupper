@@ -1,0 +1,13 @@
+[package]
+name = "sp5-gix-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Build with the target dir outside the repo:
+#   CARGO_TARGET_DIR=$SP5_WORKDIR/cargo-target cargo build --release
+[dependencies]
+gix = { version = "0.89", default-features = false, features = ["status", "blob-diff", "dirwalk", "index", "worktree-mutation", "parallel", "max-performance-safe", "sha1"] }
+
+[profile.release]
+debug = false

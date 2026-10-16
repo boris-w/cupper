@@ -1,0 +1,346 @@
+{
+  "rows": [
+    {
+      "case": "index.lock held by user",
+      "check": "temp-index snapshot succeeds",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "index.lock held by user",
+      "check": "user index + lock untouched",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "index.lock held by user",
+      "check": "git stash create",
+      "ok": false,
+      "detail": "error: could not write index"
+    },
+    {
+      "case": "merge conflict in index",
+      "check": "index has stage 1/2/3 entries",
+      "ok": true,
+      "detail": "3 unmerged entries"
+    },
+    {
+      "case": "merge conflict in index",
+      "check": "snapshot succeeds (conflict markers captured as content)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "merge conflict in index",
+      "check": "user index untouched (still unmerged)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "merge conflict in index",
+      "check": "git stash create",
+      "ok": false,
+      "detail": "Cannot save the current index state"
+    },
+    {
+      "case": "untracked + ignore rules",
+      "check": "untracked files included",
+      "ok": true,
+      "detail": "keep.log, new.txt, sub/deep/new2.txt"
+    },
+    {
+      "case": "untracked + ignore rules",
+      "check": ".gitignore / info/exclude / core.excludesFile / negation honored",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "untracked + ignore rules",
+      "check": "exec bit recorded",
+      "ok": true,
+      "detail": "100755"
+    },
+    {
+      "case": "untracked + ignore rules",
+      "check": "git stash create includes untracked files",
+      "ok": false,
+      "detail": "stash=''"
+    },
+    {
+      "case": "nested repo (untracked dir with its own .git)",
+      "check": "inner repo WITHOUT commits: plain add -A",
+      "ok": false,
+      "detail": "fatal: adding files failed"
+    },
+    {
+      "case": "nested repo (untracked dir with its own .git)",
+      "check": "... with --ignore-errors",
+      "ok": false,
+      "detail": "error: 'vendor/lib/' does not have a commit checked out"
+    },
+    {
+      "case": "nested repo (untracked dir with its own .git)",
+      "check": "... with nested repo dirs excluded by pathspec",
+      "ok": true,
+      "detail": "excluded ['vendor/lib']"
+    },
+    {
+      "case": "nested repo (untracked dir with its own .git)",
+      "check": "inner repo WITH a commit -> recorded as gitlink (160000)",
+      "ok": true,
+      "detail": "('160000', 'commit', '7a2e50f4f594bde802df46a2c21c0e5c5a056d7e')"
+    },
+    {
+      "case": "nested repo (untracked dir with its own .git)",
+      "check": "uncommitted change inside nested repo visible in snapshot diff",
+      "ok": false,
+      "detail": "no: the gitlink only records the inner HEAD"
+    },
+    {
+      "case": "submodule",
+      "check": "dirty file inside submodule changes the snapshot",
+      "ok": false,
+      "detail": "no: only the gitlink (submodule HEAD) is recorded"
+    },
+    {
+      "case": "submodule",
+      "check": "status --porcelain=v2 reports the submodule as modified",
+      "ok": true,
+      "detail": "1 .M S.M. 160000 160000 160000 ef8259bffeac535a3ffd92a9afd6e"
+    },
+    {
+      "case": "submodule",
+      "check": "new commit inside submodule shows as gitlink change",
+      "ok": true,
+      "detail": "+Subproject commit c235b485d89243a678ec9986e76099766669b36c"
+    },
+    {
+      "case": "submodule",
+      "check": "--submodule=log summarises inner commits",
+      "ok": true,
+      "detail": "Submodule sub ef8259b..c235b48:"
+    },
+    {
+      "case": "submodule",
+      "check": "stage gitlink change via git apply --cached",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "Git LFS",
+      "check": "snapshot stores the LFS pointer, not the content",
+      "ok": true,
+      "detail": "oid sha256:5b5e5427dee79d796115ad0d72bf7b24691967125dbb8f3ee3d89e69d5db4479"
+    },
+    {
+      "case": "Git LFS",
+      "check": "side effect: clean filter copies content into .git/lfs/objects",
+      "ok": true,
+      "detail": "1 -> 2 files"
+    },
+    {
+      "case": "Git LFS",
+      "check": "turn diff shows pointer change only",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "Git LFS",
+      "check": "snapshot when git-lfs is NOT on PATH (GUI app PATH)",
+      "ok": false,
+      "detail": "fatal: the remote end hung up unexpectedly"
+    },
+    {
+      "case": "Git LFS",
+      "check": "git status when git-lfs is NOT on PATH",
+      "ok": false,
+      "detail": "fatal: the remote end hung up unexpectedly"
+    },
+    {
+      "case": "large untracked files",
+      "check": "snapshot with one 100MB random untracked file",
+      "ok": true,
+      "detail": "1746 ms, object store +113 MB (loose)"
+    },
+    {
+      "case": "large untracked files",
+      "check": "snapshot with one 1024MB random untracked file",
+      "ok": true,
+      "detail": "16880 ms, object store +1024 MB (pack: above core.bigFileThreshold)"
+    },
+    {
+      "case": "large untracked files",
+      "check": "snapshot with one 1024MB zeros untracked file",
+      "ok": true,
+      "detail": "3082 ms, object store +1 MB (pack: above core.bigFileThreshold)"
+    },
+    {
+      "case": "large untracked files",
+      "check": "same 1024MB file with size pre-filter (>50MB excluded)",
+      "ok": true,
+      "detail": "39 ms incl. ls-files -o + stat"
+    },
+    {
+      "case": "many untracked files (e.g. a non-ignored node_modules)",
+      "check": "first snapshot with 20000 untracked files",
+      "ok": true,
+      "detail": "7889 ms"
+    },
+    {
+      "case": "many untracked files (e.g. a non-ignored node_modules)",
+      "check": "cheap pre-check: ls-files -o --directory",
+      "ok": true,
+      "detail": "9 ms, 1 top-level untracked entries"
+    },
+    {
+      "case": "many untracked files (e.g. a non-ignored node_modules)",
+      "check": "full pre-check: ls-files -o (every untracked file)",
+      "ok": true,
+      "detail": "23 ms, 20000 files"
+    },
+    {
+      "case": "many untracked files (e.g. a non-ignored node_modules)",
+      "check": "next snapshot with kept temp index (no new content)",
+      "ok": true,
+      "detail": "1210 ms"
+    },
+    {
+      "case": "FIFO / socket / unreadable file",
+      "check": "FIFO + unix socket in worktree: snapshot succeeds",
+      "ok": true,
+      "detail": "recorded: nothing"
+    },
+    {
+      "case": "FIFO / socket / unreadable file",
+      "check": "unreadable untracked file: plain add -A",
+      "ok": false,
+      "detail": "fatal: adding files failed"
+    },
+    {
+      "case": "FIFO / socket / unreadable file",
+      "check": "... with --ignore-errors: exit code / tree written",
+      "ok": true,
+      "detail": "add exit=1; tree=yes; stderr: error: open(\"secret.txt\"): Permission denied"
+    },
+    {
+      "case": "snapshot inside a linked worktree",
+      "check": "snapshot works, uses <common-dir>/worktrees/<name>/index as seed",
+      "ok": true,
+      "detail": "worktrees/snap-wt-linked/index"
+    },
+    {
+      "case": "snapshot inside a linked worktree",
+      "check": "neither the worktree's nor the main index is touched",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "core.splitIndex=true",
+      "check": "seeded snapshot works with a split index",
+      "ok": true,
+      "detail": "sharedindex files=1; 51 paths"
+    },
+    {
+      "case": "sparse-checkout (skip-worktree entries)",
+      "check": "skip/ removed from worktree",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "sparse-checkout (skip-worktree entries)",
+      "check": "seeded snapshot keeps skip-worktree files (not shown as deleted)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "sparse-checkout (skip-worktree entries)",
+      "check": "EMPTY-seeded snapshot treats them as deleted",
+      "ok": true,
+      "detail": "=> always seed from the user's index (or a kept temp index)"
+    },
+    {
+      "case": "assume-unchanged / skip-worktree set by the user",
+      "check": "seeded snapshot sees the edit",
+      "ok": false,
+      "detail": "no: flag is copied with the index; add -A skips the file"
+    },
+    {
+      "case": "core.safecrlf=true + mixed EOL file",
+      "check": "plain `git add -A` with user's safecrlf=true",
+      "ok": false,
+      "detail": "fatal: CRLF would be replaced by LF in m.txt"
+    },
+    {
+      "case": "core.safecrlf=true + mixed EOL file",
+      "check": "snapshot with -c core.safecrlf=false",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "empty repo (no commits yet)",
+      "check": "snapshot works without HEAD / index",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "empty repo (no commits yet)",
+      "check": "git stash create",
+      "ok": false,
+      "detail": "You do not have the initial commit yet"
+    },
+    {
+      "case": "object lifetime: gc, anchor ref, private object dir",
+      "check": "unanchored snapshot survives `git gc --prune=now`",
+      "ok": false,
+      "detail": "no: unreachable objects are pruned (default grace period 2 weeks)"
+    },
+    {
+      "case": "object lifetime: gc, anchor ref, private object dir",
+      "check": "snapshot anchored by refs/cupper/... survives gc",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "object lifetime: gc, anchor ref, private object dir",
+      "check": "... but `git log --all` now shows cupper snapshot commits",
+      "ok": false,
+      "detail": "1 snapshot commit(s) visible in log --all"
+    },
+    {
+      "case": "object lifetime: gc, anchor ref, private object dir",
+      "check": "private ODB: nothing written to the repo's .git/objects",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "object lifetime: gc, anchor ref, private object dir",
+      "check": "private ODB: diff works with env, fails without",
+      "ok": true,
+      "detail": "with env=True, without=False"
+    },
+    {
+      "case": "object lifetime: gc, anchor ref, private object dir",
+      "check": "private ODB: user's gc cannot prune snapshot objects",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "case": "object lifetime: gc, anchor ref, private object dir",
+      "check": "private ODB: snapshot still diffable after user drops a commit + gc --prune=now",
+      "ok": false,
+      "detail": "no: blobs that only lived in the dropped commit are gone -> show 'snapshot unavailable'"
+    },
+    {
+      "case": "case-only path collision on case-insensitive APFS",
+      "check": "fresh checkout is clean",
+      "ok": false,
+      "detail": "status: 'M README.md'"
+    },
+    {
+      "case": "case-only path collision on case-insensitive APFS",
+      "check": "two consecutive snapshots are identical (turn diff not polluted)",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

@@ -1,0 +1,457 @@
+{
+  "version": "gix v0.89.0",
+  "repos": [
+    {
+      "repo": "syn-1k",
+      "scenarios": {
+        "clean": {
+          "changes": {
+            "modify": 0,
+            "add": 0,
+            "delete": 0
+          },
+          "gix_status": {
+            "median_ms": 6.2,
+            "min_ms": 5.9,
+            "max_ms": 6.4,
+            "runs": 5
+          },
+          "gix_snapshot": {
+            "median_ms": 5.7,
+            "min_ms": 5.7,
+            "max_ms": 6.3,
+            "runs": 5
+          },
+          "same_tree_as_cli": true,
+          "gix_diff": {
+            "median_ms": 3.8,
+            "min_ms": 3.6,
+            "max_ms": 4.0,
+            "runs": 5
+          },
+          "cli_diff_raw": {
+            "median_ms": 10.5,
+            "min_ms": 9.9,
+            "max_ms": 14.3,
+            "runs": 5
+          }
+        },
+        "small": {
+          "changes": {
+            "modify": 10,
+            "add": 5,
+            "delete": 1
+          },
+          "gix_status": {
+            "median_ms": 5.7,
+            "min_ms": 5.4,
+            "max_ms": 5.9,
+            "runs": 5
+          },
+          "gix_snapshot": {
+            "median_ms": 15.8,
+            "min_ms": 13.9,
+            "max_ms": 17.0,
+            "runs": 5
+          },
+          "same_tree_as_cli": true,
+          "gix_diff": {
+            "median_ms": 5.2,
+            "min_ms": 5.0,
+            "max_ms": 5.4,
+            "runs": 5
+          },
+          "cli_diff_raw": {
+            "median_ms": 12.1,
+            "min_ms": 11.2,
+            "max_ms": 12.2,
+            "runs": 5
+          }
+        },
+        "medium": {
+          "changes": {
+            "modify": 500,
+            "add": 100,
+            "delete": 10
+          },
+          "gix_status": {
+            "median_ms": 6.5,
+            "min_ms": 6.1,
+            "max_ms": 6.8,
+            "runs": 5
+          },
+          "gix_snapshot": {
+            "median_ms": 210.5,
+            "min_ms": 169.4,
+            "max_ms": 286.6,
+            "runs": 5
+          },
+          "same_tree_as_cli": true,
+          "gix_diff": {
+            "median_ms": 5.1,
+            "min_ms": 4.5,
+            "max_ms": 5.5,
+            "runs": 5
+          },
+          "cli_diff_raw": {
+            "median_ms": 13.9,
+            "min_ms": 13.4,
+            "max_ms": 14.9,
+            "runs": 5
+          }
+        }
+      },
+      "gix_wtadd": {
+        "median_ms": 107.8,
+        "min_ms": 98.6,
+        "max_ms": 116.5,
+        "runs": 5
+      },
+      "gix_worktree_status_by_cli": ""
+    },
+    {
+      "repo": "syn-10k",
+      "scenarios": {
+        "clean": {
+          "changes": {
+            "modify": 0,
+            "add": 0,
+            "delete": 0
+          },
+          "gix_status": {
+            "median_ms": 14.6,
+            "min_ms": 14.5,
+            "max_ms": 17.5,
+            "runs": 5
+          },
+          "gix_snapshot": {
+            "median_ms": 15.2,
+            "min_ms": 14.7,
+            "max_ms": 16.2,
+            "runs": 5
+          },
+          "same_tree_as_cli": true,
+          "gix_diff": {
+            "median_ms": 5.2,
+            "min_ms": 4.6,
+            "max_ms": 5.3,
+            "runs": 5
+          },
+          "cli_diff_raw": {
+            "median_ms": 10.8,
+            "min_ms": 10.1,
+            "max_ms": 11.3,
+            "runs": 5
+          }
+        },
+        "small": {
+          "changes": {
+            "modify": 10,
+            "add": 5,
+            "delete": 1
+          },
+          "gix_status": {
+            "median_ms": 16.4,
+            "min_ms": 15.2,
+            "max_ms": 19.6,
+            "runs": 5
+          },
+          "gix_snapshot": {
+            "median_ms": 26.6,
+            "min_ms": 24.1,
+            "max_ms": 30.3,
+            "runs": 5
+          },
+          "same_tree_as_cli": true,
+          "gix_diff": {
+            "median_ms": 5.7,
+            "min_ms": 5.6,
+            "max_ms": 6.0,
+            "runs": 5
+          },
+          "cli_diff_raw": {
+            "median_ms": 12.5,
+            "min_ms": 12.1,
+            "max_ms": 15.9,
+            "runs": 5
+          }
+        },
+        "medium": {
+          "changes": {
+            "modify": 1000,
+            "add": 100,
+            "delete": 10
+          },
+          "gix_status": {
+            "median_ms": 15.5,
+            "min_ms": 14.9,
+            "max_ms": 17.6,
+            "runs": 5
+          },
+          "gix_snapshot": {
+            "median_ms": 411.3,
+            "min_ms": 389.8,
+            "max_ms": 472.2,
+            "runs": 5
+          },
+          "same_tree_as_cli": true,
+          "gix_diff": {
+            "median_ms": 10.6,
+            "min_ms": 10.4,
+            "max_ms": 10.7,
+            "runs": 5
+          },
+          "cli_diff_raw": {
+            "median_ms": 18.2,
+            "min_ms": 17.7,
+            "max_ms": 20.8,
+            "runs": 5
+          }
+        }
+      },
+      "gix_wtadd": {
+        "median_ms": 1197.2,
+        "min_ms": 997.9,
+        "max_ms": 1431.6,
+        "runs": 5
+      },
+      "gix_worktree_status_by_cli": ""
+    },
+    {
+      "repo": "syn-100k",
+      "scenarios": {
+        "clean": {
+          "changes": {
+            "modify": 0,
+            "add": 0,
+            "delete": 0
+          },
+          "gix_status": {
+            "median_ms": 105.6,
+            "min_ms": 98.5,
+            "max_ms": 123.2,
+            "runs": 5
+          },
+          "gix_snapshot": {
+            "median_ms": 105.8,
+            "min_ms": 104.5,
+            "max_ms": 117.6,
+            "runs": 5
+          },
+          "same_tree_as_cli": true,
+          "gix_diff": {
+            "median_ms": 11.2,
+            "min_ms": 10.8,
+            "max_ms": 11.4,
+            "runs": 5
+          },
+          "cli_diff_raw": {
+            "median_ms": 12.4,
+            "min_ms": 12.0,
+            "max_ms": 12.9,
+            "runs": 5
+          }
+        },
+        "small": {
+          "changes": {
+            "modify": 10,
+            "add": 5,
+            "delete": 1
+          },
+          "gix_status": {
+            "median_ms": 120.9,
+            "min_ms": 114.5,
+            "max_ms": 127.8,
+            "runs": 5
+          },
+          "gix_snapshot": {
+            "median_ms": 122.8,
+            "min_ms": 114.8,
+            "max_ms": 143.5,
+            "runs": 5
+          },
+          "same_tree_as_cli": true,
+          "gix_diff": {
+            "median_ms": 11.8,
+            "min_ms": 11.5,
+            "max_ms": 12.0,
+            "runs": 5
+          },
+          "cli_diff_raw": {
+            "median_ms": 13.4,
+            "min_ms": 13.1,
+            "max_ms": 21.4,
+            "runs": 5
+          }
+        },
+        "medium": {
+          "changes": {
+            "modify": 1000,
+            "add": 100,
+            "delete": 10
+          },
+          "gix_status": {
+            "median_ms": 107.3,
+            "min_ms": 103.4,
+            "max_ms": 118.4,
+            "runs": 5
+          },
+          "gix_snapshot": {
+            "median_ms": 675.3,
+            "min_ms": 616.3,
+            "max_ms": 834.2,
+            "runs": 5
+          },
+          "same_tree_as_cli": true,
+          "gix_diff": {
+            "median_ms": 36.0,
+            "min_ms": 34.0,
+            "max_ms": 39.0,
+            "runs": 5
+          },
+          "cli_diff_raw": {
+            "median_ms": 42.1,
+            "min_ms": 39.6,
+            "max_ms": 49.3,
+            "runs": 5
+          }
+        }
+      },
+      "gix_wtadd": {
+        "median_ms": 10894.7,
+        "min_ms": 9278.5,
+        "max_ms": 11776.5,
+        "runs": 3
+      },
+      "gix_worktree_status_by_cli": ""
+    },
+    {
+      "repo": "linux",
+      "scenarios": {
+        "clean": {
+          "changes": {
+            "modify": 0,
+            "add": 0,
+            "delete": 0
+          },
+          "gix_status": {
+            "median_ms": 196.7,
+            "min_ms": 184.7,
+            "max_ms": 214.3,
+            "runs": 5
+          },
+          "gix_snapshot": {
+            "median_ms": 196.3,
+            "min_ms": 194.8,
+            "max_ms": 207.3,
+            "runs": 5
+          },
+          "same_tree_as_cli": false,
+          "tree_diff_vs_cli": "             | 171 ++++-----\n net/netfilter/xt_RATEEST.c                         | 306 ++++++----------\n net/netfilter/xt_TCPMSS.c                          | 385 +++++----------------\n .../Z6.0+pooncelock+poonceLock+pombonce.litmus     |  12 +-\n 13 files changed, 442 insertions(+), 786 deletions(-)\n",
+          "gix_diff": {
+            "median_ms": 13.5,
+            "min_ms": 13.0,
+            "max_ms": 13.7,
+            "runs": 5
+          },
+          "cli_diff_raw": {
+            "median_ms": 14.5,
+            "min_ms": 14.0,
+            "max_ms": 15.5,
+            "runs": 5
+          }
+        },
+        "small": {
+          "changes": {
+            "modify": 10,
+            "add": 5,
+            "delete": 1
+          },
+          "gix_status": {
+            "median_ms": 195.7,
+            "min_ms": 189.0,
+            "max_ms": 217.5,
+            "runs": 5
+          },
+          "gix_snapshot": {
+            "median_ms": 212.8,
+            "min_ms": 194.8,
+            "max_ms": 237.4,
+            "runs": 5
+          },
+          "same_tree_as_cli": false,
+          "tree_diff_vs_cli": "             | 171 ++++-----\n net/netfilter/xt_RATEEST.c                         | 306 ++++++----------\n net/netfilter/xt_TCPMSS.c                          | 385 +++++----------------\n .../Z6.0+pooncelock+poonceLock+pombonce.litmus     |  12 +-\n 13 files changed, 442 insertions(+), 786 deletions(-)\n",
+          "gix_diff": {
+            "median_ms": 15.7,
+            "min_ms": 15.6,
+            "max_ms": 16.0,
+            "runs": 5
+          },
+          "cli_diff_raw": {
+            "median_ms": 17.3,
+            "min_ms": 16.5,
+            "max_ms": 17.6,
+            "runs": 5
+          }
+        },
+        "medium": {
+          "changes": {
+            "modify": 1000,
+            "add": 100,
+            "delete": 10
+          },
+          "gix_status": {
+            "median_ms": 213.0,
+            "min_ms": 185.7,
+            "max_ms": 219.9,
+            "runs": 5
+          },
+          "gix_snapshot": {
+            "median_ms": 759.5,
+            "min_ms": 726.8,
+            "max_ms": 804.9,
+            "runs": 5
+          },
+          "same_tree_as_cli": false,
+          "tree_diff_vs_cli": "             | 171 ++++-----\n net/netfilter/xt_RATEEST.c                         | 306 ++++++----------\n net/netfilter/xt_TCPMSS.c                          | 385 +++++----------------\n .../Z6.0+pooncelock+poonceLock+pombonce.litmus     |  12 +-\n 13 files changed, 442 insertions(+), 786 deletions(-)\n",
+          "gix_diff": {
+            "median_ms": 45.1,
+            "min_ms": 44.5,
+            "max_ms": 46.2,
+            "runs": 5
+          },
+          "cli_diff_raw": {
+            "median_ms": 52.0,
+            "min_ms": 49.9,
+            "max_ms": 57.8,
+            "runs": 5
+          }
+        }
+      },
+      "gix_wtadd": {
+        "median_ms": 10786.3,
+        "min_ms": 10569.9,
+        "max_ms": 10897.0,
+        "runs": 3
+      },
+      "gix_worktree_status_by_cli": " M include/uapi/linux/netfilter/xt_connmark.h\n M include/uapi/linux/netfilter/xt_dscp.h\n M include/uapi/linux/netfilter/xt_mark.h\n M include/uapi/linux/netfilter/xt_rateest.h\n M include/uapi/linux/net"
+    }
+  ],
+  "compat": [
+    {
+      "case": "split index",
+      "result": "ok",
+      "detail": "3"
+    },
+    {
+      "case": "sparse checkout",
+      "result": "ok",
+      "detail": "1"
+    },
+    {
+      "case": "relative worktrees ext",
+      "result": "ok",
+      "detail": "0"
+    }
+  ]
+}
