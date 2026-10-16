@@ -38,7 +38,7 @@ flowchart LR
 | agent 接入 | ACP；`claude-agent-acp` 驱动本机的 claude，`codex-acp` 驱动本机的 codex；适配器锁定版本 | 方向已定，细节待 SP-1、SP-2 | 不再分发受 Anthropic 商业条款约束的组件 | ADR-07、ADR-08（待定） |
 | Node 运行时 | 只给适配器用，与 Electron 自带的 Node 分开；具体从哪里来待 SP-2 定 | 待定 | 官方 Node 带着放宽注入防护的 entitlement，不能跑可信代码 | ADR-08（待定） |
 | 存储 | SQLite（只由宿主写入）；事件日志；blob；全文检索 FTS5 | 方向已定，细节待定 | — | ADR-06（待定） |
-| Git | 大概率直接调用 git 命令行；用临时 index 给每个回合拍快照；hunk ID 按内容寻址 | 待 SP-5 | — | ADR-10（待定） |
+| Git | **git 命令行**（不用 libgit2，暂不用 gix）；快照用临时 index，写入 cupper 私有的对象库，用户的 `.git` 一个字节都不写；hunk 操作用 `git apply`；worktree 放在仓库外，清理前按 7 条规则检查 | 提议，SP-5 实测支持 | libgit2 在 linux 等仓库上直接失败；git 命令行最正确，9.6 万个文件的仓库快照约 0.3 s | ADR-10 |
 | 打包与更新 | Developer ID 签名、公证；更新时先让宿主退出再安装，不原地覆盖可执行文件；electron-builder 还是 Forge 在详细设计时定 | 提议 | SP-4b 实测：宿主运行时替换 App 包会出问题 | ADR-01、ADR-03 |
 | 测试 | Rust 单元测试和集成测试；假 agent 回放录制的会话；Vitest；Playwright 截图回归和端到端测试 | 提议 | 确定性回归；AI 能自己验证 | ADR-03、ADR-04 |
 | 最低系统 | macOS 14+；不为兼容旧系统写任何代码 | 已确认 | 用户决定 | 设计文档"平台约束" |
@@ -63,5 +63,4 @@ flowchart LR
 | SP-1 | 两个适配器的真实行为：审批、提问、排队、插话、取消、恢复 | ADR-06、07、09 |
 | SP-2 | 本机 CLI 与适配器的版本耦合；Node 从哪里来；许可证 | ADR-08、11 |
 | SP-4a | Rust 宿主骨架：双客户端、断线补齐、`kill -9` 后恢复 | ADR-02 是否成立，以及 ADR-04、06 |
-| SP-5 | Git 快照和 hunk 操作的性能与正确性 | ADR-10 |
 | SP-6 | Electron 界面的长时间运行和多会话性能（M1b 前做） | ADR-03 的性能门槛 |

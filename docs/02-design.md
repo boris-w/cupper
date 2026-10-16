@@ -37,7 +37,7 @@
 | ADR-07 | Agent 驱动路径 | 待定 | SP-1；必要时 SP-3 | — |
 | ADR-08 | Agent 程序来源、适配器分发与版本锁定 | 待定 | SP-2 | — |
 | ADR-09 | 适配器进程拓扑 | 待定 | SP-1 | — |
-| ADR-10 | Git 与 worktree | 待定 | SP-5 | — |
+| ADR-10 | Git 与 worktree | 提议（依据 SP-5） | SP-5 | `docs/decisions/ADR-10-git-worktree.md` |
 | ADR-11 | 开源许可证与第三方依赖的再分发 | 待定 | SP-2 | — |
 | ADR-12 | 配对与 E2EE 通道 | M3 前 | SP-8 | — |
 | ADR-13 | 中继设计 | M3 前 | — | — |
@@ -53,7 +53,7 @@
 | SP-3 | 直连 Codex app-server 的对照 | 视情况 | 待定 | — |
 | SP-4a | 宿主骨架走通（Rust） | M1 前 | 进行中 | `docs/tasks/SP-4a-host-skeleton/` |
 | SP-4b | macOS 本地安全实测 | M1 前 | 已完成（ADR-05 方案成立，已据此修订 ADR-01、ADR-05） | `docs/tasks/SP-4b-local-security/` |
-| SP-5 | Git 快照与审查操作 | M1 前 | 进行中 | `docs/tasks/SP-5-git-snapshot/` |
+| SP-5 | Git 快照与审查操作 | M1 前 | 已完成（git 命令行方案，已据此起草 ADR-10） | `docs/tasks/SP-5-git-snapshot/` |
 | SP-6 | UI 渲染压力测试 | 视情况 | 待定 | — |
 | SP-7 | iOS 自建与推送链路 | M3 前 | — | — |
 | SP-8 | E2EE 通道互通 | M3 前 | — | — |
