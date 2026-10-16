@@ -1,0 +1,42 @@
+[
+  {
+    "name": "range event (send-time coalescing)",
+    "known": true,
+    "event": {"seq": 12, "from": 9, "v": 1, "ts": 1792137604874, "type": "item.delta", "data": {"item_id": "i_1", "text": "hello"}}
+  },
+  {
+    "name": "unknown event type with fallback placeholder",
+    "known": false,
+    "event": {"seq": 13, "v": 1, "ts": 1792137604874, "type": "git.snapshot", "data": {"sha": "abc"}, "fallback": {"kind": "card", "summary": "Snapshot taken"}}
+  },
+  {
+    "name": "unknown enum value inside a known event",
+    "known": true,
+    "event": {"seq": 14, "v": 1, "ts": 1792137604874, "type": "item.completed", "data": {"item_id": "i_1", "status": "paused"}}
+  },
+  {
+    "name": "unknown union member and unknown principal kind",
+    "known": true,
+    "event": {"seq": 15, "v": 1, "ts": 1792137604874, "type": "interaction.requested", "data": {"request_id": "r_1", "turn_id": "t_1", "digest": "d_1", "actionable_by": ["desktop_ui", "watch"], "request": {"type": "oauth", "url": "https://example.invalid/auth"}}}
+  },
+  {
+    "name": "unknown fields in envelope and data",
+    "known": true,
+    "event": {"seq": 16, "v": 2, "ts": 1792137604874, "trace": "x", "type": "turn.started", "data": {"turn_id": "t_2", "origin": "background"}}
+  },
+  {
+    "name": "unknown session status in the index",
+    "known": true,
+    "event": {"seq": 3, "v": 1, "ts": 1792137604874, "type": "session.upsert", "data": {"session_id": "s_1", "agent": "claude", "cwd": "/tmp/x", "status": "sleeping", "pending_interactions": 0, "updated_at": 1792137604874}}
+  },
+  {
+    "name": "unknown outcome type",
+    "known": true,
+    "event": {"seq": 17, "v": 1, "ts": 1792137604874, "type": "interaction.resolved", "data": {"request_id": "r_1", "status": "resolved", "outcome": {"type": "biometric_ok"}, "resolved_by": "device/d_1"}}
+  },
+  {
+    "name": "known type with malformed data degrades to unknown",
+    "known": false,
+    "event": {"seq": 18, "v": 1, "ts": 1792137604874, "type": "item.delta", "data": {"item_id": "i_1"}}
+  }
+]

@@ -24,17 +24,30 @@ fn def<T: JsonSchema>(g: &mut SchemaGenerator) {
     g.subschema_for::<T>();
 }
 
-/// Rebuild objects with sorted keys. serde_json's map order depends on whether
-/// some crate in the build enables its `preserve_order` feature (the ACP SDK
-/// does), so the exported schema must not rely on it.
-fn sorted(v: Value) -> Value {
+/// Largest integer JavaScript represents exactly (2^53 - 1). Every integer in
+/// the protocol stays within it (ADR-04: seq <= 2^53).
+pub const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;
+
+/// Normalize the generated schema for other languages:
+/// - sort object keys (serde_json's map order depends on whether some crate in
+///   the build enables its `preserve_order` feature; the ACP SDK does);
+/// - replace `format: uint64/int64` with JS-safe bounds, so generators emit
+///   plain numbers instead of BigInt.
+fn normalize(v: Value) -> Value {
     match v {
         Value::Object(m) => {
-            let mut entries: Vec<(String, Value)> = m.into_iter().collect();
+            let wide = matches!(m.get("format").and_then(Value::as_str), Some("uint64" | "int64"));
+            let signed = m.get("format").and_then(Value::as_str) == Some("int64");
+            let mut entries: Vec<(String, Value)> =
+                m.into_iter().filter(|(k, _)| !(wide && (k == "format" || k == "minimum" || k == "maximum"))).collect();
+            if wide {
+                entries.push(("maximum".into(), MAX_SAFE_INTEGER.into()));
+                entries.push(("minimum".into(), if signed { (-(MAX_SAFE_INTEGER as i64)).into() } else { 0.into() }));
+            }
             entries.sort_by(|a, b| a.0.cmp(&b.0));
-            Value::Object(entries.into_iter().map(|(k, v)| (k, sorted(v))).collect())
+            Value::Object(entries.into_iter().map(|(k, v)| (k, normalize(v))).collect())
         }
-        Value::Array(a) => Value::Array(a.into_iter().map(sorted).collect()),
+        Value::Array(a) => Value::Array(a.into_iter().map(normalize).collect()),
         other => other,
     }
 }
@@ -59,7 +72,7 @@ pub fn protocol_schema() -> Value {
     def::<Event>(&mut g);
     def::<EventBody>(&mut g);
     let defs = g.take_definitions(true);
-    sorted(json!({
+    normalize(json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "cupper host protocol",
         "x-protocol-version": PROTOCOL_VERSION,
@@ -89,5 +102,11 @@ mod tests {
         }
         let committed = std::fs::read_to_string(&path).unwrap_or_default();
         assert!(committed == generated, "schema is stale; rerun with UPDATE_SCHEMA=1");
+    }
+
+    #[test]
+    fn integers_are_js_safe() {
+        let s = protocol_schema().to_string();
+        assert!(!s.contains("uint64") && !s.contains("\"int64\""));
     }
 }

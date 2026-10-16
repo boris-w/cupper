@@ -1,0 +1,16 @@
+{
+  "name": "cupper-protocol-ts-spike",
+  "private": true,
+  "type": "module",
+  "description": "SP-4a: generate TS types and zod validators from protocol/schema/v1.json and check them.",
+  "scripts": {
+    "gen": "node scripts/gen.mjs",
+    "check": "tsc --noEmit -p . && node --experimental-strip-types scripts/check.ts"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
+    "@types/node": "24.19.2",
+    "typescript": "6.0.3",
+    "zod": "4.6.7"
+  }
+}

@@ -363,6 +363,21 @@ mod tests {
         assert_eq!(back, serde_json::from_str::<Value>(raw).unwrap());
     }
 
+    /// Shared fixtures (also checked by the generated TS validators).
+    #[test]
+    fn fixtures_parse_tolerantly() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../protocol/fixtures/events.json");
+        let fixtures: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        for f in fixtures {
+            let e: Event = serde_json::from_value(f["event"].clone()).unwrap_or_else(|err| panic!("{}: {err}", f["name"]));
+            let known = !matches!(e.body, EventBody::Unknown(_));
+            assert_eq!(known, f["known"].as_bool().unwrap(), "{}", f["name"]);
+            // Re-serializing and parsing again is stable.
+            let again: Event = serde_json::from_value(serde_json::to_value(&e).unwrap()).unwrap();
+            assert_eq!(again, e, "{}", f["name"]);
+        }
+    }
+
     #[test]
     fn unknown_union_members_are_tolerated() {
         let r: InteractionRequest =

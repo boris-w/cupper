@@ -63,7 +63,7 @@
         },
         "length": {
           "description": "Bytes to read; omit for \"to the end\".",
-          "format": "uint64",
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": [
             "integer",
@@ -72,7 +72,7 @@
         },
         "offset": {
           "default": 0,
-          "format": "uint64",
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": "integer"
         }
@@ -94,17 +94,17 @@
           "type": "string"
         },
         "length": {
-          "format": "uint64",
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": "integer"
         },
         "offset": {
-          "format": "uint64",
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": "integer"
         },
         "size": {
-          "format": "uint64",
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": "integer"
         }
@@ -131,7 +131,7 @@
           ]
         },
         "size": {
-          "format": "uint64",
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": "integer"
         }
@@ -484,7 +484,7 @@
         },
         "from": {
           "description": "Present on a range event produced by send-time coalescing: this event\ncovers `from..=seq`. Readers treat a missing `from` as `from = seq`.",
-          "format": "uint64",
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": [
             "integer",
@@ -493,13 +493,14 @@
         },
         "seq": {
           "description": "Sequence number in its stream. Contiguous in the host log.",
-          "format": "uint64",
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": "integer"
         },
         "ts": {
           "description": "UTC milliseconds.",
-          "format": "int64",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
           "type": "integer"
         },
         "v": {
@@ -1178,7 +1179,7 @@
         },
         "max_queue_bytes": {
           "description": "Per-connection live event backlog above which a stream is reset.",
-          "format": "uint64",
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": "integer"
         }
@@ -1284,7 +1285,8 @@
     "RpcError": {
       "properties": {
         "code": {
-          "format": "int64",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
           "type": "integer"
         },
         "data": {
@@ -1478,7 +1480,8 @@
           ]
         },
         "updated_at": {
-          "format": "int64",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
           "type": "integer"
         }
       },
@@ -1530,7 +1533,7 @@
       "description": "One page of a snapshot. Pages are ordered; applying `ops` in order to an\nempty view yields the stream state at `at_seq`.",
       "properties": {
         "at_seq": {
-          "format": "uint64",
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": "integer"
         },
@@ -1580,7 +1583,7 @@
       "properties": {
         "after_seq": {
           "description": "Last seq the client has applied. Omit to start from a snapshot.",
-          "format": "uint64",
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": [
             "integer",
@@ -1601,12 +1604,12 @@
       "properties": {
         "at_seq": {
           "description": "Seq the snapshot reflects, or the replay starting point (`after_seq`).",
-          "format": "uint64",
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": "integer"
         },
         "head_seq": {
-          "format": "uint64",
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": "integer"
         },
