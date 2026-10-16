@@ -77,10 +77,10 @@ def main() -> None:
     w = load_result("bench_worktree")
     if w:
         out += [f"## Worktree operations (median of {w['runs']} runs, ms)", ""]
-        out += [md_table(["repo", "add -b (checkout)", "add --no-checkout", "safety check", "remove (clean)",
-                          "rebuild from branch"],
-                         [(r["repo"], ms(r, "add_b"), ms(r, "add_no_checkout"), ms(r, "safety_check"), ms(r, "remove"),
-                           ms(r, "rebuild")) for r in w["repos"]]), ""]
+        out += [md_table(["repo", "add -b (checkout)", "add --no-checkout", "safety check (1st, racy)",
+                          "safety check", "remove (clean)", "rebuild from branch"],
+                         [(r["repo"], ms(r, "add_b"), ms(r, "add_no_checkout"), ms(r, "safety_check_first"),
+                           ms(r, "safety_check"), ms(r, "remove"), ms(r, "rebuild")) for r in w["repos"]]), ""]
     lg = load_result("compare_libgit2")
     if lg:
         out += [f"## libgit2 ({lg['version']}) vs git CLI (ms)", ""]

@@ -2,7 +2,7 @@
 
   add_b           git worktree add -b cupper/bench-N <path> HEAD     (full checkout)
   add_no_checkout same with --no-checkout (shows the checkout share)
-  safety_check    edge_worktree.safety() on a fresh, clean worktree
+  safety_check    edge_worktree.safety() on a clean worktree (first call right after checkout, then after one index refresh)
   remove          git worktree remove <path>     (clean worktree, no --force)
   rebuild         git worktree add <path> <existing branch>
 
@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import shutil
 import sys
+import time
 
 from edge_worktree import safety
 from lib import REPOS, SCRATCH, git, save_result, timed
@@ -53,6 +54,12 @@ def bench(name: str, runs: int) -> dict:
     out = {"repo": name}
     out["add_b"] = timed(lambda: p.add(), runs=runs, warmup=1, setup=p.drop_all)
     i = p.live[-1]
+    # Right after checkout every file has the same mtime second as the new index ("racy git"),
+    # so a read-only status re-hashes everything. Measure that once, then the normal case after
+    # one index refresh (cupper may write the index of a worktree it created).
+    out["safety_check_first"] = timed(lambda: safety(repo, p.path(i), p.branch(i)), runs=1, warmup=0)
+    time.sleep(1.1)
+    git(p.path(i), "update-index", "-q", "--refresh", check=False)
     out["safety_check"] = timed(lambda: safety(repo, p.path(i), p.branch(i)), runs=runs)
     # remove: a fresh clean worktree is created (untimed) before every run
     out["remove"] = timed(lambda: git(repo, "worktree", "remove", str(p.path(p.live.pop()))), runs=runs,
