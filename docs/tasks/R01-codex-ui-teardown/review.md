@@ -42,3 +42,8 @@
 ### 合并
 
 - 合并提交：`7b00a91`
+
+## 勘误（2026-10-16，来自 R04）
+
+- 第十二节"外壳框架：Electron"需要更正。截至 2026-10，ChatGPT 桌面 App 26.1007 在 macOS 上的运行时**不是 Electron**，而是 OpenAI 自研的 OWL：`Codex Framework.framework`，基于 Chromium 155，主类是 `BrowserCrApplication`。它的 UI 代码仍然按 Electron 的编程模型（API）编写，配合 React；开发依赖里有 Electron 42.3.0 和 Forge 7.11。
+- 编排者已在本机只读核实（见 `docs/tasks/R04-desktop-framework-survey/review.md`）。R01 的报告原文是历史记录，不做改动，以本勘误为准。
