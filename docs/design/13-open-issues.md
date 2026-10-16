@@ -49,6 +49,7 @@
 | Q32 | 仓库档里用 `-c <键>=` 置空覆盖可执行类键，对每个键是否都有效；快照档里 LFS 的标准取值是否工作 | 安全 #1、纪要 D8 | 宿主自动调用 git 的安全 | D02 的实验已确认：置空的过滤器按原样处理内容，设了 `required` 时报错（按失败处理，不重试）；其余键（`diff.*.textconv`、`merge.*.driver` 等）用"恶意配置仓库"样例逐键确认；本机没有 git-lfs，LFS 路径在 M1b 实测（`docs/tasks/D02-design-revision/notes.md`） | M1a（快照档）、M1b（仓库档写操作、LFS） |
 | Q33 | 测量闸门不达标时的后备方案"utilityProcess 宿主桥 + 委托票据" | ADR-03、ADR-05 | 主进程的连接方案 | 草案：主进程经 control 连接调用 `auth/delegate {role: window, ttl}` 取得一次性票据，经 MessagePort 交给 utilityProcess；utilityProcess 连接时以 `auth: ticket` 出示，宿主核对票据后把这条连接的固定令牌绑定到它，principal 仍是 `desktop_ui` 的 window 角色；5.8.1 的签名要求表加一行"helper 只能凭票据接入"。只在闸门不达标时启用，届时在契约冻结前补进协议 | M1a（闸门不达标时） |
 | Q34 | Claude Code 和 Codex 会从哪些目录加载项目配置：是否按层级读取上级目录的 `.claude/`、`.mcp.json`、`.codex/`，是否会越过 git 根目录 | 项目信任（安全核对 1） | 信任扫描的范围是否够 | 在核实之前，扫描范围取"工作区到 git 根目录的每一级"（[5.2.6](02-host.md#项目信任)）；兼容矩阵加剧本：在上级目录和 git 根目录之外各放一份带 hook 的配置，看哪些会生效，据此调整扫描范围 | M1a 兼容套件（Claude）、M1b（Codex） |
+| Q35 | 用户暂不开通 Apple Developer Program 账号，作者自用的构建没有 Developer ID：按现设计只能走退化认证，cupper-cli 连不上宿主（密钥只有拉起宿主的 UI 知道），NFR-8 的"界面崩溃不影响会话"不成立 | ADR-05、5.8.1、5.7.9、NFR-8 | 作者日常使用的体验和本地安全 | 验证"本机签名身份"：钥匙串里自建的代码签名证书，或免费 Apple ID 在 Xcode 中得到的 Apple Development 证书。签名要求在本机构建时写入（证书摘要或 Team ID 只存在本机构建配置里，不进仓库）；评估 hardened runtime 与库校验在这种签名下的表现。通过就新增"本机签名构建"种类，并补设计和 ADR-05；不通过就维持退化模式 | M1b 技术验证（需要用户在场：会在钥匙串里建证书或登录 Xcode） |
 
 ## 5.13.2 对 ADR 的修订建议
 

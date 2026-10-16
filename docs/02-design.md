@@ -1,6 +1,6 @@
 # cupper 技术设计
 
-- 版本：v1.0（用户确认，tag `gate/design`）
+- 版本：v1.1（v1.0 由用户确认，tag `gate/design`；v1.1 补充：Developer ID 发布推迟到用户开通账号之后，新增 Q35，见 5.12.3）
 - 日期：2026-10-16
 - 状态：已确认（2026-10-16，tag `gate/design`）
 - 依据：PRD v1.2（v1.0 打 tag `gate/prd`）；产品-架构对齐会 `docs/meetings/2026-10-16-prd-arch-alignment/`；设计评审会 `docs/meetings/2026-10-16-design-review/`；`gate/design` 前的用户决定 `docs/meetings/2026-10-16-gate-design-decisions/`
