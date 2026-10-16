@@ -2,6 +2,8 @@
 resolver = "3"
 members = [
     "crates/cupper-protocol",
+    "crates/cupper-host",
+    "crates/cupper-cli",
     "crates/cupper-fake-agent",
 ]
 

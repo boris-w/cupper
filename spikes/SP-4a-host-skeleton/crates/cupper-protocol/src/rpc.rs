@@ -63,8 +63,9 @@ pub struct ErrorData {
 pub struct RpcError {
     pub code: i64,
     pub message: String,
+    /// Boxed to keep `Result<_, RpcError>` small.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub data: Option<ErrorData>,
+    pub data: Option<Box<ErrorData>>,
 }
 
 impl RpcError {
@@ -77,7 +78,7 @@ impl RpcError {
         Self {
             code: APP_ERROR,
             message: message.into(),
-            data: Some(ErrorData { code, reason: None, retryable: None, extra: Map::new() }),
+            data: Some(Box::new(ErrorData { code, reason: None, retryable: None, extra: Map::new() })),
         }
     }
 

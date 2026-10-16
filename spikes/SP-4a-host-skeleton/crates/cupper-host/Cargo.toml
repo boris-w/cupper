@@ -1,0 +1,35 @@
+[package]
+name = "cupper-host"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "cupper session host (spike): socket gateway, event log, ACP driver."
+
+[features]
+# Adds the `test_harness` principal (key passed over an inherited fd).
+# Never enabled in release builds.
+test-harness = []
+
+[dependencies]
+cupper-protocol.workspace = true
+agent-client-protocol.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+futures.workspace = true
+hex.workspace = true
+libc.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

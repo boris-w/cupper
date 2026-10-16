@@ -24,6 +24,21 @@ fn def<T: JsonSchema>(g: &mut SchemaGenerator) {
     g.subschema_for::<T>();
 }
 
+/// Rebuild objects with sorted keys. serde_json's map order depends on whether
+/// some crate in the build enables its `preserve_order` feature (the ACP SDK
+/// does), so the exported schema must not rely on it.
+fn sorted(v: Value) -> Value {
+    match v {
+        Value::Object(m) => {
+            let mut entries: Vec<(String, Value)> = m.into_iter().collect();
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+            Value::Object(entries.into_iter().map(|(k, v)| (k, sorted(v))).collect())
+        }
+        Value::Array(a) => Value::Array(a.into_iter().map(sorted).collect()),
+        other => other,
+    }
+}
+
 /// The whole protocol as one JSON Schema document. Method and notification
 /// tables live in `x-methods` / `x-notifications`; every type is in `$defs`.
 pub fn protocol_schema() -> Value {
@@ -44,7 +59,7 @@ pub fn protocol_schema() -> Value {
     def::<Event>(&mut g);
     def::<EventBody>(&mut g);
     let defs = g.take_definitions(true);
-    json!({
+    sorted(json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "cupper host protocol",
         "x-protocol-version": PROTOCOL_VERSION,
@@ -53,7 +68,7 @@ pub fn protocol_schema() -> Value {
         "x-methods": methods,
         "x-notifications": notifications,
         "$defs": defs,
-    })
+    }))
 }
 
 #[cfg(test)]
