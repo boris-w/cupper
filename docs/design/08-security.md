@@ -133,7 +133,7 @@ sequenceDiagram
 | 进程 | 进程组 | 文件描述符 | 环境变量 | 其他 |
 |---|---|---|---|---|
 | 适配器（node + adapter.mjs） | 独立进程组；拉起后立即记录 pid、pgid、启动时间 | `POSIX_SPAWN_CLOEXEC_DEFAULT`，只有 0、1、2 三个管道 | 白名单（[5.6.6](06-agent-driver.md#566-cli-的发现与版本检查)），去掉所有 `CUPPER_*` | 默认信号处置、空信号掩码；拉起前核对 Node 的 cdhash 和 adapter.mjs 的 sha-256（ADR-08）；关闭和崩溃后按进程组清理 |
-| git | 短命子进程 | stdin 为 `/dev/null`；Rust 默认 CLOEXEC | 宿主的白名单环境加 `LC_ALL=C`、`GIT_TERMINAL_PROMPT=0` | 超时后终止 |
+| git | 短命子进程 | stdin 为 `/dev/null`；`POSIX_SPAWN_CLOEXEC_DEFAULT` | 宿主的白名单环境加 `LC_ALL=C`、`GIT_TERMINAL_PROMPT=0` | 按三档调用（[5.2.10](02-host.md#5210-git-与-worktree-服务)）：宿主自动发起的调用（快照档、仓库档）不执行仓库配置指定的任何程序；只有用户点"提交""推送"时运行仓库的 hooks；超时后终止 |
 | CLI `--version`、登录 shell 探测 | 独立进程组 | 同上 | 白名单 | 5 秒超时，超时后杀整个进程组 |
 | 宿主自身 | UI 用 setsid 拉起 | UI 主进程到宿主的连接 fd 设 CLOEXEC，不会漏给 UI 的子进程 | 不含任何秘密；dev 密钥只经 stdin | 只用 `read(2)` 读套接字，不接收 `SCM_RIGHTS` 传来的 fd（实现时用测试确认会被内核丢弃，SP-4b 遗留项） |
 | 数据与套接字 | — | — | — | 数据目录 0700 并检查属主；套接字 0600；短路径回退目录同样检查（SP-4a） |
@@ -161,6 +161,7 @@ M1b 在用户文档里写清 SEC-8 能做到和做不到的（ADR-05、SP-4b 草
 - agent 的沙箱开着时，agent 执行的命令连不上宿主；前提是 Codex 没有为工作区模式打开网络访问（打开后放行所有 Unix 套接字），Claude Code 没有配置 `allowUnixSockets`。
 - 不在沙箱里的命令（用户批准过的、MCP、hooks）能连上，但只有只读权限；写操作和审批都要用户在桌面端确认。
 - 冒充宿主会被 UI 识破；认证不依赖可被偷走的静态凭据。
+- 宿主自动执行的 git 不会运行仓库配置里的程序（fsmonitor、hooks、过滤器、diff 驱动）。用户在 cupper 里点"提交"时会运行仓库的 hooks，风险与在终端里提交相同；本会话期间仓库的 hooks 或配置有变化时，cupper 会在提交前提示。
 - 挡不住同一用户下、在沙箱外有明确恶意的进程：它可以改 agent 自己的权限配置和 cupper 的数据目录、杀掉宿主、经 launchd 或 `open` 绕过血缘检查、对确认框做社会工程。
 - 开发构建和自行构建的本地鉴权较弱。
 - 建议用户开启 agent 自带的沙箱，并且不要给 Codex 的工作区模式打开网络访问。

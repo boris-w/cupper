@@ -287,35 +287,93 @@ stateDiagram-v2
 
 ## 5.2.10 Git 与 worktree 服务
 
-全部通过 git 命令行实现（ADR-10）。
+全部通过 git 命令行实现（ADR-10）。宿主运行在所有 agent 沙箱之外，而仓库里的配置（fsmonitor、hooks、filter、diff 驱动、include）可能被 agent 写过，所以**宿主自己发起的 git 调用不执行仓库配置指定的任何程序**（安全 #1，纪要 D8）。为此按"在哪里执行"把调用分成三档。
 
-**调用约定**
+**三档调用**
 
-- `GitCmd` 构造器：每类命令一组固定参数，统一 `-z`；只读命令加 `--no-optional-locks`；固定加 `-c core.quotepath=false`。
-- 环境：PATH 用从登录 shell 取得的值（[5.6.6](06-agent-driver.md#566-cli-的发现与版本检查)）；`LC_ALL=C`，便于解析报错；`GIT_TERMINAL_PROMPT=0`；继承 `SSH_AUTH_SOCK`。
-- 超时：只读命令 30 s；快照 60 s；`worktree add` 10 分钟（输出进度事件）；`push` 5 分钟。
-- 启动时检测 git 版本（暂定最低 2.39）和 git-lfs，结果放进索引流的 `agents` 状态里一起显示。
+| 档位 | 在哪里执行 | 用于 | 防护 |
+|---|---|---|---|
+| 快照档 | cupper 自己的 GIT_DIR，`GIT_WORK_TREE` 指向工作区 | 回合快照；`last_turn`、`turn:<id>`、`unstaged`、`staged` 四种范围的文件列表和补丁；`@` 引用的文件列表；`worktree/check` 中关于工作区内容的规则；`git/status` 的文件状态 | 不读仓库本地的配置、hooks、`info/attributes`，配置只放行白名单 |
+| 仓库档 | 用户仓库 | 只读引用类：`rev-parse`、`for-each-ref`、`rev-list`、`symbolic-ref`、`merge-base`、`check-ref-format`、`branch --list`；会改动用户仓库的：`apply --cached`（暂存、取消暂存）、`apply -R`（还原）、`update-index --refresh`、`worktree add/lock/unlock/remove/prune/repair` | 每次调用前读配置并覆盖，调用后比对指纹，配置来源在工作区内时拒绝 |
+| 用户档 | 用户仓库 | 只用于用户在界面上点"提交""推送"：`commit`、`push` | 与在终端里执行一致：保留 hooks、签名、凭据助手。按钮旁注明"将运行仓库的 hooks"；本会话期间指纹变过时，确认文案带上这条提示 |
 
-**快照**（ADR-10）：复制 `rev-parse --git-path index` 指向的文件作临时 index → 预检排除超过 50 MB 的未跟踪文件、嵌套仓库、超大未跟踪目录 → `git -c core.safecrlf=false -c advice.addEmbeddedRepo=false add -A --ignore-errors -- <排除用的 pathspec>` → `write-tree`。对象写进 `<数据目录>/git/<repo_key>/objects`（`GIT_OBJECT_DIRECTORY`），通过 `GIT_ALTERNATE_OBJECT_DIRECTORIES` 读仓库原有对象；tree id 写进 `turns` 表，排除的路径写进 `snapshot.recorded` 事件。
+**快照档：cupper 自己的 GIT_DIR**（纪要 D8 要求评估的方案。结论：采用；实验记录见 `docs/tasks/D02-design-revision/notes.md`）
+
+- **目录**：
+  - 每个仓库一个私有对象库 `<数据目录>/git/<repo_key>/objects/`，写入快照产生的 blob 和 tree；
+  - 每个工作区一个 GIT_DIR `<数据目录>/git/<repo_key>/ws/<workspace_key>/`，里面有：cupper 生成的 `config`；从仓库复制的 `info/exclude`；从该工作区的 git 目录复制的 `info/sparse-checkout`；仓库使用 split index 时，从同一目录复制 index 引用的 `sharedindex.*`；临时 index。没有 `hooks/`。
+  - 全部目录权限 0700。
+- **环境**：`GIT_DIR=<工作区的 GIT_DIR>`、`GIT_WORK_TREE=<工作区>`、`GIT_INDEX_FILE=<临时 index>`、`GIT_OBJECT_DIRECTORY=<私有对象库>`、`GIT_ALTERNATE_OBJECT_DIRECTORIES=<仓库的对象目录及其 alternates>`、`GIT_CONFIG_NOSYSTEM=1`、`GIT_CONFIG_GLOBAL=<cupper 的空文件>`。命令行仍固定加 `-c core.fsmonitor=false -c core.hooksPath=<数据目录>/git/empty-hooks`。
+- **配置白名单**：每次调用前，从用户的有效配置（`git config --list --show-origin --includes -z`，含系统、全局、仓库、worktree 四级）里只取下列无害键写入 `config`（写临时文件后改名），其余一概不带。这些键只决定"工作区内容怎样变成对象"，不会执行程序；读配置本身也不执行程序。
+  - `core.autocrlf`、`core.eol`、`core.ignoreCase`、`core.precomposeUnicode`、`core.fileMode`、`core.symlinks`、`core.checkStat`、`core.trustCtime`、`core.bigFileThreshold`、`core.protectHFS`、`core.protectNTFS`；
+  - `core.excludesFile`、`core.attributesFile`（只是文件路径）；
+  - `core.untrackedCache`、`core.splitIndex`、`core.sparseCheckout`、`core.sparseCheckoutCone`、`index.sparse`、`index.version`、`index.skipHash`、`feature.manyFiles`；
+  - `extensions.objectFormat`（取值不是 sha1 时同时写 `core.repositoryFormatVersion=1`）。
+- **过滤器**：工作区 `.gitattributes` 引用的 filter 和 diff 驱动在这份配置里都没有定义，git 按原样处理内容，不执行任何程序。
+  - 例外只有 Git LFS：用户有效配置里的 `filter.lfs.*` 恰好是 git-lfs 的标准取值时，cupper 写入同样的标准取值，程序按登录 shell 的 PATH 解析。这条路径未实测（待定问题 Q32）。
+  - 其他自定义过滤器（例如 git-crypt）不执行。这些路径在快照里记录的是工作区的原始内容；在 `unstaged`、`staged` 范围里标为 `filter_unsupported`，不提供 hunk 操作，避免把明文暂存进去。是否命中用 `check-attr filter` 判断，这条命令不执行程序。
+- **复制 index 时保留 mtime**（等价 `cp -p`）。实验发现：换成新的 mtime 后，同一秒内改过、大小又没变的文件会被当成未修改，快照里留下旧内容（git 的 racy 检测失效）。SP-5 的临时 index 方案同样受影响，这里一并改正。
+- **快照**：预检排除超过 50 MB 的未跟踪文件、嵌套仓库、超大未跟踪目录 → `add -A --ignore-errors -- <排除用的 pathspec>`（固定加 `-c core.safecrlf=false -c advice.addEmbeddedRepo=false`）→ `write-tree`。tree id 写进 `turns` 表，排除的路径写进 `snapshot.recorded` 事件。
+- **与 SP-5 的关系**：仍然是"从用户 index 播种的临时 index + 私有对象库 + alternates"，只是 GIT_DIR 换成了 cupper 自己的。SP-5 否决的"影子仓库"是空 index 起步、没有 alternates，所以首次要 72 s、占 360 MB，还漏掉"被忽略但已跟踪"的文件；这里播种了 index、读仓库原有的对象，这三个问题都不存在（实验验证）。
+- **性能**（实验，合成仓库，热缓存）：`add -A` 加 `write-tree` 本身与 SP-5 方案相当；额外开销是每次重新生成配置，读一次有效配置约 10 ms，加一次 `rev-parse`，预计每次多 15–25 ms，远在 [5.9.6](09-testing.md#596-性能预算) 的预算之内。
+
+**仓库档：每次调用前读配置**（安全 #1 ① ②，纪要 D8）
+
+1. **每次**调用前执行 `git config --list --show-origin --includes -z`，得到有效配置和每个键的来源文件。
+2. 任何一个配置来源位于工作区内，或位于其他 agent 可写的位置（任一会话的工作区、任一项目目录）时，不执行这次调用，返回 `git_error`（`reason: unsafe_repo_config`），并在会话流里写 `notice{code: unsafe_repo_config}`。`core.hooksPath` 指向工作区的情况不受此限，因为它总被无条件覆盖。
+3. 无条件覆盖：`-c core.fsmonitor=false -c core.hooksPath=<数据目录>/git/empty-hooks`；加 `--no-pager`（并设 `GIT_PAGER=cat`）；生成补丁的命令一律加 `--no-ext-diff --no-textconv`。
+4. 可执行类键：`filter.*.clean`、`filter.*.smudge`、`filter.*.process`、`diff.*.command`、`diff.*.textconv`、`merge.*.driver`、`core.sshCommand`、`core.pager`、`core.editor`、`core.askPass`、`core.gitProxy`、`sequence.editor`、`gpg.program`、`gpg.*.program`、`credential.helper`、`credential.*.helper`、`uploadpack.packObjectsHook`、`remote.*.receivepack`、`remote.*.uploadpack`。取值不在白名单里的（白名单只有 git-lfs 的标准取值），一律用 `-c <键>=` 置空。实验确认：置空的过滤器按原样处理内容、不执行程序。
+5. 覆盖后 git 报错（例如过滤器设了 `required=true`，置空后 git 会直接报错退出）：这次调用失败，返回 `git_error`（`reason: unsafe_repo_config`），**不去掉覆盖重试**。
+6. 调用结束后再算一次指纹（下文）。指纹变了：只读命令丢弃结果、返回 `git_error`（`reason: repo_config_changed`）；写操作已经发生，结果照常返回；两种情况都写 `notice{code: repo_config_changed}`。
+
+实验还发现，`write-tree` 这类看似不碰工作区的命令也会因为 racy 检测去读文件、运行 clean 过滤器，也会触发 fsmonitor 和 `post-index-change` hook。所以仓库档的防护对**每一次**调用都适用，包括辅助命令。
+
+**仓库可执行配置指纹**
+
+- 内容：仓库的 `config` 及其 include 的文件、worktree 的 `config.worktree`、`hooks/` 和 `core.hooksPath` 指向的目录下的文件（名称和哈希）、`info/attributes`、工作区里的全部 `.gitattributes`。
+- 计算时机：回合开始和结束时（随快照），以及每次仓库档调用的前后。
+- 回合前后不同时，在回合里写 `notice{code: repo_config_changed, params: {paths}}`；审查面板顶部醒目提示；用户档的确认文案带上这一条。
 
 **diff 与 hunk**
 
-- `git/diff` 按范围生成文件列表（`unstaged`、`staged`、`last_turn`、`turn:<id>`），同时返回 `diff_token`。`last_turn` 用两次快照的 `diff-tree -r -z --raw -M` 加 `--numstat`；回合还在进行时，对比起始快照和现在再拍的一次快照。
-- `git/file_diff` 用固定参数（`--no-color --no-ext-diff --no-textconv --full-index --binary -U3`）生成单个文件的补丁，切成 hunk。用于暂存的补丁用 `--no-renames` 生成。每个 hunk 有按内容寻址的 `hunk_id`，标明操作单位：`hunk`、`mode`（权限位单独一个单位）、`whole_file`（新增、删除、二进制、符号链接、子模块指针、LFS）。
-- `DiffCache`：`diff_token` → 这次 diff 的全部补丁，每个工作区保留最近 32 个，10 分钟过期。`git/stage`、`git/unstage`、`git/revert` 带 `diff_token` 和 `hunk_id`，宿主取出原始补丁执行 `git apply --whitespace=nowarn [--cached] [-R]`。token 不存在或补丁应用失败都返回 `conflict`（`reason: stale_diff`），客户端刷新后重试，不做模糊匹配（ADR-10）。这就是 ADR-04 所说"`hunk_id` 加 diff 基线"的具体做法：基线就是 `diff_token`。
-- 说明：GT-3 要求能取消暂存，取消暂存需要看到已暂存的内容，所以 `staged` 范围在 M1 就提供，尽管 PRD 把"其余审查范围"（F2）放在 P1。
+- `git/diff` 按范围生成文件列表，同时返回 `diff_token`，全部在快照档里计算：
+  - `last_turn`、`turn:<id>`：两次快照之间 `diff-tree -r -z --raw -M` 加 `--numstat`；回合还在进行时，对比起始快照和现在再拍的一次快照。
+  - `unstaged`：用户 index 的树（复制 index 后 `write-tree`）对比现在再拍的一次快照，未跟踪文件自然包含在内。
+  - `staged`：`HEAD` 的树对比用户 index 的树。
+  - index 里有未合并的条目时（合并冲突中），`unstaged` 和 `staged` 返回 `unavailable`（`reason: index_unmerged`），界面提示先在终端解决冲突。
+  - 结果带 `caveats`：`mixed_changes`（本地模式下可能混入用户自己或其他会话的改动，GT-1）；`late_tool_effects`（这个回合里有 `late_tool_output` 条目，或者回合进行期间还有 `may_still_run` 的命令，界面注明"包含取消后仍在运行的命令造成的改动"，纪要 D4）。
+- `git/file_diff` 在快照档里对同一对树执行 `diff-tree -p`，固定参数 `--no-color --no-ext-diff --no-textconv --full-index --binary -U3`，切成 hunk。用于暂存的补丁用 `--no-renames` 生成。每个 hunk 有按内容寻址的 `hunk_id`，标明操作单位：`hunk`、`mode`（权限位单独一个单位）、`whole_file`（新增、删除、二进制、符号链接、子模块指针、LFS）；`filter_unsupported` 的路径没有可操作的单位。
+- `DiffCache`：`diff_token` → 这次 diff 的全部补丁，每个工作区保留最近 32 个，10 分钟过期。`git/stage`、`git/unstage`、`git/revert` 带 `diff_token` 和 `hunk_id`，宿主取出原始补丁，在仓库档执行 `git apply --whitespace=nowarn [--cached] [-R]`。实验验证：快照档生成的补丁可以直接用 `apply --cached` 应用到用户仓库，结果与 `git add` 相同。token 不存在或补丁应用失败都返回 `conflict`（`reason: stale_diff`），客户端刷新后重试，不做模糊匹配（ADR-10）。这就是 ADR-04 所说"`hunk_id` 加 diff 基线"的具体做法：基线就是 `diff_token`。
+- `git/revert` 会丢掉用户的改动，来自 window 角色时必须带主进程记录的真实输入证据（[5.2.5](#525-策略与命令账本)、[5.7.8](07-desktop.md#578-安全加固的落点)）。
+- 说明：GT-3 要求能取消暂存，取消暂存需要看到已暂存的内容，所以 `staged` 范围在 M1 就提供，尽管 PRD 把"其余审查范围"（F2）放在 P1（待定问题 Q13，待用户确认）。
 
-**提交与推送**：`commit -F -` 从 stdin 读提交信息，会运行用户自己的 hooks；`push` 默认推当前分支，必要时 `--set-upstream`。失败时把 stderr 末尾（脱敏后）放进错误的 `data`。
+**git/status**：分支、上游、领先落后用仓库档的只读引用类命令；进行中的操作（合并、cherry-pick、revert、rebase、bisect）直接检查 git 目录里的标记文件；文件状态由快照档计算。
 
-**worktree**（ADR-10）：位置 `~/.cupper/worktrees/<仓库名>-<短哈希>/<会话短名>`，可在设置中修改；分支 `cupper/<短名>`，先 `check-ref-format --branch` 校验，冲突时加后缀；会话存续期间 `worktree lock --reason "cupper session <id>"`；建好后等 1 秒执行一次 `update-index --refresh`；不用 `--relative-paths`。`worktree/check` 按 ADR-10 的 7 条规则只读检查，返回阻止删除的原因和只提示不阻止的情况（被忽略文件的数量、只因大小写冲突显示为"脏"）。删除用 `git worktree remove`，不加 `--force`；只有"仅大小写冲突"且用户确认时才加 `--force`；默认保留分支。
+**提交与推送**（用户档）：`commit -F -` 从 stdin 读提交信息，会运行用户自己的 hooks；`push` 默认推当前分支，必要时 `--set-upstream`。失败时把 stderr 末尾（脱敏后）放进错误的 `data`。
 
-**并发**：会修改用户 index 或 worktree 的操作（stage、unstage、commit、worktree add/remove）按仓库拿 `RepoLock`；快照用临时 index，不拿锁，可以与其他会话的快照并行。
+**worktree**（ADR-10，仓库档）
+
+- 位置 `~/.cupper/worktrees/<仓库名>-<短哈希>/<会话短名>`，可在设置中修改；根目录建成 0700。
+- 分支 `cupper/<短名>`，先 `check-ref-format --branch` 校验，冲突时加后缀。
+- 会话存续期间 `worktree lock --reason "cupper session <id>"`；建好后等 1 秒执行一次 `update-index --refresh`；不用 `--relative-paths`。
+- `worktree add` 的检出不运行自定义过滤器和 post-checkout hook（仓库档的覆盖）。过滤器设了 `required` 时检出会失败，界面提示"这个仓库配置了自定义过滤器，cupper 不会代为运行；请在终端创建 worktree，或改用本地模式"。
+- `worktree/check` 按 ADR-10 的 7 条规则只读检查：第 1、2 条（修改、暂存、未跟踪）由快照档计算；第 3 条检查 git 目录里的标记文件；第 4 条检查锁文件；第 5、6 条用 `rev-list`；第 7 条检查子模块的 git 目录是否存在。返回阻止删除的原因和只提示不阻止的情况（被忽略文件的数量、只因大小写冲突显示为"脏"）。
+- 删除用 `git worktree remove`，不加 `--force`；只有"仅大小写冲突"且用户确认时才加 `--force`；默认保留分支。
+
+**调用约定**（三档共用）
+
+- `GitCmd` 构造器：每类命令一组固定参数，统一 `-z`；只读命令加 `--no-optional-locks`；固定加 `-c core.quotepath=false`。
+- 环境：PATH 用从登录 shell 取得的值（[5.6.6](06-agent-driver.md#566-cli-的发现与版本检查)）；`LC_ALL=C`，便于解析报错；`GIT_TERMINAL_PROMPT=0`；继承 `SSH_AUTH_SOCK`。所有 git 子进程都经 `cupper-sys::spawn` 拉起（[5.8.5](08-security.md#585-进程卫生)）。
+- 超时：只读命令 30 s；快照 60 s；`worktree add` 10 分钟（输出进度事件）；`push` 5 分钟。
+- 启动时检测 git 版本（暂定最低 2.39）和 git-lfs，结果放进索引流的 `agents` 状态里一起显示。
+
+**并发**：会修改用户 index 或 worktree 的操作（stage、unstage、revert、commit、worktree add/remove）按仓库拿 `RepoLock`。快照档的每次调用使用自己的临时 index，不拿锁，可以与其他会话的快照并行；`config` 的重新生成写临时文件后改名。
 
 ## 5.2.11 文件服务与设置
 
 **文件服务**（CP-2 的 `@` 引用）
 
-- git 仓库：`git ls-files -z --cached --others --exclude-standard` 得到文件列表；非 git 目录：用 `ignore` crate 遍历（遵守 `.gitignore`），最多 20 万个文件。
+- git 仓库：在快照档（[5.2.10](#5210-git-与-worktree-服务)）执行 `git ls-files -z --cached --others --exclude-standard` 得到文件列表；非 git 目录：用 `ignore` crate 遍历（遵守 `.gitignore`），最多 20 万个文件。
 - 列表按工作区缓存 5 秒，回合结束时失效；用 nucleo-matcher 做模糊匹配，返回相对路径、分数和匹配区间（UTF-16 偏移，方便 JS 高亮）。
 - 发送时，`@` 引用作为 `resource_link` 内容块传给 agent（ACP 基础能力）。
 

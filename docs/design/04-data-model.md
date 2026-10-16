@@ -14,6 +14,8 @@
 ├── run/host.sock                                套接字，0600（路径过长时退到 /tmp/cupper-<uid>/<哈希>/）
 ├── blobs/sha256/<前 2 位>/<hash>                 按内容寻址的 blob 文件
 ├── git/<repo_key>/objects/                       回合快照的私有对象库（ADR-10）
+├── git/<repo_key>/ws/<workspace_key>/            快照档用的 GIT_DIR：白名单配置、info/、临时 index（5.2.10）
+├── git/empty-hooks/                             空目录，0500；宿主自动调用 git 时 core.hooksPath 指向这里
 ├── runtime/<名称>/<版本>/  + .installed.json      Node 与适配器（ADR-08）；runtime/.staging/ 为安装中的临时目录
 ├── backups/host-v<schema>-<时间>.db              迁移前的备份，保留最近 3 份
 ├── crash/                                       panic 报告
@@ -263,7 +265,7 @@ CREATE INDEX raw_by_session ON raw_frames(agent_session_id, ts);
 | 设置 | `settings` | 设置模块 | 界面偏好不在这里 |
 | 审计 | `audit` + `host.log` | 网关、策略 | — |
 | 图片、长输出、长 diff | `blobs/` 文件 + `blobs` 表 | 写线程 | — |
-| 回合快照的 git 对象 | `git/<repo_key>/objects/` | git 服务 | 用户的 `.git` 不写入任何东西（ADR-10） |
+| 回合快照的 git 对象 | `git/<repo_key>/objects/` | git 服务 | 用户的 `.git` 不写入任何东西（ADR-10）；快照档在 `git/<repo_key>/ws/` 下用 cupper 自己的 GIT_DIR（[5.2.10](02-host.md#5210-git-与-worktree-服务)） |
 | 原始 ACP 帧 | `raw.db` | 写线程 | 14 天 |
 | Node 与适配器 | `runtime/` | 运行时安装器 | 版本目录写入后不再修改 |
 | worktree | `~/.cupper/worktrees/` | git 服务 | 用户的代码，不属于宿主数据，清理按 ADR-10 的规则 |
