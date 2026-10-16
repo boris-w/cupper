@@ -56,6 +56,7 @@ python3 render.py                          # 汇总成 $SP5_WORKDIR/results/resu
 | `setup_repos.py` | 浅克隆 linux；生成 1k / 10k / 100k 文件的合成仓库 |
 | `bench_snapshot.py` | 快照、快照间 diff、单 hunk 暂存/取消暂存/还原的耗时；fsmonitor 对照 |
 | `bench_worktree.py` | worktree 创建、安全检查、删除、按分支重建的耗时 |
+| `bench_shadow.py` | 对照方案：单独的影子仓库（`GIT_DIR` 指向 cupper 自己的目录）的首次/后续快照耗时和占用 |
 | `edge_hunk.py` | hunk 操作的边界用例，按预期内容逐项校验；后端可选 git CLI、libgit2、libgit2+fix（先把 hunk 头改成 new_start = old_start） |
 | `edge_snapshot.py` | 快照的边界用例：锁、冲突、忽略规则、嵌套仓库、子模块、LFS、大文件、特殊文件、split index、稀疏检出、gc 等 |
 | `edge_worktree.py` | worktree 的安全清理规则（`safety()`）、重建、命名、放在仓库内的问题、移动主仓库 |

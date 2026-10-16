@@ -34,6 +34,7 @@ run edge_snapshot.py
 run edge_worktree.py
 run bench_snapshot.py --repos "$REPOS"
 run bench_worktree.py --repos "$REPOS"
+if [[ "${SKIP_LINUX:-}" == 1 ]]; then run bench_shadow.py --repos syn-10k; else run bench_shadow.py; fi
 if [[ "${SKIP_LIBGIT2:-}" != 1 ]]; then
   export UV_CACHE_DIR="$SP5_WORKDIR/uv-cache"
   for s in "edge_hunk.py --backend libgit2" "edge_hunk.py --backend libgit2+fix" "compare_libgit2.py --repos $REPOS"; do

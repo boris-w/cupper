@@ -81,6 +81,14 @@ def main() -> None:
                           "safety check", "remove (clean)", "rebuild from branch"],
                          [(r["repo"], ms(r, "add_b"), ms(r, "add_no_checkout"), ms(r, "safety_check_first"),
                            ms(r, "safety_check"), ms(r, "remove"), ms(r, "rebuild")) for r in w["repos"]]), ""]
+    sh = load_result("bench_shadow")
+    if sh:
+        out += ["## Alternative: separate shadow repository (ms)", ""]
+        out += [md_table(["repo", "first snapshot", "shadow store MB", "next (clean)", "next (small)",
+                          "same tree as temp-index snapshot"],
+                         [(r["repo"], r["first_snapshot_ms"], r["shadow_store_mb"], ms(r, "next_clean"),
+                           ms(r, "next_small"), "yes" if r["same_tree_as_temp_index"] else "NO")
+                          for r in sh["repos"]]), ""]
     lg = load_result("compare_libgit2")
     if lg:
         out += [f"## libgit2 ({lg['version']}) vs git CLI (ms)", ""]
