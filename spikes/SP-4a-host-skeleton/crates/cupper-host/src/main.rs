@@ -126,7 +126,12 @@ fn main() -> anyhow::Result<()> {
         }
         tracing::info!("shutting down");
         host.shutdown_sessions();
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        let reaped = tokio::task::spawn_blocking({
+            let host = host.clone();
+            move || host.reap_adapters()
+        })
+        .await??;
+        tracing::info!(reaped, "adapters stopped");
         let _ = fs::remove_file(&socket);
         drop(lock);
         Ok::<_, anyhow::Error>(())

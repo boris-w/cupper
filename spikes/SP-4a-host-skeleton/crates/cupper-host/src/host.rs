@@ -143,11 +143,7 @@ impl Host {
     /// as interrupted and pending requests as expired. Sessions resume lazily on
     /// the next `session/send`.
     pub fn recover(&self) -> Result<RecoveryReport, crate::hub::HubError> {
-        let mut report = RecoveryReport::default();
-        for a in self.store.adapters()? {
-            report.reaped_processes += reap_group(a.pid, a.start_us);
-            self.store.remove_adapter(a.pid)?;
-        }
+        let mut report = RecoveryReport { reaped_processes: self.reap_adapters()?, ..Default::default() };
         for s in self.store.sessions()? {
             if !s.running {
                 continue;
@@ -184,6 +180,19 @@ impl Host {
     }
 }
 
+impl Host {
+    /// Kill every recorded adapter process group and forget the records. Used
+    /// at startup (leftovers of a crash) and on graceful shutdown.
+    pub fn reap_adapters(&self) -> Result<usize, crate::store::StoreError> {
+        let mut reaped = 0;
+        for a in self.store.adapters()? {
+            reaped += reap_group(a.pid, a.start_us);
+            self.store.remove_adapter(a.pid)?;
+        }
+        Ok(reaped)
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct RecoveryReport {
     pub reaped_processes: usize,
@@ -201,7 +210,7 @@ fn reap_group(pgid: i32, leader_start_us: u64) -> usize {
     if !ours {
         return 0;
     }
-    tracing::warn!(pgid, count = members.len(), "reaping leftover adapter processes");
+    tracing::info!(pgid, count = members.len(), "reaping adapter process group");
     let _ = sys::kill_group(pgid, libc::SIGTERM);
     let deadline = Instant::now() + Duration::from_millis(500);
     while Instant::now() < deadline && !sys::group_members(pgid).is_empty() {
