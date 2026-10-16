@@ -34,8 +34,12 @@ pub async fn serve(host: Arc<Host>, listener: UnixListener) {
             Ok((stream, _)) => {
                 match stream.peer_cred() {
                     Ok(c) if c.uid() == uid => {}
-                    other => {
-                        tracing::warn!(?other, "rejecting peer with a different uid");
+                    Ok(c) => {
+                        tracing::warn!(peer_uid = c.uid(), "rejecting peer with a different uid");
+                        continue;
+                    }
+                    Err(e) => {
+                        tracing::debug!("peer went away before the credential check: {e}");
                         continue;
                     }
                 }

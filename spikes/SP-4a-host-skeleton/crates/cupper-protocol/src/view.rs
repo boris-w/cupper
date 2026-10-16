@@ -84,16 +84,31 @@ pub struct InteractionState {
     pub resolved_by: Option<String>,
 }
 
+/// Position of each item in `SessionView::items`. Not serialized and ignored
+/// by equality; rebuilt whenever it is out of step with the item list (items
+/// are never removed, so comparing lengths is enough).
+#[derive(Debug, Clone, Default)]
+struct ItemIndex(std::collections::HashMap<String, usize>);
+
+impl PartialEq for ItemIndex {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
 /// State of one session stream. Unknown event types and notices do not change it.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SessionView {
     pub turns: Vec<TurnState>,
     pub items: Vec<ItemState>,
     pub interactions: Vec<InteractionState>,
+    #[serde(skip)]
+    index: ItemIndex,
 }
 
 impl SessionView {
     pub fn apply(&mut self, body: &EventBody) -> Result<(), ViewError> {
+        self.sync_index();
         match body {
             EventBody::TurnStarted(t) => {
                 if self.turn(&t.turn_id).is_some() {
@@ -110,6 +125,7 @@ impl SessionView {
                 if self.item(&i.item_id).is_some() {
                     return Err(ViewError::Duplicate(i.item_id.clone()));
                 }
+                self.index.0.insert(i.item_id.clone(), self.items.len());
                 self.items.push(ItemState {
                     item_id: i.item_id.clone(),
                     turn_id: i.turn_id.clone(),
@@ -233,12 +249,26 @@ impl SessionView {
         self.turns.iter_mut().rev().find(|t| t.turn_id == id).ok_or_else(|| ViewError::UnknownTurn(id.to_owned()))
     }
 
+    fn sync_index(&mut self) {
+        if self.index.0.len() != self.items.len() {
+            self.index.0 = self.items.iter().enumerate().map(|(n, i)| (i.item_id.clone(), n)).collect();
+        }
+    }
+
     pub fn item(&self, id: &str) -> Option<&ItemState> {
-        self.items.iter().rev().find(|i| i.item_id == id)
+        if self.index.0.len() == self.items.len() {
+            self.index.0.get(id).map(|&n| &self.items[n])
+        } else {
+            self.items.iter().rev().find(|i| i.item_id == id)
+        }
     }
 
     fn item_mut(&mut self, id: &str) -> Result<&mut ItemState, ViewError> {
-        self.items.iter_mut().rev().find(|i| i.item_id == id).ok_or_else(|| ViewError::UnknownItem(id.to_owned()))
+        self.sync_index();
+        match self.index.0.get(id) {
+            Some(&n) => Ok(&mut self.items[n]),
+            None => Err(ViewError::UnknownItem(id.to_owned())),
+        }
     }
 
     pub fn interaction(&self, id: &str) -> Option<&InteractionState> {

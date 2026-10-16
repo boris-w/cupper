@@ -236,3 +236,87 @@ impl Normalizer {
         out
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cupper_protocol::coalesce::coalesce;
+    use cupper_protocol::frame::MAX_FRAME_BYTES;
+    use cupper_protocol::text::MAX_MERGED_ESCAPED;
+    use cupper_protocol::view::SessionView;
+    use cupper_protocol::{EVENT_VERSION, Event};
+    use proptest::prelude::*;
+
+    struct FakeBlobs;
+    impl BlobSink for FakeBlobs {
+        fn put(&mut self, bytes: &[u8]) -> BlobRef {
+            BlobRef { hash: "0".repeat(64), size: bytes.len() as u64, media_type: None }
+        }
+    }
+
+    /// Text that is sometimes huge and sometimes escape-heavy (control chars
+    /// grow 6x when JSON-escaped).
+    fn text() -> impl Strategy<Value = String> {
+        prop_oneof![
+            "\\PC{0,50}",
+            (1usize..300_000, any::<char>()).prop_map(|(n, c)| std::iter::repeat_n(c, n).collect()),
+            (1usize..60_000).prop_map(|n| "\u{1}\"\n".repeat(n)),
+        ]
+    }
+
+    fn update() -> impl Strategy<Value = NormUpdate> {
+        let id = (0u8..4).prop_map(|i| format!("tc{i}"));
+        prop_oneof![
+            4 => (prop::option::of("m[0-2]"), text()).prop_map(|(message_id, text)| NormUpdate::AgentText { message_id, text }),
+            2 => text().prop_map(|text| NormUpdate::Thought { text }),
+            1 => (id.clone(), text(), prop::option::of(text())).prop_map(|(id, title, content)| NormUpdate::ToolCall {
+                id, title, kind: "edit".into(), status: Some(ToolState::Running), content,
+            }),
+            1 => (id, prop::option::of(text()), prop::option::of(text())).prop_map(|(id, title, content)| NormUpdate::ToolUpdate {
+                id, title, status: Some(ToolState::Completed), content,
+            }),
+            1 => text().prop_map(|text| NormUpdate::Plan { text }),
+            1 => text().prop_map(|kind| NormUpdate::Other { kind }),
+        ]
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(64))]
+
+        /// SP-4a test 7: whatever the agent emits, every frame the host sends
+        /// (live events after send-time coalescing, and snapshot pages) fits the
+        /// 64,000-byte limit, and the snapshot rebuilds the same state.
+        #[test]
+        fn every_frame_fits_the_limit(updates in prop::collection::vec(update(), 1..25)) {
+            let mut n = Normalizer::new("t_1".into(), Duration::from_millis(40));
+            let now = Instant::now();
+            let mut bodies = vec![EventBody::TurnStarted(cupper_protocol::TurnStarted { turn_id: "t_1".into() })];
+            for u in updates {
+                bodies.extend(n.on_update(u, now, &mut FakeBlobs));
+            }
+            bodies.extend(n.finish(false));
+            let events: Vec<Event> = bodies
+                .into_iter()
+                .enumerate()
+                .map(|(i, body)| Event { seq: i as u64 + 1, from: None, v: EVENT_VERSION, ts: 0, cause: None, fallback: None, body })
+                .collect();
+            let mut view = SessionView::default();
+            for e in &events {
+                view.apply(&e.body).unwrap();
+            }
+            let jsons: Vec<String> = coalesce(events, MAX_MERGED_ESCAPED).iter().map(|e| serde_json::to_string(e).unwrap()).collect();
+            for f in crate::wire::events("session/s_x", &jsons).unwrap() {
+                prop_assert!(f.len() <= MAX_FRAME_BYTES, "event frame of {} bytes", f.len());
+            }
+            let ops = view.to_ops();
+            for f in crate::wire::snapshot("session/s_x", 1, &ops).unwrap() {
+                prop_assert!(f.len() <= MAX_FRAME_BYTES, "snapshot frame of {} bytes", f.len());
+            }
+            let mut rebuilt = SessionView::default();
+            for op in &ops {
+                rebuilt.apply(op).unwrap();
+            }
+            prop_assert_eq!(rebuilt, view);
+        }
+    }
+}

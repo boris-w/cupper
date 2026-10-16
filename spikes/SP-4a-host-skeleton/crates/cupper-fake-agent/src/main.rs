@@ -10,6 +10,7 @@
 //! | `flood_mixed <n> <len>` | like `flood`, alternating message and thought chunks |
 //! | `big <bytes>` | one message chunk of `bytes` chars |
 //! | `tool <id> <kind> <title>` | start a tool call |
+//! | `long_tool <id> <len>` | start a tool call whose title is `len` chars |
 //! | `tool_done <id> <bytes>` | complete a tool call with `bytes` chars of output |
 //! | `permission <tool_id>` | ask for permission, then `say permission:<option>` |
 //! | `question <prompt>` | elicit a one-field form, then `say answer:<value>` |
@@ -158,6 +159,10 @@ impl Script {
                     let call = ToolCall::new(id.to_owned(), title).kind(tool_kind(args.get(1).copied().unwrap_or("other")));
                     self.update(SessionUpdate::ToolCall(call))?;
                 }
+                "long_tool" => {
+                    let id = args.first().copied().unwrap_or("tool");
+                    self.update(SessionUpdate::ToolCall(ToolCall::new(id.to_owned(), filler(num(1), 23))))?;
+                }
                 "tool_done" => {
                     let id = args.first().copied().unwrap_or("tool");
                     let fields = ToolCallUpdateFields::new()
@@ -244,7 +249,7 @@ impl Script {
 
 fn is_command(c: &str) -> bool {
     const NAMES: &[&str] = &[
-        "say", "think", "flood", "flood_mixed", "big", "tool", "tool_done", "permission", "question", "sleep",
+        "say", "think", "flood", "flood_mixed", "big", "tool", "long_tool", "tool_done", "permission", "question", "sleep",
         "wait_cancel", "whoami", "spawn_child", "exit",
     ];
     NAMES.contains(&c.split_once(' ').map_or(c, |(n, _)| n))

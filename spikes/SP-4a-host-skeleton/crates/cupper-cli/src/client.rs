@@ -61,8 +61,9 @@ pub struct Client {
     incoming: mpsc::UnboundedReceiver<Incoming>,
     reader: tokio::task::JoinHandle<()>,
     pub init: Option<InitializeResult>,
-    /// Every frame size seen, for frame-limit assertions.
+    /// Largest frame seen, for frame-limit assertions.
     pub max_frame_seen: Arc<std::sync::atomic::AtomicUsize>,
+    paused: tokio::sync::watch::Sender<bool>,
 }
 
 impl Drop for Client {
@@ -96,10 +97,14 @@ impl Client {
         let (tx, incoming) = mpsc::unbounded_channel();
         let max_frame_seen = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let (p, seen) = (pending.clone(), max_frame_seen.clone());
+        let (paused, mut paused_rx) = tokio::sync::watch::channel(false);
         let reader = tokio::spawn(async move {
             let mut decoder = FrameDecoder::new();
             let mut buf = vec![0u8; MAX_FRAME_BYTES];
             loop {
+                if paused_rx.wait_for(|p| !*p).await.is_err() {
+                    break;
+                }
                 let n = match rd.read(&mut buf).await {
                     Ok(0) | Err(_) => break,
                     Ok(n) => n,
@@ -130,7 +135,17 @@ impl Client {
             // Fail whatever is still waiting.
             p.lock().expect("pending mutex").clear();
         });
-        Self { writer: tokio::sync::Mutex::new(wr), pending, next_id: AtomicI64::new(1), incoming, reader, init: None, max_frame_seen }
+        Self { writer: tokio::sync::Mutex::new(wr), pending, next_id: AtomicI64::new(1), incoming, reader, init: None, max_frame_seen, paused }
+    }
+
+    /// Stop reading the socket (simulates a client that cannot keep up). Data
+    /// already read stays available through [`Client::next`].
+    pub fn pause_reading(&self) {
+        let _ = self.paused.send(true);
+    }
+
+    pub fn resume_reading(&self) {
+        let _ = self.paused.send(false);
     }
 
     pub async fn request<M: Method>(&self, params: M::Params) -> Result<M::Result, ClientError> {
