@@ -1,6 +1,6 @@
 # ADR-09 适配器进程拓扑
 
-- 状态：提议
+- 状态：已采纳（2026-10-16，`gate/design`）
 - 日期：2026-10-16
 - 来源：SP-1 实测的第 12 个场景和资源数据（`docs/tasks/SP-1-adapter-behavior/report.md`）
 

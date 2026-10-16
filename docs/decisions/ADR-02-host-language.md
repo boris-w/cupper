@@ -1,6 +1,6 @@
 # ADR-02 会话宿主的实现语言
 
-- 状态：提议
+- 状态：已采纳（2026-10-16，`gate/design`）
 - 日期：2026-10-16
 - 来源：`docs/meetings/2026-10-16-tech-selection/`（`minutes.md`；`architect.md` ADR-02；`mobile-security-engineer.md` 第 2 节；`desktop-engineer.md` 第 8 节）
 

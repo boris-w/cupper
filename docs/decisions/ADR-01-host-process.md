@@ -1,6 +1,6 @@
 # ADR-01 会话宿主的进程形态与生命周期
 
-- 状态：提议
+- 状态：已采纳（2026-10-16，`gate/design`）
 - 日期：2026-10-16
 - 来源：`docs/meetings/2026-10-16-tech-selection/`（`minutes.md` 中的 C6；`architect.md` ADR-01 一节；三份第二轮回应）
 

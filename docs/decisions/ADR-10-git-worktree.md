@@ -1,6 +1,6 @@
 # ADR-10 Git 与 worktree
 
-- 状态：提议
+- 状态：已采纳（2026-10-16，`gate/design`）
 - 日期：2026-10-16
 - 来源：SP-5 实测（`docs/tasks/SP-5-git-snapshot/report.md`、`results.md`）
 

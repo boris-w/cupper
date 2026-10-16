@@ -1,6 +1,6 @@
 # ADR-03 桌面 UI 技术
 
-- 状态：提议（编排者结论，2026-10-16；依据技术选型讨论会和 R04，R05 的补充证据待追加；最终在 gate/design 确认）
+- 状态：已采纳（2026-10-16，`gate/design`）；编排者结论，依据技术选型讨论会、R04、R05
 - 日期：2026-10-16
 - 来源：`docs/meetings/2026-10-16-tech-selection/`（`minutes.md`，尤其是 C5；`desktop-engineer.md`；`desktop-engineer-round2.md`；`architect.md` ADR-03；`mobile-security-engineer-round2.md` 问题 2、3）
 

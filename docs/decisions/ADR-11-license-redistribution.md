@@ -1,6 +1,6 @@
 # ADR-11 开源许可证与第三方依赖的再分发
 
-- 状态：提议；其中"cupper 采用 Apache-2.0"已由用户确认（2026-10-16），`LICENSE` 已加入仓库
+- 状态：已采纳（2026-10-16，`gate/design`）；cupper 采用 Apache-2.0，`LICENSE` 已加入仓库
 - 日期：2026-10-16
 - 来源：SP-2 许可证清点（`docs/tasks/SP-2-adapter-distribution/licenses.md`）、R02、PRD 第 8 节
 

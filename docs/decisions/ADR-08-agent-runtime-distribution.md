@@ -1,6 +1,6 @@
 # ADR-08 Agent 程序来源、适配器分发与版本锁定
 
-- 状态：提议
+- 状态：已采纳（2026-10-16，`gate/design`）
 - 日期：2026-10-16
 - 来源：SP-2 实测（`docs/tasks/SP-2-adapter-distribution/report.md`）、SP-1、SP-4b、ADR-01
 
