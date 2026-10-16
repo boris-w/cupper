@@ -161,7 +161,6 @@ pub struct AgentCaps {
 pub struct Driver {
     cmd_tx: mpsc::UnboundedSender<Cmd>,
     pub pid: i32,
-    pub start_us: u64,
     pub caps: AgentCaps,
     prefs: Prefs,
 }
@@ -169,11 +168,19 @@ pub struct Driver {
 const START_TIMEOUT: Duration = Duration::from_secs(60);
 
 impl Driver {
-    /// Spawn the adapter and complete `initialize`.
-    pub async fn start(spec: &AgentSpec, log_path: &Path, events: mpsc::UnboundedSender<DriverEvent>) -> Result<Self, DriverError> {
+    /// Spawn the adapter and complete `initialize`. `on_spawn(pid, start_us)`
+    /// runs right after the process exists, before any waiting, so a crash
+    /// during startup still leaves a record for recovery to reap.
+    pub async fn start(
+        spec: &AgentSpec,
+        log_path: &Path,
+        events: mpsc::UnboundedSender<DriverEvent>,
+        on_spawn: impl FnOnce(i32, u64),
+    ) -> Result<Self, DriverError> {
         let program = resolve_program(&spec.command)?;
         let spawned = sys::spawn_adapter(&program, &spec.args, &adapter_env(spec), log_path)?;
         let pid = spawned.pid;
+        on_spawn(pid, spawned.start_us);
         let reaper_events = events.clone();
         tokio::task::spawn_blocking(move || {
             let status = sys::wait_blocking(pid);
@@ -198,7 +205,7 @@ impl Driver {
             }
         };
         let prefs = Prefs { model: spec.model.clone(), mode: spec.mode.clone() };
-        Ok(Driver { cmd_tx, pid, start_us: spawned.start_us, caps, prefs })
+        Ok(Driver { cmd_tx, pid, caps, prefs })
     }
 
     async fn call<T>(&self, make: impl FnOnce(oneshot::Sender<Result<T, DriverError>>) -> Cmd) -> Result<T, DriverError> {

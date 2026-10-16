@@ -212,11 +212,14 @@ impl SessionActor {
             RpcError::app(ErrorCode::NotFound, format!("unknown agent {}", self.rec.agent)).with_reason("unknown_agent")
         })?;
         let log = self.host.config.data_dir.join("logs").join(format!("adapter-{}.log", self.rec.session_id));
-        let driver = Driver::start(spec, &log, self.events_tx.clone()).await.map_err(|e| unavailable("adapter_crashed", &e))?;
         let store = self.host.store.clone();
-        if let Err(e) = store.record_adapter(&AdapterRecord { pid: driver.pid, session_id: self.rec.session_id.clone(), start_us: driver.start_us }) {
-            tracing::error!("recording adapter failed: {e}");
-        }
+        let session_id = self.rec.session_id.clone();
+        let record = |pid, start_us| {
+            if let Err(e) = store.record_adapter(&AdapterRecord { pid, session_id, start_us }) {
+                tracing::error!("recording adapter failed: {e}");
+            }
+        };
+        let driver = Driver::start(spec, &log, self.events_tx.clone(), record).await.map_err(|e| unavailable("adapter_crashed", &e))?;
         let cwd = PathBuf::from(&self.rec.cwd);
         let ready = match self.rec.agent_session_id.clone() {
             None => match driver.new_session(&cwd).await {
