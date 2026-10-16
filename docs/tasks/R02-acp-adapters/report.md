@@ -495,8 +495,11 @@
 ## 提交列表
 
 ```
-（提交后补充）
+67378ad docs(task): add R02 ACP and adapters report
+c1d3d70 docs(task): add R02 source index and raw excerpts
 ```
+
+此外还有一个提交只用来补充本节的提交列表，它本身的哈希写不进这里，以 `git log --oneline main..HEAD` 为准。
 
 ## 遗留问题 / 范围外发现
 
