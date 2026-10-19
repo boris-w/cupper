@@ -1,0 +1,19 @@
+{
+  "new_session": "新建会话",
+  "settings": "设置…",
+  "toggle_sidebar": "切换侧边栏",
+  "toggle_side_panel": "切换侧边面板",
+  "open_review_tab": "打开“变更”标签",
+  "toggle_file_tree": "切换文件树",
+  "interrupt": "中断回合",
+  "next_needs_action": "下一个需要处理的会话",
+  "prev_sidebar_item": "上一个会话",
+  "next_sidebar_item": "下一个会话",
+  "prev_recent": "上一个最近的会话",
+  "next_recent": "下一个最近的会话",
+  "session_n": "第 {{n}} 个会话",
+  "archive": "归档会话",
+  "rename": "重命名会话",
+  "model_picker": "模型和推理强度",
+  "open_in_terminal": "在外部终端打开工作区"
+}
