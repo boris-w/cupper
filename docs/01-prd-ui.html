@@ -1,0 +1,1930 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cupper 带界面的 PRD</title>
+<style>
+/* =====================================================================
+   设计参数。界面部分的取值来自 R06 ui-spec 第 2、3 节（Codex 26.1013 的默认值），
+   变量名沿用 ui-spec 建议的 token 名。亮色经截图核对；暗色是按规则计算的值，未经截图核对。
+   ===================================================================== */
+:root {
+  /* --- 布局（ui-spec 2.x） --- */
+  --layout-window-w: 1280px;            /* 默认窗口 1280 × 820，最小 480 × 600 */
+  --layout-window-h: 820px;
+  --layout-titlebar-h: 44px;            /* 顶栏，交通灯 x = 16 */
+  --layout-traffic-light-x: 16px;
+  --layout-pane-header-h: 40px;         /* 面板头、标签条 */
+  --layout-left-w: 340px;               /* 左栏默认 340，可拖动，240–520 */
+  --layout-sidebar-header-h: 32px;
+  --layout-row-h: 30px;                 /* 侧边栏行 */
+  --layout-row-px: 8px;
+  --layout-row-py: 5px;
+  --layout-thread-max-w: 768px;         /* 会话列 768，内容 736 */
+  --layout-thread-gutter: 16px;
+  --layout-item-gap: 16px;              /* 相邻条目 */
+  --layout-item-gap-grouped: 4px;       /* 同组条目 */
+  --layout-composer-bottom: 16px;
+  --layout-composer-min-h: 40px;        /* 输入框文字区最小高 */
+  --layout-composer-px: 12px;
+  --layout-composer-footer-bottom: 8px;
+  --layout-ctl-h: 28px;                 /* 输入框按钮、工具栏按钮、图标按钮 */
+  --layout-ctl-gap: 4px;
+  --layout-right-w: 320px;              /* 右侧面板：最小 320，按公式默认约 500–640 */
+  --layout-chat-min-w: 352px;
+  --layout-summary-w: 300px;            /* 摘要卡片（M2） */
+  --layout-bottom-h: 280px;             /* 底部面板（M2） */
+  --layout-tab-h: 32px;
+  --layout-tab-min-w: 90px;
+  --layout-filetree-w: 220px;           /* 文件树列宽（示意，ui-spec 未给值） */
+  --layout-filetree-row-h: 28px;
+  --layout-bubble-max: 70%;             /* 用户气泡最大宽 */
+  --layout-bubble-px: 16px;
+  --layout-bubble-py: 10px;
+  --layout-group-max-h: 224px;          /* 活动组展开后的最大高 */
+  --layout-cmd-max-h: 240px;            /* 命令输出最大高 */
+  --layout-warn-max: 77%;               /* 警告框最大宽 */
+  --layout-pill-bottom: 20px;           /* 审查面板底部药丸距底 */
+  --layout-toast-top: 40px;
+  --layout-toast-max-w: 790px;
+  --layout-modal-w: 420px;              /* 提交弹窗 */
+  --layout-icon: 16px;
+  --layout-dot: 8px;
+  --layout-spinner: 12px;
+  --layout-toggle-w: 32px;
+  --layout-toggle-h: 19px;
+  --layout-toggle-knob: 13px;
+  --layout-settings-max: 768px;
+  --layout-settings-row-py: 12px;
+  --layout-settings-row-px: 16px;
+  --layout-settings-gap: 24px;
+  --layout-settings-section-gap: 40px;
+  --layout-panel-pad: 20px;
+  --layout-menu-gutter: 4px;
+  --layout-menu-item-pad: 5px 8px;
+  --space: 4px;                         /* 基本间距单位 */
+  /* --- 字体与字号（ui-spec 3.3） --- */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+  --font-code: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-weight-ui: 430;
+  --font-weight-control: 510;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --text-xs: 12px;   --leading-xs: 16px;
+  --text-sm: 13px;   --leading-sm: 18.6px;
+  --text-base: 14px; --leading-base: 21px;
+  --text-chat: 14px; --leading-chat: 22.75px;
+  --text-code: 12px; --leading-diff: 21.6px;
+  --text-lg: 16px;
+  --text-heading-app: 28px;
+  /* --- 圆角（ui-spec 3.5，已按 ×1.25 放大） --- */
+  --radius-xs: 5px;
+  --radius-sm: 7.5px;
+  --radius-md: 10px;
+  --radius-lg: 12.5px;
+  --radius-xl: 15px;
+  --radius-2xl: 20px;
+  --radius-row: 10px;
+  --radius-composer: 22px;
+  --radius-bubble: 22px;
+  --radius-full: 9999px;
+  /* --- 颜色：亮色（ui-spec 3.2，Codex 默认种子） --- */
+  --color-surface: #FFFFFF;
+  --color-surface-sidebar: #F6F6F6;     /* 不透明模式；默认是半透明材质，截图约 #F8F8F8 */
+  --color-surface-code: #FFFFFF;        /* 编辑器、命令输出 */
+  --color-surface-panel: #FFFFFF;
+  --color-surface-elevated: #FFFFFF;    /* 菜单、下拉、药丸 */
+  --color-surface-composer: #FFFFFF;
+  --color-composer-bar: #F6F6F6;        /* 输入框旁的动作条 */
+  --color-fg: #1A1C1F;
+  --color-fg-secondary: #6A6B6D;        /* 前景 65% */
+  --color-fg-tertiary: #8E8F90;         /* 前景约 50% */
+  --color-border: #EDEDEE;
+  --color-border-subtle: #F4F4F4;
+  --color-border-strong: #E4E4E5;
+  --color-ring: #339CFF;
+  --color-accent: #339CFF;
+  --color-accent-soft: #E5F2FF;
+  --color-btn-secondary: #F4F4F4;
+  --color-hover: #EBECEC;               /* ghost-hover，侧边栏选中行 */
+  --color-btn-primary: #1A1C1F;
+  --color-btn-primary-fg: #FFFFFF;
+  --color-user-bubble: #F3F3F4;
+  --color-backdrop: #0000004D;
+  --color-diff-add: #00A240;
+  --color-diff-del: #BA2623;
+  --color-diff-mod: #923B0F;
+  --color-diff-add-bg: rgba(0, 162, 64, .15);
+  --color-diff-del-bg: rgba(186, 38, 35, .15);
+  --color-danger: #E02E2A;
+  --color-warning: #E25507;
+  --color-warning-border: rgba(226, 85, 7, .3);
+  --color-success: #00A240;
+  --color-warning-soft: #FFE7D9;
+  --color-danger-soft: #FFD9D9;
+  --color-term-bg: #1A1C1F;             /* 只用于本页 cupper-cli 的终端示意 */
+  --color-term-fg: #F3F3F4;
+  /* --- 阴影（ui-spec 3.6） --- */
+  --shadow-composer: 0 0 0 1px rgba(0, 0, 0, .04), 0 2px 8px rgba(0, 0, 0, .04), 0 4px 80px 8px rgba(0, 0, 0, .024);
+  --shadow-menu: 0 0 0 .5px var(--color-border), 0 8px 16px -4px rgba(0, 0, 0, .12);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, .05);
+  --shadow-lg: 0 0 0 .5px var(--color-border-strong), 0 4px 8px -2px rgba(0, 0, 0, .10);
+  /* --- 动画（ui-spec 3.7） --- */
+  --duration-spin: 1.25s;
+  --duration-shimmer: 2s;
+  /* --- 不属于 Codex 规格的：macOS 系统对话框、手机线框、本页排版 --- */
+  --mac-dialog-w: 440px;
+  --mac-dialog-bg: #ECECEC;
+  --mac-default-btn: #0A84FF;           /* macOS 系统强调色 */
+  --mac-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+  --color-on-solid: #FFFFFF;            /* 实色按钮、开关滑块上的白色 */
+  --phone-w: 190px;
+  --phone-h: 470px;
+  --phone-radius: 30px;
+  /* --- 本页示意图的画布尺寸（不是 Codex 规格） --- */
+  --fig-w-300: 300px; --fig-w-330: 330px; --fig-w-380: 380px; --fig-w-400: 400px; --fig-w-440: 440px;
+  --fig-w-480: 480px; --fig-w-500: 500px; --fig-w-520: 520px; --fig-w-600: 600px;
+  --fig-w-review: 1000px; --fig-h-review: 460px; --fig-w-scope: 150px; --fig-w-gitmenu: 180px;
+  --fig-w-settings: 1100px; --fig-w-settings-col: 520px; --fig-w-notify: 340px;
+  --fig-w-m1a: 1000px; --fig-w-m1a-sb: 220px; --fig-w-m1a-rp: 200px;
+  --wf-zoom: .9;                        /* 1280 宽的窗口线框缩放后放进页面 */
+  --doc-max: 1200px;
+  --doc-font: 14px;
+  --callout: #C2410C;                   /* 编号标注 */
+  --callout-size: 15px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* 暗色：按 ui-spec 3.2 的推导值，未经截图核对 */
+    --color-surface: #181818;
+    --color-surface-sidebar: #141414;
+    --color-surface-code: #282828;
+    --color-surface-panel: #232323;
+    --color-surface-elevated: #2D2D2D;
+    --color-surface-composer: #2D2D2D;  /* 也可能是 #363636，ui-spec 7.3 未核清 */
+    --color-composer-bar: #282828;
+    --color-fg: #DFDFDF;
+    --color-fg-secondary: #999999;
+    --color-fg-tertiary: #8B8B8B;
+    --color-border: #2B2B2B;
+    --color-border-subtle: #222222;
+    --color-border-strong: #3C3C3C;
+    --color-ring: rgba(131, 195, 255, .76);
+    --color-accent: #83C3FF;
+    --color-accent-soft: #0D273F;
+    --color-btn-secondary: #242424;
+    --color-hover: #2A2A2A;
+    --color-btn-primary: #DFDFDF;
+    --color-btn-primary-fg: #2D2D2D;
+    --color-user-bubble: #222222;
+    --color-backdrop: #00000080;
+    --color-diff-add: #40C977;
+    --color-diff-del: #FA423E;
+    --color-diff-mod: #FF8549;
+    --color-diff-add-bg: rgba(64, 201, 119, .23);
+    --color-diff-del-bg: rgba(250, 66, 62, .23);
+    --color-danger: #FF6764;
+    --color-warning: #FF8549;
+    --color-warning-border: rgba(255, 133, 73, .3);
+    --color-success: #40C977;
+    --color-warning-soft: #4A2206;
+    --color-danger-soft: #4D100E;
+    --color-term-bg: #000000;
+    --color-term-fg: #DFDFDF;
+    --shadow-composer: inset 0 0 1px rgba(255, 255, 255, .2);
+    --shadow-menu: 0 0 0 .5px var(--color-border), 0 8px 16px -4px rgba(0, 0, 0, .30);
+    --shadow-card: 0 4px 16px rgba(0, 0, 0, .30);
+    --shadow-lg: 0 0 0 .5px var(--color-border-strong), 0 4px 8px -2px rgba(0, 0, 0, .36);
+    --mac-dialog-bg: #323232;
+    --callout: #FB923C;
+  }
+}
+
+/* ===== 本页排版 ===== */
+*, *::before, *::after { box-sizing: border-box; }
+body { font: var(--doc-font)/1.65 var(--font-ui); color: var(--color-fg); background: var(--color-surface); max-width: var(--doc-max); margin: 0 auto; padding: 16px; }
+a { color: var(--color-accent); }
+h1 { font-size: 26px; margin-bottom: 4px; }
+h2 { font-size: 21px; margin-top: 44px; border-bottom: 1px solid var(--color-border-strong); padding-bottom: 4px; }
+h3 { font-size: 17px; margin-top: 30px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+table { border-collapse: collapse; width: 100%; margin: 8px 0 18px; font-size: 13px; }
+th, td { border: 1px solid var(--color-border-strong); padding: 4px 8px; text-align: left; vertical-align: top; }
+th { background: var(--color-btn-secondary); white-space: nowrap; }
+.req td:first-child, .req td:nth-child(4), .reqall td:first-child { white-space: nowrap; }
+code { font-family: var(--font-code); font-size: 12px; background: var(--color-btn-secondary); padding: 0 3px; border-radius: 3px; }
+.n { color: var(--callout); font-size: var(--callout-size); font-weight: 700; margin: 0 2px; white-space: nowrap; font-style: normal; }
+.scroll { overflow-x: auto; padding: 4px 2px 12px; }
+.fig { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.cap { color: var(--color-fg-tertiary); font-size: 12px; margin: 2px 0 8px; }
+.mermaid { max-width: 900px; }
+
+/* ===== 线框：外壳 ===== */
+.wf { font: var(--font-weight-ui) var(--text-base)/var(--leading-base) var(--font-ui); color: var(--color-fg); }
+.win { border: 1px solid var(--color-border-strong); border-radius: 10px; overflow: hidden; background: var(--color-surface); box-shadow: var(--shadow-card); }
+.win.full { width: var(--layout-window-w); zoom: var(--wf-zoom); }
+.win.mid { width: calc(var(--layout-thread-max-w) + 2 * var(--layout-thread-gutter)); max-width: 100%; }
+.tb { height: var(--layout-titlebar-h); display: flex; align-items: center; gap: var(--space); padding: 0 calc(var(--space) * 2) 0 var(--layout-traffic-light-x); background: var(--color-surface-sidebar); border-bottom: 1px solid var(--color-border); }
+.lights { color: var(--color-border-strong); letter-spacing: 2px; margin-right: calc(var(--space) * 3); }
+.cols { display: flex; height: calc(var(--layout-window-h) - var(--layout-titlebar-h)); }
+.cols.short { height: auto; min-height: 420px; }
+.sb { width: var(--layout-left-w); flex: none; background: var(--color-surface-sidebar); padding: 0 calc(var(--space) * 2) calc(var(--space) * 2); display: flex; flex-direction: column; }
+.mn { flex: 1; min-width: var(--layout-chat-min-w); display: flex; flex-direction: column; position: relative; }
+.thread { width: 100%; max-width: var(--layout-thread-max-w); margin: 0 auto; padding: 0 var(--layout-thread-gutter) var(--layout-composer-bottom); display: flex; flex-direction: column; flex: 1; gap: var(--layout-item-gap); }
+.rp { width: var(--layout-right-w); flex: none; border-left: 1px solid var(--color-border); background: var(--color-surface); display: flex; flex-direction: column; }
+.row { display: flex; gap: var(--space); align-items: center; flex-wrap: wrap; }
+.nowrap { flex-wrap: nowrap; }
+.right { justify-content: flex-end; }
+.center { justify-content: center; }
+.sp { flex: 1; }
+.col { display: flex; flex-direction: column; }
+.g4 { gap: var(--layout-item-gap-grouped); }
+.mt { margin-top: calc(var(--space) * 2); }
+.mt3 { margin-top: calc(var(--space) * 3); }
+
+/* ===== 线框：通用控件 ===== */
+.mu { color: var(--color-fg-secondary); }
+.mu3 { color: var(--color-fg-tertiary); }
+.xs { font-size: var(--text-xs); line-height: var(--leading-xs); }
+.sm { font-size: var(--text-sm); line-height: var(--leading-sm); }
+.md { font-weight: var(--font-weight-medium); }
+.mono { font-family: var(--font-code); font-size: var(--text-code); }
+.tbtn { height: var(--layout-ctl-h); display: inline-flex; align-items: center; gap: var(--space); padding: 0 calc(var(--space) * 2); border-radius: var(--radius-lg); color: var(--color-fg-tertiary); font-size: var(--text-sm); white-space: nowrap; }
+.tbtn.on { background: var(--color-btn-secondary); color: var(--color-fg); }
+.ib { width: var(--layout-ctl-h); height: var(--layout-ctl-h); display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-full); color: var(--color-fg-tertiary); }
+.ib.on { background: var(--color-btn-secondary); color: var(--color-fg); }
+.btn { height: var(--layout-ctl-h); display: inline-flex; align-items: center; gap: var(--space); padding: 0 calc(var(--space) * 3); border-radius: var(--radius-full); background: var(--color-btn-secondary); font-size: var(--text-sm); font-weight: var(--font-weight-control); white-space: nowrap; }
+.btn.p { background: var(--color-btn-primary); color: var(--color-btn-primary-fg); }
+.btn.danger { background: var(--color-danger); color: var(--color-on-solid); }
+.btn.ghost { background: transparent; color: var(--color-fg-secondary); }
+.kbd { display: inline-block; font-size: 11px; line-height: 14px; padding: 0 4px; border-radius: var(--radius-xs); border: 1px solid var(--color-border-strong); color: var(--color-fg-tertiary); }
+.tag { display: inline-block; font-size: var(--text-xs); line-height: var(--leading-xs); padding: 0 6px; border-radius: var(--radius-xs); background: var(--color-btn-secondary); color: var(--color-fg-secondary); white-space: nowrap; }
+.tag.warn { background: var(--color-warning-soft); color: var(--color-warning); }
+.tag.acc { background: var(--color-accent-soft); color: var(--color-accent); }
+.pop { background: var(--color-surface-elevated); border-radius: var(--radius-xl); box-shadow: var(--shadow-menu); padding: var(--layout-menu-gutter); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.pop .it { padding: var(--layout-menu-item-pad); border-radius: var(--radius-xl); }
+.pop .it.on { background: var(--color-hover); }
+.pop .hd { padding: var(--layout-menu-item-pad); color: var(--color-fg-tertiary); }
+.toast { align-self: center; background: var(--color-surface-elevated); box-shadow: var(--shadow-menu); border-radius: var(--radius-xl); padding: var(--layout-menu-item-pad); font-size: var(--text-sm); max-width: var(--layout-toast-max-w); }
+.later { opacity: .5; outline: 1px dashed var(--color-fg-tertiary); outline-offset: 1px; }
+.dot { display: inline-block; width: var(--layout-dot); height: var(--layout-dot); border-radius: 50%; flex: none; }
+.dot.unread { background: var(--color-accent); }
+.dot.ok { background: var(--color-success); }
+.spin { display: inline-block; width: var(--layout-spinner); height: var(--layout-spinner); border: 1.5px solid var(--color-fg-tertiary); border-right-color: transparent; border-radius: 50%; flex: none; animation: spin var(--duration-spin) linear infinite; }
+.shim { color: var(--color-fg-tertiary); background: linear-gradient(90deg, var(--color-fg-tertiary) 40%, var(--color-fg) 50%, var(--color-fg-tertiary) 60%) 0 0 / 200% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: shim var(--duration-shimmer) linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shim { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .spin, .shim { animation: none; } }
+.ico { display: inline-block; width: var(--layout-icon); text-align: center; color: var(--color-fg-tertiary); flex: none; }
+.gs { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.gs.add { background: var(--color-diff-add); } .gs.del { background: var(--color-diff-del); } .gs.mod { background: var(--color-diff-mod); }
+.add-t { color: var(--color-diff-add); } .del-t { color: var(--color-diff-del); }
+.toggle { display: inline-block; width: var(--layout-toggle-w); height: var(--layout-toggle-h); border-radius: var(--radius-full); background: var(--color-border-strong); position: relative; flex: none; }
+.toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: var(--layout-toggle-knob); height: var(--layout-toggle-knob); border-radius: 50%; background: var(--color-on-solid); }
+.toggle.on { background: var(--color-accent); }
+.toggle.on::after { left: auto; right: 3px; }
+.seg { display: inline-flex; background: var(--color-btn-secondary); border-radius: var(--radius-full); padding: 2px; font-size: var(--text-sm); }
+.seg span { padding: 1px 10px; border-radius: var(--radius-full); }
+.seg .on { background: var(--color-surface-elevated); box-shadow: var(--shadow-menu); }
+
+/* ===== 线框：侧边栏 ===== */
+.sbh { height: var(--layout-sidebar-header-h); display: flex; align-items: center; gap: var(--space); padding: 0 var(--layout-row-px); margin: var(--space) 0; }
+.si { height: var(--layout-row-h); display: flex; align-items: center; gap: calc(var(--space) * 2); padding: 0 var(--layout-row-px); border-radius: var(--radius-row); font-size: var(--text-base); line-height: 20px; white-space: nowrap; overflow: hidden; }
+.si.in { padding-left: calc(var(--layout-row-px) + 24px); }
+.si.on { background: var(--color-hover); }
+.si .t { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.gt { font-size: var(--text-sm); color: var(--color-fg-tertiary); padding: calc(var(--space) * 3) var(--layout-row-px) var(--space); }
+.sbanner { border-radius: var(--radius-lg); background: var(--color-surface-elevated); box-shadow: var(--shadow-lg); padding: calc(var(--space) * 2) calc(var(--space) * 3); font-size: var(--text-sm); margin-bottom: calc(var(--space) * 2); }
+
+/* ===== 线框：消息流 ===== */
+.bub { align-self: flex-end; max-width: var(--layout-bubble-max); background: var(--color-user-bubble); border-radius: var(--radius-bubble); padding: var(--layout-bubble-py) var(--layout-bubble-px); font-size: var(--text-chat); line-height: var(--leading-chat); }
+.msg { font-size: var(--text-chat); line-height: var(--leading-chat); }
+.turn { font-size: var(--text-sm); color: var(--color-fg-secondary); padding-bottom: var(--space); border-bottom: 1px solid var(--color-border); }
+.act { display: flex; gap: calc(var(--space) * 2); align-items: center; font-size: var(--text-sm); color: var(--color-fg-tertiary); white-space: nowrap; overflow: hidden; }
+.act .t { overflow: hidden; text-overflow: ellipsis; }
+.cmd { border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+.cmd .h { background: var(--color-hover); padding: 2px 10px; font-size: var(--text-sm); color: var(--color-fg-tertiary); border-bottom: 1px solid var(--color-border); display: flex; gap: var(--space); }
+.cmd .b { background: var(--color-surface-code); font-family: var(--font-code); font-size: var(--text-code); padding: calc(var(--space) * 2) 10px; white-space: pre-wrap; max-height: var(--layout-cmd-max-h); overflow: hidden; }
+.card { border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; font-size: var(--text-sm); }
+.card .r { display: flex; gap: calc(var(--space) * 2); align-items: center; padding: calc(var(--space) * 1.5) calc(var(--space) * 3); border-top: 1px solid var(--color-border); }
+.card .r:first-child { border-top: 0; }
+.warnbox { max-width: var(--layout-warn-max); border: 1px solid var(--color-warning-border); border-radius: var(--radius-lg); padding: calc(var(--space) * 2) calc(var(--space) * 3); font-size: var(--text-sm); }
+.pill { align-self: center; display: inline-flex; gap: calc(var(--space) * 2); align-items: center; background: var(--color-surface-elevated); box-shadow: var(--shadow-lg); border-radius: var(--radius-full); padding: 2px calc(var(--space) * 3); font-size: var(--text-sm); white-space: nowrap; }
+.fab { align-self: center; width: var(--layout-ctl-h); height: var(--layout-ctl-h); border-radius: var(--radius-full); background: var(--color-surface-elevated); box-shadow: var(--shadow-lg); display: flex; align-items: center; justify-content: center; }
+
+/* ===== 线框：输入框与请求面板 ===== */
+.composer { background: var(--color-surface-composer); border-radius: var(--radius-composer); box-shadow: var(--shadow-composer); padding-bottom: var(--layout-composer-footer-bottom); }
+.cin { min-height: var(--layout-composer-min-h); padding: 10px var(--layout-composer-px) 0; font-size: var(--text-chat); line-height: var(--leading-chat); }
+.ph { opacity: .5; }
+.cfoot { display: flex; align-items: center; gap: var(--layout-ctl-gap); padding: 0 calc(var(--space) * 2); font-size: var(--text-sm); }
+.cb { height: var(--layout-ctl-h); display: inline-flex; align-items: center; gap: var(--space); padding: 0 calc(var(--space) * 2); border-radius: var(--radius-full); color: var(--color-fg-secondary); white-space: nowrap; }
+.send { width: var(--layout-ctl-h); height: var(--layout-ctl-h); border-radius: var(--radius-full); background: var(--color-btn-primary); color: var(--color-btn-primary-fg); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.send.dis { opacity: .5; }
+.ubar { display: flex; gap: var(--space); align-items: center; flex-wrap: wrap; background: var(--color-composer-bar); border-radius: 0 0 var(--radius-composer) var(--radius-composer); margin: -14px 12px 0; padding: 18px calc(var(--space) * 2) calc(var(--space) * 1.5); font-size: var(--text-sm); color: var(--color-fg-secondary); }
+.att { display: inline-flex; gap: var(--space); align-items: center; background: var(--color-btn-secondary); border-radius: var(--radius-lg); padding: 2px calc(var(--space) * 2); font-size: var(--text-sm); }
+.ref { color: var(--color-accent); }
+.qrow { display: flex; gap: calc(var(--space) * 2); align-items: center; background: var(--color-composer-bar); border-radius: var(--radius-xl); padding: calc(var(--space) * 1.5) calc(var(--space) * 3); font-size: var(--text-sm); }
+.req { padding: calc(var(--space) * 3) calc(var(--space) * 3) var(--layout-composer-footer-bottom); }
+.opt { display: flex; gap: calc(var(--space) * 3); align-items: flex-start; padding: calc(var(--space) * 1.5) calc(var(--space) * 2); border-radius: var(--radius-xl); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.opt.on { background: var(--color-hover); }
+.opt .no { width: 14px; color: var(--color-fg-tertiary); flex: none; }
+.opt .tt { font-weight: var(--font-weight-medium); }
+.free { border-top: 1px solid var(--color-border); margin-top: var(--space); padding-top: var(--space); }
+
+/* ===== 线框：右侧面板与审查 ===== */
+.ph-h { height: var(--layout-pane-header-h); display: flex; align-items: center; gap: var(--space); padding: 0 calc(var(--space) * 2); border-bottom: 1px solid var(--color-border); flex: none; }
+.tab { height: var(--layout-tab-h); min-width: var(--layout-tab-min-w); display: inline-flex; align-items: center; gap: var(--space); padding: 0 var(--space) 0 10px; border-radius: var(--radius-lg); font-size: var(--text-sm); color: var(--color-fg-tertiary); }
+.tab.on { border: 1px solid var(--color-border); background: var(--color-surface-elevated); color: var(--color-fg); }
+.rvh { display: flex; align-items: center; gap: var(--space); padding: calc(var(--space) * 1.5) calc(var(--space) * 2); font-size: var(--text-sm); flex: none; }
+.rvbody { display: flex; flex: 1; min-height: 0; position: relative; }
+.ft { width: var(--layout-filetree-w); flex: none; border-right: 1px solid var(--color-border); padding: calc(var(--space) * 2); font-size: var(--text-sm); }
+.ft .fr { height: var(--layout-filetree-row-h); display: flex; align-items: center; gap: calc(var(--space) * 2); padding: 0 calc(var(--space) * 2); border-radius: var(--radius-md); white-space: nowrap; overflow: hidden; }
+.ft .fr.on { background: var(--color-accent-soft); }
+.ft .fr.in { padding-left: calc(var(--space) * 6); }
+.filt { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 2px calc(var(--space) * 2); color: var(--color-fg-tertiary); margin-bottom: var(--space); }
+.dv { flex: 1; min-width: 0; overflow: hidden; }
+.dfh { display: flex; align-items: center; gap: var(--space); padding: calc(var(--space) * 1.5) calc(var(--space) * 4); font-size: var(--text-sm); border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
+.dl { font-family: var(--font-code); font-size: var(--text-code); line-height: var(--leading-diff); white-space: pre; padding: 0 calc(var(--space) * 2); display: flex; gap: calc(var(--space) * 3); }
+.dl .ln { min-width: 4ch; color: var(--color-fg-tertiary); text-align: right; }
+.dl.a { background: var(--color-diff-add-bg); } .dl.d { background: var(--color-diff-del-bg); }
+.fold { margin: var(--space) calc(var(--space) * 2); border-radius: 8px; background: var(--color-btn-secondary); color: var(--color-fg-tertiary); font-size: var(--text-xs); text-align: center; }
+.cbox { margin: var(--space) calc(var(--space) * 4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-sidebar); padding: calc(var(--space) * 2) calc(var(--space) * 3); font-size: var(--text-sm); max-width: var(--layout-thread-max-w); }
+.bpill { position: absolute; left: 50%; bottom: var(--layout-pill-bottom); transform: translateX(-50%); display: inline-flex; gap: var(--space); background: var(--color-surface-elevated); box-shadow: var(--shadow-lg); border-radius: var(--radius-full); padding: var(--space); white-space: nowrap; }
+.modal { width: var(--layout-modal-w); background: var(--color-surface-panel); border-radius: var(--radius-2xl); box-shadow: var(--shadow-menu); padding: var(--layout-panel-pad); font-size: var(--text-sm); }
+.modal .t { font-size: var(--text-lg); font-weight: var(--font-weight-semibold); margin-bottom: calc(var(--space) * 2); }
+.field { border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); padding: calc(var(--space) * 1.5) calc(var(--space) * 2); color: var(--color-fg-tertiary); }
+.backdrop { background: var(--color-backdrop); padding: 24px; border-radius: 10px; display: flex; justify-content: center; }
+
+/* ===== 线框：设置页 ===== */
+.snav { width: 240px; flex: none; background: var(--color-surface-sidebar); padding: calc(var(--space) * 2); }
+.scont { flex: 1; overflow: hidden; padding: 0 var(--layout-thread-gutter) var(--layout-panel-pad); }
+.sin { max-width: var(--layout-settings-max); margin: 0 auto; }
+.sh { font-size: var(--text-lg); font-weight: var(--font-weight-semibold); margin: var(--layout-settings-section-gap) 0 calc(var(--space) * 2); }
+.sh:first-child { margin-top: calc(var(--space) * 5); }
+.sgroup { border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.srow { display: flex; align-items: center; gap: var(--layout-settings-gap); padding: var(--layout-settings-row-py) var(--layout-settings-row-px); border-top: 1px solid var(--color-border); font-size: var(--text-sm); }
+.srow:first-child { border-top: 0; }
+.srow .l { flex: 1; }
+.srow .l b { display: block; font-weight: var(--font-weight-medium); }
+
+/* ===== 非 Codex 部分：macOS 系统对话框、手机、终端 ===== */
+.mac { width: var(--mac-dialog-w); flex: none; border-radius: 12px; padding: 16px; background: var(--mac-dialog-bg); box-shadow: var(--mac-shadow); font-size: 12px; line-height: 1.5; }
+.mac .ico { width: 44px; height: 44px; border-radius: 10px; background: var(--color-border-strong); margin: 0 auto 8px; display: block; }
+.mac .t { text-align: center; font-weight: 600; font-size: 13px; }
+.mac .bt { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.mac .b { border-radius: 6px; padding: 0 10px; background: var(--color-surface); border: 1px solid var(--color-border-strong); }
+.mac .def { background: var(--mac-default-btn); color: var(--color-on-solid); border-color: var(--mac-default-btn); }
+.mac .pre { font-family: var(--font-code); background: var(--color-surface); border-radius: 6px; padding: 2px 6px; }
+.phone { width: var(--phone-w); min-height: var(--phone-h); flex: none; border: 2px solid var(--color-border-strong); border-radius: var(--phone-radius); padding: 26px 10px 14px; background: var(--color-surface); font-size: 12px; line-height: 1.5; }
+.phone .box { border: 1px solid var(--color-border); border-radius: 12px; padding: 6px 8px; margin: 6px 0; }
+.qr { width: 96px; height: 96px; outline: 1px solid var(--color-fg); background: repeating-conic-gradient(var(--color-fg) 0 25%, var(--color-surface) 0 50%) 0 0 / 16px 16px; opacity: .8; margin: 8px auto; }
+.term { background: var(--color-term-bg); color: var(--color-term-fg); padding: 10px 14px; border-radius: 8px; overflow-x: auto; font-family: var(--font-code); font-size: 12px; line-height: 1.5; }
+/* ===== 由内联样式收拢来的类 ===== */
+.dark-only { display: none; }
+@media (prefers-color-scheme: dark) { .dark-only { display: block; } }
+.note-dark { border-left: 3px solid var(--color-warning); background: var(--color-warning-soft); padding: 6px 10px; }
+.tb-left { width: calc(var(--layout-left-w) - var(--layout-traffic-light-x)); }
+.bottom-panel { height: var(--layout-ctl-h); padding: 0 var(--layout-thread-gutter); }
+.px2 { padding: 0 calc(var(--space) * 2); }
+.heading-app { font-size: var(--text-heading-app); line-height: 1.3; }
+.w-fig-300 { width: var(--fig-w-300); }
+.w-fig-330 { width: var(--fig-w-330); }
+.w-fig-380 { width: var(--fig-w-380); }
+.w-fig-400 { width: var(--fig-w-400); }
+.w-fig-440 { width: var(--fig-w-440); }
+.w-fig-480 { width: var(--fig-w-480); }
+.w-fig-500 { width: var(--fig-w-500); }
+.w-fig-520 { width: var(--fig-w-520); }
+.w-fig-600 { width: var(--fig-w-600); }
+.ai-start { align-items: flex-start; }
+.att-row { padding: calc(var(--space) * 2) var(--layout-composer-px) 0; }
+.pxb1 { padding: 0 var(--space) var(--space); }
+.win.w-review { width: var(--fig-w-review); max-width: 100%; }
+.w-review-body { height: var(--fig-h-review); }
+.w-scope { width: var(--fig-w-scope); flex: none; }
+.w-gitmenu { width: var(--fig-w-gitmenu); }
+.w-commit-msg { height: 80px; }
+.win.w-settings { width: var(--fig-w-settings); max-width: 100%; }
+.w-settings-col { width: var(--fig-w-settings-col); margin: 0; }
+.w-notify { width: var(--fig-w-notify); }
+.w-toasts { width: var(--fig-w-notify); }
+.win.w-m1a { width: var(--fig-w-m1a); max-width: 100%; }
+.w-m1a-sb { width: var(--fig-w-m1a-sb); }
+.w-m1a-rp { width: var(--fig-w-m1a-rp); padding: var(--layout-panel-pad); }
+.mnote { background: var(--color-warning-soft); color: var(--color-warning); border-radius: 6px; padding: 2px 6px; margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<h1>cupper 产品需求（带界面示意）</h1>
+<p class="mu3">文档编号 D03 · 2026-10-19 · 第 2 版（保真修订）。依据：PRD v1.3；技术设计 v1.3（5.7 的界面部分正由 D04 按 R06 修订）；任务计划 v1.0；R06 的一手界面规格 <code>docs/tasks/R06-codex-desktop-ui-firsthand/ui-spec.md</code>；界面复刻程度的决定 F1–F6（<code>docs/meetings/2026-10-19-ui-fidelity/minutes.md</code>）。本页只把已确认的文档画成图，不新增需求；与文档不一致时以文档为准。</p>
+
+<p class="dark-only note-dark">当前按暗色显示。暗色的设计参数是按 Codex 的推导规则计算的，<b>暗色未经截图核对</b>（ui-spec 7.3）。</p>
+
+<p><b>目录</b>：
+<a href="#s1">1 概览</a> ·
+<a href="#s2">2 主界面全景</a> ·
+<a href="#s3-1">3.1 新建会话</a> ·
+<a href="#s3-2">3.2 消息流</a> ·
+<a href="#s3-3">3.3 审批请求面板</a> ·
+<a href="#s3-4">3.4 提问与计划确认</a> ·
+<a href="#s3-5">3.5 输入框</a> ·
+<a href="#s3-6">3.6 审查面板</a> ·
+<a href="#s3-7">3.7 原生确认框</a> ·
+<a href="#s3-8">3.8 设置页</a> ·
+<a href="#s3-9">3.9 通知</a> ·
+<a href="#s3-10">3.10 cupper-cli</a> ·
+<a href="#s3-11">3.11 M1a 与 M1b 对比</a> ·
+<a href="#s3-12">3.12 M3 的 iOS 端</a> ·
+<a href="#s3-13">3.13 快捷键</a> ·
+<a href="#s4">4 关键场景</a> ·
+<a href="#s5">5 需求总表</a> ·
+<a href="#s6">6 边界</a>
+</p>
+
+<!-- ======================================================= 1 -->
+<h2 id="s1">1 概览</h2>
+
+<h3>1.1 一句话定位</h3>
+<p><b>一个开源、自用优先的 macOS agent 工作台。用 Codex 的交互方式驱动 Claude Code 和 Codex，并能在 iPhone 上通过端到端加密的通道随时接管。</b>（PRD 第 2 节）</p>
+<ul>
+  <li><b>界面 100% 复刻 Codex</b>，以作者本机安装的 Codex 客户端为准：布局、尺寸、亮色和暗色配色、字体与字号、动效、交互、文案结构、快捷键（UI-6，决定 F1）。</li>
+  <li><b>只复刻，不复制</b>：不使用对方的代码、样式表、图标、图片、字体，也不使用 OpenAI 的商标和品牌素材（F2）。</li>
+  <li><b>范围仍按里程碑</b>：Codex 有、但属于 M1 范围之外的功能，界面形态照 Codex 做，交付时间不变（F3）。</li>
+  <li>经 ACP 驱动用户本机已登录的官方 CLI；会话由一个与界面分离的<b>会话宿主</b>持有，桌面界面、cupper-cli、将来的 iPhone 都是它的客户端（AG-1、NFR-1）。</li>
+  <li>M3 加 iOS 端，经用户自建的中继远程接管会话，链路端到端加密（SEC-1、RL-1）。</li>
+</ul>
+
+<h3>1.2 用户、目标与场景</h3>
+<table>
+  <tr><th>用户</th><th>说明</th></tr>
+  <tr><td>首要</td><td>作者本人：同时使用 Claude Code 和 Codex 的开发者</td></tr>
+  <tr><td>次要</td><td>开源社区里有同样需求、愿意自己部署的开发者</td></tr>
+</table>
+<table>
+  <tr><th>#</th><th>目标</th><th>衡量方式</th></tr>
+  <tr><td>G1</td><td>日常开发中替代 Codex App 和终端里的 Claude Code</td><td>作者连续两周的日常开发主要在 cupper 中完成</td></tr>
+  <tr><td>G2</td><td>离开电脑时，能在 iPhone 上处理审批和提问、追加指令</td><td>Mac 醒着、cupper 在运行的前提下，离开期间的审批和提问都能在手机上完成</td></tr>
+  <tr><td>G3</td><td>除用户自己的设备外，cupper 链路上的任何一方都看不到会话内容</td><td>抓包和检查中继，只有路由所需的元数据和密文（模型提供方不在承诺范围内）</td></tr>
+</table>
+<table>
+  <tr><th>场景</th><th>一句话</th><th>里程碑</th><th>流程图</th></tr>
+  <tr><td>S1 并行开发</td><td>同一项目里两个会话（Claude Code 修 bug、Codex 补测试），各自在独立 worktree 中运行；侧边栏看出谁在运行、谁在等我</td><td>M1b</td><td><a href="#sc1">4 · S1</a></td></tr>
+  <tr><td>S2 审批与提问</td><td>输入框的位置换成请求面板，Enter 批准、Esc 拒绝；提问同样用请求面板；窗口不在前台时收到系统通知</td><td>M1a（Claude）/ M1b（Codex、通知）</td><td><a href="#sc2">4 · S2</a></td></tr>
+  <tr><td>S3 审查到提交</td><td>回合结束后看 diff，写行内评论，评论作为附件进入输入框发给 agent；按文件或 hunk 暂存，提交并推送</td><td>M1b</td><td><a href="#sc3">4 · S3</a></td></tr>
+  <tr><td>S4 运行中追加指令</td><td>agent 还在工作时补一句：默认插进当前回合（Steer），⌘Enter 排到下一回合（Queue）</td><td>M1a（排队）/ M1b（插话）</td><td><a href="#sc4">4 · S4</a></td></tr>
+  <tr><td>S5 离开工位</td><td>iPhone 收到加密推送"项目 A / 修 bug 需要审批"，查看命令后批准</td><td>M3</td><td><a href="#sc5">4 · S5</a></td></tr>
+  <tr><td>S6 手机上追加指令</td><td>在手机上看实时输出，追加一条消息让它换个思路</td><td>M3</td><td><a href="#sc6">4 · S6</a></td></tr>
+  <tr><td>S7 首次配对</td><td>桌面端显示二维码，手机扫码配对；手机丢了在桌面端撤销</td><td>M3</td><td><a href="#sc7">4 · S7</a></td></tr>
+</table>
+
+<h3>1.3 里程碑</h3>
+<pre class="mermaid">
+flowchart LR
+  M1a["M1a 宿主骨架"] --> M1b["M1b 桌面 MVP"]
+  M1b --> M2["M2 桌面完善"]
+  M2 --> M3["M3 iOS MVP"]
+  M3 --> M4["M4 iOS 增强"]
+  M1b -.->|"前提：开通 Apple Developer Program"| REL["发布（推迟）"]
+</pre>
+<table>
+  <tr><th>里程碑</th><th>交付什么</th><th>退出标准</th><th>界面上看得到的变化</th></tr>
+  <tr><td><b>M1a 宿主骨架</b></td><td>会话宿主、cupper-cli（第二客户端）、Claude Code 接入、消息流、审批与提问、重启续聊、崩溃恢复，以及最简的桌面界面。只有开发构建和 e2e 构建（设计 5.12.2）</td><td>NFR-1 的验收项全部由自动化测试通过；同一提交连续 20 次全绿；协议和 ShellAPI 契约冻结</td><td>最简界面：侧边栏、新建 Claude 本地会话、消息流（不折叠）、请求面板、排队、输入框、横幅、原生确认框，见 <a href="#s3-11">3.11</a></td></tr>
+  <tr><td><b>M1b 桌面 MVP</b></td><td>Codex 接入、审查与 Git、最小 worktree、其余 P0 的输入和消息流功能、系统通知、设置页、按 Codex 100% 复刻的界面（F1、F3：亮暗两套设计参数、转圈与未读点、发送按钮三态、排队预览与插话、计划药丸、改动卡片、文件树与底部药丸、窄窗口行为、半透明侧边栏、toast 位置），以及作者自用的本机构建</td><td>作者用两种 agent 走完 S1–S4（MAN-S1 至 MAN-S4）；NFR-2、NFR-9 的用例通过</td><td>本页第 2、3 节画的就是 M1b 完成后的样子</td></tr>
+  <tr><td><b>发布（推迟）</b></td><td>发布构建、Developer ID 签名、公证、自动更新、第三方声明等。前提是用户开通 Apple Developer Program 账号（2026-10-16 用户决定先自用）</td><td>不在 M1b 的退出标准内</td><td>更新提示（toast）、"正在安装更新"</td></tr>
+  <tr><td><b>M2 桌面完善</b></td><td>PRD 6.1 的 P1，按 F3 包括：内置终端抽屉（UI-1）、摘要卡片、侧边栏搜索、Activity 视图、组织与排序菜单、Pinned 分组、不属于项目的 Chats 分组；以及 ⌘K、前进/后退、排队消息的重排与删除、文件附件、Plan 模式、worktree 增强、子代理与上下文用量、Mermaid、会话分叉、生成提交信息、其余审查范围、创建 PR、文件树与预览、主题自定义、通知设置、MCP 状态、AG-6；后台常驻（NFR-8，M3 之前完成）</td><td>按需求迭代</td><td>本页用虚线框、半透明画出的元素</td></tr>
+  <tr><td><b>M3 iOS MVP</b></td><td>配对、会话列表、实时输出、追加消息、审批与提问、中断、加密推送（MB-1 至 MB-7）；用户自建的无状态中继；桌面端的配对和设备管理界面</td><td>S5–S7 跑通；PRD 6.3 的安全要求全部满足；安全设计评审通过；"恶意中继替换配对应答"的测试必须失败</td><td>iPhone App，见 <a href="#s3-12">3.12</a></td></tr>
+  <tr><td><b>M4 iOS 增强</b></td><td>PRD 6.2 的 P1：只读 diff、手机上新建会话与切换配置、多台 Mac、桌面在用时不推送；中继的密文缓存和电脑离线时的历史（RL-2、MB-10）</td><td>按需求迭代</td><td>见 <a href="#s3-12">3.12</a> 末尾</td></tr>
+</table>
+
+<h3>1.4 这份页面怎么读</h3>
+<ul>
+  <li>每个示意图用 <span class="n">①</span><span class="n">②</span><span class="n">③</span> 标注，图下的表格逐项对应：编号、元素、说明、PRD 需求编号、里程碑。说明里的"Codex：…"是 Codex 的英文原文，只用来对照结构；cupper 的界面文案是中英双语，图里写中文。</li>
+  <li><b>里程碑</b>：需求的里程碑取自设计 5.12；按 F3 新进 M1 的 Codex 界面元素标 M1b（界面复刻在 M1b 完成）；"M1a / M1b"表示 M1a 先做基础、M1b 补全。</li>
+  <li><b>设计参数</b>：尺寸、字号、圆角、颜色、阴影都取自 ui-spec 第 2、3 节，集中写在本页 <code>&lt;style&gt;</code> 开头的变量里，变量名沿用 ui-spec 建议的 token 名。页面跟随系统的亮色或暗色。<b>暗色未经截图核对</b>：暗色值是按 Codex 的推导规则计算的（ui-spec 7.3）。</li>
+  <li>主界面全景按默认窗口 1280 × 820 的真实尺寸画，再整体缩放到 90% 放进页面；其余局部图按 1:1 画。图标用简单的字符占位，不使用 Codex 的图标。</li>
+  <li><b>文案</b>：加引号的界面文字来自 PRD、设计或 ui-spec；标"示意"的是为了画图编的样例（项目名、文件名、命令、时长等）。审批和提问的选项文字以 agent 原文为准（AP-2），图里借用 PRD 的示例。</li>
+  <li><span class="tag later">虚线、半透明</span> = M1b 之后才交付的元素，多数是 M2（F3 列出的 P1）。ChatGPT 的全局导航栏不做，图里不画。</li>
+  <li>"待定 Qn"指设计 5.13 的待定问题编号；"待 D04"指设计修订任务 D04 要定的细节。</li>
+</ul>
+
+<!-- ======================================================= 2 -->
+<h2 id="s2">2 主界面全景（M1b 完成后）</h2>
+<p><b>结论</b>：照 Codex 的外壳。44px 的顶栏和交通灯融为一体；左栏默认 340px（可拖动，240–520），是按项目分组的会话列表；中间是 768px 宽的会话列（内容 736px），输入框贴底；右侧是贴满高度的侧边面板，M1 只有"变更"（审查）一个标签。ChatGPT 的全局导航栏不做（F3）。</p>
+
+<div class="scroll"><div class="win full wf">
+  <div class="tb">
+    <div class="row nowrap tb-left">
+      <span class="lights">● ● ●</span>
+      <span class="tbtn later">◀ ▶</span><span class="n">①</span>
+      <span class="tbtn">▯</span><span class="n">②</span>
+    </div>
+    <span class="ico">▭</span><b class="sm">修复登录 bug</b><span class="n">③</span>
+    <span class="sp"></span>
+    <span class="tag warn">本地鉴权较弱</span><span class="n">④</span>
+    <span class="tbtn">打开 ⌄</span><span class="n">⑤</span>
+    <span class="tbtn later">▁</span><span class="n">⑥</span>
+    <span class="tbtn on">▐</span><span class="n">⑦</span>
+    <span class="tbtn later">▤</span><span class="n">⑧</span>
+    <span class="tbtn">⋯</span><span class="n">⑨</span>
+  </div>
+  <div class="cols">
+    <div class="sb">
+      <div class="sbh"><b>Cupper</b><span class="dot ok"></span><span class="xs mu3">宿主运行中</span><span class="n">⑩</span><span class="sp"></span><span class="ib later">◇</span><span class="ib later">⌕</span><span class="n">⑪</span></div>
+      <div class="si"><span class="ico">✎</span><span class="t">新会话</span><span class="n">⑫</span></div>
+      <div class="gt later">置顶</div>
+      <div class="si later"><span class="t">调研缓存方案</span><span class="n">⑬</span></div>
+      <div class="gt row nowrap">项目<span class="sp"></span>＋<span class="n">⑭</span></div>
+      <div class="si"><span class="ico">▭</span><span class="t">项目 A</span><span class="n">⑮</span></div>
+      <div class="si in on"><span class="spin"></span><span class="t">修复登录 bug</span><span class="tag">Claude</span></div>
+      <div class="si in"><span class="t">补测试</span><span class="xs mu3">等待批准</span><span class="tag">Codex</span></div>
+      <div class="si in"><span class="t">设计接口</span><span class="xs mu3">需要用户输入</span><span class="tag">Claude</span></div>
+      <div class="si in"><span class="dot unread"></span><span class="t">重构配置读取</span><span class="tag">Codex</span></div>
+      <div class="si in"><span class="t">升级依赖</span><span class="xs del-t">出错</span><span class="tag">Codex</span></div>
+      <div class="si in"><span class="t">整理文档</span><span class="tag">Claude</span></div>
+      <div class="row xs"><span class="n">⑯</span><span class="mu3">状态</span><span class="n">⑰</span><span class="mu3">agent 标识</span></div>
+      <div class="si in mu3"><span class="t">展开显示</span><span class="n">⑱</span></div>
+      <div class="si"><span class="ico">▭</span><span class="t">项目 B</span><span class="tag warn">未信任</span><span class="n">⑲</span></div>
+      <div class="gt later">聊天</div>
+      <div class="si later"><span class="t">不属于项目的会话</span><span class="n">⑳</span></div>
+      <div class="sp"></div>
+      <div class="sbanner row">命令行工具申请权限<span class="sp"></span><span class="btn">查看</span><span class="n">㉑</span></div>
+      <div class="si"><span class="ico">◎</span><span class="t">设置</span><span class="n">㉒</span></div>
+    </div>
+    <div class="mn">
+      <div class="thread">
+        <div class="mt3"></div>
+        <div class="bub">登录接口在 token 过期后返回 500，帮我修一下（示意）</div>
+        <div class="turn">用时 1m 12s ›<span class="n">㉓</span></div>
+        <div class="msg">已修复：token 过期时返回 401，并补了两个测试。<span class="n">㉔</span></div>
+        <div class="card">
+          <div class="r"><b>2 个文件已更改</b><span class="add-t">+52</span><span class="del-t">−3</span><span class="sp"></span><span class="btn ghost later">撤销</span><span class="n">㉕</span></div>
+          <div class="r"><span class="mono">src/auth.rs</span><span class="sp"></span><span class="add-t">+12</span><span class="del-t">−3</span></div>
+          <div class="r"><span class="mono">tests/auth_test.rs</span><span class="sp"></span><span class="add-t">+40</span></div>
+        </div>
+        <div class="bub">再跑一遍全部测试</div>
+        <div class="col g4">
+          <div class="turn">已处理 0m 18s<span class="n">㉖</span></div>
+          <div class="act"><span class="ico">▤</span><span class="t">已读取 src/auth.rs</span></div>
+          <div class="act"><span class="ico">▣</span><span class="t">编辑了文件、运行了命令 ›</span></div>
+          <div class="act"><span class="ico">▣</span><span class="t shim">正在运行 cargo test --workspace</span><span class="n">㉗</span></div>
+        </div>
+        <div class="sp"></div>
+        <div class="row center"><span class="pill">第 2 / 3 步 · 跑全部测试</span><span class="n">㉘</span><span class="fab">↓</span><span class="n">㉙</span></div>
+        <div class="qrow"><span class="t">顺便检查错误信息的文案</span><span class="sp"></span><span class="btn ghost">编辑</span><span class="btn">插话</span><span class="n">㉚</span></div>
+        <div class="col">
+          <div class="composer">
+            <div class="cin"><span class="ph">处理中…</span></div>
+            <div class="cfoot"><span class="cb">＋</span><span class="n">㉛</span><span class="cb">⛉ default ⌄</span><span class="n">㉜</span><span class="sp"></span><span class="cb later">◔</span><span class="n">㉝</span><span class="cb">模型 推理强度 ⌄</span><span class="n">㉞</span><span class="send">■</span><span class="n">㉟</span></div>
+          </div>
+          <div class="ubar">工作树 · cupper/fix-login ⌄<span class="n">㊱</span></div>
+        </div>
+      </div>
+      <div class="later xs mu3 bottom-panel">底部面板 · 终端<span class="n">㊲</span></div>
+    </div>
+    <div class="rp">
+      <div class="ph-h"><span class="tab on">变更</span><span class="n">㊳</span><span class="tab later">终端</span></div>
+      <div class="rvh"><span class="btn">最近一轮 ⌄</span><span class="n">㊴</span><span class="add-t">+52</span><span class="del-t">−3</span><span class="sp"></span><span class="ib">☰</span><span class="ib">⋯</span><span class="n">㊵</span><span class="btn">Git ⌄</span><span class="n">㊶</span></div>
+      <div class="xs mu3 px2">本地模式下可能混入其他改动<span class="n">㊷</span></div>
+      <div class="rvbody">
+        <div class="dv">
+          <div class="dfh"><span class="gs mod"></span><span class="mono">src/auth.rs</span><span class="sp"></span><span class="ib">＋</span><span class="ib">↺</span><span class="n">㊸</span></div>
+          <div class="fold">⌃ 39 行未改动 ⌄</div>
+          <div class="dl d"><span class="ln">41</span>-  let c = decode(t)?;</div>
+          <div class="dl a"><span class="ln">41</span>+  let c = match decode(t) {</div>
+          <div class="dl a"><span class="ln">42</span>+    Err(e) if e.expired() =&gt;</div>
+          <div class="dl"><span class="ln">＋</span><span class="mu3">悬停行号出现 ＋</span><span class="n">㊹</span></div>
+          <div class="cbox">这里应返回 401<div class="row mt"><span class="sp"></span><span class="btn ghost">取消</span><span class="btn p">评论</span><span class="n">㊺</span></div></div>
+          <div class="dfh"><span class="gs add"></span><span class="mono">tests/auth_test.rs</span></div>
+        </div>
+        <div class="bpill"><span class="btn ghost">还原全部</span><span class="btn">暂存全部</span><span class="n">㊻</span></div>
+      </div>
+    </div>
+  </div>
+</div></div>
+<p class="cap">图 2-1 主界面全景（M1b，默认窗口 1280 × 820，按 90% 缩放）。右侧面板画成最小宽度 320；会话数据均为示意。</p>
+
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td>后退 / 前进</td><td>顶栏里交通灯右边；⌘[ / ⌘]。功能属于 PS-6（P1）</td><td>PS-6</td><td>M2</td></tr>
+  <tr><td>②</td><td>左栏开关</td><td>⌘B 或 ⌘⇧S；窗口窄于 768px 时左栏变成浮层</td><td>PS-1</td><td>M1b</td></tr>
+  <tr><td>③</td><td>会话标题</td><td>文件夹图标加会话标题；可以重命名（⌘⌥R）</td><td>PS-3</td><td>M1a（重命名 M1b）</td></tr>
+  <tr><td>④</td><td>"本地鉴权较弱"标记</td><td>cupper 特有。只在开发构建和自用构建（退化认证）出现；首次启动说明一次，之后常驻顶栏，设置页常驻说明（ADR-05、设计 5.8.1）</td><td>SEC-8</td><td>M1a</td></tr>
+  <tr><td>⑤</td><td>"打开"</td><td>cupper 特有：在外部终端、编辑器或 Finder 中打开工作区（⌘⌥T 打开终端）</td><td>UI-0</td><td>M1b</td></tr>
+  <tr><td>⑥</td><td>底部面板开关</td><td>⌘J，开合内置终端抽屉</td><td>UI-1</td><td>M2</td></tr>
+  <tr><td>⑦</td><td>侧边面板开关</td><td>⌘⌥B；打开时按钮换成次级底色。⌃⇧G 直接打开"变更"标签</td><td>PS-1</td><td>M1b</td></tr>
+  <tr><td>⑧</td><td>摘要卡片开关</td><td>输出内容、来源、计划的浮动卡片（300px），F3 列为 P1</td><td>MS-7</td><td>M2</td></tr>
+  <tr><td>⑨</td><td>会话菜单"⋯"</td><td>放会话级操作：重命名、归档等（PS-3）；Codex 菜单里的分叉、置顶、在新窗口打开等属于 P1、P2，M1 不出现</td><td>PS-3</td><td>M1b</td></tr>
+  <tr><td>⑩</td><td>侧边栏头部</td><td>产品名加宿主状态点：绿色运行中、灰色已断开、红色出错、蓝色转圈连接中（样式取 Codex 的远程连接状态点）。Codex 这里是产品模式切换"Codex ⌄"，cupper 不需要</td><td>PS-1、NFR-8</td><td>M1b</td></tr>
+  <tr><td>⑪</td><td>Activity、搜索</td><td>铃铛（Codex：View activity）和搜索，F3 列为 P1</td><td>PS-6</td><td>M2</td></tr>
+  <tr><td>⑫</td><td>新会话</td><td>⌘N；带编辑图标的一行（Codex：New chat）</td><td>PS-3、AG-3</td><td>M1a</td></tr>
+  <tr><td>⑬</td><td>置顶分组</td><td>Pinned 分组，F3 列为 P1</td><td>PS-6</td><td>M2</td></tr>
+  <tr><td>⑭</td><td>项目分组与添加项目</td><td>分组标题 13px、三级文字色；"＋"添加项目后走信任确认（<a href="#s3-7">3.7</a>）</td><td>PS-2</td><td>M1a（移除项目 M1b）</td></tr>
+  <tr><td>⑮</td><td>项目行</td><td>文件夹图标加项目名；会话行缩进挂在下面，行高 30px，圆角 10px，选中行是 ghost-hover 底色</td><td>PS-2</td><td>M1a</td></tr>
+  <tr><td>⑯</td><td>会话状态</td><td>按 Codex：运行中是行首灰色转圈；未读是行首蓝点；"等待批准"（审批）和"需要用户输入"（提问）是文字标签；出错有专门文案。状态由宿主统一计算，各端一致；未读全局同步（U4）</td><td>PS-4</td><td>M1a（状态）/ M1b（Codex 样式）</td></tr>
+  <tr><td>⑰</td><td>agent 标识</td><td>cupper 特有：每个会话标出是哪个 agent。Codex 没有这一项，样式待 D04 定</td><td>AG-3</td><td>M1a（Claude）/ M1b（Codex）</td></tr>
+  <tr><td>⑱</td><td>展开显示</td><td>每个项目默认显示若干条，其余收起（Codex：Show more / Show less）</td><td>PS-2</td><td>M1b</td></tr>
+  <tr><td>⑲</td><td>"未信任"标记</td><td>cupper 特有。未信任的项目：Claude 不加载项目自带的配置，Codex 不能使用</td><td>PS-2</td><td>M1a</td></tr>
+  <tr><td>⑳</td><td>聊天分组</td><td>不属于任何项目的会话（Codex：Chats），F3 列为 P1</td><td>—</td><td>M2</td></tr>
+  <tr><td>㉑</td><td>提权申请横幅</td><td>cupper 特有：cupper-cli 申请写或审批权限。样式借用 Codex 侧边栏底部的提醒卡片</td><td>SEC-8</td><td>M1a</td></tr>
+  <tr><td>㉒</td><td>设置</td><td>⌘,。Codex 的设置在被省略的全局导航栏里，cupper 按设计放在侧边栏底部</td><td>UI-2</td><td>M1b</td></tr>
+  <tr><td>㉓</td><td>回合标题</td><td>"用时 {time}"（Codex：Worked for {time}），13px 次要文字，左对齐，下方 1px 边线；点击展开过程</td><td>MS-3</td><td>M1a（带状态，不折叠）/ M1b（折叠）</td></tr>
+  <tr><td>㉔</td><td>最终回答</td><td>不加气泡，Markdown 排版：14px，行高 1.625</td><td>MS-1</td><td>M1a（高亮 M1b）</td></tr>
+  <tr><td>㉕</td><td>改动卡片</td><td>回合末尾"{n} 个文件已更改 +a −b"，每个文件一行。数据来自回合快照（GT-1）。Codex 卡片上的"撤销"（Undo）PRD 没有对应需求，<b>待 D04 定</b></td><td>GT-1、MS-3</td><td>M1b（F3）</td></tr>
+  <tr><td>㉖</td><td>运行中的回合标题</td><td>"已处理 {time}"（Codex：Working for {time}）</td><td>MS-3</td><td>M1a</td></tr>
+  <tr><td>㉗</td><td>工具活动</td><td>16px 图标加过去时摘要，13px 三级文字色；同类操作合并成一行；运行中的写法带闪光动画</td><td>MS-3</td><td>M1a（Claude）/ M1b（Codex）</td></tr>
+  <tr><td>㉘</td><td>计划药丸</td><td>浮在输入框上方："第 n / m 步"（Codex：Step {n} / {total}）</td><td>MS-4</td><td>M1b（F3）</td></tr>
+  <tr><td>㉙</td><td>回到底部</td><td>28px 圆形按钮，浮在输入框上方居中</td><td>NFR-6</td><td>M1a</td></tr>
+  <tr><td>㉚</td><td>排队消息</td><td>输入框上方每条一行：预览、编辑、立即插话（Codex：Steer，"Submit without interrupting the model"）；删除和重排属于 CP-8</td><td>CP-6</td><td>M1a（排队）/ M1b（编辑、插话，F3）</td></tr>
+  <tr><td>㉛</td><td>＋ 附件</td><td>图片；拖放时显示覆盖层</td><td>CP-2</td><td>M1b</td></tr>
+  <tr><td>㉜</td><td>权限按钮</td><td>图标加当前模式的短名，在输入框内部的底部一行；取值来自 agent</td><td>CP-4</td><td>M1b</td></tr>
+  <tr><td>㉝</td><td>上下文用量环</td><td>Codex 默认不显示，需要在设置里打开；对应上下文用量显示（P1）</td><td>MS-6</td><td>M2</td></tr>
+  <tr><td>㉞</td><td>模型与推理强度</td><td>合在一个按钮里："{模型} {强度} ⌄"；⌃⇧M</td><td>CP-4、AG-4</td><td>M1b</td></tr>
+  <tr><td>㉟</td><td>发送按钮</td><td>28px 圆形，三种状态：空时 50% 透明、可发送、运行中变成停止（实心方块）。运行中按两次 Esc 也能停止</td><td>CP-1、CP-7</td><td>M1a（发送、中断）/ M1b（三态，F3）</td></tr>
+  <tr><td>㊱</td><td>动作条</td><td>输入框下方的一条（Codex：composer utility bar）：工作树和分支。已有会话按需显示</td><td>CP-5</td><td>M1b</td></tr>
+  <tr><td>㊲</td><td>底部面板</td><td>内置终端抽屉，默认高 280px，可拖动，F3 列为 P1</td><td>UI-1</td><td>M2</td></tr>
+  <tr><td>㊳</td><td>标签条</td><td>面板头高 40px；标签高 32px、最小宽 90px，选中的标签有边框和浮起底色。M1 只有"变更"（Codex：Changes）</td><td>PS-1</td><td>M1b</td></tr>
+  <tr><td>㊴</td><td>查阅来源</td><td>范围下拉（Codex：Review source），见 <a href="#s3-6">3.6</a></td><td>GT-1</td><td>M1b</td></tr>
+  <tr><td>㊵</td><td>文件树开关、选项菜单</td><td>"显示文件"（⌘⇧E）和视图选项；全景图里文件树是关着的</td><td>GT-1</td><td>M1b（F3）</td></tr>
+  <tr><td>㊶</td><td>Git 操作</td><td>提交、推送的入口菜单（Codex：Git actions），按钮位置是示意</td><td>GT-4</td><td>M1b</td></tr>
+  <tr><td>㊷</td><td>范围的注释</td><td>cupper 特有：本地模式下"最近一轮"可能混入用户自己或其他会话的改动</td><td>GT-1</td><td>M1b</td></tr>
+  <tr><td>㊸</td><td>diff 与按文件、hunk 操作</td><td>文件头吸顶，Git 状态用彩色图标表示，不用字母；暂存、取消暂存、还原都是只有图标的 28px 圆形按钮，悬停显示名称</td><td>GT-1、GT-3</td><td>M1b</td></tr>
+  <tr><td>㊹</td><td>行内评论入口</td><td>悬停行号出现 ＋</td><td>GT-2</td><td>M1b</td></tr>
+  <tr><td>㊺</td><td>评论框</td><td>"添加一条评论…"，按钮"评论""取消"；评论作为附件进入输入框，随下一条消息发出（<a href="#s3-5">3.5</a>）</td><td>GT-2</td><td>M1b</td></tr>
+  <tr><td>㊻</td><td>底部整组操作</td><td>浮在面板底部居中的药丸，距底 20px："还原全部""暂存全部"</td><td>GT-3</td><td>M1b（F3）</td></tr>
+</table>
+<p><b>不在图里、但全局存在的</b>：</p>
+<ul>
+  <li>toast 在顶部居中，距顶 40px，最多同时 3 条，宽度不超过 790px：连接状态、更新提示、"已在别处处理"。M1a 有 toast，位置按 Codex 是 M1b（F3）。</li>
+  <li>断线时显示"正在重新连接"；宿主校验失败时显示"无法验证宿主"并提供"重启宿主"（M1a，设计 5.7.8）。</li>
+  <li>亮暗主题跟随系统（UI-3）；半透明侧边栏可以在设置里关（F3，M1b）；中英文跟随系统（UI-5，M1a 只有一种语言，全部文案走 i18n 的键）。</li>
+  <li>窄窗口：宽度小于 768px 时左栏浮在内容上面，右侧面板自动收起（F3，M1b）。</li>
+  <li>审批和提问出现时，输入框的位置换成请求面板（<a href="#s3-3">3.3</a>）。</li>
+</ul>
+
+<!-- ======================================================= 3 -->
+<h2 id="s3">3 逐个界面</h2>
+
+<!-- ------------------------------------------------ 3.1 -->
+<h3 id="s3-1">3.1 新建会话</h3>
+<p><b>结论</b>：照 Codex 的新建会话页：页面中部一个大标题，项目名本身就是项目选择器；输入框紧跟在下面，锚在视口高度 42% 的位置；输入框下方的动作条放工作树开关和起始分支。cupper 多一个 agent 选择。会话总是和第一条消息一起创建，没有空会话；第一条消息发出之前就显示所选 agent 的模型、推理强度、权限模式和斜杠命令（AG-4）。</p>
+
+<div class="scroll"><div class="win mid wf">
+  <div class="tb"><span class="lights">● ● ●</span><b class="sm">新会话</b></div>
+  <div class="thread">
+    <div class="mt3"></div>
+    <div class="warnbox">首次使用 Claude 需要联网安装适配器（约 6–8 秒）<span class="n">①</span></div>
+    <div class="mt3"></div>
+    <div class="row center heading-app">你想让我们在 <u>项目 A ⌄</u> 中构建什么？<span class="n">②</span></div>
+    <div class="col">
+      <div class="composer">
+        <div class="cin"><span class="ph">可向 Claude Code 询问任何问题。输入 @ 提及文件（示意）</span><span class="n">③</span></div>
+        <div class="cfoot"><span class="cb">＋</span><span class="cb">⛉ default ⌄</span><span class="n">④</span><span class="sp"></span><span class="cb">模型 推理强度 ⌄</span><span class="n">⑤</span><span class="send dis">↑</span><span class="n">⑥</span></div>
+      </div>
+      <div class="ubar">agent <b>Claude Code ⌄</b><span class="n">⑦</span>· 工作树 <span class="toggle on"></span><span class="n">⑧</span>· 起始分支 main ⌄<span class="n">⑨</span><span class="sp"></span><span class="xs">→ 新分支 cupper/&lt;短名&gt;</span></div>
+    </div>
+    <div class="fig">
+      <div class="pop w-fig-300">
+        <div class="hd">选择 agent<span class="n">⑩</span></div>
+        <div class="it on row">Claude Code<span class="sp"></span><span class="dot ok"></span><span class="xs mu3">可用</span></div>
+        <div class="it row">Codex<span class="sp"></span><span class="xs del-t">未登录</span></div>
+        <div class="it xs mu3">请在终端完成登录，然后重新检测（示意）</div>
+        <div class="it xs mu3">本机 CLI 版本不在已验证范围内（示意）<span class="n">⑪</span></div>
+      </div>
+      <div class="pop w-fig-330">
+        <div class="hd">应如何批准 Claude Code 的操作？<span class="n">⑫</span></div>
+        <div class="it on">default</div>
+        <div class="it">plan</div>
+        <div class="it row">acceptEdits<span class="tag warn">低打扰</span></div>
+        <div class="it row">auto<span class="tag warn">低打扰</span></div>
+        <div class="it row">bypassPermissions<span class="tag warn">完全访问 · 需系统确认</span></div>
+      </div>
+    </div>
+    <div class="warnbox">完全访问已开启<span class="n">⑬</span></div>
+  </div>
+</div></div>
+<p class="cap">图 3-1 新建会话页（M1b；主区域，左栏省略）。两个弹出层和"完全访问已开启"是展开、切换后才出现的，这里一并画出。</p>
+
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td>运行时安装提示</td><td>原文"首次使用 Claude 需要联网安装适配器（约 6–8 秒）"（设计 5.2.12），用 Codex 的警告框样式</td><td>AG-1</td><td>M1a</td></tr>
+  <tr><td>②</td><td>大标题与项目选择</td><td>"你想让我们在 {project} 中构建什么？"（Codex：What should we build in {project}?），28px；项目名就是选择器，只能选已添加的项目</td><td>PS-2</td><td>M1a（项目选择）/ M1b（Codex 样式）</td></tr>
+  <tr><td>③</td><td>输入框（新建模式）</td><td>与会话页同一个输入框；占位文字照 Codex 的结构，把"Codex"换成所选 agent，去掉 cupper 没有的"插件"（示意）。第一条消息与会话一起受理、落盘</td><td>CP-1</td><td>M1a</td></tr>
+  <tr><td>④</td><td>权限按钮</td><td>取值和名称来自 agent，当前值来自用户自己的 CLI 配置</td><td>CP-4、AG-4</td><td>M1b</td></tr>
+  <tr><td>⑤</td><td>模型与推理强度</td><td>取值来自 agent；默认值来自用户的 CLI 配置，可能是贵的大模型加高推理强度，所以要显示出来</td><td>CP-4、AG-4</td><td>M1b</td></tr>
+  <tr><td>⑥</td><td>发送按钮（禁用态）</td><td>输入为空时 50% 透明；斜杠命令在输入 <code>/</code> 时弹出（<a href="#s3-5">3.5</a>）</td><td>CP-1、CP-3</td><td>M1a（发送）/ M1b（斜杠命令、三态）</td></tr>
+  <tr><td>⑦</td><td>agent 选择</td><td>cupper 特有，放在动作条里，<b>位置待 D04 定</b>。会话创建后不能更换 agent</td><td>AG-3</td><td>M1a（只有 Claude）/ M1b（两者）</td></tr>
+  <tr><td>⑧</td><td>工作树开关</td><td>Codex：Worktree。关是本地目录，开是新建 worktree；非 git 项目不能开</td><td>CP-5</td><td>M1a（本地）/ M1b（worktree）</td></tr>
+  <tr><td>⑨</td><td>起始分支</td><td>基于所选分支直接创建有名字的分支 <code>cupper/&lt;短名&gt;</code>，worktree 放在仓库之外</td><td>CP-5</td><td>M1b</td></tr>
+  <tr><td>⑩</td><td>agent 可用状态</td><td>宿主检测：可用、未安装、未登录等；cupper 不提供登录，指导用户在终端处理。项目未信任时 Codex 不能使用</td><td>AG-2、PS-2</td><td>M1a（检测）/ M1b</td></tr>
+  <tr><td>⑪</td><td>版本提示</td><td>本机 CLI 版本不在已验证范围内时提示，不阻止</td><td>AG-5</td><td>M1b</td></tr>
+  <tr><td>⑫</td><td>权限弹出层</td><td>标题照 Codex（How should … actions be approved?）；选项是 agent 自己的模式，cupper 标出档位（下表）。切到完全访问要经原生确认框（<a href="#s3-7">3.7</a>）</td><td>CP-4</td><td>M1b</td></tr>
+  <tr><td>⑬</td><td>完全访问的警告</td><td>照 Codex："完全访问已开启"（Full access is on）显示在输入框上方；低打扰档位另加提示（设计 5.7.4、U6）</td><td>CP-4</td><td>M1b</td></tr>
+  <tr><td>—</td><td>Codex 有、cupper 不做的</td><td>运行位置里的 Cloud 和 Remote、环境选择、首页建议卡片、"不在项目里工作"：PRD 没有对应需求（云端和 SSH 是非目标；无项目会话是 P1）</td><td>—</td><td>—</td></tr>
+</table>
+
+<h4>权限模式与审批档位（设计 5.6.5、5.8.2）</h4>
+<table>
+  <tr><th>档位</th><th>含义</th><th>Claude Code</th><th>Codex</th><th>谁能把会话切到这一档</th></tr>
+  <tr><td>normal</td><td>越界操作逐个由用户审批</td><td>default、plan</td><td>read-only、workspace-write</td><td>任何有写权限的客户端</td></tr>
+  <tr><td>elevated（低打扰）</td><td>由分类器或规则代替用户审批一部分操作</td><td>acceptEdits、auto</td><td>agent（Auto review）</td><td>桌面窗口（加提示）；cupper-cli 需要同时有 write 和 approve；手机不能（M3，SEC-9）</td></tr>
+  <tr><td>full_access</td><td>不再审批</td><td>bypassPermissions</td><td>agent-full-access</td><td>只能经桌面的原生确认框</td></tr>
+  <tr><td>表里没有的取值</td><td colspan="4">一律按 full_access 处理，直到对照表更新。Codex 的完整取值待兼容矩阵补测（待定 Q25）</td></tr>
+</table>
+<p>实际档位超出设定者的权限时（例如只有写权限的 cupper-cli 新建了会话，而 Codex 的默认档位是 agent），会话进入"档位待确认"：暂停发送，会话上方出现提示，桌面端经原生确认或把档位降下来后恢复（设计 5.2.6，M1a）。</p>
+
+<!-- ------------------------------------------------ 3.2 -->
+<h3 id="s3-2">3.2 消息流</h3>
+<p><b>结论</b>：宿主输出语义化的条目，界面按 Codex 的样式排版。相邻条目间距 16px，同一组内 4px。工具活动是 16px 图标加一句过去时摘要，同类操作合并成一行；回合运行中写"已处理 {time}"，结束后收成"用时 {time}"一行，只留最终回答和改动卡片；被停止、失败的回合不收起。</p>
+
+<h4>3.2.1 运行中的回合</h4>
+<div class="scroll"><div class="win mid wf"><div class="thread">
+  <div class="mt3"></div>
+  <div class="bub">登录接口在 token 过期后返回 500。日志在下面……（长消息，已折叠）<div class="mu3 sm">显示更多 ⌄</div></div>
+  <div class="row right"><span class="n">①</span></div>
+  <div class="col g4">
+    <div class="turn">已处理 0m 48s<span class="n">②</span></div>
+    <div class="act"><span class="ico">✧</span><span class="t">已思考 6s ›</span><span class="n">③</span></div>
+    <div class="act"><span class="ico">▣</span><span class="t">编辑了文件、读取了文件、运行了命令 ⌄</span><span class="n">④</span></div>
+    <div class="act"><span class="ico">▤</span><span class="t">已读取 src/auth.rs</span></div>
+    <div class="act"><span class="ico">⌕</span><span class="t">已在 src 中搜索“refresh_token”</span></div>
+    <div class="act"><span class="ico">✎</span><span class="t">已编辑 auth.rs</span><span class="add-t">+12</span><span class="del-t">−3</span><span class="n">⑤</span></div>
+    <div class="cmd">
+      <div class="h"><span>已运行 cargo test auth</span><span class="sp"></span><span>退出码 101 · 3.2s</span></div>
+      <div class="b">running 4 tests
+test auth::expired_token ... FAILED
+test result: FAILED. 3 passed; 1 failed</div>
+    </div>
+    <div class="row"><span class="n">⑥</span></div>
+    <div class="act"><span class="ico">▣</span><span class="t">已运行 make check</span><span class="tag">退出码未知</span><span class="n">⑦</span></div>
+  </div>
+  <div class="msg">测试里有一个失败，原因是过期判断用了本地时间。我改成用服务器时间后再跑一次……<span class="n">⑧</span></div>
+  <div class="act"><span class="ico">▣</span><span class="t shim">正在运行 cargo test --workspace</span><span class="n">⑨</span></div>
+</div></div></div>
+<p class="cap">图 3-2a 运行中的回合（会话列 768px）。摘要语义由宿主的 <code>tool_kind</code> 决定，文案是示意。</p>
+
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td>用户消息</td><td>靠右气泡：最大宽为内容列的 70%，内边距 16 × 10，圆角 22，前景 5% 的底色。长消息底部渐隐，"显示更多 / 收起"。Codex 悬停时的"复制、编辑"按钮里，编辑后重发 PRD 没有对应需求</td><td>MS-1</td><td>M1a（Codex 样式 M1b）</td></tr>
+  <tr><td>②</td><td>运行中的回合标题</td><td>"已处理 {time}"（Working for {time}）；带状态</td><td>MS-3</td><td>M1a</td></tr>
+  <tr><td>③</td><td>思考</td><td>运行中"正在思考"带闪光；结束后"已思考 {elapsed}"（Thought for），可以折叠；在活动组内显示，不打断分组</td><td>MS-2</td><td>M1a</td></tr>
+  <tr><td>④</td><td>活动组</td><td>连续的工具调用合并成一行汇总，末尾展开箭头；展开后最高 224px，超出部分上下渐隐。助手正文、请求、错误、提示、计划都会结束当前组</td><td>MS-3</td><td>M1a</td></tr>
+  <tr><td>⑤</td><td>工具单行摘要</td><td>"已读取 {path}""已在 {path} 中搜索“{query}”""已编辑 {filename}""已运行 {command}"（Read / Searched for … in / Edited / Ran），13px，三级文字色。文件编辑的片段只用于展示过程，回合级改动以 git 为准</td><td>MS-3</td><td>M1a（Claude）/ M1b（Codex）</td></tr>
+  <tr><td>⑥</td><td>命令输出</td><td>带边框的块，圆角 12.5px：标题条 13px，正文等宽 12px，最高约 240px 可滚动；显示退出码和用时。输出超过内联上限时只显示尾部预览，完整内容按需获取；Claude 的命令输出不流式，结束时一次给出</td><td>MS-3</td><td>M1a</td></tr>
+  <tr><td>⑦</td><td>降级显示</td><td>拿不到退出码或输出时降级，退回 agent 给的标题</td><td>MS-3</td><td>M1a</td></tr>
+  <tr><td>⑧</td><td>助手正文</td><td>流式 Markdown，正文 14px、行高 1.625；不渲染原始 HTML，远程图片显示为链接（设计 5.7.8）</td><td>MS-1</td><td>M1a</td></tr>
+  <tr><td>⑨</td><td>运行中的工具</td><td>"正在运行 {command}"（Running），带闪光动画；系统开启"减少动态效果"时关闭动画</td><td>MS-3</td><td>M1b</td></tr>
+</table>
+
+<h4>3.2.2 结束后的回合</h4>
+<div class="scroll"><div class="win mid wf"><div class="thread">
+  <div class="mt3"></div>
+  <div class="bub">再加一个刷新 token 的测试</div>
+  <div class="turn">用时 1m 12s ›<span class="n">①</span></div>
+  <div class="msg">已加测试 <code>refresh_after_expiry</code>，全部通过。<span class="n">②</span></div>
+  <div class="card">
+    <div class="r"><b>1 个文件已更改</b><span class="add-t">+18</span><span class="sp"></span><span class="btn ghost later">撤销</span><span class="n">③</span></div>
+    <div class="r"><span class="mono">tests/auth_test.rs</span><span class="sp"></span><span class="add-t">+18</span></div>
+  </div>
+  <div class="bub">顺便看看 CI 配置</div>
+  <div class="turn">用时 0m 31s ›<span class="n">④</span></div>
+  <div class="bub">把重试次数改成 5</div>
+  <div class="col g4">
+    <div class="turn">你在 20s 后停止了<span class="n">⑤</span></div>
+    <div class="act"><span class="ico">✎</span><span class="t">已编辑 src/retry.rs</span></div>
+    <div class="act"><span class="ico">▣</span><span class="t">在 3.1s 后停止了 npm run watch</span><span class="n">⑥</span></div>
+  </div>
+  <div class="turn">已中断（宿主重启）· 用时 0m 05s<span class="n">⑦</span></div>
+  <div class="turn">用时 2m 03s ›</div>
+  <div class="bub">另外 README 里的命令也要更新</div>
+  <div class="row right"><span class="xs mu3">插进了上一回合</span><span class="n">⑧</span></div>
+</div></div></div>
+<p class="cap">图 3-2b 结束后的回合。</p>
+
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td>"用时 {time}"</td><td>正常结束后收起过程（思考、工具活动），只留这一行；箭头 14px，收起朝右、展开转 90°</td><td>MS-3</td><td>M1b</td></tr>
+  <tr><td>②</td><td>最终回答</td><td>最后一个过程条目之后的全部助手正文，由宿主判定；代码高亮按 Codex 的代码配色</td><td>MS-1、MS-3</td><td>M1b（高亮、折叠）</td></tr>
+  <tr><td>③</td><td>改动卡片</td><td>"{n} 个文件已更改 +a −b"，每个文件一行，圆角 12.5px，悬停变色。"撤销"<b>待 D04 定</b>（PRD 无对应需求）</td><td>GT-1、MS-3</td><td>M1b（F3）</td></tr>
+  <tr><td>④</td><td>只有标题的回合</td><td>回合以工具调用结束、后面没有文字时，只显示"用时"一行</td><td>MS-3</td><td>M1b</td></tr>
+  <tr><td>⑤</td><td>被停止的回合</td><td>"你在 {time} 后停止了"（You stopped after {time}），过程保持可见</td><td>MS-3、CP-7</td><td>M1a（状态）/ M1b（文案）</td></tr>
+  <tr><td>⑥</td><td>被停止的命令</td><td>"在 {elapsed} 后停止了 {command}"（Stopped {command} after {elapsed}）</td><td>MS-3、CP-7</td><td>M1b</td></tr>
+  <tr><td>⑦</td><td>已中断的回合</td><td>cupper 特有：宿主崩溃重启后，运行中的回合标为"已中断"，会话可以继续。失败的回合同样不收起</td><td>NFR-9</td><td>M1a</td></tr>
+  <tr><td>⑧</td><td>插话的消息</td><td>插进当前回合的用户消息始终显示在折叠之外。最终回答、计划、错误、提示、晚到的输出、待处理的请求也都在折叠之外</td><td>MS-3、CP-6</td><td>M1b</td></tr>
+</table>
+
+<h4>3.2.3 计划与待办（Claude 与 Codex 的差异）</h4>
+<div class="scroll"><div class="fig wf">
+  <div class="win wf w-fig-400"><div class="thread">
+    <div class="mt3"></div>
+    <div class="card">
+      <div class="r"><b>计划</b><span class="tag">Codex</span><span class="sp"></span><span class="mu3">⌄</span><span class="n">①</span></div>
+      <div class="r"><span class="add-t">●</span>1. 定位过期 token 的处理</div>
+      <div class="r"><span class="spin"></span>2. 改用服务器时间判断过期</div>
+      <div class="r"><span class="mu3">○</span>3. 补测试<span class="n">②</span></div>
+    </div>
+    <div class="row center"><span class="pill">第 2 / 3 步 · 改用服务器时间判断过期</span><span class="n">③</span></div>
+    <div class="composer"><div class="cin"><span class="ph">处理中…</span></div><div class="cfoot"><span class="sp"></span><span class="send">■</span></div></div>
+  </div></div>
+  <div class="win wf w-fig-400"><div class="thread">
+    <div class="mt3"></div>
+    <div class="card">
+      <div class="r"><b>计划</b><span class="tag">Claude Code · 计划模式</span><span class="n">④</span></div>
+      <div class="r col ai-start"><span class="md">修复方案</span><span>1. 在 decode 里区分过期和格式错误</span><span>2. 过期时返回 401</span><span>3. 补两个测试</span></div>
+    </div>
+    <div class="xs mu3">Markdown 计划，没有逐步状态，也就没有"第 n / m 步"药丸</div>
+  </div></div>
+</div></div>
+<p class="cap">图 3-2c 计划。生成中标题是"编写计划"（Writing plan）。</p>
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td>计划摘要条</td><td>标题"计划"，可以展开收起。Codex 还能在侧边面板打开、下载，对应任务面板（P1）</td><td>MS-4</td><td>M1b</td></tr>
+  <tr><td>②</td><td>编号步骤</td><td>每步一个 16px 状态图标：未开始、进行中、完成</td><td>MS-4</td><td>M1b</td></tr>
+  <tr><td>③</td><td>计划药丸</td><td>运行中浮在输入框上方："第 n / m 步"</td><td>MS-4</td><td>M1b（F3）</td></tr>
+  <tr><td>④</td><td>Markdown 计划（Claude）</td><td>SP-1 实测：Claude 在 SDK 会话里只有计划模式的 Markdown 计划。验收口径（PRD 第 10 节 Q12）：先用 sonnet 或 opus 补测，仍拿不到待办清单时，Claude 只显示计划模式的 Markdown 计划</td><td>MS-4</td><td>M1b</td></tr>
+</table>
+
+<h4>3.2.4 错误、提示与晚到的输出</h4>
+<div class="scroll"><div class="win mid wf"><div class="thread">
+  <div class="mt3"></div>
+  <div class="warnbox"><b>Claude Code 未登录</b>：请在终端中完成登录，然后重新发送（示意文案）<span class="n">①</span></div>
+  <div class="warnbox">你已达到用量上限……请在 {resetDate} 后重试<span class="n">②</span></div>
+  <div class="act"><span class="ico">↻</span><span class="t">正在重新连接 2/5</span><span class="n">③</span></div>
+  <div class="act"><span class="ico">ⓘ</span><span class="t">agent 进程已重启，会话已恢复</span><span class="n">④</span></div>
+  <div class="act"><span class="ico">ⓘ</span><span class="t">项目配置已变化，排队的消息已暂停</span><span class="n">⑤</span></div>
+  <div class="act"><span class="ico">▣</span><span class="t">已运行 cargo test</span><span class="tag">最终退出码 0</span><span class="btn ghost">跳到晚到的输出</span><span class="n">⑥</span></div>
+  <div class="act"><span class="ico">▣</span><span class="t">已运行 npm run watch</span><span class="tag warn">命令可能仍在运行</span><span class="n">⑦</span></div>
+  <div class="cmd"><div class="h"><span>› 取消后仍在运行 · cargo test · 退出码 0</span><span class="sp"></span><span>跳到原条目</span><span class="n">⑧</span></div></div>
+</div></div></div>
+<p class="cap">图 3-2d 错误、提示和晚到的输出。错误文案由宿主给出的语义码在界面上映射。</p>
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td>错误与恢复指引</td><td>Codex 的警告框样式：圆角 12.5px，1px 的警告色描边（30% 透明度），最大宽 77%。恢复指引的语义码：在终端登录、升级 CLI、额度用尽、重试；会话状态为"出错"，用户处理后重发即可</td><td>MS-5、AG-2</td><td>M1a（错误条目）/ M1b（恢复指引，设计 5.12.3）</td></tr>
+  <tr><td>②</td><td>额度用尽</td><td>文案结构照 Codex（You've hit your usage limit … try again at {resetDate}）</td><td>MS-5</td><td>M1b</td></tr>
+  <tr><td>③</td><td>上游重试</td><td>提示码 upstream_retry，写法照 Codex 的"正在重新连接 {n}/{max}"</td><td>MS-5</td><td>M1a</td></tr>
+  <tr><td>④</td><td>agent 重启提示</td><td>agent 进程崩溃后自动重启并恢复会话；挂着的请求失效</td><td>MS-5、NFR-9</td><td>M1a</td></tr>
+  <tr><td>⑤</td><td>项目配置变化</td><td>cupper 特有：已信任的项目配置变了，暂停排队，经原生确认框展示差异；同类提示还有"仓库配置已变化""快照不可用"</td><td>PS-2、GT-1</td><td>M1a</td></tr>
+  <tr><td>⑥</td><td>原条目上的最终退出码</td><td>cupper 特有：原条目可见时，旁边显示"最终退出码 N"和跳转</td><td>MS-3</td><td>M1b</td></tr>
+  <tr><td>⑦</td><td>"命令可能仍在运行"</td><td>Codex 的中断不会停掉命令，被中断回合里还在运行的命令立刻这样标出</td><td>MS-3、CP-7</td><td>M1b</td></tr>
+  <tr><td>⑧</td><td>晚到的输出</td><td>cupper 特有：默认折叠，标"取消后仍在运行"，显示命令和退出码，点击跳到原条目；写在当前回合里，旧回合不改</td><td>MS-3</td><td>M1b</td></tr>
+  <tr><td>—</td><td>上下文压缩提示、子代理活动、上下文用量</td><td>属于 MS-6（P1）</td><td>MS-6</td><td>M2</td></tr>
+</table>
+
+<!-- ------------------------------------------------ 3.3 -->
+<h3 id="s3-3">3.3 审批请求面板</h3>
+<p><b>结论</b>：按 Codex，审批不是插在消息流里的卡片，而是<b>替换输入框位置的请求面板</b>：外观和输入框一致（圆角 22、同样的阴影），选项带编号，Enter 批准、Esc 拒绝，处理完后输入框恢复（AP-1，PRD v1.3）。选项和文案以 agent 原文为准，cupper 只标出效果（AP-2）。先到先得：任何一端处理后，其他端自动收起（AP-4）。</p>
+
+<div class="scroll"><div class="fig wf">
+  <div class="win wf w-fig-520"><div class="thread">
+    <div class="mt3"></div>
+    <div class="act"><span class="ico">▣</span><span class="t">已读取 src/auth.rs</span></div>
+    <div class="composer req">
+      <div class="row nowrap"><b class="sm">要让 Claude Code 运行此命令吗？</b><span class="n">①</span><span class="sp"></span><span class="xs mu3">拒绝</span><span class="kbd">ESC</span><span class="n">②</span></div>
+      <div class="xs mu3 mt">终端 · 展开 ⌄<span class="n">③</span></div>
+      <div class="cmd"><div class="b">cargo test --workspace -- --nocapture</div></div>
+      <div class="cmd"><div class="b">echo "\u202E" &gt; notes.txt<span class="n">④</span></div></div>
+      <div class="warnbox xs">内容已截断，展开看到全文后才能批准<span class="n">⑤</span></div>
+      <div class="opt on mt"><span class="no">1</span><span class="col"><span class="tt">仅本次</span></span><span class="sp"></span><span class="xs mu3">↑↓</span><span class="n">⑥</span></div>
+      <div class="opt"><span class="no">2</span><span class="col"><span class="tt">总是允许 cargo test 开头的命令</span><span class="row"><span class="tag warn">会写入 agent 的权限规则</span><span class="tag">需系统确认</span></span></span><span class="n">⑦</span></div>
+      <div class="opt"><span class="no">3</span><span class="col"><span class="tt">拒绝</span></span><span class="n">⑧</span></div>
+      <div class="opt free"><span class="no">4</span><span class="col"><span class="tt">否，并告诉 Claude Code 应该如何做得不同</span><span class="mu3">在此输入</span></span><span class="n">⑨</span></div>
+      <div class="row mt"><span class="xs mu3">窗口刚切到前台：请再按一次</span><span class="n">⑩</span><span class="sp"></span><span class="btn p">提交 <span class="kbd">↵</span></span><span class="n">⑪</span></div>
+    </div>
+  </div></div>
+  <div class="win wf w-fig-440"><div class="thread">
+    <div class="mt3"></div>
+    <div class="composer req">
+      <div class="row nowrap"><b class="sm">要让 Codex 编辑以下文件吗？</b><span class="sp"></span><span class="kbd">ESC</span></div>
+      <div class="mono mt">src/auth.rs<br>src/old.rs → src/token.rs</div>
+      <div class="opt on mt"><span class="no">1</span><span class="tt">允许本次</span></div>
+      <div class="opt"><span class="no">2</span><span class="col"><span class="tt">本会话不再询问这些文件</span><span class="tag">需系统确认</span></span></div>
+      <div class="opt"><span class="no">3</span><span class="col"><span class="tt">拒绝</span><span class="tag warn">拒绝将结束本回合</span></span><span class="n">⑫</span></div>
+      <div class="opt"><span class="no">4</span><span class="col"><span class="tt">〈agent 原文〉</span><span class="row"><span class="tag warn">效果未知</span><span class="xs mu3">不响应 Enter / Esc</span></span></span><span class="n">⑬</span></div>
+    </div>
+  </div></div>
+</div></div>
+<p class="cap">图 3-3a 两种审批请求面板，画在输入框的位置。选项文字是 agent 原文，这里借用 PRD S2 的示例和设计 5.3.6 记录的原文含义。</p>
+
+<div class="scroll"><div class="win wf w-fig-600"><div class="thread g4">
+  <div class="mt3"></div>
+  <div class="act"><span class="ico">✓</span><span class="t">已批准：仅本次 · cargo test --workspace</span><span class="n">⑭</span></div>
+  <div class="act"><span class="ico">✓</span><span class="t">已在 cupper-cli 处理 · cargo test --workspace</span><span class="n">⑮</span></div>
+  <div class="act"><span class="ico">○</span><span class="t">已失效 · cargo test --workspace</span><span class="n">⑯</span></div>
+  <div class="act"><span class="ico">○</span><span class="t">已取消 · cargo test --workspace</span><span class="n">⑰</span></div>
+  <div class="row center mt"><span class="toast">已在别处处理</span><span class="n">⑱</span></div>
+</div></div></div>
+<p class="cap">图 3-3b 处理之后：面板收起、输入框恢复，消息流里留一行记录（样式是示意，Codex 只给了提问的记录写法）。</p>
+
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td>问句</td><td>"要让 {agent} 运行此命令吗？"（Codex：Do you want {actor} to run this command?）；文件编辑、网络、权限各有对应问句。有待处理的请求时会话状态为"需要处理"，侧边栏显示"等待批准"</td><td>AP-1、PS-4</td><td>M1a（M1b 照 Codex 文案）</td></tr>
+  <tr><td>②</td><td>Esc 拒绝</td><td>右上角带 ESC 键帽；Esc 只用于拒绝类选项（设计 5.7.8）</td><td>AP-1</td><td>M1a</td></tr>
+  <tr><td>③</td><td>要批准的内容</td><td>标签"终端"，命令全文可以展开或收起；命令和路径完整下发，不截断</td><td>AP-1、SEC-10</td><td>M1a</td></tr>
+  <tr><td>④</td><td>不可见字符转义</td><td>cupper 特有：双向控制符、零宽字符等显示成可见的转义（如 <code>\u202E</code>），与原生确认框共用一份转义工具</td><td>SEC-8</td><td>M1a</td></tr>
+  <tr><td>⑤</td><td>"已截断"</td><td>cupper 特有：超过 16,000 字符时改为预览，展开看到全文后才能批准</td><td>AP-1</td><td>M1a</td></tr>
+  <tr><td>⑥</td><td>编号选项与键盘</td><td>选项前显示编号 1、2、3；选中行右侧有 ↑↓ 提示；Enter 提交选中项。面板可见并获得焦点满 500 ms 后才响应键盘，必须是真实输入（设计 5.7.8，请求面板的落点由 D04 后交安全确认，F6）</td><td>AP-1</td><td>M1a</td></tr>
+  <tr><td>⑦</td><td>持久选项</td><td>会写入 agent 自己的权限规则（Claude 的命令规则、Codex 的执行策略），标"会写入 agent 的权限规则"；只能经原生确认框（<a href="#s3-7">3.7</a>）。Claude 同一个选项在文件编辑上只对本会话有效、在命令上持久（待定 Q7）</td><td>AP-2</td><td>M1a（Claude）/ M1b（Codex）</td></tr>
+  <tr><td>⑧</td><td>拒绝</td><td>Claude 拒绝后回合继续</td><td>AP-1</td><td>M1a</td></tr>
+  <tr><td>⑨</td><td>自由输入</td><td>Codex 的最后一项（No, and tell … what to do differently，占位 Type here）。ACP 的审批选项不带文字反馈，cupper 怎样映射（拒绝后把文字作为下一条消息，或不提供）<b>待 D04 定</b></td><td>AP-1</td><td>待 D04</td></tr>
+  <tr><td>⑩</td><td>"请再按一次"</td><td>窗口刚被激活的 1 秒冷却期内按 Enter，提示再按一次，不弹错误</td><td>AP-1</td><td>M1a</td></tr>
+  <tr><td>⑪</td><td>提交</td><td>带 ↵ 键帽的主按钮</td><td>AP-1</td><td>M1a</td></tr>
+  <tr><td>⑫</td><td>"拒绝将结束本回合"</td><td>Codex 的拒绝会结束整个回合，面板上写明</td><td>AP-2</td><td>M1b</td></tr>
+  <tr><td>⑬</td><td>效果未知的选项</td><td>对照表里没有的选项类型：显示原文并标"效果未知"，不响应 Enter 和 Esc，只能经原生确认</td><td>AP-2</td><td>M1a</td></tr>
+  <tr><td>⑭</td><td>已处理（本端）</td><td>面板收起，留一行记录</td><td>AP-4</td><td>M1a</td></tr>
+  <tr><td>⑮</td><td>已在 cupper-cli 处理</td><td>其他客户端先处理了，本端自动收起并注明是谁</td><td>AP-4</td><td>M1a</td></tr>
+  <tr><td>⑯</td><td>已失效</td><td>请求所属的 agent 进程退出，或宿主重启</td><td>SEC-10、NFR-9</td><td>M1a</td></tr>
+  <tr><td>⑰</td><td>已取消</td><td>agent 撤回了请求，或回合被中断</td><td>AP-4、CP-7</td><td>M1a</td></tr>
+  <tr><td>⑱</td><td>"已在别处处理"</td><td>本端的操作晚到，toast 提示后收起</td><td>AP-4</td><td>M1a</td></tr>
+  <tr><td>—</td><td>Codex 有、cupper 不做的</td><td>自动审查（Approve for me）的状态行和"想少一些审批提示吗？"弹窗：非目标，替代方案是 agent 自带的低打扰模式（U6）</td><td>—</td><td>—</td></tr>
+</table>
+
+<!-- ------------------------------------------------ 3.4 -->
+<h3 id="s3-4">3.4 提问与计划确认</h3>
+<p><b>结论</b>：agent 发起的结构化提问（选择题、表单、计划确认）用与审批相同的请求面板：编号选项、推荐徽标、最后一项自由输入、"跳过 / 提交"、Esc 忽略；任何客户端都能回答，有待回答的提问时会话状态为"需要处理"（AP-5，PRD v1.3）。</p>
+<div class="scroll"><div class="fig wf">
+  <div class="win wf w-fig-500"><div class="thread">
+    <div class="mt3"></div>
+    <div class="composer req">
+      <div class="row nowrap"><span class="xs mu3">问题 1 / 2</span><span class="n">①</span><span class="sp"></span><span class="xs mu3">忽略</span><span class="kbd">ESC</span><span class="n">②</span></div>
+      <b class="sm">过期的 token 要怎么处理？（示意）</b>
+      <div class="opt on mt"><span class="no">1</span><span class="col"><span class="row"><span class="tt">返回 401，由前端刷新</span><span class="tag acc">推荐</span></span><span class="mu3">agent 给的说明</span></span><span class="sp"></span><span class="xs mu3">↑↓</span><span class="n">③</span></div>
+      <div class="opt"><span class="no">2</span><span class="col"><span class="tt">服务端自动刷新</span><span class="mu3">agent 给的说明</span></span></div>
+      <div class="opt free"><span class="no">3</span><span class="col"><span class="tt">其他</span><span class="mu3">在此输入</span></span><span class="n">④</span></div>
+      <div class="row mt"><span class="btn ghost">上一个问题</span><span class="btn ghost">下一个问题</span><span class="n">⑤</span><span class="sp"></span><span class="btn">跳过</span><span class="btn p">提交 <span class="kbd">↵</span></span><span class="n">⑥</span></div>
+    </div>
+    <div class="act"><span class="ico">?</span><span class="t">已询问 2 个问题</span><span class="n">⑦</span></div>
+  </div></div>
+  <div class="win wf w-fig-500"><div class="thread">
+    <div class="mt3"></div>
+    <div class="composer req">
+      <div class="row nowrap"><b class="sm">实施此计划？</b><span class="n">⑧</span><span class="sp"></span><span class="kbd">ESC</span></div>
+      <div class="opt on mt"><span class="no">1</span><span class="col"><span class="tt">是，实施此计划</span><span class="mu3">之后的编辑逐个审批</span></span><span class="n">⑨</span></div>
+      <div class="opt"><span class="no">2</span><span class="col"><span class="tt">是，并切到 Auto 模式</span><span class="tag">需系统确认</span></span><span class="n">⑩</span></div>
+      <div class="opt"><span class="no">3</span><span class="col"><span class="tt">清空上下文并切到 Auto 模式</span><span class="tag">需系统确认</span></span></div>
+      <div class="opt"><span class="no">4</span><span class="col"><span class="tt">是，并切到完全访问</span><span class="tag warn">完全访问 · 需系统确认</span></span><span class="n">⑪</span></div>
+      <div class="opt"><span class="no">5</span><span class="col"><span class="tt">否，继续规划</span><span class="mu3">Esc</span></span><span class="n">⑫</span></div>
+    </div>
+  </div></div>
+</div></div>
+<p class="cap">图 3-4 提问面板与计划确认面板。选项文字为 agent 原文，这里用设计 5.3.6 对照表记录的效果代替。</p>
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td>多题进度</td><td>一次请求里有多个问题时逐题回答</td><td>AP-5</td><td>M1a</td></tr>
+  <tr><td>②</td><td>忽略</td><td>右上角"忽略 ESC"（Dismiss）：不回答（dismissed）</td><td>AP-5</td><td>M1a</td></tr>
+  <tr><td>③</td><td>编号选项与推荐徽标</td><td>标题 13px medium，说明 13px 三级文字色；agent 标了推荐时显示"推荐"（Recommended），驱动层能否取到这个标记由 D04 核实；多选时改成复选框。字段类型：单选、多选、文本、是非、数字</td><td>AP-5</td><td>M1a</td></tr>
+  <tr><td>④</td><td>自由输入</td><td>最后一项"在此输入"。Claude 的提问每题都带自由文本，映射成"单选 + 允许自定义"</td><td>AP-5</td><td>M1a</td></tr>
+  <tr><td>⑤</td><td>上一个 / 下一个问题</td><td>多题时出现（Previous / Next question）</td><td>AP-5</td><td>M1b</td></tr>
+  <tr><td>⑥</td><td>跳过、提交</td><td>"跳过"（Skip）即不回答；"提交"（Submit）带 ↵ 键帽。表单无法表示时只提供"跳过"</td><td>AP-5</td><td>M1a</td></tr>
+  <tr><td>⑦</td><td>消息流里的记录</td><td>"已询问 {n} 个问题"（Asked {n} questions），没答的写"未提供回答"（No answer provided）</td><td>AP-5</td><td>M1b</td></tr>
+  <tr><td>⑧</td><td>计划确认</td><td>问句照 Codex："实施此计划？"（Implement this plan?）</td><td>AP-5</td><td>M1a（Claude）/ M1b（Codex）</td></tr>
+  <tr><td>⑨</td><td>接受计划</td><td>Claude <code>exit-plan-default</code>：切回默认模式，之后的编辑逐个审批；Codex <code>implement_plan</code>：在同一回合里继续实施（Codex 原文 Yes, implement this plan）</td><td>AP-5、AP-2</td><td>M1a / M1b</td></tr>
+  <tr><td>⑩</td><td>接受并切到 Auto</td><td>Claude <code>exit-plan-auto</code>、<code>exit-plan-clear-auto</code>：切到低打扰的 Auto 模式（elevated），按"总是允许"类选项走原生确认</td><td>AP-2、CP-4</td><td>M1a</td></tr>
+  <tr><td>⑪</td><td>接受并切到完全访问</td><td>Claude <code>exit-plan-bypass</code>，走原生确认</td><td>AP-2、CP-4</td><td>M1a</td></tr>
+  <tr><td>⑫</td><td>继续规划</td><td>Claude <code>reject</code>；Codex <code>revise_plan</code> 按"可能结束回合"提示，待兼容套件补测（待定 Q25）</td><td>AP-5</td><td>M1a / M1b</td></tr>
+  <tr><td>—</td><td>需要打开的授权链接</td><td>协议里有这一类请求，M1 不产生</td><td>AP-5</td><td>—</td></tr>
+</table>
+
+<!-- ------------------------------------------------ 3.5 -->
+<h3 id="s3-5">3.5 输入框</h3>
+<p><b>结论</b>：照 Codex：圆角 22px 的输入框，文字区最小高 40px、左右 12px；底栏按钮 28px、间距 4px，左边是"＋"和权限按钮，右边是模型与推理强度、发送按钮。运行中跟进消息<b>默认插进当前回合（Steer），⌘Enter 排到下一回合（Queue）</b>，agent 不支持或插话失败时转为排队；设置里可以把默认行为改成排队（CP-6，PRD v1.3；F5）。行内评论作为附件进入输入框（GT-2）。</p>
+
+<div class="scroll"><div class="fig wf">
+  <div class="w-fig-480 col">
+    <div class="pop">
+      <div class="hd">文件<span class="n">①</span></div>
+      <div class="it on"><b>src/au</b>th.rs</div>
+      <div class="it"><b>src/au</b>th/mod.rs</div>
+      <div class="it">tests/<b>au</b>th_test.rs</div>
+    </div>
+    <div class="composer mt">
+      <div class="row att-row"><span class="att">▧ 截图.png ×</span><span class="n">②</span><span class="att">◌ 2 条评论 ×</span><span class="n">③</span></div>
+      <div class="cin">按截图和评论修一下 <span class="ref">@src/auth.rs</span><span class="n">④</span></div>
+      <div class="cfoot"><span class="cb">＋</span><span class="n">⑤</span><span class="cb">⛉ default ⌄</span><span class="sp"></span><span class="cb">模型 推理强度 ⌄</span><span class="send">↑</span></div>
+    </div>
+    <div class="row mt"><span class="xs mu3">发送按钮三态：</span><span class="send dis">↑</span><span class="send">↑</span><span class="send">■</span><span class="n">⑥</span></div>
+  </div>
+  <div class="w-fig-380 col">
+    <div class="pop">
+      <div class="hd">斜杠命令<span class="n">⑦</span></div>
+      <div class="it mu3">⌕ 搜索</div>
+      <div class="it on"><b>/compact</b> <span class="mu3">agent 给的说明</span></div>
+      <div class="it"><b>/review</b> <span class="mu3">agent 给的说明</span></div>
+      <div class="it"><b>/init</b> <span class="mu3">agent 给的说明</span></div>
+    </div>
+    <div class="composer mt">
+      <div class="cin">/</div>
+      <div class="cfoot"><span class="cb">＋</span><span class="cb">⛉ default ⌄</span><span class="sp"></span><span class="cb">模型 推理强度 ⌄</span><span class="send">↑</span></div>
+    </div>
+  </div>
+</div></div>
+<p class="cap">图 3-5a 空闲时：<code>@</code> 引用文件、图片和评论附件、斜杠命令。命令名是示意，实际列表由 agent 提供。</p>
+
+<div class="scroll"><div class="win mid wf"><div class="thread">
+  <div class="mt3"></div>
+  <div class="row center"><span class="toast">插话没有成功，已转为排队</span><span class="n">⑧</span></div>
+  <div class="sp"></div>
+  <div class="col g4">
+    <div class="qrow"><span>顺便检查错误信息的文案</span><span class="sp"></span><span class="btn ghost">编辑</span><span class="btn">插话</span><span class="btn ghost later">删除</span><span class="n">⑨</span></div>
+    <div class="qrow"><span>跑完测试后提交</span><span class="sp"></span><span class="btn ghost">编辑</span><span class="btn">插话</span></div>
+    <div class="qrow"><span class="mu">因为你中断了回合，队列已暂停</span><span class="sp"></span><span class="btn">继续</span><span class="n">⑩</span></div>
+  </div>
+  <div class="composer">
+    <div class="cin">另外把 README 里的命令也更新一下</div>
+    <div class="cfoot"><span class="cb">＋</span><span class="cb">⛉ default ⌄</span><span class="sp"></span><span class="xs mu3">Enter 插话 · ⌘Enter 排队</span><span class="n">⑪</span><span class="cb">模型 推理强度 ⌄</span><span class="send">■</span><span class="n">⑫</span></div>
+  </div>
+  <div class="row center"><span class="xs mu3">再按一次 Esc 停止（示意）</span><span class="n">⑬</span></div>
+</div></div></div>
+<p class="cap">图 3-5b 运行中：插话、排队与停止。</p>
+
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td><code>@</code> 引用文件</td><td>模糊搜索项目文件并插入引用，匹配的字符高亮；git 仓库里遵守忽略规则；拖入文件也生成引用。Codex 的 <code>@</code> 列表还有插件、技能标签页，属于 P1（B5）</td><td>CP-2</td><td>M1b</td></tr>
+  <tr><td>②</td><td>图片附件</td><td>粘贴或拖入图片，拖放时显示覆盖层；非图片的文件附件是 P1（CP-8）</td><td>CP-2</td><td>M1b</td></tr>
+  <tr><td>③</td><td>评论附件</td><td>审查面板里写的行内评论作为附件进入输入框，随下一条消息发出（Codex：{annotations} · # selected items）；发出后用户消息上显示"{n} 条评论"。没有单独的"发给 agent"按钮</td><td>GT-2</td><td>M1b</td></tr>
+  <tr><td>④</td><td>引用的显示</td><td>选中的引用在输入框里用强调色显示</td><td>CP-2</td><td>M1b</td></tr>
+  <tr><td>⑤</td><td>＋ 附件</td><td>M1 只有图片</td><td>CP-2</td><td>M1b</td></tr>
+  <tr><td>⑥</td><td>发送按钮三态</td><td>输入为空时 50% 透明的禁用态；可发送；运行中变成停止（实心方块）</td><td>CP-1、CP-7</td><td>M1b（F3）</td></tr>
+  <tr><td>⑦</td><td>斜杠命令菜单</td><td>标题"斜杠命令"，带搜索框，没有结果时显示"无命令"；最高 320px 或 10 行。命令列表来自 agent，新建会话页在第一条消息之前就能显示</td><td>CP-3、AG-4</td><td>M1b</td></tr>
+  <tr><td>⑧</td><td>插话失败转排队</td><td>agent 不支持、超时或出错时自动转为排队，toast 提示原因</td><td>CP-6</td><td>M1b</td></tr>
+  <tr><td>⑨</td><td>排队消息</td><td>输入框上方每条一行：预览、编辑、立即插话（Steer，"Submit without interrupting the model"）。删除和重排仍属于 CP-8（P1）</td><td>CP-6、CP-8</td><td>M1a（排队）/ M1b（编辑、插话，F3）/ M2（删除、重排）</td></tr>
+  <tr><td>⑩</td><td>队列暂停</td><td>用户中断回合后："因为你中断了回合，队列已暂停"，按钮"继续"（Queue paused because you interrupted / Resume）。cupper 另有暂停原因：回合失败、档位待确认、项目配置变化。Codex 因拒绝审批而结束的回合不暂停</td><td>CP-6</td><td>M1a（暂停与继续）/ M1b（Codex 文案）</td></tr>
+  <tr><td>⑪</td><td>跟进行为</td><td>运行中 Enter 插话、⌘Enter 排队（发送键设成 ⌘Enter 时，排队变成 ⌘⇧Enter）。设置里"跟进行为"可以改成默认排队：Claude 的插话会丢弃当前的工具调用、把正在跑的命令移到后台（ADR-07，F5）。⇧Enter 或 ⌥Enter 换行；输入法组合中按 Enter 不发送</td><td>CP-6、CP-1</td><td>M1b（M1a 运行中只能排队）</td></tr>
+  <tr><td>⑫</td><td>停止</td><td>运行中发送按钮变成停止；agent 10 秒没有响应时宿主兜底标为已取消；挂着的请求随之撤回</td><td>CP-7</td><td>M1a</td></tr>
+  <tr><td>⑬</td><td>两次 Esc 停止</td><td>运行中按第一次 Esc 进入"确认停止"状态，再按一次才停止（Codex 默认；⌘. 在 Codex 里另有用途）。提示的具体文案 ui-spec 没有给出，图中是示意</td><td>UI-4、CP-7</td><td>M1b</td></tr>
+  <tr><td>—</td><td>Codex 有、M1 不做的</td><td>上下文用量环（MS-6）、规划模式开关（CP-8 的 Plan 模式）、听写、输入框预测、<code>$</code> 技能：P1、P2</td><td>—</td><td>M2 或未排期</td></tr>
+</table>
+
+<!-- ------------------------------------------------ 3.6 -->
+<h3 id="s3-6">3.6 审查面板（"变更"标签）</h3>
+<p><b>结论</b>：照 Codex 的"变更"标签：头部是"查阅来源"下拉和增删统计，右侧是文件树开关、选项菜单和 Git 操作；左边文件树、右边 diff；暂存、取消暂存、还原都是只有图标的圆形按钮，整组操作是浮在底部的药丸。以仓库的实际 Git 状态为准，与 agent 无关。M1 的范围是"最近一轮""未暂存"，外加只为取消暂存服务的"已暂存"（GT-1、GT-3，Q13）。</p>
+
+<div class="scroll"><div class="win wf w-review">
+  <div class="ph-h"><span class="tab on">变更</span><span class="n">①</span><span class="tab later">文件</span><span class="tab later">终端</span><span class="n">②</span></div>
+  <div class="rvh"><span class="btn">最近一轮 ⌄</span><span class="n">③</span><span class="add-t">+52</span><span class="del-t">−3</span><span class="n">④</span><span class="sp"></span><span class="ib on">☰</span><span class="n">⑤</span><span class="ib">⋯</span><span class="n">⑥</span><span class="btn">Git 操作 ⌄</span><span class="n">⑦</span></div>
+  <div class="row nowrap pxb1">
+    
+    <div class="col sp">
+      <div class="xs mu3">"最近一轮"是回合开始和结束时两次快照之间的变化；本地模式下可能混入你自己或其他会话的改动<span class="n">⑨</span></div>
+      <div class="warnbox xs mt">包含取消后仍在运行的命令造成的改动 · 本会话期间仓库的 hooks 或配置有变化<span class="n">⑩</span></div>
+    </div>
+  </div>
+  <div class="rvbody w-review-body">
+    <div class="ft">
+      <div class="filt">筛选文件…<span class="n">⑪</span></div>
+      <div class="fr">▾ src</div>
+      <div class="fr in on"><span class="gs mod"></span>auth.rs</div>
+      <div class="fr in"><span class="gs del"></span>legacy_token.rs</div>
+      <div class="fr">▾ tests</div>
+      <div class="fr in"><span class="gs add"></span>auth_test.rs<span class="n">⑫</span></div>
+      <div class="fr"><span class="gs mod"></span>secrets.enc</div>
+    </div>
+    <div class="dv">
+      <div class="dfh"><span class="gs mod"></span><span class="mono">src/auth.rs</span><span class="add-t">+12</span><span class="del-t">−3</span><span class="n">⑬</span><span class="sp"></span><span class="ib">＋</span><span class="ib">↺</span><span class="n">⑭</span></div>
+      <div class="fold">⌃ 39 行未改动 ⌄<span class="n">⑮</span></div>
+      <div class="row"><span class="sp"></span><span class="ib">＋</span><span class="ib">－</span><span class="ib">↺</span><span class="n">⑯</span></div>
+      <div class="dl"><span class="ln">40</span>   let header = parse_header(req)?;</div>
+      <div class="dl d"><span class="ln">41</span>-  let claims = decode(token)?;</div>
+      <div class="dl a"><span class="ln">41</span>+  let claims = match decode(token) {</div>
+      <div class="dl a"><span class="ln">＋</span>+    Err(e) if e.expired() =&gt; return unauthorized(),<span class="n">⑰</span></div>
+      <div class="cbox">
+        <div class="mu3">添加一条评论…</div>
+        <div>这里应该返回 401，不要吞掉原始错误</div>
+        <div class="row mt"><span class="sp"></span><span class="btn ghost">取消</span><span class="btn p">评论</span><span class="n">⑱</span></div>
+      </div>
+      <div class="dfh"><span class="gs mod"></span><span class="mono">secrets.enc</span><span class="sp"></span><span class="tag">已变化 · 自定义过滤器，不提供 hunk 操作</span><span class="n">⑲</span></div>
+    </div>
+    <div class="bpill"><span class="btn ghost">还原全部</span><span class="btn">暂存全部</span><span class="n">⑳</span></div>
+  </div>
+</div></div>
+<p class="cap">图 3-6a 审查面板（侧边面板拖宽后的样子，内容为示意）。</p>
+
+<div class="scroll"><div class="fig wf">
+  <div class="col"><div class="pop w-scope">
+      <div class="hd">查阅来源</div>
+      <div class="it on">最近一轮</div>
+      <div class="hd">────</div>
+      <div class="it later">此分支</div>
+      <div class="it later">未提交</div>
+      <div class="it">未暂存</div>
+      <div class="it">已暂存</div>
+      <div class="hd">────</div>
+      <div class="it later">提交</div>
+    </div><span class="n">⑧</span></div>
+  <div class="backdrop">
+    <div class="modal">
+      <div class="t">是否还原更改？<span class="n">㉑</span></div>
+      <div>此操作会移除所有这些更改。</div>
+      <div class="row mt"><span class="later">☐ 不再询问</span><span class="sp"></span><span class="btn">取消</span><span class="btn danger">确认</span></div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="pop w-gitmenu">
+      <div class="it on">提交</div>
+      <div class="it">推送</div>
+      <div class="it later">创建拉取请求</div>
+    </div><span class="n">㉒</span>
+  </div>
+  <div class="backdrop">
+    <div class="modal">
+      <div class="t">提交或推送<span class="n">㉓</span></div>
+      <div class="mu">提交到 cupper/fix-login</div>
+      <div class="field mt w-commit-msg">提交信息…</div>
+      <div class="row mt"><span>☐ 包含未暂存的更改</span></div>
+      <div class="row mt"><span class="seg"><span class="on">提交</span><span>提交并推送</span><span>推送</span></span></div>
+      <div class="row mt"><span class="xs mu3">将运行仓库的 hooks</span><span class="n">㉔</span><span class="sp"></span><span class="btn">取消</span><span class="btn p">继续</span></div>
+    </div>
+  </div>
+</div></div>
+<p class="cap">图 3-6b 查阅来源的下拉、还原确认、Git 操作菜单和提交弹窗（应用内弹窗，宽 420px）。</p>
+
+<div class="scroll"><div class="fig wf">
+  <div class="backdrop">
+    <div class="modal">
+      <div class="t">归档会话？<span class="n">㉕</span></div>
+      <div>"修复登录 bug"有自己的 worktree。分支默认保留。</div>
+      <div class="row mt"><span>☑ 同时删除 worktree</span></div>
+      <div class="row mt"><span class="sp"></span><span class="btn">取消</span><span class="btn p">归档</span></div>
+    </div>
+  </div>
+  <div class="backdrop">
+    <div class="modal">
+      <div class="t">不能删除 worktree<span class="n">㉖</span></div>
+      <div>有未提交的改动（2 个文件）</div>
+      <div>有未推送的提交（1 个）</div>
+      <div class="xs mu3">另有被忽略的文件 14 个（只提示）</div>
+      <div class="row mt"><span class="sp"></span><span class="btn">取消</span><span class="btn p">只归档</span></div>
+    </div>
+  </div>
+</div></div>
+<p class="cap">图 3-6c 归档时清理 worktree（cupper 特有的内容，用 Codex 的弹窗样式；文案示意）。</p>
+
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td>"变更"标签</td><td>Codex：Changes。⌃⇧G 打开这个标签，⌘⌥B 开合整个侧边面板</td><td>PS-1、GT-1</td><td>M1b</td></tr>
+  <tr><td>②</td><td>其他标签</td><td>文件、终端、浏览器等标签：文件树与预览、集成终端都是 P1</td><td>UI-7、UI-1</td><td>M2</td></tr>
+  <tr><td>③</td><td>查阅来源</td><td>范围下拉（Review source）。范围旁可以显示数量</td><td>GT-1</td><td>M1b</td></tr>
+  <tr><td>④</td><td>增删统计</td><td>"+N"用新增色，"−N"用删除色</td><td>GT-1</td><td>M1b</td></tr>
+  <tr><td>⑤</td><td>文件树开关</td><td>"显示文件 / 隐藏文件"，28px 圆形按钮，⌘⇧E；Codex 默认关闭</td><td>GT-1</td><td>M1b（F3）</td></tr>
+  <tr><td>⑥</td><td>选项菜单</td><td>Codex 有换行、分栏 / 统一视图、全部展开收起、隐藏空白、刷新等；<b>哪些进 M1 待 D04 定</b></td><td>GT-1</td><td>待 D04</td></tr>
+  <tr><td>⑦</td><td>Git 操作</td><td>提交、推送的入口（Git actions），按钮位置是示意</td><td>GT-4</td><td>M1b</td></tr>
+  <tr><td>⑧</td><td>范围分组</td><td>Codex 三组：最近一轮；此分支、未提交、未暂存、已暂存；提交。M1 只有最近一轮、未暂存、已暂存（Q13），其余是 GT-6 的"其余审查范围"</td><td>GT-1、GT-3、GT-6</td><td>M1b / M2</td></tr>
+  <tr><td>⑨</td><td>"最近一轮"的注释</td><td>cupper 特有：本地模式下可能混入用户自己或其他会话的改动，界面要注明；worktree 会话可以弱化</td><td>GT-1</td><td>M1b</td></tr>
+  <tr><td>⑩</td><td>顶部提示</td><td>cupper 特有：回合里有取消后仍在运行的命令时注明；回合前后仓库的可执行配置（hooks、属性等）有变化时醒目提示</td><td>GT-1</td><td>M1b</td></tr>
+  <tr><td>⑪</td><td>筛选文件</td><td>文件树顶部的过滤框（Filter files…）</td><td>GT-1</td><td>M1b（F3）</td></tr>
+  <tr><td>⑫</td><td>文件树</td><td>行高 28px，13px；目录吸顶，长文件名中间截断；Git 状态用彩色图标（新增、删除、修改三色），不用字母；选中行用强调色浅底</td><td>GT-1</td><td>M1b（F3）</td></tr>
+  <tr><td>⑬</td><td>文件头</td><td>吸顶，左右 16px，路径从左侧截断、保留文件名</td><td>GT-1</td><td>M1b</td></tr>
+  <tr><td>⑭</td><td>按文件操作</td><td>悬停时出现的图标按钮：暂存文件、取消暂存文件、还原文件</td><td>GT-3</td><td>M1b</td></tr>
+  <tr><td>⑮</td><td>未改动的行</td><td>折叠成一条分隔条（圆角 8px），可以向上、向下展开</td><td>GT-1</td><td>M1b</td></tr>
+  <tr><td>⑯</td><td>按 hunk 操作</td><td>暂存、取消暂存、还原：只有图标的 28px 圆形按钮，tooltip 写操作名；状态变了就提示刷新后重试，不做模糊匹配</td><td>GT-3</td><td>M1b</td></tr>
+  <tr><td>⑰</td><td>行内评论入口</td><td>悬停行号出现 ＋。diff 是等宽 12px、行高 21.6px，行号列最小 4ch</td><td>GT-2</td><td>M1b</td></tr>
+  <tr><td>⑱</td><td>评论框</td><td>"添加一条评论…"（Add a comment…），按钮"评论 / 取消"；圆角 12.5px，最大宽 768px。评论作为附件进入输入框，随下一条消息发出（<a href="#s3-5">3.5</a>）</td><td>GT-2</td><td>M1b</td></tr>
+  <tr><td>⑲</td><td>自定义过滤器的文件</td><td>cupper 特有：宿主不运行仓库配置里的过滤器，这类文件只显示"已变化"，不提供 hunk 操作</td><td>GT-1、GT-3</td><td>M1b</td></tr>
+  <tr><td>⑳</td><td>底部整组操作</td><td>浮在面板底部居中、距底 20px 的药丸："还原全部""暂存全部"（"已暂存"范围里是"取消暂存全部"，没有"还原全部"）</td><td>GT-3</td><td>M1b（F3）</td></tr>
+  <tr><td>㉑</td><td>还原确认</td><td>"是否还原更改？"（Revert changes?），"确认"是危险色并默认获得焦点。还原必须由主文档里的控件和真实输入触发（设计 5.7.5）；Codex 的"不再询问"会跳过这一步，<b>是否保留待 D04 与安全确认</b></td><td>GT-3</td><td>M1b</td></tr>
+  <tr><td>㉒</td><td>Git 操作菜单</td><td>提交、推送；创建拉取请求是 P1（GT-6）。Codex 菜单里的"新建分支、切换分支"PRD 没有对应需求，不画</td><td>GT-4、GT-6</td><td>M1b / M2</td></tr>
+  <tr><td>㉓</td><td>提交弹窗</td><td>"提交或推送"（Commit or push），提交信息框高 80px，"包含未暂存的更改"，下一步三选一：提交、提交并推送、推送。Codex 的"留空自动生成提交信息"是 GT-6（P1），M1 不提供</td><td>GT-4</td><td>M1b</td></tr>
+  <tr><td>㉔</td><td>"将运行仓库的 hooks"</td><td>cupper 特有：与在终端里提交一致，保留 hooks、签名、凭据助手；本会话期间仓库配置变过时，确认文案带上这条提示。失败时显示 git 的报错摘要</td><td>GT-4</td><td>M1b</td></tr>
+  <tr><td>㉕</td><td>归档时清理 worktree</td><td>先检查能否删除，能删就询问是否同时删除 worktree；删除时不强制，默认保留分支。会话正在运行时，Codex 的按钮变为"停止并归档"</td><td>GT-5、PS-3</td><td>M1b</td></tr>
+  <tr><td>㉖</td><td>不能删除的原因</td><td>有未提交或未推送的内容时不删除，列出原因（共 7 条规则）；被忽略的文件只提示</td><td>GT-5</td><td>M1b</td></tr>
+</table>
+<h4>空状态与异常（文案照 Codex 的结构）</h4>
+<table>
+  <tr><th>情况</th><th>文案</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>没有改动</td><td>"尚无文件更改"，副标题"此项目中的更改会显示在这里"（No file changes yet）</td><td>GT-1</td><td>M1b</td></tr>
+  <tr><td>没有未暂存 / 已暂存的改动</td><td>"没有未暂存的更改""没有已暂存的更改"</td><td>GT-1、GT-3</td><td>M1b</td></tr>
+  <tr><td>加载失败</td><td>"无法加载更改"，按钮"重试"</td><td>GT-1</td><td>M1b</td></tr>
+  <tr><td>二进制、过大、合并冲突</td><td>"不显示二进制文件""diff 过大，无法显示""文件有合并冲突"；用户 index 里有未合并的条目时，提示先在终端解决（cupper）</td><td>GT-1</td><td>M1b</td></tr>
+  <tr><td>快照不可用</td><td>cupper 特有：回合快照缺失或已被清除时，"最近一轮"显示"快照不可用"</td><td>GT-1</td><td>M1b</td></tr>
+  <tr><td>不是 Git 仓库</td><td>Codex 提供"创建 Git 仓库"按钮；PRD 没有对应需求，cupper 只显示说明</td><td>GT-1</td><td>M1b</td></tr>
+</table>
+<!-- ------------------------------------------------ 3.7 -->
+<h3 id="s3-7">3.7 原生确认框</h3>
+<p><b>结论</b>：这一节不是 Codex 的界面，而是 cupper 的安全设计：会持久或大幅扩大权限的操作，一律由桌面主进程弹 macOS 系统对话框确认，网页内容（渲染进程）无法绕过。确认框的内容由主进程直接向宿主获取；agent 给出的文本逐字显示，不可见字符显示为转义；默认按钮是"取消"或"拒绝"；同一时间只弹一个，取消后同类操作的冷却逐次加长（2 s、10 s、60 s）（设计 5.7.8）。</p>
+
+<div class="fig">
+  <div class="mac">
+    <div class="ico"></div>
+    <div class="t">信任"项目 A"的配置吗？<span class="n">①</span></div>
+    <div class="mt">这个项目带有会被 agent 执行或加载的配置。信任之后，会话才加载它们。</div>
+    <div class="mt"><b>hooks</b>：.claude/settings.json → PreToolUse 运行 ./scripts/lint.sh</div>
+    <div><b>环境变量</b>：.claude/settings.json → 2 项</div>
+    <div><b>MCP 服务器</b>：.mcp.json → db-tools</div>
+    <div><b>Codex 配置</b>：.codex/config.toml <span class="n">②</span></div>
+    <div class="mnote">此配置来自工作区之外：~/dotfiles/claude/settings.json <span class="n">③</span></div>
+    <div class="xs">不信任时：Claude Code 只加载你的用户级配置，Codex 不能在这个项目里使用。<span class="n">④</span></div>
+    <div class="bt"><span class="b">信任</span><span class="b def">不信任</span></div>
+  </div>
+  <div class="mac">
+    <div class="ico"></div>
+    <div class="t">把这个会话切换到完全访问？<span class="n">⑤</span></div>
+    <div class="mt">会话"修复登录 bug"的权限模式将改为 bypassPermissions。agent 执行命令、修改文件将不再请求审批。（示意文案）</div>
+    <div class="bt"><span class="b">切换</span><span class="b def">取消</span></div>
+  </div>
+  <div class="mac">
+    <div class="ico"></div>
+    <div class="t">选择会持久生效的审批选项？<span class="n">⑥</span></div>
+    <div class="mt">选项原文（逐字）：</div>
+    <div class="pre">总是允许 cargo test 开头的命令</div>
+    <div>将写入：Claude Code 自己的权限规则</div>
+    <div>规则前缀：<code>cargo test</code></div>
+    <div class="xs">规则或写入位置不明时："具体规则和写入位置由 agent 决定，以原文为准"<span class="n">⑦</span></div>
+    <div class="mnote">前缀是解释器（bash、python 等）时："等于允许任意命令"；解析不出前缀时："可能放行更宽的范围"<span class="n">⑧</span></div>
+    <div class="bt"><span class="b">确认</span><span class="b def">取消</span></div>
+  </div>
+  <div class="mac">
+    <div class="ico"></div>
+    <div class="t">命令行工具申请权限<span class="n">⑨</span></div>
+    <div class="mt"><b>宿主核实的信息</b><span class="n">⑩</span></div>
+    <div class="mono">可执行文件 /Applications/Cupper.app/Contents/Helpers/cupper</div>
+    <div class="mono">签名 dev.cupper.cli（或"未签名"）</div>
+    <div class="mono">进程 4242 · 父进程链 zsh ← Terminal ← launchd · 有终端</div>
+    <div class="row"><span class="tag warn">无法确认来源</span><span class="xs">父进程链断在 launchd 或没有终端时标出</span></div>
+    <div class="mt"><b>申请方自述，未经核实</b><span class="n">⑪</span></div>
+    <div>名称：cupper-cli</div>
+    <div>理由：处理会话 s1 的审批（示意）</div>
+    <div class="mt"><b>申请范围</b><span class="n">⑫</span></div>
+    <div>☑ 写操作　☐ 审批（默认不勾）</div>
+    <div class="xs">只对这条连接有效，最长 15 分钟，断开即失效</div>
+    <div class="bt"><span class="b">批准</span><span class="b def">拒绝</span></div>
+  </div>
+</div>
+<p class="cap">图 3-7 四种原生确认框（画成 macOS 系统对话框，蓝色为默认按钮）。文案、路径、名称是示意；图标位置用灰色方块占位。</p>
+
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td>信任项目</td><td>添加项目时，扫描范围里有项目配置才弹；没有就直接记为已信任。默认按钮"不信任"</td><td>PS-2</td><td>M1a</td></tr>
+  <tr><td>②</td><td>列出的配置</td><td>扫描工作区到 git 根目录每一级的 <code>.claude/</code>、<code>.mcp.json</code>、<code>.codex/</code>；列出 hooks、环境变量、apiKeyHelper、statusLine、MCP 服务器、skills、agents、commands 和 Codex 的配置项。扫描范围是否足够待兼容套件核实（待定 Q34）</td><td>PS-2</td><td>M1a</td></tr>
+  <tr><td>③</td><td>工作区外的配置</td><td>符号链接指向工作区之外时醒目标出，不禁止信任</td><td>PS-2</td><td>M1a</td></tr>
+  <tr><td>④</td><td>不信任的后果</td><td>Claude 只加载用户级配置；Codex 不能使用。项目配置之后变了（每次发送前都会重新扫描）就转为未信任，暂停排队，经同样的确认框展示差异：可以重新信任；Claude 会话也可以选择不加载项目配置继续</td><td>PS-2</td><td>M1a</td></tr>
+  <tr><td>⑤</td><td>切到完全访问</td><td>只能由桌面主进程经原生确认设置；cupper-cli 和手机都不能。Codex 打开"在输入框显示完全访问"前也有确认框，但那是应用内的</td><td>CP-4、SEC-8</td><td>M1b（档位待确认的确认框 M1a）</td></tr>
+  <tr><td>⑥</td><td>"总是允许"类选项</td><td>逐字显示选项原文；写入的规则和位置能从 agent 拿到就显示</td><td>AP-2</td><td>M1a</td></tr>
+  <tr><td>⑦</td><td>规则不明时</td><td>不留空，明确写出由 agent 决定</td><td>AP-2</td><td>M1a</td></tr>
+  <tr><td>⑧</td><td>宽规则的警示</td><td>前缀是解释器一类时附加"等于允许任意命令"；解析不出前缀时附加"可能放行更宽的范围"</td><td>AP-2</td><td>M1a</td></tr>
+  <tr><td>⑨</td><td>CLI 提权</td><td>cupper-cli 默认只读；要写或审批，先在侧边栏底部出现横幅，用户点"查看"后弹这个确认框。10 分钟内被拒 2 次后静默 10 分钟；2 分钟没有决定就过期</td><td>SEC-8</td><td>M1a</td></tr>
+  <tr><td>⑩</td><td>宿主核实的信息</td><td>可执行文件路径、签名身份（或"未签名"）、pid、父进程链；来源不明时标"无法确认来源"</td><td>SEC-8</td><td>M1a</td></tr>
+  <tr><td>⑪</td><td>申请方自述</td><td>名称和理由各限 200 字符，控制字符显示为转义，明确标"未经核实"</td><td>SEC-8</td><td>M1a</td></tr>
+  <tr><td>⑫</td><td>申请范围</td><td>审批权限单独一个勾选项，默认不勾；授权绑定到这条连接，最长 15 分钟；CLI 永远拿不到"总是允许"、完全访问这类特权</td><td>SEC-8</td><td>M1a</td></tr>
+</table>
+
+<h4>其他走原生确认的操作（不另画图）</h4>
+<table>
+  <tr><th>操作</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>添加项目时选择目录</td><td>系统的选择目录对话框，之后才扫描和确认信任</td><td>PS-2</td><td>M1a</td></tr>
+  <tr><td>确认会话档位</td><td>会话进入"档位待确认"（例如完全访问没有确认记录、档位超出设定者的权限）时，经原生确认解除</td><td>CP-4、SEC-8</td><td>M1a</td></tr>
+  <tr><td>修改安全相关的设置</td><td>CLI 路径、额外传给适配器的环境变量、详细日志</td><td>UI-2、SEC-8</td><td>M1b</td></tr>
+  <tr><td>有运行中回合时退出 App</td><td>先提示；注销或关机时跳过</td><td>NFR-8</td><td>M1a</td></tr>
+  <tr><td>手机的配对与撤销</td><td>见 <a href="#s3-12">3.12</a></td><td>MB-1、SEC-3</td><td>M3</td></tr>
+</table>
+
+
+<!-- ------------------------------------------------ 3.8 -->
+<h3 id="s3-8">3.8 设置页</h3>
+<p><b>结论</b>：照 Codex 的设置页外壳：占满主区；左侧导航沿用侧边栏样式（行高 30px、圆角 10px），顶部是"返回应用"；内容区最大宽 768px、水平居中，分节间距 40px；每行左边是标签（medium）加说明，右边是控件，开关 32 × 19px。分区按 cupper 的需求：通用、通知、外观、已归档会话、Agent 状态、连接与设备、存储、命令行工具（UI-2）。</p>
+
+<div class="scroll"><div class="win wf w-settings">
+  <div class="tb"><span class="lights">● ● ●</span></div>
+  <div class="cols short">
+    <div class="snav">
+      <div class="si mu3"><span class="t">← 返回应用</span><span class="n">①</span></div>
+      <div class="si on"><span class="t">通用</span></div>
+      <div class="si"><span class="t">通知</span></div>
+      <div class="si"><span class="t">外观</span></div>
+      <div class="si"><span class="t">已归档会话</span></div>
+      <div class="si"><span class="t">Agent 状态</span></div>
+      <div class="si"><span class="t">连接与设备</span></div>
+      <div class="si"><span class="t">存储</span></div>
+      <div class="si"><span class="t">命令行工具</span></div>
+    </div>
+    <div class="scont"><div class="sin">
+      <div class="sh">通用</div>
+      <div class="sgroup">
+        <div class="srow"><div class="l"><b>发送快捷键</b><span class="mu3">另一个用于换行</span></div><span class="btn">Enter ⌄</span><span class="n">②</span></div>
+        <div class="srow"><div class="l"><b>跟进行为</b><span class="mu3">运行中发送的消息默认插进当前回合，还是排到下一回合</span></div><span class="seg"><span>排队</span><span class="on">插话</span></span><span class="n">③</span></div>
+        <div class="srow"><div class="l"><b>新会话默认 agent</b></div><span class="btn">Claude Code ⌄</span></div>
+        <div class="srow"><div class="l"><b>worktree 根目录</b><span class="mu3 mono">~/.cupper/worktrees</span></div><span class="btn">更改</span></div>
+        <div class="srow"><div class="l"><b>用什么打开工作区</b><span class="mu3">终端、编辑器</span></div><span class="btn">终端 ⌄</span><span class="n">④</span></div>
+        <div class="srow"><div class="l"><b>宿主空闲退出</b></div><span class="btn">10 分钟 ⌄</span></div>
+      </div>
+      <div class="sh">外观</div>
+      <div class="sgroup">
+        <div class="srow"><div class="l"><b>主题</b></div><span class="seg"><span>亮色</span><span>暗色</span><span class="on">跟随系统</span></span><span class="n">⑤</span></div>
+        <div class="srow"><div class="l"><b>半透明侧边栏</b></div><span class="toggle on"></span><span class="n">⑥</span></div>
+        <div class="srow"><div class="l"><b>语言</b></div><span class="btn">跟随系统 ⌄</span><span class="n">⑦</span></div>
+        <div class="srow later"><div class="l"><b>强调色、背景、前景、对比度、字体与字号</b></div><span class="n">⑧</span></div>
+      </div>
+    </div></div>
+  </div>
+</div></div>
+<p class="cap">图 3-8a 设置页外壳与"通用""外观"（数值为示意）。</p>
+
+<div class="scroll"><div class="fig wf">
+  <div class="sin w-settings-col">
+    <div class="sh">Agent 状态<span class="n">⑨</span></div>
+    <div class="sgroup">
+      <div class="srow"><div class="l"><b>Claude Code</b><span class="row"><span class="dot ok"></span><span class="mu3">可用</span></span></div><span class="btn">重新检测</span><span class="btn">重启</span></div>
+      <div class="srow"><div class="l"><b>CLI</b><span class="mu3 mono">/opt/homebrew/bin/claude</span></div><span class="btn">更改…</span><span class="tag">需系统确认</span></div>
+      <div class="srow"><div class="l"><b>版本</b><span class="mu3 mono">2.1.2xx</span></div><span class="tag">已验证</span></div>
+      <div class="srow"><div class="l"><b>适配器</b><span class="mu3 mono">claude-agent-acp（锁定版本）</span></div></div>
+      <div class="srow"><div class="l"><b>登录状态</b><span class="mu3">已登录（只显示类型，不显示邮箱和组织）</span></div></div>
+      <div class="srow"><div class="l"><b>运行时</b><span class="mu3">Node 就绪 · 适配器已安装</span></div></div>
+      <div class="srow"><div class="l"><b>配置目录</b><span class="mu3">校验通过</span></div></div>
+      <div class="srow"><div class="l"><b>资源占用</b><span class="mu3 mono">常驻内存 310 MB</span></div></div>
+    </div>
+    <div class="sgroup mt">
+      <div class="srow"><div class="l"><b>Codex</b><span class="row"><span class="xs del-t">未登录</span><span class="mu3">请在终端完成登录（cupper 不提供登录）</span></span></div><span class="btn">重新检测</span></div>
+      <div class="srow"><div class="l"><b>版本</b><span class="mu3 mono">0.17x</span></div><span class="tag warn">超出已验证范围，未测试</span></div>
+      <div class="srow"><div class="l"><b>git 与 git-lfs</b><span class="mu3 mono">git 2.4x · git-lfs 未找到</span></div></div>
+    </div>
+  </div>
+  <div class="sin w-settings-col">
+    <div class="sh">通知<span class="n">⑩</span></div>
+    <div class="sgroup">
+      <div class="srow"><div class="l"><b>需要处理</b><span class="mu3">有待处理的审批或提问</span></div><span class="toggle on"></span></div>
+      <div class="srow"><div class="l"><b>回合完成</b></div><span class="toggle on"></span></div>
+      <div class="srow"><div class="l"><b>出错</b></div><span class="toggle on"></span></div>
+    </div>
+    <div class="sh">连接与设备<span class="n">⑪</span></div>
+    <div class="sgroup">
+      <div class="srow"><div class="l"><b>桌面界面</b><span class="mu3">已校验</span></div></div>
+      <div class="srow"><div class="l"><b>cupper-cli</b><span class="mu3">已提权：写操作，至 10:42</span></div></div>
+      <div class="srow"><div class="l"><b>本地鉴权较弱</b><span class="mu3">这是自用构建（或开发构建）。宿主用界面拉起它时生成的一次性密钥认证界面；界面崩溃或重启后连不上原来的宿主，需要重启宿主，运行中的回合会被中断。发布构建没有这个限制</span></div><span class="tag warn">自用构建</span><span class="n">⑫</span></div>
+    </div>
+    <div class="sh">存储<span class="n">⑬</span></div>
+    <div class="sgroup">
+      <div class="srow"><div class="l"><b>快照对象</b><span class="mu3">1.2 GB · 可能复制了没被 gitignore 的密钥文件</span></div><span class="btn">清除快照对象</span></div>
+      <div class="srow"><div class="l"><b>会话数据、原始帧、附件、worktree</b><span class="mu3 mono">12 MB · 80 MB · 40 MB · 2.1 GB</span></div></div>
+    </div>
+    <div class="sh">命令行工具<span class="n">⑭</span></div>
+    <div class="sgroup">
+      <div class="srow"><div class="l"><b>安装命令行工具</b><span class="mu3">在你选择的目录里建 <code>cupper</code> 的符号链接</span></div><span class="btn">安装…</span></div>
+    </div>
+  </div>
+</div></div>
+<p class="cap">图 3-8b 设置的其他分区（版本号、路径、大小为示意；"已归档会话"是一个可以取消归档的列表，未画）。</p>
+
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td>设置外壳</td><td>⌘, 打开，占满主区；导航顶部"返回应用"（Back to app）</td><td>UI-2</td><td>M1b</td></tr>
+  <tr><td>②</td><td>发送快捷键</td><td>Codex 的三个选项：Enter；总是 ⌘Enter；多行时 ⌘Enter</td><td>CP-1</td><td>M1b</td></tr>
+  <tr><td>③</td><td>跟进行为</td><td>排队 / 插话的分段控件，默认插话（Follow-up behavior）；Claude 的插话有副作用，可以在这里改成默认排队（F5）</td><td>CP-6</td><td>M1b</td></tr>
+  <tr><td>④</td><td>打开方式</td><td>"打开"按钮用哪个终端、编辑器</td><td>UI-0</td><td>M1b</td></tr>
+  <tr><td>⑤</td><td>主题</td><td>亮色、暗色、跟随系统（默认跟随系统）</td><td>UI-3</td><td>M1b</td></tr>
+  <tr><td>⑥</td><td>半透明侧边栏</td><td>默认开，用 macOS 的半透明材质；关闭后用不透明的侧边栏色</td><td>UI-6</td><td>M1b（F3）</td></tr>
+  <tr><td>⑦</td><td>语言</td><td>简体中文和英文，默认跟随系统</td><td>UI-5</td><td>M1b</td></tr>
+  <tr><td>⑧</td><td>主题自定义</td><td>强调色、背景、前景、对比度、界面和代码字体、字号：主题自定义是 P1</td><td>UI-7</td><td>M2</td></tr>
+  <tr><td>⑨</td><td>Agent 状态</td><td>CLI 路径（手动指定要经原生确认）、版本与已验证范围、适配器版本、登录状态（只有类型）、运行时、配置目录的校验结果、资源占用（每 30 秒采样）、重新检测、重启适配器（影响它的所有会话）、git 与 git-lfs</td><td>AG-1、AG-2、AG-5、NFR-11</td><td>M1b（检测 M1a）</td></tr>
+  <tr><td>⑩</td><td>通知开关</td><td>cupper 设计里是三个开关：需要处理、回合完成、出错。Codex 的写法（回合完成"从不 / 仅在未聚焦时 / 总是"、权限通知、提问通知、提示音）属于通知设置 G9，是 P1</td><td>AP-3、UI-2</td><td>M1b（细项 M2，UI-7）</td></tr>
+  <tr><td>⑪</td><td>已连接的客户端</td><td>桌面界面、cupper-cli（只读或已提权、到期时间）；M3 起加已配对的设备</td><td>SEC-8</td><td>M1b</td></tr>
+  <tr><td>⑫</td><td>"本地鉴权较弱"的说明</td><td>自用构建和开发构建走退化认证（PRD 第 10 节 Q22：NFR-8 的"界面崩溃不影响会话"只对发布构建成立）。<b>待定 Q35</b>：M1b 用本机签名身份做技术验证，通过后自用构建改为签名校验认证</td><td>SEC-8、NFR-8</td><td>M1a（标记）/ M1b（设置页）</td></tr>
+  <tr><td>⑬</td><td>存储</td><td>各类数据的大小；"清除快照对象"，清除后旧回合的 diff 显示"快照不可用"。按规则自动回收和完整的清理入口是 P1</td><td>NFR-11</td><td>M1b（自动回收 M2）</td></tr>
+  <tr><td>⑭</td><td>安装命令行工具</td><td>cupper-cli 随 App 提供，这里在用户选择的目录建符号链接；导出诊断包是 P1</td><td>UI-2、NFR-12</td><td>M1b（诊断包 M2）</td></tr>
+  <tr><td>—</td><td>Codex 有、M1 不做的设置</td><td>个性化、插件、MCP、技能、Hooks、环境、Git 设置（分支前缀等）、快捷键自定义、用量等：P1、P2，或 PRD 未列</td><td>—</td><td>M2 或未排期</td></tr>
+</table>
+
+<!-- ------------------------------------------------ 3.9 -->
+<h3 id="s3-9">3.9 通知与 toast</h3>
+<p><b>结论</b>：窗口不在前台、没有人在看这个会话时，有待处理的审批或提问、回合完成、出错都发系统通知（AP-3）。点击只打开对应的会话，不把焦点移到请求面板上。应用内的 toast 照 Codex 放在顶部居中。</p>
+<div class="scroll"><div class="fig wf">
+  <div class="pop w-notify">
+    <div class="row"><span class="ico">◼</span><b>Cupper</b><span class="sp"></span><span class="xs mu3">现在</span><span class="n">①</span></div>
+    <div class="md">修复登录 bug</div>
+    <div>需要批准：运行命令（示意）<span class="n">②</span></div>
+  </div>
+  <div class="pop w-notify">
+    <div class="row"><span class="ico">◼</span><b>Cupper</b><span class="sp"></span><span class="xs mu3">2 分钟前</span></div>
+    <div class="md">补测试</div>
+    <div>agent 的最后一条消息……（示意）<span class="n">③</span></div>
+  </div>
+  <div class="pop w-notify">
+    <div class="row"><span class="ico">◼</span><b>Cupper</b><span class="sp"></span><span class="xs mu3">5 分钟前</span></div>
+    <div class="md">设计接口</div>
+    <div>回答一个问题以继续（示意）</div>
+  </div>
+  <div class="col w-toasts">
+    <div class="toast">已在别处处理</div>
+    <div class="toast mt">正在重新连接…</div>
+    <div class="xs mu3 mt">顶部居中，距顶 40px，最多 3 条，间距 8px<span class="n">④</span></div>
+  </div>
+</div></div>
+<p class="cap">图 3-9 系统通知（macOS 通知横幅）与应用内 toast。通知文案为示意。</p>
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td>通知来源</td><td>由宿主的 helper 弹出，点击后按 bundle id 激活 Cupper 并跳到会话。helper 能否拿到通知身份待 SP-10 在 M1b 前验证，不行就改由界面主进程弹（<b>待定 Q2</b>）。文案由宿主内置的中英文生成</td><td>AP-3</td><td>M1b</td></tr>
+  <tr><td>②</td><td>审批通知</td><td>Codex 的审批通知（Command approval 等）带"批准""本会话批准""拒绝"按钮；cupper 按设计 5.7.8 <b>不放批准按钮</b>（审批必须在桌面窗口里由真实输入完成）。是否调整由 D04 和安全确认决定</td><td>AP-3</td><td>M1b</td></tr>
+  <tr><td>③</td><td>回合完成</td><td>标题是会话标题，正文是 agent 的最后一条消息（照 Codex）。Codex 可以在通知里直接回复，PRD 没有对应需求。cupper 另有"出错"通知（Codex 把失败并入回合完成）</td><td>AP-3</td><td>M1b</td></tr>
+  <tr><td>④</td><td>toast</td><td>顶部居中，距顶 40px，最多同时 3 条，间距 8px，宽不超过 790px，可以向右滑动关闭：连接状态、更新提示、"已在别处处理"</td><td>AP-4、NFR-2</td><td>M1a（toast）/ M1b（位置，F3）</td></tr>
+  <tr><td>—</td><td>Codex 有、M1 不做的</td><td>提示音选择、Dock 角标（未读数）、手动标未读（⌘⇧U，PS-6）、清除全部未读（⇧Esc，P1）：P1 或 PRD 未列</td><td>—</td><td>M2 或未排期</td></tr>
+</table>
+<!-- ------------------------------------------------ 3.10 -->
+<h3 id="s3-10">3.10 cupper-cli（M1a 的第二客户端）</h3>
+<p><b>结论</b>：cupper-cli 是独立进程的命令行客户端，和桌面界面走同一套宿主协议，用来验收 NFR-1"界面只是宿主的一个客户端"。它默认只读；写操作和审批要先申请提权，由用户在桌面端的原生确认框里批准，授权只在这条连接上有效，所以连续操作用 <code>cupper repl</code>（设计 5.2.14、5.8.4）。</p>
+<pre class="term">$ cupper status                                  <span class="n">①</span>
+宿主 0.1.0 · 运行中的回合 1 · 待处理请求 1 · 客户端 2
+
+$ cupper sessions                                <span class="n">②</span>
+项目 A
+  需要处理  修复登录 bug   claude  worktree cupper/fix-login
+  运行中    补测试         claude  local
+
+$ cupper pending                                 <span class="n">③</span>
+修复登录 bug  r_01  运行命令 cargo test --workspace
+  选项：allow-once（仅本次） · allow-with-updates（持久，只能在桌面端确认） · reject
+
+$ cupper repl                                    <span class="n">④</span>
+cupper&gt; approve s_7f r_01 --option allow-once
+错误：需要审批权限，请先 elevate
+cupper&gt; elevate --scopes write,approve           <span class="n">⑤</span>
+等待桌面端确认……
+已授权：write、approve，到 10:42 为止（断开即失效）
+cupper&gt; approve s_7f r_01 --option allow-with-updates
+错误：这个选项需要在桌面端确认                   <span class="n">⑥</span>
+cupper&gt; approve s_7f r_01 --option allow-once
+已批准                                           <span class="n">⑦</span>
+cupper&gt; send s_7f "顺便把 README 里的命令也更新一下"
+已排队（当前回合运行中）                         <span class="n">⑧</span>
+
+$ cupper watch s_7f                              <span class="n">⑨</span>
+[回合 3] 已运行 cargo test --workspace · 退出码 0
+[回合 3] 已完成 · 用时 1m 05s
+</pre>
+<p class="cap">图 3-10 终端示意（会话、请求 ID 和输出格式都是示意；<code>--json</code> 输出 JSON Lines）。</p>
+<table class="req">
+  <tr><th>编号</th><th>命令</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td><code>cupper status</code></td><td>宿主状态</td><td>NFR-1</td><td>M1a</td></tr>
+  <tr><td>②</td><td><code>cupper sessions [--watch]</code></td><td>订阅会话列表，与桌面看到的一致</td><td>NFR-1、PS-4</td><td>M1a</td></tr>
+  <tr><td>③</td><td><code>cupper pending</code></td><td>待处理的审批和提问</td><td>NFR-1、AP-4</td><td>M1a</td></tr>
+  <tr><td>④</td><td><code>cupper repl</code></td><td>保持一条连接，交互式执行各命令</td><td>NFR-1</td><td>M1a</td></tr>
+  <tr><td>⑤</td><td><code>elevate</code></td><td>申请写或审批权限；桌面侧边栏出现横幅，用户经原生确认框批准（<a href="#s3-7">3.7</a>）。能确认是 agent 拉起的进程申请时直接拒绝，不弹框</td><td>SEC-8</td><td>M1a</td></tr>
+  <tr><td>⑥</td><td>持久选项被拒</td><td>非桌面的客户端永远不能选"总是允许"类选项、不能切到完全访问</td><td>SEC-8、AP-2</td><td>M1a</td></tr>
+  <tr><td>⑦</td><td><code>approve</code> / <code>reject</code> / <code>answer</code></td><td>处理审批、回答提问；桌面上的请求面板随即收起，消息流里记一行"已在 cupper-cli 处理"</td><td>AP-4、NFR-1</td><td>M1a</td></tr>
+  <tr><td>⑧</td><td><code>send</code> / <code>interrupt</code> / <code>new</code></td><td>发送（运行中排队，<code>--steer</code> 插话）、中断、新建会话</td><td>CP-6、CP-7、NFR-1</td><td>M1a（插话 M1b）</td></tr>
+  <tr><td>⑨</td><td><code>watch</code> / <code>history</code> / <code>diff</code></td><td>持续输出会话流、读历史、看 diff；断线重连后补齐，不丢不重</td><td>NFR-1、NFR-2</td><td>M1a（diff M1b）</td></tr>
+</table>
+
+
+<!-- ------------------------------------------------ 3.11 -->
+<h3 id="s3-11">3.11 M1a 最简界面与 M1b 完整界面的对比</h3>
+<p><b>结论</b>：M1a 的界面"架构按最终形态写，视觉从简"：状态层、订阅、按行虚拟化、Markdown 安全配置、token 和三栏外框都按终态实现，组件形态从一开始就照 Codex（请求面板、排队行、回合标题），但只有 Claude、只有本地模式、只有开发和 e2e 构建、只有一种语言。按 Codex 100% 复刻的视觉和细节在 M1b 完成（设计 5.12.1、5.12.2；F1、F3）。</p>
+
+<div class="scroll"><div class="win wf w-m1a">
+  <div class="tb"><span class="lights">● ● ●</span><b class="sm">修复登录 bug</b><span class="sp"></span><span class="tag warn">本地鉴权较弱</span></div>
+  <div class="cols short">
+    <div class="sb w-m1a-sb">
+      <div class="si"><span class="ico">✎</span><span class="t">新会话</span></div>
+      <div class="gt row nowrap">项目<span class="sp"></span>＋</div>
+      <div class="si"><span class="ico">▭</span><span class="t">项目 A</span></div>
+      <div class="si in on"><span class="spin"></span><span class="t">修复登录 bug</span></div>
+      <div class="si in"><span class="t">补测试</span><span class="xs mu3">等待批准</span></div>
+      <div class="si"><span class="ico">▭</span><span class="t">项目 B</span><span class="tag warn">未信任</span></div>
+      <div class="sp"></div>
+      <div class="sbanner row">命令行工具申请权限<span class="sp"></span><span class="btn">查看</span></div>
+    </div>
+    <div class="mn"><div class="thread">
+      <div class="mt3"></div>
+      <div class="warnbox xs">会话档位待确认：排队的消息已暂停 <span class="btn">确认…</span></div>
+      <div class="bub">登录接口在 token 过期后返回 500</div>
+      <div class="col g4">
+        <div class="turn">已完成 · 用时 1m 12s（不折叠）</div>
+        <div class="act"><span class="ico">▤</span><span class="t">已读取 src/auth.rs</span></div>
+        <div class="act"><span class="ico">▣</span><span class="t">已运行 cargo test</span></div>
+      </div>
+      <div class="msg">已修复……</div>
+      <div class="sp"></div>
+      <div class="qrow"><span>顺便检查错误信息的文案</span><span class="sp"></span><span class="xs mu3">排队中</span></div>
+      <div class="composer req">
+        <b class="sm">要让 Claude Code 运行此命令吗？</b>
+        <div class="opt on mt"><span class="no">1</span><span class="tt">仅本次</span></div>
+        <div class="opt"><span class="no">2</span><span class="tt">拒绝</span></div>
+      </div>
+    </div></div>
+    <div class="rp mu3 xs w-m1a-rp">（右侧容器已建，审查面板在 M1b）</div>
+  </div>
+</div></div>
+<p class="cap">图 3-11 M1a 的最简界面（示意）。</p>
+
+<table>
+  <tr><th>区域</th><th>M1a 有</th><th>M1a 没有，M1b 加上</th></tr>
+  <tr><td>构建与语言</td><td>开发构建、e2e 构建；只有一种语言，但全部文案走 i18n 的键；token 体系和三栏外框</td><td>自用构建；中英文；按 ui-spec 的亮暗两套设计参数和半透明侧边栏；快捷键按 Codex 默认值；人工比对（MAN-ui6）</td></tr>
+  <tr><td>顶栏</td><td>"本地鉴权较弱"标记</td><td>左栏和侧边面板开关、"打开"（UI-0）、会话菜单</td></tr>
+  <tr><td>侧边栏</td><td>项目、会话、状态（含"等待批准""需要用户输入"）、"未信任"、添加项目与信任确认、提权横幅</td><td>标题行与宿主状态点、Codex 样式的转圈和未读蓝点、展开显示、设置入口、跳到下一个需要处理的会话、重命名、归档、恢复、移除项目、窄窗口浮层</td></tr>
+  <tr><td>新建会话</td><td>只有 Claude、本地模式、项目选择</td><td>Codex 式的大标题与动作条；Codex；工作树与起始分支；第一条消息前就显示模型、推理强度、权限模式、斜杠命令；版本提示</td></tr>
+  <tr><td>消息流</td><td>按行虚拟化；Markdown；工具单行摘要；思考；错误；提示；带状态的回合标题（已取消、已中断、失败），<b>不折叠</b>；重连状态；toast</td><td>代码高亮；计划与待办、计划药丸；错误的恢复指引；"用时"折叠；改动卡片；晚到的输出；闪光与转圈动画</td></tr>
+  <tr><td>审批与提问</td><td>请求面板：审批、提问、计划确认和未知类型；编号选项；各种状态（含"已失效""已在 cupper-cli 处理"）；不可见字符转义；"已截断"；持久选项经原生确认</td><td>Codex 的文案和细节（推荐徽标、多题切换、消息流里的记录）；Codex 的选项（如"拒绝将结束本回合"）</td></tr>
+  <tr><td>输入框</td><td>发送、排队、停止按钮；排队行与暂停后继续；输入法</td><td>插话（默认）与 ⌘Enter 排队；排队消息的编辑和插话；发送按钮三态；两次 Esc 停止；<code>@</code> 文件、图片、评论附件、斜杠命令、模型 / 推理强度 / 权限选择、发送键设置、↑ 恢复</td></tr>
+  <tr><td>横幅与原生确认</td><td>"未信任：项目配置未加载""会话档位待确认"；信任项目、持久选项、CLI 提权、确认档位、退出提示的原生确认框</td><td>切到完全访问（经权限按钮）、安全相关设置的原生确认</td></tr>
+  <tr><td>右侧工作区</td><td>空的标签容器</td><td>"变更"标签：查阅来源、文件树、diff、按文件和 hunk 操作、底部药丸、行内评论、Git 操作与提交弹窗、归档时清理 worktree</td></tr>
+  <tr><td>设置与通知</td><td>无</td><td>设置页各项；系统通知</td></tr>
+  <tr><td>cupper-cli</td><td>NFR-1 需要的全部命令、<code>elevate</code>、<code>repl</code>、<code>--json</code></td><td>—</td></tr>
+</table>
+
+<!-- ------------------------------------------------ 3.12 -->
+<h3 id="s3-12">3.12 M3 的 iOS 端</h3>
+<p><b>结论</b>：M3 的 iPhone App 是会话宿主的又一个客户端，经用户自建的中继连接，内容端到端加密。它能配对、看会话列表和实时输出、追加消息、处理审批和提问、中断；权限受 SEC-9 限制，凡是会持久或大幅扩大权限的事都只能回到桌面端做。iOS 的技术方案和界面细节在 M3 前由 ADR-12 至 ADR-15 决定，<b>下面的示意只表达 PRD 的功能范围</b>（F1 的复刻对象是 Codex 桌面版，不涉及 iOS）。</p>
+
+<div class="scroll"><div class="fig">
+  <div class="phone">
+    <div class="row"><b>配对</b><span class="n">①</span></div>
+    <div class="mu3">扫描桌面端显示的二维码</div>
+    <div class="box"><div class="qr"></div><div class="mu3">取景框</div></div>
+    <div class="mt"><b>已配对</b></div>
+    <div>我的 Mac（示意）</div>
+    <div class="mu3">之后不需要再配对；可以配对多台 iPhone</div>
+  </div>
+  <div class="phone">
+    <div class="row"><b>会话</b><span class="sp"></span><span class="dot ok"></span><span>我的 Mac · 在线</span><span class="n">②</span></div>
+    <div class="mu3 mt">项目 A</div>
+    <div class="row"><span class="t">修复登录 bug</span><span class="sp"></span><span class="mu3">等待批准</span></div>
+    <div class="row"><span class="spin"></span><span>补测试</span></div>
+    <div class="mu3 mt">项目 B</div>
+    <div class="row"><span class="dot unread"></span><span>升级依赖</span></div>
+    <div class="row"><span>整理文档</span></div>
+    <div class="box later mt">按电脑分组（多台 Mac）<span class="n">③</span></div>
+  </div>
+  <div class="phone">
+    <div class="row"><b>修复登录 bug</b><span class="sp"></span><span class="btn">停止</span><span class="n">④</span></div>
+    <div class="bub">登录接口返回 500…</div>
+    <div class="act"><span class="t">已运行 cargo test …</span></div>
+    <div>我改成用服务器时间判断过期……<span class="n">⑤</span></div>
+    <div class="box"><span class="mu3">追加消息</span><div class="row"><span class="seg"><span>排队</span><span class="on">插话</span></span><span class="sp"></span><span class="send">↑</span><span class="n">⑥</span></div></div>
+  </div>
+  <div class="phone">
+    <div class="row"><b>审批</b><span class="n">⑦</span></div>
+    <div class="cmd"><div class="b">cargo test --workspace</div></div>
+    <div class="opt on mt"><span class="no">1</span><span class="tt">仅本次</span></div>
+    <div class="opt later"><span class="no">2</span><span class="tt">总是允许 …</span></div>
+    <div class="mu3">只能在桌面端选择<span class="n">⑧</span></div>
+    <div class="opt"><span class="no">3</span><span class="tt">拒绝</span></div>
+    <div class="box"><b>提问</b>：单选、表单同样可以回答<span class="n">⑨</span></div>
+    <div class="row"><span class="toast">已在桌面端处理</span><span class="n">⑩</span></div>
+  </div>
+  <div class="phone">
+    <div class="row"><b>锁屏</b><span class="n">⑪</span></div>
+    <div class="box"><b>Cupper</b><br>项目 A / 修 bug 需要审批</div>
+    <div class="box"><b>Cupper</b><br>通用文案（解密失败时，示意）</div>
+    <div class="mu3">推送内容由桌面按每台设备加密，手机上由通知扩展解密</div>
+  </div>
+</div></div>
+<p class="cap">图 3-12a iPhone 的五个画面（示意）。</p>
+
+<div class="scroll"><div class="sin w-settings-col wf">
+  <div class="sh">连接与设备 · 配对新设备<span class="n">⑫</span></div>
+  <div class="sgroup">
+    <div class="srow"><div class="l"><b>配对新设备</b><span class="mu3">二维码里有一次性、短时效的秘密，用来认证手机的应答，防止中继冒充</span></div><div class="qr"></div></div>
+    <div class="srow"><div class="l"><b>iPhone（示意）</b><span class="mu3">配对于 10-20</span></div><span class="btn">撤销</span><span class="n">⑬</span></div>
+  </div>
+</div></div>
+<p class="cap">图 3-12b 桌面端的配对和设备管理（M3 新增，位置为示意）。</p>
+
+<table class="req">
+  <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>①</td><td>扫码配对</td><td>手机扫桌面端的二维码完成配对，双向认证；可以同时配对多台 iPhone</td><td>MB-1、SEC-2</td><td>M3</td></tr>
+  <tr><td>②</td><td>会话列表</td><td>按项目分组，显示会话状态和所属电脑是否在线；未读与桌面同步</td><td>MB-2</td><td>M3</td></tr>
+  <tr><td>③</td><td>多台 Mac</td><td>一台手机配对多台 Mac，列表按电脑分组</td><td>MB-11</td><td>M4</td></tr>
+  <tr><td>④</td><td>停止</td><td>中断当前回合</td><td>MB-7</td><td>M3</td></tr>
+  <tr><td>⑤</td><td>实时输出</td><td>与桌面端同一份内容，按手机屏幕排版</td><td>MB-3</td><td>M3</td></tr>
+  <tr><td>⑥</td><td>追加消息</td><td>排队；agent 支持时可以插话。控件形式是示意</td><td>MB-4</td><td>M3</td></tr>
+  <tr><td>⑦</td><td>审批</td><td>在一处处理后，另一处自动收起；桌面在执行之前核实：来自未被撤销的已配对设备、没有被重放、针对的正是当前这条请求</td><td>MB-5、SEC-4、SEC-10</td><td>M3</td></tr>
+  <tr><td>⑧</td><td>不能选"总是允许"</td><td>会持久扩大权限的选项在手机上不可选。<b>是置灰还是隐藏未定</b>，图中按置灰示意</td><td>SEC-9</td><td>M3</td></tr>
+  <tr><td>⑨</td><td>回答提问</td><td>选择题、表单、计划确认（会切到更宽松档位的计划选项除外）</td><td>MB-5、SEC-9</td><td>M3</td></tr>
+  <tr><td>⑩</td><td>"已在桌面端处理"</td><td>先到先得</td><td>MB-5、AP-4</td><td>M3</td></tr>
+  <tr><td>⑪</td><td>加密推送</td><td>有待处理的交互请求、回合完成、出错时推送；解不开时显示通用文案。推送由中继用用户自己的 APNs 凭据直接发出</td><td>MB-6、RL-3、SEC-1</td><td>M3</td></tr>
+  <tr><td>⑫</td><td>桌面端配对</td><td>在设置的"连接与设备"里显示二维码（位置示意）；配对和撤销都走原生确认（设计 5.7.8）</td><td>MB-1、SEC-2</td><td>M3</td></tr>
+  <tr><td>⑬</td><td>已配对设备与撤销</td><td>每台设备一把独立密钥；撤销后该设备无法再连接，也无法解密新内容</td><td>SEC-3</td><td>M3</td></tr>
+</table>
+
+<h4>手机端的权限边界（SEC-9，已确认 U3、U-R2）</h4>
+<table>
+  <tr><th>手机上不能做的事</th><th>依据</th></tr>
+  <tr><td>不能选择"总是允许"这类会持久扩大权限的审批选项</td><td>SEC-9（U3）</td></tr>
+  <tr><td>不能切换到"完全访问 / 跳过审批"</td><td>SEC-9</td></tr>
+  <tr><td>不能把会话切到比当前更宽松的审批档位（Claude 的 auto、acceptEdits，Codex 的 Auto review）；已经处在这类档位的会话照常使用</td><td>SEC-9（U-R2）</td></tr>
+  <tr><td>不提供远程 shell，不能直接写文件，只能在 agent 本身的权限范围内操作</td><td>SEC-9</td></tr>
+  <tr><td>不能添加或移除项目，只能在已有项目里新建会话（新建会话本身是 M4 的 MB-9）；不能暂存、提交、推送</td><td>SEC-9；设计 5.8.3 权限矩阵</td></tr>
+</table>
+<h4>前提与限制</h4>
+<ul>
+  <li>Mac 醒着、cupper 在运行（G2）；后台常驻（关窗后会话继续运行、手机仍能操作）在 M3 之前完成（NFR-8、U5）。合盖后无法远程操作；有回合在运行或有待处理请求时阻止空闲睡眠（NFR-13，M3 为 P0）。</li>
+  <li>用户自己部署中继（Docker 或单个可执行文件），桌面和手机都只发起出站连接（RL-1）；中继只看到路由所需的元数据和密文，文档写明能看到哪些元数据（SEC-1、SEC-7）。M3 的中继不保存任何会话数据（U1）。</li>
+  <li>需要付费的 Apple Developer Program 账号，用它构建 iOS App 并发送推送（U7）。</li>
+  <li>客户端拒绝明文降级（SEC-5）；iOS 本地缓存使用系统数据保护，密钥存在钥匙串（SEC-11）。</li>
+</ul>
+<h4>M4 增加的</h4>
+<table>
+  <tr><th>需求</th><th>内容</th></tr>
+  <tr><td>MB-8</td><td>只读查看 diff</td></tr>
+  <tr><td>MB-9</td><td>在已有项目里新建会话；切换模型、推理强度、权限模式（受 SEC-9 限制）；附带图片</td></tr>
+  <tr><td>MB-10、RL-2</td><td>电脑离线时查看最近一段时间的历史，来自中继的密文缓存（默认 7 天）</td></tr>
+  <tr><td>MB-11</td><td>一台手机配对多台 Mac，会话列表按电脑分组</td></tr>
+  <tr><td>MB-12</td><td>用户正在桌面上操作时不推送</td></tr>
+</table>
+
+<!-- ------------------------------------------------ 3.13 -->
+<h3 id="s3-13">3.13 快捷键</h3>
+<p><b>结论</b>：按键沿用 Codex 的 macOS 默认值（UI-4，PRD v1.3；ui-spec 第 5 节）。M1 只做与 M1 功能对应的核心子集，属于 P1 功能的快捷键随功能在 M2 交付；具体子集由 D04 确定。</p>
+<table>
+  <tr><th>动作</th><th>快捷键</th><th>Codex 原文</th><th>需求</th><th>里程碑</th></tr>
+  <tr><td>新会话</td><td>⌘N（或 ⌘⇧O）</td><td>New chat</td><td>PS-3</td><td>M1b</td></tr>
+  <tr><td>设置</td><td>⌘,</td><td>Settings…</td><td>UI-2</td><td>M1b</td></tr>
+  <tr><td>切换左栏</td><td>⌘B 或 ⌘⇧S（光标在输入框里时 ⌘B 只在光标位于开头时切换）</td><td>Toggle sidebar</td><td>PS-1</td><td>M1b</td></tr>
+  <tr><td>切换侧边面板 / 打开"变更"标签</td><td>⌘⌥B / ⌃⇧G</td><td>Toggle Changes panel / Open Changes tab</td><td>PS-1、GT-1</td><td>M1b</td></tr>
+  <tr><td>切换文件树</td><td>⌘⇧E</td><td>Toggle navigation panel</td><td>GT-1</td><td>M1b</td></tr>
+  <tr><td>重命名 / 归档会话</td><td>⌘⌥R / ⌘⇧A</td><td>Rename chat / Archive chat</td><td>PS-3</td><td>M1b</td></tr>
+  <tr><td>下一个需要处理的会话</td><td>⌘⌥A</td><td>Next chat needing attention</td><td>PS-4</td><td>M1b</td></tr>
+  <tr><td>最近会话之间切换</td><td>⌃Tab / ⌃⇧Tab</td><td>Previous / Next recent chat</td><td>UI-4</td><td>M1b</td></tr>
+  <tr><td>侧边栏上一个 / 下一个</td><td>⌘⌥[ 或 ⌘⌥← / ⌘⌥] 或 ⌘⌥→</td><td>Previous / Next sidebar item</td><td>UI-4</td><td>M1b</td></tr>
+  <tr><td>数字直达</td><td>⌃1–9 切侧边栏会话，⌘1–9 切标签（设置里可对调）</td><td>—</td><td>UI-4</td><td>M1b</td></tr>
+  <tr><td>模型与推理强度</td><td>⌃⇧M</td><td>Select effort</td><td>CP-4</td><td>M1b</td></tr>
+  <tr><td>发送 / 换行</td><td>Enter；⇧Enter 或 ⌥Enter 换行</td><td>—</td><td>CP-1</td><td>M1a（M1b 可设置）</td></tr>
+  <tr><td>运行中排队</td><td>⌘Enter（发送键设成 ⌘Enter 时为 ⌘⇧Enter）</td><td>Queue</td><td>CP-6</td><td>M1b</td></tr>
+  <tr><td>停止回合</td><td>运行中按两次 Esc（第一次进入确认状态）</td><td>—</td><td>CP-7、UI-4</td><td>M1b（M1a 用停止按钮）</td></tr>
+  <tr><td>批准 / 拒绝</td><td>Enter / Esc</td><td>Approve / Decline request</td><td>AP-1</td><td>M1a</td></tr>
+  <tr><td>在外部终端打开工作区</td><td>⌘⌥T（cupper 自己的；Codex 没有这个键）</td><td>—</td><td>UI-0</td><td>M1b</td></tr>
+  <tr><td>后退 / 前进</td><td>⌘[ / ⌘]</td><td>Back / Forward</td><td>PS-6</td><td>M2</td></tr>
+  <tr><td>命令菜单 / 搜索文件</td><td>⌘K（或 ⌘⇧P）/ ⌘P</td><td>Open command menu / Search Files…</td><td>PS-6、UI-7</td><td>M2</td></tr>
+  <tr><td>底部面板 / 打开终端</td><td>⌘J / ⌃`</td><td>Toggle bottom panel / Open terminal</td><td>UI-1</td><td>M2</td></tr>
+  <tr><td>置顶、标为未读、清除全部未读、Activity</td><td>⌘⌥P、⌘⇧U、⇧Esc、⌘⌥U</td><td>Toggle pin / Mark as unread / Clear all unreads / Toggle activity view</td><td>PS-6</td><td>M2</td></tr>
+  <tr><td>会话内查找</td><td>⌘F（⌘G / ⌘⇧G）</td><td>Find</td><td>PS-6</td><td>M2</td></tr>
+</table>
+<ul>
+  <li>⌘. 在 Codex 里另有用途，不是中断；cupper 是否保留 ⌘. 作为中断的别名，待 D04 定。</li>
+  <li>"输入框为空时按 ↑ 恢复上一条"是 CP-1 的要求；官方快捷键表有这一条，但 R06 在本机包里没有找到对应逻辑，需要实机确认（ui-spec 7.3）。</li>
+</ul>
+<!-- ======================================================= 4 -->
+<h2 id="s4">4 关键场景</h2>
+<p><b>结论</b>：S1–S4 是 M1b 的退出标准，作者要用两种 agent 按逐步检查表走完（MAN-S1 至 MAN-S4）；S5–S7 是 M3 的退出标准。</p>
+
+<h3 id="sc1">S1 并行开发（M1b）</h3>
+<pre class="mermaid">
+flowchart LR
+  A["项目 A"] --> B["新会话 1<br/>Claude Code · 新建 worktree<br/>分支 cupper/fix-bug"]
+  A --> C["新会话 2<br/>Codex · 新建 worktree<br/>分支 cupper/add-tests"]
+  B --> D["侧边栏：蓝点 运行中"]
+  C --> E["侧边栏：琥珀点 需要处理"]
+  E --> F["⌘⌥A 跳到需要处理的会话"]
+  D --> G["两个会话互不干扰<br/>至少能同时运行 6 个"]
+</pre>
+<p>界面：<a href="#s3-1">3.1</a>、<a href="#s2">2</a> 的侧边栏。需求：CP-5、AG-3、PS-4、NFR-11。</p>
+
+<h3 id="sc2">S2 审批与提问（M1a：Claude；M1b：Codex、系统通知）</h3>
+<pre class="mermaid">
+sequenceDiagram
+  participant AG as agent
+  participant H as 会话宿主
+  participant D as 桌面界面
+  participant N as 系统通知
+  AG->>H: 请求审批：运行命令
+  H->>D: 输入框的位置换成请求面板，会话显示等待批准
+  opt 窗口不在前台
+    H->>N: 通知 需要处理
+    N->>D: 点击后打开对应会话
+  end
+  D->>H: Enter 批准，或 Esc 拒绝
+  H->>AG: 按 agent 的选项应答
+  AG->>H: 结构化提问或计划确认
+  H->>D: 提问请求面板，回答后输入框恢复，回合继续
+</pre>
+<p>界面：<a href="#s3-3">3.3</a>、<a href="#s3-4">3.4</a>、<a href="#s3-9">3.9</a>。需求：AP-1 至 AP-5。</p>
+
+<h3 id="sc3">S3 审查到提交（M1b）</h3>
+<pre class="mermaid">
+flowchart LR
+  A["回合结束<br/>改动卡片"] --> B["打开变更标签<br/>查阅来源：最近一轮"]
+  B --> C["在某一行写评论"]
+  C --> D["评论作为附件进入输入框<br/>随下一条消息发给 agent"]
+  D --> E["agent 修改后回合结束"]
+  E --> B
+  B --> F["切到未暂存<br/>按文件或 hunk 暂存"]
+  F --> G["Git 操作：提交或推送<br/>会运行仓库的 hooks"]
+  G --> H["推送"]
+</pre>
+<p>界面：<a href="#s3-6">3.6</a>、<a href="#s3-5">3.5</a>。需求：GT-1 至 GT-4。</p>
+
+<h3 id="sc4">S4 运行中追加指令（M1a：排队、停止；M1b：默认插话、⌘Enter 排队、两次 Esc）</h3>
+<pre class="mermaid">
+flowchart TD
+  A["agent 运行中，用户再输入一句"] --> B{"按哪个键"}
+  B -->|"Enter（默认插话）"| D{"agent 支持且插话成功？"}
+  B -->|"⌘Enter"| C["排到下一回合<br/>输入框上方多一行"]
+  D -->|"是"| E["并入当前回合"]
+  D -->|"否"| C
+  C -->|"点插话"| D
+  A --> F["按两次 Esc 或点停止"]
+  F --> G["回合停止，队列暂停<br/>点继续后恢复"]
+</pre>
+<p>界面：<a href="#s3-5">3.5</a>。需求：CP-6、CP-7、UI-4。设置里可以把默认行为改成排队（F5）。</p>
+
+<h3 id="sc5">S5 离开工位（M3）</h3>
+<pre class="mermaid">
+sequenceDiagram
+  participant H as Mac 上的会话宿主
+  participant R as 自建中继
+  participant P as Apple 推送服务
+  participant I as iPhone
+  H->>R: 推送内容，按设备加密
+  R->>P: 发出推送，中继只看到密文
+  P->>I: 通知送达
+  I->>I: 通知扩展解密：项目 A / 修 bug 需要审批
+  I->>R: 解锁后查看命令详情并批准，回答经端到端加密
+  R->>H: 转发密文
+  H->>H: 核实设备未撤销、未重放、针对当前请求
+  H->>I: 已处理，桌面端卡片同步收起
+</pre>
+<p>界面：<a href="#s3-12">3.12</a>。需求：MB-5、MB-6、SEC-1、SEC-4。</p>
+
+<h3 id="sc6">S6 手机上追加指令（M3）</h3>
+<pre class="mermaid">
+flowchart LR
+  A["会话列表"] --> B["打开会话<br/>看实时输出"]
+  B --> C["输入：换个思路"]
+  C --> D{"会话状态"}
+  D -->|"运行中"| E["排队<br/>agent 支持时可插话"]
+  D -->|"空闲"| F["开始新回合"]
+  E --> G["桌面和手机同步显示"]
+  F --> G
+</pre>
+<p>界面：<a href="#s3-12">3.12</a>。需求：MB-2、MB-3、MB-4。</p>
+
+<h3 id="sc7">S7 首次配对（M3）</h3>
+<pre class="mermaid">
+sequenceDiagram
+  actor U as 用户
+  participant D as 桌面端
+  participant R as 自建中继
+  participant I as iPhone
+  U->>D: 开始配对
+  D->>U: 显示二维码，内含一次性、短时效的秘密
+  U->>I: 扫码
+  I->>R: 配对应答
+  R->>D: 转发
+  D->>D: 用二维码里的秘密认证应答，防止中继冒充
+  D->>I: 配对完成，这台设备有自己的密钥
+  Note over D,I: 之后不需要再配对，手机丢了在桌面端撤销
+</pre>
+<p>界面：<a href="#s3-12">3.12</a>。需求：MB-1、SEC-2、SEC-3。配对与撤销都走原生确认（设计 5.7.8），配对协议由 ADR-12 在 M3 前决定。</p>
+
+<!-- ======================================================= 5 -->
+<h2 id="s5">5 需求总表</h2>
+<p>按模块列出 PRD v1.3 的全部需求（PRD 没有 NFR-3，它已并入 NFR-8）。里程碑与设计 5.12.4 追溯矩阵一致：P0 在 M1a / M1b 或 M3；6.1 的 P1 在 M2；6.2 的 P1 在 M4；P2 暂不排期。</p>
+<table class="reqall">
+  <tr><th>编号</th><th>一句话</th><th>优先级</th><th>里程碑</th><th>界面</th></tr>
+  <tr><th colspan="5">Agent 接入（AG）</th></tr>
+  <tr><td>AG-1</td><td>支持 Claude Code 和 Codex，使用本机已登录的官方 CLI；适配器锁定版本，不再分发 Anthropic 的组件</td><td>P0</td><td>M1a（Claude）/ M1b（Codex）</td><td><a href="#s3-1">3.1</a>、<a href="#s3-8">3.8</a></td></tr>
+  <tr><td>AG-2</td><td>尽力检测 CLI 是否安装、是否登录，失败时指导用户在终端处理</td><td>P0</td><td>M1a（检测）/ M1b（设置页）</td><td><a href="#s3-1">3.1</a>、<a href="#s3-2">3.2</a>、<a href="#s3-8">3.8</a></td></tr>
+  <tr><td>AG-3</td><td>新建会话时选择 agent，列表和会话页显示 agent 标识</td><td>P0</td><td>M1a（Claude）/ M1b（两者）</td><td><a href="#s2">2</a>、<a href="#s3-1">3.1</a></td></tr>
+  <tr><td>AG-4</td><td>按 agent 的实际能力显示功能；第一条消息前就显示模型等</td><td>P0</td><td>M1b</td><td><a href="#s3-1">3.1</a>、<a href="#s3-5">3.5</a></td></tr>
+  <tr><td>AG-5</td><td>显示 CLI 和适配器的版本，超出已验证范围时提示</td><td>P0</td><td>M1b</td><td><a href="#s3-8">3.8</a></td></tr>
+  <tr><td>AG-6</td><td>会话继承 CLI 的 MCP、hooks、插件，并显示加载了哪些</td><td>P1</td><td>M2</td><td>—</td></tr>
+  <tr><th colspan="5">项目与会话（PS）</th></tr>
+  <tr><td>PS-1</td><td>三栏布局，可以隐藏或展开；M1 右侧只放审查面板</td><td>P0</td><td>M1b</td><td><a href="#s2">2</a></td></tr>
+  <tr><td>PS-2</td><td>添加或移除项目，按项目分组；添加时确认是否信任项目配置</td><td>P0</td><td>M1a（添加与信任）/ M1b（移除）</td><td><a href="#s2">2</a>、<a href="#s3-7">3.7</a></td></tr>
+  <tr><td>PS-3</td><td>新建、重命名、归档、恢复会话；worktree 会话的恢复规则</td><td>P0</td><td>M1a（新建）/ M1b（其余）</td><td><a href="#s2">2</a>、<a href="#s3-6">3.6</a>、<a href="#s3-8">3.8</a></td></tr>
+  <tr><td>PS-4</td><td>会话状态指示，一键跳到下一个需要处理的会话</td><td>P0</td><td>M1a（状态）/ M1b（跳转）</td><td><a href="#s2">2</a></td></tr>
+  <tr><td>PS-8</td><td>App 或宿主重启后可以继续对话，历史以 cupper 的记录为准</td><td>P0</td><td>M1a</td><td><a href="#s3-2">3.2</a></td></tr>
+  <tr><td>PS-5</td><td>看到 CLI 里原有的会话历史并继续</td><td>P1</td><td>M2</td><td>—</td></tr>
+  <tr><td>PS-6</td><td>置顶、手动标未读、会话搜索、⌘K、Activity、前进/后退（F3：搜索、Activity、Pinned 分组、组织与排序菜单仍是 P1）</td><td>P1</td><td>M2</td><td><a href="#s2">2</a>（①⑪⑬）</td></tr>
+  <tr><td>PS-7</td><td>多文件夹项目、多窗口、深链接、菜单栏常驻</td><td>P2</td><td>未排期</td><td>—</td></tr>
+  <tr><th colspan="5">输入框（CP）</th></tr>
+  <tr><td>CP-1</td><td>多行输入，Enter 或 ⌘Enter 发送，↑ 恢复上一条</td><td>P0</td><td>M1a（基本）/ M1b（设置与 ↑）</td><td><a href="#s3-5">3.5</a></td></tr>
+  <tr><td>CP-2</td><td>粘贴或拖入图片；<code>@</code> 引用文件</td><td>P0</td><td>M1b</td><td><a href="#s3-5">3.5</a></td></tr>
+  <tr><td>CP-3</td><td>斜杠命令菜单，命令来自 agent</td><td>P0</td><td>M1b</td><td><a href="#s3-5">3.5</a></td></tr>
+  <tr><td>CP-4</td><td>模型、推理强度、权限模式选择，选项来自 agent</td><td>P0</td><td>M1b（档位待确认 M1a）</td><td><a href="#s3-1">3.1</a>、<a href="#s3-7">3.7</a></td></tr>
+  <tr><td>CP-5</td><td>新建会话时选本地或新建 worktree，显示分支名</td><td>P0</td><td>M1b</td><td><a href="#s3-1">3.1</a></td></tr>
+  <tr><td>CP-6</td><td>运行中追加消息：默认插话（Steer），⌘Enter 排队；不支持或失败时转排队；设置里可改成默认排队（v1.3）</td><td>P0</td><td>M1a（排队）/ M1b（插话、排队消息的编辑与插话，F3）</td><td><a href="#s3-5">3.5</a></td></tr>
+  <tr><td>CP-7</td><td>中断当前回合；agent 没响应时超时兜底</td><td>P0</td><td>M1a</td><td><a href="#s3-5">3.5</a></td></tr>
+  <tr><td>CP-8</td><td>排队消息重排、删除（编辑按 F3 提前到 M1b）、文件附件、Plan 模式、worktree 增强</td><td>P1</td><td>M2</td><td><a href="#s3-5">3.5</a>（⑨）</td></tr>
+  <tr><th colspan="5">消息流（MS）</th></tr>
+  <tr><td>MS-1</td><td>流式 Markdown，代码高亮、表格</td><td>P0</td><td>M1a（基本）/ M1b（高亮）</td><td><a href="#s3-2">3.2</a></td></tr>
+  <tr><td>MS-2</td><td>思考过程可折叠</td><td>P0</td><td>M1a</td><td><a href="#s3-2">3.2</a></td></tr>
+  <tr><td>MS-3</td><td>工具活动单行摘要，可展开；按回合折叠并显示耗时；拿不到时降级</td><td>P0</td><td>M1a（Claude）/ M1b（Codex、折叠）</td><td><a href="#s3-2">3.2</a></td></tr>
+  <tr><td>MS-4</td><td>计划和待办，带每一步的状态；运行中显示"第 n / m 步"药丸（F3）（Claude 的口径见 Q12）</td><td>P0</td><td>M1b</td><td><a href="#s3-2">3.2</a></td></tr>
+  <tr><td>MS-5</td><td>错误提示和恢复指引；agent 崩溃后自动重启并提示</td><td>P0</td><td>M1a（恢复指引的完整呈现 M1b，设计 5.12.3）</td><td><a href="#s3-2">3.2</a></td></tr>
+  <tr><td>MS-6</td><td>子代理活动、上下文压缩提示、上下文用量</td><td>P1</td><td>M2</td><td>—</td></tr>
+  <tr><td>MS-7</td><td>Mermaid、会话分叉、右侧任务面板（即摘要卡片，F3）、Codex 的 Markdown 计划</td><td>P1</td><td>M2</td><td>—</td></tr>
+  <tr><th colspan="5">审批与提问（AP）</th></tr>
+  <tr><td>AP-1</td><td>审批以请求面板呈现，替换输入框的位置，选项带编号，Enter 批准、Esc 拒绝（v1.3）</td><td>P0</td><td>M1a</td><td><a href="#s3-3">3.3</a></td></tr>
+  <tr><td>AP-2</td><td>选项和文案以 agent 为准，持久选项要标明</td><td>P0</td><td>M1a（Claude）/ M1b（Codex）</td><td><a href="#s3-3">3.3</a>、<a href="#s3-7">3.7</a></td></tr>
+  <tr><td>AP-3</td><td>窗口不在前台时发系统通知</td><td>P0</td><td>M1b</td><td><a href="#s3-9">3.9</a></td></tr>
+  <tr><td>AP-4</td><td>先到先得，其他端自动收起，晚到提示"已在别处处理"</td><td>P0</td><td>M1a</td><td><a href="#s3-3">3.3</a>、<a href="#s3-10">3.10</a></td></tr>
+  <tr><td>AP-5</td><td>结构化提问以请求面板呈现（与 AP-1 相同的形态），任何客户端都能回答（v1.3）</td><td>P0</td><td>M1a</td><td><a href="#s3-4">3.4</a></td></tr>
+  <tr><th colspan="5">审查与 Git（GT）</th></tr>
+  <tr><td>GT-1</td><td>审查面板：文件列表加 diff，未暂存和最近一回合两种范围</td><td>P0</td><td>M1a（回合快照）/ M1b</td><td><a href="#s3-6">3.6</a></td></tr>
+  <tr><td>GT-2</td><td>行内评论作为附件进入输入框，随下一条消息发给 agent（v1.3）</td><td>P0</td><td>M1b</td><td><a href="#s3-6">3.6</a>、<a href="#s3-5">3.5</a></td></tr>
+  <tr><td>GT-3</td><td>按全部、文件、hunk 暂存、取消暂存、还原（最小"已暂存"范围，Q13）</td><td>P0</td><td>M1b</td><td><a href="#s3-6">3.6</a></td></tr>
+  <tr><td>GT-4</td><td>提交和推送</td><td>P0</td><td>M1b</td><td><a href="#s3-6">3.6</a></td></tr>
+  <tr><td>GT-5</td><td>归档时提示清理 worktree，有未提交或未推送的内容时不删除</td><td>P0</td><td>M1b</td><td><a href="#s3-6">3.6</a></td></tr>
+  <tr><td>GT-6</td><td>生成提交信息、其余审查范围、创建 PR、在编辑器中打开、Git 设置</td><td>P1</td><td>M2</td><td><a href="#s3-6">3.6</a>（③⑮）</td></tr>
+  <tr><th colspan="5">终端、设置与外观（UI）</th></tr>
+  <tr><td>UI-0</td><td>在外部终端或编辑器中打开会话的工作区</td><td>P0</td><td>M1b</td><td><a href="#s2">2</a></td></tr>
+  <tr><td>UI-1</td><td>每个会话一个集成终端（Codex 的底部面板，F3）</td><td>P1</td><td>M2</td><td><a href="#s2">2</a>（⑥㊲）</td></tr>
+  <tr><td>UI-2</td><td>设置页：通用、通知、外观、已归档会话、agent 状态</td><td>P0</td><td>M1b</td><td><a href="#s3-8">3.8</a></td></tr>
+  <tr><td>UI-3</td><td>亮色和暗色，跟随系统</td><td>P0</td><td>M1b</td><td><a href="#s3-8">3.8</a></td></tr>
+  <tr><td>UI-4</td><td>核心快捷键子集，按键沿用 Codex 的默认值（如停止是两次 Esc）（v1.3）</td><td>P0</td><td>M1b</td><td><a href="#s3-13">3.13</a></td></tr>
+  <tr><td>UI-5</td><td>简体中文和英文，跟随系统</td><td>P0</td><td>M1b（M1a 一种语言，文案走键）</td><td><a href="#s3-8">3.8</a></td></tr>
+  <tr><td>UI-6</td><td>界面 100% 复刻作者本机的 Codex 客户端；只复刻，不复制，不用 OpenAI 的商标和品牌素材（v1.3，F1、F2）</td><td>P0</td><td>M1b</td><td>全部</td></tr>
+  <tr><td>UI-7</td><td>文件树和预览、主题自定义、通知设置、MCP 状态</td><td>P1</td><td>M2</td><td>—</td></tr>
+  <tr><th colspan="5">移动端（MB）</th></tr>
+  <tr><td>MB-1</td><td>扫码与桌面配对，可以配对多台 iPhone</td><td>P0</td><td>M3</td><td><a href="#s3-12">3.12</a></td></tr>
+  <tr><td>MB-2</td><td>会话列表：按项目分组，显示状态和电脑是否在线</td><td>P0</td><td>M3</td><td><a href="#s3-12">3.12</a></td></tr>
+  <tr><td>MB-3</td><td>查看实时输出</td><td>P0</td><td>M3</td><td><a href="#s3-12">3.12</a></td></tr>
+  <tr><td>MB-4</td><td>发送消息：排队，支持时插话</td><td>P0</td><td>M3</td><td><a href="#s3-12">3.12</a></td></tr>
+  <tr><td>MB-5</td><td>处理审批、回答提问，一处处理另一处收起</td><td>P0</td><td>M3</td><td><a href="#s3-12">3.12</a></td></tr>
+  <tr><td>MB-6</td><td>加密推送，解不开时显示通用文案</td><td>P0</td><td>M3</td><td><a href="#s3-12">3.12</a></td></tr>
+  <tr><td>MB-7</td><td>中断当前回合</td><td>P0</td><td>M3</td><td><a href="#s3-12">3.12</a></td></tr>
+  <tr><td>MB-8</td><td>只读查看 diff</td><td>P1</td><td>M4</td><td>—</td></tr>
+  <tr><td>MB-9</td><td>新建会话；切换模型、推理强度、权限模式（受 SEC-9 限制）；附图</td><td>P1</td><td>M4</td><td>—</td></tr>
+  <tr><td>MB-10</td><td>电脑离线时查看最近的历史（中继密文缓存）</td><td>P1</td><td>M4</td><td>—</td></tr>
+  <tr><td>MB-11</td><td>一台手机配对多台 Mac，按电脑分组</td><td>P1</td><td>M4</td><td><a href="#s3-12">3.12</a>（③）</td></tr>
+  <tr><td>MB-12</td><td>用户在桌面上操作时不推送</td><td>P1</td><td>M4</td><td>—</td></tr>
+  <tr><th colspan="5">安全与隐私（SEC）</th></tr>
+  <tr><td>SEC-1</td><td>桌面与手机之间的全部内容端到端加密</td><td>P0</td><td>M3</td><td><a href="#s3-12">3.12</a></td></tr>
+  <tr><td>SEC-2</td><td>配对时双向认证，防止中继冒充</td><td>P0</td><td>M3</td><td><a href="#s3-12">3.12</a></td></tr>
+  <tr><td>SEC-3</td><td>每台设备独立密钥，可以查看和撤销</td><td>P0</td><td>M3</td><td><a href="#s3-12">3.12</a></td></tr>
+  <tr><td>SEC-4</td><td>执行手机指令前核实设备、防重放、针对当前请求</td><td>P0</td><td>M3</td><td><a href="#s3-12">3.12</a></td></tr>
+  <tr><td>SEC-5</td><td>拒绝明文降级</td><td>P0</td><td>M3</td><td>—</td></tr>
+  <tr><td>SEC-6</td><td>默认不收集遥测</td><td>P0</td><td>M1a</td><td>—</td></tr>
+  <tr><td>SEC-7</td><td>文档说明加密覆盖范围和中继能看到的元数据</td><td>P0</td><td>M3</td><td>—</td></tr>
+  <tr><td>SEC-8</td><td>宿主只接受认证的本地客户端；agent 拿不到凭据；不监听网络端口</td><td>P0</td><td>M1a</td><td><a href="#s3-7">3.7</a>、<a href="#s3-8">3.8</a>、<a href="#s3-10">3.10</a></td></tr>
+  <tr><td>SEC-9</td><td>手机的权限边界</td><td>P0</td><td>M3</td><td><a href="#s3-12">3.12</a></td></tr>
+  <tr><td>SEC-10</td><td>交互请求的处理绑定到具体请求；agent 进程退出后请求失效</td><td>M1 数据基础；M3 P0</td><td>M1a / M3</td><td><a href="#s3-3">3.3</a></td></tr>
+  <tr><td>SEC-11</td><td>说明静态数据的保护方式</td><td>P0</td><td>M3</td><td>—</td></tr>
+  <tr><th colspan="5">中继（RL）</th></tr>
+  <tr><td>RL-1</td><td>开源单体中继，由用户自己部署</td><td>P0</td><td>M3</td><td>—</td></tr>
+  <tr><td>RL-3</td><td>推送由中继直接发出，使用用户自己的 APNs 凭据</td><td>P0</td><td>M3</td><td>—</td></tr>
+  <tr><td>RL-5</td><td>中继运维：健康检查、凭据过期与吊销、限流、部署文档、版本兼容</td><td>P0</td><td>M3</td><td>—</td></tr>
+  <tr><td>RL-2</td><td>中继缓存最近的密文（默认 7 天）</td><td>P1</td><td>M4</td><td>—</td></tr>
+  <tr><td>RL-4</td><td>同一局域网时直连</td><td>P2</td><td>未排期</td><td>—</td></tr>
+  <tr><th colspan="5">非功能（NFR）</th></tr>
+  <tr><td>NFR-1</td><td>宿主持有一切，界面只是客户端；cupper-cli 用同一协议完成验收</td><td>—</td><td>M1a</td><td><a href="#s3-10">3.10</a></td></tr>
+  <tr><td>NFR-2</td><td>断线重连不丢不重；命令重试不重复执行</td><td>—</td><td>M1a 实现 / M1b 验收</td><td><a href="#s3-2">3.2</a>（Toaster）</td></tr>
+  <tr><td>NFR-4</td><td>会话数据只存在本机</td><td>—</td><td>M1a</td><td>—</td></tr>
+  <tr><td>NFR-5</td><td>锁定适配器版本，明确 CLI 的已验证范围</td><td>—</td><td>M1a（Claude）/ M1b（Codex）</td><td><a href="#s3-8">3.8</a></td></tr>
+  <tr><td>NFR-6</td><td>冷启动 2 秒内可用；流式不卡；长会话滚动流畅</td><td>—</td><td>M1a（预算）/ M1b（SP-6 与优化）</td><td><a href="#s2">2</a>（㉔）</td></tr>
+  <tr><td>NFR-7</td><td>排队、状态、diff、worktree 等由宿主自己实现；私有扩展探测到才用</td><td>—</td><td>M1a / M1b</td><td><a href="#s3-5">3.5</a></td></tr>
+  <tr><td>NFR-8</td><td>宿主单实例；界面崩溃不影响会话（只对发布构建成立）；退出前提示；后台常驻为 P1</td><td>—</td><td>M1a（单实例、退出提示）/ M1b（升级）/ 后台常驻 M2</td><td><a href="#s3-7">3.7</a>、<a href="#s3-8">3.8</a></td></tr>
+  <tr><td>NFR-9</td><td>宿主和 agent 崩溃后的恢复，不损坏历史</td><td>—</td><td>M1a 实现 / M1b 验收</td><td><a href="#s3-2">3.2</a>、<a href="#s3-3">3.3</a></td></tr>
+  <tr><td>NFR-10</td><td>本地数据有版本，升级自动迁移并备份；不支持降级</td><td>—</td><td>M1a</td><td>—</td></tr>
+  <tr><td>NFR-11</td><td>同时运行至少 6 个会话；磁盘占用可见、可清理（P1）</td><td>—</td><td>M1b（6 个会话、存储大小）/ M2（清理）</td><td><a href="#s3-8">3.8</a></td></tr>
+  <tr><td>NFR-12</td><td>日志轮转并脱敏、收集适配器错误输出；导出诊断包（P1）；不上传</td><td>—</td><td>M1a / M2（诊断包）</td><td><a href="#s3-8">3.8</a></td></tr>
+  <tr><td>NFR-13</td><td>有回合运行或待处理请求时阻止空闲睡眠</td><td>M1 P1；M3 P0</td><td>M1b（顺带做）</td><td>—</td></tr>
+</table>
+
+<!-- ======================================================= 6 -->
+<h2 id="s6">6 边界</h2>
+
+<h3>6.1 不做什么</h3>
+<table>
+  <tr><th>不做</th><th>说明</th><th>依据</th></tr>
+  <tr><td>ChatGPT 的 Chat、Work、Sites 等非编码功能</td><td>只复刻 Codex 的编码视图；产品切换的位置不复刻</td><td>PRD 第 2 节；R01 A15</td></tr>
+  <tr><td>云端执行、云任务、SSH 远程主机</td><td>只在本机运行</td><td>PRD 第 2 节</td></tr>
+  <tr><td>账号、计费、内置登录</td><td>只调用本机已登录的 CLI，登录在终端完成；也可以用环境变量自行配置 API key</td><td>PRD 第 2、8 节；AG-2</td></tr>
+  <tr><td>Windows、Linux、Android、Web 客户端</td><td>首期不做；桌面只支持 macOS 14 及以上</td><td>PRD 第 2 节；设计"平台约束"</td></tr>
+  <tr><td>团队协作、多人共享会话</td><td>—</td><td>PRD 第 2 节</td></tr>
+  <tr><td>Codex 自家 harness 的专有能力</td><td>Approve for me 的审查 agent、Goal、Memories 不补齐；替代方案是 agent 自带的低打扰模式（Claude 的 Auto、Codex 的 Auto review）</td><td>PRD 第 2 节；U6</td></tr>
+  <tr><td>官方托管的中继或推送服务</td><td>中继由用户自己部署</td><td>PRD 第 2 节；RL-1</td></tr>
+  <tr><td>M1 的集成终端</td><td>集成终端在 M2（UI-1）；M1 提供"在外部终端或编辑器中打开"（UI-0）</td><td>U2</td></tr>
+  <tr><td>Mac App Store</td><td>只做直接下载</td><td><code>docs/tech-stack.md</code></td></tr>
+  <tr><td>改写 agent 的配置</td><td>不修改 <code>~/.claude</code>、<code>~/.codex</code>、项目里的 <code>.claude/</code>、<code>AGENTS.md</code> 等；唯一例外是用户选"总是允许"后 agent 自己写入的权限规则</td><td>PRD 第 8 节</td></tr>
+  <tr><td>遥测</td><td>默认不收集任何遥测；诊断信息不上传</td><td>SEC-6、NFR-12</td></tr>
+  <tr><td>ChatGPT 的全局导航栏</td><td>Codex 左侧那条窄的导航栏（首页、历史等）不做；设置放侧边栏底部</td><td>F3；设计 5.7.4</td></tr>
+  <tr><td>Codex 视图里 PRD 没有对应需求的功能</td><td>运行位置里的 Cloud 和 Remote、环境选择、首页建议卡片、自动审查（Approve for me）、听写、输入框预测、技能、插件、产物卡片、通知里直接回复、Dock 角标等。界面形态以后如果要做，照 Codex；范围另行决定</td><td>F3；PRD 第 2 节</td></tr>
+  <tr><td>M1b 的正式发布</td><td>签名、公证、自动更新推迟到开通 Apple Developer Program 之后</td><td>设计 5.12.3</td></tr>
+</table>
+
+<h3>6.2 自用阶段的安全须知（要点）</h3>
+<ul>
+  <li><b>"本地鉴权较弱"是什么意思</b>：自用构建和开发构建没有 Developer ID，宿主用界面拉起它时生成的一次性密钥认证界面（退化认证）。后果是界面崩溃或重启后连不上原来的宿主，需要重启宿主，运行中的回合会被中断。发布构建没有这个问题（PRD 第 10 节 Q22；设计 5.8.1）。</li>
+  <li><b>只用自用构建处理真实项目</b>：开发构建只用于开发和测试，不在真实项目上运行真实 agent（计划 1.10、第 6 节）。</li>
+  <li><b>开启 agent 自带的沙箱</b>：沙箱开着时 agent 执行的命令连不上宿主；不要给 Codex 的工作区模式打开网络访问，Claude Code 不要配置 <code>allowUnixSockets</code>。沙箱外的命令（批准过的、MCP、hooks）能连上，但只有只读权限，写操作和审批都要在桌面端确认（设计 5.8.7）。</li>
+  <li><b>在 cupper 里提交会运行仓库的 hooks</b>：风险与在终端里提交相同；本会话期间仓库的 hooks 或配置有变化时，提交前会提示。宿主自己自动执行的 git 不运行仓库配置里的任何程序（设计 5.2.10）。</li>
+  <li><b>先确认信任再用</b>：未经信任的项目，项目自带的 hooks、MCP 服务器、环境变量、apiKeyHelper 都不生效；信任之后配置又变了，最迟在下一个 prompt 之前发现并要求再次确认。回合进行中被改写的配置，CLI 可能在当前回合内就加载（待定 Q28）。</li>
+  <li><b>低打扰档位</b>（Claude 的 auto、acceptEdits，Codex 的 Auto review）由分类器代替你审批，切到这一档需要审批权限。</li>
+  <li><b>Claude 会话的插话有副作用</b>：跟进消息默认插进当前回合，Claude 会丢弃当前的工具调用、把正在跑的命令移到后台（ADR-07）。不想要这个行为，在设置里把"跟进行为"改成排队（F5）。</li>
+  <li><b>不要因为 agent 的操作授予 Cupper 辅助功能权限</b>：agent 触发的系统授权提示会显示成 Cupper；有了辅助功能权限，agent 能合成点击，替你点掉确认框。</li>
+  <li><b>挡不住的</b>：同一用户下、在沙箱外有明确恶意的进程（它可以改 agent 的权限配置和 cupper 的数据目录、杀掉宿主、对确认框做社会工程）。</li>
+  <li><b>本机数据</b>：会话记录以明文存在本机，依赖 FileVault（SEC-11）；回合快照可能复制了没被 gitignore 的密钥文件，可以在设置里清除快照对象。</li>
+</ul>
+
+<h3>6.3 与 Codex 桌面版的关系</h3>
+<p><b>界面 100% 复刻，范围和安全按 cupper 自己的文档</b>（F1–F3）。下面是有意保留的差异。</p>
+<table>
+  <tr><th>方面</th><th>Codex 桌面版</th><th>cupper</th></tr>
+  <tr><td>驱动的 agent</td><td>只有 Codex</td><td>Claude Code 和 Codex，同一套界面；功能按 agent 的实际能力显示（AG-4）；会话行和新建会话页多一个 agent 标识（AG-3）</td></tr>
+  <tr><td>会话由谁持有</td><td>外壳把 Codex 自己的 app-server 作为常驻子进程，会话由它管理（R01 第十二节）</td><td>cupper 自己的会话宿主持有会话、历史、审批与提问、Git，不依赖某一家 agent；桌面界面、cupper-cli、iPhone 都是它的客户端（NFR-1）。侧边栏头部显示宿主状态</td></tr>
+  <tr><td>安全相关的确认</td><td>应用内弹窗；审批通知上可以直接批准</td><td>持久或大幅扩大权限的操作走 macOS 原生确认框；审批只能在桌面窗口里由真实输入完成，通知上不放批准按钮（设计 5.7.8；请求面板的落点由 D04 后交安全确认，F6）</td></tr>
+  <tr><td>项目自带配置</td><td>R01、R06 未记录</td><td>添加项目时原生确认是否信任，列出 hooks、MCP 等（PS-2）；侧边栏标"未信任"</td></tr>
+  <tr><td>命令行第二客户端</td><td>R01 未记录</td><td>cupper-cli：默认只读，写操作和审批要在桌面确认（SEC-8）；侧边栏底部的提权横幅</td></tr>
+  <tr><td>手机接管</td><td>官方远程经厂商的中继，只有 TLS（PRD 背景第 2 点）</td><td>用户自建的中继，端到端加密，中继只看到密文和路由元数据（M3）</td></tr>
+  <tr><td>自动审批</td><td>Approve for me 的审查 agent</td><td>不做；用 agent 自带的低打扰模式（U6）</td></tr>
+  <tr><td>运行位置</td><td>本机、Worktree、Cloud、Remote</td><td>本机和 worktree（M1 只做最小 worktree）</td></tr>
+  <tr><td>Git 的安全</td><td>R06 未记录</td><td>宿主自动执行的 git 不运行仓库配置里的程序；提交弹窗注明"将运行仓库的 hooks"（设计 5.2.10）</td></tr>
+  <tr><td>品牌</td><td>OpenAI 的图标、字体和素材</td><td>只复刻布局、尺寸、配色、交互、文案结构和快捷键；代码、样式表、图标、图片、字体都不复制（F2、PRD 第 8 节）</td></tr>
+</table>
+
+<hr>
+<p class="mu3 xs">依据：<code>docs/01-prd.md</code>（v1.3）；<code>docs/tasks/R06-codex-desktop-ui-firsthand/ui-spec.md</code>；<code>docs/meetings/2026-10-19-ui-fidelity/minutes.md</code>；<code>docs/02-design.md</code>（v1.3）与 <code>docs/design/</code>（5.2、5.3、5.5、5.6、5.7、5.8、5.12、5.13）；<code>docs/03-plan.md</code>（v1.0）；<code>docs/meetings/2026-10-16-prd-interview-2/codex-screenshot-notes.md</code>；<code>docs/tasks/R01-codex-ui-teardown/report.md</code>；<code>docs/tech-stack.md</code>。本页由 D03 产出。</p>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "neutral", securityLevel: "strict" });</script>
+</body>
+</html>
