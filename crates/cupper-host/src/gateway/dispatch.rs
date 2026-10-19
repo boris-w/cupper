@@ -146,7 +146,8 @@ impl Dispatch {
     }
 
     fn answer(&self, routes: &Routes, method: &str, params: Value) -> Answer {
-        let Some((name, entry)) = routes.request_entry(method) else {
+        let entry = routes.request_entry(method);
+        let Some((name, entry)) = entry.filter(|(_, entry)| entry.target.serves()) else {
             return Answer::Now(Err(unsupported(method)));
         };
         let params = or_empty(params);
@@ -172,7 +173,7 @@ impl Dispatch {
             Target::Port(port) => port.deliver(self.call(name, params, ticket)),
             Target::Ping => return Answer::Now(Ok(json!({}))),
             Target::Describe(sessions) => describe::describe(sessions.as_ref(), &params),
-            Target::Streams | Target::Blobs => return Answer::Now(Err(unsupported(name))),
+            Target::Streams | Target::Blobs => unreachable!("not served yet"),
         };
         Answer::Later(reply, place)
     }

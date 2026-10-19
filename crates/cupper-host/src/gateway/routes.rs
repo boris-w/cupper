@@ -70,6 +70,14 @@ pub(super) enum Target {
     Blobs,
 }
 
+impl Target {
+    /// Whether the method is served; until it is, it is `unsupported` like
+    /// a method nobody registered.
+    pub(super) fn serves(&self) -> bool {
+        !matches!(self, Self::Streams | Self::Blobs)
+    }
+}
+
 impl Default for Routes {
     fn default() -> Self {
         let mut routes = Self {
