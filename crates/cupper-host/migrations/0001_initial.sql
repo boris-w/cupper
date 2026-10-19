@@ -91,7 +91,7 @@ CREATE TABLE events (
 CREATE TABLE checkpoints (
   stream     TEXT PRIMARY KEY,
   at_seq     INTEGER NOT NULL,
-  view_v     INTEGER NOT NULL,               -- `store::upcast::VIEW_VERSION`
+  view_v     INTEGER NOT NULL,               -- `cupper_protocol::view::VIEW_VERSION`
   view       TEXT NOT NULL,
   created_at INTEGER NOT NULL
 ) WITHOUT ROWID;

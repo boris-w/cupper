@@ -27,6 +27,11 @@ use crate::text::MAX_DELTA_ESCAPED;
 pub use index::IndexView;
 pub use session::{Entry, ItemEnd, ItemView, RequestView, SessionView, TurnView, WorkspaceView};
 
+/// The version of the views' JSON, which the host stores in its checkpoints
+/// (design 5.4.6). Goes up with every change to the JSON of [`IndexView`] or
+/// [`SessionView`]; the host discards a checkpoint of any other version.
+pub const VIEW_VERSION: u32 = 1;
+
 /// A body that does not fit the view. The client resubscribes, as on a gap.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum ViewError {
