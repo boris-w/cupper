@@ -30,7 +30,7 @@ pub use proc::{
     ProcessInfo, StartTime, UniqueIds, descendants, parent_chain, process_info, unique_ids,
 };
 pub use spawn::{Child, Command, Stdio, spawn};
-pub use system::{boot_session_uuid, current_uid, user_temp_dir};
+pub use system::{boot_session_uuid, current_uid, redirect_stdio_to_null, user_temp_dir};
 
 /// Errors from system interfaces.
 #[derive(Debug, thiserror::Error)]
