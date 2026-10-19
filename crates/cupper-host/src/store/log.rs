@@ -197,6 +197,7 @@ impl TurnSnapshot {
 }
 
 /// The ops of turn `turn_no`, at their current versions.
+#[cfg_attr(not(test), expect(dead_code, reason = "`history`, next, reads it"))]
 pub(super) fn turn_ops(
     conn: &Connection,
     session: &SessionId,
@@ -214,6 +215,7 @@ pub(super) fn turn_ops(
 }
 
 /// The newest turn before `turn_no` that has a snapshot.
+#[cfg_attr(not(test), expect(dead_code, reason = "`history`, next, reads it"))]
 pub(super) fn turn_before(
     conn: &Connection,
     session: &SessionId,

@@ -12,10 +12,6 @@
 
 mod connection;
 pub mod epoch;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the stream registry, next, puts it to use")
-)]
 pub mod log;
 pub mod meta;
 mod migrate;
