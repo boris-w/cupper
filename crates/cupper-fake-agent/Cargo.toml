@@ -8,6 +8,9 @@ publish.workspace = true
 description = "Scripted ACP agent for host tests: the prompt text is the script (design 5.9.2). Never shipped in the app."
 
 [dependencies]
+# Pinned exactly, like the host (design 5.6.10).
+agent-client-protocol = "=3.3.0"
+serde_json.workspace = true
 thiserror.workspace = true
 
 [lints]

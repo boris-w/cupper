@@ -3,6 +3,8 @@
 //! the app (5.10.1).
 //!
 //! - [`config`]: the start configuration (persona, login state, faults,
-//!   process segment), from the command line.
+//!   process segment), from the command line;
+//! - [`persona`]: what Claude's and Codex's adapters look like on the wire.
 
 pub mod config;
+pub mod persona;
