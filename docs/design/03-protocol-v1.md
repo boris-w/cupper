@@ -529,3 +529,63 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 | `effect.rule.location` | 字符串，不用 `WirePath`：适配器给的是 `localSettings` 这类语义值 |
 | `effect.scope`、`prefix_risk` 的线上值 `unknown` | 是已知取值，分别对应变体 `EffectScope::Unclassified`、`PrefixRisk::Unparsed`（`Unknown` 已被 `open_enum!` 的兜底变体占用） |
 
+**T014 实现时的裁定（2026-10-19）**
+
+视图规则。TS 的 reducer（T072）必须照做；视图 JSON 两端比对时按深度相等，不看键顺序。
+
+- **没有 `turn_id` 的条目和请求**：
+  - 有进行中的回合时并入它；否则放进 `tail`。下一个**新**回合（`turn_no` 比已有的都大）开始时，把 `tail` 收进这个回合。
+  - 并入后，视图把条目或请求的 `turn_id` 改成这个回合的 ID，这样回合快照和历史页能把它放回原处。请求的 `digest` 保持原值。
+- **窗口**（5.2.8）：
+  - 从新到旧数已结束的回合，最多 20 个，条目合计不超过 2,000 个；遇到第一个放不下的就停。只数 item，不数交互请求。
+  - 进行中的回合和 `tail` 永远保留。
+  - 最新的一个已结束回合总是保留，即使它一个就超过 2,000 个条目。否则历史页送来的回合会被当成新回合，把 `tail` 收走。
+- **`detached`**：
+  - 被淘汰的回合里仍待处理的请求，放进 `detached`，快照照样带上。
+  - 请求解决后，下一次 `trim` 把它删掉。
+  - 它的回合经历史页回来时，重复的 `interaction.requested` 把它放回原位，并保留期间的状态。
+- **视图 JSON**：
+  - 缺省的可选值不出现；map、列表、字符串总是出现。
+  - 条目是 `ItemView {item, text, output, end?}`：delta 拼出的文本单独存放，输出完成后不清空，界面按 `output_state` 选择显示哪个。
+- **`ItemPatch`**：只设置这一类条目有的字段；未知类型的条目把全部字段并进去。
+- **订阅**：
+  - 判断顺序是先比 epoch，再看 `cursor_ahead`，最后看 `cursor_expired`。
+  - 只要是 `snapshot`，不论原因（包括客户端不认识的 mode），客户端都丢弃这条流的视图和游标，用快照页重建。
+  - `stream/reset` 保留游标。
+  - `apply` 报 `ViewError` 时，客户端不带游标重新订阅。
+- **快照 ops**：
+  - 长文本按 `MAX_DELTA_ESCAPED` 拆成 `item.delta`；
+  - 超大的 `item.started` 把可选字段逐个拆成 `item.updated`；
+  - 单个 op 不超过 `max_history_page_bytes`（48,000）。
+  - 快照页和 `history/page` 都按 JSON 字节贪心分页，`op_index` 是页的起点。
+- **宿主要守的不变式**（T026、T043）：
+  - 引用某个回合的事件都写在这个回合的 `turn.completed` 之前，包括 `snapshot.recorded` 的 `phase: end`、被放弃条目的 `item.completed`、它的请求的 `interaction.resolved`。
+  - 回合快照在 `turn.completed` 时生成，随后调用 `trim`。
+- **回合外的交互请求**（编排者裁定）：
+  - 交互请求一律属于某个回合。请求到来时没有进行中的回合，宿主按 K9 开一个 `autonomous` 回合，把请求放进去。
+  - 回合在它的请求全部解决之前不结束。中断时请求标 `cancelled`，适配器退出时标 `expired`，这两条已有。
+  - 因此宿主写出的 `interaction.requested` 总带 `turn_id`。协议里它仍是可选字段（开放性），视图对缺省的情况按上面的规则处理。
+  - 没有 `turn_id` 的条目，只剩宿主的 notice 这类。
+
+**T012 开工前的裁定（2026-10-19）**
+
+方法的声明方式：
+- `Method` 加 `MILESTONE` 和 `ERRORS`，`Notification` 加 `MILESTONE`，都不给默认值，漏写就编译不过。
+  - schema 里写出 `x-milestone`，取值为 5.3.4 里程碑一栏的最早值；
+  - 写出 `x-errors`，取值为 5.3.4"可能的错误"一栏，用 `code/reason` 写法。
+  - 所有方法都可能返回的错误，写在模块文档里，不逐个列。所有方法都可能返回的有：`not_initialized`、`forbidden/scope`、`invalid_params`、`rate_limited`、`shutting_down`、`internal`；命令另有 `idempotency_mismatch`。
+- 宽容解码：`stream/events.events`、`stream/snapshot.ops`、`history/page.ops` 的类型是 `Vec<Raw<T>>`。线上是原样的 JSON，schema 转发成 `T` 的 schema；客户端逐个按宽容模式解码。
+- 方法目录：按名字排序的三张 entry 表，分别是请求、客户端通知、宿主通知。T015 从这里导出。
+- `nonce`、`proof` 用字符串，字段上标 `x-id`。格式校验和转成字节归 T030。
+- 命令方法的参数直接带 `command_id`，不用 `flatten`。
+
+5.3.4 没写死的取值：
+- `findings` 条目：`{kind, path, target?, outside_workspace, detail}`。`kind` 是开放枚举：`hook`、`env`、`api_key_helper`、`status_line`、`mcp_server`、`skill`、`agent`、`command`、`codex_config`。
+- `project/trust_info.diff_from_trusted`：按文件列出 `{path, change}`，`change` 复用 `DiffChange`（`add`、`update`、`delete`）。为此 T035 在信任时另存每个文件的哈希清单，按 P-4 写进 `0001` 的 `projects` 表。
+- `fallback_reason`（插话退回排队的原因，5.2.6）：`unsupported`、`turn_mismatch`、`not_prompting`、`prompt_required`、`timeout`、`agent_error`。
+- `session/archive.blockers`：ADR-10 的 7 条规则各一个取值；T013 的 `worktree/check` 复用同一个枚举。
+- `host/status.clients`：`ClientInfo` 的列表（与 `clients.updated` 相同），不只是个数。
+- 补充错误码：
+  - `project/trust_info` 加 `unavailable/scan_failed`，因为它要重新扫描；
+  - `session/create` 加 `forbidden/scope`，因为 `config` 同样受档位规则约束（5.8.2）。
+- `session/queue_edit` 的 scope 按 5.8.3 中 `session/send` 那一行。
