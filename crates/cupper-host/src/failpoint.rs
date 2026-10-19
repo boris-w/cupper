@@ -6,10 +6,10 @@
 //!   [`failpoint!`](crate::failpoint!). The task that adds the failpoint
 //!   registers it in the same change.
 //! - A test arms failpoints through `test_config.failpoints`:
-//!   `[{"name": "<name>", "hit"?: n}]`. The process then exits with
-//!   [`HostExit::Failpoint`](crate::exit::HostExit::Failpoint) the `n`-th time
-//!   (by default the first) execution reaches that failpoint. Reaching a
-//!   failpoint that is not armed changes nothing.
+//!   `[{"name": "<name>", "hit"?: n}]`. The process then exits with 99
+//!   (`HostExit::Failpoint`) the `n`-th time (by default the first) execution
+//!   reaches that failpoint. Reaching a failpoint that is not armed changes
+//!   nothing.
 //! - The exit runs no destructor and flushes nothing the host buffers, so it
 //!   leaves the data as a crash would.
 //! - Without `test-harness` the macro expands to nothing and nothing else in
