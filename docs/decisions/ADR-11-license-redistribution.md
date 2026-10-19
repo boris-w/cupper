@@ -64,4 +64,4 @@ CI 门禁分两层（设计评审修订，原写法为"打包输入里发现这�
   - `Unicode-3.0`：几乎所有 Rust derive 宏（serde_derive、thiserror 等）都会经 `unicode-ident` 引入它。
   - `Apache-2.0 WITH LLVM-exception`：这是 Apache-2.0 加上一条放宽义务的例外。
 - 落点：`deny.toml` 的 `allow`（T001，`b7b7491`）。
-
+- 白名单加入 `Zlib`（2026-10-19，T050）。ACP SDK 打开了 serde_json 的 `preserve_order`，由此引入 `foldhash`，它的许可证是 Zlib。Zlib 是 OSI 认证的宽松许可证。

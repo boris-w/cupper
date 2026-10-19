@@ -1,0 +1,189 @@
+{
+  "artifacts": [],
+  "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+  "duration_ms": 9248,
+  "jobs": [
+    {
+      "duration_ms": 5138,
+      "failed": 0,
+      "name": "rust",
+      "passed": 292,
+      "result": "pass"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "protocol",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 2726,
+      "failed": 0,
+      "name": "ts",
+      "passed": 64,
+      "result": "pass"
+    },
+    {
+      "duration_ms": 1383,
+      "failed": 0,
+      "name": "license",
+      "passed": 1,
+      "result": "pass"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "testdata-scan",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "ui",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "e2e",
+      "passed": 0,
+      "result": "not_implemented"
+    }
+  ],
+  "machine": "MacBook Pro (Apple M5 Pro)",
+  "os": "macOS 26.4",
+  "results": [
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-acp-detach",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-acp-unhandled",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-ci-lock",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-ci-summary",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-clock-manual",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-digest-jcs",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-failpoint",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-i18n-escape",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-idgen",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-main-hardening",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-proto-base",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-proto-events-index",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-quiescence-registry",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-release-features",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-shell-mock",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-startup-payload",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-sys-reap-group",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-sys-spawn",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-tap",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "fecf18126ede85ee97f7f4527bb019ef48202cba",
+      "id": "UNIT-transport-memory",
+      "result": "pass",
+      "suite": "pr"
+    }
+  ],
+  "target": "pr",
+  "toolchain": {
+    "cargo": "1.96.0",
+    "cargo_deny": "0.20.2",
+    "node": "24.13.0",
+    "pnpm": "12.14.0",
+    "rustc": "1.96.0"
+  },
+  "version": 1
+}

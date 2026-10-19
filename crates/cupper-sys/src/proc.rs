@@ -386,19 +386,26 @@ mod tests {
     #[test]
     fn unit_sys_uniqueid_parent_id_outlives_the_launcher_until_an_exec() {
         // sh starts a subshell in the background, reports its pid and waits
-        // for us; the subshell execs sleep on SIGUSR1.
-        let mut cmd = sh("(trap 'exec /bin/sleep 30' USR1; \
-             while :; do /bin/sleep 0.02; done) >/dev/null & \
-             echo $!; read x || true");
+        // for us. The subshell reports once its trap is set, so that SIGUSR1
+        // makes it exec sleep instead of killing it.
+        let mut cmd = sh(
+            "(trap 'exec /bin/sleep 30' USR1; echo ready; exec >/dev/null; \
+             while :; do /bin/sleep 0.02; done) & \
+             echo $!; read x || true",
+        );
         cmd.stdin(crate::Stdio::Pipe);
         let mut shell = Owned::spawn(&cmd);
         let _groups = Groups(vec![shell.group()]);
         let stdin = shell.stdin_file();
-        let mut line = String::new();
-        BufReader::new(shell.stdout_file())
-            .read_line(&mut line)
-            .unwrap();
-        let child: i32 = line.trim().parse().unwrap();
+        // The two lines may come in either order.
+        let (mut child, mut ready) = (0, false);
+        for line in BufReader::new(shell.stdout_file()).lines().take(2) {
+            match line.unwrap().as_str() {
+                "ready" => ready = true,
+                pid => child = pid.parse().unwrap(),
+            }
+        }
+        assert!(ready && child > 0);
         let launcher = unique_ids(shell.pid()).unwrap().unique_id;
         assert_eq!(unique_ids(child).unwrap().parent_unique_id, launcher);
 
