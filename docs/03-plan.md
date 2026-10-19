@@ -157,7 +157,7 @@
 | 项 | 做法 |
 |---|---|
 | 统一入口 | `cargo xtask ci <作业>`，作业与 [5.1.6](design/01-repo-build-ci.md#516-ci-流水线) 一一对应（`rust`、`protocol`、`ts`、`ui`、`license`、`testdata-scan`、`e2e`、`security-macos14`、`compat-framework`），另有组合作业 `pr`（每个 PR 的全部作业）和 `nightly`（每晚的全部作业，含 e2e 全集、差分测试、性能趋势、`release-config`、`codex-drift`）。workflow 文件照写，只调用这个入口，等有了远端再启用 |
-| 环境 | "干净 worktree"指 git 状态干净（`git status` 为空）；构建缓存可以在 worktree 之间共享。e2e 用的 App 和 `CupperHost.app` 必须由当前提交构建，摘要记下产物哈希，防止测到别的 worktree 留下的旧产物 |
+| 环境 | "干净 worktree"指 git 状态干净（`git status` 为空）；可以在 worktree 之间共享的只有下载缓存（cargo registry、pnpm store）和编译器缓存（sccache 这一类），不共用 `CARGO_TARGET_DIR`：cargo 对工作区成员的指纹不含绝对路径，另一个 worktree 编出的、时间更新的产物会被当成最新的（T015 实际遇到）。e2e 用的 App 和 `CupperHost.app` 必须由当前提交构建，摘要记下产物哈希，防止测到别的 worktree 留下的旧产物 |
 | 机器级锁 | e2e、`ui`、性能、nfr1 这几类作业取同一把机器级锁，串行运行，避免多个子 agent 和编排者同时跑时互抢 CPU、造成计时类误报。e2e 的 Playwright workers 固定为 2（T090），20 次连跑也按这个数字 |
 | 验收记录 | 入库的只有结构化摘要：提交、工具链版本、macOS 版本、机型泛称、各作业的通过数和失败数、耗时，以及逐编号的结果清单（编号、套件、结果、提交）和 e2e 产物哈希。原始日志放 `.private/`。摘要入库前过个人信息扫描（`xtask ci` 自带字段白名单检查，T052 之后再过 `testdata-scan`）（测试 #11） |
 | 每晚作业 | 每一波合并完、开始下一波之前，编排者在 main 上跑一次 `xtask ci nightly --record docs/ci/nightly/`，摘要随之提交 |
@@ -1523,7 +1523,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T018 协议方法 I-b：项目、agent、会话与交互
 - [x] T013 协议方法 II：git、文件、设置、认证、诊断与测试
 - [x] T014 协议视图与同步规则
-- [ ] T015 schema 导出与 TS 生成链
+- [x] T015 schema 导出与 TS 生成链
 - [ ] T016 契约冻结
 - [x] T020 cupper-sys I：进程与系统信息
 - [x] T021 cupper-sys II：对端校验与代码签名

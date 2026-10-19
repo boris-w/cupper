@@ -459,7 +459,7 @@ ConfigOption {
 - 兼容性检查区分方向（ADR-04）：宿主发往客户端的消息，删除字段、必填改可选、收窄类型都是破坏性的；客户端发往宿主的消息，新增必填字段是破坏性的。
 - 新增方法、事件类型、枚举值、可选字段都不升主版本；新的交互请求类型必须带特性门控。
 - schema 注解：`x-scope`、`x-idempotent`（每个方法）；`x-mergeable`（可合并的事件）；`x-id`、`x-time`、`x-path`（字段的性质，金样例的规范化按注解进行，新加的字段自动纳入，[5.9.3](09-testing.md#593-录制与金样例)）。`IndexView`、`SessionView` 的序列化格式也导出进 schema，供 TS 与 Rust 视图对比（测试 #16）。
-- 生成链：Rust（serde + schemars）→ `protocol/schema/v1.json` → `tools/gen-protocol-ts`（hey-api 生成 TS 类型和 zod，非 strict）→ 后处理：已知事件类型的字面量列表和类型守卫、兜底成员用 `.loose()`、开放枚举写成 `(string & {})`（SP-4a 报告）。
+- 生成链：Rust（serde + schemars）→ `protocol/schema/v1.json` → `tools/gen-protocol-ts`（hey-api 生成 TS 类型和 zod，非 strict）→ 后处理：已知事件类型的字面量列表和类型守卫、兜底成员用 `.loose()`、开放枚举写成 `(string & {})`（SP-4a 报告）。T015 实现时另补了四处，在转成 OpenAPI 或后处理时修正 hey-api 的行为：`$ref` 旁的关键字改写成 `allOf`（否则内部标签联合的成员丢失标签）；`true` 子 schema 改成 `{}`；接受其他字段的对象（如 `ErrorData`）加 `.loose()`；嵌套开放联合的兜底成员只接受联合不认识的标签，事件层的兜底接受一切并由 `isKnownEvent` 判定（与 Rust 的严格已知标签和 `Tolerant` 一致）。每处改写都检查命中，hey-api 升级后输出一变就失败。`v1.json` 是加了缩进的 JCS：键序、数值和字符串按 RFC 8785，只多空白，去掉空白即 JCS 原文。
 - "类型已知但数据残缺"的事件：客户端降级成未知事件并记日志；CI 对金样例严格校验，不允许降级（ADR-04 修订）。
 - iOS 怎样使用协议由 ADR-15 决定；M1 只保证 `cupper-protocol` 能编译到 iOS 模拟器、金样例里有未知值的样例。
 
