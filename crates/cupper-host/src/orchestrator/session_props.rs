@@ -450,6 +450,12 @@ impl World {
             .as_ref()
             .is_some_and(|(t, ..)| self.settled.contains(t));
         let idle = self.current.is_none();
+        // Signals that the agent is done: cost, the thread going idle, a tool
+        // finishing while it is idle.
+        let idle_thread = self.thread_active == Some(false);
+        let done =
+            matches!(op, Op::Cost | Op::Thread(false)) || matches!(op, Op::Done(_)) && idle_thread;
+        let autonomous = matches!(self.current, Some((_, TurnOrigin::Autonomous, _)));
         let step = match op {
             Op::Advance(ms) => Step::Advance(Duration::from_millis(ms)),
             _ => match self.input(&op) {
@@ -467,6 +473,15 @@ impl World {
         self.advancing = matches!(op, Op::Advance(_));
         for (at, out) in self.d.run([step]) {
             self.observe(at, out);
+        }
+        let free = self.running.is_empty() && self.asks == 0;
+        if done && autonomous && free {
+            let ended = !matches!(self.current, Some((_, TurnOrigin::Autonomous, _)));
+            self.must(
+                Prop::Guard,
+                ended,
+                "the agent being done ends a free autonomous turn at once",
+            );
         }
         if output && idle {
             assert!(
@@ -614,8 +629,9 @@ impl World {
         }
     }
 
-    /// The judge ends a quiet autonomous turn after 10 s, and lets the queue
-    /// go 30 s after a turn ended on silence.
+    /// The judge ends a quiet autonomous turn after 10 s; an idle session
+    /// holds a waiting queue only after a turn ended on silence, and for 30 s
+    /// of quiet at most.
     fn check_liveness(&self) {
         let now = self.d.now().mono;
         if let Some((_, TurnOrigin::Autonomous, started)) = &self.current {
@@ -628,12 +644,15 @@ impl World {
                 "a quiet autonomous turn ends after 10 s",
             );
         }
-        if let (None, Some(end), (1.., false)) = (&self.current, self.guard, self.queue) {
-            let due = end.max(self.quiet_since) + Duration::from_secs(30);
+        if let (None, (1.., false)) = (&self.current, self.queue) {
+            let due = self
+                .guard
+                .map(|end| end.max(self.quiet_since) + Duration::from_secs(30));
+            let held = due.is_some_and(|due| now < due);
             self.must(
                 Prop::Guard,
-                now < due,
-                "the queue moves after 30 s of quiet",
+                held,
+                "the queue moves unless 30 s of quiet are not over",
             );
         }
     }
