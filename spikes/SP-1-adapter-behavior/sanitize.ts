@@ -4,8 +4,9 @@
 //
 // Everything machine- or person-specific is taken from the running environment
 // (HOME, USER, TMPDIR, host names) or from a local terms file, so this script
-// itself contains no personal data. After writing, every output file is scanned
-// again and the script exits non-zero if anything suspicious is left.
+// itself contains no personal data. Session IDs become `session-NN`. After
+// writing, every output file is scanned again and the script exits non-zero if
+// anything suspicious is left. Running it on its own output changes nothing.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
@@ -77,9 +78,29 @@ rules.push([/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "<email>"]);
 rules.push([/\bsk-[A-Za-z0-9_-]{16,}/g, "<secret>"]);
 rules.push([/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "<secret>"]);
 rules.push([/\b(Bearer|bearer)\s+[A-Za-z0-9._~+/=-]{8,}/g, "$1 <secret>"]);
+// Names of the user's own MCP servers and plugins, wherever they appear in text:
+// MCP tool names, plugin MCP servers, and Codex config keys quoted in warnings.
+rules.push([/\bmcp__[A-Za-z0-9_-]+/g, "mcp__<redacted>"]);
+rules.push([/\bplugin:[A-Za-z0-9_.-]+(:[A-Za-z0-9_.-]+)?/g, "plugin:<redacted>"]);
+rules.push([/\bmcp_servers\.[A-Za-z0-9_-]+/g, "mcp_servers.<redacted>"]);
+
+/** Session ID -> `session-NN`, filled from every input file before anything is written. */
+const sessionAliases = new Map<string, string>();
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function collectSessionIds(v: Json) {
+  if (Array.isArray(v)) return v.forEach(collectSessionIds);
+  if (!v || typeof v !== "object") return;
+  for (const [k, x] of Object.entries(v)) {
+    if (k === "sessionId" && typeof x === "string" && UUID.test(x) && !sessionAliases.has(x)) {
+      sessionAliases.set(x, `session-${String(sessionAliases.size + 1).padStart(2, "0")}`);
+    }
+    collectSessionIds(x);
+  }
+}
 
 function scrubString(s: string): string {
   let out = s;
+  for (const [id, alias] of sessionAliases) out = out.split(id).join(alias);
   for (const [re, rep] of rules) out = out.replace(re, rep);
   // Long base64/hex runs (keys, signatures, hashes). Ids such as UUIDs or
   // "rs_<hex>" message ids are shorter or broken up by "-" / "_", so they survive.
@@ -96,6 +117,7 @@ function scrub(v: Json, parent?: Json): Json {
     for (const [k, x] of Object.entries(v)) {
       if (k === "data" && typeof x === "string" && typeof v.mimeType === "string" && v.mimeType.startsWith("image/")) out[k] = x;
       else if (k === "signature" && typeof x === "string") out[k] = "<signature>";
+      else if (/mcp_servers$/i.test(k) && Array.isArray(x)) out[k] = x.map((e: Json) => (typeof e === "string" ? "<mcp server>" : e && typeof e === "object" && "name" in e ? { ...scrub(e, x), name: "<mcp server>" } : scrub(e, x)));
       else out[k] = scrub(x, v);
     }
     return out;
@@ -110,7 +132,8 @@ function redactCommands(cmds: Json[]): Json[] {
   let n = 0;
   return cmds.map((c) => {
     const d = typeof c.description === "string" ? c.description : "";
-    const userSourced = /\((user|project)\)\s*$/.test(d) || String(c.name).startsWith("$");
+    const userSourced =
+      /\((user|project|claude\.ai sync)\)\s*$/.test(d) || d === "<redacted user skill>" || String(c.name).startsWith("$") || String(c.name).includes(":");
     if (!userSourced) return c;
     n++;
     return { ...c, name: String(c.name).startsWith("$") ? `$user-skill-${n}` : `user-skill-${n}`, description: "<redacted user skill>" };
@@ -130,8 +153,12 @@ function redactConfigOptions(opts: Json[]) {
   }
 }
 
+// Labels this script writes; a second run over its own output keeps them.
+const ROLE_LABELS = new Set(["adapter (node)", "claude auth status", "claude CLI", "codex wrapper (node)", "codex app-server", "user-configured tool or MCP server"]);
+
 /** Process labels keep only what identifies the role; anything else is a user-configured tool. */
 function procLabel(label: string): string {
+  if (ROLE_LABELS.has(label)) return label;
   if (/^node index\.js/.test(label)) return "adapter (node)";
   if (/^claude auth status/.test(label)) return "claude auth status";
   if (/^claude\b/.test(label)) return "claude CLI";
@@ -142,15 +169,18 @@ function procLabel(label: string): string {
   return "user-configured tool or MCP server";
 }
 
+/** Every process entry ({pid, label}) in a note, whatever key holds it (procs, procsAtExit, tree, victim, ...). */
+function relabel(v: Json): Json {
+  if (Array.isArray(v)) return v.map(relabel);
+  if (!v || typeof v !== "object") return v;
+  const out: Json = {};
+  for (const [k, x] of Object.entries(v)) out[k] = k === "label" && typeof x === "string" && "pid" in v ? procLabel(x) : relabel(x);
+  return out;
+}
+
 function structural(f: Json): Json {
   const m = f.msg;
-  if (f.dir === "note" && Array.isArray(f.data?.procs)) {
-    f.data.procs = f.data.procs.map((p: Json) => ({ ...p, label: procLabel(p.label) }));
-  }
-  if (f.dir === "note" && f.data?.tree?.procs) {
-    f.data.tree.procs = f.data.tree.procs.map((p: Json) => ({ ...p, label: procLabel(p.label) }));
-  }
-  if (f.dir === "note" && f.data?.victim?.label) f.data.victim.label = procLabel(f.data.victim.label);
+  if (f.dir === "note" && f.data) f.data = relabel(f.data);
   if (!m) return f;
   const u = m.params?.update;
   if (u?.sessionUpdate === "available_commands_update" && Array.isArray(u.availableCommands)) {
@@ -174,6 +204,14 @@ const leftovers: string[] = [];
 const scanTerms = [home, encoded(home), "/Users/", "/var/folders", "/private/var", "-var-folders-", ...tmpSegments, ...hosts, ...terms];
 if (user.length > 2) scanTerms.push(user);
 
+for (const adapter of readdirSync(inDir).sort()) {
+  const src = join(inDir, adapter);
+  for (const name of readdirSync(src).filter((n) => n.endsWith(".jsonl")).sort()) {
+    for (const l of readFileSync(join(src, name), "utf8").split("\n").filter(Boolean)) collectSessionIds(JSON.parse(l));
+  }
+}
+scanTerms.push(...sessionAliases.keys());
+
 let files = 0;
 for (const adapter of readdirSync(inDir)) {
   const src = join(inDir, adapter);
@@ -187,7 +225,7 @@ for (const adapter of readdirSync(inDir)) {
     writeFileSync(join(dst, name), body);
     files++;
     const lower = body.toLowerCase();
-    for (const t of scanTerms) if (t && lower.includes(t.toLowerCase())) leftovers.push(`${adapter}/${name}: ${t === user ? "<user>" : t === home ? "<home>" : "<term>"}`);
+    for (const t of scanTerms) if (t && lower.includes(t.toLowerCase())) leftovers.push(`${adapter}/${name}: ${t === user ? "<user>" : t === home ? "<home>" : sessionAliases.has(t) ? "<session id>" : "<term>"}`);
     if (/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.test(body)) leftovers.push(`${adapter}/${name}: email-like`);
   }
 }

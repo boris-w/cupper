@@ -72,8 +72,10 @@ node summarize.ts recordings > ../../docs/tasks/SP-1-adapter-behavior/data/summa
 - 路径：临时目录写成 `<tmp>`，系统临时目录写成 `<tmpdir>/`，家目录写成 `$HOME`；用户名写成 `<user>`，主机名写成 `<host>`，词表中的词写成 `<redacted>`。
 - 邮箱、`sk-` 开头的密钥、JWT、Bearer token，以及 64 个字符以上、字母和数字混合的 base64 或十六进制串（签名、哈希）都替换掉；`signature` 字段一律替换。测试图片的 base64 不替换。
 - `_auth/status_update` 中的账号字段只保留 `plan`。
-- 用户自己安装的 skill 和命令（Claude 中描述以 `(user)` 结尾的命令、Codex 中以 `$` 开头的命令）替换成 `user-skill-N`，只保留数量。
+- 用户自己安装的 skill 和命令（Claude 中描述以 `(user)`、`(project)`、`(claude.ai sync)` 结尾的命令，名字形如 `<来源>:<名字>` 的插件和 MCP 命令，Codex 中以 `$` 开头的命令）替换成 `user-skill-N`，只保留数量。
+- 会话 ID 换成 `session-NN`：先读完全部输入再编号，同一个会话在所有录制里用同一个编号。
+- 用户自己的 MCP 服务器和插件的名字：`mcp__<服务器>__<工具>`、`plugin:<插件>:<服务器>`、Codex 配置警告里的 `mcp_servers.<名字>`，以及 `*_mcp_servers` 列表里的名字，都换成占位。
 - 模型列表只保留公开的 `gpt-*` 和 Claude 模型名。本机的 Codex 接的是一个私有网关，网关目录里的其他条目会被删掉。
-- 进程采样只保留角色名（`adapter (node)`、`claude CLI`、`codex app-server` 等），用户自己配置的 MCP 服务器统一写成 `user-configured tool or MCP server`。
+- 进程信息只保留角色名（`adapter (node)`、`claude CLI`、`codex app-server` 等），用户自己配置的 MCP 服务器、hooks、插件进程统一写成 `user-configured tool or MCP server`。注记里任何带 `pid` 和 `label` 的对象都按这条处理（包括 `procsAtExit`）。脚本对自己的输出再跑一遍，结果不变。
 
 写完之后，脚本会把所有输出文件重新扫描一遍。只要还能找到家目录、`/Users/`、`/var/folders`、用户名、主机名、词表中的词或者邮箱，就以非零状态退出。
