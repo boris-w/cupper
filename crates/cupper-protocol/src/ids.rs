@@ -131,6 +131,12 @@ ids! {
     HunkId = "hk_", varies: true;
     /// Diff token: `dt_` + random; names one diff in the host's cache.
     DiffToken = "dt_", varies: true;
+    /// Notification intent: `n_` + UUIDv7.
+    IntentId = "n_", varies: true;
+    /// Activity group of consecutive tool calls: `g_` + UUIDv7.
+    GroupId = "g_", varies: true;
+    /// Blob: the sha-256 of its bytes in hex; no prefix. Varies when the content holds per-run values.
+    BlobHash = "", varies: true;
 }
 
 macro_rules! from_uuid {
@@ -153,7 +159,9 @@ from_uuid!(
     RequestId,
     QueueId,
     AdapterInstanceId,
-    ElevationId
+    ElevationId,
+    IntentId,
+    GroupId
 );
 
 impl ConnId {
@@ -162,10 +170,19 @@ impl ConnId {
     }
 }
 
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 impl Digest {
     pub fn from_sha256(hash: &[u8; 32]) -> Self {
-        let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
-        Self(format!("d_{hex}"))
+        Self(format!("d_{}", hex(hash)))
+    }
+}
+
+impl BlobHash {
+    pub fn from_sha256(hash: &[u8; 32]) -> Self {
+        Self(hex(hash))
     }
 }
 
@@ -211,5 +228,18 @@ mod tests {
         assert_eq!(serde_json::to_string(&t).unwrap(), "\"t_01\"");
         let err = serde_json::from_str::<TurnId>("\"i_01\"").unwrap_err();
         assert_eq!(err.to_string(), "malformed TurnId");
+    }
+
+    #[test]
+    fn unit_proto_events_index_new_ids() {
+        assert_eq!(
+            IntentId::from_uuid(1).as_str(),
+            format!("n_{}1", "0".repeat(31))
+        );
+        assert!("g_01".parse::<GroupId>().is_ok());
+        assert!("n_01".parse::<GroupId>().is_err());
+        let hash = BlobHash::from_sha256(&[0x0f; 32]);
+        assert_eq!(hash.as_str(), "0f".repeat(32));
+        assert_eq!(hash.as_str().parse::<BlobHash>().unwrap(), hash);
     }
 }
