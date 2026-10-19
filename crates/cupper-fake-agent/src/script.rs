@@ -24,8 +24,9 @@
 //! | `restartable` | the app-server dies (`1001`, `restartable: true`) |
 //! | `upstream_retry <n>` / `thread_status <type> [flag...]` | Codex's retry notices / run state |
 //! | `auth_none` | `_auth/status_update {kind: none}`, then `-32000` |
-//! | `whoami` / `echo_env` / `probe` | say the session, cwd, clientInfo, env names, inherited fds |
+//! | `whoami` / `echo_env` / `echo_meta` / `probe` | say the session, cwd, clientInfo, env names, `_meta`, inherited fds |
 //! | `spawn_child` / `exit <code>` | start a grandchild in our process group / exit now |
+//! | `raw <json>` | write the JSON value as one line, verbatim (`${session}` is the session id) |
 
 use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
@@ -36,7 +37,7 @@ use futures::future::BoxFuture;
 use serde_json::{Value, json};
 use tokio::sync::{oneshot, watch};
 
-use crate::agent::{self, State, Steer, lock};
+use crate::agent::{self, RAW_METHOD, State, Steer, lock};
 use crate::config::Persona::{self, Claude, Codex};
 use crate::persona;
 
@@ -74,15 +75,17 @@ const COMMANDS: &[&str] = &[
     "auth_none",
     "whoami",
     "echo_env",
+    "echo_meta",
     "probe",
     "spawn_child",
     "exit",
+    "raw",
 ];
 
 pub type Command = (String, String);
 
 /// Splits a prompt into commands, or `None` when it is not a script. `;` ends
-/// a command.
+/// a command, except inside the JSON value of `raw`.
 pub fn parse(text: &str) -> Option<Vec<Command>> {
     let mut commands = Vec::new();
     let mut rest = text;
@@ -99,7 +102,18 @@ pub fn parse(text: &str) -> Option<Vec<Command>> {
             return None;
         }
         let after = after.trim_start_matches([' ', '\t']);
-        let len = after.find(';').unwrap_or(after.len());
+        let len = if name == "raw" {
+            let mut values = serde_json::Deserializer::from_str(after).into_iter::<Value>();
+            values.next()?.ok()?;
+            let len = values.byte_offset();
+            let tail = after[len..].trim_start();
+            if !(tail.is_empty() || tail.starts_with(';')) {
+                return None;
+            }
+            len
+        } else {
+            after.find(';').unwrap_or(after.len())
+        };
         commands.push((name.to_owned(), after[..len].trim().to_owned()));
         rest = &after[len..];
     }
@@ -396,6 +410,14 @@ impl Script {
                 );
                 self.say(&line)?;
             }
+            "echo_meta" => {
+                let meta = lock(&self.state)
+                    .sessions
+                    .get(&self.session)
+                    .map(|s| s.meta.to_string())
+                    .unwrap_or_default();
+                self.say(&format!("meta={meta}"))?;
+            }
             "probe" => {
                 let fds = INHERITED_FDS.get().map_or("?", String::as_str);
                 self.say(&format!("fds={fds} env={}", env_names()))?;
@@ -408,6 +430,10 @@ impl Script {
                     .map_err(|e| Error::internal_error().data(e.to_string()))?;
             }
             "exit" => std::process::exit(i32::try_from(num(0)).unwrap_or(1)),
+            "raw" => self.notify(
+                RAW_METHOD,
+                json!({"line": rest.replace("${session}", &self.session)}),
+            )?,
             other => return Err(Error::internal_error().data(format!("no command `{other}`"))),
         }
         Ok(Flow::Next)

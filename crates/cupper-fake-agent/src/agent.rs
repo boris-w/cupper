@@ -28,6 +28,11 @@ use crate::script::{self, Script};
 /// Exit code when a second prompt arrives on a session while one is in flight.
 pub const EXIT_SECOND_PROMPT: i32 = 70;
 
+/// Method of the marker notification that carries a `raw` line through the
+/// SDK's outgoing queue, so the line keeps its place among the others; the
+/// line sink writes the carried line instead of the marker.
+pub const RAW_METHOD: &str = "_cupper_fake/raw";
+
 pub type State = Arc<Mutex<Shared>>;
 
 pub struct Shared {
@@ -41,6 +46,8 @@ pub struct Shared {
 
 pub struct Session {
     pub cwd: PathBuf,
+    /// `_meta` of the latest `session/new`, `session/resume` or `session/load`.
+    pub meta: Value,
     pub resumed: bool,
     pub config: Vec<Value>,
     /// The prompt in flight: its number and its cancel signal.
@@ -108,7 +115,8 @@ pub async fn serve(
 type LineSink = Pin<Box<dyn Sink<String, Error = std::io::Error> + Send>>;
 type LineStream = Pin<Box<dyn Stream<Item = std::io::Result<String>> + Send>>;
 
-/// Newline-delimited JSON-RPC on stdin and stdout.
+/// Newline-delimited JSON-RPC on stdin and stdout. The sink swaps a `raw`
+/// marker for the line it carries.
 pub fn stdio() -> Lines<LineSink, LineStream> {
     let incoming = futures::stream::unfold(
         BufReader::new(tokio::io::stdin()).lines(),
@@ -122,13 +130,25 @@ pub fn stdio() -> Lines<LineSink, LineStream> {
     );
     let outgoing =
         futures::sink::unfold(tokio::io::stdout(), |mut stdout, line: String| async move {
-            let mut bytes = line.into_bytes();
+            let mut bytes = raw_line(&line).unwrap_or(line).into_bytes();
             bytes.push(b'\n');
             stdout.write_all(&bytes).await?;
             stdout.flush().await?;
             Ok::<_, std::io::Error>(stdout)
         });
     Lines::new(Box::pin(outgoing), Box::pin(incoming))
+}
+
+/// The line a `raw` marker notification carries, if `line` is one.
+fn raw_line(line: &str) -> Option<String> {
+    if !line.contains(RAW_METHOD) {
+        return None;
+    }
+    let message: Value = serde_json::from_str(line).ok()?;
+    if message["method"] != RAW_METHOD {
+        return None;
+    }
+    message["params"]["line"].as_str().map(str::to_owned)
 }
 
 fn request(
@@ -237,6 +257,7 @@ fn open(
     let result = persona::session_result(persona, shown, &config);
     let session = Session {
         cwd: PathBuf::from(params["cwd"].as_str().unwrap_or_default()),
+        meta: params.get("_meta").cloned().unwrap_or(Value::Null),
         resumed,
         config,
         inflight: None,

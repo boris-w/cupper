@@ -7,6 +7,9 @@
 //! - [`persona`]: what Claude's and Codex's adapters look like on the wire;
 //! - [`agent`]: the SDK's agent role, sessions and the global invariant;
 //! - [`script`]: the prompt text is the script.
+//!
+//! Everything goes through the SDK except the lines of the `raw` command,
+//! which reach stdout verbatim.
 
 pub mod agent;
 pub mod config;
