@@ -8,7 +8,7 @@ use crate::ci::ctx::JobCtx;
 
 pub fn run(ctx: &mut JobCtx) -> Result<()> {
     let mut fmt = ctx.cargo();
-    fmt.args(["fmt", "--all", "--check"]);
+    fmt.args(["fmt", "--all", "--check", "--", "--color", "never"]);
     ctx.check("fmt", &mut fmt)?;
 
     let mut clippy = ctx.cargo();
@@ -25,6 +25,12 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     ctx.check("clippy", &mut clippy)?;
 
     let mut test = ctx.cargo();
-    test.args(["test", "--workspace", "--all-features", "--locked"]);
+    test.args([
+        "test",
+        "--workspace",
+        "--all-features",
+        "--locked",
+        "--no-fail-fast",
+    ]);
     ctx.libtest("test", &mut test)
 }
