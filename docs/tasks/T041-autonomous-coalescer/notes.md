@@ -27,3 +27,48 @@
 
 | 提交 | 内容 | 累计 |
 |---|---|---|
+| 回合机的衔接 | `HoldQueue`、`TurnSignal`、三个时长（turn.rs +42/−3，durations.rs +9） | 54 |
+| `grouping.rs` | `TurnItems` 与 UNIT-grouping、UNIT-final-items（实现 60，测试 66） | 181 |
+| `coalescer.rs` | `Coalescer` 实现，还没有 PROP-coalescer | 751 |
+
+## 停工：预计超出上限（守则第 8 条）
+
+`coalescer.rs` 估 330 行，实际 569 行（注释和空行约 60 行）。超出主要有两个来源：
+- rustfmt 默认的 `struct_lit_width` 是 18，稍长一点的结构体字面量就展开成多行。协议类型字段多（`ToolCall` 16 个、`TurnCompleted` 8 个、`LateToolOutput` 7 个），每处都要一整块。
+- 我低估了范围：除了合并文本，还要做工具调用的全部更新（输出追加与整段替换、`streaming` 状态、结束、退出码）、计划的 upsert、compaction 提示、按 Settle 收尾，以及晚到输出。这些都要用新的条目模型写出来。
+
+我已经把每一步的 `now` 和输出放进核心本身，函数签名都压到一行，从 606 行降到 569 行。再压就要改用元组结构体之类的写法，可读性会变差。
+
+按同样的放大比例，重新估剩下的部分：
+
+| 剩余部分 | 原估计 | 重估 |
+|---|---|---|
+| `AutonomousJudge` 实现 | 190 | 约 230 |
+| PROP-coalescer | 140 | 约 170 |
+| 自发回合的场景测试 | 60 | 约 70（可以省掉，由组合性质测试覆盖） |
+| 组合测试环境，加 PROP-autonomous-dequeue-guard、PROP-turn-snapshot-immutable | 370 | 约 450 |
+| 合计 | 760 | 约 850–920 |
+
+全部做完约 1,600–1,670 行，超过约 1,500 行的上限 7%–11%。所以在这里停下，由编排者决定。
+
+### 拆分建议
+
+- **T041（本分支）**：回合机的衔接（`HoldQueue`、`TurnSignal`）、`grouping.rs`（UNIT-grouping、UNIT-final-items，已完成）、`Coalescer` 加 PROP-coalescer。合计约 920 行。
+- **T041b（新任务）**：`AutonomousJudge`；组合测试环境，把回合机、裁判和合并器按 T043 的接线组合成一个测试用核心；PROP-autonomous-dequeue-guard、PROP-turn-snapshot-immutable。约 700–750 行。
+  - PROP-turn-snapshot-immutable 要靠裁判为晚到输出开自发回合，所以和裁判放在一起。
+  - T043 同时依赖 T041 和 T041b。
+
+如果不拆，我估计最终约 1,600 行，主要多在测试上。
+
+## 到目前为止的设计决定（拆分后也适用）
+
+- **出队保护放在回合机里**：新增 `Input::HoldQueue(bool)`。保持期间，空闲的会话不出队；空闲时用户发的消息照常立即开回合，并解除保护（5.2.6 只说"出队"）。由裁判发出，回合机只负责照办。
+- **`TurnSignal`**：从回合机的动作里读出回合的开始、Settle 和结束，交给合并器和裁判。T043 用 `TurnSignal::of(&action)` 转发即可。
+- **`turn.completed` 由合并器写**：`Action::Complete(TurnEnd)` 经 `TurnSignal::Completed` 交给合并器，合并器补上 `final_item_ids` 后写出。
+- **Ending 期间到达的更新**（计划在 T041b 实现）：
+  - 合并器先暂存，回合结束后放进下一个回合；
+  - 裁判见到 Ending 期间的输出，就先保持队列，等这个回合的 `turn.completed` 写出后，立即开一个自发回合承载这些更新，排在任何排队消息之前；
+  - 理由：prompt 已经返回，这些是 agent 自发的工作（K9）。放进正在收尾的回合，会破坏"Settle 之后不再有新条目"；放进出队的回合，又会在 agent 还在工作时发出新 prompt（K1）。
+- **晚到输出跨回合**：晚到输出的条目所在的回合如果在条目结束前就结束了，这个条目照常标为 `abandoned`。之后的输出在下一个回合里另建一个晚到条目。"每个原工具只有一个"按回合理解，否则就要往已经写下快照的回合里追加。
+- **大输出**：合并器把 `Replace` 写成内联的 `Content::Text`。超过内联上限时转 blob、`truncated` 状态和每秒更新尾部，都需要 I/O，不在本任务范围；在汇报里提给 T043、T053。
+- **`extraction`**：合并器按 `missing_required(false)` 给出初值。`NormUpdate::ToolStart` 没有 `cwd`，`execute` 类工具因此总是 `partial`；在汇报里提给 T053。
