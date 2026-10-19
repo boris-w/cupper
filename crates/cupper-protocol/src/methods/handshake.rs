@@ -169,7 +169,7 @@ method! {
 
 method! {
     /// `client/presence`: whether the client is in front, and on which session.
-    client_notification ClientPresence = "client/presence" (PresenceParams) {
+    client_notification ClientPresence = "client/presence" (ClientPresenceParams) {
         scope: Read,
         idempotency: Natural,
         milestone: M1a,
@@ -177,7 +177,7 @@ method! {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct PresenceParams {
+pub struct ClientPresenceParams {
     pub foreground: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<SessionId>,
@@ -208,7 +208,7 @@ pub struct HostStatusResult {
 
 method! {
     /// `host/prepare_upgrade`: stop taking turns and exit for an update.
-    request PrepareUpgrade = "host/prepare_upgrade" (PrepareUpgradeParams) -> PrepareUpgradeResult {
+    request HostPrepareUpgrade = "host/prepare_upgrade" (HostPrepareUpgradeParams) -> HostPrepareUpgradeResult {
         scope: Privileged,
         idempotency: Command,
         milestone: M1b,
@@ -217,7 +217,7 @@ method! {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct PrepareUpgradeParams {
+pub struct HostPrepareUpgradeParams {
     pub command_id: CommandId,
     pub mode: UpgradeMode,
 }
@@ -232,7 +232,7 @@ open_enum! {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct PrepareUpgradeResult {
+pub struct HostPrepareUpgradeResult {
     pub state: UpgradeState,
     pub running_turns: u32,
 }
@@ -263,11 +263,11 @@ pub struct HostExitParams {
 
 method! {
     /// `host/shutdown`: sent to every connection before an orderly exit.
-    host_notification HostShutdown = "host/shutdown" (ShutdownParams) { milestone: M1a }
+    host_notification HostShutdown = "host/shutdown" (HostShutdownParams) { milestone: M1a }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct ShutdownParams {
+pub struct HostShutdownParams {
     pub reason: ShutdownReason,
     /// The host will be back soon, e.g. after an upgrade.
     pub restart_expected: bool,
@@ -284,11 +284,11 @@ open_enum! {
 method! {
     /// `ui/navigate`: the user clicked a notification of the host; sent on
     /// the `control` connection only (AP-3).
-    host_notification UiNavigate = "ui/navigate" (NavigateParams) { milestone: M1b }
+    host_notification UiNavigate = "ui/navigate" (UiNavigateParams) { milestone: M1b }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct NavigateParams {
+pub struct UiNavigateParams {
     pub session_id: SessionId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_id: Option<RequestId>,
@@ -300,7 +300,7 @@ pub fn register(c: &mut Catalog, g: &mut SchemaGenerator) {
     c.request::<Ping>(g);
     c.client_notification::<ClientPresence>(g);
     c.request::<HostStatus>(g);
-    c.request::<PrepareUpgrade>(g);
+    c.request::<HostPrepareUpgrade>(g);
     c.request::<HostExit>(g);
     c.host_notification::<HostShutdown>(g);
     c.host_notification::<UiNavigate>(g);
@@ -353,7 +353,7 @@ pub(super) mod tests {
                     "principal_kind": "desktop_ui", "role": "control", "client_name": "Cupper",
                     "client_version": "0.1.0", "since": 3, "auth": "verified"}]}),
             ),
-            request::<PrepareUpgrade>(
+            request::<HostPrepareUpgrade>(
                 json!({"command_id": "c-1", "mode": "wait"}),
                 json!({"state": "waiting", "running_turns": 1}),
             ),

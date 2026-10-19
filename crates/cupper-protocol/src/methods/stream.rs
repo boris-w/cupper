@@ -80,7 +80,7 @@ impl<T: JsonSchema> JsonSchema for Raw<T> {
 
 method! {
     /// `stream/subscribe`: replay after a cursor, or a snapshot (design 5.3.3).
-    request Subscribe = "stream/subscribe" (SubscribeParams) -> SubscribeResult {
+    request StreamSubscribe = "stream/subscribe" (StreamSubscribeParams) -> StreamSubscribeResult {
         scope: Read,
         idempotency: Natural,
         milestone: M1a,
@@ -89,7 +89,7 @@ method! {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct SubscribeParams {
+pub struct StreamSubscribeParams {
     pub stream: StreamId,
     /// The last seq the client applied.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -99,7 +99,7 @@ pub struct SubscribeParams {
     pub epoch: Option<u64>,
 }
 
-impl SubscribeParams {
+impl StreamSubscribeParams {
     /// The cursor, for [`subscribe_mode`](crate::sync::subscribe_mode); a
     /// cursor needs both `after_seq` and `epoch`.
     pub fn resume(&self) -> Option<Resume> {
@@ -111,7 +111,7 @@ impl SubscribeParams {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct SubscribeResult {
+pub struct StreamSubscribeResult {
     pub stream: StreamId,
     pub mode: SubscribeMode,
     /// Why a cursor did not replay.
@@ -125,7 +125,7 @@ pub struct SubscribeResult {
 
 method! {
     /// `stream/unsubscribe`.
-    request Unsubscribe = "stream/unsubscribe" (StreamParams) -> Empty {
+    request StreamUnsubscribe = "stream/unsubscribe" (StreamUnsubscribeParams) -> Empty {
         scope: Read,
         idempotency: Natural,
         milestone: M1a,
@@ -134,7 +134,7 @@ method! {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct StreamParams {
+pub struct StreamUnsubscribeParams {
     pub stream: StreamId,
 }
 
@@ -151,11 +151,11 @@ pub struct StreamEventsParams {
 
 method! {
     /// `stream/snapshot`: one page of the state at `at_seq`, applied like events.
-    host_notification StreamSnapshot = "stream/snapshot" (SnapshotParams) { milestone: M1a }
+    host_notification StreamSnapshot = "stream/snapshot" (StreamSnapshotParams) { milestone: M1a }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-pub struct SnapshotParams {
+pub struct StreamSnapshotParams {
     pub stream: StreamId,
     pub at_seq: u64,
     pub epoch: u64,
@@ -168,11 +168,11 @@ pub struct SnapshotParams {
 
 method! {
     /// `stream/reset`: the host dropped the subscription; resubscribe with the cursor.
-    host_notification StreamReset = "stream/reset" (ResetParams) { milestone: M1a }
+    host_notification StreamReset = "stream/reset" (StreamResetParams) { milestone: M1a }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct ResetParams {
+pub struct StreamResetParams {
     pub stream: StreamId,
     pub reason: ResetReason,
 }
@@ -188,7 +188,7 @@ open_enum! {
 
 method! {
     /// `stream/ack`: what a remote client has applied (M3).
-    client_notification StreamAck = "stream/ack" (AckParams) {
+    client_notification StreamAck = "stream/ack" (StreamAckParams) {
         scope: Read,
         idempotency: Natural,
         milestone: M3,
@@ -196,7 +196,7 @@ method! {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct AckParams {
+pub struct StreamAckParams {
     pub stream: StreamId,
     pub seq: u64,
 }
@@ -293,8 +293,8 @@ pub struct BlobPutResult {
 }
 
 pub fn register(c: &mut Catalog, g: &mut SchemaGenerator) {
-    c.request::<Subscribe>(g);
-    c.request::<Unsubscribe>(g);
+    c.request::<StreamSubscribe>(g);
+    c.request::<StreamUnsubscribe>(g);
     c.host_notification::<StreamEvents>(g);
     c.host_notification::<StreamSnapshot>(g);
     c.host_notification::<StreamReset>(g);
@@ -342,16 +342,16 @@ pub(super) mod tests {
         let mut range = event(9, delta("ok"));
         range["from"] = json!(8);
         vec![
-            request::<Subscribe>(
+            request::<StreamSubscribe>(
                 json!({"stream": "session/s_1", "after_seq": 120, "epoch": 2}),
                 json!({"stream": "session/s_1", "mode": "snapshot", "reason": "epoch_changed",
                     "at_seq": 98, "head_seq": 98, "epoch": 3}),
             ),
-            request::<Subscribe>(
+            request::<StreamSubscribe>(
                 json!({"stream": "index"}),
                 json!({"stream": "index", "mode": "replay", "at_seq": 7, "head_seq": 9, "epoch": 1}),
             ),
-            request::<Unsubscribe>(json!({"stream": "index"}), json!({})),
+            request::<StreamUnsubscribe>(json!({"stream": "index"}), json!({})),
             notification::<StreamEvents>(json!({"stream": "session/s_1",
                 "events": [event(7, turn(1)), range]})),
             notification::<StreamSnapshot>(
@@ -406,7 +406,7 @@ pub(super) mod tests {
 
         // Snapshot pages and history pages decode op by op the same way.
         let ops = json!([turn(1), broken(), delta("ok"), {"data": {}}]);
-        let page: SnapshotParams = serde_json::from_value(json!({"stream": "session/s_1",
+        let page: StreamSnapshotParams = serde_json::from_value(json!({"stream": "session/s_1",
             "at_seq": 9, "epoch": 1, "page": 0, "last": true, "ops": ops}))
         .unwrap();
         let history: HistoryPageResult = serde_json::from_value(json!({"ops": ops})).unwrap();
@@ -444,7 +444,7 @@ pub(super) mod tests {
     #[test]
     fn unit_proto_methods_core_stream_subscribe_cursor() {
         let params = |raw: Value| {
-            serde_json::from_value::<SubscribeParams>(raw)
+            serde_json::from_value::<StreamSubscribeParams>(raw)
                 .unwrap()
                 .resume()
         };

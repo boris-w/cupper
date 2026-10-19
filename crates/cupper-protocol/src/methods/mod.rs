@@ -2,7 +2,8 @@
 //! and what the policy layer and the schema need to know about each.
 //!
 //! **Declaring.** Each group of 5.3.4 has its own file. A method is a unit
-//! type declared with `method!`, in one of three forms:
+//! type named after the method (`host/exit` is `HostExit`, its parameters
+//! `HostExitParams`), declared with `method!` in one of three forms:
 //!
 //! ```text
 //! method! {
@@ -12,7 +13,7 @@
 //!         errors: [Conflict / TurnRunning],
 //!     }
 //! }
-//! method! { client_notification Presence = "client/presence" (PresenceParams) {
+//! method! { client_notification ClientPresence = "client/presence" (ClientPresenceParams) {
 //!     scope: Read, idempotency: Natural, milestone: M1a } }
 //! method! { host_notification HostHello = "host/hello" (HostHelloParams) { milestone: M1a } }
 //! ```
