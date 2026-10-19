@@ -24,7 +24,7 @@
     {
      "t": 13008,
      "note": "storage-check",
-     "sessionId": "0dff108c-07ea-46b7-b75d-da00c0b0c79f",
+     "sessionId": "session-01",
      "found": []
     },
     {
@@ -42,7 +42,7 @@
     {
      "t": 16054,
      "note": "storage-check-after-close",
-     "sessionId": "0dff108c-07ea-46b7-b75d-da00c0b0c79f",
+     "sessionId": "session-01",
      "found": []
     },
     {
@@ -265,19 +265,19 @@
        "pid": 47536,
        "ppid": 1,
        "rssKB": 271456,
-       "label": "claude --output-format stream-json"
+       "label": "claude CLI"
       },
       {
        "pid": 47630,
        "ppid": 47536,
        "rssKB": 36384,
-       "label": "uv tool uvx"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 47711,
        "ppid": 47630,
        "rssKB": 98096,
-       "label": "python postgres-mcp --access-mode=restricted"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 791
@@ -336,25 +336,25 @@
        "pid": 87248,
        "ppid": 1,
        "rssKB": 300016,
-       "label": "claude --output-format stream-json"
+       "label": "claude CLI"
       },
       {
        "pid": 87287,
        "ppid": 87248,
        "rssKB": 55232,
-       "label": "uv tool uvx"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 87289,
        "ppid": 87248,
        "rssKB": 0,
-       "label": "<defunct>"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 87325,
        "ppid": 87287,
        "rssKB": 108928,
-       "label": "python postgres-mcp --access-mode=restricted"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 792
@@ -411,25 +411,25 @@
        "pid": 87884,
        "ppid": 1,
        "rssKB": 292080,
-       "label": "claude --output-format stream-json"
+       "label": "claude CLI"
       },
       {
        "pid": 87909,
        "ppid": 87884,
        "rssKB": 138096,
-       "label": "uv tool uvx"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 87910,
        "ppid": 87884,
        "rssKB": 0,
-       "label": "<defunct>"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 87929,
        "ppid": 87909,
        "rssKB": 109088,
-       "label": "python postgres-mcp --access-mode=restricted"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 791
@@ -629,31 +629,31 @@
        "pid": 2242,
        "ppid": 1,
        "rssKB": 303376,
-       "label": "claude --output-format stream-json"
+       "label": "claude CLI"
       },
       {
        "pid": 2268,
        "ppid": 2242,
        "rssKB": 50992,
-       "label": "uv tool uvx"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 2270,
        "ppid": 2242,
        "rssKB": 155808,
-       "label": "uv tool uvx"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 2310,
        "ppid": 2268,
        "rssKB": 109184,
-       "label": "python postgres-mcp --access-mode=restricted"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 2424,
        "ppid": 2270,
        "rssKB": 125824,
-       "label": "python browser-use --cli-mcp"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 1042
@@ -726,31 +726,31 @@
        "pid": 48298,
        "ppid": 1,
        "rssKB": 360288,
-       "label": "claude --output-format stream-json"
+       "label": "claude CLI"
       },
       {
        "pid": 48324,
        "ppid": 48298,
        "rssKB": 43904,
-       "label": "uv tool uvx"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 48326,
        "ppid": 48298,
        "rssKB": 64928,
-       "label": "uv tool uvx"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 48345,
        "ppid": 48324,
        "rssKB": 108688,
-       "label": "python postgres-mcp --access-mode=restricted"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 48375,
        "ppid": 48326,
        "rssKB": 125280,
-       "label": "python browser-use --cli-mcp"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 1051
@@ -879,25 +879,25 @@
        "pid": 49457,
        "ppid": 1,
        "rssKB": 340672,
-       "label": "claude --output-format stream-json"
+       "label": "claude CLI"
       },
       {
        "pid": 49484,
        "ppid": 49457,
        "rssKB": 5200,
-       "label": "(Python)"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 49485,
        "ppid": 49457,
        "rssKB": 35520,
-       "label": "uv tool uvx"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 49548,
        "ppid": 49485,
        "rssKB": 60560,
-       "label": "python browser-use --cli-mcp"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 881
@@ -1158,19 +1158,19 @@
        "pid": 61933,
        "ppid": 1,
        "rssKB": 285440,
-       "label": "claude --output-format stream-json"
+       "label": "claude CLI"
       },
       {
        "pid": 61956,
        "ppid": 61933,
        "rssKB": 138896,
-       "label": "uv tool uvx"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 61964,
        "ppid": 61956,
        "rssKB": 108384,
-       "label": "python postgres-mcp --access-mode=restricted"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 1041
@@ -1501,25 +1501,25 @@
        "pid": 62830,
        "ppid": 1,
        "rssKB": 267760,
-       "label": "claude --output-format stream-json"
+       "label": "claude CLI"
       },
       {
        "pid": 62857,
        "ppid": 62830,
        "rssKB": 141776,
-       "label": "uv tool uvx"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 62858,
        "ppid": 62830,
        "rssKB": 0,
-       "label": "<defunct>"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 62866,
        "ppid": 62857,
        "rssKB": 108496,
-       "label": "python postgres-mcp --access-mode=restricted"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 3301
@@ -1568,19 +1568,19 @@
        "pid": 63084,
        "ppid": 1,
        "rssKB": 291424,
-       "label": "claude --output-format stream-json"
+       "label": "claude CLI"
       },
       {
        "pid": 63140,
        "ppid": 63084,
        "rssKB": 42816,
-       "label": "uv tool uvx"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 63151,
        "ppid": 63140,
        "rssKB": 108656,
-       "label": "python postgres-mcp --access-mode=restricted"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 793
@@ -1624,7 +1624,7 @@
     {
      "t": 5434,
      "note": "storage-check",
-     "sessionId": "b8a4ed8c-9855-46cf-a87b-777878502638",
+     "sessionId": "session-15",
      "found": []
     },
     {
@@ -1643,7 +1643,7 @@
        "pid": 64247,
        "ppid": 1,
        "rssKB": 255200,
-       "label": "claude --output-format stream-json"
+       "label": "claude CLI"
       }
      ],
      "waitedMs": 540
@@ -1700,19 +1700,19 @@
        "pid": 64413,
        "ppid": 1,
        "rssKB": 291536,
-       "label": "claude --output-format stream-json"
+       "label": "claude CLI"
       },
       {
        "pid": 64441,
        "ppid": 64413,
        "rssKB": 142224,
-       "label": "uv tool uvx"
+       "label": "user-configured tool or MCP server"
       },
       {
        "pid": 64462,
        "ppid": 64441,
        "rssKB": 108608,
-       "label": "python postgres-mcp --access-mode=restricted"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 792
@@ -1845,7 +1845,7 @@
     {
      "t": 16522,
      "note": "storage-check",
-     "sessionId": "01a143ab-db07-7f62-82de-159adcec1cce",
+     "sessionId": "session-19",
      "found": []
     },
     {
@@ -1863,7 +1863,7 @@
     {
      "t": 19543,
      "note": "storage-check-after-close",
-     "sessionId": "01a143ab-db07-7f62-82de-159adcec1cce",
+     "sessionId": "session-19",
      "found": []
     },
     {
@@ -2493,7 +2493,7 @@
      "ok": false,
      "error": {
       "code": 1001,
-      "message": "The Codex app-server was killed by SIGKILL, which usually means it ran out of memory. The agent starts it again on the next request.\n\u001b[2m2026-10-16T07:57:21.822280Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_app_server\u001b[0m\u001b[2m:\u001b[0m Codex is ignoring 2 unrecognized configuration settings. Check for typos or deprecated settings.\n  user ($HOME/.codex/config.toml): `disable_response_storage` is ignored.\n  user ($HOME/.codex/config.toml): `mcp_servers.computer-use.type` is ignored.\n\u001b[2m2026-10-16T07:57:22.830835Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_rmcp_client::oauth::refresh_transaction\u001b[0m\u001b[2m:\u001b[0m \u001b[3merror\u001b[0m\u001b[2m=\u001b[0mfailed to refresh OAuth tokens for server canva: OAuth refresh token was rejected: Server returned error response: invalid_grant: Grant not found\n\u001b[2m2026-10-16T07:57:42.284546Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_rmcp_client::oauth::refresh_transaction\u001b[0m\u001b[2m:\u001b[0m \u001b[3merror\u001b[0m\u001b[2m=\u001b[0mfailed to refresh OAuth tokens for server canva: OAuth refresh token was rejected: Server returned error response: invalid_grant: Grant not found\n\u001b[2m2026-10-16T07:57:54.934000Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_rmcp_client::oauth::refresh_transaction\u001b[0m\u001b[2m:\u001b[0m \u001b[3merror\u001b[0m\u001b[2m=\u001b[0mfailed to refresh OAuth tokens for server canva: OAuth refresh token was rejected: Server returned error response: invalid_grant: Grant not found\n\u001b[2m2026-10-16T07:58:02.583713Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_rmcp_client::oauth::refresh_transaction\u001b[0m\u001b[2m:\u001b[0m \u001b[3merror\u001b[0m\u001b[2m=\u001b[0mfailed to refresh OAuth tokens for server canva: OAuth refresh token was rejected: Server returned error response: invalid_grant: Grant not found",
+      "message": "The Codex app-server was killed by SIGKILL, which usually means it ran out of memory. The agent starts it again on the next request.\n\u001b[2m2026-10-16T07:57:21.822280Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_app_server\u001b[0m\u001b[2m:\u001b[0m Codex is ignoring 2 unrecognized configuration settings. Check for typos or deprecated settings.\n  user ($HOME/.codex/config.toml): `disable_response_storage` is ignored.\n  user ($HOME/.codex/config.toml): `mcp_servers.<redacted>.type` is ignored.\n\u001b[2m2026-10-16T07:57:22.830835Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_rmcp_client::oauth::refresh_transaction\u001b[0m\u001b[2m:\u001b[0m \u001b[3merror\u001b[0m\u001b[2m=\u001b[0mfailed to refresh OAuth tokens for server canva: OAuth refresh token was rejected: Server returned error response: invalid_grant: Grant not found\n\u001b[2m2026-10-16T07:57:42.284546Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_rmcp_client::oauth::refresh_transaction\u001b[0m\u001b[2m:\u001b[0m \u001b[3merror\u001b[0m\u001b[2m=\u001b[0mfailed to refresh OAuth tokens for server canva: OAuth refresh token was rejected: Server returned error response: invalid_grant: Grant not found\n\u001b[2m2026-10-16T07:57:54.934000Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_rmcp_client::oauth::refresh_transaction\u001b[0m\u001b[2m:\u001b[0m \u001b[3merror\u001b[0m\u001b[2m=\u001b[0mfailed to refresh OAuth tokens for server canva: OAuth refresh token was rejected: Server returned error response: invalid_grant: Grant not found\n\u001b[2m2026-10-16T07:58:02.583713Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mcodex_rmcp_client::oauth::refresh_transaction\u001b[0m\u001b[2m:\u001b[0m \u001b[3merror\u001b[0m\u001b[2m=\u001b[0mfailed to refresh OAuth tokens for server canva: OAuth refresh token was rejected: Server returned error response: invalid_grant: Grant not found",
       "data": {
        "exitCode": null,
        "signal": "SIGKILL",
@@ -2533,7 +2533,7 @@
        "pid": 71522,
        "ppid": 1,
        "rssKB": 15168,
-       "label": "Codex Computer SkyComputerUseClient"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 3044
@@ -2646,7 +2646,7 @@
        "pid": 75728,
        "ppid": 1,
        "rssKB": 15216,
-       "label": "Codex Computer SkyComputerUseClient"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 293
@@ -3153,7 +3153,7 @@
     {
      "t": 12528,
      "note": "storage-check",
-     "sessionId": "01a143b7-3071-70f2-a961-c577f54a82e4",
+     "sessionId": "session-43",
      "found": []
     },
     {
@@ -3171,7 +3171,7 @@
     {
      "t": 15547,
      "note": "storage-check-after-close",
-     "sessionId": "01a143b7-3071-70f2-a961-c577f54a82e4",
+     "sessionId": "session-43",
      "found": []
     },
     {
@@ -3813,7 +3813,7 @@
        "pid": 5460,
        "ppid": 1,
        "rssKB": 15184,
-       "label": "Codex Computer SkyComputerUseClient"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 3045
@@ -3928,7 +3928,7 @@
        "pid": 7295,
        "ppid": 1,
        "rssKB": 15200,
-       "label": "Codex Computer SkyComputerUseClient"
+       "label": "user-configured tool or MCP server"
       }
      ],
      "waitedMs": 289
