@@ -114,8 +114,8 @@ CREATE TABLE turn_snapshots (
   session_id TEXT NOT NULL,
   turn_id    TEXT NOT NULL,
   turn_no    INTEGER NOT NULL,               -- history/page 按它向前翻页
-  v          INTEGER NOT NULL,               -- 写入时的事件 schema 版本
-  ops        TEXT NOT NULL,                  -- JSON 数组：事件体
+  v          INTEGER NOT NULL,               -- ops 的版式版本，目前为 1（T026）
+  ops        TEXT NOT NULL,                  -- JSON 数组：{type, v, data}，每个 op 带自己类型的 v，读时逐个升级
   bytes      INTEGER NOT NULL,
   PRIMARY KEY (session_id, turn_id)
 ) WITHOUT ROWID;

@@ -147,3 +147,112 @@ workflow 的 YAML 起初没过 prettier。我在推送前用 `git reset --soft` 
 **提交**：`63d3bb0`（用例单独进程运行）、`be38187`（等 trap 就绪再发信号）、`8f9ea44`（notes）、`773243c`（CI 摘要）。
 
 **给宿主的提示**：内核在拉起子进程时会短暂复制全部 fd，这一点宿主也会碰到。凡是"关掉 fd 后立刻判断对端是否已关闭"的逻辑都要考虑这个窗口，已写进 notes。
+
+## 修复第 2 轮汇报（`fix/T021-fd-copy-audit`，2026-10-19）
+
+- 执行者：子 agent（Rust 工程师，系统接口）
+- 分支：`fix/T021-fd-copy-audit`
+- 完成日期：2026-10-19
+
+## 做了什么
+
+本轮查清了：`cupper-sys` 里需要处理的同类断言，只剩 CI 失败的那一处，已修好；其他 crate 只排查，没有明显会失败的地方。验收标准都已满足。
+
+**复现，确认根因**
+- 办法：临时加一个被忽略、不提交的用例，把 `it_sys_peer_current_exited_peer_is_refused` 的用例体连跑 N 次，同时另开线程不停地用 `cupper_sys::spawn` 拉起 `/usr/bin/true`。
+- 没有并发拉起时，2,000 次失败 0 次。
+- 1 个拉起线程时，5,000 次失败 346 次；4 个拉起线程时，失败 1,572 次。
+- 失败信息与 CI 上的完全一致：`(PeerExited, 22)`，期望 `(PeerExited, 57)`。
+
+**整套复现**
+- 在同一个测试进程里，用 4 个线程连续拉起 3 秒，与 `cupper-sys` 的其他用例同时运行，连跑 40 次。
+- 失败 12 次，全部是这一个用例；其他用例 0 次。这和静态排查的结论一致。
+
+**发现第二种 fd 副本**
+- std 在 macOS 上建管道和 socketpair 时，是先建、后设 close-on-exec；`std::process` 拉起时又不带 `CLOEXEC_DEFAULT`。
+- 所以一个线程正在建管道时，另一个线程用 `std::process` 拉起的子进程会把这个管道**一直带到它退出**，不只是拉起期间短暂持有。
+- 实测：拉起 2,000 次，有 331 个子进程带走了管道（`io::pipe`），324 个带走了 socketpair（`UnixStream::pair`）。`File::open` 是原子地设 close-on-exec 的，0 个。
+- 宿主只用 `cupper_sys::spawn` 拉子进程，它拉起的子进程不会这样继承，所以宿主不受影响；测试里用 `std::process` 的地方不少，这一点用于下面的排查。
+
+**修复**
+- 改动在 `crates/cupper-sys/src/peer.rs`：`drop(client)` 之后，先从 `server` 读到 EOF，再做原来的断言，断言本身一个字没改。
+- `crates/cupper-sys/src/testutil.rs` 里 `fd_lock` 的文档同步改了：写明 std 建管道时的窗口，以及两种处理办法（等 EOF；或者在检查"副本是否开着"时用 `alone`）。
+
+**排查清单**
+- 完整清单写在 `docs/tasks/T021-sys-peer-sign/notes.md` 的"修复第 2 轮"一节，含位置、结论和处理方式。
+- `cupper-sys`：只有上面这一处是"关掉 fd 后立即检查"。第 1 轮的两个用例在 `alone` 里没有问题，没动。其余各处关掉 fd 后都是阻塞等待（`wait()`、读到 EOF、`output()`），副本只会让它多等一会儿，不会失败。
+- 其他 crate（只排查，未改动），没有明显会失败的：
+  - `cupper-host` `tests/startup.rs` 的 `unit_startup_payload_bad_payload_exits_1`，空输入那一项（第 83 行）：风险低。它要宿主在 2 秒的真实超时内读到 EOF；能带走 stdin 写端的，只有同一二进制里并发拉起、随即退出的那几个宿主。
+  - `cupper-fake-agent` `tests/common/mod.rs` 的 `Fake::exit`（第 231 行）：风险低，只会变慢。并行拉起的另一个 agent 可能带走这个 agent 的 stderr 写端，读到 EOF 要等那个 agent 被它的用例杀掉。
+  - `xtask` `ci/lock.rs` 的 `unit_ci_lock_released_when_holder_is_killed`：断言的形状相同，但锁文件只在持锁的子进程里打开，那个进程不拉起任何进程，所以不会有副本。无风险。
+  - 其余（内存 duplex、`ManualClock` 下的读、SQLite 记录锁、各处 `output()`）：无风险。
+
+## 关键取舍
+
+- **为什么先读到 EOF，而不是用 `alone`。** 这一段验证的是"另一端没人持有时，报 `ENOTCONN` 和对端已退出"。"没人持有"是前提，不是被检查的对象；读到 EOF 正好说明前提已经成立。
+  - 这样用例仍和其他用例并发运行，也不用多起一个测试进程。
+  - 第 1 轮那两个用例检查的恰恰是"副本此刻是否还开着"，只能用 `alone`，本轮不动。
+- **EOF 能当依据。** 按 XNU 的 `unp_disconnect`，最后一份引用关闭时，内核在同一把锁下清掉两端的连接，并标记读端结束。所以读返回 0 之后，`LOCAL_PEERTOKEN` 和 `LOCAL_PEERPID` 都返回 `ENOTCONN`。修复后同样的负载 0 次失败，与这个推理一致。
+- **不会一直卡住。** 这个用例持有 `fd_lock`。此时 `cupper-sys` 里用 `std::process` 拉起长寿子进程的用例都在等锁，所以都不存在。唯一不持锁的 `std::process` 拉起是 `alone` 的外层，它的子进程只跑一个很短的用例就退出。
+- **变异检查。** 临时把 `ENOTCONN` 归为 `Other`，用例失败，报 `(Other, 57)`。说明改动后这一段仍在检查 `ENOTCONN` 的归类。
+
+## 验证方式
+
+| 验收项 | 结果 |
+|---|---|
+| 复现 | 办法见上。修复前：1 个拉起线程时 5,000 次失败 346 次，4 个时失败 1,572 次，整套 40 次失败 12 次。修复后同样的负载：都是 0 次 |
+| CPU 负载下的稳定性（18 个 `yes` 占满 18 个核，`TMPDIR` 指向专用空目录） | `cargo test -p cupper-sys --lib` 50/50 通过；`cargo test --workspace --all-features` 30/30 通过，每次 232 个用例。判定标准：退出码为 0，输出里有 `test result: ok`，没有 `FAILED` 和编译错误 |
+| 理由和排查清单写进 `notes.md` | 已写（第 2 个提交） |
+| `cargo xtask ci pr --record`（干净 worktree） | 通过：rust 444、ts 64、license 1，IT-sys-peer-current 为 pass。摘要是 `docs/tasks/T021-sys-peer-sign/ci/pr-2fe9402fa9d5.json` |
+| 不留负载进程和临时目录 | `yes` 进程已全部退出；专用 `TMPDIR` 为空，已删除。复现工具和小实验程序都没有提交 |
+
+- 另外跑过 `cargo fmt --check`、`cupper-sys` 的 clippy（`-D warnings`），都通过。
+- 没有新增 `unsafe`，没有个人信息，产品代码没有改动。
+- 规模：代码 +11/−5 行（2 个文件），`notes.md` +105 行，合计约 120 行，在 200 行的上限以内。
+
+## 提交列表
+
+```
+0ab68ee docs(task): record the T021 fd-copy audit pr CI summary
+2fe9402 docs(task): record the T021 fd-copy audit and its reproduction
+62f1f8b test(sys): wait for end of file before checking a closed peer
+```
+
+## 遗留问题 / 范围外发现
+
+1. **产品代码里一处很小的分类竞态，没有改。** 位置：`peer_token`，`crates/cupper-sys/src/peer.rs` 第 134–136 行。
+   - 现象：另一端的最后一份副本，恰好在 `LOCAL_PEERTOKEN`（返回 `EINVAL`）和随后的 `LOCAL_PEERPID`（返回 `ENOTCONN`）之间关掉时，拒绝原因会记成 `Other`，而不是 `PeerExited`。负载下 5,000 次出现 3 次。
+   - 影响：连接照样被拒绝，只是审计种类和语义码不对。
+   - 一种改法：`peer_pid(socket).map_or_else(|r| r.kind == RefusalKind::PeerExited, |pid| unique_ids(pid).is_none())`。属于产品代码，按任务书不在本轮范围，请编排者决定是否另开任务。
+2. **建议补进 `handoff-notes.md`。** 对象是 T030、T037、T043 及以后的 actor 任务。
+   - 关掉 fd 之后要判断对端是否已关闭，应以读到 EOF 为信号，不要关闭后立刻查 `getsockopt`。
+   - 第二种副本是 `std::process` 和 `tokio::process` 才有的问题，再次说明"拉子进程一律经 `cupper_sys::spawn`"这条约束是必要的。
+3. **其他 crate 的两处低风险项**（宿主启动测试的空输入、`Fake::exit` 变慢），我判断不需要处理，由编排者决定。
+   - 另外，`unit_fake_scripts_probe` 现在只要求继承的 fd 以 `0,1,2` 开头。不要把它改成严格等于 `0,1,2`：带走的 fd 会接在后面，严格比较就会偶发失败。
+4. **一个不是本轮留下的临时目录。** 用户临时目录里有一个 `xtask-test-<pid>-4-lock-killed`，创建于今天 12:33，早于本任务，对应的进程已经不在。我没有删它，请编排者确认它的来历。
+
+### 追加：`peer_token` 的分类竞态（同一分支）
+
+T021 已就绪。
+
+`peer_token` 的分类竞态已在 `fix/T021-fd-copy-audit` 上修好。worktree 干净，所有改动都已提交，旧的 CI 摘要都保留了。
+
+- **修复**：`3adc4bd`。`EINVAL` 之后回查的 `peer_pid` 如果也报 `PeerExited`（即 `ENOTCONN`），这次就记为 `PeerExited`。注释写明了两次 `getsockopt` 之间的窗口。
+- **实测**：复现工具改成直接测这个窗口，4 个拉起线程。`(Other, 22)` 修复前 10,000 次里 40 次（两轮 5,000，各 21、19 次），修复后 0 次。
+  - 比上一轮 5,000 次里 3 次多，`notes.md` 里如实写了：原因没有深究。
+  - 复现工具没有提交。
+- **为什么没加用例**：写在 `notes.md` 里。这个窗口在用例里没法确定地触发；两条确定的路径（`EINVAL` 和 `ENOTCONN` 都记为 `PeerExited`）已经由 `exited_peer_is_refused` 覆盖。
+- **notes**：`95706fb`，"修复第 2 轮"一节新增"`peer_token` 的分类竞态"。
+- **CI**：在干净 worktree 里重跑 `cargo xtask ci pr --record`，通过：rust 444、ts 64、license 1，IT-sys-peer-current 为 pass。新摘要是 `docs/tasks/T021-sys-peer-sign/ci/pr-95706fbfc0fa.json`，提交 `39a088a`。
+- **自检**：fmt、`cupper-sys` 的 clippy（`-D warnings`）和测试都通过；没有新增 `unsafe`，提交内容里没有个人信息。
+
+```
+39a088a docs(task): record the T021 pr CI summary after the peer_token fix
+95706fb docs(task): record the T021 peer_token classification race
+3adc4bd fix(sys): count a peer that closes during the token query as exited
+0ab68ee docs(task): record the T021 fd-copy audit pr CI summary
+2fe9402 docs(task): record the T021 fd-copy audit and its reproduction
+62f1f8b test(sys): wait for end of file before checking a closed peer
+```
+
+等你合并后通知我，再开始 T074 修复第 1 轮。
