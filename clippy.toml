@@ -13,5 +13,7 @@ disallowed-methods = [
   { path = "tokio::time::interval_at", reason = "schedule through `Clock::timer_at` (design 5.2.16)" },
   { path = "tokio::time::timeout", reason = "race against a `Clock::timer_at` timer (design 5.2.16)" },
   { path = "tokio::time::timeout_at", reason = "race against a `Clock::timer_at` timer (design 5.2.16)" },
-  { path = "uuid::Uuid::now_v7", reason = "generate UUIDv7 through `IdGen` (design 5.2.16)" },
+  # A crate that builds `uuid` without `v7` cannot reach `now_v7` at all; the xtask fixture
+  # proves the path, so the "unreachable path" warning is off for this entry only.
+  { path = "uuid::Uuid::now_v7", reason = "generate UUIDv7 through `IdGen` (design 5.2.16)", allow-invalid = true },
 ]
