@@ -22,16 +22,18 @@ use cupper_protocol::methods::admin::SettingsUpdate;
 use cupper_protocol::methods::git::GitRevert;
 use cupper_protocol::methods::handshake::{ClientIdentity, Principal};
 use cupper_protocol::methods::session::SessionSetConfig;
+use cupper_protocol::methods::stream::{StreamSubscribeParams, StreamUnsubscribeParams};
 use cupper_protocol::rpc::{Idempotency, Method, RpcId};
 use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-use super::describe;
+use super::audit::Auditor;
 use super::outbox::Outbox;
 use super::routes::{Entry, Routes, Target};
-use super::wire;
+use super::subscribe::Subscriptions;
+use super::{describe, history, wire};
 use crate::ledger::{Begin, Outcome, Repeat, Ticket};
 use crate::policy::{self, Confirmable, Facts};
 
@@ -96,6 +98,7 @@ pub(super) struct Dispatch {
     principal: Principal,
     outbox: Arc<Outbox>,
     inflight: Arc<Semaphore>,
+    subscriptions: Subscriptions,
 }
 
 /// How a request is answered.
@@ -103,22 +106,32 @@ enum Answer {
     Now(Outcome),
     /// By a task, which holds the request's place in flight.
     Later(Reply, OwnedSemaphorePermit),
+    /// By the connection's subscriptions, which hold the place.
+    Queued,
 }
 
 impl Dispatch {
-    pub(super) fn new(conn: ConnId, principal: Principal, outbox: Arc<Outbox>) -> Self {
+    /// Call within a tokio runtime.
+    pub(super) fn new(
+        conn: ConnId,
+        principal: Principal,
+        outbox: Arc<Outbox>,
+        auditor: Auditor,
+    ) -> Self {
         let inflight = Arc::new(Semaphore::new(V1.max_inflight_requests as usize));
+        let subscriptions = Subscriptions::start(Arc::clone(&outbox), auditor);
         Self {
             conn,
             principal,
             outbox,
             inflight,
+            subscriptions,
         }
     }
 
     /// Answers `method` now, or queues the call and answers in a task.
     pub(super) fn request(&self, routes: &Routes, id: RpcId, method: &str, params: Value) {
-        match self.answer(routes, method, params) {
+        match self.answer(routes, &id, method, params) {
             Answer::Now(outcome) => self.outbox.push_frame(frame(&id, outcome)),
             Answer::Later(reply, place) => {
                 let outbox = Arc::clone(&self.outbox);
@@ -130,6 +143,7 @@ impl Dispatch {
                     outbox.push_frame(frame(&id, outcome));
                 });
             }
+            Answer::Queued => {}
         }
     }
 
@@ -148,7 +162,7 @@ impl Dispatch {
         }
     }
 
-    fn answer(&self, routes: &Routes, method: &str, params: Value) -> Answer {
+    fn answer(&self, routes: &Routes, id: &RpcId, method: &str, params: Value) -> Answer {
         let entry = routes.request_entry(method);
         let Some((name, entry)) = entry.filter(|(_, entry)| entry.target.serves()) else {
             return Answer::Now(Err(unsupported(method)));
@@ -176,7 +190,20 @@ impl Dispatch {
             Target::Port(port) => port.deliver(self.call(name, params, ticket)),
             Target::Ping => return Answer::Now(Ok(json!({}))),
             Target::Describe(sessions) => describe::describe(sessions.as_ref(), &params),
-            Target::Streams | Target::Blobs => unreachable!("not served yet"),
+            Target::History(source) => Box::pin(history::page(source.clone(), params)),
+            Target::Subscribe(source) => {
+                let params: StreamSubscribeParams = typed(&params).expect("validated");
+                let id = id.clone();
+                self.subscriptions.subscribe(id, source, params, place);
+                return Answer::Queued;
+            }
+            Target::Unsubscribe => {
+                let params: StreamUnsubscribeParams = typed(&params).expect("validated");
+                let id = id.clone();
+                self.subscriptions.unsubscribe(id, params.stream, place);
+                return Answer::Queued;
+            }
+            Target::Blobs => unreachable!("not served yet"),
         };
         Answer::Later(reply, place)
     }
@@ -224,6 +251,10 @@ fn or_empty(params: Value) -> Value {
         Value::Null => json!({}),
         params => params,
     }
+}
+
+pub(super) fn internal(err: impl fmt::Display) -> RpcError {
+    RpcError::app(ErrorCode::Internal, err.to_string())
 }
 
 fn unsupported(method: &str) -> RpcError {

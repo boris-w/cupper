@@ -46,8 +46,8 @@ const KEY_AUTHS: &[&str] = &[
     "harness",
 ];
 /// The optional features this host supports; each comes with the task that
-/// implements it (T033 and later).
-const HOST_FEATURES: &[Feature] = &[];
+/// implements it.
+const HOST_FEATURES: &[Feature] = &[Feature::StreamCoalesce, Feature::HistoryPage];
 
 /// What `initialize` settled for the connection's lifetime.
 #[derive(Debug, Clone, PartialEq)]

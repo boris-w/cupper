@@ -21,17 +21,19 @@ use cupper_protocol::schema::generator;
 use futures::FutureExt;
 use futures::future::{self, BoxFuture};
 use serde_json::{Value, json};
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
 use super::*;
 use crate::clock::{ManualClock, SystemClock};
 use crate::durations::Durations;
 use crate::gateway::Routes;
+use crate::gateway::audit::Auditor;
 use crate::gateway::outbox::Item;
 use crate::gateway::testkit::{Client, TempDir, TestGateway};
 use crate::quiescence::Quiescence;
+use crate::store::streams::{Streams, StreamsConfig};
 use crate::store::{
-    Database, MIGRATIONS, WRITER, Writer, WriterConfig, migrate, open_reader, open_writer,
+    Database, MIGRATIONS, Readers, WRITER, Writer, WriterConfig, migrate, open_reader, open_writer,
 };
 
 /// A port that keeps each call and its reply channel for the test to answer.
@@ -134,19 +136,25 @@ impl Fixture {
     /// The routes as the host starts them, the ledger loaded from the table;
     /// call within a runtime.
     fn start(&self) -> Routes {
-        let conn = open_reader(&self.dir.path().join("host.db")).unwrap();
+        let host_db = self.dir.path().join("host.db");
+        let conn = open_reader(&host_db).unwrap();
         let clock = Arc::new(self.clock.clone());
         let (sessions, index) = (Arc::clone(&self.sessions), Arc::clone(&self.index));
         let durations = Durations::default();
         let started = Routes::start(
             &conn,
             self.writer.clone(),
-            clock,
+            clock.clone(),
             &durations,
             sessions,
             index,
         );
-        started.unwrap().0
+        let mut routes = started.unwrap().0;
+        let readers = Readers::open(&host_db).unwrap();
+        let config = StreamsConfig::new(1, &durations);
+        let streams = Streams::new(self.writer.clone(), readers.clone(), clock, config);
+        routes.streams(streams, readers);
+        routes
     }
 }
 
@@ -163,8 +171,10 @@ impl Peer {
     fn new(principal: Principal) -> Self {
         let outbox = Arc::new(Outbox::new(V1.max_queue_bytes as usize));
         let conn = ConnId::from_index(1);
+        let clock = Arc::new(ManualClock::new());
+        let auditor = Auditor::new(conn.clone(), mpsc::unbounded_channel().0, clock);
         Self {
-            dispatch: Dispatch::new(conn, principal, Arc::clone(&outbox)),
+            dispatch: Dispatch::new(conn, principal, Arc::clone(&outbox), auditor),
             outbox,
             replies: Vec::new(),
             next_id: 0,
@@ -411,7 +421,6 @@ const ALLOWED: &[(&str, Why)] = {
         ("git/stage", Later(M1b)),
         ("git/status", Later(M1b)),
         ("git/unstage", Later(M1b)),
-        ("history/page", Until("T019")),
         ("host/exit", Until("T037")),
         ("host/prepare_upgrade", Until("T183")),
         ("host/status", Until("T037")),
@@ -426,8 +435,6 @@ const ALLOWED: &[(&str, Why)] = {
         ("settings/get", Until("T036")),
         ("settings/update", Until("T036")),
         ("stream/ack", Later(M3)),
-        ("stream/subscribe", Until("T019")),
-        ("stream/unsubscribe", Until("T019")),
         // Build `test-harness` only.
         ("test/clock_advance", Until("T047")),
         ("test/run_maintenance", Until("T047")),

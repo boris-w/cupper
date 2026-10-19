@@ -271,7 +271,9 @@ impl Conn<'_> {
                 });
                 let outbox = Arc::clone(self.outbox);
                 let principal = session.principal.clone();
-                let dispatch = Box::new(Dispatch::new(self.id.clone(), principal, outbox));
+                let auditor = self.gw.auditor(self.id);
+                let dispatch = Dispatch::new(self.id.clone(), principal, outbox, auditor);
+                let dispatch = Box::new(dispatch);
                 self.phase = Phase::Ready(session, dispatch);
                 None
             }
