@@ -20,3 +20,13 @@ export {
   type HandshakeOptions,
   type Handshaken,
 } from "./handshake";
+export {
+  ConnectionLost,
+  HostClient,
+  RpcFailure,
+  uuidv7,
+  type ClientState,
+  type HostClientOptions,
+  type Outcome,
+} from "./client";
+export { connectShell } from "./shell";
