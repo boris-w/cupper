@@ -4,5 +4,8 @@
 //! The Rust types are the source of truth; the JSON Schema exported from them is
 //! what other languages generate from.
 
+pub mod annotations;
 pub mod frame;
+pub mod ids;
 pub mod limits;
+pub mod open_enum;
