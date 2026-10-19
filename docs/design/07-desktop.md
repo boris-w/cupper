@@ -351,20 +351,22 @@ P1 再加：⌘K 命令菜单、⌘[ / ⌘] 前进后退、⇧Esc 清除未读�
 
 bundle identifier 的前缀定为 `dev.cupper`（Q5，已定（2026-10-16），见 `docs/meetings/2026-10-16-gate-design-decisions/minutes.md`）。它会写进签名要求、TCC 和通知身份；M1b 首次签名发布前可以无成本修改，之后不再改。
 
-| | 发布构建 | e2e 构建 | 开发构建 |
-|---|---|---|---|
-| UI 的 bundle id | `dev.cupper.app` | `dev.cupper.app.e2e` | `dev.cupper.app.dev` |
-| 宿主的 bundle id | `dev.cupper.app.host` | `dev.cupper.app.e2e.host` | `dev.cupper.app.dev.host` |
-| CLI 的 identifier | `dev.cupper.cli` | `dev.cupper.cli.e2e` | `dev.cupper.cli.dev` |
-| URL scheme | `cupper://` | `cupper-e2e://` | `cupper-dev://` |
-| 显示名称 | Cupper | Cupper E2E | cupper Dev |
-| 宿主认证 | `codesign`（Developer ID 要求，只认发布版 UI）；不带 `dev-auth`、`test-harness` | `dev_key`；另开 `test-harness`，供测试中的 CLI 使用 | `dev_key`，界面提示"本地鉴权较弱" |
-| Fuses | 全部按上表 | 同发布，只保留 `enableNodeCliInspectArguments`（Playwright 需要），关闭 `enableCookieEncryption`（ad-hoc 签名下可能触发钥匙串提示） | 不烧录 |
-| 数据目录 | `cupper/` | 每个用例一个临时目录（[5.9.9](09-testing.md#599-测试替身与注入点)） | `cupper-dev/` |
-| 签名 | Developer ID + 公证，开启 hardened runtime | ad-hoc，**关闭 hardened runtime**（ad-hoc 签名加 hardened runtime 需要 `disable-library-validation`，app-builder-lib 源码有警告） | ad-hoc |
-| 更新 | GitHub Releases | 无 | 无 |
-| 测试钩子 | 不存在：由 Vite `define` 的编译期常量 `__CUPPER_FLAVOR__` 门控，发布产物扫描钩子的标记串（[5.10.7](10-release.md#5107-发布流水线)） | 有 | 有 |
+| | 发布构建 | 自用构建 | e2e 构建 | 开发构建 |
+|---|---|---|---|---|
+| 用途 | 正式发布（推迟到用户开通 Apple Developer Program 之后，见 5.12.3） | 作者日常使用的本机构建，在真实项目上运行真实 agent | 端到端测试 | `pnpm dev` |
+| UI 的 bundle id | `dev.cupper.app` | `dev.cupper.app.local` | `dev.cupper.app.e2e` | `dev.cupper.app.dev` |
+| 宿主的 bundle id | `dev.cupper.app.host` | `dev.cupper.app.local.host` | `dev.cupper.app.e2e.host` | `dev.cupper.app.dev.host` |
+| CLI 的 identifier | `dev.cupper.cli` | `dev.cupper.cli.local` | `dev.cupper.cli.e2e` | `dev.cupper.cli.dev` |
+| URL scheme | `cupper://` | `cupper-local://` | `cupper-e2e://` | `cupper-dev://` |
+| 显示名称 | Cupper | Cupper Local | Cupper E2E | cupper Dev |
+| 宿主认证 | `codesign`（Developer ID 要求，只认发布版 UI）；不带 `dev-auth`、`test-harness` | `dev_key`（宿主开 `dev-auth`、不开 `test-harness`），界面提示"本地鉴权较弱"；Q35 通过后改为本机签名的 `codesign` 认证，身份和数据目录不变 | `dev_key`；另开 `test-harness`，供测试中的 CLI 使用 | `dev_key`，界面提示"本地鉴权较弱" |
+| Fuses | 全部按上表 | 同发布构建 | 同发布，只保留 `enableNodeCliInspectArguments`（Playwright 需要），关闭 `enableCookieEncryption`（ad-hoc 签名下可能触发钥匙串提示） | 不烧录 |
+| 数据目录 | `cupper/` | `cupper-local/`（userData 在其下的 `ui/`）；worktree 根目录也单独一个，默认 `~/.cupper-local/worktrees/` | 每个用例一个临时目录（[5.9.9](09-testing.md#599-测试替身与注入点)） | `cupper-dev/` |
+| 签名 | Developer ID + 公证，开启 hardened runtime | ad-hoc，**开启 hardened runtime**；entitlements 在发布构建的基础上只多 `com.apple.security.cs.disable-library-validation`，不带 `get-task-allow`、`allow-dyld-environment-variables`（关闭 hardened runtime 时，同一用户的进程可以用 `DYLD_INSERT_LIBRARIES` 向主进程注入代码） | ad-hoc，**关闭 hardened runtime**（ad-hoc 签名加 hardened runtime 需要 `disable-library-validation`，app-builder-lib 源码有警告） | ad-hoc |
+| 更新 | GitHub Releases | 无；手动替换 App，旧宿主经自检进入"待升级"（[5.5.7](05-flows.md#557-升级)） | 无 | 无 |
+| 测试钩子 | 不存在：由 Vite `define` 的编译期常量 `__CUPPER_FLAVOR__` 门控，发布产物扫描钩子的标记串（[5.10.7](10-release.md#5107-发布流水线)） | 不存在（同发布构建；`release-config` 每晚也扫描它的产物） | 有 | 有 |
 
 - 宿主按构建种类使用对应的 URL scheme，同时装了发布版和开发版时，通知不会打开错误的 App（桌面建议 #23）。
 - 依赖 hardened runtime、codesign 认证、动态状态字的检查只能在发布构建上验证，由签名后的冒烟测试覆盖（[5.10.7](10-release.md#5107-发布流水线)）；5.9.4 的每条安全 e2e 都标明在哪种构建上跑。
 - 用户自行构建（没有 Team ID）时，按开发构建的身份和数据目录运行，宿主走退化认证并提示（ADR-05，Q22）。
+- **自用构建**（v1.2 新增，见 [5.12.3](12-milestones.md#5123-m1b桌面-mvp)）单独一套身份、数据目录、userData、worktree 根目录和 URL scheme，可以与开发构建同时运行、互不干扰：开发构建抢不到它的 `host.lock`，也读不到它的数据。开发构建和测试只用临时目录或 `cupper-dev/`，不在真实项目上运行真实 agent。

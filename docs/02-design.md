@@ -1,6 +1,6 @@
 # cupper 技术设计
 
-- 版本：v1.1（v1.0 由用户确认，tag `gate/design`；v1.1 补充：Developer ID 发布推迟到用户开通账号之后，新增 Q35，见 5.12.3）
+- 版本：v1.2（v1.0 由用户确认，tag `gate/design`；v1.1 补充：Developer ID 发布推迟到用户开通账号之后，新增 Q35，见 5.12.3；v1.2（2026-10-19，计划评审后，P02）：5.6.9、5.9.4、5.9.10、5.10.7、5.12.2、5.12.3、5.12.4 里的用例编号改成完整写法，不再用缩写、通配和区间，5.9.10 增加截图回归的层前缀 `UI`；5.7.9 增加"自用构建"一列，5.12.3 同步引用）
 - 日期：2026-10-16
 - 状态：已确认（2026-10-16，tag `gate/design`）
 - 依据：PRD v1.2（v1.0 打 tag `gate/prd`）；产品-架构对齐会 `docs/meetings/2026-10-16-prd-arch-alignment/`；设计评审会 `docs/meetings/2026-10-16-design-review/`；`gate/design` 前的用户决定 `docs/meetings/2026-10-16-gate-design-decisions/`
