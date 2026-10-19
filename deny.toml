@@ -28,6 +28,9 @@ allow = [
   # exception that only relaxes it.
   "Unicode-3.0",
   "Apache-2.0 WITH LLVM-exception",
+  # T050 review: the ACP SDK turns on serde_json's `preserve_order`, which pulls in
+  # `foldhash` (Zlib, OSI-approved permissive).
+  "Zlib",
 ]
 confidence-threshold = 0.93
 # The allowlist is policy, not an inventory: unused entries are fine.
