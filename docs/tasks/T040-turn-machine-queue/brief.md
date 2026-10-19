@@ -78,3 +78,25 @@
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。其他物料（`notes.md` 等）由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-19，编排者）
+
+执行者写完 `driver::api`、`QueueCore` 和 `TurnMachine` 的实现后，累计 1,473 行，四条 PROP 还没写。补完测试预计约 1,950 行，于是按守则第 8 条停工，提出拆分。
+
+**裁定：拆分（计划 v1.3.3）。**
+- **T040 收窄**为 `driver::api` 和 `QueueCore`。编排者把本分支重置到 `13bf686`，再把记录行数的 notes 提交挑回来（`c50da70`）。
+- **`TurnMachine` 的提交**（`e03a930`）留在新分支 `feat/T048-turn-machine`，由新任务 T048 补完四条 PROP。
+- **T048 由同一位执行者接着做**，等 T040 合并之后开工。
+
+收窄后的 T040：
+- 验收编号：新增 **UNIT-queue-core**，测试名以 `unit_queue_core_` 开头。现有的三个 `queue_core_*` 和 `queue_preview_*` 用例要改名。
+- 补充用例：
+  - 先进先出；
+  - 上限 50；
+  - `remove` 和 `move` 返回 unsupported；
+  - `steer` 占位时，消息留在原处。
+- 四条 PROP 都转给 T048。
+- 在干净的 worktree 里跑 `cargo xtask ci pr --record docs/tasks/T040-turn-machine-queue/ci/`。
+
+执行者提出的 5 项裁定事项全部认可，已写进 `03-protocol-v1.md` 5.3.11 末尾的"T040 实现时的裁定"。其中"挂着的请求在回合结束时标为 `cancelled`，原因是新增的 `turn_ended`"一项由 T048 实现。
+

@@ -1,15 +1,15 @@
 //! Building blocks of the exported JSON Schema (design 5.3.10): the generator
 //! settings every protocol schema uses, and the per-method entries that carry
-//! `x-scope` and `x-idempotent`.
+//! `x-scope`, `x-idempotent`, `x-milestone` and `x-errors`.
 
 use schemars::generate::SchemaSettings;
 use schemars::transform::RecursiveTransform;
 use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde_json::{Value, json};
 
-use crate::annotations::{X_IDEMPOTENT, X_SCOPE};
+use crate::annotations::{X_ERRORS, X_IDEMPOTENT, X_MILESTONE, X_SCOPE};
 use crate::limits::MAX_SAFE_INTEGER;
-use crate::rpc::{ClientNotification, HostNotification, Method, Scope};
+use crate::rpc::{ClientNotification, HostNotification, Method, MethodError, Scope};
 
 /// Draft 2020-12, with every integer bounded by [`bound_integers`].
 pub fn generator() -> SchemaGenerator {
@@ -57,28 +57,32 @@ pub fn bound_integers(schema: &mut Schema) {
     schema.insert("maximum".into(), hi.into());
 }
 
-/// `{params, result, x-scope, x-idempotent}` of a request method.
+/// `{params, result, x-scope, x-idempotent, x-milestone, x-errors}` of a request method.
 pub fn method_entry<M: Method>(g: &mut SchemaGenerator) -> Value {
+    let errors: Vec<String> = M::ERRORS.iter().map(MethodError::wire).collect();
     json!({
         "params": subschema::<M::Params>(g),
         "result": subschema::<M::Result>(g),
         X_SCOPE: scope_name(M::SCOPE.as_ref()),
         X_IDEMPOTENT: M::IDEMPOTENCY.as_str(),
+        X_MILESTONE: M::MILESTONE.as_str(),
+        X_ERRORS: errors,
     })
 }
 
-/// `{params, x-scope, x-idempotent}` of a client-to-host notification.
+/// `{params, x-scope, x-idempotent, x-milestone}` of a client-to-host notification.
 pub fn client_notification_entry<N: ClientNotification>(g: &mut SchemaGenerator) -> Value {
     json!({
         "params": subschema::<N::Params>(g),
         X_SCOPE: scope_name(N::SCOPE.as_ref()),
         X_IDEMPOTENT: N::IDEMPOTENCY.as_str(),
+        X_MILESTONE: N::MILESTONE.as_str(),
     })
 }
 
-/// `{params}` of a host-to-client notification.
+/// `{params, x-milestone}` of a host-to-client notification.
 pub fn host_notification_entry<N: HostNotification>(g: &mut SchemaGenerator) -> Value {
-    json!({ "params": subschema::<N::Params>(g) })
+    json!({ "params": subschema::<N::Params>(g), X_MILESTONE: N::MILESTONE.as_str() })
 }
 
 /// `x-scope`: the required scope, or `none` when any principal may call.
@@ -102,7 +106,9 @@ mod tests {
 
     use super::*;
     use crate::annotations::TimestampMs;
-    use crate::rpc::{Idempotency, Notification};
+    use crate::error::{ErrorCode, ErrorReason};
+    use crate::rpc::{Idempotency, Milestone, Notification};
+    use crate::testutil::integers;
 
     #[derive(Serialize, Deserialize, JsonSchema)]
     struct Numbers {
@@ -113,24 +119,6 @@ mod tests {
         small: u8,
         offset: i32,
         at: TimestampMs,
-    }
-
-    /// Every integer schema in `v`, wherever it is nested.
-    fn integers<'a>(v: &'a Value, out: &mut Vec<&'a Value>) {
-        match v {
-            Value::Object(m) => {
-                let t = m.get("type");
-                if t == Some(&json!("integer"))
-                    || t.and_then(Value::as_array)
-                        .is_some_and(|a| a.contains(&json!("integer")))
-                {
-                    out.push(v);
-                }
-                m.values().for_each(|c| integers(c, out));
-            }
-            Value::Array(a) => a.iter().for_each(|c| integers(c, out)),
-            _ => {}
-        }
     }
 
     #[test]
@@ -170,6 +158,17 @@ mod tests {
         const NAME: &'static str = "session/send";
         const SCOPE: Option<Scope> = Some(Scope::Write);
         const IDEMPOTENCY: Idempotency = Idempotency::Command;
+        const MILESTONE: Milestone = Milestone::M1b;
+        const ERRORS: &'static [MethodError] = &[
+            MethodError {
+                code: ErrorCode::NotFound,
+                reason: None,
+            },
+            MethodError {
+                code: ErrorCode::Conflict,
+                reason: Some(ErrorReason::TurnMismatch),
+            },
+        ];
         type Params = Numbers;
         type Result = ();
     }
@@ -177,6 +176,7 @@ mod tests {
     struct Presence;
     impl Notification for Presence {
         const NAME: &'static str = "client/presence";
+        const MILESTONE: Milestone = Milestone::M1a;
         type Params = bool;
     }
     impl ClientNotification for Presence {
@@ -187,6 +187,7 @@ mod tests {
     struct Hello;
     impl Notification for Hello {
         const NAME: &'static str = "host/hello";
+        const MILESTONE: Milestone = Milestone::M3;
         type Params = String;
     }
     impl HostNotification for Hello {}
@@ -196,6 +197,8 @@ mod tests {
         const NAME: &'static str = "initialize";
         const SCOPE: Option<Scope> = None;
         const IDEMPOTENCY: Idempotency = Idempotency::None;
+        const MILESTONE: Milestone = Milestone::M1a;
+        const ERRORS: &'static [MethodError] = &[];
         type Params = ();
         type Result = ();
     }
@@ -209,19 +212,26 @@ mod tests {
             (&json!("write"), &json!("command"))
         );
         assert_eq!(send["params"], json!({"$ref": "#/$defs/Numbers"}));
+        assert_eq!(send[X_MILESTONE], "M1b");
+        assert_eq!(
+            send[X_ERRORS],
+            json!(["not_found", "conflict/turn_mismatch"])
+        );
         let init = method_entry::<Initialize>(&mut g);
         assert_eq!(
             (&init[X_SCOPE], &init[X_IDEMPOTENT]),
             (&json!("none"), &json!("none"))
         );
+        assert_eq!(init[X_ERRORS], json!([]));
         let presence = client_notification_entry::<Presence>(&mut g);
         assert_eq!(
             (&presence[X_SCOPE], &presence[X_IDEMPOTENT]),
             (&json!("read"), &json!("natural"))
         );
+        assert_eq!(presence[X_MILESTONE], "M1a");
         assert_eq!(
             host_notification_entry::<Hello>(&mut g),
-            json!({"params": {"type": "string"}})
+            json!({"params": {"type": "string"}, X_MILESTONE: "M3"})
         );
     }
 }

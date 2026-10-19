@@ -37,5 +37,9 @@ uuid = { version = "1.28.0", default-features = false, features = ["std"] }
 [dev-dependencies]
 tokio = { version = "1.53.3", features = ["macros"] }
 
+[[test]]
+name = "migrations"
+required-features = ["test-harness"]
+
 [lints]
 workspace = true
