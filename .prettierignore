@@ -6,3 +6,5 @@ CLAUDE.md
 pnpm-lock.yaml
 # Written by `export-schema` in its own canonical layout (`pnpm gen`).
 protocol/schema/
+# Written by the Rust views (`UPDATE_GOLDEN=1`, `cupper-protocol` `view::parity`).
+protocol/fixtures/views.json

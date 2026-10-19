@@ -1,5 +1,6 @@
 //! `protocol` (design 5.1.6, 5.3.10): the committed contract is what the Rust
-//! types generate, and the shared fixtures pass in Rust and TS. `pnpm gen`
+//! types generate, and the shared fixtures pass in Rust and TS, the views
+//! included. `pnpm gen`
 //! exports `protocol/schema/v1.json` and regenerates `packages/protocol`;
 //! anything it changes fails the job and stays in the work tree, ready to be
 //! committed. The comparison with released schemas joins later (T016).
@@ -23,7 +24,8 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         .and_then(|()| unchanged(ctx));
     failures.extend(generated.err());
 
-    // UNIT-proto-fixtures, then UNIT-ts-fixtures on the same files.
+    // UNIT-proto-fixtures and UNIT-views-parity, then UNIT-ts-fixtures and
+    // the TS views on the same files.
     let mut rust = ctx.cargo();
     rust.args([
         "test",
@@ -32,11 +34,20 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         "--locked",
         "--no-fail-fast",
     ])
-    .args(["--", "unit_proto_fixtures"]);
+    .args(["--", "unit_proto_fixtures", "unit_views_parity"]);
     failures.extend(ctx.libtest("fixtures-rs", &mut rust).err());
     let mut ts = ctx.command("pnpm");
     ts.args(["--dir", "packages/protocol", "run", "test"]);
     failures.extend(ctx.vitest("fixtures-ts", &mut ts).err());
+    let mut views = ctx.command("pnpm");
+    views.args([
+        "--dir",
+        "packages/host-client",
+        "run",
+        "test",
+        "src/views/parity.test.ts",
+    ]);
+    failures.extend(ctx.vitest("views-ts", &mut views).err());
 
     if !failures.is_empty() {
         let failures: Vec<String> = failures.iter().map(|err| format!("{err:#}")).collect();
