@@ -31,6 +31,7 @@ getrandom = "0.4.3"
 rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled", "fallible_uint"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json.workspace = true
+sha2.workspace = true
 thiserror = "2.0.21"
 tokio = { version = "1.53.3", features = ["io-util", "net", "rt", "sync", "time"] }
 uuid = { version = "1.28.0", default-features = false, features = ["std"] }

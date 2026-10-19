@@ -248,6 +248,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cupper-cli"
+version = "0.0.0"
+dependencies = [
+ "cupper-protocol",
+ "cupper-sys",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "cupper-fake-agent"
 version = "0.0.0"
 dependencies = [
@@ -273,6 +285,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "shuttle",
  "thiserror",
  "tokio",
