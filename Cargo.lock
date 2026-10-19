@@ -216,6 +216,7 @@ version = "0.0.0"
 dependencies = [
  "agent-client-protocol",
  "agent-client-protocol-derive",
+ "cupper-protocol",
  "cupper-sys",
  "futures",
  "getrandom",
