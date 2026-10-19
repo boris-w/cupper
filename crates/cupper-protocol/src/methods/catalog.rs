@@ -8,7 +8,7 @@ use schemars::SchemaGenerator;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::{git, handshake, stream};
+use super::{admin, git, handshake, stream};
 use crate::rpc::{ClientNotification, HostNotification, Method};
 use crate::schema::{client_notification_entry, host_notification_entry, method_entry};
 
@@ -50,6 +50,7 @@ pub fn catalog(g: &mut SchemaGenerator) -> Catalog {
     handshake::register(&mut catalog, g);
     stream::register(&mut catalog, g);
     git::register(&mut catalog, g);
+    admin::register(&mut catalog, g);
     catalog
 }
 
@@ -60,7 +61,7 @@ mod tests {
     use serde_json::{Map, json};
 
     use super::*;
-    use crate::annotations::{X_ERRORS, X_IDEMPOTENT, X_MILESTONE, X_SCOPE};
+    use crate::annotations::{X_BUILDS, X_ERRORS, X_IDEMPOTENT, X_MILESTONE, X_SCOPE};
     use crate::canonical::to_canonical_string;
     use crate::error::{ErrorCode, ErrorReason};
     use crate::limits::MAX_SAFE_INTEGER;
@@ -85,6 +86,7 @@ mod tests {
             handshake::tests::samples(),
             stream::tests::samples(),
             git::tests::samples(),
+            admin::tests::samples(),
         ]
         .concat()
         .into_iter()
@@ -114,6 +116,8 @@ mod tests {
         ByPolicy,
         /// "真实输入": the window's request must carry `input` (design 5.7.8).
         Input,
+        /// "仅 … 构建": only the builds in the method's `x-builds`.
+        Build,
     }
     use Cell::*;
 
@@ -157,8 +161,9 @@ mod tests {
             [Native, N, N, N, N, Y, N],
         ),
         (
-            "订阅……一行中的 git/status、git/diff、git/file_diff、git/branches、worktree/check、files/search",
+            "订阅……一行中的 settings/get、git/status、git/diff、git/file_diff、git/branches、worktree/check、files/search",
             &[
+                "settings/get",
                 "git/status",
                 "git/diff",
                 "git/file_diff",
@@ -179,9 +184,39 @@ mod tests {
             [Y, Input, N, Y, N, Y, ByPolicy],
         ),
         (
+            "settings/update（普通键；安全相关的键由策略要求原生确认）",
+            &["settings/update"],
+            [Y, Y, N, Y, N, Y, ByPolicy],
+        ),
+        (
             "workspace/open、diag/export",
-            &["workspace/open"],
+            &["workspace/open", "diag/export"],
             [Y, Y, N, N, N, Y, N],
+        ),
+        (
+            "auth/elevate",
+            &["auth/elevate"],
+            [ByPolicy, ByPolicy, Y, Y, Y, ByPolicy, ByPolicy],
+        ),
+        (
+            "auth/elevation_get、policy/describe",
+            &["auth/elevation_get", "policy/describe"],
+            [Y, N, N, N, N, Y, N],
+        ),
+        (
+            "auth/elevation_respond",
+            &["auth/elevation_respond"],
+            [Native, N, N, N, N, Y, N],
+        ),
+        (
+            "diag/recording_export",
+            &["diag/recording_export"],
+            [Build, Build, N, N, N, Y, N],
+        ),
+        (
+            "test/*",
+            &["test/clock_advance", "test/run_maintenance", "test/seed"],
+            [N, N, N, N, N, Build, N],
         ),
     ];
 
@@ -303,7 +338,10 @@ mod tests {
 
     /// The methods of this task's groups (T013), by their samples.
     fn ext_methods() -> BTreeSet<&'static str> {
-        git::tests::samples().into_iter().collect()
+        [git::tests::samples(), admin::tests::samples()]
+            .concat()
+            .into_iter()
+            .collect()
     }
 
     #[test]
@@ -311,13 +349,14 @@ mod tests {
         let mut ext = Catalog::default();
         let mut g = generator();
         git::register(&mut ext, &mut g);
+        admin::register(&mut ext, &mut g);
         assert!(ext.client_notifications.is_empty() && ext.host_notifications.is_empty());
         let names: BTreeSet<&str> = ext.requests.keys().copied().collect();
         assert_eq!(ext_methods(), names);
     }
 
     /// What the scope does not decide but the schema shows: `Input` cells
-    /// need an `input` parameter.
+    /// need an `input` parameter, `Build` cells go with `x-builds`.
     #[test]
     fn unit_proto_methods_ext_input_and_build_cells_match_the_schema() {
         let (catalog, defs) = built();
@@ -333,5 +372,59 @@ mod tests {
                 assert!(params["properties"].get("input").is_some(), "{row}");
             }
         }
+        let gated: BTreeSet<&str> = rows(Build)
+            .flat_map(|(_, m, _)| m.iter().copied())
+            .collect();
+        let builds = catalog
+            .requests
+            .iter()
+            .filter(|(_, e)| e.get(X_BUILDS).is_some());
+        assert_eq!(gated, builds.map(|(name, _)| *name).collect());
+    }
+
+    #[test]
+    fn unit_proto_methods_ext_milestones_errors_and_builds_are_in_the_schema() {
+        let (catalog, _) = built();
+        let entry = |name: &str| &catalog.requests[name];
+        for name in git::tests::samples() {
+            assert_eq!(entry(name)[X_MILESTONE], "M1b", "{name}");
+        }
+        for name in admin::tests::samples() {
+            let milestone = if name == "diag/export" { "M2" } else { "M1a" };
+            assert_eq!(entry(name)[X_MILESTONE], milestone, "{name}");
+        }
+        let errors = |name: &str| entry(name)[X_ERRORS].clone();
+        assert_eq!(
+            errors("git/diff"),
+            json!(["unavailable/snapshot_missing", "unavailable/index_unmerged"])
+        );
+        assert_eq!(
+            errors("git/commit"),
+            json!([
+                "git_error/hook_failed",
+                "git_error/nothing_to_commit",
+                "conflict/outcome_unknown"
+            ])
+        );
+        assert_eq!(
+            errors("auth/elevate"),
+            json!(["forbidden/lineage", "rate_limited", "timeout"])
+        );
+        assert_eq!(errors("settings/update"), json!(["forbidden"]));
+
+        // Gated methods (design 5.8.3, 5.9.9); every other method is in every build.
+        let builds: BTreeMap<&str, &Value> = catalog
+            .requests
+            .iter()
+            .filter_map(|(name, e)| Some((*name, e.get(X_BUILDS)?)))
+            .collect();
+        let (harness, dev) = (json!(["test-harness"]), json!(["test-harness", "dev-auth"]));
+        let expected = BTreeMap::from([
+            ("diag/recording_export", &dev),
+            ("test/clock_advance", &harness),
+            ("test/run_maintenance", &harness),
+            ("test/seed", &harness),
+        ]);
+        assert_eq!(builds, expected);
     }
 }

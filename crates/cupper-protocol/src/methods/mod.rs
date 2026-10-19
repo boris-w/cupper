@@ -115,6 +115,7 @@ macro_rules! method {
     (@reason $reason:ident) => { Some($crate::error::ErrorReason::$reason) };
 }
 
+pub mod admin;
 pub mod catalog;
 pub mod git;
 pub mod handshake;
