@@ -208,6 +208,9 @@ importers:
 
   crates/cupper-desktop-native:
     devDependencies:
+      '@cupper/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@types/node':
         specifier: 24.19.1
         version: 24.19.1

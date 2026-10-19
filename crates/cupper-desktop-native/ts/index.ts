@@ -8,6 +8,8 @@
 // `spawn_failed`, `connect_failed`, `fd_taken`, `already_authenticated`,
 // `protocol_error`, `unexpected`, or one of `HostRefusal`.
 
+import type { Auth } from "@cupper/protocol";
+
 export interface BuildInfo {
   /** Compile-time features; none in a release build. */
   features: string[];
@@ -82,11 +84,8 @@ export interface KeyedHostConnection extends HostConnection {
   verifyHostProof(hostProof?: string | null): boolean;
 }
 
-export interface DevKeyAuth {
-  type: "dev_key";
-  c_nonce: string;
-  proof: string;
-}
+/** `initialize`'s `auth`, as the protocol has it. */
+export type DevKeyAuth = Extract<Auth, { type: "dev_key" }>;
 
 declare const hostKey: unique symbol;
 
