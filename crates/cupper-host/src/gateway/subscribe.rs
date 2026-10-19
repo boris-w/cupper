@@ -37,6 +37,9 @@ use super::wire;
 use crate::store::Readers;
 use crate::store::streams::{StreamError, StreamHandle, Subscription};
 
+#[cfg(test)]
+mod tests;
+
 /// A connection's subscriptions: where its read loop sends them.
 #[derive(Debug)]
 pub(super) struct Subscriptions {
