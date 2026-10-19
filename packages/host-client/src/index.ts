@@ -30,3 +30,4 @@ export {
   type Outcome,
 } from "./client";
 export { connectShell } from "./shell";
+export { StreamSync, type Cursor, type StreamSink, type SyncCounters } from "./sync";
