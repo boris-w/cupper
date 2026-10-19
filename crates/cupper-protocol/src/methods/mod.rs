@@ -119,6 +119,9 @@ pub mod admin;
 pub mod catalog;
 pub mod git;
 pub mod handshake;
+pub mod interaction;
+pub mod project;
+pub mod session;
 pub mod stream;
 #[cfg(test)]
 mod testkit;
