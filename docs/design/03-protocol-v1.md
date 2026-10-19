@@ -608,4 +608,4 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
   - agent 的请求用 `AskId` 指代，ACP 的 responder 留在驱动实现里，回答走 `DriverCommand::Answer`；
   - Prompt 的内容直接用协议的 `PromptContent`，由 T055 转成 ACP 的内容块；
   - `TurnMachine` 发 `Action::Attach(AttachTarget)`，由会话 actor 补上工作区、配置和信任状态。
-
+- **队列满**（编排者裁定）：排队消息已到 5.3.9 的上限（每会话 50 条）时，`session/send` 和 `session/queue_edit` 返回 `too_large/queue_full`，队列不变。
