@@ -1,10 +1,12 @@
 //! The host's only source of time (design 5.2.16).
 //!
 //! Every reading of the monotonic or the wall clock and every timer goes through a
-//! [`Clock`], so tests can run the host on virtual time. The clippy
-//! `disallowed-methods` list bans the std and tokio time calls everywhere else;
-//! [`SystemClock`] is the one place that makes them.
+//! [`Clock`], and every UUIDv7 through an [`IdGen`] on that clock, so tests can
+//! run the host on virtual time. The clippy `disallowed-methods` list bans the std
+//! and tokio time calls and `Uuid::now_v7` everywhere else; [`SystemClock`] is the
+//! one place that reads real time.
 
+mod id;
 #[cfg(any(test, feature = "test-harness"))]
 mod manual;
 mod system;
@@ -16,6 +18,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
+pub use id::IdGen;
 #[cfg(any(test, feature = "test-harness"))]
 pub use manual::ManualClock;
 pub use system::SystemClock;
