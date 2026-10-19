@@ -103,6 +103,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "cupper-fake-agent"
+version = "0.0.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "cupper-host"
 version = "0.0.0"
 dependencies = [
