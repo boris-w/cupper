@@ -148,6 +148,8 @@
 | T046 | `--harness-key-fd` 的参数解析接 `cupper_cli::harness::HarnessKey::read_fd`；输出里"宿主未经签名校验"的标记用 `HostCheck::is_weak(&auth)`（e2e 构建里带了 harness 密钥就不算弱） | T039 |
 | T037 | `main` 里 `startup::launcher()` 返回的拉起方 ID，要放进 `GatewayConfig::dev_key`（`DevKey { key, launcher }`）。新增关闭原因 `HandshakeTimeout`，审计记为 `handshake_timeout`。夹具的审计行目前是 `Debug` 文本，正式的审计格式归本任务 | T039 |
 | T047 | 每条还没 `initialize` 的连接持有一个握手期限计时器（`gateway_handshake`，10 s），静止屏障要把它算进去 | T039 |
+| T043 | 合并器只写内联文本；工具输出超过内联上限时转 blob（`BlobStore`、`add_ref`）、标 `truncated`、每秒更新尾部，由 actor 做（5.3.11 末尾"T041 实现时的裁定"）。收到回合机的动作后，用 `TurnSignal::of(&Action)` 转发给合并器和裁判 | T041 |
+| T053 | `NormUpdate::ToolStart` 要给出 `cwd`：没有它，合并器按 `missing_required` 把 `execute` 类工具的 `extraction` 定为 `partial` | T041 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
