@@ -106,7 +106,7 @@ cupper/
 
 | 命令 | 作用 |
 |---|---|
-| `pnpm i` | 安装 TS 依赖。CI 用 `--frozen-lockfile`；保留 pnpm 10 默认不运行依赖脚本的行为，只有白名单里的包（如 `electron` 的下载脚本、`esbuild`）可以运行 |
+| `pnpm i` | 安装 TS 依赖。CI 用 `--frozen-lockfile`；保留 pnpm 10 默认不运行依赖脚本的行为，只有白名单里的包可以运行（`allowBuilds`，T074 时为空：Electron 44 已经没有安装脚本，二进制由 electron-builder 打包时下载；`esbuild` 等需要时再放行） |
 | `pnpm dev` | 以 `dev-auth` 特性构建 debug 宿主和 CLI，启动 Vite（渲染进程热重载）和 Electron 开发构建（名称 "cupper Dev"，独立的 bundle id 和数据目录）；重启 Electron 时一并重启宿主（Q22 的局限） |
 | `pnpm gen` | `cargo run -p cupper-protocol --bin export-schema` 导出 `protocol/schema/v1.json`，再运行 `tools/gen-protocol-ts` 生成 `packages/protocol`；在 macOS 和 Linux 上都能运行 |
 | `pnpm lint` | `cargo fmt --check`、`cargo clippy -D warnings`、ESLint、Prettier 检查、`tsc -b` |
