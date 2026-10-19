@@ -283,39 +283,16 @@ pub fn recv_closing_fds(socket: impl AsFd, buf: &mut [u8]) -> io::Result<Receive
 
 #[cfg(test)]
 mod tests {
-    use std::io::{BufRead, BufReader, Read, Write};
+    use std::io::{BufReader, Read, Write};
     use std::os::fd::{FromRawFd, OwnedFd};
     use std::os::unix::net::UnixStream;
     use std::process::{Command, Stdio};
 
     use super::*;
     use crate::current_uid;
-    use crate::testutil::{Forked, Owned, StdChild, cat, fd_lock, open_fds};
-
-    fn expect_line(lines: &mut impl BufRead, want: &str) {
-        let mut line = String::new();
-        lines.read_line(&mut line).unwrap();
-        assert_eq!(line.trim_end(), want);
-    }
-
-    fn expect_byte(mut socket: &UnixStream, want: u8) {
-        let mut byte = [0u8];
-        socket.read_exact(&mut byte).unwrap();
-        assert_eq!(byte[0], want);
-    }
-
-    /// `sh -c script` with `stdout` as its stdout and a pipe as its stdin.
-    fn sh_on(script: &str, stdout: &UnixStream) -> StdChild {
-        let stdout = OwnedFd::from(stdout.try_clone().unwrap());
-        StdChild(
-            Command::new("/bin/sh")
-                .args(["-c", script])
-                .stdin(Stdio::piped())
-                .stdout(stdout)
-                .spawn()
-                .unwrap(),
-        )
-    }
+    use crate::testutil::{
+        Forked, Owned, StdChild, cat, expect_byte, expect_line, fd_lock, open_fds, sh_writing_to,
+    };
 
     #[test]
     fn it_sys_peer_current_token_names_the_latest_io_process() {
@@ -332,7 +309,7 @@ mod tests {
         assert_eq!(mine.pid_version(), unique_ids(me).unwrap().pid_version);
 
         // Another process writes on the same end, then waits on its stdin.
-        let mut writer = sh_on("echo b; read x || true", &client);
+        let mut writer = sh_writing_to("echo b; read x || true", &client);
         let writer_pid = writer.0.id() as i32;
         let mut lines = BufReader::new(&server);
         expect_line(&mut lines, "b");
@@ -374,7 +351,7 @@ mod tests {
     fn it_sys_peer_current_exec_changes_the_token() {
         let _fds = fd_lock();
         let (server, client) = UnixStream::pair().unwrap();
-        let mut child = sh_on(
+        let mut child = sh_writing_to(
             "echo before; read go; exec /bin/sh -c 'echo after; read go || true'",
             &client,
         );
@@ -616,7 +593,7 @@ mod tests {
     fn it_sys_peer_current_exited_peer_is_refused() {
         let _fds = fd_lock();
         let (server, client) = UnixStream::pair().unwrap();
-        let mut child = sh_on("echo x; read y || true", &client);
+        let mut child = sh_writing_to("echo x; read y || true", &client);
         let mut lines = BufReader::new(&server);
         expect_line(&mut lines, "x");
         let token = peer_token(&server).unwrap();
@@ -654,7 +631,7 @@ mod tests {
         assert_eq!(peer_token(&server).unwrap().unique_id().unwrap(), launcher);
 
         // Another process of the same user and session is not the launcher.
-        let mut other = sh_on("echo k; read x || true", &client);
+        let mut other = sh_writing_to("echo k; read x || true", &client);
         let mut lines = BufReader::new(&server);
         expect_line(&mut lines, "k");
         assert_ne!(peer_token(&server).unwrap().unique_id().unwrap(), launcher);

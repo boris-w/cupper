@@ -8,6 +8,7 @@ publish.workspace = true
 description = "macOS system interfaces for cupper; the only crate with `unsafe` (design 5.1.1)."
 
 [dependencies]
+core-foundation = "0.10.1"
 libc = "0.2.191"
 thiserror = "2.0.21"
 

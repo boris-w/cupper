@@ -10,6 +10,7 @@
 )]
 #![deny(clippy::undocumented_unsafe_blocks)]
 
+mod codesign;
 mod env;
 mod group;
 mod peer;
@@ -19,6 +20,7 @@ mod system;
 #[cfg(test)]
 mod testutil;
 
+pub use codesign::{Cdhash, CodeStatus, Requirement, file_cdhash, own_cdhash};
 pub use env::Env;
 pub use group::{ProcessGroup, Signal};
 pub use peer::{
@@ -39,6 +41,9 @@ pub enum Error {
     /// A system interface returned data in a form it never should.
     #[error("unexpected result from {0}")]
     Unexpected(&'static str),
+    /// A Security framework call returned this `OSStatus`.
+    #[error("{call} returned OSStatus {status}")]
+    Security { call: &'static str, status: i32 },
     /// A system call failed.
     #[error("{call} failed")]
     Os {
