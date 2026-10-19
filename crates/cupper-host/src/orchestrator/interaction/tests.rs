@@ -48,13 +48,17 @@ pub fn approval() -> AskRequest {
     ]))
 }
 
-/// Claude's one question, with its custom box.
-pub fn form() -> AskRequest {
+/// A form of `schema`; without one, Claude's one question with its custom box.
+pub fn form(schema: Option<Value>) -> AskRequest {
     let choice = json!({"type": "string", "oneOf": [{"const": "red"}, {"const": "blue"}]});
-    let schema = json!({"type": "object", "properties": {"question_0": choice,
+    let claude = json!({"type": "object", "properties": {"question_0": choice,
         "question_0_custom": {"type": "string"}}});
-    let message = "Pick a color".into();
+    let (message, schema) = ("Asked".into(), schema.unwrap_or(claude));
     AskRequest::Form(FormAsk { message, schema })
+}
+
+pub fn answer(values: Value) -> InteractionOutcome {
+    serde_json::from_value(json!({"type": "answer", "values": values})).unwrap()
 }
 
 pub fn by(principal: &str) -> ResolvedBy {
@@ -179,11 +183,10 @@ fn prop_interaction_case_privileged_only_requests_leave_out_the_cli() {
 #[test]
 fn prop_interaction_case_forms_are_answered_in_the_agents_fields() {
     let mut b = broker();
-    let request = requested(&b.input(ask(1, 1, 1, form())));
-    let outcome = |values| serde_json::from_value(json!({"type": "answer", "values": values}));
-    let answer: InteractionOutcome = outcome(json!({"question_0": "green"})).unwrap();
-    let answered = b.input(respond("test_harness", &request, answer.clone(), None));
-    let content = AskAnswer::Outcome(outcome(json!({"question_0_custom": "green"})).unwrap());
+    let request = requested(&b.input(ask(1, 1, 1, form(None))));
+    let green = answer(json!({"question_0": "green"}));
+    let answered = b.input(respond("test_harness", &request, green.clone(), None));
+    let content = AskAnswer::Outcome(answer(json!({"question_0_custom": "green"})));
     let to_agent = DriverCommand::Answer {
         ask: AskId(1),
         answer: content,
@@ -192,16 +195,11 @@ fn prop_interaction_case_forms_are_answered_in_the_agents_fields() {
     let Action::Event(EventBody::InteractionResolved(resolved)) = &answered[1] else {
         panic!()
     };
-    assert_eq!(resolved.outcome, Some(answer));
+    assert_eq!(resolved.outcome, Some(green));
 
-    let schema = json!([]);
-    let unsupported = AskRequest::Form(FormAsk {
-        message: "?".into(),
-        schema,
-    });
+    let unsupported = form(Some(json!([])));
     let request = requested(&b.input(ask(2, 1, 1, unsupported)));
-    let empty = outcome(json!({})).unwrap();
-    let refused = b.input(respond("test_harness", &request, empty, None));
+    let refused = b.input(respond("test_harness", &request, answer(json!({})), None));
     assert_eq!(reply(&refused), Err(AnswerError::Outcome.into()));
     let skip = respond(
         "test_harness",
@@ -220,7 +218,7 @@ fn prop_interaction_case_requests_end_with_their_turn_agent_or_host() {
     use ResolutionReason::{AdapterExited, HostRestarted, TurnCancelled, TurnEnded};
     let mut b = broker();
     let first = requested(&b.input(ask(1, 1, 1, approval())));
-    b.input(ask(2, 1, 1, form()));
+    b.input(ask(2, 1, 1, form(None)));
     let withdrawn = kinds(&b.input(Input::Withdrawn(AskId(1))));
     assert_eq!(withdrawn, ["answer 1 cancelled", "cancelled withdrawn"]);
     let interrupted = kinds(&b.input(Input::CancelAsks(TurnId::from_uuid(1))));

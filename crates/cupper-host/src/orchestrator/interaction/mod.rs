@@ -20,6 +20,8 @@
 pub mod question;
 
 #[cfg(test)]
+mod props;
+#[cfg(test)]
 mod tests;
 
 use std::collections::HashMap;
