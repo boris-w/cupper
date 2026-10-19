@@ -20,4 +20,10 @@ export default defineConfig(
   js.configs.recommended,
   tseslint.configs.strict,
   tseslint.configs.stylistic,
+  // The host-client runs in the renderer as well (design 5.7.6); only its tests use Node.
+  {
+    files: ["packages/host-client/src/**/*.ts"],
+    ignores: ["**/*.test.ts", "packages/host-client/src/testing.ts"],
+    rules: { "no-restricted-imports": ["error", { patterns: ["node:*", "electron"] }] },
+  },
 );
