@@ -5,6 +5,7 @@
 //! what other languages generate from.
 
 pub mod annotations;
+pub mod canonical;
 pub mod coalesce;
 pub mod envelope;
 pub mod error;
