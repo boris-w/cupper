@@ -244,7 +244,13 @@ impl AutonomousJudge {
                 }
             }
             DriverEvent::UpstreamRetry { .. } => self.activity(now, out),
-            DriverEvent::AdapterExited { .. } => self.thread_active = None,
+            DriverEvent::AdapterExited { .. } => {
+                // The thread's state is unknown again: the 10 s start over.
+                self.thread_active = None;
+                if self.phase == Phase::Autonomous {
+                    out.push(self.arm(JudgeTimer::Silence, now));
+                }
+            }
             _ => {}
         }
     }

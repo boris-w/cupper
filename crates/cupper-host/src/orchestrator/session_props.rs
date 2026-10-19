@@ -1,0 +1,702 @@
+//! Property tests of the session's cores together (design 5.9.8), on
+//! virtual time. [`Session`] wires the turn machine, the autonomous judge
+//! and the coalescer the way the session's actor does (T043 takes it as its
+//! reference); a stand-in for the broker counts requests and resolves them
+//! at a turn's Settle. A [`World`] models the agent and the actor's ports,
+//! answers the cores' actions, and checks the log as it is written.
+
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::mem;
+use std::os::unix::process::ExitStatusExt;
+use std::process::ExitStatus;
+use std::sync::Arc;
+use std::time::Duration;
+
+use cupper_protocol::domain::Cost;
+use cupper_protocol::event::EventBody;
+use cupper_protocol::ids::{AdapterInstanceId, ItemId, TurnId};
+use cupper_protocol::item::{Item, ItemStatus};
+use cupper_protocol::session::{SnapshotPhase, StopReason, TurnOrigin, TurnStatus, UsageUpdated};
+use proptest::prelude::*;
+
+use super::autonomous::{self, AutonomousJudge, JudgeTimer};
+use super::coalescer::{self, Coalescer, FlushTimer};
+use super::testkit::{agent_error, attached, send, snapshot};
+use super::turn::{self, SendMode, TurnMachine, TurnSignal, TurnTimer};
+use crate::clock::{IdGen, ManualClock, MonoTime, Now};
+use crate::driver::api::{
+    DriverCommand, DriverEvent, NormUpdate, PromptTag, RunState, ToolOutput, ToolStatus,
+};
+use crate::durations::Durations;
+use crate::pure::{Core, CoreDriver, Step, TimerRequest};
+
+/// The three cores as one, wired as the session's actor wires them.
+struct Session {
+    machine: TurnMachine,
+    judge: AutonomousJudge,
+    coalescer: Coalescer,
+    /// The broker's pending requests.
+    asks: usize,
+}
+
+#[derive(Debug, Clone)]
+enum In {
+    Machine(turn::Input),
+    Agent(DriverEvent),
+    Ask,
+    Resolve,
+    Expired(Key),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum Key {
+    Turn(TurnTimer),
+    Judge(JudgeTimer),
+    Flush(FlushTimer),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum Out {
+    /// Written to the session stream.
+    Event(EventBody),
+    /// The turn machine's other actions.
+    Machine(turn::Action),
+    Timer(TimerRequest<Key>),
+}
+
+fn timer<K>(request: TimerRequest<K>, key: impl Fn(K) -> Key) -> Out {
+    Out::Timer(match request {
+        TimerRequest::Set { key: k, at } => TimerRequest::Set { key: key(k), at },
+        TimerRequest::Cancel(k) => TimerRequest::Cancel(key(k)),
+    })
+}
+
+impl Session {
+    /// A turn's signals go to the coalescer at once, and to the judge after
+    /// the machine's step; the judge's actions go back to the machine.
+    fn machine(&mut self, input: turn::Input, now: Now, out: &mut Vec<Out>) {
+        let mut judge = Vec::new();
+        for action in self.machine.step(input, now) {
+            let signal = TurnSignal::of(&action);
+            match action {
+                turn::Action::Event(body) => out.push(Out::Event(body)),
+                turn::Action::Timer(request) => out.push(timer(request, Key::Turn)),
+                // The coalescer writes `turn.completed`.
+                turn::Action::Complete(_) => {}
+                action => out.push(Out::Machine(action)),
+            }
+            if let Some(signal) = signal {
+                self.coalesce(coalescer::Input::Turn(signal.clone()), now, out);
+                if let TurnSignal::Settled { .. } = signal {
+                    judge.extend(
+                        (0..mem::take(&mut self.asks)).map(|_| autonomous::Input::Resolved),
+                    );
+                }
+                judge.push(autonomous::Input::Turn(signal));
+            }
+        }
+        for input in judge {
+            self.judge(input, now, out);
+        }
+    }
+
+    fn judge(&mut self, input: autonomous::Input, now: Now, out: &mut Vec<Out>) {
+        let mut machine = Vec::new();
+        for action in self.judge.step(input, now) {
+            match (action.turn_input(), action) {
+                (Some(input), _) => machine.push(input),
+                (None, autonomous::Action::Timer(request)) => out.push(timer(request, Key::Judge)),
+                (None, _) => {}
+            }
+        }
+        for input in machine {
+            self.machine(input, now, out);
+        }
+    }
+
+    fn coalesce(&mut self, input: coalescer::Input, now: Now, out: &mut Vec<Out>) {
+        for action in self.coalescer.step(input, now) {
+            out.push(match action {
+                coalescer::Action::Event(body) => Out::Event(body),
+                coalescer::Action::Timer(request) => timer(request, Key::Flush),
+            });
+        }
+    }
+}
+
+impl Core for Session {
+    type Input = In;
+    type Action = Out;
+    type TimerKey = Key;
+
+    fn step(&mut self, input: In, now: Now) -> Vec<Out> {
+        let mut out = Vec::new();
+        match input {
+            In::Machine(input) => self.machine(input, now, &mut out),
+            // The judge first, so that a turn is open for the coalescer.
+            In::Agent(event) => {
+                self.judge(autonomous::Input::Driver(event.clone()), now, &mut out);
+                self.machine(turn::Input::Driver(event.clone()), now, &mut out);
+                if let DriverEvent::Update(update) = event {
+                    self.coalesce(coalescer::Input::Update(update), now, &mut out);
+                }
+            }
+            In::Ask => {
+                self.asks += 1;
+                self.judge(autonomous::Input::Asked, now, &mut out);
+                self.coalesce(coalescer::Input::Interject, now, &mut out);
+            }
+            In::Resolve if self.asks > 0 => {
+                self.asks -= 1;
+                self.judge(autonomous::Input::Resolved, now, &mut out);
+            }
+            In::Resolve => {}
+            In::Expired(Key::Turn(key)) => self.machine(turn::Input::Expired(key), now, &mut out),
+            In::Expired(Key::Judge(key)) => {
+                self.judge(autonomous::Input::Expired(key), now, &mut out)
+            }
+            In::Expired(Key::Flush(key)) => {
+                self.coalesce(coalescer::Input::Expired(key), now, &mut out)
+            }
+        }
+        out
+    }
+
+    fn timer_request(action: &Out) -> Option<TimerRequest<Key>> {
+        match action {
+            Out::Timer(request) => Some(request.clone()),
+            _ => None,
+        }
+    }
+
+    fn timer_expired(key: Key) -> In {
+        In::Expired(key)
+    }
+}
+
+#[derive(Debug, Clone)]
+enum Op {
+    Send,
+    Interrupt,
+    /// Reply to the pending attach, successfully when set.
+    Attach(bool),
+    /// Finish the n-th snapshot asked for.
+    Snapshot(u8),
+    /// Return the n-th running prompt, failed unless set.
+    Answer(u8, bool),
+    /// Agent output: a message fragment, a thought, a tool call starting,
+    /// output or the end of the n-th unfinished tool call.
+    Text(u8),
+    Thought,
+    ToolStart,
+    Output(u8),
+    Done(u8),
+    /// A `usage_update` with `cost`.
+    Cost,
+    /// The thread's state, active when set.
+    Thread(bool),
+    Ask,
+    Resolve,
+    Exit,
+    Advance(u64),
+}
+
+fn ops() -> impl Strategy<Value = Vec<Op>> {
+    let op = prop_oneof![
+        3 => Just(Op::Send),
+        2 => Just(Op::Interrupt),
+        3 => any::<bool>().prop_map(Op::Attach),
+        3 => any::<u8>().prop_map(Op::Snapshot),
+        3 => (any::<u8>(), prop::bool::weighted(0.8)).prop_map(|(n, ok)| Op::Answer(n, ok)),
+        3 => any::<u8>().prop_map(Op::Text),
+        1 => Just(Op::Thought),
+        2 => Just(Op::ToolStart),
+        3 => any::<u8>().prop_map(Op::Output),
+        2 => any::<u8>().prop_map(Op::Done),
+        1 => Just(Op::Cost),
+        2 => any::<bool>().prop_map(Op::Thread),
+        1 => Just(Op::Ask),
+        1 => Just(Op::Resolve),
+        1 => Just(Op::Exit),
+        4 => prop_oneof![0..100_u64, 5_000..12_000_u64, 25_000..35_000_u64].prop_map(Op::Advance),
+    ];
+    prop::collection::vec(op, 0..100)
+}
+
+/// Whose rules a run asserts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Prop {
+    /// PROP-autonomous-dequeue-guard.
+    Guard,
+    /// PROP-turn-snapshot-immutable.
+    Immutable,
+}
+
+struct World {
+    prop: Prop,
+    d: CoreDriver<Session>,
+    // The agent and the ports.
+    instance: u128,
+    attaching: bool,
+    prompts: Vec<PromptTag>,
+    snapshots: Vec<(TurnId, SnapshotPhase)>,
+    tools: Vec<String>,
+    finished: HashSet<String>,
+    // What the judge should know.
+    running: BTreeSet<String>,
+    thread_active: Option<bool>,
+    asks: usize,
+    // The log so far.
+    current: Option<(TurnId, TurnOrigin, MonoTime)>,
+    settled: HashSet<TurnId>,
+    completed: HashSet<TurnId>,
+    /// By item: its turn, whether it ended, whether it is a tool call.
+    items: HashMap<ItemId, (TurnId, bool, bool)>,
+    abandoned: HashSet<ItemId>,
+    late: HashSet<(ItemId, TurnId)>,
+    queue: (usize, bool),
+    // The dequeue guard.
+    advancing: bool,
+    /// The agent's last output or activity, and the judge's last reason to
+    /// start its 10 s over.
+    quiet_since: MonoTime,
+    poke: MonoTime,
+    /// The end of an autonomous turn ended on silence, until a turn the user
+    /// starts or another end.
+    guard: Option<MonoTime>,
+    /// Output came while the turn was ending.
+    after_prompt: bool,
+}
+
+impl World {
+    fn new(prop: Prop) -> Self {
+        let clock = ManualClock::new();
+        let ids = Arc::new(IdGen::seeded(Arc::new(clock.clone()), 1));
+        let durations = Durations::default();
+        let session = Session {
+            machine: TurnMachine::new(Arc::clone(&ids), &durations),
+            judge: AutonomousJudge::new(&durations),
+            coalescer: Coalescer::new(ids, &durations, false),
+            asks: 0,
+        };
+        Self {
+            prop,
+            d: CoreDriver::with_clock(session, clock),
+            instance: 1,
+            attaching: false,
+            prompts: Vec::new(),
+            snapshots: Vec::new(),
+            tools: Vec::new(),
+            finished: HashSet::new(),
+            running: BTreeSet::new(),
+            thread_active: None,
+            asks: 0,
+            current: None,
+            settled: HashSet::new(),
+            completed: HashSet::new(),
+            items: HashMap::new(),
+            abandoned: HashSet::new(),
+            late: HashSet::new(),
+            queue: (0, false),
+            advancing: false,
+            quiet_since: MonoTime::ZERO,
+            poke: MonoTime::ZERO,
+            guard: None,
+            after_prompt: false,
+        }
+    }
+
+    fn must(&self, prop: Prop, ok: bool, what: &str) {
+        assert!(self.prop != prop || ok, "{prop:?}: {what}");
+    }
+
+    /// The n-th tool call that has not finished.
+    fn unfinished(&self, n: u8) -> Option<String> {
+        let open: Vec<&String> = self
+            .tools
+            .iter()
+            .filter(|t| !self.finished.contains(*t))
+            .collect();
+        open.get(usize::from(n) % open.len().max(1))
+            .map(|t| (*t).clone())
+    }
+
+    fn input(&mut self, op: &Op) -> Option<In> {
+        let update = |update| Some(In::Agent(DriverEvent::Update(update)));
+        let tool = |tool_call_id, output, status: Option<ToolStatus>| {
+            let exit_code = status.map(|_| 0);
+            let (title, diffs) = (None, None);
+            update(NormUpdate::ToolUpdate {
+                tool_call_id,
+                title,
+                status,
+                output,
+                exit_code,
+                diffs,
+            })
+        };
+        Some(match op.clone() {
+            Op::Send => In::Machine(send("m", SendMode::Queue)),
+            Op::Interrupt => In::Machine(turn::Input::Interrupt {
+                expected_turn: None,
+            }),
+            Op::Attach(_) if !self.attaching => return None,
+            Op::Attach(ok) => {
+                self.attaching = false;
+                In::Machine(if ok {
+                    attached(self.instance)
+                } else {
+                    turn::Input::Attached(Err(agent_error()))
+                })
+            }
+            Op::Snapshot(_) if self.snapshots.is_empty() => return None,
+            Op::Snapshot(n) => {
+                let (turn, phase) = self.snapshots.remove(usize::from(n) % self.snapshots.len());
+                In::Machine(snapshot(&turn, phase))
+            }
+            Op::Answer(_, _) if self.prompts.is_empty() => return None,
+            Op::Answer(n, ok) => {
+                let tag = self.prompts.remove(usize::from(n) % self.prompts.len());
+                let error = agent_error();
+                In::Agent(match ok {
+                    true => DriverEvent::PromptDone {
+                        tag,
+                        stop_reason: StopReason::EndTurn,
+                        usage: None,
+                    },
+                    false => DriverEvent::PromptFailed { tag, error },
+                })
+            }
+            Op::Text(m) => {
+                let (message_id, text) = (Some(format!("m{}", m % 2)), "t".into());
+                return update(NormUpdate::AgentText { message_id, text });
+            }
+            Op::Thought => return update(NormUpdate::Thought { text: "…".into() }),
+            Op::ToolStart => {
+                self.tools.push(format!("t{}", self.tools.len()));
+                self.running.extend(self.tools.last().cloned());
+                return update(NormUpdate::ToolStart {
+                    tool_call_id: self.tools[self.tools.len() - 1].clone(),
+                    tool_kind: cupper_protocol::item::ToolKind::Execute,
+                    title: "Run".into(),
+                    paths: Vec::new(),
+                    command: Some("make".into()),
+                });
+            }
+            Op::Output(n) => {
+                let id = self.unfinished(n)?;
+                self.running.insert(id.clone());
+                return tool(id, Some(ToolOutput::Append("o".into())), None);
+            }
+            Op::Done(n) => {
+                let id = self.unfinished(n)?;
+                self.running.remove(&id);
+                self.finished.insert(id.clone());
+                return tool(id, None, Some(ToolStatus::Completed));
+            }
+            Op::Cost => {
+                let cost = Some(Cost {
+                    amount: 0.1,
+                    currency: "USD".into(),
+                });
+                In::Agent(DriverEvent::Usage(UsageUpdated {
+                    context_used: 1,
+                    context_size: 2,
+                    cost,
+                }))
+            }
+            Op::Thread(active) => {
+                self.thread_active = Some(active);
+                let (waiting_on_approval, waiting_on_user_input, system_error) =
+                    (false, false, false);
+                let state = RunState {
+                    active,
+                    waiting_on_approval,
+                    waiting_on_user_input,
+                    system_error,
+                };
+                In::Agent(DriverEvent::RunState(state))
+            }
+            Op::Ask => {
+                self.asks += 1;
+                In::Ask
+            }
+            Op::Resolve => {
+                self.asks = self.asks.saturating_sub(1);
+                In::Resolve
+            }
+            Op::Exit => {
+                self.prompts.clear();
+                self.thread_active = None;
+                self.instance += 1;
+                let instance = AdapterInstanceId::from_uuid(self.instance - 1);
+                In::Agent(DriverEvent::AdapterExited {
+                    instance,
+                    status: ExitStatus::from_raw(9),
+                })
+            }
+            Op::Advance(_) => return None,
+        })
+    }
+
+    fn apply(&mut self, op: Op) {
+        let now = self.d.now().mono;
+        let output = matches!(
+            op,
+            Op::Text(_) | Op::Thought | Op::ToolStart | Op::Output(_) | Op::Done(_) | Op::Ask
+        );
+        let ending = self
+            .current
+            .as_ref()
+            .is_some_and(|(t, ..)| self.settled.contains(t));
+        let idle = self.current.is_none();
+        let step = match op {
+            Op::Advance(ms) => Step::Advance(Duration::from_millis(ms)),
+            _ => match self.input(&op) {
+                Some(input) => Step::Input(input),
+                None => return,
+            },
+        };
+        if output || matches!(op, Op::Thread(true)) {
+            self.quiet_since = now;
+        }
+        if output || matches!(op, Op::Thread(true) | Op::Resolve | Op::Exit) {
+            self.poke = now;
+        }
+        self.after_prompt |= output && ending;
+        self.advancing = matches!(op, Op::Advance(_));
+        for (at, out) in self.d.run([step]) {
+            self.observe(at, out);
+        }
+        if output && idle {
+            assert!(
+                self.current.is_some(),
+                "output outside a turn starts one (K9)"
+            );
+        }
+        self.check_liveness();
+    }
+
+    fn observe(&mut self, at: MonoTime, out: Out) {
+        match out {
+            Out::Machine(turn::Action::Driver(DriverCommand::Prompt { tag, .. })) => {
+                self.prompts.push(tag)
+            }
+            Out::Machine(turn::Action::Driver(DriverCommand::Close { .. })) => self.prompts.clear(),
+            Out::Machine(turn::Action::Attach(_)) => self.attaching = true,
+            Out::Machine(turn::Action::Snapshot { turn_id, phase }) => {
+                self.snapshots.push((turn_id, phase))
+            }
+            Out::Machine(turn::Action::Settle { end, .. }) => {
+                let judged = matches!(self.current, Some((_, TurnOrigin::Autonomous, _)))
+                    && end.status == TurnStatus::Completed;
+                let free = self.running.is_empty() && self.asks == 0;
+                self.must(
+                    Prop::Guard,
+                    !judged || free,
+                    "no end while a tool runs or a request waits",
+                );
+                self.settled.insert(end.turn_id);
+                // Abandoned; the broker resolves the turn's requests.
+                self.running.clear();
+                self.asks = 0;
+            }
+            Out::Event(body) => self.event(at, body),
+            Out::Machine(_) | Out::Timer(_) => {}
+        }
+    }
+
+    fn event(&mut self, at: MonoTime, body: EventBody) {
+        use Prop::{Guard, Immutable};
+        let open = |w: &Self, turn: &TurnId| !w.completed.contains(turn);
+        match body {
+            EventBody::TurnStarted(started) => {
+                assert!(self.current.is_none(), "one turn at a time");
+                let origin = started.origin;
+                if origin == TurnOrigin::Queued {
+                    let quiet = self.guard.is_none_or(|end| {
+                        at >= end + Duration::from_secs(30)
+                            && at >= self.quiet_since + Duration::from_secs(30)
+                    });
+                    self.must(
+                        Guard,
+                        quiet,
+                        "after a turn ended on silence, the queue waits for 30 s of quiet",
+                    );
+                    self.must(
+                        Guard,
+                        !self.after_prompt,
+                        "output after a prompt goes to an autonomous turn first",
+                    );
+                }
+                if origin != TurnOrigin::Autonomous {
+                    self.guard = None;
+                }
+                self.after_prompt = false;
+                self.current = Some((started.turn_id, origin, at));
+            }
+            EventBody::TurnCompleted(completed) => {
+                let turn = completed.turn_id;
+                let (current, origin, _) = self.current.take().expect("a running turn completes");
+                assert_eq!(current, turn, "only the running turn completes");
+                let once = self.settled.contains(&turn) && self.completed.insert(turn.clone());
+                self.must(Immutable, once, "a turn settles, then completes once");
+                let open_items = self
+                    .items
+                    .values()
+                    .any(|(t, ended, _)| *t == turn && !ended);
+                self.must(
+                    Immutable,
+                    !open_items,
+                    "every item of a turn ends before turn.completed",
+                );
+                if origin == TurnOrigin::Autonomous {
+                    let silent = self.advancing && completed.status == TurnStatus::Completed;
+                    let quiet = !silent || self.thread_active != Some(true);
+                    self.must(Guard, quiet, "no end on silence while the thread is active");
+                    self.guard = silent.then_some(at);
+                }
+            }
+            EventBody::ItemStarted(started) => {
+                let turn = started.turn_id.expect("items go into a turn");
+                let running = self.current.as_ref().is_some_and(|(t, ..)| *t == turn);
+                self.must(
+                    Immutable,
+                    running && !self.settled.contains(&turn),
+                    "items start in the running turn, before it settles",
+                );
+                if let Item::LateToolOutput(late) = &started.item {
+                    let of = &late.of;
+                    let original = self.abandoned.contains(&of.item_id)
+                        && self.completed.contains(&of.turn_id);
+                    self.must(
+                        Immutable,
+                        original,
+                        "late output refers to a call abandoned in a completed turn",
+                    );
+                    let first = self.late.insert((of.item_id.clone(), turn.clone()));
+                    self.must(Immutable, first, "one late output item per call and turn");
+                }
+                let tool = matches!(started.item, Item::ToolCall(_));
+                self.items.insert(started.item_id, (turn, false, tool));
+            }
+            EventBody::ItemDelta(delta) => self.item_event(&delta.item_id, None),
+            EventBody::ItemUpdated(updated) => self.item_event(&updated.item_id, None),
+            EventBody::ItemCompleted(item) => self.item_event(&item.item_id, Some(item.status)),
+            EventBody::SnapshotRecorded(record) => {
+                self.must(
+                    Immutable,
+                    open(self, &record.turn_id),
+                    "no snapshot after turn.completed",
+                );
+            }
+            EventBody::QueueUpdated(update) => {
+                self.queue = (update.entries.len(), update.paused.is_some())
+            }
+            _ => {}
+        }
+    }
+
+    /// An event of an item: never after the item ended or its turn completed.
+    fn item_event(&mut self, item: &ItemId, end: Option<ItemStatus>) {
+        let (turn, ended, tool) = self.items.get(item).cloned().expect("a started item");
+        let ok = !ended && !self.completed.contains(&turn);
+        self.must(
+            Prop::Immutable,
+            ok,
+            "nothing changes an ended item or a completed turn",
+        );
+        if let Some(status) = end {
+            if tool && status == ItemStatus::Abandoned {
+                self.abandoned.insert(item.clone());
+            }
+            self.items.insert(item.clone(), (turn, true, tool));
+        }
+    }
+
+    /// The judge ends a quiet autonomous turn after 10 s, and lets the queue
+    /// go 30 s after a turn ended on silence.
+    fn check_liveness(&self) {
+        let now = self.d.now().mono;
+        if let Some((_, TurnOrigin::Autonomous, started)) = &self.current {
+            let free =
+                self.running.is_empty() && self.asks == 0 && self.thread_active != Some(true);
+            let due = (*started).max(self.poke) + Duration::from_secs(10);
+            self.must(
+                Prop::Guard,
+                !(free && now >= due),
+                "a quiet autonomous turn ends after 10 s",
+            );
+        }
+        if let (None, Some(end), (1.., false)) = (&self.current, self.guard, self.queue) {
+            let due = end.max(self.quiet_since) + Duration::from_secs(30);
+            self.must(
+                Prop::Guard,
+                now < due,
+                "the queue moves after 30 s of quiet",
+            );
+        }
+    }
+
+    /// Answers everything until the session is idle with an empty queue.
+    fn quiesce(&mut self) {
+        for _ in 0..200 {
+            let done = self.current.is_none() && self.queue.0 == 0 && !self.attaching;
+            if done && self.prompts.is_empty() && self.snapshots.is_empty() {
+                break;
+            }
+            self.apply(Op::Attach(true));
+            while !self.prompts.is_empty() {
+                self.apply(Op::Answer(0, true));
+            }
+            while !self.snapshots.is_empty() {
+                self.apply(Op::Snapshot(0));
+            }
+            while self.unfinished(0).is_some() {
+                self.apply(Op::Done(0));
+            }
+            while self.asks > 0 {
+                self.apply(Op::Resolve);
+            }
+            if self.thread_active == Some(true) {
+                self.apply(Op::Thread(false));
+            }
+            if self.current.is_none() {
+                self.d
+                    .input(In::Machine(turn::Input::QueueResume))
+                    .into_iter()
+                    .for_each(|out| self.observe(self.d.now().mono, out));
+            }
+            self.apply(Op::Advance(45_000));
+        }
+        assert!(
+            self.current.is_none() && self.queue.0 == 0,
+            "the session settles"
+        );
+        assert_eq!(
+            self.completed.len(),
+            self.settled.len(),
+            "every turn completes"
+        );
+    }
+}
+
+fn run(prop: Prop, ops: Vec<Op>) {
+    let mut world = World::new(prop);
+    for op in ops {
+        world.apply(op);
+    }
+    world.quiesce();
+}
+
+proptest! {
+    #[test]
+    fn prop_autonomous_dequeue_guard_queue_waits_while_the_agent_works(ops in ops()) {
+        run(Prop::Guard, ops);
+    }
+
+    #[test]
+    fn prop_turn_snapshot_immutable_no_event_after_turn_completed(ops in ops()) {
+        run(Prop::Immutable, ops);
+    }
+}

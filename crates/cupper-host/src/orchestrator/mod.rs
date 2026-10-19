@@ -11,5 +11,7 @@ pub mod interaction;
 mod props;
 pub mod queue;
 #[cfg(test)]
+mod session_props;
+#[cfg(test)]
 mod testkit;
 pub mod turn;
