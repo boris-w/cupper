@@ -10,19 +10,27 @@
 )]
 #![deny(clippy::undocumented_unsafe_blocks)]
 
+mod codesign;
 mod env;
 mod group;
+mod peer;
 mod proc;
 mod spawn;
 mod system;
 #[cfg(test)]
 mod testutil;
 
+pub use codesign::{Cdhash, CodeStatus, Requirement, file_cdhash, own_cdhash};
 pub use env::Env;
 pub use group::{ProcessGroup, Signal};
-pub use proc::{ProcessInfo, StartTime, descendants, parent_chain, process_info};
+pub use peer::{
+    AuditToken, Received, Refusal, RefusalKind, peer_pid, peer_token, peer_uid, recv_closing_fds,
+};
+pub use proc::{
+    ProcessInfo, StartTime, UniqueIds, descendants, parent_chain, process_info, unique_ids,
+};
 pub use spawn::{Child, Command, Stdio, spawn};
-pub use system::{boot_session_uuid, current_uid, user_temp_dir};
+pub use system::{boot_session_uuid, current_uid, redirect_stdio_to_null, user_temp_dir};
 
 /// Errors from system interfaces.
 #[derive(Debug, thiserror::Error)]
@@ -33,6 +41,9 @@ pub enum Error {
     /// A system interface returned data in a form it never should.
     #[error("unexpected result from {0}")]
     Unexpected(&'static str),
+    /// A Security framework call returned this `OSStatus`.
+    #[error("{call} returned OSStatus {status}")]
+    Security { call: &'static str, status: i32 },
     /// A system call failed.
     #[error("{call} failed")]
     Os {

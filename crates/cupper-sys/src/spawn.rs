@@ -439,7 +439,7 @@ mod tests {
 
     use super::*;
     use crate::process_info;
-    use crate::testutil::{Owned, cat, inheritable_fd, open_fds, sh};
+    use crate::testutil::{Owned, cat, fd_lock, inheritable_fd, open_fds, sh};
 
     /// Sends a line through `cat` and reads it back: once it returns, `cat`
     /// has finished starting and its fd table is final.
@@ -472,6 +472,7 @@ mod tests {
     fn unit_sys_spawn_mutation_without_cloexec_default_leaks_fds() {
         // The same check as above, against a spawn without
         // POSIX_SPAWN_CLOEXEC_DEFAULT: it must see the leak, or it proves nothing.
+        let _fds = fd_lock();
         let leak = inheritable_fd();
         let mut cmd = cat();
         cmd.without_cloexec_default = true;
