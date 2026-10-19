@@ -1,10 +1,10 @@
 import { EventEmitter } from "node:events";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { Session, WebContents } from "electron";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { Flavor } from "../shared/flavor";
 import {
@@ -176,9 +176,10 @@ describe("UNIT-main-hardening", () => {
   describe("app protocol", () => {
     // <dir>/renderer is served; <dir>/secret.txt and <dir>/renderer-x/secret.txt
     // sit right next to it.
+    let dir = "";
     let root = "";
     beforeAll(async () => {
-      const dir = await mkdtemp(join(tmpdir(), "cupper-app-protocol-"));
+      dir = await mkdtemp(join(tmpdir(), "cupper-app-protocol-"));
       root = join(dir, "renderer");
       await mkdir(join(root, "assets"), { recursive: true });
       await mkdir(join(dir, "renderer-x"));
@@ -186,6 +187,11 @@ describe("UNIT-main-hardening", () => {
       await writeFile(join(root, "assets", "app.js"), "export {};");
       await writeFile(join(dir, "secret.txt"), "secret");
       await writeFile(join(dir, "renderer-x", "secret.txt"), "secret");
+    });
+    afterAll(async () => {
+      if (dir) {
+        await rm(dir, { recursive: true, force: true });
+      }
     });
 
     function serve() {
