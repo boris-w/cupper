@@ -169,6 +169,10 @@
 | T173 | MAN 证据的格式先定为 `tests/ids.toml` 里的 `[[evidence]]`（id、date、record、versions），可以在此基础上改 | T002 |
 | 改用 cargo-nextest 的任务 | 替换 `crates/xtask/src/ci/ctx.rs` 的 `parse_libtest`，并考虑在摘要里记"skip"；摘要格式不变时 trace-ids 不用改（它的 JUnit 读取是按格式手写的样例测试的，接上时用真实报告再核对一次） | T002 |
 | T053、T110 | "其余录制"的 GOLD-A 编号，由各自在 `tests/ids.toml` 里追加 | T002 |
+| T087 | 接入点（详见 `docs/tasks/T071-host-client-conn/notes.md`"给 T087 的接入点"）：所有 `stream/*` 通知按顺序经 `onNotification` 到达；`stream/subscribe` 必须用 `client.call(method, params, done)`，`done` 同步执行，排在同一数据块里随后的通知之前（用 `request()` 的 Promise 的话，后面的事件已经分发出去了）；`onState` 的 `reconnecting`、`failed`、`closed` 表示"停下并保留游标"，`ready` 带新的握手结果（含 `data_epoch`），这时重新订阅。三种计数放在订阅层 | T071 |
+| T076 | 对 windowBridge 运行 `hostPortContract`，setup 要提供 `shell`、`host`（一个 `MockHost`）和 `settle`；合同里的请求用例用 `host/status`（scope `read`），不依赖 `ping` 在不在白名单里；握手结果来自 host-client 的 `handshake()`，要去掉 `host_proof`；状态和数据走同一条有序通道 | T071 |
+| T08x 浏览器截图测试 | `MockHost` 的夹具由构造函数传入：用 Vite 导入 `protocol/fixtures/methods.json` 再传进去 | T071 |
+| T080、T145 | `HostClient` 还没有 `notify`（例如 `client/presence`）和 `sendBlob`，需要时加到 `client.ts` | T071 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

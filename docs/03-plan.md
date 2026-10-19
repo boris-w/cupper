@@ -1581,7 +1581,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T069 宿主集成测试 IV：并发、故障点、崩溃一致性与外发
 - [x] T070 shell-api（与协议无关的部分）与 i18n
 - [ ] T087 host-client I-b：订阅与同步
-- [ ] T071 host-client I：连接与续传，ShellAPI 的协议部分
+- [x] T071 host-client I：连接与续传，ShellAPI 的协议部分
 - [ ] T072 host-client II：视图 reducer 与交叉验证
 - [ ] T073 cupper-desktop-native
 - [x] T074 桌面主进程 I：应用骨架、构建与加固基线
