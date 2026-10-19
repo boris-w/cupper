@@ -7,6 +7,8 @@
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
+use uuid::Uuid;
+
 use crate::exit::HostExit;
 
 pub mod payload;
@@ -104,6 +106,15 @@ impl CommandError {
     }
 }
 
+/// A fresh random UUIDv4 for the host ID, which is `h_` and its 32 hex
+/// digits (design 5.4.4). The host chooses it on its first run and keeps it.
+/// It carries no time, so it does not come from `IdGen`.
+pub fn new_host_uuid() -> Uuid {
+    let mut bytes = [0; 16];
+    getrandom::fill(&mut bytes).expect("the operating system's random source is available");
+    uuid::Builder::from_random_bytes(bytes).into_uuid()
+}
+
 /// One line of JSON: `{"debug_assertions", "features", "name", "version"}`.
 /// `features` lists the enabled entries of [`FEATURES`].
 pub fn build_info() -> String {
@@ -176,6 +187,14 @@ mod tests {
             assert!(matches!(err, CommandError::Unknown(_)), "{args:?}: {err}");
             assert_eq!(err.exit(), HostExit::Error);
         }
+    }
+
+    #[test]
+    fn host_uuid_is_a_random_v4() {
+        let id = new_host_uuid();
+        assert_eq!(id.get_version(), Some(uuid::Version::Random));
+        assert_eq!(id.get_variant(), uuid::Variant::RFC4122);
+        assert_ne!(id, new_host_uuid());
     }
 
     #[test]
