@@ -247,8 +247,8 @@ mod tests {
     use std::time::Duration;
 
     use agent_client_protocol::schema::v1::{
-        CloseSessionRequest, PermissionOptionKind, PromptRequest, RequestPermissionOutcome,
-        TextContent,
+        CancelNotification, CloseSessionRequest, PermissionOptionKind, PromptRequest,
+        RequestPermissionOutcome, TextContent,
     };
     use futures::future::{Either, select};
     use serde_json::{Value, json};
@@ -410,13 +410,15 @@ mod tests {
         let sent = agent.recv().await.unwrap();
         assert_eq!(sent["method"], "session/prompt");
 
-        // The prompt never comes back: stop waiting, then close the session (K1).
+        // The prompt never comes back: stop waiting, interrupt, then close the session (K1).
         drop(reply_rx);
+        conn.notify(CancelNotification::new("s-1")).unwrap();
         let (closed_tx, closed_rx) = oneshot::channel();
         conn.request(CloseSessionRequest::new("s-1"), move |reply| {
             drop(closed_tx.send(reply))
         })
         .unwrap();
+        assert_eq!(agent.recv().await.unwrap()["method"], "session/cancel");
         let next = agent.recv().await.unwrap();
         assert_eq!(next["method"], "session/close", "{next}");
 
