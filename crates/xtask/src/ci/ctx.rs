@@ -127,7 +127,7 @@ impl<'a> JobCtx<'a> {
         let log_path = self.step_file(step, "log");
         let mut log = File::create(&log_path).context("create the step log")?;
         writeln!(log, "$ {cmd:?}")?;
-        eprint!("  {step:<12}");
+        eprint!("  {step:<12} ");
         let watch = Stopwatch::start();
         let status = cmd
             .stdout(log.try_clone()?)
