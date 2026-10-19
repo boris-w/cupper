@@ -15,6 +15,9 @@ dev-auth = []
 test-harness = []
 
 [dependencies]
+# The ACP SDK is pinned to the exact release T003 validated (ADR-02, design 5.6.10).
+agent-client-protocol = "=3.3.0"
+futures = { version = "0.3.34", default-features = false, features = ["std"] }
 getrandom = "0.4.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json.workspace = true
