@@ -1,0 +1,7 @@
+{
+  "checking": "正在检查更新",
+  "downloading": "正在下载更新",
+  "ready": "重启以更新",
+  "installing": "正在安装更新",
+  "error": "更新失败"
+}
