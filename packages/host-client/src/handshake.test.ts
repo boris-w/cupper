@@ -77,31 +77,17 @@ describe("UNIT-hc-conn", () => {
     expect(host.requests[0]?.params).not.toHaveProperty("role");
   });
 
+  const refusing = (code: string, reason?: string) => (host: MockHost) =>
+    host.handle("initialize", () => hostError(code, reason));
   const refusals: [string, (host: MockHost) => void, HandshakeFailure][] = [
     ["no common version", (h) => (h.hello.protocol = { min: 2, max: 3 }), "version_unsupported"],
-    [
-      "the host's version_unsupported",
-      (h) => h.handle("initialize", () => hostError("version_unsupported")),
-      "version_unsupported",
-    ],
-    [
-      "unauthenticated",
-      (h) => h.handle("initialize", () => hostError("unauthenticated", "bad_key")),
-      "unauthenticated",
-    ],
-    ["forbidden", (h) => h.handle("initialize", () => hostError("forbidden", "role")), "forbidden"],
-    [
-      "shutting down",
-      (h) => h.handle("initialize", () => hostError("shutting_down", "idle")),
-      "closed",
-    ],
-    ["another error", (h) => h.handle("initialize", () => hostError("internal")), "protocol_error"],
+    ["the host's version_unsupported", refusing("version_unsupported"), "version_unsupported"],
+    ["unauthenticated", refusing("unauthenticated", "bad_key"), "unauthenticated"],
+    ["forbidden", refusing("forbidden", "role"), "forbidden"],
+    ["shutting down", refusing("shutting_down", "idle"), "closed"],
+    ["another error", refusing("internal"), "protocol_error"],
     ["another version chosen", (h) => (h.init.protocol = 2), "protocol_error"],
-    [
-      "a malformed result",
-      (h) => h.handle("initialize", () => ({ result: { protocol: 1 } })),
-      "protocol_error",
-    ],
+    ["a malformed result", (h) => h.handle("initialize", () => ({ result: {} })), "protocol_error"],
     ["a wrong host proof", (h) => (h.init.host_proof = "e".repeat(64)), "host_unverified"],
     ["no host proof", (h) => delete h.init.host_proof, "host_unverified"],
   ];
@@ -125,29 +111,17 @@ describe("UNIT-hc-conn", () => {
     });
   });
 
-  const violations: [string, HostPort, HandshakeFailure][] = [
-    [
-      "a first message other than hello",
-      scripted({ jsonrpc: "2.0", id: 1, result: {} }),
-      "protocol_error",
-    ],
-    ["a malformed hello", scripted({ ...hello, params: { nonce: 1 } }), "protocol_error"],
-    ["a broken frame", scripted(new Uint8Array([0, 0, 0, 0])), "protocol_error"],
-    [
-      "a frame that is not JSON",
-      scripted(encodeFrame(1, new Uint8Array([0x7b]))),
-      "protocol_error",
-    ],
-    ["a notification instead of the result", scripted(hello, hello), "protocol_error"],
-    [
-      "the result of another request",
-      scripted(hello, { jsonrpc: "2.0", id: 2, result: {} }),
-      "protocol_error",
-    ],
+  const violations: [string, HostPort][] = [
+    ["a first message other than hello", scripted({ jsonrpc: "2.0", id: 1, result: {} })],
+    ["a malformed hello", scripted({ ...hello, params: { nonce: 1 } })],
+    ["a broken frame", scripted(new Uint8Array([0, 0, 0, 0]))],
+    ["a frame that is not JSON", scripted(encodeFrame(1, new Uint8Array([0x7b])))],
+    ["a notification instead of the result", scripted(hello, hello)],
+    ["the result of another request", scripted(hello, { jsonrpc: "2.0", id: 2, result: {} })],
   ];
 
-  test.each(violations)("handshake fails: %s", async (_, port, reason) => {
-    await expect(handshake(port, options())).rejects.toMatchObject({ reason });
+  test.each(violations)("handshake fails: %s", async (_, port) => {
+    await expect(handshake(port, options())).rejects.toMatchObject({ reason: "protocol_error" });
   });
 
   test("handshake fails: given up while waiting", async () => {
