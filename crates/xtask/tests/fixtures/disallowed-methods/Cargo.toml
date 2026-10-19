@@ -1,0 +1,13 @@
+# Negative sample for the workspace `clippy.toml`. Not a member of the cupper workspace:
+# only `crates/xtask/tests/clippy_disallowed_methods.rs` compiles it.
+[package]
+name = "disallowed-methods-fixture"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+tokio = { version = "1.53", default-features = false, features = ["time"] }
+uuid = { version = "1.18", default-features = false, features = ["std", "v7"] }
