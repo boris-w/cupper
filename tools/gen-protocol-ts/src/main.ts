@@ -22,7 +22,9 @@ const scratch = await mkdtemp(join(tmpdir(), "gen-protocol-ts-"));
 try {
   await createClient({
     input: { path: toOpenApi(schema) },
-    output: { path: scratch, entryFile: false, header: HEADER },
+    // No tsconfig lookup: hey-api would search upwards from its own install
+    // directory, and module specifiers stay extensionless either way.
+    output: { path: scratch, entryFile: false, header: HEADER, tsConfigPath: null },
     logs: { level: "warn", file: false },
     plugins: ["@hey-api/typescript", "zod"],
   });

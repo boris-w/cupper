@@ -4,12 +4,16 @@
  * - {@link toOpenApi}: hey-api ignores keywords next to a `$ref`, which is how
  *   schemars writes a member of an internally tagged union
  *   (`{$ref: ToolCall, properties: {kind: {const: "tool_call"}}}`), so the tag
- *   would be lost; such a schema becomes `allOf: [{$ref}, {the rest}]`.
+ *   would be lost; such a schema becomes `allOf: [{$ref}, {the rest}]`. It
+ *   also drops a property whose schema is `true` (any value), which becomes `{}`.
  * - Open enums: hey-api writes `"a" | "b" | string`, which TS folds into
  *   `string`; `(string & {})` keeps the known values for completion.
- * - Fallback members of open unions keep the fields this version does not
- *   know: an object gets `.loose()` (`UnknownEvent`); a record such as
- *   `UnknownMember` keeps them already.
+ * - Fallback members of open unions, and objects open to other fields
+ *   (`ErrorData`), keep the fields this version does not know: an object gets
+ *   `.loose()`; a record such as `UnknownMember` keeps them already. Below the event, a fallback takes
+ *   only tags the union does not know, as `open_union!` does in Rust (design
+ *   5.3.11), so a known member with malformed data fails the union instead
+ *   of passing as unknown; the event then degrades as a whole.
  * - `events.gen.ts`: the known event types as literals, and a guard that
  *   narrows an event to them only when its data matches its type.
  *
@@ -62,17 +66,24 @@ function rewrite(value: unknown): unknown {
   if (typeof value !== "object" || value === null) {
     return value;
   }
-  const node = Object.fromEntries(
-    Object.entries(value).map(([key, child]) => [
-      key,
-      key === "$ref" ? String(child).replace(DEFS, "#/components/schemas/") : rewrite(child),
-    ]),
-  );
+  const node = mapValues(value, (child, key) => {
+    if (key === "$ref") {
+      return String(child).replace(DEFS, "#/components/schemas/");
+    }
+    if (key === "properties") {
+      return mapValues(child as object, (property) => (property === true ? {} : rewrite(property)));
+    }
+    return rewrite(child);
+  });
   if (!("$ref" in node) || Object.keys(node).every(annotation)) {
     return node;
   }
   const { $ref, description, ...rest } = node;
   return { ...(description === undefined ? {} : { description }), allOf: [{ $ref }, rest] };
+}
+
+function mapValues(object: object, f: (value: unknown, key: string) => unknown) {
+  return Object.fromEntries(Object.entries(object).map(([key, value]) => [key, f(value, key)]));
 }
 
 /** hey-api's `types.gen.ts` and `zod.gen.ts`, and `events.gen.ts`, by file name. */
@@ -88,12 +99,29 @@ export function postprocess(
     types = replaceOnce(types, union, "$1 | (string & {});");
   }
   let zod = generated.zod;
-  for (const name of fallbacks(defs)) {
+  const unions = openUnions(defs);
+  for (const name of new Set([...unions.map((u) => u.fallback), ...openObjects(defs)])) {
     const object = new RegExp(`^(export const z${name} = z\\.object\\([^]*?^\\}\\));$`, "m");
     const record = `export const z${name} = z.record(z.string(), z.unknown());`;
     if (!zod.includes(record)) {
       zod = replaceOnce(zod, object, "$1.loose();");
     }
+  }
+  for (const { def, tag, known, fallback } of unions) {
+    if (EVENTS.includes(def)) {
+      continue;
+    }
+    const [statement] = new RegExp(`^export const z${def} = [^]*?;$`, "m").exec(zod) ?? [];
+    if (statement === undefined) {
+      throw new Error(`z${def} is not in zod.gen.ts`);
+    }
+    const unknownTag = `(member) => typeof member.${tag} === "string" && !${JSON.stringify(known)}.includes(member.${tag})`;
+    const refined = replaceOnce(
+      statement,
+      new RegExp(`\\bz${fallback}\\b`),
+      `z${fallback}.refine(${unknownTag})`,
+    );
+    zod = zod.replace(statement, refined);
   }
   return { "types.gen.ts": types, "zod.gen.ts": zod, "events.gen.ts": eventsModule(defs) };
 }
@@ -122,29 +150,68 @@ function openEnums(defs: Record<string, Node>): string[] {
     .map(([name]) => name);
 }
 
-/** A union member that carries its tag as a `const`. */
-const tagged = (member: Node) => Object.values(member.properties ?? {}).some((p) => "const" in p);
-
-/** Definitions that stand for an open union's unknown member: the untagged
- * `$ref` member of an `anyOf` whose other members are tagged. */
-function fallbacks(defs: Record<string, Node>): Set<string> {
-  const found = new Set<string>();
+/** Definitions with properties that take other fields too (`additionalProperties`). */
+function openObjects(defs: Record<string, Node>): string[] {
+  const open = (node: Node) => node.properties !== undefined && node.additionalProperties === true;
+  const found = Object.entries(defs).filter(([, def]) => open(def));
+  // Only at the top of a definition, where the line above looks.
+  const nested: Node[] = [];
   const visit = (value: unknown) => {
-    if (typeof value !== "object" || value === null) {
-      return;
-    }
-    const members = (value as Node).anyOf;
-    if (members?.some(tagged)) {
-      for (const member of members) {
-        if (!tagged(member) && member.$ref !== undefined) {
-          found.add(member.$ref.slice(DEFS.length));
-        }
+    if (typeof value === "object" && value !== null) {
+      if (open(value as Node) && !found.some(([, def]) => def === value)) {
+        nested.push(value as Node);
       }
+      Object.values(value).forEach(visit);
     }
-    Object.values(value).forEach(visit);
   };
   visit(defs);
-  return found;
+  if (nested.length > 0) {
+    throw new Error(`objects open to other fields inside a definition: ${JSON.stringify(nested)}`);
+  }
+  return found.map(([name]) => name);
+}
+
+/** The definitions of the event and its body: their fallback takes any type,
+ * and `isKnownEvent` tells a malformed known type apart. */
+const EVENTS = ["Event", "EventBody"];
+
+/** An open union: a definition whose `anyOf` has members tagged by `tag`,
+ * and an untagged `$ref` member for the tags it does not know. */
+interface OpenUnion {
+  def: string;
+  tag: string;
+  known: string[];
+  fallback: string;
+}
+
+function openUnions(defs: Record<string, Node>): OpenUnion[] {
+  const unions = Object.entries(defs).flatMap(([def, node]) => {
+    const members = node.anyOf ?? [];
+    const tags = members.flatMap((member) =>
+      Object.entries(member.properties ?? {}).flatMap(([key, property]) =>
+        typeof property.const === "string" ? [{ key, value: property.const }] : [],
+      ),
+    );
+    const keys = [...new Set(tags.map((t) => t.key))];
+    const fallbacks = members.filter((m) => !keys.some((key) => m.properties?.[key]));
+    if (tags.length === 0 || fallbacks.length === 0) {
+      return [];
+    }
+    const [fallback] = fallbacks.map((m) => m.$ref?.slice(DEFS.length));
+    if (keys.length > 1 || fallbacks.length > 1 || fallback === undefined) {
+      throw new Error(`${def}: an open union has one tag and one fallback member`);
+    }
+    return [{ def, tag: String(keys[0]), known: tags.map((t) => t.value), fallback }];
+  });
+  // Every fallback sits at the top of a definition, where the loop above looks.
+  const text = JSON.stringify(defs);
+  for (const fallback of new Set(unions.map((u) => u.fallback))) {
+    const uses = text.split(`"${DEFS}${fallback}"`).length - 1;
+    if (uses !== unions.filter((u) => u.fallback === fallback).length) {
+      throw new Error(`${fallback} is used outside the top of a definition`);
+    }
+  }
+  return unions;
 }
 
 /** The known event types of `EventBody`, the literal list and the guard. */

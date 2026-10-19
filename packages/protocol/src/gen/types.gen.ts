@@ -2227,6 +2227,7 @@ export type PlanSource = "entries" | "markdown" | (string & {});
  */
 export type PolicyDescribeParams = {
   method: string;
+  params: unknown;
 };
 
 export type PolicyDescribeResult = {

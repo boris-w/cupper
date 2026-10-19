@@ -878,6 +878,7 @@ export const zPlanSource = z.union([z.enum(["entries", "markdown"]), z.string()]
  */
 export const zPolicyDescribeParams = z.object({
   method: z.string(),
+  params: z.unknown(),
 });
 
 export const zPolicyDescribeResult = z.object({
@@ -1732,7 +1733,11 @@ export const zAuth = z.union([
       type: z.literal("harness"),
     }),
   ),
-  zUnknownMember,
+  zUnknownMember.refine(
+    (member) =>
+      typeof member.type === "string" &&
+      !["codesign", "peer", "dev_key", "harness"].includes(member.type),
+  ),
 ]);
 
 /**
@@ -1750,7 +1755,9 @@ export const zContent = z.union([
       type: z.literal("blob"),
     }),
   ),
-  zUnknownMember,
+  zUnknownMember.refine(
+    (member) => typeof member.type === "string" && !["text", "blob"].includes(member.type),
+  ),
 ]);
 
 /**
@@ -1773,7 +1780,11 @@ export const zInteractionOutcome = z.union([
   z.object({
     type: z.literal("opened"),
   }),
-  zUnknownMember,
+  zUnknownMember.refine(
+    (member) =>
+      typeof member.type === "string" &&
+      !["selected", "answer", "dismissed", "opened"].includes(member.type),
+  ),
 ]);
 
 /**
@@ -1865,17 +1876,19 @@ export const zVersionRange = z.object({
 /**
  * `error.data` of an application error.
  */
-export const zErrorData = z.object({
-  agent_code: z.string().nullish(),
-  agent_message: z.string().nullish(),
-  capability: z.string().nullish(),
-  code: zErrorCode,
-  reason: zErrorReason.nullish(),
-  resolved_by: zResolvedBy.nullish(),
-  retry_after_ms: zDurationMs.nullish(),
-  scope: zScope.nullish(),
-  supported: zVersionRange.nullish(),
-});
+export const zErrorData = z
+  .object({
+    agent_code: z.string().nullish(),
+    agent_message: z.string().nullish(),
+    capability: z.string().nullish(),
+    code: zErrorCode,
+    reason: zErrorReason.nullish(),
+    resolved_by: zResolvedBy.nullish(),
+    retry_after_ms: zDurationMs.nullish(),
+    scope: zScope.nullish(),
+    supported: zVersionRange.nullish(),
+  })
+  .loose();
 
 export const zHostHelloParams = z.object({
   host_version: z.string(),
@@ -2138,7 +2151,11 @@ export const zInteractionRequest = z.union([
       type: z.literal("auth_url"),
     }),
   ),
-  zUnknownMember,
+  zUnknownMember.refine(
+    (member) =>
+      typeof member.type === "string" &&
+      !["permission", "question", "plan_confirm", "auth_url"].includes(member.type),
+  ),
 ]);
 
 /**
@@ -2223,7 +2240,11 @@ export const zPromptBlock = z.union([
       type: z.literal("text_blob"),
     }),
   ),
-  zUnknownMember,
+  zUnknownMember.refine(
+    (member) =>
+      typeof member.type === "string" &&
+      !["text", "image", "file_ref", "review_comment", "text_blob"].includes(member.type),
+  ),
 ]);
 
 export const zQueueEntry = z.object({
@@ -2264,7 +2285,10 @@ export const zQueueOp = z.union([
       op: z.literal("move"),
     }),
   ),
-  zUnknownMember,
+  zUnknownMember.refine(
+    (member) =>
+      typeof member.op === "string" && !["replace", "steer", "remove", "move"].includes(member.op),
+  ),
 ]);
 
 /**
@@ -2523,7 +2547,20 @@ export const zItemStarted = z.intersection(
         kind: z.literal("error"),
       }),
     ),
-    zUnknownMember,
+    zUnknownMember.refine(
+      (member) =>
+        typeof member.kind === "string" &&
+        ![
+          "user_message",
+          "agent_message",
+          "thought",
+          "tool_call",
+          "late_tool_output",
+          "plan",
+          "notice",
+          "error",
+        ].includes(member.kind),
+    ),
   ]),
   z.object({
     group_id: zGroupId.nullish(),
@@ -2926,7 +2963,9 @@ export const zWorkspaceSpec = z.union([
       kind: z.literal("worktree"),
     }),
   ),
-  zUnknownMember,
+  zUnknownMember.refine(
+    (member) => typeof member.kind === "string" && !["local", "worktree"].includes(member.kind),
+  ),
 ]);
 
 export const zSessionCreateParams = z.object({
