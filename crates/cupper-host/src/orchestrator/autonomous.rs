@@ -12,8 +12,8 @@
 //!   idle (Codex); a tool finishing while the thread is idle (late output,
 //!   K3); 10 s without updates, unless the thread is known to be active.
 //! - A turn ended on silence keeps the queue held until the agent has been
-//!   quiet for another 30 s (K1); a turn the user starts while idle ends the
-//!   hold. Only the queue is held: a message sent while idle runs at once.
+//!   quiet for another 30 s (K1); a turn the user starts ends the hold when it
+//!   completes. Only the queue is held: a message sent while idle runs at once.
 //!
 //! The session's actor wires the judge between its other cores. A driver
 //! event goes to the judge first, then to the turn machine, then (an update)
@@ -146,16 +146,15 @@ impl AutonomousJudge {
 
     fn turn(&mut self, signal: TurnSignal, now: Now, out: &mut Vec<Action>) {
         match signal {
-            TurnSignal::Started { origin, .. } => {
-                self.silent_end = false;
-                if origin == TurnOrigin::Autonomous {
-                    self.phase = Phase::Autonomous;
-                    out.push(self.arm(JudgeTimer::Silence, now));
-                } else {
-                    self.phase = Phase::Prompted;
-                    self.release(out);
-                }
+            TurnSignal::Started {
+                origin: TurnOrigin::Autonomous,
+                ..
+            } => {
+                self.phase = Phase::Autonomous;
+                out.push(self.arm(JudgeTimer::Silence, now));
             }
+            // A hold ends when this turn completes; until then nothing dequeues.
+            TurnSignal::Started { .. } => self.phase = Phase::Prompted,
             TurnSignal::Settled { .. } => {
                 if self.phase == Phase::Autonomous {
                     out.push(Action::Timer(TimerRequest::Cancel(JudgeTimer::Silence)));
