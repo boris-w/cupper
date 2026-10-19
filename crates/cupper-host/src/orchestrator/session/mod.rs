@@ -7,6 +7,8 @@ mod actor;
 pub mod core;
 mod manager;
 mod rows;
+#[cfg(test)]
+mod tests;
 
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
 use serde::de::DeserializeOwned;
