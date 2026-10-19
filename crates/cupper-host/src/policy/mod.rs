@@ -19,6 +19,8 @@
 //!      option's `requires`, and the 400 ms after a request (design 5.7.8);
 //!    - [`attach()`]: the project trust gate (design 5.2.6).
 //!
+//! `policy/describe` is [`Confirmable`] and [`describe()`].
+//!
 //! Cells of the matrix (5.8.3) the policy allows because the scope does, and
 //! leaves the rest to others:
 //! - "原生确认": the control connection holds `privileged`; the main process
@@ -29,6 +31,7 @@
 //!   `x-builds` (design 5.9.9).
 
 mod attach;
+mod describe;
 mod input;
 mod method;
 mod tier;
@@ -42,6 +45,7 @@ use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::rpc::Scope;
 
 pub use attach::{ProjectConfig, attach};
+pub use describe::{Confirmable, DescribeError, Facts, describe};
 pub use input::{MIN_ANSWER_DELAY, Pending, git_revert, respond};
 pub use method::{method, set_config, settings_update};
 pub use tier::{ceiling, option_tier, tier_change};
