@@ -285,6 +285,18 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
   - 桌面端经原生确认调用 `session/confirm_config`；
   - 有权限的一方用 `session/set_config` 把档位降到它有权设定的范围（降档只需要 write）。
 
+**T043 开工前的裁定（2026-10-19）**
+
+- **`queue_entries` 加 `reply_to` 列**：按 P-4 改 `0001`，同时改 5.4.2 的 SQL；不加的话，重启后从库恢复队列时 v1.5 的 `reply_to` 会丢。由 T043 一并改，store 的测试会拿迁移结果与设计里的 SQL 比对。
+- **T061 之前的回合快照**：记为 `skipped`，不带 `reason`。写 `not_a_repo` 对 git 项目是错的。
+- **能力缓存为空时的 `session/create`**：
+  - 模式换算不出档位时，按规则当作 `full_access` 处理；
+  - 合并器的 `interrupt_stops_commands` 先取 `false`，attach 之后再按能力更新（`Coalescer` 加一个设置函数）。
+- **actor 空闲 10 分钟退出**（5.2.3、5.2.6）：归 T089。
+- **组合核心**：把 `orchestrator/session_props.rs` 的 `Session` 提成正式代码，性质测试改用它，免得两份接线各自漂移。
+- **超长输出写 blob**：由 actor 直接 await，这样 `item.completed` 一定排在 blob 引用之后（T089）。
+- **`interaction.responded` 审计**：新增一种带 `ConnId` 的网关审计记录，由 actor 发进现有的审计 channel，落盘归 T059（T088）。
+
 ## 5.2.7 交互代理
 
 交互代理是会话 actor 内部的一个组件，不单独起 actor。先到先得依赖的正是会话 actor 的顺序处理（SP-4a 已验证）。
