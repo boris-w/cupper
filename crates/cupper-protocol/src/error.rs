@@ -8,6 +8,7 @@ use serde_json::{Map, Value};
 
 use crate::annotations::DurationMs;
 use crate::domain::ResolvedBy;
+use crate::methods::handshake::VersionRange;
 use crate::open_enum;
 use crate::rpc::Scope;
 
@@ -168,7 +169,10 @@ pub struct ErrorData {
     /// `conflict/already_resolved`: who resolved the request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolved_by: Option<ResolvedBy>,
-    /// Other code-specific details, e.g. `supported`.
+    /// `version_unsupported`: the major versions the host supports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supported: Option<VersionRange>,
+    /// Other code-specific details.
     #[serde(flatten)]
     pub details: Map<String, Value>,
 }
@@ -184,6 +188,7 @@ impl ErrorData {
             agent_message: None,
             retry_after_ms: None,
             resolved_by: None,
+            supported: None,
             details: Map::new(),
         }
     }
@@ -287,7 +292,7 @@ mod tests {
 
         // Unknown codes, reasons and details survive a roundtrip.
         let raw = serde_json::json!({"code": -32000, "message": "x", "data": {
-            "code": "future_code", "reason": "later", "supported": {"min": 1, "max": 1}}});
+            "code": "future_code", "reason": "later", "quota": {"used": 1, "max": 1}}});
         let err: RpcError = serde_json::from_value(raw.clone()).unwrap();
         assert_eq!(
             err.app_code(),

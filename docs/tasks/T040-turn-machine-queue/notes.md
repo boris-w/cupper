@@ -42,6 +42,8 @@
 
 ## 实现中的取舍与待裁定事项
 
+已由编排者全部认可，写进 `03-protocol-v1.md` 5.3.11 末尾的"T040 实现时的裁定"。除第 6 条（驱动接口）以外，都随 `TurnMachine` 归 T048。
+
 1. **prompt 已经正常返回、但还有交互请求挂着**（任务书点名要提方案）。prompt 返回说明 agent 已经不再等这些请求的回答，回合不能因此一直挂着。方案：回合的结局一定下来，`TurnMachine` 先发 `Action::Settle(TurnEnd)`，由交互代理（T042）把这个回合仍挂着的请求结掉，并对 ACP 应答 `Cancelled`，免得适配器一直等；之后才是结束快照和 `turn.completed`，满足 T014 的顺序裁定。请求的状态和原因：
    - 中断导致的结束：`cancelled`，`reason: turn_cancelled`（已有）；
    - 适配器退出：`expired`，`reason: adapter_exited`（已有）；
@@ -58,3 +60,20 @@
    - 命令是纯数据，`Attach` 的事件发送端和请求的回复通道由 actor 在交给 runtime 时补上。`TurnMachine` 发的是 `Action::Attach(AttachTarget)`，工作区、配置和信任状态由 actor 补齐。
 7. **自发回合**只留了进入和退出：`Input::AutonomousStarted`、`AutonomousEnded`。自发回合里中断：发 `Cancel`，回合记 `cancelled`、暂停队列；适配器退出时记 `failed`。不拍快照，30 s 出队保护归 T041。
 8. **未覆盖、留给后续**：K6 自动 resume 重发和配置、信任的门控暂停（T044）；Steer（T140，目前 `mode: steer` 按排队处理，回复里带 `fallback: unsupported`）；从数据库恢复回合序号、队列和 agent 会话（T043）；`Ending` 期间到达的更新怎样归属（T041、T043）。
+
+## 收窄后的 T040（补充裁定之后）
+
+编排者采用方案 A（计划 v1.3.3）：分支重置到 13bf686，挑回 notes 提交，合入 main。`TurnMachine`（e03a930）和四条 PROP 归新任务 T048，分支 `feat/T048-turn-machine`。
+
+范围：`driver::api` 和 `QueueCore`。验收编号 UNIT-queue-core：原有的 3 个用例改名为 `unit_queue_core_*`，并补齐先进先出、上限 50、`remove`/`move` 返回 unsupported、`steer` 占位时消息留在原位，共 6 个用例。
+
+行数（相对 main，不含 `Cargo.lock` 和 `docs/`；`cupper-protocol` 依赖 main 上已有，`Cargo.toml` 没有差异）：
+
+| 文件 | 实现 | 测试 | 合计 |
+|---|---|---|---|
+| `driver/api.rs` | 285 | 26 | 311 |
+| `orchestrator/queue.rs` | 157 | 178 | 335 |
+| `orchestrator/mod.rs`、`driver/mod.rs`、`lib.rs` | 6 | 0 | 6 |
+| 合计 | 448 | 204 | 652 |
+
+计划里收窄后的规模是 M，652 行在范围内。
