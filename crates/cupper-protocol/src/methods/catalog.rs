@@ -8,7 +8,7 @@ use schemars::SchemaGenerator;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::{handshake, stream};
+use super::{handshake, project, stream};
 use crate::rpc::{ClientNotification, HostNotification, Method};
 use crate::schema::{client_notification_entry, host_notification_entry, method_entry};
 
@@ -49,6 +49,7 @@ pub fn catalog(g: &mut SchemaGenerator) -> Catalog {
     let mut catalog = Catalog::default();
     handshake::register(&mut catalog, g);
     stream::register(&mut catalog, g);
+    project::register(&mut catalog, g);
     catalog
 }
 
@@ -80,10 +81,14 @@ mod tests {
 
     #[test]
     fn unit_proto_methods_core_stream_every_method_roundtrips() {
-        let sampled: BTreeSet<&str> = [handshake::tests::samples(), stream::tests::samples()]
-            .concat()
-            .into_iter()
-            .collect();
+        let sampled: BTreeSet<&str> = [
+            handshake::tests::samples(),
+            stream::tests::samples(),
+            project::tests::samples(),
+        ]
+        .concat()
+        .into_iter()
+        .collect();
         let (catalog, _) = built();
         let names: BTreeSet<&str> = scoped(&catalog)
             .chain(&catalog.host_notifications)
@@ -104,6 +109,9 @@ mod tests {
         Native,
         /// "仅由主进程代发": the main process sends it for the window.
         ByMain,
+        /// ✗ for remote_device by SEC-9: it holds the scope, so the policy
+        /// module refuses or narrows the method (design 5.8.3).
+        Sec9,
     }
     use Cell::*;
 
@@ -121,8 +129,11 @@ mod tests {
         ("remote_device", &[Read, Write, Approve]),
     ];
 
+    /// A row of 5.8.3: its name there, the methods it names, its cells.
+    type Row = (&'static str, &'static [&'static str], [Cell; 7]);
+
     /// Rows of 5.8.3, each with the methods it names. A group adds its own.
-    const MATRIX: &[(&str, &[&str], [Cell; 7])] = &[
+    const MATRIX: &[Row] = &[
         ("initialize", &["initialize"], [Y, ByMain, Y, Y, Y, Y, Y]),
         (
             "ping、client/presence、host/status",
@@ -146,16 +157,39 @@ mod tests {
             &["host/prepare_upgrade", "host/exit"],
             [Native, N, N, N, N, Y, N],
         ),
+        (
+            "订阅、history/page、…、session/list_archived（其中 T018 的方法）",
+            &["agents/capabilities", "project/trust_info"],
+            [Y; 7],
+        ),
+        (
+            "project/add、project/remove（SEC-9：只能在已有项目里新建会话）",
+            &["project/add", "project/remove"],
+            [Y, Y, N, Y, N, Y, Sec9],
+        ),
+        (
+            "project/trust",
+            &["project/trust"],
+            [Native, N, N, N, N, Y, N],
+        ),
+        (
+            "session/set_config（非档位的配置项）、session/rename、session/archive、session/restore、agents/refresh、agents/restart（remote_device 仅 set_config 的模型和推理强度）",
+            &["agents/refresh", "agents/restart"],
+            [Y, Y, N, Y, N, Y, Sec9],
+        ),
     ];
 
-    #[test]
-    fn unit_proto_methods_core_stream_scopes_match_the_matrix() {
-        let (catalog, _) = built();
+    /// Checks every cell of `rows` against the method's scope; returns the
+    /// methods the rows name.
+    fn check_rows<'a>(
+        catalog: &Catalog,
+        rows: impl IntoIterator<Item = &'a Row>,
+    ) -> BTreeSet<&'static str> {
         let mut covered = BTreeSet::new();
-        for (row, methods, cells) in MATRIX {
+        for (row, methods, cells) in rows {
             for method in *methods {
                 assert!(covered.insert(*method), "{method} in two rows");
-                let entry = scoped(&catalog).find(|(name, _)| *name == method);
+                let entry = scoped(catalog).find(|(name, _)| *name == method);
                 let scope = &entry.unwrap_or_else(|| panic!("{method} missing")).1[X_SCOPE];
                 for ((principal, scopes), cell) in PRINCIPALS.iter().zip(cells) {
                     let allowed = scope == "none" || scopes.iter().any(|s| s.as_str() == scope);
@@ -164,6 +198,13 @@ mod tests {
                 }
             }
         }
+        covered
+    }
+
+    #[test]
+    fn unit_proto_methods_core_stream_scopes_match_the_matrix() {
+        let (catalog, _) = built();
+        let covered = check_rows(&catalog, MATRIX);
         let all: BTreeSet<&str> = scoped(&catalog).map(|(name, _)| *name).collect();
         assert_eq!(covered, all, "every scoped method sits in one row");
     }
@@ -262,5 +303,84 @@ mod tests {
             to_canonical_string(&catalog).unwrap(),
             to_canonical_string(&again).unwrap()
         );
+    }
+
+    /// A method group: its `register` and its `samples`.
+    type Group = (
+        fn(&mut Catalog, &mut SchemaGenerator),
+        fn() -> Vec<&'static str>,
+    );
+
+    /// The method groups of T018.
+    const SESSION_GROUPS: [Group; 1] = [(project::register, project::tests::samples)];
+
+    /// What `register` adds to the catalog.
+    fn names(register: fn(&mut Catalog, &mut SchemaGenerator)) -> BTreeSet<&'static str> {
+        let mut catalog = Catalog::default();
+        register(&mut catalog, &mut generator());
+        let all = scoped(&catalog).chain(&catalog.host_notifications);
+        all.map(|(name, _)| *name).collect()
+    }
+
+    #[test]
+    fn unit_proto_methods_core_session_every_method_roundtrips() {
+        for (register, samples) in SESSION_GROUPS {
+            let sampled: BTreeSet<&str> = samples().into_iter().collect();
+            assert_eq!(sampled, names(register));
+        }
+    }
+
+    #[test]
+    fn unit_proto_methods_core_session_scopes_match_the_matrix() {
+        let (catalog, _) = built();
+        let ours: BTreeSet<&str> = SESSION_GROUPS.iter().flat_map(|g| names(g.0)).collect();
+        let rows = MATRIX
+            .iter()
+            .filter(|row| row.1.iter().any(|m| ours.contains(m)));
+        assert_eq!(check_rows(&catalog, rows), ours, "rows of their own");
+    }
+
+    #[test]
+    fn unit_proto_methods_core_session_sec9_cells() {
+        // SEC-9: a remote device adds no project and changes a session's
+        // model and reasoning effort only. It holds the scopes of these
+        // methods, so the policy module refuses them, not the scope check.
+        let sec9: BTreeSet<&str> = MATRIX
+            .iter()
+            .filter(|row| row.2[6] == Sec9)
+            .flat_map(|row| row.1.iter().copied())
+            .collect();
+        let expected = [
+            "agents/refresh",
+            "agents/restart",
+            "project/add",
+            "project/remove",
+        ];
+        assert_eq!(sec9, BTreeSet::from(expected));
+        let (catalog, _) = built();
+        let (principal, scopes) = PRINCIPALS[6];
+        assert_eq!(principal, "remote_device");
+        for method in sec9 {
+            let scope = &catalog.requests[method][X_SCOPE];
+            assert!(scopes.iter().any(|s| s.as_str() == scope), "{method}");
+        }
+    }
+
+    #[test]
+    fn unit_proto_methods_core_session_milestones_and_errors_are_in_the_schema() {
+        let (catalog, _) = built();
+        let entry = |name: &str| &catalog.requests[name];
+        for (name, milestone) in [
+            ("project/add", "M1a"),
+            ("project/remove", "M1b"),
+            ("agents/restart", "M1b"),
+        ] {
+            assert_eq!(entry(name)[X_MILESTONE], milestone, "{name}");
+        }
+        // 5.3.11 adds `unavailable/scan_failed`: the method scans again.
+        let errors = json!(["not_found", "unavailable/scan_failed"]);
+        assert_eq!(entry("project/trust_info")[X_ERRORS], errors);
+        let errors = json!(["conflict/digest_mismatch", "unavailable/scan_failed"]);
+        assert_eq!(entry("project/trust")[X_ERRORS], errors);
     }
 }
