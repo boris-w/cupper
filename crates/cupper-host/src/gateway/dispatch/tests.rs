@@ -27,6 +27,7 @@ use super::*;
 use crate::clock::{ManualClock, SystemClock};
 use crate::durations::Durations;
 use crate::gateway::Routes;
+use crate::gateway::outbox::Item;
 use crate::gateway::testkit::{Client, TempDir, TestGateway};
 use crate::quiescence::Quiescence;
 use crate::store::{
@@ -210,9 +211,12 @@ impl Peer {
         ids.map(Option::unwrap).collect()
     }
 
-    fn take(&mut self, frames: Vec<Vec<u8>>) {
+    fn take(&mut self, items: Vec<Item>) {
         let mut decoder = FrameDecoder::new();
-        for frame in frames {
+        for item in items {
+            let Item::Frame(frame) = item else {
+                panic!("only replies are queued: {item:?}");
+            };
             decoder.push(&frame);
             let payload = decoder.next_frame().unwrap().unwrap().payload;
             self.replies.push(serde_json::from_slice(&payload).unwrap());

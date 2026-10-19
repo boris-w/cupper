@@ -16,6 +16,7 @@ mod handshake;
 pub mod listen;
 pub mod outbox;
 pub mod routes;
+mod send;
 #[cfg(any(test, feature = "test-harness"))]
 pub mod testkit;
 #[cfg(test)]
