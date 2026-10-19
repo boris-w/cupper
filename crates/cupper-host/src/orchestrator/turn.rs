@@ -655,7 +655,10 @@ impl TurnMachine {
         };
         let asks = if end.error_code == Some(FailureCode::AdapterExited) {
             ResolutionReason::AdapterExited
-        } else if outcome.pause == Some(PauseReason::TurnCancelled) {
+        } else if matches!(turn.phase, Phase::Cancelling(_))
+            || outcome.pause == Some(PauseReason::TurnCancelled)
+        {
+            // Interrupted by the host, whatever the prompt's result.
             ResolutionReason::TurnCancelled
         } else {
             ResolutionReason::TurnEnded
