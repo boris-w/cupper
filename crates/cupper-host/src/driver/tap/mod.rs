@@ -9,8 +9,9 @@
 //! Only lines that contain a keyword of either are parsed as JSON. Extension
 //! messages are not its business: they all go through the SDK (T003).
 //!
-//! The raw frame queue is bounded; when it is full the frame is dropped and
-//! counted, so diagnostics never hold up the ACP read path (design 5.2.3).
+//! The raw frame queue ([`RawSink`]) is the store's: it is bounded, and a frame
+//! that finds it full is dropped and counted, so diagnostics never hold up the
+//! ACP read path (design 5.2.3).
 
 pub mod k19;
 mod redact;
@@ -25,76 +26,10 @@ use agent_client_protocol::Lines;
 use futures::{Sink, Stream};
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, BufReader};
-use tokio::sync::mpsc;
 
 use super::transport::AcpTransport;
 use crate::clock::Clock;
-
-/// Raw frames waiting for the store's writer thread (design 5.2.3).
-pub const RAW_QUEUE_CAPACITY: usize = 4096;
-
-/// One line as `raw.db` keeps it (design 5.4.2).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RawFrame {
-    pub instance: Arc<str>,
-    /// Counts the instance's lines in both directions from 1.
-    pub seq: u64,
-    /// Wall-clock milliseconds.
-    pub ts: u64,
-    pub dir: Dir,
-    /// The first `sessionId` in the line, for exporting one session's frames.
-    pub agent_session_id: Option<String>,
-    /// The line after structured redaction.
-    pub frame: String,
-}
-
-/// Which way a line went (`raw_frames.dir`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Dir {
-    /// Host to adapter.
-    Send,
-    /// Adapter to host.
-    Recv,
-    /// A line the adapter wrote that is not JSON; the SDK never sees it.
-    RecvNonjson,
-}
-
-impl Dir {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Send => "send",
-            Self::Recv => "recv",
-            Self::RecvNonjson => "recv_nonjson",
-        }
-    }
-}
-
-/// The sending side of the raw frame queue, shared by every instance's tap.
-#[derive(Debug, Clone)]
-pub struct RawSink {
-    tx: mpsc::Sender<RawFrame>,
-    dropped: Arc<AtomicU64>,
-}
-
-impl RawSink {
-    /// A queue of [`RAW_QUEUE_CAPACITY`] frames and its reading side.
-    pub fn bounded() -> (Self, mpsc::Receiver<RawFrame>) {
-        let (tx, rx) = mpsc::channel(RAW_QUEUE_CAPACITY);
-        let dropped = Arc::new(AtomicU64::new(0));
-        (Self { tx, dropped }, rx)
-    }
-
-    /// Frames lost because the queue was full or its reader had gone.
-    pub fn dropped(&self) -> u64 {
-        self.dropped.load(Ordering::Relaxed)
-    }
-
-    fn push(&self, frame: RawFrame) {
-        if self.tx.try_send(frame).is_err() {
-            self.dropped.fetch_add(1, Ordering::Relaxed);
-        }
-    }
-}
+use crate::store::{Dir, RawFrame, RawSink};
 
 /// The tap of one adapter instance.
 #[derive(Debug)]
@@ -269,20 +204,17 @@ mod tests {
 
     use super::*;
     use crate::clock::ManualClock;
+    use crate::store::Unattended;
 
-    fn tap() -> (Tap, mpsc::Receiver<RawFrame>) {
-        let (raw, frames) = RawSink::bounded();
+    fn tap() -> (Tap, Unattended) {
+        let (raw, frames) = RawSink::unattended();
         let clock = Arc::new(ManualClock::starting_at(1_700_000_000_000));
         (Tap::new("instance-1", clock, raw), frames)
     }
 
-    fn drain(frames: &mut mpsc::Receiver<RawFrame>) -> Vec<RawFrame> {
-        std::iter::from_fn(|| frames.try_recv().ok()).collect()
-    }
-
     #[test]
     fn unit_tap_numbers_every_line_in_both_directions() {
-        let (tap, mut frames) = tap();
+        let (tap, frames) = tap();
         let update = r#"{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s-1","update":{}}}"#;
         assert_eq!(tap.inbound(update.to_owned()).as_deref(), Some(update));
         assert_eq!(tap.inbound("node: a warning".to_owned()), None);
@@ -290,7 +222,7 @@ mod tests {
             r#"{"jsonrpc":"2.0","id":7,"method":"session/cancel","params":{"sessionId": "s-2"}}"#,
         );
 
-        let frames = drain(&mut frames);
+        let frames = frames.frames();
         let summary: Vec<_> = frames
             .iter()
             .map(|f| (f.seq, f.dir.as_str(), f.agent_session_id.as_deref()))
@@ -314,7 +246,7 @@ mod tests {
 
     #[test]
     fn unit_tap_redacts_what_it_records_and_forwards_the_original() {
-        let (tap, mut frames) = tap();
+        let (tap, frames) = tap();
         let auth = json!({"jsonrpc": "2.0", "method": "_auth/status_update", "params": {"authStatus":
             {"kind": "account", "label": "Claude Max",
              "account": {"plan": "max", "email": "someone@example.com", "organization": "Example Org"}}}})
@@ -323,7 +255,7 @@ mod tests {
         assert_eq!(tap.inbound(auth.clone()), Some(auth));
         tap.outbound(prompt);
 
-        let frames = drain(&mut frames);
+        let frames = frames.frames();
         let recorded: Value = serde_json::from_str(&frames[0].frame).unwrap();
         assert_eq!(
             recorded["params"],
@@ -335,29 +267,14 @@ mod tests {
         );
     }
 
-    #[test]
-    fn unit_tap_drops_and_counts_frames_when_the_queue_is_full() {
-        let (raw, mut frames) = RawSink::bounded();
-        let tap = Tap::new("instance-1", Arc::new(ManualClock::new()), raw.clone());
-        for _ in 0..RAW_QUEUE_CAPACITY + 2 {
-            tap.outbound("{}");
-        }
-        assert_eq!(raw.dropped(), 2);
-        assert_eq!(drain(&mut frames).len(), RAW_QUEUE_CAPACITY);
-
-        drop(frames);
-        tap.outbound("{}");
-        assert_eq!(raw.dropped(), 3);
-    }
-
     /// Sends `line` through the tap; returns `pointer` of what the SDK gets,
     /// read as a `T`, and what was recorded.
     fn through<T: serde::de::DeserializeOwned>(line: &str, pointer: &str) -> (T, String) {
-        let (tap, mut frames) = tap();
+        let (tap, frames) = tap();
         let forwarded: Value =
             serde_json::from_str(&tap.inbound(line.to_owned()).unwrap()).unwrap();
         let parsed = serde_json::from_value(forwarded.pointer(pointer).unwrap().clone()).unwrap();
-        (parsed, drain(&mut frames).remove(0).frame)
+        (parsed, frames.frames().remove(0).frame)
     }
 
     #[test]

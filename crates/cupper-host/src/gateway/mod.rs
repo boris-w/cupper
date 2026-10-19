@@ -30,6 +30,8 @@ pub use self::audit::{AuditEvent, AuditRecord, CloseReason, Rejection};
 pub use self::handshake::Session;
 use crate::clock::Clock;
 use crate::durations::{Durations, GATEWAY_ACCEPT_BACKOFF};
+#[cfg(any(feature = "dev-auth", feature = "test-harness"))]
+use crate::startup::payload::SecretKey;
 
 /// The verdict on a peer's code signature, taken on accept (design 5.8.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +51,22 @@ pub struct GatewayConfig {
     /// the binary (design 5.8.1). Release builds get theirs with the Team
     /// ID (T180); without one, no peer is the UI by signature.
     pub ui_requirement: Option<Requirement>,
+    /// The startup payload's `dev_key`, and who may present it.
+    #[cfg(feature = "dev-auth")]
+    pub dev_key: Option<DevKey>,
+    /// The startup payload's `harness_key`.
+    #[cfg(feature = "test-harness")]
+    pub harness_key: Option<SecretKey>,
+}
+
+/// `dev_key` is only accepted from the process that started the host
+/// (design 5.8.1).
+#[cfg(feature = "dev-auth")]
+#[derive(Debug, Clone)]
+pub struct DevKey {
+    pub key: SecretKey,
+    /// Its unique id, from [`launcher`](crate::startup::launcher).
+    pub launcher: u64,
 }
 
 #[derive(Debug)]

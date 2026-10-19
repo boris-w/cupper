@@ -258,8 +258,9 @@ mod tests {
 
     use super::*;
     use crate::clock::{Clock, ManualClock, SystemClock};
-    use crate::driver::tap::{RawSink, k19};
+    use crate::driver::tap::k19;
     use crate::driver::transport::MemoryTransport;
+    use crate::store::RawSink;
 
     /// A stand-in agent on the other end of a memory transport: raw JSON lines.
     struct TestAgent {
@@ -299,7 +300,7 @@ mod tests {
         let tap = Tap::new(
             "instance-1",
             Arc::new(ManualClock::new()),
-            RawSink::bounded().0,
+            RawSink::unattended().0,
         );
         (transport, tap, TestAgent { lines, write })
     }

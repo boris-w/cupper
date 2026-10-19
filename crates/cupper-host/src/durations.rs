@@ -13,6 +13,8 @@ use std::time::Duration;
 
 use cupper_protocol::limits::V1;
 
+const DAY_SECS: u64 = 24 * 3600;
+
 /// A registered duration: its name in `test_config.durations` and its value
 /// in the design.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,6 +58,9 @@ durations! {
     /// How long a closing connection may take to send its last replies, such
     /// as the error that ends a handshake (design 5.3.11, rulings before T030).
     GATEWAY_CLOSE_GRACE = "gateway_close_grace", Duration::from_secs(2);
+    /// How long a client has after `host/hello` to send `initialize` (design
+    /// 5.3.11, the ruling on T030's report).
+    GATEWAY_HANDSHAKE = "gateway_handshake", Duration::from_secs(10);
     /// The wait after a failed `accept`, out of fds for one, before the next.
     GATEWAY_ACCEPT_BACKOFF = "gateway_accept_backoff", Duration::from_millis(50);
     /// How long a stream stays in memory with no handle, writer or subscriber
@@ -76,6 +81,17 @@ durations! {
     /// After an autonomous turn ended on silence, how long the agent must
     /// stay silent before the queue moves on (design 5.2.6, K1).
     DEQUEUE_GUARD = "dequeue_guard", Duration::from_secs(30);
+    /// How long `raw.db` keeps a frame (design 5.4.5, ADR-06).
+    RAW_FRAMES_MAX_AGE = "raw_frames_max_age", Duration::from_secs(14 * DAY_SECS);
+    /// How often retention prunes `raw.db` (design 5.4.5).
+    RAW_FRAMES_PERIOD = "raw_frames_period", Duration::from_secs(3600);
+    /// How long `audit` keeps a record (design 5.4.5).
+    AUDIT_MAX_AGE = "audit_max_age", Duration::from_secs(90 * DAY_SECS);
+    /// How often retention prunes `audit` (design 5.4.5).
+    AUDIT_PERIOD = "audit_period", Duration::from_secs(DAY_SECS);
+    /// How long after its last put a blob nothing references is kept (design
+    /// 5.4.5).
+    ORPHAN_BLOB_GRACE = "orphan_blob_grace", Duration::from_secs(DAY_SECS);
     /// How long the command ledger keeps a command after it began (design
     /// 5.2.5, 5.4.5).
     LEDGER_RETENTION = "ledger_retention", Duration::from_secs(48 * 60 * 60);

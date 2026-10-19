@@ -1,8 +1,9 @@
 //! Session orchestration (design 5.2.6). So far its pure cores: the turn
-//! state machine and the queue of messages it drains.
+//! state machine, the queue of messages it drains, and the interaction broker.
 
 pub mod coalescer;
 pub mod grouping;
+pub mod interaction;
 #[cfg(test)]
 mod props;
 pub mod queue;

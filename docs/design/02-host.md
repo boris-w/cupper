@@ -61,7 +61,8 @@ flowchart TB
 |---|---|---|
 | 主线程 | 1 | 运行 `CFRunLoop`，承载 UserNotifications 的代理回调和 IOKit 通知。tokio 运行时不在主线程上 |
 | tokio 工作线程 | min(4, 核数) | 所有 actor、连接、子进程 I/O |
-| 存储写线程 | 1 | 唯一的 SQLite 写连接（`host.db` 和 `raw.db`），组提交 |
+| 存储写线程 | 1 | `host.db` 唯一的写连接，组提交 |
+| 原始帧写线程 | 1 | `raw.db` 唯一的写连接，批量写入原始帧、裁剪和 `VACUUM`（T027 起与 `host.db` 的写线程分开，避免 `raw.db` 的裁剪挡住事件追加） |
 | 阻塞线程池 | 按需（读池用信号量限 4 个并发） | SQLite 只读查询、`waitpid`、文件哈希、tar 解包 |
 
 **actor**（tokio task + mpsc 邮箱；actor 内部顺序处理消息，不 await 耗时操作，耗时操作另起 task，完成后以消息回送）
@@ -81,7 +82,7 @@ flowchart TB
 | 网关 → `SessionActor` | 无界 mpsc，消息带 oneshot 回复 | 同一会话的命令按到达顺序进入邮箱（见下文"命令顺序"） |
 | ACP 回调 → `AgentRuntime` → `SessionActor` | 无界 mpsc | ADR-02：ACP 回调里只做 channel 发送，读 ACP 的路径永远不等待任何下游 |
 | 各写者 → 存储写线程 | std mpsc（写线程阻塞接收），每个操作带 oneshot 确认 | 写线程攒批（组提交），规则见 [5.2.8](#528-事件存储) |
-| 线路分接 → 存储写线程 | 有界队列（4,096 条），满了就丢弃并计数 | 原始帧只用于诊断和重算，不能反压 ACP 读路径 |
+| 线路分接 → 原始帧写线程 | 有界队列（4,096 条），满了就丢弃并计数 | 原始帧只用于诊断和重算，不能反压 ACP 读路径 |
 | 流 → 连接 `Outbox` | 加锁 push，不等待 | 超出该连接的字节预算时重置这条流（SP-4a 已实现） |
 
 **锁**
@@ -302,7 +303,7 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
 
 | 触发 | 结果状态 |
 |---|---|
-| Claude 发 `$/cancel_request` 撤回 | `cancelled`（`reason: agent_withdrew`） |
+| Claude 发 `$/cancel_request` 撤回 | `cancelled`（`reason: withdrawn`） |
 | 回合被中断（Codex 不撤回，宿主替它应答 `Cancelled`） | `cancelled` |
 | 请求所属的适配器实例退出 | `expired`（SEC-10） |
 | 宿主重启 | `expired` |
@@ -323,7 +324,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 | 检查点 | 每个回合结束时，在同一个事务里写入：流检查点（窗口视图 + `at_seq`）和这个回合的快照（重建该回合所需的事件体序列）。索引流没有回合，每追加 1,000 条写一次检查点，否则它的日志无法裁剪（T026）；有序退出时各流都写一次 |
 | 淘汰 | 会话流状态在没有订阅者、也没有 actor 10 分钟后从内存移除 |
 | `BlobStore` | 按内容寻址的文件 `blobs/sha256/<前 2 位>/<hash>`：写临时文件、fsync、改名；`blobs` 表记录大小、媒体类型和引用 |
-| 原始帧 | 线路分接的输出进入有界队列，写线程批量写入 `raw.db`；队列满了就丢弃并计数（ADR-06 的用途是重算和排障，不能反压 ACP） |
+| 原始帧 | 线路分接的输出进入有界队列，原始帧写线程（与 `host.db` 的写线程分开）批量写入 `raw.db`，一个事务最多 256 帧；队列满了就丢弃并计数（ADR-06 的用途是重算和排障，不能反压 ACP） |
 | 升级器与迁移 | 见 [5.4.6](04-data-model.md#546-迁移) |
 | 持久性 | 按 SQLite 和 macOS 的文档决定，不做 VM 断电实验（Q15 关闭，纪要 D5）：<br>- 默认 `journal_mode=WAL`、`synchronous=NORMAL`，并开启 `checkpoint_fullfsync`。进程崩溃不丢已提交的事务；断电可能丢最近的事务，但数据库不会损坏；<br>- 写 `pending_external` 的那一批，写线程临时改用 `synchronous=FULL` 加 `fullfsync` 提交（macOS 上普通 fsync 不保证写入盘内缓存），确认后才执行 git；<br>- `raw.db` 不开 fullfsync |
 | 数据代次 `data_epoch` | 断电丢事务后，seq 可能被重用，客户端的游标会指向已经不存在的事件。宿主每次启动记下 `kern.bootsessionuuid`（每次开机不同）；**上次运行没有正常退出（`meta.last_clean_exit_at` 早于上次的 `last_start_at`），并且启动会话的 UUID 变了**，就把 `meta.data_epoch` 加 1。`kill -9` 不加：进程崩溃时 WAL 不丢数据。`initialize` 的结果下发 `data_epoch`，订阅时游标的 epoch 不同就走快照（[5.3.3](03-protocol-v1.md#533-流与同步)）。代价是"`kill -9` 之后用户又正常重启了电脑"也会被判成断电，只多一次全量快照。两个输入（启动会话的 UUID、上次是否正常退出）在 test-harness 构建里都可以注入 |
