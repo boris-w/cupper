@@ -75,7 +75,7 @@ async fn it_handshake_hello_then_one_initialize_as_read_only_cli() {
     let result = client.call("initialize", params).await.unwrap();
     let host = json!({"host_id": HostId::from_uuid(1), "version": env!("CARGO_PKG_VERSION"),
         "weak_auth": cfg!(feature = "dev-auth"), "data_epoch": 1});
-    let expected = json!({"protocol": 1, "host": host, "features": [], "limits": V1,
+    let expected = json!({"protocol": 1, "host": host, "features": ["stream.coalesce"], "limits": V1,
         "principal": {"id": "pr_cli", "kind": "cli", "scopes": ["read"]}});
     assert_eq!(result, expected);
 

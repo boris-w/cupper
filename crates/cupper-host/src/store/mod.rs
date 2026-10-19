@@ -28,7 +28,7 @@ mod readers;
 pub mod retention;
 pub mod streams;
 #[cfg(test)]
-mod testutil;
+pub(crate) mod testutil;
 pub mod upcast;
 pub mod writer;
 

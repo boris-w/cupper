@@ -6,7 +6,9 @@
 //! [`Routes::add`] for a request, [`Routes::notification`] for a client
 //! notification. A method with `x-builds` is registered only in those builds.
 //! [`Routes::sessions`] and [`Routes::index`] register the M1a methods of the
-//! session and index ports; the tasks that bring more add them.
+//! session and index ports, and [`Routes::streams`] the subscriptions and
+//! history pages the gateway serves itself; the tasks that bring more add
+//! them.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -34,7 +36,8 @@ use super::dispatch::{IndexPort, Opened, Port, SessionPort, typed};
 use crate::clock::Clock;
 use crate::durations::Durations;
 use crate::ledger::{Ledger, LedgerError};
-use crate::store::Writer;
+use crate::store::streams::Streams;
+use crate::store::{Readers, Writer};
 
 /// The methods this host serves, and the ledger their commands go through.
 /// [`Routes::default`] serves what the gateway answers itself, and no
@@ -63,18 +66,27 @@ pub(super) enum Target {
     Ping,
     /// `policy/describe`, with the session port's facts.
     Describe(Arc<dyn SessionPort>),
-    /// `stream/subscribe`, `stream/unsubscribe`, `history/page`: the gateway
-    /// serves them itself from T019 on, and `unsupported` until then.
-    Streams,
-    /// `blob/get`, `blob/put`: the gateway's from T029 on, as [`Self::Streams`].
+    Subscribe(Source),
+    Unsubscribe,
+    History(Source),
+    /// `blob/get`, `blob/put`: the gateway serves them itself from T029 on,
+    /// and `unsupported` until then.
     Blobs,
+}
+
+/// What the gateway serves subscriptions and history pages from.
+#[derive(Debug, Clone)]
+pub(super) struct Source {
+    pub streams: Streams,
+    /// Replays and history pages read through these.
+    pub readers: Readers,
 }
 
 impl Target {
     /// Whether the method is served; until it is, it is `unsupported` like
     /// a method nobody registered.
     pub(super) fn serves(&self) -> bool {
-        !matches!(self, Self::Streams | Self::Blobs)
+        !matches!(self, Self::Blobs)
     }
 }
 
@@ -87,9 +99,6 @@ impl Default for Routes {
             index: None,
         };
         routes.insert::<Ping>(Target::Ping);
-        routes.insert::<StreamSubscribe>(Target::Streams);
-        routes.insert::<StreamUnsubscribe>(Target::Streams);
-        routes.insert::<HistoryPage>(Target::Streams);
         routes.insert::<BlobGet>(Target::Blobs);
         routes.insert::<BlobPut>(Target::Blobs);
         routes
@@ -168,6 +177,16 @@ impl Routes {
         self.add::<SessionMarkRead>(to());
         self.notification::<ClientPresence>(to());
         self.index = Some(port);
+    }
+
+    /// The gateway serves `stream/subscribe`, `stream/unsubscribe` and
+    /// `history/page` from `streams`, reading replays and history pages
+    /// through `readers`.
+    pub fn streams(&mut self, streams: Streams, readers: Readers) {
+        let source = Source { streams, readers };
+        self.insert::<StreamSubscribe>(Target::Subscribe(source.clone()));
+        self.insert::<StreamUnsubscribe>(Target::Unsubscribe);
+        self.insert::<HistoryPage>(Target::History(source));
     }
 
     pub(super) fn request_entry(&self, method: &str) -> Option<(&'static str, &Entry)> {

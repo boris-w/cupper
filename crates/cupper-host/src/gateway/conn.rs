@@ -9,25 +9,26 @@
 
 use std::io;
 use std::sync::Arc;
+use std::time::Duration;
 
 use cupper_protocol::error::{ErrorCode, ErrorReason, PARSE_ERROR, RpcError};
 use cupper_protocol::frame::{Frame, FrameDecoder, FrameType, MAX_FRAME_BYTES};
 use cupper_protocol::ids::ConnId;
 use cupper_protocol::limits::V1;
-use cupper_protocol::methods::handshake::{HostHello, Initialize};
+use cupper_protocol::methods::handshake::{Feature, HostHello, Initialize};
 use cupper_protocol::rpc::{Message, Method, RawMessage, RpcId};
 use cupper_sys::{AuditToken, Received};
 use futures::future::{self, Either};
 use serde_json::Value;
-use tokio::io::{AsyncWriteExt, Interest};
+use tokio::io::Interest;
 use tokio::net::UnixStream;
-use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::net::unix::OwnedReadHalf;
 
 use super::audit::{AuditEvent, CloseReason, Rejection};
 use super::dispatch::{Dispatch, Opened};
 use super::handshake::{self, Nonce, Session};
-use super::outbox::Outbox;
-use super::{Gateway, Verdict, wire};
+use super::outbox::{Coalesce, Outbox};
+use super::{Gateway, Verdict, send, wire};
 use crate::clock::Timer;
 use crate::durations::{GATEWAY_CLOSE_GRACE, GATEWAY_HANDSHAKE};
 
@@ -38,7 +39,8 @@ pub(super) async fn run(gw: Arc<Gateway>, stream: UnixStream, id: ConnId) {
     };
     let (reader, writer) = stream.into_split();
     let outbox = Arc::new(Outbox::new(V1.max_queue_bytes as usize));
-    let mut writing = tokio::spawn(write_loop(writer, Arc::clone(&outbox)));
+    let clock = Arc::clone(&gw.clock);
+    let mut writing = tokio::spawn(send::write_loop(writer, Arc::clone(&outbox), clock));
     let handshake = gw.durations.get(GATEWAY_HANDSHAKE);
     let deadline = gw.clock.timer_at(gw.clock.now_mono() + handshake);
     let nonce = handshake::new_nonce();
@@ -263,9 +265,15 @@ impl Conn<'_> {
                     weak_auth,
                 };
                 self.gw.audit(self.id, event);
+                self.outbox.set_coalesce(Coalesce {
+                    window: Duration::from_millis(session.coalesce_ms.into()),
+                    ranges: session.features.contains(&Feature::StreamCoalesce),
+                });
                 let outbox = Arc::clone(self.outbox);
                 let principal = session.principal.clone();
-                let dispatch = Box::new(Dispatch::new(self.id.clone(), principal, outbox));
+                let auditor = self.gw.auditor(self.id);
+                let dispatch = Dispatch::new(self.id.clone(), principal, outbox, auditor);
+                let dispatch = Box::new(dispatch);
                 self.phase = Phase::Ready(session, dispatch);
                 None
             }
@@ -300,17 +308,6 @@ async fn read(stream: &UnixStream, buf: &mut [u8]) -> io::Result<Received> {
             Err(err) if matches!(err.kind(), io::ErrorKind::WouldBlock) => {}
             Err(err) if matches!(err.kind(), io::ErrorKind::Interrupted) => {}
             result => return result,
-        }
-    }
-}
-
-async fn write_loop(mut writer: OwnedWriteHalf, outbox: Arc<Outbox>) {
-    while let Some(frames) = outbox.drain().await {
-        for frame in frames {
-            if writer.write_all(&frame).await.is_err() {
-                outbox.close();
-                return;
-            }
         }
     }
 }
