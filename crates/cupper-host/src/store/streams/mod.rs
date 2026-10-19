@@ -12,6 +12,8 @@
 //!   [`StreamsConfig::idle`]; idle streams are swept whenever one is opened.
 
 mod append;
+#[cfg(all(test, shuttle))]
+mod interleavings;
 mod state;
 mod sync;
 #[cfg(test)]
