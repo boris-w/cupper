@@ -14,5 +14,6 @@ pub mod ids;
 pub mod limits;
 pub mod open_enum;
 pub mod rpc;
+pub mod schema;
 pub mod sync;
 pub mod text;
