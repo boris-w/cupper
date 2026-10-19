@@ -15,6 +15,7 @@ mod raw;
 mod readers;
 #[cfg(test)]
 mod testutil;
+pub mod upcast;
 pub mod writer;
 
 pub use connection::{BUSY_TIMEOUT, Database, Durability, OpenError, open_reader, open_writer};
