@@ -12,8 +12,9 @@
 //! snapshots that `history/page` serves.
 //!
 //! Raw frames reach `raw.db` through the bounded queue of a [`RawWriter`],
-//! a thread of its own.
+//! a thread of its own. [`BlobStore`] keeps the content-addressed blobs.
 
+pub mod blobs;
 mod connection;
 pub mod epoch;
 pub mod history;
@@ -29,6 +30,7 @@ mod testutil;
 pub mod upcast;
 pub mod writer;
 
+pub use blobs::{BlobError, BlobStore};
 pub use connection::{BUSY_TIMEOUT, Database, Durability, OpenError, open_reader, open_writer};
 pub use migrate::{LAYOUT_VERSION, MIGRATIONS, MigrateError, Migrated, Migration, migrate};
 pub use raw::{RAW_SCHEMA, RawDb, RawSchema, prepare_raw};
