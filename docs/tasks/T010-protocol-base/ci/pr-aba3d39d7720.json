@@ -1,0 +1,93 @@
+{
+  "artifacts": [],
+  "commit": "aba3d39d77200256cb2c8f88ec998f2a9c7cb3a2",
+  "duration_ms": 8448,
+  "jobs": [
+    {
+      "duration_ms": 5746,
+      "failed": 0,
+      "name": "rust",
+      "passed": 41,
+      "result": "pass"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "protocol",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 1454,
+      "failed": 0,
+      "name": "ts",
+      "passed": 3,
+      "result": "pass"
+    },
+    {
+      "duration_ms": 1247,
+      "failed": 0,
+      "name": "license",
+      "passed": 1,
+      "result": "pass"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "testdata-scan",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "ui",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "e2e",
+      "passed": 0,
+      "result": "not_implemented"
+    }
+  ],
+  "machine": "MacBook Pro (Apple M5 Pro)",
+  "os": "macOS 26.4",
+  "results": [
+    {
+      "commit": "aba3d39d77200256cb2c8f88ec998f2a9c7cb3a2",
+      "id": "UNIT-ci-lock",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "aba3d39d77200256cb2c8f88ec998f2a9c7cb3a2",
+      "id": "UNIT-ci-summary",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "aba3d39d77200256cb2c8f88ec998f2a9c7cb3a2",
+      "id": "UNIT-digest-jcs",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "aba3d39d77200256cb2c8f88ec998f2a9c7cb3a2",
+      "id": "UNIT-proto-base",
+      "result": "pass",
+      "suite": "pr"
+    }
+  ],
+  "target": "pr",
+  "toolchain": {
+    "cargo": "1.96.0",
+    "cargo_deny": "0.20.2",
+    "node": "24.13.0",
+    "pnpm": "12.14.0",
+    "rustc": "1.96.0"
+  },
+  "version": 1
+}
