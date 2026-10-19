@@ -80,13 +80,18 @@ open_enum! {
 #[serde(try_from = "u8", into = "u8")]
 pub struct KeyDigit(u8);
 
-impl TryFrom<u8> for KeyDigit {
-    type Error = String;
+/// A digit outside 1 to 9.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("digit {0} is not 1 to 9")]
+pub struct DigitOutOfRange(pub u8);
 
-    fn try_from(digit: u8) -> Result<Self, String> {
+impl TryFrom<u8> for KeyDigit {
+    type Error = DigitOutOfRange;
+
+    fn try_from(digit: u8) -> Result<Self, DigitOutOfRange> {
         match digit {
             1..=9 => Ok(Self(digit)),
-            _ => Err(format!("digit {digit} is not 1 to 9")),
+            _ => Err(DigitOutOfRange(digit)),
         }
     }
 }
@@ -219,9 +224,14 @@ pub(super) mod tests {
         assert_eq!(input.key, Some(InputKey::Digit));
         assert_eq!(input.digit.map(u8::from), Some(9));
         for bad in [0, 10, 255] {
+            assert_eq!(KeyDigit::try_from(bad), Err(DigitOutOfRange(bad)));
             let raw = json!({"kind": "key", "key": "digit", "digit": bad});
             let err = serde_json::from_value::<InputEvidence>(raw).unwrap_err();
-            assert!(err.to_string().contains("is not 1 to 9"), "{bad}: {err}");
+            assert!(
+                err.to_string()
+                    .contains(&format!("digit {bad} is not 1 to 9")),
+                "{err}"
+            );
         }
 
         let mut g = generator();
