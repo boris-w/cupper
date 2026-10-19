@@ -2,5 +2,6 @@
 //! declares them (plan 1.5).
 
 pub mod clock;
+pub mod exit;
 pub mod pure;
 pub mod quiescence;
