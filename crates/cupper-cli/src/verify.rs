@@ -12,6 +12,7 @@ use cupper_protocol::methods::handshake::HostIdentity;
 use cupper_sys::{AuditToken, Cdhash, Refusal, Requirement, file_cdhash, peer_token};
 
 use crate::build_kind::BuildKind;
+use crate::client::ClientAuth;
 
 /// The code requirement of the release host, with the Team ID (design 5.8.1).
 /// T180 sets it; until then a release CLI accepts no host.
@@ -32,8 +33,9 @@ pub enum HostCheck {
     /// Development: it runs the code of this file. Weak, since anyone can
     /// build a binary there; output marks the host as not verified.
     HostFile(PathBuf),
-    /// e2e: the `harness` proof of `initialize`, which T039 adds. Until then
-    /// nothing is checked besides the user and the pinned token.
+    /// e2e: the host proves the `harness` key in `initialize`'s
+    /// `host_proof`. A client without the key, authenticating as `peer`, has
+    /// only the user and the pinned token to go on: weak.
     Harness,
 }
 
@@ -60,6 +62,8 @@ pub enum VerifyError {
     WeakAuth,
     #[error("another process now speaks for the host")]
     TokenChanged,
+    #[error("the host did not prove the key")]
+    HostProof,
 }
 
 impl HostCheck {
@@ -78,9 +82,14 @@ impl HostCheck {
         })
     }
 
-    /// Whether output has to mark the host as not verified by its signature.
-    pub fn is_weak(&self) -> bool {
-        matches!(self, Self::HostFile(_) | Self::Harness)
+    /// Whether output has to mark the host as not verified by its signature,
+    /// for a client that authenticates with `auth`.
+    pub fn is_weak(&self, auth: &ClientAuth) -> bool {
+        match self {
+            Self::Signature(_) | Self::Cdhash(_) => false,
+            Self::HostFile(_) => true,
+            Self::Harness => !auth.proves_host(),
+        }
     }
 
     /// Checks the process at the other end of `socket`, a connected Unix
@@ -197,7 +206,7 @@ mod tests {
             HostCheck::Harness,
         ]
         .iter()
-        .map(HostCheck::is_weak)
+        .map(|check| check.is_weak(&ClientAuth::Peer))
         .collect();
         assert_eq!(weak, [false, false, true, true]);
     }

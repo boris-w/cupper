@@ -27,6 +27,7 @@ use cupper_protocol::methods::stream::{
     StreamEvents, StreamEventsParams, StreamReset, StreamResetParams, StreamSnapshot,
     StreamSnapshotParams, StreamSubscribe, StreamSubscribeParams, StreamSubscribeResult,
 };
+use cupper_protocol::proof::{self, Channel, Direction};
 use cupper_protocol::rpc::{self, Message, Method, Notification, RawMessage, RpcId};
 use cupper_protocol::sync::StreamId;
 use cupper_sys::{AuditToken, Refusal, recv_closing_fds};
@@ -37,6 +38,8 @@ use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::sync::{Mutex as AsyncMutex, mpsc, oneshot};
 use tokio::task::JoinHandle;
 
+#[cfg(feature = "test-harness")]
+use crate::harness::HarnessKey;
 use crate::verify::{HostCheck, VerifyError, still_pinned};
 
 /// A message from the host other than the response to a [`Client::request`].
@@ -93,27 +96,80 @@ pub enum ClientError {
     Closed(Option<CloseReason>),
     #[error("the host's first message was not host/hello")]
     NoHello,
+    #[error("the nonce of host/hello is not 64 hex digits")]
+    BadNonce,
     #[error("no protocol version in common with the host's {}..={}", .0.min, .0.max)]
     NoCommonVersion(VersionRange),
     #[error("the host chose protocol version {0}")]
     WrongVersion(u32),
 }
 
-/// How the CLI authenticates (design 5.8.1). T039 adds `harness`, keyed
-/// from `--harness-key-fd`: `ClientAuth::credentials` gets the `nonce`
-/// and the host's pinned token its proof binds to, and the handshake then
-/// checks `host_proof`.
+/// How the CLI authenticates (design 5.8.1).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum ClientAuth {
     /// The read-only `cli` principal.
     #[default]
     Peer,
+    /// e2e builds: the `test_harness` principal, with the key of
+    /// `--harness-key-fd`. The host proves the key back in `host_proof`.
+    #[cfg(feature = "test-harness")]
+    Harness(HarnessKey),
+}
+
+/// What the host has to prove in `host_proof`: the key, bound to the
+/// channel and to the pid of the host's pinned token.
+struct HostProof {
+    key: proof::Bytes32,
+    channel: Channel,
+    pid: i32,
+}
+
+impl HostProof {
+    fn check(&self, host_proof: Option<&str>) -> Result<(), VerifyError> {
+        let proof = host_proof.ok_or(VerifyError::HostProof)?;
+        let checked = self
+            .channel
+            .check(&self.key, Direction::HostToClient, self.pid, proof);
+        checked.map_err(|_| VerifyError::HostProof)
+    }
 }
 
 impl ClientAuth {
-    fn credentials(&self, _hello: &HostHelloParams, _host: &AuditToken) -> Auth {
+    /// Whether the host proves itself to this authentication.
+    pub fn proves_host(&self) -> bool {
+        !matches!(self, Self::Peer)
+    }
+
+    /// `auth` for `initialize`, and what `host_proof` has to be then.
+    #[cfg_attr(
+        not(feature = "test-harness"),
+        expect(unused_variables, reason = "only the harness key has a proof")
+    )]
+    fn credentials(
+        &self,
+        hello: &HostHelloParams,
+        host: &AuditToken,
+    ) -> Result<(Auth, Option<HostProof>), ClientError> {
         match self {
-            Self::Peer => Auth::Peer,
+            Self::Peer => Ok((Auth::Peer, None)),
+            #[cfg(feature = "test-harness")]
+            Self::Harness(key) => {
+                use cupper_protocol::methods::handshake::KeyProof;
+
+                let h_nonce = proof::parse_hex32(&hello.nonce).ok_or(ClientError::BadNonce)?;
+                let mut c_nonce = [0; 32];
+                getrandom::fill(&mut c_nonce).expect("the system's random source is available");
+                let channel = Channel { h_nonce, c_nonce };
+                let pid = std::process::id() as i32;
+                let proof = channel.prove(key.expose(), Direction::ClientToHost, pid);
+                let c_nonce = proof::to_hex(&c_nonce);
+                let host_proof = HostProof {
+                    key: *key.expose(),
+                    channel,
+                    pid: host.pid(),
+                };
+                Ok((Auth::Harness(KeyProof { c_nonce, proof }), Some(host_proof)))
+            }
         }
     }
 }
@@ -182,7 +238,8 @@ impl Client {
     }
 
     /// Checks the host at the other end of `stream`, then reads `host/hello`
-    /// and sends `initialize`. A host that fails the check gets nothing.
+    /// and sends `initialize`. A host that fails the check gets nothing; one
+    /// that does not prove the key of `options.auth` is left.
     pub async fn handshake(
         stream: UnixStream,
         check: &HostCheck,
@@ -198,9 +255,10 @@ impl Client {
         let version = PROTOCOL
             .negotiate(&hello.protocol)
             .ok_or(ClientError::NoCommonVersion(hello.protocol))?;
+        let (auth, host_proof) = options.auth.credentials(&hello, &host)?;
         let params = InitializeParams {
             protocol: PROTOCOL,
-            auth: options.auth.credentials(&hello, &host),
+            auth,
             nonce: hello.nonce,
             client: ClientIdentity {
                 kind: ClientKind::Cli,
@@ -216,6 +274,9 @@ impl Client {
             return Err(ClientError::WrongVersion(init.protocol));
         }
         check.accept(&init.host)?;
+        if let Some(expected) = host_proof {
+            expected.check(init.host_proof.as_deref())?;
+        }
         client.init = Some(init);
         Ok(client)
     }
@@ -465,12 +526,15 @@ mod tests {
         /// Answers `initialize` choosing `protocol`, and returns the request.
         async fn initialize(&mut self, protocol: u32) -> Value {
             let request = self.recv().await.unwrap();
-            let result = json!({"protocol": protocol, "host": {"host_id": "h_1", "version": "0.1.0",
-                "weak_auth": true, "data_epoch": 3}, "principal": {"id": "pr_cli", "kind": "cli",
-                "scopes": ["read"]}, "features": ["stream.coalesce"], "limits": V1});
-            self.reply(&request, result).await;
+            self.reply(&request, init_result(protocol)).await;
             request
         }
+    }
+
+    fn init_result(protocol: u32) -> Value {
+        json!({"protocol": protocol, "host": {"host_id": "h_1", "version": "0.1.0",
+            "weak_auth": true, "data_epoch": 3}, "principal": {"id": "pr_cli", "kind": "cli",
+            "scopes": ["read"]}, "features": ["stream.coalesce"], "limits": V1})
     }
 
     fn pair() -> (UnixStream, FakeHost) {
@@ -662,6 +726,56 @@ mod tests {
         assert_eq!(client.close_reason(), Some(CloseReason::TokenChanged));
         drop(input);
         assert!(cat.wait().unwrap().success());
+    }
+
+    #[cfg(feature = "test-harness")]
+    #[tokio::test]
+    async fn unit_cli_client_harness_proves_the_key_and_checks_host_proof() {
+        let key = [0x5a; 32];
+        let me = std::process::id() as i32;
+        // The host's proof: for the pid of the pinned host (this process),
+        // for another one, as a relaying process would make it, or none.
+        for host_pid in [Some(me), Some(me + 1), None] {
+            let (stream, mut host) = pair();
+            let script = tokio::spawn(async move {
+                host.hello(1, 1).await;
+                let request = host.recv().await.unwrap();
+                let auth = &request["params"]["auth"];
+                assert_eq!(auth["type"], "harness");
+                let c_nonce = proof::parse_hex32(auth["c_nonce"].as_str().unwrap()).unwrap();
+                let channel = Channel {
+                    h_nonce: [0xaa; 32],
+                    c_nonce,
+                };
+                let client_proof = auth["proof"].as_str().unwrap();
+                let checked = channel.check(&key, Direction::ClientToHost, me, client_proof);
+                assert_eq!(checked, Ok(()), "the client proved the key for its pid");
+                let mut result = init_result(1);
+                if let Some(pid) = host_pid {
+                    result["host_proof"] = channel.prove(&key, Direction::HostToClient, pid).into();
+                }
+                host.reply(&request, result).await;
+                host
+            });
+            let auth = ClientAuth::Harness(HarnessKey::new(key));
+            let options = Options {
+                auth: auth.clone(),
+                ..Options::default()
+            };
+            let connected = Client::handshake(stream, &HostCheck::Harness, options).await;
+            let mut host = script.await.unwrap();
+            if host_pid == Some(me) {
+                assert_eq!(connected.unwrap().initialized().host.data_epoch, 3);
+                assert!(!HostCheck::Harness.is_weak(&auth));
+                continue;
+            }
+            let err = connected.err().unwrap();
+            assert!(
+                matches!(err, ClientError::Verify(VerifyError::HostProof)),
+                "{host_pid:?}: {err}"
+            );
+            assert_eq!(host.recv().await, None, "the client left");
+        }
     }
 
     #[test]

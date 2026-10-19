@@ -253,6 +253,7 @@ version = "0.0.0"
 dependencies = [
  "cupper-protocol",
  "cupper-sys",
+ "getrandom 0.4.3",
  "serde_json",
  "thiserror",
  "tokio",
