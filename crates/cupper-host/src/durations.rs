@@ -53,6 +53,9 @@ durations! {
     /// queue runs empty (design 5.2.8). Only on `SystemClock`; it is not a
     /// `Clock` timer (design 5.2.16).
     STORE_BATCH_LINGER = "store_batch_linger", Duration::from_millis(2);
+    /// How long a stream stays in memory with no handle, writer or subscriber
+    /// left (design 5.2.8). Checked whenever a stream is opened, not by a timer.
+    STREAM_IDLE = "stream_idle", Duration::from_secs(600);
     /// How long a new turn waits for its start snapshot before it sends the
     /// prompt anyway (design 5.2.6).
     TURN_PREPARE = "turn_prepare", Duration::from_secs(3);

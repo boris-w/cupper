@@ -85,6 +85,9 @@ mod harness {
         /// Between two migration scripts of `host.db`: one has committed, the
         /// next has not begun (design 5.4.6). Hit once per script.
         STORE_MIGRATION_COMMITTED = "store.migration_committed";
+        /// Between steps 2 and 3 of an append: the batch has committed, the
+        /// stream has not applied or fanned it out (design 5.2.3).
+        STORE_BEFORE_PUBLISH = "store.before_publish";
         /// The module's own tests.
         #[cfg(test)]
         TEST_PROBE = "test.probe";
