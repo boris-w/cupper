@@ -7,3 +7,4 @@ export {
   type MethodFixture,
   type Reply,
 } from "./host";
+export { createMockShellHost, MOCK_HANDSHAKE } from "./port";
