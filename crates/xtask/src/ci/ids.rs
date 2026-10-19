@@ -1,6 +1,7 @@
 //! Test IDs (`<layer>-<scope>-<name>`, design 5.9.10) and the tests that carry
-//! them. A test belongs to an ID when its name, or a module on its path, starts
-//! with the ID written in snake case: `unit_ci_lock_...` runs `UNIT-ci-lock`.
+//! them. A test belongs to an ID when its name, or a module or describe block
+//! on its path, starts with the ID: in snake case for Rust (`unit_ci_lock_...`
+//! runs `UNIT-ci-lock`), verbatim for JS test titles (`UNIT-shell-mock ...`).
 //! The IDs come from the design and the plan, which keep their exact spelling.
 
 use std::collections::BTreeSet;
@@ -59,16 +60,23 @@ fn scan(text: &str, ids: &mut BTreeSet<String>) {
     }
 }
 
-/// The longest ID whose snake-case form starts a segment of `test_name`.
+/// The longest ID that starts a `::`-separated segment of `test_name`, either
+/// in snake case and followed by `_`, or verbatim and followed by anything
+/// that cannot continue an ID.
 pub fn owner<'a>(ids: &'a [String], test_name: &str) -> Option<&'a str> {
     let segments: Vec<&str> = test_name.split("::").collect();
+    let id_char = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_';
     ids.iter()
         .filter(|id| {
             let snake = id.to_ascii_lowercase().replace('-', "_");
             segments.iter().any(|segment| {
-                segment
+                let in_snake_case = segment
                     .strip_prefix(snake.as_str())
-                    .is_some_and(|rest| rest.is_empty() || rest.starts_with('_'))
+                    .is_some_and(|rest| rest.is_empty() || rest.starts_with('_'));
+                let verbatim = segment
+                    .strip_prefix(id.as_str())
+                    .is_some_and(|rest| !rest.starts_with(id_char));
+                in_snake_case || verbatim
             })
         })
         .max_by_key(|id| id.len())
@@ -109,5 +117,23 @@ mod tests {
         );
         assert_eq!(owner(&ids, "ci::tests::unit_ci_locked_out"), None);
         assert_eq!(owner(&ids, "ci::tests::helper"), None);
+
+        // JS test titles carry the ID verbatim, in a describe block or the test.
+        assert_eq!(
+            owner(&ids, "packages/a/src/a.test.ts::UNIT-ci-lock::waits"),
+            Some("UNIT-ci-lock")
+        );
+        assert_eq!(
+            owner(&ids, "packages/a/src/a.test.ts::UNIT-ci-summary: no paths"),
+            Some("UNIT-ci-summary")
+        );
+        assert_eq!(
+            owner(&ids, "e2e/a.spec.ts::GOLD-A-option-map"),
+            Some("GOLD-A-option-map")
+        );
+        assert_eq!(owner(&ids, "a.test.ts::UNIT-ci-locked waits"), None);
+        assert_eq!(owner(&ids, "a.test.ts::UNIT-ci-lock-x waits"), None);
+        assert_eq!(owner(&ids, "a.test.ts::unit-ci-lock waits"), None);
+        assert_eq!(owner(&ids, "a.test.ts::waits for UNIT-ci-lock"), None);
     }
 }
