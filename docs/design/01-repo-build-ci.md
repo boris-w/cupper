@@ -75,7 +75,7 @@ cupper/
 | `cupper-cli` | Rust lib + bin | protocol、sys、tokio、clap | 库部分（连接、请求关联、`Mirror`）供宿主集成测试复用。特性 `test-harness` 才有 `--harness-key-fd`；`--build-info` 同宿主 |
 | `cupper-fake-agent` | Rust bin | agent-client-protocol | 两种模式见 [5.9](09-testing.md) |
 | `cupper-desktop-native` | Rust cdylib（napi-rs） | sys、napi | 产物 `cupper_native.node`，放在 asar 外（`asarUnpack`），由 electron-builder 一并签名 |
-| `xtask` | Rust bin | — | 只在开发和 CI 使用；依赖 `cupper-cli` 等 macOS 专用的 crate，只在 macOS 上编译，不承担 schema 导出 |
+| `xtask` | Rust bin | — | 只在开发和 CI 使用，不承担 schema 导出。以后依赖 `cupper-cli` 等 macOS 专用的 crate 时，这部分用 `cfg(target_os = "macos")` 隔离，保证 `ts`、`license`、`testdata-scan` 这类放在 ubuntu 上的作业仍能编译 xtask；做不到就把这些作业改到 macOS 上跑（T001 审阅意见 2） |
 | `@cupper/protocol` | TS | zod | 生成物入库；CI 检查与 schema 一致 |
 | `@cupper/host-client` | TS | protocol | 渲染进程使用；视图 reducer 与 Rust 视图用同一批金样例交叉验证 |
 | `@cupper/shell-api` | TS | — | 接口见 [5.7.3](07-desktop.md#573-shellapi) |
@@ -91,8 +91,9 @@ cupper/
 |---|---|---|
 | Rust | `rust-toolchain.toml` | stable 1.96（SP-4a 实测版本；`rust-version = 1.89`，因为用了 `File::try_lock`） |
 | ACP SDK | `Cargo.toml` 精确版本 | `agent-client-protocol = "=3.3.0"`（ADR-02；T003 在这个版本上验证了扩展消息和两条约束，升级时重跑它的探针，[5.6.10](06-agent-driver.md#5610-线路分接层)） |
-| Node（开发与工具） | `.node-version` | 24 LTS |
-| pnpm | `packageManager` 字段 | 10.x |
+| Node（开发与工具） | `.node-version` | 24 LTS（T001 定为 24.13.0） |
+| pnpm | `packageManager` 字段 | 12.x（T001 定为 12.14.0：本机版本，也是当前 latest；12 的依赖脚本白名单键为 `allowBuilds`，与 10.x 的配置格式不兼容） |
+| TypeScript | 根 `package.json` 精确版本 | 6.0.x（T001 定为 6.0.3：typescript-eslint 8.71 要求低于 6.1） |
 | Electron | `apps/desktop/package.json` 精确版本 | 44.x 的最新补丁版本（2026-10-19 时是 44.9.0，T074 开工时复核；见 [5.10.6](10-release.md#5106-electron-版本)） |
 | electron-builder / electron-updater | 精确版本 | 26.x / 6.8.x |
 | 适配器、Node 运行时 | `runtime/manifest.json` | claude-agent-acp 0.91.0、codex-acp 2.2.2、Node 24.22.0（SP-1、SP-2 实测版本，T003 复核不变）。claude-agent-acp 在 M1a 保持 0.91.0，升级放到 T066 的兼容运行；升到 0.93 及以上之前，先处理待定问题 Q42（`/remote-control`） |

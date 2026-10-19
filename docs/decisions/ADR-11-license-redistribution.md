@@ -57,3 +57,11 @@ CI 门禁分两层（设计评审修订，原写法为"打包输入里发现这�
 
 - **门禁工具**：`cargo deny`、cargo-about、`tools/license-gate`；第一层每个 PR 跑，第二层在发布流水线和每晚的发布配置构建里跑（详细设计 5.1.6、5.10.7）。
 - CI 计算 claude-agent-acp 本机打包产物的哈希时用隔离目录，不进入任何打包输入。
+
+## 白名单补充（2026-10-19，T001）
+
+- 白名单加入 `Unicode-3.0` 和 `Apache-2.0 WITH LLVM-exception`。两者都是 OSI 认可的宽松许可证，符合本 ADR 第 4 条的本意。
+  - `Unicode-3.0`：几乎所有 Rust derive 宏（serde_derive、thiserror 等）都会经 `unicode-ident` 引入它。
+  - `Apache-2.0 WITH LLVM-exception`：这是 Apache-2.0 加上一条放宽义务的例外。
+- 落点：`deny.toml` 的 `allow`（T001，`b7b7491`）。
+
