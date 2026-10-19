@@ -11,6 +11,9 @@ rust-version = "1.89"
 license = "Apache-2.0"
 publish = false
 
+[workspace.dependencies]
+anyhow = "1.0.100"
+
 [workspace.lints.rust]
 # `unsafe` lives only in `cupper-sys`, which opts out with a crate-level `allow` (design 5.1.1).
 unsafe_code = "deny"
