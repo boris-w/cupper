@@ -12,6 +12,8 @@
 mod fixtures;
 mod index;
 mod ops;
+#[cfg(test)]
+mod props;
 mod session;
 
 use std::ops::Range;
