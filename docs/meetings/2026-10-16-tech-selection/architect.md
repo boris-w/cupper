@@ -599,12 +599,12 @@ SP-4 用 Rust 做，范围在对齐会的基础上增加：ADR-01 的第 1–4 �
 
 ## 关键文件
 
-- /Users/boris/self/idea/cupper/docs/meetings/2026-10-16-tech-selection/agenda.md
-- /Users/boris/self/idea/cupper/docs/01-prd.md
-- /Users/boris/self/idea/cupper/docs/meetings/2026-10-16-prd-arch-alignment/architect.md
-- /Users/boris/self/idea/cupper/docs/tasks/R02-acp-adapters/report.md
-- /Users/boris/self/idea/cupper/docs/tasks/R01-codex-ui-teardown/report.md
-- /Users/boris/self/idea/cupper/docs/tasks/R03-mobile-e2ee-remote/report.md
-- /Users/boris/self/idea/cupper/docs/02-design.md
+- docs/meetings/2026-10-16-tech-selection/agenda.md
+- docs/01-prd.md
+- docs/meetings/2026-10-16-prd-arch-alignment/architect.md
+- docs/tasks/R02-acp-adapters/report.md
+- docs/tasks/R01-codex-ui-teardown/report.md
+- docs/tasks/R03-mobile-e2ee-remote/report.md
+- docs/02-design.md
 
 （本次讨论是只读的：没有修改、创建或提交仓库里的任何文件。）

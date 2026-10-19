@@ -555,8 +555,8 @@ sequenceDiagram
 
 ## 附：关键文件
 
-- /Users/boris/self/idea/cupper/docs/01-prd.md
-- /Users/boris/self/idea/cupper/docs/tasks/R02-acp-adapters/report.md
-- /Users/boris/self/idea/cupper/docs/tasks/R03-mobile-e2ee-remote/report.md
-- /Users/boris/self/idea/cupper/docs/tasks/R01-codex-ui-teardown/report.md
-- /Users/boris/self/idea/cupper/docs/meetings/2026-10-16-prd-arch-alignment/agenda.md
+- docs/01-prd.md
+- docs/tasks/R02-acp-adapters/report.md
+- docs/tasks/R03-mobile-e2ee-remote/report.md
+- docs/tasks/R01-codex-ui-teardown/report.md
+- docs/meetings/2026-10-16-prd-arch-alignment/agenda.md
