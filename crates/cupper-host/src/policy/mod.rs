@@ -37,6 +37,8 @@ mod method;
 mod tier;
 
 #[cfg(test)]
+mod matrix;
+#[cfg(test)]
 mod testkit;
 
 use cupper_protocol::domain::{ClientRole, PrincipalKind};
