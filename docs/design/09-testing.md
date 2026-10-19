@@ -171,7 +171,7 @@ flowchart LR
 |---|---|
 | 适配器 | 当前锁定的版本；准备升级时加上候选版本 |
 | CLI | 已验证范围的下限、当前稳定版、最新版 |
-| 剧本 | 新建会话与能力；普通回合；执行命令（含非零退出码）；审批允许与拒绝；结构化提问；计划确认；取消（命令执行中、审批挂起时）；CLI 或 app-server 被杀后恢复；宿主重启后 resume；图片输入；Steer；**两个会话在同一个适配器上并发 prompt**（Q8）；**未信任项目**（`settingSources: ["user"]` 时，项目的 hooks 不运行、`.mcp.json` 里的服务器不启动、项目的 `env` 和 `apiKeyHelper` 不生效，安全确认 ③） |
+| 剧本 | 新建会话与能力；普通回合；执行命令（含非零退出码）；审批允许与拒绝；结构化提问；计划确认；取消（命令执行中、审批挂起时）；CLI 或 app-server 被杀后恢复；宿主重启后 resume；图片输入；Steer；**两个会话在同一个适配器上并发 prompt**（Q8）；**6 个会话在同一个适配器上并发**（COMPAT-claude-six-sessions，NFR-11，v1.6：T003 只测了 2 个会话）；**关闭时有命令正在运行**（COMPAT-claude-close-running，K21，v1.6：断言关闭之后命令及其子进程都已退出）；**多次 resume 同一个会话后的进程数**（COMPAT-claude-resume-procs，上游 #1011，Q43，v1.6）；**未信任项目**（`settingSources: ["user"]` 时，项目的 hooks 不运行、`.mcp.json` 里的服务器不启动、项目的 `env` 和 `apiKeyHelper` 不生效，安全确认 ③） |
 
 - **Q8 的通过条件**：两个会话同时各发 3 个 prompt，全部在 5 分钟内返回，输出没有串到另一个会话，重复 3 轮。
 - **只在本机运行**（纪要 D13，测试 #8、安全 #10）：由维护者在本机手动执行 `cargo xtask compat`，不经任何 CI runner；用最便宜的模型、临时 git 仓库，只选 `allow_once` 和 `reject_once`。
