@@ -1,5 +1,6 @@
-//! Step 1 of the host's startup (design 5.2.13): the command line and
-//! `--build-info`. Both belong to the frozen startup contract (5.12.5 #9).
+//! Step 1 of the host's startup (design 5.2.13): the command line,
+//! `--build-info` and the stdin [`payload`]. All three belong to the frozen
+//! startup contract (5.12.5 #9).
 //!
 //! `test_config` has no switch: it comes only in the stdin payload (plan P-9).
 
@@ -7,6 +8,10 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 use crate::exit::HostExit;
+
+pub mod payload;
+#[cfg(feature = "test-harness")]
+pub mod test_config;
 
 /// `cupper-host [--data-dir <dir>] [--build-info]`.
 pub const USAGE: &str = "usage: cupper-host [--data-dir <dir>] [--build-info]";
