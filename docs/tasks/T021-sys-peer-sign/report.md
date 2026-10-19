@@ -113,3 +113,37 @@ workflow 的 YAML 起初没过 prettier。我在推送前用 `git reset --soft` 
    - main 已经前进到 `11d0db9`。合并时如果 `Cargo.lock` 冲突，取 main 的版本，再让 cargo 重新解析即可。
 6. **规模**：约 1,815 行，超过约 1,500 行的上限。其中测试和测试辅助约 880 行，产品代码约 760 行。超出主要来自两块：没有预料到的 SCM_RIGHTS 对策（`recv_closing_fds` 和它的两个用例），以及编排者追加的 stdio 重定向（约 95 行）。超出是在工作基本完成时才发现的，所以没有中途停下。
 7. **T020 的用例改了一行**：`unit_sys_spawn_mutation_without_cloexec_default_leaks_fds` 加了 `fd_lock()`，原因见"关键取舍"第 5 条。
+
+## 修复轮汇报（`fix/T021-flaky-peer-test`，2026-10-19）
+
+两个偶发失败的用例都已修好，在 CPU 打满的情况下连跑 80 次，全部通过。
+
+**原因**
+- 推测只对了一半：确实是拉起子进程造成的，但子进程并不是继承了 fd。
+- 任何 `posix_spawn`，包括带 `CLOEXEC_DEFAULT` 的 `cupper_sys::spawn`，都会在内核里先复制整张 fd 表，再关掉多余的；close-on-exec 的 fd 也一样。
+- 所以只要别的用例正在拉子进程，刚关掉的管道写端就可能还被短暂持有，`writers_gone` 断言随之失败。T020 和 UNIT-sys-uniqueid 的用例拉子进程时都不取 `fd_lock`。
+- 实测：一个线程连续拉子进程时，20,000 次检查里有 10–15 次写端仍开着；没有并发拉起时是 0 次。
+
+**负载下又发现一个偶发失败，也是 T021 的**
+- 失败的用例：`unit_sys_uniqueid_parent_id_outlives_the_launcher_until_an_exec`，在未改动的 main 上 50 次失败 1 次。
+- 原因：`SIGUSR1` 可能在后台子 shell 执行 `trap` 之前就到达，信号按默认处置把它杀掉，它也就不会 exec。
+
+**怎么修**
+- 断言"fd 此刻是否还有人持有"的两个用例（`plain_reads_install_passed_fds`、`recv_closes_passed_fds`）改用新加的 `testutil::alone`，放到单独的测试进程里跑：
+  - 做法：用 `--exact` 重新运行同一个测试二进制，只跑这一个用例，在那个进程里没有别的用例拉子进程。
+  - 外层会核对子进程里恰好跑了 1 个用例且通过；测试路径写错或用例本身失败，外层都会失败，两种情况都实际验证过。
+- 为什么不选"所有拉子进程的用例都取 `fd_lock`"：受影响的是所有拉子进程的用例，不只是用 `std::process` 的那些。现在和以后每个这样的用例都得记得取锁，漏一个就会重新出现偶发失败。
+- 为什么不选单独的集成测试二进制：两个用例都要用 `unsafe`，而工作区禁止 crate 外的 `unsafe`，还得把辅助函数复制一份过去。
+- 子 shell 设好 `trap` 后先输出一行 `ready`，测试读到这一行才发信号，结果是确定的。
+- `notes.md` 里讲 `fd_lock` 的两处说明同步改了。
+
+**验证**（18 个 `yes` 进程占满 18 个核）
+- `cargo test -p cupper-sys --lib`：50 次，全部通过；
+- `cargo test --workspace --all-features`：30 次，全部通过；
+- 判定标准：输出里有 `test result: ok`，并且没有 FAILED 或编译错误。
+- 结束后没有残留的负载进程和临时目录。
+- `cargo xtask ci pr --record`（干净 worktree）通过：rust 255、ts 64、license 1，IT-sys-peer-current 和 UNIT-sys-uniqueid 都是 pass。摘要是 `docs/tasks/T021-sys-peer-sign/ci/pr-8f9ea44d9812.json`。
+
+**提交**：`63d3bb0`（用例单独进程运行）、`be38187`（等 trap 就绪再发信号）、`8f9ea44`（notes）、`773243c`（CI 摘要）。
+
+**给宿主的提示**：内核在拉起子进程时会短暂复制全部 fd，这一点宿主也会碰到。凡是"关掉 fd 后立刻判断对端是否已关闭"的逻辑都要考虑这个窗口，已写进 notes。
