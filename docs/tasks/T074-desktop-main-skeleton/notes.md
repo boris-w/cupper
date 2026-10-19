@@ -92,3 +92,13 @@
 - **Electron 44 有第 9 个 fuse**，@electron/fuses 1.8.0 不认识。T161 逐项断言 fuses 时需要处理。
 - **`~/Library/Preferences/dev.cupper.app.e2e.plist`**：e2e 产物启动后，Chromium 往这个 bundle id 的用户默认值里写了几项（`NSTreatUnknownArgumentsAsOpen` 等），它不在 `CUPPER_E2E_DIR` 下面。内容与用户数据无关；验证结束后已删除。
 - **缩放后的交通灯位置**：Codex 按 `(44 × 缩放 − 14) / 2` 计算 y。本任务只按默认缩放设成 15，菜单里的缩放角色不会重新计算，留给 T152（窗口外观的细节）。
+
+## 修复第 1 轮：测试的临时目录（`fix/T074-test-tmpdir-cleanup`，2026-10-19）
+
+- 每跑一次桌面端测试，用户临时目录里会多 7 个目录：`hardening.test.ts` 的 1 个 `cupper-app-protocol-*`，`log.test.ts` 的 2 个 `cupper-log-*`，`prefs.test.ts` 的 4 个 `cupper-prefs-*`。修复前，用户临时目录里分别已有 52、92、184 个。`apps/`、`packages/` 下只有这三处用了 `mkdtemp`、`tmpdir()`。
+- 修法：app protocol 一组在 `afterAll` 里删除 `beforeAll` 建的目录；log 和 prefs 的辅助函数建目录后用 `onTestFinished` 登记删除，每个用例结束时删掉自己的目录，失败的用例也删。用三处各加一条必败断言验证过：3 个用例失败，临时目录里一个也没剩。
+- 验证：
+  - `TMPDIR` 指向专用空目录：修复前 `pnpm -r run test` 一次留下 7 个目录，修复后 0 个。
+  - 用户临时目录，按运行前后的目录清单比对，已有目录一个没删：`pnpm -r run test` 和根目录的 `pnpm test`（Rust）交替各跑 5 次，新增 7 个，创建时间都是同一秒，那一秒本分支正在跑 Rust 测试，所以是别处跑未修复代码的结果；随后只跑 `pnpm -r run test` 5 次，新增 0 个。
+- Rust 测试：`cupper-sys`、`cupper-host` 存储、`xtask` 的 `TempDir` 都在 `Drop` 里删除，fake agent 的工作目录也在 `Drop` 里删除；只有进程被杀时才会残留。`cupper-host` 的 `migrations.rs`、`xtask` 的 `clippy_disallowed_methods.rs` 用 `CARGO_TARGET_TMPDIR`，在 `target/` 下，不进用户临时目录。`TMPDIR` 指向专用空目录跑 `cargo test --workspace --all-features` 和宿主的三个特性组合，结束后目录为空。
+- 用户临时目录里还有 2 个 `cupper-store-test-*-linger`（15:27、15:38），当前代码里没有叫 `linger` 的存储用例（只有 `no-linger`、`linger-stop`），应是别的分支或被打断的运行留下的，没有动。
