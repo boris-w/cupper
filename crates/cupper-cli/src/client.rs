@@ -407,6 +407,8 @@ fn notification(method: String, params: Value) -> serde_json::Result<Incoming> {
 
 #[cfg(test)]
 mod tests {
+    use std::os::fd::AsFd;
+
     use cupper_protocol::limits::V1;
     use cupper_protocol::methods::Empty;
     use cupper_protocol::methods::handshake::HostStatus;
@@ -485,6 +487,17 @@ mod tests {
 
     fn this_process() -> HostCheck {
         HostCheck::Cdhash(own_cdhash().unwrap())
+    }
+
+    async fn connected() -> (Client, FakeHost) {
+        let (stream, mut host) = pair();
+        let script = tokio::spawn(async move {
+            host.hello(1, 1).await;
+            host.initialize(1).await;
+            host
+        });
+        let client = Client::handshake(stream, &this_process(), Options::default()).await;
+        (client.unwrap(), script.await.unwrap())
     }
 
     #[tokio::test]
@@ -619,6 +632,36 @@ mod tests {
             "{err}"
         );
         assert_eq!(host.recv().await, None, "the client sent nothing");
+    }
+
+    #[tokio::test]
+    async fn unit_cli_client_passed_fds_or_another_writer_end_the_connection() {
+        let shutdown = json!({"jsonrpc": "2.0", "method": "host/shutdown",
+            "params": {"reason": "idle", "restart_expected": false}});
+        let shutdown = frame::encode_json(&shutdown).unwrap();
+
+        let (mut client, host) = connected().await;
+        let (_read, write) = io::pipe().unwrap();
+        let sent = cupper_sys::send_with_fds(&host.stream, &shutdown, &[write.as_fd()]).unwrap();
+        assert_eq!(sent, shutdown.len());
+        assert_eq!(client.next().await, None, "nothing of a message with fds");
+        assert_eq!(client.close_reason(), Some(CloseReason::PassedFds(1)));
+
+        // `cat` writes on the host's end: another process now speaks for the
+        // host. It stays alive until the client has read, so the token names it.
+        let (mut client, host) = connected().await;
+        let end = host.stream.as_fd().try_clone_to_owned().unwrap();
+        let mut cat = std::process::Command::new("/bin/cat")
+            .stdin(std::process::Stdio::piped())
+            .stdout(end)
+            .spawn()
+            .unwrap();
+        let mut input = cat.stdin.take().unwrap();
+        io::Write::write_all(&mut input, &shutdown).unwrap();
+        assert_eq!(client.next().await, None, "nothing from the other process");
+        assert_eq!(client.close_reason(), Some(CloseReason::TokenChanged));
+        drop(input);
+        assert!(cat.wait().unwrap().success());
     }
 
     #[test]

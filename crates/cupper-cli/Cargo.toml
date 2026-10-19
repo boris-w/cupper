@@ -35,6 +35,8 @@ tokio = { version = "1.53.3", features = ["io-util", "net", "rt", "sync", "time"
 uuid = { version = "1.28.0", default-features = false, features = ["std", "v7"] }
 
 [dev-dependencies]
+# `send_with_fds`: a host that passes fds (UNIT-cli-client).
+cupper-sys = { path = "../cupper-sys", features = ["test-util"] }
 tokio = { version = "1.53.3", features = ["macros"] }
 
 [lints]
