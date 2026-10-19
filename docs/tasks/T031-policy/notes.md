@@ -64,3 +64,9 @@
 ### 变异检查
 
 逐条把规则改坏，确认至少有一个用例失败：去掉 SEC-9 清单、去掉 CliOnly、去掉 400 ms、`digit` 差一、安全键不再要求 privileged、手机能放宽、window 不查证据、`allow_always` 不算 privileged、Esc 能批准 `once`、忽略 `mode_after`、Claude 在未信任时加载项目配置、没有 approve 也能放宽到 elevated、未知的当前档位按 full_access、`git/revert` 不查证据、角色未知的 desktop 连接不按 window。15 处全部被抓到。其中最后一处是第一轮检查的漏网，补了用例。
+
+### 裁定之后
+
+- 编排者裁定按方案 A 验收，上限放宽到约 1,850 行。
+- 按要求改了 `cupper-protocol` `catalog.rs` 的测试（`1a4b925`）：`MATRIX` 里 window 的 `interaction/respond` 改为 `Input`；SEC-9 的注释改为"手机只能改模型、推理强度，以及收紧或保持 permission_mode"。宿主 `matrix.rs` 的文档随之删掉"两张表这一格写法不同"的说明。本提交 +6 / −7 行。
+- 统计（`git diff --numstat <分叉点> HEAD -- crates/`）：新增 1,836 行，删除 3 行，在 1,850 行以内。
