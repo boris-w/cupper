@@ -242,8 +242,11 @@ impl Peer {
             cupper_protocol::limits::V1.max_queue_bytes as usize,
         ));
         let conn = cupper_protocol::ids::ConnId::from_index(1);
+        let clock = Arc::new(crate::clock::ManualClock::new());
+        let audit = tokio::sync::mpsc::unbounded_channel().0;
+        let auditor = super::audit::Auditor::new(conn.clone(), audit, clock);
         Self {
-            dispatch: super::dispatch::Dispatch::new(conn, principal, Arc::clone(&outbox)),
+            dispatch: super::dispatch::Dispatch::new(conn, principal, Arc::clone(&outbox), auditor),
             outbox,
             replies: Vec::new(),
             next_id: 0,
@@ -295,9 +298,12 @@ impl Peer {
         ids.map(Option::unwrap).collect()
     }
 
-    fn take(&mut self, frames: Vec<Vec<u8>>) {
+    fn take(&mut self, items: Vec<super::outbox::Item>) {
         let mut decoder = FrameDecoder::new();
-        for frame in frames {
+        for item in items {
+            let super::outbox::Item::Frame(frame) = item else {
+                panic!("only replies are queued: {item:?}");
+            };
             decoder.push(&frame);
             let payload = decoder.next_frame().unwrap().unwrap().payload;
             self.replies.push(serde_json::from_slice(&payload).unwrap());

@@ -1547,7 +1547,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T030 网关 I：连接、握手与本地认证
 - [x] T031 策略
 - [x] T032 命令账本
-- [ ] T019 网关 III：订阅、历史与发送合并
+- [x] T019 网关 III：订阅、历史与发送合并
 - [ ] T029 网关 IV：blob 上传与下载
 - [x] T033 网关 II：分发、订阅、历史与 blob 传输
 - [ ] T034 索引 actor 与关注度
@@ -1587,9 +1587,9 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T068 宿主集成测试 III：交互、信任与档位
 - [ ] T069 宿主集成测试 IV：并发、故障点、崩溃一致性与外发
 - [x] T070 shell-api（与协议无关的部分）与 i18n
-- [ ] T087 host-client I-b：订阅与同步
+- [x] T087 host-client I-b：订阅与同步
 - [x] T071 host-client I：连接与续传，ShellAPI 的协议部分
-- [ ] T072 host-client II：视图 reducer 与交叉验证
+- [x] T072 host-client II：视图 reducer 与交叉验证
 - [x] T073 cupper-desktop-native
 - [x] T074 桌面主进程 I：应用骨架、构建与加固基线
 - [ ] T075 桌面主进程 II：拉起宿主、control 连接与退出确认
