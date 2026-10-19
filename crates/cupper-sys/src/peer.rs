@@ -616,8 +616,11 @@ mod tests {
         let refusal = token.unique_id().unwrap_err();
         assert_eq!(refusal.kind, RefusalKind::PeerExited, "{refusal}");
 
-        // Nobody holds the other end any more.
+        // Nobody holds the other end any more once we read end of file. Until
+        // then a spawn on another thread may still hold a copy (`fd_lock`),
+        // and the token query still fails with `EINVAL`, as above.
         drop(client);
+        assert_eq!(lines.read(&mut [0u8]).unwrap(), 0, "end of file");
         let refusal = peer_token(&server).unwrap_err();
         assert_eq!(
             (refusal.kind, refusal.code),
