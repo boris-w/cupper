@@ -3,3 +3,4 @@
 
 pub mod clock;
 pub mod pure;
+pub mod quiescence;
