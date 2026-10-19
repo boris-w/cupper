@@ -1,0 +1,6 @@
+# Prettier also skips everything in .gitignore. Documents kept by the orchestrator
+# and the prototype code are not reformatted.
+docs/
+spikes/
+CLAUDE.md
+pnpm-lock.yaml

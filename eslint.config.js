@@ -1,0 +1,21 @@
+// Base lint rules for every TS package. The security rules for the renderer and
+// `ui-core` (design 5.7.8) are added by the tasks that create those packages.
+import js from "@eslint/js";
+import { defineConfig, globalIgnores } from "eslint/config";
+import tseslint from "typescript-eslint";
+
+export default defineConfig(
+  // Mirrors .gitignore (ESLint does not read it), plus docs and prototype code.
+  globalIgnores([
+    "**/dist/",
+    "**/target/",
+    ".claude/",
+    ".private/",
+    ".worktrees/",
+    "docs/",
+    "spikes/",
+  ]),
+  js.configs.recommended,
+  tseslint.configs.strict,
+  tseslint.configs.stylistic,
+);
