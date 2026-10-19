@@ -2,6 +2,7 @@
 //! declares them (plan 1.5).
 
 pub mod clock;
+pub mod driver;
 pub mod durations;
 pub mod exit;
 pub mod failpoint;
