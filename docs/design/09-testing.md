@@ -134,7 +134,7 @@ flowchart LR
 
 **NFR-2、NFR-9**（M1b 的退出标准）：E2E-NFR2-retry（断线后用同一个 `command_id` 重发，不重复执行）、IT-NFR2-epoch（[5.9.8](#598-其他关键测试) 的 epoch 用例）、E2E-NFR9-adapter-crash、E2E-NFR9-cli-crash、IT-NFR9-failpoints（故障点全集）、IT-NFR9-crash-under-load（高负载写入中反复 `kill -9`，每次做完整性检查）。
 
-**M1b 的端到端**：S1（两个会话分别在两个 worktree 中运行）、S2（审批和提问、通知意图）、S3（审查、行内评论、按 hunk 暂存、提交）、S4（排队、Steer、中断），用假 agent 跑；用真实 agent 的完整流程走人工检查表（MAN-S1 至 MAN-S4）。
+**M1b 的端到端**：E2E-S1（两个会话分别在两个 worktree 中运行）、E2E-S2（审批和提问、通知意图）、E2E-S3（审查、行内评论、按 hunk 暂存、提交）、E2E-S4（排队、Steer、中断），用假 agent 跑；用真实 agent 的完整流程走人工检查表（MAN-S1、MAN-S2、MAN-S3、MAN-S4）。
 
 **安全相关的端到端**
 
@@ -146,7 +146,13 @@ flowchart LR
 | E2E-SEC-privileged | 渲染进程无法发出 `privileged` 方法、无法绕过原生确认框 | e2e |
 | E2E-SEC-fake-host | 假宿主占用套接字时 UI 拒绝连接（靠 dev_key 的双向证明） | e2e；发布路径由签名后冒烟覆盖 |
 | E2E-SEC-review-iso | 审查文档与主文档跨源，`parent.document` 访问抛错；别的端口发来的消息被忽略；iframe 的 `revert` 不会直接执行；注入金样例（[5.7.8](07-desktop.md#578-安全加固的落点)） | e2e（M1b） |
-| SMOKE-SIGNED-* | codesign 认证、`weak_auth` 为 false、CLI 默认只读、杀掉主进程后新 UI 接上旧宿主（NFR-8）、握手矩阵、拒绝假宿主、拒绝 `weak_auth` 宿主 | 只在发布流水线签名之后（[5.10.7](10-release.md#5107-发布流水线)） |
+| SMOKE-SIGNED-codesign-auth | 宿主认 UI 走的是 `codesign` 认证 | 只在发布流水线签名之后（[5.10.7](10-release.md#5107-发布流水线)），下同 |
+| SMOKE-SIGNED-no-weak-auth | `weak_auth` 为 false | 同上 |
+| SMOKE-SIGNED-cli-readonly | CLI 默认只读 | 同上 |
+| SMOKE-SIGNED-reattach | 杀掉主进程后新 UI 接上旧宿主（NFR-8） | 同上 |
+| SMOKE-SIGNED-handshake-matrix | 握手矩阵 | 同上 |
+| SMOKE-SIGNED-reject-fake-host | 拒绝假宿主 | 同上 |
+| SMOKE-SIGNED-reject-weak-host | 拒绝 `weak_auth` 宿主 | 同上 |
 | E2E-SEC-egress | SEC-6、NFR-4：App 运行期间除更新检查和运行时安装外没有外发连接。整个 App 放进 Seatbelt 会让 Chromium 的子进程崩溃（测试工程师实测），所以改用 `nettop` 对 App 的进程树采样，具体方法由 Q27 确定；宿主单独的外发检查用 Seatbelt，在宿主集成测试里做 | e2e（每晚） |
 
 ## 5.9.5 兼容矩阵
@@ -272,7 +278,7 @@ flowchart LR
 
 ## 5.9.10 测试编号与人工验证清单
 
-**编号**：`<层>-<范围>-<名称>`，层取 `UNIT`、`PROP`、`GOLD-A`、`GOLD-B`、`IT`、`E2E`、`SMOKE-SIGNED`、`COMPAT`、`PERF`、`MAN`。
+**编号**：`<层>-<范围>-<名称>`，层取 `UNIT`、`PROP`、`GOLD-A`、`GOLD-B`、`IT`、`E2E`、`UI`（界面截图回归）、`SMOKE-SIGNED`、`COMPAT`、`PERF`、`MAN`。引用时一律写完整编号，不用缩写、通配或区间。截图回归的名称以字母开头（如 `UI-layout`），与 PRD 的需求编号（UI-0 等）区分。
 
 **编号与测试的一致性检查**（测试核对 5）：`tools/trace-ids` 从 `docs/design/` 里抽出全部用例编号，与代码里的测试名（Rust 测试函数、Playwright 用例标题都以编号开头）和人工清单比对。每个编号要么有同名的测试或清单项，要么登记在 `tests/pending-ids.toml` 里并写明所属的里程碑；都没有就失败。某个里程碑退出时，`pending-ids.toml` 里属于它的条目必须清空。CI 的 `testdata-scan` 作业运行这项检查（[5.1.6](01-repo-build-ci.md#516-ci-流水线)）。
 追溯矩阵（[5.12.4](12-milestones.md#5124-追溯矩阵m1-的全部-p0-需求)）和规避清单（[5.6.9](06-agent-driver.md#569-已知问题的规避清单)）都引用编号，并注明在哪个套件里跑：每个 PR、每晚、发布流水线、人工。
@@ -281,7 +287,7 @@ flowchart LR
 
 | 编号 | 内容 | 谁、什么时候 |
 |---|---|---|
-| MAN-S1 至 MAN-S4 | S1–S4 × Claude 和 Codex 两种 agent 的逐步检查表：步骤、通过条件、CLI 和适配器的版本、日期 | 作者，M1b 退出前 |
+| MAN-S1、MAN-S2、MAN-S3、MAN-S4 | S1–S4 × Claude 和 Codex 两种 agent 的逐步检查表：步骤、通过条件、CLI 和适配器的版本、日期 | 作者，M1b 退出前 |
 | MAN-keyboard | 实体键盘：Enter 批准、Esc 拒绝、用输入法选词时不触发（[5.7.8](07-desktop.md#578-安全加固的落点)） | 作者，M1a 一次，之后每次升级 Electron 大版本 |
 | MAN-ime | SP-6 场景 6：流式输出期间用拼音输入 | 作者，SP-6 |
 | MAN-notification | AP-3 的系统通知、helper 的通知身份和点击跳转（Q2、SP-10） | 作者，M1b 开始前 |

@@ -139,7 +139,7 @@ Cupper.app/Contents/
    - **许可证门禁第二层**：对最终的 `.app`、zip、DMG 按内容指纹扫描（`@anthropic-ai/claude-agent-sdk` 发布文件的哈希和特征串、Claude Code 的 Mach-O 签名 identifier）；`locks/` 下的锁文件按哈希放进允许清单；
    - `THIRD_PARTY_NOTICES.txt` 存在且包含 Node、codex-acp 及其内联依赖、esbuild-wasm、Electron 与前端依赖、Rust 依赖（cargo-about 生成）；
    - `cupper-host --self-test`：校验内嵌清单与随包组件一致，然后退出。
-7. **签名后冒烟**（测试 #15、安全 #12；编号 SMOKE-SIGNED-*）：在 runner 上启动签名后的 App 和 CLI，断言：
+7. **签名后冒烟**（测试 #15、安全 #12；七个 SMOKE-SIGNED 用例的编号见 [5.9.4](09-testing.md#594-端到端测试与-nfr-1-验收)）：在 runner 上启动签名后的 App 和 CLI，断言：
    - 宿主认 UI 走的是 `codesign` 认证，`weak_auth` 为 false；
    - CLI 默认只读；
    - 杀掉 UI 主进程后，新 UI 能接上旧宿主（NFR-8；退化模式下做不到，这里补上覆盖，Q22）；

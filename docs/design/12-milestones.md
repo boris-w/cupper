@@ -26,7 +26,7 @@
 | 假 agent | 启动配置（persona、能力、登录状态、故障注入）、剧本命令（含 5.9.2 新增的命令）、原始行通道、全局不变式、回放模式；录制格式规格和 SP-1 录制的一次性转换；A 层金样例；第一批 B 层金样例（维护者用 Claude 跑兼容套件产出） |
 | 桌面端（最简） | **主进程**：拉起宿主（经原生扩展）、两类连接、原生扩展校验宿主（含双向证明）、数据连接的生命周期、出方向的解析与白名单、真实输入检查、原生确认框、基本加固（sandbox、CSP 与 Trusted Types、`app://cupper`、命令行开关白名单、导航限制）；**windowBridge 的测量闸门**（[5.7.1](07-desktop.md#571-进程与连接)，不达标就在界面任务之前改用后备方案）。**ShellAPI**：M1a 的完整接口（冻结）。**界面**（按最终形态的架构，视觉从简）：侧边栏（项目、会话、状态、"未信任"标记）；新建会话（Claude、本地模式）；消息流（按行虚拟化、streamdown 按 5.7.8 的配置、工具单行摘要、思考、错误、提示、**带状态的回合标题**，显示已取消、已中断、失败，不做折叠）；审批和提问卡片（含"已失效""已在 cupper-cli 处理"等状态、不可见字符的转义、"已截断"）；**排队条**；输入框（发送、排队、中断）；重连状态；**Toaster**；**提权横幅与原生确认框**；**添加项目时的信任确认**；**会话档位待确认的横幅**；弱认证标记。所有文案从第一天起走 i18n 的键，先只做一种语言。只有开发构建和 e2e 构建 |
 | 测试 | 宿主集成测试（含故障点、`data_epoch` 用例、6 个会话共用假适配器）；性质测试；NFR-1 的端到端验收套件；安全 e2e（e2e 构建上能跑的部分）；发布 CSP 下 `securitypolicyviolation` 为 0 |
-| **退出标准** | NFR-1 的验收项（[5.9.4](09-testing.md#594-端到端测试与-nfr-1-验收) 的 E2E-NFR1-1 至 E2E-NFR1-5）全部由自动化测试通过，并且：在退出候选的**同一个提交**上、按 CI 平时的并行度，在 CI 的 macOS runner 上**连续 20 次全绿**；不允许重试、跳过或隔离用例；中途失败一次，查明根因后计数清零（测试 #17，纪要 D15）。协议和 ShellAPI 的契约已冻结（[5.12.5](#5125-契约冻结清单)） |
+| **退出标准** | NFR-1 的验收项（[5.9.4](09-testing.md#594-端到端测试与-nfr-1-验收) 的 E2E-NFR1-1、E2E-NFR1-2、E2E-NFR1-3、E2E-NFR1-4、E2E-NFR1-5）全部由自动化测试通过，并且：在退出候选的**同一个提交**上、按 CI 平时的并行度，在 CI 的 macOS runner 上**连续 20 次全绿**；不允许重试、跳过或隔离用例；中途失败一次，查明根因后计数清零（测试 #17，纪要 D15）。协议和 ShellAPI 的契约已冻结（[5.12.5](#5125-契约冻结清单)） |
 
 ## 5.12.3 M1b：桌面 MVP
 
@@ -41,10 +41,10 @@
 | 关注度与通知 | 系统通知（AP-3）、通知点击后的 `ui/navigate`；跳到下一个需要处理的会话 |
 | agent 状态 | 设置页的 agent 状态：CLI 路径与版本、已验证范围提示、登录状态、配置目录的校验结果、运行时、资源占用、重启（AG-2、AG-5） |
 | 界面打磨 | Codex 式三栏布局（尺寸 token、右侧标签容器、侧边栏标题行、新建会话页布局）、设置页各项（含存储、安装命令行工具）、亮暗主题、快捷键、中英文、视觉（PS-1、UI-2 至 UI-6）；UI-0 的"打开"按钮 |
-| 自用构建 | 作者日常使用的本机构建：`release-config` 每晚构建（fuses、调试开关、asar 清单、产物扫描，不签名）；许可证门禁第一层；**Q35 的技术验证**：用本机签名身份给自用构建签名，通过则自用构建走签名校验认证（CLI 可用，NFR-8 成立），不通过则自用构建按开发构建的退化模式运行 |
+| 自用构建 | 作者日常使用的本机构建：`release-config` 每晚构建（fuses、调试开关、asar 清单、产物扫描，不签名）；许可证门禁第一层；**Q35 的技术验证**：用本机签名身份给自用构建签名，通过则自用构建走签名校验认证（CLI 可用，NFR-8 成立），不通过则自用构建按退化模式运行。自用构建单独一套身份和数据目录，见 [5.7.9](07-desktop.md#579-构建种类) 的"自用构建"一列 |
 | 发布（推迟） | **前提：用户开通 Apple Developer Program 账号**（2026-10-16 用户决定暂不开通，先自用）。内容：发布构建（`dev.cupper` 前缀）、Developer ID 签名、公证（Node 在 `Helpers/` 里随 App 公证）、许可证门禁第二层、签名后冒烟、RC 标签、electron-updater（安装空窗、安装位置检查）、升级演练、第三方声明。不在 M1b 的退出标准内 |
 | 其他 | 防休眠（NFR-13，M1 为 P1，成本很低，一并做）；SEC-8 的安全边界说明写进用户文档，含"系统权限会被 agent 继承"的警示，发布前必须完成（MAN-security-doc） |
-| **退出标准** | ① 作者用两种 agent 走完 S1–S4，按逐步检查表（MAN-S1 至 MAN-S4）记录步骤、通过条件、CLI 和适配器的版本、日期，结果存档；② NFR-2 的用例 E2E-NFR2-retry、IT-NFR2-epoch 通过；③ NFR-9 的用例 E2E-NFR9-adapter-crash、E2E-NFR9-cli-crash、IT-NFR9-failpoints、IT-NFR9-crash-under-load 通过（[5.9.4](09-testing.md#594-端到端测试与-nfr-1-验收)）。PRD 第 5 节 |
+| **退出标准** | ① 作者用两种 agent 走完 S1–S4，按逐步检查表（MAN-S1、MAN-S2、MAN-S3、MAN-S4）记录步骤、通过条件、CLI 和适配器的版本、日期，结果存档；② NFR-2 的用例 E2E-NFR2-retry、IT-NFR2-epoch 通过；③ NFR-9 的用例 E2E-NFR9-adapter-crash、E2E-NFR9-cli-crash、IT-NFR9-failpoints、IT-NFR9-crash-under-load 通过（[5.9.4](09-testing.md#594-端到端测试与-nfr-1-验收)）。PRD 第 5 节 |
 
 ## 5.12.4 追溯矩阵（M1 的全部 P0 需求）
 
@@ -57,7 +57,7 @@
 | AG-3 | 新建会话时选 agent，界面显示 agent 标识 | 会话编排、侧边栏、新建会话页 | `session/create`、`SessionSummary.agent` | M1a（Claude）/ M1b（两者） | E2E-new-session-agent〔PR〕 |
 | AG-4 | 按能力显示功能；第一条消息前就能显示模型等 | 能力缓存、`SessionCapabilities`、新建会话页 | `agents/capabilities`、`session.capabilities` | M1b | UNIT-capabilities〔PR〕；E2E-new-session-before-first-message〔晚〕 |
 | AG-5 | 显示 CLI 和适配器版本，超出已验证范围时提示 | CLI 发现与版本检查、清单里的已验证范围 | `agents.updated` | M1b | UNIT-version-classify〔PR〕；`testdata-scan` 的范围比对〔PR〕 |
-| PS-1 | 三栏布局，可隐藏 | 桌面端布局 | — | M1b | 截图回归 UI-layout〔PR〕 |
+| PS-1 | 三栏布局，可隐藏 | 桌面端布局 | — | M1b | UI-layout〔PR〕 |
 | PS-2 | 添加、移除项目，会话按项目分组；添加时确认是否信任项目配置（PRD v1.2） | `IndexActor`、`projects` 表、`trust` 模块、侧边栏 | `project/add`、`project/trust`、`project/remove`、`project.*` | 添加与信任 M1a；移除 M1b | E2E-project-add-trust〔PR〕；IT-trust-stale、IT-trust-rescan-before-prompt、IT-trust-settingsources〔PR〕；COMPAT-untrusted-project〔人〕 |
 | PS-3 | 新建、重命名、归档、恢复；worktree 会话的恢复规则 | 会话编排、git 服务 | `session/rename`、`session/archive`、`session/restore`、`worktree/check` | 新建 M1a；其余 M1b | IT-session-archive-restore〔PR〕；E2E-archive-cleanup〔晚〕 |
 | PS-4 | 状态指示、跳到下一个需要处理的会话 | `IndexActor` 的状态计算、侧边栏 | `SessionSummary.status/unread` | 状态 M1a；跳转 M1b | UNIT-index-status〔PR〕；E2E-next-needs-action〔晚〕 |
@@ -67,15 +67,15 @@
 | CP-3 | 斜杠命令菜单，命令来自 agent | 能力缓存、输入框 | `SessionCapabilities.commands` | M1b | E2E-slash-commands〔晚〕 |
 | CP-4 | 模型、推理强度、权限模式选择 | 配置项映射、档位规则、原生确认 | `session/set_config`、`session/create.config`、`session/confirm_config` | M1b（`config_unconfirmed` 的处理 M1a） | UNIT-tier-rules〔PR〕；IT-config-unconfirmed〔PR〕；E2E-full-access-native〔晚〕 |
 | CP-5 | 新建会话时选本地或新建 worktree，显示分支名 | git 服务（worktree）、会话编排 | `session/create.workspace`、`workspace.*` | M1b | IT-worktree-create〔PR〕；E2E-S1〔晚〕 |
-| CP-6 | 运行中追加消息：宿主排队；支持时可以 Steer，失败转排队 | 会话编排（队列、Steer） | `session/send.mode`、`queue.updated` | 排队 M1a；Steer M1b | PROP-queue-fifo〔PR〕；IT-K10、IT-K11〔PR〕；E2E-NFR1-2〔PR〕 |
+| CP-6 | 运行中追加消息：宿主排队；支持时可以 Steer，失败转排队 | 会话编排（队列、Steer） | `session/send.mode`、`queue.updated` | 排队 M1a；Steer M1b | PROP-queue-fifo〔PR〕；IT-K10-steer-explicit-only、IT-K11-steer-idle-queued〔PR〕；E2E-NFR1-2〔PR〕 |
 | CP-7 | 中断；agent 没响应时超时兜底 | 会话编排（`Cancelling`，10 s） | `session/interrupt` | M1a | PROP-interrupt-10s〔PR〕；IT-K1-close-resume（`hang`）〔PR〕；E2E-NFR1-2〔PR〕 |
-| MS-1 | 流式 Markdown、代码高亮、表格 | 消息流组件（streamdown、Shiki）；写入时合并 | `item.delta` | 基本 M1a；高亮 M1b | 截图回归〔PR〕；Markdown 注入金样例〔PR〕 |
+| MS-1 | 流式 Markdown、代码高亮、表格 | 消息流组件（streamdown、Shiki）；写入时合并 | `item.delta` | 基本 M1a；高亮 M1b | UI-stream-markdown、UI-code-highlight〔PR〕；UNIT-md-injection（Markdown 注入金样例）〔PR〕 |
 | MS-2 | 思考过程可折叠 | 提取层、`thought` 条目 | `item.*` | M1a | IT-thought-claude（claude 形态的 `think`）〔PR〕；GOLD-A-codex-s02（Codex 的录制里有 `agent_thought_chunk`）〔PR〕。SP-1 的 Claude 录制里没有思考帧（s02d 也没有），真实的 Claude 思考流录制由兼容矩阵用 sonnet 或 opus 补（COMPAT-claude-thinking〔人〕） |
-| MS-3 | 工具活动单行摘要，可展开看输出、diff、退出码；按回合折叠显示耗时；拿不到时降级 | 提取层、`ToolCall`、`group_id`、`final_item_ids` | `item.*`、`turn.*` | M1a（Claude）/ M1b（Codex、折叠） | GOLD-A（各 `tool_kind` 的必填字段）〔PR〕；UNIT-final-items、UNIT-grouping〔PR〕；截图回归〔PR〕 |
+| MS-3 | 工具活动单行摘要，可展开看输出、diff、退出码；按回合折叠显示耗时；拿不到时降级 | 提取层、`ToolCall`、`group_id`、`final_item_ids` | `item.*`、`turn.*` | M1a（Claude）/ M1b（Codex、折叠） | GOLD-A-tool-fields（各 `tool_kind` 的必填字段）〔PR〕；UNIT-final-items、UNIT-grouping〔PR〕；UI-stream-tools、UI-stream-fold〔PR〕 |
 | MS-4 | 计划和待办清单 | 提取层、`plan` 条目 | `item.*` | M1b | GOLD-A-claude-s05、GOLD-A-codex-s05（两边的 `plan_update` 都在 s05 里）〔PR〕；IT-plan-entries（假 agent 的 `plan_update`）〔PR〕；Claude 的口径见 PRD v1.2 第 10 节（Q12） |
-| MS-5 | 错误和恢复指引；agent 崩溃后自动重启并提示 | 统一错误条目、`notice`、`AgentRuntime` 重启 | `error`、`notice` 条目 | M1a | IT-K6、IT-K7、IT-K17〔PR〕；E2E-error-guidance〔晚〕 |
+| MS-5 | 错误和恢复指引；agent 崩溃后自动重启并提示 | 统一错误条目、`notice`、`AgentRuntime` 重启 | `error`、`notice` 条目 | M1a | IT-K6-crash-resume、IT-K6-output-then-crash、IT-K7-restartable、IT-K17-text-error〔PR〕；E2E-error-guidance〔晚〕 |
 | AP-1 | 消息流内的审批卡片，Enter 批准、Esc 拒绝 | 交互代理、审批卡片、真实输入检查 | `interaction.*`、`interaction/respond` | M1a | E2E-SEC-real-input、E2E-approve-enter-esc〔PR〕；MAN-keyboard〔人〕 |
-| AP-2 | 选项和文案以 agent 为准；持久选项要标明 | 选项对照表（`effect`、`requires`）、原生确认 | `Option.effect` | M1a（Claude）/ M1b（Codex） | GOLD-A（选项对照表）〔PR〕；UNIT-option-map〔PR〕；E2E-persistent-option-native〔晚〕 |
+| AP-2 | 选项和文案以 agent 为准；持久选项要标明 | 选项对照表（`effect`、`requires`）、原生确认 | `Option.effect` | M1a（Claude）/ M1b（Codex） | GOLD-A-option-map（选项对照表）〔PR〕；UNIT-option-map〔PR〕；E2E-persistent-option-native〔晚〕 |
 | AP-3 | 窗口不在前台时发系统通知 | `IndexActor` 通知意图、`notifier`、在场 | `notification.intent`、`client/presence`、`ui/navigate` | M1b | IT-notification-intent〔PR〕；MAN-notification〔人〕 |
 | AP-4 | 先到先得，晚到提示"已在别处处理" | 会话 actor 串行处理、`resolved_by` | `conflict/already_resolved` | M1a | E2E-NFR1-3〔PR〕 |
 | AP-5 | 结构化提问以卡片呈现，任何客户端都能回答，状态为"需要处理" | 交互代理（`question`、`plan_confirm`）、状态计算 | `interaction.*` | M1a | IT-form、IT-plan-confirm〔PR〕；E2E-question-card〔PR〕 |
@@ -85,20 +85,20 @@
 | GT-4 | 提交和推送 | git 服务（用户档） | `git/commit`、`git/push` | M1b | IT-git-commit-push〔PR〕 |
 | GT-5 | 归档时提示清理 worktree，有未提交或未推送内容时不删除 | git 服务（7 条规则） | `worktree/check`、`session/archive` | M1b | IT-worktree-check-rules〔PR〕 |
 | UI-0 | 在外部终端或编辑器中打开工作区 | 宿主 `workspace/open` | `workspace/open` | M1b | E2E-workspace-open（mock 打开动作）〔晚〕 |
-| UI-2 | 设置页 | 桌面端、设置模块 | `settings/*`、`session/list_archived`、`agents.updated`、`clients.updated` | M1b | 截图回归〔PR〕 |
-| UI-3 | 亮色和暗色，跟随系统 | 主题 token | — | M1b | 截图回归〔PR〕 |
+| UI-2 | 设置页 | 桌面端、设置模块 | `settings/*`、`session/list_archived`、`agents.updated`、`clients.updated` | M1b | UI-settings〔PR〕 |
+| UI-3 | 亮色和暗色，跟随系统 | 主题 token | — | M1b | UI-theme〔PR〕 |
 | UI-4 | 核心快捷键 | 菜单与快捷键 | — | M1b | E2E-shortcuts〔晚〕 |
-| UI-5 | 中英文，跟随系统 | `@cupper/i18n` | 语义码 | M1b（M1a 先只有一种语言，但全部文案走键） | 截图回归（两种语言）〔PR〕 |
+| UI-5 | 中英文，跟随系统 | `@cupper/i18n` | 语义码 | M1b（M1a 先只有一种语言，但全部文案走键） | UI-locale（两种语言）〔PR〕 |
 | UI-6 | 视觉参照 Codex，不用其品牌素材 | 桌面端 | — | M1b | MAN-ui6〔人〕 |
 | SEC-6 | 默认不收集遥测 | 全部；crashReporter 本地保存 | — | M1a | E2E-SEC-egress（`nettop` 采样，Q27）〔晚〕；宿主的 Seatbelt 外发检查〔PR〕 |
-| SEC-8 | 只接受认证的本地客户端；agent 拿不到凭据；不监听网络端口 | 网关、`cupper-sys`、进程卫生、提权、项目信任 | `initialize.auth`、`auth/elevate` | M1a | UNIT 策略矩阵（含无特性运行）〔PR〕；IT-process-hygiene〔PR〕；E2E-SEC-*〔PR〕；SMOKE-SIGNED-*〔发〕 |
+| SEC-8 | 只接受认证的本地客户端；agent 拿不到凭据；不监听网络端口 | 网关、`cupper-sys`、进程卫生、提权、项目信任 | `initialize.auth`、`auth/elevate` | M1a | UNIT-policy-matrix、UNIT-release-features（无特性运行）〔PR〕；IT-process-hygiene〔PR〕；E2E-SEC-csp、E2E-SEC-real-input、E2E-SEC-privileged、E2E-SEC-fake-host、E2E-SEC-review-iso〔PR〕；E2E-SEC-switches、E2E-SEC-egress〔晚〕；SMOKE-SIGNED-codesign-auth、SMOKE-SIGNED-no-weak-auth、SMOKE-SIGNED-cli-readonly、SMOKE-SIGNED-reattach、SMOKE-SIGNED-handshake-matrix、SMOKE-SIGNED-reject-fake-host、SMOKE-SIGNED-reject-weak-host〔发〕 |
 | SEC-10（M1 打数据基础） | 处理绑定到具体请求和内容；适配器退出后请求失效 | 交互代理（摘要、`adapter_instance`） | `request_digest`、`expired` | M1a | IT-interaction-expire〔PR〕；UNIT-digest-jcs〔PR〕 |
-| NFR-1 | 宿主持有一切；协议具备协商、授权、续传、幂等、按需获取 | 全部宿主模块、cupper-cli | 全部 | M1a | E2E-NFR1-1 至 E2E-NFR1-5，连续 20 次全绿〔PR〕 |
+| NFR-1 | 宿主持有一切；协议具备协商、授权、续传、幂等、按需获取 | 全部宿主模块、cupper-cli | 全部 | M1a | E2E-NFR1-1、E2E-NFR1-2、E2E-NFR1-3、E2E-NFR1-4、E2E-NFR1-5，连续 20 次全绿〔PR〕 |
 | NFR-2 | 断线续传不丢不重；命令重试不重复执行 | 流（游标、快照、`data_epoch`）、账本 | `stream/*`、`command_id` | M1a 实现；M1b 验收 | E2E-NFR2-retry〔晚〕；IT-NFR2-epoch〔PR〕 |
 | NFR-4 | 会话数据只在本机 | 数据目录 | — | M1a | E2E-SEC-egress〔晚〕；代码审查：宿主只访问 npm 仓库 |
 | NFR-5 | 锁定适配器版本，升级经回归；已验证的 CLI 范围 | 运行时清单、兼容矩阵、金样例 | — | M1a（Claude）/ M1b（Codex） | MAN-compat〔人〕；`testdata-scan` 的范围比对、选项和档位取值检查〔PR〕 |
 | NFR-6 | 冷启动 2 秒内可用；流式不卡；长会话流畅 | 启动路径、快照窗口、行虚拟化 | — | 预算与测量闸门 M1a；SP-6 与优化 M1b | PERF（5.9.6）〔晚〕；SP-6〔人〕 |
-| NFR-7 | 宿主自己实现排队、状态、diff、worktree、索引、路由；私有扩展探测到才用 | 会话编排、git 服务、能力描述 | `SessionCapabilities` | M1a / M1b | IT-degrade-*：假 agent 关掉 steering、计划、思考等能力时，功能按 AG-4 隐藏或降级〔PR〕 |
+| NFR-7 | 宿主自己实现排队、状态、diff、worktree、索引、路由；私有扩展探测到才用 | 会话编排、git 服务、能力描述 | `SessionCapabilities` | M1a / M1b | IT-degrade-steering、IT-degrade-plan、IT-degrade-thinking：假 agent 分别关掉 steering、计划、思考能力时，功能按 AG-4 隐藏或降级（以后新增可降级的能力时按同样格式加编号）〔PR〕 |
 | NFR-8 | 单实例；界面崩溃不影响会话；退出前提示；升级时推迟重启宿主 | 进程监护、`lifecycle`、更新流程 | `host/status`、`host/exit`、`host/prepare_upgrade` | 单实例与退出提示 M1a；升级 M1b | E2E-single-instance、E2E-quit-confirm〔晚〕；SMOKE-SIGNED-reattach〔发〕（"界面崩溃不影响会话"只对发布构建成立，PRD v1.2 第 10 节，Q22）；MAN-upgrade〔人〕 |
 | NFR-9 | 宿主崩溃和 agent 崩溃后的恢复，不损坏历史 | 启动恢复、`AgentRuntime` 重启、SQLite WAL 与持久性配置 | `interrupted`、`expired`、`notice` | M1a 实现；M1b 验收 | E2E-NFR9-adapter-crash、E2E-NFR9-cli-crash〔晚〕；IT-NFR9-failpoints、IT-NFR9-crash-under-load〔PR〕 |
 | NFR-10 | 数据有版本，升级自动迁移并备份；不支持降级；协议版本协商 | 迁移、升级器、`initialize` | `protocol` 区间 | M1a | IT-migrations〔PR〕；从第二个发布版起 IT-n-minus-1-cli〔PR〕 |
