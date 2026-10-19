@@ -1,5 +1,5 @@
-//! The SDK's agent role: sessions, the global invariant (K1), steering, and
-//! the notifications each persona sends after a response.
+//! The SDK's agent role: sessions, the global invariant (K1), steering, the
+//! crash state, and the notifications each persona sends after a response.
 //! Requests are handled untyped so that results keep the exact shapes of the
 //! recordings; their params still go through the SDK's types, so the fake
 //! rejects what a real adapter's SDK would.
@@ -32,6 +32,8 @@ pub type State = Arc<Mutex<Shared>>;
 
 pub struct Shared {
     pub config: Config,
+    /// `clientInfo` of `initialize` (K26).
+    pub client_info: Value,
     pub sessions: HashMap<String, Session>,
     created: u64,
     prompts: u64,
@@ -43,6 +45,8 @@ pub struct Session {
     pub config: Vec<Value>,
     /// The prompt in flight: its number and its cancel signal.
     pub inflight: Option<(u64, watch::Sender<bool>)>,
+    /// Claude's CLI died (`crash_cli`): requests fail until `session/resume`.
+    pub crashed: bool,
     pub steer: Steer,
 }
 
@@ -72,6 +76,7 @@ pub async fn serve(
 ) -> Result<(), ServeError> {
     let state = Arc::new(Mutex::new(Shared {
         config,
+        client_info: Value::Null,
         sessions: HashMap::new(),
         created: 0,
         prompts: 0,
@@ -159,7 +164,8 @@ fn answer(
     let persona = shared.config.persona;
     match method {
         "initialize" => {
-            InitializeRequest::parse_message(method, params)?;
+            let req = InitializeRequest::parse_message(method, params)?;
+            shared.client_info = serde_json::to_value(req.client_info).unwrap_or_default();
             after.push((
                 "_auth/status_update",
                 persona::auth_status(persona, shared.config.logged_in),
@@ -234,6 +240,7 @@ fn open(
         resumed,
         config,
         inflight: None,
+        crashed: false,
         steer: Steer::Persona,
     };
     shared.sessions.insert(id.to_owned(), session);
@@ -244,12 +251,12 @@ fn open(
     result
 }
 
-/// A session that answers requests: not closed.
+/// A session that answers requests: not closed, and not crashed (K6).
 pub fn live<'a>(shared: &'a mut Shared, id: &str) -> Result<&'a mut Session, Error> {
-    shared
-        .sessions
-        .get_mut(id)
-        .ok_or_else(persona::session_not_found)
+    match shared.sessions.get_mut(id) {
+        Some(session) if !session.crashed => Ok(session),
+        _ => Err(persona::session_not_found()),
+    }
 }
 
 fn prompt(

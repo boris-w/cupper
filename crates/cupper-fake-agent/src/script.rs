@@ -17,8 +17,14 @@
 //! | `form <q>=<a>\|<b> ...` | a multi-question form, then `say form:<content>` |
 //! | `plan_update <markdown>` / `plan_confirm` | a plan / its confirmation, then `say plan:<option>` |
 //! | `steer_ok` / `steer_new_turn` / `steer_hang` | how later `_session/steering` requests are answered |
-//! | `sleep <ms>` / `wait_cancel` | wait / until `session/cancel` |
-//! | `whoami` / `probe` | say the session, inherited fds, env names |
+//! | `sleep <ms>` / `wait_cancel` / `hang` | wait / until `session/cancel` / forever, ignoring cancel |
+//! | `late_tool <id> <ms>` | start a command; once cancelled, its output arrives `ms` later |
+//! | `autonomous <ms>` | end the prompt; the rest of the script runs `ms` later, outside any prompt |
+//! | `crash_cli` / `output_then_crash` | the CLI dies (`-32603`, then "Session not found" until resume) / after some output |
+//! | `restartable` | the app-server dies (`1001`, `restartable: true`) |
+//! | `upstream_retry <n>` / `thread_status <type> [flag...]` | Codex's retry notices / run state |
+//! | `auth_none` | `_auth/status_update {kind: none}`, then `-32000` |
+//! | `whoami` / `echo_env` / `probe` | say the session, cwd, clientInfo, env names, inherited fds |
 //! | `spawn_child` / `exit <code>` | start a grandchild in our process group / exit now |
 
 use std::path::{Component, Path, PathBuf};
@@ -57,7 +63,17 @@ const COMMANDS: &[&str] = &[
     "steer_hang",
     "sleep",
     "wait_cancel",
+    "hang",
+    "late_tool",
+    "autonomous",
+    "crash_cli",
+    "output_then_crash",
+    "restartable",
+    "upstream_retry",
+    "thread_status",
+    "auth_none",
     "whoami",
+    "echo_env",
     "probe",
     "spawn_child",
     "exit",
@@ -98,13 +114,18 @@ pub fn parse_or_reply(text: &str) -> Vec<Command> {
 enum End {
     Stop(&'static str),
     Fail(Error),
+    /// The prompt never returns.
+    Hang,
 }
 
 enum Flow {
     Next,
     End(End),
+    /// End the prompt; run the rest of the script after this many ms.
+    Detach(u64),
 }
 
+#[derive(Clone)]
 pub struct Script {
     state: State,
     cx: ConnectionTo<Client>,
@@ -150,6 +171,7 @@ impl Script {
             self.update(persona::thread_status("active", &[]))?;
         }
         let result = match self.run(parse_or_reply(&text)).await {
+            End::Hang => return Ok(()),
             End::Fail(e) => Err(e),
             End::Stop(reason) => {
                 if self.persona == Codex {
@@ -181,13 +203,21 @@ impl Script {
     }
 
     async fn run(&mut self, commands: Vec<Command>) -> End {
-        for (name, args) in commands {
+        let mut commands = commands.into_iter();
+        while let Some((name, args)) = commands.next() {
             if *self.cancel.borrow() {
                 return End::Stop("cancelled");
             }
             match self.exec(&name, &args).await {
                 Ok(Flow::Next) => {}
                 Ok(Flow::End(end)) => return end,
+                Ok(Flow::Detach(ms)) => {
+                    let later = self.clone().later(ms, commands.collect());
+                    return match self.cx.spawn(later) {
+                        Ok(()) => End::Stop("end_turn"),
+                        Err(e) => End::Fail(e),
+                    };
+                }
                 Err(e) => return End::Fail(e),
             }
         }
@@ -305,6 +335,41 @@ impl Script {
                 self.cancelled().await;
                 return Ok(cancelled());
             }
+            "hang" => return Ok(Flow::End(End::Hang)),
+            "late_tool" => {
+                let (id, ms, late) = (arg(0).to_owned(), num(1), self.clone());
+                self.update(persona::terminal_start(p, &id, &self.cwd))?;
+                self.cancelled().await;
+                // Codex does not stop the command; its output and end arrive later (s07, K3).
+                self.cx.spawn(async move {
+                    real_sleep(ms).await;
+                    late.update(persona::terminal_output(&id, "late output\n"))?;
+                    late.update(persona::terminal_exit(&id, 0))
+                })?;
+                return Ok(cancelled());
+            }
+            "autonomous" => return Ok(Flow::Detach(num(0))),
+            "crash_cli" | "output_then_crash" => {
+                if name == "output_then_crash" {
+                    self.say("output before the crash")?;
+                }
+                agent::live(&mut lock(&self.state), &self.session)?.crashed = true;
+                return Ok(Flow::End(End::Fail(persona::cli_crashed())));
+            }
+            "restartable" => return Ok(Flow::End(End::Fail(persona::app_server_killed()))),
+            "upstream_retry" => {
+                for attempt in 1..=num(0) {
+                    self.update(persona::upstream_retry(attempt))?;
+                }
+            }
+            "thread_status" => self.update(persona::thread_status(
+                arg(0),
+                args.get(1..).unwrap_or_default(),
+            ))?,
+            "auth_none" => {
+                self.notify("_auth/status_update", persona::auth_status(p, false))?;
+                return Ok(Flow::End(End::Fail(persona::auth_required())));
+            }
             "whoami" => {
                 let (resumed, segment) = {
                     let shared = lock(&self.state);
@@ -320,6 +385,16 @@ impl Script {
                     "session={} resumed={resumed} segment={segment}",
                     self.session
                 ))?;
+            }
+            "echo_env" => {
+                // Names only: values would leak the environment into test logs.
+                let client = lock(&self.state).client_info.to_string();
+                let line = format!(
+                    "cwd={} clientInfo={client} env={}",
+                    self.cwd.display(),
+                    env_names()
+                );
+                self.say(&line)?;
             }
             "probe" => {
                 let fds = INHERITED_FDS.get().map_or("?", String::as_str);
