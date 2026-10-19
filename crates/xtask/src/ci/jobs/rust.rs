@@ -1,6 +1,6 @@
 //! `rust`: formatting, clippy with warnings denied, the iOS build of
 //! `cupper-protocol` and the workspace tests (design 5.1.6), plus the host's
-//! other feature sets. A later task adds the golden tests.
+//! other feature sets and its shuttle tests. A later task adds the golden tests.
 
 use anyhow::Result;
 
@@ -63,7 +63,19 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         with_features(&mut test, features);
         ctx.libtest(&format!("test-host-{name}"), &mut test)?;
     }
-    Ok(())
+
+    // PROP-stream-seq runs the host's streams under shuttle, which needs the
+    // crate built with `--cfg shuttle` (design 5.9.8); a target dir of its own
+    // keeps the other builds cached.
+    let args = "test -p cupper-host --lib --locked --no-fail-fast --target-dir target/shuttle";
+    let mut shuttle = ctx.cargo();
+    shuttle
+        .args(args.split(' '))
+        .args(["--", "prop_stream_seq"]);
+    ctx.libtest(
+        "test-host-shuttle",
+        shuttle.env("RUSTFLAGS", "--cfg shuttle"),
+    )
 }
 
 fn with_features(cmd: &mut std::process::Command, features: &[&str]) {

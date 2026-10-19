@@ -71,8 +71,8 @@ CREATE TABLE turn_snapshots (
   session_id TEXT NOT NULL,
   turn_id    TEXT NOT NULL,
   turn_no    INTEGER NOT NULL,
-  v          INTEGER NOT NULL,               -- event schema version when written
-  ops        TEXT NOT NULL,                  -- JSON array of event bodies
+  v          INTEGER NOT NULL,               -- layout of `ops`: `store::log::TURN_SNAPSHOT_LAYOUT`
+  ops        TEXT NOT NULL,                  -- JSON array of `{type, v, data}`, `v` per op
   bytes      INTEGER NOT NULL,
   PRIMARY KEY (session_id, turn_id)
 ) WITHOUT ROWID;
@@ -91,7 +91,7 @@ CREATE TABLE events (
 CREATE TABLE checkpoints (
   stream     TEXT PRIMARY KEY,
   at_seq     INTEGER NOT NULL,
-  view_v     INTEGER NOT NULL,               -- `store::upcast::VIEW_VERSION`
+  view_v     INTEGER NOT NULL,               -- `cupper_protocol::view::VIEW_VERSION`
   view       TEXT NOT NULL,
   created_at INTEGER NOT NULL
 ) WITHOUT ROWID;
