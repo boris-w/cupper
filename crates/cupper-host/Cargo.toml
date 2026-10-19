@@ -14,5 +14,11 @@ dev-auth = []
 # Release builds never enable it.
 test-harness = []
 
+[dependencies]
+tokio = { version = "1.53.3", features = ["time"] }
+
+[dev-dependencies]
+tokio = { version = "1.53.3", features = ["rt", "sync"] }
+
 [lints]
 workspace = true
