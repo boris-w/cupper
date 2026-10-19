@@ -5,6 +5,7 @@
 //! rejects what a real adapter's SDK would.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -37,6 +38,7 @@ pub struct Shared {
 }
 
 pub struct Session {
+    pub cwd: PathBuf,
     pub resumed: bool,
     pub config: Vec<Value>,
     /// The prompt in flight: its number and its cancel signal.
@@ -161,7 +163,7 @@ fn answer(
             }
             shared.created += 1;
             let id = format!("fake-{}-{}", shared.config.segment, shared.created);
-            Ok(open(shared, &id, false, after))
+            Ok(open(shared, &id, params, false, after))
         }
         "session/resume" | "session/load" => {
             if method == "session/resume" {
@@ -173,7 +175,7 @@ fn answer(
                 return Err(Error::internal_error().data("fault: resume_error"));
             }
             let id = params["sessionId"].as_str().unwrap_or_default().to_owned();
-            Ok(open(shared, &id, true, after))
+            Ok(open(shared, &id, params, true, after))
         }
         "session/close" => {
             let req = CloseSessionRequest::parse_message(method, params)?;
@@ -208,6 +210,7 @@ fn answer(
 fn open(
     shared: &mut Shared,
     id: &str,
+    params: &Value,
     resumed: bool,
     after: &mut Vec<(&'static str, Value)>,
 ) -> Value {
@@ -217,6 +220,7 @@ fn open(
     let shown = (!resumed || persona == Persona::Claude).then_some(id);
     let result = persona::session_result(persona, shown, &config);
     let session = Session {
+        cwd: PathBuf::from(params["cwd"].as_str().unwrap_or_default()),
         resumed,
         config,
         inflight: None,
@@ -268,7 +272,14 @@ fn prompt(
     }
     let (cancel, cancelled) = watch::channel(false);
     session.inflight = Some((number, cancel));
-    let script = Script::new(state.clone(), cx.clone(), persona, &id, cancelled);
+    let script = Script::new(
+        state.clone(),
+        cx.clone(),
+        persona,
+        &id,
+        session.cwd.clone(),
+        cancelled,
+    );
     drop(shared);
     let text = text_of(&req.prompt);
     cx.spawn(script.prompt(text, number, responder))
@@ -302,7 +313,14 @@ fn steering(
         "startedNewTurn"
     };
     let (_, never) = watch::channel(false);
-    let script = Script::new(state.clone(), cx.clone(), persona, id, never);
+    let script = Script::new(
+        state.clone(),
+        cx.clone(),
+        persona,
+        id,
+        session.cwd.clone(),
+        never,
+    );
     drop(shared);
     let text = text_of(&prompt);
     match outcome {
