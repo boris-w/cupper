@@ -63,3 +63,25 @@
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为 `report.md`。不要自己创建 `report.md`。
+
+## 范围调整（2026-10-19，第 2 轮）
+
+执行者开工前按模块估算，约 2,150 行，超出上限，于是停下来汇报（见 `notes.md`）。编排者采纳了它的拆分建议：
+
+- **本任务（T011）收窄为"事件基础、领域类型与索引流"**，即 notes 里建议的 T011a：
+  - `open_union!` 和严格/宽容两种解码；
+  - `EventBody` 的骨架和所属流的判定；
+  - 公共领域类型；
+  - 索引流的全部事件；
+  - `SessionCapabilities`；
+  - `fallback.summary` 的填法；
+  - `ErrorData.resolved_by` 改为具名字段。
+
+  估计约 1,055 行。
+- **新增 T017"会话流、条目、ToolCall 与交互请求"**，即 notes 里的 T011b，在本任务合并后派发。
+- **用例编号**：原来的 UNIT-proto-events 拆成两个子编号。本任务产出 UNIT-proto-events-index，T017 产出 UNIT-proto-events-session。
+- **设计空缺的 11 条建议和 `fallback.summary` 的填法**，编排者全部采纳，已写进设计 v1.7（5.3.11、5.4.4），按设计实现即可。
+- **验收标准**调整如下：
+  - UNIT-proto-events-index：覆盖索引流与领域类型的往返，包括未知类型、未知枚举值、残缺数据在严格和宽容两种模式下的结果，以及 `open_union!` 宏本身；
+  - 汇报里的第 2 组对照表，只列本任务负责的部分；
+  - 其余验收标准不变。

@@ -10,7 +10,7 @@
 
 - **共 137 个任务**：M1a 78 个（含 2 个条件任务），M1b 54 个（含 5 个条件任务），"发布（推迟）"5 个。规模：M1a 非条件任务 S 3、M 48、L 25；M1b 非条件任务 S 11、M 26、L 12；发布组 S 1、M 1、L 3。L 的都在表后注明了为什么不再拆。
 - **没有远端也能验收**（U-P1：先不建远端）：所有 CI 检查都经 `cargo xtask ci <作业>` 在本机干净的 worktree 里执行，workflow 文件照写、暂不启用；入库的只有结构化摘要（1.8）。M1a 退出改为在作者机器上连跑 20 次加 5 次降速变体（T099）；本机替代不了的两项（macOS 14、15 上的对端校验，CI 负载下的稳定性）在 T099、T179 的记录里列为缺口，由用户确认。
-- **M1a 关键路径**（按规模加权，S=1、M=2、L=3，共 29）：T001 → T010 → T011 → T014 → T026 → T033 → T043 → T044 → T046 → T090 → T091 → T099。桌面链（T015 → T071、T030 → T073，再经 T075 → T076 → T077 → T090）和兼容链（T047 → T064 → T066）只差 1。任务表里加粗的编号在零松弛的链上。
+- **M1a 关键路径**（按规模加权，S=1、M=2、L=3，共 32；2026-10-19 T011 拆分后）：T001 → T010 → T011 → T017 → T014 → T026 → T033 → T043 → T044 → T046 → T090 → T091 → T099。桌面链（T015 → T071、T030 → T073，再经 T075 → T076 → T077 → T090）和兼容链（T047 → T064 → T066）只差 1。任务表里加粗的编号在零松弛的链上。
 - **M1b 关键路径**（从 T099 起，共 17）：T099 → T120 → T121 → T130 → T131 → T148 → T154 → T179。
 - **v1.3 的变化**（D05：技术验证 T003 的结论，设计 v1.6；明细见 2.8）：K1 已通过，T057 不触发；T050 的扩展消息全部走 SDK，加两条 SDK 约束的用例；T055 加 `CommandsChanged` 去重和新的关闭顺序；T038 按"对 Claude 工具命令只剩祖先链"设定血缘信号的期望；T063、T066 观察多次 resume 后的进程数，T066 加 6 会话和关闭时有命令运行两个剧本；T074 的 Electron 起始版本改为 44.x 的最新补丁。依赖和波次不变。
 - **v1.2 的变化**（D04 第 2 轮：安全工程师对请求面板"附条件可以"，设计 v1.5；明细见 2.7）：请求面板的焦点、编号、"拒绝并附一条消息"的规则写进 T083；导航键清掉尚未用掉的输入（T077）；宿主核对 `digit` 与序号（T031）、记录 `reply_to`（T011、T012、T043）；还原确认按触发来源分开（T130、T131、T139）；通知没有操作按钮的单元测试（T150、T158）；新增 E2E-SEC-panel-numbering、E2E-reject-with-message、E2E-SEC-revert-confirm、UNIT-notifier-no-actions。依赖和波次不变。
@@ -211,10 +211,11 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T005 | xtask host-bundle | build | 5.10.1、5.10.2、5.7.9 | T004、T023、T045 | 做：`cargo xtask host-bundle` 按构建种类组装 `CupperHost.app`（Info.plist、`Helpers/node`、`Resources/runtime/`）并 ad-hoc 签名；构建顺序是先签宿主、取得 cdhash，再编译 CLI（自用构建把宿主 cdhash 编进 CLI，5.8.1）并单独签名。不做：自用构建的签名参数（T160）、Developer ID（T180） | 新增 IT-host-bundle-layout（布局、identifier、Info.plist 不含用途说明、CLI 内嵌的 cdhash 等于同一产物里宿主的 cdhash） | S | 否 | H.xt |
 | T006 | 许可证门禁第一层 | ci | 5.1.6（license）、ADR-11 | T004、T074 | 做：`tools/license-gate` 第一层（按锁文件和 metafile 求每个 JS 入口的生产依赖闭包，出现 Anthropic SDK 或 Claude Code 就失败；运行时组件许可证齐全）与负面样例，接入 `xtask ci license`。不做：最终产物扫描（T182） | 新增 UNIT-license-gate-negative | M | 否 | C |
 | **T010** | 协议基础：分帧、信封、ID、错误码、规范 JSON 与注解 | feat | 5.3.1、5.3.8、5.3.9、5.4.4、5.2.15 | T001 | 做：迁移 SP-4a 的 frame、rpc（`Method` 加 `SCOPE`、`IDEMPOTENCY`）、open_enum、text、coalesce、sync、transport；事件信封与流 ID、ID 前缀类型、错误码与 reason、限额、RFC 8785 与 `d_` 摘要、六种 schema 注解的机制、整数上界。不做：具体的事件和方法 | UNIT-digest-jcs；新增 UNIT-proto-base | M | 否 | P |
-| **T011** | 协议事件目录与领域类型 | feat | 5.3.5、5.3.6、5.3.7、5.12.5 第 2 组 | T010 | 做：两条流的全部事件（含 M1b 才产生的）、条目类型、`ToolCall` 与按 `tool_kind` 的必填字段表、`late_tool_output`、交互请求与 `Option.effect`、能力描述、`PromptContent`、`user_message.reply_to`（v1.5）、`SessionSummary`（含 v1.4 的 `pending_kind`）、`queue.updated`（条目带完整的 `content`，v1.4；`reply_to`，v1.5）、`AgentStatus`；开放枚举、`Unknown` 兜底、严格模式开关。不做：方法、视图 | 新增 UNIT-proto-events（每种事件往返，含未知类型、未知枚举值、残缺数据） | L | 否 | P |
-| **T012** | 协议方法 I：握手、流、项目、agent、会话与交互 | feat | 5.3.2、5.3.3、5.3.4 | T011 | 做：`host/hello`、`initialize`（各 `auth` 变体、`role`、`features`、`limits`、`host_proof`）及生命周期、流、项目、agent、会话、交互各方法的参数与结果（含 v1.4 定义的 `session/queue_edit` 的 `QueueOp`、`interaction/respond` 的 `input.key: digit`，以及 v1.5 的 `session/send.reply_to`），逐个声明 scope 与幂等。不做：其余方法（T013） | 新增 UNIT-proto-methods-core（往返；方法级 scope 与 5.8.3 一致） | M | 否 | P |
+| **T011** | 协议事件目录 I：事件基础、领域类型与索引流 | feat | 5.3.5、5.3.7、5.4.4、5.12.5 第 2 组；协议补充 5.3.11 | T010 | 做：`open_union!` 宏与严格/宽容两种解码（`Strictness`）；`EventBody` 的骨架与所属流的判定；公共领域类型（`Content`、`BlobRef`、`PromptContent`、`AgentKind`、`PrincipalKind`、`ClientKind`、`ClientRole`、`Tier`、`ResolvedBy`、`Cost`，`ids` 新增 `BlobHash`、`IntentId`、`GroupId`）；索引流的全部事件（`project.upserted` 的 `trust_state`、`SessionSummary` 的 `pending_kind`、`AgentStatus` 等）；`SessionCapabilities`（含 `turn.interrupt_stops_commands`）；`fallback.summary` 的填法；`ErrorData.resolved_by` 改为具名字段。不做：会话流的事件、条目、交互请求（T017）；方法、视图 | 新增 UNIT-proto-events-index（索引流与领域类型往返，含未知类型、未知枚举值、残缺数据在严格与宽容模式下的结果；`open_union!`） | L | 否 | P |
+| **T017** | 协议事件目录 II：会话流、条目、ToolCall 与交互请求 | feat | 5.3.5、5.3.6、5.12.5 第 2 组；协议补充 5.3.11 | T011 | 做：会话流的全部事件（`session.configured` 的 `project_config` 与 `confirmation_required`、`workspace.*`、`turn.*` 的时间字段与 `final_item_ids`、`item.*` 与 `ItemPatch`、`queue.updated` 的条目带 `content` 与 `reply_to`、`snapshot.recorded` 的 `stat` 与 `reason`、用量）；条目联合（`user_message` 的 `reply_to`、`tool_call` 即 `ToolCall` 与按 `tool_kind` 的必填字段表、`late_tool_output`、`plan`、`notice`、`error` 等）；交互请求与 `Option.effect`（`unknown`、`tier_after`、`rule`、`ends_turn`）、回答；`request_digest`；`item.delta` 的 `field` 与 `Mergeable`、`x-mergeable`。不做：方法、视图 | 新增 UNIT-proto-events-session（会话流、条目、交互请求往返，含未知与残缺；`item.delta` 按 `(item_id, field)` 合并） | L | 否 | P |
+| **T012** | 协议方法 I：握手、流、项目、agent、会话与交互 | feat | 5.3.2、5.3.3、5.3.4 | T017 | 做：`host/hello`、`initialize`（各 `auth` 变体、`role`、`features`、`limits`、`host_proof`）及生命周期、流、项目、agent、会话、交互各方法的参数与结果（含 v1.4 定义的 `session/queue_edit` 的 `QueueOp`、`interaction/respond` 的 `input.key: digit`，以及 v1.5 的 `session/send.reply_to`），逐个声明 scope 与幂等。不做：其余方法（T013） | 新增 UNIT-proto-methods-core（往返；方法级 scope 与 5.8.3 一致） | M | 否 | P |
 | T013 | 协议方法 II：git、文件、设置、认证、诊断与测试 | feat | 5.3.4 | T011 | 做：git、worktree、文件、`workspace/open`、设置、`auth/*`、`policy/describe`、`diag/*`、`test/*` 各方法，以及按构建特性门控的方法在 schema 里的标注。不做：任何实现 | 新增 UNIT-proto-methods-ext | M | 否 | P |
-| **T014** | 协议视图与同步规则 | feat | 5.3.3、5.2.8（视图窗口）、5.7.6 | T011 | 做：`IndexView`、`SessionView`（窗口、进行中回合、待处理交互、配置、能力、队列）、`apply` 与按 `turn_no` 排序、`late_by_ref`、快照 ops 的生成与切分、连续性与 epoch 重置规则、视图的序列化格式。不做：存储侧检查点、TS reducer | 新增 PROP-view-coalesce、UNIT-view-window、UNIT-view-late-by-ref | M | 否 | P |
+| **T014** | 协议视图与同步规则 | feat | 5.3.3、5.2.8（视图窗口）、5.7.6 | T017 | 做：`IndexView`、`SessionView`（窗口、进行中回合、待处理交互、配置、能力、队列）、`apply` 与按 `turn_no` 排序、`late_by_ref`、快照 ops 的生成与切分、连续性与 epoch 重置规则、视图的序列化格式。不做：存储侧检查点、TS reducer | 新增 PROP-view-coalesce、UNIT-view-window、UNIT-view-late-by-ref | M | 否 | P |
 | T015 | schema 导出与 TS 生成链 | build | 5.3.10、5.1.5、5.1.6（protocol） | T012、T013、T014 | 做：`export-schema` 完整输出、`protocol/schema/v1.json`、`tools/gen-protocol-ts`（hey-api 与三处后处理）、`packages/protocol` 生成物、`protocol/fixtures/`（含未知值）、`xtask ci protocol`（生成物一致性检查从此一直开着）。不做：兼容比对与冻结（T016） | `xtask ci protocol` 通过；新增 UNIT-proto-fixtures、UNIT-ts-fixtures | M | 否 | P、T.lib、C |
 | T016 | 契约冻结 | chore | 5.12.5；P-1 | T077、T078、T082、T083、T085 | 做：`tools/schema-compat`（方向敏感）、`protocol/released/v1-m1a.json`、`packages/shell-api/api-m1a.d.ts` 与类型断言，接入 `xtask ci protocol`。不做：契约内容的修改 | 破坏性改动的样例（删字段、下发方向必填改可选、上行新增必填、ShellAPI 删成员）让 `xtask ci protocol` 失败，附加式改动通过；新增 UNIT-schema-compat | M | 否 | P、T.lib、C |
 | T020 | cupper-sys I：进程与系统信息 | feat | 5.1.3、5.8.5、5.2.13 | T001 | 做：迁移 SP-4a 的 `sys.rs`：`spawn`（SETSID 可选、`CLOEXEC_DEFAULT`、显式 stdio、默认信号处置、环境变量白名单）、进程组清理、libproc（启动时间、父进程链、会话与进程组）、`kern.bootsessionuuid`、`DARWIN_USER_TEMP_DIR`。不做：IOPM、UserNotifications | 新增 UNIT-sys-spawn（只继承 fd 0–2；去掉 CLOEXEC 的变异检查应失败）、UNIT-sys-reap-group | M | 否 | H.sys |
@@ -235,7 +236,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T036 | 设置 | feat | 5.2.11（设置） | T033 | 做：`settings` 表、`settings/get`、`settings/update`（安全相关键要 privileged）、默认值与读取接口。不做：界面偏好 | 新增 UNIT-settings | S | 否 | H.idx |
 | T037 | 进程监护与宿主生命周期 | feat | 5.2.13、5.5.6 | T020、T026、T027、T030 | 做：启动 10 步串联、`Supervisor`（按 `adapters` 表清理残留、空闲退出、有序退出、`host/status`、`host/exit`、`host/shutdown`、SIGTERM）、自检与待升级、退出码、主线程 `CFRunLoop`；"孤立"状态（`dev-auth` 构建里拉起宿主的父进程退出后，不再开始新回合，运行中的回合结束后有序退出）；空闲时长接 `test_config.durations`。不做：防休眠（T156）、准备阶段的会话恢复（T043） | 新增 IT-self-check、IT-lifecycle（启动前直接写库造出运行中的回合和待处理交互，断言转为 interrupted、expired；空闲退出、有序退出）、UNIT-orphan-policy | L | 否 | H.core |
 | T038 | CLI 提权（宿主侧） | feat | 5.8.4、5.8.6 | T034、T055 | 做：`auth/elevate`（血缘检查，信号的期望按 T003 的结论（5.8.4）：对 Claude 的工具命令只有祖先链会命中，CLI、MCP、hooks 仍在适配器的进程组里；全局一个未决、被拒静默、2 分钟过期）、`auth/elevation_get`（核实信息里给出申请方是否为本 App 自带的命令行工具：路径与 cdhash 是否相符）、`auth/elevation_respond`、授权绑定连接与固定令牌、索引流的提权事件、审计；各时长接 `test_config.durations`。不做：原生确认框（T077） | 新增 IT-elevate（适配器后代被拒：经祖先链识别的工具命令、与适配器同进程组的 MCP 或 hooks；限频、过期、断开即失效） | M | 否 | H.gw |
-| T040 | 会话纯核心 I：回合状态机与队列 | feat | 5.2.6、5.2.16、5.6.2 | T011、T022 | 做：`driver::api`（5.6.2 的命令、事件、`AgentError` 分类）；`TurnMachine`（各状态、3 s 准备超时、10 s 中断兜底、在途规则、先 close 再 resume）；`QueueCore`。不做：Steer（T140）、自发回合（T041） | PROP-queue-fifo、PROP-interrupt-10s、PROP-turn-single-prompt、PROP-prompt-inflight-no-end | L | 否 | H.orch |
+| T040 | 会话纯核心 I：回合状态机与队列 | feat | 5.2.6、5.2.16、5.6.2 | T017、T022 | 做：`driver::api`（5.6.2 的命令、事件、`AgentError` 分类）；`TurnMachine`（各状态、3 s 准备超时、10 s 中断兜底、在途规则、先 close 再 resume）；`QueueCore`。不做：Steer（T140）、自发回合（T041） | PROP-queue-fifo、PROP-interrupt-10s、PROP-turn-single-prompt、PROP-prompt-inflight-no-end | L | 否 | H.orch |
 | T041 | 会话纯核心 II：自发回合、合并器与最终回答 | feat | 5.2.6、5.3.5、5.2.15 | T040 | 做：`AutonomousJudge`（Q10）、`Coalescer`（迁移写入时合并）、`group_id` 与 `final_item_ids` 判定、晚到输出与回合快照不可变的模型检查。不做：actor 接线 | PROP-autonomous-dequeue-guard、PROP-turn-snapshot-immutable、UNIT-final-items、UNIT-grouping；新增 PROP-coalescer | M | 否 | H.orch |
 | T042 | 交互代理纯核心 | feat | 5.2.7、5.3.6 | T031 | 做：`InteractionBroker`：入账（摘要、`actionable_by`）、回答检查链、撤回与失效、Claude 多问题提问的拆分与合并、`unsupported_schema`。不做：选项对照表数据（T053） | 新增 PROP-interaction、UNIT-question-mapping | M | 否 | H.orch |
 | **T043** | 会话 actor I：创建、发送、中断与持久化 | feat | 5.2.6、5.5.2（本地模式）、5.5.3、5.5.5 | T033、T041、T042 | 做：`SessionManager`、`SessionActor` 适配层、`session/create`（本地模式，第一条消息随受理落盘）、`send`（排队；`queue.updated` 的条目带完整的 `content`；`reply_to` 核对后写进用户消息和排队条目，v1.5）、`interrupt`、`queue_resume`、`get`、`capabilities`、交互的接线、回合事件与检查点、快照端口、准备阶段的恢复；各时长接 `test_config.durations`；用进程内驱动替身测试。不做：档位、信任门控、崩溃（T044） | 新增 IT-orch-lifecycle（进程内；含 `reply_to` 的核对） | L | 否 | H.orch |
@@ -289,8 +290,8 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 - **T002**：机制见 1.6。初始登记按本计划第 5 节填写里程碑和产出任务；之后每个任务只追加自己的一段。
 - **T003**：报告是以下任务的输入：T050（Q9 决定扩展请求走 SDK 还是分接层）、T055 和 T057（Q8）、T038（SP-4b #7 影响血缘信号）、T074（Electron 版本）、T078（负载数字）。代码放 `spikes/T003-tech-validation/`。约束见 1.10。可以与 T001 同时开始。v1.3：已完成，K1 通过；结论已写进设计 v1.6 和 T038、T050、T055、T057、T063、T066、T074、T078。
 - **T005**：5.9.4 要求 e2e 构建"打包方式与发布构建相同"，需要组装 `CupperHost.app`；5.12.2 没有列它（P-8）。CLI 晚于宿主编译，才能把宿主的 cdhash 编进去（5.8.1）；CLI 与宿主是两个独立的 Mach-O，不存在 UI 与宿主之间那种互相依赖。
-- **T011（L）**：事件目录是第 2 组冻结字段的主体，`ToolCall` 的必填字段表、交互模型、能力描述互相引用，拆开就不能一次评审完整的事件契约。代码以类型为主，测试是机械的往返。
-- **T012、T013**：都只依赖 T011，彼此并行；按文件分开（例如 `methods/core.rs` 和 `methods/ext.rs`）。
+- **T011、T017（L）**：事件目录原为一个任务（T011）。开工前的模块估算约 2,150 行，超出上限，按守则第 8 条停下汇报后拆成两个依次进行的任务（2026-10-19）：T011 是事件基础、领域类型与索引流（约 1,055 行），T017 是会话流、条目、ToolCall 与交互请求（约 1,100 行）。拆分计划见 `docs/tasks/T011-protocol-events/notes.md`。
+- **T012、T013**：T012 依赖 T017（用到交互请求的类型），T013 依赖 T011，彼此可以并行；按文件分开（例如 `methods/core.rs` 和 `methods/ext.rs`）。
 - **T016**：排在测量闸门之后（P-1）。K2 不达标时等 T079 合并后再做。
 - **T021**：`PROC_PIDUNIQIDENTIFIERINFO` 的字段名凭评审者记忆，以实测为准；不可行时报告，T030 退回"pid 加进程启动时间"（5.8.1）。
 - **T022**：静止屏障的参与者登记在这里，屏障本身（`test/clock_advance`）在 T047。
@@ -495,7 +496,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | 2 | 导航键不触发第 3 条，但清掉尚未用掉的输入 | T077 | UNIT-input-guard |
 | 3 | 编号等于 `options` 的序号，特权和效果未知的选项也占编号，不重新排序 | T083（渲染）、T031（宿主核对） | UNIT-policy-matrix；新增 E2E-SEC-panel-numbering（T092） |
 | 4 | 还原确认按触发来源分开：审查文档触发的不自动获得焦点、同一时间只显示一个 | T130、T131（K9 不通过时 T139） | 新增 E2E-SEC-revert-confirm（T131）。任务书写的是放在 T093，但 T093 在 M1a，审查面板在 M1b，所以放在 T131 |
-| 5 | "拒绝并附一条消息"：拒绝成功后才发送，别处已处理时文字留下，遵守默认排队和插话能力，标明附属的拒绝 | T083；插话路径 T140；`reply_to` 在 T011、T012、T043 | 新增 E2E-reject-with-message（T093）；E2E-composer-steer-default 补插话路径（T140）；IT-orch-lifecycle 补 `reply_to` 的核对（T043） |
+| 5 | "拒绝并附一条消息"：拒绝成功后才发送，别处已处理时文字留下，遵守默认排队和插话能力，标明附属的拒绝 | T083；插话路径 T140；`reply_to` 在 T017、T012、T043 | 新增 E2E-reject-with-message（T093）；E2E-composer-steer-default 补插话路径（T140）；IT-orch-lifecycle 补 `reply_to` 的核对（T043） |
 | 6 | 通知没有任何操作按钮的单元测试；Codex 数字键的行为交 T106 核对；MAN-keyboard 保留数字键 | T150、T158、T106、T077 | 新增 UNIT-notifier-no-actions（T150）；UNIT-main-notifications 补断言（T158） |
 
 ### 2.8 v1.2 → v1.3 的任务变化
@@ -530,7 +531,8 @@ flowchart LR
   end
   subgraph G1["协议"]
     T010["T010<br/>协议基础"]
-    T011["T011<br/>事件目录"]
+    T011["T011<br/>事件目录 I"]
+    T017["T017<br/>事件目录 II"]
     T012["T012<br/>方法 I"]
     T013["T013<br/>方法 II"]
     T014["T014<br/>视图与同步"]
@@ -627,9 +629,10 @@ flowchart LR
   T074 --> T006
   T001 --> T010
   T010 --> T011
-  T011 --> T012
+  T011 --> T017
+  T017 --> T012
   T011 --> T013
-  T011 --> T014
+  T017 --> T014
   T012 --> T015
   T013 --> T015
   T014 --> T015
@@ -676,7 +679,7 @@ flowchart LR
   T030 --> T037
   T034 --> T038
   T055 --> T038
-  T011 --> T040
+  T017 --> T040
   T022 --> T040
   T040 --> T041
   T031 --> T042
@@ -789,7 +792,7 @@ flowchart LR
   classDef crit stroke:#d62728,stroke-width:3px
   classDef cond stroke-dasharray:5 5
   classDef prior fill:#eeeeee,stroke:#999999
-  class T001,T010,T011,T012,T014,T026,T030,T033,T043,T044,T046,T090,T091,T092,T093,T099 crit
+  class T001,T010,T011,T017,T012,T014,T026,T030,T033,T043,T044,T046,T090,T091,T092,T093,T099 crit
   class T057,T079 cond
 ```
 
@@ -1011,7 +1014,7 @@ flowchart LR
 
 | 范围 | 路径 | 加权长度 |
 |---|---|---|
-| M1a | T001 → T010 → T011 → T014 → T026 → T033 → T043 → T044 → T046 → T090 → T091 → T099 | 29 |
+| M1a | T001 → T010 → T011 → T017 → T014 → T026 → T033 → T043 → T044 → T046 → T090 → T091 → T099 | 32 |
 | M1b（T099 之后） | T099 → T120 → T121 → T130 → T131 → T148 → T154 → T179 | 17 |
 | 发布（推迟，T161 之后） | T161 → T180 → T181 → T183 → T184 | 10 |
 
@@ -1027,7 +1030,7 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 |---|---|---|
 | W0 | **T001**、T003 | T001 与 T003 同时开始；T003 已完成，K1 通过 |
 | W1 | T002、T004、**T010**、T020、T021、T022、T051、T070 | 协议、系统接口、宿主核心、假 agent、TS 库同时起步 |
-| W2 | **T011**、T023、T024、T028、T050、T052、T054、T074 | T050 按 K1 的结论：扩展消息全部走 SDK |
+| W2 | **T011**、**T017**、T023、T024、T028、T050、T052、T054、T074 | T050 按 K1 的结论：扩展消息全部走 SDK；T017 在 T011 合并后派发，W3 的 T012、T014、T040 等它 |
 | W3 | T006、**T012**、T013、**T014**、T025、T035、T040、T060 | 纯核心（T040）与信任扫描（T035）不依赖存储，先做 |
 | W4 | T015、**T026**、T027、**T030**、T031、T032、T041、T045、T053、T056 | T053 起 A 层金样例进入 `xtask ci rust` |
 | W5 | T005、**T033**、T037、T042、T055、T071、T073 | T055 合并后假 agent 可以经驱动跑通；K1 已通过，T057 不派发 |
@@ -1339,9 +1342,9 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 | 第 1 组 | ① `initialize` 与绑定信道的证明（v1.3：`dev_key` 只接受拉起宿主的进程） | T012、T021、T030、T073 |
 | | ② `stream/subscribe` 的 `epoch` 与重置 | T012、T014、T033 |
 | | ③ `history/page` 的游标 | T012、T026 |
-| | ④ `item.delta` 的 `field` 与 `output_state` | T011、T041 |
+| | ④ `item.delta` 的 `field` 与 `output_state` | T017、T041 |
 | | ⑤ 完整摘要与 RFC 8785 | T010 |
-| | ⑥ 要批准的内容不截断 | T011、T042 |
+| | ⑥ 要批准的内容不截断 | T017、T042 |
 | | ⑦ 策略语义（档位、信任门控、输入证据（v1.4：数字键 `digit`）、未知 kind） | T031、T044 |
 | | ⑧ ShellAPI | T070、T071、T076、T077 |
 | | ⑨ 宿主启动契约 | T023 |
@@ -1510,7 +1513,8 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T005 xtask host-bundle
 - [ ] T006 许可证门禁第一层
 - [ ] T010 协议基础：分帧、信封、ID、错误码、规范 JSON 与注解
-- [ ] T011 协议事件目录与领域类型
+- [ ] T011 协议事件目录 I：事件基础、领域类型与索引流
+- [ ] T017 协议事件目录 II：会话流、条目、ToolCall 与交互请求
 - [ ] T012 协议方法 I：握手、流、项目、agent、会话与交互
 - [ ] T013 协议方法 II：git、文件、设置、认证、诊断与测试
 - [ ] T014 协议视图与同步规则
@@ -1658,3 +1662,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.1 | 2026-10-19 | 按用户决定"界面 100% 复刻 Codex"修订（D04，设计 v1.4、PRD v1.3）：界面任务按 Codex 规格改写；请求面板（T083）与输入框（新增 T086）分开；新增 T132、T149；T106 改为复刻核对并可以提前，M1b 的界面任务不再依赖它；覆盖核对加 5.8（F3 的元素）；待处理改为 P-22 至 P-24。明细见 2.6 |
 | v1.2 | 2026-10-19 | 落实安全工程师对请求面板的确认条件（D04 第 2 轮，设计 v1.5）：焦点、导航键、编号、还原确认、"拒绝并附一条消息"、通知按钮的单元测试写进相应任务；新增 E2E-SEC-panel-numbering、E2E-reject-with-message、E2E-SEC-revert-confirm、UNIT-notifier-no-actions；P-22、P-23 移入已定。明细见 2.7 |
 | v1.3 | 2026-10-19 | 写进技术验证 T003 的结论（D05，设计 v1.6）：K1 通过，T057 不触发；T050、T055、T038、T063、T066、T074、T078 按新结论改写"做"和验收；新增 UNIT-acp-unhandled、UNIT-acp-detach、UNIT-commands-dedup、COMPAT-claude-six-sessions、COMPAT-claude-close-running、COMPAT-claude-resume-procs；覆盖核对加 K27、K28、Q42、Q43，去掉已关闭的 Q9。明细见 2.8 |
+| v1.3.1 | 2026-10-19 | T011 按守则第 8 条在开工前拆分：T011 收窄为事件基础、领域类型与索引流，新增 T017（会话流、条目、ToolCall 与交互请求）；T012、T014、T040 改为依赖 T017；关键路径 29 → 32；UNIT-proto-events 拆成 -index 与 -session 两个子编号 |

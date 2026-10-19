@@ -462,3 +462,35 @@ ConfigOption {
 - 生成链：Rust（serde + schemars）→ `protocol/schema/v1.json` → `tools/gen-protocol-ts`（hey-api 生成 TS 类型和 zod，非 strict）→ 后处理：已知事件类型的字面量列表和类型守卫、兜底成员用 `.loose()`、开放枚举写成 `(string & {})`（SP-4a 报告）。
 - "类型已知但数据残缺"的事件：客户端降级成未知事件并记日志；CI 对金样例严格校验，不允许降级（ADR-04 修订）。
 - iOS 怎样使用协议由 ADR-15 决定；M1 只保证 `cupper-protocol` 能编译到 iOS 模拟器、金样例里有未知值的样例。
+
+## 5.3.11 事件与领域类型的补充（v1.7，T011 规划）
+
+T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面是编排者的裁定，T011、T017 按此实现。依据是 `docs/tasks/T011-protocol-events/notes.md`。
+
+**解码与兼容**
+
+- **开放联合**：不用派生的 `#[serde(tag)]` 加 `untagged` 兜底。实测发现，类型已知、数据残缺的值会悄悄落进 `Unknown`。改用 `open_union!` 宏：`Serialize` 和 `JsonSchema` 照旧派生（schema 是 `anyOf`）；`Deserialize` 由宏生成，标签已知时按变体严格解析，标签未知时才落进 `Unknown`，并原样保留数据。
+- **严格模式**：`Strictness::{Strict, Tolerant}`，作用于 `Event<EventBody>` 和 `EventBody`。
+  - `Strict`：任何一层"类型已知、数据残缺"都直接报错，用于 CI 的金样例。
+  - `Tolerant`：整个事件降级成 `Unknown`，并把错误交给调用方记日志（ADR-04 修订第 4 条）。
+  - 嵌套联合遇到未知标签时，照常落进各自的 `Unknown`。
+- **一个 `EventBody` 覆盖两条流**，由 `stream_kind()` 给出每种事件属于哪条流。
+- **`fallback{kind, summary}`**：`kind` 是开放枚举，取客户端已经会画的占位形状（`item`、`hidden` 等）。`summary` 是给开发者看的英文短句，最多 120 个字符，不含 agent 给的文本和路径。界面显示本地化的通用占位，`summary` 只出现在 tooltip 和诊断信息里。
+  - 理由：只有不认识这个 `type` 的旧客户端才会用到 `fallback`；新类型带来的语义码，旧客户端同样没有翻译。
+
+**字段与类型**
+
+| # | 位置 | 裁定 |
+|---|---|---|
+| 1 | `notification.intent.intent_id`、条目的 `group_id` | 新增前缀 `n_`、`g_`，后接 UUIDv7（5.4.4） |
+| 2 | blob 的 `hash` | 新增 `BlobHash` 类型，带 `x-id`（5.4.4） |
+| 3 | `late_tool_output.output` | 改为可选。条目开始时还没有输出，输出走 `field: output` 的 delta，与 `ToolCall.output?` 一致 |
+| 4 | `Option.effect.ends_turn` | 类型为 `Option<bool>`，不出现表示未知。用于效果未知的选项，以及未实测的 Codex `revise_plan` |
+| 5 | `item.updated`、`item.completed` 中要更新的字段 | 共用展开的 `ItemPatch`：各类条目可以更新的字段都写成可选字段，不带 `kind`；同名字段在各类条目里类型相同 |
+| 6 | `workspace.failed` | `{code: ErrorCode, reason?: ErrorReason}`，与错误对象的写法一致 |
+| 7 | `turn.completed.error_code`、`SessionSummary.error_code`、`error` 条目的 `code` | 开放枚举 `FailureCode`：5.6.2 中 `AgentError` 的分类（`not_logged_in`、`cli_too_old`、`session_not_found`、`process_exited`、`restartable`、`model_unsupported`、`quota_exhausted`、`other`），再加宿主侧的 `adapter_exited`、`host_restarted` 等 |
+| 8 | `AgentStatus` | `{agent, state, cli?: {path, version?, compat, install}, adapter: {version, runtime, failure?}, auth: {state, kind?, plan?}, rss_bytes?, config_dir}`。登录状态只有类型和套餐名，不含邮箱、组织 |
+| 9 | 用量里的 `cost` | `{amount, currency}`，形状与 ACP 的 `usage_update` 相同 |
+| 10 | `session.configured.config` 的值、提问回答的 `values` | 配置项的值是字符串，ACP 的配置项是 select 类型。回答的值是带类型的 `AnswerValue`（字符串、数字、布尔、字符串数组），数字用 `serde_json::Number`，保证整数往返时不会变成浮点数 |
+| 11 | `queue.updated` 条目的 `created_by` | `PrincipalId` |
+

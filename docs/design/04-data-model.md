@@ -300,6 +300,8 @@ CREATE INDEX raw_by_session ON raw_frames(agent_session_id, ts);
 | hunk | `hk_` + sha-256(路径、hunk 头、内容、所在 diff 的 token) 前 24 位 | 宿主 | 按内容寻址 |
 | diff token | `dt_` + 随机 | 宿主 | 指向 `DiffCache` 里的一次 diff |
 | blob | sha-256 十六进制 | 宿主（上传时校验客户端给的值） | 按内容寻址 |
+| 通知意图、活动组 | `n_`、`g_` + UUIDv7 | 宿主的 `IdGen` | v1.7 补充（T011 规划）：`notification.intent.intent_id`、条目的 `group_id` |
+| blob 的 `hash` 字段 | 同上一行，协议类型为 `BlobHash`，带 `x-id` 注解 | — | v1.7 补充：内容里有每次运行都不同的值时哈希也会变，金样例按 `x-id` 规范化 |
 
 - 工具调用的条目用宿主生成的 `i_` ID，适配器的 `toolCallId` 只在驱动层的映射表里作 upsert 键（ADR-06 的"工具调用 ID 用 toolCallId"在这里细化为"upsert 键"）。原因是 `toolCallId` 只在一个 agent 会话内唯一，而且不同适配器的格式不同。
 - agent 侧的 ID（`agent_session_id`、`toolCallId`）不出现在协议里。
