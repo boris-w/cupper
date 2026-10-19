@@ -77,7 +77,7 @@
 | T033 | 订阅时调用 `sync::subscribe_mode(resume, &LogExtent)`。快照分页用 `paginate(snapshot_ops(), 帧负载减去信封的余量)` | T014（已写入 brief） |
 | T045 | 客户端同步状态机归本任务（T014 没做）。遇到 `snapshot`，不论原因（包括未知的 mode），都丢弃视图和游标；核对 `at_seq`、`epoch` 和页序号后组装，之后的事件经 `StreamCursor` 再 `apply`。遇到 `ViewError` 时不带游标重新订阅。`stream/reset` 保留游标 | T014（已写入 brief） |
 | T015 | 把 `IndexView`、`SessionView` 导出进 `v1.json`，测试 #16 要比对两端的视图 JSON | T014（已写入 brief） |
-| T072 | TS reducer 照 5.3.11 末尾"T014 实现时的裁定"的规则和视图 JSON 实现。JSON 对象的键顺序没有含义，比较时按深度相等 | T014 |
+| T072 | TS reducer 照 5.3.11 末尾"T014 实现时的裁定"的规则和视图 JSON 实现。JSON 对象的键顺序没有含义，比较时按深度相等 | T014（已写入 brief） |
 | T030 | `RawMessage::classify` 会把缺省的 `params` 变成 `null`，而 `ping` 这类参数为 `{}` 的方法，按结构体解析时会失败。分发时把 `null` 当作 `{}` | T012（已写入 brief） |
 | T035 | `project/trust_info.diff_from_trusted` 按文件列出差异，所以信任时要另存每个文件的哈希清单，按 P-4 加进 `0001` 的 `projects` 表 | T012 裁定 |
 | T052 | 假 agent 的 `--segment-file <路径>` 每次启动段号加 1，重启后的实例接着演下一段，用来回放多实例录制。persona 与 SP-1 录制的 jq 摘取命令在 `docs/tasks/T051-fake-agent-scripts/notes.md` 里，自动比对可以直接用 | T051 |
@@ -122,7 +122,7 @@
 | T043、T044 | `session/create`、`set_config` 的档位：用能力里的 `risk` 换算成 `Tier` 后调用 `policy::tier_change`，映射里没有的模式传 `FullAccess`；`config_unconfirmed` 的判定用 `policy::ceiling`；Attach 之前调用 `policy::attach`（信任门控） | T031（已写入 T043 的 brief） |
 | T077 | 原生确认框按 5.3.11 末尾"T031 实现时的裁定"里各 action 的 `details` 键取内容，文案由界面按语义码组织 | T031 |
 | T071 | 从 `@cupper/protocol` 用 `zEvent`、`zEventBody`、`isKnownEvent`、`KnownEvent`；`isKnownEvent` 为 false 时记日志并显示占位。生成的 `zStreamEventsParams`、`zStreamSnapshotParams`、`zHistoryPageResult` 对数组里每个事件做完整校验，一个没有合法外壳的事件（例如缺 `seq`）会让整条消息失败，而 Rust 的 `Raw<T>` 只让那一条失败：先把 `events`、`ops` 当作 `unknown[]` 取出，再逐个 `zEvent.safeParse`。`protocol/fixtures/methods.json` 可以直接给 mock 宿主用 | T015（已写入 brief） |
-| T072 | `zIndexView`、`zSessionView` 及类型已生成；两端视图按深度相等比较。`Item` 等嵌套开放联合在 TS 里无法按标签收窄（`UnknownMember` 带索引签名），需要时生成类似 `isKnownEvent` 的守卫（也可在 T082 定） | T015 |
+| T072 | `zIndexView`、`zSessionView` 及类型已生成；两端视图按深度相等比较。`Item` 等嵌套开放联合在 TS 里无法按标签收窄（`UnknownMember` 带索引签名），需要时生成类似 `isKnownEvent` 的守卫（也可在 T082 定） | T015（已写入 brief） |
 | T016 | 冻结前要定：可选字段在 TS 里是 `T \| null`（zod `.nullish()`），宿主从不发 `null`，是否统一改成只是缺省；`Settings.cli_path` 标必填、`SettingsPatch` 的非空键不接受 `null`，在 Rust 里改，两端一起变；`v1.json` 是加了缩进的 JCS，方法目录在 `x-methods` 的三张表里；`protocol` 作业还没有对导出文件单独做整数安全检查（5.1.6），导出时超界会直接失败 | T015 |
 | T006 | npm 依赖闭包里有 `argparse@2.0.1`（Python-2.0，不在 allowlist），经 hey-api → `js-yaml` 和 electron-builder → `js-yaml` 引入，只在开发时使用。许可证门禁按生产依赖闭包计算时不会算进去；如果要连开发依赖一起检查，需要把它列为例外 | T015 |
 | 所有改协议类型的任务 | 改了 `cupper-protocol` 的类型就要跑 `pnpm gen` 并提交生成物（`protocol/schema/v1.json`、`packages/protocol/src/gen/`），`xtask ci protocol` 会卡住漏提交的情况 | T015 |
@@ -179,6 +179,10 @@
 | T076 | 原生扩展用 socketpair 转发，每条连接两个线程加一次拷贝；macOS 上 socketpair 和本机套接字的默认缓冲区只有 8 KB，转发会分成很多小块。测量闸门不达标时，在 `cupper-sys` 里加 `setsockopt(SO_SNDBUF/SO_RCVBUF)` | T073 |
 | T161 | `release-config` 可以断言扩展发布构建的 `buildInfo().features` 为空 | T073 |
 | 下一个改 Rust 依赖的任务 | `getrandom 0.4.3` 已有三个使用方（cupper-host、cupper-cli、cupper-desktop-native），按惯例提到 `[workspace.dependencies]` | T073 |
+| T080 | `client.counters` 是全部流的计数之和，E2E 的 `window.__cupperTest` 可以直接导出。`StreamSink` 的约定见 T072 的任务书。"生产构建只校验非 delta 事件"仍未做，目前每个事件都用 zod 解析 | T087 |
+| T080 | 视图：每帧调用一次 `versions.flush()`；组件用 `versions.subscribe(key, cb)` 和 `versions.of(key)` 订阅（键如 `item:<id>`、`turn:<id>`、`tail`、`session`，`view` 随每次变化）；`complete` 用来显示"加载中"，`error` 显示订阅失败 | T072 |
+| T082 | 视图的 `unknown` 列表（键 `unknown`）是要显示成占位的事件体，实时到达的带着 event 和 `fallback`；占位在消息流里的位置由本任务定 | T072 |
+| 改动视图规则或协议类型的任务 | 视图 JSON 变了就重新生成交叉验证的样例：`UPDATE_GOLDEN=1 cargo test -p cupper-protocol --lib view::parity`，在 PR 里审阅 `protocol/fixtures/views.json` 的差异；TS 侧的 reducer 要同步改 | T072 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

@@ -10,6 +10,8 @@
 //!   and encoded again, an event gives `normalized`, or itself when absent.
 //! - `methods.json`: `{method, params, result?}`, typical messages of every
 //!   method and notification in the catalog, each a round trip through its types.
+//! - `views.json`: event bodies and the views they fold into, which
+//!   `view::parity` writes and checks (UNIT-views-parity).
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -41,7 +43,7 @@ fn unit_proto_fixtures_every_file_is_checked() {
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect();
     files.sort();
-    assert_eq!(files, ["events.json", "methods.json"]);
+    assert_eq!(files, ["events.json", "methods.json", "views.json"]);
 }
 
 #[test]

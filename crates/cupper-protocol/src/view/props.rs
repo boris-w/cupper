@@ -18,7 +18,7 @@ use crate::sync::StreamCursor;
 use crate::text::escaped_len;
 
 #[derive(Debug, Clone)]
-enum Step {
+pub(super) enum Step {
     /// Start a turn, or end the running one.
     Turn,
     /// Start an item; without `turn_id` when the flag is set.
@@ -35,7 +35,7 @@ enum Step {
     State(u8),
 }
 
-fn steps() -> impl Strategy<Value = Vec<Step>> {
+pub(super) fn steps() -> impl Strategy<Value = Vec<Step>> {
     let text = || "\\PC{0,12}|[\"\\\\\\n\\x01é]{0,6}";
     let step = prop_oneof![
         2 => Just(Step::Turn),
@@ -180,7 +180,7 @@ impl Host {
     }
 }
 
-fn script(steps: &[Step]) -> Vec<EventBody> {
+pub(super) fn script(steps: &[Step]) -> Vec<EventBody> {
     let mut host = Host::default();
     for step in steps {
         host.step(step);
@@ -190,7 +190,7 @@ fn script(steps: &[Step]) -> Vec<EventBody> {
 
 /// The host's view, trimmed to `window` as each turn ends, with each turn's
 /// ops saved at its end; and the view of the whole log.
-fn host_run(
+pub(super) fn host_run(
     ops: &[EventBody],
     window: &Window,
 ) -> (SessionView, BTreeMap<u32, Vec<EventBody>>, SessionView) {

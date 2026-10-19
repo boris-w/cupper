@@ -2,7 +2,7 @@
 // out, requests matched to responses, and commands that survive a lost
 // connection. A driver attaches it to a HostPort after each handshake: the
 // renderer through `ShellAPI.host` (`connectShell`), the main process over its
-// sockets (T075). Stream sync builds on `call`, `onNotification` and `onState` (T087).
+// sockets (T075). Stream sync (`subscribe`) builds on `call`, `onNotification` and `onState`.
 
 import { zRpcError, type RpcError } from "@cupper/protocol";
 import type {
@@ -22,6 +22,7 @@ import {
   type BlobChunk,
 } from "./frame";
 import { Listeners } from "./listeners";
+import { StreamSync, type StreamSink, type SyncCounters } from "./sync";
 
 export type ClientState = ConnectionState | { status: "closed" };
 
@@ -83,10 +84,49 @@ export class HostClient {
   readonly #blobs = new Listeners<[BlobChunk]>();
   readonly #commandId: () => string;
   readonly #log: (message: string) => void;
+  readonly #streams = new Map<string, StreamSync>();
+  readonly #counters: SyncCounters = { gaps: 0, duplicates: 0, resets: 0 };
 
   constructor(options: HostClientOptions = {}) {
     this.#commandId = options.commandId ?? (() => uuidv7());
     this.#log = options.log ?? ((message) => console.warn(`host-client: ${message}`));
+    // Registered first: streams see each notification and state before other listeners do.
+    this.onNotification((method, params) => this.#route(method, params));
+    this.onState((state) => {
+      for (const sync of this.#streams.values()) {
+        if (state.status === "ready") {
+          this.#subscribe(sync, sync.subscribe());
+        } else {
+          sync.detach();
+        }
+      }
+    });
+  }
+
+  /** Gaps, duplicates and resets over every stream so far. */
+  get counters(): SyncCounters {
+    return { ...this.#counters };
+  }
+
+  /**
+   * Follows `stream` into `sink` until the returned function is called; see
+   * `StreamSync` for the rules. After a reconnect it resumes from its cursor.
+   */
+  subscribe(stream: string, sink: StreamSink): Unsubscribe {
+    if (this.#streams.has(stream)) {
+      throw new Error(`${stream} is subscribed already`);
+    }
+    const sync = new StreamSync(stream, sink, this.#counters, this.#log);
+    this.#streams.set(stream, sync);
+    if (this.#state.status === "ready") {
+      this.#subscribe(sync, sync.subscribe());
+    }
+    return () => {
+      if (this.#streams.get(stream) === sync) {
+        this.#streams.delete(stream);
+        this.call("stream/unsubscribe", { stream }, () => undefined);
+      }
+    };
   }
 
   get state(): ClientState {
@@ -190,6 +230,40 @@ export class HostClient {
         command: true,
       }),
     );
+  }
+
+  #subscribe(sync: StreamSync, params: object): void {
+    this.call("stream/subscribe", params, (outcome) => {
+      // A lost call waits for the next `ready`; a stream unsubscribed meanwhile is gone.
+      if ("lost" in outcome || this.#streams.get(sync.stream) !== sync) {
+        return;
+      }
+      if ("error" in outcome) {
+        sync.failed(outcome.error);
+        return;
+      }
+      const again = sync.subscribed(outcome.result);
+      if (again) {
+        this.#subscribe(sync, again);
+      }
+    });
+  }
+
+  #route(method: string, params: unknown): void {
+    const stream = (params as { stream?: unknown } | null)?.stream;
+    const sync = typeof stream === "string" ? this.#streams.get(stream) : undefined;
+    const again =
+      sync &&
+      (method === "stream/events"
+        ? sync.events(params)
+        : method === "stream/snapshot"
+          ? sync.snapshot(params)
+          : method === "stream/reset"
+            ? sync.reset()
+            : undefined);
+    if (sync && again) {
+      this.#subscribe(sync, again);
+    }
   }
 
   #set(state: ClientState, handshake?: Handshake): void {
