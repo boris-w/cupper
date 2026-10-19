@@ -188,6 +188,21 @@
 | T029 | outbox 的项现在是 `Item`（带订阅的 feed 编号），blob 分片仍走 `push_frame`；`Target::Streams` 已删除，`Target::Blobs` 还在，由本任务接上 | T019 |
 | 用大合并窗口的客户端（CLI、iOS） | 合并窗口内，同一批里的响应也要等窗口结束才发（与 SP-4a 相同，最多 1 s）。桌面默认 `coalesce_ms = 0`，不受影响；要用大窗口时，改成先发窗口前的响应帧（`gateway/send.rs`） | T019 |
 | 以后排查宿主内存时 | 对不存在的会话订阅或取历史，会把一条空流载入内存，直到空闲淘汰（10 分钟） | T019 |
+| T058 的修复（T088 之前或同时） | 组合核心的性质测试有稳定的反例：`orchestrator::session_props::prop_autonomous_dequeue_guard_queue_waits_while_the_agent_works`，断言"Guard: after a turn ended on silence, the queue waits for 30 s of quiet"失败。种子：`cc 7390a05ebe580707816e5bab38bbf67b0501e1d444018d9994dbaf6d6edc9900 # shrinks to ops = [Send, Send, Interrupt, Text(0), Advance(25000), Advance(25000), Thread(true)]`。main 上和 T043 之后的 `SessionCore` 都能复现，先判断是裁判、组合接线还是性质本身写错了。CI 在修好之前可能随机撞上。`proptest-regressions/` 定为入库（proptest 的推荐做法），修复时把这个种子文件一并提交 | T037、T043（编排者复现） |
+| T088 | agent 发来的请求（`DriverEvent::Ask`）现在没人应答，actor 也不处理 `CancelAsks`、`Settle`；接线点是 `SessionCore` 的请求计数（`Input::Asked`、`Input::Resolved`）和 actor 的 `Action::Machine(_)` 分支。`send` 的 `reply_to` 还没写进 `SendRequest`，`queue_entries.reply_to` 列和行的写法已经有了。还要补 `interactions` 的行和 `facts.option` | T043 |
+| T089 | 不在内存里的会话，`deliver` 和重启后的 `get` 现在都回 `not_found`，按需载入接在 `SessionManager::deliver` 里；排队消息到命令的对照（`command_id`）要从 `queue_entries` 恢复。载入时补写 T037 启动清理留下的 `turn.completed{interrupted}` 和交互的 `expired` 事件，并决定是否暂停队列 | T043、T037 |
+| T044 | 信任状态只在 `session/create` 时判定一次，attach 和每次 prompt 之前的重扫由本任务做；`facts` 对 `session/set_config` 还没有 `mode_tier` | T043 |
+| T061 | 快照端口是 `orchestrator/session/actor.rs` 里的 `skipped()`，换成真正的快照任务即可；`turns.snapshot_status` 只有一列，最后记的是结束快照的状态 | T043 |
+| T028 | 发布构建的 stdio 指向 `/dev/null`（T037）之后，有两处输出要改写进 host.log：启动失败的原因；会话 actor 在视图拒收事件时写的 stderr（测试构建里是 panic） | T037、T043 |
+| T059 | 在 `Host::start` 里调用 `routes.streams(streams, readers)`，删掉 `supervisor/mod.rs` 里 `streams` 上的 `#[expect(dead_code)]`（编排者指定，T019、T037 都留了这一步）。另外：空闲、孤立、待升级作为新的 `Exit` 取值接进 `Host::run`；`host/shutdown` 的 `reason` 按 `Exit` 取值（空闲 `idle`、待升级 `upgrade`）；把 `_audit` 接到写线程，`HostExiting` 记为 `host_exiting`；清理残留排在 `maintenance.spawn` 之前；`pending_upgrade` 改取自检结果 | T037、T019 |
+| T055 | 会话管理器的组装（编排者指定，T037、T043 都把这一步留给了对方）：在 `Host::start` 里 `SessionManager::new(SessionDeps { streams, writer, readers, clock, ids, durations, agents, quiescence })`，`agents` 是本任务的 `AgentRuntime`；用 `routes.sessions(Arc::new(manager))` 登记，不必改用 `Routes::start`。`supervisor::Part` 的顺序：会话管理器第一，`AgentRuntime` 第二（`stop` 里按 ADR-09 关闭适配器）。`raw.sink()` 在 `Host::start` 里取。适配器的环境变量过滤直接取 `runtime/manifest.json` 的 `env.deny`（设计 5.6.6），不另抄一份 | T037、T043、T004 |
+| T034 | 用 `routes.index(..)` 登记索引端口，作为第三个 `Part`（`stop` 里写索引流的检查点）；`clients.updated` 用 `Gateway::clients()`；启动第 7 步（加载索引流）放在绑定套接字之前 | T037 |
+| T047 | `test/clock_advance` 要用的 `Quiescence` 和 `ManualClock` 现在只是 `Host::start` 里的局部值，要留在 `Host` 上 | T037 |
+| T005 | `cargo xtask runtime-pack` 的暂存目录是 `target/runtime-pack/Contents/`，布局与 5.10.1 一致（`Helpers/node`、`Resources/runtime/…`），可以直接拷进 `CupperHost.app/Contents`。esbuild-wasm 整包随附，含用不到的浏览器版文件，每个文件都记了哈希；要精简由本任务定 | T004 |
+| T056 | 拉起 claude-agent-acp 的打包脚本时，`PATH` 只放随包 Node 所在的目录，其余环境变量清空：esbuild-wasm 按 `node` 这个名字从 PATH 拉起服务进程，否则会找不到或用到别的 node | T004 |
+| T006（license-gate） | codex-acp 内联依赖的许可证声明，按上游 v2.2.2 标签的 `package-lock.json` 生成；SP-2 的锁文件是按版本范围自己解析的，与上游实际内联的版本不同（例如 `@agentclientprotocol/sdk` 1.5.0 对 1.8.0），明细见 `docs/tasks/T004-runtime-pack/notes.md` | T004 |
+| T161、T180 | 5.10.7 第 2 步的 Node GPG 核对还是手工做的，自动化需要 `gpgv` 和锁定的 Node 发布公钥环。清单里 Node 的 sha-256 和 cdhash 是 ad-hoc 签名的值，Developer ID 签名后都会变：发布流水线要按发布身份重新生成并内嵌清单，设计里要写明每种构建内嵌哪一份 | T004 |
+| T064、T066 | 清单里还没有"已验证 CLI 范围"（5.10.3，由兼容报告生成）。T066 升级适配器时，重新评估静态扫描对 SDK 动态读取环境变量的覆盖（5.6.6 的已知局限） | T004 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
