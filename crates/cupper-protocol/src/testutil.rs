@@ -17,3 +17,21 @@ pub fn open_values<T: Serialize + DeserializeOwned>(known: &[&str]) {
     wire.push("zz_future");
     roundtrip::<Vec<T>>(&json!(wire));
 }
+
+/// Every integer schema in `v`, wherever it is nested.
+pub fn integers<'a>(v: &'a Value, out: &mut Vec<&'a Value>) {
+    match v {
+        Value::Object(m) => {
+            let t = m.get("type");
+            if t == Some(&json!("integer"))
+                || t.and_then(Value::as_array)
+                    .is_some_and(|a| a.contains(&json!("integer")))
+            {
+                out.push(v);
+            }
+            m.values().for_each(|c| integers(c, out));
+        }
+        Value::Array(a) => a.iter().for_each(|c| integers(c, out)),
+        _ => {}
+    }
+}
