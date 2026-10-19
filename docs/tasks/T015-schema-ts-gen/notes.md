@@ -66,3 +66,5 @@
 ## 验证"改了类型不重新生成就失败"
 
 在临时的分离 worktree 里给 `FallbackKind` 加一个取值并提交（不跑 `pnpm gen`），共用本 worktree 的构建目录跑 `cargo xtask ci protocol`：`gen` 步骤之后工作区出现 `protocol/schema/v1.json`、`types.gen.ts`、`zod.gen.ts` 三处改动，作业失败（175 通过、1 失败），提示提交重新生成的文件。验证完删除了临时 worktree，本分支没有这个提交。
+
+**教训：临时 worktree 不要和别的 worktree 共用构建目录。** 上面的验证用 `CARGO_TARGET_DIR` 指向本 worktree 的 `target/`。随后在本 worktree 跑 `xtask ci pr`，`protocol` 作业用的竟是临时 worktree 编出的 `export-schema` 和 `fixtures` 测试：`v1.json` 多出了 `card`，测试按临时 worktree 已删除的路径找样例而失败，xtask 也是改名前的旧版本。原因是 cargo 对工作区成员的元数据哈希不含绝对路径，依赖信息里记的又是相对工作区根的路径，于是另一个 worktree 编出的、时间更新的产物在这里被当成最新的。`cargo clean -p cupper-protocol -p xtask` 之后重跑，全部通过。计划 1.8 写着"构建缓存可以在 worktree 之间共享"，用同一个 `CARGO_TARGET_DIR` 时会遇到同样的问题，见汇报的范围外发现。
