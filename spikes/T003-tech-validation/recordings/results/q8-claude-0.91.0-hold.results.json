@@ -1,0 +1,203 @@
+{
+ "name": "q8-claude-0.91.0-hold",
+ "versions": {
+  "adapter": "@agentclientprotocol/claude-agent-acp 0.91.0",
+  "acpSdk": "1.8.0",
+  "agentSdk": "0.3.300",
+  "cli": "2.1.296 (Claude Code)",
+  "node": "v24.13.0"
+ },
+ "date": "2026-10-19",
+ "rounds": [],
+ "hold": {
+  "heldMs": 15002,
+  "sessionB": {
+   "ok": true,
+   "stopReason": "end_turn",
+   "elapsedMs": 1535,
+   "tokenEchoed": true
+  },
+  "sessionNewWhileHeld": {
+   "ok": true,
+   "elapsedMs": 809
+  },
+  "sessionListWhileHeld": {
+   "ok": true,
+   "elapsedMs": 19,
+   "sessions": 9
+  },
+  "sessionCloseWhileHeld": {
+   "ok": true
+  },
+  "sessionAStillWaitingWhenBFinished": true,
+  "sessionA": {
+   "ok": true,
+   "stopReason": "end_turn",
+   "elapsedMs": 19112,
+   "tokenEchoed": true,
+   "permissions": 1,
+   "fileWritten": true
+  },
+  "crossTalk": []
+ },
+ "killGroup": {
+  "processesBefore": 7,
+  "sleepSeen": true,
+  "survivors": [
+   {
+    "role": "zsh",
+    "label": "zsh",
+    "sameGroupAsAdapter": false,
+    "sameSessionAsAdapter": false
+   },
+   {
+    "role": "sleep",
+    "label": "sleep",
+    "sameGroupAsAdapter": false,
+    "sameSessionAsAdapter": false
+   }
+  ]
+ },
+ "outOfTurnTotal": 0,
+ "crossTalkTotal": 0,
+ "procSamples": [
+  {
+   "t": 205,
+   "label": "after initialize",
+   "procs": [
+    {
+     "role": "adapter (node)",
+     "pid": 29754,
+     "ppid": 29751,
+     "pgid": 29754,
+     "sid": 29754,
+     "stat": "Ss",
+     "rssKB": 119936,
+     "label": "adapter (node)",
+     "sameSessionAsAdapter": true,
+     "sameGroupAsAdapter": true,
+     "isGroupLeader": true,
+     "isSessionLeader": true
+    },
+    {
+     "role": "claude CLI",
+     "pid": 29755,
+     "ppid": 29754,
+     "pgid": 29754,
+     "sid": 29754,
+     "stat": "R",
+     "rssKB": 7824,
+     "label": "claude auth status",
+     "sameSessionAsAdapter": true,
+     "sameGroupAsAdapter": true,
+     "isGroupLeader": false,
+     "isSessionLeader": false
+    }
+   ]
+  },
+  {
+   "t": 26436,
+   "label": "killgroup: just before SIGKILL to the adapter's process group",
+   "procs": [
+    {
+     "role": "adapter (node)",
+     "pid": 29754,
+     "ppid": 29751,
+     "pgid": 29754,
+     "sid": 29754,
+     "stat": "Ss",
+     "rssKB": 105040,
+     "label": "adapter (node)",
+     "sameSessionAsAdapter": true,
+     "sameGroupAsAdapter": true,
+     "isGroupLeader": true,
+     "isSessionLeader": true
+    },
+    {
+     "role": "claude CLI",
+     "pid": 30187,
+     "ppid": 29754,
+     "pgid": 29754,
+     "sid": 29754,
+     "stat": "S",
+     "rssKB": 279648,
+     "label": "claude CLI",
+     "sameSessionAsAdapter": true,
+     "sameGroupAsAdapter": true,
+     "isGroupLeader": false,
+     "isSessionLeader": false
+    },
+    {
+     "role": "zsh",
+     "pid": 30355,
+     "ppid": 30187,
+     "pgid": 30355,
+     "sid": 30355,
+     "stat": "Ss",
+     "rssKB": 2640,
+     "label": "zsh",
+     "sameSessionAsAdapter": false,
+     "sameGroupAsAdapter": false,
+     "isGroupLeader": true,
+     "isSessionLeader": true
+    },
+    {
+     "role": "sleep",
+     "pid": 30356,
+     "ppid": 30355,
+     "pgid": 30355,
+     "sid": 30355,
+     "stat": "S",
+     "rssKB": 1264,
+     "label": "sleep",
+     "sameSessionAsAdapter": false,
+     "sameGroupAsAdapter": false,
+     "isGroupLeader": false,
+     "isSessionLeader": false
+    },
+    {
+     "role": "other",
+     "pid": 30205,
+     "ppid": 30187,
+     "pgid": 29754,
+     "sid": 29754,
+     "stat": "S",
+     "rssKB": 162176,
+     "label": "user-configured tool or MCP server",
+     "sameSessionAsAdapter": true,
+     "sameGroupAsAdapter": true,
+     "isGroupLeader": false,
+     "isSessionLeader": false
+    },
+    {
+     "role": "other",
+     "pid": 30269,
+     "ppid": 30205,
+     "pgid": 29754,
+     "sid": 29754,
+     "stat": "S",
+     "rssKB": 125424,
+     "label": "user-configured tool or MCP server",
+     "sameSessionAsAdapter": true,
+     "sameGroupAsAdapter": true,
+     "isGroupLeader": false,
+     "isSessionLeader": false
+    },
+    {
+     "role": "other",
+     "pid": 30204,
+     "ppid": 30187,
+     "pgid": 29754,
+     "sid": 29754,
+     "stat": "S",
+     "rssKB": 11856,
+     "label": "user-configured tool or MCP server",
+     "sameSessionAsAdapter": true,
+     "sameGroupAsAdapter": true,
+     "isGroupLeader": false,
+     "isSessionLeader": false
+    }
+   ]
+  }
+ ]
+}

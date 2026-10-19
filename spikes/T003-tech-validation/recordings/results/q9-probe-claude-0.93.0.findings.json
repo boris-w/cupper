@@ -1,0 +1,67 @@
+{
+ "initialize": {
+  "steeringSupportedOnWire": true,
+  "steeringSupportedAfterSdkParse": true,
+  "promptQueueingAfterSdkParse": true
+ },
+ "authStatusUpdate": {
+  "receivedBySdkHandler": true,
+  "kind": "account",
+  "onWire": true
+ },
+ "steeringIdle": {
+  "ok": true,
+  "outcome": "promptRequired",
+  "reason": "noRunningTurn"
+ },
+ "steeringInTurn": {
+  "sentAfterFirstChunk": true,
+  "response": {
+   "outcome": "injected",
+   "reason": null
+  },
+  "turnStopReason": "end_turn",
+  "replyMentionsSteered": true
+ },
+ "cancelRequest": {
+  "permissionAsked": true,
+  "permissionRequestId": 0,
+  "rawHandlerSaw": true,
+  "rawHandlerRequestId": 0,
+  "requestIdMatchesPermission": true,
+  "responderMarkerFired": true,
+  "onWire": true,
+  "msFromSessionCancel": 10,
+  "turnStopReason": "cancelled",
+  "lateCancelledAnswerAccepted": true,
+  "fileCreated": false
+ },
+ "dropPrompt": {
+  "droppedAfterFirstChunk": true,
+  "sdkSentCancelRequest": true,
+  "adapterResponse": {
+   "stopReason": "cancelled",
+   "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cachedReadTokens": 0,
+    "cachedWriteTokens": 0,
+    "totalTokens": 0
+   },
+   "_meta": {
+    "quota": {
+     "token_count": {
+      "totalTokens": 0,
+      "inputTokens": 0,
+      "cachedInputTokens": 0,
+      "cachedWriteTokens": 0,
+      "outputTokens": 0,
+      "reasoningOutputTokens": 0
+     },
+     "model_usage": []
+    }
+   }
+  }
+ },
+ "sessionClose": true
+}
