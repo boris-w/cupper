@@ -35,6 +35,9 @@ use super::wire;
 use crate::ledger::{Begin, Outcome, Repeat, Ticket};
 use crate::policy::{self, Confirmable, Facts};
 
+#[cfg(test)]
+mod tests;
+
 /// A call's reply, once its executor has one.
 pub type Reply = BoxFuture<'static, Outcome>;
 
