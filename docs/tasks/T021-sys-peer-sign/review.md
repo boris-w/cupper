@@ -44,3 +44,21 @@
 - 已知的小代价：`alone` 的外层用 `std::process` 拉子进程，不取 `fd_lock`。拉起期间，如果同进程里有 `fork` 用例，管道写端可能被短暂复制，最多让外层多等到那个 fork 子进程退出，不影响结果。接受。
 - 转交事项：内核在拉起时会短暂复制全部 fd。宿主里凡是"关掉 fd 后立刻判断对端是否已关闭"的逻辑，都要考虑这个窗口。已写进 `handoff-notes.md`，交给 T037（进程监护）和 T043 及以后的 actor 任务。
 
+## 第 3 轮：fd 副本全面排查（2026-10-19，编排者）
+
+- 结论：通过，合并 `fix/T021-fd-copy-audit`。
+- 背景：合并 T014 之后，main 上 `it_sys_peer_current_exited_peer_is_refused` 又偶发失败一次，与第 2 轮同一个根因。这一轮要求把同类断言一次排查完。
+- 核对：
+  - 两次 CI 摘要都在干净 worktree 里跑出，rust 444、ts 64、license 1：`ci/pr-2fe9402fa9d5.json` 是排查后的，`ci/pr-95706fbfc0fa.json` 是竞态修复后的；
+  - 没有新增 `unsafe`，没有个人信息；
+  - 负载进程和临时目录都已清理。
+- 审阅：
+  - 先复现，再修。修复前：1 个拉起线程时 5,000 次失败 346 次；整套跑 40 次失败 12 次。修复后 0 次。
+  - 修法：`drop(client)` 后先从 `server` 读到 EOF，再断言。"没人持有"是这段的前提，不是被检查的对象，读到 EOF 正好证明前提已经成立。断言本身没改，用例仍能并发运行。执行者用 XNU 的 `unp_disconnect` 说明了 EOF 之后 `ENOTCONN` 必然成立。
+  - 新发现第二种副本：std 在 macOS 上建管道和 socketpair 时，是先建、后设 close-on-exec，`std::process` 拉起的子进程可能把它们一直带到退出。宿主只经 `cupper_sys::spawn` 拉子进程，不受影响。
+  - 其他 crate 的排查清单在 `notes.md`，没有会失败的项。
+- 扩大范围（编排者决定）：`peer_token` 的分类竞态，属于产品代码，3 行改动。`EINVAL` 之后回查 `peer_pid`，如果得到 `PeerExited`，也记为 `PeerExited`。
+  - 实测：修复前 10,000 次里有 40 次记成 `Other`，修复后 0 次。
+  - 这个窗口没法在用例里确定地触发；两条确定的路径已经由现有用例覆盖。接受。
+- 同时发现：用户临时目录里有 48 个 `cupper-app-protocol-*`，来自 `apps/desktop` 的 `hardening.test.ts`，没有清理。另开 T074 修复第 1 轮处理，执行者是同一位。
+
