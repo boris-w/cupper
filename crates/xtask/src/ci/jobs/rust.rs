@@ -1,10 +1,20 @@
 //! `rust`: formatting, clippy with warnings denied, and the workspace tests
-//! (design 5.1.6). Later tasks add the feature matrix, the iOS build of
-//! `cupper-protocol` and the golden tests.
+//! (design 5.1.6), plus the host's other feature sets. Later tasks add the iOS
+//! build of `cupper-protocol` and the golden tests.
 
 use anyhow::Result;
 
 use crate::ci::ctx::JobCtx;
+
+/// The host's feature sets besides `--all-features` (the e2e build): the
+/// release build (none, design 5.9.1), the self-use build (`dev-auth`) and the
+/// integration-test build (`test-harness`). Code gated on these features is
+/// compiled differently in each, so each gets its own clippy and test run.
+const HOST_FEATURE_SETS: &[(&str, &[&str])] = &[
+    ("release", &[]),
+    ("dev-auth", &["dev-auth"]),
+    ("test-harness", &["test-harness"]),
+];
 
 pub fn run(ctx: &mut JobCtx) -> Result<()> {
     let mut fmt = ctx.cargo();
@@ -23,6 +33,13 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         "warnings",
     ]);
     ctx.check("clippy", &mut clippy)?;
+    for (name, features) in HOST_FEATURE_SETS {
+        let mut clippy = ctx.cargo();
+        clippy.args(["clippy", "-p", "cupper-host", "--all-targets", "--locked"]);
+        with_features(&mut clippy, features);
+        clippy.args(["--", "-D", "warnings"]);
+        ctx.check(&format!("clippy-host-{name}"), &mut clippy)?;
+    }
 
     let mut test = ctx.cargo();
     test.args([
@@ -32,5 +49,18 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         "--locked",
         "--no-fail-fast",
     ]);
-    ctx.libtest("test", &mut test)
+    ctx.libtest("test", &mut test)?;
+    for (name, features) in HOST_FEATURE_SETS {
+        let mut test = ctx.cargo();
+        test.args(["test", "-p", "cupper-host", "--locked", "--no-fail-fast"]);
+        with_features(&mut test, features);
+        ctx.libtest(&format!("test-host-{name}"), &mut test)?;
+    }
+    Ok(())
+}
+
+fn with_features(cmd: &mut std::process::Command, features: &[&str]) {
+    if !features.is_empty() {
+        cmd.args(["--features", &features.join(",")]);
+    }
 }
