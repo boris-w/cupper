@@ -1,0 +1,958 @@
+# 用例编号登记表（设计 5.9.10，计划 1.6），由 tools/trace-ids 读取：
+#   check          文档（docs/03-plan.md、docs/design/）里的每个编号都在这里登记、格式正确；
+#                  `cargo xtask ci testdata-scan` 运行它
+#   status、verify 按测试结果和人工证据推导每个编号是否完成，待完成清单不手工维护
+#
+# 每个产出任务一段，按计划第 2 节任务表的顺序；任务只追加自己的一段，不删行（计划 1.5）。
+# 段里的 milestone 是这一段的默认里程碑（M1a、M1b、release、M2、later），其余每个键是一个编号。
+# 值是字符串时就是套件，即这个编号必须在哪个 `xtask ci` 目标里通过：
+#   pr       每个 PR                      nightly  每晚
+#   release  发布流水线                    compat   兼容套件（`cargo xtask compat`，维护者本机运行）
+#   man      人工检查，靠证据而不是测试结果
+# 需要更多字段时写成内联表：
+#   suite、milestone   同上；milestone 覆盖段的默认值
+#   status、reason     conditional（条件任务的编号，检查点通过后改为 na）、na（不适用）、
+#                      gap（缺口：本机替代不了）、gap-confirmed（缺口，用户已确认）；都要写 reason
+#   parts              子编号：全部子编号完成才算完成
+#   versions           MAN：证据要与这些组件的当前版本相符，如 { electron = "major" }
+#   max_age_days       MAN：证据超过这么多天就过期
+# 没有产出任务的编号放在 [unplanned]；文档里形似编号、但不是用例编号的写法放在 [not-ids]；
+# MAN 的证据追加在文件末尾：
+#   [[evidence]]
+#   id = "MAN-keyboard"
+#   date = "YYYY-MM-DD"
+#   record = "docs/tasks/<ID>-<slug>/<记录>.md"
+#   versions = { electron = "44.9.0" }
+
+# 仓库与工程骨架、本机 CI 入口
+[T001]
+milestone = "M1a"
+UNIT-ci-summary = "pr"
+UNIT-ci-lock = "pr"
+
+# 用例编号登记与 trace-ids
+[T002]
+milestone = "M1a"
+UNIT-trace-ids = "pr"
+
+# xtask runtime-pack 与运行时清单
+[T004]
+milestone = "M1a"
+UNIT-runtime-pack-envscan = "pr"
+
+# xtask host-bundle
+[T005]
+milestone = "M1a"
+IT-host-bundle-layout = "pr"
+
+# 许可证门禁第一层
+[T006]
+milestone = "M1a"
+UNIT-license-gate-negative = "pr"
+
+# 协议基础：分帧、信封、ID、错误码、规范 JSON 与注解
+[T010]
+milestone = "M1a"
+UNIT-digest-jcs = "pr"
+UNIT-proto-base = "pr"
+
+# 协议事件目录 I：事件基础、领域类型与索引流
+[T011]
+milestone = "M1a"
+UNIT-proto-events-index = "pr"
+
+# 协议事件目录 II：会话流、条目、ToolCall 与交互请求
+[T017]
+milestone = "M1a"
+UNIT-proto-events-session = "pr"
+UNIT-proto-events = { parts = ["UNIT-proto-events-index", "UNIT-proto-events-session"] }
+
+# 协议方法 I：方法基础、握手与流
+[T012]
+milestone = "M1a"
+UNIT-proto-methods-core-stream = "pr"
+
+# 协议方法 I-b：项目、agent、会话与交互
+[T018]
+milestone = "M1a"
+UNIT-proto-methods-core-session = "pr"
+UNIT-proto-methods-core = { parts = ["UNIT-proto-methods-core-stream", "UNIT-proto-methods-core-session"] }
+
+# 协议方法 II：git、文件、设置、认证、诊断与测试
+[T013]
+milestone = "M1a"
+UNIT-proto-methods-ext = "pr"
+
+# 协议视图与同步规则
+[T014]
+milestone = "M1a"
+PROP-view-coalesce = "pr"
+# 暂时也覆盖 T014 的 IndexView 用例和订阅规则（T014 的交接事项）
+UNIT-view-window = "pr"
+UNIT-view-late-by-ref = "pr"
+
+# schema 导出与 TS 生成链
+[T015]
+milestone = "M1a"
+UNIT-proto-fixtures = "pr"
+UNIT-ts-fixtures = "pr"
+
+# 契约冻结
+[T016]
+milestone = "M1a"
+UNIT-schema-compat = "pr"
+
+# cupper-sys I：进程与系统信息
+[T020]
+milestone = "M1a"
+UNIT-sys-spawn = "pr"
+UNIT-sys-reap-group = "pr"
+
+# cupper-sys II：对端校验与代码签名
+[T021]
+milestone = "M1a"
+# 本机的 security-macos14 只记作这一项，不算 macOS 14 的覆盖
+IT-sys-peer-current = "pr"
+IT-sys-peer-macos14 = { suite = "nightly", status = "gap", reason = "本机替代不了：macOS 14 上的对端校验，里程碑退出时由用户确认（计划 1.6、1.8）" }
+IT-sys-peer-macos15 = { suite = "pr", status = "gap", reason = "本机替代不了：macOS 15 上的对端校验，里程碑退出时由用户确认（计划 1.6、1.8）" }
+UNIT-sys-uniqueid = "pr"
+IT-sys-peer = { parts = ["IT-sys-peer-current", "IT-sys-peer-macos14", "IT-sys-peer-macos15"] }
+
+# 宿主核心骨架 I：时钟、纯核心框架与静止屏障登记
+[T022]
+milestone = "M1a"
+UNIT-clock-manual = "pr"
+UNIT-idgen = "pr"
+UNIT-quiescence-registry = "pr"
+
+# 宿主核心骨架 II：启动契约、注入点与故障点
+[T023]
+milestone = "M1a"
+UNIT-startup-payload = "pr"
+UNIT-failpoint = "pr"
+UNIT-release-features = "pr"
+
+# 存储 I：写线程、读池与持久性
+[T024]
+milestone = "M1a"
+UNIT-writer-savepoint = "pr"
+UNIT-epoch-decision = "pr"
+
+# 存储 II：表结构、迁移与升级器
+[T025]
+milestone = "M1a"
+IT-migrations = "pr"
+
+# 存储 III：流、检查点、回合快照与历史
+[T026]
+milestone = "M1a"
+PROP-stream-seq = "pr"
+PROP-stream-replay = "pr"
+
+# 存储 IV：blob、原始帧与保留清理
+[T027]
+milestone = "M1a"
+UNIT-blobstore = "pr"
+UNIT-raw-queue = "pr"
+UNIT-retention = "pr"
+
+# 日志与脱敏
+[T028]
+milestone = "M1a"
+UNIT-redaction = "pr"
+UNIT-redact-auth-status = "pr"
+
+# 网关 I：连接、握手与本地认证（peer、codesign）
+[T030]
+milestone = "M1a"
+# IT-handshake：T030 产出 peer、codesign 与错误码部分，T039 补上了密钥认证部分（不拆子编号）
+IT-handshake = "pr"
+IT-pinned-token = "pr"
+
+# 网关 I-b：密钥认证与双向证明
+[T039]
+milestone = "M1a"
+UNIT-proof-binding = "pr"
+IT-devkey-launcher-only = "pr"
+IT-devkey-orphan-start = "pr"
+
+# 策略
+[T031]
+milestone = "M1a"
+UNIT-tier-rules = "pr"
+UNIT-policy-matrix = "pr"
+
+# 命令账本
+[T032]
+milestone = "M1a"
+UNIT-ledger = "pr"
+
+# 网关 II：分发、账本与路由
+[T033]
+milestone = "M1a"
+IT-command-order = "pr"
+UNIT-unsupported-set = "pr"
+
+# 网关 III：订阅、历史与发送合并
+[T019]
+milestone = "M1a"
+IT-gw-subscribe = "pr"
+
+# 网关 IV：blob 上传与下载
+[T029]
+milestone = "M1a"
+IT-gw-blob = "pr"
+
+# 索引 actor 与关注度
+[T034]
+milestone = "M1a"
+UNIT-index-status = "pr"
+UNIT-index-intent = "pr"
+IT-project-add-trust = "pr"
+
+# 项目信任扫描
+[T035]
+milestone = "M1a"
+UNIT-trust-scan = "pr"
+
+# 设置
+[T036]
+milestone = "M1a"
+UNIT-settings = "pr"
+
+# 进程监护与宿主生命周期
+[T037]
+milestone = "M1a"
+IT-self-check = "pr"
+IT-lifecycle = "pr"
+UNIT-orphan-policy = "pr"
+
+# CLI 提权（宿主侧）
+[T038]
+milestone = "M1a"
+IT-elevate = "pr"
+
+# 会话纯核心 I：驱动接口与队列
+[T040]
+milestone = "M1a"
+UNIT-queue-core = "pr"
+
+# 会话纯核心 I-b：回合状态机
+[T048]
+milestone = "M1a"
+PROP-queue-fifo = "pr"
+PROP-interrupt-10s = "pr"
+PROP-turn-single-prompt = "pr"
+PROP-prompt-inflight-no-end = "pr"
+
+# 会话纯核心 II：合并器、分组与最终回答
+[T041]
+milestone = "M1a"
+UNIT-final-items = "pr"
+UNIT-grouping = "pr"
+PROP-coalescer = "pr"
+
+# 会话纯核心 II-b：自发回合判定与组合
+[T058]
+milestone = "M1a"
+PROP-autonomous-dequeue-guard = "pr"
+PROP-turn-snapshot-immutable = "pr"
+
+# 交互代理纯核心
+[T042]
+milestone = "M1a"
+PROP-interaction = "pr"
+UNIT-question-mapping = "pr"
+
+# 会话 actor I：创建、发送、中断与持久化
+[T043]
+milestone = "M1a"
+IT-orch-lifecycle = "pr"
+
+# 会话 actor II：档位、信任门控、崩溃与晚到输出
+[T044]
+milestone = "M1a"
+IT-orch-gating = "pr"
+
+# cupper-cli I：客户端库、连接与宿主校验
+[T045]
+milestone = "M1a"
+UNIT-cli-host-verify = "pr"
+UNIT-cli-client = "pr"
+
+# cupper-cli I-b：Mirror 与客户端同步状态机
+[T049]
+milestone = "M1a"
+UNIT-mirror = "pr"
+
+# cupper-cli II：命令行
+[T046]
+milestone = "M1a"
+IT-cli-commands = "pr"
+
+# test-harness 测试接口、录制导出与宿主性能
+[T047]
+milestone = "M1a"
+IT-clock-advance = "pr"
+IT-seed = "pr"
+IT-recording-export = "pr"
+PERF-host-cold-start = "nightly"
+PERF-index-snapshot = "nightly"
+PERF-host-memory = "nightly"
+
+# 驱动层 I：传输、线路分接与 ACP 连接
+[T050]
+milestone = "M1a"
+UNIT-tap = "pr"
+UNIT-transport-memory = "pr"
+UNIT-acp-unhandled = "pr"
+UNIT-acp-detach = "pr"
+
+# 假 agent：剧本模式与 persona
+[T051]
+milestone = "M1a"
+UNIT-fake-scripts = "pr"
+
+# 录制格式、回放模式、SP-1 录制转换与敏感信息扫描
+[T052]
+milestone = "M1a"
+UNIT-rec-format = "pr"
+UNIT-replay = "pr"
+UNIT-sensitive-list = "pr"
+
+# Claude 提取层、选项对照表与 A 层金样例
+[T053]
+milestone = "M1a"
+GOLD-A-claude-s01 = "pr"
+GOLD-A-claude-s02c = "pr"
+GOLD-A-claude-s03 = "pr"
+GOLD-A-claude-s05 = "pr"
+GOLD-A-claude-s06 = "pr"
+GOLD-A-claude-s07 = "pr"
+GOLD-A-claude-s07b = "pr"
+GOLD-A-claude-s09 = "pr"
+GOLD-A-unknown-enums = "pr"
+GOLD-A-tool-fields-claude = "pr"
+GOLD-A-option-map-claude = "pr"
+UNIT-option-map-claude = "pr"
+UNIT-capabilities = "pr"
+UNIT-capabilities-plan = "pr"
+
+# CLI 发现、登录 shell 环境与可信 PATH
+[T054]
+milestone = "M1a"
+UNIT-cli-resolver-claude = "pr"
+UNIT-version-classify = "pr"
+UNIT-realpath = "pr"
+UNIT-env-rules = "pr"
+
+# 驱动层 II：AgentRuntime 与 Claude 接入
+[T055]
+milestone = "M1a"
+IT-process-hygiene = "pr"
+IT-K13-echo-cwd = "pr"
+IT-K21-reap-group = "pr"
+IT-K26-client-info = "pr"
+IT-adapter-restart = "pr"
+UNIT-commands-dedup = "pr"
+
+# 运行时安装器
+[T056]
+milestone = "M1a"
+IT-runtime-install = "pr"
+
+# （条件）Q8 后备：同一种 agent 的 prompt 全局串行（K1 已通过，不触发）
+[T057]
+milestone = "M1a"
+IT-q8-fallback-claude = { suite = "pr", status = "na", reason = "K1 已通过（T003，2026-10-19），T057 不触发" }
+
+# Git 服务 I：GitCmd 三档与仓库档防护
+[T060]
+milestone = "M1a"
+IT-git-repo-tier-malicious = "pr"
+UNIT-git-fingerprint = "pr"
+
+# Git 服务 II：快照档与回合快照
+[T061]
+milestone = "M1a"
+IT-git-snapshot-parity = "pr"
+IT-git-racy = "pr"
+IT-git-filter-placeholder = "pr"
+IT-git-snapshot-malicious = "pr"
+IT-git-lfs-snapshot = "pr"
+PERF-snapshot = "nightly"
+
+# 宿主集成测试 I：网关同步、历史与通知意图
+[T062]
+milestone = "M1a"
+IT-gw-sync = "pr"
+IT-NFR2-epoch = "pr"
+IT-history-from-host = "pr"
+IT-notification-intent = "pr"
+IT-host-orphaned = "pr"
+
+# 宿主集成测试 II：驱动与回合（K 清单）
+[T063]
+milestone = "M1a"
+IT-K1-close-resume = "pr"
+IT-K5-withdraw = "pr"
+IT-K6-crash-resume = "pr"
+IT-K6-output-then-crash = "pr"
+IT-K9-autonomous = "pr"
+IT-K14-old-cli-auth = "pr"
+IT-auth-none = "pr"
+IT-K19-unknown-kind-privileged = "pr"
+IT-thought-claude = "pr"
+IT-plan-entries = "pr"
+
+# 兼容套件框架
+[T064]
+milestone = "M1a"
+UNIT-compat-report = "pr"
+UNIT-compat-guards = "pr"
+
+# B 层金样例运行器
+[T065]
+milestone = "M1a"
+GOLD-B-fake = "pr"
+
+# 首批真实录制：Claude 兼容套件
+[T066]
+milestone = "M1a"
+MAN-compat-claude = "man"
+COMPAT-claude-thinking = "compat"
+COMPAT-untrusted-project-claude = "compat"
+COMPAT-claude-six-sessions = "compat"
+COMPAT-claude-close-running = "compat"
+COMPAT-claude-resume-procs = "compat"
+# 至少覆盖普通回合、审批、取消三个剧本（K12）
+GOLD-B-claude = "pr"
+
+# 宿主集成测试 III：交互、信任与档位
+[T068]
+milestone = "M1a"
+IT-form = "pr"
+IT-plan-confirm = "pr"
+IT-interaction-expire = "pr"
+IT-config-unconfirmed = "pr"
+IT-trust-stale = "pr"
+IT-trust-rescan-before-prompt = "pr"
+IT-trust-settingsources = "pr"
+
+# 宿主集成测试 IV：并发、故障点、崩溃一致性与外发
+[T069]
+milestone = "M1a"
+IT-six-sessions-shared-adapter = "pr"
+IT-NFR9-failpoints-core = "pr"
+IT-NFR9-crash-under-load = "pr"
+IT-host-egress-seatbelt = "pr"
+
+# shell-api（与协议无关的部分）与 i18n
+[T070]
+milestone = "M1a"
+UNIT-shell-mock = "pr"
+UNIT-i18n-escape = "pr"
+
+# host-client I：连接、切帧与握手，ShellAPI 的协议部分
+[T071]
+milestone = "M1a"
+UNIT-hc-conn = "pr"
+UNIT-hostport-contract-mock = "pr"
+
+# host-client I-b：订阅与同步
+[T087]
+milestone = "M1a"
+UNIT-hc-sync = "pr"
+
+# host-client II：视图 reducer 与交叉验证
+[T072]
+milestone = "M1a"
+UNIT-views-parity = "pr"
+UNIT-views-differential = "nightly"
+
+# cupper-desktop-native
+[T073]
+milestone = "M1a"
+UNIT-native = "pr"
+
+# 桌面主进程 I：应用骨架、构建与加固基线
+[T074]
+milestone = "M1a"
+UNIT-main-hardening = "pr"
+
+# 桌面主进程 II：拉起宿主、control 连接与退出确认
+[T075]
+milestone = "M1a"
+UNIT-launcher = "pr"
+
+# 桌面主进程 III：windowBridge 与 preload
+[T076]
+milestone = "M1a"
+UNIT-bridge-whitelist = "pr"
+UNIT-bridge-flow = "pr"
+UNIT-bridge-lifecycle = "pr"
+UNIT-hostport-contract-bridge = "pr"
+
+# 桌面主进程 IV：真实输入、特权操作与 Q26
+[T077]
+milestone = "M1a"
+UNIT-input-guard = "pr"
+UNIT-privileged = "pr"
+# 每个 Electron 大版本做一次（T077，之后 T107 等）；证据要与当前的大版本相符
+MAN-keyboard = { suite = "man", versions = { electron = "major" } }
+
+# 测量闸门：主进程转发
+[T078]
+milestone = "M1a"
+# K2 不达标时，T079 合并后重测同一编号
+PERF-bridge-gate = "nightly"
+
+# （条件）utilityProcess 宿主桥加委托票据
+[T079]
+milestone = "M1a"
+IT-ticket-auth = { suite = "pr", status = "conditional", reason = "K2 测量闸门（T078）不达标时由 T079 产出" }
+
+# ui-core I：状态层与安全规则
+[T080]
+milestone = "M1a"
+UNIT-ui-store = "pr"
+UNIT-ui-lint-rules = "pr"
+
+# ui-core III：侧边栏、横幅与 toast
+[T081]
+milestone = "M1a"
+UI-sidebar = "pr"
+UI-banners = "pr"
+
+# ui-core IV：消息流
+[T082]
+milestone = "M1a"
+UNIT-md-injection = "pr"
+UI-stream-markdown = "pr"
+UI-stream-tools = "pr"
+UNIT-stream-anchor = "pr"
+
+# ui-core V：请求面板与请求记录行
+[T083]
+milestone = "M1a"
+UNIT-request-panel = "pr"
+UI-request-panel = "pr"
+
+# ui-core II：token、三栏外框、页面骨架与截图测试
+[T084]
+milestone = "M1a"
+UI-shell = "pr"
+UI-shell-narrow = "pr"
+UI-csp-zero = "pr"
+
+# ui-core VI：新建会话页（M1a）
+[T085]
+milestone = "M1a"
+UI-new-session = "pr"
+
+# ui-core VII：输入框与排队消息（M1a）
+[T086]
+milestone = "M1a"
+UNIT-composer-ime = "pr"
+UNIT-composer-long-text = "pr"
+UNIT-composer-esc = "pr"
+UI-composer = "pr"
+
+# e2e 基础设施
+[T090]
+milestone = "M1a"
+E2E-single-instance = "nightly"
+E2E-quit-confirm = "nightly"
+
+# NFR-1 验收套件
+[T091]
+milestone = "M1a"
+E2E-NFR1-1 = "pr"
+E2E-NFR1-2 = "pr"
+E2E-NFR1-3 = "pr"
+E2E-NFR1-4 = "pr"
+E2E-NFR1-5 = "pr"
+
+# 安全 e2e 与外发检查
+[T092]
+milestone = "M1a"
+E2E-SEC-csp = "pr"
+E2E-SEC-real-input = "pr"
+E2E-SEC-panel-arming = "pr"
+E2E-SEC-panel-numbering = "pr"
+E2E-SEC-privileged = "pr"
+E2E-SEC-fake-host = "pr"
+E2E-SEC-egress = "nightly"
+E2E-SEC-no-key-client = "pr"
+E2E-SEC-double-initialize = "pr"
+E2E-SEC-cli-fake-host = "pr"
+
+# 交互与项目 e2e
+[T093]
+milestone = "M1a"
+E2E-approve-enter-esc = "pr"
+E2E-question-panel = "pr"
+E2E-persistent-option-native = "nightly"
+E2E-project-add-trust = "pr"
+E2E-new-session-agent-claude = "pr"
+E2E-reject-with-message = "pr"
+
+# SP-10 通知身份（Q2）
+[T101]
+milestone = "M1b"
+MAN-notification-spike = "man"
+
+# SP-6 场景 5、6：浸泡与输入法
+[T108]
+milestone = "M1b"
+MAN-ime = "man"
+
+# Codex 提取层、选项对照表与 A 层金样例
+[T110]
+milestone = "M1b"
+GOLD-A-codex-s02 = "pr"
+GOLD-A-codex-s04 = "pr"
+GOLD-A-codex-s04b = "pr"
+GOLD-A-codex-s05 = "pr"
+GOLD-A-codex-s06 = "pr"
+GOLD-A-codex-s07 = "pr"
+GOLD-A-codex-s10x = "pr"
+GOLD-A-tool-fields-codex = "pr"
+GOLD-A-option-map-codex = "pr"
+UNIT-option-map-codex = "pr"
+GOLD-A-tool-fields = { parts = ["GOLD-A-tool-fields-claude", "GOLD-A-tool-fields-codex"] }
+GOLD-A-option-map = { parts = ["GOLD-A-option-map-claude", "GOLD-A-option-map-codex"] }
+UNIT-option-map = { parts = ["UNIT-option-map-claude", "UNIT-option-map-codex"] }
+
+# Codex 接入：发现、运行时与回收
+[T111]
+milestone = "M1b"
+UNIT-cli-resolver-codex = "pr"
+IT-K20-reclaim = "pr"
+IT-codex-untrusted = "pr"
+UNIT-cli-resolver = { parts = ["UNIT-cli-resolver-claude", "UNIT-cli-resolver-codex"] }
+
+# Codex 回合语义集成测试
+[T112]
+milestone = "M1b"
+IT-K2-reject-ends-turn = "pr"
+IT-K3-late-output = "pr"
+IT-K4-cancel-pending-approval = "pr"
+IT-K7-restartable = "pr"
+IT-K12-plan-confirm-idle = "pr"
+IT-K17-text-error = "pr"
+IT-K18-upstream-retry = "pr"
+
+# Codex 兼容矩阵与 B 层补录
+[T113]
+milestone = "M1b"
+MAN-compat-codex = "man"
+COMPAT-untrusted-project-codex = "compat"
+GOLD-B-codex-s07 = "pr"
+MAN-compat = { parts = ["MAN-compat-claude", "MAN-compat-codex"] }
+COMPAT-untrusted-project = { parts = ["COMPAT-untrusted-project-claude", "COMPAT-untrusted-project-codex"] }
+
+# codex-drift 检查
+[T114]
+milestone = "M1b"
+UNIT-codex-drift = "pr"
+
+# （条件）Q8 后备（Codex）
+[T119]
+milestone = "M1b"
+IT-q8-fallback-codex = { suite = "pr", status = "conditional", reason = "K6 Q8 的 Codex 部分（T102）不通过时由 T119 产出" }
+
+# Git 服务 III：diff、file_diff、status 与 branches
+[T120]
+milestone = "M1b"
+IT-git-diff-scopes = "pr"
+
+# Git 服务 IV：暂存、取消暂存与还原（含 SP-5 的 82 个用例）
+[T121]
+milestone = "M1b"
+IT-git-hunk = "pr"
+IT-NFR9-failpoints-git = "pr"
+IT-git-stage = "pr"
+
+# Git 服务 V：提交与推送（用户档）与 Q23
+[T123]
+milestone = "M1b"
+IT-git-commit-push = "pr"
+
+# worktree 创建（CP-5）
+[T124]
+milestone = "M1b"
+IT-worktree-create = "pr"
+IT-NFR9-failpoints-worktree = "pr"
+
+# worktree 检查、归档、恢复与重命名
+[T125]
+milestone = "M1b"
+IT-worktree-check-rules = "pr"
+IT-session-archive-restore = "pr"
+
+# 文件搜索、提示内容映射与在外部应用打开
+[T126]
+milestone = "M1b"
+IT-files-search = "pr"
+UNIT-prompt-mapping = "pr"
+IT-workspace-open = "pr"
+
+# 存储用量与清除快照对象
+[T127]
+milestone = "M1b"
+IT-snapshot-purge = "pr"
+
+# 审查面板：主文档部分
+[T130]
+milestone = "M1b"
+UNIT-review-actions = "pr"
+UI-review = "pr"
+
+# 审查文档（独立源 iframe）
+[T131]
+milestone = "M1b"
+E2E-SEC-review-iso = "pr"
+# E2E-review-comment、E2E-SEC-revert-confirm：K9 不通过时改由 T139 产出
+E2E-review-comment = "nightly"
+UNIT-review-injection = "pr"
+E2E-SEC-revert-confirm = "nightly"
+
+# 回合改动卡片与撤销
+[T132]
+milestone = "M1b"
+UI-turn-changes = "pr"
+E2E-turn-changes-undo = "nightly"
+
+# （条件）审查面板后备：DiffHunksRenderer
+[T139]
+milestone = "M1b"
+UNIT-hast-render = { suite = "pr", status = "conditional", reason = "K9 Q29 审查文档（T104）不通过时由 T139 产出" }
+
+# Steer：宿主、驱动、CLI 与界面
+[T140]
+milestone = "M1b"
+PROP-steer-only-prompting = "pr"
+IT-K10-steer-explicit-only = "pr"
+IT-K11-steer-idle-queued = "pr"
+E2E-composer-steer-default = "nightly"
+IT-degrade-steering = "pr"
+IT-degrade-plan = "pr"
+IT-degrade-thinking = "pr"
+
+# 配置选择：set_config 与模式选择器
+[T141]
+milestone = "M1b"
+E2E-full-access-native = "nightly"
+IT-set-config-tier = "pr"
+
+# 输入框增强 I：@ 文件引用与拖入文件
+[T142]
+milestone = "M1b"
+E2E-file-ref = "nightly"
+
+# 消息流增强 I：代码高亮、计划与恢复指引
+[T143]
+milestone = "M1b"
+UI-code-highlight = "pr"
+E2E-error-guidance = "nightly"
+UI-plan = "pr"
+UI-error = "pr"
+
+# 新建会话页：两种 agent、工作区与分支
+[T144]
+milestone = "M1b"
+E2E-new-session-agent-codex = "pr"
+E2E-new-session-before-first-message = "nightly"
+E2E-new-session-agent = { parts = ["E2E-new-session-agent-claude", "E2E-new-session-agent-codex"] }
+
+# 输入框增强 II：图片、斜杠命令、↑ 与发送键
+[T145]
+milestone = "M1b"
+E2E-image-paste = "nightly"
+E2E-slash-commands = "nightly"
+E2E-send-key-setting = "nightly"
+
+# 消息流增强 II：回合折叠与晚到输出
+[T146]
+milestone = "M1b"
+UI-stream-fold = "pr"
+UI-late-output = "pr"
+
+# 设置页 II：通用、通知、外观、存储与命令行工具
+[T147]
+milestone = "M1b"
+UI-settings-general = "pr"
+UI-settings = { parts = ["UI-settings-agents", "UI-settings-general"] }
+
+# 复刻度修正
+[T148]
+milestone = "M1b"
+MAN-ui6-full = "man"
+MAN-ui6 = { parts = ["MAN-ui6-shell", "MAN-ui6-full"] }
+
+# 排队消息的编辑与插话
+[T149]
+milestone = "M1b"
+IT-queue-edit = "pr"
+E2E-queue-edit = "nightly"
+
+# 系统通知与 ui/navigate
+[T150]
+milestone = "M1b"
+MAN-notification-product = "man"
+IT-notifier-record = "pr"
+UNIT-notifier-no-actions = "pr"
+# K5 不通过时改由 T158 产出（替代 T150 的宿主通知部分）
+E2E-notification-navigate = "nightly"
+MAN-notification = { parts = ["MAN-notification-spike", "MAN-notification-product"] }
+
+# 设置页 I：agent 状态、连接与已归档会话
+[T151]
+milestone = "M1b"
+UI-settings-agents = "pr"
+
+# 视觉调整：暗色核对结果、半透明侧边栏与窗口外观
+[T152]
+milestone = "M1b"
+UI-layout = "pr"
+UI-theme = "pr"
+MAN-ui6-shell = "man"
+
+# 会话管理界面、快捷键与"打开"按钮
+[T153]
+milestone = "M1b"
+E2E-archive-cleanup = "nightly"
+E2E-next-needs-action = "nightly"
+E2E-shortcuts = "nightly"
+E2E-workspace-open = "nightly"
+
+# 中英文与截图基线
+[T154]
+milestone = "M1b"
+UI-locale = "pr"
+
+# SP-6 场景改写为性能回归
+[T155]
+milestone = "M1b"
+PERF-ui-stream = "nightly"
+PERF-ui-long-session = "nightly"
+PERF-ui-switch = "nightly"
+PERF-ui-occluded = "nightly"
+
+# 防休眠（NFR-13）
+[T156]
+milestone = "M1b"
+IT-power-assertion = "pr"
+
+# 安全边界说明（用户文档，完整版）
+[T157]
+milestone = "M1b"
+MAN-security-doc = "man"
+
+# （条件）主进程通知后备
+[T158]
+milestone = "M1b"
+UNIT-main-notifications = { suite = "pr", status = "conditional", reason = "K5 SP-10 通知身份（T101）不通过时由 T158 产出" }
+
+# 自用构建
+[T160]
+milestone = "M1b"
+IT-selfuse-build = "nightly"
+E2E-selfuse-coexist = "nightly"
+E2E-selfuse-replace = "nightly"
+
+# release-config 检查
+[T161]
+milestone = "M1b"
+E2E-SEC-switches = "nightly"
+UNIT-release-config-scan = "pr"
+
+# （条件）本机签名构建
+[T162]
+milestone = "M1b"
+MAN-local-signed = { suite = "man", status = "conditional", reason = "K7 Q35 本机签名（T105）通过时由 T162 产出" }
+
+# M1b 端到端：S1 与 S2
+[T170]
+milestone = "M1b"
+E2E-S1 = "nightly"
+E2E-S2 = "nightly"
+
+# M1b 端到端：S3 与 S4
+[T171]
+milestone = "M1b"
+E2E-S3 = "nightly"
+E2E-S4 = "nightly"
+
+# M1b 端到端：NFR-2、NFR-9 与容量
+[T172]
+milestone = "M1b"
+E2E-NFR2-retry = "nightly"
+E2E-NFR9-adapter-crash = "nightly"
+E2E-NFR9-cli-crash = "nightly"
+E2E-six-sessions = "nightly"
+IT-NFR9-failpoints = { parts = ["IT-NFR9-failpoints-core", "IT-NFR9-failpoints-git", "IT-NFR9-failpoints-worktree"] }
+
+# Q16 保留参数复核
+[T174]
+milestone = "M1b"
+PROP-retention-boundary = "pr"
+
+# M1b 退出验收
+[T179]
+milestone = "M1b"
+MAN-S1 = "man"
+MAN-S2 = "man"
+MAN-S3 = "man"
+MAN-S4 = "man"
+
+# Developer ID 签名与公证
+[T180]
+milestone = "release"
+MAN-node-notarize = "man"
+UNIT-signing-check = "release"
+
+# 发布流水线、签名后冒烟与 RC
+[T181]
+milestone = "release"
+SMOKE-SIGNED-codesign-auth = "release"
+SMOKE-SIGNED-no-weak-auth = "release"
+SMOKE-SIGNED-cli-readonly = "release"
+SMOKE-SIGNED-reattach = "release"
+SMOKE-SIGNED-handshake-matrix = "release"
+SMOKE-SIGNED-reject-fake-host = "release"
+SMOKE-SIGNED-reject-weak-host = "release"
+
+# 许可证门禁第二层与第三方声明
+[T182]
+milestone = "release"
+UNIT-license-gate-l2 = "pr"
+UNIT-third-party-notices = "pr"
+
+# 自动更新与升级流程
+[T183]
+milestone = "release"
+MAN-upgrade = "man"
+IT-prepare-upgrade = "pr"
+
+# 计划里没有产出任务的编号
+[unplanned]
+# 从第二个发布版起（计划 5.3 的 NFR-10）
+IT-n-minus-1-cli = { suite = "pr", milestone = "later" }
+# M2 的 SP-10（计划 5.4）
+MAN-tcc = { suite = "man", milestone = "M2" }
+
+# 文档里形似编号、但不是用例编号的写法
+[not-ids]
+UI-0 = "PRD 的需求编号"
+UI-1 = "PRD 的需求编号"
+UI-2 = "PRD 的需求编号"
+UI-3 = "PRD 的需求编号"
+UI-4 = "PRD 的需求编号"
+UI-5 = "PRD 的需求编号"
+UI-6 = "PRD 的需求编号"
+UI-7 = "PRD 的需求编号"
+E2E-question-card = "旧名，计划 v1.1 改为 E2E-question-panel"
+UI-cards = "旧名，计划 v1.1 改为 UI-request-panel"
+IT-K11 = "计划 T140 的注里对 IT-K11-steer-idle-queued 的简写"

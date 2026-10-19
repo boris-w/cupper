@@ -1,0 +1,17 @@
+{
+  "name": "@cupper/trace-ids",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Checks the test ID registry tests/ids.toml and derives the done and pending test IDs from test results (design 5.9.10, plan 1.6).",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "smol-toml": "1.9.0",
+    "vite": "8.3.3",
+    "vitest": "5.0.3"
+  }
+}

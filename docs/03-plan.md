@@ -1232,8 +1232,8 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | CP-3 | E2E-slash-commands → T145 |
 | CP-4 | UNIT-tier-rules → T031；IT-config-unconfirmed → T068；E2E-full-access-native → T141 |
 | CP-5 | IT-worktree-create → T124；E2E-S1 → T170 |
-| CP-6 | PROP-queue-fifo → T040；IT-K10-steer-explicit-only、IT-K11-steer-idle-queued、E2E-composer-steer-default → T140；IT-queue-edit、E2E-queue-edit → T149；E2E-NFR1-2 → T091 |
-| CP-7 | PROP-interrupt-10s → T040；IT-K1-close-resume → T063；E2E-NFR1-2 → T091 |
+| CP-6 | PROP-queue-fifo → T048；IT-K10-steer-explicit-only、IT-K11-steer-idle-queued、E2E-composer-steer-default → T140；IT-queue-edit、E2E-queue-edit → T149；E2E-NFR1-2 → T091 |
+| CP-7 | PROP-interrupt-10s → T048；IT-K1-close-resume → T063；E2E-NFR1-2 → T091 |
 | MS-1 | UI-stream-markdown、UNIT-md-injection → T082；UI-code-highlight → T143 |
 | MS-2 | IT-thought-claude → T063；GOLD-A-codex-s02 → T110；COMPAT-claude-thinking → T066 |
 | MS-3 | GOLD-A-tool-fields → T053（`-claude`）、T110（`-codex`）；UNIT-final-items、UNIT-grouping → T041；UI-stream-tools → T082；UI-stream-fold → T146 |
@@ -1277,7 +1277,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 
 | 来源 | 用例 → 任务 |
 |---|---|
-| K1 | PROP-turn-single-prompt → T040；IT-K1-close-resume → T063；假 agent 的全局不变式 → T051；GOLD-A-claude-s06 → T053；GOLD-A-codex-s06 → T110 |
+| K1 | PROP-turn-single-prompt → T048；IT-K1-close-resume → T063；假 agent 的全局不变式 → T051；GOLD-A-claude-s06 → T053；GOLD-A-codex-s06 → T110 |
 | K2 | GOLD-A-codex-s04、GOLD-A-codex-s04b → T110；IT-K2-reject-ends-turn → T112 |
 | K3 | GOLD-A-codex-s07 → T110；IT-K3-late-output → T112；PROP-turn-snapshot-immutable → T041；GOLD-B-codex-s07 → T113 |
 | K4 | IT-K4-cancel-pending-approval → T112 |
@@ -1287,7 +1287,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | K8 | GOLD-A-claude-s09 → T053；IT-history-from-host → T062 |
 | K9 | IT-K9-autonomous → T063；PROP-autonomous-dequeue-guard → T041 |
 | K10、K11 | IT-K10-steer-explicit-only、E2E-composer-steer-default、PROP-steer-only-prompting、IT-K11-steer-idle-queued → T140 |
-| K12 | GOLD-A-codex-s05 → T110；IT-K12-plan-confirm-idle → T112；PROP-prompt-inflight-no-end → T040 |
+| K12 | GOLD-A-codex-s05 → T110；IT-K12-plan-confirm-idle → T112；PROP-prompt-inflight-no-end → T048 |
 | K13 | UNIT-realpath → T054；IT-K13-echo-cwd → T055 |
 | K14、K15 | UNIT-version-classify、UNIT-cli-resolver → T054（Codex 样例 T111）；IT-K14-old-cli-auth → T063 |
 | K16 | GOLD-A-claude-s01 → T053；UNIT-redact-auth-status → T028 |
@@ -1516,7 +1516,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 **M1a**
 
 - [x] T001 仓库与工程骨架、本机 CI 入口
-- [ ] T002 用例编号登记与 trace-ids
+- [x] T002 用例编号登记与 trace-ids
 - [x] T003 技术验证：Q8（Claude）、Q9、SP-4b #7 与版本复核
 - [ ] T004 xtask runtime-pack 与运行时清单
 - [ ] T005 xtask host-bundle
@@ -1545,7 +1545,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T032 命令账本
 - [ ] T019 网关 III：订阅、历史与发送合并
 - [ ] T029 网关 IV：blob 上传与下载
-- [ ] T033 网关 II：分发、订阅、历史与 blob 传输
+- [x] T033 网关 II：分发、订阅、历史与 blob 传输
 - [ ] T034 索引 actor 与关注度
 - [ ] T035 项目信任扫描
 - [ ] T036 设置
@@ -1581,7 +1581,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T069 宿主集成测试 IV：并发、故障点、崩溃一致性与外发
 - [x] T070 shell-api（与协议无关的部分）与 i18n
 - [ ] T087 host-client I-b：订阅与同步
-- [ ] T071 host-client I：连接与续传，ShellAPI 的协议部分
+- [x] T071 host-client I：连接与续传，ShellAPI 的协议部分
 - [ ] T072 host-client II：视图 reducer 与交叉验证
 - [ ] T073 cupper-desktop-native
 - [x] T074 桌面主进程 I：应用骨架、构建与加固基线

@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "lib": ["es2024", "dom"],
+    // Only the tests read `protocol/fixtures/`; ESLint keeps `node:*` out of the rest.
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "references": [{ "path": "../protocol" }, { "path": "../shell-api" }]
+}

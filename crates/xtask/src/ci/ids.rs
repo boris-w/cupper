@@ -2,7 +2,8 @@
 //! them. A test belongs to an ID when its name, or a module or describe block
 //! on its path, starts with the ID: in snake case for Rust (`unit_ci_lock_...`
 //! runs `UNIT-ci-lock`), verbatim for JS test titles (`UNIT-shell-mock ...`).
-//! The IDs come from the design and the plan, which keep their exact spelling.
+//! The IDs come from the design, the plan and the registry `tests/ids.toml`,
+//! which keep their exact spelling.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -22,10 +23,11 @@ const LAYERS: &[&str] = &[
     "PERF",
 ];
 
-/// Every test ID mentioned in `docs/design/` and `docs/03-plan.md`.
+/// Every test ID mentioned in `docs/design/`, `docs/03-plan.md` and
+/// `tests/ids.toml`, which also has the IDs that tasks add.
 pub fn harvest(root: &Path) -> Vec<String> {
     let docs = root.join("docs");
-    let mut files = vec![docs.join("03-plan.md")];
+    let mut files = vec![docs.join("03-plan.md"), root.join("tests").join("ids.toml")];
     if let Ok(entries) = fs::read_dir(docs.join("design")) {
         files.extend(entries.filter_map(|entry| Some(entry.ok()?.path())));
     }
