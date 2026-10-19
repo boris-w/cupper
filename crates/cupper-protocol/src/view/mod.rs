@@ -4,19 +4,26 @@
 //! bodies ([`View::snapshot_ops`]), so live events, snapshots and history
 //! pages all go through the same `apply`.
 //!
-//! The serialized form of [`IndexView`] and `SessionView` is part of the
+//! The serialized form of [`IndexView`] and [`SessionView`] is part of the
 //! schema: the TS views must produce the same JSON (test #16). Absent optional
 //! values are left out; maps, lists and strings are always present.
 
+#[cfg(test)]
+mod fixtures;
 mod index;
+mod ops;
+mod session;
 
 use std::ops::Range;
 
 use thiserror::Error;
 
 use crate::event::EventBody;
+use crate::limits::V1;
+use crate::text::MAX_DELTA_ESCAPED;
 
 pub use index::IndexView;
+pub use session::{Entry, ItemEnd, ItemView, RequestView, SessionView, TurnView, WorkspaceView};
 
 /// A body that does not fit the view. The client resubscribes, as on a gap.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
@@ -35,8 +42,46 @@ pub trait View: Default {
     /// types change nothing.
     fn apply(&mut self, body: &EventBody) -> Result<(), ViewError>;
 
-    /// Bodies that rebuild this view from empty.
+    /// Bodies that rebuild this view from empty, each within [`OpLimits::V1`].
     fn snapshot_ops(&self) -> Vec<EventBody>;
+}
+
+/// What a session snapshot covers besides the running turn, the entries
+/// after the last turn and the pending requests (design 5.2.8, 5.3.9).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Window {
+    /// Finished turns.
+    pub turns: usize,
+    /// Items of those turns together. The newest finished turn stays even
+    /// when it alone has more, so that a history page is never mistaken for
+    /// a new turn (see [`SessionView::trim`]).
+    pub items: usize,
+}
+
+impl Window {
+    pub const V1: Self = Self {
+        turns: V1.snapshot_turns as usize,
+        items: V1.snapshot_items as usize,
+    };
+}
+
+/// How snapshot ops are cut: every op fits one history page, which also
+/// leaves room for the `stream/snapshot` envelope in a frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OpLimits {
+    /// Escaped text of one `item.delta`; at least 6, the longest escaped char.
+    pub delta: usize,
+    /// One serialized op. An `item.started` above it moves its optional
+    /// fields into `item.updated` ops; a single field that is larger still
+    /// arrived in one live event, so it fits a frame.
+    pub op: usize,
+}
+
+impl OpLimits {
+    pub const V1: Self = Self {
+        delta: MAX_DELTA_ESCAPED,
+        op: V1.max_history_page_bytes as usize,
+    };
 }
 
 /// Bytes of `op` as JSON.
