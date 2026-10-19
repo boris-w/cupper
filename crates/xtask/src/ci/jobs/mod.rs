@@ -6,6 +6,7 @@ mod license;
 mod protocol;
 mod rust;
 mod security;
+mod testdata_scan;
 mod ts;
 
 use anyhow::Result;
@@ -41,7 +42,7 @@ pub const JOBS: &[Job] = &[
     job("ts", Some(ts::run)),
     locked("ui", None),
     job("license", Some(license::run)),
-    job("testdata-scan", None),
+    job("testdata-scan", Some(testdata_scan::run)),
     locked("e2e", None),
     locked("perf", None),
     job("security-macos14", Some(security::run)),

@@ -3,12 +3,15 @@
 //! and the coalescer that writes the agent's updates as items, with their
 //! activity groups and the final answer.
 
+pub mod autonomous;
 pub mod coalescer;
 pub mod grouping;
 pub mod interaction;
 #[cfg(test)]
 mod props;
 pub mod queue;
+#[cfg(test)]
+mod session_props;
 #[cfg(test)]
 mod testkit;
 pub mod turn;

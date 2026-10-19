@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.9
+- 版本：v1.3.10
 - 日期：2026-10-19
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -52,6 +52,7 @@
 - 分支名按 [`CLAUDE.md`](../CLAUDE.md) 的约定：`<类型>/<编号>-<英文短名>`，例如 `feat/T043-session-actor`；技术验证类任务用 `spike/<编号>-<短名>`，代码放 `spikes/<编号>-<短名>/`，不进产品代码。
 - 上限约 1,500 行。子 agent 开工后发现会明显超出，先停下来汇报，由编排者按注里的拆分点拆成两个任务，不硬塞进一个分支。
 - 执行经验（2026-10-19，M1a 前两波）：测试通常占改动的 40%–55%，例如 T024 实现约 690 行、测试约 560 行。测试基础设施类任务，测试客户端和断言辅助本身就很大：T051 的测试实际 922 行，估计时只算了约 420 行。写任务书和估行数时，把测试和测试辅助单独列一项。
+- 执行经验（2026-10-19，M1a 第 3–5 波）：宿主任务的实现常比草估多出约 70%，rustfmt 会把字段多的结构体字面量展开；组合多个纯核心的性质测试要模拟很多端口，约多出 50%。估规模时，实现按草估的 1.7 倍、组合性质测试按 1.5 倍计（T058 的建议）。
 
 ### 1.2 每次合并后 main 都可用
 
@@ -239,7 +240,8 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T034 | 索引 actor 与关注度 | feat | 5.2.9、5.3.5（索引流）、5.5.10 | T033、T035、T037、T060 | 做：`IndexActor`（索引流与 `projects` 表的唯一写者）、`project/add`、`project/trust`、`project/trust_info`、状态计算（含 v1.4 的 `pending_kind`）与 100 ms 合并、`session/mark_read`、只采信 desktop_ui 的在场、`notification.intent`、`clients`/`agents`/`host`。不做：系统通知、`project/remove`；通知意图的进程级用例（T062） | UNIT-index-status（含 `pending_kind`）；新增 UNIT-index-intent（直接向 IndexActor 输入状态变化）、IT-project-add-trust | L | 否 | H.idx |
 | T035 | 项目信任扫描 | feat | 5.2.6（项目信任）、5.9.8 | T011、T022 | 做：`trust` 模块：工作区到 git 根目录每一级的项目配置、符号链接一律跟随、2,000 个文件或 16 MB 上限、摘要、findings、工作区外标记、与已信任摘要的差异、状态转换。不做：门控（T044） | 新增 UNIT-trust-scan | M | 否 | H.idx |
 | T036 | 设置 | feat | 5.2.11（设置） | T033 | 做：`settings` 表、`settings/get`、`settings/update`（安全相关键要 privileged）、默认值与读取接口。不做：界面偏好 | 新增 UNIT-settings | S | 否 | H.idx |
-| T037 | 进程监护与宿主生命周期 | feat | 5.2.13、5.5.6 | T020、T026、T027、T030 | 做：启动 10 步串联、`Supervisor`（按 `adapters` 表清理残留、空闲退出、有序退出、`host/status`、`host/exit`、`host/shutdown`、SIGTERM）、自检与待升级、退出码、主线程 `CFRunLoop`；"孤立"状态（`dev-auth` 构建里拉起宿主的父进程退出后，不再开始新回合，运行中的回合结束后有序退出）；空闲时长接 `test_config.durations`。不做：防休眠（T156）、准备阶段的会话恢复（T043） | 新增 IT-self-check、IT-lifecycle（启动前直接写库造出运行中的回合和待处理交互，断言转为 interrupted、expired；空闲退出、有序退出）、UNIT-orphan-policy | L | 否 | H.core |
+| T037 | 宿主生命周期 I：启动串联与有序退出 | feat | 5.2.13、5.5.6 | T020、T026、T027、T030 | 做：主线程 `CFRunLoop` 与 `main` 重组、stdio 重定向、数据目录检查、启动 10 步串联与退出码 3–6、启动时直接写库清理状态（回合 → interrupted、交互 → expired、`sessions.state`）、写线程死亡的通知、有序退出（SIGTERM、`host/exit`、写线程死亡）、网关的连接登记表与 `host/shutdown` 广播、`host/status`、`host/exit`。不做：空闲退出、孤立状态、自检、按 `adapters` 表清理残留、审计落盘（v1.3.10 起归 T059）；防休眠（T156）；会话恢复（T043） | 新增 IT-lifecycle（启动前直接写库造出运行中的回合和待处理交互，断言转为 interrupted、expired；SIGTERM 与 `host/exit` 的有序退出；退出码 3–6；与真实宿主握手） | L | 否 | H.core |
+| T059 | 宿主生命周期 II：监护、孤立、自检与审计落盘 | feat | 5.2.13、5.5.6、5.8.1 | T037 | 做：监护者纯核心（空闲退出、孤立状态、待升级、是否接受新回合；空闲时长接 `test_config.durations`）、`dev-auth` 构建下监视父进程、自检、按 `adapters` 表清理残留（TERM → 限时等待 → KILL 的例程，T055 复用；清理完才启动 Maintenance）、审计落盘与正式格式。不做：防休眠（T156） | 新增 UNIT-orphan-policy、IT-self-check、IT-idle-exit | L | 否 | H.core |
 | T038 | CLI 提权（宿主侧） | feat | 5.8.4、5.8.6 | T034、T055 | 做：`auth/elevate`（血缘检查，信号的期望按 T003 的结论（5.8.4）：对 Claude 的工具命令只有祖先链会命中，CLI、MCP、hooks 仍在适配器的进程组里；全局一个未决、被拒静默、2 分钟过期）、`auth/elevation_get`（核实信息里给出申请方是否为本 App 自带的命令行工具：路径与 cdhash 是否相符）、`auth/elevation_respond`、授权绑定连接与固定令牌、索引流的提权事件、审计；各时长接 `test_config.durations`。不做：原生确认框（T077） | 新增 IT-elevate（适配器后代被拒：经祖先链识别的工具命令、与适配器同进程组的 MCP 或 hooks；限频、过期、断开即失效） | M | 否 | H.gw |
 | **T040** | 会话纯核心 I：驱动接口与队列 | feat | 5.2.6、5.6.2 | T017、T022 | 做：`driver::api`（5.6.2 的命令、事件、`AgentError` 分类）；`QueueCore`（先进先出、暂停与恢复、版本号、`queue_edit` 的 `replace`、上限 50）。不做：`TurnMachine` 与四条 PROP（T048）、Steer（T140）、自发回合（T041） | 新增 UNIT-queue-core | M | 否 | H.orch |
 | **T048** | 会话纯核心 I-b：回合状态机 | feat | 5.2.6、5.2.16、5.6.2 | T040 | 做：`TurnMachine`（各状态、3 s 准备超时、10 s 中断兜底、在途规则、先 close 再 resume；结束顺序为 Settle → 结束快照 → `turn.completed`；出队与暂停）及其与 `QueueCore` 的接线；`ResolutionReason` 补 `turn_ended`。不做：Steer（T140）、自发回合（T041）、交互请求的跟踪（T042） | PROP-queue-fifo、PROP-interrupt-10s、PROP-turn-single-prompt、PROP-prompt-inflight-no-end | L | 否 | H.orch |
@@ -262,7 +264,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T057 | （条件）Q8 后备：同一种 agent 的 prompt 全局串行（K1 已通过，不触发） | feat | 5.13 Q8、ADR-09 | T055 | 不触发：K1 已通过（T003，2026-10-19），IT-q8-fallback-claude 在 `tests/ids.toml` 里标"不适用（K1 已通过）"。原触发条件：K1 的 Q8（Claude）不通过。做：按 agent 配置的串行闸门，或只对该 agent 退回每会话一个适配器进程（按 T003 的报告二选一） | 新增 IT-q8-fallback-claude | M | 否 | H.drv |
 | T060 | Git 服务 I：GitCmd 三档与仓库档防护 | feat | 5.2.10（调用约定、仓库档、指纹） | T054 | 做：`GitCmd` 构造器（固定参数、绝对路径、可信 PATH、环境、工作目录、超时）、三档类型从第一次调用起分开、仓库档的读配置、拒绝、覆盖、不重试、指纹比对与 notice。不做：快照档（T061）、用户档（T123） | 新增 IT-git-repo-tier-malicious、UNIT-git-fingerprint | M | 否 | H.git |
 | T061 | Git 服务 II：快照档与回合快照 | feat | 5.2.10（快照档）、5.2.6、5.9.8 | T043、T060 | 做：私有对象库、每工作区 GIT_DIR、白名单配置、复制 info 文件与 sharedindex、保留 mtime、自定义过滤器占位、LFS 标准取值（用 xtask 下载、核对哈希的锁定版本 git-lfs）、排除超大和嵌套仓库、`snapshot.recorded`，接入快照端口；Q32 快照档逐键确认。不做：diff（T120） | IT-git-snapshot-parity；新增 IT-git-racy、IT-git-filter-placeholder、IT-git-snapshot-malicious、IT-git-lfs-snapshot、PERF-snapshot | L | 否 | H.git、H.xt |
-| T062 | 宿主集成测试 I：网关同步、历史与通知意图 | test | 5.9.1、5.9.8；测试 #2 | T019、T029、T044、T047、T049 | 做：真实宿主进程加 claude 形态假 agent 加 CLI 库：迁移 SP-4a 端到端测试 1–7、数据代次的进程级用例、历史与通知意图；缺陷按 1.2 的上限就地修 | IT-gw-sync、IT-NFR2-epoch、IT-history-from-host、IT-notification-intent；新增 IT-host-orphaned（回合进行中拉起宿主的父进程退出：不再开始新回合，回合结束后有序退出） | L | 否 | H.gw、H.orch |
+| T062 | 宿主集成测试 I：网关同步、历史与通知意图 | test | 5.9.1、5.9.8；测试 #2 | T019、T029、T044、T047、T049、T059 | 做：真实宿主进程加 claude 形态假 agent 加 CLI 库：迁移 SP-4a 端到端测试 1–7、数据代次的进程级用例、历史与通知意图；缺陷按 1.2 的上限就地修 | IT-gw-sync、IT-NFR2-epoch、IT-history-from-host、IT-notification-intent；新增 IT-host-orphaned（回合进行中拉起宿主的父进程退出：不再开始新回合，回合结束后有序退出） | L | 否 | H.gw、H.orch |
 | T063 | 宿主集成测试 II：驱动与回合（K 清单） | test | 5.9.1、5.6.9 | T037、T044、T055 | 做：claude 形态假 agent 的进程级 K 清单用例；多次 resume 同一个会话后，断言宿主侧没有累积进程（上游 #1011，Q43）；依赖一满足就派发；缺陷按 1.2 的上限就地修。不做：codex 形态（T112） | IT-K1-close-resume、IT-K5-withdraw、IT-K6-crash-resume（含多次 resume 后的进程数）、IT-K6-output-then-crash、IT-K9-autonomous、IT-K14-old-cli-auth、IT-auth-none、IT-K19-unknown-kind-privileged、IT-thought-claude、IT-plan-entries | M | 否 | H.orch、H.drv |
 | T064 | 兼容套件框架 | feat | 5.9.5、5.1.6（compat-framework、testdata-scan） | T044、T047、T056 | 做：`cargo xtask compat`（5.9.5 的剧本全集，含 Q8、未信任项目、Q28、Q34、思考流）、只断言结构、真实配置的前后哈希对比、报告与 JSON schema、录制脱敏并过本机敏感词清单后入库、`--fake`；真实模式的自我约束（每个剧本显式设权限模式：Claude `default`、Codex `read-only` 或 `workspace-write`；拒绝 privileged 选项和放宽档位，除非剧本声明且只作用于临时仓库；临时仓库只建在每个用户自己的临时目录）；`xtask ci compat-framework`；`testdata-scan` 加报告校验和已验证范围重算；`tools/rec-shape-diff`；`lsof` 断言 | `xtask ci compat-framework` 通过；新增 UNIT-compat-report、UNIT-compat-guards | L | 否 | H.xt、H.fake |
 | T065 | B 层金样例运行器 | test | 5.9.3（B 层、规范化） | T044、T047 | 做：进程内宿主核心加内存传输加按录制 `t` 推进的 ManualClock、按 `x-id`/`x-time`/`x-path` 的规范化、严格模式、`pnpm test:golden` 的 B 层；先用假 agent 经宿主产出的录制 | 新增 GOLD-B-fake | M | 否 | H.orch、H.fake |
@@ -1042,7 +1044,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | W2 | **T011**、**T017**、T023、T024、T028、T050、T052、T054、T074 | T050 按 K1 的结论：扩展消息全部走 SDK；T017 在 T011 合并后派发，W3 的 T012、T014、T040 等它 |
 | W3 | T006、**T012**、**T013**、T014、**T018**、T025、T035、**T040**、T060 | 纯核心（T040）与信任扫描（T035）不依赖存储，先做 |
 | W4 | **T015**、T026、T027、**T030**、**T031**、T032、**T041**、T045、**T048**、T053、T056 | T053 起 A 层金样例进入 `xtask ci rust` |
-| W5 | T005、**T033**、**T039**、T019、T029、**T058**、T037、T042、T049、T055、**T071**、**T073** | T055 合并后假 agent 可以经驱动跑通；K1 已通过，T057 不派发 |
+| W5 | T005、**T033**、**T039**、T019、T029、**T058**、T037、T059、T042、T049、T055、**T071**、**T073** | T055 合并后假 agent 可以经驱动跑通；K1 已通过，T057 不派发 |
 | W6 | T034、T036、**T043**、**T072**、**T087**、**T075**、T084 | T043 用进程内驱动替身；T084 只依赖 T071，与 T080 并行 |
 | W7 | T038、**T044**、T047、T061、**T076**、**T080** | T044 合并后 T063、T068 立即可派 |
 | W8 | **T046**、T062、T063、T064、T065、T068、T069、**T077**、T078、**T081**、T082、T083、T086 | T078 测量闸门（K2）；T077 含 MAN-keyboard |
@@ -1232,8 +1234,8 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | CP-3 | E2E-slash-commands → T145 |
 | CP-4 | UNIT-tier-rules → T031；IT-config-unconfirmed → T068；E2E-full-access-native → T141 |
 | CP-5 | IT-worktree-create → T124；E2E-S1 → T170 |
-| CP-6 | PROP-queue-fifo → T040；IT-K10-steer-explicit-only、IT-K11-steer-idle-queued、E2E-composer-steer-default → T140；IT-queue-edit、E2E-queue-edit → T149；E2E-NFR1-2 → T091 |
-| CP-7 | PROP-interrupt-10s → T040；IT-K1-close-resume → T063；E2E-NFR1-2 → T091 |
+| CP-6 | PROP-queue-fifo → T048；IT-K10-steer-explicit-only、IT-K11-steer-idle-queued、E2E-composer-steer-default → T140；IT-queue-edit、E2E-queue-edit → T149；E2E-NFR1-2 → T091 |
+| CP-7 | PROP-interrupt-10s → T048；IT-K1-close-resume → T063；E2E-NFR1-2 → T091 |
 | MS-1 | UI-stream-markdown、UNIT-md-injection → T082；UI-code-highlight → T143 |
 | MS-2 | IT-thought-claude → T063；GOLD-A-codex-s02 → T110；COMPAT-claude-thinking → T066 |
 | MS-3 | GOLD-A-tool-fields → T053（`-claude`）、T110（`-codex`）；UNIT-final-items、UNIT-grouping → T041；UI-stream-tools → T082；UI-stream-fold → T146 |
@@ -1277,7 +1279,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 
 | 来源 | 用例 → 任务 |
 |---|---|
-| K1 | PROP-turn-single-prompt → T040；IT-K1-close-resume → T063；假 agent 的全局不变式 → T051；GOLD-A-claude-s06 → T053；GOLD-A-codex-s06 → T110 |
+| K1 | PROP-turn-single-prompt → T048；IT-K1-close-resume → T063；假 agent 的全局不变式 → T051；GOLD-A-claude-s06 → T053；GOLD-A-codex-s06 → T110 |
 | K2 | GOLD-A-codex-s04、GOLD-A-codex-s04b → T110；IT-K2-reject-ends-turn → T112 |
 | K3 | GOLD-A-codex-s07 → T110；IT-K3-late-output → T112；PROP-turn-snapshot-immutable → T041；GOLD-B-codex-s07 → T113 |
 | K4 | IT-K4-cancel-pending-approval → T112 |
@@ -1287,7 +1289,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | K8 | GOLD-A-claude-s09 → T053；IT-history-from-host → T062 |
 | K9 | IT-K9-autonomous → T063；PROP-autonomous-dequeue-guard → T041 |
 | K10、K11 | IT-K10-steer-explicit-only、E2E-composer-steer-default、PROP-steer-only-prompting、IT-K11-steer-idle-queued → T140 |
-| K12 | GOLD-A-codex-s05 → T110；IT-K12-plan-confirm-idle → T112；PROP-prompt-inflight-no-end → T040 |
+| K12 | GOLD-A-codex-s05 → T110；IT-K12-plan-confirm-idle → T112；PROP-prompt-inflight-no-end → T048 |
 | K13 | UNIT-realpath → T054；IT-K13-echo-cwd → T055 |
 | K14、K15 | UNIT-version-classify、UNIT-cli-resolver → T054（Codex 样例 T111）；IT-K14-old-cli-auth → T063 |
 | K16 | GOLD-A-claude-s01 → T053；UNIT-redact-auth-status → T028 |
@@ -1516,7 +1518,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 **M1a**
 
 - [x] T001 仓库与工程骨架、本机 CI 入口
-- [ ] T002 用例编号登记与 trace-ids
+- [x] T002 用例编号登记与 trace-ids
 - [x] T003 技术验证：Q8（Claude）、Q9、SP-4b #7 与版本复核
 - [ ] T004 xtask runtime-pack 与运行时清单
 - [ ] T005 xtask host-bundle
@@ -1549,11 +1551,12 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T034 索引 actor 与关注度
 - [ ] T035 项目信任扫描
 - [ ] T036 设置
+- [ ] T059 宿主生命周期 II：监护、孤立、自检与审计落盘
 - [ ] T037 进程监护与宿主生命周期
 - [ ] T038 CLI 提权（宿主侧）
 - [x] T040 会话纯核心 I：驱动接口与队列
 - [x] T048 会话纯核心 I-b：回合状态机
-- [ ] T058 会话纯核心 II-b：自发回合判定与组合
+- [x] T058 会话纯核心 II-b：自发回合判定与组合
 - [x] T041 会话纯核心 II：自发回合、合并器与最终回答
 - [x] T042 交互代理纯核心
 - [ ] T043 会话 actor I：创建、发送、中断与持久化
@@ -1581,7 +1584,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T069 宿主集成测试 IV：并发、故障点、崩溃一致性与外发
 - [x] T070 shell-api（与协议无关的部分）与 i18n
 - [ ] T087 host-client I-b：订阅与同步
-- [ ] T071 host-client I：连接与续传，ShellAPI 的协议部分
+- [x] T071 host-client I：连接与续传，ShellAPI 的协议部分
 - [ ] T072 host-client II：视图 reducer 与交叉验证
 - [ ] T073 cupper-desktop-native
 - [x] T074 桌面主进程 I：应用骨架、构建与加固基线
@@ -1688,3 +1691,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.7 | 2026-10-19 | T033 开工前按守则第 8 条拆分（估计约 2,800 行）：T033 收窄为分发、账本与路由（关键路径）；新增 T019（订阅、历史与发送合并，IT-gw-subscribe）与 T029（blob 传输，新增 IT-gw-blob），都依赖 T033，可与 T043 并行；T062、T090 改为也依赖 T019、T029；"账本重放"的用例挪进 T033 的网关层用例 |
 | v1.3.8 | 2026-10-19 | T041 按守则第 8 条中途拆分（已写 751 行，推算约 1,600–1,670）：T041 收窄为与回合机的衔接、`Coalescer`、分组与最终回答（PROP-coalescer、UNIT-grouping、UNIT-final-items）；新增 T058（`AutonomousJudge` 与组合测试环境，PROP-autonomous-dequeue-guard、PROP-turn-snapshot-immutable）；T043 改为也依赖 T058 |
 | v1.3.9 | 2026-10-19 | T071 第二次超限预警后拆分（已完成 4 个模块 1,052 行，推算约 2,170，越过放宽后的硬停止线 1,900）：T071 收窄为连接、切帧、握手、请求关联、ShellAPI 协议部分与 mock、合同测试（UNIT-hc-conn、UNIT-hostport-contract-mock）；新增 T087（订阅与同步，UNIT-hc-sync），与 T075 并行；T072 改为依赖 T087 |
+| v1.3.10 | 2026-10-19 | T037 开工前按守则第 8 条拆分（估计约 2,085 行）：T037 收窄为启动串联与有序退出（IT-lifecycle）；新增 T059（监护、孤立、自检、清理残留、审计落盘；UNIT-orphan-policy、IT-self-check，新增 IT-idle-exit），依赖 T037；T062 改为也依赖 T059 |
