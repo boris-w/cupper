@@ -101,3 +101,70 @@ df616fe docs(design): use full test IDs and add the self-use build column
 - T099 和 T179：确认本机替代不了的缺口。
 
 **提醒**：5.12.5 的措辞要改成"冻结时机见 `03-plan.md`"，按裁定由编排者负责；`00-process.md` 的流程也由编排者改。
+
+## 第 2 轮汇报（2026-10-19）
+
+- 执行者：子 agent（架构师，兼任规划）
+- 分支：`docs/P02-plan-revision-2`（基于 `8ecfa50`）
+- 完成日期：2026-10-19
+
+## 做了什么
+
+- `docs/03-plan.md` 升到 v0.3，17 条都已落实：
+  - 版本、日期、修订记录已更新；第 0 节写了 v0.3 的变化；新增 2.5，列出 v0.2 到 v0.3 的任务变化。
+  - 本机 CI 细则（第 2–6 条）写进 1.5、1.6、1.8，以及 T001、T002、T047、T084、T090、T099、T179。
+    - 5.7 新增"本机执行的约束"一行。
+    - Playwright workers 固定为 2。
+  - 设计 v1.3 的 5.8.1 落到任务（第 15、16 条）：
+    - T021：实测 `PROC_PIDUNIQIDENTIFIERINFO`。
+    - T030：只接受拉起宿主的进程；ppid 为 1 时退出；提供网关测试夹具。
+    - "孤立"状态放在 T037，进程级用例放在 T062。
+    - T005：先签宿主、取 cdhash，再编译 CLI。
+    - T045：CLI 按构建种类校验宿主。
+    - T092：新增 E2E-SEC-cli-fake-host。
+    - 可选项也做了：T038 和 T077 会标出"申请方不是本 App 自带的命令行工具"。
+  - M1b 的界面任务都依赖 T106（第 8 条）。P-20 按裁定写进 T106、1.11 和第 6 节（第 9 条）。
+  - 系统字体截图写进 1.2 和 1.11（第 10 条）。
+  - T160、T161、T157：helper 的 entitlements、cookie 加密、用 T160 自己的产物验收、剩余风险（第 11、12 条）。
+  - T092 的断言（第 13 条）、T102 的 P-14 细节（第 14 条）。
+  - 更正 7.3 的 K7 两行、T147、8.1 的 P-6、5.5 的 Q35（第 17 条）。
+  - 第 8 节：P-16 到 P-20 移入"已定"；8.2 新增 P-21（见下）。
+- 新增编号都已写进覆盖核对：UNIT-ci-lock、UNIT-sys-uniqueid、IT-sys-peer-current（另有 -macos14、-macos15 两个缺口子编号）、IT-devkey-launcher-only、IT-devkey-orphan-start、UNIT-orphan-policy、IT-host-orphaned、UNIT-cli-host-verify、E2E-SEC-cli-fake-host。
+- 设计只改了一处：`design/07-desktop.md` 中 5.7.9 自用构建一列的 Fuses 格，关闭 `enableCookieEncryption`。
+- `responses.md` 末尾加了"第 2 轮"一节：逐条列出 17 条的处理和落点，另附一节"其他变化"。
+
+## 关键取舍
+
+- **第 7 条与原文不同**：加入 T106 依赖后，T152 从 B3 移到 B4（T152 → T103 → T143 → T106）。
+  - 同波先合并 T152，T131、T147 再按新 token 重新生成各自的基线。
+  - 已在 B3 合并的 T130、T145、T146、T151，基线由 T152 一并更新。
+  - M1b 的波次因此从 B1–B7 变成 B1–B8，第 6 节第 15、16 行的波次随之后移。
+- **T073 的前置由 T023 改为 T030**：第 15 条要求 `dev_key` 由拉起方出示，所以 T073 改为对 T030 的网关夹具跑用例。
+  - 没有改成依赖 T037：那样 M1a 关键路径会从 29 变成 31。
+  - 关键路径仍是 M1a 29、M1b 17。
+- **第 1 条选了补依赖**：IT-project-add-trust 没有改成 crate 内用例，仍在真实宿主进程上跑。
+
+## 验证方式
+
+- mermaid：4 个图全部能解析。
+- 链接与锚点：计划、`responses.md`、`07-desktop.md` 共 64 处，0 处失效。
+- 依赖：没有环；每个任务的前置都在更早的波次。
+- 四处一致：任务表、依赖图、波次、进度清单都是 134 个任务，没有差异。依赖图的边与任务表的前置一一对应。
+- 进程级用例执行者闭包：130 个用例，0 个问题。
+- 三个文件的表格列数一致。
+- 个人信息：diff 与提交信息 grep 均为 0 处。
+- 验证工具装在临时目录里，用完已删。生成器留在临时目录，没有进仓库。
+
+## 提交列表
+
+```
+3b550e8 docs(task): record where each round-2 condition landed
+4d85f2d docs(plan): revise task plan to v0.3 per round-2 review conditions
+5d19ecd docs(design): turn off cookie encryption in the self-use build
+```
+
+## 遗留问题 / 范围外发现
+
+- **P-21**：改了 5.7.9 的 Fuses 格，但 `02-design.md` 头部的版本说明不在授权范围内，没有改。建议在 v1.3 的说明里补一句，或记为 v1.3.1。
+- **5.7.2 里的一个括注**：Fuses 行写着"`enableCookieEncryption`（e2e 构建关闭）"，现在自用构建也关闭了。不在授权范围内，没有改，可以和 P-21 一起处理。
+- **第 10 条的 brief 模板**：系统字体截图的要求还需要编排者写进界面任务的 brief 模板。计划里已写进 1.2 和 1.11。
