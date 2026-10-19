@@ -251,10 +251,17 @@ pub async fn fold<V: View>(
 
 #[cfg(test)]
 mod tests {
+    use cupper_protocol::frame::{self, FrameDecoder};
+    use cupper_protocol::limits::V1;
     use cupper_protocol::view::ItemView;
+    use cupper_sys::own_cdhash;
     use serde_json::{Value, json};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::UnixStream;
 
     use super::*;
+    use crate::client::Options;
+    use crate::verify::HostCheck;
 
     fn stream() -> StreamId {
         StreamId::Session("s_1".parse().unwrap())
@@ -560,5 +567,80 @@ mod tests {
             result: Err(error.clone()),
         };
         assert_eq!(mirror.handle(&failed), Err(error));
+    }
+
+    async fn send(host: &mut UnixStream, method: &str, request: Option<&Value>, body: Value) {
+        let message = match request {
+            Some(request) => json!({"jsonrpc": "2.0", "id": request["id"], "result": body}),
+            None => json!({"jsonrpc": "2.0", "method": method, "params": body}),
+        };
+        host.write_all(&frame::encode_json(&message).unwrap())
+            .await
+            .unwrap();
+    }
+
+    async fn recv(host: &mut UnixStream, decoder: &mut FrameDecoder) -> Value {
+        loop {
+            if let Some(frame) = decoder.next_frame().unwrap() {
+                return serde_json::from_slice(&frame.payload).unwrap();
+            }
+            let mut buf = [0; 4096];
+            let n = host.read(&mut buf).await.unwrap();
+            assert!(n > 0, "the client hung up");
+            decoder.push(&buf[..n]);
+        }
+    }
+
+    /// A host in this process: a snapshot, a gap, then a replay from the cursor.
+    #[tokio::test]
+    async fn unit_mirror_follows_the_host_over_a_client() {
+        let (stream, mut host) = UnixStream::pair().unwrap();
+        let script = tokio::spawn(async move {
+            let decoder = &mut FrameDecoder::new();
+            let hello = json!({"nonce": "a".repeat(64), "protocol": {"min": 1, "max": 1},
+                "host_version": "0.1.0"});
+            send(&mut host, "host/hello", None, hello).await;
+            let init = recv(&mut host, decoder).await;
+            let result = json!({"protocol": 1, "host": {"host_id": "h_1", "version": "0.1.0",
+                "weak_auth": false, "data_epoch": 1}, "principal": {"id": "pr_cli", "kind": "cli",
+                "scopes": ["read"]}, "features": [], "limits": V1});
+            send(&mut host, "", Some(&init), result).await;
+            let mut asked = Vec::new();
+            for (mode, seq) in [("snapshot", 5), ("replay", 3)] {
+                let request = recv(&mut host, decoder).await;
+                let result = json!({"stream": "session/s_1", "mode": mode, "at_seq": 2,
+                    "head_seq": 5, "epoch": 1});
+                send(&mut host, "", Some(&request), result).await;
+                if mode == "snapshot" {
+                    let page = json!({"stream": "session/s_1", "at_seq": 2, "epoch": 1, "page": 0,
+                        "last": true, "ops": [turn(1), item("i_1")]});
+                    send(&mut host, "stream/snapshot", None, page).await;
+                }
+                let events = json!({"stream": "session/s_1",
+                    "events": [event(seq, None, delta("i_1", "a"))]});
+                send(&mut host, "stream/events", None, events).await;
+                asked.push(request["params"].clone());
+            }
+            // Stay until the client hangs up: data that arrives after the
+            // host's end is closed cannot be verified, and the client drops it.
+            let mut rest = Vec::new();
+            host.read_to_end(&mut rest).await.unwrap();
+            asked
+        });
+        let check = HostCheck::Cdhash(own_cdhash().unwrap());
+        let mut client = Client::handshake(stream, &check, Options::default())
+            .await
+            .unwrap();
+        let mut mirror = Mirror::session("s_1".parse().unwrap());
+        subscribe(&client, &mut mirror).await.unwrap();
+        while text(&mirror) != Some("a") {
+            let incoming = client.next().await.expect("the host sent the delta");
+            fold(&client, &mut mirror, &incoming).await.unwrap();
+        }
+        assert_eq!(mirror.resume(), cursor(1, 3));
+        drop(client);
+        let asked = script.await.unwrap();
+        let resumed = json!({"stream": "session/s_1", "after_seq": 2, "epoch": 1});
+        assert_eq!(asked, [json!({"stream": "session/s_1"}), resumed]);
     }
 }
