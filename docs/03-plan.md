@@ -1331,7 +1331,7 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 | SP-4b #7 | Claude 已有结论（T003，设计 5.8.4、5.6.8）；Codex 在 M1b 之前 | T038（血缘信号的期望）、T055（回收）、T066（COMPAT-claude-close-running）；T102（Codex） |
 | Q42 | 升级 claude-agent-acp 到 0.93 及以上之前 | 安全评审与宿主拦截另开任务；T066 只把 0.93 当候选版本跑 |
 | Q43 | M1a | T055（采样）、T063、T066（COMPAT-claude-resume-procs） |
-| SP-4b #6 | 实现时 | T021（`SCM_RIGHTS` 被丢弃） |
+| SP-4b #6 | 已实测（T021） | 普通读取会装入 `SCM_RIGHTS` 的 fd；改用 `recv_closing_fds`（T021），宿主、原生扩展、CLI 的读路径分别在 T030、T073、T045 接入 |
 
 ### 5.6 契约冻结清单
 
