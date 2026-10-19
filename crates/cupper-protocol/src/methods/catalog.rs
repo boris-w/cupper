@@ -8,7 +8,7 @@ use schemars::SchemaGenerator;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::{handshake, project, session, stream};
+use super::{handshake, interaction, project, session, stream};
 use crate::rpc::{ClientNotification, HostNotification, Method};
 use crate::schema::{client_notification_entry, host_notification_entry, method_entry};
 
@@ -51,6 +51,7 @@ pub fn catalog(g: &mut SchemaGenerator) -> Catalog {
     stream::register(&mut catalog, g);
     project::register(&mut catalog, g);
     session::register(&mut catalog, g);
+    interaction::register(&mut catalog, g);
     catalog
 }
 
@@ -87,6 +88,7 @@ mod tests {
             stream::tests::samples(),
             project::tests::samples(),
             session::tests::samples(),
+            interaction::tests::samples(),
         ]
         .concat()
         .into_iter()
@@ -167,6 +169,7 @@ mod tests {
                 "session/get",
                 "session/capabilities",
                 "session/list_archived",
+                "interaction/get",
             ],
             [Y; 7],
         ),
@@ -207,6 +210,11 @@ mod tests {
             "session/confirm_config",
             &["session/confirm_config"],
             [Native, N, N, N, N, Y, N],
+        ),
+        (
+            "interaction/respond（requires: approve 的选项、回答提问；privileged 的选项和档位由策略判定）",
+            &["interaction/respond"],
+            [Y, Y, N, N, Y, Y, Y],
         ),
     ];
 
@@ -343,9 +351,10 @@ mod tests {
     );
 
     /// The method groups of T018.
-    const SESSION_GROUPS: [Group; 2] = [
+    const SESSION_GROUPS: [Group; 3] = [
         (project::register, project::tests::samples),
         (session::register, session::tests::samples),
+        (interaction::register, interaction::tests::samples),
     ];
 
     /// What `register` adds to the catalog.
@@ -426,5 +435,13 @@ mod tests {
         // And `forbidden/scope`: the tier rules apply to `config` (5.8.2).
         let errors = json!(["not_found", "unavailable", "unsupported", "forbidden/scope"]);
         assert_eq!(entry("session/create")[X_ERRORS], errors);
+        let errors = json!([
+            "conflict/already_resolved",
+            "conflict/digest_mismatch",
+            "conflict/too_early",
+            "expired",
+            "forbidden"
+        ]);
+        assert_eq!(entry("interaction/respond")[X_ERRORS], errors);
     }
 }
