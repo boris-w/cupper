@@ -3,8 +3,10 @@
 //! too. Each case is `{name, view, ops, expected}`, `view` being `index` or
 //! `session`.
 //!
-//! UNIT-views-parity: `protocol/fixtures/views.json`, checked here on every
-//! PR; `UPDATE_GOLDEN=1` writes it again.
+//! - UNIT-views-parity: `protocol/fixtures/views.json`, checked here on
+//!   every PR; `UPDATE_GOLDEN=1` writes it again.
+//! - UNIT-views-differential: random host streams, written nightly to the
+//!   file `CUPPER_VIEW_CASES` names (`cargo xtask ci differential`).
 
 use std::fs;
 use std::path::PathBuf;
@@ -246,4 +248,21 @@ fn unit_views_parity_fixture_is_what_the_rust_views_give() {
         committed == Value::Array(cases),
         "protocol/fixtures/views.json is stale: run this test with UPDATE_GOLDEN=1"
     );
+}
+
+#[test]
+#[ignore = "nightly: `cargo xtask ci differential` names the file in CUPPER_VIEW_CASES"]
+fn unit_views_differential_writes_random_host_streams() {
+    let path = std::env::var_os("CUPPER_VIEW_CASES").expect("CUPPER_VIEW_CASES names a file");
+    let mut runner = TestRunner::default();
+    let mut cases = Vec::new();
+    for n in 0..300 {
+        let steps = steps().new_tree(&mut runner).unwrap().current();
+        let window = Window {
+            turns: 1 + n % 3,
+            items: n % 13,
+        };
+        cases.extend(streams(&format!("random {n}"), &steps, window));
+    }
+    fs::write(path, serde_json::to_vec(&cases).unwrap()).unwrap();
 }
