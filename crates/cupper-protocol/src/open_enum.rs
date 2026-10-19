@@ -2,22 +2,7 @@
 //! version does not know, so older readers never fail on newer values.
 //!
 //! - Enums: [`open_enum!`](crate::open_enum!) keeps unknown strings in `Unknown(String)`.
-//! - Internally tagged unions (`#[serde(tag = "type")]`) end with an
-//!   `#[serde(untagged)] Unknown(UnknownTagged)` member.
-
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
-
-/// Fallback member of an internally tagged union: a `type` this version does
-/// not know, with the rest of the object kept as is.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-pub struct UnknownTagged {
-    #[serde(rename = "type")]
-    pub kind: String,
-    #[serde(flatten)]
-    pub rest: Map<String, Value>,
-}
+//! - Tagged unions: [`open_union!`](crate::open_union!) keeps unknown members in `Unknown`.
 
 /// Declares an open string enum with serde and JSON Schema support.
 ///
@@ -99,19 +84,8 @@ macro_rules! open_enum {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     open_enum! {
         pub enum Color { Red => "red", Blue => "blue" }
-    }
-
-    #[derive(Debug, PartialEq, Serialize, Deserialize)]
-    #[serde(tag = "type")]
-    enum Shape {
-        #[serde(rename = "dot")]
-        Dot { color: Color },
-        #[serde(untagged)]
-        Unknown(UnknownTagged),
     }
 
     #[test]
@@ -125,26 +99,5 @@ mod tests {
         );
         assert_eq!(Color::from("blue").as_str(), "blue");
         assert_eq!(Color::KNOWN, ["red", "blue"]);
-    }
-
-    #[test]
-    fn unit_proto_base_open_union_unknown_members_roundtrip() {
-        let raw = r#"{"type":"cube","edge":2,"color":"red"}"#;
-        let s: Shape = serde_json::from_str(raw).unwrap();
-        let Shape::Unknown(u) = &s else {
-            panic!("{s:?}")
-        };
-        assert_eq!(u.kind, "cube");
-        assert_eq!(
-            serde_json::to_value(&s).unwrap(),
-            serde_json::from_str::<Value>(raw).unwrap()
-        );
-        let dot: Shape = serde_json::from_str(r#"{"type":"dot","color":"teal"}"#).unwrap();
-        assert_eq!(
-            dot,
-            Shape::Dot {
-                color: Color::Unknown("teal".into())
-            }
-        );
     }
 }

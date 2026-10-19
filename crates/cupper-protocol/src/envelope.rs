@@ -1,9 +1,9 @@
 //! Event envelope (design 5.3.5, ADR-06): `{seq, from?, type, v, ts, cause?, fallback?, data}`.
 //!
-//! The body `B` supplies `type` and `data`, as an adjacently tagged enum
-//! (`#[serde(tag = "type", content = "data")]`). The union is open: it ends with
-//! `#[serde(untagged)] Unknown(UnknownEvent)`, and a reader shows `fallback`
-//! for a type it does not know.
+//! The body `B` supplies `type` and `data`: an open union declared with
+//! [`open_union!`](crate::open_union!) in its `tag "type", content "data"`
+//! form, whose unknown member is an [`UnknownEvent`]. A reader shows
+//! `fallback` for a type it does not know.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
