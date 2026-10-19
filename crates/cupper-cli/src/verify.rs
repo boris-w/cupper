@@ -196,7 +196,7 @@ mod tests {
             matches!(&err, VerifyError::NoHostFile(d) if *d == dir),
             "{err}"
         );
-        // e2e: the proof is T039's; the user and the token are checked.
+        // e2e: the user and the token here; the proof comes in `initialize`.
         assert!(verify(&HostCheck::of(BuildKind::E2e).unwrap()).is_ok());
 
         let weak: Vec<bool> = [
