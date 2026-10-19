@@ -165,7 +165,7 @@ UNIT-redact-auth-status = "pr"
 # 网关 I：连接、握手与本地认证（peer、codesign）
 [T030]
 milestone = "M1a"
-# IT-handshake：T030 产出 peer、codesign 与错误码部分，密钥部分由 T039 补上（计划没有拆子编号）
+# IT-handshake：T030 产出 peer、codesign 与错误码部分，T039 补上了密钥认证部分（不拆子编号）
 IT-handshake = "pr"
 IT-pinned-token = "pr"
 
@@ -187,12 +187,21 @@ UNIT-policy-matrix = "pr"
 milestone = "M1a"
 UNIT-ledger = "pr"
 
-# 网关 II：分发、订阅、历史与 blob 传输
+# 网关 II：分发、账本与路由
 [T033]
 milestone = "M1a"
-IT-gw-subscribe = "pr"
 IT-command-order = "pr"
 UNIT-unsupported-set = "pr"
+
+# 网关 III：订阅、历史与发送合并
+[T019]
+milestone = "M1a"
+IT-gw-subscribe = "pr"
+
+# 网关 IV：blob 上传与下载
+[T029]
+milestone = "M1a"
+IT-gw-blob = "pr"
 
 # 索引 actor 与关注度
 [T034]
@@ -236,14 +245,18 @@ PROP-interrupt-10s = "pr"
 PROP-turn-single-prompt = "pr"
 PROP-prompt-inflight-no-end = "pr"
 
-# 会话纯核心 II：自发回合、合并器与最终回答
+# 会话纯核心 II：合并器、分组与最终回答
 [T041]
 milestone = "M1a"
-PROP-autonomous-dequeue-guard = "pr"
-PROP-turn-snapshot-immutable = "pr"
 UNIT-final-items = "pr"
 UNIT-grouping = "pr"
 PROP-coalescer = "pr"
+
+# 会话纯核心 II-b：自发回合判定与组合
+[T058]
+milestone = "M1a"
+PROP-autonomous-dequeue-guard = "pr"
+PROP-turn-snapshot-immutable = "pr"
 
 # 交互代理纯核心
 [T042]
@@ -440,12 +453,16 @@ milestone = "M1a"
 UNIT-shell-mock = "pr"
 UNIT-i18n-escape = "pr"
 
-# host-client I：连接与续传，ShellAPI 的协议部分
+# host-client I：连接、切帧与握手，ShellAPI 的协议部分
 [T071]
 milestone = "M1a"
 UNIT-hc-conn = "pr"
-UNIT-hc-sync = "pr"
 UNIT-hostport-contract-mock = "pr"
+
+# host-client I-b：订阅与同步
+[T087]
+milestone = "M1a"
+UNIT-hc-sync = "pr"
 
 # host-client II：视图 reducer 与交叉验证
 [T072]

@@ -101,7 +101,7 @@
 
 以计划 v1.3.6 的任务表为准。以下是表里没有直接写明、由我判断的：
 
-1. **IT-handshake**：T030 产出 peer、codesign 和错误码部分，T039 补密钥部分，计划没有拆子编号。按"实际产出"登记在 T030，注释写明 T039 的部分。摘要里的通过结果不能说明密钥部分也在；需要的话可以拆成 `-peer`、`-key` 两个子编号。
+1. **IT-handshake**：T030 产出 peer、codesign 和错误码部分，T039 补上了密钥认证部分。编排者裁定不拆子编号，登记在 T030，注释写明 T039 的部分；T039 的用例名也以 `it_handshake_` 开头，摘要里一起统计。
 2. **跨任务的同一编号只登记一次**：PERF-bridge-gate 在 T078（T079 达标后重测同一编号）；MAN-keyboard 在 T077，绑定 Electron 的大版本，T107 升级后补新证据；E2E-review-comment、E2E-SEC-revert-confirm 在 T131（K9 不通过时由 T139 产出）；E2E-notification-navigate 在 T150（K5 不通过时由 T158 产出）。
 3. **父编号放在完成它的任务里**：UNIT-proto-events（T017）、UNIT-proto-methods-core（T018）、IT-sys-peer（T021）、GOLD-A-tool-fields、GOLD-A-option-map、UNIT-option-map（T110）、UNIT-cli-resolver（T111）、MAN-compat、COMPAT-untrusted-project（T113）、E2E-new-session-agent（T144）、UI-settings（T147）、MAN-ui6（T148）、MAN-notification（T150）、IT-NFR9-failpoints（T172）。
 4. **5.12.4 没有标套件的编号**：
@@ -116,6 +116,8 @@
 9. **不是用例编号的写法**（`[not-ids]`）：PRD 的需求编号 UI-0 至 UI-7；旧名 E2E-question-card、UI-cards；计划 T140 的注里写的 IT-K11（应为 IT-K11-steer-idle-queued，计划改成完整编号后可以从 `[not-ids]` 删掉）。
 
 ## 合并时与计划 v1.3.9 同步
+
+已应用：编排者把 main 合入本分支（`b9591ee`）后，按下面的内容改了 `tests/ids.toml`，并核对了 v1.3.7–v1.3.9 的任务表，没有别的变化。编排者确认了第 2 至 5 项的做法。
 
 本分支从计划 v1.3.6 开出。main 上的计划已到 v1.3.9，拆出了 T019、T029、T058、T087，并新增 IT-gw-blob。合并 main 后 `trace-ids check` 会报 IT-gw-blob 未登记。按 v1.3.9 的任务表，`tests/ids.toml` 要这样改：
 
