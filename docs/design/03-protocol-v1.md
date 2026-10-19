@@ -89,7 +89,7 @@
 **快照的内容**是一串事件体，客户端用处理增量时同一个 `apply` 应用（ADR-06）。
 
 - 会话流的快照覆盖窗口：最近 20 个已结束的回合（或最多 2,000 个条目）、进行中的回合（全部条目，靠 `stream/snapshot` 分页）、全部待处理的交互请求、配置、能力和队列。
-- 条目和交互请求按原始的相对顺序排列（视图按 seq 把它们放在同一个有序序列里），卡片在消息流中的位置不会丢（桌面建议 #24）。
+- 条目和交互请求按原始的相对顺序排列（视图按 seq 把它们放在同一个有序序列里），请求在消息流中留下的记录行位置不会丢（桌面建议 #24；v1.4 起待处理的请求显示在请求面板里，[5.7.4](07-desktop.md#574-窗口与布局)）。
 - 视图生成的快照和回合快照，都按 delta 的上限切分长文本，保证每个事件体都放得进一帧。
 
 **历史**：`history/page {session_id, cursor?, max_bytes?}` → `{ops: [EventBody], next?}`（桌面 #11）
@@ -156,7 +156,7 @@
 | `session/send` | 请求 | `{command_id, session_id, content: PromptContent, mode: queue\|steer, expected_turn_id?}` | `{disposition: started\|queued\|steered, turn_id?, queue_id?, fallback_reason?}`；队列暂停时（例如 `config_unconfirmed`、`project_config_changed`）照常排队 | `not_found`、`unavailable`、`too_large` | 命令 | write | M1a（steer 为 M1b） |
 | `session/interrupt` | 请求 | `{command_id, session_id, expected_turn_id?}` | `{turn_id?}` | `conflict/turn_mismatch` | 命令 | write | M1a |
 | `session/queue_resume` | 请求 | `{command_id, session_id}` | `{}`：恢复已暂停的队列 | `conflict/config_unconfirmed`、`unavailable/project_untrusted` | 命令 | write | M1a |
-| `session/queue_edit` | 请求 | `{command_id, session_id, expected_version, ops}` | `{version}` | `conflict/version_mismatch` | 命令 | write | M2（CP-8） |
+| `session/queue_edit` | 请求 | `{command_id, session_id, expected_version, ops: [QueueOp]}` | `{version, steer?: {disposition: steered\|queued, turn_id?, fallback_reason?}}` | `conflict/version_mismatch`、`not_found`（`queue_id` 不在队列里）、`unsupported`（M1 里的 `remove`、`move`） | 命令 | write | M1b（`replace`、`steer`，用户决定 F3）；M2（`remove`、`move`，CP-8） |
 | `session/set_config` | 请求 | `{command_id, session_id, option, value}` | `{config}` | `unsupported`、`agent_error`、`forbidden/scope` | 命令 | write；放宽档位时按档位规则（[5.8.2](08-security.md#582-principal角色与-scope)） | M1b |
 | `session/confirm_config` | 请求 | `{command_id, session_id, config_digest}` | `{}`：确认会话当前的档位，解除 `config_unconfirmed`（[5.2.6](02-host.md#配置项)） | `conflict/digest_mismatch`（确认期间配置又变了） | 命令 | privileged（只能经原生确认） | M1a |
 | `session/rename` | 请求 | `{command_id, session_id, title}` | `{}` | — | 命令 | write | M1b |
@@ -167,13 +167,19 @@
 | `session/capabilities` | 请求 | `{session_id}` | 能力描述 | `not_found` | 天然 | read | M1a |
 | `session/list_archived` | 请求 | `{cursor?}` | `{sessions, next?}` | — | 天然 | read | M1b |
 
-`PromptContent` 是内容块数组：`text {text}`、`image {blob}`、`file_ref {path}`（`@` 引用，相对工作区）、`review_comment {path, line_start, line_end, side, quote, comment}`（GT-2，宿主负责把评论排成给 agent 的文本）。单个 `text` 块超过帧预算时，客户端先 `blob/put`，再用 `text_blob {blob}` 引用。
+`PromptContent` 是内容块数组：`text {text}`、`image {blob}`、`file_ref {path}`（`@` 引用，相对工作区）、`review_comment {path, line_start, line_end, side, quote, comment}`（GT-2，宿主负责把评论排成给 agent 的文本）。单个 `text` 块超过帧预算时，客户端先 `blob/put`，再用 `text_blob {blob}` 引用。v1.4 起，桌面端把行内评论作为输入框的附件，随下一条消息以 `review_comment` 块发出（GT-2 v1.3，[5.7.4](07-desktop.md#574-窗口与布局)）。
+
+`QueueOp`（v1.4 定义，对应用户决定 F3 中"排队消息的编辑和插话"）：
+
+- `{op: replace, queue_id, content: PromptContent}`：改写一条排队消息；
+- `{op: steer, queue_id}`：把这条消息从队列里取出，立即插进当前回合，规则同 `session/send` 的 `mode: steer`。回退时这条消息留在原位，结果里的 `steer` 带 `disposition: queued` 和 `fallback_reason`。`steer` 只能单独出现在 `ops` 里；
+- `{op: remove, queue_id}`、`{op: move, queue_id, before_queue_id?}`：属于 CP-8（M2），M1 返回 `unsupported`。
 
 ### 交互请求
 
 | 方法 | 类型 | 参数要点 | 结果要点 | 可能的错误 | 幂等 | scope | 里程碑 |
 |---|---|---|---|---|---|---|---|
-| `interaction/respond` | 请求 | `{command_id, session_id, request_id, request_digest, outcome, input?}`；`input: {kind: click\|key\|native_confirm, key?: enter\|space\|escape\|cmd_enter}` 由桌面主进程写入，来自 window 角色时必须有，缺了就拒绝（[5.7.8](07-desktop.md#578-安全加固的落点)），其他 principal 的这个参数被忽略 | `{request_id}` | `conflict/already_resolved`（带 `resolved_by`）、`conflict/digest_mismatch`、`conflict/too_early`、`expired`、`forbidden`（含 `user_activation_required`） | 命令 | approve；选项 `requires: privileged` 时 privileged；带 `mode_after` 的选项另按档位规则 | M1a |
+| `interaction/respond` | 请求 | `{command_id, session_id, request_id, request_digest, outcome, input?}`；`input: {kind: click\|key\|native_confirm, key?: enter\|space\|escape\|cmd_enter\|digit, digit?}` 由桌面主进程写入（`digit` 是 v1.4 为请求面板的数字键新增的，取 1–9，宿主核对它与所选选项的序号相符），来自 window 角色时必须有，缺了就拒绝（[5.7.8](07-desktop.md#578-安全加固的落点)），其他 principal 的这个参数被忽略 | `{request_id}` | `conflict/already_resolved`（带 `resolved_by`）、`conflict/digest_mismatch`、`conflict/too_early`、`expired`、`forbidden`（含 `user_activation_required`） | 命令 | approve；选项 `requires: privileged` 时 privileged；带 `mode_after` 的选项另按档位规则 | M1a |
 | `interaction/get` | 请求 | `{session_id, request_id}` | 完整的交互请求和当前状态（供主进程弹原生确认框） | `not_found` | 天然 | read | M1a |
 
 ### Git、工作区与文件（M1b）
@@ -222,7 +228,7 @@
 |---|---|---|---|
 | `project.upserted` | 否 | `{project_id, name, path, is_git, added_at, position, trust_state}`（`trust_state` 见 [5.2.6](02-host.md#项目信任)） | 添加、改名、排序、信任状态变化 |
 | `project.removed` | 否 | `{project_id}` | 移除 |
-| `session.upserted` | 否 | `SessionSummary {session_id, project_id, agent, title, title_source, workspace_kind, branch?, status, unread, pending_interactions, last_activity_at, error_code?, read_only}` | 状态、标题、分支、未读变化（`IndexActor` 合并 100 ms 内的连续变化） |
+| `session.upserted` | 否 | `SessionSummary {session_id, project_id, agent, title, title_source, workspace_kind, branch?, status, unread, pending_interactions, pending_kind?, last_activity_at, error_code?, read_only}`；`pending_interactions` 是待处理请求的数量；`pending_kind`（v1.4）是最早一个待处理请求的类别：`permission`、`plan_confirm` 为 `approval`，`question`、`auth_url` 为 `input`，侧边栏据此显示"等待批准"或"需要用户输入" | 状态、标题、分支、未读变化（`IndexActor` 合并 100 ms 内的连续变化） |
 | `session.removed` | 否 | `{session_id, reason: archived}` | 归档 |
 | `agents.updated` | 否 | `{agents: [AgentStatus]}`：每个 agent 的 CLI（路径、版本、与已验证范围的关系）、适配器（版本、运行时状态）、登录状态（只有类型，不含邮箱和组织）、资源占用、配置目录的校验结果；另含 git 版本和 git-lfs | 检测结果或采样变化 |
 | `host.updated` | 否 | `{version, weak_auth, pending_upgrade, power_assertion, last_exit_abnormal?}` | 变化时 |
@@ -247,7 +253,7 @@
 | `item.completed` | 否 | `{item_id, status: completed\|failed\|cancelled\|abandoned, ended_at, may_still_run?, ...最终字段}` | 条目结束 |
 | `interaction.requested` | 否 | 见 [5.3.6](#536-交互请求模型) | agent 发起请求 |
 | `interaction.resolved` | 否 | `{request_id, status: resolved\|cancelled\|expired, outcome?, resolved_by?: {principal_id, client_kind, client_name}, reason?}` | 处理、撤回、失效 |
-| `queue.updated` | 否 | `{version, paused?: {reason: turn_cancelled\|turn_failed\|turn_interrupted\|config_unconfirmed\|project_config_changed}, entries: [{queue_id, preview, created_at, created_by}]}` | 入队、出队、暂停、恢复 |
+| `queue.updated` | 否 | `{version, paused?: {reason: turn_cancelled\|turn_failed\|turn_interrupted\|config_unconfirmed\|project_config_changed}, entries: [{queue_id, preview, content, created_at, created_by}]}`；`content` 是完整的 `PromptContent`（v1.4，编辑排队消息时用） | 入队、出队、暂停、恢复、编辑 |
 | `snapshot.recorded` | 否 | `{turn_id, phase: start\|end, status: ok\|partial\|failed\|skipped, reason?, excluded: [{path, reason}], stat?: {files, added, removed}}`；`stat` 只在 `phase: end` 时有，是相对起始快照的统计；`reason` 取 `timeout`、`unsafe_repo_config` 等；tree id 不下发 | 拍完快照 |
 | `usage.updated` | 否 | `{context_used, context_size, cost?}`；后写的覆盖先写的 | agent 上报用量（显示是 P1，数据从 M1 起记录） |
 
@@ -397,7 +403,7 @@ ConfigOption {
 ```
 
 - 不支持的功能不出现（AG-4）：例如 `steer.supported` 为 false 时，界面不显示"插话"。
-- `steer.side_effects` 为 true（Claude）时，界面默认仍然排队，插话需要用户明确选择（ADR-07）。
+- `steer.side_effects` 为 true（Claude）时，界面仍默认插话（v1.4：PRD CP-6 v1.3 与用户决定 F5），副作用在设置"跟进消息默认排队"的说明里和第一次插话时提示；用户可以把默认行为改成排队（[5.7.4](07-desktop.md#574-窗口与布局)）。宿主只在客户端明确要求 `steer` 时插话（ADR-07）。
 - `turn.interrupt_stops_commands` 为 false（Codex，K3）时，中断后还在运行的命令记为 `abandoned` 加 `may_still_run`，界面立刻提示"命令可能仍在运行"（纪要 D4）。
 - `risk` 由宿主按配置项映射表给出（[5.6.5](06-agent-driver.md#565-配置项映射)），档位有序：`normal` < `elevated` < `full_access`。谁能放宽到哪一档见 [5.8.2](08-security.md#582-principal角色与-scope)。
 
@@ -413,7 +419,7 @@ ConfigOption {
 | `forbidden` | `scope`（`data.scope` 指出缺哪项）、`lineage`、`role`（需要控制连接）、`already_initialized`、`user_activation_required`（主进程本地产生，宿主也会产生） | 否 | CLI 申请提权；界面走原生确认，或提示"请再按一次" |
 | `not_found` | — | 否 | 刷新 |
 | `conflict` | `already_resolved`、`turn_mismatch`、`digest_mismatch`、`too_early`、`version_mismatch`、`stale_diff`、`outcome_unknown`、`turn_running`、`config_unconfirmed` | 否 | 收起或刷新；`already_resolved` 显示"已在别处处理"（AP-4） |
-| `expired` | `adapter_exited`、`host_restarted` | 否 | 收起卡片 |
+| `expired` | `adapter_exited`、`host_restarted` | 否 | 收起请求面板 |
 | `unsupported` | `data.capability` 指出能力；`not_a_repo` | 否 | 隐藏功能 |
 | `unavailable` | `cli_missing`、`cli_not_logged_in`、`cli_too_old`、`runtime_installing`、`runtime_failed`、`adapter_starting`、`adapter_crashed`、`pending_upgrade`、`quota_exhausted`、`app_not_found`、`snapshot_missing`、`index_unmerged`、`project_untrusted`、`scan_failed` | 视 reason | 显示恢复指引（AG-2、MS-5） |
 | `agent_error` | `data.agent_code`、`data.agent_message`（截断、脱敏） | 否 | 显示 |

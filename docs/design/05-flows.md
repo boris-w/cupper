@@ -121,6 +121,7 @@ sequenceDiagram
   participant A as 驱动层
   participant AD as 适配器
   Note over S: 回合 t1 正在运行（Prompting）
+  Note over R: 桌面端默认 Enter 插话、⌘Enter 排队（v1.4，5.7.4）；宿主的处理不变
   R->>S: session/send（mode queue，消息 B）
   S->>S: 追加到队列，写 queue.updated
   S-->>R: disposition queued
@@ -160,7 +161,7 @@ sequenceDiagram
   S->>S: 刷出缓冲的文本，同一事务写 interaction.requested 和 interactions 行
   S-->>R: interaction.requested（主进程不解析，直接转发）
   S-->>C: interaction.requested
-  Note over R: 卡片出现，焦点在卡片上时 Enter 批准、Esc 拒绝
+  Note over R: 请求面板替换输入框，待命 500 ms 后，Enter 或数字键批准、Esc 拒绝（5.7.8）
   par 两端几乎同时回答
     C->>S: interaction/respond（allow_once，digest）
   and
@@ -173,7 +174,7 @@ sequenceDiagram
   A->>AD: 响应
   S->>S: interaction.resolved（resolved_by cupper-cli）和命令结果同一事务落盘
   S-->>C: 成功
-  S-->>R: interaction.resolved，卡片收起
+  S-->>R: interaction.resolved，请求面板收起
   S->>S: 后到的一条：已经不是 pending
   S-->>M: conflict already_resolved（resolved_by cupper-cli）
   M-->>R: 显示"已在 cupper-cli 处理"
@@ -243,7 +244,7 @@ sequenceDiagram
   else 异常退出后系统重启过（可能断电丢了事务），data_epoch 已加 1
     H2-->>M: mode snapshot（reason epoch_changed），客户端丢弃视图和游标后重建
   end
-  Note over M: 审批卡片收起，消息流提示"回合已中断"
+  Note over M: 请求面板收起，消息流提示"回合已中断"
   M->>H2: 用户再次发送
   H2->>AD: 拉起适配器，session/resume
   AD-->>H2: 恢复成功，上下文接上
@@ -337,7 +338,7 @@ sequenceDiagram
   R->>H: git/file_diff（dt1，某个文件）
   H->>GIT: 快照档：固定参数生成补丁并切成 hunk
   H-->>R: hunks（hunk_id）
-  Note over R: 用户在某一行写评论，点"发给 agent"
+  Note over R: 用户在某一行写评论，评论进入输入框的附件条，随下一条消息发出
   R->>S: session/send（content 含 review_comment）
   S->>S: 把评论排成给 agent 的文本，开新回合或排队
   R->>H: git/diff（scope unstaged）得到 dt2，再 git/file_diff

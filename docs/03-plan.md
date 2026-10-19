@@ -1,17 +1,23 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.0
+- 版本：v1.1
 - 日期：2026-10-19
-- 状态：已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）
-- 依据：技术设计 v1.3（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.2（[`01-prd.md`](01-prd.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
+- 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04），待编排者确认
+- 依据：技术设计 v1.4（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
 - 用途：编排者照着本文件逐个写 brief、派发任务（[`00-process.md`](00-process.md) 的"任务生命周期"）；任务完成后在第 9 节打勾。对评审意见的逐条回应见 [`tasks/P02-plan-revision/responses.md`](tasks/P02-plan-revision/responses.md)
 
 ## 0. 结论
 
-- **共 134 个任务**：M1a 77 个（含 2 个条件任务），M1b 52 个（含 5 个条件任务），"发布（推迟）"5 个。规模：M1a 非条件任务 S 3、M 47、L 25；M1b 非条件任务 S 11、M 24、L 12；发布组 S 1、M 1、L 3。L 的都在表后注明了为什么不再拆。
+- **共 137 个任务**：M1a 78 个（含 2 个条件任务），M1b 54 个（含 5 个条件任务），"发布（推迟）"5 个。规模：M1a 非条件任务 S 3、M 48、L 25；M1b 非条件任务 S 11、M 26、L 12；发布组 S 1、M 1、L 3。L 的都在表后注明了为什么不再拆。
 - **没有远端也能验收**（U-P1：先不建远端）：所有 CI 检查都经 `cargo xtask ci <作业>` 在本机干净的 worktree 里执行，workflow 文件照写、暂不启用；入库的只有结构化摘要（1.8）。M1a 退出改为在作者机器上连跑 20 次加 5 次降速变体（T099）；本机替代不了的两项（macOS 14、15 上的对端校验，CI 负载下的稳定性）在 T099、T179 的记录里列为缺口，由用户确认。
 - **M1a 关键路径**（按规模加权，S=1、M=2、L=3，共 29）：T001 → T010 → T011 → T014 → T026 → T033 → T043 → T044 → T046 → T090 → T091 → T099。桌面链（T015 → T071、T030 → T073，再经 T075 → T076 → T077 → T090）和兼容链（T047 → T064 → T066）只差 1。任务表里加粗的编号在零松弛的链上。
 - **M1b 关键路径**（从 T099 起，共 17）：T099 → T120 → T121 → T130 → T131 → T148 → T154 → T179。
+- **v1.1 的变化**（D04：用户决定界面 100% 复刻作者本机安装的 Codex，设计 v1.4、PRD v1.3；明细见 2.6）：
+  - 界面任务按设计 v1.4 的 Codex 规格改写"做"和验收；T084 直接用设计 5.7.10 的 token，不再等 T106。
+  - 审批和提问改为替换输入框位置的请求面板：T083 改为"请求面板与请求记录行"，输入框和排队消息拆到新增的 T086；真实输入规则的变化在 T077，e2e 在 T090–T093（新增 E2E-SEC-panel-arming）。请求面板的安全落点待安全工程师确认（设计 Q41，8.2 的 P-23）。
+  - F3 定为进 M1 的元素都有了归属（5.8）：新增 T132（回合改动卡片与撤销）、T149（排队消息的编辑与插话，`session/queue_edit` 提前到 M1b，属于附加，在契约冻结之前写进契约）。
+  - T106 改为"复刻核对：暗色与未核实项"，可以提前，只有 T152 依赖它；M1b 的界面任务不再依赖 T106，M1b 由 B1–B8 变为 B1–B7。关键路径不变。
+  - 以后的界面任务可以按 F2 只读查看本机 App 包（1.11）。
 - **v0.3 的变化**（第二轮确认的 17 条条件，明细见 2.5）：
   - 本机 CI 补细则：机器级锁，e2e、`ui`、性能、nfr1 类作业串行；"干净 worktree"的含义；摘要里加逐编号结果清单；截图元数据只严格比对 Chromium；`security-macos14` 在作者机器上运行，不算作 macOS 14 的覆盖（1.8）。
   - 5.8.1（设计 v1.3）落到任务：`dev_key` 只接受拉起宿主的进程（T021、T030、T037）；CLI 按构建种类校验宿主，自用构建的 CLI 编进宿主的 cdhash（T005、T045、T092）。
@@ -26,7 +32,7 @@
   - 新增 Electron 大版本跟进 T107；SP-6 拆成 T103 和 T108，T103 排在代码高亮之后。
   - 安全要求写进任务：兼容套件的自我约束（T064）、真实录制过本机敏感词清单并由用户抽查（T052、T066、T113）、Q35 以私钥隔离为通过条件（T105）、委托票据的安全要求（T079）。
 - **检查点**：K1 技术验证 T003 → 驱动层；K2 测量闸门 T078 → K3 契约冻结 T016；K12 首批真实录制 T066；K4 M1a 退出 T099；K5–K9 是 M1b 的验证与 SP-6；K10 M1b 退出；K11 账号到位（4.4）。
-- **还需要用户定的事**：第 6 节第 1 行（上游反馈；T099、T179 的缺口届时确认），以及 M1b 开始前补截参考图（第 6 节）。P-16 至 P-20 都已处理（8.1）；第 8.2 节有 1 条需要编排者处理的事项。
+- **还需要用户定的事**：第 6 节第 1 行（上游反馈；T099、T179 的缺口届时确认），以及 T106 之前补截暗色主界面等截图（第 6 节第 12 行）。P-16 至 P-21 都已处理（8.1）；第 8.2 节有 3 条需要编排者处理的事项。
 
 ## 1. 拆分原则
 
@@ -46,8 +52,8 @@
 
 ### 1.2 每次合并后 main 都可用
 
-- **每个任务的基本验收**：`cargo xtask ci pr` 在本机干净的 worktree 里通过（1.8）；新增的 IT、E2E 用例在本任务里连续跑 10 次全绿，次数和摘要写进汇报（测试 #7）。表里的"验收"一栏只列这之外的内容。界面任务（T081–T085、T130、T131、T139–T148、T150–T154）的汇报另附复刻度审阅用的截图，在使用系统字体（SF Pro、苹方）的 e2e 构建里截取，不用开源字体的回归基线（1.11）。
-- **未实现的方法统一返回 `unsupported`**：宿主按方法注册执行者，没有执行者的方法返回 `unsupported`。M2、M3 的方法（`session/queue_edit`、`diag/export`、`stream/ack`）在 M1 结束时仍是这样；`host/prepare_upgrade` 在 T183 之前也是。为了不掩盖遗漏，T033 加 UNIT-unsupported-set：枚举协议的全部方法，断言"返回 `unsupported` 的集合"恰好等于按里程碑允许的集合；T099、T179 各核对一次（测试 #8）。
+- **每个任务的基本验收**：`cargo xtask ci pr` 在本机干净的 worktree 里通过（1.8）；新增的 IT、E2E 用例在本任务里连续跑 10 次全绿，次数和摘要写进汇报（测试 #7）。表里的"验收"一栏只列这之外的内容。界面任务（T081–T086、T130–T132、T139–T149、T150–T154）的汇报另附复刻度审阅用的截图，在使用系统字体（SF Pro、苹方）的 e2e 构建里截取，不用开源字体的回归基线（1.11）。
+- **未实现的方法统一返回 `unsupported`**：宿主按方法注册执行者，没有执行者的方法返回 `unsupported`。M2、M3 的方法（`diag/export`、`stream/ack`）以及 `session/queue_edit` 的 `remove`、`move` 两种 op 在 M1 结束时仍是这样（`queue_edit` 的 `replace`、`steer` 按 F3 在 T149 实现）；`host/prepare_upgrade` 在 T183 之前也是。为了不掩盖遗漏，T033 加 UNIT-unsupported-set：枚举协议的全部方法，断言"返回 `unsupported` 的集合"恰好等于按里程碑允许的集合；T099、T179 各核对一次（测试 #8）。
 - **接口由使用方先定义，实现方后接上**：例如 T040 定义 `driver::api`，T043 用进程内替身测试，T055 实现；T043 的快照端口在 T061 合并前为空，回合快照记为 `skipped`（与非 git 项目相同）。替身只出现在测试代码里。
 - **测试任务"就地修"的上限**：单处修复不超过 100 行、不改接口；超出的另开 fix 任务，测试任务先把相关用例标为待修（测试 #10）。
 - 不留技术债（[`CLAUDE.md`](../CLAUDE.md) 的工程原则）：条件任务只在触发时派发，触发前不写后备代码（P-7）。
@@ -55,7 +61,7 @@
 ### 1.3 契约先行
 
 - 协议的全部类型（含 M1b 才用的方法和事件）在 T010–T015 完成，宿主、CLI、host-client、界面都在它之后；`driver::api` 在 T040；ShellAPI 里与协议无关的部分在 T070，依赖协议类型的部分（`HostPort`、`PrivilegedAction` 等）在 T071；帧级 TS mock 宿主和 HostPort 合同测试在 T071。
-- 冻结（T016）排在测量闸门 T078 之后，并且依赖 ShellAPI 的主要使用方 T077、T081–T083、T085（P-1）。冻结前修改契约：单独提交，在同一任务里重新生成 `packages/protocol`，在汇报里列出改了什么；T015 的生成物一致性检查从那时起一直开着。冻结之后只能附加（[5.12.5](design/12-milestones.md#5125-契约冻结清单)），`xtask ci protocol` 把关。
+- 冻结（T016）排在测量闸门 T078 之后，并且依赖 ShellAPI 的主要使用方 T077、T081–T083、T085、T086（P-1）。冻结前修改契约：单独提交，在同一任务里重新生成 `packages/protocol`，在汇报里列出改了什么；T015 的生成物一致性检查从那时起一直开着。冻结之后只能附加（[5.12.5](design/12-milestones.md#5125-契约冻结清单)），`xtask ci protocol` 把关。
 
 ### 1.4 测试基础设施先行
 
@@ -101,8 +107,8 @@
 规则：
 
 - 不同区域的任务可以并行；同一区域的任务默认串行，除非 brief 写明各自拥有哪些目录或文件。以下几处必须写明：
-  - 界面：T080 负责状态层，T084 负责外框、骨架、插槽、行类型注册表和基础组件；T082 只写行列表和消息类的行；T083 注册卡片行，写排队条和输入框；T085 写新建会话页（桌面 #2）。
-  - 输入框：T083 预留底栏左右两组插槽和弹出层挂载点，T140、T141、T142、T145 只新增文件；T142 与 T145 共用弹出层，串行（桌面 #4）。
+  - 界面：T080 负责状态层，T084 负责外框、骨架、插槽、行类型注册表和基础组件；T082 只写行列表和消息类的行；T083 写请求面板和请求记录行，T086 写输入框和排队消息，两者经 T084 的输入框位置插槽衔接（v1.1）；T085 写新建会话页（桌面 #2）。
+  - 输入框：T086 预留底栏左右两组插槽和弹出层挂载点，T140、T141、T142、T145、T149 只新增文件；T142 与 T145 共用弹出层，串行（桌面 #4）。
   - 桌面主进程：M1b 里改 `apps/desktop` 的任务（T131、T142、T147、T152、T153）在 brief 里列出各自负责的文件。
   - e2e：T090 一次给齐辅助函数，T091–T093 只新增用例文件（桌面 #13）。
   - 测量闸门：T078 的负载页面和钩子放测试专用目录，不碰 T077 的文件（桌面 #10）。
@@ -114,7 +120,7 @@
   - `tests/ids.toml` 按任务分段，每个任务只追加自己的一段，不需要删行（1.6）。
   - 表结构在 T160 之前只改 `0001`（P-4）。
 - 实际并行度：作者机器上同时运行的子 agent 建议不超过 3–4 个（Rust 编译占 CPU）；e2e、`ui`、性能、nfr1 这几类作业由 `xtask ci` 的机器级锁串行（1.8）。
-- 截图基线的合并顺序：T152 改 token 取值时，一并更新它影响到的已有基线；与 T152 同波的界面任务（T131、T147）等 T152 先合并，再在新的 token 取值下重新生成各自新增的基线后合并。
+- 截图基线的合并顺序：T152 修正暗色取值、加上半透明侧边栏时，一并更新它影响到的已有基线；与 T152 同波的界面任务（v1.1 为 T130、T145、T149、T151）等 T152 先合并，再在新的取值下重新生成各自新增的基线后合并。
 
 ### 1.6 用例编号与登记
 
@@ -141,7 +147,7 @@
 ### 1.7 条件任务与可以提前的任务
 
 - **条件任务**（名称前标"（条件）"）只在检查点不通过时派发：T057、T079、T119、T139、T158、T159；T162 在 Q35 *通过*时派发。依赖图里用虚线表示。
-- **可以提前的任务**（前置一栏标"可提前"）：T101、T102、T104、T105、T110、T114。依赖满足后可以在 M1a 期间派发，但评审资源优先给 M1a 的关键链。其余 M1b 任务在 T099 之后派发。
+- **可以提前的任务**（前置一栏标"可提前"）：T101、T102、T104、T105、T106（v1.1）、T110、T114。依赖满足后可以在 M1a 期间派发，但评审资源优先给 M1a 的关键链。其余 M1b 任务在 T099 之后派发。
 
 ### 1.8 本机 CI（U-P1：先不建远端）
 
@@ -176,15 +182,17 @@
 
 ### 1.11 界面复刻度
 
+v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决定 F1，PRD UI-6 v1.3）；规格在设计 5.7.4、5.7.5、5.7.10。
+
 | 时间 | 做什么 | 谁 |
 |---|---|---|
-| M1a 的 T084 | 建立 token 体系和三栏外框，组件从第一天起只引用 token | 子 agent |
-| M1b 开始前 | 按清单补截参考图，只放在主仓库的 `.private/references/`（第 6 节） | 作者 |
-| T099 之后 | T106 视觉规格：只读参考图，写成入库的文字规格（尺寸、间距、字号、圆角、颜色、各区域结构）；参考图不复制进 worktree、不入库，规格里不嵌入图像。M1b 的全部界面任务依赖 T106 | 子 agent（P-20） |
-| 每个界面任务 | 汇报附固定窗口尺寸、固定夹具下的截图，在使用系统字体（SF Pro、苹方）的 e2e 构建里截取，不用开源字体的回归基线；编排者对照规格审阅，偏差当场退回 | 子 agent 截图，编排者审阅 |
-| T152 之后 | MAN-ui6-shell：外框、token、两种主题 | 作者 |
-| 全部界面功能完成后 | MAN-ui6-full：全量并排比对，随后 T148 复刻度修正；T154 依赖它，截图基线锁定的是修正后的视觉 | 作者比对，子 agent 修正 |
-| T179 | MAN-S1 至 MAN-S4 顺带检查交互细节：折叠、Enter 和 Esc、贴底、跳转 | 作者 |
+| M1a 的 T084 | 按设计 5.7.10 建立 token（亮色经截图核对，暗色先用推算值）和三栏外框，组件从第一天起只引用 token | 子 agent |
+| 每个界面任务 | 按设计的 Codex 规格实现。需要核对细节时，可以按 F2 只读查看本机 App 包：不启动 App，不读用户数据目录，解包只放 `$TMPDIR` 并且用完删除，不把对方的代码、样式表、图标、图片、字体复制进仓库，汇报里写明看过哪些资源。汇报附固定窗口尺寸、固定夹具下的截图，在使用系统字体（SF Pro、苹方）的 e2e 构建里截取，不用开源字体的回归基线；编排者对照设计审阅，偏差当场退回 | 子 agent 截图，编排者审阅 |
+| T106 之前 | 补截暗色主界面截图和 ui-spec 7.3 中需要截图核对的几项，只放在主仓库的 `.private/references/`（第 6 节第 12 行） | 作者 |
+| 可以提前 | T106 复刻核对：按 F2 只读查看本机 App 包、对照截图，核对设计的 Q36–Q40；结果由编排者更新设计 5.7.10，T152 据此修正暗色 | 子 agent（P-20） |
+| T152 之后 | MAN-ui6-shell：外框、token、两种主题，与本机 Codex 并排比对 | 作者 |
+| 全部界面功能完成后 | MAN-ui6-full：与本机 Codex 全量并排比对，随后 T148 复刻度修正；T154 依赖它，截图基线锁定的是修正后的视觉 | 作者比对，子 agent 修正 |
+| T179 | MAN-S1 至 MAN-S4 顺带检查交互细节：折叠、请求面板的按键、贴底、跳转 | 作者 |
 
 ## 2. 任务清单
 
@@ -201,12 +209,12 @@
 | T005 | xtask host-bundle | build | 5.10.1、5.10.2、5.7.9 | T004、T023、T045 | 做：`cargo xtask host-bundle` 按构建种类组装 `CupperHost.app`（Info.plist、`Helpers/node`、`Resources/runtime/`）并 ad-hoc 签名；构建顺序是先签宿主、取得 cdhash，再编译 CLI（自用构建把宿主 cdhash 编进 CLI，5.8.1）并单独签名。不做：自用构建的签名参数（T160）、Developer ID（T180） | 新增 IT-host-bundle-layout（布局、identifier、Info.plist 不含用途说明、CLI 内嵌的 cdhash 等于同一产物里宿主的 cdhash） | S | 否 | H.xt |
 | T006 | 许可证门禁第一层 | ci | 5.1.6（license）、ADR-11 | T004、T074 | 做：`tools/license-gate` 第一层（按锁文件和 metafile 求每个 JS 入口的生产依赖闭包，出现 Anthropic SDK 或 Claude Code 就失败；运行时组件许可证齐全）与负面样例，接入 `xtask ci license`。不做：最终产物扫描（T182） | 新增 UNIT-license-gate-negative | M | 否 | C |
 | **T010** | 协议基础：分帧、信封、ID、错误码、规范 JSON 与注解 | feat | 5.3.1、5.3.8、5.3.9、5.4.4、5.2.15 | T001 | 做：迁移 SP-4a 的 frame、rpc（`Method` 加 `SCOPE`、`IDEMPOTENCY`）、open_enum、text、coalesce、sync、transport；事件信封与流 ID、ID 前缀类型、错误码与 reason、限额、RFC 8785 与 `d_` 摘要、六种 schema 注解的机制、整数上界。不做：具体的事件和方法 | UNIT-digest-jcs；新增 UNIT-proto-base | M | 否 | P |
-| **T011** | 协议事件目录与领域类型 | feat | 5.3.5、5.3.6、5.3.7、5.12.5 第 2 组 | T010 | 做：两条流的全部事件（含 M1b 才产生的）、条目类型、`ToolCall` 与按 `tool_kind` 的必填字段表、`late_tool_output`、交互请求与 `Option.effect`、能力描述、`PromptContent`、`SessionSummary`、`AgentStatus`；开放枚举、`Unknown` 兜底、严格模式开关。不做：方法、视图 | 新增 UNIT-proto-events（每种事件往返，含未知类型、未知枚举值、残缺数据） | L | 否 | P |
-| **T012** | 协议方法 I：握手、流、项目、agent、会话与交互 | feat | 5.3.2、5.3.3、5.3.4 | T011 | 做：`host/hello`、`initialize`（各 `auth` 变体、`role`、`features`、`limits`、`host_proof`）及生命周期、流、项目、agent、会话、交互各方法的参数与结果，逐个声明 scope 与幂等。不做：其余方法（T013） | 新增 UNIT-proto-methods-core（往返；方法级 scope 与 5.8.3 一致） | M | 否 | P |
+| **T011** | 协议事件目录与领域类型 | feat | 5.3.5、5.3.6、5.3.7、5.12.5 第 2 组 | T010 | 做：两条流的全部事件（含 M1b 才产生的）、条目类型、`ToolCall` 与按 `tool_kind` 的必填字段表、`late_tool_output`、交互请求与 `Option.effect`、能力描述、`PromptContent`、`SessionSummary`（含 v1.4 的 `pending_kind`）、`queue.updated`（条目带完整的 `content`，v1.4）、`AgentStatus`；开放枚举、`Unknown` 兜底、严格模式开关。不做：方法、视图 | 新增 UNIT-proto-events（每种事件往返，含未知类型、未知枚举值、残缺数据） | L | 否 | P |
+| **T012** | 协议方法 I：握手、流、项目、agent、会话与交互 | feat | 5.3.2、5.3.3、5.3.4 | T011 | 做：`host/hello`、`initialize`（各 `auth` 变体、`role`、`features`、`limits`、`host_proof`）及生命周期、流、项目、agent、会话、交互各方法的参数与结果（含 v1.4 定义的 `session/queue_edit` 的 `QueueOp`、`interaction/respond` 的 `input.key: digit`），逐个声明 scope 与幂等。不做：其余方法（T013） | 新增 UNIT-proto-methods-core（往返；方法级 scope 与 5.8.3 一致） | M | 否 | P |
 | T013 | 协议方法 II：git、文件、设置、认证、诊断与测试 | feat | 5.3.4 | T011 | 做：git、worktree、文件、`workspace/open`、设置、`auth/*`、`policy/describe`、`diag/*`、`test/*` 各方法，以及按构建特性门控的方法在 schema 里的标注。不做：任何实现 | 新增 UNIT-proto-methods-ext | M | 否 | P |
 | **T014** | 协议视图与同步规则 | feat | 5.3.3、5.2.8（视图窗口）、5.7.6 | T011 | 做：`IndexView`、`SessionView`（窗口、进行中回合、待处理交互、配置、能力、队列）、`apply` 与按 `turn_no` 排序、`late_by_ref`、快照 ops 的生成与切分、连续性与 epoch 重置规则、视图的序列化格式。不做：存储侧检查点、TS reducer | 新增 PROP-view-coalesce、UNIT-view-window、UNIT-view-late-by-ref | M | 否 | P |
 | T015 | schema 导出与 TS 生成链 | build | 5.3.10、5.1.5、5.1.6（protocol） | T012、T013、T014 | 做：`export-schema` 完整输出、`protocol/schema/v1.json`、`tools/gen-protocol-ts`（hey-api 与三处后处理）、`packages/protocol` 生成物、`protocol/fixtures/`（含未知值）、`xtask ci protocol`（生成物一致性检查从此一直开着）。不做：兼容比对与冻结（T016） | `xtask ci protocol` 通过；新增 UNIT-proto-fixtures、UNIT-ts-fixtures | M | 否 | P、T.lib、C |
-| T016 | 契约冻结 | chore | 5.12.5；P-1 | T077、T078、T082、T085 | 做：`tools/schema-compat`（方向敏感）、`protocol/released/v1-m1a.json`、`packages/shell-api/api-m1a.d.ts` 与类型断言，接入 `xtask ci protocol`。不做：契约内容的修改 | 破坏性改动的样例（删字段、下发方向必填改可选、上行新增必填、ShellAPI 删成员）让 `xtask ci protocol` 失败，附加式改动通过；新增 UNIT-schema-compat | M | 否 | P、T.lib、C |
+| T016 | 契约冻结 | chore | 5.12.5；P-1 | T077、T078、T082、T083、T085 | 做：`tools/schema-compat`（方向敏感）、`protocol/released/v1-m1a.json`、`packages/shell-api/api-m1a.d.ts` 与类型断言，接入 `xtask ci protocol`。不做：契约内容的修改 | 破坏性改动的样例（删字段、下发方向必填改可选、上行新增必填、ShellAPI 删成员）让 `xtask ci protocol` 失败，附加式改动通过；新增 UNIT-schema-compat | M | 否 | P、T.lib、C |
 | T020 | cupper-sys I：进程与系统信息 | feat | 5.1.3、5.8.5、5.2.13 | T001 | 做：迁移 SP-4a 的 `sys.rs`：`spawn`（SETSID 可选、`CLOEXEC_DEFAULT`、显式 stdio、默认信号处置、环境变量白名单）、进程组清理、libproc（启动时间、父进程链、会话与进程组）、`kern.bootsessionuuid`、`DARWIN_USER_TEMP_DIR`。不做：IOPM、UserNotifications | 新增 UNIT-sys-spawn（只继承 fd 0–2；去掉 CLOEXEC 的变异检查应失败）、UNIT-sys-reap-group | M | 否 | H.sys |
 | T021 | cupper-sys II：对端校验与代码签名 | feat | 5.8.1、5.1.6（security-macos14）、Q24 | T001 | 做：合并 SP-4b 的 Security FFI：`LOCAL_PEERTOKEN`、`LOCAL_PEERPID`、SecCode 校验与动态状态字、编译期签名要求、csops、四类错误；实测 `proc_pidinfo` 的 `PROC_PIDUNIQIDENTIFIERINFO`（读自己的 `p_puniqueid`、对端的 `p_uniqueid`，供 5.8.1 的"`dev_key` 只接受拉起宿主的进程"）；`xtask ci security-macos14`（在作者机器的系统上运行，摘要记下系统版本） | 新增 IT-sys-peer-current（最后一次 I/O 进程语义、exec 与 fork 被拒、`SCM_RIGHTS` 被丢弃、csops、错误码；作者机器上的系统），IT-sys-peer-macos14、IT-sys-peer-macos15 登记为缺口；新增 UNIT-sys-uniqueid（不可行时报告并退回"pid 加启动时间"） | M | 否 | H.sys、C |
 | T022 | 宿主核心骨架 I：时钟、纯核心框架与静止屏障登记 | feat | 5.2.16、5.2.3 | T001 | 做：`cupper-host` crate（lib、bin，特性 `dev-auth`、`test-harness`）、`Clock`、`SystemClock`、`ManualClock`、`IdGen`、纯核心 `step(input, now)` 的框架与测试驱动器、静止屏障的参与者登记（actor 未登记就启动时 debug 构建断言失败）。不做：启动契约（T023）、`test/clock_advance` 方法（T047） | 新增 UNIT-clock-manual、UNIT-idgen、UNIT-quiescence-registry | M | 否 | H.core |
@@ -217,10 +225,10 @@
 | T027 | 存储 IV：blob、原始帧与保留清理 | feat | 5.2.8、5.4.5 | T025 | 做：按内容寻址的 BlobStore、原始帧有界队列写 raw.db（满了丢弃并计数）、各类保留清理（经 Clock，时长接 `test_config.durations`）。不做：blob 传输（T033） | 新增 UNIT-blobstore、UNIT-raw-queue、UNIT-retention | M | 否 | H.store |
 | T028 | 日志与脱敏 | feat | 5.11.1、5.11.2 | T022 | 做：tracing JSON Lines 与按大小轮转、两档脱敏、`info` 不记内容、适配器 stderr 管道读取（每实例保留 64 KB）、panic hook。不做：诊断包（M2） | UNIT-redaction、UNIT-redact-auth-status | M | 否 | H.diag |
 | **T030** | 网关 I：连接、握手与本地认证 | feat | 5.2.4、5.8.1、5.3.2 | T012、T021、T025 | 做：迁移 SP-4a 的 conn、outbox、wire；uid、签名结论与固定令牌（每次读取比对）、`host/hello`、只接受一次的 `initialize`、四种认证与绑定信道的双向证明、principal 与角色、套接字路径与权限、`host.lock`、写循环与慢客户端重置、`ping`、连接审计；`dev_key` 只接受拉起宿主的那个进程（比对对端的 `p_uniqueid` 与自己的 `p_puniqueid`），证明错误或缺失时 `unauthenticated` 并断开；`dev-auth` 构建启动时 ppid 已是 1 就以退出码 1 退出；只运行网关的测试夹具进程（test-harness 门控，T073 复用）。不做：方法分发、"孤立"状态（T037） | 新增 IT-handshake、IT-pinned-token（crate 内，真实套接字）、UNIT-proof-binding、IT-devkey-launcher-only（拉起夹具的测试进程出示 `dev_key` 被接受，持同一密钥的其他进程被拒）、IT-devkey-orphan-start | L | 否 | H.gw |
-| T031 | 策略 | feat | 5.2.5、5.8.2、5.8.3 | T012、T013、T022 | 做：方法级由 `SCOPE` 驱动；资源级规则（档位、privileged 选项、安全设置键、window 角色的输入证据与按键、400 ms、信任门控的钩子）；`policy/describe`。不做：账本 | UNIT-tier-rules、UNIT-policy-matrix | M | 否 | H.gw |
+| T031 | 策略 | feat | 5.2.5、5.8.2、5.8.3 | T012、T013、T022 | 做：方法级由 `SCOPE` 驱动；资源级规则（档位、privileged 选项、安全设置键、window 角色的输入证据与按键（v1.4：`digit` 须与所选选项的序号相符）、400 ms、信任门控的钩子）；`policy/describe`。不做：账本 | UNIT-tier-rules、UNIT-policy-matrix | M | 否 | H.gw |
 | T032 | 命令账本 | feat | 5.2.5（账本） | T025 | 做：principal 稳定 ID 加 `command_id` 为键、三种状态、去掉 `command_id`/`attestation`/`input` 后的 JCS 参数哈希、48 小时内存表、`idempotency_mismatch`、`outcome_unknown`、结果与首批事件同事务的接口。不做：路由 | 新增 UNIT-ledger | M | 否 | H.gw |
 | **T033** | 网关 II：分发、订阅、历史与 blob 传输 | feat | 5.2.4、5.3.3、5.3.4（流与内容） | T026、T027、T030、T031、T032、T045 | 做：读循环 → 策略 → 账本 → 路由（会话命令按序投递会话邮箱接口，索引命令投递索引接口）、每连接 64 个在途、`stream/subscribe` 四种情况与快照分页、`history/page`、blob 上传下载、断开清理、订阅模式写日志（Q16）、未注册方法返回 `unsupported`；用到 `dev_key` 的用例由拉起网关夹具的测试进程自己出示。不做：会话和索引的业务；进程级用例（T062） | 只验收网关层（crate 内，以 `Streams::append` 作写者）：新增 IT-gw-subscribe（四种订阅、续传、快照分页、慢客户端重置、帧上限、账本重放、epoch 与游标规则）、IT-command-order、UNIT-unsupported-set（返回 `unsupported` 的方法集合等于按里程碑允许的集合） | L | 否 | H.gw |
-| T034 | 索引 actor 与关注度 | feat | 5.2.9、5.3.5（索引流）、5.5.10 | T033、T035、T037、T060 | 做：`IndexActor`（索引流与 `projects` 表的唯一写者）、`project/add`、`project/trust`、`project/trust_info`、状态计算与 100 ms 合并、`session/mark_read`、只采信 desktop_ui 的在场、`notification.intent`、`clients`/`agents`/`host`。不做：系统通知、`project/remove`；通知意图的进程级用例（T062） | UNIT-index-status；新增 UNIT-index-intent（直接向 IndexActor 输入状态变化）、IT-project-add-trust | L | 否 | H.idx |
+| T034 | 索引 actor 与关注度 | feat | 5.2.9、5.3.5（索引流）、5.5.10 | T033、T035、T037、T060 | 做：`IndexActor`（索引流与 `projects` 表的唯一写者）、`project/add`、`project/trust`、`project/trust_info`、状态计算（含 v1.4 的 `pending_kind`）与 100 ms 合并、`session/mark_read`、只采信 desktop_ui 的在场、`notification.intent`、`clients`/`agents`/`host`。不做：系统通知、`project/remove`；通知意图的进程级用例（T062） | UNIT-index-status（含 `pending_kind`）；新增 UNIT-index-intent（直接向 IndexActor 输入状态变化）、IT-project-add-trust | L | 否 | H.idx |
 | T035 | 项目信任扫描 | feat | 5.2.6（项目信任）、5.9.8 | T011、T022 | 做：`trust` 模块：工作区到 git 根目录每一级的项目配置、符号链接一律跟随、2,000 个文件或 16 MB 上限、摘要、findings、工作区外标记、与已信任摘要的差异、状态转换。不做：门控（T044） | 新增 UNIT-trust-scan | M | 否 | H.idx |
 | T036 | 设置 | feat | 5.2.11（设置） | T033 | 做：`settings` 表、`settings/get`、`settings/update`（安全相关键要 privileged）、默认值与读取接口。不做：界面偏好 | 新增 UNIT-settings | S | 否 | H.idx |
 | T037 | 进程监护与宿主生命周期 | feat | 5.2.13、5.5.6 | T020、T026、T027、T030 | 做：启动 10 步串联、`Supervisor`（按 `adapters` 表清理残留、空闲退出、有序退出、`host/status`、`host/exit`、`host/shutdown`、SIGTERM）、自检与待升级、退出码、主线程 `CFRunLoop`；"孤立"状态（`dev-auth` 构建里拉起宿主的父进程退出后，不再开始新回合，运行中的回合结束后有序退出）；空闲时长接 `test_config.durations`。不做：防休眠（T156）、准备阶段的会话恢复（T043） | 新增 IT-self-check、IT-lifecycle（启动前直接写库造出运行中的回合和待处理交互，断言转为 interrupted、expired；空闲退出、有序退出）、UNIT-orphan-policy | L | 否 | H.core |
@@ -228,7 +236,7 @@
 | T040 | 会话纯核心 I：回合状态机与队列 | feat | 5.2.6、5.2.16、5.6.2 | T011、T022 | 做：`driver::api`（5.6.2 的命令、事件、`AgentError` 分类）；`TurnMachine`（各状态、3 s 准备超时、10 s 中断兜底、在途规则、先 close 再 resume）；`QueueCore`。不做：Steer（T140）、自发回合（T041） | PROP-queue-fifo、PROP-interrupt-10s、PROP-turn-single-prompt、PROP-prompt-inflight-no-end | L | 否 | H.orch |
 | T041 | 会话纯核心 II：自发回合、合并器与最终回答 | feat | 5.2.6、5.3.5、5.2.15 | T040 | 做：`AutonomousJudge`（Q10）、`Coalescer`（迁移写入时合并）、`group_id` 与 `final_item_ids` 判定、晚到输出与回合快照不可变的模型检查。不做：actor 接线 | PROP-autonomous-dequeue-guard、PROP-turn-snapshot-immutable、UNIT-final-items、UNIT-grouping；新增 PROP-coalescer | M | 否 | H.orch |
 | T042 | 交互代理纯核心 | feat | 5.2.7、5.3.6 | T031 | 做：`InteractionBroker`：入账（摘要、`actionable_by`）、回答检查链、撤回与失效、Claude 多问题提问的拆分与合并、`unsupported_schema`。不做：选项对照表数据（T053） | 新增 PROP-interaction、UNIT-question-mapping | M | 否 | H.orch |
-| **T043** | 会话 actor I：创建、发送、中断与持久化 | feat | 5.2.6、5.5.2（本地模式）、5.5.3、5.5.5 | T033、T041、T042 | 做：`SessionManager`、`SessionActor` 适配层、`session/create`（本地模式，第一条消息随受理落盘）、`send`（排队）、`interrupt`、`queue_resume`、`get`、`capabilities`、交互的接线、回合事件与检查点、快照端口、准备阶段的恢复；各时长接 `test_config.durations`；用进程内驱动替身测试。不做：档位、信任门控、崩溃（T044） | 新增 IT-orch-lifecycle（进程内） | L | 否 | H.orch |
+| **T043** | 会话 actor I：创建、发送、中断与持久化 | feat | 5.2.6、5.5.2（本地模式）、5.5.3、5.5.5 | T033、T041、T042 | 做：`SessionManager`、`SessionActor` 适配层、`session/create`（本地模式，第一条消息随受理落盘）、`send`（排队；`queue.updated` 的条目带完整的 `content`）、`interrupt`、`queue_resume`、`get`、`capabilities`、交互的接线、回合事件与检查点、快照端口、准备阶段的恢复；各时长接 `test_config.durations`；用进程内驱动替身测试。不做：档位、信任门控、崩溃（T044） | 新增 IT-orch-lifecycle（进程内） | L | 否 | H.orch |
 | **T044** | 会话 actor II：档位、信任门控、崩溃与晚到输出 | feat | 5.2.6（配置项、项目信任、崩溃与恢复、晚到的工具输出） | T035、T043、T060 | 做：档位核对与 `config_unconfirmed`、回合中越权先改回再中断、`session/confirm_config`；三个时机重扫信任（git 根目录经 T060 取得）、stale 暂停、"不加载项目配置继续"；适配器退出后 resume、K6、K7；`late_tool_output` 与 `may_still_run`。不做：进程级集成测试（T062、T063、T068） | 新增 IT-orch-gating（进程内） | L | 否 | H.orch |
 | T045 | cupper-cli I：客户端库与 Mirror | feat | 5.2.14、5.3.3 | T012、T014、T020 | 做：迁移 SP-4a 的 client 与 mirror：握手（peer、harness）、请求关联、订阅与连续性、epoch 重置、套接字发现、`--build-info`；按构建种类校验宿主（5.8.1：发布按签名要求；自用按编译期写入的宿主 cdhash，经审计令牌比对，之后每次读取比对令牌；开发按同目录宿主文件的 cdhash 弱校验并在输出里标"宿主未经签名校验"；e2e 按 `harness` 证明），发布构建拒绝 `weak_auth`。不做：子命令；cdhash 的写入（T005） | 新增 UNIT-mirror、UNIT-cli-host-verify（四种构建的校验分支；cdhash 不符时拒绝连接） | M | 否 | H.cli |
 | **T046** | cupper-cli II：命令行 | feat | 5.2.14 | T038、T044 | 做：`status`、`sessions`、`watch`、`history`、`new`、`send`、`interrupt`、`pending`、`approve`/`reject`、`answer`、`elevate`、`repl`、`--json`、`--harness-key-fd`（仅测试构建）。不做：`cupper diff`（T120）、`--steer`（T140） | 新增 IT-cli-commands（真实宿主加假 agent，逐个命令断言 `--json` 输出） | M | 否 | H.cli |
@@ -254,22 +262,23 @@
 | T071 | host-client I：连接与续传，ShellAPI 的协议部分 | feat | 5.7.6、5.3.3、5.7.3 | T015、T070 | 做：连接状态机、切帧（含 `0x02`）、请求关联、断线后同一 `command_id` 重发、订阅与游标（含 `data_epoch`）、快照重置、连续性与三种计数；ShellAPI 的 `host.*`、`HostPort`、`Handshake`、`PrivilegedAction`/`PrivilegedResult`；帧级 TS mock 宿主与浏览器 mock 的 HostPort；HostPort 合同测试套件。不做：视图（T072） | 新增 UNIT-hc-conn、UNIT-hc-sync、UNIT-hostport-contract-mock | L | 否 | T.lib |
 | T072 | host-client II：视图 reducer 与交叉验证 | feat | 5.7.6、5.9.1（差分测试） | T071 | 做：TS 的两个视图 reducer（窗口、历史插入、`late_by_ref`）与按条目订阅的版本号；与 Rust 视图用 fixtures 交叉验证（接入 `xtask ci protocol`）；差分测试接入 `xtask ci nightly` | 新增 UNIT-views-parity、UNIT-views-differential | M | 否 | T.lib、P |
 | T073 | cupper-desktop-native | feat | 5.1.3、5.7.2、5.8.1 | T020、T030 | 做：napi-rs 扩展：经 `cupper-sys::spawn` 拉起宿主并写启动载荷、连接并完整校验宿主签名后返回 fd、每次读取的令牌比对、`dev_key` 证明与 `host_proof` 校验。用例里由加载扩展的 Node 测试进程拉起 T030 的网关夹具并自己出示 `dev_key`。不做：Electron 侧逻辑 | 新增 UNIT-native（对 ad-hoc 签名的网关夹具跑通拉起、校验、证明） | M | 否 | D.nat |
-| T074 | 桌面主进程 I：应用骨架、构建与加固基线 | feat | 5.7.2、5.7.8、5.7.9、5.10.6 | T070 | 做：`apps/desktop`、Vite 构建三个入口、`app://cupper` 与 CSP、路径规范化、webPreferences、导航与新窗口拦截、权限处理器、开关白名单、单实例锁、userData、构建种类常量、dev 与 e2e 的打包配置、prefs、main.log、菜单骨架。不做：宿主连接、自用构建配置（T160） | 新增 UNIT-main-hardening；`pnpm build:e2e` 产物可启动 | L | 否 | D.main |
+| T074 | 桌面主进程 I：应用骨架、构建与加固基线 | feat | 5.7.2、5.7.8、5.7.9、5.10.6 | T070 | 做：`apps/desktop`、Vite 构建三个入口、`app://cupper` 与 CSP、路径规范化、webPreferences、导航与新窗口拦截、权限处理器、开关白名单、BrowserWindow 的参数（默认 1280 × 820、最小 480 × 600、`hiddenInset`、交通灯位置，设计 5.7.4）、单实例锁、userData、构建种类常量、dev 与 e2e 的打包配置、prefs、main.log、菜单骨架。不做：宿主连接、自用构建配置（T160） | 新增 UNIT-main-hardening；`pnpm build:e2e` 产物可启动 | L | 否 | D.main |
 | T075 | 桌面主进程 II：拉起宿主、control 连接与退出确认 | feat | 5.7.1、5.7.2、5.5.1 | T005、T071、T073、T074 | 做：`hostLauncher`（载荷留内存、被杀后重传、500 ms、退出码 3–6）、`hostConnection`、`controlClient`、`lifecycle`（退出确认、关机跳过）、"无法验证宿主"与"重启宿主"（发信号前核对 `host.lock` 里的 pid 的可执行文件路径和 cdhash 属于本构建的宿主）、`CUPPER_E2E_DIR` | 新增 UNIT-launcher（含"pid 不属于本构建的宿主时不发信号"） | M | 否 | D.main |
 | T076 | 桌面主进程 III：windowBridge 与 preload | feat | 5.7.1、5.7.3、5.7.8（命令白名单） | T075 | 做：每窗口 `windowBridge`（数据连接绑定文档实例、代发 initialize、入方向字节块批量、出方向解析与白名单与重新序列化、`sendBlob`、8 MB 流控、重连顺序、按窗口断连的钩子）、preload 的 ShellAPI 实现；用 TS mock 宿主按判定负载做一次预测量。不做：真实输入与特权（T077） | 新增 UNIT-bridge-whitelist、UNIT-bridge-flow、UNIT-bridge-lifecycle；UNIT-hostport-contract-bridge（与 mock 用同一套合同） | L | 否 | D.main |
-| T077 | 桌面主进程 IV：真实输入、特权操作与 Q26 | feat | 5.7.8（真实输入、原生确认框）、5.7.2、Q26 | T076 | 做：`inputGuard`（9 条规则、可注入时钟）、证据写入与已放行 `command_id` 表、`privileged`（取内容、原生确认框、control 发送、一次一个、逐次加长的冷却；提权确认框醒目标出"申请方不是本 App 自带的命令行工具"）、`add_project` 流程；在 Electron 上复测 Q26 | 新增 UNIT-input-guard、UNIT-privileged；MAN-keyboard（按当前 Electron 大版本记录） | L | 是：MAN-keyboard 需要作者用实体键盘确认 | D.main |
+| T077 | 桌面主进程 IV：真实输入、特权操作与 Q26 | feat | 5.7.8（真实输入、请求面板的落点、原生确认框）、5.7.2、Q26 | T076 | 做：`inputGuard`（9 条规则、可注入时钟；v1.4：数字键 1–9 进白名单并写 `digit` 证据，↑ ↓ ← → 作为导航键，不算打字键）、证据写入与已放行 `command_id` 表、`privileged`（取内容、原生确认框、control 发送、一次一个、逐次加长的冷却；提权确认框醒目标出"申请方不是本 App 自带的命令行工具"）、`add_project` 流程；在 Electron 上复测 Q26 | 新增 UNIT-input-guard（含数字键与导航键）、UNIT-privileged；MAN-keyboard（Enter、Esc、数字键、输入法，按当前 Electron 大版本记录） | L | 是：MAN-keyboard 需要作者用实体键盘确认 | D.main |
 | T078 | 测量闸门：主进程转发 | test | 5.7.1（测量闸门）、5.9.6 | T047、T076、T080 | 做：按判定负载（索引流加 4 条会话流、5 MB blob、5,000 事件重同步）产生负载；消费端是用 T080 store 的真实渲染进程（到达即应用、随即确认）；测主进程事件循环延迟 p99 与流重置，可见和遮挡各一次，另出 6 条流的压力报告；负载页面和钩子放测试专用目录，不碰 T077 的文件 | 判定报告（p99 < 5 ms 且无流重置；记下机型泛称、系统与 Electron 版本、负载参数，附 T076 的预测量）；新增 PERF-bridge-gate | M | 知情：在作者机器上弹窗口运行约 20 分钟 | D.main、H.core |
 | T079 | （条件）utilityProcess 宿主桥加委托票据 | feat | Q33、5.7.1、5.8.1 | T078 | 触发：K2 不达标。前提：编排者按注里的安全要求修订 5.7.1、5.8.1 与 ADR-03，交安全评审和用户确认。做：协议加 `auth/delegate` 与 `auth: ticket`、网关的票据认证、主进程取票据交给 utilityProcess、由它持有数据连接；出方向白名单和 `input` 证据仍由主进程写入 | 重测 PERF-bridge-gate 达标；新增 IT-ticket-auth（重放、过期、跨窗口兑换、非 helper 兑换、伪造 `input`） | L | 是：ADR-03 修订需要用户确认 | D.main、P、H.gw |
 | T080 | ui-core I：状态层与安全规则 | feat | 5.7.6、5.7.8（Trusted Types、代码规则） | T072 | 做：`packages/ui-core` 的状态层：流 store（到达即应用、确认、按条目订阅）、订阅策略（索引加 LRU 3）、zustand、TanStack Query、`security/policies.ts`、ESLint 安全与文案规则。不做：外框与页面（T084） | 新增 UNIT-ui-store、UNIT-ui-lint-rules（负面样例触发规则） | M | 否 | T.ui |
-| T081 | ui-core III：侧边栏与全局状态 | feat | 5.7.4、5.7.5、5.12.2（界面） | T080、T084 | 做：侧边栏（项目分组、状态点、"未信任"、提权横幅）、添加项目、页头与"未信任""配置待确认"横幅、弱认证标记、重连状态、Toaster。不做：新建会话页（T085） | 新增 UI-sidebar、UI-banners | M | 否 | T.ui |
-| T082 | ui-core IV：消息流 | feat | 5.7.4（消息流）、5.7.6（长会话）、5.7.8（Markdown） | T080、T084 | 做：在 T084 的行类型注册表上实现行列表（按行虚拟化、加载更早的历史与视口锚点、贴底与 ↓）和消息类的行：带状态的回合标题（不折叠）、用户与助手消息（streamdown 配置）、工具单行摘要、思考、提示、错误。不做：卡片行（T083）；高亮、计划、恢复指引、折叠（T143、T146） | UNIT-md-injection、UI-stream-markdown、UI-stream-tools；新增 UNIT-stream-anchor | L | 否 | T.ui |
-| T083 | ui-core V：交互卡片、排队条与输入框 | feat | 5.7.4（卡片）、5.7.7、5.7.8 | T080、T084 | 做：注册卡片行（三类卡片与未知类型、各状态、不可见字符转义、"已截断"、"效果未知"、500 ms 与"可以操作"标记、"请再按一次"、privileged 选项经 `requestPrivileged`）；排队条；输入框（发送、排队、中断、输入法；超过帧预算的文本经 `sendBlob` 与 `text_blob`；预留底栏左右两组插槽和弹出层挂载点） | UNIT-composer-ime；新增 UI-cards、UNIT-composer-long-text | L | 否 | T.ui |
-| T084 | ui-core II：token、三栏外框、页面骨架与截图测试 | feat | 5.7.4、5.7.5、5.7.7（主题）、5.9.1（截图回归） | T071 | 做：设计 token（CSS 变量，亮色取截图笔记的估值，暗色占位）、三栏外框（侧边栏、主区、右侧标签容器）、Providers 与路由、会话页和新建会话页的骨架与插槽、行类型注册表、基础组件；截图测试（随夹具附带开源字体，固定视口、缩放、语言、时区、虚拟时钟，关闭动画，隐藏光标；基线由专用脚本生成，元数据记下 macOS 与 Chromium（Electron）版本：Chromium 严格比对，macOS 只比对大版本，小版本变化只提示，出现像素差异才重新生成）、`xtask ci ui`、发布 CSP 下的违规计数 | `xtask ci ui` 通过；新增 UI-shell、UI-csp-zero | L | 否 | T.ui |
-| T085 | ui-core VI：新建会话页（M1a） | feat | 5.7.4（新建会话页） | T081、T083 | 做：新建会话页（Claude、本地模式、项目选择），复用 T083 的输入框（`mode="new"`） | 新增 UI-new-session | S | 否 | T.ui |
-| **T090** | e2e 基础设施 | test | 5.9.4（环境）、5.9.9 | T046、T077、T081 | 做：Playwright `_electron` 夹具（e2e 构建、每用例临时根目录、临时仓库、假 agent、CLI 以 `--harness-key-fd` 接入）；一次给齐辅助函数（原生确认框替换并记录、`__cupperTest`、按窗口断连、事件屏障、`kill -9`、CLI 提权、外发采样、按键）；`@smoke` 标签与 PR、每晚套件的对应；Playwright workers 固定为 2；`xtask ci e2e`（e2e 的 App 和 `CupperHost.app` 由当前提交构建，摘要记下产物哈希） | E2E-single-instance、E2E-quit-confirm | M | 否 | D.main、C |
-| **T091** | NFR-1 验收套件 | test | 5.9.4（NFR-1） | T082、T083、T090 | 做：严格按 5.9.4 写五个用例，含 CLI 提权走原生确认、"可以操作"后两端同时回答、三种断开、两次带屏障的 `kill -9`；只新增用例文件 | E2E-NFR1-1、E2E-NFR1-2、E2E-NFR1-3、E2E-NFR1-4、E2E-NFR1-5 | M | 否 | D.main、H.cli |
-| **T092** | 安全 e2e 与外发检查 | test | 5.9.4（安全）、Q27 | T083、T090 | 做：e2e 构建上的安全用例；验证 `nettop` 采样整个 App 进程树的可行性（Q27），不可行就换方法并上报；只新增用例文件 | E2E-SEC-csp、E2E-SEC-real-input、E2E-SEC-privileged、E2E-SEC-fake-host、E2E-SEC-egress；新增 E2E-SEC-no-key-client（没有密钥的客户端不能以 desktop_ui 接入，最多得到只读的 cli 身份；出示 `auth: dev_key` 但证明错误或缺失时得到 `unauthenticated` 并被断开，不降级成只读）、E2E-SEC-double-initialize（window 连接上的第二次 `initialize` 在主进程被拦下）、E2E-SEC-cli-fake-host（假宿主占住套接字时 CLI 拒绝连接） | M | 否 | D.main |
-| **T093** | 交互与项目 e2e | test | 5.9.4、5.12.4 | T085、T090 | 做：卡片的键盘操作、提问卡片、持久选项的原生确认、添加项目与信任、新建 Claude 会话；只新增用例文件 | E2E-approve-enter-esc、E2E-question-card、E2E-persistent-option-native、E2E-project-add-trust、E2E-new-session-agent-claude | M | 否 | D.main、T.ui |
+| T081 | ui-core III：侧边栏、横幅与 toast | feat | 5.7.4（侧边栏、窄窗口、toast）、5.7.5、5.7.10、5.12.2（界面） | T080、T084 | 做：按设计 5.7.4 的 Codex 样式实现侧边栏：头部（产品名、宿主状态点）、"新会话"一行、项目分组（"未信任"、悬停时的"+"和菜单、展开显示）、会话行（30 高；状态的转圈、蓝点、"等待批准""需要用户输入"标签、错误图标）、宽度拖动（240–520，存 prefs）、窗口窄于 768 时的浮层；提权横幅、添加项目、"未信任""配置待确认"警告框、弱认证标记、重连状态、Toaster（顶部居中、最多 3 条）。不做：新建会话页（T085）；会话行和"⋯"菜单里的动作（T153） | 新增 UI-sidebar（各状态与 `pending_kind` 的两种标签、两种主题、窄窗口浮层）、UI-banners（含 toast 的位置） | M | 否 | T.ui |
+| T082 | ui-core IV：消息流 | feat | 5.7.4（消息流）、5.7.6（长会话）、5.7.8（Markdown）、5.7.10 | T080、T084 | 做：在 T084 的行类型注册表上实现行列表（按行虚拟化、加载更早的历史与视口锚点、贴底与回到底部按钮）和消息类的行，样式按设计 5.7.4、5.7.10：用户气泡（最大 70%、折叠与"显示更多"、悬停"复制"）、助手正文（streamdown 配置、Markdown 排版参数）、工具单行摘要（图标、过去时文案、运行中闪光、活动组汇总与展开、命令输出块）、思考（"正在思考""已思考 {时长}"）、提示与错误的警告框、带状态的回合标题（"已处理""你在 … 后停止了""已中断""失败"，不折叠）。不做：请求记录行（T083）；高亮、计划、恢复指引、折叠（T143、T146）；改动卡片（T132） | UNIT-md-injection、UI-stream-markdown、UI-stream-tools；新增 UNIT-stream-anchor | L | 否 | T.ui |
+| T083 | ui-core V：请求面板与请求记录行 | feat | 5.7.4（请求面板）、5.7.5、5.7.8（请求面板的落点） | T080、T084 | 做：请求面板（在 T084 的输入框位置插槽里替换 T086 的输入框，保留草稿和附件；三类请求与未知类型的占位；编号选项，"效果未知"、持久选项、"拒绝将结束本回合"的标注；自由输入行与"拒绝并附一条消息"（两条命令，第二条失败时文字留在输入框）；"跳过""提交""关闭"到回答的映射；5.7.8 的 RP-1 至 RP-9：待命期、点击、焦点与"按 Tab 或点击以处理请求"、初始选中、数字键与方向键、效果未知与特权选项（经 `requestPrivileged`）；不可见字符转义、"已截断"、"请再按一次"；多个请求时的"1 / 3"；别处处理后收起并提示；`data-ready` 等 DOM 标记）；消息流里的请求记录行（"已批准""已询问 n 个问题""未回答"）。不做：输入框本身（T086） | 新增 UNIT-request-panel（待命期、焦点规则、初始选中、动作到回答的映射、两条命令的失败处理）、UI-request-panel（三类请求与各状态、两种主题） | L | 否 | T.ui |
+| T084 | ui-core II：token、三栏外框、页面骨架与截图测试 | feat | 5.7.4、5.7.5、5.7.7（主题）、5.7.10、5.9.1（截图回归） | T071 | 做：设计 token 直接按设计 5.7.10（亮色经截图核对；暗色先用推算值，T106 核对后由 T152 修正）；三栏外框（侧边栏；主区；右侧侧边面板与 46 高的标签条，宽度拖动与键盘调整；窗口窄于 768 时侧边栏变浮层，主区放不下时侧边面板自动收起）、Providers 与路由、会话页和新建会话页的骨架与插槽（输入框位置的插槽供 T086 和 T083 使用）、行类型注册表、基础组件（工具栏按钮、菜单、tooltip、开关、警告框）；截图测试（随夹具附带开源字体，固定视口、缩放、语言、时区、虚拟时钟，关闭动画，隐藏光标；基线由专用脚本生成，元数据记下 macOS 与 Chromium（Electron）版本：Chromium 严格比对，macOS 只比对大版本，小版本变化只提示，出现像素差异才重新生成）、`xtask ci ui`、发布 CSP 下的违规计数 | `xtask ci ui` 通过；新增 UI-shell、UI-shell-narrow（窗口窄于 768、侧边面板自动收起）、UI-csp-zero | L | 否 | T.ui |
+| T085 | ui-core VI：新建会话页（M1a） | feat | 5.7.4（新建会话页） | T081、T086 | 做：新建会话页（设计 5.7.4：大标题与项目选择器、输入框锚在视口高度的 42% 处、输入框下方的动作条：agent 选择（M1a 只有 Claude）、工作区（M1a 只有本地））；复用 T086 的输入框（`mode="new"`） | 新增 UI-new-session | S | 否 | T.ui |
+| T086 | ui-core VII：输入框与排队消息（M1a） | feat | 5.7.4（输入框、排队消息）、5.7.7、5.7.10 | T080、T084 | 做：输入框（设计 5.7.4 的外形与底栏、发送按钮三态、附件条、Esc 的处理顺序与"两次 Esc 停止"；运行中发送：M1a 没有 Steer，一律排队；输入法；超过帧预算的文本经 `sendBlob` 与 `text_blob`；底栏左右两组插槽和弹出层挂载点）；排队消息的预览、暂停与"继续"；`data-send-state` 等 DOM 标记。不做：插话、排队消息的编辑（T140、T149）；请求面板（T083） | UNIT-composer-ime；新增 UNIT-composer-long-text、UNIT-composer-esc（两次 Esc 与 Esc 的处理顺序）、UI-composer（发送按钮三态、附件条、排队消息） | M | 否 | T.ui |
+| **T090** | e2e 基础设施 | test | 5.9.4（环境）、5.9.9 | T046、T077、T081 | 做：Playwright `_electron` 夹具（e2e 构建、每用例临时根目录、临时仓库、假 agent、CLI 以 `--harness-key-fd` 接入）；一次给齐辅助函数（原生确认框替换并记录、`__cupperTest`、按窗口断连、事件屏障、`kill -9`、CLI 提权、外发采样、按键；请求面板：等 `data-ready`、按数字键、按 Tab 激活）；`@smoke` 标签与 PR、每晚套件的对应；Playwright workers 固定为 2；`xtask ci e2e`（e2e 的 App 和 `CupperHost.app` 由当前提交构建，摘要记下产物哈希） | E2E-single-instance、E2E-quit-confirm | M | 否 | D.main、C |
+| **T091** | NFR-1 验收套件 | test | 5.9.4（NFR-1） | T082、T083、T086、T090 | 做：严格按 5.9.4 写五个用例，含 CLI 提权走原生确认、"可以操作"后两端同时回答、三种断开、两次带屏障的 `kill -9`；只新增用例文件 | E2E-NFR1-1、E2E-NFR1-2、E2E-NFR1-3、E2E-NFR1-4、E2E-NFR1-5 | M | 否 | D.main、H.cli |
+| **T092** | 安全 e2e 与外发检查 | test | 5.9.4（安全）、Q27 | T083、T086、T090 | 做：e2e 构建上的安全用例；验证 `nettop` 采样整个 App 进程树的可行性（Q27），不可行就换方法并上报；只新增用例文件 | E2E-SEC-csp、E2E-SEC-real-input（含数字键证据）、新增 E2E-SEC-panel-arming（打字中出现的面板不接收按键、待命期、点击、连续请求、弹出菜单遮挡）、E2E-SEC-privileged、E2E-SEC-fake-host、E2E-SEC-egress；新增 E2E-SEC-no-key-client（没有密钥的客户端不能以 desktop_ui 接入，最多得到只读的 cli 身份；出示 `auth: dev_key` 但证明错误或缺失时得到 `unauthenticated` 并被断开，不降级成只读）、E2E-SEC-double-initialize（window 连接上的第二次 `initialize` 在主进程被拦下）、E2E-SEC-cli-fake-host（假宿主占住套接字时 CLI 拒绝连接） | M | 否 | D.main |
+| **T093** | 交互与项目 e2e | test | 5.9.4、5.12.4 | T083、T085、T090 | 做：请求面板的键盘与点击（Enter、Esc、数字键、方向键，"跳过""关闭"的映射，"拒绝并附一条消息"）、提问面板、持久选项的原生确认、添加项目与信任、新建 Claude 会话；只新增用例文件 | E2E-approve-enter-esc、E2E-question-panel、E2E-persistent-option-native、E2E-project-add-trust、E2E-new-session-agent-claude | M | 否 | D.main、T.ui |
 | **T099** | M1a 退出验收 | chore | 5.12.2（退出标准）；1.8 | T006、T016、T036、T061、T062、T063、T066、T068、T069、T091、T092、T093 | 做：在退出候选的同一个提交上：`xtask ci e2e --suite nfr1` 连跑 20 次，再跑 5 次降速变体，`xtask ci pr` 与 `xtask ci nightly` 各通过一次；核对 UNIT-unsupported-set、M1a 的待完成登记为空（按入库的逐编号结果清单复核）、契约已冻结；写记录（含本机替代不了的缺口：IT-sys-peer-macos14、IT-sys-peer-macos15，CI 负载下的稳定性）。不稳定用例的修复另开 fix 任务 | 运行记录（结构化摘要）存档；缺口经用户确认；M1a 同步会纪要 | M | 知情：运行期间不操作机器；是：确认缺口、参加同步会 | C |
 
 **注**
@@ -317,8 +326,9 @@
 - **T079（L）**：触发时 5.8.1 的修订至少写清：票据一次性、几秒内过期、只能兑换 window 角色并绑定到某一个窗口；兑换方必须是本 App 的 helper（按签名要求校验），父进程是持票的 UI 主进程；票据不经 argv 或环境变量；control 连接一断开全部作废；出方向白名单和 `input` 证据仍由主进程写入，utilityProcess 不能自己填（`interaction/respond` 这类方法仍经主进程转发，或由主进程按 `command_id` 下发一次性证据，二选一写进修订）。修订稿交安全评审（安全 #7、桌面 #7）。
 - **T080、T084**：原 T080 拆成两个（桌面 #3）：T080 状态层与安全规则；T084 外框与截图基础，只依赖 T071，与 T080 并行。
 - **T084（L）**：token、外框、页面骨架、行类型注册表和截图测试是全部界面任务的共同前提，截图基线需要一个渲染出来的外框；附带的开源字体（例如 Inter、Noto Sans SC）连同许可证文本一起入库。
-- **T082、T083（L）**：各自围绕一个组件（消息列表；卡片与输入框）和它的滚动或键盘规则。
-- **T085**：新建会话页复用 T083 的输入框，所以排在 T083 之后（桌面 #2）。
+- **T082、T083（L）**：各自围绕一个组件和它的滚动或键盘规则：T082 是消息列表；T083 是请求面板，它的待命期、焦点、按键和回答映射是一条安全路径（设计 5.7.8 的 RP-1 至 RP-9），拆开后中间状态会让按键落到错误的地方。输入框和排队消息在 v1.1 拆到 T086。
+- **T083、T086**：两者都依赖 T084 的输入框位置插槽，可以并行；请求面板替换输入框时保留草稿和附件，接口由 T084 的插槽约定。
+- **T085**：新建会话页复用 T086 的输入框，所以排在 T086 之后（桌面 #2）。
 - **T090**：辅助函数一次给齐，T091–T093 只新增用例文件（桌面 #13）。workers 固定为 2：每个用例启动一个 App 实例，作者机器上更多并行会让焦点和冷却类用例不稳定；以后有远端时按 runner 的核数重新定，并在 CI 上重跑一轮 20 次。
 - **T099**：规模按 M 估（测试 #9）。记录是结构化摘要（1.8），另列缺口，交用户确认。
 
@@ -331,7 +341,7 @@
 | T103 | SP-6 渲染压力测试：场景 1–4、7、8 | spike | 5.9.7 | T107、T143 | 做：在作者机器上按 5.9.7 跑场景 1–4、7、8（含遮挡），出带数据和 trace 的报告；场景 7 中"从通知跳过去"一项在 T150 合并后由 T155 补测。不做：场景 5、6（T108），场景 9（T104） | SP-6 报告（场景 1–4、7、8） | M | 知情：在作者机器上运行并弹窗口 | SP、T.ui |
 | T104 | Q29 审查文档可行性（SP-6 场景 9） | spike | 5.7.5（审查文档）、5.9.7、Q29 | T074（可提前） | 做：在 `spikes/` 里用与 `apps/desktop` 相同的协议注册和 CSP 搭双源原型，验证 constructable stylesheet、跨源 iframe 里的 Worker 与模块脚本、桌面确认的 8 点、5,000 行 diff 的冷启动、内存、滚动和违规数 | Q29 判定报告 | M | 知情：在作者机器上测量 | SP |
 | T105 | 技术验证：Q35 本机签名身份 | spike | 5.13 Q35、5.8.1、5.7.9 | T005、T073（可提前） | 做：按注里的六项验证两种本机签名身份：私钥隔离（通过条件）、负面矩阵、两种身份下的签名事实、证书到期与更换、Team ID 和证书摘要的去向、签名后运行与重连与 CLI 提权 | Q35 判定报告（两种来源分别给结论）；仓库里不出现证书摘要、Team ID 和证书名 | M | 是：在专用钥匙串里建证书或登录 Xcode，设置钥匙串密码，需要用户在场 | SP |
-| T106 | 视觉规格 | docs | 5.7.4、UI-6；桌面 #5 | T099 | 做：由子 agent 执行（P-20）：brief 写明主仓库里参考图的路径 `.private/references/`，只读不改；从参考图提取尺寸、间距、字号、圆角、颜色和各区域结构，写成入库的文字规格。参考图不复制进 worktree、不入库，规格里不嵌入图像。M1b 的全部界面任务依赖它 | 规格文档经编排者对照参考图审阅 | S | 是：M1b 开始前按清单补截参考图（第 6 节） | Doc |
+| T106 | 复刻核对：暗色与未核实项 | docs | 5.7.10、5.13 Q36–Q40；F2 | —（可提前） | 做：由子 agent 执行。按 F2 只读查看本机 App 包（不启动 App，不读用户数据目录，解包只放临时目录、结束时删除，不把任何代码或资源复制进仓库），并对照作者补截的截图（主仓库 `.private/references/`，只读，P-20）：逐项核对 5.7.10 的暗色取值（含输入框底色，Q37）、左栏 340 是否含导航栏（Q36）、会话行尾的时间与 diff 统计（Q38）、↑ 恢复（Q39）和 Q40 的各项；写成核对报告和"设计需要更正的取值"清单，由编排者更新设计 5.7.10 与 5.13。截图不复制进 worktree、不入库 | 核对报告（Q36–Q40 逐项结论，每项注明来源：本机包、截图或推测）经编排者审阅 | S | 是：补截暗色主界面等截图（第 6 节） | Doc |
 | T107 | Electron 大版本跟进 | build | 5.10.6；桌面 #14 | T099 | 做：升级到官方支持的最新大版本（满两周），跑全量 `xtask ci pr`、`xtask ci nightly`、`xtask ci e2e`；排在 SP-6 之前，保证 SP-6 测的就是要交付的版本 | MAN-keyboard（新的 Electron 大版本）；全量作业通过 | S | 是：MAN-keyboard 需要作者用实体键盘确认 | D.main |
 | T108 | SP-6 场景 5、6：浸泡与输入法 | spike | 5.9.7（场景 5、6） | T103 | 做：8 小时浸泡（每 5 分钟一个带工具调用的回合，对照内存增长上限）；流式输出期间用拼音输入（场景 6） | 浸泡报告；MAN-ime | S | 是：机器空出 8 小时；场景 6 需要作者用拼音输入 | SP、T.ui |
 | T110 | Codex 提取层、选项对照表与 A 层金样例 | feat | 5.6.3–5.6.5、5.3.6、Q25、Q31 | T053、T102（可提前） | 做：Codex 提取层（`threadStatus`、`_meta.codex.error`、文本形式的错误、读取类命令、Q31）、选项对照表、配置项与档位（未知取值按 full_access） | GOLD-A-codex-s02、s04、s04b、s05、s06、s07、s10x（及其余 Codex 录制）、GOLD-A-tool-fields-codex、GOLD-A-option-map-codex、UNIT-option-map-codex | L | 否 | H.drv |
@@ -347,22 +357,24 @@
 | T125 | worktree 检查、归档、恢复与重命名 | feat | 5.2.10、5.2.6、5.5.9 | T120、T124 | 做：`worktree/check` 的 7 条规则、`session/archive`、`session/restore`、`session/rename`、`session/list_archived`、`project/remove` | IT-worktree-check-rules、IT-session-archive-restore | L | 否 | H.git、H.orch、H.idx |
 | T126 | 文件搜索、提示内容映射与在外部应用打开 | feat | 5.2.11（文件服务）、5.3.4 | T099 | 做：`files/search`（快照档 `ls-files`、非 git 目录遍历、缓存、模糊匹配、UTF-16 区间）；`image`、`file_ref`、`review_comment`、`text_blob` 映射为 ACP 内容块；`workspace/open` | 新增 IT-files-search、UNIT-prompt-mapping、IT-workspace-open | M | 否 | H.git、H.orch |
 | T127 | 存储用量与清除快照对象 | feat | 5.4.5、5.7.4（设置页"存储"）；P-6 | T099 | 前提：写 brief 时编排者按 P-6 补进设计。做：查询各类数据大小（scope read）、清除快照对象（scope privileged，经原生确认），均为附加式方法；清除后旧回合的 diff 返回 `snapshot_missing` | 新增 IT-snapshot-purge | S | 否 | H.git、H.store、P |
-| **T130** | 审查面板：主文档部分 | feat | 5.7.4、5.7.5、5.5.8 | T106、T121、T123、T126 | 做：在 T084 的右侧标签容器里：范围切换、文件列表、暂存栏（还原要主文档确认控件和真实输入）、待发送评论与"发给 agent"、提交框（hooks 与指纹提示）、`caveats`；为 diff 视图留接口 | 新增 UNIT-review-actions、UI-review | L | 否 | T.ui |
-| **T131** | 审查文档（独立源 iframe） | feat | 5.7.5（审查文档）、5.7.8 | T104、T130 | 前提：K9 通过。做：第二个渲染入口与 `app://cupper-review`、独立 CSP、iframe 的 sandbox 与导航限制、@pierre/diffs（`workerFactory`、`shiki-js`）、版本化 MessageChannel 协议（两侧 zod）、无状态视图、`reviewDocumentUrl`；浏览器 mock 下审查文档也从第二个源、按生产 CSP 加载；新入口接入许可证门禁第一层 | E2E-SEC-review-iso、E2E-review-comment；新增 UNIT-review-injection | L | 否 | D.main、T.ui |
+| **T130** | 审查面板：主文档部分 | feat | 5.7.5（审查面板）、5.5.8、5.7.8（RP-11） | T121、T123、T126 | 做：在 T084 的侧边面板里按 Codex 样式实现"变更"标签：头部（"查阅来源"范围下拉、增删统计、文件树开关、选项菜单的 M1 项：换行、diff 视图、展开收起全部、刷新）、文件树（默认关闭、⌘⇧E、筛选、Git 状态图标、右键菜单）、hunk 与文件操作的图标按钮、底部整组操作的药丸（还原全部、暂存全部或取消暂存全部）、还原确认控件（真实输入、500 ms 待命期、不提供"不再询问"）、"Git 操作"菜单与提交弹窗（"包含未暂存的更改"，提交、提交并推送、推送，hooks 与指纹提示）、`caveats`、空状态；行内评论的草稿由主文档持有，进入输入框的附件条（GT-2）；为 diff 视图留接口 | 新增 UNIT-review-actions、UI-review（文件树开合、整组操作在三种范围下的状态、空状态） | L | 否 | T.ui |
+| **T131** | 审查文档（独立源 iframe） | feat | 5.7.5（审查文档）、5.7.8 | T104、T130 | 前提：K9 通过。做：第二个渲染入口与 `app://cupper-review`、独立 CSP、iframe 的 sandbox 与导航限制、@pierre/diffs（`workerFactory`、`shiki-js`）、版本化 MessageChannel 协议（两侧 zod）、无状态视图、`reviewDocumentUrl`；行内评论按 Codex 的交互（悬停行号出现"+"，评论框只写草稿，经 `draft_comment` 交给主文档的附件条）；浏览器 mock 下审查文档也从第二个源、按生产 CSP 加载；新入口接入许可证门禁第一层 | E2E-SEC-review-iso、E2E-review-comment（评论作为附件随下一条消息发出，用户消息显示"{n} 条评论"）；新增 UNIT-review-injection | L | 否 | D.main、T.ui |
+| T132 | 回合改动卡片与撤销 | feat | 5.7.4（回合改动卡片）、5.3.5（`snapshot.recorded`）、GT-3；F3 | T130、T146 | 做：回合结束且结束快照的 `stat` 有改动时，在最终回答之后显示改动卡片（标题行"{n} 个文件已更改 +a −b"、每个文件一行，文件列表来自 `git/diff` 的 `{turn: id}` 范围；点文件在侧边面板打开"变更"并滚动到该文件）；"撤销"经主文档的确认控件（真实输入、待命期）以该回合范围的 `diff_token` 调用 `git/revert`，补丁应用失败时给出提示和审查面板的入口；快照不完整时注明原因、不提供撤销；卡片显示在回合折叠之外 | 新增 UI-turn-changes、E2E-turn-changes-undo | M | 否 | T.ui |
 | T139 | （条件）审查面板后备：DiffHunksRenderer | feat | 5.7.5（后备方案） | T104、T130 | 触发：K9 不通过。做：`DiffHunksRenderer` 生成 HAST，在主文档用 React 渲染，自写虚拟滚动和 hunk 交互 | E2E-review-comment；新增 UNIT-hast-render | L | 否 | T.ui |
-| T140 | Steer：宿主、驱动、CLI 与界面 | feat | 5.2.6、5.6.2、5.5.3、NFR-7 | T106、T111 | 做：纯核心的 Steer 判定、驱动 `Steer`（按 Q9 结论）、能力里的 `steer`、`cupper send --steer`、界面默认排队并可显式插话（用 T083 的插槽）；能力降级的用例 | PROP-steer-only-prompting、IT-K10-steer-explicit-only、IT-K11-steer-idle-queued、E2E-composer-steer-default、IT-degrade-steering、IT-degrade-plan、IT-degrade-thinking | L | 否 | H.orch、H.drv、T.ui |
-| T141 | 配置选择：set_config 与模式选择器 | feat | 5.2.6（配置项）、5.6.5、5.8.2 | T106 | 做：宿主 `session/set_config`（档位规则、`mode_set_by`）；输入框底栏插槽里的模型、推理强度、权限模式选择器；完全访问走 `requestPrivileged`；`elevated` 提示 | E2E-full-access-native；新增 IT-set-config-tier | L | 否 | H.orch、T.ui |
-| T142 | 输入框增强 I：@ 文件引用与拖入文件 | feat | 5.7.4（输入框）、5.7.3 | T106、T126 | 做：`@` 模糊搜索的弹出层（挂在 T083 的挂载点，UTF-16 区间高亮）、拖入文件生成引用（ShellAPI 新增 `pathForFile`，主进程用 `webUtils.getPathForFile`） | E2E-file-ref | M | 否 | T.ui、D.main |
-| T143 | 消息流增强 I：代码高亮、计划与恢复指引 | feat | 5.7.4（消息流）、MS-1、MS-4、MS-5 | T106 | 做：Shiki 懒加载与双主题、计划与待办条目（entries 带状态，markdown 计划）、错误条目的恢复指引（语义码到文案和操作） | UI-code-highlight、E2E-error-guidance；新增 UI-plan、UI-error | M | 否 | T.ui |
-| T144 | 新建会话页：两种 agent、工作区与分支 | feat | 5.7.4（新建会话页）、CP-5、AG-3、AG-4 | T111、T124、T141、T152 | 做：agent 选择（带可用状态）、本地或新建 worktree、起始分支、分支名显示在页头和标题栏、第一条消息前显示缓存的能力 | E2E-new-session-agent-codex、E2E-new-session-before-first-message | M | 否 | T.ui |
-| T145 | 输入框增强 II：图片、斜杠命令、↑ 与发送键 | feat | 5.7.4（输入框）、CP-1、CP-2、CP-3 | T142 | 做：粘贴或拖入图片（`HostPort.sendBlob` 与 `blob/put`）、斜杠命令菜单（来自能力）、输入框为空时 ↑ 恢复、Enter 或 ⌘Enter 的设置（prefs） | E2E-image-paste、E2E-slash-commands、E2E-send-key-setting | M | 否 | T.ui |
-| T146 | 消息流增强 II：回合折叠与晚到输出 | feat | 5.7.4（回合折叠、晚到的输出）、5.3.5 | T143 | 做：按回合折叠与耗时（`final_item_ids`、始终显示在折叠之外的条目）、`late_tool_output` 的显示与跳转、原条目旁的"最终退出码"、`may_still_run` 提示 | UI-stream-fold；新增 UI-late-output | M | 否 | T.ui |
-| T147 | 设置页 II：通用、通知、外观、存储与命令行工具 | feat | 5.7.4（设置页）、UI-2；P-6 | T127、T151 | 做：通用、通知开关、外观（主题覆盖、语言覆盖）、存储（大小、清除快照对象）、"安装命令行工具"（`PrivilegedAction` 的 `install_cli`：默认 `~/.local/bin`，先检查 App 在"应用程序"文件夹里；退化模式下 CLI 照常按 uid 只读接入，入口不隐藏） | UI-settings-general | M | 否 | T.ui、D.main |
-| **T148** | 复刻度修正 | feat | UI-6；桌面 #5 | T131、T140、T144、T145、T146、T147、T150、T153 | 做：作者做第二次 MAN-ui6（全量并排比对），按比对结果修正视觉；规模按结果定，必要时拆成多个任务 | MAN-ui6-full；修正后的截图 | M | 是：MAN-ui6-full 需要作者并排比对 | T.ui |
-| T150 | 系统通知与 ui/navigate | feat | 5.2.9、5.7.2、AP-3 | T101、T106 | 前提：K5 通过。做：cupper-sys 的 UserNotifications、宿主 `notifier`（主线程 run loop、内置中英文案、设置开关、`test_config.notifier: record`）、点击后经 control 连接发 `ui/navigate` 并按 bundle id 激活、`ShellAPI.onNavigate` 只导航不聚焦卡片 | MAN-notification-product；新增 IT-notifier-record、E2E-notification-navigate | L | 是：MAN-notification-product 复核 | H.idx、H.sys、D.main、T.ui |
-| T151 | 设置页 I：agent 状态、连接与已归档会话 | feat | 5.7.4（设置页）、AG-2、AG-5 | T106、T111、T125 | 做：设置页框架；agent 状态（CLI 路径与版本、已验证范围、登录状态、配置目录校验、运行时、资源占用、重启）、连接与设备、已归档会话（恢复） | UI-settings-agents | M | 否 | T.ui |
-| T152 | 视觉调整：token 取值、暗色主题与窗口外观 | feat | 5.7.4、5.7.7（主题）、PS-1、UI-3、UI-6 | T103 | 做：按视觉规格调整 token 的取值，完成暗色主题（两个文档共用）、跟随系统与覆盖、Shiki 双主题、窗口外观（标题栏、交通灯位置、侧边栏标题行）；不改动内部组件；一并更新它影响到的已有截图基线（单独提交）。排在 SP-6 的场景 1–4、7、8 之后；同波里先合并它 | UI-layout、UI-theme；MAN-ui6-shell | M | 是：MAN-ui6-shell 需要作者并排比对 | T.ui、D.main |
-| T153 | 会话管理界面、快捷键与"打开"按钮 | feat | 5.7.7（快捷键）、5.5.9、PS-4、UI-0、UI-4 | T125、T126、T152 | 做：归档时的 worktree 清理提示、重命名、5.7.7 的快捷键（菜单加速键经 `onCommand`，含 ⌘⌥A 跳到下一个需要处理的会话）、标题栏"打开" | E2E-archive-cleanup、E2E-next-needs-action、E2E-shortcuts、E2E-workspace-open | M | 否 | T.ui、D.main |
+| T140 | Steer：宿主、驱动、CLI 与界面 | feat | 5.2.6、5.6.2、5.5.3、5.7.4（跟进消息）、NFR-7 | T111 | 做：纯核心的 Steer 判定、驱动 `Steer`（按 Q9 结论）、能力里的 `steer`、`cupper send --steer`；界面按 CP-6 v1.3：运行中 Enter 默认插话、⌘Enter 排队（"发送快捷键"为 ⌘Enter 时是 ⌘⇧Enter），回退时提示"已转为排队"，偏好"跟进消息默认排队"（默认关，设置项的界面在 T147），Claude 会话第一次插话时提示副作用；能力降级的用例 | PROP-steer-only-prompting、IT-K10-steer-explicit-only、IT-K11-steer-idle-queued、E2E-composer-steer-default（默认插话、⌘Enter 排队、偏好对调、回退）、IT-degrade-steering、IT-degrade-plan、IT-degrade-thinking | L | 否 | H.orch、H.drv、T.ui |
+| T141 | 配置选择：set_config 与模式选择器 | feat | 5.2.6（配置项）、5.6.5、5.8.2 | T099 | 做：宿主 `session/set_config`（档位规则、`mode_set_by`）；输入框底栏插槽里的权限按钮（图标加短名，下拉）和"{模型} {强度} ⌄"合一的选择器（设计 5.7.4）；完全访问走 `requestPrivileged`，开启后输入框上方显示"完全访问权限已开启"；`elevated` 提示 | E2E-full-access-native；新增 IT-set-config-tier | L | 否 | H.orch、T.ui |
+| T142 | 输入框增强 I：@ 文件引用与拖入文件 | feat | 5.7.4（输入框）、5.7.3 | T126 | 做：`@` 模糊搜索的弹出层（Codex 样式，挂在 T086 的挂载点，UTF-16 区间高亮）、拖入文件生成引用（ShellAPI 新增 `pathForFile`，主进程用 `webUtils.getPathForFile`） | E2E-file-ref | M | 否 | T.ui、D.main |
+| T143 | 消息流增强 I：代码高亮、计划与恢复指引 | feat | 5.7.4（消息流）、5.7.10、MS-1、MS-4、MS-5；F3 | T099 | 做：Shiki 懒加载与双主题（设计 5.7.10 的代码配色）、计划与待办条目（entries 带状态；Markdown 计划显示为"计划"摘要条）、输入框上方的计划药丸"第 n / m 步"（F3）、错误条目的恢复指引（警告框里的按钮） | UI-code-highlight、E2E-error-guidance；新增 UI-plan（含计划药丸）、UI-error | M | 否 | T.ui |
+| T144 | 新建会话页：两种 agent、工作区与分支 | feat | 5.7.4（新建会话页）、CP-5、AG-3、AG-4 | T111、T124、T141、T152 | 做：新建会话页的动作条（设计 5.7.4）：agent 选择（最左边的下拉，两种 agent 及其可用状态）、本地或新建 worktree、起始分支；分支名显示在顶栏标题、第一条消息前显示缓存的能力 | E2E-new-session-agent-codex、E2E-new-session-before-first-message | M | 否 | T.ui |
+| T145 | 输入框增强 II：图片、斜杠命令、↑ 与发送键 | feat | 5.7.4（输入框）、CP-1、CP-2、CP-3 | T142 | 做：粘贴、拖入或经"+"添加图片（拖放覆盖层；`HostPort.sendBlob` 与 `blob/put`）、斜杠命令菜单（命令来自能力，菜单样式按 Codex：标题、搜索、最高 320 或 10 行）、输入框为空时 ↑ 恢复（Q39）、"发送快捷键"偏好（Enter 或 ⌘Enter，排队键随之变为 ⌘⇧Enter） | E2E-image-paste、E2E-slash-commands、E2E-send-key-setting | M | 否 | T.ui |
+| T146 | 消息流增强 II：回合折叠与晚到输出 | feat | 5.7.4（回合折叠、晚到的输出）、5.3.5 | T143 | 做：按回合折叠与耗时（设计 5.7.4 的文案和样式："用时 {时长}"、箭头动画、下方边线；`final_item_ids`、始终显示在折叠之外的条目，含请求记录行和改动卡片的位置）、`late_tool_output` 的显示与跳转、原条目旁的"最终退出码"、`may_still_run` 提示 | UI-stream-fold；新增 UI-late-output | M | 否 | T.ui |
+| T147 | 设置页 II：通用、通知、外观、存储与命令行工具 | feat | 5.7.4（设置页）、UI-2；P-6 | T127、T151 | 做：通用（发送快捷键、跟进消息默认排队及 Claude 插话副作用的说明、默认权限等）、通知开关、外观（主题覆盖、半透明侧边栏、语言覆盖）、存储（大小、清除快照对象）、"安装命令行工具"（`PrivilegedAction` 的 `install_cli`：默认 `~/.local/bin`，先检查 App 在"应用程序"文件夹里；退化模式下 CLI 照常按 uid 只读接入，入口不隐藏） | UI-settings-general | M | 否 | T.ui、D.main |
+| **T148** | 复刻度修正 | feat | UI-6；桌面 #5 | T131、T132、T144、T145、T147、T149、T150、T153 | 做：作者做第二次 MAN-ui6（与本机 Codex 同尺寸窗口、同一主题全量并排比对），按比对结果修正视觉，可以按 F2 只读查看本机 App 包核对细节；规模按结果定，必要时拆成多个任务 | MAN-ui6-full；修正后的截图 | M | 是：MAN-ui6-full 需要作者并排比对 | T.ui |
+| T149 | 排队消息的编辑与插话 | feat | 5.2.6（排队）、5.3.4（`session/queue_edit`）、5.7.4（排队消息）；CP-6 v1.3、F3 | T140 | 做：宿主 `session/queue_edit` 的 `replace` 和 `steer`（按 `expected_version` 检查；`steer` 回退时放回原位；`remove`、`move` 返回 `unsupported`）；排队消息行的"插话"按钮、菜单（编辑消息、切换"跟进消息默认排队"）、原行展开编辑；队列暂停时发新消息的"发送消息？"弹框（M1 只有"发送"和"取消"）；同步 UNIT-unsupported-set 的允许集合 | 新增 IT-queue-edit（crate 内：版本冲突、改写、插话与回退）、E2E-queue-edit | M | 否 | H.orch、T.ui |
+| T150 | 系统通知与 ui/navigate | feat | 5.2.9、5.7.2、AP-3 | T099、T101 | 前提：K5 通过。做：cupper-sys 的 UserNotifications、宿主 `notifier`（主线程 run loop、内置中英文案（措辞参照 Codex）、设置开关、`test_config.notifier: record`）、点击后经 control 连接发 `ui/navigate` 并按 bundle id 激活、`ShellAPI.onNavigate` 只导航不聚焦请求面板；通知上不放"批准"按钮（有意与 Codex 不同，5.7.8） | MAN-notification-product；新增 IT-notifier-record、E2E-notification-navigate | L | 是：MAN-notification-product 复核 | H.idx、H.sys、D.main、T.ui |
+| T151 | 设置页 I：agent 状态、连接与已归档会话 | feat | 5.7.4（设置页）、AG-2、AG-5 | T111、T125 | 做：设置页框架（设计 5.7.4 的 Codex 样式：占满主区、左侧导航与"返回应用"、内容区最大 768、设置行与开关的规格）；agent 状态（CLI 路径与版本、已验证范围、登录状态、配置目录校验、运行时、资源占用、重启）、连接与设备、已归档会话（恢复） | UI-settings-agents | M | 否 | T.ui |
+| T152 | 视觉调整：暗色核对结果、半透明侧边栏与窗口外观 | feat | 5.7.4、5.7.7（主题）、5.7.10、PS-1、UI-3、UI-6 | T103、T106 | 做：按 T106 的核对结果修正暗色取值（编排者先更新设计 5.7.10），完成暗色主题（两个文档共用）、跟随系统与覆盖、Shiki 双主题；半透明侧边栏（`vibrancy: 'menu'`，关闭后和系统"降低透明度"时用不透明的回退色）；窗口外观的细节（顶栏、交通灯与侧边栏头部的对齐）；不改动内部组件；一并更新它影响到的已有截图基线（单独提交）。排在 SP-6 的场景 1–4、7、8 之后；同波里先合并它 | UI-layout、UI-theme；MAN-ui6-shell | M | 是：MAN-ui6-shell 需要作者与本机 Codex 并排比对 | T.ui、D.main |
+| T153 | 会话管理界面、快捷键与"打开"按钮 | feat | 5.7.7（快捷键）、5.5.9、PS-4、UI-0、UI-4 | T125、T126、T152 | 做：会话行的悬停菜单和右键菜单、顶栏的"⋯"会话菜单（重命名弹窗、归档与 worktree 清理提示、复制工作目录）；5.7.7 按 Codex 默认值的快捷键子集与 cupper 的别名（⌘.、⌘⌥T），菜单加速键经 `onCommand`（含 ⌘⌥A 跳到下一个需要处理的会话）；顶栏的"打开" | E2E-archive-cleanup、E2E-next-needs-action、E2E-shortcuts、E2E-workspace-open | M | 否 | T.ui、D.main |
 | **T154** | 中英文与截图基线 | feat | 5.7.7（本地化）、UI-5 | T148 | 做：补齐中英文文案（含主进程原生确认框）、跟随系统语言与覆盖、截图回归扩到两种主题乘两种语言；基线锁定的是 T148 修正后的视觉 | UI-locale | M | 否 | T.ui、D.main |
 | T155 | SP-6 场景改写为性能回归 | test | 5.9.7（产出） | T103、T146、T150 | 做：把场景 2、3、4、7、8 改写成 `xtask ci nightly` 的性能回归与趋势阈值，覆盖代码高亮、回合折叠和"从通知跳过去" | 新增 PERF-ui-stream、PERF-ui-long-session、PERF-ui-switch、PERF-ui-occluded | M | 否 | T.ui、C |
 | T156 | 防休眠（NFR-13） | feat | 5.2.13（防休眠） | T099 | 做：cupper-sys 的 IOPMAssertion、Supervisor 的引用计数、`host.updated.power_assertion` | 新增 IT-power-assertion | S | 否 | H.sys、H.core |
@@ -372,8 +384,8 @@
 | T160 | 自用构建 | build | 5.7.9（自用构建）、5.12.3、5.10.1；P-5、P-15 | T099 | 做：`electron-builder.release.yml` 与自用构建配置（5.7.9 自用构建一列：独立身份与数据目录、`dev-auth` 开 `test-harness` 关、fuses 同发布但关闭 `enableCookieEncryption`、ad-hoc 签名并开启 hardened runtime、`disable-library-validation` 同时写进 `entitlements` 和 `entitlementsInherit`）；本机安装与手动更新说明；一页"自用前须知"（含剩余风险，见注） | 新增 IT-selfuse-build（逐个 Mach-O 比对 entitlements 白名单，helper 也在内；`@electron/fuses read` 逐项；无测试钩子；`--build-info`；CLI 内嵌的宿主 cdhash 相符）、E2E-selfuse-coexist（在 T160 产出的那份 App 上运行：与开发构建同时运行互不干扰，全部 helper 都能起来，原生扩展能加载）、E2E-selfuse-replace（手动替换 App 时旧宿主进入待升级） | L | 知情：在作者机器上同时运行两种构建 | D.main、H.xt、Doc |
 | T161 | release-config 检查 | ci | 5.1.6（release-config）、5.10.7；P-11 | T160 | 做：`xtask ci nightly` 里的发布配置构建（不签名）：fuses 逐项、`ElectronAsarIntegrity`、asar 清单、未知开关即退出、测试钩子标记扫描、`--build-info`、`runtime-pack --verify`；同样扫描自用构建的产物（其 fuses 按 5.7.9 自用构建一列断言，`enableCookieEncryption` 关闭） | E2E-SEC-switches；新增 UNIT-release-config-scan | M | 否 | C、D.main |
 | T162 | （条件）本机签名构建 | feat | 5.13 Q35、5.8.1、5.7.9、ADR-05 | T105、T160 | 触发：K7 通过。前提：编排者补设计和 ADR-05（私钥放在哪里、签名要求串、负面矩阵），交用户确认。做：本机构建配置（不进仓库）注入签名要求，宿主、原生扩展、CLI 按它校验，自用构建改走 `codesign` 认证，身份和数据目录沿用 T160 | 新增 MAN-local-signed（UI 被杀后新 UI 接上旧宿主、CLI 只读接入、`weak_auth` 为 false、负面矩阵） | L | 是：需要作者本机的签名身份与钥匙串密码 | H.sys、D.nat、D.main、H.xt |
-| T170 | M1b 端到端：S1 与 S2 | test | 5.9.4（M1b 的端到端） | T144、T150 | 做：用假 agent 跑 S1（claude 与 codex 两种 persona 各一个会话，各在一个 worktree，侧边栏状态）、S2（审批、提问、通知意图的记录） | E2E-S1、E2E-S2 | M | 否 | D.main、T.ui |
-| T171 | M1b 端到端：S3 与 S4 | test | 5.9.4（M1b 的端到端） | T131、T140 | 做：用假 agent 跑 S3（审查、行内评论、按 hunk 暂存、提交）、S4（排队、Steer、中断）；K9 不通过时 S3 走 T139 的视图 | E2E-S3、E2E-S4 | M | 否 | D.main、T.ui |
+| T170 | M1b 端到端：S1 与 S2 | test | 5.9.4（M1b 的端到端） | T144、T150 | 做：用假 agent 跑 S1（claude 与 codex 两种 persona 各一个会话，各在一个 worktree，侧边栏状态）、S2（请求面板上的审批和提问、通知意图的记录） | E2E-S1、E2E-S2 | M | 否 | D.main、T.ui |
+| T171 | M1b 端到端：S3 与 S4 | test | 5.9.4（M1b 的端到端） | T131、T149 | 做：用假 agent 跑 S3（审查、行内评论作为附件发出、按 hunk 暂存、提交）、S4（默认插话、⌘Enter 排队、编辑排队消息、两次 Esc 中断）；K9 不通过时 S3 走 T139 的视图 | E2E-S3、E2E-S4 | M | 否 | D.main、T.ui |
 | T172 | M1b 端到端：NFR-2、NFR-9 与容量 | test | 5.9.4（NFR-2、NFR-9）、NFR-11 | T111、T121、T124 | 做：断线后同一 `command_id` 重发不重复执行、适配器和 CLI 崩溃后恢复、6 个会话同时运行；核对故障点的子编号全部通过 | E2E-NFR2-retry、E2E-NFR9-adapter-crash、E2E-NFR9-cli-crash、E2E-six-sessions、IT-NFR9-failpoints | M | 否 | D.main |
 | T173 | S1–S4 逐步检查表与人工证据格式 | docs | 5.12.3（退出标准 ①）、5.9.10 | T099 | 做：写 MAN-S1 至 MAN-S4 的检查表（步骤、通过条件、CLI 与适配器版本、日期）；定下全部 MAN 项证据的统一格式，与 trace-ids 的核对对齐 | 检查表与证据格式经编排者审阅 | S | 否 | Doc |
 | T174 | Q16 保留参数复核 | chore | 5.13 Q16 | T160 | 做：只读、只统计宿主日志里的订阅模式和游标落后量，据此调整窗口和保留参数，补边界性质测试；日志原文不进仓库也不进汇报 | 新增 PROP-retention-boundary | S | 是：授权读取作者自用一段时间后的本机日志 | H.store |
@@ -392,7 +404,7 @@
   4. 证书到期、撤销、更换时宿主的行为与重新编译步骤；
   5. Team ID 和证书摘要在 `--build-info`、审计日志、诊断包、录制里都经过脱敏，本机构建配置在仓库之外；
   6. 签名后能否运行、UI 被杀后新 UI 能否接上旧宿主、CLI 能否只读接入并走完提权。
-- **T106**：P-20 已裁定由子 agent 执行。brief 写明主仓库里参考图的路径 `.private/references/`，子 agent 只读不改；产出只有文字规格。M1b 的界面任务（T130、T140–T143、T150、T151、T152，以及经它们间接依赖的 T131、T144–T148、T153、T154）都依赖 T106（桌面确认 #5）。
+- **T106**：v1.1 改为复刻核对：R06 的一手规格已经写进设计 v1.4（5.7.4、5.7.10），界面任务不再等它。仍由子 agent 执行（P-20）：brief 写明主仓库里参考图的路径 `.private/references/` 和 F2 的约束，只读不改；产出只有核对报告和需要更正的取值清单。不依赖任何代码，可以提前；只有 T152 依赖它。
 - **T107**：保证 SP-6 测的就是要交付的 Electron 版本（桌面 #14）。
 - **T110（L）**：同 T053。
 - **T111（L）**：发现、运行时复制和回收都作用于 Codex 的 AgentRuntime，IT-K20-reclaim 需要完整路径。
@@ -401,14 +413,16 @@
 - **T124（L）**：worktree 添加、`session/create` 的 worktree 分支和崩溃恢复是同一个准备流程。
 - **T125（L）**：7 条规则的结论直接决定归档和恢复的行为。
 - **T127、T147**：方法名、ShellAPI 成员在写 brief 时由编排者按 P-6 的裁定补进设计。
-- **T130（L）**：面板各部分共用同一个 `diff_token` 和选择状态；右侧标签容器在 M1a 的 T084 就有，不再等 T152（桌面 #3）。
+- **T130（L）**：面板各部分共用同一个 `diff_token` 和选择状态；右侧标签容器在 M1a 的 T084 就有，不再等 T152（桌面 #3）。v1.1：文件树替代文件列表，整组操作的药丸替代暂存栏，评论草稿改进输入框的附件条，规模不变。
+- **T132**：F3 定为进 M1 的元素。"撤销"映射到 GT-3 的还原（`git/revert` 加回合范围的 `diff_token`），确认控件与审查面板共用（T130）。
 - **T131、T139（L）**：审查文档是一个完整的独立文档加消息协议，后备方案是整体替代，两者只做其一。
 - **T140（L）**：宿主、驱动、CLI 和界面要同时出现，否则宿主侧就是没人用的代码。IT-K11 用 codex 形态，所以排在 T111 之后。
 - **T141（L）**：`session/set_config` 的宿主侧与选择器同时出现才有使用方。
 - **T143、T146**：同在消息流里，T146 排在 T143 之后。
+- **T149**：F3 把排队消息的编辑和插话提前到 M1（PRD v1.3 的 CP-6、CP-8）。`session/queue_edit` 在 v1 的类型里本来就有，设计 v1.4 定义了 `ops` 的形状，在 T016 冻结之前进入契约，属于附加；`remove`、`move` 仍属于 CP-8（P1）。
 - **T148**：规模按 MAN-ui6-full 的结果定，偏差多时拆成多个任务。
 - **T150（L）**：通知身份、点击回调和激活是 SP-10 验证过的同一条路径，拆开无法端到端验证。K5 不通过时由 T158 替代宿主通知部分。
-- **T152**：范围收窄（桌面 #3）：只调整 token 的取值、做暗色主题和窗口外观，不改内部组件，所以从 L 降为 M。截图基线的合并顺序见 1.5（桌面确认 #3）。T106 进入依赖后，T152 落在 B4，与 T131、T147 同波；在它之前合并的 T130、T145、T146、T151 的基线由 T152 一并更新。
+- **T152**：v1.1 起 token 的取值已在设计 5.7.10，T152 只按 T106 的核对结果修正暗色、加半透明侧边栏、对齐窗口外观，不改内部组件（M）。截图基线的合并顺序见 1.5。T106 不再挡住其他界面任务后，T152 落在 B3，与 T130、T145、T149、T151 同波；在它之前合并的 T140–T143、T146、T150 的基线由 T152 一并更新。
 - **T154**：放在 T148 之后，两种语言的截图基线锁定修正后的视觉。
 - **T157**：安全说明分两步：T160 附"自用前须知"，T157 在 M1b 末尾写完整版（P-15）。
 - **T160（L）**：自用构建的配置、签名和它的校验要一起合并，否则 main 上会有一个没经校验、却每天在真实项目上使用的构建。"自用前须知"的内容：退化认证意味着什么（沙箱外的同用户进程只要能杀掉宿主、再以注入的方式重新启动 App，就能接管）；不要因为 agent 的操作给 Cupper 授予辅助功能或自动化权限；开启 agent 自带的沙箱；Codex 的工作区模式不开网络访问；在 cupper 里提交会运行仓库的 hooks（安全 #3）；剩余风险：开了 `disable-library-validation`，同用户进程替换包内的库并 ad-hoc 重签后仍会被加载，每次手动替换 App 都要重新确认 TCC 授权（文件夹访问、通知），两者的根本解决都是 Q35（桌面确认）。关闭 `enableCookieEncryption` 是编排者裁定：界面不使用 cookie（`connect-src 'none'`），而 ad-hoc 签名下每次替换 App 都会触发钥匙串提示；已写进 5.7.9 自用构建一列的 Fuses 格。T160 之后每次改表结构都要附样例数据库和迁移用例（P-4）。
@@ -457,6 +471,17 @@
 | "做"与验收补充 | T001（机器级锁、干净检查、逐编号结果、产物哈希）；T002（读入库结果、缺口状态）；T005（先签宿主再编译 CLI）；T021（`PROC_PIDUNIQIDENTIFIERINFO`）；T030（只接受拉起宿主的进程、ppid 为 1 退出、网关夹具）；T033、T073（`dev_key` 由拉起方出示）；T037（孤立状态）；T038、T077（提权确认框标出非自带 CLI）；T045（按构建种类校验宿主）；T047（性能历史入库）；T062（孤立状态的进程级用例）；T084（截图元数据比对规则）；T090（workers 为 2、产物由当前提交构建）；T092（证明错误时断开、CLI 识破假宿主）；T099、T179（按入库结果复核、缺口清单）；T102（P-14 细节）；T106（P-20）；T147（`install_cli` 不隐藏）；T152（基线合并顺序）；T157、T160（剩余风险、cookie 加密、helper 的 entitlements、用自己的产物验收）；T161（自用构建的 fuses 断言） | 第 2 轮任务书的 17 条 |
 | 新增编号 | UNIT-ci-lock、UNIT-sys-uniqueid、IT-sys-peer-current（原 IT-sys-peer 拆成三个子编号）、IT-devkey-launcher-only、IT-devkey-orphan-start、UNIT-orphan-policy、IT-host-orphaned、UNIT-cli-host-verify、E2E-SEC-cli-fake-host | 同上 |
 | 更正 | 7.3 中 K7 的两行、T147、8.1 的 P-6：退化模式下 CLI 照常只读接入 | 安全确认 |
+
+### 2.6 v1.0 → v1.1 的任务变化
+
+| 变化 | 任务 | 依据 |
+|---|---|---|
+| 新增 | T086（输入框与排队消息，从 T083 拆出）；T132（回合改动卡片与撤销）；T149（排队消息的编辑与插话） | 用户决定 F3；设计 v1.4 |
+| 改定位 | T106：视觉规格 → 复刻核对（暗色与未核实项），可以提前，只有 T152 依赖它 | R06 已给出一手规格 |
+| 依赖调整 | T130、T140、T141、T142、T143、T150、T151 去掉 T106；T085 改依赖 T086；T091、T092 补 T086；T148 补 T132、T149；T171 补 T149 | 同上 |
+| 改名 | T081（侧边栏、横幅与 toast）、T083（请求面板与请求记录行）、T106、T152 | 同上 |
+| "做"与验收改写 | T011、T012（v1.4 的协议附加：`pending_kind`、排队条目的 `content`、`QueueOp`、`input.key: digit`）；T031（数字键证据）；T034（`pending_kind`）；T043（排队条目带 `content`）；T074（窗口参数）；T077（数字键与导航键）；T081–T086（Codex 规格）；T090、T092、T093（请求面板）；T130、T131（文件树、整组操作、评论进附件条）；T140、T141、T143–T148、T150–T153（Codex 规格）；T170、T171 | 设计 v1.4 |
+| 新增编号 | UNIT-request-panel、UI-request-panel（原 UI-cards）、UNIT-composer-esc、UI-composer、UI-shell-narrow、E2E-SEC-panel-arming、E2E-question-panel（原 E2E-question-card）、UI-turn-changes、E2E-turn-changes-undo、IT-queue-edit、E2E-queue-edit | 同上 |
 
 ## 3. 依赖图
 
@@ -552,9 +577,10 @@ flowchart LR
     T080["T080<br/>ui-core 状态与安全"]
     T081["T081<br/>侧边栏与全局状态"]
     T082["T082<br/>消息流"]
-    T083["T083<br/>卡片与输入框"]
+    T083["T083<br/>请求面板"]
     T084["T084<br/>token、外框与截图"]
     T085["T085<br/>新建会话页 M1a"]
+    T086["T086<br/>输入框与排队"]
   end
   subgraph G9["e2e 与退出"]
     T090["T090<br/>e2e 基础设施"]
@@ -581,6 +607,7 @@ flowchart LR
   T077 --> T016
   T078 --> T016
   T082 --> T016
+  T083 --> T016
   T085 --> T016
   T001 --> T020
   T001 --> T021
@@ -702,15 +729,20 @@ flowchart LR
   T084 --> T083
   T071 --> T084
   T081 --> T085
-  T083 --> T085
+  T086 --> T085
+  T080 --> T086
+  T084 --> T086
   T046 --> T090
   T077 --> T090
   T081 --> T090
   T082 --> T091
   T083 --> T091
+  T086 --> T091
   T090 --> T091
   T083 --> T092
+  T086 --> T092
   T090 --> T092
+  T083 --> T093
   T085 --> T093
   T090 --> T093
   T006 --> T099
@@ -744,7 +776,7 @@ flowchart LR
     T103["T103<br/>SP-6 场景 1–4、7、8"]
     T104["T104<br/>Q29 审查文档"]
     T105["T105<br/>Q35 本机签名"]
-    T106["T106<br/>视觉规格"]
+    T106["T106<br/>复刻核对"]
     T107["T107<br/>Electron 跟进"]
     T108["T108<br/>SP-6 浸泡与输入法"]
   end
@@ -768,6 +800,7 @@ flowchart LR
   subgraph H3["审查面板"]
     T130["T130<br/>审查面板"]
     T131["T131<br/>审查文档 iframe"]
+    T132["T132<br/>回合改动卡片"]
     T139["T139<br/>DiffHunksRenderer（条件）"]
   end
   subgraph H4["输入框、消息流、设置页与复刻度"]
@@ -780,11 +813,12 @@ flowchart LR
     T146["T146<br/>折叠与晚到输出"]
     T147["T147<br/>设置页 II"]
     T148["T148<br/>复刻度修正"]
+    T149["T149<br/>排队编辑与插话"]
   end
   subgraph H5["通知、打磨与其他"]
     T150["T150<br/>系统通知"]
     T151["T151<br/>设置页 I"]
-    T152["T152<br/>视觉调整与暗色"]
+    T152["T152<br/>暗色与半透明"]
     T153["T153<br/>会话管理与快捷键"]
     T154["T154<br/>中英文"]
     T155["T155<br/>性能回归"]
@@ -817,7 +851,6 @@ flowchart LR
   T074 --> T104
   T005 --> T105
   T073 --> T105
-  T099 --> T106
   T099 --> T107
   T103 --> T108
   T053 --> T110
@@ -836,20 +869,19 @@ flowchart LR
   T124 --> T125
   T099 --> T126
   T099 --> T127
-  T106 --> T130
   T121 --> T130
   T123 --> T130
   T126 --> T130
   T104 --> T131
   T130 --> T131
+  T130 --> T132
+  T146 --> T132
   T104 -.-> T139
   T130 -.-> T139
-  T106 --> T140
   T111 --> T140
-  T106 --> T141
-  T106 --> T142
+  T099 --> T141
   T126 --> T142
-  T106 --> T143
+  T099 --> T143
   T111 --> T144
   T124 --> T144
   T141 --> T144
@@ -859,19 +891,20 @@ flowchart LR
   T127 --> T147
   T151 --> T147
   T131 --> T148
-  T140 --> T148
+  T132 --> T148
   T144 --> T148
   T145 --> T148
-  T146 --> T148
   T147 --> T148
+  T149 --> T148
   T150 --> T148
   T153 --> T148
+  T140 --> T149
+  T099 --> T150
   T101 --> T150
-  T106 --> T150
-  T106 --> T151
   T111 --> T151
   T125 --> T151
   T103 --> T152
+  T106 --> T152
   T125 --> T153
   T126 --> T153
   T152 --> T153
@@ -891,7 +924,7 @@ flowchart LR
   T144 --> T170
   T150 --> T170
   T131 --> T171
-  T140 --> T171
+  T149 --> T171
   T111 --> T172
   T121 --> T172
   T124 --> T172
@@ -953,7 +986,7 @@ flowchart LR
 | M1b（T099 之后） | T099 → T120 → T121 → T130 → T131 → T148 → T154 → T179 | 17 |
 | 发布（推迟，T161 之后） | T161 → T180 → T181 → T183 → T184 | 10 |
 
-M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077）、兼容链（T047、T064、T066）、网关链的 T034、T038，以及 T037。关键链上的任务优先派发、优先评审；同一波里的其他任务用空档。
+M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077）、兼容链（T047、T064、T066）、网关链的 T034、T038，以及 T037。M1b 里松弛为 1 的是 T123 和新增的 T132。关键链上的任务优先派发、优先评审；同一波里的其他任务用空档。
 
 ## 4. 派发波次与检查点
 
@@ -971,7 +1004,7 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 | W5 | T005、**T033**、T037、T042、T055、T071、T073 | T055 合并后假 agent 可以经驱动跑通；K1 的 Q8 不通过时在此之后派 T057 |
 | W6 | T034、T036、**T043**、T072、T075、T084 | T043 用进程内驱动替身；T084 只依赖 T071，与 T080 并行 |
 | W7 | T038、**T044**、T047、T061、T076、T080 | T044 合并后 T063、T068 立即可派 |
-| W8 | **T046**、T062、T063、T064、T065、T068、T069、T077、T078、T081、T082、T083 | T078 测量闸门（K2）；T077 含 MAN-keyboard |
+| W8 | **T046**、T062、T063、T064、T065、T068、T069、T077、T078、T081、T082、T083、T086 | T078 测量闸门（K2）；T077 含 MAN-keyboard |
 | W9 | T066、T085、**T090** | T066 用真实 Claude（K12）；T078 不达标时 T079 先于 T016 |
 | W10 | T016、**T091**、**T092**、**T093** | T016 契约冻结（K3） |
 | W11 | **T099** | M1a 退出（K4） |
@@ -981,15 +1014,14 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 
 | 波次 | 任务（可并行） | 说明 |
 |---|---|---|
-| 提前（M1a 期间） | T101（W0 起）、T102（W0 起）、T104（W3 起）、T105（W6 起）、T110（W5 起）、T114（W2 起） | SP-10（K5）、Q8 Codex（K6）、Q35（K7）、Q29（K9）的结论都要在用到它们的任务之前出来 |
-| B1 | T106、T107、T111、**T120**、T124、T126、T127、T156、T160、T173 | T106 依赖作者补截的参考图，M1b 的界面任务都等它；T107 先于 SP-6；T160 交付自用构建与"自用前须知" |
-| B2 | T112、**T121**、T123、T125、T140、T141、T142、T143、T150、T161、T174 |  |
-| B3 | T103、T113、**T130**、T145、T146、T151、T172 | T103 SP-6（K8）测场景 1–4、7、8，T152 等它 |
-| B4 | T108、**T131**、T147、T152、T155、T157 | T152 先合并，T131、T147 再按新的 token 重新生成各自新增的基线（1.5）；T131 与 T139 只做其一（K9） |
-| B5 | T144、T153、T171 |  |
-| B6 | **T148**、T170 | T148 开始时作者做 MAN-ui6-full |
-| B7 | **T154** |  |
-| B8 | **T179** | M1b 退出（K10） |
+| 提前（M1a 期间） | T101（W0 起）、T102（W0 起）、T104（W3 起）、T105（W6 起）、T106（W0 起）、T110（W5 起）、T114（W2 起） | SP-10（K5）、Q8 Codex（K6）、Q35（K7）、Q29（K9）的结论都要在用到它们的任务之前出来；T106 的复刻核对要在 T152 之前出来 |
+| B1 | T107、T111、**T120**、T124、T126、T127、T141、T143、T150、T156、T160、T173 | 界面任务按设计 5.7.10 直接开工，不等 T106；T107 先于 SP-6；T160 交付自用构建与"自用前须知" |
+| B2 | T103、T112、**T121**、T123、T125、T140、T142、T146、T161、T174 | T103 SP-6（K8）测场景 1–4、7、8，T152 等它 |
+| B3 | T108、T113、**T130**、T145、T149、T151、T152、T155、T172 | T152 先合并，T130、T145、T149、T151 再按新的取值重新生成各自新增的基线（1.5） |
+| B4 | **T131**、T132、T144、T147、T153、T157 | T131 与 T139 只做其一（K9） |
+| B5 | **T148**、T170、T171 | T148 开始时作者做 MAN-ui6-full |
+| B6 | **T154** |  |
+| B7 | **T179** | M1b 退出（K10） |
 | 条件 | T119（K6 不通过）、T139（K9 不通过，代替 T131）、T158（K5 不通过，代替 T150 的宿主部分）、T159（K8 有不达标项）、T162（K7 通过） | 只在触发时派发 |
 
 ### 4.3 发布（推迟）
@@ -1015,7 +1047,7 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 | K5 | SP-10 通知身份 | T101（可提前） | helper 能申请授权、弹通知、点击后激活主 App | T150 | T158（主进程通知后备） | T150、T170 |
 | K6 | Q8（Codex） | T102（可提前） | 同 K1 | 按原设计写 T111 | T119 | T111、T172（E2E-six-sessions） |
 | K7 | Q35 本机签名 | T105（可提前） | **私钥隔离**（同用户进程无用户输入时签名失败）；负面矩阵全部被拒；hardened runtime 与库校验下各组件可运行；CLI 能接入 | T162，并补设计和 ADR-05 | 维持退化模式，T162 不派发 | 见 7.3 |
-| K8 | SP-6 | T103（M1b B3）；T108 | 5.9.6 与 5.9.7 的预算 | T152、T155 | T159（规模待定）；只有部分指标不达标时 T152 照常进行，触发 ADR-03 的改变条件时停下讨论 | T152、T155，最坏情况影响整个桌面端 |
+| K8 | SP-6 | T103（M1b B2）；T108 | 5.9.6 与 5.9.7 的预算 | T152、T155 | T159（规模待定）；只有部分指标不达标时 T152 照常进行，触发 ADR-03 的改变条件时停下讨论 | T152、T155，最坏情况影响整个桌面端 |
 | K9 | Q29 审查文档 | T104（可提前） | 5.9.7 场景 9 与 5.7.5 的 8 点 | T131 | T139（DiffHunksRenderer） | T131 或 T139、T171、E2E-SEC-review-iso |
 | K10 | M1b 退出 | T179 | 5.12.3 的退出标准 ①②③；同一提交上 `xtask ci pr` 与 `xtask ci nightly` 各通过一次；M1b 的待完成登记为空；缺口经用户确认 | 进入 M2 | — | — |
 | K11 | 账号到位 | 用户 | 用户开通 Apple Developer Program | 派发 T180–T184 | 发布组继续悬空 | 发布组 |
@@ -1075,11 +1107,12 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 | | 基本加固（sandbox、CSP 与 Trusted Types、`app://cupper`、开关白名单、导航限制） | T074、T080（Trusted Types 策略） |
 | | windowBridge 的测量闸门 | T078（不达标：T079） |
 | | ShellAPI（M1a 的完整接口，冻结） | T070、T071、T076、T077、T016 |
-| | 界面：外框与 token | T084 |
-| | 界面：侧边栏、添加项目与信任确认、各类横幅、弱认证标记、重连状态、Toaster | T081 |
+| | 界面：token（设计 5.7.10）、三栏外框、窄窗口行为 | T084 |
+| | 界面：侧边栏（状态的转圈、蓝点、文字标签）、添加项目与信任确认、各类横幅、弱认证标记、重连状态、Toaster（顶部居中） | T081（`pending_kind` 在 T011、T034） |
 | | 界面：新建会话（Claude、本地模式） | T085 |
 | | 界面：消息流（按行虚拟化、streamdown、工具摘要、思考、错误、提示、带状态的回合标题） | T082 |
-| | 界面：审批与提问卡片、排队条、输入框 | T083 |
+| | 界面：请求面板与请求记录行（待命期、数字键与焦点规则） | T083（主进程的规则在 T077，宿主核对 `digit` 在 T031） |
+| | 界面：输入框（发送按钮三态、两次 Esc）与排队消息的预览 | T086 |
 | | 文案走 i18n 的键 | T070、T080（ESLint 规则） |
 | | 只有开发构建和 e2e 构建 | T074、T005 |
 | 测试 | 宿主集成测试（故障点、`data_epoch`、6 个会话共用假适配器） | T062、T063、T068、T069（网关层在 T033） |
@@ -1103,20 +1136,23 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 | Git 与 worktree | git 服务全部方法（三档、Q32、LFS） | T120、T121、T123（快照档在 T061） |
 | | 新建 worktree（CP-5） | T124 |
 | | 归档、恢复与清理（PS-3、GT-5） | T125、T153 |
-| | 审查面板（GT-1 至 GT-4，含行内评论） | T130、T131 或 T139、T126（评论排成文本） |
+| | 审查面板（GT-1 至 GT-4；文件树与整组操作；行内评论进输入框的附件条） | T130、T131 或 T139、T126（评论排成文本） |
 | | "清除快照对象" | T127、T147 |
 | 输入框 | `@` 文件搜索、拖入文件 | T142、T126 |
 | | 图片粘贴、斜杠命令菜单、↑ 恢复、Enter/⌘Enter | T145、T126 |
 | | 模型、推理强度、权限模式（档位规则、完全访问的原生确认） | T141、T144 |
-| | Steer | T140 |
-| 消息流 | 代码高亮、计划与待办、错误的恢复指引 | T143 |
+| | Steer（默认插话、⌘Enter 排队、"跟进消息默认排队"） | T140、T147（设置项） |
+| | 排队消息的编辑与插话（`session/queue_edit`） | T149 |
+| 消息流 | 代码高亮、计划与待办、计划药丸、错误的恢复指引 | T143 |
 | | 按回合折叠与耗时、晚到输出的显示 | T146 |
+| | 回合改动卡片与撤销 | T132 |
 | 关注度与通知 | 系统通知、`ui/navigate` | T150（不通过：T158） |
 | | 跳到下一个需要处理的会话 | T153 |
 | agent 状态 | 设置页的 agent 状态与重启 | T151（`agents/restart` 在 T111） |
-| 界面打磨 | Codex 式三栏布局 | T084（外框）、T152（视觉调整） |
+| 界面打磨 | 100% 复刻 Codex 的布局与 token | T084（token 与外框）、T081–T086（M1a 的组件）、T152 |
 | | 亮暗主题 | T084（token）、T152（暗色） |
-| | 视觉（UI-6） | T106、T148、T152 |
+| | 视觉（UI-6） | T106（核对）、T148、T152 |
+| | 半透明侧边栏 | T152、T147（设置项） |
 | | 设置页各项（含存储、安装命令行工具） | T147、T151 |
 | | 快捷键、UI-0 的"打开" | T153（`workspace/open` 在 T126） |
 | | 中英文 | T154 |
@@ -1148,36 +1184,36 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 | PS-1 | UI-layout → T152（外框 UI-shell 在 T084） |
 | PS-2 | E2E-project-add-trust → T093；IT-trust-stale、IT-trust-rescan-before-prompt、IT-trust-settingsources → T068；COMPAT-untrusted-project → T066（`-claude`）、T113（`-codex`） |
 | PS-3 | IT-session-archive-restore → T125；E2E-archive-cleanup → T153 |
-| PS-4 | UNIT-index-status → T034；E2E-next-needs-action → T153 |
+| PS-4 | UNIT-index-status → T034；UI-sidebar → T081；E2E-next-needs-action → T153 |
 | PS-8 | E2E-NFR1-5 → T091；IT-history-from-host → T062 |
-| CP-1 | UNIT-composer-ime → T083；E2E-send-key-setting → T145；MAN-ime → T108 |
+| CP-1 | UNIT-composer-ime → T086；E2E-send-key-setting → T145；MAN-ime → T108 |
 | CP-2 | E2E-image-paste → T145；E2E-file-ref → T142 |
 | CP-3 | E2E-slash-commands → T145 |
 | CP-4 | UNIT-tier-rules → T031；IT-config-unconfirmed → T068；E2E-full-access-native → T141 |
 | CP-5 | IT-worktree-create → T124；E2E-S1 → T170 |
-| CP-6 | PROP-queue-fifo → T040；IT-K10-steer-explicit-only、IT-K11-steer-idle-queued → T140；E2E-NFR1-2 → T091 |
+| CP-6 | PROP-queue-fifo → T040；IT-K10-steer-explicit-only、IT-K11-steer-idle-queued、E2E-composer-steer-default → T140；IT-queue-edit、E2E-queue-edit → T149；E2E-NFR1-2 → T091 |
 | CP-7 | PROP-interrupt-10s → T040；IT-K1-close-resume → T063；E2E-NFR1-2 → T091 |
 | MS-1 | UI-stream-markdown、UNIT-md-injection → T082；UI-code-highlight → T143 |
 | MS-2 | IT-thought-claude → T063；GOLD-A-codex-s02 → T110；COMPAT-claude-thinking → T066 |
 | MS-3 | GOLD-A-tool-fields → T053（`-claude`）、T110（`-codex`）；UNIT-final-items、UNIT-grouping → T041；UI-stream-tools → T082；UI-stream-fold → T146 |
-| MS-4 | GOLD-A-claude-s05 → T053；GOLD-A-codex-s05 → T110；IT-plan-entries → T063 |
+| MS-4 | GOLD-A-claude-s05 → T053；GOLD-A-codex-s05 → T110；IT-plan-entries → T063；UI-plan（含计划药丸）→ T143 |
 | MS-5 | IT-K6-crash-resume、IT-K6-output-then-crash → T063；IT-K7-restartable、IT-K17-text-error → T112；E2E-error-guidance → T143 |
-| AP-1 | E2E-SEC-real-input → T092；E2E-approve-enter-esc → T093；MAN-keyboard → T077、T107（每个 Electron 大版本一次） |
+| AP-1 | E2E-SEC-real-input、E2E-SEC-panel-arming → T092；E2E-approve-enter-esc → T093；MAN-keyboard → T077、T107（每个 Electron 大版本一次） |
 | AP-2 | GOLD-A-option-map、UNIT-option-map → T053（`-claude`）、T110（`-codex`）；E2E-persistent-option-native → T093 |
 | AP-3 | IT-notification-intent → T062；MAN-notification → T101（`-spike`）、T150（`-product`） |
 | AP-4 | E2E-NFR1-3 → T091 |
-| AP-5 | IT-form、IT-plan-confirm → T068；E2E-question-card → T093 |
+| AP-5 | IT-form、IT-plan-confirm → T068；E2E-question-panel → T093 |
 | GT-1 | IT-git-diff-scopes → T120；IT-git-snapshot-parity → T061；E2E-S3 → T171 |
 | GT-2 | E2E-review-comment → T131（K9 不通过时 T139） |
-| GT-3 | IT-git-hunk → T121 |
+| GT-3 | IT-git-hunk → T121；E2E-turn-changes-undo → T132 |
 | GT-4 | IT-git-commit-push → T123 |
 | GT-5 | IT-worktree-check-rules → T125 |
 | UI-0 | E2E-workspace-open → T153 |
 | UI-2 | UI-settings → T151（`-agents`）、T147（`-general`） |
 | UI-3 | UI-theme → T152 |
-| UI-4 | E2E-shortcuts → T153 |
+| UI-4 | E2E-shortcuts → T153；UNIT-composer-esc → T086 |
 | UI-5 | UI-locale → T154 |
-| UI-6 | MAN-ui6 → T152（`-shell`）、T148（`-full`）；视觉规格 T106 |
+| UI-6 | MAN-ui6 → T152（`-shell`）、T148（`-full`）；UI-shell、UI-shell-narrow → T084；复刻核对 T106 |
 | SEC-6 | E2E-SEC-egress → T092；宿主的 Seatbelt 外发检查 → T069（IT-host-egress-seatbelt） |
 | SEC-8 | UNIT-policy-matrix → T031；UNIT-release-features → T023；IT-process-hygiene → T055；E2E-SEC-csp、E2E-SEC-real-input、E2E-SEC-privileged、E2E-SEC-fake-host、E2E-SEC-egress → T092；E2E-SEC-review-iso → T131；E2E-SEC-switches → T161；SMOKE-SIGNED-codesign-auth、SMOKE-SIGNED-no-weak-auth、SMOKE-SIGNED-cli-readonly、SMOKE-SIGNED-reattach、SMOKE-SIGNED-handshake-matrix、SMOKE-SIGNED-reject-fake-host、SMOKE-SIGNED-reject-weak-host → T181 †（Q35 通过时，T162 的 MAN-local-signed 在作者机器上覆盖其中的握手、重连和 `weak_auth`）；另有新增的 E2E-SEC-no-key-client、E2E-SEC-double-initialize、E2E-SEC-cli-fake-host → T092；IT-sys-peer-current、UNIT-sys-uniqueid → T021（IT-sys-peer-macos14、IT-sys-peer-macos15 为缺口）；IT-devkey-launcher-only、IT-devkey-orphan-start → T030；UNIT-orphan-policy → T037；IT-host-orphaned → T062；UNIT-cli-host-verify → T045 |
 | SEC-10 | IT-interaction-expire → T068；UNIT-digest-jcs → T010 |
@@ -1254,6 +1290,12 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 | Q33 | 闸门不达标时 | T079 |
 | Q34 | M1a 兼容套件（Claude）、M1b（Codex） | T064、T066、T113；结论写进 T157；需要调整扫描范围时另开缺陷修复任务改 T035 |
 | Q35 | M1b 技术验证 | T105（通过条件含私钥隔离；通过：T162）。设计 v1.3 已更正：退化模式下 CLI 照常只读接入，Q35 的收益是 NFR-8 成立、UI 和 CLI 都按签名身份校验宿主 |
+| Q36 | T106 | T106；结论影响 T084 的侧边栏宽度 |
+| Q37 | T106；T152 之前 | T106、T152 |
+| Q38 | T106 | T106；需要显示时另开任务 |
+| Q39 | T106；T145 之前 | T106、T145 |
+| Q40 | T106 | T106；结论落到 T082、T086、T131、T145 |
+| Q41 | 安全工程师确认；T077、T083 派发之前 | 编排者（8.2 的 P-23）；T077、T083、T092、T130、T150 |
 | SP-4b #7 | M1a 驱动任务前 | T003（Claude）、T102（Codex） |
 | SP-4b #6 | 实现时 | T021（`SCM_RIGHTS` 被丢弃） |
 
@@ -1269,10 +1311,10 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 | | ④ `item.delta` 的 `field` 与 `output_state` | T011、T041 |
 | | ⑤ 完整摘要与 RFC 8785 | T010 |
 | | ⑥ 要批准的内容不截断 | T011、T042 |
-| | ⑦ 策略语义（档位、信任门控、输入证据、未知 kind） | T031、T044 |
+| | ⑦ 策略语义（档位、信任门控、输入证据（v1.4：数字键 `digit`）、未知 kind） | T031、T044 |
 | | ⑧ ShellAPI | T070、T071、T076、T077 |
 | | ⑨ 宿主启动契约 | T023 |
-| 第 2 组 | 时间字段、`final_item_ids`、活动组、`ToolCall` 字段与必填表、晚到输出、信任与 `project_config`、`confirm_config`、快照与 diff 的字段、`Option.effect` 的新字段、错误 reason 与 notice code、`ui/navigate`、`host/status.pid`、schema 注解与视图格式 | T010、T011、T013、T014（实现分布在相应的宿主任务） |
+| 第 2 组 | 时间字段、`final_item_ids`、活动组、`ToolCall` 字段与必填表、晚到输出、信任与 `project_config`、`confirm_config`、快照与 diff 的字段、`Option.effect` 的新字段、错误 reason 与 notice code、`ui/navigate`、`host/status.pid`、schema 注解与视图格式；v1.4 的 `SessionSummary.pending_kind`、`queue.updated` 条目的 `content`、`session/queue_edit` 的 `ops` | T010、T011、T012、T013、T014（实现分布在相应的宿主任务；`queue_edit` 在 T149） |
 | 第 3 组 | 审查文档、仓库档写与用户档、Codex 提取层、安装空窗与签名后冒烟与许可证第二层、`pathForFile` | T131、T121、T123、T110–T112、T181–T183 †、T142 |
 | 机制 | `released/v1-m1a.json`、`schema-compat`、ShellAPI 快照 | T016 |
 
@@ -1298,6 +1340,24 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 | 每晚的其他检查（差分测试、性能趋势） | T072、T047 | T061、T078、T155 |
 | 本机执行的约束（1.8：干净检查、机器级锁、逐编号结果清单、e2e 产物哈希、性能历史入库） | T001（UNIT-ci-summary、UNIT-ci-lock） | T002（里程碑退出读入库的结果清单）、T090（产物由当前提交构建）、T047（性能历史） |
 
+### 5.8 界面复刻：F3 定为进 M1 的元素
+
+对照用户决定 F3（`docs/meetings/2026-10-19-ui-fidelity/minutes.md`）和设计 v1.4。
+
+| 元素 | 设计 | 任务 |
+|---|---|---|
+| 运行中的转圈、未读蓝点、"等待批准"与"需要用户输入"的文字标签 | 5.7.4 侧边栏；`SessionSummary.pending_kind` | T081（界面）、T034（计算）、T011（类型） |
+| 发送按钮的三种状态 | 5.7.4 输入框 | T086 |
+| 排队消息的预览、编辑、插话 | 5.7.4 排队消息；5.3.4 `session/queue_edit` | T086（预览、暂停与继续）、T149（编辑与插话）、T140（插话的宿主路径） |
+| 计划药丸"第 n / m 步" | 5.7.4 计划 | T143 |
+| 回合末尾的改动卡片 | 5.7.4 回合改动卡片 | T132 |
+| 审查面板的文件树和底部的整组操作 | 5.7.5 审查面板 | T130 |
+| 窄窗口时的行为 | 5.7.4 三栏与尺寸 | T084 |
+| 半透明侧边栏 | 5.7.4 窗口与顶栏 | T152（`vibrancy` 与回退）、T147（设置项） |
+| toast 的位置 | 5.7.4 其他 | T081 |
+
+仍是 P1（M2）的，设计只预留位置，本计划不派任务：内置终端抽屉（UI-1）、摘要卡片、侧边栏搜索、Activity 视图、组织和排序菜单、置顶分组、不属于项目的"聊天"分组。ChatGPT 的全局导航栏不做。
+
 ## 6. 需要用户参与或提供的事项（按时间顺序）
 
 | # | 时间点 | 事项 | 任务 | 用户要做什么 |
@@ -1313,15 +1373,15 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 | 9 | M1a 期间任意时间，T111 之前 | Q8（Codex）并发剧本，消耗额度；运行前自己备份 `~/.codex/config.toml` 和 `hooks.json`（仓库外，0600），运行后看差异报告（新增的 `[projects]` 信任项单独列出），决定保留还是恢复 | T102 | 备份、知悉额度、决定 |
 | 10 | T005、T073 合并后任意时间 | Q35：在专用钥匙串里建代码签名证书（或用免费 Apple ID 登录 Xcode 后把身份迁入专用钥匙串），设置钥匙串密码，验证时按提示输入；通过后设计与 ADR-05 的补充要用户确认 | T105、T162 | 在场操作；确认修订 |
 | 11 | M1a 退出 | 在作者机器上连跑 20 次加 5 次降速变体，可能要几个小时；确认本机替代不了的缺口（IT-sys-peer-macos14、IT-sys-peer-macos15，CI 负载下的稳定性）；M1a 同步会 | T099 | 运行期间不操作机器；确认缺口；参会 |
-| 12 | M1b 开始前 | 按清单补截参考图，放在主仓库的 `.private/references/`（T106 的子 agent 只读）：新建会话页、运行中的会话（含工具行和折叠）、审批与提问卡片、审查面板（含行内评论）、设置页、暗色主题 | T106 | 截图 |
+| 12 | M1b 开始前（T106 之前） | 补截暗色主界面截图，以及 ui-spec 7.3 中需要截图核对的几项（会话行尾的时间与 diff 统计、回到底部按钮、运行中输入框有内容时的发送按钮），放在主仓库的 `.private/references/`（T106 的子 agent 只读） | T106 | 截图 |
 | 13 | M1b B1 | 新的 Electron 大版本上做 MAN-keyboard | T107 | 亲自操作 |
 | 14 | M1b B1 | 自用构建交付：读"自用前须知"；之后只用自用构建处理真实项目；共存测试会同时运行两种构建 | T160 | 阅读；遵守 |
-| 15 | M1b B3 | SP-6 场景 1–4、7、8；Q29 的测量（T104 也可以更早） | T103、T104 | 运行期间不操作机器 |
-| 16 | M1b B4 | SP-6 的 8 小时浸泡；流式输出期间用拼音输入（约 15 分钟） | T108 | 让机器空出 8 小时；亲自输入 |
+| 15 | M1b B2 | SP-6 场景 1–4、7、8；Q29 的测量（T104 也可以更早） | T103、T104 | 运行期间不操作机器 |
+| 16 | M1b B3 | SP-6 的 8 小时浸泡；流式输出期间用拼音输入（约 15 分钟） | T108 | 让机器空出 8 小时；亲自输入 |
 | 17 | M1b | 真实 Codex 的兼容套件，消耗额度；运行前备份配置；入库前抽查录制和报告 | T113 | 备份、知悉额度、抽查 |
 | 18 | M1b（可选） | Q23：用作者自己的 SSH agent、GPG 签名配置手动验证一次提交和推送 | T123 | 可选 |
 | 19 | M1b | MAN-notification 在产品里复核一次 | T150 | 确认现象 |
-| 20 | M1b | 第一次 MAN-ui6：外框、token、两种主题 | T152 | 比对并给意见 |
+| 20 | M1b | 第一次 MAN-ui6：外框、token、两种主题，与本机 Codex 并排比对 | T152 | 比对并给意见 |
 | 21 | M1b 后段 | 第二次 MAN-ui6：全量并排比对，结果交 T148 修正 | T148 | 比对并给意见 |
 | 22 | M1b（建议） | 审阅安全边界说明 | T157 | 审阅 |
 | 23 | M1b 后段 | 作者自用一段时间后，授权子 agent 只读统计本机日志 `~/Library/Logs/cupper-local/` 里的订阅记录 | T174 | 授权 |
@@ -1351,6 +1411,8 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 | R10 真实 CLI 的额度和稳定性：Codex 走自定义网关、常过载（SP-1），结果可能"不确定" | 最便宜的模型、限定剧本；"不确定"允许有上限地重跑（T066 的注）；K12 给出 M1a 的退路 |
 | R11 Apple 账号推迟，发布组整体悬空；Electron 大版本在开发期间更替 | 已按 v1.1 移出 M1b；T182 不需要账号，可以按需提前；T107 在 SP-6 前跟进 Electron，之后按 5.10.6 的节奏 |
 | R12 以后建远端时，历史里可能有个人信息，公开仓库的 Actions 可能被外部贡献者利用 | 1.8"以后建远端时"一行的清单 |
+| R13 安全工程师可能不接受请求面板的部分按键规则（设计 Q41） | T077、T083 派发之前拿到确认；退回方案已写进设计（数字键只选中、Enter 提交），只影响 T083、T077 的局部和 T093 的用例 |
+| R14 Codex 客户端在开发期间改版，复刻的基准变化 | 以 R06 记录的版本（26.1013）为基准；T148 的 MAN-ui6-full 按当时本机的版本再比对一次，差异由编排者决定是否跟进 |
 
 ### 7.3 检查点不通过时的返工范围
 
@@ -1370,7 +1432,7 @@ M1a 里松弛为 1 的还有桌面链（T015、T071、T073、T075、T076、T077�
 
 ### 8.1 已定
 
-v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P02-plan-revision/brief.md)）；v0.2 的 P-16 至 P-19 由设计 v1.3 处理，P-20 已裁定（[第 2 轮任务书](tasks/P02-plan-revision/brief-r2.md)）。
+v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P02-plan-revision/brief.md)）；v0.2 的 P-16 至 P-19 由设计 v1.3 处理，P-20 已裁定（[第 2 轮任务书](tasks/P02-plan-revision/brief-r2.md)）；v0.3 的 P-21 已由编排者处理。
 
 | # | 问题 | 裁定 | 落点 |
 |---|---|---|---|
@@ -1393,13 +1455,16 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | P-17 | 设计里关于 CI 的措辞按远端写 | 设计 v1.3 的 5.1.6、5.9.1、5.12.2 已改为没有远端时按本机执行 | 1.8 |
 | P-18 | 5.8.1、Q22、5.4.1 没跟上自用构建 | 设计 v1.3 已补四种构建的目录清单，并更正 5.8.1、Q22 | T160、第 6 节 |
 | P-19 | `dev_key` 绑定拉起宿主的父进程 | 采纳，设计 v1.3 的 5.8.1：用 `p_puniqueid` 比对，启动时 ppid 为 1 就退出，只限 `dev_key`，父进程退出后进入"孤立"状态 | T021、T030、T037、T062 |
-| P-20 | T106 读参考图 | 由子 agent 执行；brief 写明主仓库里参考图的路径 `.private/references/`，只读不改；只产出文字规格，参考图不复制进 worktree、不入库，规格里不嵌入图像 | T106、1.11 |
+| P-20 | T106 读参考图 | 由子 agent 执行；brief 写明主仓库里参考图的路径 `.private/references/`，只读不改；只产出文字规格，参考图不复制进 worktree、不入库，规格里不嵌入图像（v1.1：T106 改为复刻核对，仍按这条执行） | T106、1.11 |
+| P-21 | 改了 5.7.9 的 Fuses 格，`02-design.md` 头部的版本说明没有改 | 编排者已处理（2026-10-19）：v1.3 的说明补了一句，5.7.8 的 Fuses 括注改为"e2e 构建和自用构建关闭" | 设计 v1.3 |
 
 ### 8.2 仍待处理
 
 | # | 问题 | 涉及 | 建议 | 何时需要定 |
 |---|---|---|---|---|
-| P-21 | 按 P02 第 2 轮的授权改了 5.7.9 自用构建一列的 Fuses 格（关闭 `enableCookieEncryption`），`02-design.md` 头部的版本说明没有改，不在授权范围内 | `02-design.md` | 已处理（2026-10-19，编排者）：v1.3 的说明补了一句，5.7.8 的 Fuses 括注改为"e2e 构建和自用构建关闭" | — |
+| P-22 | ADR-03、ADR-07 与设计 v1.4 不一致：请求面板的输入保护（原写"卡片出现后约 500 ms、Enter 只在焦点位于卡片上时生效"）、跟进消息的默认行为（原写"默认排队"） | 设计 5.13.2 的两行 v1.4 | 编排者按 5.13.2 修订 ADR | T077、T083、T140 派发之前 |
+| P-23 | 请求面板替换输入框后的真实输入规则，以及两处有意保留的差异（系统通知不放"批准"、还原不提供"不再询问"），待安全工程师确认（设计 Q41） | 设计 5.7.8 | 编排者交安全工程师；不接受数字键直接提交时，按设计的退回方案改 T083、T077 | T077、T083 派发之前 |
+| P-24 | PRD 界面页 `docs/01-prd-ui.html` 上标"待 D04"的各处，设计 v1.4 已定（agent 标识与选择器的位置、"撤销"、审批面板的自由输入、选项菜单、推荐徽标、⌘.、"不再询问"、通知按钮）；另有一处不同：页面的左栏按 340 画，设计取 288（Q36） | `docs/01-prd-ui.html` | 下次修订页面时同步 | T106 之后 |
 
 ## 9. 进度
 
@@ -1474,11 +1539,12 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T078 测量闸门：主进程转发
 - [ ] T079 （条件）utilityProcess 宿主桥加委托票据
 - [ ] T080 ui-core I：状态层与安全规则
-- [ ] T081 ui-core III：侧边栏与全局状态
+- [ ] T081 ui-core III：侧边栏、横幅与 toast
 - [ ] T082 ui-core IV：消息流
-- [ ] T083 ui-core V：交互卡片、排队条与输入框
+- [ ] T083 ui-core V：请求面板与请求记录行
 - [ ] T084 ui-core II：token、三栏外框、页面骨架与截图测试
 - [ ] T085 ui-core VI：新建会话页（M1a）
+- [ ] T086 ui-core VII：输入框与排队消息（M1a）
 - [ ] T090 e2e 基础设施
 - [ ] T091 NFR-1 验收套件
 - [ ] T092 安全 e2e 与外发检查
@@ -1492,7 +1558,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T103 SP-6 渲染压力测试：场景 1–4、7、8
 - [ ] T104 Q29 审查文档可行性（SP-6 场景 9）
 - [ ] T105 技术验证：Q35 本机签名身份
-- [ ] T106 视觉规格
+- [ ] T106 复刻核对：暗色与未核实项
 - [ ] T107 Electron 大版本跟进
 - [ ] T108 SP-6 场景 5、6：浸泡与输入法
 - [ ] T110 Codex 提取层、选项对照表与 A 层金样例
@@ -1510,6 +1576,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T127 存储用量与清除快照对象
 - [ ] T130 审查面板：主文档部分
 - [ ] T131 审查文档（独立源 iframe）
+- [ ] T132 回合改动卡片与撤销
 - [ ] T139 （条件）审查面板后备：DiffHunksRenderer
 - [ ] T140 Steer：宿主、驱动、CLI 与界面
 - [ ] T141 配置选择：set_config 与模式选择器
@@ -1520,9 +1587,10 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T146 消息流增强 II：回合折叠与晚到输出
 - [ ] T147 设置页 II：通用、通知、外观、存储与命令行工具
 - [ ] T148 复刻度修正
+- [ ] T149 排队消息的编辑与插话
 - [ ] T150 系统通知与 ui/navigate
 - [ ] T151 设置页 I：agent 状态、连接与已归档会话
-- [ ] T152 视觉调整：token 取值、暗色主题与窗口外观
+- [ ] T152 视觉调整：暗色核对结果、半透明侧边栏与窗口外观
 - [ ] T153 会话管理界面、快捷键与"打开"按钮
 - [ ] T154 中英文与截图基线
 - [ ] T155 SP-6 场景改写为性能回归
@@ -1556,3 +1624,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v0.2 | 2026-10-19 | 按计划评审第一轮意见和编排者裁定修订（P02）：本机 CI（U-P1）；用例登记改为登记表加自动推导；验收改挂与依赖补全；集成测试与界面任务重新拆分；复刻度检查贯穿 M1b；自用构建的身份与加固；新增 T068、T069、T084、T085、T106、T107、T108、T148，T067、T122 并入其他任务；待处理改为"已定"和 P-16 至 P-20。逐条回应见 `tasks/P02-plan-revision/responses.md` |
 | v0.3 | 2026-10-19 | 落实三位评审者第二轮确认附加的 17 条条件（P02 第 2 轮）：本机 CI 细则、5.8.1（设计 v1.3）的任务落点、M1b 界面任务依赖 T106、自用构建的 fuses 与 entitlements、更正退化模式下 CLI 的行为；P-16 至 P-20 移入已定，新增 P-21。明细见 2.5，落点见 `tasks/P02-plan-revision/responses.md` 的"第 2 轮" |
 | v1.0 | 2026-10-19 | 用户确认任务的顺序和粒度，打 tag `gate/plan`；用户决定不向上游反馈 Q7、K19（见计划评审纪要"用户确认"一节） |
+| v1.1 | 2026-10-19 | 按用户决定"界面 100% 复刻 Codex"修订（D04，设计 v1.4、PRD v1.3）：界面任务按 Codex 规格改写；请求面板（T083）与输入框（新增 T086）分开；新增 T132、T149；T106 改为复刻核对并可以提前，M1b 的界面任务不再依赖它；覆盖核对加 5.8（F3 的元素）；待处理改为 P-22 至 P-24。明细见 2.6 |

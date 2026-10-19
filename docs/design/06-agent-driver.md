@@ -201,7 +201,7 @@ ACP 的 `configOptions` 按 `category` 映射到 cupper 的配置项，具体取
 | K7 | Codex app-server 被杀（s07） | `1001`，`restartable: true` | 回合标为 `failed` 并提示；下一个 prompt 由适配器自动重启 app-server | GOLD-A-codex-s07；IT-K7-restartable |
 | K8 | 回放不完整、没有时间戳（#1297、#1307、#617） | 回放不能当历史 | 历史只用宿主自己的日志；`session/load` 只用于 PS-5 导入，导入内容标"可能不完整" | GOLD-A-claude-s09；IT-history-from-host（宿主重启后 `history/page` 来自回合快照） |
 | K9 | 回合外的更新（s06） | 后台命令结束后 Claude 自发开回合；空闲时 steer 启动回合；Codex 补发遗留输出 | 开 `autonomous` 回合；K3 的遗留输出按 K3 处理；自发回合结束后的出队保护见 [5.2.6](02-host.md#回合状态机) | GOLD-A-claude-s06；IT-K9-autonomous（`autonomous`，含"静默超过阈值后又继续输出"）；PROP-autonomous-dequeue-guard |
-| K10 | Claude steering 的副作用（s06） | 工具调用被丢弃、命令被移到后台 | 默认排队；只有用户明确选择"插话"才 steer（ADR-07） | IT-K10-steer-explicit-only；E2E-composer-steer-default |
+| K10 | Claude steering 的副作用（s06） | 工具调用被丢弃、命令被移到后台 | 宿主只在客户端明确要求 `steer` 时插话；界面默认插话（v1.4，PRD CP-6 v1.3 与用户决定 F5），设置里可以改为默认排队，副作用在设置说明和第一次插话时提示（ADR-07 的修订建议见 5.13.2） | IT-K10-steer-explicit-only；E2E-composer-steer-default |
 | K11 | Codex 忽略 `idleBehavior`（s06） | 空闲时 steer 直接开新回合 | 宿主只在回合处于 `Prompting` 时 steer | PROP-steer-only-prompting；IT-K11-steer-idle-queued |
 | K12 | Codex 的计划确认请求发出时线程状态已是 `idle`（s05） | 若以 `threadStatus` 判断回合结束，会把还在等确认的回合提前结束 | **有 prompt 在途时，回合以 prompt 响应为准**；`threadStatus` 只用于显示运行状态和界定 `autonomous` 回合，变成 idle 也不会让挂着的交互请求失效（纪要 D3） | GOLD-A-codex-s05；IT-K12-plan-confirm-idle（`thread_status idle` 加 `plan_confirm`）；PROP-prompt-inflight-no-end |
 | K13 | cwd 必须是真实路径（s08） | Codex 按 cwd 过滤时用 `/var/...` 得到 0 条 | 一律传 realpath | UNIT-realpath；IT-K13-echo-cwd（假 agent `echo_env` 回显 cwd） |
