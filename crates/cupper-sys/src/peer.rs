@@ -130,9 +130,15 @@ pub fn peer_token(socket: impl AsFd) -> Result<AuditToken, Refusal> {
         .map_err(|mut refusal| {
             // `EINVAL` when the process of the latest I/O has exited while
             // another one still holds the other end; `LOCAL_PEERPID` still
-            // names it then.
+            // names it then. The last holder may close the other end between
+            // the two calls (a process starting on another thread holds a
+            // copy of every fd for a moment): `LOCAL_PEERPID` then fails with
+            // `ENOTCONN`, and the peer has exited all the same.
             if refusal.code == i64::from(libc::EINVAL)
-                && peer_pid(socket).is_ok_and(|pid| unique_ids(pid).is_none())
+                && peer_pid(socket).map_or_else(
+                    |closed| closed.kind == RefusalKind::PeerExited,
+                    |pid| unique_ids(pid).is_none(),
+                )
             {
                 refusal.kind = RefusalKind::PeerExited;
             }
@@ -616,8 +622,11 @@ mod tests {
         let refusal = token.unique_id().unwrap_err();
         assert_eq!(refusal.kind, RefusalKind::PeerExited, "{refusal}");
 
-        // Nobody holds the other end any more.
+        // Nobody holds the other end any more once we read end of file. Until
+        // then a spawn on another thread may still hold a copy (`fd_lock`),
+        // and the token query still fails with `EINVAL`, as above.
         drop(client);
+        assert_eq!(lines.read(&mut [0u8]).unwrap(), 0, "end of file");
         let refusal = peer_token(&server).unwrap_err();
         assert_eq!(
             (refusal.kind, refusal.code),
