@@ -95,3 +95,63 @@ A 里有一块分不开的固定成本：actor 的循环与执行（A4）、管�
 6. **网关的 `Peer`**：IT 要经过策略和账本，需要把 `dispatch/tests.rs` 里私有的 `Peer` 挪到 `gateway/testkit.rs`，只改可见性，不改行为。
 7. **`interaction.responded` 审计**：网关的审计记录现在都按连接组织；打算加一种带 `ConnId` 的记录，由会话 actor 发进同一个 channel，落盘归 T059。
 8. **UNIT-unsupported-set**：T033 已经用 `Routes::sessions` 登记了 M1a 的会话方法，允许表里没有本任务要删的行。
+
+## 裁定之后（计划 v1.3.11）
+
+编排者采用方案一：本任务只做 A，上限放宽到约 2,100 行，硬停止线 2,200 行；B 归 T088，C 归 T089。上面 7 项待裁定全部认可，写进了 `02-host.md` 5.2.6 末尾"T043 开工前的裁定"。
+
+### 实际规模
+
+按 `git diff --numstat` 统计，不含本笔记和 CI 摘要。
+
+| 提交 | 内容 | 增 | 删 |
+|---|---|---|---|
+| `feat(host): keep a queued message's reply_to …` | `0001` 和 5.4.2 的 `queue_entries.reply_to` | 2 | 0 |
+| `feat(host): add Alarm …` | `pure/alarm.rs` | 85 | 2 |
+| `refactor(host): make the session's composed core …` | `session/core.rs`（从 `session_props.rs` 挪来）；`TurnMachine::turn_id`、`Coalescer::set_stops_commands` | 230 | 168 |
+| `feat(host): add AgentPort …` | `driver/api.rs` | 20 | 3 |
+| `test(host): move the dispatch tests' Peer …` | `gateway/testkit.rs` | 82 | 74 |
+| `feat(host): run sessions in actors …` | `actor.rs` 533、`manager.rs` 389、`rows.rs` 175、`mod.rs` | 1,130 | 12 |
+| `test(host): IT-orch-lifecycle` | `session/tests.rs` | 479 | 1 |
+| 合计 | | **2,028** | 260 |
+
+挪动的代码（`Session` 约 160 行、`Peer` 约 75 行）同时计入增和删，净增约 1,770 行。`actor.rs` 第一稿 552 行、`rows.rs` 251 行、测试 609 行，合计超过了硬停止线；在提交之前压缩：行的写法改成"语句加参数"的表，测试的断言改成单行（行拼成字符串、事件类型拼成一行、错误码拼成 `code reason`）。
+
+### 实现要点
+
+- **组合核心**（`session/core.rs`）：`session_props.rs` 的 `Session` 原样提成正式代码，性质测试改用它。`Input::Asked`、`Input::Resolved` 和 Settle 时结清请求的计数，是交互代理的位置，T088 换成 `InteractionBroker`。
+- **actor 的一步**：
+  - 每个输入是核心的一步；快照的回复作为下一个输入，各自一个批次。
+  - 一步的事件、它改动的行、命令的账本记录在同一个事务里提交（`Batch::with`）；之后才回复、发驱动命令、起 attach 的 task。
+  - 没有事件、只有行的一步（例如 resume 回来的 attach），行和账本记录经写线程单独提交。
+  - 前置条件不满足（`queue_full`、`turn_mismatch`）的命令用 `Ticket::reject`，不记录。
+  - `Appended::rejected` 不为空时，测试和 test-harness 构建里 panic，其他构建写 stderr。
+- **定时器**：`TimerTable` 加 `Alarm`；到期后一次取一个键送进核心，因为前一步可能取消后一个。
+- **attach**：另起 task，结果从 channel 回来。带回的能力和配置变了才写 `session.capabilities`、`session.configured`；`agent_session_id` 写进行；合并器的 `interrupt_stops_commands` 按能力更新。
+- **行**（`rows.rs`）：
+  - `turn.started` 插入 `turns`，`sessions.state` 改为 `running`，同时清空 `initial_prompt_json`；
+  - `turn.completed` 更新 `turns` 和 `sessions.state`（`failed` → `error`，`interrupted` → `interrupted`，其余 → `idle`）、`last_turn_end_seq`；
+  - `snapshot.recorded` 更新 `turns.snapshot_status`；
+  - `queue.updated` 整体替换本会话的 `queue_entries`，`command_id` 由 actor 记下每条排队消息来自哪个命令；
+  - `session.configured` 更新 `config_json`。
+- **`session/create`**：本地模式。查项目行和信任（`policy::attach`）、能力缓存；模式按缓存里的 `risk` 换成档位，换不出就当 `full_access`，再 `policy::tier_change`。一个事务写 `sessions` 行（含 `initial_prompt_json`，标题取第一条消息的预览，`title_source: prompt`，`mode_set_by` 为创建者）、`session.configured`、`workspace.ready` 和账本行；提交后才登记句柄、启动 actor、回复。actor 的第一步就是这条消息。
+- **`session/get`**：读 `sessions` 行，状态按 5.2.9 的表从视图和回合算出。
+- **`facts`**：`session/create` 的 `mode_tier` 来自能力缓存；`running_turns` 是各 actor 的运行标志之和。
+- **`reply_to`**：核对归 T088，本任务的 `send` 不写它（`SendRequest.reply_to` 恒为 `None`），列和行的写法已经有了。
+
+## 给其他任务的接入点
+
+- **T088（交互接线）**：
+  - `SessionCore` 的 `asks` 计数换成 `InteractionBroker`；
+  - actor 里 `Action::Machine(CancelAsks | Settle)` 现在不处理，`DriverEvent::Ask` 也没人应答，都从这里接；
+  - `interactions` 的行加在 `Rows::of` 里；
+  - `send` 的 `reply_to` 核对后填进 `SendRequest`；
+  - `facts` 加上 `option`。
+- **T089（恢复、空闲退出、超长输出）**：
+  - `SessionManager::deliver` 找不到句柄时回 `not_found`，按需载入接在这里：先建邮箱、登记句柄，再在 task 里载入，命令顺序不变；
+  - actor 的 `commands`（排队消息到命令的对照）要从 `queue_entries` 恢复；
+  - 空闲退出时关闭邮箱即可，`run` 在邮箱关闭时返回。
+- **T037（宿主组装）**：`SessionManager::new(SessionDeps { streams, writer, readers, clock, ids, durations, agents, quiescence })`，然后 `Routes::start(.., Arc::new(manager), index)`。`SessionManager::new` 自己在静止屏障里登记 `session`。
+- **T044**：信任状态目前只在创建时判定一次，attach 和每次 prompt 之前的重新扫描归 T044；`facts` 对 `session/set_config` 还没有 `mode_tier`。
+- **T055**：实现 `AgentPort`；`SessionDeps.agents` 按 `AgentKind` 放每种 agent 的端口；attach 时传进来的事件发送端收这个会话的全部事件。
+- **T061**：快照端口是 `actor.rs` 的 `skipped()`，换成真正的快照任务，结果同样作为输入回送。
