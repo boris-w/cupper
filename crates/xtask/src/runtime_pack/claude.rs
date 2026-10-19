@@ -1,8 +1,8 @@
 //! The fixed hash of the claude-agent-acp bundle (ADR-08, ADR-11, design
 //! 5.10.3). Its npm tree, Anthropic's SDK included, goes into an isolated
 //! directory that is no input of anything packaged; it is bundled exactly the
-//! way the host bundles it on the user's machine, hashed and deleted.
-//! Optional packages, which carry
+//! way the host bundles it on the user's machine, hashed, scanned for the
+//! environment variables it reads, and deleted. Optional packages, which carry
 //! the Claude Code binaries, are never downloaded. Nothing from the tree runs:
 //! esbuild-wasm only reads it, run by the re-signed Node with PATH as the only
 //! environment variable.
@@ -14,6 +14,7 @@ use std::process::{Command, Stdio};
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
+use super::envscan::{self, Reads};
 use super::fetch::{self, Download, Pin};
 use super::unpack;
 
@@ -26,8 +27,12 @@ pub struct Tools<'a> {
     pub esbuild_main: &'a Path,
 }
 
-/// The sha-256 of the bundle.
-pub fn bundle(isolated: &Path, lockfile: &str, entry: &str, tools: &Tools) -> Result<String> {
+pub struct Bundle {
+    pub sha256: String,
+    pub reads: Reads,
+}
+
+pub fn bundle(isolated: &Path, lockfile: &str, entry: &str, tools: &Tools) -> Result<Bundle> {
     let _cleanup = Cleanup(isolated);
     let _ = fs::remove_dir_all(isolated);
     let downloads = isolated.join(".downloads");
@@ -66,7 +71,10 @@ pub fn bundle(isolated: &Path, lockfile: &str, entry: &str, tools: &Tools) -> Re
         bail!("the bundle script failed ({status})");
     }
     let bytes = fs::read(isolated.join(OUT)).context("cannot read the bundle")?;
-    Ok(fetch::sha256_hex(&bytes))
+    Ok(Bundle {
+        sha256: fetch::sha256_hex(&bytes),
+        reads: envscan::scan(&String::from_utf8_lossy(&bytes)),
+    })
 }
 
 /// Removes the isolated directory however the bundle step ends.

@@ -1,7 +1,8 @@
 //! `cargo xtask runtime-pack [--verify]` (design 5.1.5, 5.10.3): downloads
 //! the Node, codex-acp and esbuild-wasm pinned in `runtime/manifest.json` and
-//! checks them, re-signs the cached Node copy, and computes the
-//! claude-agent-acp bundle hash in an isolated directory. The runtime is staged in
+//! checks them, re-signs the cached Node copy, computes the claude-agent-acp
+//! bundle hash in an isolated directory, and scans both adapters for the
+//! environment variables they read. The runtime is staged in
 //! `target/runtime-pack/Contents/`, laid out like `CupperHost.app/Contents`
 //! (design 5.10.1), for `host-bundle`. Without `--verify` the computed fields
 //! are written back to the manifest and the components' license texts to
@@ -9,6 +10,7 @@
 //! Claude Code never reach the stage or the repository (ADR-11).
 
 mod claude;
+mod envscan;
 mod fetch;
 mod manifest;
 mod sign;
@@ -124,9 +126,17 @@ fn run(root: &Path, verify: bool) -> Result<()> {
     };
     let isolated = cache.join("claude-agent-acp.isolated");
     let bundle = claude::bundle(&isolated, &lockfile, &pinned.claude_agent_acp.entry, &tools)?;
+    let codex_source = fs::read(codex.join("index.mjs")).context("cannot read codex-acp")?;
 
     let mut computed = pinned.clone();
-    computed.claude_agent_acp.bundle_sha256 = bundle;
+    computed.claude_agent_acp.bundle_sha256 = bundle.sha256;
+    computed.env.reads = BTreeMap::from([
+        ("claude_agent_acp".to_owned(), bundle.reads),
+        (
+            "codex_acp".to_owned(),
+            envscan::scan(&String::from_utf8_lossy(&codex_source)),
+        ),
+    ]);
     computed.files = hash_tree(&contents)?;
     let node_hash = computed
         .files
@@ -144,8 +154,8 @@ fn run(root: &Path, verify: bool) -> Result<()> {
     Ok(())
 }
 
-/// Either checks the manifest and the license texts in `source` (`verify`)
-/// or writes them.
+/// Fails on unclassified environment variables; then either checks the
+/// manifest and the license texts in `source` (`verify`) or writes them.
 fn conclude(
     source: &Path,
     pinned: &Manifest,
@@ -153,6 +163,7 @@ fn conclude(
     licenses: &[(PathBuf, &str)],
     verify: bool,
 ) -> Result<()> {
+    envscan::check(&computed.env)?;
     let mut found = if verify {
         manifest::differences(pinned, computed)
     } else {
@@ -218,24 +229,46 @@ mod tests {
     use super::*;
     use crate::testutil::TempDir;
 
-    fn manifest() -> Manifest {
+    fn manifest(reads: &[&str]) -> Manifest {
         let text = r#"{
           "schema": 1,
           "node": { "version": "1", "url": "u", "sha256": "s", "identifier": "i" },
           "codex_acp": { "version": "1", "url": "u", "integrity": "i" },
           "esbuild_wasm": { "version": "1", "url": "u", "integrity": "i" },
           "claude_agent_acp": { "version": "1", "lockfile": "l", "entry": "e", "bundle_sha256": "b" },
+          "env": { "allow": [], "deny": [], "harmless": [], "reads": {} },
           "files": { "Helpers/node": { "sha256": "n", "cdhash": "c" } }
         }"#;
-        serde_json::from_str(text).expect("valid manifest")
+        let mut manifest: Manifest = serde_json::from_str(text).expect("valid manifest");
+        manifest.env = envscan::tests::env(reads);
+        manifest
     }
 
     #[test]
-    fn the_committed_manifest_is_canonical() {
+    fn unit_runtime_pack_envscan_the_committed_manifest_is_canonical_and_classified() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime/manifest.json");
         let committed = Manifest::load(&path).expect("runtime/manifest.json parses");
         let text = fs::read_to_string(&path).expect("read");
         assert_eq!(committed.to_text(), text, "written by `runtime-pack`");
+        envscan::check(&committed.env).expect("every read is classified");
+        assert!(committed.env.reads.contains_key("claude_agent_acp"));
+        assert!(committed.env.reads.contains_key("codex_acp"));
+    }
+
+    #[test]
+    fn unit_runtime_pack_envscan_an_unclassified_read_fails_before_anything_is_written() {
+        let dir = TempDir::new("pack-unclassified");
+        let staged = dir.path().join("LICENSE");
+        fs::write(&staged, "license").expect("write");
+        let licenses = [(staged, "node-LICENSE")];
+        let computed = manifest(&["PATH", "NEW_SWITCH"]);
+        for verify in [false, true] {
+            let err = conclude(dir.path(), &computed, &computed, &licenses, verify)
+                .expect_err("unclassified name");
+            assert!(err.to_string().contains("NEW_SWITCH (codex_acp)"), "{err}");
+        }
+        assert!(!dir.path().join("manifest.json").exists());
+        assert!(!dir.path().join("licenses").exists());
     }
 
     #[test]
@@ -244,8 +277,8 @@ mod tests {
         let staged = dir.path().join("LICENSE");
         fs::write(&staged, "license").expect("write");
         let licenses = [(staged, "node-LICENSE")];
-        let pinned = manifest();
-        let mut computed = manifest();
+        let pinned = manifest(&["PATH"]);
+        let mut computed = manifest(&["PATH", "LC_ALL"]);
         computed.claude_agent_acp.bundle_sha256 = "other".to_owned();
         computed.files.remove("Helpers/node");
 
@@ -253,6 +286,7 @@ mod tests {
         let text = format!("{err:#}");
         for expected in [
             "/claude_agent_acp/bundle_sha256: \"b\" -> \"other\"",
+            "/env/reads/codex_acp/names: +\"LC_ALL\"",
             "/files/Helpers/node: {",
             "runtime/licenses/node-LICENSE differs",
         ] {

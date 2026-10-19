@@ -1,9 +1,10 @@
 //! `runtime/manifest.json` (design 5.10.3). Maintained by hand: the pinned
-//! versions, addresses and hashes of the components. Written by
-//! `runtime-pack`: `files`, the hash of every file the host takes from the app
-//! bundle (paths relative to `CupperHost.app/Contents`, design 5.10.1), and the
-//! claude-agent-acp bundle hash. Keys are in a fixed order (struct fields,
-//! sorted maps), so the file does not depend on serde_json's map order.
+//! versions, addresses and hashes of the components, and the classes of
+//! environment variables (design 5.6.6). Written by `runtime-pack`: `files`,
+//! the hash of every file the host takes from the app bundle (paths relative
+//! to `CupperHost.app/Contents`, design 5.10.1), the claude-agent-acp bundle
+//! hash and the variables each adapter reads. Keys are in a fixed order (struct
+//! fields, sorted maps), so the file does not depend on serde_json's map order.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -13,6 +14,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::envscan::Reads;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
@@ -21,6 +24,7 @@ pub struct Manifest {
     pub codex_acp: NpmPackage,
     pub esbuild_wasm: NpmPackage,
     pub claude_agent_acp: ClaudeAgentAcp,
+    pub env: Env,
     pub files: BTreeMap<String, FileHash>,
 }
 
@@ -51,6 +55,19 @@ pub struct ClaudeAgentAcp {
     pub lockfile: String,
     pub entry: String,
     pub bundle_sha256: String,
+}
+
+/// Classes are names or prefixes ending in `*`: `allow`, the fixed allowlist
+/// the host passes on; `deny`, never passed on, whatever the settings say;
+/// `harmless`, read by an adapter but neither set by the host nor dangerous
+/// when a user passes it on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Env {
+    pub allow: Vec<String>,
+    pub deny: Vec<String>,
+    pub harmless: Vec<String>,
+    pub reads: BTreeMap<String, Reads>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
