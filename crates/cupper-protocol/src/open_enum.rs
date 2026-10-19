@@ -40,6 +40,9 @@ macro_rules! open_enum {
         }
 
         impl $name {
+            /// Wire values this version knows.
+            pub const KNOWN: &'static [&'static str] = &[$($wire),+];
+
             pub fn as_str(&self) -> &str {
                 match self {
                     $( $name::$variant => $wire, )+
@@ -121,6 +124,7 @@ mod tests {
             Color::Red
         );
         assert_eq!(Color::from("blue").as_str(), "blue");
+        assert_eq!(Color::KNOWN, ["red", "blue"]);
     }
 
     #[test]
