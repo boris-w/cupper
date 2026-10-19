@@ -13,6 +13,7 @@ publish = false
 
 [workspace.dependencies]
 anyhow = "1.0.100"
+serde_json = "1.0.149"
 
 [workspace.lints.rust]
 # `unsafe` lives only in `cupper-sys`, which opts out with a crate-level `allow` (design 5.1.1).

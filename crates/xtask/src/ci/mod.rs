@@ -1,14 +1,18 @@
-//! `cargo xtask ci <job>`: the single CI entry point (plan 1.8). Jobs run on the
-//! author's machine, only in a clean work tree; raw logs go to the git-ignored
-//! `.private/ci-logs/`.
+//! `cargo xtask ci <job> [--record <dir>]`: the single CI entry point (plan 1.8).
+//! Jobs run on the author's machine, only in a clean work tree; raw logs go to
+//! the git-ignored `.private/ci-logs/`, and `--record` writes the structured
+//! summary that may be committed.
 
 mod ctx;
+mod facts;
 mod git;
+mod ids;
 mod jobs;
 mod lock;
+mod summary;
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
@@ -22,7 +26,9 @@ pub fn usage() -> String {
     let jobs: Vec<&str> = jobs::JOBS.iter().map(|job| job.name).collect();
     let composites: Vec<&str> = jobs::COMPOSITES.iter().map(|(name, _)| *name).collect();
     format!(
-        "usage: cargo xtask ci <job>\n\njobs: {}\ncomposites: {}",
+        "usage: cargo xtask ci <job> [--record <dir>]\n\njobs: {}\ncomposites: {}\n\n\
+         --record <dir>  write the run summary to <dir>/<job>-<commit>.json,\n\
+         \x20               e.g. docs/tasks/<ID>-<slug>/ci/",
         jobs.join(", "),
         composites.join(", ")
     )
@@ -50,6 +56,16 @@ enum Outcome {
     NotImplemented,
 }
 
+impl Outcome {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Pass => "pass",
+            Self::Fail => "fail",
+            Self::NotImplemented => "not_implemented",
+        }
+    }
+}
+
 struct JobReport {
     name: &'static str,
     outcome: Outcome,
@@ -59,11 +75,32 @@ struct JobReport {
     cases: Vec<TestCase>,
 }
 
+struct Options<'a> {
+    target: &'a str,
+    record: Option<PathBuf>,
+}
+
+fn parse(args: &[String]) -> Result<Options<'_>> {
+    let mut target = None;
+    let mut record = None;
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--record" => {
+                let dir = rest.next().context("`--record` needs a directory")?;
+                record = Some(PathBuf::from(dir));
+            }
+            flag if flag.starts_with('-') => bail!("unknown option `{flag}`\n\n{}", usage()),
+            name if target.is_none() => target = Some(name),
+            extra => bail!("unexpected argument `{extra}`\n\n{}", usage()),
+        }
+    }
+    let target = target.with_context(usage)?;
+    Ok(Options { target, record })
+}
+
 fn run(args: &[String], cwd: &Path) -> Result<bool> {
-    let target = match args {
-        [target] if !target.starts_with('-') => target.as_str(),
-        _ => bail!("{}", usage()),
-    };
+    let Options { target, record } = parse(args)?;
     let selected =
         jobs::resolve(target).with_context(|| format!("unknown job `{target}`\n\n{}", usage()))?;
     if let [job] = selected.as_slice()
@@ -81,11 +118,34 @@ fn run(args: &[String], cwd: &Path) -> Result<bool> {
     fs::create_dir_all(&log_dir).context("create the log directory")?;
     eprintln!("xtask ci {target} at {short}; raw logs in .private/ci-logs/{run_id}/");
 
+    let watch = Stopwatch::start();
     let reports: Vec<JobReport> = selected
         .iter()
         .map(|job| run_job(job, &root, &log_dir))
         .collect();
+    let duration_ms = watch.elapsed_ms();
     print_reports(&reports);
+
+    if let Some(dir) = record {
+        let machine = facts::machine(&root);
+        // The generic model name is not personal even where a host is named after it.
+        let mut identity = facts::identity(&root);
+        identity.retain(|name| !machine.to_lowercase().contains(name.as_str()));
+        let summary = summary::build(&summary::Run {
+            commit: &commit,
+            target,
+            toolchain: &facts::toolchain(&root),
+            os: &facts::os(&root),
+            machine: &machine,
+            duration_ms,
+            reports: &reports,
+            ids: &ids::harvest(&root),
+        });
+        let file_name = format!("{target}-{short}.json");
+        let path = summary::write(&cwd.join(dir), &file_name, &summary, &identity)?;
+        let shown = path.strip_prefix(&root).unwrap_or(&path);
+        eprintln!("summary written to {}", shown.display());
+    }
     Ok(reports.iter().all(|report| report.outcome != Outcome::Fail))
 }
 
@@ -181,6 +241,18 @@ mod tests {
             !repo.path().join(".private").exists(),
             "a refused run must not start any job"
         );
+    }
+
+    #[test]
+    fn options_take_a_target_and_an_optional_record_dir() {
+        let given = args(&["pr", "--record", "docs/x/ci"]);
+        let parsed = parse(&given).expect("valid");
+        assert_eq!(parsed.target, "pr");
+        assert_eq!(parsed.record, Some(PathBuf::from("docs/x/ci")));
+        assert!(parse(&args(&["pr", "--record"])).is_err());
+        assert!(parse(&args(&["pr", "rust"])).is_err());
+        assert!(parse(&args(&["--verbose", "pr"])).is_err());
+        assert!(parse(&args(&[])).is_err());
     }
 
     #[test]
