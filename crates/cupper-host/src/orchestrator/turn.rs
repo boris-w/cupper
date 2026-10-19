@@ -55,6 +55,8 @@ pub struct TurnMachine {
     last_turn_no: u32,
     turn: Option<Turn>,
     queue: QueueCore,
+    /// Set by the autonomous judge's [`Input::HoldQueue`].
+    hold: bool,
 }
 
 #[derive(Debug)]
@@ -113,6 +115,9 @@ pub enum Input {
     /// The autonomous turn's judge (T041) saw updates outside any prompt.
     AutonomousStarted,
     AutonomousEnded,
+    /// The judge's dequeue guard: while held, an idle session takes no
+    /// queued message; a message sent while idle still starts its turn.
+    HoldQueue(bool),
     Expired(TurnTimer),
 }
 
@@ -160,7 +165,8 @@ pub enum Action {
         end: TurnEnd,
         asks: ResolutionReason,
     },
-    /// Write `turn.completed`, adding the final answer (T041).
+    /// The turn is over: the coalescer writes `turn.completed` with its final
+    /// answer.
     Complete(TurnEnd),
     Timer(TimerRequest<TurnTimer>),
     /// The reply to the command input of this step.
@@ -176,6 +182,35 @@ pub struct TurnEnd {
     pub usage: Option<TurnUsage>,
     pub ended_at: TimestampMs,
     pub duration_ms: DurationMs,
+}
+
+/// How the session's other cores (the coalescer, the autonomous judge)
+/// follow its turns: what an action of the machine tells them.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TurnSignal {
+    /// `turn.started`.
+    Started { turn_id: TurnId, origin: TurnOrigin },
+    /// [`Action::Settle`]: the end is decided; `interrupted` when the host
+    /// interrupted the turn.
+    Settled { interrupted: bool },
+    /// [`Action::Complete`].
+    Completed(TurnEnd),
+}
+
+impl TurnSignal {
+    pub fn of(action: &Action) -> Option<Self> {
+        match action {
+            Action::Event(EventBody::TurnStarted(started)) => Some(Self::Started {
+                turn_id: started.turn_id.clone(),
+                origin: started.origin.clone(),
+            }),
+            Action::Settle { asks, .. } => Some(Self::Settled {
+                interrupted: *asks == ResolutionReason::TurnCancelled,
+            }),
+            Action::Complete(end) => Some(Self::Completed(end.clone())),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -270,6 +305,7 @@ impl TurnMachine {
             last_turn_no: 0,
             turn: None,
             queue: QueueCore::default(),
+            hold: false,
         }
     }
 
@@ -380,10 +416,12 @@ impl TurnMachine {
     }
 
     /// Moves things along after every step: an idle session takes the next
-    /// queued message, and a preparing turn connects, closes and resumes a
-    /// session with a prompt still in flight (K1), or sends its prompt.
+    /// queued message unless the queue is held, and a preparing turn
+    /// connects, closes and resumes a session with a prompt still in flight
+    /// (K1), or sends its prompt.
     fn advance(&mut self, now: Now, out: &mut Vec<Action>) {
         if self.turn.is_none()
+            && !self.hold
             && let Some((entry, update)) = self.queue.pop()
         {
             out.push(Action::Event(EventBody::QueueUpdated(update)));
@@ -748,6 +786,7 @@ impl Core for TurnMachine {
                     self.end(Outcome::new(TurnStatus::Completed, None), now, &mut out);
                 }
             }
+            Input::HoldQueue(hold) => self.hold = hold,
             Input::Expired(timer) => self.expired(timer, now, &mut out),
         }
         self.advance(now, &mut out);

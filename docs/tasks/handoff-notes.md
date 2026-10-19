@@ -144,10 +144,18 @@
 | T053、T055 | 按 `AskRequest` 交出 agent 的请求：权限请求用 `Classified`，form 模式的 elicitation 用 `Form`（原样带 JSON schema）。`DriverEvent::Ask` 还没有 `toolCallId`，actor 填 `item_id` 需要它，由提取层补上。撤回之后交互代理仍会发一次 `Answer { Cancelled }`，运行时据此放掉应答句柄 | T042 |
 | T110 | Codex 用 `_meta.codex.isOther` 和 `<id>_note` 表达"其他"和备注，目前按 JSON Schema 类型映射成两个字段；要不要合成一题，由本任务决定 | T042 |
 | T016 | `interaction/respond` 的 `x-errors` 里没有 `not_found`，会话里不存在的请求 ID 目前回 `invalid_params`，而 `interaction/get` 回 `not_found`。冻结前补上，并跑 `pnpm gen` | T042 审阅 |
-| T073 | 网关夹具 `cupper-gateway-fixture` 要用 `--features dev-auth,test-harness` 构建，必须给 `--data-dir`，stdin 读启动载荷；监听后 stdout 输出 `{"socket": ...}`，审计按 JSON 行写到 stderr。`dev_key` 只接受拉起夹具的那个进程（Node 测试进程）；`host_proof` 按夹具的 pid 校验。证明的已知答案见 UNIT-proof-binding（`cupper-protocol::proof`） | T039 |
+| T073 | 网关夹具 `cupper-gateway-fixture` 要用 `--features dev-auth,test-harness` 构建，必须给 `--data-dir`，stdin 读启动载荷；监听后 stdout 输出 `{"socket": ...}`，审计按 JSON 行写到 stderr。`dev_key` 只接受拉起夹具的那个进程（Node 测试进程）；`host_proof` 按夹具的 pid 校验。证明的已知答案见 UNIT-proof-binding（`cupper-protocol::proof`） | T039（已写入 brief） |
 | T046 | `--harness-key-fd` 的参数解析接 `cupper_cli::harness::HarnessKey::read_fd`；输出里"宿主未经签名校验"的标记用 `HostCheck::is_weak(&auth)`（e2e 构建里带了 harness 密钥就不算弱） | T039 |
 | T037 | `main` 里 `startup::launcher()` 返回的拉起方 ID，要放进 `GatewayConfig::dev_key`（`DevKey { key, launcher }`）。新增关闭原因 `HandshakeTimeout`，审计记为 `handshake_timeout`。夹具的审计行目前是 `Debug` 文本，正式的审计格式归本任务 | T039 |
 | T047 | 每条还没 `initialize` 的连接持有一个握手期限计时器（`gateway_handshake`，10 s），静止屏障要把它算进去 | T039 |
+| T043 | 合并器只写内联文本；工具输出超过内联上限时转 blob（`BlobStore`、`add_ref`）、标 `truncated`、每秒更新尾部，由 actor 做（5.3.11 末尾"T041 实现时的裁定"）。收到回合机的动作后，用 `TurnSignal::of(&Action)` 转发给合并器和裁判 | T041 |
+| T053 | `NormUpdate::ToolStart` 要给出 `cwd`：没有它，合并器按 `missing_required` 把 `execute` 类工具的 `extraction` 定为 `partial` | T041 |
+| T076 | windowBridge 的白名单要按协议常量生成，但生成的 `@cupper/protocol` 目前没有方法目录（方法名 → scope、幂等）：扩展 `tools/gen-protocol-ts` 输出它（`v1.json` 的 `x-methods` 里有）。本地拒绝和重连顺序按 5.7.6 末尾"T071 开工前的裁定"，状态和数据走同一条有序通道，并通过 HostPort 合同测试 | T071 |
+| T075 | `ConnectionState` 的 `failed.reason` 是开放枚举，宿主拉起失败（退出码 4–6、宿主校验失败）的取值由本任务追加 | T071 |
+| T080 | 5.7.6 的"生产构建只校验非 delta 事件"还没做，T071 目前校验全部事件 | T071 |
+| T058 | 合并器已经能暂存 Ending 期间的更新，也能为被放弃的工具建晚到条目。组合测试环境里：回合机的每个动作先转 `TurnSignal` 给合并器，再给裁判；裁判的 `Start`、`End`、`Hold` 在回合机当前这一步之后，作为输入回送给回合机 | T041（已写入 brief） |
+| T043 | 用 `TurnSignal::of` 把回合机的动作转给合并器；`turn.completed` 由合并器写出，actor 收到 `Action::Complete` 时自己不写。交互代理写 `interaction.requested` 之前，先给合并器送 `Input::Interject`（刷出缓冲的文本并结束活动组）。构造合并器时传入能力里的 `interrupt_stops_commands` | T041 |
+| T075 | host-client 的握手没有内置超时：调用方传 `AbortSignal.timeout(...)`，套接字关闭时也要同样 abort。mock 宿主的 `conn.port()` 是不经检查的 HostPort，可以直接给 control 连接用 | T071 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
