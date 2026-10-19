@@ -3,16 +3,19 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 use cupper_protocol::annotations::TimestampMs;
 use cupper_protocol::envelope::Event;
 use cupper_protocol::event::{EventBody, Strictness};
-use rusqlite::Connection;
 use rusqlite::types::Value;
+use rusqlite::{Connection, Row};
 use serde_json::json;
 
 use super::streams::Published;
+use super::{Dir, RawFrame, Writer, WriterConfig, WriterThread};
 use crate::clock::ManualClock;
+use crate::quiescence::Quiescence;
 
 /// A fresh directory under the system temp dir, removed on drop.
 pub struct TempDir(PathBuf);
@@ -196,4 +199,70 @@ pub fn item(id: &str, n: u32) -> EventBody {
         data["turn_id"] = json!(format!("t_{n}"));
     }
     body(json!({"type": "item.started", "data": data}))
+}
+
+/// `raw.db` in `dir`, at this host's schema.
+pub fn raw_db(dir: &TempDir) -> Connection {
+    let mut conn =
+        super::open_writer(&dir.path().join("raw.db"), super::Database::Raw).expect("open raw.db");
+    super::prepare_raw(&mut conn, &super::RAW_SCHEMA).expect("prepare raw.db");
+    conn
+}
+
+/// A frame of instance `a_1`, received at `ts`.
+pub fn raw_frame(seq: u64, ts: u64, frame: &str) -> RawFrame {
+    RawFrame {
+        instance: "a_1".into(),
+        seq,
+        ts,
+        dir: Dir::Recv,
+        agent_session_id: Some("s-1".to_owned()),
+        frame: frame.to_owned(),
+    }
+}
+
+/// The frames in `raw.db` in `dir`, by instance and seq.
+pub fn raw_rows(dir: &TempDir) -> Vec<RawFrame> {
+    let sql = "SELECT instance_id, seq, ts, dir, agent_session_id, frame FROM raw_frames
+               ORDER BY instance_id, seq";
+    query(&dir.path().join("raw.db"), sql, |row| {
+        let dir = [Dir::Send, Dir::Recv, Dir::RecvNonjson]
+            .into_iter()
+            .find(|dir| dir.as_str() == row.get_ref_unwrap(3).as_str().unwrap_or_default());
+        Ok(RawFrame {
+            instance: row.get::<_, String>(0)?.into(),
+            seq: row.get(1)?,
+            ts: row.get(2)?,
+            dir: dir.expect("a known dir"),
+            agent_session_id: row.get(4)?,
+            frame: row.get(5)?,
+        })
+    })
+}
+
+/// `host.db` in `dir`, migrated, and a writer thread on it.
+pub fn host_writer(dir: &TempDir, clock: &ManualClock) -> (Writer, WriterThread) {
+    let mut conn = super::open_writer(&dir.host_db(), super::Database::Host).expect("open host.db");
+    let backups = dir.path().join("backups");
+    super::migrate(&mut conn, super::MIGRATIONS, &backups, clock).expect("migrate");
+    let quiescence = Quiescence::new();
+    quiescence.register(super::WRITER);
+    let config = WriterConfig {
+        linger: Duration::ZERO,
+    };
+    Writer::spawn(conn, config, &quiescence).expect("spawn the writer")
+}
+
+/// Every row of `sql` on the database at `db`, read with `row`.
+pub fn query<T>(db: &Path, sql: &str, row: impl FnMut(&Row<'_>) -> rusqlite::Result<T>) -> Vec<T> {
+    let conn = super::open_reader(db).expect("open a reader");
+    let mut select = conn.prepare(sql).expect("prepare");
+    let rows = select.query_map([], row).expect("query");
+    rows.collect::<Result<_, _>>().expect("read")
+}
+
+pub fn runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_current_thread()
+        .build()
+        .expect("a runtime")
 }
