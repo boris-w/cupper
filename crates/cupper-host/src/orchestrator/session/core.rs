@@ -125,9 +125,7 @@ impl SessionCore {
         for action in self.judge.step(input, now) {
             match (action.turn_input(), action) {
                 (Some(input), _) => machine.push(input),
-                (None, autonomous::Action::Timer(request)) => {
-                    out.push(timer(request, Key::Judge))
-                }
+                (None, autonomous::Action::Timer(request)) => out.push(timer(request, Key::Judge)),
                 (None, _) => {}
             }
         }

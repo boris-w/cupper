@@ -5,7 +5,7 @@ use std::future;
 use std::sync::Arc;
 
 use super::TimerTable;
-use crate::clock::{Clock, MonoTime, Timer};
+use crate::clock::{Clock, Timer};
 
 /// The one clock timer an actor keeps armed for its cores' timers.
 #[derive(Debug)]
@@ -30,14 +30,12 @@ impl Alarm {
 
     /// Completes when the armed timer fires, and disarms it; pending while
     /// disarmed. Cancel-safe: dropped unfinished, the timer stays armed.
-    pub async fn rung(&mut self) -> MonoTime {
+    pub async fn rung(&mut self) {
         let Some(timer) = &mut self.timer else {
             return future::pending().await;
         };
-        let at = timer.deadline();
-        (&mut *timer).await;
+        timer.await;
         self.timer = None;
-        at
     }
 }
 
@@ -48,7 +46,7 @@ mod tests {
     use futures::FutureExt;
 
     use super::*;
-    use crate::clock::ManualClock;
+    use crate::clock::{ManualClock, MonoTime};
     use crate::pure::TimerRequest;
 
     fn at(ms: u64) -> MonoTime {
@@ -70,7 +68,7 @@ mod tests {
         clock.advance(Duration::from_millis(9));
         assert_eq!(alarm.rung().now_or_never(), None);
         clock.advance(Duration::from_millis(1));
-        assert_eq!(alarm.rung().now_or_never(), Some(at(10)));
+        assert_eq!(alarm.rung().now_or_never(), Some(()));
         // Fired once; the table decides what is next.
         assert_eq!(alarm.rung().now_or_never(), None);
         assert_eq!(table.pop_due(at(10)), Some("soon"));
