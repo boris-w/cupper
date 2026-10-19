@@ -17,8 +17,8 @@ dev-auth = []
 # Self-use builds: check the host against the cdhash that `xtask host-bundle`
 # (T005) passes in `CUPPER_HOST_CDHASH` when it compiles the CLI.
 self-use = []
-# e2e builds: `--harness-key-fd` and the `harness` proof (T039).
-test-harness = []
+# e2e builds: `--harness-key-fd` and the `harness` proof (design 5.8.1).
+test-harness = ["dep:getrandom"]
 
 [[bin]]
 name = "cupper"
@@ -27,6 +27,8 @@ path = "src/main.rs"
 [dependencies]
 cupper-protocol = { path = "../cupper-protocol" }
 cupper-sys = { path = "../cupper-sys" }
+# The client nonce of the `harness` proof.
+getrandom = { version = "0.4.3", optional = true }
 serde_json.workspace = true
 thiserror.workspace = true
 # `time` is unused, but without it clippy's `disallowed-methods` entries for

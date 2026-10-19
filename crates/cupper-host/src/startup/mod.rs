@@ -115,6 +115,25 @@ pub fn new_host_uuid() -> Uuid {
     uuid::Builder::from_random_bytes(bytes).into_uuid()
 }
 
+/// The unique id of the process that started the host, the only one that
+/// may present `dev_key` (design 5.8.1). The parent the kernel recorded at
+/// fork is read, so the launcher's exit cannot race this. A host that starts
+/// with its launcher gone, adopted by launchd, would wait for a key nobody
+/// else may present: [`LauncherGone`], and it exits with 1.
+#[cfg(feature = "dev-auth")]
+pub fn launcher() -> Result<u64, LauncherGone> {
+    let me = std::process::id() as i32;
+    match (cupper_sys::process_info(me), cupper_sys::unique_ids(me)) {
+        (Some(info), Some(ids)) if info.ppid != 1 => Ok(ids.parent_unique_id),
+        _ => Err(LauncherGone),
+    }
+}
+
+#[cfg(feature = "dev-auth")]
+#[derive(Debug, thiserror::Error)]
+#[error("the process that started the host has already exited")]
+pub struct LauncherGone;
+
 /// One line of JSON: `{"debug_assertions", "features", "name", "version"}`.
 /// `features` lists the enabled entries of [`FEATURES`].
 pub fn build_info() -> String {

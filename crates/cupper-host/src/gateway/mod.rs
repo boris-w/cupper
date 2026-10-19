@@ -4,14 +4,18 @@
 //! [`listen`] takes `host.lock` and binds the socket; [`Gateway::serve`]
 //! accepts on it. Each connection runs in its own task (`conn`), with a
 //! writer task draining its [`Outbox`](outbox::Outbox): admission, then
-//! `host/hello`, then exactly one `initialize` (`handshake`), then requests.
-//! Dispatching requests to the executors, subscriptions and blobs are T033's.
+//! `host/hello`, then exactly one `initialize` (`handshake`), then requests
+//! and client notifications, which [`dispatch`] hands to the executors in
+//! [`Routes`]. Subscriptions and history are T019's, blobs T029's.
 
 mod audit;
 mod conn;
+mod describe;
+pub mod dispatch;
 mod handshake;
 pub mod listen;
 pub mod outbox;
+pub mod routes;
 #[cfg(any(test, feature = "test-harness"))]
 pub mod testkit;
 #[cfg(test)]
@@ -27,9 +31,13 @@ use tokio::net::UnixListener;
 use tokio::sync::mpsc;
 
 pub use self::audit::{AuditEvent, AuditRecord, CloseReason, Rejection};
+pub use self::dispatch::{Call, IndexPort, Opened, Port, Reply, SessionPort};
 pub use self::handshake::Session;
+pub use self::routes::Routes;
 use crate::clock::Clock;
 use crate::durations::{Durations, GATEWAY_ACCEPT_BACKOFF};
+#[cfg(any(feature = "dev-auth", feature = "test-harness"))]
+use crate::startup::payload::SecretKey;
 
 /// The verdict on a peer's code signature, taken on accept (design 5.8.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +57,22 @@ pub struct GatewayConfig {
     /// the binary (design 5.8.1). Release builds get theirs with the Team
     /// ID (T180); without one, no peer is the UI by signature.
     pub ui_requirement: Option<Requirement>,
+    /// The startup payload's `dev_key`, and who may present it.
+    #[cfg(feature = "dev-auth")]
+    pub dev_key: Option<DevKey>,
+    /// The startup payload's `harness_key`.
+    #[cfg(feature = "test-harness")]
+    pub harness_key: Option<SecretKey>,
+}
+
+/// `dev_key` is only accepted from the process that started the host
+/// (design 5.8.1).
+#[cfg(feature = "dev-auth")]
+#[derive(Debug, Clone)]
+pub struct DevKey {
+    pub key: SecretKey,
+    /// Its unique id, from [`launcher`](crate::startup::launcher).
+    pub launcher: u64,
 }
 
 #[derive(Debug)]
@@ -58,14 +82,17 @@ pub struct Gateway {
     durations: Durations,
     audit: mpsc::UnboundedSender<AuditRecord>,
     connections: AtomicU64,
+    routes: Routes,
 }
 
 impl Gateway {
-    /// A gateway, and the receiving end of its audit records.
+    /// A gateway serving `routes`, and the receiving end of its audit
+    /// records.
     pub fn new(
         config: GatewayConfig,
         clock: Arc<dyn Clock>,
         durations: Durations,
+        routes: Routes,
     ) -> (Arc<Self>, mpsc::UnboundedReceiver<AuditRecord>) {
         let (audit, records) = mpsc::unbounded_channel();
         let gateway = Self {
@@ -74,6 +101,7 @@ impl Gateway {
             durations,
             audit,
             connections: AtomicU64::new(0),
+            routes,
         };
         (Arc::new(gateway), records)
     }

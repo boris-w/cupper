@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use cupper_protocol::frame::{self, FrameDecoder, FrameType};
 use cupper_protocol::ids::HostId;
+use cupper_protocol::proof::{self, Bytes32, Channel, Direction};
 use cupper_sys::Requirement;
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -15,9 +16,12 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task::JoinHandle;
 
 use super::listen::HostLock;
-use super::{AuditEvent, AuditRecord, CloseReason, Gateway, GatewayConfig};
-use crate::clock::SystemClock;
+use super::{AuditEvent, AuditRecord, CloseReason, Gateway, GatewayConfig, Routes};
+use crate::clock::{Clock, SystemClock};
 use crate::durations::Durations;
+
+/// The key of the test gateway's `dev_key` and `harness_key`.
+pub const KEY: Bytes32 = [0x5a; 32];
 
 /// A fresh directory under the system temp dir, removed on drop. Its path
 /// stays short enough for a socket in `run/` (design 5.2.13).
@@ -56,18 +60,40 @@ pub struct TestGateway {
 }
 
 impl TestGateway {
-    /// Starts serving; call within a tokio runtime.
+    /// Starts serving [`config`](Self::config) on the system clock, with
+    /// the default routes; call within a tokio runtime.
     pub fn start(ui_requirement: Option<Requirement>) -> Self {
-        let dir = TempDir::new("gateway");
-        let lock = HostLock::acquire(dir.path()).expect("take host.lock");
-        let (listener, socket) = lock.bind().expect("bind the socket");
-        let config = GatewayConfig {
+        let clock = Arc::new(SystemClock::new());
+        Self::with(Self::config(ui_requirement), clock, Routes::default())
+    }
+
+    /// Host 1 at epoch 1, and [`KEY`] for `dev_key`, as started by this
+    /// process, and for `harness`.
+    pub fn config(ui_requirement: Option<Requirement>) -> GatewayConfig {
+        #[cfg(any(feature = "dev-auth", feature = "test-harness"))]
+        let key: crate::startup::payload::SecretKey =
+            serde_json::from_value(json!(proof::to_hex(&KEY))).expect("a key");
+        GatewayConfig {
             host_id: HostId::from_uuid(1),
             data_epoch: 1,
             ui_requirement,
-        };
-        let clock = Arc::new(SystemClock::new());
-        let (gateway, audit) = Gateway::new(config, clock, Durations::default());
+            #[cfg(feature = "dev-auth")]
+            dev_key: Some(super::DevKey {
+                key: key.clone(),
+                launcher: cupper_sys::unique_ids(std::process::id() as i32)
+                    .expect("our own ids")
+                    .unique_id,
+            }),
+            #[cfg(feature = "test-harness")]
+            harness_key: Some(key),
+        }
+    }
+
+    pub fn with(config: GatewayConfig, clock: Arc<dyn Clock>, routes: Routes) -> Self {
+        let dir = TempDir::new("gateway");
+        let lock = HostLock::acquire(dir.path()).expect("take host.lock");
+        let (listener, socket) = lock.bind().expect("bind the socket");
+        let (gateway, audit) = Gateway::new(config, clock, Durations::default(), routes);
         Self {
             socket,
             audit,
@@ -183,4 +209,18 @@ impl Client {
 pub fn initialize_params(nonce: &str, auth: Value) -> Value {
     json!({"protocol": {"min": 1, "max": 1}, "nonce": nonce, "auth": auth, "features": [],
         "client": {"kind": "cli", "name": "testkit", "version": "0"}})
+}
+
+/// `auth` of `kind` (`dev_key` or `harness`): the proof of `key` by process
+/// `pid` for the `nonce` of `host/hello`; and the channel of `host_proof`.
+pub fn key_auth(kind: &str, key: &Bytes32, nonce: &str, pid: i32) -> (Value, Channel) {
+    let h_nonce = proof::parse_hex32(nonce).expect("a nonce of 64 hex digits");
+    let channel = Channel {
+        h_nonce,
+        c_nonce: [0xc0; 32],
+    };
+    let proof = channel.prove(key, Direction::ClientToHost, pid);
+    let c_nonce = proof::to_hex(&channel.c_nonce);
+    let auth = json!({"type": kind, "c_nonce": c_nonce, "proof": proof});
+    (auth, channel)
 }

@@ -58,6 +58,9 @@ durations! {
     /// How long a closing connection may take to send its last replies, such
     /// as the error that ends a handshake (design 5.3.11, rulings before T030).
     GATEWAY_CLOSE_GRACE = "gateway_close_grace", Duration::from_secs(2);
+    /// How long a client has after `host/hello` to send `initialize` (design
+    /// 5.3.11, the ruling on T030's report).
+    GATEWAY_HANDSHAKE = "gateway_handshake", Duration::from_secs(10);
     /// The wait after a failed `accept`, out of fds for one, before the next.
     GATEWAY_ACCEPT_BACKOFF = "gateway_accept_backoff", Duration::from_millis(50);
     /// How long a stream stays in memory with no handle, writer or subscriber
@@ -69,6 +72,15 @@ durations! {
     /// After an interrupt, how long the host waits for the prompt to return
     /// before it ends the turn as `host_timeout` (design 5.2.6, 5.3.9).
     INTERRUPT_FALLBACK = "interrupt_fallback", Duration::from_millis(V1.interrupt_fallback_ms);
+    /// How long an item's later text fragments wait to be written as one
+    /// delta (design 5.2.16, ADR-06).
+    ITEM_COALESCE = "item_coalesce", Duration::from_millis(40);
+    /// How long an autonomous turn may go without updates, and with no tool
+    /// running, before the host ends it (design 5.2.6, Q10).
+    AUTONOMOUS_SILENCE = "autonomous_silence", Duration::from_secs(10);
+    /// After an autonomous turn ended on silence, how long the agent must
+    /// stay silent before the queue moves on (design 5.2.6, K1).
+    DEQUEUE_GUARD = "dequeue_guard", Duration::from_secs(30);
     /// How long `raw.db` keeps a frame (design 5.4.5, ADR-06).
     RAW_FRAMES_MAX_AGE = "raw_frames_max_age", Duration::from_secs(14 * DAY_SECS);
     /// How often retention prunes `raw.db` (design 5.4.5).
