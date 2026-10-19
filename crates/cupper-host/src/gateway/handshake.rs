@@ -5,31 +5,46 @@
 //! |---|---|---|---|---|
 //! | `codesign` | yes | no | yes | no |
 //! | `peer` | yes | yes | yes | yes |
-//! | `dev_key` | no | yes (T039) | no | yes (T039) |
-//! | `harness` | no | no | yes (T039) | yes (T039) |
+//! | `dev_key` | no | yes | no | yes |
+//! | `harness` | no | no | yes | yes |
 //!
-//! Until T039 brings them, `dev_key` and `harness` are refused like any
-//! authentication a build does not offer.
+//! `dev_key` and `harness` prove the startup payload's key, bound to the
+//! channel ([`proof`]), and the host proves it back in `host_proof`. A wrong
+//! or missing proof is refused, never taken for `peer`; `dev_key` is only
+//! accepted from the process that started the host. The code of a key
+//! authentication exists only in the builds that offer it.
 
 use cupper_protocol::domain::{ClientRole, PrincipalKind};
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::limits::V1;
+#[cfg(any(feature = "dev-auth", feature = "test-harness"))]
+use cupper_protocol::methods::handshake::KeyProof;
 use cupper_protocol::methods::handshake::{
     Auth, ClientIdentity, Feature, HostHelloParams, HostIdentity, InitializeParams,
     InitializeResult, PROTOCOL, Principal,
 };
+use cupper_protocol::proof;
 use cupper_protocol::rpc::Scope;
+use cupper_sys::AuditToken;
+use serde::Deserialize;
 use serde_json::Value;
 
 use super::{GatewayConfig, Verdict};
 
 /// `h_nonce`: 32 random bytes, sent as 64 hex digits.
-pub type Nonce = [u8; 32];
+pub type Nonce = proof::Bytes32;
 
 /// `dev-auth` builds authenticate the UI by key, not by signature.
 const CODESIGN_OFFERED: bool = !cfg!(feature = "dev-auth");
 /// Degraded local authentication (ADR-05).
 const WEAK_AUTH: bool = cfg!(feature = "dev-auth");
+/// The key authentications this build offers.
+const KEY_AUTHS: &[&str] = &[
+    #[cfg(feature = "dev-auth")]
+    "dev_key",
+    #[cfg(feature = "test-harness")]
+    "harness",
+];
 /// The optional features this host supports; each comes with the task that
 /// implements it (T033 and later).
 const HOST_FEATURES: &[Feature] = &[];
@@ -51,23 +66,31 @@ pub(super) fn new_nonce() -> Nonce {
 
 pub(super) fn hello(nonce: &Nonce) -> HostHelloParams {
     HostHelloParams {
-        nonce: nonce.iter().map(|byte| format!("{byte:02x}")).collect(),
+        nonce: proof::to_hex(nonce),
         protocol: PROTOCOL,
         host_version: env!("CARGO_PKG_VERSION").to_owned(),
     }
 }
 
 /// Handles the connection's `initialize`: `nonce` is the one its
-/// `host/hello` carried, `verdict` the one on its signature.
+/// `host/hello` carried, `peer` its pinned token and `verdict` the one on
+/// its signature.
+#[cfg_attr(
+    not(any(feature = "dev-auth", feature = "test-harness")),
+    expect(
+        unused_variables,
+        reason = "only key authentications look at the token"
+    )
+)]
 pub(super) fn initialize(
     config: &GatewayConfig,
     nonce: &Nonce,
+    peer: &AuditToken,
     verdict: Verdict,
     params: Value,
 ) -> Result<(InitializeResult, Session, ClientIdentity), RpcError> {
-    let params: InitializeParams = serde_json::from_value(params)
-        .map_err(|err| RpcError::new(INVALID_PARAMS, err.to_string()))?;
-    if parse_nonce(&params.nonce) != Some(*nonce) {
+    let params = parse_params(&params)?;
+    if proof::parse_hex32(&params.nonce) != Some(*nonce) {
         return Err(unauthenticated(
             ErrorReason::BadNonce,
             "the nonce is not the one of host/hello",
@@ -77,7 +100,13 @@ pub(super) fn initialize(
         RpcError::app(ErrorCode::VersionUnsupported, "no common protocol version")
             .with_data(|data| data.supported = Some(PROTOCOL))
     })?;
-    let kind = authenticate(&params.auth, verdict)?;
+    let (kind, host_proof) = match &params.auth {
+        #[cfg(feature = "dev-auth")]
+        Auth::DevKey(proof) => dev_key(config, proof, nonce, peer)?,
+        #[cfg(feature = "test-harness")]
+        Auth::Harness(proof) => harness(config, proof, nonce, peer)?,
+        auth => (authenticate(auth, verdict)?, None),
+    };
     let session = Session {
         principal: principal(kind, params.role)?,
         features: HOST_FEATURES
@@ -95,7 +124,7 @@ pub(super) fn initialize(
             weak_auth: WEAK_AUTH,
             data_epoch: config.data_epoch,
         },
-        host_proof: None,
+        host_proof,
         principal: session.principal.clone(),
         features: session.features.clone(),
         limits: V1,
@@ -103,10 +132,22 @@ pub(super) fn initialize(
     Ok((result, session, params.client))
 }
 
-/// What `auth` proves the peer to be. Every authentication is decided here;
-/// T039 adds the `dev_key` and `harness` arms, with their keys in
-/// [`GatewayConfig`], the pinned token for the proof's pid, and `host_proof`
-/// in the result.
+/// `initialize`'s params. An offered key authentication with its proof
+/// missing or malformed is refused as such, not as invalid params.
+fn parse_params(params: &Value) -> Result<InitializeParams, RpcError> {
+    InitializeParams::deserialize(params).map_err(|err| {
+        let auth = &params["auth"];
+        let key_auth = auth["type"]
+            .as_str()
+            .is_some_and(|tag| KEY_AUTHS.contains(&tag));
+        match key_auth && Auth::deserialize(auth).is_err() {
+            true => unauthenticated(ErrorReason::BadProof, "the key proof is missing"),
+            false => RpcError::new(INVALID_PARAMS, err.to_string()),
+        }
+    })
+}
+
+/// What an authentication other than a key proves the peer to be.
 fn authenticate(auth: &Auth, verdict: Verdict) -> Result<PrincipalKind, RpcError> {
     match auth {
         Auth::Peer => Ok(PrincipalKind::Cli),
@@ -124,6 +165,71 @@ fn authenticate(auth: &Auth, verdict: Verdict) -> Result<PrincipalKind, RpcError
     }
 }
 
+/// `dev_key`: the desktop UI, as long as it is the process that started the
+/// host (design 5.8.1).
+#[cfg(feature = "dev-auth")]
+fn dev_key(
+    config: &GatewayConfig,
+    proof: &KeyProof,
+    h_nonce: &Nonce,
+    peer: &AuditToken,
+) -> Result<(PrincipalKind, Option<String>), RpcError> {
+    let dev = config.dev_key.as_ref().ok_or_else(no_key)?;
+    if peer.unique_id() != Ok(dev.launcher) {
+        return Err(unauthenticated(
+            ErrorReason::BadKey,
+            "dev_key is only accepted from the process that started the host",
+        ));
+    }
+    let host_proof = check_key(dev.key.expose(), proof, h_nonce, peer)?;
+    Ok((PrincipalKind::DesktopUi, Some(host_proof)))
+}
+
+/// `harness`: the test principal.
+#[cfg(feature = "test-harness")]
+fn harness(
+    config: &GatewayConfig,
+    proof: &KeyProof,
+    h_nonce: &Nonce,
+    peer: &AuditToken,
+) -> Result<(PrincipalKind, Option<String>), RpcError> {
+    let key = config.harness_key.as_ref().ok_or_else(no_key)?;
+    let host_proof = check_key(key.expose(), proof, h_nonce, peer)?;
+    Ok((PrincipalKind::TestHarness, Some(host_proof)))
+}
+
+#[cfg(any(feature = "dev-auth", feature = "test-harness"))]
+fn no_key() -> RpcError {
+    unauthenticated(
+        ErrorReason::BadKey,
+        "no key was loaded for this authentication",
+    )
+}
+
+/// Checks the client's proof of `key`, made by the process of the pinned
+/// token; the host's proof in return.
+#[cfg(any(feature = "dev-auth", feature = "test-harness"))]
+fn check_key(
+    key: &proof::Bytes32,
+    auth: &KeyProof,
+    h_nonce: &Nonce,
+    peer: &AuditToken,
+) -> Result<String, RpcError> {
+    use proof::{Channel, Direction};
+
+    let bad = || unauthenticated(ErrorReason::BadProof, "the key proof does not hold");
+    let c_nonce = proof::parse_hex32(&auth.c_nonce).ok_or_else(bad)?;
+    let channel = Channel {
+        h_nonce: *h_nonce,
+        c_nonce,
+    };
+    channel
+        .check(key, Direction::ClientToHost, peer.pid(), &auth.proof)
+        .map_err(|_| bad())?;
+    let pid = std::process::id() as i32;
+    Ok(channel.prove(key, Direction::HostToClient, pid))
+}
+
 /// The principal of `kind` in `role`. Only the desktop UI has roles, and it
 /// must name one (design 5.8.1, 5.8.2).
 fn principal(kind: PrincipalKind, role: Option<ClientRole>) -> Result<Principal, RpcError> {
@@ -137,6 +243,11 @@ fn principal(kind: PrincipalKind, role: Option<ClientRole>) -> Result<Principal,
             ("pr_desktop", vec![Read, Write, Approve, UiLocal])
         }
         (PrincipalKind::Cli, None) => ("pr_cli", vec![Read]),
+        #[cfg(feature = "test-harness")]
+        (PrincipalKind::TestHarness, None) => (
+            "pr_test",
+            vec![Read, Write, Approve, Privileged, UiLocal, Scope::Test],
+        ),
         _ => {
             return Err(
                 RpcError::app(ErrorCode::Forbidden, "this role is not for this client")
@@ -154,19 +265,6 @@ fn principal(kind: PrincipalKind, role: Option<ClientRole>) -> Result<Principal,
 
 fn unauthenticated(reason: ErrorReason, message: &str) -> RpcError {
     RpcError::app(ErrorCode::Unauthenticated, message).with_reason(reason)
-}
-
-/// 64 hex digits, either case.
-fn parse_nonce(text: &str) -> Option<Nonce> {
-    let digits = text.as_bytes();
-    if digits.len() != 64 || !digits.iter().all(u8::is_ascii_hexdigit) {
-        return None;
-    }
-    let mut nonce = [0; 32];
-    for (byte, pair) in nonce.iter_mut().zip(digits.chunks_exact(2)) {
-        *byte = u8::from_str_radix(std::str::from_utf8(pair).ok()?, 16).ok()?;
-    }
-    Some(nonce)
 }
 
 #[cfg(test)]
@@ -223,14 +321,9 @@ mod tests {
     }
 
     #[test]
-    fn it_handshake_nonce_is_64_hex_digits() {
-        let nonce: Nonce = std::array::from_fn(|i| i as u8 * 7);
-        let hex = hello(&nonce).nonce;
-        assert_eq!(parse_nonce(&hex), Some(nonce));
-        assert_eq!(parse_nonce(&hex.to_uppercase()), Some(nonce));
-        for bad in [&hex[2..], "+1".repeat(32).as_str(), &"é".repeat(32)] {
-            assert_eq!(parse_nonce(bad), None, "{bad}");
-        }
-        assert_ne!(new_nonce(), new_nonce());
+    fn it_handshake_nonce_is_fresh_hex() {
+        let nonce = new_nonce();
+        assert_eq!(proof::parse_hex32(&hello(&nonce).nonce), Some(nonce));
+        assert_ne!(new_nonce(), nonce);
     }
 }

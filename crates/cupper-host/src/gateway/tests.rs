@@ -1,5 +1,5 @@
 //! IT-handshake and IT-pinned-token: the gateway on a real socket, in this
-//! test process.
+//! test process, which also counts as the process that started the host.
 
 use std::io::Write;
 use std::os::fd::AsFd;
@@ -8,11 +8,14 @@ use std::process::{Command, Stdio};
 use cupper_protocol::frame::{self, FrameType};
 use cupper_protocol::ids::HostId;
 use cupper_protocol::limits::V1;
+use cupper_protocol::proof::Direction;
 use cupper_sys::{RefusalKind, Requirement};
 use serde_json::{Value, json};
 
-use super::testkit::{Client, TestGateway, initialize_params};
+use super::testkit::{Client, KEY, TestGateway, initialize_params, key_auth};
 use super::{AuditEvent, CloseReason, Verdict};
+#[cfg(any(feature = "dev-auth", feature = "test-harness"))]
+use crate::clock::SystemClock;
 
 /// `data.code` and `data.reason` of an error, `""` when missing.
 fn code(error: &Value) -> (&str, &str) {
@@ -22,6 +25,33 @@ fn code(error: &Value) -> (&str, &str) {
 
 fn peer() -> Value {
     json!({"type": "peer"})
+}
+
+fn me() -> i32 {
+    std::process::id() as i32
+}
+
+/// `initialize` with `auth`; `dev_key` is the desktop UI's, in a role.
+fn key_params(nonce: &str, auth: Value) -> Value {
+    let mut params = initialize_params(nonce, auth);
+    if params["auth"]["type"] == "dev_key" {
+        params["client"]["kind"] = json!("desktop");
+        params["role"] = json!("control");
+    }
+    params
+}
+
+/// The error of an `initialize` whose `auth` `make` builds from the nonce;
+/// the connection closes after it.
+#[cfg(any(feature = "dev-auth", feature = "test-harness"))]
+async fn refused(gw: &mut TestGateway, make: impl Fn(&str) -> Value) -> Value {
+    let mut client = Client::connect(&gw.socket).await;
+    let nonce = client.hello().await;
+    let params = key_params(&nonce, make(&nonce));
+    let err = client.call("initialize", params).await.unwrap_err();
+    assert_eq!(client.next().await, None, "closed after {err}");
+    assert!(matches!(gw.closed().await, CloseReason::HandshakeFailed(_)));
+    err
 }
 
 #[tokio::test]
@@ -105,6 +135,10 @@ async fn it_handshake_failed_initialize_is_answered_then_closed() {
         false => "signature_invalid",
     };
     let zeros = "0".repeat(64);
+    let key_refusal = |offered| match offered {
+        true => "bad_proof",
+        false => "bad_key",
+    };
     let cases = [
         (
             "nonce",
@@ -124,12 +158,15 @@ async fn it_handshake_failed_initialize_is_answered_then_closed() {
         (
             "auth",
             json!({"type": "dev_key", "c_nonce": zeros, "proof": zeros}),
-            ("unauthenticated", "bad_key"),
+            ("unauthenticated", key_refusal(cfg!(feature = "dev-auth"))),
         ),
         (
             "auth",
             json!({"type": "harness", "c_nonce": zeros, "proof": zeros}),
-            ("unauthenticated", "bad_key"),
+            (
+                "unauthenticated",
+                key_refusal(cfg!(feature = "test-harness")),
+            ),
         ),
         (
             "auth",
@@ -164,6 +201,102 @@ async fn it_handshake_failed_initialize_is_answered_then_closed() {
             if e.app_code().map(ToString::to_string).as_deref() == Some(expected.0)),
             "{reason:?}"
         );
+    }
+}
+
+#[tokio::test]
+async fn it_handshake_key_auths_where_offered_prove_the_host_too() {
+    let gw = TestGateway::start(None);
+    let ui = json!({"id": "pr_desktop", "kind": "desktop_ui", "role": "control",
+        "scopes": ["read", "write", "approve", "privileged", "ui_local"]});
+    let test = json!({"id": "pr_test", "kind": "test_harness",
+        "scopes": ["read", "write", "approve", "privileged", "ui_local", "test"]});
+    let kinds = [
+        ("dev_key", cfg!(feature = "dev-auth"), ui),
+        ("harness", cfg!(feature = "test-harness"), test),
+    ];
+    for (kind, offered, principal) in kinds {
+        let mut client = Client::connect(&gw.socket).await;
+        let nonce = client.hello().await;
+        let (auth, channel) = key_auth(kind, &KEY, &nonce, me());
+        let result = client.call("initialize", key_params(&nonce, auth)).await;
+        if !offered {
+            assert_eq!(code(&result.unwrap_err()), ("unauthenticated", "bad_key"));
+            continue;
+        }
+        let result = result.unwrap();
+        assert_eq!(result["principal"], principal, "{kind}");
+        // The host's proof, bound to this connection and to its own pid.
+        let host_proof = result["host_proof"].as_str().unwrap();
+        let checked = channel.check(&KEY, Direction::HostToClient, me(), host_proof);
+        assert_eq!(checked, Ok(()), "{kind}");
+        assert_eq!(client.call("ping", Value::Null).await, Ok(json!({})));
+    }
+}
+
+#[cfg(any(feature = "dev-auth", feature = "test-harness"))]
+#[tokio::test]
+async fn it_handshake_wrong_or_missing_key_proofs_are_refused() {
+    let mut gw = TestGateway::start(None);
+    let kinds = [
+        #[cfg(feature = "dev-auth")]
+        "dev_key",
+        #[cfg(feature = "test-harness")]
+        "harness",
+    ];
+    for kind in kinds {
+        for case in [
+            "relayed",
+            "other key",
+            "other nonce",
+            "no proof",
+            "bad c_nonce",
+        ] {
+            let make = |nonce: &str| {
+                let good = key_auth(kind, &KEY, nonce, me()).0;
+                match case {
+                    // A process relaying the handshake proves with its own pid.
+                    "relayed" => key_auth(kind, &KEY, nonce, me() + 1).0,
+                    "other key" => key_auth(kind, &[1; 32], nonce, me()).0,
+                    "other nonce" => key_auth(kind, &KEY, &"ab".repeat(32), me()).0,
+                    "no proof" => json!({"type": kind, "c_nonce": good["c_nonce"]}),
+                    _ => json!({"type": kind, "c_nonce": "c0", "proof": good["proof"]}),
+                }
+            };
+            let err = refused(&mut gw, make).await;
+            assert_eq!(
+                code(&err),
+                ("unauthenticated", "bad_proof"),
+                "{kind} {case}"
+            );
+        }
+    }
+}
+
+#[cfg(any(feature = "dev-auth", feature = "test-harness"))]
+#[tokio::test]
+async fn it_handshake_key_auths_need_the_key_and_dev_key_its_launcher() {
+    let mut config = TestGateway::config(None);
+    let mut cases = Vec::new();
+    #[cfg(feature = "dev-auth")]
+    {
+        // Started by another process than this one, and without a key.
+        let mut other = TestGateway::config(None);
+        other.dev_key.as_mut().unwrap().launcher ^= 1;
+        cases.push((other, "dev_key", "started the host"));
+        config.dev_key = None;
+        cases.push((config.clone(), "dev_key", "no key"));
+    }
+    #[cfg(feature = "test-harness")]
+    {
+        config.harness_key = None;
+        cases.push((config, "harness", "no key"));
+    }
+    for (config, kind, message) in cases {
+        let mut gw = TestGateway::with(config, std::sync::Arc::new(SystemClock::new()));
+        let err = refused(&mut gw, |nonce| key_auth(kind, &KEY, nonce, me()).0).await;
+        assert_eq!(code(&err), ("unauthenticated", "bad_key"), "{kind}");
+        assert!(err["message"].as_str().unwrap().contains(message), "{err}");
     }
 }
 

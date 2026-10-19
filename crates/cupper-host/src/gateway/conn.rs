@@ -43,10 +43,11 @@ pub(super) async fn run(gw: Arc<Gateway>, stream: UnixStream, id: ConnId) {
         gw: &gw,
         id: &id,
         outbox: &outbox,
+        pinned,
         verdict,
         phase: Phase::Hello(nonce),
     };
-    let end = conn.read_loop(&reader, pinned).await;
+    let end = conn.read_loop(&reader).await;
     if end.flush {
         // Let the writer send the error behind the close, but not wait on a
         // peer that does not read.
@@ -143,12 +144,13 @@ struct Conn<'a> {
     gw: &'a Gateway,
     id: &'a ConnId,
     outbox: &'a Outbox,
+    pinned: AuditToken,
     verdict: Verdict,
     phase: Phase,
 }
 
 impl Conn<'_> {
-    async fn read_loop(&mut self, reader: &OwnedReadHalf, pinned: AuditToken) -> End {
+    async fn read_loop(&mut self, reader: &OwnedReadHalf) -> End {
         let stream: &UnixStream = reader.as_ref();
         let mut buf = vec![0; MAX_FRAME_BYTES];
         let mut decoder = FrameDecoder::new();
@@ -165,7 +167,7 @@ impl Conn<'_> {
                 return End::now(CloseReason::PeerClosed);
             }
             match cupper_sys::peer_token(stream) {
-                Ok(token) if token == pinned => {}
+                Ok(token) if token == self.pinned => {}
                 Ok(_) => return End::now(CloseReason::TokenMismatch),
                 Err(refusal) => return End::now(CloseReason::TokenUnreadable(refusal.kind)),
             }
@@ -218,7 +220,8 @@ impl Conn<'_> {
     }
 
     fn initialize(&mut self, id: &RpcId, nonce: &Nonce, params: Value) -> Option<End> {
-        match handshake::initialize(&self.gw.config, nonce, self.verdict, params) {
+        let config = &self.gw.config;
+        match handshake::initialize(config, nonce, &self.pinned, self.verdict, params) {
             Ok((result, session, client)) => {
                 self.outbox.push_frame(wire::response(id, &result));
                 let principal = session.principal.clone();
