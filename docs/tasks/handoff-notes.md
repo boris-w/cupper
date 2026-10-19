@@ -156,6 +156,14 @@
 | T058 | 合并器已经能暂存 Ending 期间的更新，也能为被放弃的工具建晚到条目。组合测试环境里：回合机的每个动作先转 `TurnSignal` 给合并器，再给裁判；裁判的 `Start`、`End`、`Hold` 在回合机当前这一步之后，作为输入回送给回合机 | T041（已写入 brief） |
 | T043 | 用 `TurnSignal::of` 把回合机的动作转给合并器；`turn.completed` 由合并器写出，actor 收到 `Action::Complete` 时自己不写。交互代理写 `interaction.requested` 之前，先给合并器送 `Input::Interject`（刷出缓冲的文本并结束活动组）。构造合并器时传入能力里的 `interrupt_stops_commands` | T041 |
 | T075 | host-client 的握手没有内置超时：调用方传 `AbortSignal.timeout(...)`，套接字关闭时也要同样 abort。mock 宿主的 `conn.port()` 是不经检查的 HostPort，可以直接给 control 连接用 | T071 |
+| T043 | 实现 `SessionPort`：`deliver(Call)` 按 `params.session_id` 投进会话邮箱，只排队不等待，返回回复的 future；用 `Call.ticket` 结束命令（T032 的账本接口）。实现 `facts(&Confirmable)`，给出 `mode_tier`、`option`、`running_turns`。登记 M1a 的会话方法时用 `Routes::sessions(port)`，接上后从 UNIT-unsupported-set 的允许表里删掉相应行（详见 `docs/tasks/T033-gateway-dispatch/notes.md`"给其他任务的接入点"） | T033 |
+| T044 | 登记 `session/confirm_config`，并删掉 UNIT-unsupported-set 允许表里标为 T044 的那一行 | T033 |
+| T034 | 实现 `IndexPort`（`deliver`、`opened(Opened)`、`closed(&ConnId)`）；`ClientInfo.auth` 由 `Opened` 里的 principal 种类和 `weak_auth` 推出。客户端通知目前不计入在途、每条另起一个 task，没有上限；加入代价大的通知时要定上限 | T033 |
+| T036 | 登记 `settings/*`（`Routes` 的 `add::<M>`），`settings_update` 规则网关已经执行过；接上后从 UNIT-unsupported-set 的允许表里删掉相应行 | T033 |
+| T037 | 组装：`Routes::start(conn, writer, clock, durations, sessions, index)` → `(routes, sweeper)`，再 `Gateway::new(config, clock, durations, routes)`；有序退出时 abort 清理任务。登记 `host/status`、`host/exit` | T033 |
+| T038 | 撤销提权挂在 `IndexPort::closed` 上。`Dispatch` 里的 principal 在 `initialize` 时定下、之后不变；授予提权需要让这条连接的 scope 能更新，要改这里 | T033 |
+| T047 | `test/run_maintenance` 要用账本：给 `Routes` 加一个公开的账本访问函数（现在是 `pub(super)`）。账本清理任务、各连接等待回复的 task 还没有登记进静止屏障 | T033 |
+| T019、T029 | 接入点见 `docs/tasks/T033-gateway-dispatch/notes.md`"给 T019、T029 的接入点"：`stream/*`、`history/page` 登记为 `Target::Streams`，`blob/*` 为 `Target::Blobs`；订阅表和上传缓冲放进每条连接的 `Dispatch`，断开时自动清理；`HOST_FEATURES` 目前为空，由它们补上 | T033 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
