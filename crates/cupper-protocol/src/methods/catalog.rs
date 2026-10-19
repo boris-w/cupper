@@ -8,7 +8,7 @@ use schemars::SchemaGenerator;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::handshake;
+use super::{handshake, stream};
 use crate::rpc::{ClientNotification, HostNotification, Method};
 use crate::schema::{client_notification_entry, host_notification_entry, method_entry};
 
@@ -48,6 +48,7 @@ fn insert(table: &mut BTreeMap<&'static str, Value>, name: &'static str, entry: 
 pub fn catalog(g: &mut SchemaGenerator) -> Catalog {
     let mut catalog = Catalog::default();
     handshake::register(&mut catalog, g);
+    stream::register(&mut catalog, g);
     catalog
 }
 
@@ -79,7 +80,10 @@ mod tests {
 
     #[test]
     fn unit_proto_methods_core_stream_every_method_roundtrips() {
-        let sampled: BTreeSet<&str> = [handshake::tests::samples()].concat().into_iter().collect();
+        let sampled: BTreeSet<&str> = [handshake::tests::samples(), stream::tests::samples()]
+            .concat()
+            .into_iter()
+            .collect();
         let (catalog, _) = built();
         let names: BTreeSet<&str> = scoped(&catalog)
             .chain(&catalog.host_notifications)
@@ -125,6 +129,18 @@ mod tests {
             &["ping", "client/presence", "host/status"],
             [Y; 7],
         ),
+        (
+            "订阅、history/page、blob/get（stream/ack 属于订阅）",
+            &[
+                "stream/subscribe",
+                "stream/unsubscribe",
+                "stream/ack",
+                "history/page",
+                "blob/get",
+            ],
+            [Y; 7],
+        ),
+        ("blob/put", &["blob/put"], [Y, Y, N, Y, N, Y, Y]),
         (
             "host/prepare_upgrade、host/exit（有运行中的回合时原生确认）",
             &["host/prepare_upgrade", "host/exit"],
@@ -181,6 +197,8 @@ mod tests {
             ("initialize", "M1a"),
             ("host/prepare_upgrade", "M1b"),
             ("ui/navigate", "M1b"),
+            ("stream/ack", "M3"),
+            ("stream/events", "M1a"),
         ];
         for (name, value) in expected {
             assert_eq!(milestone(name), value, "{name}");
@@ -195,6 +213,7 @@ mod tests {
             ])
         );
         assert_eq!(errors("host/exit"), json!(["conflict/turn_running"]));
+        assert_eq!(errors("blob/put"), json!(["too_large", "conflict"]));
         assert_eq!(errors("ping"), json!([]));
         for (name, entry) in &catalog.requests {
             for error in entry[X_ERRORS].as_array().unwrap() {
