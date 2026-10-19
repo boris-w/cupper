@@ -232,6 +232,7 @@ dependencies = [
  "cupper-sys",
  "futures",
  "getrandom",
+ "proptest",
  "rusqlite",
  "serde",
  "serde_json",

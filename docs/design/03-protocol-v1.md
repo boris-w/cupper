@@ -523,7 +523,7 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 | `StopReason` | ACP 的 `end_turn`、`max_tokens`、`max_turn_requests`、`refusal`、`cancelled`，另加宿主的 `host_timeout` |
 | `SnapshotReason` | `timeout`、`unsafe_repo_config`、`not_a_repo`、`git_failed` |
 | `ExclusionReason` | `too_large`、`nested_repo`、`large_untracked_dir`、`filter_unsupported` |
-| `ResolutionReason` | `withdrawn`、`turn_cancelled`、`adapter_exited`、`host_restarted` |
+| `ResolutionReason` | `withdrawn`、`turn_cancelled`、`adapter_exited`、`host_restarted`；T048 附加 `turn_ended`（回合结束时还挂着的请求，见下文"T040 实现时的裁定"） |
 | `PlanPriority` | `high`、`medium`、`low`（ACP） |
 | `workspace.preparing.progress` | 0–100 的百分比 |
 | `effect.rule.location` | 字符串，不用 `WirePath`：适配器给的是 `localSettings` 这类语义值 |

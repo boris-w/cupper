@@ -1,13 +1,16 @@
-import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { MAX_PREFS_BYTES, Prefs } from "./prefs";
 
+/** A prefs file in a temporary directory that is removed when the test ends. */
 async function prefsFile() {
-  return join(await mkdtemp(join(tmpdir(), "cupper-prefs-")), "prefs.json");
+  const dir = await mkdtemp(join(tmpdir(), "cupper-prefs-"));
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  return join(dir, "prefs.json");
 }
 
 describe("prefs", () => {
