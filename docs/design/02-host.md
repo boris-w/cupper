@@ -528,6 +528,22 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 - 测试构建可以用 `--harness-key-fd <n>` 以 `test_harness` 身份连接；这个参数在编译期门控，发布版 CLI 没有它。`--build-info` 输出启用的编译特性。
 - 库部分保留 SP-4a 的 `Client` 和 `Mirror`（检查 `from` 等于上一个 seq 加 1），供宿主集成测试直接使用。
 
+**T045 实现时的裁定（2026-10-19）**
+
+- **CLI 的构建种类由特性决定**：
+  - `dev-auth`：开发构建；
+  - `self-use`：自用构建；
+  - `test-harness`：e2e 构建；
+  - 都不开：发布构建。
+  - 同时开了多个时，`test-harness` 优先于 `self-use`，`self-use` 优先于 `dev-auth`。
+- **自用构建的宿主 cdhash**：
+  - 来自编译期环境变量 `CUPPER_HOST_CDHASH`，40 位小写十六进制；
+  - 变量缺失或格式不对时编译失败，不会退成弱校验；
+  - T005 的构建命令：`CUPPER_HOST_CDHASH=<cdhash> cargo build -p cupper-cli --release --features self-use`。
+- **发布构建**：宿主的签名要求在 T180 带上 Team ID 之前为空，所以在那之前发布版 CLI 不接受任何宿主。发布已经推迟，不影响 M1a。
+- **e2e 分支在 T039 之前**：只检查同用户和固定令牌，输出里标"宿主未经签名校验"。
+- **订阅的结果按线上顺序进入通知流**（`Incoming::Subscribed`），不走请求的 oneshot。这样 Mirror 能分清哪些数据是旧订阅还在路上的。
+
 ## 5.2.15 SP-4a 代码的沿用与改动
 
 SP-4a 的代码由 M1a 的任务迁移进 `crates/`（复制后按下表调整），`spikes/` 原样保留。总体判断：**协议 crate 基本沿用，宿主的连接、发送队列、账本、恢复、系统调用沿用，存储、会话编排和驱动需要重构**。
