@@ -12,6 +12,7 @@ use rusqlite::types::Value;
 use serde_json::json;
 
 use super::streams::Published;
+use super::{Dir, RawFrame};
 use crate::clock::ManualClock;
 
 /// A fresh directory under the system temp dir, removed on drop.
@@ -196,4 +197,53 @@ pub fn item(id: &str, n: u32) -> EventBody {
         data["turn_id"] = json!(format!("t_{n}"));
     }
     body(json!({"type": "item.started", "data": data}))
+}
+
+/// `raw.db` in `dir`, at this host's schema.
+pub fn raw_db(dir: &TempDir) -> Connection {
+    let mut conn =
+        super::open_writer(&dir.path().join("raw.db"), super::Database::Raw).expect("open raw.db");
+    super::prepare_raw(&mut conn, &super::RAW_SCHEMA).expect("prepare raw.db");
+    conn
+}
+
+/// A frame of instance `a_1`, received at `ts`.
+pub fn raw_frame(seq: u64, ts: u64, frame: &str) -> RawFrame {
+    RawFrame {
+        instance: "a_1".into(),
+        seq,
+        ts,
+        dir: Dir::Recv,
+        agent_session_id: Some("s-1".to_owned()),
+        frame: frame.to_owned(),
+    }
+}
+
+/// The frames in `raw.db` in `dir`, by instance and seq.
+pub fn raw_rows(dir: &TempDir) -> Vec<RawFrame> {
+    let conn = super::open_reader(&dir.path().join("raw.db")).expect("open raw.db");
+    let mut select = conn
+        .prepare(
+            "SELECT instance_id, seq, ts, dir, agent_session_id, frame FROM raw_frames
+             ORDER BY instance_id, seq",
+        )
+        .expect("prepare");
+    let rows = select.query_map([], |row| {
+        let dir = match row.get::<_, String>(3)?.as_str() {
+            "send" => Dir::Send,
+            "recv" => Dir::Recv,
+            _ => Dir::RecvNonjson,
+        };
+        Ok(RawFrame {
+            instance: row.get::<_, String>(0)?.into(),
+            seq: row.get(1)?,
+            ts: row.get(2)?,
+            dir,
+            agent_session_id: row.get(4)?,
+            frame: row.get(5)?,
+        })
+    });
+    rows.expect("query")
+        .collect::<Result<_, _>>()
+        .expect("read")
 }
