@@ -12,3 +12,11 @@ export {
   type BlobChunk,
   type Frame,
 } from "./frame";
+export {
+  handshake,
+  HandshakeError,
+  PROTOCOL,
+  type HandshakeFailure,
+  type HandshakeOptions,
+  type Handshaken,
+} from "./handshake";
