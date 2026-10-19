@@ -651,3 +651,33 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
   - `Build`：只在特定构建里有；
   - `CliOnly`：`auth/elevate` 不要求 scope，策略对 `cli` 以外的 principal 一律拒绝。
 
+**T030 开工前的裁定（2026-10-19）**
+
+- **各构建开放的认证**，按 5.8.1 的表推定：
+
+  | 认证 | 发布（无特性） | `dev-auth` | `test-harness` | e2e（两者都开） |
+  |---|---|---|---|---|
+  | `codesign` | 开放 | 不开放 | 开放 | 不开放 |
+  | `peer` | 开放 | 开放 | 开放 | 开放 |
+  | `dev_key` | 不开放 | 开放 | 不开放 | 开放 |
+  | `harness` | 不开放 | 不开放 | 开放 | 开放 |
+
+  - `weak_auth` 等于是否开了 `dev-auth`。
+  - UI 的签名要求在 T180 带上 Team ID 之前为空，所以在那之前 `codesign` 认证全部失败。这不影响 M1a：开发、自用和 e2e 构建里，UI 都用 `dev_key`。
+- **握手失败一律先回错误，再断开**。错误码如下：
+  - nonce 不符：`unauthenticated/bad_nonce`；
+  - 签名结论不是 UI：`unauthenticated/signature_invalid`；
+  - 本构建没有这种认证、没有载入密钥，或者 `dev_key` 的出示方不是拉起宿主的进程：`unauthenticated/bad_key`；
+  - 证明格式错误或对不上：`unauthenticated/bad_proof`；
+  - 非 UI 的客户端声明了角色，或者 UI 没有声明角色：`forbidden/role`。
+- **写循环**：
+  - 实时事件以编好的帧进入发送队列，按字节预算；超出预算时按流重置。
+  - 发送时按 `coalesce_ms` 合并、补发（`Replay`），归 T033。
+- **两个时长**：
+  - 关闭宽限 2 s；
+  - accept 出错后的退避 50 ms。
+  - 两者都登记在 `durations.rs`。
+- **审计**：
+  - 网关把审计记录发进 channel。写进 `audit` 表和 host.log 的接线，归 T037。
+  - 对端可执行文件的路径、签名 identifier、Team ID，归 T038，它的提权确认框同样要用。
+
