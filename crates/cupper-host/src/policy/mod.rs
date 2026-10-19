@@ -13,6 +13,10 @@
 //!    - [`settings_update`]: a security-related key takes `privileged`;
 //!    - [`set_config`]: SEC-9 lets a remote device change only the model, the
 //!      reasoning effort and, by the tier rules, the permission mode;
+//!    - [`tier_change`]: a looser tier from `session/create`'s `config`,
+//!      `session/set_config` or an option's `mode_after` (design 5.8.2);
+//!    - [`git_revert`], [`respond`]: the window's input evidence, the chosen
+//!      option's `requires`, and the 400 ms after a request (design 5.7.8);
 //!
 //! Cells of the matrix (5.8.3) the policy allows because the scope does, and
 //! leaves the rest to others:
@@ -23,16 +27,21 @@
 //! - "仅 … 构建": the host registers the method only in the builds of its
 //!   `x-builds` (design 5.9.9).
 
+mod input;
 mod method;
+mod tier;
 
 #[cfg(test)]
 mod testkit;
 
+use cupper_protocol::domain::{ClientRole, PrincipalKind};
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::rpc::Scope;
 
+pub use input::{MIN_ANSWER_DELAY, Pending, git_revert, respond};
 pub use method::{method, set_config, settings_update};
+pub use tier::{ceiling, option_tier, tier_change};
 
 /// Why the policy refuses, as a semantic code (design 5.3.8).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -51,7 +60,7 @@ pub enum Denial {
     #[error("needs real user input that fits the command")]
     UserActivation,
     /// `conflict/too_early`: the window answered within
-    /// 400 ms of the request.
+    /// [`MIN_ANSWER_DELAY`] of the request.
     #[error("answered too soon after the request")]
     TooEarly,
     /// Invalid params: the chosen option is not one of the request's.
@@ -91,6 +100,12 @@ fn require(principal: &Principal, scope: &Scope) -> Result<(), Denial> {
     }
 }
 
+/// A `desktop_ui` connection other than the main process's own: the
+/// window's rules apply to it, also when its role is unknown.
+fn is_window(principal: &Principal) -> bool {
+    principal.kind == PrincipalKind::DesktopUi && principal.role != Some(ClientRole::Control)
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -123,5 +138,16 @@ mod tests {
         let invalid = wire(Denial::NoSuchOption);
         assert_eq!(invalid["code"], INVALID_PARAMS);
         assert!(invalid.get("data").is_none());
+    }
+
+    #[test]
+    fn unit_policy_matrix_unknown_desktop_role_counts_as_window() {
+        let mut desktop = testkit::column("UI window");
+        for role in [None, Some(ClientRole::Unknown("tab".into()))] {
+            desktop.role = role;
+            assert!(is_window(&desktop), "{:?}", desktop.role);
+        }
+        assert!(!is_window(&testkit::column("UI control")));
+        assert!(!is_window(&testkit::column("test_harness")));
     }
 }
