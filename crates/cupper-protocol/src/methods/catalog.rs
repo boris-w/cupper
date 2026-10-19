@@ -8,7 +8,7 @@ use schemars::SchemaGenerator;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::{handshake, interaction, project, session, stream};
+use super::{admin, git, handshake, interaction, project, session, stream};
 use crate::rpc::{ClientNotification, HostNotification, Method};
 use crate::schema::{client_notification_entry, host_notification_entry, method_entry};
 
@@ -49,6 +49,8 @@ pub fn catalog(g: &mut SchemaGenerator) -> Catalog {
     let mut catalog = Catalog::default();
     handshake::register(&mut catalog, g);
     stream::register(&mut catalog, g);
+    git::register(&mut catalog, g);
+    admin::register(&mut catalog, g);
     project::register(&mut catalog, g);
     session::register(&mut catalog, g);
     interaction::register(&mut catalog, g);
@@ -62,7 +64,7 @@ mod tests {
     use serde_json::{Map, json};
 
     use super::*;
-    use crate::annotations::{X_ERRORS, X_IDEMPOTENT, X_MILESTONE, X_SCOPE};
+    use crate::annotations::{X_BUILDS, X_ERRORS, X_IDEMPOTENT, X_MILESTONE, X_SCOPE};
     use crate::canonical::to_canonical_string;
     use crate::error::{ErrorCode, ErrorReason};
     use crate::limits::MAX_SAFE_INTEGER;
@@ -86,6 +88,8 @@ mod tests {
         let sampled: BTreeSet<&str> = [
             handshake::tests::samples(),
             stream::tests::samples(),
+            git::tests::samples(),
+            admin::tests::samples(),
             project::tests::samples(),
             session::tests::samples(),
             interaction::tests::samples(),
@@ -113,8 +117,17 @@ mod tests {
         Native,
         /// "仅由主进程代发": the main process sends it for the window.
         ByMain,
+        /// ✗ for a principal other than `cli`: `auth/elevate` needs no scope,
+        /// so the policy module (T031) refuses it by principal kind (design 5.8.4).
+        CliOnly,
+        /// "真实输入": ✓, but the policy module (T031) refuses the window's
+        /// request without `input` as `forbidden/user_activation_required` (design 5.2.5).
+        Input,
+        /// "仅 … 构建": ✓ only in the builds of the method's `x-builds`; the
+        /// host has no handler for it in other builds (design 5.9.9).
+        Build,
         /// ✗ for remote_device by SEC-9: it holds the scope, so the policy
-        /// module refuses or narrows the method (design 5.8.3).
+        /// module (T031) refuses or narrows the method (design 5.2.5, 5.8.3).
         Sec9,
     }
     use Cell::*;
@@ -162,6 +175,19 @@ mod tests {
             [Native, N, N, N, N, Y, N],
         ),
         (
+            "订阅……一行中的 settings/get、git/status、git/diff、git/file_diff、git/branches、worktree/check、files/search",
+            &[
+                "settings/get",
+                "git/status",
+                "git/diff",
+                "git/file_diff",
+                "git/branches",
+                "worktree/check",
+                "files/search",
+            ],
+            [Y; 7],
+        ),
+        (
             "订阅、history/page、…、session/list_archived（其中 T018 的方法）",
             &[
                 "agents/capabilities",
@@ -172,6 +198,47 @@ mod tests {
                 "interaction/get",
             ],
             [Y; 7],
+        ),
+        (
+            "git/stage、git/unstage、git/commit、git/push",
+            &["git/stage", "git/unstage", "git/commit", "git/push"],
+            [Y, Y, N, Y, N, Y, Sec9],
+        ),
+        ("git/revert", &["git/revert"], [Y, Input, N, Y, N, Y, Sec9]),
+        (
+            "settings/update（普通键；安全相关的键由策略要求原生确认）",
+            &["settings/update"],
+            [Y, Y, N, Y, N, Y, Sec9],
+        ),
+        (
+            "workspace/open、diag/export",
+            &["workspace/open", "diag/export"],
+            [Y, Y, N, N, N, Y, N],
+        ),
+        (
+            "auth/elevate",
+            &["auth/elevate"],
+            [CliOnly, CliOnly, Y, Y, Y, CliOnly, CliOnly],
+        ),
+        (
+            "auth/elevation_get、policy/describe",
+            &["auth/elevation_get", "policy/describe"],
+            [Y, N, N, N, N, Y, N],
+        ),
+        (
+            "auth/elevation_respond",
+            &["auth/elevation_respond"],
+            [Native, N, N, N, N, Y, N],
+        ),
+        (
+            "diag/recording_export",
+            &["diag/recording_export"],
+            [Build, Build, N, N, N, Y, N],
+        ),
+        (
+            "test/*",
+            &["test/clock_advance", "test/run_maintenance", "test/seed"],
+            [N, N, N, N, N, Build, N],
         ),
         (
             "project/add、project/remove（SEC-9：只能在已有项目里新建会话）",
@@ -188,6 +255,7 @@ mod tests {
             &[
                 "session/set_config",
                 "session/rename",
+                "session/archive",
                 "session/restore",
                 "agents/refresh",
                 "agents/restart",
@@ -344,6 +412,118 @@ mod tests {
         );
     }
 
+    /// The method groups of T013.
+    const EXT_GROUPS: [Group; 2] = [
+        (git::register, git::tests::samples),
+        (admin::register, admin::tests::samples),
+    ];
+
+    #[test]
+    fn unit_proto_methods_ext_every_method_roundtrips() {
+        for (register, samples) in EXT_GROUPS {
+            let sampled: BTreeSet<&str> = samples().into_iter().collect();
+            assert_eq!(sampled, names(register));
+        }
+    }
+
+    #[test]
+    fn unit_proto_methods_ext_scopes_match_the_matrix() {
+        let (catalog, _) = built();
+        let ours: BTreeSet<&str> = EXT_GROUPS.iter().flat_map(|g| names(g.0)).collect();
+        let rows = MATRIX
+            .iter()
+            .filter(|row| row.1.iter().any(|m| ours.contains(m)));
+        assert_eq!(check_rows(&catalog, rows), ours, "rows of their own");
+    }
+
+    /// What the scope does not decide but the schema shows: `Input` cells
+    /// need an `input` parameter, `Build` cells go with `x-builds`, and
+    /// `CliOnly` cells with a method that needs no scope.
+    #[test]
+    fn unit_proto_methods_ext_cells_beyond_the_scope_match_the_schema() {
+        let (catalog, defs) = built();
+        let rows = |cell| {
+            MATRIX
+                .iter()
+                .filter(move |(_, _, cells)| cells.contains(&cell))
+        };
+        for (row, methods, _) in rows(Input) {
+            for method in *methods {
+                let params = catalog.requests[method]["params"]["$ref"].as_str().unwrap();
+                let params = &defs[params.trim_start_matches("#/$defs/")];
+                assert!(params["properties"].get("input").is_some(), "{row}");
+            }
+        }
+        let gated: BTreeSet<&str> = rows(Build)
+            .flat_map(|(_, m, _)| m.iter().copied())
+            .collect();
+        let builds = catalog
+            .requests
+            .iter()
+            .filter(|(_, e)| e.get(X_BUILDS).is_some());
+        assert_eq!(gated, builds.map(|(name, _)| *name).collect());
+        let cli_only: Vec<&str> = rows(CliOnly)
+            .flat_map(|(_, m, _)| m.iter().copied())
+            .collect();
+        assert_eq!(cli_only, ["auth/elevate"]);
+        assert_eq!(catalog.requests["auth/elevate"][X_SCOPE], "none");
+    }
+
+    #[test]
+    fn unit_proto_methods_ext_milestones_errors_and_builds_are_in_the_schema() {
+        let (catalog, _) = built();
+        let entry = |name: &str| &catalog.requests[name];
+        for name in git::tests::samples() {
+            assert_eq!(entry(name)[X_MILESTONE], "M1b", "{name}");
+        }
+        for name in admin::tests::samples() {
+            let milestone = if name == "diag/export" { "M2" } else { "M1a" };
+            assert_eq!(entry(name)[X_MILESTONE], milestone, "{name}");
+        }
+        let errors = |name: &str| entry(name)[X_ERRORS].clone();
+        assert_eq!(
+            errors("git/diff"),
+            json!(["unavailable/snapshot_missing", "unavailable/index_unmerged"])
+        );
+        assert_eq!(
+            errors("git/commit"),
+            json!([
+                "git_error/hook_failed",
+                "git_error/nothing_to_commit",
+                "conflict/outcome_unknown"
+            ])
+        );
+        assert_eq!(
+            errors("auth/elevate"),
+            json!(["forbidden/lineage", "rate_limited", "timeout"])
+        );
+        assert_eq!(errors("settings/update"), json!(["forbidden"]));
+        let errors_of_apply = [
+            "conflict/stale_diff",
+            "conflict/outcome_unknown",
+            "git_error",
+            "forbidden",
+        ];
+        assert_eq!(errors("git/revert"), json!(errors_of_apply));
+        assert_eq!(entry("session/archive")[X_MILESTONE], "M1b");
+        assert_eq!(errors("session/archive"), json!(["conflict/turn_running"]));
+
+        // Gated methods (design 5.8.3, 5.9.9); every other method is in every build.
+        let builds: BTreeMap<&str, &Value> = catalog
+            .requests
+            .iter()
+            .filter_map(|(name, e)| Some((*name, e.get(X_BUILDS)?)))
+            .collect();
+        let (harness, dev) = (json!(["test-harness"]), json!(["test-harness", "dev-auth"]));
+        let expected = BTreeMap::from([
+            ("diag/recording_export", &dev),
+            ("test/clock_advance", &harness),
+            ("test/run_maintenance", &harness),
+            ("test/seed", &harness),
+        ]);
+        assert_eq!(builds, expected);
+    }
+
     /// A method group: its `register` and its `samples`.
     type Group = (
         fn(&mut Catalog, &mut SchemaGenerator),
@@ -385,9 +565,10 @@ mod tests {
 
     #[test]
     fn unit_proto_methods_core_session_sec9_cells() {
-        // SEC-9: a remote device adds no project and changes a session's
-        // model and reasoning effort only. It holds the scopes of these
-        // methods, so the policy module refuses them, not the scope check.
+        // SEC-9: a remote device adds no project, changes a session's model
+        // and reasoning effort only, and writes no files, git state or
+        // settings. It holds the scopes of these methods, so the policy
+        // module refuses them, not the scope check.
         let sec9: BTreeSet<&str> = MATRIX
             .iter()
             .filter(|row| row.2[6] == Sec9)
@@ -396,11 +577,18 @@ mod tests {
         let expected = [
             "agents/refresh",
             "agents/restart",
+            "git/commit",
+            "git/push",
+            "git/revert",
+            "git/stage",
+            "git/unstage",
             "project/add",
             "project/remove",
+            "session/archive",
             "session/rename",
             "session/restore",
             "session/set_config",
+            "settings/update",
         ];
         assert_eq!(sec9, BTreeSet::from(expected));
         let (catalog, _) = built();

@@ -73,6 +73,23 @@ impl Milestone {
     }
 }
 
+/// A host build with methods that the release build lacks: the host's cargo
+/// feature of the same name (design 5.1.2, 5.9.9).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Build {
+    TestHarness,
+    DevAuth,
+}
+
+impl Build {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::TestHarness => "test-harness",
+            Self::DevAuth => "dev-auth",
+        }
+    }
+}
+
 /// An error a method may return besides those every method may return (see
 /// [`crate::methods`]): a code, narrowed to one reason or not.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,6 +119,9 @@ pub trait Method {
     const IDEMPOTENCY: Idempotency;
     const MILESTONE: Milestone;
     const ERRORS: &'static [MethodError];
+    /// The builds that have the method, as `x-builds`; empty: every build,
+    /// release included. The host registers a gated method only in these.
+    const BUILDS: &'static [Build] = &[];
     type Params: Serialize + DeserializeOwned + JsonSchema;
     type Result: Serialize + DeserializeOwned + JsonSchema;
 }
