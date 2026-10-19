@@ -287,6 +287,45 @@ pub fn recv_closing_fds(socket: impl AsFd, buf: &mut [u8]) -> io::Result<Receive
     Ok(Received { len, closed_fds })
 }
 
+/// Sends `data` with `fds` attached (`SCM_RIGHTS`) in one message, as a peer
+/// that passes fds does; for tests of the readers of a socket. Returns the
+/// bytes sent.
+#[cfg(any(test, feature = "test-util"))]
+pub fn send_with_fds(socket: impl AsFd, data: &[u8], fds: &[BorrowedFd<'_>]) -> io::Result<usize> {
+    let mut iov = libc::iovec {
+        // sendmsg only reads the data.
+        iov_base: data.as_ptr().cast_mut().cast(),
+        iov_len: data.len(),
+    };
+    let bytes = mem::size_of_val(fds) as u32;
+    // SAFETY: CMSG_SPACE only computes a size.
+    let space = unsafe { libc::CMSG_SPACE(bytes) };
+    // u64 words keep the buffer aligned for `cmsghdr`.
+    let mut control = vec![0u64; (space as usize).div_ceil(8)];
+    // SAFETY: msghdr is integers and pointers; all-zero is a valid value.
+    let mut msg: libc::msghdr = unsafe { mem::zeroed() };
+    msg.msg_iov = &mut iov;
+    msg.msg_iovlen = 1;
+    msg.msg_control = control.as_mut_ptr().cast();
+    msg.msg_controllen = space;
+    // SAFETY: `control` has room for one cmsghdr with `bytes` of data, so
+    // the header and the `bytes` after CMSG_DATA lie inside it.
+    unsafe {
+        let cmsg = libc::CMSG_FIRSTHDR(&msg);
+        (*cmsg).cmsg_level = libc::SOL_SOCKET;
+        (*cmsg).cmsg_type = libc::SCM_RIGHTS;
+        (*cmsg).cmsg_len = libc::CMSG_LEN(bytes);
+        let data = libc::CMSG_DATA(cmsg).cast::<c_int>();
+        for (i, fd) in fds.iter().enumerate() {
+            data.add(i).write_unaligned(fd.as_raw_fd());
+        }
+    }
+    // SAFETY: `msg` and the buffers it points to outlive the call; the
+    // kernel does not write to the data.
+    let sent = unsafe { libc::sendmsg(socket.as_fd().as_raw_fd(), &msg, 0) };
+    usize::try_from(sent).map_err(|_| io::Error::last_os_error())
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::{BufReader, Read, Write};
@@ -432,45 +471,6 @@ mod tests {
         assert_eq!(child.wait(), 0);
     }
 
-    /// Sends `byte` with `fds` attached as one `SCM_RIGHTS` message.
-    fn send_fds(socket: &UnixStream, fds: &[BorrowedFd<'_>], byte: u8) -> io::Result<()> {
-        let mut data = [byte];
-        let mut iov = libc::iovec {
-            iov_base: data.as_mut_ptr().cast(),
-            iov_len: 1,
-        };
-        let bytes = mem::size_of_val(fds) as u32;
-        // SAFETY: CMSG_SPACE only computes a size.
-        let space = unsafe { libc::CMSG_SPACE(bytes) };
-        // u64 words keep the buffer aligned for `cmsghdr`.
-        let mut control = vec![0u64; (space as usize).div_ceil(8)];
-        // SAFETY: msghdr is integers and pointers; all-zero is a valid value.
-        let mut msg: libc::msghdr = unsafe { mem::zeroed() };
-        msg.msg_iov = &mut iov;
-        msg.msg_iovlen = 1;
-        msg.msg_control = control.as_mut_ptr().cast();
-        msg.msg_controllen = space;
-        // SAFETY: `control` has room for one cmsghdr with `bytes` of data, so
-        // the header and the `bytes` after CMSG_DATA lie inside it.
-        unsafe {
-            let cmsg = libc::CMSG_FIRSTHDR(&msg);
-            (*cmsg).cmsg_level = libc::SOL_SOCKET;
-            (*cmsg).cmsg_type = libc::SCM_RIGHTS;
-            (*cmsg).cmsg_len = libc::CMSG_LEN(bytes);
-            let data = libc::CMSG_DATA(cmsg).cast::<c_int>();
-            for (i, fd) in fds.iter().enumerate() {
-                data.add(i).write_unaligned(fd.as_raw_fd());
-            }
-        }
-        // SAFETY: `msg` and everything it points to outlive the call.
-        let sent = unsafe { libc::sendmsg(socket.as_raw_fd(), &msg, 0) };
-        if sent == 1 {
-            Ok(())
-        } else {
-            Err(io::Error::last_os_error())
-        }
-    }
-
     /// Whether every write end of the pipe of `reader` is closed: a
     /// non-blocking read then reports end of file instead of `EAGAIN`.
     fn writers_gone(reader: &io::PipeReader) -> bool {
@@ -546,7 +546,7 @@ mod tests {
             let (server, client) = UnixStream::pair().unwrap();
             let (pipe, writer) = nonblocking_pipe();
             let id = file_id(writer.as_fd()).unwrap();
-            send_fds(&client, &[writer.as_fd()], b'x').unwrap();
+            send_with_fds(&client, b"x", &[writer.as_fd()]).unwrap();
             drop(writer);
             assert_eq!(read(&server), b'x');
             assert!(!writers_gone(&pipe), "the passed copy is still open");
@@ -570,9 +570,9 @@ mod tests {
         let (pipe, writer) = nonblocking_pipe();
         // One fd, then the most one message can carry: one more is refused,
         // so the control buffer of `recv_closing_fds` is never too small.
-        send_fds(&client, &[writer.as_fd()], b'a').unwrap();
-        send_fds(&client, &[writer.as_fd(); 254], b'b').unwrap();
-        let refused = send_fds(&client, &[writer.as_fd(); 255], b'-').unwrap_err();
+        send_with_fds(&client, b"a", &[writer.as_fd()]).unwrap();
+        send_with_fds(&client, b"b", &[writer.as_fd(); 254]).unwrap();
+        let refused = send_with_fds(&client, b"-", &[writer.as_fd(); 255]).unwrap_err();
         assert_eq!(refused.raw_os_error(), Some(libc::EINVAL));
         drop(writer);
         (&client).write_all(b"plain").unwrap();
