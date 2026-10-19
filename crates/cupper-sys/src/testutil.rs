@@ -17,10 +17,13 @@ use crate::{Child, Command, ProcessGroup, Signal, Stdio, spawn};
 
 /// Serialises the tests whose children keep copies of this process's fds:
 /// `fork` (all of them, until the child exits), `std::process` and a spawn
-/// without `CLOEXEC_DEFAULT` (those without close-on-exec). A check of which
-/// processes hold an fd at a given moment needs more than this lock: any
-/// spawn, [`spawn`] included, briefly copies every fd of this process, close-
-/// on-exec or not, so such a test runs [`alone`].
+/// without `CLOEXEC_DEFAULT` (those without close-on-exec, which includes a
+/// pipe or socket pair that std is creating on another thread right then). A
+/// check of which processes hold an fd at a given moment needs more than this
+/// lock: any spawn, [`spawn`] included, briefly copies every fd of this
+/// process, close-on-exec or not. So a test that closes an fd waits for the
+/// other end to report end of file before it relies on the fd being closed,
+/// or runs [`alone`] when whether a copy is open is what it checks.
 pub fn fd_lock() -> MutexGuard<'static, ()> {
     static LOCK: Mutex<()> = Mutex::new(());
     LOCK.lock().unwrap_or_else(PoisonError::into_inner)
