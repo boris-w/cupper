@@ -23,6 +23,8 @@ thiserror = "2.0.21"
 [workspace.lints.rust]
 # `unsafe` lives only in `cupper-sys`, which opts out with a crate-level `allow` (design 5.1.1).
 unsafe_code = "deny"
+# `--cfg shuttle` swaps the host streams' locks for shuttle's (PROP-stream-seq, design 5.9.8).
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(shuttle)"] }
 
 [workspace.lints.clippy]
 await_holding_lock = "deny"

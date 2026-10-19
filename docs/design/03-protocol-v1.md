@@ -680,4 +680,4 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 - **审计**：
   - 网关把审计记录发进 channel。写进 `audit` 表和 host.log 的接线，归 T037。
   - 对端可执行文件的路径、签名 identifier、Team ID，归 T038，它的提权确认框同样要用。
-
+- **握手期限**（编排者裁定，T030 汇报时提出）：宿主发出 `host/hello` 后，客户端须在 10 s 内发来 `initialize`，否则宿主断开连接，审计原因记 `handshake_timeout`。期限登记在 `durations.rs`，经 `Clock` 计时，由 T039 实现。

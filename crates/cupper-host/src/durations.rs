@@ -58,6 +58,9 @@ durations! {
     GATEWAY_CLOSE_GRACE = "gateway_close_grace", Duration::from_secs(2);
     /// The wait after a failed `accept`, out of fds for one, before the next.
     GATEWAY_ACCEPT_BACKOFF = "gateway_accept_backoff", Duration::from_millis(50);
+    /// How long a stream stays in memory with no handle, writer or subscriber
+    /// left (design 5.2.8). Checked whenever a stream is opened, not by a timer.
+    STREAM_IDLE = "stream_idle", Duration::from_secs(600);
     /// How long a new turn waits for its start snapshot before it sends the
     /// prompt anyway (design 5.2.6).
     TURN_PREPARE = "turn_prepare", Duration::from_secs(3);
