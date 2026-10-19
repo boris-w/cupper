@@ -2,3 +2,4 @@
 //! declares them (plan 1.5).
 
 pub mod clock;
+pub mod pure;
