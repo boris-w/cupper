@@ -18,6 +18,23 @@
 
 总计约 1,190 行，超出 M 的估计，但在约 1,500 行的上限之内。T026 的经验是实现会比估计多约 25%（rustfmt 展开和文档注释），照此约 1,350 行，所以要省：测试夹具共用，不写只为测试存在的开关。做到一半预计超过 1,500 行就停下来汇报。
 
+## 实际行数
+
+按模块分步提交，每个提交带本模块的单元测试，单独通过 fmt、clippy（工作区全特性和宿主三种特性组合）和测试。相对分支起点的新增行数（不含 `Cargo.lock`、`docs/`）：
+
+| 提交 | 内容 | 本提交新增（删除） | 累计新增 |
+|---|---|---|---|
+| `6c317a4` | 原始帧队列与 `raw.db` 写线程；`RawFrame`、`Dir`、`RawSink` 挪进 store；UNIT-raw-queue | 550（98） | 550 |
+| `8ebe545` | `BlobStore`、`add_ref`；UNIT-blobstore | 425（21） | 955 |
+| `a61854c` | `Maintenance`、`Schedule`、5 个时长；UNIT-retention | 519（1） | 1,473 |
+| 最后一个 `fix` | 停止请求之后排着的帧计入丢弃 | 14（2） | 1,485 |
+
+（累计按分支起点到各提交的 diff 计，挪动和改写的行会抵消一部分，所以不等于逐行相加。）
+
+按类别：实现约 900 行（`raw_writer.rs` 约 345，其中约 45 行是从 tap 挪来的类型；`blobs.rs` 258；`retention.rs` 254；其余是 `durations.rs`、`store/mod.rs`、tap 和 `Cargo.toml`）；测试和测试辅助约 585 行（`retention.rs` 249、`blobs.rs` 124、`raw_writer.rs` 118 加测试用的 `Unattended` 约 22、`testutil.rs` 70）。
+
+比开工前的估计（约 1,190 行）多约 25%，和 T026 的经验一致，主要是 rustfmt 展开和文档注释；在约 1,500 行的上限之内，没有触发停止。
+
 ## 取舍
 
 ### 原始帧另开一个写线程（`store-raw-writer`），不放进 `Batcher`
@@ -41,7 +58,7 @@
 
 ### 写失败也算丢弃
 
-单条 INSERT 失败只回滚这一条（SQLite 的语句级原子性），计入 `dropped`；`BEGIN` 或 `COMMIT` 失败，整批计入 `dropped`。宿主还没有日志设施，计数是唯一的出口。
+单条 INSERT 失败只回滚这一条（SQLite 的语句级原子性），计入 `dropped`；`BEGIN` 或 `COMMIT` 失败，或者某条 INSERT 的错误让 SQLite 自己结束了事务，整批计入 `dropped`。停止请求之后还排着的帧，以及停止之后才推入的帧，也计入。宿主还没有日志设施，计数是唯一的出口。
 
 ### `raw.db` 的"总大小"按在用的页计
 
