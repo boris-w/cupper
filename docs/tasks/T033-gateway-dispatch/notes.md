@@ -143,3 +143,88 @@
     - `testkit.rs` 的 `TestGateway::start`。
 
     都是附加，合并时由编排者处理。
+
+## 拆分之后（计划 v1.3.7）
+
+编排者采用方案 A，T033 只做 D 部分（分发、账本与路由）；订阅与历史归 T019，blob 归 T029。待裁定的 6 项全部认可，写进了 `03-protocol-v1.md` 5.3.11 末尾"T033 开工前的裁定"，其中第 1–3 项归本任务。开工时 main 已经带来 T039（密钥认证、握手期限、网关夹具）。
+
+### 实际规模
+
+按 `git diff --numstat` 统计，不含本笔记和 CI 摘要。
+
+| 提交 | 内容 | 增 | 删 |
+|---|---|---|---|
+| `feat(host): dispatch requests …` | `dispatch.rs`、`routes.rs`、`describe.rs`；`conn.rs`、`mod.rs`、`testkit.rs`、夹具、T039 用例的接线 | 558 | 50 |
+| `fix(host): answer gateway methods not served yet …` | 留位的方法在参数检查之前就回 `unsupported` | 14 | 2 |
+| `test(host): IT-command-order, …` | `dispatch/tests.rs` | 783 | 0 |
+| 合计 | | **1,355** | 52 |
+
+实现约 570 行，比估计的 535 多一点。测试 783 行，比估计的 630 多，多在替身与驱动分发的辅助上；仍在上限之内。
+
+### 实现要点
+
+- **流水线**（`dispatch.rs`）：
+  - 读循环对每条请求同步调用 `Dispatch::request`，顺序是：
+    1. 查方法表，没有登记就回 `unsupported`；
+    2. `policy::method`；
+    3. 按方法的参数类型校验，不通过就回 invalid params；
+    4. 三条只看参数的规则；
+    5. 在途许可；
+    6. 命令过 `Ledger::begin`；
+    7. 投递。
+  - `Answer::Later` 的回复在单独的 task 里等待。先释放在途许可，再写回复，这样客户端读到回复就能发下一条请求。
+  - 缺省的 `params` 一律按 `{}` 处理。
+- **在途**：每条连接一个 64 许可的信号量，所有请求都计数，包括 `ping` 和同步回答的请求；客户端通知不计。第 65 个请求回 `rate_limited`，不带 `retry_after_ms`。
+- **客户端通知**：同样经过查表、策略和参数校验；任何一步不通过就静默丢弃。投递返回的 future 另起 task 执行，结果丢弃。
+- **方法表**（`routes.rs`）：
+  - `add::<M>`、`notification::<N>` 记下 `SCOPE`、`IDEMPOTENCY`、参数校验函数和目标，按 `M::BUILDS` 只在相应构建里登记。
+  - 命令必须登记在带账本的表上，否则组装时断言失败。同一方法重复登记也断言失败。
+  - `Routes::default()` 只有网关自处理的方法（`ping` 和留位），没有账本，供网关夹具和 `TestGateway::start` 使用。
+- **断开**：
+  - `initialize` 成功后调用 `IndexPort::opened`；连接结束时，在写 `conn.closed` 审计之前调用 `IndexPort::closed`。
+  - 每条连接的 `Dispatch` 随连接一起丢弃。
+- **用例编号**：网关层的策略和账本用例没有新编号，分别挂在已有的 UNIT-policy-matrix、UNIT-ledger 下（`unit_policy_matrix_gateway_*`、`unit_ledger_gateway_*`）。走真实套接字的那条挂在 IT-command-order 下。
+
+## 给 T019、T029 的接入点
+
+- **方法表里的留位**：
+  - `Routes::default()` 把 `stream/subscribe`、`stream/unsubscribe`、`history/page` 登记为 `Target::Streams`，把 `blob/get`、`blob/put` 登记为 `Target::Blobs`。
+  - `Target::serves()` 对这两种返回 false，所以它们现在和没有登记的方法一样，在策略之前就回 `unsupported`。`Dispatch::answer` 里对应的分支是 `unreachable!`。
+  - T019、T029 各自把留位换成带依赖的目标，例如 `Target::Streams { streams, readers }`，由 `Routes` 上的一个登记函数（如 `routes.streams(streams, readers)`）放进去。然后在 `Dispatch::answer` 里处理，并删掉 `serves()` 里的对应项和 UNIT-unsupported-set 允许表里的对应行。
+  - 这几个方法的幂等都是"天然"，不经过账本。
+- **每连接的状态**：
+  - 订阅表、上传缓冲放进 `Dispatch`。它在 `initialize` 成功时创建，装在 `Phase::Ready(session, Box<Dispatch>)` 里，在 `conn::run` 末尾随连接丢弃。
+  - 订阅和上传缓冲放在这里，断开时就自动注销、丢弃，不用另写清理。
+- **回复与帧的先后**：
+  - `Answer::Later(reply, place)` 的回复，要等 future 完成后才写进发送队列。
+  - `blob/get` 可以在 future 里先把分片帧推进 `Dispatch` 持有的 `Outbox`，完成后网关再写结果。
+  - `stream/subscribe` 要在 `start` 回调里排响应，不能走 `Answer::Later` 的回复路径，要在 `Dispatch` 里另开一条分支：直接写 `Outbox`，由同步分支持有在途许可。
+- **`0x02` 帧**：`conn.rs` 的 `on_frame` 在 `initialize` 之后忽略非 JSON 帧（注释写明归 T029）。T029 在这里把帧交给 `Dispatch` 的上传缓冲。分片本身不经过方法表，`write` scope 要自己用 `policy::method(principal, BlobPut::NAME, BlobPut::SCOPE.as_ref())` 检查。
+- **特性**：`handshake.rs` 的 `HOST_FEATURES` 仍为空。T019 加 `stream.coalesce`、`history.page`，T029 加 `blob.get`、`blob.put`。
+- **发送时合并**：`coalesce_ms` 和协商出的特性在 `Phase::Ready` 的 `Session` 里。写任务（`conn.rs` 的 `write_loop`）在 `initialize` 之前就已启动，T019 要把这两个值传给它。
+- **组装入口**：`Routes::start` 目前装载账本、启动清理任务、登记两个端口。T019、T029 在这里加上 `Streams`、`Readers`、`BlobStore`，或者另给登记函数，由 T037 调用。
+
+## 给其他任务的接入点（汇报时一并交接）
+
+- **T043**：
+  - 实现 `SessionPort`：`deliver` 按 `params.session_id` 投进会话 actor 的邮箱，不等待；`Call.ticket` 是命令的首次执行；返回的 future 给出回复。
+  - 实现 `facts(&Confirmable)`：给出 `mode_tier`、`option` 和 `running_turns`。
+  - `Routes::sessions` 已登记 `session/create`、`send`、`interrupt`、`queue_resume`、`get`、`capabilities` 和 `interaction/respond`、`interaction/get`。
+- **T044**：`routes.add::<SessionConfirmConfig>(sessions)`，并删掉允许表里那一行。
+- **T034**：
+  - 实现 `IndexPort`：`project/add`、`trust`、`trust_info`、`session/mark_read`，以及 `client/presence` 通知。
+  - `opened` 和 `closed` 维护 `clients`。`ClientInfo.auth` 由 `Opened` 的 principal 种类和 `weak_auth` 推出。
+- **T036**：`routes.add::<SettingsGet>`、`routes.add::<SettingsUpdate>`。`settings_update` 规则网关已经执行过。
+- **T037**：
+  - 组装：`Routes::start(&conn, writer, clock, &durations, sessions, index)` 返回 `(routes, sweeper)`，然后 `Gateway::new(config, clock, durations, routes)`；有序退出时 abort 清理任务。
+  - 登记 `host/status`、`host/exit`。
+- **T038**：
+  - 撤销提权挂在 `IndexPort::closed` 上。
+  - `Dispatch` 里的 principal 目前在 `initialize` 时定下、不再变化。授予提权时，要让这条连接的 scope 能更新，例如改成共享的可变 principal 或 scope 叠加。
+  - 登记 `auth/*`。
+- **T047**：
+  - 登记 `test/*`、`diag/recording_export`。`add::<M>` 会按构建门控。
+  - `test/run_maintenance` 要调用 `Ledger::sweep()`，届时给 `Routes` 加一个公开的账本访问函数（现在是 `pub(super)`），或者由组装时把账本交给执行者。
+  - 账本清理任务、各连接等回复的 task 还没有登记进静止屏障。
+- **T055**：登记 `agents/capabilities`、`agents/refresh`。
+- **T183**：登记 `host/prepare_upgrade`。
