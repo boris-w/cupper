@@ -1,5 +1,5 @@
 //! IT-migrations (design 5.4.6, 5.9.8, test #11): `host.db` migrations with
-//! test scripts after the real ones (plan P-4).
+//! test scripts after the real ones (plan P-4), and the rebuild of `raw.db`.
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -12,7 +12,8 @@ use cupper_host::exit::HostExit;
 use cupper_host::failpoint;
 use cupper_host::store::meta::{self, MetaKey};
 use cupper_host::store::{
-    self, Database, LAYOUT_VERSION, MIGRATIONS, MigrateError, Migrated, Migration,
+    self, Database, LAYOUT_VERSION, MIGRATIONS, MigrateError, Migrated, Migration, RAW_SCHEMA,
+    RawDb, RawSchema,
 };
 use rusqlite::Connection;
 
@@ -309,4 +310,48 @@ fn crash_child() {
     let all = scripts(&[RECORD_A, RECORD_B]);
     let result = store::migrate(&mut conn, &all, &dir.join("backups"), &ManualClock::new());
     panic!("the failpoint did not fire: {result:?}");
+}
+
+#[test]
+fn it_migrations_raw_db_is_rebuilt_when_its_schema_changes() {
+    let dir = DataDir::new("raw");
+    let mut conn = store::open_writer(&dir.0.join("raw.db"), Database::Raw).unwrap();
+    let frames = |conn: &Connection| -> i64 {
+        conn.query_row("SELECT count(*) FROM raw_frames", [], |row| row.get(0))
+            .unwrap()
+    };
+    let rebuilt = store::prepare_raw(&mut conn, &RAW_SCHEMA).unwrap();
+    assert_eq!(rebuilt, RawDb::Rebuilt { from: 0 });
+    conn.execute(
+        "INSERT INTO raw_frames VALUES ('a_1', 1, 5, 'send', NULL, '{}')",
+        [],
+    )
+    .unwrap();
+
+    // The same version: kept as it is.
+    let kept = store::prepare_raw(&mut conn, &RAW_SCHEMA).unwrap();
+    assert_eq!(kept, RawDb::Kept);
+    assert_eq!(frames(&conn), 1);
+
+    // A changed schema: emptied and rebuilt, no migration.
+    let changed = RawSchema {
+        version: RAW_SCHEMA.version + 1,
+        sql: "CREATE TABLE raw_frames (frame TEXT NOT NULL);",
+    };
+    let rebuilt = store::prepare_raw(&mut conn, &changed).unwrap();
+    let from = i64::from(RAW_SCHEMA.version);
+    assert_eq!(rebuilt, RawDb::Rebuilt { from });
+    assert_eq!(frames(&conn), 0);
+    let schema: Vec<String> = conn
+        .prepare("SELECT sql FROM sqlite_schema")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(schema, [changed.sql.trim_end_matches(';')]);
+    let user_version: u32 = conn
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .unwrap();
+    assert_eq!(user_version, changed.version);
 }
