@@ -15,14 +15,15 @@
 //!    [`TimerTable`], and execute the rest (append events, call the driver,
 //!    reply to a command), reporting results back as new inputs;
 //! 3. keep one [`Clock::timer_at`](crate::clock::Clock::timer_at) armed for
-//!    [`TimerTable::next_deadline`]; when it fires, feed every
-//!    [`TimerTable::pop_due`] key back through [`Core::timer_expired`].
+//!    [`TimerTable::next_deadline`] with an [`Alarm`]; when it fires, feed
+//!    every [`TimerTable::pop_due`] key back through [`Core::timer_expired`].
 //!
 //! A timer cancelled or moved by a step never reaches the core afterwards, so a
 //! core sees an expiry only for a timer it still has set. A core that needs IDs
 //! mints them with [`IdGen::new_id_at`](crate::clock::IdGen::new_id_at) at
 //! `now.wall_ms`, so they match the time of the step.
 
+mod alarm;
 #[cfg(any(test, feature = "test-harness"))]
 mod driver;
 
@@ -32,6 +33,7 @@ use std::hash::Hash;
 
 use crate::clock::{MonoTime, Now};
 
+pub use alarm::Alarm;
 #[cfg(any(test, feature = "test-harness"))]
 pub use driver::{CoreDriver, Step};
 
