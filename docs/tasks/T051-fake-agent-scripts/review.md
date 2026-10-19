@@ -17,7 +17,7 @@
   - 原始行装进标记通知，走 SDK 的发送队列，写出时再换回原样。这样保证了它与前后消息的顺序，做法可取。
   - 请求不走 SDK 的类型化处理器，响应直接写 JSON，以保留录制里的原样形态；参数仍经 SDK 校验。接受。
   - 全局不变式：在途标记在 prompt 的响应之前清除，避免宿主紧接着发下一个 prompt 时被误判。退出码 70。
-  - `crash_cli` 这类命令用 `std::process` 拉 `/bin/sleep` 模拟 CLI 子进程。`CLAUDE.md` 里"经 `cupper-sys::spawn` 拉子进程"的约束只针对宿主、CLI 和原生扩展，假 agent 不在其内。接受。
+  - `spawn_child` 用 `std::process` 拉 `/bin/sleep`，模拟活得比适配器久、需要宿主按进程组回收的 CLI 子进程。`CLAUDE.md` 里"经 `cupper-sys::spawn` 拉子进程"的约束只针对宿主、CLI 和原生扩展，假 agent 不在其内。接受。
 - 规模：最终 3,050 行，其中 persona JSON 404 行（prettier 排版，属于数据）、实现 1,704 行、测试 922 行。接受。
 - 转交事项已写进 `docs/tasks/handoff-notes.md`：
   - T052：用 `--segment-file` 回放多实例录制；persona 与录制的自动比对（jq 命令在 `notes.md` 里）；
