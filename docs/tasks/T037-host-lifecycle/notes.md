@@ -115,7 +115,8 @@
 | `feat(host): assemble the host, …` | `supervisor/`（组装、清理状态、有序退出、`host/status`、`host/exit`）、`main` 重组、UNIT-unsupported-set 的两行 | 584 | 25 | 570 |
 | `test(host): IT-lifecycle …` | `tests/lifecycle.rs` 三个用例 | 273 | 0 | 285 |
 | `test: register the T037/T059 split …` | 从 main 拣来的 `tests/ids.toml`（见下文） | 6 | 1 | — |
-| **合计** | | **1,305** | 46 | 1,210 |
+| `test(host): a release host that ignored its stdin comes up` | T023 的发布构建用例原来断言"not assembled"、退出码 1；宿主组装好后会一直运行，改为等它监听、stderr 为空、SIGTERM 后退出码 0 | 37 | 9 | — |
+| **合计** | | **1,342** | 55 | 1,210 |
 
 网关超出估计最多：起初只算了"登记表加广播"，实际还要让读循环能被关闭（`closing`）、统计存活的连接任务（`Live`）、由 `Opened` 推出 `ClientInfo`。启动清理没有单独写单元测试，由 IT-lifecycle 在进程级覆盖，省下约 45 行。
 
