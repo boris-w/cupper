@@ -77,3 +77,26 @@
    不开放的认证一律回 `unauthenticated` 并断开。UI 的签名要求要等 T180 带上 Team ID；在此之前配置里为空，`codesign` 认证全部失败（`signature_invalid`）。`weak_auth` 等于是否开了 `dev-auth`。
 7. **错误码的取法**：nonce 不符 `unauthenticated/bad_nonce`；签名结论不是 UI `unauthenticated/signature_invalid`；本构建没有这种认证、没有载入密钥、`dev_key` 不是拉起方 `unauthenticated/bad_key`；证明格式错或不符 `unauthenticated/bad_proof`；未知认证类型 `unauthenticated`（不带 reason）；非 UI 声明角色、UI 不声明角色 `forbidden/role`。握手失败一律先回错误、再断开。
 8. **新时长**：关闭宽限（先写完错误回复再断开，设计没有给值，取 2 s）、accept 出错退避（沿用 SP-4a 的 50 ms），登记到 `durations.rs`。
+
+## 裁定之后：收窄后的估计（2026-10-19）
+
+编排者裁定按方案 B 拆分（任务书末尾的"补充裁定"、设计 5.3.11 末尾的"T030 开工前的裁定"）。`proof`、`dev_key`、`harness`、`host_proof`、ppid 为 1 退出、kqueue、网关夹具归 T039；本任务里 `dev_key`、`harness` 一律回 `unauthenticated/bad_key`。
+
+| 模块 | 内容 | 估计 |
+|---|---|---|
+| `gateway/listen.rs` | `host.lock`、套接字目录检查、绑定、0600 | 100 |
+| `gateway/wire.rs` | 响应、错误、通知的帧编码；过长的错误信息截断 | 45 |
+| `gateway/outbox.rs` | 帧、按字节预算的实时帧、按流重置、`finish` 与 `close` | 110 |
+| `gateway/audit.rs` | 审计记录 | 70 |
+| `gateway/handshake.rs` | `initialize`：nonce、版本、认证分派（`peer`、`codesign`）、角色、principal、结果 | 130 |
+| `gateway/conn.rs` | 准入、读循环、阶段机、`ping`、关闭宽限、写循环 | 220 |
+| `gateway/mod.rs` | 配置、`Gateway`、accept 循环 | 110 |
+| `cupper-sys` | 测试用的 `send_with_fds`（从 peer 的测试里挪出，`test-util` 特性门控） | 15 |
+| `durations.rs`、`Cargo.toml`、`lib.rs` | | 20 |
+| 实现小计 | | **820** |
+| `gateway/testkit.rs` | 测试客户端、起一个网关、临时目录 | 130 |
+| listen、outbox、handshake 的单元测试 | | 160 |
+| IT-handshake | | 200 |
+| IT-pinned-token（含收到 fd） | | 90 |
+| 测试小计 | | **580** |
+| **合计** | | **约 1,400** |
