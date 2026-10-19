@@ -282,7 +282,7 @@ mod tests {
         (
             "interaction/respond（requires: approve 的选项、回答提问；privileged 的选项和档位由策略判定）",
             &["interaction/respond"],
-            [Y, Y, N, N, Y, Y, Y],
+            [Y, Input, N, N, Y, Y, Y],
         ),
     ];
 
@@ -565,8 +565,9 @@ mod tests {
 
     #[test]
     fn unit_proto_methods_core_session_sec9_cells() {
-        // SEC-9: a remote device adds no project, changes a session's model
-        // and reasoning effort only, and writes no files, git state or
+        // SEC-9: a remote device adds no project; of a session's options it
+        // changes the model and the reasoning effort, and only tightens or
+        // keeps the permission mode; it writes no files, git state or
         // settings. It holds the scopes of these methods, so the policy
         // module refuses them, not the scope check.
         let sec9: BTreeSet<&str> = MATRIX

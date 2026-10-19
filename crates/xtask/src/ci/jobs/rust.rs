@@ -1,6 +1,6 @@
-//! `rust`: formatting, clippy with warnings denied, and the workspace tests
-//! (design 5.1.6), plus the host's other feature sets and its shuttle tests.
-//! Later tasks add the iOS build of `cupper-protocol` and the golden tests.
+//! `rust`: formatting, clippy with warnings denied, the iOS build of
+//! `cupper-protocol` and the workspace tests (design 5.1.6), plus the host's
+//! other feature sets and its shuttle tests. A later task adds the golden tests.
 
 use anyhow::Result;
 
@@ -40,6 +40,13 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         clippy.args(["--", "-D", "warnings"]);
         ctx.check(&format!("clippy-host-{name}"), &mut clippy)?;
     }
+
+    // The library has no I/O and builds for iOS (design 5.1.1); its bin
+    // `export-schema` stays out.
+    let mut ios = ctx.cargo();
+    ios.args(["build", "-p", "cupper-protocol", "--lib", "--locked"])
+        .args(["--target", "aarch64-apple-ios-sim"]);
+    ctx.check("ios-sim", &mut ios)?;
 
     let mut test = ctx.cargo();
     test.args([

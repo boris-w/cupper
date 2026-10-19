@@ -1,0 +1,1510 @@
+[
+  {
+    "name": "project.upserted",
+    "expect": "known",
+    "event": {
+      "seq": 1,
+      "v": 1,
+      "ts": 1700000000001,
+      "cause": { "command_id": "c_0190a3b4c5d67e8f9a0b1c2d3e4f5a6b", "principal": "pr_desktop" },
+      "data": {
+        "added_at": 1,
+        "is_git": true,
+        "name": "cupper",
+        "path": "/work/cupper",
+        "position": 0,
+        "project_id": "p_1",
+        "trust_state": "stale"
+      },
+      "type": "project.upserted"
+    }
+  },
+  {
+    "name": "project.removed",
+    "expect": "known",
+    "event": {
+      "seq": 2,
+      "v": 1,
+      "ts": 1700000000002,
+      "data": { "project_id": "p_1" },
+      "type": "project.removed"
+    }
+  },
+  {
+    "name": "session.upserted",
+    "expect": "known",
+    "event": {
+      "seq": 3,
+      "v": 1,
+      "ts": 1700000000003,
+      "data": {
+        "agent": "claude",
+        "branch": "cupper/fix",
+        "error_code": "quota_exhausted",
+        "last_activity_at": 5,
+        "pending_interactions": 2,
+        "pending_kind": "approval",
+        "project_id": "p_1",
+        "read_only": false,
+        "session_id": "s_0190a3b4c5d67e8f9a0b1c2d3e4f5a6b",
+        "status": "needs_action",
+        "title": "Fix the build",
+        "title_source": "agent",
+        "unread": true,
+        "workspace_kind": "worktree"
+      },
+      "type": "session.upserted"
+    }
+  },
+  {
+    "name": "session.upserted, optional fields left out",
+    "expect": "known",
+    "event": {
+      "seq": 4,
+      "v": 1,
+      "ts": 1700000000004,
+      "data": {
+        "agent": "codex",
+        "last_activity_at": 5,
+        "pending_interactions": 0,
+        "project_id": "p_1",
+        "read_only": true,
+        "session_id": "s_0190a3b4c5d67e8f9a0b1c2d3e4f5a6b",
+        "status": "idle",
+        "title": "",
+        "title_source": "none",
+        "unread": false,
+        "workspace_kind": "local"
+      },
+      "type": "session.upserted"
+    }
+  },
+  {
+    "name": "session.removed",
+    "expect": "known",
+    "event": {
+      "seq": 5,
+      "v": 1,
+      "ts": 1700000000005,
+      "data": { "reason": "archived", "session_id": "s_0190a3b4c5d67e8f9a0b1c2d3e4f5a6b" },
+      "type": "session.removed"
+    }
+  },
+  {
+    "name": "agents.updated",
+    "expect": "known",
+    "event": {
+      "seq": 6,
+      "v": 1,
+      "ts": 1700000000006,
+      "data": {
+        "agents": [
+          {
+            "adapter": { "failure": "hash_mismatch", "runtime": "failed", "version": "0.91.0" },
+            "agent": "claude",
+            "auth": { "kind": "subscription", "plan": "max", "state": "logged_in" },
+            "cli": {
+              "compat": "verified",
+              "install": "native",
+              "path": "/opt/homebrew/bin/claude",
+              "version": "2.1.296"
+            },
+            "config_dir": "ok",
+            "rss_bytes": 734003200,
+            "state": "running"
+          },
+          {
+            "adapter": { "runtime": "missing", "version": "2.2.2" },
+            "agent": "codex",
+            "auth": { "state": "unchecked" },
+            "config_dir": "default",
+            "state": "unavailable"
+          }
+        ],
+        "git": { "lfs": "3.7.0", "version": "2.50.1" }
+      },
+      "type": "agents.updated"
+    }
+  },
+  {
+    "name": "agents.updated, optional fields left out",
+    "expect": "known",
+    "event": {
+      "seq": 7,
+      "v": 1,
+      "ts": 1700000000007,
+      "data": { "agents": [], "git": {} },
+      "type": "agents.updated"
+    }
+  },
+  {
+    "name": "host.updated",
+    "expect": "known",
+    "event": {
+      "seq": 8,
+      "v": 1,
+      "ts": 1700000000008,
+      "data": {
+        "last_exit_abnormal": true,
+        "pending_upgrade": true,
+        "power_assertion": true,
+        "version": "0.1.0",
+        "weak_auth": false
+      },
+      "type": "host.updated"
+    }
+  },
+  {
+    "name": "clients.updated",
+    "expect": "known",
+    "event": {
+      "seq": 9,
+      "v": 1,
+      "ts": 1700000000009,
+      "data": {
+        "clients": [
+          {
+            "auth": "verified",
+            "client_name": "Cupper",
+            "client_version": "0.1.0",
+            "conn_id": "c_1",
+            "principal_kind": "desktop_ui",
+            "role": "window",
+            "since": 3
+          },
+          {
+            "auth": "peer",
+            "client_name": "cupper-cli",
+            "client_version": "0.1.0",
+            "conn_id": "c_2",
+            "elevated": { "expires_at": 9, "scopes": ["write", "approve"] },
+            "principal_kind": "cli",
+            "since": 4
+          }
+        ]
+      },
+      "type": "clients.updated"
+    }
+  },
+  {
+    "name": "elevation.requested",
+    "expect": "known",
+    "event": {
+      "seq": 10,
+      "v": 1,
+      "ts": 1700000000010,
+      "data": {
+        "client_name": "cupper-cli",
+        "elevation_id": "e_1",
+        "requested_at": 7,
+        "scopes": ["write"]
+      },
+      "type": "elevation.requested"
+    }
+  },
+  {
+    "name": "elevation.resolved",
+    "expect": "known",
+    "event": {
+      "seq": 11,
+      "v": 1,
+      "ts": 1700000000011,
+      "data": { "decision": "expired", "elevation_id": "e_1" },
+      "type": "elevation.resolved"
+    }
+  },
+  {
+    "name": "notification.intent",
+    "expect": "known",
+    "event": {
+      "seq": 12,
+      "v": 1,
+      "ts": 1700000000012,
+      "data": {
+        "intent_id": "n_1",
+        "reason": "needs_action",
+        "request_id": "r_1",
+        "session_id": "s_0190a3b4c5d67e8f9a0b1c2d3e4f5a6b"
+      },
+      "type": "notification.intent"
+    }
+  },
+  {
+    "name": "session.configured",
+    "expect": "known",
+    "event": {
+      "seq": 13,
+      "v": 1,
+      "ts": 1700000000013,
+      "data": {
+        "agent": "claude",
+        "config": { "model": "opus", "permission_mode": "bypassPermissions" },
+        "confirmation_required": {
+          "config_digest": "d_1111111111111111111111111111111111111111111111111111111111111111",
+          "reason": "full_access_unconfirmed"
+        },
+        "project_config": "ignored",
+        "read_only": false,
+        "workspace": {
+          "base_ref": "main",
+          "branch": "cupper/fix",
+          "kind": "worktree",
+          "path": "/w/fix"
+        }
+      },
+      "type": "session.configured"
+    }
+  },
+  {
+    "name": "session.configured, optional fields left out",
+    "expect": "known",
+    "event": {
+      "seq": 14,
+      "v": 1,
+      "ts": 1700000000014,
+      "data": {
+        "agent": "codex",
+        "config": {},
+        "project_config": "loaded",
+        "read_only": true,
+        "workspace": { "kind": "local", "path": "/w" }
+      },
+      "type": "session.configured"
+    }
+  },
+  {
+    "name": "session.capabilities",
+    "expect": "known",
+    "event": {
+      "seq": 15,
+      "v": 1,
+      "ts": 1700000000015,
+      "data": {
+        "agent": "codex",
+        "commands": [],
+        "config": [],
+        "extraction": {
+          "diff": "per_hunk",
+          "exit_code": true,
+          "output_streaming": true,
+          "plan": "entries",
+          "run_state": "agent_reported",
+          "thinking": true
+        },
+        "interactions": { "plan_confirm": true, "question_forms": true, "reject_ends_turn": true },
+        "prompt": { "file_ref": true, "image": true, "max_image_bytes": 10485760 },
+        "session": { "fork": false, "load_history": false, "resume": true },
+        "turn": {
+          "interrupt": true,
+          "interrupt_stops_commands": false,
+          "queue": true,
+          "steer": { "side_effects": false, "supported": true }
+        },
+        "versions": { "adapter": "2.2.2", "cli": "0.160.0", "cli_compat": "verified" }
+      },
+      "type": "session.capabilities"
+    }
+  },
+  {
+    "name": "workspace.preparing",
+    "expect": "known",
+    "event": {
+      "seq": 16,
+      "v": 1,
+      "ts": 1700000000016,
+      "data": { "phase": "checkout", "progress": 40 },
+      "type": "workspace.preparing"
+    }
+  },
+  {
+    "name": "workspace.preparing, optional fields left out",
+    "expect": "known",
+    "event": {
+      "seq": 17,
+      "v": 1,
+      "ts": 1700000000017,
+      "data": { "phase": "worktree_add" },
+      "type": "workspace.preparing"
+    }
+  },
+  {
+    "name": "workspace.ready",
+    "expect": "known",
+    "event": {
+      "seq": 18,
+      "v": 1,
+      "ts": 1700000000018,
+      "data": { "branch": "cupper/fix", "path": "/w/fix" },
+      "type": "workspace.ready"
+    }
+  },
+  {
+    "name": "workspace.failed",
+    "expect": "known",
+    "event": {
+      "seq": 19,
+      "v": 1,
+      "ts": 1700000000019,
+      "data": { "code": "git_error", "reason": "lock_held" },
+      "type": "workspace.failed"
+    }
+  },
+  {
+    "name": "turn.started",
+    "expect": "known",
+    "event": {
+      "seq": 20,
+      "v": 1,
+      "ts": 1700000000020,
+      "data": { "origin": "steer_new_turn", "started_at": 5, "turn_id": "t_1", "turn_no": 3 },
+      "type": "turn.started"
+    }
+  },
+  {
+    "name": "turn.completed",
+    "expect": "known",
+    "event": {
+      "seq": 21,
+      "v": 1,
+      "ts": 1700000000021,
+      "data": {
+        "duration_ms": 4,
+        "ended_at": 9,
+        "error_code": "adapter_exited",
+        "final_item_ids": ["i_2", "i_3"],
+        "status": "failed",
+        "stop_reason": "host_timeout",
+        "turn_id": "t_1",
+        "usage": {
+          "cached": 1000,
+          "cost": { "amount": 0.5, "currency": "USD" },
+          "input": 1200,
+          "output": 300
+        }
+      },
+      "type": "turn.completed"
+    }
+  },
+  {
+    "name": "turn.completed, optional fields left out",
+    "expect": "known",
+    "event": {
+      "seq": 22,
+      "v": 1,
+      "ts": 1700000000022,
+      "data": {
+        "duration_ms": 4,
+        "ended_at": 9,
+        "final_item_ids": [],
+        "status": "completed",
+        "turn_id": "t_1",
+        "usage": { "input": 1, "output": 2 }
+      },
+      "type": "turn.completed"
+    }
+  },
+  {
+    "name": "item.started: user_message",
+    "expect": "known",
+    "event": {
+      "seq": 23,
+      "v": 1,
+      "ts": 1700000000023,
+      "data": {
+        "content": [{ "text": "No, use pnpm", "type": "text" }],
+        "item_id": "i_1",
+        "kind": "user_message",
+        "queue_id": "q_1",
+        "reply_to": "r_0",
+        "started_at": 5,
+        "steered": true,
+        "turn_id": "t_1"
+      },
+      "type": "item.started"
+    }
+  },
+  {
+    "name": "item.started: agent_message",
+    "expect": "known",
+    "event": {
+      "seq": 24,
+      "v": 1,
+      "ts": 1700000000024,
+      "data": { "item_id": "i_1", "kind": "agent_message", "started_at": 5, "turn_id": "t_1" },
+      "type": "item.started"
+    }
+  },
+  {
+    "name": "item.started: thought",
+    "expect": "known",
+    "event": {
+      "seq": 25,
+      "v": 1,
+      "ts": 1700000000025,
+      "data": {
+        "group_id": "g_1",
+        "item_id": "i_1",
+        "kind": "thought",
+        "started_at": 5,
+        "turn_id": "t_1"
+      },
+      "type": "item.started"
+    }
+  },
+  {
+    "name": "item.started: tool_call execute",
+    "expect": "known",
+    "event": {
+      "seq": 26,
+      "v": 1,
+      "ts": 1700000000026,
+      "data": {
+        "command": "cargo test",
+        "cwd": "/w",
+        "diffs": [
+          {
+            "change": "update",
+            "hunks": {
+              "blob": {
+                "hash": "abababababababababababababababababababababababababababababababab",
+                "media_type": "text/plain",
+                "size": 70000
+              },
+              "preview": "fn main",
+              "type": "blob"
+            },
+            "path": "a.rs",
+            "stat": { "added": 2, "removed": 1 }
+          }
+        ],
+        "exit_code": 101,
+        "extraction": "partial",
+        "group_id": "g_1",
+        "item_id": "i_1",
+        "kind": "tool_call",
+        "output": {
+          "blob": {
+            "hash": "abababababababababababababababababababababababababababababababab",
+            "media_type": "text/plain",
+            "size": 70000
+          },
+          "preview": "fn main",
+          "type": "blob"
+        },
+        "output_bytes": 70000,
+        "output_state": "truncated",
+        "output_tail": "FAILED",
+        "parent_item_id": "i_0",
+        "paths": [],
+        "signal": "SIGTERM",
+        "started_at": 5,
+        "title": "Run tests",
+        "tool_kind": "execute",
+        "turn_id": "t_1"
+      },
+      "type": "item.started"
+    }
+  },
+  {
+    "name": "item.started: tool_call fetch",
+    "expect": "known",
+    "event": {
+      "seq": 27,
+      "v": 1,
+      "ts": 1700000000027,
+      "data": {
+        "extraction": "full",
+        "item_id": "i_1",
+        "kind": "tool_call",
+        "output_state": "none",
+        "paths": [],
+        "query": "q",
+        "started_at": 5,
+        "title": "Fetch",
+        "tool_kind": "fetch",
+        "turn_id": "t_1",
+        "url": "https://example.com"
+      },
+      "type": "item.started"
+    }
+  },
+  {
+    "name": "item.started: late_tool_output",
+    "expect": "known",
+    "event": {
+      "seq": 28,
+      "v": 1,
+      "ts": 1700000000028,
+      "data": {
+        "item_id": "i_1",
+        "kind": "late_tool_output",
+        "output_state": "streaming",
+        "ref": {
+          "command": "npm start",
+          "item_id": "i_0",
+          "title": "Run server",
+          "turn_id": "t_0"
+        },
+        "started_at": 5,
+        "turn_id": "t_1"
+      },
+      "type": "item.started"
+    }
+  },
+  {
+    "name": "item.started: plan entries",
+    "expect": "known",
+    "event": {
+      "seq": 29,
+      "v": 1,
+      "ts": 1700000000029,
+      "data": {
+        "entries": [
+          { "content": "Write tests", "priority": "high", "status": "completed" },
+          { "content": "Fix", "status": "pending" }
+        ],
+        "item_id": "i_1",
+        "kind": "plan",
+        "source": "entries",
+        "started_at": 5,
+        "turn_id": "t_1"
+      },
+      "type": "item.started"
+    }
+  },
+  {
+    "name": "item.started: plan markdown",
+    "expect": "known",
+    "event": {
+      "seq": 30,
+      "v": 1,
+      "ts": 1700000000030,
+      "data": {
+        "item_id": "i_1",
+        "kind": "plan",
+        "markdown": { "text": "1. a", "type": "text" },
+        "source": "markdown",
+        "started_at": 5,
+        "turn_id": "t_1"
+      },
+      "type": "item.started"
+    }
+  },
+  {
+    "name": "item.started: notice",
+    "expect": "known",
+    "event": {
+      "seq": 31,
+      "v": 1,
+      "ts": 1700000000031,
+      "data": {
+        "code": "repo_config_changed",
+        "item_id": "i_1",
+        "kind": "notice",
+        "params": { "paths": [".git/config"] },
+        "started_at": 5,
+        "turn_id": "t_1"
+      },
+      "type": "item.started"
+    }
+  },
+  {
+    "name": "item.started: error",
+    "expect": "known",
+    "event": {
+      "seq": 32,
+      "v": 1,
+      "ts": 1700000000032,
+      "data": {
+        "agent_code": "-32000",
+        "code": "not_logged_in",
+        "guidance": "run_login_in_terminal",
+        "item_id": "i_1",
+        "kind": "error",
+        "raw": "Authentication required",
+        "retryable": false,
+        "started_at": 5,
+        "turn_id": "t_1"
+      },
+      "type": "item.started"
+    }
+  },
+  {
+    "name": "item.delta",
+    "expect": "known",
+    "event": {
+      "seq": 33,
+      "v": 1,
+      "ts": 1700000000033,
+      "from": 31,
+      "data": { "field": "output", "item_id": "i_1", "text": "ok\n" },
+      "type": "item.delta"
+    }
+  },
+  {
+    "name": "item.updated",
+    "expect": "known",
+    "event": {
+      "seq": 34,
+      "v": 1,
+      "ts": 1700000000034,
+      "data": {
+        "item_id": "i_1",
+        "output_bytes": 20000,
+        "output_state": "truncated",
+        "output_tail": "…",
+        "params": { "attempt": 2, "max": 5 }
+      },
+      "type": "item.updated"
+    }
+  },
+  {
+    "name": "item.completed",
+    "expect": "known",
+    "event": {
+      "seq": 35,
+      "v": 1,
+      "ts": 1700000000035,
+      "data": {
+        "duration_ms": 4,
+        "ended_at": 9,
+        "exit_code": 0,
+        "item_id": "i_1",
+        "may_still_run": true,
+        "output": {
+          "blob": {
+            "hash": "abababababababababababababababababababababababababababababababab",
+            "media_type": "text/plain",
+            "size": 70000
+          },
+          "preview": "fn main",
+          "type": "blob"
+        },
+        "output_state": "complete",
+        "status": "abandoned"
+      },
+      "type": "item.completed"
+    }
+  },
+  {
+    "name": "item.completed, optional fields left out",
+    "expect": "known",
+    "event": {
+      "seq": 36,
+      "v": 1,
+      "ts": 1700000000036,
+      "data": { "duration_ms": 0, "ended_at": 9, "item_id": "i_1", "status": "completed" },
+      "type": "item.completed"
+    }
+  },
+  {
+    "name": "interaction.requested: permission",
+    "expect": "known",
+    "event": {
+      "seq": 37,
+      "v": 1,
+      "ts": 1700000000037,
+      "data": {
+        "actionable_by": ["desktop_ui", "cli"],
+        "created_at": 6,
+        "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+        "request": {
+          "content_truncated": true,
+          "detail": { "text": "in /w", "type": "text" },
+          "options": [
+            {
+              "effect": { "ends_turn": false, "persistent": false, "scope": "once" },
+              "kind": "allow_once",
+              "name": "Allow",
+              "option_id": "allow-once",
+              "requires": "approve"
+            },
+            {
+              "effect": {
+                "persistent": true,
+                "rule": {
+                  "location": "localSettings",
+                  "prefix": "npm test",
+                  "prefix_risk": "normal",
+                  "text": "Bash(npm test:*)"
+                },
+                "scope": "persistent"
+              },
+              "kind": "allow_always",
+              "name": "Always allow `npm test`",
+              "option_id": "allow-with-updates",
+              "requires": "privileged"
+            },
+            {
+              "effect": {
+                "persistent": true,
+                "rule": { "prefix_risk": "unknown" },
+                "scope": "unknown"
+              },
+              "kind": "allow_sometimes",
+              "name": "Do the thing",
+              "option_id": "x",
+              "requires": "privileged"
+            }
+          ],
+          "title": "Run npm test",
+          "tool": {
+            "command": {
+              "blob": {
+                "hash": "abababababababababababababababababababababababababababababababab",
+                "media_type": "text/plain",
+                "size": 70000
+              },
+              "preview": "fn main",
+              "type": "blob"
+            },
+            "item_id": "i_1",
+            "paths": ["package.json"],
+            "tool_kind": "execute"
+          },
+          "type": "permission"
+        },
+        "request_id": "r_1"
+      },
+      "type": "interaction.requested"
+    }
+  },
+  {
+    "name": "interaction.requested: question",
+    "expect": "known",
+    "event": {
+      "seq": 38,
+      "v": 1,
+      "ts": 1700000000038,
+      "data": {
+        "actionable_by": ["desktop_ui", "cli"],
+        "created_at": 6,
+        "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+        "request": {
+          "fields": [
+            {
+              "allow_custom": true,
+              "choices": [{ "description": "SQL", "label": "Postgres", "value": "pg" }],
+              "field_id": "question_1",
+              "label": "Database",
+              "required": true,
+              "type": "single_choice"
+            },
+            {
+              "allow_custom": false,
+              "field_id": "n",
+              "label": "Count",
+              "required": false,
+              "type": "number"
+            }
+          ],
+          "prompt": "Which?",
+          "type": "question",
+          "unsupported_schema": false
+        },
+        "request_id": "r_1"
+      },
+      "type": "interaction.requested"
+    }
+  },
+  {
+    "name": "interaction.requested: plan_confirm",
+    "expect": "known",
+    "event": {
+      "seq": 39,
+      "v": 1,
+      "ts": 1700000000039,
+      "data": {
+        "actionable_by": ["desktop_ui", "cli"],
+        "created_at": 6,
+        "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+        "request": {
+          "options": [
+            {
+              "effect": {
+                "ends_turn": false,
+                "mode_after": "auto",
+                "persistent": false,
+                "scope": "mode_switch",
+                "tier_after": "elevated"
+              },
+              "kind": "allow_always",
+              "name": "Auto",
+              "option_id": "exit-plan-auto",
+              "requires": "privileged"
+            }
+          ],
+          "plan": { "text": "1. a", "type": "text" },
+          "type": "plan_confirm"
+        },
+        "request_id": "r_1"
+      },
+      "type": "interaction.requested"
+    }
+  },
+  {
+    "name": "interaction.requested: auth_url",
+    "expect": "known",
+    "event": {
+      "seq": 40,
+      "v": 1,
+      "ts": 1700000000040,
+      "data": {
+        "actionable_by": ["desktop_ui", "cli"],
+        "created_at": 6,
+        "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+        "request": { "message": "Sign in", "type": "auth_url", "url": "https://example.com/login" },
+        "request_id": "r_1"
+      },
+      "type": "interaction.requested"
+    }
+  },
+  {
+    "name": "interaction.resolved: resolved selected",
+    "expect": "known",
+    "event": {
+      "seq": 41,
+      "v": 1,
+      "ts": 1700000000041,
+      "data": {
+        "outcome": { "option_id": "allow-once", "type": "selected" },
+        "request_id": "r_1",
+        "resolved_by": {
+          "client_kind": "desktop",
+          "client_name": "Cupper",
+          "principal_id": "pr_desktop"
+        },
+        "status": "resolved"
+      },
+      "type": "interaction.resolved"
+    }
+  },
+  {
+    "name": "interaction.resolved: resolved answer",
+    "expect": "known",
+    "event": {
+      "seq": 42,
+      "v": 1,
+      "ts": 1700000000042,
+      "data": {
+        "outcome": { "type": "answer", "values": { "n": 3, "question_1": "pg" } },
+        "request_id": "r_1",
+        "status": "resolved"
+      },
+      "type": "interaction.resolved"
+    }
+  },
+  {
+    "name": "interaction.resolved: resolved dismissed",
+    "expect": "known",
+    "event": {
+      "seq": 43,
+      "v": 1,
+      "ts": 1700000000043,
+      "data": { "outcome": { "type": "dismissed" }, "request_id": "r_1", "status": "resolved" },
+      "type": "interaction.resolved"
+    }
+  },
+  {
+    "name": "interaction.resolved: resolved opened",
+    "expect": "known",
+    "event": {
+      "seq": 44,
+      "v": 1,
+      "ts": 1700000000044,
+      "data": { "outcome": { "type": "opened" }, "request_id": "r_1", "status": "resolved" },
+      "type": "interaction.resolved"
+    }
+  },
+  {
+    "name": "interaction.resolved: expired",
+    "expect": "known",
+    "event": {
+      "seq": 45,
+      "v": 1,
+      "ts": 1700000000045,
+      "data": { "reason": "adapter_exited", "request_id": "r_1", "status": "expired" },
+      "type": "interaction.resolved"
+    }
+  },
+  {
+    "name": "queue.updated",
+    "expect": "known",
+    "event": {
+      "seq": 46,
+      "v": 1,
+      "ts": 1700000000046,
+      "data": {
+        "entries": [
+          {
+            "content": [
+              { "text": "And docs", "type": "text" },
+              { "path": "README.md", "type": "file_ref" }
+            ],
+            "created_at": 8,
+            "created_by": "pr_cli",
+            "preview": "And docs",
+            "queue_id": "q_1",
+            "reply_to": "r_1"
+          }
+        ],
+        "paused": { "reason": "config_unconfirmed" },
+        "version": 7
+      },
+      "type": "queue.updated"
+    }
+  },
+  {
+    "name": "queue.updated, optional fields left out",
+    "expect": "known",
+    "event": {
+      "seq": 47,
+      "v": 1,
+      "ts": 1700000000047,
+      "data": { "entries": [], "version": 8 },
+      "type": "queue.updated"
+    }
+  },
+  {
+    "name": "snapshot.recorded",
+    "expect": "known",
+    "event": {
+      "seq": 48,
+      "v": 1,
+      "ts": 1700000000048,
+      "data": {
+        "excluded": [{ "path": "data.bin", "reason": "too_large" }],
+        "phase": "end",
+        "stat": { "added": 40, "files": 3, "removed": 2 },
+        "status": "partial",
+        "turn_id": "t_1"
+      },
+      "type": "snapshot.recorded"
+    }
+  },
+  {
+    "name": "snapshot.recorded, optional fields left out",
+    "expect": "known",
+    "event": {
+      "seq": 49,
+      "v": 1,
+      "ts": 1700000000049,
+      "data": {
+        "excluded": [],
+        "phase": "start",
+        "reason": "not_a_repo",
+        "status": "skipped",
+        "turn_id": "t_1"
+      },
+      "type": "snapshot.recorded"
+    }
+  },
+  {
+    "name": "usage.updated",
+    "expect": "known",
+    "event": {
+      "seq": 50,
+      "v": 1,
+      "ts": 1700000000050,
+      "data": {
+        "context_size": 200000,
+        "context_used": 50000,
+        "cost": { "amount": 1.25, "currency": "USD" }
+      },
+      "type": "usage.updated"
+    }
+  },
+  {
+    "name": "usage.updated, optional fields left out",
+    "expect": "known",
+    "event": {
+      "seq": 51,
+      "v": 1,
+      "ts": 1700000000051,
+      "data": { "context_size": 258400, "context_used": 0 },
+      "type": "usage.updated"
+    }
+  },
+  {
+    "name": "open enums: unknown values in session.upserted",
+    "expect": "known",
+    "event": {
+      "seq": 52,
+      "v": 1,
+      "ts": 1700000000052,
+      "type": "session.upserted",
+      "data": {
+        "session_id": "s_1",
+        "project_id": "p_1",
+        "agent": "gemini",
+        "title": "t",
+        "title_source": "summary",
+        "workspace_kind": "container",
+        "status": "paused",
+        "unread": false,
+        "pending_interactions": 1,
+        "pending_kind": "review",
+        "last_activity_at": 1,
+        "error_code": "disk_full",
+        "read_only": false
+      }
+    }
+  },
+  {
+    "name": "open union: unknown item kind keeps its fields",
+    "expect": "known",
+    "event": {
+      "seq": 53,
+      "v": 1,
+      "ts": 1700000000053,
+      "data": {
+        "content": [{ "text": "No, use pnpm", "type": "text" }],
+        "item_id": "i_1",
+        "kind": "canvas",
+        "queue_id": "q_1",
+        "reply_to": "r_0",
+        "started_at": 5,
+        "steered": true,
+        "turn_id": "t_1"
+      },
+      "type": "item.started"
+    }
+  },
+  {
+    "name": "open union: unknown request type keeps its fields",
+    "expect": "known",
+    "event": {
+      "seq": 54,
+      "v": 1,
+      "ts": 1700000000054,
+      "data": {
+        "actionable_by": ["desktop_ui", "cli"],
+        "created_at": 6,
+        "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+        "request": { "type": "oauth_device", "code": "ABCD", "expires_at": 9 },
+        "request_id": "r_1"
+      },
+      "type": "interaction.requested"
+    }
+  },
+  {
+    "name": "open union: unknown outcome type keeps its fields",
+    "expect": "known",
+    "event": {
+      "seq": 55,
+      "v": 1,
+      "ts": 1700000000055,
+      "data": {
+        "outcome": { "type": "later", "at": 5 },
+        "request_id": "r_1",
+        "resolved_by": {
+          "client_kind": "desktop",
+          "client_name": "Cupper",
+          "principal_id": "pr_desktop"
+        },
+        "status": "resolved"
+      },
+      "type": "interaction.resolved"
+    }
+  },
+  {
+    "name": "open union: unknown prompt block in a queued message",
+    "expect": "known",
+    "event": {
+      "seq": 56,
+      "v": 1,
+      "ts": 1700000000056,
+      "data": {
+        "entries": [
+          {
+            "content": [
+              { "text": "And docs", "type": "text" },
+              { "path": "README.md", "type": "file_ref" },
+              { "type": "video", "url": "https://example.com/v.mp4" }
+            ],
+            "created_at": 8,
+            "created_by": "pr_cli",
+            "preview": "And docs",
+            "queue_id": "q_1",
+            "reply_to": "r_1"
+          }
+        ],
+        "paused": { "reason": "config_unconfirmed" },
+        "version": 7
+      },
+      "type": "queue.updated"
+    }
+  },
+  {
+    "name": "open enums: unknown delta field",
+    "expect": "known",
+    "event": {
+      "seq": 57,
+      "v": 1,
+      "ts": 1700000000057,
+      "type": "item.delta",
+      "data": { "item_id": "i_1", "field": "stderr", "text": "x" }
+    }
+  },
+  {
+    "name": "open enums: unknown tool kind, output state and extraction",
+    "expect": "known",
+    "event": {
+      "seq": 58,
+      "v": 1,
+      "ts": 1700000000058,
+      "type": "item.started",
+      "data": {
+        "item_id": "i_1",
+        "started_at": 1,
+        "kind": "tool_call",
+        "tool_kind": "browse",
+        "title": "t",
+        "paths": [],
+        "output_state": "paused",
+        "extraction": "guess"
+      }
+    }
+  },
+  {
+    "name": "open enums: unknown turn status, stop reason and failure code",
+    "expect": "known",
+    "event": {
+      "seq": 59,
+      "v": 1,
+      "ts": 1700000000059,
+      "type": "turn.completed",
+      "data": {
+        "turn_id": "t_1",
+        "status": "paused",
+        "stop_reason": "nap",
+        "ended_at": 9,
+        "duration_ms": 4,
+        "error_code": "disk_full",
+        "final_item_ids": []
+      }
+    }
+  },
+  {
+    "name": "unknown fields in a known event are dropped",
+    "expect": "known",
+    "event": {
+      "seq": 60,
+      "v": 1,
+      "ts": 1700000000060,
+      "type": "project.removed",
+      "data": { "project_id": "p_1", "pinned": true },
+      "trace": "x"
+    },
+    "normalized": {
+      "seq": 60,
+      "v": 1,
+      "ts": 1700000000060,
+      "type": "project.removed",
+      "data": { "project_id": "p_1" }
+    }
+  },
+  {
+    "name": "unknown type with a fallback",
+    "expect": "unknown",
+    "event": {
+      "seq": 61,
+      "v": 1,
+      "ts": 1700000000061,
+      "type": "project.pinned",
+      "data": { "project_id": "p_1", "pinned": true },
+      "fallback": { "kind": "item", "summary": "Project pinned" }
+    }
+  },
+  {
+    "name": "unknown type with an unknown fallback kind",
+    "expect": "unknown",
+    "event": {
+      "seq": 62,
+      "v": 1,
+      "ts": 1700000000062,
+      "type": "git.snapshot",
+      "data": { "sha": "abc" },
+      "fallback": { "kind": "card", "summary": "Snapshot taken" }
+    }
+  },
+  {
+    "name": "unknown type without data",
+    "expect": "unknown",
+    "event": { "seq": 63, "v": 1, "ts": 1700000000063, "type": "session.paused" },
+    "normalized": { "seq": 63, "v": 1, "ts": 1700000000063, "type": "session.paused", "data": null }
+  },
+  {
+    "name": "malformed: missing field",
+    "expect": "degraded",
+    "event": {
+      "seq": 64,
+      "v": 1,
+      "ts": 1700000000064,
+      "data": {
+        "added_at": 1,
+        "is_git": true,
+        "name": "cupper",
+        "path": "/work/cupper",
+        "position": 0,
+        "project_id": "p_1"
+      },
+      "type": "project.upserted"
+    }
+  },
+  {
+    "name": "malformed: negative integer",
+    "expect": "degraded",
+    "event": {
+      "seq": 65,
+      "v": 1,
+      "ts": 1700000000065,
+      "data": {
+        "added_at": 1,
+        "is_git": true,
+        "name": "cupper",
+        "path": "/work/cupper",
+        "position": -1,
+        "project_id": "p_1",
+        "trust_state": "stale"
+      },
+      "type": "project.upserted"
+    }
+  },
+  {
+    "name": "malformed: missing nested field",
+    "expect": "degraded",
+    "event": {
+      "seq": 66,
+      "v": 1,
+      "ts": 1700000000066,
+      "data": {
+        "agents": [
+          {
+            "adapter": { "failure": "hash_mismatch", "runtime": "failed", "version": "0.91.0" },
+            "agent": "claude",
+            "auth": { "kind": "subscription", "plan": "max", "state": "logged_in" },
+            "cli": {
+              "compat": "verified",
+              "install": "native",
+              "path": "/opt/homebrew/bin/claude",
+              "version": "2.1.296"
+            },
+            "config_dir": "ok",
+            "rss_bytes": 734003200,
+            "state": "running"
+          },
+          {
+            "agent": "codex",
+            "auth": { "state": "unchecked" },
+            "config_dir": "default",
+            "state": "unavailable"
+          }
+        ],
+        "git": { "lfs": "3.7.0", "version": "2.50.1" }
+      },
+      "type": "agents.updated"
+    }
+  },
+  {
+    "name": "malformed: no data",
+    "expect": "degraded",
+    "event": { "seq": 67, "v": 1, "ts": 1700000000067, "type": "project.removed" },
+    "normalized": {
+      "seq": 67,
+      "v": 1,
+      "ts": 1700000000067,
+      "type": "project.removed",
+      "data": null
+    }
+  },
+  {
+    "name": "malformed: data of the wrong type",
+    "expect": "degraded",
+    "event": { "seq": 68, "v": 1, "ts": 1700000000068, "type": "host.updated", "data": "up" }
+  },
+  {
+    "name": "malformed: known item kind with a missing field",
+    "expect": "degraded",
+    "event": {
+      "seq": 69,
+      "v": 1,
+      "ts": 1700000000069,
+      "data": {
+        "command": "cargo test",
+        "cwd": "/w",
+        "diffs": [
+          {
+            "change": "update",
+            "hunks": {
+              "blob": {
+                "hash": "abababababababababababababababababababababababababababababababab",
+                "media_type": "text/plain",
+                "size": 70000
+              },
+              "preview": "fn main",
+              "type": "blob"
+            },
+            "path": "a.rs",
+            "stat": { "added": 2, "removed": 1 }
+          }
+        ],
+        "exit_code": 101,
+        "extraction": "partial",
+        "group_id": "g_1",
+        "item_id": "i_1",
+        "kind": "tool_call",
+        "output": {
+          "blob": {
+            "hash": "abababababababababababababababababababababababababababababababab",
+            "media_type": "text/plain",
+            "size": 70000
+          },
+          "preview": "fn main",
+          "type": "blob"
+        },
+        "output_bytes": 70000,
+        "output_tail": "FAILED",
+        "parent_item_id": "i_0",
+        "paths": [],
+        "signal": "SIGTERM",
+        "started_at": 5,
+        "title": "Run tests",
+        "tool_kind": "execute",
+        "turn_id": "t_1"
+      },
+      "type": "item.started"
+    }
+  },
+  {
+    "name": "malformed: known request type with a missing nested field",
+    "expect": "degraded",
+    "event": {
+      "seq": 70,
+      "v": 1,
+      "ts": 1700000000070,
+      "data": {
+        "actionable_by": ["desktop_ui", "cli"],
+        "created_at": 6,
+        "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+        "request": {
+          "content_truncated": true,
+          "detail": { "text": "in /w", "type": "text" },
+          "options": [
+            {
+              "effect": { "ends_turn": false, "scope": "once" },
+              "kind": "allow_once",
+              "name": "Allow",
+              "option_id": "allow-once",
+              "requires": "approve"
+            },
+            {
+              "effect": {
+                "persistent": true,
+                "rule": {
+                  "location": "localSettings",
+                  "prefix": "npm test",
+                  "prefix_risk": "normal",
+                  "text": "Bash(npm test:*)"
+                },
+                "scope": "persistent"
+              },
+              "kind": "allow_always",
+              "name": "Always allow `npm test`",
+              "option_id": "allow-with-updates",
+              "requires": "privileged"
+            },
+            {
+              "effect": {
+                "persistent": true,
+                "rule": { "prefix_risk": "unknown" },
+                "scope": "unknown"
+              },
+              "kind": "allow_sometimes",
+              "name": "Do the thing",
+              "option_id": "x",
+              "requires": "privileged"
+            }
+          ],
+          "title": "Run npm test",
+          "tool": {
+            "command": {
+              "blob": {
+                "hash": "abababababababababababababababababababababababababababababababab",
+                "media_type": "text/plain",
+                "size": 70000
+              },
+              "preview": "fn main",
+              "type": "blob"
+            },
+            "item_id": "i_1",
+            "paths": ["package.json"],
+            "tool_kind": "execute"
+          },
+          "type": "permission"
+        },
+        "request_id": "r_1"
+      },
+      "type": "interaction.requested"
+    }
+  },
+  {
+    "name": "malformed: known outcome type with a missing field",
+    "expect": "degraded",
+    "event": {
+      "seq": 71,
+      "v": 1,
+      "ts": 1700000000071,
+      "data": {
+        "outcome": { "type": "selected" },
+        "request_id": "r_1",
+        "resolved_by": {
+          "client_kind": "desktop",
+          "client_name": "Cupper",
+          "principal_id": "pr_desktop"
+        },
+        "status": "resolved"
+      },
+      "type": "interaction.resolved"
+    }
+  },
+  {
+    "name": "malformed: known prompt block with a missing field",
+    "expect": "degraded",
+    "event": {
+      "seq": 72,
+      "v": 1,
+      "ts": 1700000000072,
+      "data": {
+        "entries": [
+          {
+            "content": [{ "text": "And docs", "type": "text" }, { "type": "file_ref" }],
+            "created_at": 8,
+            "created_by": "pr_cli",
+            "preview": "And docs",
+            "queue_id": "q_1",
+            "reply_to": "r_1"
+          }
+        ],
+        "paused": { "reason": "config_unconfirmed" },
+        "version": 7
+      },
+      "type": "queue.updated"
+    }
+  },
+  {
+    "name": "invalid: envelope without seq",
+    "expect": "invalid",
+    "event": {
+      "v": 1,
+      "ts": 1700000000073,
+      "data": { "project_id": "p_1" },
+      "type": "project.removed"
+    }
+  },
+  {
+    "name": "invalid: no type",
+    "expect": "invalid",
+    "event": { "seq": 74, "v": 1, "ts": 1700000000074, "data": { "project_id": "p_1" } }
+  }
+]

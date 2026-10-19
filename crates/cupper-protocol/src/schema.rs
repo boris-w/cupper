@@ -1,6 +1,6 @@
-//! Building blocks of the exported JSON Schema (design 5.3.10): the generator
-//! settings every protocol schema uses, and the per-method entries that carry
-//! `x-scope`, `x-idempotent`, `x-milestone`, `x-errors` and `x-builds`.
+//! The exported JSON Schema (design 5.3.10): the whole [`document`], the
+//! generator settings every protocol schema uses, and the per-method entries
+//! that carry `x-scope`, `x-idempotent`, `x-milestone`, `x-errors` and `x-builds`.
 
 use schemars::generate::SchemaSettings;
 use schemars::transform::RecursiveTransform;
@@ -8,8 +8,35 @@ use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde_json::{Value, json};
 
 use crate::annotations::{X_BUILDS, X_ERRORS, X_IDEMPOTENT, X_MILESTONE, X_SCOPE};
+use crate::envelope::Event;
+use crate::error::RpcError;
+use crate::event::EventBody;
 use crate::limits::MAX_SAFE_INTEGER;
+use crate::methods::catalog::catalog;
+use crate::methods::handshake::PROTOCOL;
 use crate::rpc::{Build, ClientNotification, HostNotification, Method, MethodError, Scope};
+use crate::view::{IndexView, SessionView};
+
+/// The protocol as one JSON Schema document, which `export-schema` writes to
+/// `protocol/schema/v1.json`: the method catalog's three tables in
+/// `x-methods`, and in `$defs` every type they use, plus the event envelope
+/// and body, the views (test #16) and the JSON-RPC error object.
+pub fn document() -> Value {
+    let mut g = generator();
+    let methods = catalog(&mut g);
+    g.subschema_for::<Event<EventBody>>();
+    g.subschema_for::<EventBody>();
+    g.subschema_for::<IndexView>();
+    g.subschema_for::<SessionView>();
+    g.subschema_for::<RpcError>();
+    json!({
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "cupper host protocol",
+        "x-protocol-version": PROTOCOL.max,
+        "x-methods": methods,
+        "$defs": g.take_definitions(true),
+    })
+}
 
 /// Draft 2020-12, with every integer bounded by [`bound_integers`].
 pub fn generator() -> SchemaGenerator {
@@ -238,6 +265,66 @@ mod tests {
         assert_eq!(
             host_notification_entry::<Hello>(&mut g),
             json!({"params": {"type": "string"}, X_MILESTONE: "M3"})
+        );
+    }
+
+    /// Every `$ref` in `v`.
+    fn refs<'a>(v: &'a Value, out: &mut Vec<&'a str>) {
+        match v {
+            Value::Object(m) => {
+                out.extend(m.get("$ref").and_then(Value::as_str));
+                m.values().for_each(|c| refs(c, out));
+            }
+            Value::Array(a) => a.iter().for_each(|c| refs(c, out)),
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn unit_proto_fixtures_schema_document_is_complete() {
+        let doc = document();
+        assert_eq!(doc["x-protocol-version"], 1);
+        let defs = doc["$defs"].as_object().unwrap();
+        for name in ["Event", "EventBody", "IndexView", "SessionView", "RpcError"] {
+            assert!(defs.contains_key(name), "{name}");
+        }
+        let mut found = Vec::new();
+        refs(&doc, &mut found);
+        for r in found {
+            let name = r.strip_prefix("#/$defs/").unwrap_or(r);
+            assert!(defs.contains_key(name), "dangling {r}");
+        }
+
+        // The catalog and the annotations of methods, events and fields.
+        let methods = &doc["x-methods"];
+        let send = &methods["requests"]["session/send"];
+        assert_eq!(
+            (&send[X_SCOPE], &send[X_IDEMPOTENT]),
+            (&json!("write"), &json!("command"))
+        );
+        assert_eq!(
+            methods["requests"]["test/seed"][X_BUILDS],
+            json!(["test-harness"])
+        );
+        assert_eq!(
+            methods["client_notifications"]["client/presence"][X_MILESTONE],
+            "M1a"
+        );
+        assert!(methods["host_notifications"]["stream/events"]["params"].is_object());
+        let delta = defs["EventBody"]["anyOf"].as_array().unwrap().iter();
+        let mergeable: Vec<&Value> = delta
+            .filter(|m| m.get(crate::annotations::X_MERGEABLE).is_some())
+            .map(|m| &m["properties"]["type"]["const"])
+            .collect();
+        assert_eq!(mergeable, ["item.delta"]);
+        assert_eq!(defs["SessionId"]["x-id"], true);
+        assert_eq!(defs["TimestampMs"]["x-time"], true);
+        assert_eq!(defs["WirePath"]["x-path"], true);
+
+        let text = crate::canonical::to_canonical_string(&doc).unwrap();
+        assert_eq!(
+            text,
+            crate::canonical::to_canonical_string(&document()).unwrap()
         );
     }
 }

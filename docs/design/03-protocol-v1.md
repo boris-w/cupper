@@ -459,7 +459,7 @@ ConfigOption {
 - 兼容性检查区分方向（ADR-04）：宿主发往客户端的消息，删除字段、必填改可选、收窄类型都是破坏性的；客户端发往宿主的消息，新增必填字段是破坏性的。
 - 新增方法、事件类型、枚举值、可选字段都不升主版本；新的交互请求类型必须带特性门控。
 - schema 注解：`x-scope`、`x-idempotent`（每个方法）；`x-mergeable`（可合并的事件）；`x-id`、`x-time`、`x-path`（字段的性质，金样例的规范化按注解进行，新加的字段自动纳入，[5.9.3](09-testing.md#593-录制与金样例)）。`IndexView`、`SessionView` 的序列化格式也导出进 schema，供 TS 与 Rust 视图对比（测试 #16）。
-- 生成链：Rust（serde + schemars）→ `protocol/schema/v1.json` → `tools/gen-protocol-ts`（hey-api 生成 TS 类型和 zod，非 strict）→ 后处理：已知事件类型的字面量列表和类型守卫、兜底成员用 `.loose()`、开放枚举写成 `(string & {})`（SP-4a 报告）。
+- 生成链：Rust（serde + schemars）→ `protocol/schema/v1.json` → `tools/gen-protocol-ts`（hey-api 生成 TS 类型和 zod，非 strict）→ 后处理：已知事件类型的字面量列表和类型守卫、兜底成员用 `.loose()`、开放枚举写成 `(string & {})`（SP-4a 报告）。T015 实现时另补了四处，在转成 OpenAPI 或后处理时修正 hey-api 的行为：`$ref` 旁的关键字改写成 `allOf`（否则内部标签联合的成员丢失标签）；`true` 子 schema 改成 `{}`；接受其他字段的对象（如 `ErrorData`）加 `.loose()`；嵌套开放联合的兜底成员只接受联合不认识的标签，事件层的兜底接受一切并由 `isKnownEvent` 判定（与 Rust 的严格已知标签和 `Tolerant` 一致）。每处改写都检查命中，hey-api 升级后输出一变就失败。`v1.json` 是加了缩进的 JCS：键序、数值和字符串按 RFC 8785，只多空白，去掉空白即 JCS 原文。
 - "类型已知但数据残缺"的事件：客户端降级成未知事件并记日志；CI 对金样例严格校验，不允许降级（ADR-04 修订）。
 - iOS 怎样使用协议由 ADR-15 决定；M1 只保证 `cupper-protocol` 能编译到 iOS 模拟器、金样例里有未知值的样例。
 
@@ -681,3 +681,41 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
   - 网关把审计记录发进 channel。写进 `audit` 表和 host.log 的接线，归 T037。
   - 对端可执行文件的路径、签名 identifier、Team ID，归 T038，它的提权确认框同样要用。
 - **握手期限**（编排者裁定，T030 汇报时提出）：宿主发出 `host/hello` 后，客户端须在 10 s 内发来 `initialize`，否则宿主断开连接，审计原因记 `handshake_timeout`。期限登记在 `durations.rs`，经 `Clock` 计时，由 T039 实现。
+
+**T031 实现时的裁定（2026-10-19）**
+
+- **拒绝码**：
+  - SEC-9（remote_device 的收窄）和 `CliOnly` 的拒绝用 `forbidden/role`；
+  - 档位规则的拒绝用 `forbidden/scope`，`data.scope` 写明要的是 `approve` 还是 `privileged`。
+- **手机与 `permission_mode`**：手机可以改 `permission_mode`，但只能收紧或保持（MB-9；5.8.2 档位表）。所以 SEC-9 下手机能改的配置项是模型、推理强度，以及收紧或保持的 `permission_mode`。
+- **400 ms 最短回答间隔**：
+  - 用宿主的 `MonoTime` 计，从交互代理收到请求时开始算，不用线上的 `created_at`；
+  - `MIN_ANSWER_DELAY` 是安全阈值，写成常量，不登记到 `durations.rs`，测试配置不能覆盖。
+- **一律按 privileged 处理的选项**：`allow_always`、kind 未知、effect 未知的选项，不管对照表怎么写，都按 privileged 处理。
+- **档位规则的边界**：
+  - 映射里没有的模式按 `full_access` 处理（5.6.5）；
+  - 当前档位未知时按 `normal` 处理；
+  - 只有 `mode_after`、没有 `tier_after` 的选项，按 `full_access` 处理。
+- **window 的按键**：
+  - Esc 只能用于 `dismissed`，或 effect 为 `reject`、`plan_revise` 的选项；
+  - `digit` 不能用来 dismiss；
+  - 提问时只接受 `answer`；
+  - role 未知的 desktop 连接按 window 处理；
+  - `git/revert` 来自 window 时，只接受点击、Enter、Space、⌘Enter 或原生确认。
+- **信任门控**：
+  - 已信任的项目，加载项目配置；
+  - 未信任或 stale 的项目：Claude 只加载用户配置，Codex 回 `unavailable/project_untrusted`；
+  - 信任状态未知或 agent 未知，一律拒绝。
+- **`policy/describe` 各 action 的 `details` 键**（不带文案，T077 的原生确认框按这些键取内容）：
+  - `trust_project`：`{project_id, trust_digest}`；
+  - `confirm_config`：`{session_id, config_digest}`；
+  - `full_access`：
+    - 来自 `session/create`：`{agent, project_id, mode}`；
+    - 来自 `session/set_config`：`{session_id, mode}`；
+    - 来自 `interaction/respond`：与 `privileged_option` 相同，另加 `mode`；
+  - `privileged_option`：`{session_id, request_id, option_id, kind, effect}`；
+  - `security_setting`：`{settings}`，只含安全相关的键和新值；
+  - `grant_elevation`：`{elevation_id, scopes}`；
+  - `interrupt_turns`：`{running_turns}`。只有 `host/exit` 带 `force`、`host/prepare_upgrade` 为 `mode: force`，并且确实有运行中的回合时，才是这个 action；
+  - 这个形式下不需要确认的命令，返回 invalid params。
+

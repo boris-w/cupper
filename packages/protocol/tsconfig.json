@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // The fixture tests read `protocol/fixtures/`; the package itself uses no Node API.
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
