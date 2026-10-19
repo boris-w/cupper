@@ -4,6 +4,7 @@
 
 mod license;
 mod rust;
+mod security;
 mod ts;
 
 use anyhow::Result;
@@ -42,7 +43,7 @@ pub const JOBS: &[Job] = &[
     job("testdata-scan", None),
     locked("e2e", None),
     locked("perf", None),
-    job("security-macos14", None),
+    job("security-macos14", Some(security::run)),
     job("compat-framework", None),
     job("release-config", None),
     job("codex-drift", None),

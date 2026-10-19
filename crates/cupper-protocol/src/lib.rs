@@ -15,11 +15,14 @@ pub mod event;
 pub mod frame;
 pub mod ids;
 pub mod index;
+pub mod interaction;
+pub mod item;
 pub mod limits;
 pub mod open_enum;
 pub mod open_union;
 pub mod rpc;
 pub mod schema;
+pub mod session;
 pub mod sync;
 #[cfg(test)]
 mod testutil;

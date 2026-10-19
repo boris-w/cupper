@@ -1,7 +1,10 @@
-//! Facts about the machine and the user that the host reads at startup
-//! (design 5.2.13).
+//! Facts about the machine and the user that the host reads at startup, and
+//! the host's own stdio (design 5.2.13).
 
 use std::ffi::{CStr, OsString};
+use std::fs::OpenOptions;
+use std::io;
+use std::os::fd::{AsRawFd, IntoRawFd};
 use std::os::unix::ffi::OsStringExt;
 use std::path::PathBuf;
 use std::ptr;
@@ -80,6 +83,46 @@ pub fn user_temp_dir() -> Result<PathBuf> {
         return Err(Error::Unexpected("confstr(_CS_DARWIN_USER_TEMP_DIR)"));
     }
     Ok(dir)
+}
+
+/// Points fds 0, 1 and 2 of this process at `/dev/null`, closing whatever
+/// they referred to. The host does so once it has read its startup payload
+/// (design 5.8.1, 5.2.13).
+pub fn redirect_stdio_to_null() -> Result<()> {
+    let null = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/null")
+        .map_err(|source| Error::Os {
+            call: "open(/dev/null)",
+            source,
+        })?;
+    let raw = null.as_raw_fd();
+    for fd in 0..=2 {
+        if fd == raw {
+            continue;
+        }
+        loop {
+            // SAFETY: dup2 takes plain fds and `null` stays open meanwhile.
+            // Replacing 0–2 closes what they referred to; Rust code only
+            // reaches those through the fd numbers, which stay valid.
+            if unsafe { libc::dup2(raw, fd) } >= 0 {
+                break;
+            }
+            let source = io::Error::last_os_error();
+            if source.kind() != io::ErrorKind::Interrupted {
+                return Err(Error::Os {
+                    call: "dup2",
+                    source,
+                });
+            }
+        }
+    }
+    if raw <= 2 {
+        // `/dev/null` was opened as one of 0–2 (one was closed): keep it.
+        let _ = null.into_raw_fd();
+    }
+    Ok(())
 }
 
 /// The real user ID of this process.

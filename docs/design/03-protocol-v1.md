@@ -507,3 +507,25 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 | `FallbackKind` | `item`、`hidden` |
 | `CliCompat` | 不新增取值；读不到版本号时记为 `unsupported` |
 
+**T017 实现时的裁定与取值（2026-10-19）**
+
+- 权限请求的 `tool.paths` 超出预算时，把完整列表放进 `detail`（blob），`paths` 只保留前若干项，并设 `content_truncated`。
+- `user_message` 的 `content` 始终完整，超长的文本用 `text_blob` 引用，不拆成 `item.delta`。拆成 delta 只用于 agent 一侧的条目（`agent_message`、`thought`、工具输出）。
+- `ItemPatch` 的语义：出现的字段整体替换，没出现的保持不变；没有"清空字段"的写法。客户端按 `output_state` 这类状态字段来判断，例如输出完成后不会清掉 `output_tail`。
+- `item.started` 的写法是 `{item_id, turn_id?, started_at, group_id?, kind, ...}`，条目联合展开在外壳字段旁边。`group_id` 放在外壳上，因为组内的 `thought` 也要带它。
+- `duration_ms` 放在 `item.completed` 上，不作为 `ToolCall` 的字段。
+- 权限请求里的 `tool.command` 是 `Content`，不是字符串，因为超长时要改成 blob（第 1 组第 6 条）。
+- `request_digest`：`turn_id` 缺省时省略这个键，不写 `null`。
+
+| 类型 | 取值 |
+|---|---|
+| `Guidance` | `retry`、`run_login_in_terminal`、`upgrade_cli`、`install_cli`、`quota_exhausted`、`change_model`、`restart_agent`、`none` |
+| `StopReason` | ACP 的 `end_turn`、`max_tokens`、`max_turn_requests`、`refusal`、`cancelled`，另加宿主的 `host_timeout` |
+| `SnapshotReason` | `timeout`、`unsafe_repo_config`、`not_a_repo`、`git_failed` |
+| `ExclusionReason` | `too_large`、`nested_repo`、`large_untracked_dir`、`filter_unsupported` |
+| `ResolutionReason` | `withdrawn`、`turn_cancelled`、`adapter_exited`、`host_restarted` |
+| `PlanPriority` | `high`、`medium`、`low`（ACP） |
+| `workspace.preparing.progress` | 0–100 的百分比 |
+| `effect.rule.location` | 字符串，不用 `WirePath`：适配器给的是 `localSettings` 这类语义值 |
+| `effect.scope`、`prefix_risk` 的线上值 `unknown` | 是已知取值，分别对应变体 `EffectScope::Unclassified`、`PrefixRisk::Unparsed`（`Unknown` 已被 `open_enum!` 的兜底变体占用） |
+

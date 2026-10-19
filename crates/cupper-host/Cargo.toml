@@ -15,7 +15,13 @@ dev-auth = []
 test-harness = []
 
 [dependencies]
+# The ACP SDK is pinned to the exact release T003 validated (ADR-02, design 5.6.10).
+# `unstable_plan_operations`: the `plan` client capability and `plan_update` (design 5.6.1).
+agent-client-protocol = { version = "=3.3.0", features = ["unstable_plan_operations"] }
+# The SDK only asks for ^3.3.0 of its derive macros; keep them on the same release.
+agent-client-protocol-derive = "=3.3.0"
 cupper-sys = { path = "../cupper-sys" }
+futures = { version = "0.3.34", default-features = false, features = ["std"] }
 getrandom = "0.4.3"
 # Exact: the bundled SQLite (3.53.2) comes with this release (design 5.1.3).
 # No default features: the store does not use the statement cache (`cache`),
@@ -24,8 +30,11 @@ rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json.workspace = true
 thiserror = "2.0.21"
-tokio = { version = "1.53.3", features = ["rt", "sync", "time"] }
+tokio = { version = "1.53.3", features = ["io-util", "net", "rt", "sync", "time"] }
 uuid = { version = "1.28.0", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+tokio = { version = "1.53.3", features = ["macros"] }
 
 [lints]
 workspace = true

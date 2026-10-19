@@ -206,7 +206,7 @@ sequenceDiagram
 | 适配器（node + adapter.mjs） | `POSIX_SPAWN_SETSID`：自成会话和进程组；拉起后立即记录 pid、pgid、启动时间 | 只有 0、1、2 三个管道 | 白名单（[5.6.6](06-agent-driver.md#566-cli-的发现与版本检查)），去掉所有 `CUPPER_*` | 拉起前核对 Node 的 cdhash 和 adapter.mjs 的 sha-256（ADR-08）；关闭和崩溃后按进程组清理；ACP 客户端能力里的 `fs`、`terminal` 永远声明为不支持，要改必须经过安全评审 |
 | git | 短命子进程；用启动时解析出的绝对路径，工作目录是 cupper 自己的目录 | stdin 为 `/dev/null` | 宿主的白名单环境加 `LC_ALL=C`、`GIT_TERMINAL_PROMPT=0`；PATH 只保留可信条目（不在任何项目、工作区、临时目录下的绝对路径） | 按三档调用（[5.2.10](02-host.md#5210-git-与-worktree-服务)）：宿主自动发起的调用不执行仓库配置指定的任何程序；只有用户点"提交""推送"时运行仓库的 hooks；超时后终止 |
 | CLI `--version`、登录 shell 探测 | 独立进程组 | stdin 为 `/dev/null` | 白名单 | 5 秒超时，超时后杀整个进程组；登录 shell 取到的环境只放在内存里，不写日志，不进诊断包 |
-| 宿主自身 | 桌面主进程经原生扩展调用 `cupper-sys::spawn` 拉起，`POSIX_SPAWN_SETSID` | 主进程到宿主的连接 fd 设 CLOEXEC，不会漏给 UI 的子进程；宿主读完启动载荷后，把自己的 stdio 指向 `/dev/null` | 环境变量白名单，不含任何秘密；密钥只经启动载荷 | 只用 `read(2)` 读套接字，不接收 `SCM_RIGHTS` 传来的 fd（实现时用测试确认会被内核丢弃，SP-4b 遗留项） |
+| 宿主自身 | 桌面主进程经原生扩展调用 `cupper-sys::spawn` 拉起，`POSIX_SPAWN_SETSID` | 主进程到宿主的连接 fd 设 CLOEXEC，不会漏给 UI 的子进程；宿主读完启动载荷后，把自己的 stdio 指向 `/dev/null` | 环境变量白名单，不含任何秘密；密钥只经启动载荷 | 读 cupper 的套接字一律经 `cupper_sys::recv_closing_fds`（带控制缓冲区读取，收到的 fd 全部关闭），收到 fd 就断开连接并记审计（v1.8 更正：T021 实测发现，不带控制缓冲区的 `read`/`recv` 照样会把 `SCM_RIGHTS` 传来的 fd 装进读方，并且不设 CLOEXEC；原写法"只用 read(2)、会被内核丢弃"不成立）。原生扩展和 CLI 读宿主的套接字时同样如此 |
 | 数据与套接字 | — | — | — | 数据目录、日志目录 `~/Library/Logs/cupper`、worktree 根目录都建成 0700 并检查属主；套接字 0600；路径过长时回退到每个用户自己的 `DARWIN_USER_TEMP_DIR`（[5.2.13](02-host.md#5213-进程监护与宿主生命周期)） |
 | 网络 | — | — | — | 宿主不监听任何端口（SEC-8）；只有运行时安装器访问 npm 仓库。electron-updater 会在 UI 进程里开一个只监听 127.0.0.1 的代理端口，把下载好的包交给 Squirrel.Mac：从下载完成时开始监听，直到调用 `quitAndInstall` 才关闭，可能持续数天；根路径要求随机生成的 Basic 认证，zip 在 128 位随机路径下（安全 #14）。这不是宿主，但写进安全说明 |
 
