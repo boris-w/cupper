@@ -4,3 +4,4 @@
 //! sync. The host's integration tests use it as their client.
 
 pub mod build_kind;
+pub mod verify;
