@@ -6,6 +6,7 @@
 
 pub mod annotations;
 pub mod canonical;
+pub mod capabilities;
 pub mod coalesce;
 pub mod domain;
 pub mod envelope;
