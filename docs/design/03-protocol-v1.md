@@ -719,3 +719,17 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
   - `interrupt_turns`：`{running_turns}`。只有 `host/exit` 带 `force`、`host/prepare_upgrade` 为 `mode: force`，并且确实有运行中的回合时，才是这个 action；
   - 这个形式下不需要确认的命令，返回 invalid params。
 
+**T033 开工前的裁定（2026-10-19）**
+
+- **UNIT-unsupported-set 的允许集合**：每一项都写明原因。可以返回 `unsupported` 的方法有：
+  - M1b、M2、M3 的方法；
+  - 按构建门控、本构建没有的方法；
+  - T183 之前的 `host/prepare_upgrade`；
+  - 执行者还没合并的 M1a 方法，并写明由哪个任务接上。
+  - 每个任务接上执行者时，删掉自己那几行。到 T099 时，表里不应再有 M1a 方法。
+- **`policy/describe` 的 `Facts`**：全部由会话端口的 `facts(&Confirmable)` 提供，`running_turns` 也由会话管理给出，不另设接口。
+- **每连接在途上限**：第 65 个在途请求回 `rate_limited`，不带 `retry_after_ms`，因为在途数要靠这条连接自己的回复来释放，与时间无关。
+- **订阅与 `history/page` 的 `not_found`**：会话流的 head 为 0 就回 `not_found`，不查 `sessions` 表（T019）。
+- **补发与裁剪的竞态**：补发时读到缺口，就摘掉订阅、清掉这条流排队中的实时项，发 `stream/reset`，`reason` 沿用 `rebuilt`。客户端带游标重新订阅，会拿到 `cursor_expired` 快照（T019）。
+- **订阅日志（Q16）**：网关把 `stream.subscribed` 发进审计 channel，T037 只把它写进 host.log，不写 `audit` 表（T019）。
+
