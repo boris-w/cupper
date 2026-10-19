@@ -20,7 +20,9 @@ mod testutil;
 
 pub use env::Env;
 pub use group::{ProcessGroup, Signal};
-pub use proc::{ProcessInfo, StartTime, descendants, parent_chain, process_info};
+pub use proc::{
+    ProcessInfo, StartTime, UniqueIds, descendants, parent_chain, process_info, unique_ids,
+};
 pub use spawn::{Child, Command, Stdio, spawn};
 pub use system::{boot_session_uuid, current_uid, user_temp_dir};
 

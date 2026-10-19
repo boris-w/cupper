@@ -112,6 +112,69 @@ pub(crate) fn start_time(pid: i32) -> Option<StartTime> {
     ))
 }
 
+/// `PROC_PIDUNIQIDENTIFIERINFO` from XNU's private `<sys/proc_info_private.h>`.
+const PROC_PIDUNIQIDENTIFIERINFO: libc::c_int = 17;
+
+/// `struct proc_uniqidentifierinfo` from the same header; the libc crate does
+/// not declare it.
+#[repr(C)]
+struct ProcUniqIdentifierInfo {
+    _p_uuid: [u8; 16],
+    p_uniqueid: u64,
+    p_puniqueid: u64,
+    p_idversion: i32,
+    _p_reserve2: u32,
+    _p_reserve3: u64,
+    _p_reserve4: u64,
+}
+
+const _: () = assert!(mem::size_of::<ProcUniqIdentifierInfo>() == 56);
+
+/// Identifiers of a process that, unlike its pid, the kernel does not reuse.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UniqueIds {
+    /// This process, for the whole boot; it is kept across exec.
+    pub unique_id: u64,
+    /// The process that started this one: the parent at its latest fork or
+    /// exec. When the parent exits and launchd adopts the process, it stays,
+    /// so a process can name its launcher without racing the launcher's exit
+    /// (design 5.8.1: `dev_key` is only accepted from the launcher). Only an
+    /// exec after the adoption makes it launchd's id. It never names another
+    /// process.
+    pub parent_unique_id: u64,
+    /// Changes on every fork and exec; it is the pid version of the
+    /// process's audit token.
+    pub pid_version: u32,
+}
+
+/// The unique ids of `pid`; `None` when it does not exist, has exited, or
+/// cannot be read. Other users' processes can be read too.
+pub fn unique_ids(pid: i32) -> Option<UniqueIds> {
+    if pid <= 0 {
+        return None;
+    }
+    // SAFETY: the struct holds only integers and a byte array, for which
+    // all-zero bytes are a valid value.
+    let mut info: ProcUniqIdentifierInfo = unsafe { mem::zeroed() };
+    let size = mem::size_of::<ProcUniqIdentifierInfo>() as libc::c_int;
+    // SAFETY: the buffer is one struct of `size` bytes and the kernel writes
+    // at most `size` bytes into it.
+    let written = unsafe {
+        libc::proc_pidinfo(
+            pid,
+            PROC_PIDUNIQIDENTIFIERINFO,
+            0,
+            (&raw mut info).cast(),
+            size,
+        )
+    };
+    (written == size).then_some(UniqueIds {
+        unique_id: info.p_uniqueid,
+        parent_unique_id: info.p_puniqueid,
+        pid_version: info.p_idversion as u32,
+    })
+}
+
 /// Facts about `pid`; `None` when it does not exist, has exited (a zombie
 /// waiting to be reaped), or cannot be read.
 pub fn process_info(pid: i32) -> Option<ProcessInfo> {
@@ -242,11 +305,12 @@ pub(crate) fn group_members(pgid: i32) -> Vec<ProcessInfo> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{BufRead, BufReader, Write};
     use std::time::Duration;
 
     use super::*;
     use crate::Command;
-    use crate::testutil::{Owned, eventually};
+    use crate::testutil::{Groups, Owned, cat, eventually, sh};
 
     #[test]
     fn process_info_describes_this_process() {
@@ -275,6 +339,103 @@ mod tests {
         }));
         // Still ours to reap, so the pid has not been reused meanwhile.
         assert_eq!(start_time(child.pid()), Some(child.start()));
+        assert!(child.wait().unwrap().success());
+    }
+
+    #[test]
+    fn unit_sys_uniqueid_child_records_its_launcher() {
+        let me = unique_ids(std::process::id() as i32).unwrap();
+        let parent = unique_ids(std::os::unix::process::parent_id() as i32).unwrap();
+        assert_eq!(me.parent_unique_id, parent.unique_id);
+
+        // The host is started like this (SETSID) and reads its own record.
+        let host = Owned::spawn(cat().new_session());
+        let ids = unique_ids(host.pid()).unwrap();
+        assert_eq!(ids.parent_unique_id, me.unique_id);
+        assert!(ids.unique_id > me.unique_id, "{ids:?} {me:?}");
+        assert_ne!(ids.pid_version, me.pid_version);
+
+        // Another process of the same program started by the same launcher is
+        // still told apart.
+        let sibling = Owned::spawn(&cat());
+        let other = unique_ids(sibling.pid()).unwrap();
+        assert_eq!(other.parent_unique_id, me.unique_id);
+        assert_ne!(other.unique_id, ids.unique_id);
+    }
+
+    #[test]
+    fn unit_sys_uniqueid_exec_keeps_the_id_and_changes_the_pid_version() {
+        let mut cmd = sh("read x && exec /bin/cat");
+        cmd.stdin(crate::Stdio::Pipe);
+        let mut child = Owned::spawn(&cmd);
+        let mut stdin = child.stdin_file();
+        let mut stdout = BufReader::new(child.stdout_file());
+        let before = unique_ids(child.pid()).unwrap();
+        stdin.write_all(b"exec\nping\n").unwrap();
+        let mut line = String::new();
+        stdout.read_line(&mut line).unwrap();
+        assert_eq!(line, "ping\n", "cat runs in place of sh");
+        let after = unique_ids(child.pid()).unwrap();
+        assert_eq!(after.unique_id, before.unique_id);
+        assert_eq!(after.parent_unique_id, before.parent_unique_id);
+        assert_ne!(after.pid_version, before.pid_version);
+        drop(stdin);
+        assert!(child.wait().unwrap().success());
+    }
+
+    #[test]
+    fn unit_sys_uniqueid_parent_id_outlives_the_launcher_until_an_exec() {
+        // sh starts a subshell in the background, reports its pid and waits
+        // for us; the subshell execs sleep on SIGUSR1.
+        let mut cmd = sh("(trap 'exec /bin/sleep 30' USR1; \
+             while :; do /bin/sleep 0.02; done) >/dev/null & \
+             echo $!; read x || true");
+        cmd.stdin(crate::Stdio::Pipe);
+        let mut shell = Owned::spawn(&cmd);
+        let _groups = Groups(vec![shell.group()]);
+        let stdin = shell.stdin_file();
+        let mut line = String::new();
+        BufReader::new(shell.stdout_file())
+            .read_line(&mut line)
+            .unwrap();
+        let child: i32 = line.trim().parse().unwrap();
+        let launcher = unique_ids(shell.pid()).unwrap().unique_id;
+        assert_eq!(unique_ids(child).unwrap().parent_unique_id, launcher);
+
+        // Adoption by launchd keeps the record (macOS 26.4).
+        drop(stdin);
+        assert!(shell.wait().unwrap().success());
+        assert!(eventually(Duration::from_secs(5), || {
+            process_info(child).is_some_and(|info| info.ppid == 1)
+        }));
+        assert_eq!(unique_ids(child).unwrap().parent_unique_id, launcher);
+
+        // An exec after the adoption records launchd instead.
+        // SAFETY: kill takes plain integers; `child` is alive, in our group.
+        assert_eq!(unsafe { libc::kill(child, libc::SIGUSR1) }, 0);
+        assert!(eventually(Duration::from_secs(5), || {
+            process_info(child).is_some_and(|info| info.name == "sleep")
+        }));
+        let launchd = unique_ids(1).unwrap().unique_id;
+        assert_eq!(unique_ids(child).unwrap().parent_unique_id, launchd);
+    }
+
+    #[test]
+    fn unit_sys_uniqueid_reads_root_processes_but_not_missing_ones() {
+        let launchd = unique_ids(1).unwrap();
+        assert!(launchd.unique_id > 0);
+        assert_eq!(unique_ids(0), None);
+        assert_eq!(unique_ids(-1), None);
+        assert_eq!(unique_ids(i32::MAX), None);
+    }
+
+    #[test]
+    fn unit_sys_uniqueid_of_a_zombie_is_none() {
+        let mut child = Owned::spawn(&Command::new("/usr/bin/true"));
+        assert!(eventually(Duration::from_secs(5), || {
+            process_info(child.pid()).is_none()
+        }));
+        assert_eq!(unique_ids(child.pid()), None);
         assert!(child.wait().unwrap().success());
     }
 
