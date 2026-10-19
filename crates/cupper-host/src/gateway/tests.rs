@@ -75,7 +75,7 @@ async fn it_handshake_hello_then_one_initialize_as_read_only_cli() {
     let result = client.call("initialize", params).await.unwrap();
     let host = json!({"host_id": HostId::from_uuid(1), "version": env!("CARGO_PKG_VERSION"),
         "weak_auth": cfg!(feature = "dev-auth"), "data_epoch": 1});
-    let expected = json!({"protocol": 1, "host": host, "features": [], "limits": V1,
+    let expected = json!({"protocol": 1, "host": host, "features": ["stream.coalesce"], "limits": V1,
         "principal": {"id": "pr_cli", "kind": "cli", "scopes": ["read"]}});
     assert_eq!(result, expected);
 
@@ -410,4 +410,40 @@ async fn it_pinned_token_passed_fds_end_the_connection() {
     assert_eq!(sent, ping.len());
     assert_eq!(client.next().await, None, "no answer to a message with fds");
     assert_eq!(gw.closed().await, CloseReason::FdPassed { fds: 1 });
+}
+
+/// IT-lifecycle at the gateway: on the way out, `host/shutdown` reaches the
+/// initialized connections, then every connection ends.
+#[tokio::test]
+async fn it_lifecycle_gateway_shutdown_reaches_clients_then_all_connections_end() {
+    use cupper_protocol::domain::PrincipalKind;
+    use cupper_protocol::index::ClientAuth;
+    use cupper_protocol::methods::handshake::{HostShutdown, HostShutdownParams, ShutdownReason};
+
+    let mut gw = TestGateway::start(None);
+    let mut ready = Client::connect(&gw.socket).await;
+    ready.handshake(peer()).await.expect("initialized");
+    let mut waiting = Client::connect(&gw.socket).await;
+    waiting.hello().await;
+
+    let clients = gw.gateway.clients();
+    assert_eq!(clients.len(), 1, "{clients:?}");
+    assert_eq!(clients[0].principal_kind, PrincipalKind::Cli);
+    assert_eq!(clients[0].auth, ClientAuth::Peer);
+    assert_eq!(clients[0].client_name, "testkit");
+
+    gw.gateway.broadcast::<HostShutdown>(&HostShutdownParams {
+        reason: ShutdownReason::UserQuit,
+        restart_expected: false,
+    });
+    gw.gateway.close_all().await;
+    let shutdown = ready.next().await.expect("host/shutdown");
+    assert_eq!(shutdown["method"], "host/shutdown", "{shutdown}");
+    assert_eq!(shutdown["params"]["reason"], "user_quit");
+    assert_eq!(ready.next().await, None);
+    assert_eq!(waiting.next().await, None);
+    for _ in 0..2 {
+        assert_eq!(gw.closed().await, CloseReason::HostExiting);
+    }
+    assert!(gw.gateway.clients().is_empty());
 }

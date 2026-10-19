@@ -1,11 +1,15 @@
 //! The frames the host sends: one JSON-RPC message per `0x01` frame (design
-//! 5.3.1). Pages of events and snapshots are T033's.
+//! 5.3.1). Events and snapshot ops are packed as many to a frame as fit.
 
 use cupper_protocol::error::{ErrorCode, RpcError};
-use cupper_protocol::frame;
+use cupper_protocol::event::EventBody;
+use cupper_protocol::frame::{self, FrameType, MAX_FRAME_BYTES, MAX_PAYLOAD_BYTES};
+use cupper_protocol::methods::stream::{Raw, StreamEvents, StreamSnapshot, StreamSnapshotParams};
 use cupper_protocol::rpc::{
-    HostNotification, JSONRPC_VERSION, OutError, OutNotification, OutResult, RpcId,
+    HostNotification, JSONRPC_VERSION, Notification, OutError, OutNotification, OutResult, RpcId,
 };
+use cupper_protocol::sync::StreamId;
+use cupper_protocol::view::paginate;
 use serde::Serialize;
 
 /// Longest error message sent when the whole one does not fit into a frame.
@@ -48,15 +52,78 @@ pub fn error(id: Option<&RpcId>, err: &RpcError) -> Vec<u8> {
     })
 }
 
-/// A notification of the host. Only small ones go through here, such as
-/// `host/hello` and `stream/reset`.
+/// A notification of the host that fits into a frame: a small one such as
+/// `host/hello` and `stream/reset`, or a page made to fit.
 pub fn notification<N: HostNotification>(params: &N::Params) -> Vec<u8> {
     frame::encode_json(&OutNotification {
         jsonrpc: JSONRPC_VERSION,
         method: N::NAME,
         params,
     })
-    .expect("a small notification fits into a frame")
+    .expect("the notification fits into a frame")
+}
+
+/// `stream/events` of `stream` with `events`, each the JSON of an event, as
+/// many to a frame as fit, in order. They stop before an event too large
+/// for a frame of its own; the flag says whether all of them went in.
+pub fn events<S: AsRef<str>>(stream: &StreamId, events: &[S]) -> (Vec<Vec<u8>>, bool) {
+    const TAIL: &str = "]}}";
+    let name = serde_json::to_string(stream).expect("a stream name serializes");
+    let head = format!(
+        r#"{{"jsonrpc":"{JSONRPC_VERSION}","method":"{}","params":{{"stream":{name},"events":["#,
+        StreamEvents::NAME
+    );
+    let room = MAX_PAYLOAD_BYTES - head.len() - TAIL.len();
+    let frame = |body: &str| {
+        let payload = [&head, body, TAIL].concat();
+        frame::encode(FrameType::Json, payload.as_bytes()).expect("the events fit into the frame")
+    };
+    let (mut frames, mut body) = (Vec::new(), String::new());
+    for event in events.iter().map(AsRef::as_ref) {
+        if event.len() > room {
+            frames.extend((!body.is_empty()).then(|| frame(&body)));
+            return (frames, false);
+        }
+        if !body.is_empty() && body.len() + 1 + event.len() > room {
+            frames.push(frame(&body));
+            body.clear();
+        }
+        if !body.is_empty() {
+            body.push(',');
+        }
+        body.push_str(event);
+    }
+    frames.extend((!body.is_empty()).then(|| frame(&body)));
+    (frames, true)
+}
+
+/// The `stream/snapshot` pages of `ops`, as many to a page as fit into a
+/// frame, by [`paginate`]; one empty page when there are none.
+pub fn snapshot(stream: &StreamId, at_seq: u64, epoch: u64, ops: &[EventBody]) -> Vec<Vec<u8>> {
+    let page = |page, last, ops: &[EventBody]| StreamSnapshotParams {
+        stream: stream.clone(),
+        at_seq,
+        epoch,
+        page,
+        last,
+        ops: ops
+            .iter()
+            .map(|op| Raw::encode(op).expect("an op serializes"))
+            .collect(),
+    };
+    // The longest envelope: the highest page number and `false`; `paginate`
+    // counts the brackets of the empty `ops` it has.
+    let envelope = notification::<StreamSnapshot>(&page(u32::MAX, false, &[])).len();
+    let mut pages = paginate(ops, MAX_FRAME_BYTES - envelope + 2);
+    if pages.is_empty() {
+        pages.push(0..0);
+    }
+    let last = pages.len() - 1;
+    let pages = pages.into_iter().enumerate().map(|(n, range)| {
+        let n = u32::try_from(n).expect("fewer than 2^32 pages");
+        notification::<StreamSnapshot>(&page(n, n as usize == last, &ops[range]))
+    });
+    pages.collect()
 }
 
 #[cfg(test)]

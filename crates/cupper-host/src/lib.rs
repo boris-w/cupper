@@ -14,3 +14,4 @@ pub mod pure;
 pub mod quiescence;
 pub mod startup;
 pub mod store;
+pub mod supervisor;

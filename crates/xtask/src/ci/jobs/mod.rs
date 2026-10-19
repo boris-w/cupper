@@ -2,6 +2,7 @@
 //! A job registered with `run: None` is implemented by a later task, which adds
 //! its file and fills in `run`; the composites already list it.
 
+mod differential;
 mod license;
 mod protocol;
 mod rust;
@@ -43,6 +44,7 @@ pub const JOBS: &[Job] = &[
     locked("ui", None),
     job("license", Some(license::run)),
     job("testdata-scan", Some(testdata_scan::run)),
+    job("differential", Some(differential::run)),
     locked("e2e", None),
     locked("perf", None),
     job("security-macos14", Some(security::run)),
@@ -74,6 +76,7 @@ pub const COMPOSITES: &[(&str, &[&str])] = &[
             "ts",
             "license",
             "testdata-scan",
+            "differential",
             "ui",
             "e2e",
             "perf",

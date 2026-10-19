@@ -17,8 +17,9 @@ fn run(cmd: &mut Command) -> Output {
     cmd.output().expect("run cupper-host")
 }
 
-/// Runs the host with `--data-dir` (which it does not touch yet) and `input`
-/// on stdin, then closes stdin.
+/// Runs the host with `--data-dir` (which a bad payload keeps it from
+/// touching) and `input` on stdin, then closes stdin.
+#[cfg(any(feature = "dev-auth", feature = "test-harness"))]
 fn run_with_stdin(input: &[u8]) -> (Option<i32>, String) {
     let data_dir = concat!(env!("CARGO_TARGET_TMPDIR"), "/cupper-host-startup");
     let mut child = host(&["--data-dir", data_dir])
@@ -90,13 +91,40 @@ fn unit_startup_payload_bad_payload_exits_1() {
 }
 
 /// A release host never reads stdin: a payload that every reading build
-/// rejects goes unnoticed.
+/// rejects goes unnoticed, and the host comes up. Its stdio went to
+/// `/dev/null` at once, so its stderr stays empty; SIGTERM ends it.
 #[cfg(not(any(feature = "dev-auth", feature = "test-harness")))]
-#[test]
-fn unit_release_features_host_does_not_read_stdin() {
+#[tokio::test]
+async fn unit_release_features_host_does_not_read_stdin() {
+    use std::time::Duration;
+
+    use cupper_host::clock::{Clock, SystemClock};
+
     let payload = br#"{"harness_key": "not a key", "test_config": {"failpoints": [{"name": "no.such"}]}, "unknown": 1}"#;
-    let (code, stderr) = run_with_stdin(payload);
-    assert_eq!(code, Some(1), "{stderr}");
-    assert!(stderr.contains("not assembled"), "{stderr}");
-    assert!(!stderr.contains("payload"), "{stderr}");
+    let data_dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("cupper-host-release-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data_dir);
+    let mut child = host(&["--data-dir", data_dir.to_str().unwrap()])
+        .stdin(Stdio::piped())
+        .spawn()
+        .expect("start cupper-host");
+    let _ = child.stdin.take().unwrap().write_all(payload);
+    let socket =
+        cupper_protocol::transport::socket_path(&data_dir, &cupper_sys::user_temp_dir().unwrap());
+    let clock = SystemClock::new();
+    let give_up = clock.now_mono() + Duration::from_secs(30);
+    while tokio::net::UnixStream::connect(&socket).await.is_err() {
+        assert!(clock.now_mono() < give_up, "the host does not listen");
+        clock
+            .timer_at(clock.now_mono() + Duration::from_millis(20))
+            .await;
+    }
+    let kill = Command::new("/bin/kill")
+        .args(["-TERM", &child.id().to_string()])
+        .status();
+    assert!(kill.unwrap().success());
+    let out = child.wait_with_output().expect("wait for cupper-host");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(out.stderr.is_empty(), "{out:?}");
+    std::fs::remove_dir_all(&data_dir).unwrap();
 }

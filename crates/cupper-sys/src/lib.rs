@@ -16,6 +16,7 @@ mod exit;
 mod group;
 mod peer;
 mod proc;
+mod runloop;
 mod spawn;
 mod system;
 #[cfg(test)]
@@ -33,6 +34,7 @@ pub use peer::{
 pub use proc::{
     ProcessInfo, StartTime, UniqueIds, descendants, parent_chain, process_info, unique_ids,
 };
+pub use runloop::{RunLoop, RunLoopStop};
 pub use spawn::{Child, Command, Stdio, spawn};
 pub use system::{boot_session_uuid, current_uid, redirect_stdio_to_null, user_temp_dir};
 

@@ -10,13 +10,12 @@ use std::time::Duration;
 
 use cupper_protocol::annotations::{X_BUILDS, X_MILESTONE};
 use cupper_protocol::domain::{ClientRole, PrincipalKind};
-use cupper_protocol::frame::FrameDecoder;
 use cupper_protocol::ids::{ConnId, SessionId};
 use cupper_protocol::methods::admin::SettingsUpdate;
 use cupper_protocol::methods::catalog::catalog;
 use cupper_protocol::methods::git::GitRevert;
 use cupper_protocol::methods::session::SessionSetConfig;
-use cupper_protocol::rpc::{Milestone, RpcId, Scope};
+use cupper_protocol::rpc::{Milestone, Scope};
 use cupper_protocol::schema::generator;
 use futures::FutureExt;
 use futures::future::{self, BoxFuture};
@@ -27,11 +26,13 @@ use super::*;
 use crate::clock::{ManualClock, SystemClock};
 use crate::durations::Durations;
 use crate::gateway::Routes;
-use crate::gateway::testkit::{Client, TempDir, TestGateway};
+use crate::gateway::testkit::{Client, Peer, TempDir, TestGateway};
 use crate::quiescence::Quiescence;
+use crate::store::streams::{Streams, StreamsConfig};
 use crate::store::{
-    Database, MIGRATIONS, WRITER, Writer, WriterConfig, migrate, open_reader, open_writer,
+    Database, MIGRATIONS, Readers, WRITER, Writer, WriterConfig, migrate, open_reader, open_writer,
 };
+use crate::supervisor::control::Control;
 
 /// A port that keeps each call and its reply channel for the test to answer.
 #[derive(Debug, Default)]
@@ -133,90 +134,27 @@ impl Fixture {
     /// The routes as the host starts them, the ledger loaded from the table;
     /// call within a runtime.
     fn start(&self) -> Routes {
-        let conn = open_reader(&self.dir.path().join("host.db")).unwrap();
+        let host_db = self.dir.path().join("host.db");
+        let conn = open_reader(&host_db).unwrap();
         let clock = Arc::new(self.clock.clone());
         let (sessions, index) = (Arc::clone(&self.sessions), Arc::clone(&self.index));
         let durations = Durations::default();
         let started = Routes::start(
             &conn,
             self.writer.clone(),
-            clock,
+            clock.clone(),
             &durations,
             sessions,
             index,
         );
-        started.unwrap().0
-    }
-}
-
-/// One connection's dispatch, driven as the read loop drives it, and the
-/// replies it queued.
-struct Peer {
-    dispatch: Dispatch,
-    outbox: Arc<Outbox>,
-    replies: Vec<Value>,
-    next_id: i64,
-}
-
-impl Peer {
-    fn new(principal: Principal) -> Self {
-        let outbox = Arc::new(Outbox::new(V1.max_queue_bytes as usize));
-        let conn = ConnId::from_index(1);
-        Self {
-            dispatch: Dispatch::new(conn, principal, Arc::clone(&outbox)),
-            outbox,
-            replies: Vec::new(),
-            next_id: 0,
-        }
-    }
-
-    /// Sends a request; returns its id.
-    fn send(&mut self, routes: &Routes, method: &str, params: Value) -> i64 {
-        self.next_id += 1;
-        let id = RpcId::Number(self.next_id);
-        self.dispatch.request(routes, id, method, params);
-        self.next_id
-    }
-
-    async fn call(&mut self, routes: &Routes, method: &str, params: Value) -> Result<Value, Value> {
-        let id = self.send(routes, method, params);
-        self.reply(id).await
-    }
-
-    /// The reply to request `id`: its `result`, or its `error`.
-    async fn reply(&mut self, id: i64) -> Result<Value, Value> {
-        loop {
-            if let Some(at) = self.replies.iter().position(|reply| reply["id"] == id) {
-                let reply = self.replies.remove(at);
-                return match reply.get("error") {
-                    Some(error) => Err(error.clone()),
-                    None => Ok(reply["result"].clone()),
-                };
-            }
-            let frames = self.outbox.drain().await.expect("the outbox is open");
-            self.take(frames);
-        }
-    }
-
-    /// The ids of the replies queued once the tasks that can run have run.
-    async fn answered(&mut self) -> Vec<i64> {
-        for _ in 0..16 {
-            tokio::task::yield_now().await;
-        }
-        if let Some(Some(frames)) = self.outbox.drain().now_or_never() {
-            self.take(frames);
-        }
-        let ids = self.replies.iter().map(|reply| reply["id"].as_i64());
-        ids.map(Option::unwrap).collect()
-    }
-
-    fn take(&mut self, frames: Vec<Vec<u8>>) {
-        let mut decoder = FrameDecoder::new();
-        for frame in frames {
-            decoder.push(&frame);
-            let payload = decoder.next_frame().unwrap().unwrap().payload;
-            self.replies.push(serde_json::from_slice(&payload).unwrap());
-        }
+        let mut routes = started.unwrap().0;
+        let readers = Readers::open(&host_db).unwrap();
+        let config = StreamsConfig::new(1, &durations);
+        let streams = Streams::new(self.writer.clone(), readers.clone(), clock, config);
+        routes.streams(streams, readers);
+        let (supervisor, _) = tokio::sync::mpsc::unbounded_channel();
+        Arc::new(Control::new(supervisor, Arc::new([]))).route(&mut routes);
+        routes
     }
 }
 
@@ -407,10 +345,7 @@ const ALLOWED: &[(&str, Why)] = {
         ("git/stage", Later(M1b)),
         ("git/status", Later(M1b)),
         ("git/unstage", Later(M1b)),
-        ("history/page", Until("T019")),
-        ("host/exit", Until("T037")),
         ("host/prepare_upgrade", Until("T183")),
-        ("host/status", Until("T037")),
         ("project/remove", Later(M1b)),
         ("session/archive", Later(M1b)),
         ("session/confirm_config", Until("T044")),
@@ -422,8 +357,6 @@ const ALLOWED: &[(&str, Why)] = {
         ("settings/get", Until("T036")),
         ("settings/update", Until("T036")),
         ("stream/ack", Later(M3)),
-        ("stream/subscribe", Until("T019")),
-        ("stream/unsubscribe", Until("T019")),
         // Build `test-harness` only.
         ("test/clock_advance", Until("T047")),
         ("test/run_maintenance", Until("T047")),

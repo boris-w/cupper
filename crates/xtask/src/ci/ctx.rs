@@ -118,7 +118,8 @@ impl<'a> JobCtx<'a> {
     }
 
     /// `<log dir>/<job>-<step>.<extension>`.
-    fn step_file(&self, step: &str, extension: &str) -> PathBuf {
+    /// A file of this job's step next to the logs, e.g. one a step writes for the next.
+    pub fn step_file(&self, step: &str, extension: &str) -> PathBuf {
         self.log_dir
             .join(format!("{}-{step}.{extension}", self.job))
     }

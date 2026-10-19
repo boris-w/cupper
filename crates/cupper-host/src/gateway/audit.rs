@@ -4,14 +4,18 @@
 //! identifier and Team ID of a peer are T038's.
 
 use std::io;
+use std::sync::Arc;
 use std::time::Duration;
 
 use cupper_protocol::error::RpcError;
 use cupper_protocol::ids::{ConnId, PrincipalId};
 use cupper_protocol::methods::handshake::{ClientIdentity, Principal};
+use cupper_protocol::sync::{ResyncReason, StreamId, SubscribeMode};
 use cupper_sys::{Refusal, RefusalKind};
+use tokio::sync::mpsc;
 
 use super::Verdict;
+use crate::clock::Clock;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AuditRecord {
@@ -46,6 +50,46 @@ pub enum AuditEvent {
         /// Who the connection was, once initialized.
         principal: Option<PrincipalId>,
     },
+    /// `stream.subscribed`: how a subscription started (Q16). It goes to
+    /// `host.log` only, not to the `audit` table (design 5.3.11, rulings
+    /// before T033).
+    Subscribed {
+        stream: StreamId,
+        mode: SubscribeMode,
+        reason: Option<ResyncReason>,
+        /// How far the cursor was behind the head, when it came with the
+        /// host's epoch and was not ahead.
+        lag: Option<u64>,
+    },
+}
+
+/// One connection's way into the audit channel.
+#[derive(Debug, Clone)]
+pub(super) struct Auditor {
+    conn: ConnId,
+    records: mpsc::UnboundedSender<AuditRecord>,
+    clock: Arc<dyn Clock>,
+}
+
+impl Auditor {
+    pub fn new(
+        conn: ConnId,
+        records: mpsc::UnboundedSender<AuditRecord>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        Self {
+            conn,
+            records,
+            clock,
+        }
+    }
+
+    pub fn record(&self, event: AuditEvent) {
+        let at_ms = self.clock.now_wall_ms();
+        let conn = self.conn.clone();
+        // Nobody listening is the receiver's choice.
+        let _ = self.records.send(AuditRecord { at_ms, conn, event });
+    }
 }
 
 /// Why a peer was turned away on accept.
@@ -80,4 +124,6 @@ pub enum CloseReason {
     AlreadyInitialized,
     /// `initialize` failed with this error, which the peer was sent.
     HandshakeFailed(RpcError),
+    /// The host is exiting (design 5.2.13).
+    HostExiting,
 }

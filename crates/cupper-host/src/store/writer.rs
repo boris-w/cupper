@@ -138,13 +138,23 @@ impl Writer {
             linger: config.linger,
             durability: None,
         };
+        // Dropped as the thread ends, a panic's unwinding included.
+        let (alive, ended) = oneshot::channel::<()>();
         let thread = thread::Builder::new()
             .name("store-writer".to_owned())
-            .spawn(move || batcher.run(&inbox, participant))?;
+            .spawn(move || {
+                let _alive = alive;
+                batcher.run(&inbox, participant);
+            })?;
         let writer = Self {
             queue: queue.clone(),
         };
-        Ok((writer, WriterThread { queue, thread }))
+        let thread = WriterThread {
+            queue,
+            thread,
+            ended,
+        };
+        Ok((writer, thread))
     }
 
     /// Queues `op` to run in its own savepoint in the next batch, committed
@@ -171,9 +181,17 @@ impl Writer {
 pub struct WriterThread {
     queue: mpsc::Sender<Message>,
     thread: JoinHandle<()>,
+    ended: oneshot::Receiver<()>,
 }
 
 impl WriterThread {
+    /// Completes once the thread has ended without [`stop`](Self::stop): an
+    /// operation panicked. The host cannot go on without its writer and exits
+    /// (design 5.2.13).
+    pub async fn ended(&mut self) {
+        let _ = (&mut self.ended).await;
+    }
+
     /// Commits what was submitted before this call, then ends the thread;
     /// operations submitted later get [`WriteError::Stopped`]. Blocks until the
     /// thread has ended; `Err` carries the panic of a thread that died.
@@ -585,6 +603,20 @@ mod tests {
             Err(WriteError::Stopped)
         ));
         assert_eq!(committed(&fx.dir.host_db()), [1]);
+    }
+
+    #[tokio::test]
+    async fn store_writer_thread_ends_when_an_operation_panics() {
+        let mut fx = start("panic", Duration::ZERO);
+        let receipt = fx
+            .writer
+            .submit(Durability::Normal, |_| -> rusqlite::Result<()> {
+                panic!("a broken operation")
+            });
+        fx.thread.ended().await;
+        assert!(matches!(receipt.await, Err(WriteError::Stopped)));
+        assert!(fx.thread.stop().is_err());
+        assert_eq!(fx.quiescence.running(WRITER), 0);
     }
 
     #[test]
