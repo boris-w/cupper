@@ -5,10 +5,12 @@
   "license": "Apache-2.0",
   "description": "The Electron app: main process, preload and the renderer entry.",
   "type": "module",
+  "main": "dist/main/index.js",
   "scripts": {
     "test": "vitest run"
   },
   "devDependencies": {
+    "@cupper/i18n": "workspace:*",
     "@cupper/shell-api": "workspace:*",
     "@types/node": "24.19.1",
     "electron": "44.9.0",
