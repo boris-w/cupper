@@ -257,6 +257,7 @@ mod tests {
             &[
                 "session/set_config",
                 "session/rename",
+                "session/archive",
                 "session/restore",
                 "agents/refresh",
                 "agents/restart",
@@ -559,6 +560,7 @@ mod tests {
             "agents/restart",
             "project/add",
             "project/remove",
+            "session/archive",
             "session/rename",
             "session/restore",
             "session/set_config",
