@@ -12,6 +12,7 @@
 
 mod env;
 mod group;
+mod peer;
 mod proc;
 mod spawn;
 mod system;
@@ -20,6 +21,9 @@ mod testutil;
 
 pub use env::Env;
 pub use group::{ProcessGroup, Signal};
+pub use peer::{
+    AuditToken, Received, Refusal, RefusalKind, peer_pid, peer_token, peer_uid, recv_closing_fds,
+};
 pub use proc::{
     ProcessInfo, StartTime, UniqueIds, descendants, parent_chain, process_info, unique_ids,
 };

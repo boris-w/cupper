@@ -5,9 +5,61 @@ use std::fs::File;
 use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use crate::{Child, Command, ProcessGroup, Signal, Stdio, spawn};
+
+/// Serialises the tests that leave fds without close-on-exec in this process
+/// (passed fds) with the tests whose children inherit such fds (`std::process`,
+/// `fork`, a spawn without `CLOEXEC_DEFAULT`), so that neither sees the
+/// other's fds. Children started with [`spawn`] inherit nothing and need no
+/// lock.
+pub fn fd_lock() -> MutexGuard<'static, ()> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    LOCK.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// A child started with `std::process`, for tests that hand it a socket as
+/// stdio; killed and waited for when the test ends. Take [`fd_lock`] first.
+pub struct StdChild(pub std::process::Child);
+
+impl Drop for StdChild {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+/// A child made with `fork`; killed and waited for when the test ends, unless
+/// [`Forked::wait`] already did.
+pub struct Forked(pub i32);
+
+impl Forked {
+    /// Waits for the child; its exit status.
+    pub fn wait(&mut self) -> i32 {
+        let mut status = 0;
+        // SAFETY: a valid out pointer; the pid is our unreaped child.
+        let rc = unsafe { libc::waitpid(self.0, &mut status, 0) };
+        assert_eq!(rc, self.0, "waitpid: {}", std::io::Error::last_os_error());
+        self.0 = 0;
+        status
+    }
+}
+
+impl Drop for Forked {
+    fn drop(&mut self) {
+        if self.0 > 0 {
+            let mut status = 0;
+            // SAFETY: plain integers and a valid out pointer; the pid is our
+            // unreaped child.
+            unsafe {
+                libc::kill(self.0, libc::SIGKILL);
+                libc::waitpid(self.0, &mut status, 0);
+            }
+        }
+    }
+}
 
 /// `/bin/cat` reading a pipe and writing a pipe: it stays alive until we close
 /// its stdin.
