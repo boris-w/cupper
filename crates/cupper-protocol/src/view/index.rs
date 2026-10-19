@@ -242,7 +242,8 @@ mod tests {
                 }
             }
             prop_assert_eq!(&rebuilt, &view);
-            prop_assert_eq!(serde_json::to_value(&rebuilt).unwrap(), serde_json::to_value(&view).unwrap());
+            let json = serde_json::to_value(&view).unwrap();
+            prop_assert_eq!(serde_json::from_value::<IndexView>(json).unwrap(), view);
         }
     }
 }

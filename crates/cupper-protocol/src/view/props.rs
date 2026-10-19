@@ -251,6 +251,8 @@ proptest! {
         paged(&mut split, &ops, page_bytes);
         prop_assert_eq!(&split, &view);
         prop_assert_eq!(&rebuilt(&view, &OpLimits::V1), &view);
+        let json = serde_json::to_value(&view).unwrap();
+        prop_assert_eq!(&serde_json::from_value::<SessionView>(json).unwrap(), &view);
     }
 
     /// The window's snapshot plus every turn's history, newest first and in
