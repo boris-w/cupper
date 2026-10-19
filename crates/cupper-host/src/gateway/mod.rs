@@ -14,6 +14,8 @@ pub mod listen;
 pub mod outbox;
 #[cfg(any(test, feature = "test-harness"))]
 pub mod testkit;
+#[cfg(test)]
+mod tests;
 pub mod wire;
 
 use std::sync::Arc;
