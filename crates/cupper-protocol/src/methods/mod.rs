@@ -116,6 +116,7 @@ macro_rules! method {
 }
 
 pub mod catalog;
+pub mod git;
 pub mod handshake;
 pub mod stream;
 #[cfg(test)]

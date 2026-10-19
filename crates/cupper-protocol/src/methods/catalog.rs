@@ -8,7 +8,7 @@ use schemars::SchemaGenerator;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::{handshake, stream};
+use super::{git, handshake, stream};
 use crate::rpc::{ClientNotification, HostNotification, Method};
 use crate::schema::{client_notification_entry, host_notification_entry, method_entry};
 
@@ -49,6 +49,7 @@ pub fn catalog(g: &mut SchemaGenerator) -> Catalog {
     let mut catalog = Catalog::default();
     handshake::register(&mut catalog, g);
     stream::register(&mut catalog, g);
+    git::register(&mut catalog, g);
     catalog
 }
 
@@ -80,10 +81,14 @@ mod tests {
 
     #[test]
     fn unit_proto_methods_core_stream_every_method_roundtrips() {
-        let sampled: BTreeSet<&str> = [handshake::tests::samples(), stream::tests::samples()]
-            .concat()
-            .into_iter()
-            .collect();
+        let sampled: BTreeSet<&str> = [
+            handshake::tests::samples(),
+            stream::tests::samples(),
+            git::tests::samples(),
+        ]
+        .concat()
+        .into_iter()
+        .collect();
         let (catalog, _) = built();
         let names: BTreeSet<&str> = scoped(&catalog)
             .chain(&catalog.host_notifications)
@@ -104,6 +109,11 @@ mod tests {
         Native,
         /// "仅由主进程代发": the main process sends it for the window.
         ByMain,
+        /// ✗, though the scope allows it: the policy module refuses it, e.g.
+        /// remote_device by SEC-9 (design 5.2.5).
+        ByPolicy,
+        /// "真实输入": the window's request must carry `input` (design 5.7.8).
+        Input,
     }
     use Cell::*;
 
@@ -121,8 +131,11 @@ mod tests {
         ("remote_device", &[Read, Write, Approve]),
     ];
 
+    /// A row of 5.8.3: its name there, the methods it names, its cells.
+    type Row = (&'static str, &'static [&'static str], [Cell; 7]);
+
     /// Rows of 5.8.3, each with the methods it names. A group adds its own.
-    const MATRIX: &[(&str, &[&str], [Cell; 7])] = &[
+    const MATRIX: &[Row] = &[
         ("initialize", &["initialize"], [Y, ByMain, Y, Y, Y, Y, Y]),
         (
             "ping、client/presence、host/status",
@@ -146,26 +159,98 @@ mod tests {
             &["host/prepare_upgrade", "host/exit"],
             [Native, N, N, N, N, Y, N],
         ),
+        (
+            "订阅、history/page……一行中的 git/status、git/diff、git/file_diff、git/branches、worktree/check、files/search",
+            &[
+                "git/status",
+                "git/diff",
+                "git/file_diff",
+                "git/branches",
+                "worktree/check",
+                "files/search",
+            ],
+            [Y; 7],
+        ),
+        (
+            "git/stage、git/unstage、git/commit、git/push",
+            &["git/stage", "git/unstage", "git/commit", "git/push"],
+            [Y, Y, N, Y, N, Y, ByPolicy],
+        ),
+        (
+            "git/revert",
+            &["git/revert"],
+            [Y, Input, N, Y, N, Y, ByPolicy],
+        ),
+        (
+            "workspace/open、diag/export",
+            &["workspace/open"],
+            [Y, Y, N, N, N, Y, N],
+        ),
     ];
 
-    #[test]
-    fn unit_proto_methods_core_stream_scopes_match_the_matrix() {
-        let (catalog, _) = built();
+    /// Checks each row's cells against the scope of the methods it names, and
+    /// what the scope does not decide but the schema shows; returns the methods.
+    fn check_rows<'a>(
+        (catalog, defs): &(Catalog, Map<String, Value>),
+        rows: impl IntoIterator<Item = &'a Row>,
+    ) -> BTreeSet<&'static str> {
         let mut covered = BTreeSet::new();
-        for (row, methods, cells) in MATRIX {
+        for (row, methods, cells) in rows {
             for method in *methods {
                 assert!(covered.insert(*method), "{method} in two rows");
-                let entry = scoped(&catalog).find(|(name, _)| *name == method);
-                let scope = &entry.unwrap_or_else(|| panic!("{method} missing")).1[X_SCOPE];
+                let entry = scoped(catalog).find(|(name, _)| *name == method);
+                let entry = entry.unwrap_or_else(|| panic!("{method} missing")).1;
                 for ((principal, scopes), cell) in PRINCIPALS.iter().zip(cells) {
+                    let scope = &entry[X_SCOPE];
                     let allowed = scope == "none" || scopes.iter().any(|s| s.as_str() == scope);
                     let expected = *cell != N;
                     assert_eq!(allowed, expected, "5.8.3 {row}: {method} for {principal}");
                 }
+                if cells.contains(&Input) {
+                    let params = entry["params"]["$ref"].as_str().unwrap();
+                    let params = &defs[params.trim_start_matches("#/$defs/")];
+                    assert!(params["properties"].get("input").is_some(), "{method}");
+                }
             }
         }
-        let all: BTreeSet<&str> = scoped(&catalog).map(|(name, _)| *name).collect();
+        covered
+    }
+
+    #[test]
+    fn unit_proto_methods_core_stream_scopes_match_the_matrix() {
+        let built = built();
+        let covered = check_rows(&built, MATRIX);
+        let all: BTreeSet<&str> = scoped(&built.0).map(|(name, _)| *name).collect();
         assert_eq!(covered, all, "every scoped method sits in one row");
+    }
+
+    /// The methods of this task's groups (T013), by their samples.
+    fn ext_methods() -> BTreeSet<&'static str> {
+        git::tests::samples().into_iter().collect()
+    }
+
+    #[test]
+    fn unit_proto_methods_ext_every_method_roundtrips() {
+        let mut ext = Catalog::default();
+        let mut g = generator();
+        git::register(&mut ext, &mut g);
+        assert!(ext.client_notifications.is_empty() && ext.host_notifications.is_empty());
+        let names: BTreeSet<&str> = ext.requests.keys().copied().collect();
+        assert_eq!(ext_methods(), names);
+    }
+
+    #[test]
+    fn unit_proto_methods_ext_scopes_match_the_matrix() {
+        let built = built();
+        let ext = ext_methods();
+        let rows = MATRIX
+            .iter()
+            .filter(|(_, methods, _)| methods.iter().any(|m| ext.contains(m)));
+        assert_eq!(
+            check_rows(&built, rows),
+            ext,
+            "every method sits in a row of its own"
+        );
     }
 
     #[test]
