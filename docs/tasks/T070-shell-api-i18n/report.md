@@ -110,7 +110,7 @@ a185312 feat(xtask): record every Vitest case in the ts job
 ## 遗留问题 / 范围外发现
 
 1. **根配置没有改**。改动只在 `packages/shell-api`、`packages/i18n`、`crates/xtask/src/ci/`（`ctx.rs`、`ids.rs`、`jobs/ts.rs`）和 `pnpm-lock.yaml`。
-2. **设计 07-desktop.md 第 373 行的示例显示不出来**："显示成可见的转义，如 `‮`"，反引号里实际是一个真正的 U+202E 字符。建议改成 `\u{202E}`，这也是本任务采用的格式。
+2. **设计 07-desktop.md 第 373 行的示例显示不出来**："显示成可见的转义，如 `\u{202E}`"，反引号里实际是一个真正的 U+202E 字符。建议改成 `\u{202E}`，这也是本任务采用的格式。
 3. **ShellAPI 里还没有 `pathForFile`（M1b）和 `saveFile`（P1）**：任务书的范围没有列这两项。按"冻结后只加成员"，可以由对应的任务再加；如果 M1a 冻结时就要包含，请编排者决定。
 4. **`lightningcss` 的许可证是 MPL-2.0，不在 ADR-11 白名单里**。它是 vite 的依赖，只在开发和测试时使用，不进 App。T006 的许可证门禁要按生产依赖闭包计算，才不会误报。
 5. **ts 作业的新约定**：包的 `test` 脚本必须跑 Vitest，作业会在末尾补 reporter 参数。以后有不用 Vitest 的包，要另起脚本名（例如 `test:e2e`）。
