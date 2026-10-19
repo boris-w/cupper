@@ -85,3 +85,27 @@ T014（协议视图）正在同一个 crate 里进行，改的是视图和同步
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。其他物料（`notes.md` 等）由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-19，编排者）
+
+执行者开工前按方法组估算，总规模约 2,250 行（代码约 1,665 行，测试约 580 行），按守则第 8 条在写代码之前停下汇报。
+
+**裁定：拆分。** 本任务收窄为 A，第 3–5 组另立新任务 T018（计划 v1.3.2）。
+
+A 的范围：
+- 第 0 组"方法基础"：
+  - 里程碑和错误码常量、`x-milestone`、`x-errors`；
+  - `ErrorData.supported` 改为具名字段；
+  - 声明宏和方法目录；
+  - 权限矩阵、`command_id` 与幂等、整数上界三类测试的框架，表里只填本组的行。
+- 第 1 组"握手与生命周期"。
+- 第 2 组"流与内容"，包括 `Raw<T>` 宽容解码。
+
+A 的验收编号是 UNIT-proto-methods-core-stream，测试名以 `unit_proto_methods_core_stream_` 开头。规模上限仍是约 1,500 行。
+
+T018（第 3–5 组：项目、agent、会话、交互）在 A 合并后派发。T013 也改为依赖本任务，因为要用这里的声明方式。
+
+执行者 notes.md 第 6 条列出的 7 项取值全部认可，已写进 `03-protocol-v1.md` 5.3.11 末尾的"T012 开工前的裁定"。其中只有 `host/status.clients`（用 `ClientInfo` 列表）落在 A 的范围里，其余由 T018 和 T013 使用。
+
+**交接事项（来自 T014，已合并）**：`stream/subscribe` 的结果复用 `sync::SubscribeMode` 和 `sync::ResyncReason`，不要另定义。这两个类型在 main 上，编排者会先把 main 合入本分支。
+
