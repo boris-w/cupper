@@ -244,7 +244,7 @@
 | type | 可合并 | data 要点 | 何时写入 |
 |---|---|---|---|
 | `session.configured` | 否 | `{agent, workspace: {kind, path, branch?, base_ref?}, config: {<option>: value}, read_only, project_config: loaded\|ignored, confirmation_required?: {reason: full_access_unconfirmed\|tier_above_setter, config_digest}}`；后写的覆盖先写的 | 创建、配置变化、恢复、项目信任状态变化 |
-| `session.capabilities` | 否 | 能力描述（[5.3.7](#537-会话能力描述)） | agent 会话建立或 resume 后；能力变化时 |
+| `session.capabilities` | 否 | 能力描述（[5.3.7](#537-会话能力描述)） | agent 会话建立或 resume 后；能力变化时。只在内容变化时写（v1.6）：Claude 每个会话和每个回合开始都推一次完整的命令列表（22–32 KB），内容相同的不写（[5.6.2](06-agent-driver.md#562-驱动接口)） |
 | `workspace.preparing` | 否 | `{phase: worktree_add\|checkout\|refresh, progress?}` | 创建 worktree 期间 |
 | `workspace.ready` / `workspace.failed` | 否 | `{path, branch?}` / `{code}` | 准备完成或失败 |
 | `turn.started` | 否 | `{turn_id, turn_no, origin: user\|queued\|steer_new_turn\|autonomous, started_at}`；`turn_no` 是会话内从 1 递增的序号，视图按它排序 | 回合开始 |

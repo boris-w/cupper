@@ -484,7 +484,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 3. 数据目录和子目录建成 0700，并检查属主。
 4. 对 `host.lock` 加 `flock`；已被占用就以退出码 3 退出（UI 改为直接连接）。
 5. 打开数据库，必要时先备份再迁移（每个迁移脚本在自己的事务里同时更新 `schema_version`，[5.4.6](04-data-model.md#546-迁移)）；数据库版本比本程序新就以退出码 4 退出（不支持降级，NFR-10）；迁移失败以退出码 6 退出。按 [5.2.8](#528-事件存储) 的规则判定是否把 `data_epoch` 加 1，并记下这次的 `last_start_at` 和启动会话的 UUID。
-6. 崩溃恢复（NFR-9）：按 `adapters` 表的进程组和启动时间清理残留（SP-4a 的 `reap_group`）；运行中的回合写 `turn.completed{status: interrupted}`；待处理的交互请求写 `expired`；账本里 `pending_external` 的记录保留，供重试时返回 `outcome_unknown`；`initial_prompt_json` 不为空、停在准备工作区阶段的会话，交给会话 actor 重新准备工作区（已登记的 worktree 直接复用），失败就写 `workspace.failed`，并把这条消息转成一条暂停中的排队消息，不丢弃。
+6. 崩溃恢复（NFR-9）：按 `adapters` 表的进程组和启动时间清理残留（SP-4a 的 `reap_group`），包括资源采样时记下的适配器后代的进程组（v1.6，Claude 的工具命令有自己的进程组，[5.6.8](06-agent-driver.md#568-资源回收)）；运行中的回合写 `turn.completed{status: interrupted}`；待处理的交互请求写 `expired`；账本里 `pending_external` 的记录保留，供重试时返回 `outcome_unknown`；`initial_prompt_json` 不为空、停在准备工作区阶段的会话，交给会话 actor 重新准备工作区（已登记的 worktree 直接复用），失败就写 `workspace.failed`，并把这条消息转成一条暂停中的排队消息，不丢弃。
 7. 加载索引流（检查点 + 其后的事件）。
 8. 绑定套接字：`run/host.sock`；路径超过 104 字节时退到每个用户自己的临时目录 `confstr(_CS_DARWIN_USER_TEMP_DIR)` 下的 `cupper-<数据目录哈希>/`（系统创建、权限 0700，别的用户无法抢先创建；客户端用同一个算法找到套接字），使用前检查属主和 0700；套接字文件 0600（安全建议 #18）。
 9. 启动 actor：`IndexActor`、`Supervisor`、`RuntimeInstaller`（后台校验）；`AgentRuntime` 按需启动。

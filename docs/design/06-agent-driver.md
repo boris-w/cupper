@@ -1,7 +1,7 @@
 # 5.6 Agent 驱动层
 
 - 所属：`docs/02-design.md` 第 5 节
-- 依据：ADR-07（两边都走 ACP 适配器）、ADR-08（本机 CLI、运行时、版本锁定）、ADR-09（每种 agent 一个适配器进程）、ADR-02（ACP 回调只做 channel 发送）；SP-1（行为实测与录制）、SP-2（分发与版本耦合）、SP-4a（`driver.rs`、`normalize.rs`）
+- 依据：ADR-07（两边都走 ACP 适配器）、ADR-08（本机 CLI、运行时、版本锁定）、ADR-09（每种 agent 一个适配器进程）、ADR-02（ACP 回调只做 channel 发送）；SP-1（行为实测与录制）、SP-2（分发与版本耦合）、SP-4a（`driver.rs`、`normalize.rs`）；v1.6：技术验证 T003（`docs/tasks/T003-tech-validation/report.md`）
 - 边界：**ACP 的类型不出驱动层**（对齐会 1.3 第 9 条）。会话编排只看到本节定义的命令和事件，以后增加"直连 Codex app-server"的实现不影响上层
 
 ## 5.6.1 结构
@@ -21,7 +21,6 @@ flowchart LR
   TAP <-->|"按行转发"| SDK["ACP 连接任务<br/>官方 Rust SDK =3.3.0"]
   SDK -->|"回调只做 channel 发送"| AR
   TAP -->|"原始帧（脱敏）"| RAW[("raw.db")]
-  TAP -->|"扩展通知"| AR
   AR -->|"DriverEvent"| SA
   INST -->|"stderr 管道"| LOG["adapter-<agent>.log（脱敏、轮转）"]
 ```
@@ -30,8 +29,8 @@ flowchart LR
 |---|---|
 | `AgentRuntime` | 每种 agent 一个 actor（ADR-09）。持有当前的适配器实例；把会话的命令转成 ACP 请求；把 ACP 回调经提取层变成 `DriverEvent`，按 `agent_session_id` 路由给会话；维护能力缓存、登录状态和资源采样 |
 | 适配器实例 | `cupper-sys::spawn` 拉起 `runtime/node/<版本>/bin/node runtime/<adapter>/<版本>/adapter.mjs`：`POSIX_SPAWN_SETSID`（自成会话和进程组，血缘检查据此判断，[5.8.4](08-security.md#584-cli-提权)）、`POSIX_SPAWN_CLOEXEC_DEFAULT`、默认信号处置、环境变量白名单；stdin、stdout 为管道，stderr 也是管道（由宿主读出、脱敏后写日志，便于轮转；SP-4a 是直接写文件）。拉起后立即写 `adapters` 表 |
-| 线路分接（Tap） | 位于管道和 SDK 之间，按行转发 ACP 消息。三件事：记录原始帧；对 SDK 中封闭枚举的未知值做容错改写；把 SDK 不处理的扩展消息交给 `AgentRuntime`。见 [5.6.10](#5610-线路分接层) |
-| ACP 连接任务 | 沿用 SP-4a 的 `run_connection`：用 SDK 的 `Client` 构建连接，回调里只做 channel 发送；`initialize` 声明 form 类 elicitation、`_meta.terminal_output`、unstable 的 `plan`，`clientInfo.name` 固定为 `cupper`（ADR-08：它会出现在 codex 发往 OpenAI 的 User-Agent 里）。`fs` 和 `terminal` 两项客户端能力永远声明为不支持：声明了，宿主就要替 agent 在沙箱外读写文件、运行命令；要改必须经过安全评审 |
+| 线路分接（Tap） | 位于管道和 SDK 之间，按行转发 ACP 消息。v1.6（T003）收窄为三件事：给每行编号并记录原始帧；结构化脱敏（含 `_auth/status_update` 里的账号字段）；对 SDK 中封闭枚举的未知值做容错改写（K19）。扩展消息不经分接层，全部走 SDK。见 [5.6.10](#5610-线路分接层) |
+| ACP 连接任务 | 沿用 SP-4a 的 `run_connection`：用 SDK 的 `Client` 构建连接，回调里只做 channel 发送；扩展消息也走 SDK（v1.6，Q9）：`_session/steering` 用 SDK 的派生宏声明成请求类型，`_auth/status_update` 由类型化的通知处理器接收，`$/cancel_request` 由 SDK 处理并把对应请求的 `Responder::cancellation()` 标为已取消；必须遵守 [5.6.10](#5610-线路分接层) 的两条 SDK 约束；`initialize` 声明 form 类 elicitation、`_meta.terminal_output`、unstable 的 `plan`，`clientInfo.name` 固定为 `cupper`（ADR-08：它会出现在 codex 发往 OpenAI 的 User-Agent 里）。`fs` 和 `terminal` 两项客户端能力永远声明为不支持：声明了，宿主就要替 agent 在沙箱外读写文件、运行命令；要改必须经过安全评审 |
 | Extractor | 按 agent 区分的提取层：把 `SessionUpdate`、权限请求、elicitation、错误转成 cupper 的语义（[5.6.3](#563-提取层claude-与-codex-对照)） |
 
 ## 5.6.2 驱动接口
@@ -55,10 +54,10 @@ flowchart LR
 |---|---|
 | `Update(NormUpdate)` | 规范化后的更新：`AgentText {message_id, text}`、`Thought {text}`、`ToolStart {tool_call_id, tool_kind, title, paths, command?}`、`ToolUpdate {tool_call_id, title?, status?, output: Append\|Replace?, exit_code?, diffs?}`（`Append` 映射为协议里 `field: output` 的 `item.delta`，`Replace` 映射为结束时给出的完整输出，[5.3.5](03-protocol-v1.md#535-事件类型目录)）、`Plan {entries \| markdown}`、`Compaction {phase, summary?}` |
 | `Permission(PermissionAsk, Responder)`、`Question(QuestionAsk, Responder)` | 已分类、已标好选项生效范围的交互请求（[5.6.4](#564-交互请求的分类与选项映射)） |
-| `RequestWithdrawn(ask_ref)` | Claude 发来 `$/cancel_request` |
+| `RequestWithdrawn(ask_ref)` | Claude 发来 `$/cancel_request`：SDK 把对应请求的 `Responder::cancellation()` 标为已取消，`AgentRuntime` 据此发出（v1.6） |
 | `PromptDone {stop_reason, usage?}`、`PromptFailed(AgentError)` | prompt 的结果 |
 | `RunState {active, waiting_on_approval, waiting_on_user_input, system_error}` | Codex 的 `threadStatus` |
-| `ConfigChanged(options)`、`CommandsChanged(commands)` | `config_option_update`、`current_mode_update`、`available_commands_update` |
+| `ConfigChanged(options)`、`CommandsChanged(commands)` | `config_option_update`、`current_mode_update`、`available_commands_update`。**`CommandsChanged` 去重**（v1.6，T003）：Claude 在每个会话开始和每个回合开始时，都推一次完整的命令列表（本机 22–32 KB，取决于装了多少 skill）。`AgentRuntime` 按会话记住上一份列表的摘要，内容没有变化就不发事件；会话流里的 `session.capabilities` 也只在内容变化时写（[5.3.5](03-protocol-v1.md#535-事件类型目录)） |
 | `TitleChanged {title, source}`、`Usage {used, size, cost?}` | `session_info_update`、`usage_update` |
 | `UpstreamRetry {attempt, max}` | Codex 的 `_meta.codex.error` 且 `willRetry` 为真 |
 | `AdapterExited {instance_id, status}` | 广播给该 agent 的所有会话 |
@@ -169,7 +168,7 @@ ACP 的 `configOptions` 按 `category` 映射到 cupper 的配置项，具体取
 
 ## 5.6.7 能力缓存
 
-- **来源**：`initialize` 的响应（会话能力、`_meta.steering.supported`、`_meta.claudeCode.promptQueueing`）；`session/new` 或 `session/resume` 的响应（`configOptions`）；随后 2–5 ms 到达的 `available_commands_update`（Claude 在每个回合开始时还会再推一次）。
+- **来源**：`initialize` 的响应（会话能力、`_meta.steering.supported`、`_meta.claudeCode.promptQueueing`；T003 实测 `steering.supported` 在响应顶层的 `_meta` 里，不在 `agentCapabilities._meta` 下）；`session/new` 或 `session/resume` 的响应（`configOptions`）；随后 2–5 ms 到达的 `available_commands_update`（Claude 在每个回合开始时还会再推一次）。
 - **存放**：`agent_capabilities` 表，每种 agent 一行；适配器版本或 CLI 版本变化时作废。每次有会话 `Attach` 成功都刷新。
 - **新建会话页**（AG-4、ADR-09）：调用 `agents/capabilities` 取缓存，第一条消息发出之前就能显示模型、推理强度、权限模式和斜杠命令。
 - **缓存为空时**（首次使用）：`agents/refresh` 做一次探测：先把 `<数据目录>/probe/<agent>/` 删掉重建为空目录（0700，[5.2.6](02-host.md#项目信任)），在里面 `session/new`，读取配置和命令（等 `available_commands_update` 最多 200 ms），然后 `session/close`。Claude 的代价约 0.8 秒；Codex 的探测会拉起用户的 MCP 且不释放，所以探测后把 Codex 适配器标为"空闲时回收"。只建会话不发 prompt，两边都不会留下会话记录（SP-1）。
@@ -182,7 +181,10 @@ ACP 的 `configOptions` 按 `category` 映射到 cupper 的配置项，具体取
 | Codex 适配器 | 该 agent 没有进行中的回合、没有待处理的交互请求，并且（进程组常驻内存超过 2 GiB，或距最后一个回合超过 30 分钟）时回收：逐个 `session/close`，停掉适配器，所有会话变为 `Detached`，下次使用时 `session/resume`（代价很小，SP-1） |
 | 适配器意外退出 | 有会话在运行回合时立即重启，否则等下次使用再启动；退避 1、2、4 … 最长 30 秒；5 分钟内连续失败 5 次，状态改为 `crashed`，需要用户在设置页手动重启 |
 | 手动 | `agents/restart`（界面先提示会影响该 agent 的所有会话） |
-| 关闭 | 按 ADR-09 的顺序：逐个 `session/close` → 关闭 stdin → 等进程组退出 → SIGTERM → SIGKILL |
+| 关闭 | v1.6 的顺序（T003：Claude Code 用 setsid 拉起工具命令，命令有自己的会话和进程组，杀适配器的进程组杀不到它们）：<br>1. 逐个 `session/close`，让 CLI 自己正常退出；<br>2. 关闭 stdin，限时等适配器退出；<br>3. 发任何信号之前，用 libproc 枚举适配器的全部后代，记下每个后代的进程组（组号加启动时间）；<br>4. 对这些进程组和适配器的进程组逐个发 SIGTERM，限时等待，再对仍在的发 SIGKILL。<br>顺序不能倒：适配器先退出的话，它的后代会被 launchd 收养，从进程树上再也找不到 |
+
+- **意外退出后的清理**：适配器意外退出时，它的后代已经被 launchd 收养。资源采样时顺带把后代的进程组（组号加启动时间）写进 `adapters` 表，宿主重启或重启适配器时，按记录逐个清理（[5.2.13](02-host.md#5213-进程监护与宿主生命周期)）。
+- **孤儿 `claude` 进程**（上游 #1011，待定问题 Q43）：长期运行的适配器反复 resume 同一个会话后，可能累积多个 `claude` 子进程。资源采样记录每种 agent 的 `claude` 进程数，超过会话数时写日志。
 
 容量提示（NFR-11、ADR-09）：设置页显示每种 agent 的进程组内存，并说明"每配置一套 MCP，每个会话还要多占几百 MB"。
 
@@ -192,11 +194,11 @@ ACP 的 `configOptions` 按 `category` 映射到 cupper 的配置项，具体取
 
 | # | 问题（来源） | 现象 | 规避 | 回归 |
 |---|---|---|---|---|
-| K1 | 并发 prompt（SP-1 s06） | Claude 并入当前回合并丢掉第一条回复；Codex 的第一个 prompt 永不返回 | 宿主自己排队；同一个 agent 会话同时最多一个 prompt；上一个 prompt 一直不返回时，先 `session/close` 再 `session/resume`，然后才发新 prompt | PROP-turn-single-prompt；IT-K1-close-resume（假 agent `hang`）；假 agent 的全局不变式：同一会话收到第二个在途 prompt 立即报错退出，所有 IT 用例都会检查；GOLD-A-claude-s06、GOLD-A-codex-s06 |
+| K1 | 并发 prompt（SP-1 s06） | Claude 并入当前回合并丢掉第一条回复；Codex 的第一个 prompt 永不返回 | 宿主自己排队；同一个 agent 会话同时最多一个 prompt；上一个 prompt 一直不返回时，先**显式**发 `session/close` 再 `session/resume`，然后才发新 prompt（v1.6：放弃等待时先对 `SentRequest` 调 `detach()`，不能丢弃 future，见 K28） | PROP-turn-single-prompt；IT-K1-close-resume（假 agent `hang`）；假 agent 的全局不变式：同一会话收到第二个在途 prompt 立即报错退出，所有 IT 用例都会检查；GOLD-A-claude-s06、GOLD-A-codex-s06 |
 | K2 | Codex #556（SP-1 s04、s04b） | 拒绝审批只有 `cancel`，整个回合以 `cancelled` 结束 | 选项标 `ends_turn: true`，界面写明"拒绝将结束本回合"；这种取消不暂停队列 | GOLD-A-codex-s04、GOLD-A-codex-s04b；IT-K2-reject-ends-turn（codex 形态） |
 | K3 | Codex 取消后命令不停（s07） | 命令继续运行，输出和 `completed` 在下一个回合到达 | 中断时还在运行的命令标 `abandoned` 加 `may_still_run`；晚到的输出写成当前回合里的 `late_tool_output` 条目，原回合不改（Q14，纪要 D4，[5.2.6](02-host.md#晚到的工具输出)） | GOLD-A-codex-s07（只断言晚到的帧被提取成带原 `toolCallId` 的 ToolUpdate）；IT-K3-late-output（codex 形态的 `late_tool`，断言回合结构）；PROP-turn-snapshot-immutable；GOLD-B-codex-s07（等 M1b 用宿主重新录到 codex 的取消场景后再补） |
 | K4 | Codex 取消不撤回审批（s07） | 挂起的审批请求留在适配器那边 | 宿主把请求标为 `cancelled`，并替用户应答 `Cancelled` | IT-K4-cancel-pending-approval（codex 形态）；GOLD-A-codex-s07 |
-| K5 | Claude 撤回审批（s07） | 取消时先收到 `$/cancel_request` | 分接层识别后发 `RequestWithdrawn`，请求标为 `cancelled`（`agent_withdrew`） | GOLD-A-claude-s07；IT-K5-withdraw（经原始行通道发 `$/cancel_request`） |
+| K5 | Claude 撤回审批（s07） | 取消时先收到 `$/cancel_request` | SDK 收到后把对应请求的 `Responder::cancellation()` 标为已取消，`AgentRuntime` 发 `RequestWithdrawn`，请求标为 `cancelled`（`agent_withdrew`）（v1.6，Q9） | GOLD-A-claude-s07；IT-K5-withdraw（经原始行通道发 `$/cancel_request`） |
 | K6 | Claude CLI 崩溃（s07、s07b） | `-32603`，之后 "Session not found"，适配器不自动重启 CLI | 回合标为 `failed`；下一次发送时自动 `session/resume`，再重发一次（只在该 prompt 没有产生任何更新时） | GOLD-A-claude-s07b；IT-K6-crash-resume（`crash_cli`）；IT-K6-output-then-crash（`output_then_crash`，断言不重发） |
 | K7 | Codex app-server 被杀（s07） | `1001`，`restartable: true` | 回合标为 `failed` 并提示；下一个 prompt 由适配器自动重启 app-server | GOLD-A-codex-s07；IT-K7-restartable |
 | K8 | 回放不完整、没有时间戳（#1297、#1307、#617） | 回放不能当历史 | 历史只用宿主自己的日志；`session/load` 只用于 PS-5 导入，导入内容标"可能不完整" | GOLD-A-claude-s09；IT-history-from-host（宿主重启后 `history/page` 来自回合快照） |
@@ -212,12 +214,14 @@ ACP 的 `configOptions` 按 `category` 映射到 cupper 的配置项，具体取
 | K18 | 上游过载（Codex） | 自动重试最多 5 次 | `notice: upstream_retry` 显示进度 | IT-K18-upstream-retry（`upstream_retry`）；有含重连的录制时加 GOLD-A |
 | K19 | SDK 的封闭枚举（SP-4a） | `StopReason`、`PermissionOptionKind`、`ToolCallStatus` 出现未知值时整条消息解析失败 | 分接层把未知值改写为可解析的兜底值，原值放进 `_meta.cupper.original`，提取层用原值判断；未知的选项 kind 按最严处理（安全 #5）；同时向上游反馈 | GOLD-A-unknown-enums（经原始行通道发送）；IT-K19-unknown-kind-privileged |
 | K20 | Codex 的 MCP 不随 `session/close` 释放（s12） | 内存只增不减 | 资源采样加回收（5.6.8） | IT-K20-reclaim（经注入点设定采样值） |
-| K21 | Claude 适配器退出不等子进程（s12、SP-4a） | `claude` CLI 残留约 300 MB | 进程组清理 | IT-K21-reap-group（沿用 SP-4a 的端到端测试） |
+| K21 | Claude 适配器退出不等子进程（s12、SP-4a）；工具命令有自己的会话和进程组（T003） | `claude` CLI 残留约 300 MB；杀适配器的进程组之后，正在运行的命令仍在（被 launchd 收养） | 关闭时先 `session/close`，再枚举全部后代、按各自的进程组逐个发信号（顺序见 [5.6.8](#568-资源回收)）；意外退出后按 `adapters` 表里记下的进程组清理 | IT-K21-reap-group（沿用 SP-4a 的端到端测试，补"后代在另一个进程组"）；COMPAT-claude-close-running（关闭时有命令正在运行，T066） |
 | K22 | Claude 命令输出不流式（s03） | 命令结束前没有任何输出 | `output_streaming: false`，界面显示"运行中" | GOLD-A-claude-s03 |
 | K23 | Codex 偶发丢失第一行输出（s07，codex-local 一次） | — | 不做处理，记录在案 | 不测：上游的偶发行为，cupper 没有对应的规避逻辑可测 |
 | K24 | Codex 用 shell 运行 `apply_patch`（s05） | 没有 diff | 条目 `extraction: partial`；回合 diff 以 git 为准 | GOLD-A-codex-s05 |
 | K25 | Claude 的 TodoWrite 在 SDK 会话不可用（s02c） | 没有 `plan` 条目 | 能力里标 `plan: markdown_only` | GOLD-A-claude-s02c；UNIT-capabilities-plan |
 | K26 | `clientInfo.name` 外发（SP-2） | 出现在 codex 发往 OpenAI 的 User-Agent 里 | 固定为 `cupper`，不带任何用户信息 | IT-K26-client-info（假 agent 断言 `clientInfo.name == "cupper"`） |
+| K27 | SDK 3.3.0：没有处理器的请求永远收不到响应（T003） | agent 发来的未知请求带 `params.sessionId` 时，Client 角色的默认处理器把它标成"稍后重试"，再也不回，agent 一直挂着；同样带 `sessionId` 的未知通知一直堆在内存里 | 在处理器链的最后注册无类型的 `on_receive_dispatch`：未知请求回 method not found，未知通知直接丢弃，响应照常转发（[5.6.10](#5610-线路分接层)） | UNIT-acp-unhandled（沿用 T003 的 `tests/unhandled.rs`，假 agent 发未知请求和通知） |
+| K28 | SDK 3.3.0：丢弃在途请求会发 `$/cancel_request`（T003） | 在收到响应之前丢弃 `SentRequest` 或它的 future，SDK 自动发 `$/cancel_request`；claude-agent-acp 收到后约 5 ms 就把回合取消。用 timeout 或 `select!` 包住等待时很容易踩到 | 只想放弃等待时，先调用 `detach()`；K1 的兜底显式发 `session/close` | UNIT-acp-detach（放弃等待后假 agent 收不到 `$/cancel_request`） |
 
 ## 5.6.10 线路分接层
 
@@ -225,5 +229,15 @@ ACP 的 stdio 传输是按行分隔的 JSON-RPC。分接层把适配器的 stdou
 
 1. **编号和记录**：给每行分配实例内的 `seq`，做结构化脱敏后（只处理账号字段和已知格式的凭据，重点是 `_auth/status_update`，[5.11.2](11-diagnostics.md#5112-脱敏)；不套用日志的长串规则，原始帧才能用于重算历史），送进原始帧队列；队列满了就丢弃并计数，不阻塞。
 2. **容错改写**（K19）：只在已知的几个字段上做：`session/prompt` 响应的 `stopReason`、权限请求选项的 `kind`、工具调用的 `status`。值不认识时改写成兜底值（分别为 `end_turn`、`reject_once`、`in_progress`），原值放进该对象的 `_meta.cupper.original`。其余内容一律原样转发。改写只是为了让 SDK 能解析：提取层一律按原值判断，协议里下发的也是原值，未知的选项 kind 按最严处理（安全 #5，[5.6.4](#564-交互请求的分类与选项映射)）。
-3. **扩展消息**：`_auth/status_update`、`$/cancel_request`，以及 SDK 没有对应处理器的其他 `_` 开头的消息，解析后交给 `AgentRuntime`。`_session/steering` 是宿主发出的扩展请求，通过 SDK 的扩展方法接口发送；SDK 3.3 是否支持需要在实现时核实，不支持就由分接层在 stdin 侧发送并关联响应（待定问题 Q9）。
-4. 为了少做一次完整解析，只对包含上述关键字的行做 JSON 解析，其余的行只做编号和记录。
+3. **扩展消息不经分接层**（v1.6，T003 关闭 Q9）：SDK 3.3.0 直接支持三项。
+   - `_session/steering`：用 SDK 的派生宏声明成请求类型，发出后能收到响应并对上号。
+   - `_auth/status_update`：由类型化的通知处理器接收。分接层只负责在写原始帧前把其中的账号字段脱敏（K16）。
+   - `$/cancel_request`：SDK 先把对应请求的 `Responder::cancellation()` 标为已取消，再交给处理器（K5）。
+   - 能力位 `steering.supported` 在 `initialize` 响应顶层的 `_meta` 里（[5.6.7](#567-能力缓存)）。
+4. 为了少做一次完整解析，只对包含第 1、2 条关键字的行做 JSON 解析，其余的行只做编号和记录。
+
+**SDK 3.3.0 的两条约束**（T003，驱动层必须遵守；T050 的验收含对应用例）：
+
+- **兜底处理器**（K27）：在处理器链的最后注册一个无类型的 `on_receive_dispatch`：未知请求回 method not found，未知通知直接丢弃，响应照常转发。否则带 `sessionId` 的未知请求永远收不到响应，agent 一直挂着。
+- **放弃等待用 `detach()`**（K28）：放弃等待一个在途请求时，先对 `SentRequest` 调用 `detach()`，不能直接丢弃它或它的 future，否则 SDK 会发 `$/cancel_request`，claude-agent-acp 随即取消回合。K1 里"上一个 prompt 一直不返回"的兜底，要显式发 `session/close`。
+- **版本**：SDK 保持 `=3.3.0`。以后升级（当天最新 3.4.0）时，重跑 T003 的探针（`spikes/T003-tech-validation/q9-probe/`）和其中的 `tests/unhandled.rs`。

@@ -90,12 +90,12 @@ cupper/
 | 项 | 锁定方式 | 起始值（M1a 开工时按当天复核） |
 |---|---|---|
 | Rust | `rust-toolchain.toml` | stable 1.96（SP-4a 实测版本；`rust-version = 1.89`，因为用了 `File::try_lock`） |
-| ACP SDK | `Cargo.toml` 精确版本 | `agent-client-protocol = "=3.3.0"`（ADR-02） |
+| ACP SDK | `Cargo.toml` 精确版本 | `agent-client-protocol = "=3.3.0"`（ADR-02；T003 在这个版本上验证了扩展消息和两条约束，升级时重跑它的探针，[5.6.10](06-agent-driver.md#5610-线路分接层)） |
 | Node（开发与工具） | `.node-version` | 24 LTS |
 | pnpm | `packageManager` 字段 | 10.x |
-| Electron | `apps/desktop/package.json` 精确版本 | 44.8.0（见 [5.10.6](10-release.md#5106-electron-版本)） |
+| Electron | `apps/desktop/package.json` 精确版本 | 44.x 的最新补丁版本（2026-10-19 时是 44.9.0，T074 开工时复核；见 [5.10.6](10-release.md#5106-electron-版本)） |
 | electron-builder / electron-updater | 精确版本 | 26.x / 6.8.x |
-| 适配器、Node 运行时 | `runtime/manifest.json` | claude-agent-acp 0.91.0、codex-acp 2.2.2、Node 24.22.0（SP-1、SP-2 实测版本；开工时用兼容套件复核后再定） |
+| 适配器、Node 运行时 | `runtime/manifest.json` | claude-agent-acp 0.91.0、codex-acp 2.2.2、Node 24.22.0（SP-1、SP-2 实测版本，T003 复核不变）。claude-agent-acp 在 M1a 保持 0.91.0，升级放到 T066 的兼容运行；升到 0.93 及以上之前，先处理待定问题 Q42（`/remote-control`） |
 
 依赖更新：Rust 和 npm 的依赖由人工按月升级，每次升级跑完整的 CI 和兼容套件。适配器版本升级单独走"兼容矩阵"流程（[5.9.5](09-testing.md#595-兼容矩阵)）。
 
