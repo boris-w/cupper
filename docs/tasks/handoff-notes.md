@@ -19,7 +19,7 @@
 | `pathForFile`、`saveFile` | ShellAPI 冻结以后，以附加方式加入（M1b 的 T142 等） | T070 |
 | T074、T154 | i18n 已有 `command`、`update` 两个命名空间。措辞按 Codex 的中文译文核对 | T070 |
 | T021 | `PROC_PIDTBSDINFO` 读不了其他用户的进程；`PROC_PIDT_SHORTBSDINFO` 和 `PROC_PIDUNIQIDENTIFIERINFO`（flavor 17，56 字节）对 root 进程也能读（实测 pid 1 可以）。libc 0.2.191 没有定义 `POSIX_SPAWN_SETSID` 和 `proc_bsdinfowithuniqid`，需要自己声明 | T020 |
-| T037、T055 | 关闭顺序：先用 `child.group().with_descendants()` 记下所有进程组，再逐组 `signal(Term)`，用 `Clock` 限时等待并用 `is_alive()` 核对，最后对还在的组 `signal(Kill)`。持久化时存 `pgid` 和 `start.as_micros()`。适配器自己先退出时，后代已无从枚举，只能靠资源采样时记下的组 | T020 |
+| T037、T055 | 关闭顺序：先用 `child.group().with_descendants()` 记下所有进程组，再逐组 `signal(Term)`，用 `Clock` 限时等待并用 `is_alive()` 核对，最后对还在的组 `signal(Kill)`。持久化时存 `pgid` 和 `start.as_micros()`。适配器自己先退出时，后代已无从枚举，只能靠资源采样时记下的组 | T020（已写入 T037 的 brief） |
 | T038 | `parent_chain` 能经过 root 进程走到 launchd；进程名是内核里的 16 字节短名，要完整路径需另取 | T020 |
 | T054 | 直接用 `Env::from_allowed` 加 `set`。`CUPPER_*` 已在 `cupper-sys` 里拒绝，这里不用再处理 | T020 |
 | 所有拉起子进程的任务 | `cupper_sys::spawn` 不搜索 `PATH`，调用方要传入解析好的绝对路径。`Child` 在 drop 时不会自动回收，必须 `wait`，否则会留下僵尸进程 | T020 |
@@ -41,7 +41,7 @@
 | T015 | `Event<EventBody>` 的 schema 名是 `Event`；`UnknownMember` 的 schema 是任意对象，后处理时用 `.loose()` | T011（已写入 brief） |
 | T017 | 在 `EventBody` 里加会话流的变体，`stream_kind()` 是穷尽 `match`，会强制给新变体分类；`item.delta` 变体上标 `#[schemars(extend("x-mergeable" = true))]`，并为 `EventBody` 实现 `Mergeable`；条目联合用 `open_union!` 的 `in tag "kind"` 形式；测试复用 `testutil::{roundtrip, open_values}` | T011 |
 | 第一个写事件的宿主任务（T026 或 T027） | 事件的版本常量 `EVENT_VERSION`（`v`）还没定义，按需加上（5.4.6 的事件升级器） | T011（已写入 T026 的 brief） |
-| T037 | 在 `main` 里接入 stdio 重定向：调用 `cupper_sys::redirect_stdio_to_null()`（T021 补充，把 0、1、2 都指向 `/dev/null`）。读载荷的构建读完再调用，发布构建一开始就调用。另外，`main` 目前只为等载荷建了一个 current-thread runtime，可以按 CFRunLoop 的方案重组；数据目录的 0700 和属主检查、把 `test_config.clock` 和 `Durations` 分发给各模块，也都归 T037 | T023 |
+| T037 | 在 `main` 里接入 stdio 重定向：调用 `cupper_sys::redirect_stdio_to_null()`（T021 补充，把 0、1、2 都指向 `/dev/null`）。读载荷的构建读完再调用，发布构建一开始就调用。另外，`main` 目前只为等载荷建了一个 current-thread runtime，可以按 CFRunLoop 的方案重组；数据目录的 0700 和属主检查、把 `test_config.clock` 和 `Durations` 分发给各模块，也都归 T037 | T023（已写入 brief） |
 | T025 | 宿主 ID 用 `HostId::from_uuid(new_host_uuid().as_u128())` | T023（已写入 brief） |
 | T030 | 密钥取 `payload.dev_key`、`payload.harness_key` 的 `SecretKey::expose()`；`dev_key` 只接受拉起宿主的进程（5.8.1，`p_puniqueid`，见 T021） | T023（已写入 brief） |
 | T045、T075 | 启动载荷是一行 JSON 加换行，写完立即关闭 stdin；两种密钥都是 64 位十六进制；出现未知的键时宿主以退出码 1 退出。CLI 的 `--harness-key-fd` 用同样的密钥格式 | T023（已写入 T045 的 brief） |
@@ -62,10 +62,10 @@
 | T025、T047 | 原始帧的方向 `Dir` 目前有 `send`、`recv`、`recv_nonjson`；`stderr` 和 `note` 由写入它们的任务补上 | T050（已写入 T025 的 brief） |
 | 全工作区 | serde_json 的 `preserve_order` 由 SDK 打开，在工作区内是统一生效的，所以 `cupper-protocol` 在工作区构建时也会带上它。导出物一律不能依赖 map 的键顺序（`CLAUDE.md`） | T050 |
 | T052 | 回放模式落地时，加一项自动比对：假 agent 的 persona（能力、configOptions、默认模式、命令列表、权限选项 ID）与 SP-1 录制的形态一致。T051 里这一项只用测试里的常量逐条核对 | T051 |
-| T037、T043 及以后的 actor 任务 | 任何 `posix_spawn`（包括带 `CLOEXEC_DEFAULT` 的 `cupper_sys::spawn`）都会在内核里短暂复制整张 fd 表。别的线程正在拉起子进程时，刚关掉的 fd 可能还被持有片刻。凡是"关掉 fd 后立刻判断对端已关闭"的逻辑都要容忍这个窗口；测试里用 `cupper_sys` 的 `testutil::alone` 隔离这类断言 | T021 |
+| T037、T043 及以后的 actor 任务 | 任何 `posix_spawn`（包括带 `CLOEXEC_DEFAULT` 的 `cupper_sys::spawn`）都会在内核里短暂复制整张 fd 表。别的线程正在拉起子进程时，刚关掉的 fd 可能还被持有片刻。凡是"关掉 fd 后立刻判断对端已关闭"的逻辑都要容忍这个窗口；测试里用 `cupper_sys` 的 `testutil::alone` 隔离这类断言 | T021（已写入 T037 的 brief） |
 | T025 | 用 `store::open_writer(path, Database::Host)`（或 `Raw`）打开连接，迁移在这个连接上跑完，再交给 `Writer::spawn`：迁移需要自己的事务，`VACUUM INTO` 也不能在事务里执行，所以不能作为写线程的操作。`Readers::open` 放在写连接打开之后 | T024（已写入 brief） |
-| T037 | 启动第 5 步：`epoch::decide(LastExit::from_meta(..), Boot::since(meta.boot_session_uuid, current_boot_session(&payload)?))`，然后写 `last_start_at` 和 `boot.to_string()`。`Writer::spawn` 之前先 `quiescence.register(store::WRITER)`，写线程配置用 `WriterConfig::for_startup(&payload, &durations)`。有序退出时，把写 `last_clean_exit_at` 作为 `stop()` 之前的最后一个操作提交 | T024 |
-| T037 | 写线程上的操作 panic 时，写线程随之结束：在途回执都是 `Stopped`，`WriterThread::stop()` 返回 `Err`。宿主把这种情况当作致命错误，有序退出，不能带着死掉的写线程继续运行 | T024 审阅 |
+| T037 | 启动第 5 步：`epoch::decide(LastExit::from_meta(..), Boot::since(meta.boot_session_uuid, current_boot_session(&payload)?))`，然后写 `last_start_at` 和 `boot.to_string()`。`Writer::spawn` 之前先 `quiescence.register(store::WRITER)`，写线程配置用 `WriterConfig::for_startup(&payload, &durations)`。有序退出时，把写 `last_clean_exit_at` 作为 `stop()` 之前的最后一个操作提交 | T024（已写入 brief） |
+| T037 | 写线程上的操作 panic 时，写线程随之结束：在途回执都是 `Stopped`，`WriterThread::stop()` 返回 `Err`。宿主把这种情况当作致命错误，有序退出，不能带着死掉的写线程继续运行 | T024 审阅（已写入 brief） |
 | T026、T032、T121 | 写线程的回执在提交之后才返回，可以直接作为"追加三步"的第二步。写 `pending_external` 的操作用 `Durability::Full`。操作不能自己结束事务，否则整批作废。需要 `prepare_cached` 时给 rusqlite 打开 `cache` 特性（会引入 foldhash，Zlib 已在 allowlist 里） | T024（已写入 T026 的 brief） |
 | T027 | 写线程目前只有 `host.db` 的连接。原始帧（`raw.db`，有界队列 4,096）需要在 `Batcher` 里加第二个连接和队列（按 5.2.8，每个数据库一个事务），或者另开线程；`Database::Raw` 的 pragma 已经备好 | T024（已写入 brief） |
 | T047 | 写线程现在只登记"运行中"。实现忙或空闲时，阻塞在 `inbox.recv()` 并且手里没有批次才算空闲。ManualClock 下 `linger` 为 0，不会有真实时间的等待 | T024 |
@@ -82,7 +82,7 @@
 | T035 | `project/trust_info.diff_from_trusted` 按文件列出差异，所以信任时要另存每个文件的哈希清单，按 P-4 加进 `0001` 的 `projects` 表 | T012 裁定 |
 | T052 | 假 agent 的 `--segment-file <路径>` 每次启动段号加 1，重启后的实例接着演下一段，用来回放多实例录制。persona 与 SP-1 录制的 jq 摘取命令在 `docs/tasks/T051-fake-agent-scripts/notes.md` 里，自动比对可以直接用 | T051 |
 | T055、T062、T090 | 假 agent 是独立的二进制，cargo 不支持跨 crate 的 `CARGO_BIN_EXE_*`。T055 定一个拿路径的做法（例如测试前先 `cargo build -p cupper-fake-agent`，再按 target 目录推出路径，或由 `xtask ci` 先构建），后面的任务照用。配置只经命令行参数（`--persona`、`--auth`、`--fault`、`--segment`、`--segment-file`），因为宿主的环境变量规则会过滤掉我们自己的变量。同一会话收到第二个在途 prompt 时，假 agent 以退出码 70 退出 | T051 |
-| T037 | host.db 的启动顺序：`open_writer(host.db, Database::Host)` → `store::migrate(&mut conn, MIGRATIONS, &data_dir.join("backups"), &*clock)` → 用 `meta::get` 读出 epoch 判定的输入，用 `meta::set` 写 `LastStartAt`、`BootSessionUuid`、`DataEpoch` → `Writer::spawn`。raw.db：`open_writer(raw.db, Database::Raw)` → `prepare_raw(&mut conn, &RAW_SCHEMA)`。退出码：`TooNew` → 4；`Failed` → 6，界面显示 `backup`；`Backup`、`Unreadable`、`BadVersion` 建议用 5 | T025 |
+| T037 | host.db 的启动顺序：`open_writer(host.db, Database::Host)` → `store::migrate(&mut conn, MIGRATIONS, &data_dir.join("backups"), &*clock)` → 用 `meta::get` 读出 epoch 判定的输入，用 `meta::set` 写 `LastStartAt`、`BootSessionUuid`、`DataEpoch` → `Writer::spawn`。raw.db：`open_writer(raw.db, Database::Raw)` → `prepare_raw(&mut conn, &RAW_SCHEMA)`。退出码：`TooNew` → 4；`Failed` → 6，界面显示 `backup`；`Backup`、`Unreadable`、`BadVersion` 建议用 5 | T025（已写入 brief） |
 | T026 | 写事件时 `v` 取 `Upcasters::host().current(type)`，可以替代 T011 交接里的 `EVENT_VERSION`；读事件时调用 `upcast(type, v, data)`。检查点：写 `view_v`，读时调用 `checkpoint_fate(view_v)`；`VIEW_VERSION` 从 `store::upcast` 挪到 `cupper-protocol::view`，和视图类型放在一起（编排者裁定）。`turn_snapshots.v` 是整个快照一个版本，而事件的 `v` 是按类型分的，ops 里的事件体也不带 `v`，请定下这一列的含义，例如让每个 op 带自己的 `v` | T025（已写入 brief） |
 | T027 | `backups/` 只保留最近 3 份（5.4.5），迁移成功后回收。备份文件名 `host-v<版本>-<YYYYMMDDTHHMMSSZ>.db`，按名字排序就是按时间排序；忽略 `host.partial` | T025（已写入 brief） |
 | T055 | `driver/tap/mod.rs` 有一处文档链接指向私有的 `redact`，`RUSTDOCFLAGS=-D warnings cargo doc -p cupper-host --all-features` 会失败。改 `driver/` 时顺手修 | T025 |
@@ -113,7 +113,7 @@
 | T002 | `xtask ci rust` 缺了 `cargo build -p cupper-protocol --lib --target aarch64-apple-ios-sim`（5.1.6 要求每个 PR 都跑），T001 时漏掉了，请补上 | T013（改由 T015 做，已写入它的 brief） |
 | T033 | 网关的发送队列实现 `store::streams` 的 `Sink`：两个方法都在流锁内调用，只能排队，不能回调流；`push` 返回 `Full` 时流会摘掉这个订阅者并调用 `reset`（`slow_consumer`）。订阅时，把响应、快照页或补发标记放进 `subscribe` 的 `start` 回调。补发用 `store::log::read_events(conn, stream, after, head, ..)`。`history/page` 用 `store::history::page`；不带游标时，用 `StreamHandle::read` 取窗口里最早的 `turn_no`；`max_bytes` 自己截到 48,000 | T026（已写入 brief） |
 | T032、T043 | 命令结果和它产生的事件放进同一个 `Batch`（`Batch::with`），同一事务提交。`Appended::rejected` 不为空，说明写者违反了视图规则，是 bug：要记日志；test-harness 构建里建议直接让用例失败 | T026（已写入 T032 的 brief） |
-| T037 | 组装流：`Streams::new(writer, readers, clock, StreamsConfig::new(epoch, &durations))` | T026 |
+| T037 | 组装流：`Streams::new(writer, readers, clock, StreamsConfig::new(epoch, &durations))` | T026（已写入 brief） |
 | T039 | 接入点：`handshake::authenticate` 的 match、`GatewayConfig` 里的密钥、传给 `initialize` 的固定令牌、`host_proof` 的返回值、`principal` 里 `pr_test` 那一行（详见 `docs/tasks/T030-gateway-handshake/notes.md`"给 T039 的接入点"）。另外实现握手期限：`host/hello` 之后 10 s 内没有 `initialize` 就断开，审计原因 `handshake_timeout`（5.3.11 末尾，编排者裁定） | T030（已写入 brief） |
 | T047 | 网关的连接任务还没有登记进静止屏障：它们由 I/O 驱动，只有关闭宽限（和 T039 的握手期限）用到 `Clock` 定时器 | T030 |
 | T006 | `xtask ci license` 跑 `cargo deny check` 时要从 GitHub 拉 advisory 数据库，网络出错时整个作业失败（2026-10-19 在 main 上遇到一次，重跑通过）。考虑拉取失败时用已缓存的数据库继续，并在摘要里标记为过期，或者重试 | 编排者 |
@@ -136,7 +136,7 @@
 | T033 | 账本接线：启动时在 host.db 连接上调用 `Ledger::load`，并 `spawn(ledger.clone().sweeper())`。读循环对命令类请求调用 `begin`，传入原始 params 的 `Value`：`Run(ticket)` 时把 ticket 随命令交给执行者；`Replay` 时直接回复；`Wait(w)` 时另起 task，等 `w.outcome()` 后回复。`LedgerError` 可以直接转成 `RpcError`。`test/run_maintenance` 调用 `Ledger::sweep()` | T032（已写入 brief） |
 | T043、git 执行者（T061 等） | 受理后调用 `ticket.complete(Ok(result))`，把 `Box::new(completion.row())` 放进 `Batch::with`；`append` 成功后调用 `completion.committed()`，失败时丢弃 `completion`。改动用户仓库的 git 命令，在执行 git 之前先 `mark_external().await`。前置条件不满足时用 `reject(err)` | T032 |
 | T016 | 账本回放的结果带 `replayed: true`（5.2.5），协议 schema 里还没有声明。请在冻结前定下声明方式 | T032 审阅 |
-| T037 | 组装存储：在静止屏障里登记 `store::RAW_WRITER`、`store::retention::MAINTENANCE`。启动顺序：`open_writer(raw.db, Database::Raw)` → `prepare_raw` → `RawWriter::spawn(conn, &quiescence)`，再把 `raw.sink()` 交给 T055；`BlobStore::new(data_dir, writer.clone(), clock)`；`Maintenance::new(writer, raw, blobs, data_dir.join("backups"), clock, durations).spawn(&quiescence)`，放在"按 `adapters` 表清理残留"之后。有序退出时先停清理任务，再 `RawWriterThread::stop()`。清理失败目前直接吞掉，有了 host.log 之后要记下；`RawSink::dropped()` 还没有地方展示 | T027 |
+| T037 | 组装存储：在静止屏障里登记 `store::RAW_WRITER`、`store::retention::MAINTENANCE`。启动顺序：`open_writer(raw.db, Database::Raw)` → `prepare_raw` → `RawWriter::spawn(conn, &quiescence)`，再把 `raw.sink()` 交给 T055；`BlobStore::new(data_dir, writer.clone(), clock)`；`Maintenance::new(writer, raw, blobs, data_dir.join("backups"), clock, durations).spawn(&quiescence)`，放在"按 `adapters` 表清理残留"之后。有序退出时先停清理任务，再 `RawWriterThread::stop()`。清理失败目前直接吞掉，有了 host.log 之后要记下；`RawSink::dropped()` 还没有地方展示 | T027（已写入 brief） |
 | T033 | blob 传输：`BlobStore::put(data, media_type, Some(hash))`，`Mismatch` 对应 `conflict`，`TooLarge` 对应 `too_large`；客户端声明的 `size` 由 T033 自己和 `data.len()` 比对。`get` 每次都读整个文件并核对哈希，`offset`/`length` 由 T033 截取。图片的 10 MiB 限制（按 agent）不在 `BlobStore` 里 | T027（已写入 brief） |
 | T043、T055 | 事件引用 blob 时，在同一个写操作里调用 `store::blobs::add_ref`，返回 `false` 时让客户端重新上传。T055 用 `RawWriter::sink()` 构造 `Tap` | T027 |
 | T047 | `test/run_maintenance` 的 `raw_frames`、`audit`、`orphan_blobs` 对应 `Maintenance::run(Cleanup::…)`，`ledger` 对应 T032 的 `Ledger::sweep()`。静止屏障要把 `store_raw_writer`、`store_maintenance` 两类参与者算进去 | T027 |
@@ -146,7 +146,7 @@
 | T016 | `interaction/respond` 的 `x-errors` 里没有 `not_found`，会话里不存在的请求 ID 目前回 `invalid_params`，而 `interaction/get` 回 `not_found`。冻结前补上，并跑 `pnpm gen` | T042 审阅 |
 | T073 | 网关夹具 `cupper-gateway-fixture` 要用 `--features dev-auth,test-harness` 构建，必须给 `--data-dir`，stdin 读启动载荷；监听后 stdout 输出 `{"socket": ...}`，审计按 JSON 行写到 stderr。`dev_key` 只接受拉起夹具的那个进程（Node 测试进程）；`host_proof` 按夹具的 pid 校验。证明的已知答案见 UNIT-proof-binding（`cupper-protocol::proof`） | T039（已写入 brief） |
 | T046 | `--harness-key-fd` 的参数解析接 `cupper_cli::harness::HarnessKey::read_fd`；输出里"宿主未经签名校验"的标记用 `HostCheck::is_weak(&auth)`（e2e 构建里带了 harness 密钥就不算弱） | T039 |
-| T037 | `main` 里 `startup::launcher()` 返回的拉起方 ID，要放进 `GatewayConfig::dev_key`（`DevKey { key, launcher }`）。新增关闭原因 `HandshakeTimeout`，审计记为 `handshake_timeout`。夹具的审计行目前是 `Debug` 文本，正式的审计格式归本任务 | T039 |
+| T037 | `main` 里 `startup::launcher()` 返回的拉起方 ID，要放进 `GatewayConfig::dev_key`（`DevKey { key, launcher }`）。新增关闭原因 `HandshakeTimeout`，审计记为 `handshake_timeout`。夹具的审计行目前是 `Debug` 文本，正式的审计格式归本任务 | T039（已写入 brief） |
 | T047 | 每条还没 `initialize` 的连接持有一个握手期限计时器（`gateway_handshake`，10 s），静止屏障要把它算进去 | T039 |
 | T043 | 合并器只写内联文本；工具输出超过内联上限时转 blob（`BlobStore`、`add_ref`）、标 `truncated`、每秒更新尾部，由 actor 做（5.3.11 末尾"T041 实现时的裁定"）。收到回合机的动作后，用 `TurnSignal::of(&Action)` 转发给合并器和裁判 | T041 |
 | T053 | `NormUpdate::ToolStart` 要给出 `cwd`：没有它，合并器按 `missing_required` 把 `execute` 类工具的 `extraction` 定为 `partial` | T041 |
@@ -160,7 +160,7 @@
 | T044 | 登记 `session/confirm_config`，并删掉 UNIT-unsupported-set 允许表里标为 T044 的那一行 | T033 |
 | T034 | 实现 `IndexPort`（`deliver`、`opened(Opened)`、`closed(&ConnId)`）；`ClientInfo.auth` 由 `Opened` 里的 principal 种类和 `weak_auth` 推出。客户端通知目前不计入在途、每条另起一个 task，没有上限；加入代价大的通知时要定上限 | T033 |
 | T036 | 登记 `settings/*`（`Routes` 的 `add::<M>`），`settings_update` 规则网关已经执行过；接上后从 UNIT-unsupported-set 的允许表里删掉相应行 | T033 |
-| T037 | 组装：`Routes::start(conn, writer, clock, durations, sessions, index)` → `(routes, sweeper)`，再 `Gateway::new(config, clock, durations, routes)`；有序退出时 abort 清理任务。登记 `host/status`、`host/exit` | T033 |
+| T037 | 组装：`Routes::start(conn, writer, clock, durations, sessions, index)` → `(routes, sweeper)`，再 `Gateway::new(config, clock, durations, routes)`；有序退出时 abort 清理任务。登记 `host/status`、`host/exit` | T033（已写入 brief） |
 | T038 | 撤销提权挂在 `IndexPort::closed` 上。`Dispatch` 里的 principal 在 `initialize` 时定下、之后不变；授予提权需要让这条连接的 scope 能更新，要改这里 | T033 |
 | T047 | `test/run_maintenance` 要用账本：给 `Routes` 加一个公开的账本访问函数（现在是 `pub(super)`）。账本清理任务、各连接等待回复的 task 还没有登记进静止屏障 | T033 |
 | T019、T029 | 接入点见 `docs/tasks/T033-gateway-dispatch/notes.md`"给 T019、T029 的接入点"：`stream/*`、`history/page` 登记为 `Target::Streams`，`blob/*` 为 `Target::Blobs`；订阅表和上传缓冲放进每条连接的 `Dispatch`，断开时自动清理；`HOST_FEATURES` 目前为空，由它们补上 | T033 |
