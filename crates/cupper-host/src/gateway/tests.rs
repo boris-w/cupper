@@ -4,6 +4,8 @@
 use std::io::Write;
 use std::os::fd::AsFd;
 use std::process::{Command, Stdio};
+use std::sync::Arc;
+use std::time::Duration;
 
 use cupper_protocol::frame::{self, FrameType};
 use cupper_protocol::ids::HostId;
@@ -16,6 +18,7 @@ use super::testkit::{Client, KEY, TestGateway, initialize_params, key_auth};
 use super::{AuditEvent, CloseReason, Verdict};
 #[cfg(any(feature = "dev-auth", feature = "test-harness"))]
 use crate::clock::SystemClock;
+use crate::clock::{ManualClock, MonoTime};
 
 /// `data.code` and `data.reason` of an error, `""` when missing.
 fn code(error: &Value) -> (&str, &str) {
@@ -293,11 +296,31 @@ async fn it_handshake_key_auths_need_the_key_and_dev_key_its_launcher() {
         cases.push((config, "harness", "no key"));
     }
     for (config, kind, message) in cases {
-        let mut gw = TestGateway::with(config, std::sync::Arc::new(SystemClock::new()));
+        let mut gw = TestGateway::with(config, Arc::new(SystemClock::new()));
         let err = refused(&mut gw, |nonce| key_auth(kind, &KEY, nonce, me()).0).await;
         assert_eq!(code(&err), ("unauthenticated", "bad_key"), "{kind}");
         assert!(err["message"].as_str().unwrap().contains(message), "{err}");
     }
+}
+
+#[tokio::test]
+async fn it_handshake_initialize_within_ten_seconds_of_hello() {
+    let clock = Arc::new(ManualClock::new());
+    let mut gw = TestGateway::with(TestGateway::config(None), clock.clone());
+    let mut prompt = Client::connect(&gw.socket).await;
+    prompt.handshake(peer()).await.unwrap();
+    clock.advance(Duration::from_secs(5));
+    let mut late = Client::connect(&gw.socket).await;
+    late.hello().await;
+    // Only the connection without `initialize` has a deadline.
+    let deadline = MonoTime::from_origin(Duration::from_secs(15));
+    assert_eq!(clock.next_deadline(), Some(deadline));
+    clock.advance(Duration::from_millis(9_999));
+    assert_eq!(clock.next_deadline(), Some(deadline), "not yet");
+    clock.advance(Duration::from_millis(1));
+    assert_eq!(late.next().await, None);
+    assert_eq!(gw.closed().await, CloseReason::HandshakeTimeout);
+    assert_eq!(prompt.call("ping", Value::Null).await, Ok(json!({})));
 }
 
 #[tokio::test]
