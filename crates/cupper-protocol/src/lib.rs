@@ -7,6 +7,7 @@
 pub mod annotations;
 pub mod canonical;
 pub mod coalesce;
+pub mod domain;
 pub mod envelope;
 pub mod error;
 pub mod frame;
@@ -17,5 +18,7 @@ pub mod open_union;
 pub mod rpc;
 pub mod schema;
 pub mod sync;
+#[cfg(test)]
+mod testutil;
 pub mod text;
 pub mod transport;
