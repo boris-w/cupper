@@ -1,9 +1,9 @@
 //! Event envelope (design 5.3.5, ADR-06): `{seq, from?, type, v, ts, cause?, fallback?, data}`.
 //!
-//! The body `B` supplies `type` and `data`, as an adjacently tagged enum
-//! (`#[serde(tag = "type", content = "data")]`). The union is open: it ends with
-//! `#[serde(untagged)] Unknown(UnknownEvent)`, and a reader shows `fallback`
-//! for a type it does not know.
+//! The body `B` supplies `type` and `data`: an open union declared with
+//! [`open_union!`](crate::open_union!) in its `tag "type", content "data"`
+//! form, whose unknown member is an [`UnknownEvent`]. A reader shows
+//! `fallback` for a type it does not know.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -11,6 +11,7 @@ use serde_json::Value;
 
 use crate::annotations::TimestampMs;
 use crate::ids::{CommandId, PrincipalId};
+use crate::open_enum;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Event<B> {
@@ -44,11 +45,44 @@ pub struct Cause {
     pub principal: PrincipalId,
 }
 
-/// What a reader shows in place of an event type it does not know.
+/// Longest [`Fallback::summary`], in characters.
+pub const MAX_FALLBACK_SUMMARY_CHARS: usize = 120;
+
+/// What a reader shows in place of an event type it does not know (design 5.3.11).
+///
+/// Only a client older than the event type reads it, and such a client has no
+/// translation for the semantic codes the new type brings, so a code would not
+/// help. The client draws its own localized placeholder of shape `kind`;
+/// `summary` appears only in a tooltip or in diagnostics.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Fallback {
-    pub kind: String,
+    pub kind: FallbackKind,
+    /// English for developers, at most [`MAX_FALLBACK_SUMMARY_CHARS`]
+    /// characters, never agent-provided text or paths.
     pub summary: String,
+}
+
+impl Fallback {
+    pub fn new(kind: FallbackKind, summary: &str) -> Self {
+        debug_assert!(
+            summary.chars().count() <= MAX_FALLBACK_SUMMARY_CHARS,
+            "fallback summary too long: {summary}"
+        );
+        Self {
+            kind,
+            summary: summary.to_owned(),
+        }
+    }
+}
+
+open_enum! {
+    /// The placeholder shape a client already knows how to draw.
+    pub enum FallbackKind {
+        /// A row in the message stream.
+        Item => "item",
+        /// Nothing: the event only changes state the client cannot show.
+        Hidden => "hidden",
+    }
 }
 
 /// Body of an event whose `type` this version does not know.
@@ -77,9 +111,13 @@ mod tests {
     #[test]
     fn unit_proto_base_envelope_keeps_unknown_types() {
         let raw = r#"{"seq":5,"v":3,"ts":1,"type":"future.thing","data":{"x":1},
-            "fallback":{"kind":"card","summary":"New thing"}}"#;
+            "fallback":{"kind":"item","summary":"New thing"}}"#;
         let e: Event<Body> = serde_json::from_str(raw).unwrap();
         assert!(matches!(&e.body, Body::Unknown(u) if u.kind == "future.thing"));
+        assert_eq!(
+            e.fallback,
+            Some(Fallback::new(FallbackKind::Item, "New thing"))
+        );
         assert_eq!(e.first_seq(), 5);
         let back = serde_json::to_value(&e).unwrap();
         assert_eq!(back, serde_json::from_str::<Value>(raw).unwrap());
@@ -96,6 +134,24 @@ mod tests {
         assert_eq!(
             (e.first_seq(), e.cause.unwrap().principal.as_str()),
             (6, "pr_cli")
+        );
+    }
+
+    #[test]
+    fn unit_proto_events_index_fallback_kind_is_open() {
+        let raw = serde_json::json!({"kind": "card", "summary": "Shows a card"});
+        let f: Fallback = serde_json::from_value(raw.clone()).unwrap();
+        assert_eq!(f.kind, FallbackKind::Unknown("card".into()));
+        assert_eq!(serde_json::to_value(&f).unwrap(), raw);
+        assert_eq!(FallbackKind::KNOWN, ["item", "hidden"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "fallback summary too long")]
+    fn unit_proto_events_index_fallback_summary_is_short() {
+        Fallback::new(
+            FallbackKind::Item,
+            &"x".repeat(MAX_FALLBACK_SUMMARY_CHARS + 1),
         );
     }
 }

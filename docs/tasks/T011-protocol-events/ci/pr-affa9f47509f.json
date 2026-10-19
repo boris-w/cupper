@@ -1,0 +1,141 @@
+{
+  "artifacts": [],
+  "commit": "affa9f47509f9bd894878aea9f01b780d7f8787c",
+  "duration_ms": 18119,
+  "jobs": [
+    {
+      "duration_ms": 13031,
+      "failed": 0,
+      "name": "rust",
+      "passed": 93,
+      "result": "pass"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "protocol",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 3976,
+      "failed": 0,
+      "name": "ts",
+      "passed": 26,
+      "result": "pass"
+    },
+    {
+      "duration_ms": 1111,
+      "failed": 0,
+      "name": "license",
+      "passed": 1,
+      "result": "pass"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "testdata-scan",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "ui",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "e2e",
+      "passed": 0,
+      "result": "not_implemented"
+    }
+  ],
+  "machine": "MacBook Pro (Apple M5 Pro)",
+  "os": "macOS 26.4",
+  "results": [
+    {
+      "commit": "affa9f47509f9bd894878aea9f01b780d7f8787c",
+      "id": "UNIT-ci-lock",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "affa9f47509f9bd894878aea9f01b780d7f8787c",
+      "id": "UNIT-ci-summary",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "affa9f47509f9bd894878aea9f01b780d7f8787c",
+      "id": "UNIT-clock-manual",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "affa9f47509f9bd894878aea9f01b780d7f8787c",
+      "id": "UNIT-digest-jcs",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "affa9f47509f9bd894878aea9f01b780d7f8787c",
+      "id": "UNIT-i18n-escape",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "affa9f47509f9bd894878aea9f01b780d7f8787c",
+      "id": "UNIT-idgen",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "affa9f47509f9bd894878aea9f01b780d7f8787c",
+      "id": "UNIT-proto-base",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "affa9f47509f9bd894878aea9f01b780d7f8787c",
+      "id": "UNIT-proto-events-index",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "affa9f47509f9bd894878aea9f01b780d7f8787c",
+      "id": "UNIT-quiescence-registry",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "affa9f47509f9bd894878aea9f01b780d7f8787c",
+      "id": "UNIT-shell-mock",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "affa9f47509f9bd894878aea9f01b780d7f8787c",
+      "id": "UNIT-sys-reap-group",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "affa9f47509f9bd894878aea9f01b780d7f8787c",
+      "id": "UNIT-sys-spawn",
+      "result": "pass",
+      "suite": "pr"
+    }
+  ],
+  "target": "pr",
+  "toolchain": {
+    "cargo": "1.96.0",
+    "cargo_deny": "0.20.2",
+    "node": "24.13.0",
+    "pnpm": "12.14.0",
+    "rustc": "1.96.0"
+  },
+  "version": 1
+}

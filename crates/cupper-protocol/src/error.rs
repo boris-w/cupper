@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::annotations::DurationMs;
+use crate::domain::ResolvedBy;
 use crate::open_enum;
 use crate::rpc::Scope;
 
@@ -164,7 +165,10 @@ pub struct ErrorData {
     /// `rate_limited`: when to try again.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub retry_after_ms: Option<DurationMs>,
-    /// Other code-specific details, e.g. `resolved_by` or `supported`.
+    /// `conflict/already_resolved`: who resolved the request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_by: Option<ResolvedBy>,
+    /// Other code-specific details, e.g. `supported`.
     #[serde(flatten)]
     pub details: Map<String, Value>,
 }
@@ -179,6 +183,7 @@ impl ErrorData {
             agent_code: None,
             agent_message: None,
             retry_after_ms: None,
+            resolved_by: None,
             details: Map::new(),
         }
     }
@@ -282,7 +287,7 @@ mod tests {
 
         // Unknown codes, reasons and details survive a roundtrip.
         let raw = serde_json::json!({"code": -32000, "message": "x", "data": {
-            "code": "future_code", "reason": "later", "resolved_by": {"principal_id": "pr_cli"}}});
+            "code": "future_code", "reason": "later", "supported": {"min": 1, "max": 1}}});
         let err: RpcError = serde_json::from_value(raw.clone()).unwrap();
         assert_eq!(
             err.app_code(),
@@ -290,5 +295,15 @@ mod tests {
         );
         assert_eq!(err.reason(), Some(&ErrorReason::Unknown("later".into())));
         assert_eq!(serde_json::to_value(&err).unwrap(), raw);
+    }
+
+    #[test]
+    fn unit_proto_events_index_error_names_resolved_by() {
+        let raw = serde_json::json!({"code": "conflict", "reason": "already_resolved",
+            "resolved_by": {"principal_id": "pr_desktop", "client_kind": "desktop", "client_name": "Cupper"}});
+        let data: ErrorData = serde_json::from_value(raw.clone()).unwrap();
+        assert_eq!(data.resolved_by.as_ref().unwrap().client_name, "Cupper");
+        assert!(data.details.is_empty());
+        assert_eq!(serde_json::to_value(&data).unwrap(), raw);
     }
 }
