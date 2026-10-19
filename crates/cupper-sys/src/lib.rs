@@ -12,10 +12,14 @@
 
 mod env;
 mod proc;
+mod spawn;
 mod system;
+#[cfg(test)]
+mod testutil;
 
 pub use env::Env;
 pub use proc::{ProcessInfo, StartTime, parent_chain, process_info};
+pub use spawn::{Child, Command, Stdio, spawn};
 pub use system::{boot_session_uuid, current_uid, user_temp_dir};
 
 /// Errors from system interfaces.

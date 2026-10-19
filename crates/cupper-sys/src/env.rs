@@ -5,7 +5,7 @@
 //! names go on the list is the caller's policy (design 5.6.6 for adapters).
 
 use std::collections::BTreeMap;
-use std::ffi::{OsStr, OsString};
+use std::ffi::{CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
 
 use crate::{Error, Result};
@@ -79,6 +79,20 @@ impl Env {
             .iter()
             .map(|(k, v)| (k.as_os_str(), v.as_os_str()))
     }
+
+    /// `NAME=value` strings for `posix_spawn`.
+    pub(crate) fn to_cstrings(&self) -> Vec<CString> {
+        self.vars
+            .iter()
+            .map(|(name, value)| {
+                let mut entry = Vec::with_capacity(name.len() + 1 + value.len());
+                entry.extend_from_slice(name.as_bytes());
+                entry.push(b'=');
+                entry.extend_from_slice(value.as_bytes());
+                CString::new(entry).expect("`set` refuses NUL bytes")
+            })
+            .collect()
+    }
 }
 
 fn matches(pattern: &str, name: &OsStr) -> bool {
@@ -128,5 +142,6 @@ mod tests {
         env.set("LANG", "C").unwrap();
         env.set("LANG", "en_US.UTF-8").unwrap();
         assert_eq!(env.get("LANG"), Some(OsStr::new("en_US.UTF-8")));
+        assert_eq!(env.to_cstrings(), [c"LANG=en_US.UTF-8".to_owned()]);
     }
 }
