@@ -1,8 +1,8 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v0.3
+- 版本：v1.0
 - 日期：2026-10-19
-- 状态：草案，已按计划评审第一轮意见和第二轮确认的条件修订，待 `gate/plan`
+- 状态：已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）
 - 依据：技术设计 v1.3（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.2（[`01-prd.md`](01-prd.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
 - 用途：编排者照着本文件逐个写 brief、派发任务（[`00-process.md`](00-process.md) 的"任务生命周期"）；任务完成后在第 9 节打勾。对评审意见的逐条回应见 [`tasks/P02-plan-revision/responses.md`](tasks/P02-plan-revision/responses.md)
 
@@ -1555,3 +1555,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v0.1 | 2026-10-16 | 初稿（P01）：按设计 v1.1 拆分 M1a、M1b 与"发布（推迟）"组 |
 | v0.2 | 2026-10-19 | 按计划评审第一轮意见和编排者裁定修订（P02）：本机 CI（U-P1）；用例登记改为登记表加自动推导；验收改挂与依赖补全；集成测试与界面任务重新拆分；复刻度检查贯穿 M1b；自用构建的身份与加固；新增 T068、T069、T084、T085、T106、T107、T108、T148，T067、T122 并入其他任务；待处理改为"已定"和 P-16 至 P-20。逐条回应见 `tasks/P02-plan-revision/responses.md` |
 | v0.3 | 2026-10-19 | 落实三位评审者第二轮确认附加的 17 条条件（P02 第 2 轮）：本机 CI 细则、5.8.1（设计 v1.3）的任务落点、M1b 界面任务依赖 T106、自用构建的 fuses 与 entitlements、更正退化模式下 CLI 的行为；P-16 至 P-20 移入已定，新增 P-21。明细见 2.5，落点见 `tasks/P02-plan-revision/responses.md` 的"第 2 轮" |
+| v1.0 | 2026-10-19 | 用户确认任务的顺序和粒度，打 tag `gate/plan`；用户决定不向上游反馈 Q7、K19（见计划评审纪要"用户确认"一节） |

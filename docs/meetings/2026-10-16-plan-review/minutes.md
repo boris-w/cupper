@@ -81,3 +81,21 @@
 - 第二轮确认：`test-engineer-confirm.md`、`desktop-engineer-confirm.md`、`security-engineer-confirm.md`
 - 回应：`docs/tasks/P02-plan-revision/responses.md`
 - 修订记录：`docs/tasks/P01-task-plan/`、`docs/tasks/P02-plan-revision/`（brief、brief-r2、report、review）
+
+## 用户确认（2026-10-19）
+
+编排者请用户确认两件事：任务的顺序和粒度；是否、以谁的名义向 claude-agent-acp 上游反馈 Q7 和 K19。用户的回复是：
+
+> 1 顺序ok
+> 2 不要上报
+
+**决定**
+- `gate/plan` 通过：`03-plan.md` 定为 v1.0，打 tag `gate/plan`，进入阶段 ④。
+- **不向上游反馈 Q7、K19。** 两者照原样由 cupper 自行规避：
+  - Q7：按工具区分选项的作用范围，判断不出来时按持久处理；
+  - K19：在线路分接层给封闭枚举做容错。
+
+  计划和设计里所有"向上游反馈"的字样都按"不反馈"理解，相关任务的 brief 不包含反馈步骤。
+
+用户在同一条消息里还要求先看一份"带界面的 PRD"（HTML），作为任务 D03 处理。
+

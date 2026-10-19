@@ -72,7 +72,7 @@ docs/
 - [x] 初始化仓库和协作约定
 - [x] ① PRD：v1.0 已确认（tag `gate/prd`）
 - [x] ② 技术设计：v1.0 已确认（tag `gate/design`）；ADR-01 至 ADR-11 已采纳；详细设计见 `docs/02-design.md` 第 5 节和 `docs/design/`
-- [ ] ③ 任务拆分：进行中（`docs/03-plan.md`）
-- [ ] ④ 迭代开发
+- [x] ③ 任务拆分：v1.0 已确认（tag `gate/plan`），共 134 个任务
+- [ ] ④ 迭代开发：M1a 进行中
 - [ ] ⑤ 验收发布
 - [ ] ⑥ 复盘
