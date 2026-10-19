@@ -197,10 +197,6 @@ impl SessionView {
         self.turns.last().filter(|t| t.completed.is_none())
     }
 
-    pub fn pending_requests(&self) -> impl Iterator<Item = &RequestView> {
-        self.requests.values().filter(|r| r.is_pending())
-    }
-
     /// Drops the finished turns before the window (the host calls this when
     /// a turn ends). Their items go; their requests go too, except pending
     /// ones, which wait in `detached` until resolved. The running turn and
