@@ -15,14 +15,41 @@ use std::time::{Duration, Instant};
 
 use crate::{Child, Command, ProcessGroup, Signal, Stdio, spawn};
 
-/// Serialises the tests that leave fds without close-on-exec in this process
-/// (passed fds) with the tests whose children inherit such fds (`std::process`,
-/// `fork`, a spawn without `CLOEXEC_DEFAULT`), so that neither sees the
-/// other's fds. Children started with [`spawn`] inherit nothing and need no
-/// lock.
+/// Serialises the tests whose children keep copies of this process's fds:
+/// `fork` (all of them, until the child exits), `std::process` and a spawn
+/// without `CLOEXEC_DEFAULT` (those without close-on-exec). A check of which
+/// processes hold an fd at a given moment needs more than this lock: any
+/// spawn, [`spawn`] included, briefly copies every fd of this process, close-
+/// on-exec or not, so such a test runs [`alone`].
 pub fn fd_lock() -> MutexGuard<'static, ()> {
     static LOCK: Mutex<()> = Mutex::new(());
     LOCK.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+const ALONE_ENV: &str = "SYS_TEST_ALONE";
+
+/// Runs the test `path` (its full name, `module::tests::name`) in a test
+/// process of its own, where no other test starts processes meanwhile.
+/// Returns `true` in that process, where the caller goes on with the test
+/// body; in the calling process it starts that process, checks that exactly
+/// this test ran and passed, and returns `false`.
+pub fn alone(path: &str) -> bool {
+    if std::env::var_os(ALONE_ENV).is_some_and(|name| name == path) {
+        return true;
+    }
+    let out = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([path, "--exact", "--test-threads=1"])
+        .env(ALONE_ENV, path)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout) + String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{path} failed on its own:\n{text}");
+    assert!(
+        text.contains("test result: ok. 1 passed"),
+        "{path} did not run on its own:\n{text}"
+    );
+    false
 }
 
 /// A child started with `std::process`, for tests that hand it a socket as
