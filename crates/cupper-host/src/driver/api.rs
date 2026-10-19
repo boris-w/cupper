@@ -70,7 +70,8 @@ pub enum DriverCommand {
     },
     /// `session/close`; the session leaves the runtime's routing table.
     Close { session: AgentSessionId },
-    /// Answers an agent request; `AskAnswer::Cancelled` is ACP's `Cancelled`.
+    /// Answers an agent request; every ask gets one, unless its adapter
+    /// instance exited first. `AskAnswer::Cancelled` is ACP's `Cancelled`.
     Answer { ask: AskId, answer: AskAnswer },
     /// Request, replied with `Result<SessionCapabilities, AgentError>`, while
     /// the capability cache is empty (design 5.6.7).
@@ -120,20 +121,40 @@ pub enum SteerOutcome {
     Unsupported,
 }
 
+/// A form's answer is an `Answer` keyed by the form's own property names
+/// (ACP's `accept`), and its `Dismissed` is ACP's `decline`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AskAnswer {
     Outcome(InteractionOutcome),
     Cancelled,
 }
 
+/// What the agent asks, as the runtime hands it over.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AskRequest {
+    /// `session/request_permission`, classified, with its options' effects
+    /// from the option table (design 5.6.4).
+    Classified(InteractionRequest),
+    /// `elicitation/create` in form mode, as the agent sent it: the
+    /// interaction broker maps its fields (design 5.3.6).
+    Form(FormAsk),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FormAsk {
+    pub message: String,
+    /// `requestedSchema`, as JSON.
+    pub schema: serde_json::Value,
+}
+
 /// What the runtime reports to a session.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DriverEvent {
     Update(NormUpdate),
-    /// A classified request with its options' effects (design 5.6.4).
+    /// A request from the agent (design 5.6.4).
     Ask {
         ask: AskId,
-        request: InteractionRequest,
+        request: AskRequest,
     },
     /// The agent took a request back (`$/cancel_request`, K5).
     AskWithdrawn(AskId),
