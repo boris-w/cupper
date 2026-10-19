@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use super::Empty;
 use super::catalog::Catalog;
+use super::interaction::InputEvidence;
 use crate::annotations::WirePath;
 use crate::domain::BlobRef;
 use crate::ids::{CommandId, DiffToken, HunkId, ProjectId, SessionId, TurnId};
@@ -228,9 +229,7 @@ method! {
         scope: Write,
         idempotency: Command,
         milestone: M1b,
-        errors: [Conflict / StaleDiff, Conflict / OutcomeUnknown, GitError,
-            GitError / UnsafeRepoConfig, GitError / FilterUnsupported,
-            Forbidden, Forbidden / UserActivationRequired],
+        errors: [Conflict / StaleDiff, Conflict / OutcomeUnknown, GitError, Forbidden],
     }
 }
 
@@ -240,9 +239,7 @@ method! {
         scope: Write,
         idempotency: Command,
         milestone: M1b,
-        errors: [Conflict / StaleDiff, Conflict / OutcomeUnknown, GitError,
-            GitError / UnsafeRepoConfig, GitError / FilterUnsupported,
-            Forbidden, Forbidden / UserActivationRequired],
+        errors: [Conflict / StaleDiff, Conflict / OutcomeUnknown, GitError, Forbidden],
     }
 }
 
@@ -252,9 +249,7 @@ method! {
         scope: Write,
         idempotency: Command,
         milestone: M1b,
-        errors: [Conflict / StaleDiff, Conflict / OutcomeUnknown, GitError,
-            GitError / UnsafeRepoConfig, GitError / FilterUnsupported,
-            Forbidden, Forbidden / UserActivationRequired],
+        errors: [Conflict / StaleDiff, Conflict / OutcomeUnknown, GitError, Forbidden],
     }
 }
 
@@ -266,7 +261,8 @@ pub struct GitApplyParams {
     /// The `git/diff` that `target` refers to.
     pub diff_token: DiffToken,
     pub target: GitTarget,
-    /// Required for `git/revert` from the `window` role (design 5.2.5).
+    /// Evidence of real input (design 5.7.8); required for `git/revert`
+    /// from the `window` role (design 5.2.5).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input: Option<InputEvidence>,
 }
@@ -280,40 +276,6 @@ pub enum GitTarget {
     /// Whole files, relative to the workspace.
     Paths(Vec<WirePath>),
     HunkIds(Vec<HunkId>),
-}
-
-/// Evidence of real user input, which the desktop main process writes when
-/// it forwards a command from a window (design 5.7.8). The same as
-/// `interaction/respond`'s `input`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct InputEvidence {
-    pub kind: InputKind,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub key: Option<InputKey>,
-    /// With `key: digit`: the number pressed.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[schemars(range(min = 1, max = 9))]
-    pub digit: Option<u8>,
-}
-
-open_enum! {
-    pub enum InputKind {
-        Click => "click",
-        Key => "key",
-        /// The user confirmed a native dialog.
-        NativeConfirm => "native_confirm",
-    }
-}
-
-open_enum! {
-    pub enum InputKey {
-        Enter => "enter",
-        Space => "space",
-        Escape => "escape",
-        CmdEnter => "cmd_enter",
-        /// A number key; see `digit`.
-        Digit => "digit",
-    }
 }
 
 method! {
@@ -646,15 +608,6 @@ pub(super) mod tests {
         for raw in [json!("all"), mixed, json!({"hunk_ids": ["x_1"]})] {
             assert!(serde_json::from_value::<GitTarget>(raw).is_err());
         }
-
-        let mut g = crate::schema::generator();
-        g.subschema_for::<InputEvidence>();
-        let defs = g.take_definitions(true);
-        let digit = &defs["InputEvidence"]["properties"]["digit"];
-        assert_eq!(
-            (&digit["minimum"], &digit["maximum"]),
-            (&1.into(), &9.into())
-        );
     }
 
     #[test]
@@ -677,8 +630,6 @@ pub(super) mod tests {
         open_values::<GitFileStatus>(GitFileStatus::KNOWN);
         open_values::<DiffCaveat>(DiffCaveat::KNOWN);
         open_values::<HunkUnit>(HunkUnit::KNOWN);
-        open_values::<InputKind>(InputKind::KNOWN);
-        open_values::<InputKey>(InputKey::KNOWN);
         open_values::<OpenTarget>(OpenTarget::KNOWN);
     }
 }
