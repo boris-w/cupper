@@ -8,6 +8,8 @@ publish.workspace = true
 description = "cupper host protocol: the contract shared by host, CLI, desktop and iOS. No I/O."
 
 [dependencies]
+# The key proofs (design 5.8.1); the same generation as `sha2`.
+hmac = "=0.12.1"
 schemars.workspace = true
 serde.workspace = true
 # Exact float parsing: digests over client-sent numbers must match other languages.

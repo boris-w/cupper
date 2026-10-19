@@ -18,6 +18,7 @@ use cupper_protocol::methods::Empty;
 use cupper_protocol::methods::handshake::{HostHello, Initialize, Ping};
 use cupper_protocol::rpc::{Message, Method, RawMessage, RpcId};
 use cupper_sys::{AuditToken, Received};
+use futures::future::{self, Either};
 use serde_json::Value;
 use tokio::io::{AsyncWriteExt, Interest};
 use tokio::net::UnixStream;
@@ -27,7 +28,8 @@ use super::audit::{AuditEvent, CloseReason, Rejection};
 use super::handshake::{self, Nonce, Session};
 use super::outbox::Outbox;
 use super::{Gateway, Verdict, wire};
-use crate::durations::GATEWAY_CLOSE_GRACE;
+use crate::clock::Timer;
+use crate::durations::{GATEWAY_CLOSE_GRACE, GATEWAY_HANDSHAKE};
 
 pub(super) async fn run(gw: Arc<Gateway>, stream: UnixStream, id: ConnId) {
     let opened = gw.clock.now_mono();
@@ -37,16 +39,20 @@ pub(super) async fn run(gw: Arc<Gateway>, stream: UnixStream, id: ConnId) {
     let (reader, writer) = stream.into_split();
     let outbox = Arc::new(Outbox::new(V1.max_queue_bytes as usize));
     let mut writing = tokio::spawn(write_loop(writer, Arc::clone(&outbox)));
+    let handshake = gw.durations.get(GATEWAY_HANDSHAKE);
+    let deadline = gw.clock.timer_at(gw.clock.now_mono() + handshake);
     let nonce = handshake::new_nonce();
     outbox.push_frame(wire::notification::<HostHello>(&handshake::hello(&nonce)));
     let mut conn = Conn {
         gw: &gw,
         id: &id,
         outbox: &outbox,
+        pinned,
         verdict,
         phase: Phase::Hello(nonce),
+        deadline: Some(deadline),
     };
-    let end = conn.read_loop(&reader, pinned).await;
+    let end = conn.read_loop(&reader).await;
     if end.flush {
         // Let the writer send the error behind the close, but not wait on a
         // peer that does not read.
@@ -143,17 +149,28 @@ struct Conn<'a> {
     gw: &'a Gateway,
     id: &'a ConnId,
     outbox: &'a Outbox,
+    pinned: AuditToken,
     verdict: Verdict,
     phase: Phase,
+    /// Until `initialize`: when the handshake times out.
+    deadline: Option<Timer>,
 }
 
 impl Conn<'_> {
-    async fn read_loop(&mut self, reader: &OwnedReadHalf, pinned: AuditToken) -> End {
+    async fn read_loop(&mut self, reader: &OwnedReadHalf) -> End {
         let stream: &UnixStream = reader.as_ref();
         let mut buf = vec![0; MAX_FRAME_BYTES];
         let mut decoder = FrameDecoder::new();
         loop {
-            let got = match read(stream, &mut buf).await {
+            let read = read(stream, &mut buf);
+            let got = match self.deadline.as_mut() {
+                Some(deadline) => match future::select(std::pin::pin!(read), deadline).await {
+                    Either::Left((got, _)) => got,
+                    Either::Right(_) => return End::now(CloseReason::HandshakeTimeout),
+                },
+                None => read.await,
+            };
+            let got = match got {
                 Ok(got) => got,
                 Err(err) => return End::now(CloseReason::ReadFailed(err.kind())),
             };
@@ -165,7 +182,7 @@ impl Conn<'_> {
                 return End::now(CloseReason::PeerClosed);
             }
             match cupper_sys::peer_token(stream) {
-                Ok(token) if token == pinned => {}
+                Ok(token) if token == self.pinned => {}
                 Ok(_) => return End::now(CloseReason::TokenMismatch),
                 Err(refusal) => return End::now(CloseReason::TokenUnreadable(refusal.kind)),
             }
@@ -218,8 +235,10 @@ impl Conn<'_> {
     }
 
     fn initialize(&mut self, id: &RpcId, nonce: &Nonce, params: Value) -> Option<End> {
-        match handshake::initialize(&self.gw.config, nonce, self.verdict, params) {
+        let config = &self.gw.config;
+        match handshake::initialize(config, nonce, &self.pinned, self.verdict, params) {
             Ok((result, session, client)) => {
+                self.deadline = None;
                 self.outbox.push_frame(wire::response(id, &result));
                 let principal = session.principal.clone();
                 let weak_auth = result.host.weak_auth;

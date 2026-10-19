@@ -1,7 +1,7 @@
 //! `cupper-host`, the session host process (design 5.2). It runs step 1 of the
-//! startup sequence (design 5.2.13): the command line, `--build-info` and the
-//! stdin payload. The steps after it are not assembled yet, so the host then
-//! exits with 1.
+//! startup sequence (design 5.2.13): the command line, `--build-info`, in
+//! `dev-auth` builds the launcher (design 5.8.1), and the stdin payload. The
+//! steps after it are not assembled yet, so the host then exits with 1.
 
 use std::process::ExitCode;
 
@@ -18,6 +18,10 @@ fn main() -> ExitCode {
     if command == Command::BuildInfo {
         println!("{}", startup::build_info());
         return HostExit::Ok.into();
+    }
+    #[cfg(feature = "dev-auth")]
+    if let Err(err) = startup::launcher() {
+        return fail(&err, HostExit::Error);
     }
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_time()

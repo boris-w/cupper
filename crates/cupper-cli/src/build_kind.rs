@@ -16,7 +16,7 @@ pub enum BuildKind {
     SelfUse { host_cdhash: Cdhash },
     /// `dev-auth`: the host must run the code of the host file next to the CLI.
     Dev,
-    /// `test-harness`: the host proves itself with the `harness` key (T039).
+    /// `test-harness`: the host proves itself with the `harness` key.
     E2e,
 }
 
