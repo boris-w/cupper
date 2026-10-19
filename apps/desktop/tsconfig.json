@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist/tsc",
+    "types": ["node"]
+  },
+  "include": ["src", "vitest.config.ts"],
+  "references": [{ "path": "../../packages/shell-api" }]
+}
