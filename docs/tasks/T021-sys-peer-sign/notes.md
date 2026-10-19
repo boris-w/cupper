@@ -33,7 +33,8 @@
 - 设计 5.8.5 写的是"只用 `read(2)` 读、内核会丢弃传来的 fd"。实测不是这样：不带控制缓冲区的 `read(2)` 和 `recv(2)`（std 的 `UnixStream::read`，也就是 tokio 最终调用的）都会把传来的 fd **装进读方的 fd 表**，不设 close-on-exec，也不告诉读方。用管道写端验证过：读完后写端仍然开着，在本进程的 fd 表里能找到这份副本，往里写的数据能从管道读出来。
 - 一条消息最多带 254 个 fd，255 个时 `sendmsg` 返回 `EINVAL`。内核内部把每个 fd 存成 8 字节指针，放在 2 KiB 的簇里（12 + 254 × 8 = 2044）。
 - 对策是 `recv_closing_fds`：用 4 KiB 控制缓冲区调 `recvmsg`，把 `SCM_RIGHTS` 里的 fd 逐个 `close`，返回关掉了几个。控制数据被截断（`MSG_CTRUNC`）时返回错误，因为截掉的 fd 会留在表里。按上面的上限，4 KiB 不会被截断。
-- 从 `recvmsg` 装入到 `close` 之间，这些 fd 没有 close-on-exec。这段时间里别的线程如果用不带 `POSIX_SPAWN_CLOEXEC_DEFAULT` 的方式拉起子进程，子进程会继承它们。宿主只用 `cupper_sys::spawn` 拉子进程（5.8.5），不受影响；测试里用 `fd_lock` 把这类用例串起来，因为测试里有 `std::process`、`fork` 和 T020 的无 CLOEXEC 变异用例。
+- 从 `recvmsg` 装入到 `close` 之间，这些 fd 没有 close-on-exec。这段时间里别的线程如果用不带 `POSIX_SPAWN_CLOEXEC_DEFAULT` 的方式拉起子进程，子进程会继承它们。宿主只用 `cupper_sys::spawn` 拉子进程（5.8.5），不受影响。
+- 另外，任何 `posix_spawn`（包括带 `CLOEXEC_DEFAULT` 的 `cupper_sys::spawn`）在内核里都会先复制父进程的整张 fd 表，再关掉多余的，close-on-exec 的 fd 也一样。所以别的线程正在拉子进程时，刚关掉的 fd 可能还被短暂持有。2026-10-19 的复测：一个线程连续拉子进程时，"刚关掉的管道写端"约 0.06% 的概率仍然开着；没有并发拉起时 20,000 次中 0 次。宿主只在关闭后不久做这种判断时才需要注意。
 - 网关的用法：tokio 的 `UnixStream::try_io(Interest::READABLE, || cupper_sys::recv_closing_fds(&stream, buf))`。`closed_fds > 0` 说明对端不在说我们的协议，建议断开并记审计。
 
 ### `PROC_PIDUNIQIDENTIFIERINFO`（UNIT-sys-uniqueid）
@@ -78,7 +79,9 @@
 3. **`Refusal` 用一个扁平的枚举。** 网关拿到 `Err` 一律按 other 处理，只需按 `kind` 记审计和给语义码。前四类就是设计的四类错误，后四类是"校验成功，但不是要求的那个程序"。
 4. **用 `core-foundation` 0.10.1**（设计 5.1.3 为本 crate 列的依赖），Security 部分自己声明，约 40 行 `extern`。Security 框架的 CF 对象用 `CFType` 包装，释放交给 Drop。
 5. **签名用例的对端是测试二进制自己的副本。** 复制到临时目录，用 `codesign --force --sign -` 按需加 identifier、runtime、get-task-allow 做 ad-hoc 签名，再以 `--exact testutil::signed_peer_probe --ignored` 启动，环境变量打开探针模式，它把套接字上收到的字节原样回写。不碰钥匙串，也不需要证书。系统自带的二进制只有 arm64e 切片，重签后不能运行，所以不用它们。
-6. **`fd_lock`**：见上面 SCM_RIGHTS 一节。改了 T020 的一个用例（`unit_sys_spawn_mutation_without_cloexec_default_leaks_fds`），让它也持锁，因为它拉起的子进程会继承所有没有 CLOEXEC 的 fd。
+6. **`fd_lock` 和 `alone`**：
+   - `fd_lock` 串起那些子进程会长期持有本进程 fd 的用例（`fork`、`std::process`、T020 的无 CLOEXEC 变异用例），为此 T020 的 `unit_sys_spawn_mutation_without_cloexec_default_leaks_fds` 也持锁。
+   - 断言"某个 fd 此刻是否还有人持有"的两个用例（`plain_reads_install_passed_fds`、`recv_closes_passed_fds`）用 `alone` 在单独的测试进程里运行：同一进程里其他用例的任何拉起都会短暂复制 fd（见上），只靠锁要让所有拉起子进程的用例都持锁，漏一个就重新出现偶发失败。最初版本只靠 `fd_lock`，在 main 的全量运行里偶发失败过一次，修复见 `fix/T021-flaky-peer-test`。
 7. **`redirect_stdio_to_null` 的用例放在单独的测试二进制里，并在子进程里执行。** 如果在测试进程里直接调用，libtest 之后打印的结果行会进 `/dev/null`，CI 的逐编号结果就看不到这个用例。子进程是同一个测试二进制，带环境变量启动，按 rdev 比对 `/dev/fd/0..2` 与 `/dev/null`，并确认重定向之后它写的内容没有到达父进程的管道、读 stdin 读到的是空。去掉 fd 2 的变异会让用例失败。用例编号沿用 UNIT-sys-spawn（名字以 `unit_sys_spawn_` 开头）。
 
 ## 没能测的

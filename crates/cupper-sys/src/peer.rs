@@ -291,7 +291,8 @@ mod tests {
     use super::*;
     use crate::current_uid;
     use crate::testutil::{
-        Forked, Owned, StdChild, cat, expect_byte, expect_line, fd_lock, open_fds, sh_writing_to,
+        Forked, Owned, StdChild, alone, cat, expect_byte, expect_line, fd_lock, open_fds,
+        sh_writing_to,
     };
 
     #[test]
@@ -524,7 +525,11 @@ mod tests {
 
     #[test]
     fn it_sys_peer_current_plain_reads_install_passed_fds() {
-        let _fds = fd_lock();
+        // Whether the pipe's write end is open anywhere is only knowable while
+        // no other test starts a process: each spawn briefly holds a copy.
+        if !alone("peer::tests::it_sys_peer_current_plain_reads_install_passed_fds") {
+            return;
+        }
         // A pipe's write end is passed along with one byte and closed here.
         // The kernel does not drop the passed copy when the reader asks for no
         // control data: std's read (recv(2), what tokio ends up calling) and
@@ -551,7 +556,10 @@ mod tests {
 
     #[test]
     fn it_sys_peer_current_recv_closes_passed_fds() {
-        let _fds = fd_lock();
+        // See `it_sys_peer_current_plain_reads_install_passed_fds`.
+        if !alone("peer::tests::it_sys_peer_current_recv_closes_passed_fds") {
+            return;
+        }
         let (server, client) = UnixStream::pair().unwrap();
         let (pipe, writer) = nonblocking_pipe();
         // One fd, then the most one message can carry: one more is refused,
