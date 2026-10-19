@@ -6,6 +6,7 @@ pub mod driver;
 pub mod durations;
 pub mod exit;
 pub mod failpoint;
+pub mod gateway;
 pub mod orchestrator;
 pub mod policy;
 pub mod pure;

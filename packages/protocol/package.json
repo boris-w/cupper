@@ -1,0 +1,22 @@
+{
+  "name": "@cupper/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "The host protocol's TS types and zod schemas, generated from protocol/schema/v1.json (`pnpm gen`).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "vite": "8.3.3",
+    "vitest": "5.0.3"
+  }
+}

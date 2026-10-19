@@ -3,6 +3,7 @@
 //! its file and fills in `run`; the composites already list it.
 
 mod license;
+mod protocol;
 mod rust;
 mod security;
 mod ts;
@@ -36,7 +37,7 @@ const fn locked(name: &'static str, run: Option<fn(&mut JobCtx) -> Result<()>>) 
 
 pub const JOBS: &[Job] = &[
     job("rust", Some(rust::run)),
-    job("protocol", None),
+    job("protocol", Some(protocol::run)),
     job("ts", Some(ts::run)),
     locked("ui", None),
     job("license", Some(license::run)),

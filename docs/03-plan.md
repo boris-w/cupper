@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.4
+- 版本：v1.3.5
 - 日期：2026-10-19
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -10,7 +10,7 @@
 
 - **共 137 个任务**：M1a 78 个（含 2 个条件任务），M1b 54 个（含 5 个条件任务），"发布（推迟）"5 个。规模：M1a 非条件任务 S 3、M 48、L 25；M1b 非条件任务 S 11、M 26、L 12；发布组 S 1、M 1、L 3。L 的都在表后注明了为什么不再拆。
 - **没有远端也能验收**（U-P1：先不建远端）：所有 CI 检查都经 `cargo xtask ci <作业>` 在本机干净的 worktree 里执行，workflow 文件照写、暂不启用；入库的只有结构化摘要（1.8）。M1a 退出改为在作者机器上连跑 20 次加 5 次降速变体（T099）；本机替代不了的两项（macOS 14、15 上的对端校验，CI 负载下的稳定性）在 T099、T179 的记录里列为缺口，由用户确认。
-- **M1a 关键路径**（按规模加权，S=1、M=2、L=3，共 33；2026-10-19 T012 拆分后）：T001 → T010 → T011 → T017 → T012 → T013 → T031 → T033 → T043 → T044 → T046 → T090 → T091 → T099。桌面链（T012 → T013 或 T018 → T015 → T071 → T075 → T076 → T077 → T090）同样为零松弛；存储链（T014 → T026 → T033）和兼容链（T047 → T064 → T066）只差 1。任务表里加粗的编号在零松弛的链上。
+- **M1a 关键路径**（按规模加权，S=1、M=2、L=3，共 33；2026-10-19 v1.3.5 后）：T001 → T010 → T011 → T017 → T012 → T013 → T031 → T033 → T043 → T044 → T046 → T090 → T091 → T099。桌面链（T013 或 T018 → T015 → T071 → T075 → T076 → T077 → T090，以及 T030 → T039 → T073 → T075）同样为零松弛；存储链（T014 → T026 → T033）、T045 和兼容链（T047 → T064 → T066）只差 1。任务表里加粗的编号在零松弛的链上。
 - **M1b 关键路径**（从 T099 起，共 17）：T099 → T120 → T121 → T130 → T131 → T148 → T154 → T179。
 - **v1.3 的变化**（D05：技术验证 T003 的结论，设计 v1.6；明细见 2.8）：K1 已通过，T057 不触发；T050 的扩展消息全部走 SDK，加两条 SDK 约束的用例；T055 加 `CommandsChanged` 去重和新的关闭顺序；T038 按"对 Claude 工具命令只剩祖先链"设定血缘信号的期望；T063、T066 观察多次 resume 后的进程数，T066 加 6 会话和关闭时有命令运行两个剧本；T074 的 Electron 起始版本改为 44.x 的最新补丁。依赖和波次不变。
 - **v1.2 的变化**（D04 第 2 轮：安全工程师对请求面板"附条件可以"，设计 v1.5；明细见 2.7）：请求面板的焦点、编号、"拒绝并附一条消息"的规则写进 T083；导航键清掉尚未用掉的输入（T077）；宿主核对 `digit` 与序号（T031）、记录 `reply_to`（T011、T012、T043）；还原确认按触发来源分开（T130、T131、T139）；通知没有操作按钮的单元测试（T150、T158）；新增 E2E-SEC-panel-numbering、E2E-reject-with-message、E2E-SEC-revert-confirm、UNIT-notifier-no-actions。依赖和波次不变。
@@ -157,7 +157,7 @@
 | 项 | 做法 |
 |---|---|
 | 统一入口 | `cargo xtask ci <作业>`，作业与 [5.1.6](design/01-repo-build-ci.md#516-ci-流水线) 一一对应（`rust`、`protocol`、`ts`、`ui`、`license`、`testdata-scan`、`e2e`、`security-macos14`、`compat-framework`），另有组合作业 `pr`（每个 PR 的全部作业）和 `nightly`（每晚的全部作业，含 e2e 全集、差分测试、性能趋势、`release-config`、`codex-drift`）。workflow 文件照写，只调用这个入口，等有了远端再启用 |
-| 环境 | "干净 worktree"指 git 状态干净（`git status` 为空）；构建缓存可以在 worktree 之间共享。e2e 用的 App 和 `CupperHost.app` 必须由当前提交构建，摘要记下产物哈希，防止测到别的 worktree 留下的旧产物 |
+| 环境 | "干净 worktree"指 git 状态干净（`git status` 为空）；可以在 worktree 之间共享的只有下载缓存（cargo registry、pnpm store）和编译器缓存（sccache 这一类），不共用 `CARGO_TARGET_DIR`：cargo 对工作区成员的指纹不含绝对路径，另一个 worktree 编出的、时间更新的产物会被当成最新的（T015 实际遇到）。e2e 用的 App 和 `CupperHost.app` 必须由当前提交构建，摘要记下产物哈希，防止测到别的 worktree 留下的旧产物 |
 | 机器级锁 | e2e、`ui`、性能、nfr1 这几类作业取同一把机器级锁，串行运行，避免多个子 agent 和编排者同时跑时互抢 CPU、造成计时类误报。e2e 的 Playwright workers 固定为 2（T090），20 次连跑也按这个数字 |
 | 验收记录 | 入库的只有结构化摘要：提交、工具链版本、macOS 版本、机型泛称、各作业的通过数和失败数、耗时，以及逐编号的结果清单（编号、套件、结果、提交）和 e2e 产物哈希。原始日志放 `.private/`。摘要入库前过个人信息扫描（`xtask ci` 自带字段白名单检查，T052 之后再过 `testdata-scan`）（测试 #11） |
 | 每晚作业 | 每一波合并完、开始下一波之前，编排者在 main 上跑一次 `xtask ci nightly --record docs/ci/nightly/`，摘要随之提交 |
@@ -229,7 +229,8 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T026 | 存储 III：流、检查点、回合快照与历史 | feat | 5.2.3、5.2.8、5.3.3、5.4.5 | T014、T025 | 做：迁移 SP-4a 的 hub 为 `store::streams`（追加三步、订阅在流锁内读取、懒加载、淘汰；同步原语经 `cfg(shuttle)` 门面）、扇出接口、回合结束同事务写检查点和不可变的回合快照、`history/page` 读取、events 裁剪。不做：订阅协议（T033） | 新增 PROP-stream-seq（shuttle）、PROP-stream-replay | L | 否 | H.store |
 | T027 | 存储 IV：blob、原始帧与保留清理 | feat | 5.2.8、5.4.5 | T025 | 做：按内容寻址的 BlobStore、原始帧有界队列写 raw.db（满了丢弃并计数）、各类保留清理（经 Clock，时长接 `test_config.durations`）。不做：blob 传输（T033） | 新增 UNIT-blobstore、UNIT-raw-queue、UNIT-retention | M | 否 | H.store |
 | T028 | 日志与脱敏 | feat | 5.11.1、5.11.2 | T022 | 做：tracing JSON Lines 与按大小轮转、两档脱敏、`info` 不记内容、适配器 stderr 管道读取（每实例保留 64 KB）、panic hook。不做：诊断包（M2） | UNIT-redaction、UNIT-redact-auth-status | M | 否 | H.diag |
-| T030 | 网关 I：连接、握手与本地认证 | feat | 5.2.4、5.8.1、5.3.2 | T012、T021、T025 | 做：迁移 SP-4a 的 conn、outbox、wire；uid、签名结论与固定令牌（每次读取比对）、`host/hello`、只接受一次的 `initialize`、四种认证与绑定信道的双向证明、principal 与角色、套接字路径与权限、`host.lock`、写循环与慢客户端重置、`ping`、连接审计；`dev_key` 只接受拉起宿主的那个进程（比对对端的 `p_uniqueid` 与自己的 `p_puniqueid`），证明错误或缺失时 `unauthenticated` 并断开；`dev-auth` 构建启动时 ppid 已是 1 就以退出码 1 退出；只运行网关的测试夹具进程（test-harness 门控，T073 复用）。不做：方法分发、"孤立"状态（T037） | 新增 IT-handshake、IT-pinned-token（crate 内，真实套接字）、UNIT-proof-binding、IT-devkey-launcher-only（拉起夹具的测试进程出示 `dev_key` 被接受，持同一密钥的其他进程被拒）、IT-devkey-orphan-start | L | 否 | H.gw |
+| **T030** | 网关 I：连接、握手与本地认证（peer、codesign） | feat | 5.2.4、5.8.1、5.3.2 | T012、T021、T025 | 做：迁移 SP-4a 的 conn、outbox、wire；监听套接字的路径与权限、`host.lock`；准入（uid、签名结论、固定令牌，每次读取后比对）；读循环经 `recv_closing_fds`，收到 fd 就断开并记审计；写循环（编好的帧进入发送队列，按字节预算，超出时按流重置）；`host/hello`、只接受一次的 `initialize`、版本协商；`peer` 与 `codesign` 两种认证、principal 与角色；`ping`、连接审计。`dev_key`、`harness` 在本任务里一律回 `unauthenticated`（v1.3.5 起归 T039）。不做：方法分发、发送时合并与补发（T033）、"孤立"状态（T037） | 新增 IT-handshake（peer、codesign 与错误码部分）、IT-pinned-token（crate 内，真实套接字，含收到 fd 的用例） | L | 否 | H.gw |
+| **T039** | 网关 I-b：密钥认证与双向证明 | feat | 5.8.1、5.3.2 | T030、T045 | 做：证明的计算放进 `cupper-protocol`（纯函数，HMAC-SHA256，常量时间比较，CLI 和原生扩展共用）；`dev_key`（只接受拉起宿主的那个进程：比对对端的 `p_uniqueid` 与自己的 `p_puniqueid`）与 `harness` 认证；宿主的 `host_proof`；`dev-auth` 构建启动时 ppid 已是 1 就以退出码 1 退出；`cupper-sys` 按 pid 等待退出码（kqueue `NOTE_EXITSTATUS`）；CLI 客户端库的 `harness` 认证与 e2e 构建按 `harness` 证明校验宿主；只运行网关的测试夹具进程（test-harness 门控，T073 复用）。不做：审计落盘（T037） | 新增 UNIT-proof-binding、IT-devkey-launcher-only（拉起夹具的测试进程出示 `dev_key` 被接受，持同一密钥的其他进程被拒）、IT-devkey-orphan-start；IT-handshake 的密钥部分 | M | 否 | H.gw |
 | **T031** | 策略 | feat | 5.2.5、5.8.2、5.8.3 | T013、T018、T022 | 做：方法级由 `SCOPE` 驱动；资源级规则（档位、privileged 选项、安全设置键、window 角色的输入证据与按键（v1.4：`digit` 须与所选选项的序号相符）、400 ms、信任门控的钩子）；`policy/describe`。不做：账本 | UNIT-tier-rules、UNIT-policy-matrix（含 `digit` 与序号的核对：特权和效果未知的选项也占序号） | M | 否 | H.gw |
 | T032 | 命令账本 | feat | 5.2.5（账本） | T025 | 做：principal 稳定 ID 加 `command_id` 为键、三种状态、去掉 `command_id`/`attestation`/`input` 后的 JCS 参数哈希、48 小时内存表、`idempotency_mismatch`、`outcome_unknown`、结果与首批事件同事务的接口。不做：路由 | 新增 UNIT-ledger | M | 否 | H.gw |
 | **T033** | 网关 II：分发、订阅、历史与 blob 传输 | feat | 5.2.4、5.3.3、5.3.4（流与内容） | T026、T027、T030、T031、T032、T045 | 做：读循环 → 策略 → 账本 → 路由（会话命令按序投递会话邮箱接口，索引命令投递索引接口）、每连接 64 个在途、`stream/subscribe` 四种情况与快照分页、`history/page`、blob 上传下载、断开清理、订阅模式写日志（Q16）、未注册方法返回 `unsupported`；用到 `dev_key` 的用例由拉起网关夹具的测试进程自己出示。不做：会话和索引的业务；进程级用例（T062） | 只验收网关层（crate 内，以 `Streams::append` 作写者）：新增 IT-gw-subscribe（四种订阅、续传、快照分页、慢客户端重置、帧上限、账本重放、epoch 与游标规则）、IT-command-order、UNIT-unsupported-set（返回 `unsupported` 的方法集合等于按里程碑允许的集合） | L | 否 | H.gw |
@@ -244,9 +245,9 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T042 | 交互代理纯核心 | feat | 5.2.7、5.3.6 | T031 | 做：`InteractionBroker`：入账（摘要、`actionable_by`）、回答检查链、撤回与失效、Claude 多问题提问的拆分与合并、`unsupported_schema`。不做：选项对照表数据（T053） | 新增 PROP-interaction、UNIT-question-mapping | M | 否 | H.orch |
 | **T043** | 会话 actor I：创建、发送、中断与持久化 | feat | 5.2.6、5.5.2（本地模式）、5.5.3、5.5.5 | T033、T041、T042 | 做：`SessionManager`、`SessionActor` 适配层、`session/create`（本地模式，第一条消息随受理落盘）、`send`（排队；`queue.updated` 的条目带完整的 `content`；`reply_to` 核对后写进用户消息和排队条目，v1.5）、`interrupt`、`queue_resume`、`get`、`capabilities`、交互的接线、回合事件与检查点、快照端口、准备阶段的恢复；各时长接 `test_config.durations`；用进程内驱动替身测试。不做：档位、信任门控、崩溃（T044） | 新增 IT-orch-lifecycle（进程内；含 `reply_to` 的核对） | L | 否 | H.orch |
 | **T044** | 会话 actor II：档位、信任门控、崩溃与晚到输出 | feat | 5.2.6（配置项、项目信任、崩溃与恢复、晚到的工具输出） | T035、T043、T060 | 做：档位核对与 `config_unconfirmed`、回合中越权先改回再中断、`session/confirm_config`；三个时机重扫信任（git 根目录经 T060 取得）、stale 暂停、"不加载项目配置继续"；适配器退出后 resume、K6、K7；`late_tool_output` 与 `may_still_run`。不做：进程级集成测试（T062、T063、T068） | 新增 IT-orch-gating（进程内） | L | 否 | H.orch |
-| T045 | cupper-cli I：客户端库与 Mirror | feat | 5.2.14、5.3.3 | T012、T014、T020 | 做：迁移 SP-4a 的 client 与 mirror：握手（peer、harness）、请求关联、订阅与连续性、epoch 重置、套接字发现、`--build-info`；按构建种类校验宿主（5.8.1：发布按签名要求；自用按编译期写入的宿主 cdhash，经审计令牌比对，之后每次读取比对令牌；开发按同目录宿主文件的 cdhash 弱校验并在输出里标"宿主未经签名校验"；e2e 按 `harness` 证明），发布构建拒绝 `weak_auth`。不做：子命令；cdhash 的写入（T005） | 新增 UNIT-mirror、UNIT-cli-host-verify（四种构建的校验分支；cdhash 不符时拒绝连接） | M | 否 | H.cli |
+| T045 | cupper-cli I：客户端库与 Mirror | feat | 5.2.14、5.3.3 | T012、T014、T020 | 做：迁移 SP-4a 的 client 与 mirror：握手（peer；`harness` 证明归 T039）、请求关联、订阅与连续性、epoch 重置、套接字发现、`--build-info`；按构建种类校验宿主（5.8.1：发布按签名要求；自用按编译期写入的宿主 cdhash，经审计令牌比对，之后每次读取比对令牌；开发按同目录宿主文件的 cdhash 弱校验并在输出里标"宿主未经签名校验"；e2e 按 `harness` 证明，由 T039 补上），发布构建拒绝 `weak_auth`。不做：子命令；cdhash 的写入（T005） | 新增 UNIT-mirror、UNIT-cli-host-verify（四种构建的校验分支；cdhash 不符时拒绝连接） | M | 否 | H.cli |
 | **T046** | cupper-cli II：命令行 | feat | 5.2.14 | T038、T044 | 做：`status`、`sessions`、`watch`、`history`、`new`、`send`、`interrupt`、`pending`、`approve`/`reject`、`answer`、`elevate`、`repl`、`--json`、`--harness-key-fd`（仅测试构建）。不做：`cupper diff`（T120）、`--steer`（T140） | 新增 IT-cli-commands（真实宿主加假 agent，逐个命令断言 `--json` 输出） | M | 否 | H.cli |
-| T047 | test-harness 测试接口、录制导出与宿主性能 | feat | 5.2.16、5.9.9、5.9.3、5.9.6 | T034、T043、T055 | 做：`test/clock_advance`（用 T022 的登记实现全宿主静止屏障）、`test/run_maintenance`、`test/seed`（含 SP-1 分布和单回合 2,000 条目）、`host/status.pid`、`diag/recording_export`、其余注入点接线；迁移 SP-4a 的 `measure.rs`（原 T067）；性能趋势的历史数值序列入库（脱敏后只含数值和版本），"历史中位数"从它算出。不做：通知的记录模式（T150） | 新增 IT-clock-advance（含"全部 actor 类型都已登记"的枚举用例）、IT-seed、IT-recording-export、PERF-host-cold-start、PERF-index-snapshot、PERF-host-memory | L | 否 | H.core |
+| T047 | test-harness 测试接口、录制导出与宿主性能 | feat | 5.2.16、5.9.9、5.9.3、5.9.6 | T034、T039、T043、T055 | 做：`test/clock_advance`（用 T022 的登记实现全宿主静止屏障）、`test/run_maintenance`、`test/seed`（含 SP-1 分布和单回合 2,000 条目）、`host/status.pid`、`diag/recording_export`、其余注入点接线；迁移 SP-4a 的 `measure.rs`（原 T067）；性能趋势的历史数值序列入库（脱敏后只含数值和版本），"历史中位数"从它算出。不做：通知的记录模式（T150） | 新增 IT-clock-advance（含"全部 actor 类型都已登记"的枚举用例）、IT-seed、IT-recording-export、PERF-host-cold-start、PERF-index-snapshot、PERF-host-memory | L | 否 | H.core |
 | T050 | 驱动层 I：传输、线路分接与 ACP 连接 | feat | 5.6.1、5.6.9（K27、K28）、5.6.10、5.2.16 | T003、T022 | 做：`AcpTransport`（stdio、内存双工）、线路分接（编号、结构化脱敏入原始帧（含 `_auth/status_update` 的账号字段）、K19 改写；不再路由扩展消息）、ACP 连接任务（回调只发 channel、`fs`/`terminal` 不支持、`clientInfo.name` 固定）、扩展消息按 T003 的结论全部走 SDK（`_session/steering` 用派生宏声明为请求类型，`_auth/status_update` 用类型化的通知处理器，`$/cancel_request` 由 SDK 标记 `Responder::cancellation()`）；SDK 的两条约束：处理器链最后注册无类型的 `on_receive_dispatch`（K27），放弃等待用 `detach()`、不丢弃 future（K28）；SDK 保持 `=3.3.0`。不做：提取层、AgentRuntime | 新增 UNIT-tap、UNIT-transport-memory、UNIT-acp-unhandled（沿用 T003 的 `tests/unhandled.rs`：未知请求回 method not found，未知通知丢弃）、UNIT-acp-detach（放弃等待后不发 `$/cancel_request`） | M | 否 | H.drv |
 | T051 | 假 agent：剧本模式与 persona | feat | 5.9.2 | T001 | 做：迁移 SP-4a 的假 agent；启动配置（persona、登录状态、故障注入、进程分段）、5.9.2 新增的全部剧本命令、回显收到的 `_meta` 选项（供 IT-trust-settingsources）、原始行通道、全局不变式。不做：回放模式（T052） | 新增 UNIT-fake-scripts | L | 否 | H.fake |
 | T052 | 录制格式、回放模式、SP-1 录制转换与敏感信息扫描 | feat | 5.9.2、5.9.3 | T002、T051 | 做：录制格式 v1 的读写库、假 agent 回放模式、SP-1 的 48 份录制一次性转换入 `testdata/recordings/`、`tools/sanitize` 迁移、`testdata/` 通用 PII 扫描与本机敏感词清单（只放 `.private/`，不入库）接入 `xtask ci testdata-scan`。不做：录制导出（T047） | 新增 UNIT-rec-format、UNIT-replay、UNIT-sensitive-list；PII 扫描通过 | M | 否 | H.fake |
@@ -267,7 +268,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T070 | shell-api（与协议无关的部分）与 i18n | feat | 5.7.3、5.7.7（本地化） | T001 | 做：`@cupper/shell-api` 里不依赖协议类型的成员（`init` 与 `ShellInfo`、`onCommand`、`onNavigate`、`openExternal`、`pickDirectory`、`system`、`window`、`prefs`、`updates`）及其浏览器 mock；`@cupper/i18n`（i18next、语义码为键、按功能分文件、一种语言、不可见字符转义工具）。不做：`host.*`、`HostPort`、`requestPrivileged` 的类型（T071） | 新增 UNIT-shell-mock、UNIT-i18n-escape | M | 否 | T.lib |
 | **T071** | host-client I：连接与续传，ShellAPI 的协议部分 | feat | 5.7.6、5.3.3、5.7.3 | T015、T070 | 做：连接状态机、切帧（含 `0x02`）、请求关联、断线后同一 `command_id` 重发、订阅与游标（含 `data_epoch`）、快照重置、连续性与三种计数；ShellAPI 的 `host.*`、`HostPort`、`Handshake`、`PrivilegedAction`/`PrivilegedResult`；帧级 TS mock 宿主与浏览器 mock 的 HostPort；HostPort 合同测试套件。不做：视图（T072） | 新增 UNIT-hc-conn、UNIT-hc-sync、UNIT-hostport-contract-mock | L | 否 | T.lib |
 | T072 | host-client II：视图 reducer 与交叉验证 | feat | 5.7.6、5.9.1（差分测试） | T071 | 做：TS 的两个视图 reducer（窗口、历史插入、`late_by_ref`）与按条目订阅的版本号；与 Rust 视图用 fixtures 交叉验证（接入 `xtask ci protocol`）；差分测试接入 `xtask ci nightly` | 新增 UNIT-views-parity、UNIT-views-differential | M | 否 | T.lib、P |
-| T073 | cupper-desktop-native | feat | 5.1.3、5.7.2、5.8.1 | T020、T030 | 做：napi-rs 扩展：经 `cupper-sys::spawn` 拉起宿主并写启动载荷、连接并完整校验宿主签名后返回 fd、每次读取的令牌比对、`dev_key` 证明与 `host_proof` 校验。用例里由加载扩展的 Node 测试进程拉起 T030 的网关夹具并自己出示 `dev_key`。不做：Electron 侧逻辑 | 新增 UNIT-native（对 ad-hoc 签名的网关夹具跑通拉起、校验、证明） | M | 否 | D.nat |
+| **T073** | cupper-desktop-native | feat | 5.1.3、5.7.2、5.8.1 | T020、T039 | 做：napi-rs 扩展：经 `cupper-sys::spawn` 拉起宿主并写启动载荷、连接并完整校验宿主签名后返回 fd、每次读取的令牌比对、`dev_key` 证明与 `host_proof` 校验。用例里由加载扩展的 Node 测试进程拉起 T030 的网关夹具并自己出示 `dev_key`。不做：Electron 侧逻辑 | 新增 UNIT-native（对 ad-hoc 签名的网关夹具跑通拉起、校验、证明） | M | 否 | D.nat |
 | T074 | 桌面主进程 I：应用骨架、构建与加固基线 | feat | 5.7.2、5.7.8、5.7.9、5.10.6 | T070 | 做：`apps/desktop`（Electron 用 44.x 的最新补丁版本，2026-10-19 时是 44.9.0，开工时复核）、Vite 构建三个入口、`app://cupper` 与 CSP、路径规范化、webPreferences、导航与新窗口拦截、权限处理器、开关白名单、BrowserWindow 的参数（默认 1280 × 820、最小 480 × 600、`hiddenInset`、交通灯位置，设计 5.7.4）、单实例锁、userData、构建种类常量、dev 与 e2e 的打包配置、prefs、main.log、菜单骨架。不做：宿主连接、自用构建配置（T160） | 新增 UNIT-main-hardening；`pnpm build:e2e` 产物可启动 | L | 否 | D.main |
 | **T075** | 桌面主进程 II：拉起宿主、control 连接与退出确认 | feat | 5.7.1、5.7.2、5.5.1 | T005、T071、T073、T074 | 做：`hostLauncher`（载荷留内存、被杀后重传、500 ms、退出码 3–6）、`hostConnection`、`controlClient`、`lifecycle`（退出确认、关机跳过）、"无法验证宿主"与"重启宿主"（发信号前核对 `host.lock` 里的 pid 的可执行文件路径和 cdhash 属于本构建的宿主）、`CUPPER_E2E_DIR` | 新增 UNIT-launcher（含"pid 不属于本构建的宿主时不发信号"） | M | 否 | D.main |
 | **T076** | 桌面主进程 III：windowBridge 与 preload | feat | 5.7.1、5.7.3、5.7.8（命令白名单） | T075 | 做：每窗口 `windowBridge`（数据连接绑定文档实例、代发 initialize、入方向字节块批量、出方向解析与白名单与重新序列化、`sendBlob`、8 MB 流控、重连顺序、按窗口断连的钩子）、preload 的 ShellAPI 实现；用 TS mock 宿主按判定负载做一次预测量。不做：真实输入与特权（T077） | 新增 UNIT-bridge-whitelist、UNIT-bridge-flow、UNIT-bridge-lifecycle；UNIT-hostport-contract-bridge（与 mock 用同一套合同） | L | 否 | D.main |
@@ -1021,7 +1022,7 @@ flowchart LR
 | M1b（T099 之后） | T099 → T120 → T121 → T130 → T131 → T148 → T154 → T179 | 17 |
 | 发布（推迟，T161 之后） | T161 → T180 → T181 → T183 → T184 | 10 |
 
-M1a 里，v1.3.2 拆分 T012 之后，桌面链（T018、T015、T071、T075、T076、T077）也是零松弛；松弛为 1 的有存储链（T014、T026）、T030、兼容链（T047、T064、T066）、网关链的 T034、T038，以及 T042。M1b 里松弛为 1 的是 T123 和新增的 T132。关键链上的任务优先派发、优先评审；同一波里的其他任务用空档。
+M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）和网关链（T030、T039、T073）也是零松弛；松弛为 1 的有存储链（T014、T026）、T045、兼容链（T047、T064、T066）、网关链的 T034、T038，以及 T042。
 
 ## 4. 派发波次与检查点
 
@@ -1035,8 +1036,8 @@ M1a 里，v1.3.2 拆分 T012 之后，桌面链（T018、T015、T071、T075、T0
 | W1 | T002、T004、**T010**、T020、T021、T022、T051、T070 | 协议、系统接口、宿主核心、假 agent、TS 库同时起步 |
 | W2 | **T011**、**T017**、T023、T024、T028、T050、T052、T054、T074 | T050 按 K1 的结论：扩展消息全部走 SDK；T017 在 T011 合并后派发，W3 的 T012、T014、T040 等它 |
 | W3 | T006、**T012**、**T013**、T014、**T018**、T025、T035、T040、T060 | 纯核心（T040）与信任扫描（T035）不依赖存储，先做 |
-| W4 | **T015**、T026、T027、T030、**T031**、T032、T041、T045、T048、T053、T056 | T053 起 A 层金样例进入 `xtask ci rust` |
-| W5 | T005、**T033**、T037、T042、T055、**T071**、T073 | T055 合并后假 agent 可以经驱动跑通；K1 已通过，T057 不派发 |
+| W4 | **T015**、T026、T027、**T030**、**T031**、T032、T041、T045、T048、T053、T056 | T053 起 A 层金样例进入 `xtask ci rust` |
+| W5 | T005、**T033**、**T039**、T037、T042、T055、**T071**、**T073** | T055 合并后假 agent 可以经驱动跑通；K1 已通过，T057 不派发 |
 | W6 | T034、T036、**T043**、T072、**T075**、T084 | T043 用进程内驱动替身；T084 只依赖 T071，与 T080 并行 |
 | W7 | T038、**T044**、T047、T061、**T076**、T080 | T044 合并后 T063、T068 立即可派 |
 | W8 | **T046**、T062、T063、T064、T065、T068、T069、**T077**、T078、T081、T082、T083、T086 | T078 测量闸门（K2）；T077 含 MAN-keyboard |
@@ -1522,7 +1523,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T018 协议方法 I-b：项目、agent、会话与交互
 - [x] T013 协议方法 II：git、文件、设置、认证、诊断与测试
 - [x] T014 协议视图与同步规则
-- [ ] T015 schema 导出与 TS 生成链
+- [x] T015 schema 导出与 TS 生成链
 - [ ] T016 契约冻结
 - [x] T020 cupper-sys I：进程与系统信息
 - [x] T021 cupper-sys II：对端校验与代码签名
@@ -1530,10 +1531,11 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T023 宿主核心骨架 II：启动契约、注入点与故障点
 - [x] T024 存储 I：写线程、读池与持久性
 - [x] T025 存储 II：表结构、迁移与升级器
-- [ ] T026 存储 III：流、检查点、回合快照与历史
+- [x] T026 存储 III：流、检查点、回合快照与历史
 - [ ] T027 存储 IV：blob、原始帧与保留清理
 - [ ] T028 日志与脱敏
-- [ ] T030 网关 I：连接、握手与本地认证
+- [ ] T039 网关 I-b：密钥认证与双向证明
+- [x] T030 网关 I：连接、握手与本地认证
 - [ ] T031 策略
 - [ ] T032 命令账本
 - [ ] T033 网关 II：分发、订阅、历史与 blob 传输
@@ -1671,3 +1673,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.2 | 2026-10-19 | T012 按守则第 8 条在开工前拆分（估计约 2,250 行）：T012 收窄为方法基础、握手与流，新增 T018（项目、agent、会话与交互）；T013 改为依赖 T012（要用它的声明方式），T015 改为依赖 T013、T014、T018，T031 改为依赖 T013、T018、T022；关键路径 32 → 33，改经 T012 → T013 → T031；桌面链变为零松弛，存储链（T014 → T026）松弛 1；UNIT-proto-methods-core 拆成 -stream 与 -session 两个子编号；1.1 补充测试行数的执行经验 |
 | v1.3.3 | 2026-10-19 | T040 按守则第 8 条中途拆分（实现写完时累计 1,473 行，补完测试预计约 1,950 行）：T040 收窄为驱动接口与 `QueueCore`，新增 T048（`TurnMachine` 与四条 PROP）；T041 改为依赖 T048；新增编号 UNIT-queue-core |
 | v1.3.4 | 2026-10-19 | `session/archive` 从 T018 移给 T013：它的 `blockers` 用 T013 定义的阻塞原因枚举，而 T013 的 `git/revert.input` 要复用 T018 的 `InputEvidence`，两个并行任务互相等待；T018 先合并，T013 合入 main 后补上 archive |
+| v1.3.5 | 2026-10-19 | T030 开工前按守则第 8 条拆分（估计约 1,815 行）：T030 收窄为连接、准入、读写循环、握手与 peer/codesign 认证；新增 T039（证明的计算放进 `cupper-protocol`，宿主侧 `dev_key`、`harness`、`host_proof`，ppid 为 1 时退出，按 pid 等退出码，CLI 客户端库的 `harness` 认证，网关夹具），依赖 T030、T045；T045 的握手只做 peer；T073、T047 改为依赖 T039。T033 的集成测试用 peer 认证，或在 crate 内直接构造 principal |

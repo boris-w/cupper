@@ -15,6 +15,7 @@
 //! - A checkpoint stores a window view, versioned on its own by
 //!   [`VIEW_VERSION`]; see [`checkpoint_fate`].
 
+use cupper_protocol::view::VIEW_VERSION;
 use serde_json::Value;
 
 /// The version every event type starts at.
@@ -117,16 +118,11 @@ impl Upcasters {
     }
 }
 
-/// The version of the window view in `checkpoints.view`, the JSON of the
-/// protocol's index or session view (T014). Goes up with every change to
-/// that JSON.
-pub const VIEW_VERSION: u32 = 1;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheckpointFate {
     Use,
     /// Rebuild the view from the latest 20 turn snapshots and the events
-    /// after them instead (T026).
+    /// after them instead (`store::streams`).
     Discard,
 }
 
