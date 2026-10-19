@@ -5,6 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@12.14.0",
   "scripts": {
+    "build:e2e": "pnpm --filter @cupper/desktop run build:e2e",
     "format": "cargo fmt --all && prettier --write .",
     "lint": "cargo fmt --all --check && cargo clippy --workspace --all-targets --all-features --locked -- -D warnings && prettier --check . && eslint --max-warnings=0 .",
     "test": "cargo test --workspace --all-features --locked"
