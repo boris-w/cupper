@@ -52,13 +52,17 @@ impl ExitWatch {
     }
 
     /// The exit status, once the process exits within `timeout`; `None` if
-    /// it still runs then. A signal restarts the wait.
+    /// it still runs then. The exit is reported once. A signal restarts the
+    /// wait.
     pub fn wait(&self, timeout: Duration) -> Result<Option<ExitStatus>> {
         let limit = libc::timespec {
             tv_sec: libc::time_t::try_from(timeout.as_secs()).unwrap_or(libc::time_t::MAX),
             tv_nsec: libc::c_long::from(timeout.subsec_nanos()),
         };
-        let mut got = exit_event(self.pid);
+        let mut got = libc::kevent {
+            fflags: 0,
+            ..exit_event(self.pid)
+        };
         loop {
             // SAFETY: no changes in; room for one event out; `limit` and `got`
             // outlive the call.
