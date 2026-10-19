@@ -16,7 +16,10 @@ test-harness = []
 
 [dependencies]
 # The ACP SDK is pinned to the exact release T003 validated (ADR-02, design 5.6.10).
-agent-client-protocol = "=3.3.0"
+# `unstable_plan_operations`: the `plan` client capability and `plan_update` (design 5.6.1).
+agent-client-protocol = { version = "=3.3.0", features = ["unstable_plan_operations"] }
+# The SDK only asks for ^3.3.0 of its derive macros; keep them on the same release.
+agent-client-protocol-derive = "=3.3.0"
 futures = { version = "0.3.34", default-features = false, features = ["std"] }
 getrandom = "0.4.3"
 serde = { version = "1.0.229", features = ["derive"] }
