@@ -23,6 +23,8 @@ mod testutil;
 pub use codesign::{Cdhash, CodeStatus, Requirement, file_cdhash, own_cdhash};
 pub use env::Env;
 pub use group::{ProcessGroup, Signal};
+#[cfg(any(test, feature = "test-util"))]
+pub use peer::send_with_fds;
 pub use peer::{
     AuditToken, Received, Refusal, RefusalKind, peer_pid, peer_token, peer_uid, recv_closing_fds,
 };
