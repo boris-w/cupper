@@ -567,3 +567,379 @@ impl Core for Coalescer {
         Input::Expired(key)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use cupper_protocol::coalesce::Mergeable;
+    use cupper_protocol::item::PlanSource;
+    use cupper_protocol::session::{TurnOrigin, TurnStatus, UsageUpdated};
+    use proptest::prelude::*;
+
+    use super::*;
+    use crate::clock::ManualClock;
+    use crate::pure::{CoreDriver, Step};
+
+    const WINDOW: Duration = Duration::from_millis(40);
+
+    fn coalescer() -> CoreDriver<Coalescer> {
+        let clock = ManualClock::new();
+        let ids = Arc::new(IdGen::seeded(Arc::new(clock.clone()), 7));
+        CoreDriver::with_clock(Coalescer::new(ids, &Durations::default(), false), clock)
+    }
+
+    fn started(turn: u128) -> Input {
+        let (turn_id, origin) = (TurnId::from_uuid(turn), TurnOrigin::User);
+        Input::Turn(TurnSignal::Started { turn_id, origin })
+    }
+
+    fn completed(turn: u128) -> Input {
+        Input::Turn(TurnSignal::Completed(TurnEnd {
+            turn_id: TurnId::from_uuid(turn),
+            status: TurnStatus::Completed,
+            stop_reason: None,
+            error_code: None,
+            usage: None,
+            ended_at: TimestampMs(0),
+            duration_ms: DurationMs(0),
+        }))
+    }
+
+    fn tool(id: &str, output: Option<ToolOutput>, status: Option<ToolStatus>) -> Input {
+        let (tool_call_id, title, diffs) = (id.to_owned(), None, None);
+        let exit_code = status.map(|_| 0);
+        let update = NormUpdate::ToolUpdate {
+            tool_call_id,
+            title,
+            status,
+            output,
+            exit_code,
+            diffs,
+        };
+        Input::Update(update)
+    }
+
+    fn tool_start(id: &str) -> Input {
+        Input::Update(NormUpdate::ToolStart {
+            tool_call_id: id.to_owned(),
+            tool_kind: ToolKind::Execute,
+            title: "Run tests".to_owned(),
+            paths: Vec::new(),
+            command: Some("cargo test".to_owned()),
+        })
+    }
+
+    fn message(id: Option<&str>, text: &str) -> Input {
+        let (message_id, text) = (id.map(str::to_owned), text.to_owned());
+        Input::Update(NormUpdate::AgentText { message_id, text })
+    }
+
+    fn events(actions: Vec<Action>) -> Vec<EventBody> {
+        let event = |action| match action {
+            Action::Event(body) => Some(body),
+            Action::Timer(_) => None,
+        };
+        actions.into_iter().filter_map(event).collect()
+    }
+
+    /// Contiguous deltas of one item and field, merged as `item.delta` merges.
+    fn merged(log: &[EventBody]) -> Vec<EventBody> {
+        let mut out: Vec<EventBody> = Vec::new();
+        for body in log {
+            match out.last_mut().and_then(|last| last.merge(body, usize::MAX)) {
+                Some(merged) => *out.last_mut().unwrap() = merged,
+                None => out.push(body.clone()),
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn coalescer_settles_open_items_and_writes_late_output_in_the_next_turn() {
+        let mut c = coalescer();
+        c.input(started(1));
+        c.input(message(Some("m1"), "Running"));
+        c.input(tool_start("t1"));
+        c.input(tool("t1", Some(ToolOutput::Append("a".into())), None));
+        let settle = events(c.input(Input::Turn(TurnSignal::Settled { interrupted: true })));
+        let [EventBody::ItemCompleted(abandoned)] = &settle[..] else {
+            panic!("{settle:?}")
+        };
+        assert_eq!(
+            (&abandoned.status, abandoned.may_still_run),
+            (&ItemStatus::Abandoned, true)
+        );
+        // Held while the turn ends, written into the next turn.
+        assert!(
+            c.input(tool("t1", Some(ToolOutput::Append("b".into())), None))
+                .is_empty()
+        );
+        let end = events(c.input(completed(1)));
+        let [EventBody::TurnCompleted(end)] = &end[..] else {
+            panic!("{end:?}")
+        };
+        assert_eq!(end.final_item_ids.len(), 0, "the turn ended on a tool call");
+        let late = events(c.input(started(2)));
+        let kinds: Vec<&str> = late.iter().map(EventBody::tag).collect();
+        assert_eq!(kinds, ["item.started", "item.updated", "item.delta"]);
+        let EventBody::ItemStarted(ItemStarted {
+            item: Item::LateToolOutput(late),
+            ..
+        }) = &late[0]
+        else {
+            panic!("{late:?}")
+        };
+        let original = (
+            &late.of.item_id,
+            &late.of.turn_id,
+            late.of.command.as_deref(),
+        );
+        assert_eq!(
+            original,
+            (
+                &abandoned.item_id,
+                &TurnId::from_uuid(1),
+                Some("cargo test")
+            )
+        );
+        let done = events(c.input(tool("t1", None, Some(ToolStatus::Completed))));
+        let [EventBody::ItemCompleted(done)] = &done[..] else {
+            panic!("{done:?}")
+        };
+        assert_eq!(
+            (&done.status, done.patch.exit_code),
+            (&ItemStatus::Completed, Some(0))
+        );
+        c.input(message(Some("m2"), "Done"));
+        c.input(Input::Turn(TurnSignal::Settled { interrupted: false }));
+        let end = events(c.input(completed(2)));
+        let [EventBody::TurnCompleted(end)] = &end[..] else {
+            panic!("{end:?}")
+        };
+        assert_eq!(end.final_item_ids.len(), 1, "late output takes no part");
+    }
+
+    #[derive(Debug, Clone)]
+    enum Op {
+        /// A message fragment; message ID 3 is none.
+        Text(u8, String),
+        Thought(String),
+        /// A tool call starts; when `n % 4 == 0`, one that started before.
+        Start(u8),
+        Output(u8, String),
+        Replace(u8),
+        Done(u8),
+        Plan,
+        /// An interaction request: the coalescer flushes, a marker follows.
+        Interject,
+        Settle(bool),
+        /// The settled turn completes and the next one starts.
+        Next,
+        Advance(u64),
+    }
+
+    fn ops() -> impl Strategy<Value = Vec<Op>> {
+        let text = || {
+            prop_oneof![
+                8 => "\\PC{0,8}|[\"\\\\\\n\\x01é]{0,6}",
+                1 => (0..3_000_usize).prop_map(|n| "\u{1}é".repeat(n)),
+            ]
+        };
+        let op = prop_oneof![
+            4 => (0..4_u8, text()).prop_map(|(m, t)| Op::Text(m, t)),
+            2 => text().prop_map(Op::Thought),
+            2 => any::<u8>().prop_map(Op::Start),
+            8 => (any::<u8>(), text()).prop_map(|(n, t)| Op::Output(n, t)),
+            1 => any::<u8>().prop_map(Op::Replace),
+            2 => any::<u8>().prop_map(Op::Done),
+            1 => Just(Op::Plan),
+            2 => Just(Op::Interject),
+            1 => any::<bool>().prop_map(Op::Settle),
+            1 => Just(Op::Next),
+            4 => prop_oneof![0..40_u64, 40..100_u64].prop_map(Op::Advance),
+        ];
+        prop::collection::vec(op, 0..80)
+    }
+
+    /// The same inputs go to `a`, which coalesces, and to `b`, which is made
+    /// to write every fragment at once by a flush after each input.
+    struct World {
+        a: CoreDriver<Coalescer>,
+        b: CoreDriver<Coalescer>,
+        logs: [Vec<EventBody>; 2],
+        tools: Vec<String>,
+        turn: u128,
+        ending: bool,
+        /// The flush timer's deadline while text waits.
+        deadline: Option<MonoTime>,
+    }
+
+    impl World {
+        fn new() -> Self {
+            let (mut a, mut b) = (coalescer(), coalescer());
+            a.input(started(1));
+            b.input(started(1));
+            let (logs, tools) = (Default::default(), Vec::new());
+            Self {
+                a,
+                b,
+                logs,
+                tools,
+                turn: 1,
+                ending: false,
+                deadline: None,
+            }
+        }
+
+        /// One of the last three tool calls, so that their outputs interleave.
+        fn pick(&self, n: u8) -> Option<String> {
+            let back = usize::from(n) % self.tools.len().clamp(1, 3);
+            self.tools.iter().rev().nth(back).cloned()
+        }
+
+        fn inputs(&mut self, op: Op) -> Vec<Input> {
+            let update =
+                |id: Option<String>, output, status| id.map(|id| tool(&id, output, status));
+            let input = match op {
+                Op::Text(m, text) => {
+                    message(["m0", "m1", "m2"].get(usize::from(m)).copied(), &text)
+                }
+                Op::Thought(text) => Input::Update(NormUpdate::Thought { text }),
+                Op::Start(n) => match self.pick(n).filter(|_| n % 4 == 0) {
+                    Some(id) => tool_start(&id),
+                    None => {
+                        self.tools.push(format!("t{}", self.tools.len()));
+                        tool_start(&self.tools[self.tools.len() - 1])
+                    }
+                },
+                Op::Output(n, text) => {
+                    return update(self.pick(n), Some(ToolOutput::Append(text)), None)
+                        .into_iter()
+                        .collect();
+                }
+                Op::Replace(n) => {
+                    let output = Some(ToolOutput::Replace("all".into()));
+                    return update(self.pick(n), output, None).into_iter().collect();
+                }
+                Op::Done(n) => {
+                    let status = Some(ToolStatus::Completed);
+                    return update(self.pick(n), None, status).into_iter().collect();
+                }
+                Op::Plan => {
+                    let markdown = Some(Content::Text(TextContent {
+                        text: "1. Test".into(),
+                    }));
+                    let source = PlanSource::Markdown;
+                    Input::Update(NormUpdate::Plan(Plan {
+                        source,
+                        entries: None,
+                        markdown,
+                    }))
+                }
+                Op::Interject => Input::Interject,
+                Op::Settle(interrupted) if !self.ending => {
+                    self.ending = true;
+                    Input::Turn(TurnSignal::Settled { interrupted })
+                }
+                Op::Next if self.ending => {
+                    (self.ending, self.turn) = (false, self.turn + 1);
+                    return vec![completed(self.turn - 1), started(self.turn)];
+                }
+                Op::Settle(_) | Op::Next | Op::Advance(_) => return Vec::new(),
+            };
+            vec![input]
+        }
+
+        fn apply(&mut self, op: Op) {
+            let mut wrote = false;
+            if let Op::Advance(ms) = op {
+                let by = Duration::from_millis(ms);
+                for (at, action) in self.a.run([Step::Advance(by)]) {
+                    assert_eq!(
+                        Some(at),
+                        self.deadline,
+                        "text goes out when its window ends"
+                    );
+                    self.logs[0].extend(events(vec![action]));
+                    wrote = true;
+                }
+                self.logs[1].extend(events(self.b.advance(by)));
+            }
+            let interject = matches!(op, Op::Interject);
+            for input in self.inputs(op) {
+                let written = events(self.a.input(input.clone()));
+                wrote |= written.iter().any(|e| matches!(e, EventBody::ItemDelta(_)));
+                self.logs[0].extend(written);
+                self.logs[1].extend(events(self.b.input(input)));
+                self.logs[1].extend(events(self.b.input(Input::Expired(FlushTimer))));
+            }
+            if interject {
+                assert!(
+                    self.a.core().pending.is_none(),
+                    "flushed before another event"
+                );
+                let marker = UsageUpdated {
+                    context_used: 0,
+                    context_size: 0,
+                    cost: None,
+                };
+                let marker = EventBody::UsageUpdated(marker);
+                self.logs
+                    .iter_mut()
+                    .for_each(|log| log.push(marker.clone()));
+            }
+            self.check(wrote);
+        }
+
+        /// Text waits from its first buffered fragment until the window ends,
+        /// and the log, with the waiting text, merges to `b`'s.
+        fn check(&mut self, wrote: bool) {
+            let (now, pending) = (self.a.now().mono, self.a.core().pending.clone());
+            self.deadline = pending.as_ref().map(|_| {
+                let at = self
+                    .a
+                    .timers()
+                    .iter()
+                    .next()
+                    .expect("waiting text has a timer")
+                    .0;
+                let window_end = match self.deadline {
+                    Some(before) if !wrote => before,
+                    _ => now + WINDOW,
+                };
+                assert_eq!(at, window_end, "text waits 40 ms from its first fragment");
+                at
+            });
+            let mut log = self.logs[0].clone();
+            let delta = |(item_id, field, text)| {
+                EventBody::ItemDelta(ItemDelta {
+                    item_id,
+                    field,
+                    text,
+                })
+            };
+            log.extend(pending.map(delta));
+            assert_eq!(
+                merged(&log),
+                merged(&self.logs[1]),
+                "the log reads as written one by one"
+            );
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn prop_coalescer_log_reads_as_written_fragment_by_fragment(ops in ops()) {
+            let mut world = World::new();
+            for op in ops {
+                world.apply(op);
+            }
+            world.apply(Op::Advance(40));
+            prop_assert!(world.a.core().pending.is_none());
+            for body in &world.logs[0] {
+                if let EventBody::ItemDelta(delta) = body {
+                    prop_assert!(escaped_len(&delta.text) <= MAX_DELTA_ESCAPED);
+                }
+            }
+        }
+    }
+}
