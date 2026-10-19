@@ -111,3 +111,22 @@ T030 正在做宿主的网关（`cupper-host/src/gateway/`），本任务只改 
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料（`notes.md` 等）由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-19，编排者）
+
+执行者写完三个模块时已经有 1,161 行，推算总数约 1,720 行，于是按守则第 8 条在 Mirror 之前停下来汇报。
+
+**裁定：拆分（计划 v1.3.6）。**
+- **T045 收窄**为已完成的部分：构建种类、`--build-info`、宿主校验、连接与握手、请求关联、`command_id`。验收编号为 UNIT-cli-host-verify，另加新编号 UNIT-cli-client。
+- **Mirror 与客户端同步状态机**（UNIT-mirror）另立 T049，设计沿用 `notes.md` 里的"Mirror 的设计"一节。
+
+执行者需要确认的 6 项做法全部认可：
+- CLI 的特性与优先级；
+- `CUPPER_HOST_CDHASH`；
+- 发布构建的签名要求为空；
+- e2e 分支先只做同用户和固定令牌；
+- tokio 的 `time` 特性；
+- 新编号 UNIT-cli-client。
+
+其中前四项已写进 `02-host.md` 5.2.14 末尾的"T045 实现时的裁定"。
+
