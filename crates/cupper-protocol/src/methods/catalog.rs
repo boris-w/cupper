@@ -110,7 +110,7 @@ mod tests {
         /// "仅由主进程代发": the main process sends it for the window.
         ByMain,
         /// ✗, though the scope allows it: the policy module refuses it, e.g.
-        /// remote_device by SEC-9 (design 5.2.5).
+        /// remote_device by SEC-9, or `auth/elevate` for all but `cli`.
         ByPolicy,
         /// "真实输入": the window's request must carry `input` (design 5.7.8).
         Input,
@@ -131,11 +131,8 @@ mod tests {
         ("remote_device", &[Read, Write, Approve]),
     ];
 
-    /// A row of 5.8.3: its name there, the methods it names, its cells.
-    type Row = (&'static str, &'static [&'static str], [Cell; 7]);
-
     /// Rows of 5.8.3, each with the methods it names. A group adds its own.
-    const MATRIX: &[Row] = &[
+    const MATRIX: &[(&str, &[&str], [Cell; 7])] = &[
         ("initialize", &["initialize"], [Y, ByMain, Y, Y, Y, Y, Y]),
         (
             "ping、client/presence、host/status",
@@ -160,7 +157,7 @@ mod tests {
             [Native, N, N, N, N, Y, N],
         ),
         (
-            "订阅、history/page……一行中的 git/status、git/diff、git/file_diff、git/branches、worktree/check、files/search",
+            "订阅……一行中的 git/status、git/diff、git/file_diff、git/branches、worktree/check、files/search",
             &[
                 "git/status",
                 "git/diff",
@@ -188,69 +185,24 @@ mod tests {
         ),
     ];
 
-    /// Checks each row's cells against the scope of the methods it names, and
-    /// what the scope does not decide but the schema shows; returns the methods.
-    fn check_rows<'a>(
-        (catalog, defs): &(Catalog, Map<String, Value>),
-        rows: impl IntoIterator<Item = &'a Row>,
-    ) -> BTreeSet<&'static str> {
+    #[test]
+    fn unit_proto_methods_core_stream_scopes_match_the_matrix() {
+        let (catalog, _) = built();
         let mut covered = BTreeSet::new();
-        for (row, methods, cells) in rows {
+        for (row, methods, cells) in MATRIX {
             for method in *methods {
                 assert!(covered.insert(*method), "{method} in two rows");
-                let entry = scoped(catalog).find(|(name, _)| *name == method);
-                let entry = entry.unwrap_or_else(|| panic!("{method} missing")).1;
+                let entry = scoped(&catalog).find(|(name, _)| *name == method);
+                let scope = &entry.unwrap_or_else(|| panic!("{method} missing")).1[X_SCOPE];
                 for ((principal, scopes), cell) in PRINCIPALS.iter().zip(cells) {
-                    let scope = &entry[X_SCOPE];
                     let allowed = scope == "none" || scopes.iter().any(|s| s.as_str() == scope);
                     let expected = *cell != N;
                     assert_eq!(allowed, expected, "5.8.3 {row}: {method} for {principal}");
                 }
-                if cells.contains(&Input) {
-                    let params = entry["params"]["$ref"].as_str().unwrap();
-                    let params = &defs[params.trim_start_matches("#/$defs/")];
-                    assert!(params["properties"].get("input").is_some(), "{method}");
-                }
             }
         }
-        covered
-    }
-
-    #[test]
-    fn unit_proto_methods_core_stream_scopes_match_the_matrix() {
-        let built = built();
-        let covered = check_rows(&built, MATRIX);
-        let all: BTreeSet<&str> = scoped(&built.0).map(|(name, _)| *name).collect();
+        let all: BTreeSet<&str> = scoped(&catalog).map(|(name, _)| *name).collect();
         assert_eq!(covered, all, "every scoped method sits in one row");
-    }
-
-    /// The methods of this task's groups (T013), by their samples.
-    fn ext_methods() -> BTreeSet<&'static str> {
-        git::tests::samples().into_iter().collect()
-    }
-
-    #[test]
-    fn unit_proto_methods_ext_every_method_roundtrips() {
-        let mut ext = Catalog::default();
-        let mut g = generator();
-        git::register(&mut ext, &mut g);
-        assert!(ext.client_notifications.is_empty() && ext.host_notifications.is_empty());
-        let names: BTreeSet<&str> = ext.requests.keys().copied().collect();
-        assert_eq!(ext_methods(), names);
-    }
-
-    #[test]
-    fn unit_proto_methods_ext_scopes_match_the_matrix() {
-        let built = built();
-        let ext = ext_methods();
-        let rows = MATRIX
-            .iter()
-            .filter(|(_, methods, _)| methods.iter().any(|m| ext.contains(m)));
-        assert_eq!(
-            check_rows(&built, rows),
-            ext,
-            "every method sits in a row of its own"
-        );
     }
 
     #[test]
@@ -347,5 +299,39 @@ mod tests {
             to_canonical_string(&catalog).unwrap(),
             to_canonical_string(&again).unwrap()
         );
+    }
+
+    /// The methods of this task's groups (T013), by their samples.
+    fn ext_methods() -> BTreeSet<&'static str> {
+        git::tests::samples().into_iter().collect()
+    }
+
+    #[test]
+    fn unit_proto_methods_ext_every_method_roundtrips() {
+        let mut ext = Catalog::default();
+        let mut g = generator();
+        git::register(&mut ext, &mut g);
+        assert!(ext.client_notifications.is_empty() && ext.host_notifications.is_empty());
+        let names: BTreeSet<&str> = ext.requests.keys().copied().collect();
+        assert_eq!(ext_methods(), names);
+    }
+
+    /// What the scope does not decide but the schema shows: `Input` cells
+    /// need an `input` parameter.
+    #[test]
+    fn unit_proto_methods_ext_input_and_build_cells_match_the_schema() {
+        let (catalog, defs) = built();
+        let rows = |cell| {
+            MATRIX
+                .iter()
+                .filter(move |(_, _, cells)| cells.contains(&cell))
+        };
+        for (row, methods, _) in rows(Input) {
+            for method in *methods {
+                let params = catalog.requests[method]["params"]["$ref"].as_str().unwrap();
+                let params = &defs[params.trim_start_matches("#/$defs/")];
+                assert!(params["properties"].get("input").is_some(), "{row}");
+            }
+        }
     }
 }
