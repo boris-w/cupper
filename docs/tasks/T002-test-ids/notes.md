@@ -85,8 +85,67 @@
 
 ## 实际行数
 
-（每完成一个模块补一行。）
+`git show --shortstat <提交>`，不含 `pnpm-lock.yaml` 和 `tests/ids.toml`：
+
+| 完成的部分（提交） | 新增 / 删除 | 其中测试 | 估计（代码 + 测试） | 累计 |
+|---|---|---|---|---|
+| `tools/trace-ids` 全部模块与测试（`b21215f`） | 1,418 | 509 | 约 1,170 | 1,418 |
+| `tests/ids.toml`（`40e2332`，数据，941 行） | 不计 | — | — | 1,418 |
+| xtask：`testdata-scan` 作业与登记表进摘要匹配（`3ac4012`） | 25 / 4 | — | 约 40 | 1,443 / 删 4 |
+| 用法文字的排版（`281c1bc`） | 3 / 3 | — | — | **1,446 / 删 7** |
+
+- 工具的五个模块是一起写完的，提交前统计了一次（1,430 行，含格式化后多出的行），比估计多约 20%：Prettier 把校验逻辑展开得比预估长（`registry.ts` 313 行，估 170）。按剩下的 xtask 部分（估 40 行）推算总数约 1,470，在约 1,500 的上限以内，所以没有停下；当时把 `registry.ts` 开头重复登记表头部说明的注释删掉，留了一点余量。
+- 合计约 1,450 行，超过计划的 M（400–900），在上限以内。超出的主要原因是测试（509 行）：五种报错情况、三种结果来源和登记表的各种格式错误各要一组夹具。
 
 ## 登记时拿不准的地方
 
-（登记过程中补充。）
+以计划 v1.3.6 的任务表为准。以下是表里没有直接写明、由我判断的：
+
+1. **IT-handshake**：T030 产出 peer、codesign 和错误码部分，T039 补密钥部分，计划没有拆子编号。按"实际产出"登记在 T030，注释写明 T039 的部分。摘要里的通过结果不能说明密钥部分也在；需要的话可以拆成 `-peer`、`-key` 两个子编号。
+2. **跨任务的同一编号只登记一次**：PERF-bridge-gate 在 T078（T079 达标后重测同一编号）；MAN-keyboard 在 T077，绑定 Electron 的大版本，T107 升级后补新证据；E2E-review-comment、E2E-SEC-revert-confirm 在 T131（K9 不通过时由 T139 产出）；E2E-notification-navigate 在 T150（K5 不通过时由 T158 产出）。
+3. **父编号放在完成它的任务里**：UNIT-proto-events（T017）、UNIT-proto-methods-core（T018）、IT-sys-peer（T021）、GOLD-A-tool-fields、GOLD-A-option-map、UNIT-option-map（T110）、UNIT-cli-resolver（T111）、MAN-compat、COMPAT-untrusted-project（T113）、E2E-new-session-agent（T144）、UI-settings（T147）、MAN-ui6（T148）、MAN-notification（T150）、IT-NFR9-failpoints（T172）。
+4. **5.12.4 没有标套件的编号**：
+   - 记为 `nightly`：E2E-S2、E2E-S4（同 S1、S3）、E2E-notification-navigate、E2E-selfuse-coexist、E2E-selfuse-replace、IT-selfuse-build（要构建自用版 App）、UNIT-views-differential（计划写明接入 nightly）、全部 PERF（含 PERF-bridge-gate、PERF-snapshot）；
+   - 记为 `pr`：E2E-SEC-no-key-client、E2E-SEC-double-initialize、E2E-SEC-cli-fake-host（同 E2E-SEC-fake-host）；
+   - 记为 `release`：UNIT-signing-check（检查签名后的产物）；
+   - 缺口 IT-sys-peer-macos14 记为 `nightly`（`security-macos14` 作业），IT-sys-peer-macos15 记为 `pr`（5.1.6："macOS 15 由 `rust` 作业覆盖"）。
+5. **COMPAT 的套件是 `compat`**：5.12.4 把它们标为〔人〕，但它们的结果是兼容报告里机器可读的剧本结果，不是 MAN 那样的证据。trace-ids 还没有读兼容报告的入口，T064 定下报告格式时补一个 `--compat <报告>`，在此之前 COMPAT 一直是待完成。
+6. **金样例的"其余录制"**：T053、T110 的验收写了"及其余 Claude（Codex）录制"，没有逐个列出，由它们各自追加。
+7. **没有产出任务的编号**：IT-n-minus-1-cli（第二个发布版起）记为里程碑 `later`；MAN-tcc（M2 的 SP-10）记为 `M2`。
+8. **条件任务的编号**：T079、T119、T139、T158、T162 的编号记为 `conditional`，原因写触发条件；检查点有结论后改为 `na` 或去掉状态。T057 的 IT-q8-fallback-claude 已是 `na`（K1 已通过）。
+9. **不是用例编号的写法**（`[not-ids]`）：PRD 的需求编号 UI-0 至 UI-7；旧名 E2E-question-card、UI-cards；计划 T140 的注里写的 IT-K11（应为 IT-K11-steer-idle-queued，计划改成完整编号后可以从 `[not-ids]` 删掉）。
+
+## 合并时与计划 v1.3.9 同步
+
+本分支从计划 v1.3.6 开出。main 上的计划已到 v1.3.9，拆出了 T019、T029、T058、T087，并新增 IT-gw-blob。合并 main 后 `trace-ids check` 会报 IT-gw-blob 未登记。按 v1.3.9 的任务表，`tests/ids.toml` 要这样改：
+
+```toml
+# [T033] 去掉 IT-gw-subscribe
+
+# 网关 III：订阅、历史与发送合并
+[T019]
+milestone = "M1a"
+IT-gw-subscribe = "pr"
+
+# 网关 IV：blob 上传与下载
+[T029]
+milestone = "M1a"
+IT-gw-blob = "pr"
+
+# [T041] 去掉 PROP-autonomous-dequeue-guard、PROP-turn-snapshot-immutable
+
+# 会话纯核心 II-b：自发回合判定与组合
+[T058]
+milestone = "M1a"
+PROP-autonomous-dequeue-guard = "pr"
+PROP-turn-snapshot-immutable = "pr"
+
+# [T071] 去掉 UNIT-hc-sync
+
+# host-client I-b：订阅与同步
+[T087]
+milestone = "M1a"
+UNIT-hc-sync = "pr"
+```
+
+各段放在任务表里相应的位置（T019、T029 跟在 T033 后，T058 跟在 T041 后，T087 跟在 T071 后）。
