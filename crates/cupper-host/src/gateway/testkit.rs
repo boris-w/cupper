@@ -53,6 +53,7 @@ impl Drop for TempDir {
 /// A gateway on a socket in a fresh data directory, serving until dropped.
 pub struct TestGateway {
     pub socket: PathBuf,
+    pub gateway: Arc<Gateway>,
     pub audit: UnboundedReceiver<AuditRecord>,
     serving: JoinHandle<()>,
     _lock: HostLock,
@@ -96,8 +97,9 @@ impl TestGateway {
         let (gateway, audit) = Gateway::new(config, clock, Durations::default(), routes);
         Self {
             socket,
+            serving: tokio::spawn(Arc::clone(&gateway).serve(listener)),
+            gateway,
             audit,
-            serving: tokio::spawn(gateway.serve(listener)),
             _lock: lock,
             _dir: dir,
         }

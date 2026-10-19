@@ -22,18 +22,20 @@ use serde_json::Value;
 use tokio::io::{AsyncWriteExt, Interest};
 use tokio::net::UnixStream;
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::sync::watch;
 
 use super::audit::{AuditEvent, CloseReason, Rejection};
 use super::dispatch::{Dispatch, Opened};
 use super::handshake::{self, Nonce, Session};
 use super::outbox::Outbox;
-use super::{Gateway, Verdict, wire};
+use super::{Gateway, Live, Verdict, wire};
 use crate::clock::Timer;
 use crate::durations::{GATEWAY_CLOSE_GRACE, GATEWAY_HANDSHAKE};
 
-pub(super) async fn run(gw: Arc<Gateway>, stream: UnixStream, id: ConnId) {
+pub(super) async fn run(live: Live, stream: UnixStream, id: ConnId) {
+    let gw: &Gateway = &live.0;
     let opened = gw.clock.now_mono();
-    let Some((pinned, verdict)) = admit(&gw, &stream, &id) else {
+    let Some((pinned, verdict)) = admit(gw, &stream, &id) else {
         return;
     };
     let (reader, writer) = stream.into_split();
@@ -44,7 +46,7 @@ pub(super) async fn run(gw: Arc<Gateway>, stream: UnixStream, id: ConnId) {
     let nonce = handshake::new_nonce();
     outbox.push_frame(wire::notification::<HostHello>(&handshake::hello(&nonce)));
     let mut conn = Conn {
-        gw: &gw,
+        gw,
         id: &id,
         outbox: &outbox,
         pinned,
@@ -65,6 +67,7 @@ pub(super) async fn run(gw: Arc<Gateway>, stream: UnixStream, id: ConnId) {
     writing.abort();
     let principal = match conn.phase {
         Phase::Ready(session, _) => {
+            gw.clients.remove(&id);
             gw.routes.closed(&id);
             Some(session.principal.id)
         }
@@ -164,14 +167,15 @@ impl Conn<'_> {
         let stream: &UnixStream = reader.as_ref();
         let mut buf = vec![0; MAX_FRAME_BYTES];
         let mut decoder = FrameDecoder::new();
+        let mut closing = self.gw.closing.subscribe();
         loop {
-            let read = read(stream, &mut buf);
-            let got = match self.deadline.as_mut() {
-                Some(deadline) => match future::select(std::pin::pin!(read), deadline).await {
+            let got = {
+                let read = std::pin::pin!(read(stream, &mut buf));
+                let end = std::pin::pin!(interrupted(self.deadline.as_mut(), &mut closing));
+                match future::select(read, end).await {
                     Either::Left((got, _)) => got,
-                    Either::Right(_) => return End::now(CloseReason::HandshakeTimeout),
-                },
-                None => read.await,
+                    Either::Right((end, _)) => return end,
+                }
             };
             let got = match got {
                 Ok(got) => got,
@@ -251,12 +255,16 @@ impl Conn<'_> {
                 self.outbox.push_frame(wire::response(id, &result));
                 let principal = session.principal.clone();
                 let weak_auth = result.host.weak_auth;
-                self.gw.routes.opened(Opened {
+                let opened = Opened {
                     conn: self.id.clone(),
                     principal: principal.clone(),
                     client: client.clone(),
                     weak_auth,
-                });
+                };
+                let since_ms = self.gw.clock.now_wall_ms();
+                let outbox = Arc::clone(self.outbox);
+                self.gw.clients.add(opened.clone(), since_ms, outbox);
+                self.gw.routes.opened(opened);
                 let event = AuditEvent::Initialized {
                     principal,
                     client,
@@ -287,6 +295,24 @@ impl Conn<'_> {
             dispatch.request(&self.gw.routes, id, method, params);
         }
         None
+    }
+}
+
+/// What ends the wait for the peer's next bytes, if they are slow to come:
+/// the handshake deadline, or the host exiting, which lets the queued frames
+/// go out first.
+async fn interrupted(deadline: Option<&mut Timer>, closing: &mut watch::Receiver<bool>) -> End {
+    let exiting = async {
+        // A gateway that is gone is exiting, too.
+        let _ = closing.wait_for(|closing| *closing).await;
+        End::after_replies(CloseReason::HostExiting)
+    };
+    match deadline {
+        Some(deadline) => match future::select(std::pin::pin!(exiting), deadline).await {
+            Either::Left((end, _)) => end,
+            Either::Right(_) => End::now(CloseReason::HandshakeTimeout),
+        },
+        None => exiting.await,
     }
 }
 
