@@ -15,6 +15,7 @@ dev-auth = []
 test-harness = []
 
 [dependencies]
+cupper-sys = { path = "../cupper-sys" }
 getrandom = "0.4.3"
 # Exact: the bundled SQLite (3.53.2) comes with this release (design 5.1.3).
 # No default features: the statement cache pulls in `foldhash` (Zlib), which

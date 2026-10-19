@@ -1,11 +1,12 @@
 //! The event store's storage layer (design 5.2.8): the connections to
 //! `host.db` and `raw.db`, their durability, the [`writer`] thread that does
-//! all the writing and the [`Readers`] pool.
+//! all the writing, the [`Readers`] pool, and the [`epoch`] decision.
 //!
 //! SQLite runs only on the store's own threads or under `spawn_blocking`, never
 //! on an async worker (SP-4a). The tables and migrations are T025's.
 
 mod connection;
+pub mod epoch;
 mod readers;
 #[cfg(test)]
 mod testutil;
