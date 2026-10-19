@@ -24,6 +24,8 @@
 //! - `errors`: the table's "可能的错误" column, as `Code` or `Code / Reason`
 //!   with the variants of [`ErrorCode`](crate::error::ErrorCode) and
 //!   [`ErrorReason`](crate::error::ErrorReason).
+//! - `builds` (requests only, optional): the [`Build`](crate::rpc::Build)s
+//!   that have the method, e.g. `builds: [TestHarness]`; left out, every build has it.
 //!
 //! The group's `register` adds each method to the [`catalog`]; its test
 //! module adds typical values (`samples`) and rows of the permission matrix
@@ -45,7 +47,8 @@ macro_rules! method {
             scope: $scope:ident,
             idempotency: $idempotency:ident,
             milestone: $milestone:ident,
-            errors: [$($code:ident $(/ $reason:ident)?),* $(,)?] $(,)?
+            errors: [$($code:ident $(/ $reason:ident)?),* $(,)?]
+            $(, builds: [$($build:ident),+ $(,)?])? $(,)?
         }
     ) => {
         $(#[$meta])*
@@ -64,6 +67,7 @@ macro_rules! method {
                     reason: method!(@reason $($reason)?),
                 }
             ),*];
+            $(const BUILDS: &'static [$crate::rpc::Build] = &[$($crate::rpc::Build::$build),+];)?
             type Params = $params;
             type Result = $result;
         }
