@@ -29,7 +29,17 @@ pub enum CanonicalError {
 /// The RFC 8785 form of `value`.
 pub fn to_canonical_string<T: Serialize + ?Sized>(value: &T) -> Result<String, CanonicalError> {
     let mut out = String::new();
-    write_value(&mut out, &serde_json::to_value(value)?)?;
+    write_value(&mut out, &serde_json::to_value(value)?, None)?;
+    Ok(out)
+}
+
+/// The RFC 8785 form of `value` indented by two spaces, with a final newline,
+/// for committed files people review: dropping the whitespace between tokens
+/// gives [`to_canonical_string`] back.
+pub fn to_canonical_pretty<T: Serialize + ?Sized>(value: &T) -> Result<String, CanonicalError> {
+    let mut out = String::new();
+    write_value(&mut out, &serde_json::to_value(value)?, Some(0))?;
+    out.push('\n');
     Ok(out)
 }
 
@@ -41,7 +51,12 @@ pub fn digest<T: Serialize + ?Sized>(value: &T) -> Result<Digest, CanonicalError
     ))
 }
 
-fn write_value(out: &mut String, value: &Value) -> Result<(), CanonicalError> {
+/// Writes `value`; `depth` is the nesting level when indenting, `None` for none.
+fn write_value(
+    out: &mut String,
+    value: &Value,
+    depth: Option<usize>,
+) -> Result<(), CanonicalError> {
     match value {
         Value::Null => out.push_str("null"),
         Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
@@ -50,29 +65,46 @@ fn write_value(out: &mut String, value: &Value) -> Result<(), CanonicalError> {
         Value::Array(items) => {
             out.push('[');
             for (i, item) in items.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                write_value(out, item)?;
+                separate(out, i, depth);
+                write_value(out, item, depth.map(|d| d + 1))?;
             }
-            out.push(']');
+            close(out, items.is_empty(), depth, ']');
         }
         Value::Object(members) => {
             let mut members: Vec<(&String, &Value)> = members.iter().collect();
             members.sort_by(|a, b| a.0.encode_utf16().cmp(b.0.encode_utf16()));
             out.push('{');
-            for (i, (name, item)) in members.into_iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
+            for (i, (name, item)) in members.iter().enumerate() {
+                separate(out, i, depth);
                 write_string(out, name);
-                out.push(':');
-                write_value(out, item)?;
+                out.push_str(if depth.is_some() { ": " } else { ":" });
+                write_value(out, item, depth.map(|d| d + 1))?;
             }
-            out.push('}');
+            close(out, members.is_empty(), depth, '}');
         }
     }
     Ok(())
+}
+
+/// Before the `i`th element: a comma after the first, and when indenting a
+/// new line at one level deeper than `depth`.
+fn separate(out: &mut String, i: usize, depth: Option<usize>) {
+    if i > 0 {
+        out.push(',');
+    }
+    if let Some(depth) = depth {
+        out.push('\n');
+        out.push_str(&"  ".repeat(depth + 1));
+    }
+}
+
+/// The closing bracket, on a line of its own after a non-empty container when indenting.
+fn close(out: &mut String, empty: bool, depth: Option<usize>, bracket: char) {
+    if let (Some(depth), false) = (depth, empty) {
+        out.push('\n');
+        out.push_str(&"  ".repeat(depth));
+    }
+    out.push(bracket);
 }
 
 fn write_number(out: &mut String, n: &Number) -> Result<(), CanonicalError> {
@@ -289,6 +321,21 @@ mod tests {
         let expected = "d_cdab067e9f3beb32d1252cfd63e492592fecbf591b0d08cadb24bb17f3864246";
         assert_eq!(d.as_str(), expected);
         assert_eq!(digest(&json!({"a": "x", "b": 1})).unwrap(), d);
+    }
+
+    #[test]
+    fn unit_proto_fixtures_schema_file_is_canonical_json_indented() {
+        let value = json!({"b": [1.5, {}, []], "a": {"é": "x\ny", "A": null}});
+        let pretty = to_canonical_pretty(&value).unwrap();
+        let expected = "{\n  \"a\": {\n    \"A\": null,\n    \"é\": \"x\\ny\"\n  },\n  \
+                        \"b\": [\n    1.5,\n    {},\n    []\n  ]\n}\n";
+        assert_eq!(pretty, expected);
+        let compact: String = pretty
+            .split('\n')
+            .map(|line| line.trim_start().replacen("\": ", "\":", 1))
+            .collect();
+        assert_eq!(compact, to_canonical_string(&value).unwrap());
+        assert!(to_canonical_pretty(&json!(u64::MAX)).is_err());
     }
 
     proptest! {

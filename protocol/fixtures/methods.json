@@ -1,0 +1,1102 @@
+[
+  {
+    "method": "host/hello",
+    "params": {
+      "host_version": "0.1.0",
+      "nonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "protocol": { "max": 1, "min": 1 }
+    }
+  },
+  {
+    "method": "initialize",
+    "params": {
+      "auth": {
+        "c_nonce": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "proof": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "type": "dev_key"
+      },
+      "client": { "kind": "desktop", "name": "Cupper", "version": "0.1.0" },
+      "coalesce_ms": 40,
+      "features": ["stream.coalesce", "blob.get", "interaction.permission", "canvas.v2"],
+      "nonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "protocol": { "max": 2, "min": 1 },
+      "role": "window"
+    },
+    "result": {
+      "features": ["stream.coalesce", "blob.get"],
+      "host": { "data_epoch": 3, "host_id": "h_1", "version": "0.1.0", "weak_auth": true },
+      "host_proof": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "limits": {
+        "command_retention_ms": 172800000,
+        "interrupt_fallback_ms": 10000,
+        "max_blob_bytes": 33554432,
+        "max_coalesce_ms": 1000,
+        "max_delta_bytes": 16000,
+        "max_elevation_ms": 900000,
+        "max_frame_bytes": 64000,
+        "max_history_page_bytes": 48000,
+        "max_image_bytes": 10485760,
+        "max_inflight_requests": 64,
+        "max_inline_bytes": 16000,
+        "max_label_chars": 1000,
+        "max_merged_bytes": 32000,
+        "max_pending_upload_bytes": 67108864,
+        "max_queue_bytes": 4194304,
+        "max_queued_messages": 50,
+        "max_subscriptions": 64,
+        "snapshot_items": 2000,
+        "snapshot_turns": 20,
+        "steer_timeout_ms": 5000
+      },
+      "principal": {
+        "id": "pr_desktop",
+        "kind": "desktop_ui",
+        "role": "window",
+        "scopes": ["read", "write", "approve", "ui_local"]
+      },
+      "protocol": 1
+    }
+  },
+  {
+    "method": "initialize",
+    "params": {
+      "auth": { "type": "peer" },
+      "client": { "kind": "cli", "name": "cupper-cli", "version": "0.1.0" },
+      "features": [],
+      "nonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "protocol": { "max": 1, "min": 1 }
+    },
+    "result": {
+      "features": [],
+      "host": { "data_epoch": 1, "host_id": "h_1", "version": "0.1.0", "weak_auth": false },
+      "limits": {
+        "command_retention_ms": 172800000,
+        "interrupt_fallback_ms": 10000,
+        "max_blob_bytes": 33554432,
+        "max_coalesce_ms": 1000,
+        "max_delta_bytes": 16000,
+        "max_elevation_ms": 900000,
+        "max_frame_bytes": 64000,
+        "max_history_page_bytes": 48000,
+        "max_image_bytes": 10485760,
+        "max_inflight_requests": 64,
+        "max_inline_bytes": 16000,
+        "max_label_chars": 1000,
+        "max_merged_bytes": 32000,
+        "max_pending_upload_bytes": 67108864,
+        "max_queue_bytes": 4194304,
+        "max_queued_messages": 50,
+        "max_subscriptions": 64,
+        "snapshot_items": 2000,
+        "snapshot_turns": 20,
+        "steer_timeout_ms": 5000
+      },
+      "principal": { "id": "pr_cli", "kind": "cli", "scopes": ["read"] },
+      "protocol": 1
+    }
+  },
+  { "method": "ping", "params": {}, "result": {} },
+  { "method": "client/presence", "params": { "foreground": true, "session_id": "s_1" } },
+  { "method": "client/presence", "params": { "foreground": false } },
+  {
+    "method": "host/status",
+    "params": {},
+    "result": {
+      "clients": [
+        {
+          "auth": "verified",
+          "client_name": "Cupper",
+          "client_version": "0.1.0",
+          "conn_id": "c_1",
+          "principal_kind": "desktop_ui",
+          "role": "control",
+          "since": 3
+        }
+      ],
+      "pending_interactions": 1,
+      "pending_upgrade": false,
+      "pid": 4242,
+      "running_turns": 2,
+      "version": "0.1.0"
+    }
+  },
+  {
+    "method": "host/prepare_upgrade",
+    "params": { "command_id": "c-1", "mode": "wait" },
+    "result": { "running_turns": 1, "state": "waiting" }
+  },
+  { "method": "host/exit", "params": { "command_id": "c-2", "force": true }, "result": {} },
+  { "method": "host/shutdown", "params": { "reason": "upgrade", "restart_expected": true } },
+  { "method": "ui/navigate", "params": { "request_id": "r_1", "session_id": "s_1" } },
+  { "method": "ui/navigate", "params": { "session_id": "s_1" } },
+  {
+    "method": "stream/subscribe",
+    "params": { "after_seq": 120, "epoch": 2, "stream": "session/s_1" },
+    "result": {
+      "at_seq": 98,
+      "epoch": 3,
+      "head_seq": 98,
+      "mode": "snapshot",
+      "reason": "epoch_changed",
+      "stream": "session/s_1"
+    }
+  },
+  {
+    "method": "stream/subscribe",
+    "params": { "stream": "index" },
+    "result": { "at_seq": 7, "epoch": 1, "head_seq": 9, "mode": "replay", "stream": "index" }
+  },
+  { "method": "stream/unsubscribe", "params": { "stream": "index" }, "result": {} },
+  {
+    "method": "stream/events",
+    "params": {
+      "events": [
+        {
+          "data": { "origin": "user", "started_at": 5, "turn_id": "t_1", "turn_no": 1 },
+          "seq": 7,
+          "ts": 1700000000000,
+          "type": "turn.started",
+          "v": 1
+        },
+        {
+          "data": { "field": "text", "item_id": "i_1", "text": "ok" },
+          "from": 8,
+          "seq": 9,
+          "ts": 1700000000000,
+          "type": "item.delta",
+          "v": 1
+        }
+      ],
+      "stream": "session/s_1"
+    }
+  },
+  {
+    "method": "stream/snapshot",
+    "params": {
+      "at_seq": 98,
+      "epoch": 3,
+      "last": true,
+      "ops": [
+        {
+          "data": { "origin": "user", "started_at": 5, "turn_id": "t_1", "turn_no": 1 },
+          "type": "turn.started"
+        },
+        { "data": { "field": "text", "item_id": "i_1", "text": "ok" }, "type": "item.delta" }
+      ],
+      "page": 0,
+      "stream": "session/s_1"
+    }
+  },
+  { "method": "stream/reset", "params": { "reason": "slow_consumer", "stream": "index" } },
+  { "method": "stream/ack", "params": { "seq": 98, "stream": "session/s_1" } },
+  {
+    "method": "history/page",
+    "params": { "cursor": { "turn_no": 21 }, "max_bytes": 48000, "session_id": "s_1" },
+    "result": {
+      "next": { "op_index": 1500, "turn_no": 19 },
+      "ops": [
+        {
+          "data": { "origin": "user", "started_at": 5, "turn_id": "t_20", "turn_no": 20 },
+          "type": "turn.started"
+        },
+        { "data": { "field": "text", "item_id": "i_1", "text": "ok" }, "type": "item.delta" }
+      ]
+    }
+  },
+  { "method": "history/page", "params": { "session_id": "s_1" }, "result": { "ops": [] } },
+  {
+    "method": "blob/get",
+    "params": {
+      "hash": "abababababababababababababababababababababababababababababababab",
+      "length": 65536,
+      "offset": 0
+    },
+    "result": {
+      "chunks": 2,
+      "hash": "abababababababababababababababababababababababababababababababab",
+      "length": 65536,
+      "offset": 0,
+      "size": 70000
+    }
+  },
+  {
+    "method": "blob/get",
+    "params": { "hash": "abababababababababababababababababababababababababababababababab" },
+    "result": {
+      "chunks": 1,
+      "hash": "abababababababababababababababababababababababababababababababab",
+      "length": 9,
+      "offset": 0,
+      "size": 9
+    }
+  },
+  {
+    "method": "blob/put",
+    "params": {
+      "hash": "abababababababababababababababababababababababababababababababab",
+      "media_type": "image/png",
+      "size": 9
+    },
+    "result": { "hash": "abababababababababababababababababababababababababababababababab" }
+  },
+  {
+    "method": "git/status",
+    "params": { "session_id": "s_1" },
+    "result": {
+      "ahead": 2,
+      "behind": 0,
+      "branch": "cupper/fix-login",
+      "files": [
+        { "index": "modified", "path": "src/a.rs", "worktree": "unmodified" },
+        { "index": "renamed", "old_path": "src/c.rs", "path": "src/b.rs", "worktree": "modified" },
+        { "index": "untracked", "path": "notes.md", "worktree": "untracked" }
+      ],
+      "in_progress": "rebase",
+      "upstream": "origin/cupper/fix-login"
+    }
+  },
+  {
+    "method": "git/status",
+    "params": { "session_id": "s_1" },
+    "result": { "ahead": 0, "behind": 0, "files": [] }
+  },
+  {
+    "method": "git/diff",
+    "params": { "scope": "last_turn", "session_id": "s_1" },
+    "result": {
+      "caveats": ["mixed_changes", "late_tool_effects"],
+      "diff_token": "dt_1",
+      "files": [
+        { "additions": 3, "binary": false, "change": "update", "deletions": 1, "path": "src/a.rs" },
+        { "additions": 0, "binary": true, "change": "add", "deletions": 0, "path": "logo.png" },
+        {
+          "additions": 0,
+          "binary": false,
+          "change": "update",
+          "deletions": 0,
+          "filter_unsupported": true,
+          "path": "secret.env"
+        }
+      ],
+      "snapshot": {
+        "excluded": [{ "path": "data.bin", "reason": "too_large" }],
+        "status": "partial"
+      },
+      "stat": { "added": 3, "files": 3, "removed": 1 }
+    }
+  },
+  {
+    "method": "git/diff",
+    "params": { "scope": { "turn": "t_1" }, "session_id": "s_1" },
+    "result": {
+      "caveats": ["mixed_changes"],
+      "diff_token": "dt_2",
+      "files": [
+        {
+          "additions": 0,
+          "binary": false,
+          "change": "update",
+          "deletions": 0,
+          "old_path": "src/c.rs",
+          "path": "src/b.rs"
+        }
+      ],
+      "snapshot": { "excluded": [], "status": "ok" },
+      "stat": { "added": 0, "files": 1, "removed": 0 }
+    }
+  },
+  {
+    "method": "git/diff",
+    "params": { "scope": "staged", "session_id": "s_1" },
+    "result": {
+      "caveats": [],
+      "diff_token": "dt_3",
+      "files": [
+        { "additions": 3, "binary": false, "change": "update", "deletions": 1, "path": "src/a.rs" }
+      ],
+      "stat": { "added": 3, "files": 1, "removed": 1 }
+    }
+  },
+  {
+    "method": "git/file_diff",
+    "params": { "diff_token": "dt_1", "path": "src/a.rs", "session_id": "s_1" },
+    "result": {
+      "hunks": [
+        {
+          "header": "@@ -1,2 +1,3 @@",
+          "hunk_id": "hk_1",
+          "lines": [" fn a() {", "+    b();", " }"],
+          "unit": "hunk"
+        },
+        { "header": "old mode 100644\nnew mode 100755", "hunk_id": "hk_2", "unit": "mode" },
+        {
+          "header": "@@ -10,900 +10,950 @@",
+          "hunk_id": "hk_3",
+          "lines_blob": {
+            "hash": "abababababababababababababababababababababababababababababababab",
+            "media_type": "text/x-diff",
+            "size": 70000
+          },
+          "unit": "hunk"
+        }
+      ],
+      "path": "src/a.rs"
+    }
+  },
+  {
+    "method": "git/stage",
+    "params": {
+      "command_id": "c-1",
+      "diff_token": "dt_1",
+      "session_id": "s_1",
+      "target": { "hunk_ids": ["hk_1", "hk_2"] }
+    },
+    "result": {}
+  },
+  {
+    "method": "git/unstage",
+    "params": {
+      "command_id": "c-1",
+      "diff_token": "dt_1",
+      "session_id": "s_1",
+      "target": { "paths": ["src/a.rs"] }
+    },
+    "result": {}
+  },
+  {
+    "method": "git/revert",
+    "params": {
+      "command_id": "c-1",
+      "diff_token": "dt_1",
+      "input": { "digit": 3, "key": "digit", "kind": "key" },
+      "session_id": "s_1",
+      "target": { "all": true }
+    },
+    "result": {}
+  },
+  {
+    "method": "git/commit",
+    "params": { "command_id": "c-2", "message": "Fix the login\n\nDetails.", "session_id": "s_1" },
+    "result": { "oid": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f" }
+  },
+  {
+    "method": "git/push",
+    "params": { "command_id": "c-3", "session_id": "s_1", "set_upstream": true },
+    "result": { "branch": "cupper/fix-login", "remote": "origin" }
+  },
+  {
+    "method": "git/push",
+    "params": { "command_id": "c-4", "session_id": "s_1" },
+    "result": { "branch": "main", "remote": "origin" }
+  },
+  {
+    "method": "git/branches",
+    "params": { "project_id": "p_1" },
+    "result": {
+      "current": "main",
+      "local": ["main", "cupper/fix-login"],
+      "remote": ["origin/main", "origin/HEAD"]
+    }
+  },
+  {
+    "method": "worktree/check",
+    "params": { "session_id": "s_1" },
+    "result": {
+      "blockers": ["untracked_files", "unpushed_commits"],
+      "removable": false,
+      "warnings": { "case_only_dirty": false, "ignored_files": 12 }
+    }
+  },
+  {
+    "method": "worktree/check",
+    "params": { "session_id": "s_1" },
+    "result": {
+      "blockers": [],
+      "removable": true,
+      "warnings": { "case_only_dirty": true, "ignored_files": 0 }
+    }
+  },
+  {
+    "method": "files/search",
+    "params": { "limit": 20, "query": "lgn", "session_id": "s_1" },
+    "result": {
+      "results": [
+        {
+          "path": "src/login.rs",
+          "ranges_utf16": [
+            [4, 5],
+            [6, 8]
+          ],
+          "score": 120
+        }
+      ]
+    }
+  },
+  {
+    "method": "files/search",
+    "params": { "project_id": "p_1", "query": "readme" },
+    "result": { "results": [] }
+  },
+  {
+    "method": "workspace/open",
+    "params": { "session_id": "s_1", "target": "editor" },
+    "result": {}
+  },
+  {
+    "method": "settings/get",
+    "params": {},
+    "result": {
+      "settings": {
+        "agents.claude.cli_path": "/opt/homebrew/bin/claude",
+        "agents.codex.cli_path": null,
+        "agents.env_passthrough": ["ANTHROPIC_BASE_URL"],
+        "apps.editor": "vscode",
+        "apps.terminal": "terminal",
+        "diagnostics.verbose": false,
+        "host.idle_exit_minutes": 30,
+        "notifications.error": true,
+        "notifications.needs_action": true,
+        "notifications.turn_completed": true,
+        "sessions.default_agent": "claude",
+        "worktrees.root": "~/.cupper/worktrees"
+      }
+    }
+  },
+  {
+    "method": "settings/update",
+    "params": {
+      "command_id": "c-1",
+      "patch": { "agents.claude.cli_path": null, "notifications.error": false }
+    },
+    "result": {
+      "settings": {
+        "agents.claude.cli_path": "/opt/homebrew/bin/claude",
+        "agents.codex.cli_path": null,
+        "agents.env_passthrough": ["ANTHROPIC_BASE_URL"],
+        "apps.editor": "vscode",
+        "apps.terminal": "terminal",
+        "diagnostics.verbose": false,
+        "host.idle_exit_minutes": 30,
+        "notifications.error": true,
+        "notifications.needs_action": true,
+        "notifications.turn_completed": true,
+        "sessions.default_agent": "claude",
+        "worktrees.root": "~/.cupper/worktrees"
+      }
+    }
+  },
+  {
+    "method": "auth/elevate",
+    "params": { "reason": "apply the review", "scopes": ["write", "approve"] },
+    "result": { "expires_at": 1700000900000, "granted": ["write"] }
+  },
+  { "method": "auth/elevate", "params": { "scopes": ["write"] }, "result": { "granted": [] } },
+  {
+    "method": "auth/elevation_get",
+    "params": { "elevation_id": "e_1" },
+    "result": {
+      "scopes": ["write", "approve"],
+      "self_reported": { "client_name": "cupper-cli", "reason": "apply the review" },
+      "verified": {
+        "executable": "/usr/local/bin/cupper",
+        "has_tty": true,
+        "origin_unverifiable": false,
+        "parent_chain": [{ "executable": "/bin/zsh", "pid": 4100 }],
+        "pid": 4242,
+        "signing": "Developer ID"
+      }
+    }
+  },
+  {
+    "method": "auth/elevation_respond",
+    "params": {
+      "command_id": "c-2",
+      "decision": "grant",
+      "elevation_id": "e_1",
+      "scopes": ["write"]
+    },
+    "result": {}
+  },
+  {
+    "method": "policy/describe",
+    "params": {
+      "method": "settings/update",
+      "params": { "command_id": "c-1", "patch": { "agents.env_passthrough": ["OPENAI_API_KEY"] } }
+    },
+    "result": {
+      "action": "security_setting",
+      "details": { "key": "agents.env_passthrough", "value": ["OPENAI_API_KEY"] }
+    }
+  },
+  {
+    "method": "diag/export",
+    "params": { "command_id": "c-3", "include_sessions": ["s_1"] },
+    "result": {
+      "blob": {
+        "hash": "abababababababababababababababababababababababababababababababab",
+        "media_type": "application/zip",
+        "size": 9000
+      }
+    }
+  },
+  {
+    "method": "diag/recording_export",
+    "params": { "session_id": "s_1" },
+    "result": {
+      "blob": {
+        "hash": "abababababababababababababababababababababababababababababababab",
+        "media_type": "application/jsonl",
+        "size": 9000
+      }
+    }
+  },
+  { "method": "test/clock_advance", "params": { "ms": 3000 }, "result": {} },
+  { "method": "test/run_maintenance", "params": { "task": "orphan_blobs" }, "result": {} },
+  {
+    "method": "test/seed",
+    "params": {
+      "profile": {
+        "items_per_turn": 50,
+        "large_turn_items": 2000,
+        "mix": "sp1",
+        "sessions": 200,
+        "turns": 20
+      }
+    },
+    "result": {}
+  },
+  {
+    "method": "project/add",
+    "params": { "command_id": "c-1", "path": "/work/app" },
+    "result": {
+      "project_id": "p_1",
+      "trust": {
+        "findings": [
+          {
+            "detail": "npm run lint",
+            "kind": "hook",
+            "outside_workspace": false,
+            "path": ".claude/settings.json"
+          },
+          {
+            "detail": "github: npx server-github",
+            "kind": "mcp_server",
+            "outside_workspace": true,
+            "path": ".mcp.json",
+            "target": "/work/dotfiles/mcp.json"
+          },
+          {
+            "detail": "sandbox_mode",
+            "kind": "codex_config",
+            "outside_workspace": false,
+            "path": "../.codex/config.toml"
+          }
+        ],
+        "state": "untrusted",
+        "trust_digest": "d_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  {
+    "method": "project/add",
+    "params": { "command_id": "c-2", "path": "/work/empty" },
+    "result": {
+      "project_id": "p_2",
+      "trust": {
+        "findings": [],
+        "state": "trusted",
+        "trust_digest": "d_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    }
+  },
+  {
+    "method": "project/trust",
+    "params": {
+      "command_id": "c-3",
+      "project_id": "p_1",
+      "trust_digest": "d_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "result": { "trust_state": "trusted" }
+  },
+  {
+    "method": "project/trust_info",
+    "params": { "project_id": "p_1" },
+    "result": {
+      "diff_from_trusted": [
+        { "change": "update", "path": ".mcp.json" },
+        { "change": "add", "path": "../.codex/config.toml" }
+      ],
+      "findings": [
+        {
+          "detail": "npm run lint",
+          "kind": "hook",
+          "outside_workspace": false,
+          "path": ".claude/settings.json"
+        },
+        {
+          "detail": "github: npx server-github",
+          "kind": "mcp_server",
+          "outside_workspace": true,
+          "path": ".mcp.json",
+          "target": "/work/dotfiles/mcp.json"
+        },
+        {
+          "detail": "sandbox_mode",
+          "kind": "codex_config",
+          "outside_workspace": false,
+          "path": "../.codex/config.toml"
+        }
+      ],
+      "state": "stale",
+      "trust_digest": "d_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  {
+    "method": "project/trust_info",
+    "params": { "project_id": "p_1" },
+    "result": {
+      "findings": [],
+      "state": "untrusted",
+      "trust_digest": "d_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  {
+    "method": "project/remove",
+    "params": { "command_id": "c-4", "project_id": "p_1" },
+    "result": {}
+  },
+  {
+    "method": "agents/capabilities",
+    "params": { "agent": "claude" },
+    "result": {
+      "cached": {
+        "capabilities": {
+          "agent": "claude",
+          "commands": [{ "description": "Review a PR", "name": "review" }],
+          "config": [
+            {
+              "agent_option_id": "model",
+              "current": "opus",
+              "id": "model",
+              "values": [{ "name": "Opus", "risk": "normal", "value": "opus" }]
+            }
+          ],
+          "extraction": {
+            "diff": "per_hunk",
+            "exit_code": true,
+            "output_streaming": false,
+            "plan": "markdown_only",
+            "run_state": "inferred",
+            "thinking": true
+          },
+          "interactions": {
+            "plan_confirm": true,
+            "question_forms": true,
+            "reject_ends_turn": false
+          },
+          "prompt": { "file_ref": true, "image": true, "max_image_bytes": 10485760 },
+          "session": { "fork": false, "load_history": false, "resume": true },
+          "turn": {
+            "interrupt": true,
+            "interrupt_stops_commands": true,
+            "queue": true,
+            "steer": { "side_effects": true, "supported": true }
+          },
+          "versions": { "adapter": "0.91.0", "cli": "2.1.296", "cli_compat": "verified" }
+        },
+        "captured_at": 1700000000000
+      }
+    }
+  },
+  { "method": "agents/capabilities", "params": { "agent": "codex" }, "result": {} },
+  {
+    "method": "agents/refresh",
+    "params": { "agent": "codex" },
+    "result": {
+      "status": {
+        "adapter": { "runtime": "ready", "version": "2.2.2" },
+        "agent": "codex",
+        "auth": { "kind": "chatgpt", "state": "logged_in" },
+        "cli": {
+          "compat": "verified",
+          "install": "native",
+          "path": "/opt/homebrew/bin/codex",
+          "version": "0.50.0"
+        },
+        "config_dir": "default",
+        "state": "idle"
+      }
+    }
+  },
+  { "method": "agents/restart", "params": { "agent": "codex", "command_id": "c-5" }, "result": {} },
+  {
+    "method": "session/create",
+    "params": {
+      "agent": "claude",
+      "command_id": "c-1",
+      "config": { "model": "opus", "permission_mode": "default" },
+      "message": [
+        { "text": "fix the build", "type": "text" },
+        { "path": "src/main.rs", "type": "file_ref" }
+      ],
+      "project_id": "p_1",
+      "workspace": { "kind": "local" }
+    },
+    "result": { "session_id": "s_1" }
+  },
+  {
+    "method": "session/create",
+    "params": {
+      "agent": "codex",
+      "command_id": "c-2",
+      "message": [{ "text": "go", "type": "text" }],
+      "project_id": "p_1",
+      "workspace": { "base_ref": "main", "branch_hint": "fix-build", "kind": "worktree" }
+    },
+    "result": { "session_id": "s_2" }
+  },
+  {
+    "method": "session/send",
+    "params": {
+      "command_id": "c-3",
+      "content": [{ "text": "try again", "type": "text" }],
+      "mode": "queue",
+      "reply_to": "r_1",
+      "session_id": "s_1"
+    },
+    "result": { "disposition": "queued", "queue_id": "q_1" }
+  },
+  {
+    "method": "session/send",
+    "params": {
+      "command_id": "c-4",
+      "content": [{ "text": "also docs", "type": "text" }],
+      "expected_turn_id": "t_1",
+      "mode": "steer",
+      "session_id": "s_1"
+    },
+    "result": { "disposition": "queued", "fallback_reason": "prompt_required", "queue_id": "q_2" }
+  },
+  {
+    "method": "session/send",
+    "params": {
+      "command_id": "c-5",
+      "content": [{ "text": "next", "type": "text" }],
+      "mode": "steer",
+      "session_id": "s_1"
+    },
+    "result": { "disposition": "steered", "turn_id": "t_1" }
+  },
+  {
+    "method": "session/interrupt",
+    "params": { "command_id": "c-6", "expected_turn_id": "t_1", "session_id": "s_1" },
+    "result": { "turn_id": "t_1" }
+  },
+  {
+    "method": "session/interrupt",
+    "params": { "command_id": "c-7", "session_id": "s_1" },
+    "result": {}
+  },
+  {
+    "method": "session/queue_resume",
+    "params": { "command_id": "c-8", "session_id": "s_1" },
+    "result": {}
+  },
+  {
+    "method": "session/queue_edit",
+    "params": {
+      "command_id": "c-9",
+      "expected_version": 4,
+      "ops": [
+        { "content": [{ "text": "v2", "type": "text" }], "op": "replace", "queue_id": "q_1" }
+      ],
+      "session_id": "s_1"
+    },
+    "result": { "version": 5 }
+  },
+  {
+    "method": "session/queue_edit",
+    "params": {
+      "command_id": "c-10",
+      "expected_version": 5,
+      "ops": [{ "op": "steer", "queue_id": "q_2" }],
+      "session_id": "s_1"
+    },
+    "result": { "steer": { "disposition": "queued", "fallback_reason": "timeout" }, "version": 6 }
+  },
+  {
+    "method": "session/queue_edit",
+    "params": {
+      "command_id": "c-11",
+      "expected_version": 6,
+      "ops": [
+        { "op": "remove", "queue_id": "q_1" },
+        { "before_queue_id": "q_3", "op": "move", "queue_id": "q_2" }
+      ],
+      "session_id": "s_1"
+    },
+    "result": { "version": 7 }
+  },
+  {
+    "method": "session/set_config",
+    "params": { "command_id": "c-12", "option": "model", "session_id": "s_1", "value": "sonnet" },
+    "result": { "config": { "model": "sonnet", "permission_mode": "default" } }
+  },
+  {
+    "method": "session/confirm_config",
+    "params": {
+      "command_id": "c-13",
+      "config_digest": "d_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "session_id": "s_1"
+    },
+    "result": {}
+  },
+  {
+    "method": "session/rename",
+    "params": { "command_id": "c-14", "session_id": "s_1", "title": "Fix the build" },
+    "result": {}
+  },
+  {
+    "method": "session/archive",
+    "params": { "command_id": "c-20", "session_id": "s_1", "worktree": "remove" },
+    "result": { "blockers": ["modified_files", "head_only_commits"], "worktree": "blocked" }
+  },
+  {
+    "method": "session/archive",
+    "params": { "command_id": "c-21", "session_id": "s_1", "worktree": "remove_case_only_dirty" },
+    "result": { "worktree": "removed" }
+  },
+  {
+    "method": "session/restore",
+    "params": { "command_id": "c-15", "session_id": "s_1" },
+    "result": { "mode": "read_only" }
+  },
+  {
+    "method": "session/mark_read",
+    "params": { "session_id": "s_1", "up_to_seq": 120 },
+    "result": {}
+  },
+  {
+    "method": "session/get",
+    "params": { "session_id": "s_1" },
+    "result": {
+      "archived_at": 1700000000000,
+      "summary": {
+        "agent": "claude",
+        "branch": "cupper/fix-build",
+        "last_activity_at": 1700000000000,
+        "pending_interactions": 0,
+        "project_id": "p_1",
+        "read_only": false,
+        "session_id": "s_1",
+        "status": "idle",
+        "title": "Fix the build",
+        "title_source": "user",
+        "unread": false,
+        "workspace_kind": "worktree"
+      },
+      "workspace": {
+        "base_ref": "main",
+        "branch": "cupper/fix-build",
+        "kind": "worktree",
+        "path": "/work/worktrees/fix-build"
+      }
+    }
+  },
+  {
+    "method": "session/capabilities",
+    "params": { "session_id": "s_1" },
+    "result": {
+      "agent": "claude",
+      "commands": [{ "description": "Review a PR", "name": "review" }],
+      "config": [
+        {
+          "agent_option_id": "model",
+          "current": "opus",
+          "id": "model",
+          "values": [{ "name": "Opus", "risk": "normal", "value": "opus" }]
+        }
+      ],
+      "extraction": {
+        "diff": "per_hunk",
+        "exit_code": true,
+        "output_streaming": false,
+        "plan": "markdown_only",
+        "run_state": "inferred",
+        "thinking": true
+      },
+      "interactions": { "plan_confirm": true, "question_forms": true, "reject_ends_turn": false },
+      "prompt": { "file_ref": true, "image": true, "max_image_bytes": 10485760 },
+      "session": { "fork": false, "load_history": false, "resume": true },
+      "turn": {
+        "interrupt": true,
+        "interrupt_stops_commands": true,
+        "queue": true,
+        "steer": { "side_effects": true, "supported": true }
+      },
+      "versions": { "adapter": "0.91.0", "cli": "2.1.296", "cli_compat": "verified" }
+    }
+  },
+  {
+    "method": "session/list_archived",
+    "params": { "cursor": { "archived_at": 1700000000000, "session_id": "s_1" } },
+    "result": {
+      "next": { "archived_at": 1700000000000, "session_id": "s_1" },
+      "sessions": [
+        {
+          "archived_at": 1700000000000,
+          "summary": {
+            "agent": "claude",
+            "branch": "cupper/fix-build",
+            "last_activity_at": 1700000000000,
+            "pending_interactions": 0,
+            "project_id": "p_1",
+            "read_only": false,
+            "session_id": "s_1",
+            "status": "idle",
+            "title": "Fix the build",
+            "title_source": "user",
+            "unread": false,
+            "workspace_kind": "worktree"
+          }
+        }
+      ]
+    }
+  },
+  { "method": "session/list_archived", "params": {}, "result": { "sessions": [] } },
+  {
+    "method": "interaction/respond",
+    "params": {
+      "command_id": "c-1",
+      "input": { "digit": 1, "key": "digit", "kind": "key" },
+      "outcome": { "option_id": "allow-once", "type": "selected" },
+      "request_digest": "d_ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "request_id": "r_1",
+      "session_id": "s_1"
+    },
+    "result": { "request_id": "r_1" }
+  },
+  {
+    "method": "interaction/respond",
+    "params": {
+      "command_id": "c-1",
+      "input": { "kind": "click" },
+      "outcome": { "type": "answer", "values": { "q1": "yes" } },
+      "request_digest": "d_ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "request_id": "r_1",
+      "session_id": "s_1"
+    },
+    "result": { "request_id": "r_1" }
+  },
+  {
+    "method": "interaction/respond",
+    "params": {
+      "command_id": "c-1",
+      "input": { "key": "escape", "kind": "key" },
+      "outcome": { "type": "dismissed" },
+      "request_digest": "d_ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "request_id": "r_1",
+      "session_id": "s_1"
+    },
+    "result": { "request_id": "r_1" }
+  },
+  {
+    "method": "interaction/respond",
+    "params": {
+      "command_id": "c-1",
+      "outcome": { "option_id": "reject", "type": "selected" },
+      "request_digest": "d_ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "request_id": "r_1",
+      "session_id": "s_1"
+    },
+    "result": { "request_id": "r_1" }
+  },
+  {
+    "method": "interaction/get",
+    "params": { "request_id": "r_1", "session_id": "s_1" },
+    "result": {
+      "requested": {
+        "actionable_by": ["desktop_ui", "cli", "test_harness"],
+        "created_at": 1700000000000,
+        "digest": "d_ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "item_id": "i_1",
+        "request": {
+          "content_truncated": false,
+          "options": [
+            {
+              "effect": { "persistent": false, "scope": "once" },
+              "kind": "allow_once",
+              "name": "allow-once",
+              "option_id": "allow-once",
+              "requires": "approve"
+            },
+            {
+              "effect": { "persistent": false, "scope": "reject" },
+              "kind": "reject_once",
+              "name": "reject",
+              "option_id": "reject",
+              "requires": "approve"
+            }
+          ],
+          "title": "Run cargo test",
+          "tool": {
+            "command": { "text": "cargo test", "type": "text" },
+            "paths": [],
+            "tool_kind": "execute"
+          },
+          "type": "permission"
+        },
+        "request_id": "r_1",
+        "turn_id": "t_1"
+      },
+      "status": "pending"
+    }
+  },
+  {
+    "method": "interaction/get",
+    "params": { "request_id": "r_1", "session_id": "s_1" },
+    "result": {
+      "outcome": { "option_id": "allow-once", "type": "selected" },
+      "requested": {
+        "actionable_by": ["desktop_ui", "cli", "test_harness"],
+        "created_at": 1700000000000,
+        "digest": "d_ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "item_id": "i_1",
+        "request": {
+          "content_truncated": false,
+          "options": [
+            {
+              "effect": { "persistent": false, "scope": "once" },
+              "kind": "allow_once",
+              "name": "allow-once",
+              "option_id": "allow-once",
+              "requires": "approve"
+            },
+            {
+              "effect": { "persistent": false, "scope": "reject" },
+              "kind": "reject_once",
+              "name": "reject",
+              "option_id": "reject",
+              "requires": "approve"
+            }
+          ],
+          "title": "Run cargo test",
+          "tool": {
+            "command": { "text": "cargo test", "type": "text" },
+            "paths": [],
+            "tool_kind": "execute"
+          },
+          "type": "permission"
+        },
+        "request_id": "r_1",
+        "turn_id": "t_1"
+      },
+      "resolved_by": {
+        "client_kind": "cli",
+        "client_name": "cupper-cli",
+        "principal_id": "pr_cli"
+      },
+      "status": "resolved"
+    }
+  }
+]

@@ -4,3 +4,5 @@ docs/
 spikes/
 CLAUDE.md
 pnpm-lock.yaml
+# Written by `export-schema` in its own canonical layout (`pnpm gen`).
+protocol/schema/
