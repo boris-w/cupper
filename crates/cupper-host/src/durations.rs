@@ -67,6 +67,12 @@ durations! {
     /// After an interrupt, how long the host waits for the prompt to return
     /// before it ends the turn as `host_timeout` (design 5.2.6, 5.3.9).
     INTERRUPT_FALLBACK = "interrupt_fallback", Duration::from_millis(V1.interrupt_fallback_ms);
+    /// How long the command ledger keeps a command after it began (design
+    /// 5.2.5, 5.4.5).
+    LEDGER_RETENTION = "ledger_retention", Duration::from_secs(48 * 60 * 60);
+    /// How often the ledger drops the commands past their retention (design
+    /// 5.4.5).
+    LEDGER_SWEEP = "ledger_sweep", Duration::from_secs(60 * 60);
     /// The registry's own tests: a short coalescing window.
     #[cfg(test)]
     TEST_TICK = "test_tick", Duration::from_millis(40);
