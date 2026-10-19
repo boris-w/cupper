@@ -74,6 +74,8 @@ pub enum CloseReason {
     FrameError,
     /// The first message was not `initialize`.
     NotInitialized,
+    /// No `initialize` within the handshake deadline (design 5.3.11).
+    HandshakeTimeout,
     /// A second `initialize`.
     AlreadyInitialized,
     /// `initialize` failed with this error, which the peer was sent.

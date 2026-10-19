@@ -371,9 +371,9 @@
 | Codex | 计划确认（`toolCallId` 以 `plan-review:` 开头） | `implement_plan` | allow_once | plan_accept | 否 | 否 | approve | 在同一个 prompt 里继续实施 |
 | Codex | 计划确认 | `revise_plan` | reject_once | plan_revise | 否 | 未实测 | approve | 按"可能结束回合"提示，兼容套件补测 |
 | 任意 | 对照表里没有的 option_id，kind 已知 | 按 kind 兜底 | allow_once → once / approve；allow_always → persistent / privileged；reject_once → reject（Codex 视为 ends_turn）/ approve；reject_always → reject、persistent / approve | | | | | 同时记日志，提示更新对照表 |
-| 任意 | **kind 未知**（安全 #5） | — | 原值 | unknown | 是 | 未知 | privileged | `actionable_by` 只有 `desktop_ui`；界面显示 agent 原文并标"效果未知"，不套用拒绝的样式，不响应 Enter 和 Esc |
+| 任意 | **kind 未知**（安全 #5） | — | 原值 | unknown | 是 | 未知 | privileged | `actionable_by` 只有 `desktop_ui` 和 `test_harness`；界面显示 agent 原文并标"效果未知"，不套用拒绝的样式，不响应 Enter 和 Esc |
 
-**`actionable_by`**：所有选项都是 `privileged` 时只有 `desktop_ui`；否则为 `desktop_ui`、`cli`（已提权且含 `approve`）、`test_harness`，M3 加 `remote_device`。宿主在回答时还会再检查一遍（ADR-04）。
+**`actionable_by`**：所有选项都是 `privileged` 时为 `desktop_ui` 和 `test_harness`；否则为 `desktop_ui`、`cli`（已提权且含 `approve`）、`test_harness`，M3 加 `remote_device`（v1.8 后 T042 裁定：`test_harness` 总在其中，与 5.8.3 一致，取值不随构建变化；回答照样走完整的检查链）。宿主在回答时还会再检查一遍（ADR-04）。
 
 **摘要**：`d_` 加上 `{session_id, request_id, turn_id, request}` 经 JCS 规范化后的 sha-256，完整 64 位十六进制。
 
@@ -718,4 +718,18 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
   - `grant_elevation`：`{elevation_id, scopes}`；
   - `interrupt_turns`：`{running_turns}`。只有 `host/exit` 带 `force`、`host/prepare_upgrade` 为 `mode: force`，并且确实有运行中的回合时，才是这个 action；
   - 这个形式下不需要确认的命令，返回 invalid params。
+
+**T033 开工前的裁定（2026-10-19）**
+
+- **UNIT-unsupported-set 的允许集合**：每一项都写明原因。可以返回 `unsupported` 的方法有：
+  - M1b、M2、M3 的方法；
+  - 按构建门控、本构建没有的方法；
+  - T183 之前的 `host/prepare_upgrade`；
+  - 执行者还没合并的 M1a 方法，并写明由哪个任务接上。
+  - 每个任务接上执行者时，删掉自己那几行。到 T099 时，表里不应再有 M1a 方法。
+- **`policy/describe` 的 `Facts`**：全部由会话端口的 `facts(&Confirmable)` 提供，`running_turns` 也由会话管理给出，不另设接口。
+- **每连接在途上限**：第 65 个在途请求回 `rate_limited`，不带 `retry_after_ms`，因为在途数要靠这条连接自己的回复来释放，与时间无关。
+- **订阅与 `history/page` 的 `not_found`**：会话流的 head 为 0 就回 `not_found`，不查 `sessions` 表（T019）。
+- **补发与裁剪的竞态**：补发时读到缺口，就摘掉订阅、清掉这条流排队中的实时项，发 `stream/reset`，`reason` 沿用 `rebuilt`。客户端带游标重新订阅，会拿到 `cursor_expired` 快照（T019）。
+- **订阅日志（Q16）**：网关把 `stream.subscribed` 发进审计 channel，T037 只把它写进 host.log，不写 `audit` 表（T019）。
 

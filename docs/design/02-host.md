@@ -303,7 +303,7 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
 
 | 触发 | 结果状态 |
 |---|---|
-| Claude 发 `$/cancel_request` 撤回 | `cancelled`（`reason: agent_withdrew`） |
+| Claude 发 `$/cancel_request` 撤回 | `cancelled`（`reason: withdrawn`） |
 | 回合被中断（Codex 不撤回，宿主替它应答 `Cancelled`） | `cancelled` |
 | 请求所属的适配器实例退出 | `expired`（SEC-10） |
 | 宿主重启 | `expired` |

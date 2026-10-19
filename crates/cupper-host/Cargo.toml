@@ -37,6 +37,8 @@ tokio = { version = "1.53.3", features = ["io-util", "net", "rt", "sync", "time"
 uuid = { version = "1.28.0", default-features = false, features = ["std"] }
 
 [dev-dependencies]
+# The CLI's client, with the harness key, against the gateway fixture.
+cupper-cli = { path = "../cupper-cli", features = ["test-harness"] }
 # `send_with_fds`: a peer that passes fds (IT-pinned-token).
 cupper-sys = { path = "../cupper-sys", features = ["test-util"] }
 proptest.workspace = true
@@ -48,6 +50,17 @@ tokio = { version = "1.53.3", features = ["macros"] }
 [[test]]
 name = "migrations"
 required-features = ["test-harness"]
+
+# The gateway alone, for process-level tests (T039, T073).
+[[bin]]
+name = "cupper-gateway-fixture"
+path = "src/bin/gateway_fixture.rs"
+required-features = ["test-harness"]
+
+# IT-devkey-launcher-only and IT-devkey-orphan-start run the fixture with `dev_key`.
+[[test]]
+name = "gateway"
+required-features = ["dev-auth", "test-harness"]
 
 [lints]
 workspace = true

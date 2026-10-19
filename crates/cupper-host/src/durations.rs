@@ -58,6 +58,9 @@ durations! {
     /// How long a closing connection may take to send its last replies, such
     /// as the error that ends a handshake (design 5.3.11, rulings before T030).
     GATEWAY_CLOSE_GRACE = "gateway_close_grace", Duration::from_secs(2);
+    /// How long a client has after `host/hello` to send `initialize` (design
+    /// 5.3.11, the ruling on T030's report).
+    GATEWAY_HANDSHAKE = "gateway_handshake", Duration::from_secs(10);
     /// The wait after a failed `accept`, out of fds for one, before the next.
     GATEWAY_ACCEPT_BACKOFF = "gateway_accept_backoff", Duration::from_millis(50);
     /// How long a stream stays in memory with no handle, writer or subscriber

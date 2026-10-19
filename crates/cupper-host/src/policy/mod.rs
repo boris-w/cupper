@@ -39,7 +39,7 @@ mod tier;
 #[cfg(test)]
 mod matrix;
 #[cfg(test)]
-mod testkit;
+pub(crate) mod testkit;
 
 use cupper_protocol::domain::{ClientRole, PrincipalKind};
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
@@ -48,7 +48,7 @@ use cupper_protocol::rpc::Scope;
 
 pub use attach::{ProjectConfig, attach};
 pub use describe::{Confirmable, DescribeError, Facts, describe};
-pub use input::{MIN_ANSWER_DELAY, Pending, git_revert, respond};
+pub use input::{MIN_ANSWER_DELAY, Pending, git_revert, requires, respond};
 pub use method::{method, set_config, settings_update};
 pub use tier::{ceiling, option_tier, tier_change};
 
