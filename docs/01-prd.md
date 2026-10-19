@@ -125,7 +125,7 @@
 | CP-5 | 新建会话时选择工作区：本地目录，或新建 worktree。新建 worktree 时，基于所选的起始分支直接创建一个有名字的分支，会话页显示分支名（B9、E1、E2 的最小版本） | P0 |
 | CP-6 | 运行中追加消息：按 Codex 的交互，默认插进当前回合（Steer），⌘Enter 排到下一回合（Queue）；agent 不支持 Steer 或 Steer 失败时自动转为排队。排队由 cupper 自己实现。设置里可以把默认行为改成排队（Claude 的 Steer 有副作用，见 ADR-07）（B10；v1.3） | P0 |
 | CP-7 | 中断当前回合；agent 没有响应时，cupper 超时兜底（B12） | P0 |
-| CP-8 | 排队消息可编辑、重排、删除（B11）；文件附件（B3）；Plan 模式（B13）；worktree 增强：setup 脚本、复制被忽略的文件、Handoff（E2、E3） | P1 |
+| CP-8 | 排队消息的重排、删除（B11；预览、编辑和插话按界面复刻决定 F3 提前到 M1，归入 CP-6）；文件附件（B3）；Plan 模式（B13）；worktree 增强：setup 脚本、复制被忽略的文件、Handoff（E2、E3） | P1 |
 
 **消息流**（R01-C）
 
@@ -359,4 +359,4 @@
 | v1.0 | 2026-10-16 | 用户评审通过：第 10 节全部按建议确认，U7 记为"接受前提，M3 前核实账号"；去掉正文中的待确认标记。打 tag `gate/prd` |
 | v1.1 | 2026-10-16 | gate 之后的增补，已由用户确认（见 `docs/meetings/2026-10-16-design-decisions/`）：新增 AG-6（会话继承 CLI 的 MCP、hooks、插件）。来源是 SP-1 实测中的范围外发现 |
 | v1.2 | 2026-10-16 | 设计评审之后的增补（见 `docs/meetings/2026-10-16-design-review/` 和 `docs/meetings/2026-10-16-gate-design-decisions/`）：PS-2 增加项目信任；SEC-9 增加"不能切到更宽松的审批档位"；第 10 节记录 MS-4、GT-3、NFR-8 的验收口径 |
-| v1.3 | 2026-10-19 | 界面 100% 复刻 Codex（用户决定，见 `docs/meetings/2026-10-19-ui-fidelity/`）：UI-6 改写；AP-1、AP-5 改为请求面板；GT-2 的评论改为作为附件进入输入框；CP-6 默认插话、⌘Enter 排队；UI-4 按 Codex 的快捷键；第 10 节记录这一决定 |
+| v1.3 | 2026-10-19 | 界面 100% 复刻 Codex（用户决定，见 `docs/meetings/2026-10-19-ui-fidelity/`）：UI-6 改写；AP-1、AP-5 改为请求面板；GT-2 的评论改为作为附件进入输入框；CP-6 默认插话、⌘Enter 排队；UI-4 按 Codex 的快捷键；CP-8 中排队消息的编辑提前到 M1；第 10 节记录这一决定 |
