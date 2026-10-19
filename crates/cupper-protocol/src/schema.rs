@@ -1,15 +1,15 @@
 //! Building blocks of the exported JSON Schema (design 5.3.10): the generator
 //! settings every protocol schema uses, and the per-method entries that carry
-//! `x-scope`, `x-idempotent`, `x-milestone` and `x-errors`.
+//! `x-scope`, `x-idempotent`, `x-milestone`, `x-errors` and `x-builds`.
 
 use schemars::generate::SchemaSettings;
 use schemars::transform::RecursiveTransform;
 use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde_json::{Value, json};
 
-use crate::annotations::{X_ERRORS, X_IDEMPOTENT, X_MILESTONE, X_SCOPE};
+use crate::annotations::{X_BUILDS, X_ERRORS, X_IDEMPOTENT, X_MILESTONE, X_SCOPE};
 use crate::limits::MAX_SAFE_INTEGER;
-use crate::rpc::{ClientNotification, HostNotification, Method, MethodError, Scope};
+use crate::rpc::{Build, ClientNotification, HostNotification, Method, MethodError, Scope};
 
 /// Draft 2020-12, with every integer bounded by [`bound_integers`].
 pub fn generator() -> SchemaGenerator {
@@ -57,17 +57,23 @@ pub fn bound_integers(schema: &mut Schema) {
     schema.insert("maximum".into(), hi.into());
 }
 
-/// `{params, result, x-scope, x-idempotent, x-milestone, x-errors}` of a request method.
+/// `{params, result, x-scope, x-idempotent, x-milestone, x-errors}` of a
+/// request method, and `x-builds` when only some builds have it.
 pub fn method_entry<M: Method>(g: &mut SchemaGenerator) -> Value {
     let errors: Vec<String> = M::ERRORS.iter().map(MethodError::wire).collect();
-    json!({
+    let mut entry = json!({
         "params": subschema::<M::Params>(g),
         "result": subschema::<M::Result>(g),
         X_SCOPE: scope_name(M::SCOPE.as_ref()),
         X_IDEMPOTENT: M::IDEMPOTENCY.as_str(),
         X_MILESTONE: M::MILESTONE.as_str(),
         X_ERRORS: errors,
-    })
+    });
+    if !M::BUILDS.is_empty() {
+        let builds: Vec<&str> = M::BUILDS.iter().copied().map(Build::as_str).collect();
+        entry[X_BUILDS] = json!(builds);
+    }
+    entry
 }
 
 /// `{params, x-scope, x-idempotent, x-milestone}` of a client-to-host notification.

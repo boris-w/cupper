@@ -1,13 +1,16 @@
-import { mkdtemp, readdir, readFile, stat } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, onTestFinished } from "vitest";
 
 import { MainLog } from "./log";
 
+/** A log directory in a temporary directory that is removed when the test ends. */
 async function logDir() {
-  return join(await mkdtemp(join(tmpdir(), "cupper-log-")), "logs");
+  const dir = await mkdtemp(join(tmpdir(), "cupper-log-"));
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
+  return join(dir, "logs");
 }
 
 describe("main.log", () => {
