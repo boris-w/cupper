@@ -1,0 +1,26 @@
+{
+  "name": "@cupper/host-client",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "The desktop's client of the host protocol: framing, handshake, requests, commands and stream sync; a mock host and the HostPort contract tests.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./mock": "./src/mock/index.ts",
+    "./contract": "./src/contract.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cupper/protocol": "workspace:*",
+    "@cupper/shell-api": "workspace:*",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "vite": "8.3.3",
+    "vitest": "5.0.3"
+  }
+}
