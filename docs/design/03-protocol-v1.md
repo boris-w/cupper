@@ -371,9 +371,9 @@
 | Codex | 计划确认（`toolCallId` 以 `plan-review:` 开头） | `implement_plan` | allow_once | plan_accept | 否 | 否 | approve | 在同一个 prompt 里继续实施 |
 | Codex | 计划确认 | `revise_plan` | reject_once | plan_revise | 否 | 未实测 | approve | 按"可能结束回合"提示，兼容套件补测 |
 | 任意 | 对照表里没有的 option_id，kind 已知 | 按 kind 兜底 | allow_once → once / approve；allow_always → persistent / privileged；reject_once → reject（Codex 视为 ends_turn）/ approve；reject_always → reject、persistent / approve | | | | | 同时记日志，提示更新对照表 |
-| 任意 | **kind 未知**（安全 #5） | — | 原值 | unknown | 是 | 未知 | privileged | `actionable_by` 只有 `desktop_ui`；界面显示 agent 原文并标"效果未知"，不套用拒绝的样式，不响应 Enter 和 Esc |
+| 任意 | **kind 未知**（安全 #5） | — | 原值 | unknown | 是 | 未知 | privileged | `actionable_by` 只有 `desktop_ui` 和 `test_harness`；界面显示 agent 原文并标"效果未知"，不套用拒绝的样式，不响应 Enter 和 Esc |
 
-**`actionable_by`**：所有选项都是 `privileged` 时只有 `desktop_ui`；否则为 `desktop_ui`、`cli`（已提权且含 `approve`）、`test_harness`，M3 加 `remote_device`。宿主在回答时还会再检查一遍（ADR-04）。
+**`actionable_by`**：所有选项都是 `privileged` 时为 `desktop_ui` 和 `test_harness`；否则为 `desktop_ui`、`cli`（已提权且含 `approve`）、`test_harness`，M3 加 `remote_device`（v1.8 后 T042 裁定：`test_harness` 总在其中，与 5.8.3 一致，取值不随构建变化；回答照样走完整的检查链）。宿主在回答时还会再检查一遍（ADR-04）。
 
 **摘要**：`d_` 加上 `{session_id, request_id, turn_id, request}` 经 JCS 规范化后的 sha-256，完整 64 位十六进制。
 

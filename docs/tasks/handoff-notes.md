@@ -140,6 +140,10 @@
 | T033 | blob 传输：`BlobStore::put(data, media_type, Some(hash))`，`Mismatch` 对应 `conflict`，`TooLarge` 对应 `too_large`；客户端声明的 `size` 由 T033 自己和 `data.len()` 比对。`get` 每次都读整个文件并核对哈希，`offset`/`length` 由 T033 截取。图片的 10 MiB 限制（按 agent）不在 `BlobStore` 里 | T027（已写入 brief） |
 | T043、T055 | 事件引用 blob 时，在同一个写操作里调用 `store::blobs::add_ref`，返回 `false` 时让客户端重新上传。T055 用 `RawWriter::sink()` 构造 `Tap` | T027 |
 | T047 | `test/run_maintenance` 的 `raw_frames`、`audit`、`orphan_blobs` 对应 `Maintenance::run(Cleanup::…)`，`ledger` 对应 T032 的 `Ledger::sweep()`。静止屏障要把 `store_raw_writer`、`store_maintenance` 两类参与者算进去 | T027 |
+| T043 | 宿主重启后，用 `InteractionBroker` 的 `Input::Ended` 载入 `interactions` 表里本会话已经结束的请求；写 `interaction.requested` 之前先刷出 normalizer 缓冲的文本，并通知 `IndexActor`；`Respond.tier` 传会话当前的档位；CLI、test_harness 完成的回答要写审计 `interaction.responded`（也涉及 T037） | T042 |
+| T053、T055 | 按 `AskRequest` 交出 agent 的请求：权限请求用 `Classified`，form 模式的 elicitation 用 `Form`（原样带 JSON schema）。`DriverEvent::Ask` 还没有 `toolCallId`，actor 填 `item_id` 需要它，由提取层补上。撤回之后交互代理仍会发一次 `Answer { Cancelled }`，运行时据此放掉应答句柄 | T042 |
+| T110 | Codex 用 `_meta.codex.isOther` 和 `<id>_note` 表达"其他"和备注，目前按 JSON Schema 类型映射成两个字段；要不要合成一题，由本任务决定 | T042 |
+| T016 | `interaction/respond` 的 `x-errors` 里没有 `not_found`，会话里不存在的请求 ID 目前回 `invalid_params`，而 `interaction/get` 回 `not_found`。冻结前补上，并跑 `pnpm gen` | T042 审阅 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
