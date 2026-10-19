@@ -24,8 +24,8 @@ pub use manual::ManualClock;
 pub use system::SystemClock;
 
 /// A reading of a clock's monotonic time: how long after the clock's origin.
-/// Readings of one clock compare and subtract; readings of different clocks
-/// mean nothing to each other, so the host shares a single clock.
+/// Readings of one clock compare and measure the time between them; readings of
+/// different clocks mean nothing to each other, so the host shares one clock.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MonoTime(Duration);
 

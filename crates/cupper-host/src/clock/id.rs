@@ -13,9 +13,9 @@ use super::Clock;
 /// The remaining 74 bits are a counter: random at each new millisecond (with the
 /// top bit clear, so it cannot run over) and incremented within one, so IDs from
 /// one generator are strictly increasing while the wall clock does not go back.
-/// The random part comes from a generator seeded once; [`IdGen::seeded`] fixes the
-/// seed, which together with a [`ManualClock`](super::ManualClock) makes the IDs
-/// reproducible.
+/// The random part comes from a generator seeded once; `IdGen::seeded` (tests and
+/// `test-harness` builds) fixes the seed, which together with a `ManualClock`
+/// makes the IDs reproducible.
 #[derive(Debug)]
 pub struct IdGen {
     clock: Arc<dyn Clock>,
