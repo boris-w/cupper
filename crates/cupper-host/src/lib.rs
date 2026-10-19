@@ -4,6 +4,7 @@
 pub mod clock;
 pub mod durations;
 pub mod exit;
+pub mod failpoint;
 pub mod pure;
 pub mod quiescence;
 pub mod startup;
