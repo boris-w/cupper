@@ -423,7 +423,7 @@ code { font-family: var(--font-code); font-size: 12px; background: var(--color-b
 <body>
 
 <h1>cupper 产品需求（带界面示意）</h1>
-<p class="mu3">文档编号 D03 · 2026-10-19 · 第 3 版（同步设计 v1.4）。依据：PRD v1.3；技术设计 v1.4（5.7 按 R06 和 F1–F6 重写，见 D04）；任务计划 v1.1；R06 的一手界面规格 <code>docs/tasks/R06-codex-desktop-ui-firsthand/ui-spec.md</code>；界面复刻程度的决定 F1–F6（<code>docs/meetings/2026-10-19-ui-fidelity/minutes.md</code>）。本页只把已确认的文档画成图，不新增需求；与文档不一致时以文档为准。</p>
+<p class="mu3">文档编号 D03 · 2026-10-19 · 第 4 版（同步设计 v1.5）。依据：PRD v1.3；技术设计 v1.5（5.7 按 R06 和 F1–F6 重写，见 D04；请求面板的规则经安全工程师确认）；任务计划 v1.2；R06 的一手界面规格 <code>docs/tasks/R06-codex-desktop-ui-firsthand/ui-spec.md</code>；界面复刻程度的决定 F1–F6（<code>docs/meetings/2026-10-19-ui-fidelity/minutes.md</code>）。本页只把已确认的文档画成图，不新增需求；与文档不一致时以文档为准。</p>
 
 <p class="dark-only note-dark">当前按暗色显示。暗色的设计参数是按 Codex 的推导规则计算的，<b>暗色未经截图核对</b>（ui-spec 7.3）。</p>
 
@@ -511,7 +511,7 @@ flowchart LR
   <li>主界面全景按默认窗口 1280 × 820 的真实尺寸画，再整体缩放到 90% 放进页面；其余局部图按 1:1 画。图标用简单的字符占位，不使用 Codex 的图标。</li>
   <li><b>文案</b>：加引号的界面文字来自 PRD、设计或 ui-spec；标"示意"的是为了画图编的样例（项目名、文件名、命令、时长等）。审批和提问的选项文字以 agent 原文为准（AP-2），图里借用 PRD 的示例。</li>
   <li><span class="tag later">虚线、半透明</span> = M1b 之后才交付的元素，多数是 M2（F3 列出的 P1）。ChatGPT 的全局导航栏不做，图里不画。</li>
-  <li>"待定 Qn"指设计 5.13 的待定问题编号。<b>"待安全确认（Q41）"</b>：请求面板的待命期、焦点和按键规则，以及两处有意与 Codex 不同的地方，安全工程师还在确认。</li>
+  <li>"待定 Qn"指设计 5.13 的待定问题编号。请求面板的规则和两处有意与 Codex 不同的地方，<b>已经安全确认（附条件，已落实，设计 v1.5）</b>；Q41 只剩一项：Codex 的数字键是不是"选中即提交"，交 T106 核对。</li>
 </ul>
 
 <!-- ======================================================= 2 -->
@@ -878,7 +878,7 @@ test result: FAILED. 3 passed; 1 failed</div>
 
 <!-- ------------------------------------------------ 3.3 -->
 <h3 id="s3-3">3.3 审批请求面板</h3>
-<p><b>结论</b>：按 Codex，审批不是插在消息流里的卡片，而是<b>替换输入框位置的请求面板</b>：外观和输入框一致（圆角 22、同样的阴影和底色），选项带编号，数字键选中即提交，Enter 提交当前选中项，Esc 关闭；输入框的草稿和附件原样保留，请求处理完后输入框恢复（AP-1，PRD v1.3；设计 5.7.4）。选项和文案以 agent 原文为准，cupper 只标出效果（AP-2）。先到先得：任何一端处理后，其他端自动收起（AP-4）。面板的待命期、焦点和按键规则见 <a href="#s3-3-rp">3.3.1</a>，<b>待安全确认（Q41）</b>。</p>
+<p><b>结论</b>：按 Codex，审批不是插在消息流里的卡片，而是<b>替换输入框位置的请求面板</b>：外观和输入框一致（圆角 22、同样的阴影和底色），选项带编号，数字键选中即提交（Codex 是否如此还没核实，Q41），Enter 提交当前选中项，Esc 关闭；输入框的草稿和附件原样保留，请求处理完后输入框恢复（AP-1，PRD v1.3；设计 5.7.4）。选项和文案以 agent 原文为准，cupper 只标出效果（AP-2）。先到先得：任何一端处理后，其他端自动收起（AP-4）。面板的待命期、焦点和按键规则见 <a href="#s3-3-rp">3.3.1</a>，已经安全确认（附条件，已落实）。</p>
 
 <div class="scroll"><div class="fig wf">
   <div class="win wf w-fig-520"><div class="thread">
@@ -914,18 +914,30 @@ test result: FAILED. 3 passed; 1 failed</div>
       <div class="composer req">
         <div class="row nowrap"><b class="sm">允许 Claude Code 运行此命令？</b><span class="sp"></span><span class="xs mu3">关闭</span><span class="kbd">ESC</span></div>
         <div class="row center mt"><span class="tag">按 Tab 或点击以处理请求</span><span class="n">⑮</span></div>
+        <div class="xs mu3 row center">输入框里有草稿、最近 2 秒打过字，或刚按了打字键</div>
         <div class="opt mt"><span class="no">1</span><span class="tt">仅本次</span></div>
         <div class="opt"><span class="no">2</span><span class="tt">拒绝</span></div>
       </div>
     </div></div>
+    <div class="win wf w-fig-440 mt"><div class="thread">
+      <div class="mt3"></div>
+      <div class="composer req">
+        <div class="row nowrap"><b class="sm">允许 Claude Code 运行此命令？</b><span class="sp"></span><span class="xs mu3">关闭</span><span class="kbd">ESC</span></div>
+        <div class="opt on mt"><span class="no">1</span><span class="tt">仅本次</span></div>
+        <div class="opt"><span class="no">2</span><span class="tt">拒绝</span></div>
+        <div class="row mt"><span class="tag">按 Enter 提交</span><span class="n">㉑</span><span class="sp"></span><span class="btn">跳过</span><span class="btn p">提交 <span class="kbd">↵</span></span></div>
+      </div>
+    </div></div>
   </div>
 </div></div>
-<p class="cap">图 3-3a 审批请求面板，画在输入框的位置。右下是"面板出现时你正在打字"的状态。选项文字是 agent 原文，这里借用 PRD S2 的示例和设计 5.3.6 记录的原文含义。</p>
+<p class="cap">图 3-3a 审批请求面板，画在输入框的位置。右侧下面两张：面板没有自动获得焦点（⑮），以及获得焦点后按了第一下 ⌘Enter（㉑）。选项文字是 agent 原文，这里借用 PRD S2 的示例和设计 5.3.6 记录的原文含义。</p>
 
 <div class="scroll"><div class="win wf w-fig-600"><div class="thread g4">
   <div class="mt3"></div>
   <div class="act"><span class="ico">✓</span><span class="t">已批准：运行 cargo test --workspace</span><span class="n">⑯</span></div>
-  <div class="act"><span class="ico">✕</span><span class="t">已拒绝 · 并附一条消息</span></div>
+  <div class="act"><span class="ico">✕</span><span class="t">已拒绝：运行 rm -rf build</span></div>
+  <div class="bub">先跑一遍测试，再决定要不要清理<div class="xs mu3">附于对"运行 rm -rf build"的拒绝</div></div>
+  <div class="row right"><span class="n">㉒</span></div>
   <div class="act"><span class="ico">✓</span><span class="t">已批准：运行 cargo test --workspace · 在 cupper-cli 处理</span><span class="n">⑰</span></div>
   <div class="act"><span class="ico">○</span><span class="t">已失效 · cargo test --workspace</span><span class="n">⑱</span></div>
   <div class="act"><span class="ico">○</span><span class="t">已撤回 · cargo test --workspace</span><span class="n">⑲</span></div>
@@ -941,37 +953,49 @@ test result: FAILED. 3 passed; 1 failed</div>
   <tr><td>④</td><td>要批准的内容</td><td>标签"终端"，命令全文可以展开或收起；命令和路径完整下发，不截断</td><td>AP-1、SEC-10</td><td>M1a</td></tr>
   <tr><td>⑤</td><td>不可见字符转义</td><td>cupper 特有：双向控制符、零宽字符等显示成可见的转义（如 <code>\u202E</code>），与原生确认框共用一份转义工具</td><td>SEC-8</td><td>M1a</td></tr>
   <tr><td>⑥</td><td>"已截断"</td><td>cupper 特有：超过 16,000 字符时改为预览；展开看到全文之前，允许类选项不可选</td><td>AP-1</td><td>M1a</td></tr>
-  <tr><td>⑦</td><td>编号选项与键盘</td><td>选项前显示编号 1、2、3；选中行右侧有 ↑↓ 提示。数字键选中对应编号并立即提交，↑ ↓ 移动选中，Enter 提交选中项。初始选中第一个既不是特权、也不是效果未知的选项（RP-4、RP-5，<b>待安全确认，Q41</b>）</td><td>AP-1</td><td>M1a</td></tr>
-  <tr><td>⑧</td><td>持久选项</td><td>会写入 agent 自己的权限规则（Claude 的命令规则、Codex 的执行策略），标"会写入 agent 的权限规则"；特权选项标"需要确认"，数字键、Enter、点击都只会弹原生确认框（<a href="#s3-7">3.7</a>，RP-7）。Claude 同一个选项在文件编辑上只对本会话有效、在命令上持久（待定 Q7）</td><td>AP-2</td><td>M1a（Claude）/ M1b（Codex）</td></tr>
+  <tr><td>⑦</td><td>编号选项与键盘</td><td>编号一律等于选项在 agent 给出的顺序里从 1 起的序号，特权选项和效果未知的选项也占编号，不重新排序（宿主按这个序号核对数字键，RP-6、RP-10）。数字键选中对应编号并立即提交（Codex 是否如此未核实，Q41）；↑ ↓ 移动选中，Enter 提交选中项。初始选中第一个既不是特权、也不是效果未知的选项（RP-4、RP-5）</td><td>AP-1</td><td>M1a</td></tr>
+  <tr><td>⑧</td><td>持久选项</td><td>会写入 agent 自己的权限规则（Claude 的命令规则、Codex 的执行策略），标"会写入 agent 的权限规则"；特权选项标"需要确认"，按它的编号、Enter、点击都只会弹原生确认框（<a href="#s3-7">3.7</a>，RP-7）。Claude 同一个选项在文件编辑上只对本会话有效、在命令上持久（待定 Q7）</td><td>AP-2</td><td>M1a（Claude）/ M1b（Codex）</td></tr>
   <tr><td>⑨</td><td>拒绝</td><td>Claude 拒绝后回合继续</td><td>AP-1</td><td>M1a</td></tr>
-  <tr><td>⑩</td><td>拒绝并附一条消息</td><td>Codex 的最后一项（No, and tell … what to do differently）。ACP 的审批选项不带文字反馈，所以提交时先以"跳过"所用的那个拒绝选项回答，再把这段文字按跟进行为发给 agent：Claude 拒绝后回合继续，文字作为插话；Codex 的拒绝会结束回合，文字开启下一个回合。两条命令，协议不变；第二条失败时文字留在输入框里。没有拒绝类选项时不显示这一行（设计 5.7.4）</td><td>AP-1、CP-6</td><td>M1a（M1a 没有插话，文字按排队发出）</td></tr>
-  <tr><td>⑪</td><td>"请再按一次"</td><td>窗口刚被激活的 1 秒冷却期内、或刚打完字 1 秒内按 Enter，提示再按一次（或按 ⌘Enter）</td><td>AP-1</td><td>M1a</td></tr>
+  <tr><td>⑩</td><td>拒绝并附一条消息</td><td>Codex 的最后一项（No, and tell … what to do differently）。ACP 的审批选项不带文字反馈，所以先以"跳过"所用的那个不持久的拒绝选项回答，<b>拒绝成功之后</b>才把这段文字按跟进行为发给 agent（遵守"跟进消息默认排队"和插话能力）：Claude 拒绝后回合继续，文字作为插话；Codex 的拒绝会结束回合，文字开启下一个回合。收到"已在别处处理"或"已失效"时不发，文字留在输入框里，并提示"已在别处处理"。没有拒绝类选项时不显示这一行（RP-12）</td><td>AP-1、CP-6</td><td>M1a（M1a 没有插话，文字按排队发出）</td></tr>
+  <tr><td>⑪</td><td>"请再按一次"</td><td>只用于窗口激活后的 1 秒冷却期：这时按 Enter 被拒，提示再按一次。刚打过字时被拒不给这个提示，而是回到"按 Tab 或点击以处理请求"（⑮），以免引导以为自己在发消息的人按第二下（真实输入第 7 条）</td><td>AP-1</td><td>M1a</td></tr>
   <tr><td>⑫</td><td>跳过、提交</td><td>"跳过"选不持久的拒绝类选项；"提交"带 Enter 键帽</td><td>AP-1</td><td>M1a</td></tr>
   <tr><td>⑬</td><td>"拒绝将结束本回合"</td><td>Codex 的拒绝会结束整个回合，面板上写明</td><td>AP-2</td><td>M1b</td></tr>
-  <tr><td>⑭</td><td>效果未知的选项</td><td>对照表里没有的选项类型：显示原文并标"效果未知"，不套用拒绝的样式；数字键和方向键跳过它，Enter 不提交它，只能点击，点击后走原生确认框（RP-6）</td><td>AP-2</td><td>M1a</td></tr>
-  <tr><td>⑮</td><td>"按 Tab 或点击以处理请求"</td><td>面板出现时你在输入框里、并且最近 2 秒打过字：面板不自动获得焦点，按 Tab 或点击之前不响应按键（RP-3，<b>待安全确认，Q41</b>）</td><td>AP-1</td><td>M1a</td></tr>
+  <tr><td>⑭</td><td>效果未知的选项</td><td>对照表里没有的选项类型：显示原文并标"效果未知"，不套用拒绝的样式；它照样占编号，但按它的编号不起作用，方向键跳过它，Enter 不提交它，只能点击，点击后走原生确认框（RP-6）</td><td>AP-2</td><td>M1a</td></tr>
+  <tr><td>⑮</td><td>"按 Tab 或点击以处理请求"</td><td>面板只在三条都满足时自动获得焦点：焦点在输入框里、输入框里没有草稿（文字和附件都空）、最近 2 秒没打字。否则显示这句提示，按 Tab 或点击之前不响应按键。面板获得焦点后，只要收到打字键（数字、方向键、Enter、⌘Enter、Esc、Tab 以外的键），也回到这个状态，那一下按键被吞掉（RP-3）</td><td>AP-1</td><td>M1a</td></tr>
   <tr><td>⑯</td><td>请求记录行</td><td>请求在消息流里原来的位置留一行："已批准：运行 cargo test""已拒绝"等</td><td>AP-4</td><td>M1a</td></tr>
   <tr><td>⑰</td><td>别的客户端处理的</td><td>记录行注明在哪个客户端处理</td><td>AP-4</td><td>M1a</td></tr>
   <tr><td>⑱</td><td>已失效</td><td>请求所属的 agent 进程退出，或宿主重启；面板收起，在记录行里注明</td><td>SEC-10、NFR-9</td><td>M1a</td></tr>
   <tr><td>⑲</td><td>已撤回</td><td>agent 撤回了请求，或回合被中断；面板收起，在记录行里注明</td><td>AP-4、CP-7</td><td>M1a</td></tr>
   <tr><td>⑳</td><td>"已在 {客户端} 处理"</td><td>请求在别的客户端处理后，面板收起，toast 提示</td><td>AP-4</td><td>M1a</td></tr>
+  <tr><td>㉑</td><td>第一下 ⌘Enter</td><td>面板获得焦点后的第一下 ⌘Enter 不提交，只把焦点留在面板上，提示"按 Enter 提交"：输入框里的 ⌘Enter 是排队发送，避免肌肉记忆误批（RP-3、RP-5）</td><td>AP-1</td><td>M1a</td></tr>
+  <tr><td>㉒</td><td>附于拒绝的消息</td><td>"拒绝并附一条消息"发出的那条用户消息带 <code>reply_to</code>（被拒绝的请求），消息流里标明"附于对 … 的拒绝"（RP-12）</td><td>AP-1、CP-6</td><td>M1a</td></tr>
   <tr><td>—</td><td>Codex 有、cupper 不做的</td><td>自动审查（Approve for me）的状态行和"想少一些审批提示吗？"弹窗：非目标，替代方案是 agent 自带的低打扰模式（U6）</td><td>—</td><td>—</td></tr>
 </table>
 
-<h4 id="s3-3-rp">3.3.1 请求面板的待命期、焦点与按键（待安全确认，Q41）</h4>
-<p>请求面板替换了输入框，按键可能本来是要打进输入框的，所以面板有自己的一组规则（设计 5.7.8 的 RP-1 至 RP-11）。<b>这部分由安全工程师确认（待定 Q41）</b>；如果不接受"数字键直接提交"，退回"数字键只选中，Enter 提交"。</p>
+<h4 id="s3-3-rp">3.3.1 请求面板的待命期、焦点与按键（已经安全确认）</h4>
+<p>请求面板替换了输入框，按键可能本来是要打进输入框的，所以面板有自己的一组规则（设计 5.7.8 的 RP-1 至 RP-12，以及真实输入规则的第 2、3、7 条）。<b>已经安全确认（附条件，已落实）</b>：安全工程师接受"数字键直接提交"，提出的 6 条补充都写进了设计 v1.5（<code>docs/meetings/2026-10-19-ui-fidelity/security-engineer.md</code>）。只剩 Q41 一项待定：Codex 里的数字键是不是"选中即提交"还没有核实，交 T106 核对；它只影响复刻度，安全上两种都可以。</p>
 <table>
   <tr><th>规则</th><th>内容</th></tr>
   <tr><td>RP-1 待命期</td><td>面板出现，或下一个请求接替时，先有 500 ms 的待命期：这期间的按键和点击一律吞掉；有按键就重新计时</td></tr>
   <tr><td>RP-2 点击</td><td>只认在"可以操作"之后才按下的点击</td></tr>
-  <tr><td>RP-3 焦点</td><td>焦点原在输入框、并且最近 2 秒没打字时，焦点移到面板上；刚打过字时不自动获得焦点，显示"按 Tab 或点击以处理请求"；焦点原在别处（侧边栏、侧边面板、审查文档）时不抢焦点；导航、切换会话、通知点击都不会把焦点移到面板上</td></tr>
+  <tr><td>RP-3 焦点（v1.5 收紧）</td><td>
+    <b>自动获得焦点</b>：焦点在输入框里、输入框没有草稿（文字和附件都空）、最近 2 秒没打字，三条都满足才把焦点移到面板上。<br>
+    <b>否则</b>显示"按 Tab 或点击以处理请求"，按 Tab 或点击之前不响应按键。<br>
+    <b>撤销</b>：面板获得焦点后收到打字键，就回到"按 Tab 或点击以处理请求"，那一下按键被吞掉；焦点在自由输入行时打字是正常输入。<br>
+    <b>第一下 ⌘Enter</b>：面板获得焦点后的第一下 ⌘Enter 不提交，提示"按 Enter 提交"。<br>
+    <b>不抢焦点</b>：焦点原在侧边栏、侧边面板、审查文档时不抢；导航、切换会话、通知点击都不会把焦点移到面板上</td></tr>
   <tr><td>RP-4 初始选中</td><td>跳过特权选项和效果未知的选项；没有可选的就不选中，Enter 无效</td></tr>
-  <tr><td>RP-5 按键</td><td>数字键选中即提交（与 Codex 相同），"选项数 + 1"的数字键把焦点移到自由输入行；↑ ↓ 移动；← → 多题时切换；Enter 或 ⌘Enter 提交；Esc 关闭（焦点在有内容的自由输入行时，第一次 Esc 只回到选项列表）</td></tr>
-  <tr><td>RP-6、RP-7</td><td>效果未知的选项只能点击；特权选项一律走原生确认框，Esc 永远不会触发它</td></tr>
+  <tr><td>RP-5 按键</td><td>数字键 n 选中第 n 项并提交（Codex 是否如此未核实，Q41），"选项数 + 1"把焦点移到自由输入行；↑ ↓ 移动；← → 多题时切换；Enter 提交；⌘Enter 同 Enter，但获得焦点后的第一下不提交；自由输入行里刚打完字 1 秒内的 Enter 不算，只在提交按钮旁提示"点击提交"；Esc 关闭（焦点在有内容的自由输入行时，第一次 Esc 只回到选项列表）</td></tr>
+  <tr><td>RP-6 编号（v1.5）</td><td>显示的编号一律等于选项在 agent 给出的顺序里从 1 起的序号，特权选项和效果未知的选项也占编号；不重新排序。效果未知的选项：按它的编号不起作用，方向键跳过，Enter 不提交，只能点击，点击后走原生确认框</td></tr>
+  <tr><td>RP-7 特权选项</td><td>按它的编号、Enter、点击，都只会弹原生确认框；Esc 永远不会触发它</td></tr>
   <tr><td>RP-8 连续的请求</td><td>前一个提交后，下一个重新待命，防止连按 Enter 批准两个请求</td></tr>
   <tr><td>RP-9 遮挡</td><td>面板上方有弹出菜单、下拉或对话框时不响应按键</td></tr>
-  <tr><td>RP-10 宿主兜底</td><td>窗口发来的回答必须带真实输入证据；距请求创建不足 400 ms 的拒绝；Esc 只能用于拒绝类选项和 <code>dismissed</code>；数字键证据要与选项序号相符</td></tr>
-  <tr><td>RP-11 还原确认</td><td>审查面板的还原、改动卡片的"撤销"用的主文档确认控件，同样有 500 ms 待命期，只认真实输入；默认焦点按 Codex 放在"确认"上</td></tr>
+  <tr><td>RP-10 宿主兜底</td><td>窗口发来的回答必须带真实输入证据；距请求创建不足 400 ms 的拒绝；Esc 只能用于拒绝类选项和 <code>dismissed</code>；数字键证据要等于所选选项的序号，不能改成按"显示编号"核对</td></tr>
+  <tr><td>RP-11 还原确认（v1.5）</td><td>由主文档里的按钮触发（"还原全部"、改动卡片的"撤销"）：默认焦点按 Codex 放在"确认"上。由审查文档触发（hunk 和文件的还原）：<b>不自动获得焦点</b>，必须点击或按 Tab；同一时间只显示一个，已有一个时，审查文档发来的新还原请求被忽略。两种都有 500 ms 待命期，只认真实输入</td></tr>
+  <tr><td>RP-12 拒绝并附一条消息（v1.5）</td><td>先回答不持久的拒绝选项，<b>拒绝成功之后</b>才发跟进消息；收到"已在别处处理"或"已失效"时不发，文字留在输入框里并提示"已在别处处理"；跟进消息遵守"跟进消息默认排队"和插话能力；消息带 <code>reply_to</code>，消息流里标明"附于对 … 的拒绝"</td></tr>
+  <tr><td>真实输入第 2 条：导航键</td><td>↑ ↓ ← → 本身不算真实输入，也不触发"打字中"的规则，但会清掉尚未用掉的输入（v1.5）：按了方向键，说明之前那一下没有用来提交，不能再被拿去当证据</td></tr>
+  <tr><td>真实输入第 3 条：打字中</td><td>前 1 秒内按过打字键时，紧接着的 Enter、Space、数字键不算真实输入（⌘Enter 除外）</td></tr>
+  <tr><td>真实输入第 7 条：冷却期</td><td>窗口激活后 1 秒内的按键不记录；"请再按一次"的提示只用于这种情况（v1.5）</td></tr>
 </table>
 
 <!-- ------------------------------------------------ 3.4 -->
@@ -1183,7 +1207,7 @@ test result: FAILED. 3 passed; 1 failed</div>
     </div>
   </div>
 </div></div>
-<p class="cap">图 3-6b 查阅来源的下拉、还原确认、选项菜单、Git 操作菜单和提交弹窗（应用内弹窗，宽 420px）。</p>
+<p class="cap">图 3-6b 查阅来源的下拉、还原确认（画的是由"还原全部"触发、焦点在"确认"上的情况）、选项菜单、Git 操作菜单和提交弹窗（应用内弹窗，宽 420px）。</p>
 
 <div class="scroll"><div class="fig wf">
   <div class="backdrop">
@@ -1228,7 +1252,7 @@ test result: FAILED. 3 passed; 1 failed</div>
   <tr><td>⑱</td><td>评论框</td><td>"添加一条评论…"（Add a comment…），按钮"评论 / 取消"；圆角 12.5px，最大宽 768px。评论作为附件进入输入框，随下一条消息发出（<a href="#s3-5">3.5</a>）</td><td>GT-2</td><td>M1b</td></tr>
   <tr><td>⑲</td><td>自定义过滤器的文件</td><td>cupper 特有：宿主不运行仓库配置里的过滤器，这类文件只显示"已变化"，不提供 hunk 操作</td><td>GT-1、GT-3</td><td>M1b</td></tr>
   <tr><td>⑳</td><td>底部整组操作</td><td>浮在面板底部居中、距底 20px 的药丸："还原全部""暂存全部"（"已暂存"范围里是"取消暂存全部"，没有"还原全部"）</td><td>GT-3</td><td>M1b（F3）</td></tr>
-  <tr><td>㉑</td><td>还原确认</td><td>"是否还原更改？"，正文"此操作会移除这些更改。"，"确认"是危险色、默认获得焦点；有 500 ms 待命期，只认真实输入（RP-11）。<b>不提供 Codex 的"不再询问"</b>：被还原的改动无法恢复，审查文档发来的还原必须经过这个控件（有意与 Codex 不同，待安全确认，Q41）</td><td>GT-3</td><td>M1b</td></tr>
+  <tr><td>㉑</td><td>还原确认</td><td>"是否还原更改？"，正文"此操作会移除这些更改。"，"确认"是危险色；有 500 ms 待命期，只认真实输入。焦点按触发来源分开：由主文档里的按钮触发（"还原全部"、改动卡片的"撤销"）时，默认焦点按 Codex 放在"确认"上；<b>由审查文档触发（hunk 和文件的还原）时不自动获得焦点</b>，必须点击或按 Tab，同一时间只显示一个，因为你可能正在审查文档里写评论（RP-11）。<b>不提供 Codex 的"不再询问"</b>：被还原的改动无法恢复，审查文档发来的还原必须经过这个控件（有意与 Codex 不同，已经安全确认）</td><td>GT-3</td><td>M1b</td></tr>
   <tr><td>㉒</td><td>Git 操作菜单</td><td>提交、推送；创建拉取请求是 P1（GT-6）。Codex 菜单里的"新建分支、切换分支"PRD 没有对应需求，不画</td><td>GT-4、GT-6</td><td>M1b / M2</td></tr>
   <tr><td>㉓</td><td>提交弹窗</td><td>"提交或推送"（Commit or push），提交信息框高 80px，"包含未暂存的更改"，下一步三选一：提交、提交并推送、推送。Codex 的"留空自动生成提交信息"是 GT-6（P1），M1 不提供</td><td>GT-4</td><td>M1b</td></tr>
   <tr><td>㉔</td><td>"将运行仓库的 hooks"</td><td>cupper 特有：与在终端里提交一致，保留 hooks、签名、凭据助手；本会话期间仓库配置变过时，确认文案带上这条提示。失败时显示 git 的报错摘要</td><td>GT-4</td><td>M1b</td></tr>
@@ -1461,7 +1485,7 @@ test result: FAILED. 3 passed; 1 failed</div>
 <table class="req">
   <tr><th>编号</th><th>元素</th><th>说明</th><th>需求</th><th>里程碑</th></tr>
   <tr><td>①</td><td>通知来源</td><td>由宿主的 helper 弹出，点击后按 bundle id 激活 Cupper 并跳到会话。helper 能否拿到通知身份待 SP-10 在 M1b 前验证，不行就改由界面主进程弹（<b>待定 Q2</b>）。文案由宿主内置的中英文生成</td><td>AP-3</td><td>M1b</td></tr>
-  <tr><td>②</td><td>审批通知</td><td><b>有意与 Codex 不同</b>：Codex 的审批通知带"批准""本会话批准""拒绝"按钮，cupper 的通知上不放这些按钮。理由：按钮的点击没有真实输入证据，也不经过原生确认；通知里看不到完整命令（设计 5.7.8，待安全确认，Q41）</td><td>AP-3</td><td>M1b</td></tr>
+  <tr><td>②</td><td>审批通知</td><td><b>有意与 Codex 不同</b>（已经安全确认）：Codex 的审批通知带"批准""本会话批准""拒绝"按钮，cupper 的通知上没有任何操作按钮。理由：按钮的点击没有真实输入证据，也不经过原生确认；通知里看不到完整命令；按钮回调由宿主的 helper 处理，相当于多了一条不经过任何客户端 principal 的审批通道，绕过先到先得、摘要核对和输入证据。Codex 的"本会话批准"在 cupper 属于特权操作，本来就要走原生确认（设计 5.7.8）</td><td>AP-3</td><td>M1b</td></tr>
   <tr><td>③</td><td>回合完成</td><td>标题是会话标题，正文是 agent 的最后一条消息（照 Codex）。Codex 可以在通知里直接回复，PRD 没有对应需求。cupper 另有"出错"通知（Codex 把失败并入回合完成）</td><td>AP-3</td><td>M1b</td></tr>
   <tr><td>④</td><td>toast</td><td>顶部居中，距顶 40px，最多同时 3 条，间距 8px，宽不超过 790px，可以向右滑动关闭：连接状态、更新提示、"已在别处处理"</td><td>AP-4、NFR-2</td><td>M1a（toast）/ M1b（位置，F3）</td></tr>
   <tr><td>—</td><td>Codex 有、M1 不做的</td><td>提示音选择、Dock 角标（未读数）、手动标未读（⌘⇧U，PS-6）、清除全部未读（⇧Esc，P1）：P1 或 PRD 未列</td><td>—</td><td>M2 或未排期</td></tr>
@@ -1688,7 +1712,7 @@ $ cupper watch s_7f                              <span class="n">⑨</span>
   <tr><td>发送 / 换行</td><td>Enter；⇧Enter 或 ⌥Enter 换行；"发送快捷键"可设为 ⌘Enter；输入法组合中按 Enter 不发送</td><td>—</td><td>CP-1</td><td>M1a（M1b 可设置）</td></tr>
   <tr><td>运行中排队</td><td>⌘Enter（发送快捷键为 ⌘Enter 时是 ⌘⇧Enter）；打开"跟进消息默认排队"后与插话对调</td><td>Queue</td><td>CP-6</td><td>M1b</td></tr>
   <tr><td>停止当前回合</td><td>运行中按两次 Esc（第一次进入确认状态）</td><td>—</td><td>CP-7、UI-4</td><td>M1b（M1a 用停止按钮）</td></tr>
-  <tr><td>请求面板</td><td>1–9 选择并提交，↑ ↓ 移动，← → 切换题目，Enter 提交，Esc 关闭（<a href="#s3-3-rp">3.3.1</a>，<b>待安全确认，Q41</b>）</td><td>Approve / Decline request</td><td>AP-1、AP-5</td><td>M1a</td></tr>
+  <tr><td>请求面板</td><td>1–9 选择并提交，↑ ↓ 移动，← → 切换题目，Enter 提交，Esc 关闭；获得焦点后的第一下 ⌘Enter 不提交（<a href="#s3-3-rp">3.3.1</a>；Codex 的数字键是否选中即提交未核实，Q41）</td><td>Approve / Decline request</td><td>AP-1、AP-5</td><td>M1a</td></tr>
   <tr><td>恢复上一条</td><td>↑（输入框为空时）。CP-1 的要求；Codex 官方快捷键表有，本机包里没找到对应逻辑（待定 Q39）</td><td>—</td><td>CP-1</td><td>M1b</td></tr>
   <tr><td>缩放 / 全屏</td><td>⌘+、⌘−、⌘0 / ⌘⌃F（菜单角色）</td><td>Zoom / Toggle full screen</td><td>UI-4</td><td>M1b</td></tr>
 </table>
@@ -1967,9 +1991,9 @@ sequenceDiagram
   <tr><th>方面</th><th>Codex 桌面版</th><th>cupper</th></tr>
   <tr><td>驱动的 agent</td><td>只有 Codex</td><td>Claude Code 和 Codex，同一套界面；功能按 agent 的实际能力显示（AG-4）；顶栏标题旁的 agent 标识、新建会话页动作条最左边的 agent 选择（AG-3）；不显示"推荐"徽标（驱动层拿不到）</td></tr>
   <tr><td>会话由谁持有</td><td>外壳把 Codex 自己的 app-server 作为常驻子进程，会话由它管理（R01 第十二节）</td><td>cupper 自己的会话宿主持有会话、历史、审批与提问、Git，不依赖某一家 agent；桌面界面、cupper-cli、iPhone 都是它的客户端（NFR-1）。侧边栏头部显示宿主状态</td></tr>
-  <tr><td>系统通知上的按钮</td><td>审批通知带"批准""本会话批准""拒绝"</td><td><b>有意不同</b>：通知上不放这些按钮。按钮的点击没有真实输入证据，也不经过原生确认；通知里看不到完整命令（设计 5.7.8，待安全确认，Q41）</td></tr>
-  <tr><td>还原确认框</td><td>有"不再询问"</td><td><b>有意不同</b>：不提供"不再询问"。被还原的改动无法恢复；审查文档发来的还原必须经过主文档里的这个控件（设计 5.7.5，待安全确认，Q41）</td></tr>
-  <tr><td>请求面板的按键</td><td>数字键、Enter、Esc 直接生效</td><td>按键形态相同，另加 500 ms 待命期、"刚打过字不自动获得焦点"、真实输入证据（RP-1 至 RP-11，待安全确认，Q41）</td></tr>
+  <tr><td>系统通知上的按钮</td><td>审批通知带"批准""本会话批准""拒绝"</td><td><b>有意不同</b>（已经安全确认）：通知上没有操作按钮。按钮的点击没有真实输入证据，也不经过原生确认；通知里看不到完整命令；<b>按钮回调由宿主的 helper 处理，相当于多了一条不经过任何客户端 principal 的审批通道</b>，绕过先到先得、摘要核对和输入证据（设计 5.7.8）</td></tr>
+  <tr><td>还原确认框</td><td>有"不再询问"</td><td><b>有意不同</b>（已经安全确认）：不提供"不再询问"。被还原的改动无法恢复；审查文档发来的还原必须经过主文档里的这个控件，而且这种情况下确认框不自动获得焦点（设计 5.7.5、5.7.8 RP-11）</td></tr>
+  <tr><td>请求面板的按键</td><td>数字键、Enter、Esc 直接生效</td><td>按键形态相同，另加 500 ms 待命期、有草稿或刚打过字时不自动获得焦点、收到打字键就退出键盘操作、第一下 ⌘Enter 不提交、真实输入证据（RP-1 至 RP-12，已经安全确认）</td></tr>
   <tr><td>其他安全相关的确认</td><td>应用内弹窗</td><td>持久或大幅扩大权限的操作（"总是允许"类选项、完全访问、信任项目、CLI 提权）走 macOS 原生确认框（设计 5.7.8）</td></tr>
   <tr><td>项目自带配置</td><td>R01、R06 未记录</td><td>添加项目时原生确认是否信任，列出 hooks、MCP 等（PS-2）；侧边栏标"未信任"</td></tr>
   <tr><td>命令行第二客户端</td><td>R01 未记录</td><td>cupper-cli：默认只读，写操作和审批要在桌面确认（SEC-8）；侧边栏底部的提权横幅</td></tr>
