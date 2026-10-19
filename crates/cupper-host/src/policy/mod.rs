@@ -17,6 +17,7 @@
 //!      `session/set_config` or an option's `mode_after` (design 5.8.2);
 //!    - [`git_revert`], [`respond`]: the window's input evidence, the chosen
 //!      option's `requires`, and the 400 ms after a request (design 5.7.8);
+//!    - [`attach()`]: the project trust gate (design 5.2.6).
 //!
 //! Cells of the matrix (5.8.3) the policy allows because the scope does, and
 //! leaves the rest to others:
@@ -27,6 +28,7 @@
 //! - "仅 … 构建": the host registers the method only in the builds of its
 //!   `x-builds` (design 5.9.9).
 
+mod attach;
 mod input;
 mod method;
 mod tier;
@@ -39,6 +41,7 @@ use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::rpc::Scope;
 
+pub use attach::{ProjectConfig, attach};
 pub use input::{MIN_ANSWER_DELAY, Pending, git_revert, respond};
 pub use method::{method, set_config, settings_update};
 pub use tier::{ceiling, option_tier, tier_change};
