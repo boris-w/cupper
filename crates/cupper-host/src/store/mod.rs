@@ -8,10 +8,15 @@
 //! on an async worker (SP-4a).
 //!
 //! On top of them, [`streams`] keeps every stream's seqs, view and
-//! subscribers.
+//! subscribers over the event [`log`].
 
 mod connection;
 pub mod epoch;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the stream registry, next, puts it to use")
+)]
+pub mod log;
 pub mod meta;
 mod migrate;
 mod raw;

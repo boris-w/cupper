@@ -223,38 +223,13 @@ impl Stream {
 pub(super) mod tests {
     use std::sync::Mutex;
 
-    use cupper_protocol::annotations::TimestampMs;
-    use cupper_protocol::event::Strictness;
     use serde_json::json;
 
     use super::*;
-
-    /// `project.upserted` of `p_<n>`, or `project.removed` of `p_<n>` with `removed`.
-    pub fn project(n: u64, removed: bool) -> EventBody {
-        let raw = match removed {
-            false => json!({"type": "project.upserted", "data": {"project_id": format!("p_{n}"),
-                "name": "p", "path": "/w", "is_git": false, "added_at": n, "position": n,
-                "trust_state": "trusted"}}),
-            true => json!({"type": "project.removed", "data": {"project_id": format!("p_{n}")}}),
-        };
-        EventBody::decode(&raw, Strictness::Strict).unwrap().value
-    }
+    use crate::store::testutil::{body, project, published};
 
     pub fn batch(seqs: impl IntoIterator<Item = u64>) -> Committed {
-        let events = seqs.into_iter().map(|seq| {
-            let body = project(seq, false);
-            let event = Event {
-                seq,
-                from: None,
-                v: 1,
-                ts: TimestampMs(0),
-                cause: None,
-                fallback: None,
-                body,
-            };
-            let json = serde_json::to_string(&event).unwrap().into_boxed_str();
-            Arc::new(Published { event, json })
-        });
+        let events = seqs.into_iter().map(|seq| published(seq, 0, project(seq)));
         Committed {
             events: events.collect(),
             view: None,
@@ -323,11 +298,9 @@ pub(super) mod tests {
         assert_eq!((snapshot.at_seq, snapshot.ops.len()), (3, 3));
 
         // A body the view rejects still goes out.
-        let mut removal = batch([4]);
-        let mut event = removal.events.pop().unwrap().event.clone();
-        event.body = project(9, true);
-        let json = serde_json::to_string(&event).unwrap().into_boxed_str();
-        removal.events.push(Arc::new(Published { event, json }));
+        let mut removal = batch([]);
+        let gone = json!({"type": "project.removed", "data": {"project_id": "p_9"}});
+        removal.events.push(published(4, 0, body(gone)));
         assert_eq!(
             stream.publish(removal),
             [(4, ViewError::Missing("p_9".into()))]

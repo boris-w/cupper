@@ -71,8 +71,8 @@ CREATE TABLE turn_snapshots (
   session_id TEXT NOT NULL,
   turn_id    TEXT NOT NULL,
   turn_no    INTEGER NOT NULL,
-  v          INTEGER NOT NULL,               -- event schema version when written
-  ops        TEXT NOT NULL,                  -- JSON array of event bodies
+  v          INTEGER NOT NULL,               -- layout of `ops`: `store::log::TURN_SNAPSHOT_LAYOUT`
+  ops        TEXT NOT NULL,                  -- JSON array of `{type, v, data}`, `v` per op
   bytes      INTEGER NOT NULL,
   PRIMARY KEY (session_id, turn_id)
 ) WITHOUT ROWID;
