@@ -13,6 +13,8 @@ mod fixtures;
 mod index;
 mod ops;
 #[cfg(test)]
+mod parity;
+#[cfg(test)]
 mod props;
 mod session;
 

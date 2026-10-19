@@ -1,12 +1,10 @@
 //! Property tests of the session's cores together (design 5.9.8), on
-//! virtual time. [`Session`] wires the turn machine, the autonomous judge
-//! and the coalescer the way the session's actor does (T043 takes it as its
-//! reference); a stand-in for the broker counts requests and resolves them
-//! at a turn's Settle. A [`World`] models the agent and the actor's ports,
-//! answers the cores' actions, and checks the log as it is written.
+//! virtual time, through the actor's own [`SessionCore`]: the turn machine,
+//! the autonomous judge and the coalescer, with requests counted and
+//! resolved at a turn's Settle. A [`World`] models the agent and the actor's
+//! ports, answers the cores' actions, and checks the log as it is written.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::mem;
 use std::os::unix::process::ExitStatusExt;
 use std::process::ExitStatus;
 use std::sync::Arc;
@@ -19,160 +17,15 @@ use cupper_protocol::item::{Item, ItemStatus};
 use cupper_protocol::session::{SnapshotPhase, StopReason, TurnOrigin, TurnStatus, UsageUpdated};
 use proptest::prelude::*;
 
-use super::autonomous::{self, AutonomousJudge, JudgeTimer};
-use super::coalescer::{self, Coalescer, FlushTimer};
+use super::session::core::{Action as Out, Input as In, SessionCore};
 use super::testkit::{agent_error, attached, send, snapshot};
-use super::turn::{self, SendMode, TurnMachine, TurnSignal, TurnTimer};
-use crate::clock::{IdGen, ManualClock, MonoTime, Now};
+use super::turn::{self, SendMode};
+use crate::clock::{IdGen, ManualClock, MonoTime};
 use crate::driver::api::{
     DriverCommand, DriverEvent, NormUpdate, PromptTag, RunState, ToolOutput, ToolStatus,
 };
 use crate::durations::Durations;
-use crate::pure::{Core, CoreDriver, Step, TimerRequest};
-
-/// The three cores as one, wired as the session's actor wires them.
-struct Session {
-    machine: TurnMachine,
-    judge: AutonomousJudge,
-    coalescer: Coalescer,
-    /// The broker's pending requests.
-    asks: usize,
-}
-
-#[derive(Debug, Clone)]
-enum In {
-    Machine(turn::Input),
-    Agent(DriverEvent),
-    Ask,
-    Resolve,
-    Expired(Key),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum Key {
-    Turn(TurnTimer),
-    Judge(JudgeTimer),
-    Flush(FlushTimer),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum Out {
-    /// Written to the session stream.
-    Event(EventBody),
-    /// The turn machine's other actions.
-    Machine(turn::Action),
-    Timer(TimerRequest<Key>),
-}
-
-fn timer<K>(request: TimerRequest<K>, key: impl Fn(K) -> Key) -> Out {
-    Out::Timer(match request {
-        TimerRequest::Set { key: k, at } => TimerRequest::Set { key: key(k), at },
-        TimerRequest::Cancel(k) => TimerRequest::Cancel(key(k)),
-    })
-}
-
-impl Session {
-    /// A turn's signals go to the coalescer at once, and to the judge after
-    /// the machine's step; the judge's actions go back to the machine.
-    fn machine(&mut self, input: turn::Input, now: Now, out: &mut Vec<Out>) {
-        let mut judge = Vec::new();
-        for action in self.machine.step(input, now) {
-            let signal = TurnSignal::of(&action);
-            match action {
-                turn::Action::Event(body) => out.push(Out::Event(body)),
-                turn::Action::Timer(request) => out.push(timer(request, Key::Turn)),
-                // The coalescer writes `turn.completed`.
-                turn::Action::Complete(_) => {}
-                action => out.push(Out::Machine(action)),
-            }
-            if let Some(signal) = signal {
-                self.coalesce(coalescer::Input::Turn(signal.clone()), now, out);
-                if let TurnSignal::Settled { .. } = signal {
-                    judge.extend(
-                        (0..mem::take(&mut self.asks)).map(|_| autonomous::Input::Resolved),
-                    );
-                }
-                judge.push(autonomous::Input::Turn(signal));
-            }
-        }
-        for input in judge {
-            self.judge(input, now, out);
-        }
-    }
-
-    fn judge(&mut self, input: autonomous::Input, now: Now, out: &mut Vec<Out>) {
-        let mut machine = Vec::new();
-        for action in self.judge.step(input, now) {
-            match (action.turn_input(), action) {
-                (Some(input), _) => machine.push(input),
-                (None, autonomous::Action::Timer(request)) => out.push(timer(request, Key::Judge)),
-                (None, _) => {}
-            }
-        }
-        for input in machine {
-            self.machine(input, now, out);
-        }
-    }
-
-    fn coalesce(&mut self, input: coalescer::Input, now: Now, out: &mut Vec<Out>) {
-        for action in self.coalescer.step(input, now) {
-            out.push(match action {
-                coalescer::Action::Event(body) => Out::Event(body),
-                coalescer::Action::Timer(request) => timer(request, Key::Flush),
-            });
-        }
-    }
-}
-
-impl Core for Session {
-    type Input = In;
-    type Action = Out;
-    type TimerKey = Key;
-
-    fn step(&mut self, input: In, now: Now) -> Vec<Out> {
-        let mut out = Vec::new();
-        match input {
-            In::Machine(input) => self.machine(input, now, &mut out),
-            // The judge first, so that a turn is open for the coalescer.
-            In::Agent(event) => {
-                self.judge(autonomous::Input::Driver(event.clone()), now, &mut out);
-                self.machine(turn::Input::Driver(event.clone()), now, &mut out);
-                if let DriverEvent::Update(update) = event {
-                    self.coalesce(coalescer::Input::Update(update), now, &mut out);
-                }
-            }
-            In::Ask => {
-                self.asks += 1;
-                self.judge(autonomous::Input::Asked, now, &mut out);
-                self.coalesce(coalescer::Input::Interject, now, &mut out);
-            }
-            In::Resolve if self.asks > 0 => {
-                self.asks -= 1;
-                self.judge(autonomous::Input::Resolved, now, &mut out);
-            }
-            In::Resolve => {}
-            In::Expired(Key::Turn(key)) => self.machine(turn::Input::Expired(key), now, &mut out),
-            In::Expired(Key::Judge(key)) => {
-                self.judge(autonomous::Input::Expired(key), now, &mut out)
-            }
-            In::Expired(Key::Flush(key)) => {
-                self.coalesce(coalescer::Input::Expired(key), now, &mut out)
-            }
-        }
-        out
-    }
-
-    fn timer_request(action: &Out) -> Option<TimerRequest<Key>> {
-        match action {
-            Out::Timer(request) => Some(request.clone()),
-            _ => None,
-        }
-    }
-
-    fn timer_expired(key: Key) -> In {
-        In::Expired(key)
-    }
-}
+use crate::pure::{CoreDriver, Step};
 
 #[derive(Debug, Clone)]
 enum Op {
@@ -234,7 +87,7 @@ enum Prop {
 
 struct World {
     prop: Prop,
-    d: CoreDriver<Session>,
+    d: CoreDriver<SessionCore>,
     // The agent and the ports.
     instance: u128,
     attaching: bool,
@@ -273,12 +126,7 @@ impl World {
         let clock = ManualClock::new();
         let ids = Arc::new(IdGen::seeded(Arc::new(clock.clone()), 1));
         let durations = Durations::default();
-        let session = Session {
-            machine: TurnMachine::new(Arc::clone(&ids), &durations),
-            judge: AutonomousJudge::new(&durations),
-            coalescer: Coalescer::new(ids, &durations, false),
-            asks: 0,
-        };
+        let session = SessionCore::new(ids, &durations, false);
         Self {
             prop,
             d: CoreDriver::with_clock(session, clock),
@@ -419,11 +267,11 @@ impl World {
             }
             Op::Ask => {
                 self.asks += 1;
-                In::Ask
+                In::Asked
             }
             Op::Resolve => {
                 self.asks = self.asks.saturating_sub(1);
-                In::Resolve
+                In::Resolved
             }
             Op::Exit => {
                 self.prompts.clear();

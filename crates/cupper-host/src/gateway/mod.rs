@@ -6,7 +6,8 @@
 //! writer task draining its [`Outbox`](outbox::Outbox): admission, then
 //! `host/hello`, then exactly one `initialize` (`handshake`), then requests
 //! and client notifications, which [`dispatch`] hands to the executors in
-//! [`Routes`]. Subscriptions and history are T019's, blobs T029's.
+//! [`Routes`]. The gateway serves subscriptions (`subscribe`, sent by the
+//! writer in `send`) and history pages (`history`) itself; blobs are T029's.
 //!
 //! On the way out (design 5.2.13) the host stops [`Gateway::serve`], sends
 //! [`Gateway::broadcast`] `host/shutdown`, and at last ends every connection
@@ -18,9 +19,12 @@ mod conn;
 mod describe;
 pub mod dispatch;
 mod handshake;
+mod history;
 pub mod listen;
 pub mod outbox;
 pub mod routes;
+mod send;
+mod subscribe;
 #[cfg(any(test, feature = "test-harness"))]
 pub mod testkit;
 #[cfg(test)]
@@ -37,6 +41,7 @@ use cupper_sys::{Refusal, Requirement};
 use tokio::net::UnixListener;
 use tokio::sync::{mpsc, watch};
 
+use self::audit::Auditor;
 pub use self::audit::{AuditEvent, AuditRecord, CloseReason, Rejection};
 pub use self::dispatch::{Call, IndexPort, Opened, Port, Reply, SessionPort};
 pub use self::handshake::Session;
@@ -167,6 +172,12 @@ impl Gateway {
         let conn = conn.clone();
         // Nobody listening is the receiver's choice.
         let _ = self.audit.send(AuditRecord { at_ms, conn, event });
+    }
+
+    /// The audit channel for what connection `conn` records later.
+    fn auditor(&self, conn: &ConnId) -> Auditor {
+        let clock = Arc::clone(&self.clock);
+        Auditor::new(conn.clone(), self.audit.clone(), clock)
     }
 }
 

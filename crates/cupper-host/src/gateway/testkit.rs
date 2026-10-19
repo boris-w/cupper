@@ -226,3 +226,89 @@ pub fn key_auth(kind: &str, key: &Bytes32, nonce: &str, pid: i32) -> (Value, Cha
     let auth = json!({"type": kind, "c_nonce": c_nonce, "proof": proof});
     (auth, channel)
 }
+
+/// One connection's dispatch, driven as the read loop drives it, and the
+/// replies it queued: requests with any principal, made in the crate.
+#[cfg(test)]
+pub(crate) struct Peer {
+    pub(super) dispatch: super::dispatch::Dispatch,
+    outbox: Arc<super::outbox::Outbox>,
+    replies: Vec<Value>,
+    next_id: i64,
+}
+
+#[cfg(test)]
+impl Peer {
+    pub(crate) fn new(principal: cupper_protocol::methods::handshake::Principal) -> Self {
+        let outbox = Arc::new(super::outbox::Outbox::new(
+            cupper_protocol::limits::V1.max_queue_bytes as usize,
+        ));
+        let conn = cupper_protocol::ids::ConnId::from_index(1);
+        let clock = Arc::new(crate::clock::ManualClock::new());
+        let audit = tokio::sync::mpsc::unbounded_channel().0;
+        let auditor = super::audit::Auditor::new(conn.clone(), audit, clock);
+        Self {
+            dispatch: super::dispatch::Dispatch::new(conn, principal, Arc::clone(&outbox), auditor),
+            outbox,
+            replies: Vec::new(),
+            next_id: 0,
+        }
+    }
+
+    /// Sends a request; returns its id.
+    pub(crate) fn send(&mut self, routes: &Routes, method: &str, params: Value) -> i64 {
+        self.next_id += 1;
+        let id = cupper_protocol::rpc::RpcId::Number(self.next_id);
+        self.dispatch.request(routes, id, method, params);
+        self.next_id
+    }
+
+    pub(crate) async fn call(
+        &mut self,
+        routes: &Routes,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, Value> {
+        let id = self.send(routes, method, params);
+        self.reply(id).await
+    }
+
+    /// The reply to request `id`: its `result`, or its `error`.
+    pub(crate) async fn reply(&mut self, id: i64) -> Result<Value, Value> {
+        loop {
+            if let Some(at) = self.replies.iter().position(|reply| reply["id"] == id) {
+                let reply = self.replies.remove(at);
+                return match reply.get("error") {
+                    Some(error) => Err(error.clone()),
+                    None => Ok(reply["result"].clone()),
+                };
+            }
+            let frames = self.outbox.drain().await.expect("the outbox is open");
+            self.take(frames);
+        }
+    }
+
+    /// The ids of the replies queued once the tasks that can run have run.
+    pub(crate) async fn answered(&mut self) -> Vec<i64> {
+        for _ in 0..16 {
+            tokio::task::yield_now().await;
+        }
+        if let Some(Some(frames)) = futures::FutureExt::now_or_never(self.outbox.drain()) {
+            self.take(frames);
+        }
+        let ids = self.replies.iter().map(|reply| reply["id"].as_i64());
+        ids.map(Option::unwrap).collect()
+    }
+
+    fn take(&mut self, items: Vec<super::outbox::Item>) {
+        let mut decoder = FrameDecoder::new();
+        for item in items {
+            let super::outbox::Item::Frame(frame) = item else {
+                panic!("only replies are queued: {item:?}");
+            };
+            decoder.push(&frame);
+            let payload = decoder.next_frame().unwrap().unwrap().payload;
+            self.replies.push(serde_json::from_slice(&payload).unwrap());
+        }
+    }
+}

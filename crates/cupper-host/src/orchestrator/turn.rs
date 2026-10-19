@@ -309,6 +309,11 @@ impl TurnMachine {
         }
     }
 
+    /// The running turn, until it completes.
+    pub fn turn_id(&self) -> Option<&TurnId> {
+        self.turn.as_ref().map(|turn| &turn.id)
+    }
+
     fn send(&mut self, send: SendRequest, now: Now, out: &mut Vec<Action>) {
         let fallback = (send.mode == SendMode::Steer).then_some(SteerFallback::Unsupported);
         if self.turn.is_none() {

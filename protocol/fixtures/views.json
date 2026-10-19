@@ -1,0 +1,5307 @@
+[
+  {
+    "expected": {
+      "agents": {
+        "agents": [],
+        "git": {}
+      },
+      "clients": {
+        "clients": [
+          {
+            "auth": "verified",
+            "client_name": "Cupper",
+            "client_version": "0.1.0",
+            "conn_id": "c_1",
+            "principal_kind": "desktop_ui",
+            "role": "window",
+            "since": 3
+          },
+          {
+            "auth": "peer",
+            "client_name": "cupper-cli",
+            "client_version": "0.1.0",
+            "conn_id": "c_2",
+            "elevated": {
+              "expires_at": 9,
+              "scopes": [
+                "write",
+                "approve"
+              ]
+            },
+            "principal_kind": "cli",
+            "since": 4
+          }
+        ]
+      },
+      "elevations": {},
+      "host": {
+        "last_exit_abnormal": true,
+        "pending_upgrade": true,
+        "power_assertion": true,
+        "version": "0.1.0",
+        "weak_auth": false
+      },
+      "projects": {},
+      "sessions": {
+        "s_1": {
+          "agent": "gemini",
+          "error_code": "disk_full",
+          "last_activity_at": 1,
+          "pending_interactions": 1,
+          "pending_kind": "review",
+          "project_id": "p_1",
+          "read_only": false,
+          "session_id": "s_1",
+          "status": "paused",
+          "title": "t",
+          "title_source": "summary",
+          "unread": false,
+          "workspace_kind": "container"
+        }
+      }
+    },
+    "name": "every index sample",
+    "ops": [
+      {
+        "data": {
+          "added_at": 1,
+          "is_git": true,
+          "name": "cupper",
+          "path": "/work/cupper",
+          "position": 0,
+          "project_id": "p_1",
+          "trust_state": "stale"
+        },
+        "type": "project.upserted"
+      },
+      {
+        "data": {
+          "project_id": "p_1"
+        },
+        "type": "project.removed"
+      },
+      {
+        "data": {
+          "agent": "claude",
+          "branch": "cupper/fix",
+          "error_code": "quota_exhausted",
+          "last_activity_at": 5,
+          "pending_interactions": 2,
+          "pending_kind": "approval",
+          "project_id": "p_1",
+          "read_only": false,
+          "session_id": "s_0190a3b4c5d67e8f9a0b1c2d3e4f5a6b",
+          "status": "needs_action",
+          "title": "Fix the build",
+          "title_source": "agent",
+          "unread": true,
+          "workspace_kind": "worktree"
+        },
+        "type": "session.upserted"
+      },
+      {
+        "data": {
+          "agent": "codex",
+          "last_activity_at": 5,
+          "pending_interactions": 0,
+          "project_id": "p_1",
+          "read_only": true,
+          "session_id": "s_0190a3b4c5d67e8f9a0b1c2d3e4f5a6b",
+          "status": "idle",
+          "title": "",
+          "title_source": "none",
+          "unread": false,
+          "workspace_kind": "local"
+        },
+        "type": "session.upserted"
+      },
+      {
+        "data": {
+          "reason": "archived",
+          "session_id": "s_0190a3b4c5d67e8f9a0b1c2d3e4f5a6b"
+        },
+        "type": "session.removed"
+      },
+      {
+        "data": {
+          "agents": [
+            {
+              "adapter": {
+                "failure": "hash_mismatch",
+                "runtime": "failed",
+                "version": "0.91.0"
+              },
+              "agent": "claude",
+              "auth": {
+                "kind": "subscription",
+                "plan": "max",
+                "state": "logged_in"
+              },
+              "cli": {
+                "compat": "verified",
+                "install": "native",
+                "path": "/opt/homebrew/bin/claude",
+                "version": "2.1.296"
+              },
+              "config_dir": "ok",
+              "rss_bytes": 734003200,
+              "state": "running"
+            },
+            {
+              "adapter": {
+                "runtime": "missing",
+                "version": "2.2.2"
+              },
+              "agent": "codex",
+              "auth": {
+                "state": "unchecked"
+              },
+              "config_dir": "default",
+              "state": "unavailable"
+            }
+          ],
+          "git": {
+            "lfs": "3.7.0",
+            "version": "2.50.1"
+          }
+        },
+        "type": "agents.updated"
+      },
+      {
+        "data": {
+          "agents": [],
+          "git": {}
+        },
+        "type": "agents.updated"
+      },
+      {
+        "data": {
+          "last_exit_abnormal": true,
+          "pending_upgrade": true,
+          "power_assertion": true,
+          "version": "0.1.0",
+          "weak_auth": false
+        },
+        "type": "host.updated"
+      },
+      {
+        "data": {
+          "clients": [
+            {
+              "auth": "verified",
+              "client_name": "Cupper",
+              "client_version": "0.1.0",
+              "conn_id": "c_1",
+              "principal_kind": "desktop_ui",
+              "role": "window",
+              "since": 3
+            },
+            {
+              "auth": "peer",
+              "client_name": "cupper-cli",
+              "client_version": "0.1.0",
+              "conn_id": "c_2",
+              "elevated": {
+                "expires_at": 9,
+                "scopes": [
+                  "write",
+                  "approve"
+                ]
+              },
+              "principal_kind": "cli",
+              "since": 4
+            }
+          ]
+        },
+        "type": "clients.updated"
+      },
+      {
+        "data": {
+          "client_name": "cupper-cli",
+          "elevation_id": "e_1",
+          "requested_at": 7,
+          "scopes": [
+            "write"
+          ]
+        },
+        "type": "elevation.requested"
+      },
+      {
+        "data": {
+          "decision": "expired",
+          "elevation_id": "e_1"
+        },
+        "type": "elevation.resolved"
+      },
+      {
+        "data": {
+          "intent_id": "n_1",
+          "reason": "needs_action",
+          "request_id": "r_1",
+          "session_id": "s_0190a3b4c5d67e8f9a0b1c2d3e4f5a6b"
+        },
+        "type": "notification.intent"
+      },
+      {
+        "data": {
+          "agent": "gemini",
+          "error_code": "disk_full",
+          "last_activity_at": 1,
+          "pending_interactions": 1,
+          "pending_kind": "review",
+          "project_id": "p_1",
+          "read_only": false,
+          "session_id": "s_1",
+          "status": "paused",
+          "title": "t",
+          "title_source": "summary",
+          "unread": false,
+          "workspace_kind": "container"
+        },
+        "type": "session.upserted"
+      },
+      {
+        "data": {
+          "pinned": true,
+          "project_id": "p_1"
+        },
+        "type": "project.pinned"
+      },
+      {
+        "data": {
+          "sha": "abc"
+        },
+        "type": "git.snapshot"
+      },
+      {
+        "type": "session.paused"
+      },
+      {
+        "data": {
+          "added_at": 1,
+          "is_git": true,
+          "name": "cupper",
+          "path": "/work/cupper",
+          "position": 0,
+          "project_id": "p_1"
+        },
+        "type": "project.upserted"
+      },
+      {
+        "data": {
+          "added_at": 1,
+          "is_git": true,
+          "name": "cupper",
+          "path": "/work/cupper",
+          "position": -1,
+          "project_id": "p_1",
+          "trust_state": "stale"
+        },
+        "type": "project.upserted"
+      },
+      {
+        "data": {
+          "agents": [
+            {
+              "adapter": {
+                "failure": "hash_mismatch",
+                "runtime": "failed",
+                "version": "0.91.0"
+              },
+              "agent": "claude",
+              "auth": {
+                "kind": "subscription",
+                "plan": "max",
+                "state": "logged_in"
+              },
+              "cli": {
+                "compat": "verified",
+                "install": "native",
+                "path": "/opt/homebrew/bin/claude",
+                "version": "2.1.296"
+              },
+              "config_dir": "ok",
+              "rss_bytes": 734003200,
+              "state": "running"
+            },
+            {
+              "agent": "codex",
+              "auth": {
+                "state": "unchecked"
+              },
+              "config_dir": "default",
+              "state": "unavailable"
+            }
+          ],
+          "git": {
+            "lfs": "3.7.0",
+            "version": "2.50.1"
+          }
+        },
+        "type": "agents.updated"
+      },
+      {
+        "type": "project.removed"
+      },
+      {
+        "data": "up",
+        "type": "host.updated"
+      },
+      {
+        "data": {
+          "command": "cargo test",
+          "cwd": "/w",
+          "diffs": [
+            {
+              "change": "update",
+              "hunks": {
+                "blob": {
+                  "hash": "abababababababababababababababababababababababababababababababab",
+                  "media_type": "text/plain",
+                  "size": 70000
+                },
+                "preview": "fn main",
+                "type": "blob"
+              },
+              "path": "a.rs",
+              "stat": {
+                "added": 2,
+                "removed": 1
+              }
+            }
+          ],
+          "exit_code": 101,
+          "extraction": "partial",
+          "group_id": "g_1",
+          "item_id": "i_1",
+          "kind": "tool_call",
+          "output": {
+            "blob": {
+              "hash": "abababababababababababababababababababababababababababababababab",
+              "media_type": "text/plain",
+              "size": 70000
+            },
+            "preview": "fn main",
+            "type": "blob"
+          },
+          "output_bytes": 70000,
+          "output_tail": "FAILED",
+          "parent_item_id": "i_0",
+          "paths": [],
+          "signal": "SIGTERM",
+          "started_at": 5,
+          "title": "Run tests",
+          "tool_kind": "execute",
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "actionable_by": [
+            "desktop_ui",
+            "cli"
+          ],
+          "created_at": 6,
+          "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+          "request": {
+            "content_truncated": true,
+            "detail": {
+              "text": "in /w",
+              "type": "text"
+            },
+            "options": [
+              {
+                "effect": {
+                  "ends_turn": false,
+                  "scope": "once"
+                },
+                "kind": "allow_once",
+                "name": "Allow",
+                "option_id": "allow-once",
+                "requires": "approve"
+              },
+              {
+                "effect": {
+                  "persistent": true,
+                  "rule": {
+                    "location": "localSettings",
+                    "prefix": "npm test",
+                    "prefix_risk": "normal",
+                    "text": "Bash(npm test:*)"
+                  },
+                  "scope": "persistent"
+                },
+                "kind": "allow_always",
+                "name": "Always allow `npm test`",
+                "option_id": "allow-with-updates",
+                "requires": "privileged"
+              },
+              {
+                "effect": {
+                  "persistent": true,
+                  "rule": {
+                    "prefix_risk": "unknown"
+                  },
+                  "scope": "unknown"
+                },
+                "kind": "allow_sometimes",
+                "name": "Do the thing",
+                "option_id": "x",
+                "requires": "privileged"
+              }
+            ],
+            "title": "Run npm test",
+            "tool": {
+              "command": {
+                "blob": {
+                  "hash": "abababababababababababababababababababababababababababababababab",
+                  "media_type": "text/plain",
+                  "size": 70000
+                },
+                "preview": "fn main",
+                "type": "blob"
+              },
+              "item_id": "i_1",
+              "paths": [
+                "package.json"
+              ],
+              "tool_kind": "execute"
+            },
+            "type": "permission"
+          },
+          "request_id": "r_1"
+        },
+        "type": "interaction.requested"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "selected"
+          },
+          "request_id": "r_1",
+          "resolved_by": {
+            "client_kind": "desktop",
+            "client_name": "Cupper",
+            "principal_id": "pr_desktop"
+          },
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "entries": [
+            {
+              "content": [
+                {
+                  "text": "And docs",
+                  "type": "text"
+                },
+                {
+                  "type": "file_ref"
+                }
+              ],
+              "created_at": 8,
+              "created_by": "pr_cli",
+              "preview": "And docs",
+              "queue_id": "q_1",
+              "reply_to": "r_1"
+            }
+          ],
+          "paused": {
+            "reason": "config_unconfirmed"
+          },
+          "version": 7
+        },
+        "type": "queue.updated"
+      }
+    ],
+    "view": "index"
+  },
+  {
+    "expected": {
+      "capabilities": {
+        "agent": "codex",
+        "commands": [],
+        "config": [],
+        "extraction": {
+          "diff": "per_hunk",
+          "exit_code": true,
+          "output_streaming": true,
+          "plan": "entries",
+          "run_state": "agent_reported",
+          "thinking": true
+        },
+        "interactions": {
+          "plan_confirm": true,
+          "question_forms": true,
+          "reject_ends_turn": true
+        },
+        "prompt": {
+          "file_ref": true,
+          "image": true,
+          "max_image_bytes": 10485760
+        },
+        "session": {
+          "fork": false,
+          "load_history": false,
+          "resume": true
+        },
+        "turn": {
+          "interrupt": true,
+          "interrupt_stops_commands": false,
+          "queue": true,
+          "steer": {
+            "side_effects": false,
+            "supported": true
+          }
+        },
+        "versions": {
+          "adapter": "2.2.2",
+          "cli": "0.160.0",
+          "cli_compat": "verified"
+        }
+      },
+      "configured": {
+        "agent": "codex",
+        "config": {},
+        "project_config": "loaded",
+        "read_only": true,
+        "workspace": {
+          "kind": "local",
+          "path": "/w"
+        }
+      },
+      "detached": [],
+      "items": {
+        "i_22": {
+          "end": {
+            "duration_ms": 0,
+            "ended_at": 9,
+            "status": "completed"
+          },
+          "item": {
+            "content": [
+              {
+                "text": "No, use pnpm",
+                "type": "text"
+              }
+            ],
+            "item_id": "i_22",
+            "kind": "user_message",
+            "queue_id": "q_1",
+            "reply_to": "r_0",
+            "started_at": 5,
+            "steered": true,
+            "turn_id": "t_1"
+          },
+          "output": "ok\n",
+          "text": ""
+        },
+        "i_23": {
+          "end": {
+            "duration_ms": 0,
+            "ended_at": 9,
+            "status": "completed"
+          },
+          "item": {
+            "item_id": "i_23",
+            "kind": "agent_message",
+            "started_at": 5,
+            "turn_id": "t_1"
+          },
+          "output": "ok\n",
+          "text": ""
+        },
+        "i_24": {
+          "end": {
+            "duration_ms": 0,
+            "ended_at": 9,
+            "status": "completed"
+          },
+          "item": {
+            "group_id": "g_1",
+            "item_id": "i_24",
+            "kind": "thought",
+            "started_at": 5,
+            "turn_id": "t_1"
+          },
+          "output": "ok\n",
+          "text": ""
+        },
+        "i_25": {
+          "end": {
+            "duration_ms": 0,
+            "ended_at": 9,
+            "status": "completed"
+          },
+          "item": {
+            "command": "cargo test",
+            "cwd": "/w",
+            "diffs": [
+              {
+                "change": "update",
+                "hunks": {
+                  "blob": {
+                    "hash": "abababababababababababababababababababababababababababababababab",
+                    "media_type": "text/plain",
+                    "size": 70000
+                  },
+                  "preview": "fn main",
+                  "type": "blob"
+                },
+                "path": "a.rs",
+                "stat": {
+                  "added": 2,
+                  "removed": 1
+                }
+              }
+            ],
+            "exit_code": 0,
+            "extraction": "partial",
+            "group_id": "g_1",
+            "item_id": "i_25",
+            "kind": "tool_call",
+            "output": {
+              "blob": {
+                "hash": "abababababababababababababababababababababababababababababababab",
+                "media_type": "text/plain",
+                "size": 70000
+              },
+              "preview": "fn main",
+              "type": "blob"
+            },
+            "output_bytes": 20000,
+            "output_state": "complete",
+            "output_tail": "…",
+            "parent_item_id": "i_0",
+            "paths": [],
+            "signal": "SIGTERM",
+            "started_at": 5,
+            "title": "Run tests",
+            "tool_kind": "execute",
+            "turn_id": "t_1"
+          },
+          "output": "ok\n",
+          "text": ""
+        },
+        "i_26": {
+          "end": {
+            "duration_ms": 0,
+            "ended_at": 9,
+            "status": "completed"
+          },
+          "item": {
+            "exit_code": 0,
+            "extraction": "full",
+            "item_id": "i_26",
+            "kind": "tool_call",
+            "output": {
+              "blob": {
+                "hash": "abababababababababababababababababababababababababababababababab",
+                "media_type": "text/plain",
+                "size": 70000
+              },
+              "preview": "fn main",
+              "type": "blob"
+            },
+            "output_bytes": 20000,
+            "output_state": "complete",
+            "output_tail": "…",
+            "paths": [],
+            "query": "q",
+            "started_at": 5,
+            "title": "Fetch",
+            "tool_kind": "fetch",
+            "turn_id": "t_1",
+            "url": "https://example.com"
+          },
+          "output": "ok\n",
+          "text": ""
+        },
+        "i_27": {
+          "end": {
+            "duration_ms": 0,
+            "ended_at": 9,
+            "status": "completed"
+          },
+          "item": {
+            "exit_code": 0,
+            "item_id": "i_27",
+            "kind": "late_tool_output",
+            "output": {
+              "blob": {
+                "hash": "abababababababababababababababababababababababababababababababab",
+                "media_type": "text/plain",
+                "size": 70000
+              },
+              "preview": "fn main",
+              "type": "blob"
+            },
+            "output_bytes": 20000,
+            "output_state": "complete",
+            "output_tail": "…",
+            "ref": {
+              "command": "npm start",
+              "item_id": "i_0",
+              "title": "Run server",
+              "turn_id": "t_0"
+            },
+            "started_at": 5,
+            "turn_id": "t_1"
+          },
+          "output": "ok\n",
+          "text": ""
+        },
+        "i_28": {
+          "end": {
+            "duration_ms": 0,
+            "ended_at": 9,
+            "status": "completed"
+          },
+          "item": {
+            "entries": [
+              {
+                "content": "Write tests",
+                "priority": "high",
+                "status": "completed"
+              },
+              {
+                "content": "Fix",
+                "status": "pending"
+              }
+            ],
+            "item_id": "i_28",
+            "kind": "plan",
+            "source": "entries",
+            "started_at": 5,
+            "turn_id": "t_1"
+          },
+          "output": "ok\n",
+          "text": ""
+        },
+        "i_29": {
+          "end": {
+            "duration_ms": 0,
+            "ended_at": 9,
+            "status": "completed"
+          },
+          "item": {
+            "item_id": "i_29",
+            "kind": "plan",
+            "markdown": {
+              "text": "1. a",
+              "type": "text"
+            },
+            "source": "markdown",
+            "started_at": 5,
+            "turn_id": "t_1"
+          },
+          "output": "ok\n",
+          "text": ""
+        },
+        "i_30": {
+          "end": {
+            "duration_ms": 0,
+            "ended_at": 9,
+            "status": "completed"
+          },
+          "item": {
+            "code": "repo_config_changed",
+            "item_id": "i_30",
+            "kind": "notice",
+            "params": {
+              "attempt": 2,
+              "max": 5
+            },
+            "started_at": 5,
+            "turn_id": "t_1"
+          },
+          "output": "ok\n",
+          "text": ""
+        },
+        "i_31": {
+          "end": {
+            "duration_ms": 0,
+            "ended_at": 9,
+            "status": "completed"
+          },
+          "item": {
+            "agent_code": "-32000",
+            "code": "not_logged_in",
+            "guidance": "run_login_in_terminal",
+            "item_id": "i_31",
+            "kind": "error",
+            "raw": "Authentication required",
+            "retryable": false,
+            "started_at": 5,
+            "turn_id": "t_1"
+          },
+          "output": "ok\n",
+          "text": ""
+        },
+        "i_52": {
+          "item": {
+            "content": [
+              {
+                "text": "No, use pnpm",
+                "type": "text"
+              }
+            ],
+            "item_id": "i_52",
+            "kind": "canvas",
+            "queue_id": "q_1",
+            "reply_to": "r_0",
+            "started_at": 5,
+            "steered": true,
+            "turn_id": "t_1"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_57": {
+          "item": {
+            "extraction": "guess",
+            "item_id": "i_57",
+            "kind": "tool_call",
+            "output_state": "paused",
+            "paths": [],
+            "started_at": 1,
+            "title": "t",
+            "tool_kind": "browse"
+          },
+          "output": "",
+          "text": ""
+        }
+      },
+      "late_by_ref": {
+        "i_0": "i_27"
+      },
+      "queue": {
+        "entries": [
+          {
+            "content": [
+              {
+                "text": "And docs",
+                "type": "text"
+              },
+              {
+                "path": "README.md",
+                "type": "file_ref"
+              },
+              {
+                "type": "video",
+                "url": "https://example.com/v.mp4"
+              }
+            ],
+            "created_at": 8,
+            "created_by": "pr_cli",
+            "preview": "And docs",
+            "queue_id": "q_1",
+            "reply_to": "r_1"
+          }
+        ],
+        "paused": {
+          "reason": "config_unconfirmed"
+        },
+        "version": 7
+      },
+      "requests": {
+        "r_36": {
+          "requested": {
+            "actionable_by": [
+              "desktop_ui",
+              "cli"
+            ],
+            "created_at": 6,
+            "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+            "request": {
+              "content_truncated": true,
+              "detail": {
+                "text": "in /w",
+                "type": "text"
+              },
+              "options": [
+                {
+                  "effect": {
+                    "ends_turn": false,
+                    "persistent": false,
+                    "scope": "once"
+                  },
+                  "kind": "allow_once",
+                  "name": "Allow",
+                  "option_id": "allow-once",
+                  "requires": "approve"
+                },
+                {
+                  "effect": {
+                    "persistent": true,
+                    "rule": {
+                      "location": "localSettings",
+                      "prefix": "npm test",
+                      "prefix_risk": "normal",
+                      "text": "Bash(npm test:*)"
+                    },
+                    "scope": "persistent"
+                  },
+                  "kind": "allow_always",
+                  "name": "Always allow `npm test`",
+                  "option_id": "allow-with-updates",
+                  "requires": "privileged"
+                },
+                {
+                  "effect": {
+                    "persistent": true,
+                    "rule": {
+                      "prefix_risk": "unknown"
+                    },
+                    "scope": "unknown"
+                  },
+                  "kind": "allow_sometimes",
+                  "name": "Do the thing",
+                  "option_id": "x",
+                  "requires": "privileged"
+                }
+              ],
+              "title": "Run npm test",
+              "tool": {
+                "command": {
+                  "blob": {
+                    "hash": "abababababababababababababababababababababababababababababababab",
+                    "media_type": "text/plain",
+                    "size": 70000
+                  },
+                  "preview": "fn main",
+                  "type": "blob"
+                },
+                "item_id": "i_1",
+                "paths": [
+                  "package.json"
+                ],
+                "tool_kind": "execute"
+              },
+              "type": "permission"
+            },
+            "request_id": "r_36"
+          },
+          "resolved": {
+            "outcome": {
+              "at": 5,
+              "type": "later"
+            },
+            "request_id": "r_36",
+            "resolved_by": {
+              "client_kind": "desktop",
+              "client_name": "Cupper",
+              "principal_id": "pr_desktop"
+            },
+            "status": "resolved"
+          }
+        },
+        "r_37": {
+          "requested": {
+            "actionable_by": [
+              "desktop_ui",
+              "cli"
+            ],
+            "created_at": 6,
+            "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+            "request": {
+              "fields": [
+                {
+                  "allow_custom": true,
+                  "choices": [
+                    {
+                      "description": "SQL",
+                      "label": "Postgres",
+                      "value": "pg"
+                    }
+                  ],
+                  "field_id": "question_1",
+                  "label": "Database",
+                  "required": true,
+                  "type": "single_choice"
+                },
+                {
+                  "allow_custom": false,
+                  "field_id": "n",
+                  "label": "Count",
+                  "required": false,
+                  "type": "number"
+                }
+              ],
+              "prompt": "Which?",
+              "type": "question",
+              "unsupported_schema": false
+            },
+            "request_id": "r_37"
+          },
+          "resolved": {
+            "outcome": {
+              "at": 5,
+              "type": "later"
+            },
+            "request_id": "r_37",
+            "resolved_by": {
+              "client_kind": "desktop",
+              "client_name": "Cupper",
+              "principal_id": "pr_desktop"
+            },
+            "status": "resolved"
+          }
+        },
+        "r_38": {
+          "requested": {
+            "actionable_by": [
+              "desktop_ui",
+              "cli"
+            ],
+            "created_at": 6,
+            "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+            "request": {
+              "options": [
+                {
+                  "effect": {
+                    "ends_turn": false,
+                    "mode_after": "auto",
+                    "persistent": false,
+                    "scope": "mode_switch",
+                    "tier_after": "elevated"
+                  },
+                  "kind": "allow_always",
+                  "name": "Auto",
+                  "option_id": "exit-plan-auto",
+                  "requires": "privileged"
+                }
+              ],
+              "plan": {
+                "text": "1. a",
+                "type": "text"
+              },
+              "type": "plan_confirm"
+            },
+            "request_id": "r_38"
+          },
+          "resolved": {
+            "outcome": {
+              "at": 5,
+              "type": "later"
+            },
+            "request_id": "r_38",
+            "resolved_by": {
+              "client_kind": "desktop",
+              "client_name": "Cupper",
+              "principal_id": "pr_desktop"
+            },
+            "status": "resolved"
+          }
+        },
+        "r_39": {
+          "requested": {
+            "actionable_by": [
+              "desktop_ui",
+              "cli"
+            ],
+            "created_at": 6,
+            "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+            "request": {
+              "message": "Sign in",
+              "type": "auth_url",
+              "url": "https://example.com/login"
+            },
+            "request_id": "r_39"
+          },
+          "resolved": {
+            "outcome": {
+              "at": 5,
+              "type": "later"
+            },
+            "request_id": "r_39",
+            "resolved_by": {
+              "client_kind": "desktop",
+              "client_name": "Cupper",
+              "principal_id": "pr_desktop"
+            },
+            "status": "resolved"
+          }
+        },
+        "r_53": {
+          "requested": {
+            "actionable_by": [
+              "desktop_ui",
+              "cli"
+            ],
+            "created_at": 6,
+            "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+            "request": {
+              "code": "ABCD",
+              "expires_at": 9,
+              "type": "oauth_device"
+            },
+            "request_id": "r_53"
+          },
+          "resolved": {
+            "outcome": {
+              "at": 5,
+              "type": "later"
+            },
+            "request_id": "r_53",
+            "resolved_by": {
+              "client_kind": "desktop",
+              "client_name": "Cupper",
+              "principal_id": "pr_desktop"
+            },
+            "status": "resolved"
+          }
+        }
+      },
+      "tail": [
+        {
+          "request": "r_36"
+        },
+        {
+          "request": "r_37"
+        },
+        {
+          "request": "r_38"
+        },
+        {
+          "request": "r_39"
+        },
+        {
+          "request": "r_53"
+        },
+        {
+          "item": "i_57"
+        }
+      ],
+      "turns": [
+        {
+          "completed": {
+            "duration_ms": 4,
+            "ended_at": 9,
+            "error_code": "disk_full",
+            "final_item_ids": [],
+            "status": "paused",
+            "stop_reason": "nap",
+            "turn_id": "t_1"
+          },
+          "entries": [
+            {
+              "item": "i_22"
+            },
+            {
+              "item": "i_23"
+            },
+            {
+              "item": "i_24"
+            },
+            {
+              "item": "i_25"
+            },
+            {
+              "item": "i_26"
+            },
+            {
+              "item": "i_27"
+            },
+            {
+              "item": "i_28"
+            },
+            {
+              "item": "i_29"
+            },
+            {
+              "item": "i_30"
+            },
+            {
+              "item": "i_31"
+            },
+            {
+              "item": "i_52"
+            }
+          ],
+          "snapshots": [
+            {
+              "excluded": [
+                {
+                  "path": "data.bin",
+                  "reason": "too_large"
+                }
+              ],
+              "phase": "end",
+              "stat": {
+                "added": 40,
+                "files": 3,
+                "removed": 2
+              },
+              "status": "partial",
+              "turn_id": "t_1"
+            },
+            {
+              "excluded": [],
+              "phase": "start",
+              "reason": "not_a_repo",
+              "status": "skipped",
+              "turn_id": "t_1"
+            }
+          ],
+          "started": {
+            "origin": "steer_new_turn",
+            "started_at": 5,
+            "turn_id": "t_1",
+            "turn_no": 3
+          }
+        }
+      ],
+      "usage": {
+        "context_size": 258400,
+        "context_used": 0
+      },
+      "workspace": {
+        "code": "git_error",
+        "reason": "lock_held",
+        "state": "failed"
+      }
+    },
+    "name": "every session sample",
+    "ops": [
+      {
+        "data": {
+          "agent": "claude",
+          "config": {
+            "model": "opus",
+            "permission_mode": "bypassPermissions"
+          },
+          "confirmation_required": {
+            "config_digest": "d_1111111111111111111111111111111111111111111111111111111111111111",
+            "reason": "full_access_unconfirmed"
+          },
+          "project_config": "ignored",
+          "read_only": false,
+          "workspace": {
+            "base_ref": "main",
+            "branch": "cupper/fix",
+            "kind": "worktree",
+            "path": "/w/fix"
+          }
+        },
+        "type": "session.configured"
+      },
+      {
+        "data": {
+          "agent": "codex",
+          "config": {},
+          "project_config": "loaded",
+          "read_only": true,
+          "workspace": {
+            "kind": "local",
+            "path": "/w"
+          }
+        },
+        "type": "session.configured"
+      },
+      {
+        "data": {
+          "agent": "codex",
+          "commands": [],
+          "config": [],
+          "extraction": {
+            "diff": "per_hunk",
+            "exit_code": true,
+            "output_streaming": true,
+            "plan": "entries",
+            "run_state": "agent_reported",
+            "thinking": true
+          },
+          "interactions": {
+            "plan_confirm": true,
+            "question_forms": true,
+            "reject_ends_turn": true
+          },
+          "prompt": {
+            "file_ref": true,
+            "image": true,
+            "max_image_bytes": 10485760
+          },
+          "session": {
+            "fork": false,
+            "load_history": false,
+            "resume": true
+          },
+          "turn": {
+            "interrupt": true,
+            "interrupt_stops_commands": false,
+            "queue": true,
+            "steer": {
+              "side_effects": false,
+              "supported": true
+            }
+          },
+          "versions": {
+            "adapter": "2.2.2",
+            "cli": "0.160.0",
+            "cli_compat": "verified"
+          }
+        },
+        "type": "session.capabilities"
+      },
+      {
+        "data": {
+          "phase": "checkout",
+          "progress": 40
+        },
+        "type": "workspace.preparing"
+      },
+      {
+        "data": {
+          "phase": "worktree_add"
+        },
+        "type": "workspace.preparing"
+      },
+      {
+        "data": {
+          "branch": "cupper/fix",
+          "path": "/w/fix"
+        },
+        "type": "workspace.ready"
+      },
+      {
+        "data": {
+          "code": "git_error",
+          "reason": "lock_held"
+        },
+        "type": "workspace.failed"
+      },
+      {
+        "data": {
+          "origin": "steer_new_turn",
+          "started_at": 5,
+          "turn_id": "t_1",
+          "turn_no": 3
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "duration_ms": 4,
+          "ended_at": 9,
+          "error_code": "adapter_exited",
+          "final_item_ids": [
+            "i_2",
+            "i_3"
+          ],
+          "status": "failed",
+          "stop_reason": "host_timeout",
+          "turn_id": "t_1",
+          "usage": {
+            "cached": 1000,
+            "cost": {
+              "amount": 0.5,
+              "currency": "USD"
+            },
+            "input": 1200,
+            "output": 300
+          }
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 4,
+          "ended_at": 9,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_1",
+          "usage": {
+            "input": 1,
+            "output": 2
+          }
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "content": [
+            {
+              "text": "No, use pnpm",
+              "type": "text"
+            }
+          ],
+          "item_id": "i_22",
+          "kind": "user_message",
+          "queue_id": "q_1",
+          "reply_to": "r_0",
+          "started_at": 5,
+          "steered": true,
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "item_id": "i_23",
+          "kind": "agent_message",
+          "started_at": 5,
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "group_id": "g_1",
+          "item_id": "i_24",
+          "kind": "thought",
+          "started_at": 5,
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "command": "cargo test",
+          "cwd": "/w",
+          "diffs": [
+            {
+              "change": "update",
+              "hunks": {
+                "blob": {
+                  "hash": "abababababababababababababababababababababababababababababababab",
+                  "media_type": "text/plain",
+                  "size": 70000
+                },
+                "preview": "fn main",
+                "type": "blob"
+              },
+              "path": "a.rs",
+              "stat": {
+                "added": 2,
+                "removed": 1
+              }
+            }
+          ],
+          "exit_code": 101,
+          "extraction": "partial",
+          "group_id": "g_1",
+          "item_id": "i_25",
+          "kind": "tool_call",
+          "output": {
+            "blob": {
+              "hash": "abababababababababababababababababababababababababababababababab",
+              "media_type": "text/plain",
+              "size": 70000
+            },
+            "preview": "fn main",
+            "type": "blob"
+          },
+          "output_bytes": 70000,
+          "output_state": "truncated",
+          "output_tail": "FAILED",
+          "parent_item_id": "i_0",
+          "paths": [],
+          "signal": "SIGTERM",
+          "started_at": 5,
+          "title": "Run tests",
+          "tool_kind": "execute",
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "extraction": "full",
+          "item_id": "i_26",
+          "kind": "tool_call",
+          "output_state": "none",
+          "paths": [],
+          "query": "q",
+          "started_at": 5,
+          "title": "Fetch",
+          "tool_kind": "fetch",
+          "turn_id": "t_1",
+          "url": "https://example.com"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "item_id": "i_27",
+          "kind": "late_tool_output",
+          "output_state": "streaming",
+          "ref": {
+            "command": "npm start",
+            "item_id": "i_0",
+            "title": "Run server",
+            "turn_id": "t_0"
+          },
+          "started_at": 5,
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "entries": [
+            {
+              "content": "Write tests",
+              "priority": "high",
+              "status": "completed"
+            },
+            {
+              "content": "Fix",
+              "status": "pending"
+            }
+          ],
+          "item_id": "i_28",
+          "kind": "plan",
+          "source": "entries",
+          "started_at": 5,
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "item_id": "i_29",
+          "kind": "plan",
+          "markdown": {
+            "text": "1. a",
+            "type": "text"
+          },
+          "source": "markdown",
+          "started_at": 5,
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "repo_config_changed",
+          "item_id": "i_30",
+          "kind": "notice",
+          "params": {
+            "paths": [
+              ".git/config"
+            ]
+          },
+          "started_at": 5,
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "agent_code": "-32000",
+          "code": "not_logged_in",
+          "guidance": "run_login_in_terminal",
+          "item_id": "i_31",
+          "kind": "error",
+          "raw": "Authentication required",
+          "retryable": false,
+          "started_at": 5,
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_22",
+          "text": "ok\n"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_23",
+          "text": "ok\n"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_24",
+          "text": "ok\n"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_25",
+          "text": "ok\n"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_26",
+          "text": "ok\n"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_27",
+          "text": "ok\n"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_28",
+          "text": "ok\n"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_29",
+          "text": "ok\n"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_30",
+          "text": "ok\n"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_31",
+          "text": "ok\n"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "item_id": "i_22",
+          "output_bytes": 20000,
+          "output_state": "truncated",
+          "output_tail": "…",
+          "params": {
+            "attempt": 2,
+            "max": 5
+          }
+        },
+        "type": "item.updated"
+      },
+      {
+        "data": {
+          "item_id": "i_23",
+          "output_bytes": 20000,
+          "output_state": "truncated",
+          "output_tail": "…",
+          "params": {
+            "attempt": 2,
+            "max": 5
+          }
+        },
+        "type": "item.updated"
+      },
+      {
+        "data": {
+          "item_id": "i_24",
+          "output_bytes": 20000,
+          "output_state": "truncated",
+          "output_tail": "…",
+          "params": {
+            "attempt": 2,
+            "max": 5
+          }
+        },
+        "type": "item.updated"
+      },
+      {
+        "data": {
+          "item_id": "i_25",
+          "output_bytes": 20000,
+          "output_state": "truncated",
+          "output_tail": "…",
+          "params": {
+            "attempt": 2,
+            "max": 5
+          }
+        },
+        "type": "item.updated"
+      },
+      {
+        "data": {
+          "item_id": "i_26",
+          "output_bytes": 20000,
+          "output_state": "truncated",
+          "output_tail": "…",
+          "params": {
+            "attempt": 2,
+            "max": 5
+          }
+        },
+        "type": "item.updated"
+      },
+      {
+        "data": {
+          "item_id": "i_27",
+          "output_bytes": 20000,
+          "output_state": "truncated",
+          "output_tail": "…",
+          "params": {
+            "attempt": 2,
+            "max": 5
+          }
+        },
+        "type": "item.updated"
+      },
+      {
+        "data": {
+          "item_id": "i_28",
+          "output_bytes": 20000,
+          "output_state": "truncated",
+          "output_tail": "…",
+          "params": {
+            "attempt": 2,
+            "max": 5
+          }
+        },
+        "type": "item.updated"
+      },
+      {
+        "data": {
+          "item_id": "i_29",
+          "output_bytes": 20000,
+          "output_state": "truncated",
+          "output_tail": "…",
+          "params": {
+            "attempt": 2,
+            "max": 5
+          }
+        },
+        "type": "item.updated"
+      },
+      {
+        "data": {
+          "item_id": "i_30",
+          "output_bytes": 20000,
+          "output_state": "truncated",
+          "output_tail": "…",
+          "params": {
+            "attempt": 2,
+            "max": 5
+          }
+        },
+        "type": "item.updated"
+      },
+      {
+        "data": {
+          "item_id": "i_31",
+          "output_bytes": 20000,
+          "output_state": "truncated",
+          "output_tail": "…",
+          "params": {
+            "attempt": 2,
+            "max": 5
+          }
+        },
+        "type": "item.updated"
+      },
+      {
+        "data": {
+          "duration_ms": 4,
+          "ended_at": 9,
+          "exit_code": 0,
+          "item_id": "i_22",
+          "may_still_run": true,
+          "output": {
+            "blob": {
+              "hash": "abababababababababababababababababababababababababababababababab",
+              "media_type": "text/plain",
+              "size": 70000
+            },
+            "preview": "fn main",
+            "type": "blob"
+          },
+          "output_state": "complete",
+          "status": "abandoned"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 4,
+          "ended_at": 9,
+          "exit_code": 0,
+          "item_id": "i_23",
+          "may_still_run": true,
+          "output": {
+            "blob": {
+              "hash": "abababababababababababababababababababababababababababababababab",
+              "media_type": "text/plain",
+              "size": 70000
+            },
+            "preview": "fn main",
+            "type": "blob"
+          },
+          "output_state": "complete",
+          "status": "abandoned"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 4,
+          "ended_at": 9,
+          "exit_code": 0,
+          "item_id": "i_24",
+          "may_still_run": true,
+          "output": {
+            "blob": {
+              "hash": "abababababababababababababababababababababababababababababababab",
+              "media_type": "text/plain",
+              "size": 70000
+            },
+            "preview": "fn main",
+            "type": "blob"
+          },
+          "output_state": "complete",
+          "status": "abandoned"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 4,
+          "ended_at": 9,
+          "exit_code": 0,
+          "item_id": "i_25",
+          "may_still_run": true,
+          "output": {
+            "blob": {
+              "hash": "abababababababababababababababababababababababababababababababab",
+              "media_type": "text/plain",
+              "size": 70000
+            },
+            "preview": "fn main",
+            "type": "blob"
+          },
+          "output_state": "complete",
+          "status": "abandoned"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 4,
+          "ended_at": 9,
+          "exit_code": 0,
+          "item_id": "i_26",
+          "may_still_run": true,
+          "output": {
+            "blob": {
+              "hash": "abababababababababababababababababababababababababababababababab",
+              "media_type": "text/plain",
+              "size": 70000
+            },
+            "preview": "fn main",
+            "type": "blob"
+          },
+          "output_state": "complete",
+          "status": "abandoned"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 4,
+          "ended_at": 9,
+          "exit_code": 0,
+          "item_id": "i_27",
+          "may_still_run": true,
+          "output": {
+            "blob": {
+              "hash": "abababababababababababababababababababababababababababababababab",
+              "media_type": "text/plain",
+              "size": 70000
+            },
+            "preview": "fn main",
+            "type": "blob"
+          },
+          "output_state": "complete",
+          "status": "abandoned"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 4,
+          "ended_at": 9,
+          "exit_code": 0,
+          "item_id": "i_28",
+          "may_still_run": true,
+          "output": {
+            "blob": {
+              "hash": "abababababababababababababababababababababababababababababababab",
+              "media_type": "text/plain",
+              "size": 70000
+            },
+            "preview": "fn main",
+            "type": "blob"
+          },
+          "output_state": "complete",
+          "status": "abandoned"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 4,
+          "ended_at": 9,
+          "exit_code": 0,
+          "item_id": "i_29",
+          "may_still_run": true,
+          "output": {
+            "blob": {
+              "hash": "abababababababababababababababababababababababababababababababab",
+              "media_type": "text/plain",
+              "size": 70000
+            },
+            "preview": "fn main",
+            "type": "blob"
+          },
+          "output_state": "complete",
+          "status": "abandoned"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 4,
+          "ended_at": 9,
+          "exit_code": 0,
+          "item_id": "i_30",
+          "may_still_run": true,
+          "output": {
+            "blob": {
+              "hash": "abababababababababababababababababababababababababababababababab",
+              "media_type": "text/plain",
+              "size": 70000
+            },
+            "preview": "fn main",
+            "type": "blob"
+          },
+          "output_state": "complete",
+          "status": "abandoned"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 4,
+          "ended_at": 9,
+          "exit_code": 0,
+          "item_id": "i_31",
+          "may_still_run": true,
+          "output": {
+            "blob": {
+              "hash": "abababababababababababababababababababababababababababababababab",
+              "media_type": "text/plain",
+              "size": 70000
+            },
+            "preview": "fn main",
+            "type": "blob"
+          },
+          "output_state": "complete",
+          "status": "abandoned"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 0,
+          "ended_at": 9,
+          "item_id": "i_22",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 0,
+          "ended_at": 9,
+          "item_id": "i_23",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 0,
+          "ended_at": 9,
+          "item_id": "i_24",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 0,
+          "ended_at": 9,
+          "item_id": "i_25",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 0,
+          "ended_at": 9,
+          "item_id": "i_26",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 0,
+          "ended_at": 9,
+          "item_id": "i_27",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 0,
+          "ended_at": 9,
+          "item_id": "i_28",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 0,
+          "ended_at": 9,
+          "item_id": "i_29",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 0,
+          "ended_at": 9,
+          "item_id": "i_30",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 0,
+          "ended_at": 9,
+          "item_id": "i_31",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "actionable_by": [
+            "desktop_ui",
+            "cli"
+          ],
+          "created_at": 6,
+          "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+          "request": {
+            "content_truncated": true,
+            "detail": {
+              "text": "in /w",
+              "type": "text"
+            },
+            "options": [
+              {
+                "effect": {
+                  "ends_turn": false,
+                  "persistent": false,
+                  "scope": "once"
+                },
+                "kind": "allow_once",
+                "name": "Allow",
+                "option_id": "allow-once",
+                "requires": "approve"
+              },
+              {
+                "effect": {
+                  "persistent": true,
+                  "rule": {
+                    "location": "localSettings",
+                    "prefix": "npm test",
+                    "prefix_risk": "normal",
+                    "text": "Bash(npm test:*)"
+                  },
+                  "scope": "persistent"
+                },
+                "kind": "allow_always",
+                "name": "Always allow `npm test`",
+                "option_id": "allow-with-updates",
+                "requires": "privileged"
+              },
+              {
+                "effect": {
+                  "persistent": true,
+                  "rule": {
+                    "prefix_risk": "unknown"
+                  },
+                  "scope": "unknown"
+                },
+                "kind": "allow_sometimes",
+                "name": "Do the thing",
+                "option_id": "x",
+                "requires": "privileged"
+              }
+            ],
+            "title": "Run npm test",
+            "tool": {
+              "command": {
+                "blob": {
+                  "hash": "abababababababababababababababababababababababababababababababab",
+                  "media_type": "text/plain",
+                  "size": 70000
+                },
+                "preview": "fn main",
+                "type": "blob"
+              },
+              "item_id": "i_1",
+              "paths": [
+                "package.json"
+              ],
+              "tool_kind": "execute"
+            },
+            "type": "permission"
+          },
+          "request_id": "r_36"
+        },
+        "type": "interaction.requested"
+      },
+      {
+        "data": {
+          "actionable_by": [
+            "desktop_ui",
+            "cli"
+          ],
+          "created_at": 6,
+          "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+          "request": {
+            "fields": [
+              {
+                "allow_custom": true,
+                "choices": [
+                  {
+                    "description": "SQL",
+                    "label": "Postgres",
+                    "value": "pg"
+                  }
+                ],
+                "field_id": "question_1",
+                "label": "Database",
+                "required": true,
+                "type": "single_choice"
+              },
+              {
+                "allow_custom": false,
+                "field_id": "n",
+                "label": "Count",
+                "required": false,
+                "type": "number"
+              }
+            ],
+            "prompt": "Which?",
+            "type": "question",
+            "unsupported_schema": false
+          },
+          "request_id": "r_37"
+        },
+        "type": "interaction.requested"
+      },
+      {
+        "data": {
+          "actionable_by": [
+            "desktop_ui",
+            "cli"
+          ],
+          "created_at": 6,
+          "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+          "request": {
+            "options": [
+              {
+                "effect": {
+                  "ends_turn": false,
+                  "mode_after": "auto",
+                  "persistent": false,
+                  "scope": "mode_switch",
+                  "tier_after": "elevated"
+                },
+                "kind": "allow_always",
+                "name": "Auto",
+                "option_id": "exit-plan-auto",
+                "requires": "privileged"
+              }
+            ],
+            "plan": {
+              "text": "1. a",
+              "type": "text"
+            },
+            "type": "plan_confirm"
+          },
+          "request_id": "r_38"
+        },
+        "type": "interaction.requested"
+      },
+      {
+        "data": {
+          "actionable_by": [
+            "desktop_ui",
+            "cli"
+          ],
+          "created_at": 6,
+          "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+          "request": {
+            "message": "Sign in",
+            "type": "auth_url",
+            "url": "https://example.com/login"
+          },
+          "request_id": "r_39"
+        },
+        "type": "interaction.requested"
+      },
+      {
+        "data": {
+          "outcome": {
+            "option_id": "allow-once",
+            "type": "selected"
+          },
+          "request_id": "r_36",
+          "resolved_by": {
+            "client_kind": "desktop",
+            "client_name": "Cupper",
+            "principal_id": "pr_desktop"
+          },
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "option_id": "allow-once",
+            "type": "selected"
+          },
+          "request_id": "r_37",
+          "resolved_by": {
+            "client_kind": "desktop",
+            "client_name": "Cupper",
+            "principal_id": "pr_desktop"
+          },
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "option_id": "allow-once",
+            "type": "selected"
+          },
+          "request_id": "r_38",
+          "resolved_by": {
+            "client_kind": "desktop",
+            "client_name": "Cupper",
+            "principal_id": "pr_desktop"
+          },
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "option_id": "allow-once",
+            "type": "selected"
+          },
+          "request_id": "r_39",
+          "resolved_by": {
+            "client_kind": "desktop",
+            "client_name": "Cupper",
+            "principal_id": "pr_desktop"
+          },
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "answer",
+            "values": {
+              "n": 3,
+              "question_1": "pg"
+            }
+          },
+          "request_id": "r_36",
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "answer",
+            "values": {
+              "n": 3,
+              "question_1": "pg"
+            }
+          },
+          "request_id": "r_37",
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "answer",
+            "values": {
+              "n": 3,
+              "question_1": "pg"
+            }
+          },
+          "request_id": "r_38",
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "answer",
+            "values": {
+              "n": 3,
+              "question_1": "pg"
+            }
+          },
+          "request_id": "r_39",
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "dismissed"
+          },
+          "request_id": "r_36",
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "dismissed"
+          },
+          "request_id": "r_37",
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "dismissed"
+          },
+          "request_id": "r_38",
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "dismissed"
+          },
+          "request_id": "r_39",
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "opened"
+          },
+          "request_id": "r_36",
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "opened"
+          },
+          "request_id": "r_37",
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "opened"
+          },
+          "request_id": "r_38",
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "opened"
+          },
+          "request_id": "r_39",
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "reason": "adapter_exited",
+          "request_id": "r_36",
+          "status": "expired"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "reason": "adapter_exited",
+          "request_id": "r_37",
+          "status": "expired"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "reason": "adapter_exited",
+          "request_id": "r_38",
+          "status": "expired"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "reason": "adapter_exited",
+          "request_id": "r_39",
+          "status": "expired"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "entries": [
+            {
+              "content": [
+                {
+                  "text": "And docs",
+                  "type": "text"
+                },
+                {
+                  "path": "README.md",
+                  "type": "file_ref"
+                }
+              ],
+              "created_at": 8,
+              "created_by": "pr_cli",
+              "preview": "And docs",
+              "queue_id": "q_1",
+              "reply_to": "r_1"
+            }
+          ],
+          "paused": {
+            "reason": "config_unconfirmed"
+          },
+          "version": 7
+        },
+        "type": "queue.updated"
+      },
+      {
+        "data": {
+          "entries": [],
+          "version": 8
+        },
+        "type": "queue.updated"
+      },
+      {
+        "data": {
+          "excluded": [
+            {
+              "path": "data.bin",
+              "reason": "too_large"
+            }
+          ],
+          "phase": "end",
+          "stat": {
+            "added": 40,
+            "files": 3,
+            "removed": 2
+          },
+          "status": "partial",
+          "turn_id": "t_1"
+        },
+        "type": "snapshot.recorded"
+      },
+      {
+        "data": {
+          "excluded": [],
+          "phase": "start",
+          "reason": "not_a_repo",
+          "status": "skipped",
+          "turn_id": "t_1"
+        },
+        "type": "snapshot.recorded"
+      },
+      {
+        "data": {
+          "context_size": 200000,
+          "context_used": 50000,
+          "cost": {
+            "amount": 1.25,
+            "currency": "USD"
+          }
+        },
+        "type": "usage.updated"
+      },
+      {
+        "data": {
+          "context_size": 258400,
+          "context_used": 0
+        },
+        "type": "usage.updated"
+      },
+      {
+        "data": {
+          "content": [
+            {
+              "text": "No, use pnpm",
+              "type": "text"
+            }
+          ],
+          "item_id": "i_52",
+          "kind": "canvas",
+          "queue_id": "q_1",
+          "reply_to": "r_0",
+          "started_at": 5,
+          "steered": true,
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "actionable_by": [
+            "desktop_ui",
+            "cli"
+          ],
+          "created_at": 6,
+          "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+          "request": {
+            "code": "ABCD",
+            "expires_at": 9,
+            "type": "oauth_device"
+          },
+          "request_id": "r_53"
+        },
+        "type": "interaction.requested"
+      },
+      {
+        "data": {
+          "outcome": {
+            "at": 5,
+            "type": "later"
+          },
+          "request_id": "r_36",
+          "resolved_by": {
+            "client_kind": "desktop",
+            "client_name": "Cupper",
+            "principal_id": "pr_desktop"
+          },
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "at": 5,
+            "type": "later"
+          },
+          "request_id": "r_37",
+          "resolved_by": {
+            "client_kind": "desktop",
+            "client_name": "Cupper",
+            "principal_id": "pr_desktop"
+          },
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "at": 5,
+            "type": "later"
+          },
+          "request_id": "r_38",
+          "resolved_by": {
+            "client_kind": "desktop",
+            "client_name": "Cupper",
+            "principal_id": "pr_desktop"
+          },
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "at": 5,
+            "type": "later"
+          },
+          "request_id": "r_39",
+          "resolved_by": {
+            "client_kind": "desktop",
+            "client_name": "Cupper",
+            "principal_id": "pr_desktop"
+          },
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "outcome": {
+            "at": 5,
+            "type": "later"
+          },
+          "request_id": "r_53",
+          "resolved_by": {
+            "client_kind": "desktop",
+            "client_name": "Cupper",
+            "principal_id": "pr_desktop"
+          },
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "entries": [
+            {
+              "content": [
+                {
+                  "text": "And docs",
+                  "type": "text"
+                },
+                {
+                  "path": "README.md",
+                  "type": "file_ref"
+                },
+                {
+                  "type": "video",
+                  "url": "https://example.com/v.mp4"
+                }
+              ],
+              "created_at": 8,
+              "created_by": "pr_cli",
+              "preview": "And docs",
+              "queue_id": "q_1",
+              "reply_to": "r_1"
+            }
+          ],
+          "paused": {
+            "reason": "config_unconfirmed"
+          },
+          "version": 7
+        },
+        "type": "queue.updated"
+      },
+      {
+        "data": {
+          "field": "stderr",
+          "item_id": "i_22",
+          "text": "x"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "stderr",
+          "item_id": "i_23",
+          "text": "x"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "stderr",
+          "item_id": "i_24",
+          "text": "x"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "stderr",
+          "item_id": "i_25",
+          "text": "x"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "stderr",
+          "item_id": "i_26",
+          "text": "x"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "stderr",
+          "item_id": "i_27",
+          "text": "x"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "stderr",
+          "item_id": "i_28",
+          "text": "x"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "stderr",
+          "item_id": "i_29",
+          "text": "x"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "stderr",
+          "item_id": "i_30",
+          "text": "x"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "stderr",
+          "item_id": "i_31",
+          "text": "x"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "stderr",
+          "item_id": "i_52",
+          "text": "x"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "extraction": "guess",
+          "item_id": "i_57",
+          "kind": "tool_call",
+          "output_state": "paused",
+          "paths": [],
+          "started_at": 1,
+          "title": "t",
+          "tool_kind": "browse"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "duration_ms": 4,
+          "ended_at": 9,
+          "error_code": "disk_full",
+          "final_item_ids": [],
+          "status": "paused",
+          "stop_reason": "nap",
+          "turn_id": "t_1"
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "pinned": true,
+          "project_id": "p_1"
+        },
+        "type": "project.pinned"
+      },
+      {
+        "data": {
+          "sha": "abc"
+        },
+        "type": "git.snapshot"
+      },
+      {
+        "type": "session.paused"
+      },
+      {
+        "data": {
+          "added_at": 1,
+          "is_git": true,
+          "name": "cupper",
+          "path": "/work/cupper",
+          "position": 0,
+          "project_id": "p_1"
+        },
+        "type": "project.upserted"
+      },
+      {
+        "data": {
+          "added_at": 1,
+          "is_git": true,
+          "name": "cupper",
+          "path": "/work/cupper",
+          "position": -1,
+          "project_id": "p_1",
+          "trust_state": "stale"
+        },
+        "type": "project.upserted"
+      },
+      {
+        "data": {
+          "agents": [
+            {
+              "adapter": {
+                "failure": "hash_mismatch",
+                "runtime": "failed",
+                "version": "0.91.0"
+              },
+              "agent": "claude",
+              "auth": {
+                "kind": "subscription",
+                "plan": "max",
+                "state": "logged_in"
+              },
+              "cli": {
+                "compat": "verified",
+                "install": "native",
+                "path": "/opt/homebrew/bin/claude",
+                "version": "2.1.296"
+              },
+              "config_dir": "ok",
+              "rss_bytes": 734003200,
+              "state": "running"
+            },
+            {
+              "agent": "codex",
+              "auth": {
+                "state": "unchecked"
+              },
+              "config_dir": "default",
+              "state": "unavailable"
+            }
+          ],
+          "git": {
+            "lfs": "3.7.0",
+            "version": "2.50.1"
+          }
+        },
+        "type": "agents.updated"
+      },
+      {
+        "type": "project.removed"
+      },
+      {
+        "data": "up",
+        "type": "host.updated"
+      },
+      {
+        "data": {
+          "command": "cargo test",
+          "cwd": "/w",
+          "diffs": [
+            {
+              "change": "update",
+              "hunks": {
+                "blob": {
+                  "hash": "abababababababababababababababababababababababababababababababab",
+                  "media_type": "text/plain",
+                  "size": 70000
+                },
+                "preview": "fn main",
+                "type": "blob"
+              },
+              "path": "a.rs",
+              "stat": {
+                "added": 2,
+                "removed": 1
+              }
+            }
+          ],
+          "exit_code": 101,
+          "extraction": "partial",
+          "group_id": "g_1",
+          "item_id": "i_1",
+          "kind": "tool_call",
+          "output": {
+            "blob": {
+              "hash": "abababababababababababababababababababababababababababababababab",
+              "media_type": "text/plain",
+              "size": 70000
+            },
+            "preview": "fn main",
+            "type": "blob"
+          },
+          "output_bytes": 70000,
+          "output_tail": "FAILED",
+          "parent_item_id": "i_0",
+          "paths": [],
+          "signal": "SIGTERM",
+          "started_at": 5,
+          "title": "Run tests",
+          "tool_kind": "execute",
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "actionable_by": [
+            "desktop_ui",
+            "cli"
+          ],
+          "created_at": 6,
+          "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+          "request": {
+            "content_truncated": true,
+            "detail": {
+              "text": "in /w",
+              "type": "text"
+            },
+            "options": [
+              {
+                "effect": {
+                  "ends_turn": false,
+                  "scope": "once"
+                },
+                "kind": "allow_once",
+                "name": "Allow",
+                "option_id": "allow-once",
+                "requires": "approve"
+              },
+              {
+                "effect": {
+                  "persistent": true,
+                  "rule": {
+                    "location": "localSettings",
+                    "prefix": "npm test",
+                    "prefix_risk": "normal",
+                    "text": "Bash(npm test:*)"
+                  },
+                  "scope": "persistent"
+                },
+                "kind": "allow_always",
+                "name": "Always allow `npm test`",
+                "option_id": "allow-with-updates",
+                "requires": "privileged"
+              },
+              {
+                "effect": {
+                  "persistent": true,
+                  "rule": {
+                    "prefix_risk": "unknown"
+                  },
+                  "scope": "unknown"
+                },
+                "kind": "allow_sometimes",
+                "name": "Do the thing",
+                "option_id": "x",
+                "requires": "privileged"
+              }
+            ],
+            "title": "Run npm test",
+            "tool": {
+              "command": {
+                "blob": {
+                  "hash": "abababababababababababababababababababababababababababababababab",
+                  "media_type": "text/plain",
+                  "size": 70000
+                },
+                "preview": "fn main",
+                "type": "blob"
+              },
+              "item_id": "i_1",
+              "paths": [
+                "package.json"
+              ],
+              "tool_kind": "execute"
+            },
+            "type": "permission"
+          },
+          "request_id": "r_1"
+        },
+        "type": "interaction.requested"
+      },
+      {
+        "data": {
+          "outcome": {
+            "type": "selected"
+          },
+          "request_id": "r_1",
+          "resolved_by": {
+            "client_kind": "desktop",
+            "client_name": "Cupper",
+            "principal_id": "pr_desktop"
+          },
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "entries": [
+            {
+              "content": [
+                {
+                  "text": "And docs",
+                  "type": "text"
+                },
+                {
+                  "type": "file_ref"
+                }
+              ],
+              "created_at": 8,
+              "created_by": "pr_cli",
+              "preview": "And docs",
+              "queue_id": "q_1",
+              "reply_to": "r_1"
+            }
+          ],
+          "paused": {
+            "reason": "config_unconfirmed"
+          },
+          "version": 7
+        },
+        "type": "queue.updated"
+      }
+    ],
+    "view": "session"
+  },
+  {
+    "expected": {
+      "detached": [],
+      "items": {
+        "i_1": {
+          "item": {
+            "item_id": "i_1",
+            "kind": "agent_message",
+            "started_at": 1,
+            "turn_id": "t_1"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_2": {
+          "item": {
+            "item_id": "i_2",
+            "kind": "agent_message",
+            "started_at": 1,
+            "turn_id": "t_2"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_3": {
+          "item": {
+            "item_id": "i_3",
+            "kind": "agent_message",
+            "started_at": 1,
+            "turn_id": "t_3"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_4": {
+          "item": {
+            "item_id": "i_4",
+            "kind": "agent_message",
+            "started_at": 1,
+            "turn_id": "t_4"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_loose1": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_loose1",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_1"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_loose2": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_loose2",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_2"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_loose3": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_loose3",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_3"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_loose4": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_loose4",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_4"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_tail": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_tail",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_5"
+          },
+          "output": "",
+          "text": ""
+        }
+      },
+      "late_by_ref": {},
+      "requests": {},
+      "tail": [],
+      "turns": [
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 1,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_1"
+          },
+          "entries": [
+            {
+              "item": "i_loose1"
+            },
+            {
+              "item": "i_1"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 1,
+            "turn_id": "t_1",
+            "turn_no": 1
+          }
+        },
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 2,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_2"
+          },
+          "entries": [
+            {
+              "item": "i_loose2"
+            },
+            {
+              "item": "i_2"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 2,
+            "turn_id": "t_2",
+            "turn_no": 2
+          }
+        },
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 3,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_3"
+          },
+          "entries": [
+            {
+              "item": "i_loose3"
+            },
+            {
+              "item": "i_3"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 3,
+            "turn_id": "t_3",
+            "turn_no": 3
+          }
+        },
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 4,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_4"
+          },
+          "entries": [
+            {
+              "item": "i_loose4"
+            },
+            {
+              "item": "i_4"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 4,
+            "turn_id": "t_4",
+            "turn_no": 4
+          }
+        },
+        {
+          "entries": [
+            {
+              "item": "i_tail"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 5,
+            "turn_id": "t_5",
+            "turn_no": 5
+          }
+        }
+      ]
+    },
+    "name": "history before the window and a tail",
+    "ops": [
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 4,
+          "turn_id": "t_4",
+          "turn_no": 4
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_loose4",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_4"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "item_id": "i_4",
+          "kind": "agent_message",
+          "started_at": 1,
+          "turn_id": "t_4"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 4,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_4"
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 3,
+          "turn_id": "t_3",
+          "turn_no": 3
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_loose3",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_3"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "item_id": "i_3",
+          "kind": "agent_message",
+          "started_at": 1,
+          "turn_id": "t_3"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 3,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_3"
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 2,
+          "turn_id": "t_2",
+          "turn_no": 2
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_loose2",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_2"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "item_id": "i_2",
+          "kind": "agent_message",
+          "started_at": 1,
+          "turn_id": "t_2"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 2,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_2"
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 1,
+          "turn_id": "t_1",
+          "turn_no": 1
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_loose1",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "item_id": "i_1",
+          "kind": "agent_message",
+          "started_at": 1,
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 1,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_1"
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_tail",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 5,
+          "turn_id": "t_5",
+          "turn_no": 5
+        },
+        "type": "turn.started"
+      }
+    ],
+    "view": "session"
+  },
+  {
+    "expected": {
+      "detached": [],
+      "items": {},
+      "late_by_ref": {},
+      "requests": {
+        "r_1": {
+          "requested": {
+            "actionable_by": [
+              "desktop_ui"
+            ],
+            "created_at": 1,
+            "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+            "request": {
+              "message": "Sign in",
+              "type": "auth_url",
+              "url": "https://example.com"
+            },
+            "request_id": "r_1",
+            "turn_id": "t_1"
+          },
+          "resolved": {
+            "request_id": "r_1",
+            "status": "cancelled"
+          }
+        },
+        "r_2": {
+          "requested": {
+            "actionable_by": [
+              "desktop_ui"
+            ],
+            "created_at": 1,
+            "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+            "request": {
+              "message": "Sign in",
+              "type": "auth_url",
+              "url": "https://example.com"
+            },
+            "request_id": "r_2",
+            "turn_id": "t_1"
+          },
+          "resolved": {
+            "request_id": "r_2",
+            "status": "resolved"
+          }
+        }
+      },
+      "tail": [],
+      "turns": [
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 1,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_1"
+          },
+          "entries": [
+            {
+              "request": "r_1"
+            },
+            {
+              "request": "r_2"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 1,
+            "turn_id": "t_1",
+            "turn_no": 1
+          }
+        },
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 2,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_2"
+          },
+          "entries": [],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 2,
+            "turn_id": "t_2",
+            "turn_no": 2
+          }
+        }
+      ]
+    },
+    "name": "a detached request back in place",
+    "ops": [
+      {
+        "data": {
+          "actionable_by": [
+            "desktop_ui"
+          ],
+          "created_at": 1,
+          "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+          "request": {
+            "message": "Sign in",
+            "type": "auth_url",
+            "url": "https://example.com"
+          },
+          "request_id": "r_1",
+          "turn_id": "t_1"
+        },
+        "type": "interaction.requested"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 2,
+          "turn_id": "t_2",
+          "turn_no": 2
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 2,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_2"
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "request_id": "r_1",
+          "status": "cancelled"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 1,
+          "turn_id": "t_1",
+          "turn_no": 1
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "actionable_by": [
+            "desktop_ui"
+          ],
+          "created_at": 1,
+          "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+          "request": {
+            "message": "Sign in",
+            "type": "auth_url",
+            "url": "https://example.com"
+          },
+          "request_id": "r_1",
+          "turn_id": "t_1"
+        },
+        "type": "interaction.requested"
+      },
+      {
+        "data": {
+          "actionable_by": [
+            "desktop_ui"
+          ],
+          "created_at": 1,
+          "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+          "request": {
+            "message": "Sign in",
+            "type": "auth_url",
+            "url": "https://example.com"
+          },
+          "request_id": "r_2",
+          "turn_id": "t_1"
+        },
+        "type": "interaction.requested"
+      },
+      {
+        "data": {
+          "request_id": "r_2",
+          "status": "resolved"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 1,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_1"
+        },
+        "type": "turn.completed"
+      }
+    ],
+    "view": "session"
+  },
+  {
+    "expected": {
+      "detached": [],
+      "items": {
+        "i_1": {
+          "end": {
+            "duration_ms": 1,
+            "ended_at": 2,
+            "may_still_run": true,
+            "status": "abandoned"
+          },
+          "item": {
+            "command": "npm start",
+            "cwd": "/w",
+            "exit_code": 2,
+            "extraction": "full",
+            "item_id": "i_1",
+            "kind": "tool_call",
+            "output_state": "none",
+            "paths": [],
+            "started_at": 1,
+            "title": "Run",
+            "tool_kind": "execute",
+            "turn_id": "t_1"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_2": {
+          "end": {
+            "duration_ms": 1,
+            "ended_at": 2,
+            "status": "completed"
+          },
+          "item": {
+            "exit_code": 0,
+            "item_id": "i_2",
+            "kind": "late_tool_output",
+            "output_state": "complete",
+            "ref": {
+              "command": "npm start",
+              "item_id": "i_1",
+              "title": "Run",
+              "turn_id": "t_1"
+            },
+            "started_at": 3,
+            "turn_id": "t_2"
+          },
+          "output": "ready\n",
+          "text": ""
+        }
+      },
+      "late_by_ref": {
+        "i_1": "i_2"
+      },
+      "requests": {},
+      "tail": [],
+      "turns": [
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 1,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_1"
+          },
+          "entries": [
+            {
+              "item": "i_1"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 1,
+            "turn_id": "t_1",
+            "turn_no": 1
+          }
+        },
+        {
+          "entries": [
+            {
+              "item": "i_2"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 2,
+            "turn_id": "t_2",
+            "turn_no": 2
+          }
+        }
+      ]
+    },
+    "name": "late output of an abandoned tool call",
+    "ops": [
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 1,
+          "turn_id": "t_1",
+          "turn_no": 1
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "command": "npm start",
+          "cwd": "/w",
+          "extraction": "full",
+          "item_id": "i_1",
+          "kind": "tool_call",
+          "output_state": "none",
+          "paths": [],
+          "started_at": 1,
+          "title": "Run",
+          "tool_kind": "execute",
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 2,
+          "exit_code": 2,
+          "item_id": "i_1",
+          "may_still_run": true,
+          "params": {},
+          "status": "abandoned"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 1,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_1"
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 2,
+          "turn_id": "t_2",
+          "turn_no": 2
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "item_id": "i_2",
+          "kind": "late_tool_output",
+          "output_state": "streaming",
+          "ref": {
+            "command": "npm start",
+            "item_id": "i_1",
+            "title": "Run",
+            "turn_id": "t_1"
+          },
+          "started_at": 3,
+          "turn_id": "t_2"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_2",
+          "text": "ready\n"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 2,
+          "exit_code": 0,
+          "item_id": "i_2",
+          "output_state": "complete",
+          "status": "completed",
+          "title": "x"
+        },
+        "type": "item.completed"
+      }
+    ],
+    "view": "session"
+  },
+  {
+    "expected": {
+      "detached": [],
+      "items": {
+        "i_1": {
+          "end": {
+            "duration_ms": 1,
+            "ended_at": 2,
+            "status": "completed"
+          },
+          "item": {
+            "item_id": "i_1",
+            "kind": "thought",
+            "started_at": 1,
+            "turn_id": "t_1"
+          },
+          "output": "",
+          "text": "ô/Lö"
+        },
+        "i_10": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_10",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_3"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_11": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_11",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_3"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_12": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_12",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_3"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_13": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_13",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_4"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_14": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_14",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_4"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_2": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_2",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_2"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_3": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_3",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_2"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_4": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_4",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_2"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_6": {
+          "end": {
+            "duration_ms": 1,
+            "ended_at": 2,
+            "status": "completed"
+          },
+          "item": {
+            "item_id": "i_6",
+            "kind": "agent_message",
+            "started_at": 1,
+            "turn_id": "t_2"
+          },
+          "output": ".?🕴ἄ𛅤xPu\"ຂѨ﹠\u0001",
+          "text": "<"
+        },
+        "i_7": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_7",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_2"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_8": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_8",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_3"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_9": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_9",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_3"
+          },
+          "output": "",
+          "text": ""
+        }
+      },
+      "late_by_ref": {},
+      "queue": {
+        "entries": [],
+        "version": 226
+      },
+      "requests": {
+        "r_5": {
+          "requested": {
+            "actionable_by": [
+              "desktop_ui"
+            ],
+            "created_at": 1,
+            "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+            "request": {
+              "message": "Sign in",
+              "type": "auth_url",
+              "url": "https://example.com"
+            },
+            "request_id": "r_5",
+            "turn_id": "t_2"
+          },
+          "resolved": {
+            "request_id": "r_5",
+            "status": "cancelled"
+          }
+        }
+      },
+      "tail": [],
+      "turns": [
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 1,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_1"
+          },
+          "entries": [
+            {
+              "item": "i_1"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 1,
+            "turn_id": "t_1",
+            "turn_no": 1
+          }
+        },
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 2,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_2"
+          },
+          "entries": [
+            {
+              "item": "i_2"
+            },
+            {
+              "item": "i_3"
+            },
+            {
+              "item": "i_4"
+            },
+            {
+              "request": "r_5"
+            },
+            {
+              "item": "i_6"
+            },
+            {
+              "item": "i_7"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 2,
+            "turn_id": "t_2",
+            "turn_no": 2
+          }
+        },
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 3,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_3"
+          },
+          "entries": [
+            {
+              "item": "i_8"
+            },
+            {
+              "item": "i_9"
+            },
+            {
+              "item": "i_10"
+            },
+            {
+              "item": "i_11"
+            },
+            {
+              "item": "i_12"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 3,
+            "turn_id": "t_3",
+            "turn_no": 3
+          }
+        },
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 4,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_4"
+          },
+          "entries": [
+            {
+              "item": "i_13"
+            },
+            {
+              "item": "i_14"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 4,
+            "turn_id": "t_4",
+            "turn_no": 4
+          }
+        }
+      ],
+      "usage": {
+        "context_size": 1000,
+        "context_used": 203
+      }
+    },
+    "name": "a host stream: the log",
+    "ops": [
+      {
+        "data": {
+          "context_size": 1000,
+          "context_used": 203
+        },
+        "type": "usage.updated"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 1,
+          "turn_id": "t_1",
+          "turn_no": 1
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "item_id": "i_1",
+          "kind": "thought",
+          "started_at": 1,
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "field": "text",
+          "item_id": "i_1",
+          "text": "ô/Lö"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "item_id": "i_1",
+          "output_bytes": 1,
+          "output_state": "truncated",
+          "output_tail": "\u0001",
+          "title": "\u0001"
+        },
+        "type": "item.updated"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 2,
+          "item_id": "i_1",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 1,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_1"
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_2",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_3",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_4",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 2,
+          "turn_id": "t_2",
+          "turn_no": 2
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "actionable_by": [
+            "desktop_ui"
+          ],
+          "created_at": 1,
+          "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+          "request": {
+            "message": "Sign in",
+            "type": "auth_url",
+            "url": "https://example.com"
+          },
+          "request_id": "r_5",
+          "turn_id": "t_2"
+        },
+        "type": "interaction.requested"
+      },
+      {
+        "data": {
+          "item_id": "i_6",
+          "kind": "agent_message",
+          "started_at": 1
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_7",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_2"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "field": "text",
+          "item_id": "i_6",
+          "text": ""
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_6",
+          "text": ".?🕴ἄ𛅤xPu\"ຂѨ"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "text",
+          "item_id": "i_6",
+          "text": "<"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_6",
+          "text": "﹠"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "item_id": "i_6",
+          "output_bytes": 3,
+          "output_state": "truncated",
+          "output_tail": "\\\n\"",
+          "title": "\\\n\""
+        },
+        "type": "item.updated"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_6",
+          "text": "\u0001"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 2,
+          "item_id": "i_6",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "request_id": "r_5",
+          "status": "cancelled"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 2,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_2"
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_8",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_9",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_10",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_11",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 3,
+          "turn_id": "t_3",
+          "turn_no": 3
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_12",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_3"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 3,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_3"
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 4,
+          "turn_id": "t_4",
+          "turn_no": 4
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_13",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_4"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_14",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "entries": [],
+          "version": 226
+        },
+        "type": "queue.updated"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 4,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_4"
+        },
+        "type": "turn.completed"
+      }
+    ],
+    "view": "session"
+  },
+  {
+    "expected": {
+      "detached": [],
+      "items": {
+        "i_13": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_13",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_4"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_14": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_14",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_4"
+          },
+          "output": "",
+          "text": ""
+        }
+      },
+      "late_by_ref": {},
+      "queue": {
+        "entries": [],
+        "version": 226
+      },
+      "requests": {},
+      "tail": [],
+      "turns": [
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 4,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_4"
+          },
+          "entries": [
+            {
+              "item": "i_13"
+            },
+            {
+              "item": "i_14"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 4,
+            "turn_id": "t_4",
+            "turn_no": 4
+          }
+        }
+      ],
+      "usage": {
+        "context_size": 1000,
+        "context_used": 203
+      }
+    },
+    "name": "a host stream: a snapshot",
+    "ops": [
+      {
+        "data": {
+          "entries": [],
+          "version": 226
+        },
+        "type": "queue.updated"
+      },
+      {
+        "data": {
+          "context_size": 1000,
+          "context_used": 203
+        },
+        "type": "usage.updated"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 4,
+          "turn_id": "t_4",
+          "turn_no": 4
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_13",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_4"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_14",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_4"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 4,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_4"
+        },
+        "type": "turn.completed"
+      }
+    ],
+    "view": "session"
+  },
+  {
+    "expected": {
+      "detached": [],
+      "items": {
+        "i_1": {
+          "end": {
+            "duration_ms": 1,
+            "ended_at": 2,
+            "status": "completed"
+          },
+          "item": {
+            "item_id": "i_1",
+            "kind": "thought",
+            "started_at": 1,
+            "turn_id": "t_1"
+          },
+          "output": "",
+          "text": "ô/Lö"
+        },
+        "i_10": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_10",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_3"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_11": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_11",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_3"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_12": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_12",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_3"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_13": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_13",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_4"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_14": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_14",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_4"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_2": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_2",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_2"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_3": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_3",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_2"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_4": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_4",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_2"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_6": {
+          "end": {
+            "duration_ms": 1,
+            "ended_at": 2,
+            "status": "completed"
+          },
+          "item": {
+            "item_id": "i_6",
+            "kind": "agent_message",
+            "started_at": 1,
+            "turn_id": "t_2"
+          },
+          "output": ".?🕴ἄ𛅤xPu\"ຂѨ﹠\u0001",
+          "text": "<"
+        },
+        "i_7": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_7",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_2"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_8": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_8",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_3"
+          },
+          "output": "",
+          "text": ""
+        },
+        "i_9": {
+          "item": {
+            "code": "session_resumed",
+            "item_id": "i_9",
+            "kind": "notice",
+            "params": {},
+            "started_at": 1,
+            "turn_id": "t_3"
+          },
+          "output": "",
+          "text": ""
+        }
+      },
+      "late_by_ref": {},
+      "queue": {
+        "entries": [],
+        "version": 226
+      },
+      "requests": {
+        "r_5": {
+          "requested": {
+            "actionable_by": [
+              "desktop_ui"
+            ],
+            "created_at": 1,
+            "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+            "request": {
+              "message": "Sign in",
+              "type": "auth_url",
+              "url": "https://example.com"
+            },
+            "request_id": "r_5",
+            "turn_id": "t_2"
+          },
+          "resolved": {
+            "request_id": "r_5",
+            "status": "cancelled"
+          }
+        }
+      },
+      "tail": [],
+      "turns": [
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 1,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_1"
+          },
+          "entries": [
+            {
+              "item": "i_1"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 1,
+            "turn_id": "t_1",
+            "turn_no": 1
+          }
+        },
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 2,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_2"
+          },
+          "entries": [
+            {
+              "item": "i_2"
+            },
+            {
+              "item": "i_3"
+            },
+            {
+              "item": "i_4"
+            },
+            {
+              "request": "r_5"
+            },
+            {
+              "item": "i_6"
+            },
+            {
+              "item": "i_7"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 2,
+            "turn_id": "t_2",
+            "turn_no": 2
+          }
+        },
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 3,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_3"
+          },
+          "entries": [
+            {
+              "item": "i_8"
+            },
+            {
+              "item": "i_9"
+            },
+            {
+              "item": "i_10"
+            },
+            {
+              "item": "i_11"
+            },
+            {
+              "item": "i_12"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 3,
+            "turn_id": "t_3",
+            "turn_no": 3
+          }
+        },
+        {
+          "completed": {
+            "duration_ms": 1,
+            "ended_at": 4,
+            "final_item_ids": [],
+            "status": "completed",
+            "turn_id": "t_4"
+          },
+          "entries": [
+            {
+              "item": "i_13"
+            },
+            {
+              "item": "i_14"
+            }
+          ],
+          "snapshots": [],
+          "started": {
+            "origin": "user",
+            "started_at": 4,
+            "turn_id": "t_4",
+            "turn_no": 4
+          }
+        }
+      ],
+      "usage": {
+        "context_size": 1000,
+        "context_used": 203
+      }
+    },
+    "name": "a host stream: with history",
+    "ops": [
+      {
+        "data": {
+          "entries": [],
+          "version": 226
+        },
+        "type": "queue.updated"
+      },
+      {
+        "data": {
+          "context_size": 1000,
+          "context_used": 203
+        },
+        "type": "usage.updated"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 4,
+          "turn_id": "t_4",
+          "turn_no": 4
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_13",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_4"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_14",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_4"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 4,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_4"
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 3,
+          "turn_id": "t_3",
+          "turn_no": 3
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_8",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_3"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_9",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_3"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_10",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_3"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_11",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_3"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_12",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_3"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 3,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_3"
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 2,
+          "turn_id": "t_2",
+          "turn_no": 2
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_2",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_2"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_3",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_2"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_4",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_2"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "actionable_by": [
+            "desktop_ui"
+          ],
+          "created_at": 1,
+          "digest": "d_0000000000000000000000000000000000000000000000000000000000000000",
+          "request": {
+            "message": "Sign in",
+            "type": "auth_url",
+            "url": "https://example.com"
+          },
+          "request_id": "r_5",
+          "turn_id": "t_2"
+        },
+        "type": "interaction.requested"
+      },
+      {
+        "data": {
+          "request_id": "r_5",
+          "status": "cancelled"
+        },
+        "type": "interaction.resolved"
+      },
+      {
+        "data": {
+          "item_id": "i_6",
+          "kind": "agent_message",
+          "started_at": 1,
+          "turn_id": "t_2"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "field": "text",
+          "item_id": "i_6",
+          "text": "<"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "field": "output",
+          "item_id": "i_6",
+          "text": ".?🕴ἄ𛅤xPu\"ຂѨ﹠\u0001"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 2,
+          "item_id": "i_6",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "code": "session_resumed",
+          "item_id": "i_7",
+          "kind": "notice",
+          "params": {},
+          "started_at": 1,
+          "turn_id": "t_2"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 2,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_2"
+        },
+        "type": "turn.completed"
+      },
+      {
+        "data": {
+          "origin": "user",
+          "started_at": 1,
+          "turn_id": "t_1",
+          "turn_no": 1
+        },
+        "type": "turn.started"
+      },
+      {
+        "data": {
+          "item_id": "i_1",
+          "kind": "thought",
+          "started_at": 1,
+          "turn_id": "t_1"
+        },
+        "type": "item.started"
+      },
+      {
+        "data": {
+          "field": "text",
+          "item_id": "i_1",
+          "text": "ô/Lö"
+        },
+        "type": "item.delta"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 2,
+          "item_id": "i_1",
+          "status": "completed"
+        },
+        "type": "item.completed"
+      },
+      {
+        "data": {
+          "duration_ms": 1,
+          "ended_at": 1,
+          "final_item_ids": [],
+          "status": "completed",
+          "turn_id": "t_1"
+        },
+        "type": "turn.completed"
+      }
+    ],
+    "view": "session"
+  }
+]

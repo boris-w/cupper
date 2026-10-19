@@ -144,6 +144,11 @@ impl Coalescer {
         }
     }
 
+    /// The agent's `interrupt_stops_commands`, once an attach tells it.
+    pub fn set_stops_commands(&mut self, stops_commands: bool) {
+        self.stops_commands = stops_commands;
+    }
+
     fn flush(&mut self) {
         let Some((item_id, field, text)) = self.pending.take() else {
             return;

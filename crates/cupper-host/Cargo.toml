@@ -33,9 +33,10 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true
 thiserror = "2.0.21"
-# `rt-multi-thread`: the host's workers beside the main thread's run loop;
-# `signal`: SIGTERM starts the orderly exit (design 5.2.3, 5.2.13).
-tokio = { version = "1.53.3", features = ["io-util", "net", "rt", "rt-multi-thread", "signal", "sync", "time"] }
+# `macros`: the session actor's `select!`; `rt-multi-thread`: the host's
+# workers beside the main thread's run loop; `signal`: SIGTERM starts the
+# orderly exit (design 5.2.3, 5.2.13).
+tokio = { version = "1.53.3", features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "signal", "sync", "time"] }
 uuid = { version = "1.28.0", default-features = false, features = ["std"] }
 
 [dev-dependencies]

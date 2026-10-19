@@ -1,19 +1,23 @@
 //! `rust`: formatting, clippy with warnings denied, the iOS build of
-//! `cupper-protocol` and the workspace tests (design 5.1.6), plus the host's
-//! other feature sets and its shuttle tests. A later task adds the golden tests.
+//! `cupper-protocol` and the workspace tests (design 5.1.6), plus the other
+//! feature sets of the host and the native extension, the host's shuttle
+//! tests and the native extension's Node tests. A later task adds the golden
+//! tests.
 
 use anyhow::Result;
 
 use crate::ci::ctx::JobCtx;
 
-/// The host's feature sets besides `--all-features` (the e2e build): the
-/// release build (none, design 5.9.1), the self-use build (`dev-auth`) and the
-/// integration-test build (`test-harness`). Code gated on these features is
-/// compiled differently in each, so each gets its own clippy and test run.
-const HOST_FEATURE_SETS: &[(&str, &[&str])] = &[
-    ("release", &[]),
-    ("dev-auth", &["dev-auth"]),
-    ("test-harness", &["test-harness"]),
+/// Feature sets besides `--all-features` (the e2e build): the host's release
+/// build (none, design 5.9.1), self-use build (`dev-auth`) and
+/// integration-test build (`test-harness`), and the native extension's
+/// release build. Code gated on these features is compiled differently in
+/// each, so each gets its own clippy and test run.
+const FEATURE_SETS: &[(&str, &str, &[&str])] = &[
+    ("cupper-host", "host-release", &[]),
+    ("cupper-host", "host-dev-auth", &["dev-auth"]),
+    ("cupper-host", "host-test-harness", &["test-harness"]),
+    ("cupper-desktop-native", "native-release", &[]),
 ];
 
 pub fn run(ctx: &mut JobCtx) -> Result<()> {
@@ -33,12 +37,12 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         "warnings",
     ]);
     ctx.check("clippy", &mut clippy)?;
-    for (name, features) in HOST_FEATURE_SETS {
+    for (package, name, features) in FEATURE_SETS {
         let mut clippy = ctx.cargo();
-        clippy.args(["clippy", "-p", "cupper-host", "--all-targets", "--locked"]);
+        clippy.args(["clippy", "-p", package, "--all-targets", "--locked"]);
         with_features(&mut clippy, features);
         clippy.args(["--", "-D", "warnings"]);
-        ctx.check(&format!("clippy-host-{name}"), &mut clippy)?;
+        ctx.check(&format!("clippy-{name}"), &mut clippy)?;
     }
 
     // The library has no I/O and builds for iOS (design 5.1.1); its bin
@@ -57,11 +61,11 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         "--no-fail-fast",
     ]);
     ctx.libtest("test", &mut test)?;
-    for (name, features) in HOST_FEATURE_SETS {
+    for (package, name, features) in FEATURE_SETS {
         let mut test = ctx.cargo();
-        test.args(["test", "-p", "cupper-host", "--locked", "--no-fail-fast"]);
+        test.args(["test", "-p", package, "--locked", "--no-fail-fast"]);
         with_features(&mut test, features);
-        ctx.libtest(&format!("test-host-{name}"), &mut test)?;
+        ctx.libtest(&format!("test-{name}"), &mut test)?;
     }
 
     // PROP-stream-seq runs the host's streams under shuttle, which needs the
@@ -75,7 +79,17 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     ctx.libtest(
         "test-host-shuttle",
         shuttle.env("RUSTFLAGS", "--cfg shuttle"),
-    )
+    )?;
+
+    // UNIT-native: a Node process loads the extension's `dev-auth` build and
+    // drives the gateway fixture with it; the package's test script builds
+    // both first.
+    let mut install = ctx.command("pnpm");
+    install.args(["install", "--frozen-lockfile"]);
+    ctx.check("pnpm-install", &mut install)?;
+    let mut native = ctx.command("pnpm");
+    native.args(["--dir", "crates/cupper-desktop-native", "run", "test"]);
+    ctx.vitest("test-native", &mut native)
 }
 
 fn with_features(cmd: &mut std::process::Command, features: &[&str]) {
