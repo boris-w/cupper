@@ -182,3 +182,10 @@
 
 - **`tests/ids.toml`**：main 在 `486d67f` 之后提交了 `6d214fd`（把 IT-self-check、UNIT-orphan-policy 挪到 T059 一段，并登记 IT-idle-exit）。本分支的文档已经带上 IT-idle-exit，缺这条登记会让 `testdata-scan` 失败。所以用 `cherry-pick -x` 把它拣了过来，改动与 main 完全相同，合并时不会冲突。
 - **新依赖**：tokio 加了 `rt-multi-thread` 和 `signal` 两个特性，后者带来 `signal-hook-registry` 和 `errno`，两者都是 MIT OR Apache-2.0。
+- **范围外：PROP-autonomous-dequeue-guard 的反例**。第一次跑 `cargo xtask ci pr` 时，`test-host-release` 里的 `orchestrator::session_props::prop_autonomous_dequeue_guard_queue_waits_while_the_agent_works`（T058）随机撞到一个反例，断言"Guard: after a turn ended on silence, the queue waits for 30 s of quiet"失败。proptest 写出的回归种子是：
+
+  ```
+  cc 7390a05ebe580707816e5bab38bbf67b0501e1d444018d9994dbaf6d6edc9900 # shrinks to ops = [Send, Send, Interrupt, Text(0), Advance(25000), Advance(25000), Thread(true)]
+  ```
+
+  把它放进 `crates/cupper-host/proptest-regressions/orchestrator/session_props.txt`，每次都能复现；本任务没有改动 `orchestrator`，main 上的代码也一样。按守则没有顺手修，种子文件也没有提交。这个文件没被 git 忽略，所以同一次运行的 `protocol` 作业还报了"工作树被改动"。把种子文件挪走后重跑，各作业都通过，摘要就是 `ci/pr-90f6c710a21a.json`。
