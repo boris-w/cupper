@@ -12,7 +12,8 @@
 //! snapshots that `history/page` serves.
 //!
 //! Raw frames reach `raw.db` through the bounded queue of a [`RawWriter`],
-//! a thread of its own. [`BlobStore`] keeps the content-addressed blobs.
+//! a thread of its own. [`BlobStore`] keeps the content-addressed blobs, and
+//! [`retention`] cleans up after all of them.
 
 pub mod blobs;
 mod connection;
@@ -24,6 +25,7 @@ mod migrate;
 mod raw;
 mod raw_writer;
 mod readers;
+pub mod retention;
 pub mod streams;
 #[cfg(test)]
 mod testutil;
