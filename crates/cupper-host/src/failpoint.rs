@@ -82,6 +82,9 @@ mod harness {
 
     // Names are `<module>.<place>`, e.g. `store.before_commit`.
     failpoints! {
+        /// Between two migration scripts of `host.db`: one has committed, the
+        /// next has not begun (design 5.4.6). Hit once per script.
+        STORE_MIGRATION_COMMITTED = "store.migration_committed";
         /// The module's own tests.
         #[cfg(test)]
         TEST_PROBE = "test.probe";

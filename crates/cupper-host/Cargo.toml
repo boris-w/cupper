@@ -20,6 +20,7 @@ test-harness = []
 agent-client-protocol = { version = "=3.3.0", features = ["unstable_plan_operations"] }
 # The SDK only asks for ^3.3.0 of its derive macros; keep them on the same release.
 agent-client-protocol-derive = "=3.3.0"
+cupper-protocol = { path = "../cupper-protocol" }
 cupper-sys = { path = "../cupper-sys" }
 futures = { version = "0.3.34", default-features = false, features = ["std"] }
 getrandom = "0.4.3"
@@ -35,6 +36,10 @@ uuid = { version = "1.28.0", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 tokio = { version = "1.53.3", features = ["macros"] }
+
+[[test]]
+name = "migrations"
+required-features = ["test-harness"]
 
 [lints]
 workspace = true
