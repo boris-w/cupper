@@ -16,7 +16,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task::JoinHandle;
 
 use super::listen::HostLock;
-use super::{AuditEvent, AuditRecord, CloseReason, Gateway, GatewayConfig};
+use super::{AuditEvent, AuditRecord, CloseReason, Gateway, GatewayConfig, Routes};
 use crate::clock::{Clock, SystemClock};
 use crate::durations::Durations;
 
@@ -60,10 +60,11 @@ pub struct TestGateway {
 }
 
 impl TestGateway {
-    /// Starts serving [`config`](Self::config) on the system clock; call
-    /// within a tokio runtime.
+    /// Starts serving [`config`](Self::config) on the system clock, with
+    /// the default routes; call within a tokio runtime.
     pub fn start(ui_requirement: Option<Requirement>) -> Self {
-        Self::with(Self::config(ui_requirement), Arc::new(SystemClock::new()))
+        let clock = Arc::new(SystemClock::new());
+        Self::with(Self::config(ui_requirement), clock, Routes::default())
     }
 
     /// Host 1 at epoch 1, and [`KEY`] for `dev_key`, as started by this
@@ -88,11 +89,11 @@ impl TestGateway {
         }
     }
 
-    pub fn with(config: GatewayConfig, clock: Arc<dyn Clock>) -> Self {
+    pub fn with(config: GatewayConfig, clock: Arc<dyn Clock>, routes: Routes) -> Self {
         let dir = TempDir::new("gateway");
         let lock = HostLock::acquire(dir.path()).expect("take host.lock");
         let (listener, socket) = lock.bind().expect("bind the socket");
-        let (gateway, audit) = Gateway::new(config, clock, Durations::default());
+        let (gateway, audit) = Gateway::new(config, clock, Durations::default(), routes);
         Self {
             socket,
             audit,

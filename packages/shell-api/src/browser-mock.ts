@@ -6,6 +6,8 @@
 import { isExternalUrl } from "./links";
 import type {
   NavigateTarget,
+  PrivilegedAction,
+  PrivilegedResult,
   ShellAPI,
   ShellCommand,
   ShellInfo,
@@ -17,6 +19,11 @@ import type {
 export interface BrowserShellOptions {
   /** Overrides of the default `ShellInfo`. */
   info?: Partial<ShellInfo>;
+  /**
+   * The data connection, such as `@cupper/host-client/mock`'s, which plays
+   * the main process in front of a mock host. Without one, `open` rejects.
+   */
+  host?: ShellAPI["host"];
 }
 
 export interface BrowserShellControls {
@@ -28,6 +35,10 @@ export interface BrowserShellControls {
   setUpdateState(state: UpdateState): void;
   /** What the next `pickDirectory` resolves to; `null`, the default, is a cancelled picker. */
   setPickedDirectory(path: string | null): void;
+  /** What `requestPrivileged` resolves to from now on; `cancelled` by default. */
+  setPrivilegedResult(result: PrivilegedResult): void;
+  /** The actions `requestPrivileged` took, in order. */
+  readonly privilegedActions: readonly PrivilegedAction[];
   /** The URLs `openExternal` took, in order. */
   readonly openedUrls: readonly string[];
 }
@@ -81,6 +92,12 @@ export function createBrowserShell(options: BrowserShellOptions = {}): BrowserSh
   const updateStates = new Listeners<[UpdateState]>();
   const openedUrls: string[] = [];
   let pickedDirectory: string | null = null;
+  const privilegedActions: PrivilegedAction[] = [];
+  let privilegedResult: PrivilegedResult = { status: "cancelled" };
+  const host: ShellAPI["host"] = options.host ?? {
+    open: () => Promise.reject(new Error("this browser shell has no host")),
+    onConnectionState: () => () => undefined,
+  };
 
   const setUpdateState = (state: UpdateState) => {
     info.updateState = structuredClone(state);
@@ -89,6 +106,11 @@ export function createBrowserShell(options: BrowserShellOptions = {}): BrowserSh
 
   const shell: ShellAPI = {
     init: () => Promise.resolve(structuredClone(info)),
+    host,
+    requestPrivileged: async (action) => {
+      privilegedActions.push(structuredClone(action));
+      return structuredClone(privilegedResult);
+    },
     onCommand: (cb) => commands.add(cb),
     onNavigate: (cb) => navigations.add(cb),
     openExternal: (url) => {
@@ -137,6 +159,10 @@ export function createBrowserShell(options: BrowserShellOptions = {}): BrowserSh
     setPickedDirectory: (path) => {
       pickedDirectory = path;
     },
+    setPrivilegedResult: (result) => {
+      privilegedResult = structuredClone(result);
+    },
+    privilegedActions,
     openedUrls,
   };
 

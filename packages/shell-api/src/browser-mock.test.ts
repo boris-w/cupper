@@ -3,7 +3,13 @@ import { describe, expect, test } from "vitest";
 import { createBrowserShell } from "./browser-mock";
 import { commandHandler } from "./commands";
 import { isKnownTarget } from "./navigation";
-import type { NavigateTarget, ShellAPI, ShellCommand, UpdateState } from "./shell-api";
+import type {
+  NavigateTarget,
+  PrivilegedAction,
+  ShellAPI,
+  ShellCommand,
+  UpdateState,
+} from "./shell-api";
 
 /** Every member of `T`; the compiler rejects this list when it misses or invents one. */
 type Members<T> = {
@@ -12,6 +18,8 @@ type Members<T> = {
 
 const SHELL_API_MEMBERS: Members<ShellAPI> = {
   init: "function",
+  host: { open: "function", onConnectionState: "function" },
+  requestPrivileged: "function",
   onCommand: "function",
   onNavigate: "function",
   openExternal: "function",
@@ -204,5 +212,25 @@ describe("UNIT-shell-mock", () => {
       { status: "installing", version: "1.2.0" },
     ]);
     expect((await shell.init()).updateState).toEqual({ status: "installing", version: "1.2.0" });
+  });
+
+  test("host.open rejects without an injected host, and uses the injected one", async () => {
+    await expect(createBrowserShell().shell.host.open()).rejects.toThrow("no host");
+    const open = () => Promise.reject(new Error("injected"));
+    const host = { open, onConnectionState: () => () => undefined };
+    await expect(createBrowserShell({ host }).shell.host.open()).rejects.toThrow("injected");
+  });
+
+  test("requestPrivileged records a copy of each action and resolves to the set result", async () => {
+    const { shell, controls } = createBrowserShell();
+    const action: PrivilegedAction = { kind: "trust_project", project_id: "p_1" };
+    expect(await shell.requestPrivileged(action)).toEqual({ status: "cancelled" });
+    controls.setPrivilegedResult({ status: "confirmed", result: { project_id: "p_2" } });
+    expect(await shell.requestPrivileged({ kind: "add_project" })).toEqual({
+      status: "confirmed",
+      result: { project_id: "p_2" },
+    });
+    expect(controls.privilegedActions).toEqual([action, { kind: "add_project" }]);
+    expect(controls.privilegedActions[0]).not.toBe(action);
   });
 });

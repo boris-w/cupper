@@ -15,7 +15,7 @@ use cupper_sys::{RefusalKind, Requirement};
 use serde_json::{Value, json};
 
 use super::testkit::{Client, KEY, TestGateway, initialize_params, key_auth};
-use super::{AuditEvent, CloseReason, Verdict};
+use super::{AuditEvent, CloseReason, Routes, Verdict};
 #[cfg(any(feature = "dev-auth", feature = "test-harness"))]
 use crate::clock::SystemClock;
 use crate::clock::{ManualClock, MonoTime};
@@ -296,7 +296,7 @@ async fn it_handshake_key_auths_need_the_key_and_dev_key_its_launcher() {
         cases.push((config, "harness", "no key"));
     }
     for (config, kind, message) in cases {
-        let mut gw = TestGateway::with(config, Arc::new(SystemClock::new()));
+        let mut gw = TestGateway::with(config, Arc::new(SystemClock::new()), Routes::default());
         let err = refused(&mut gw, |nonce| key_auth(kind, &KEY, nonce, me()).0).await;
         assert_eq!(code(&err), ("unauthenticated", "bad_key"), "{kind}");
         assert!(err["message"].as_str().unwrap().contains(message), "{err}");
@@ -306,7 +306,7 @@ async fn it_handshake_key_auths_need_the_key_and_dev_key_its_launcher() {
 #[tokio::test]
 async fn it_handshake_initialize_within_ten_seconds_of_hello() {
     let clock = Arc::new(ManualClock::new());
-    let mut gw = TestGateway::with(TestGateway::config(None), clock.clone());
+    let mut gw = TestGateway::with(TestGateway::config(None), clock.clone(), Routes::default());
     let mut prompt = Client::connect(&gw.socket).await;
     prompt.handshake(peer()).await.unwrap();
     clock.advance(Duration::from_secs(5));

@@ -20,7 +20,7 @@ use std::sync::Arc;
 use cupper_host::clock::SystemClock;
 use cupper_host::exit::HostExit;
 use cupper_host::gateway::listen::HostLock;
-use cupper_host::gateway::{Gateway, GatewayConfig};
+use cupper_host::gateway::{Gateway, GatewayConfig, Routes};
 use cupper_host::startup::{self, Command, payload};
 use cupper_protocol::ids::HostId;
 
@@ -74,7 +74,8 @@ fn main() -> ExitCode {
             .map(|key| cupper_host::gateway::DevKey { key, launcher }),
         harness_key: payload.harness_key,
     };
-    let (gateway, mut audit) = Gateway::new(config, clock, payload.test_config.durations);
+    let durations = payload.test_config.durations;
+    let (gateway, mut audit) = Gateway::new(config, clock, durations, Routes::default());
     println!("{}", serde_json::json!({"socket": socket}));
     runtime.block_on(async move {
         tokio::spawn(gateway.serve(listener));
