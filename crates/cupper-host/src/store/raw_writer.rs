@@ -248,7 +248,11 @@ impl RawBatcher {
                     // The caller may no longer be waiting.
                     let _ = reply.send(self.prune(retention, now_ms));
                 }
-                Message::Stop => return,
+                Message::Stop => {
+                    let late = inbox.try_iter().filter(|m| matches!(m, Message::Frame(_)));
+                    self.counts.lose(late.count());
+                    return;
+                }
             }
             if next.is_none() {
                 next = inbox.recv().ok();
@@ -424,7 +428,7 @@ mod tests {
     }
 
     #[test]
-    fn unit_raw_queue_batches_up_to_max_batch_and_stops_at_other_messages() {
+    fn unit_raw_queue_batches_end_at_max_batch_or_a_control_message() {
         let (sink, inbox) = queue();
         for seq in 1..=300 {
             sink.push(raw_frame(seq, 7, "{}"));
@@ -456,6 +460,14 @@ mod tests {
         assert_eq!(frames.len(), 300 - MAX_BATCH);
         assert!(matches!(after, Some(Message::Prune { .. })));
         assert_eq!(sink.counts.queued.load(Ordering::Acquire), 0);
+
+        // A frame behind a stop request is lost, and counted.
+        sink.queue.send(Message::Stop).unwrap();
+        sink.push(raw_frame(301, 7, "{}"));
+        let quiescence = Quiescence::new();
+        quiescence.register(RAW_WRITER);
+        batcher.run(&inbox, quiescence.enter(RAW_WRITER));
+        assert_eq!(sink.dropped(), 1);
     }
 
     #[test]
