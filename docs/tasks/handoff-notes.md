@@ -53,7 +53,7 @@
 | T002 | 缺口编号要登记：IT-sys-peer-macos14、IT-sys-peer-macos15，状态写"缺口：本机替代不了，里程碑退出时由用户确认"；本机跑出的结果只记作 IT-sys-peer-current | T021 |
 | T014 | `apply` 规则：`ItemPatch` 里出现的字段整体替换，没出现的保持不变。`late_by_ref` 的键在线上是 `ref.item_id`，在 Rust 里是 `LateToolOutput.of.item_id`。工具调用的用时取自 `item.completed.duration_ms`。快照里的长文本按 `MAX_DELTA_ESCAPED` 拆成 `item.delta` | T017 |
 | T012 | `interaction/respond.outcome` 复用 `InteractionOutcome`；`interaction/get` 的状态复用 `InteractionStatus`（含 `pending`）。宿主核对摘要用 `request_digest`，它返回 `Result`，只在出现超过 2^53 的整数时失败 | T017（已写入 brief） |
-| T013 | `git/diff` 复用 `DiffStat`、`ExcludedPath`、`SnapshotStatus` | T017 |
+| T013 | `git/diff` 复用 `DiffStat`、`ExcludedPath`、`SnapshotStatus` | T017（已写入 brief） |
 | T015 | `ItemStarted` 的 schema 是外壳属性加 9 个成员的 `anyOf`；`ItemUpdated` 展开 `ItemPatch` 后共 21 个属性；`AnswerValue` 是不带标签的联合（`anyOf`）；`Item`、`InteractionRequest`、`InteractionOutcome` 的兜底成员是 `UnknownMember`，后处理时用 `.loose()` | T017 |
 | T053（提取层） | `ToolCall::missing_required(ended)` 不为空时，把 `extraction` 降为 `partial` | T017 |
 | T053 | 封闭枚举的原值用 `tap::k19::original` 读取，路径是 `_meta.cupper.original.<字段名>`，覆盖 `stopReason`、选项 `kind` 和工具调用的 `status`。`initialize` 只声明了 elicitation、`terminal_output`、`plan`，比 SP-1 的客户端少了 `session.{configOptions.boolean, notices, compaction}` 和 `auth.terminal`。不声明 `session.compaction` 时适配器还推不推 compaction，要用录制或兼容剧本确认，必要时在设计 5.6.1 里补上 | T050 |
@@ -71,7 +71,7 @@
 | T047 | 写线程现在只登记"运行中"。实现忙或空闲时，阻塞在 `inbox.recv()` 并且手里没有批次才算空闲。ManualClock 下 `linger` 为 0，不会有真实时间的等待 | T024 |
 | T069 | 故障点 `store.before_commit`、`store.after_commit` 的位置：`Batcher::commit` 里 COMMIT 之前；`Batcher::flush` 里提交之后、回复回执之前 | T024 |
 | T012 | `stream/subscribe` 的结果复用 `sync::SubscribeMode`、`sync::ResyncReason`，不要另定义 | T014（已写入 brief） |
-| T018 | 5.3.11 末尾"T012 开工前的裁定"列出的取值，包括 `findings`、`diff_from_trusted`、`fallback_reason`、`blockers`、补充的错误码，以及 `queue_edit` 的 scope | T012 裁定 |
+| T018 | 5.3.11 末尾"T012 开工前的裁定"列出的取值，包括 `findings`、`diff_from_trusted`、`fallback_reason`、`blockers`、补充的错误码，以及 `queue_edit` 的 scope | T012 裁定（已写入 brief） |
 | T026 | 每个 `turn.completed` 之后，在同一个事务里先存 `turn_ops(&turn_id, &OpLimits::V1)` 作为回合快照，再调用 `trim(&Window::V1)`。检查点直接存视图的 JSON。`history/page` 用 `paginate(回合 ops, max_bytes)`，`op_index` 是页的起点 | T014（已写入 brief） |
 | T026、T043 | 宿主要守的不变式见 5.3.11 末尾"T014 实现时的裁定"：引用某个回合的事件都写在它的 `turn.completed` 之前；交互请求一律属于某个回合，没有进行中的回合时按 K9 开 `autonomous` 回合；回合在它的请求全部解决之前不结束 | T014 审阅（已写入 T026 的 brief） |
 | T033 | 订阅时调用 `sync::subscribe_mode(resume, &LogExtent)`。快照分页用 `paginate(snapshot_ops(), 帧负载减去信封的余量)` | T014 |
@@ -87,9 +87,9 @@
 | T027 | `backups/` 只保留最近 3 份（5.4.5），迁移成功后回收。备份文件名 `host-v<版本>-<YYYYMMDDTHHMMSSZ>.db`，按名字排序就是按时间排序；忽略 `host.partial` | T025 |
 | T055 | `driver/tap/mod.rs` 有一处文档链接指向私有的 `redact`，`RUSTDOCFLAGS=-D warnings cargo doc -p cupper-host --all-features` 会失败。改 `driver/` 时顺手修 | T025 |
 | T160 | 迁移脚本在 `foreign_keys=ON` 下执行。按 SQLite 的 12 步法重建表的脚本，需要在事务外关闭外键，迁移框架（`store::migrate`）目前没有处理 | T025 |
-| T018、T013 | 接入方法的步骤（详见 `docs/tasks/T012-protocol-methods-core/notes.md`"给 T018、T013 的说明"）：新建组文件，用 `method!` 声明并提供 `register`；`methods/mod.rs` 加一行 `mod`，`catalog()` 加一行；在组文件的测试模块里写 `samples()`，加进 `catalog.rs` 的覆盖测试；按 5.8.3 往 `MATRIX` 加行；参数必须是具名结构体。类型按完整的方法名命名（`session/send` 是 `SessionSend`） | T012 |
-| T018、T013 | 用例编号的归属（编排者裁定）：`catalog.rs` 里的跨组测试（往返、矩阵、`command_id`、整数）属于 T012 的 UNIT-proto-methods-core-stream，不改名，它们会自动检查新加的方法。各任务另写以自己编号开头的测试（T018 是 `unit_proto_methods_core_session_`，T013 是 `unit_proto_methods_ext_`），用共享的测试辅助函数检查自己这组的样例和矩阵行，让自己的编号有独立通过的用例 | T012 审阅 |
-| T018 | 权限矩阵要新增一种格子："scope 允许，但按 SEC-9 由策略拒绝"，用在 `project/add` 等行的 remote_device 一列。T012 用不到，所以没加 | T012 |
+| T018、T013 | 接入方法的步骤（详见 `docs/tasks/T012-protocol-methods-core/notes.md`"给 T018、T013 的说明"）：新建组文件，用 `method!` 声明并提供 `register`；`methods/mod.rs` 加一行 `mod`，`catalog()` 加一行；在组文件的测试模块里写 `samples()`，加进 `catalog.rs` 的覆盖测试；按 5.8.3 往 `MATRIX` 加行；参数必须是具名结构体。类型按完整的方法名命名（`session/send` 是 `SessionSend`） | T012（已写入 brief） |
+| T018、T013 | 用例编号的归属（编排者裁定）：`catalog.rs` 里的跨组测试（往返、矩阵、`command_id`、整数）属于 T012 的 UNIT-proto-methods-core-stream，不改名，它们会自动检查新加的方法。各任务另写以自己编号开头的测试（T018 是 `unit_proto_methods_core_session_`，T013 是 `unit_proto_methods_ext_`），用共享的测试辅助函数检查自己这组的样例和矩阵行，让自己的编号有独立通过的用例 | T012 审阅（已写入 brief） |
+| T018 | 权限矩阵要新增一种格子："scope 允许，但按 SEC-9 由策略拒绝"，用在 `project/add` 等行的 remote_device 一列。T012 用不到，所以没加 | T012（已写入 brief） |
 | T030、T045 | 可以直接用 `methods::handshake::PROTOCOL`、`VersionRange::negotiate`（取双方交集中的最大版本）、`StreamSubscribeParams::resume()`（转成 T014 的 `Resume`）。`nonce`、`proof` 在协议里是字符串，格式校验和转成字节归 T030 | T012 |
 | T015 | 方法目录用 `methods::catalog::catalog(&mut generator)` 导出，之后再 `take_definitions(true)`。`Raw<Event<EventBody>>` 的 schema 名就是 `Event` | T012 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
