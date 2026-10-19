@@ -11,6 +11,7 @@ pub mod coalesce;
 pub mod domain;
 pub mod envelope;
 pub mod error;
+pub mod event;
 pub mod frame;
 pub mod ids;
 pub mod index;
