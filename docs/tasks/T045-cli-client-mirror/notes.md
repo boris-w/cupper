@@ -1,5 +1,9 @@
 # T045 工作笔记
 
+## 范围（拆分后）
+
+编排者在 `mirror.rs` 之前采用了下文的方案 B（计划 v1.3.6）：T045 收窄为构建种类与 `--build-info`、按构建种类校验宿主、连接与握手、请求关联、`command_id`，验收编号是 UNIT-cli-host-verify 和新登记的 UNIT-cli-client。Mirror 和 UNIT-mirror 另立为 T049，按本文末尾"Mirror 的设计"做。本文的估计和推算写于拆分之前，保留原样。
+
 ## 行数估计（开工前）
 
 ### 估算方法
@@ -30,13 +34,17 @@ SP-4a 的 `client.rs`（199 行）和 `mirror.rs`（100 行）是起点。本任
 |---|---|---|---|---|
 | `Cargo.toml`、`lib.rs`、`build_kind.rs`、`main.rs`（`86dc1a4`） | 245 | 56 | 约 215 | 245 |
 | `verify.rs`（`4a5c179`） | 282 | 142 | 约 270 | 527 |
-| `client.rs`（`3254b22`） | 635 / 1 | 224 | 约 430 | **1,161 / 删 1** |
+| `client.rs`（`3254b22`） | 635 / 1 | 224 | 约 430 | 1,161 / 删 1 |
+| 拆分后：去掉指向 Mirror 的文档链接（`9778f16`） | 8 / 8 | — | — | 1,161 / 删 1 |
+| 拆分后：收到 fd、另一个进程接手宿主那端时断开（`0a4a93b`） | 45 | 45 | — | **1,206 / 删 1** |
 
 - 三个模块合计 1,161 行：代码 739 行、测试 422 行，比这三个模块的估计（约 915 行）多 27%。代码多 28%，测试多 24%。
 - 超出最多的是 `client.rs`（多 47%）：rustfmt 把错误枚举、`Options`、读循环展开；测试里的假宿主（`FakeHost`）约 70 行。
 - 剩下的 `mirror.rs` 估计 450 行（代码 190、测试 260）。按已完成模块的偏差（+25%）推算约 560 行，**总数约 1,720 行（区间 1,600–1,750）**，超过约 1,500 行的停止线。按守则第 8 条，在写 `mirror.rs` 之前停下来汇报。
 
-### 待编排者决定：怎样处理剩下的 Mirror
+**最终（收窄后的 T045）：新增 1,206 行，其中代码 741 行、测试 465 行**（`build_kind.rs` 128 + 56，`verify.rs` 139 + 142，`client.rs` 407 + 267，`Cargo.toml`、`lib.rs`、`main.rs` 67）。比这几个模块开工前的估计（约 915 行）多 32%，在约 1,500 行的上限以内。
+
+### 拆分前提给编排者的两个方案（已选 B）
 
 - **方案 A：在 T045 内做完。** `mirror.rs` 和 UNIT-mirror 约 450–560 行，总数约 1,600–1,750 行，超上限 7%–17%，超出主要在测试。好处是不增加任务，T033、T039、T046 的依赖不变。
 - **方案 B：拆分。** T045 收窄为"构建种类与 `--build-info`、按构建种类校验宿主、连接与握手、请求关联、`command_id`"，已经完成（1,161 行，还要跑 `cargo xtask ci pr`）。Mirror（客户端同步状态机）和 UNIT-mirror 拆成新任务（S，约 450–560 行）。T039 只依赖 T045 的连接部分；T046 和要用 Mirror 的宿主集成测试改为依赖新任务。
@@ -44,7 +52,7 @@ SP-4a 的 `client.rs`（199 行）和 `mirror.rs`（100 行）是起点。本任
 
 ## 实现时的取舍
 
-**构建种类**（`build_kind.rs`；需要编排者确认，见汇报）
+**构建种类**（`build_kind.rs`；特性与优先级、`CUPPER_HOST_CDHASH`、发布构建签名要求为空、e2e 分支的处理已由编排者认可，写进设计 5.2.14 末尾"T045 实现时的裁定"）
 
 - CLI 的特性：`dev-auth`（开发构建）、`self-use`（自用构建）、`test-harness`（e2e 构建）；都不开是发布构建。同时开时 `test-harness` 优先于 `self-use`，`self-use` 优先于 `dev-auth`。`dev-auth`、`test-harness` 与宿主同名，`--build-info` 的 `features` 也就和宿主一样，发布流水线可以用同一条断言。
 - 自用构建的宿主 cdhash 来自编译期环境变量 `CUPPER_HOST_CDHASH`（40 位小写十六进制，与 `Cdhash` 的打印形式一致）。只有 `self-use` 开、`test-harness` 不开时才读它，缺失或格式不对都编译失败，不会悄悄退成开发构建的弱校验。T005 的构建命令是 `CUPPER_HOST_CDHASH=<宿主的 cdhash> cargo build -p cupper-cli --release --features self-use`。CI 的 `--all-features` 由 `test-harness` 优先，不需要这个变量。
@@ -72,10 +80,10 @@ SP-4a 的 `client.rs`（199 行）和 `mirror.rs`（100 行）是起点。本任
 - tokio 开了没有用到的 `time` 特性：没有它，单独对本 crate 跑 clippy 时，`clippy.toml` 里 tokio 定时器的禁用条目解析不到，`-D warnings` 下报错。
 - SP-4a 里没有迁移的：`pause_reading`、`max_frame_seen`（慢客户端和帧上限的集成测试用）、blob 分片的转交（CLI 不调 `blob/get`）、`next_timeout`（时间规则）。由需要它们的任务加。
 
-**没有用例覆盖的拒绝路径**
+**拒绝路径的用例**（拆分后补齐）
 
-- 收到 `SCM_RIGHTS` 传来的 fd 时断开：发 fd 要 `unsafe`，`cupper-sys` 的 `send_with_fds` 在 main 上还只给本 crate 的测试用（T030 的分支把它公开给其他 crate 的测试）。T030 合并后可以补一例。
-- 校验之后另一个进程接手宿主那一端：要把套接字交给子进程，`cupper_sys::spawn` 只支持 null 和管道。宿主侧的同类用例是 T030 的 IT-pinned-token，用的是同一个 `peer_token`。
+- 收到 `SCM_RIGHTS` 传来的 fd 时断开：用 `cupper-sys` 的 `send_with_fds`，只在 dev-dependencies 里打开 `test-util`，产品构建不带它。
+- 校验之后另一个进程接手宿主那一端：照 T030 的 IT-pinned-token 的做法，让 `/bin/cat` 往宿主那端写一帧。`cat` 在客户端读到之前不退出，令牌指向它，客户端以 `TokenChanged` 断开。测试里用 `std::process::Command` 拉 `cat`，同宿主的测试；`cupper_sys::spawn` 只支持 null 和管道，交不了套接字。
 
 ## 给 T039 的接入点
 
@@ -84,7 +92,7 @@ SP-4a 的 `client.rs`（199 行）和 `mirror.rs`（100 行）是起点。本任
 - `Client::handshake`：在 `check.accept(&init.host)` 旁边校验 `init.host_proof`，不符就断开。
 - `verify::HostCheck::Harness`：证明落地后，`is_weak` 对它改为 false。
 
-## Mirror 的设计（还没有写代码）
+## Mirror 的设计（留给 T049）
 
 `Mirror<V: View>` 是纯核心：不做 I/O，不 await。构造只有 `Mirror::index()` 和 `Mirror::session(id)`，视图类型和流不会配错。
 
