@@ -89,3 +89,19 @@ T042（交互代理）同时在 `orchestrator/` 里做 `InteractionBroker`。本
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-19，编排者）
+
+执行者写到 751 行时推算，全部做完约 1,600–1,670 行，于是按守则第 8 条停工汇报。
+
+**裁定：拆分（计划 v1.3.8）。** 本任务收窄为三部分：
+- 与回合机的衔接（`HoldQueue`、`TurnSignal`）；
+- `Coalescer`；
+- 分组与最终回答。
+
+验收是 PROP-coalescer、UNIT-grouping、UNIT-final-items。
+
+`AutonomousJudge` 和组合测试环境另立为 T058，同一位执行者在本任务合并后接着做，验收是 PROP-autonomous-dequeue-guard、PROP-turn-snapshot-immutable。T043 改为也依赖 T058。
+
+执行者已定的设计决定全部认可，写进了 `03-protocol-v1.md` 5.3.11 末尾"T041 实现时的裁定"。出队保护的范围维持设计原意：只保护自动出队，用户的明确操作优先。
+

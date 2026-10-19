@@ -10,24 +10,26 @@
 use std::io;
 use std::sync::Arc;
 
-use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, PARSE_ERROR, RpcError};
+use cupper_protocol::error::{ErrorCode, ErrorReason, PARSE_ERROR, RpcError};
 use cupper_protocol::frame::{Frame, FrameDecoder, FrameType, MAX_FRAME_BYTES};
 use cupper_protocol::ids::ConnId;
 use cupper_protocol::limits::V1;
-use cupper_protocol::methods::Empty;
-use cupper_protocol::methods::handshake::{HostHello, Initialize, Ping};
+use cupper_protocol::methods::handshake::{HostHello, Initialize};
 use cupper_protocol::rpc::{Message, Method, RawMessage, RpcId};
 use cupper_sys::{AuditToken, Received};
+use futures::future::{self, Either};
 use serde_json::Value;
 use tokio::io::{AsyncWriteExt, Interest};
 use tokio::net::UnixStream;
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 
 use super::audit::{AuditEvent, CloseReason, Rejection};
+use super::dispatch::{Dispatch, Opened};
 use super::handshake::{self, Nonce, Session};
 use super::outbox::Outbox;
 use super::{Gateway, Verdict, wire};
-use crate::durations::GATEWAY_CLOSE_GRACE;
+use crate::clock::Timer;
+use crate::durations::{GATEWAY_CLOSE_GRACE, GATEWAY_HANDSHAKE};
 
 pub(super) async fn run(gw: Arc<Gateway>, stream: UnixStream, id: ConnId) {
     let opened = gw.clock.now_mono();
@@ -37,16 +39,20 @@ pub(super) async fn run(gw: Arc<Gateway>, stream: UnixStream, id: ConnId) {
     let (reader, writer) = stream.into_split();
     let outbox = Arc::new(Outbox::new(V1.max_queue_bytes as usize));
     let mut writing = tokio::spawn(write_loop(writer, Arc::clone(&outbox)));
+    let handshake = gw.durations.get(GATEWAY_HANDSHAKE);
+    let deadline = gw.clock.timer_at(gw.clock.now_mono() + handshake);
     let nonce = handshake::new_nonce();
     outbox.push_frame(wire::notification::<HostHello>(&handshake::hello(&nonce)));
     let mut conn = Conn {
         gw: &gw,
         id: &id,
         outbox: &outbox,
+        pinned,
         verdict,
         phase: Phase::Hello(nonce),
+        deadline: Some(deadline),
     };
-    let end = conn.read_loop(&reader, pinned).await;
+    let end = conn.read_loop(&reader).await;
     if end.flush {
         // Let the writer send the error behind the close, but not wait on a
         // peer that does not read.
@@ -58,7 +64,10 @@ pub(super) async fn run(gw: Arc<Gateway>, stream: UnixStream, id: ConnId) {
     outbox.close();
     writing.abort();
     let principal = match conn.phase {
-        Phase::Ready(session) => Some(session.principal.id),
+        Phase::Ready(session, _) => {
+            gw.routes.closed(&id);
+            Some(session.principal.id)
+        }
         Phase::Hello(_) => None,
     };
     let after = gw.clock.now_mono().saturating_duration_since(opened);
@@ -114,7 +123,7 @@ fn admit(gw: &Gateway, stream: &UnixStream, id: &ConnId) -> Option<(AuditToken, 
 enum Phase {
     /// `host/hello` went out with this nonce; `initialize` has to come next.
     Hello(Nonce),
-    Ready(Session),
+    Ready(Session, Box<Dispatch>),
 }
 
 /// How a connection ends: why, and whether the queued replies go out first.
@@ -142,18 +151,29 @@ impl End {
 struct Conn<'a> {
     gw: &'a Gateway,
     id: &'a ConnId,
-    outbox: &'a Outbox,
+    outbox: &'a Arc<Outbox>,
+    pinned: AuditToken,
     verdict: Verdict,
     phase: Phase,
+    /// Until `initialize`: when the handshake times out.
+    deadline: Option<Timer>,
 }
 
 impl Conn<'_> {
-    async fn read_loop(&mut self, reader: &OwnedReadHalf, pinned: AuditToken) -> End {
+    async fn read_loop(&mut self, reader: &OwnedReadHalf) -> End {
         let stream: &UnixStream = reader.as_ref();
         let mut buf = vec![0; MAX_FRAME_BYTES];
         let mut decoder = FrameDecoder::new();
         loop {
-            let got = match read(stream, &mut buf).await {
+            let read = read(stream, &mut buf);
+            let got = match self.deadline.as_mut() {
+                Some(deadline) => match future::select(std::pin::pin!(read), deadline).await {
+                    Either::Left((got, _)) => got,
+                    Either::Right(_) => return End::now(CloseReason::HandshakeTimeout),
+                },
+                None => read.await,
+            };
+            let got = match got {
                 Ok(got) => got,
                 Err(err) => return End::now(CloseReason::ReadFailed(err.kind())),
             };
@@ -165,7 +185,7 @@ impl Conn<'_> {
                 return End::now(CloseReason::PeerClosed);
             }
             match cupper_sys::peer_token(stream) {
-                Ok(token) if token == pinned => {}
+                Ok(token) if token == self.pinned => {}
                 Ok(_) => return End::now(CloseReason::TokenMismatch),
                 Err(refusal) => return End::now(CloseReason::TokenUnreadable(refusal.kind)),
             }
@@ -185,9 +205,9 @@ impl Conn<'_> {
     }
 
     fn on_frame(&mut self, frame: Frame) -> Option<End> {
-        let ready = matches!(self.phase, Phase::Ready(_));
+        let ready = matches!(self.phase, Phase::Ready(..));
         if frame.frame_type != FrameType::Json {
-            // Blob chunks are T033's; before `initialize` nothing else counts.
+            // Blob chunks are T029's; before `initialize` nothing else counts.
             return (!ready).then(|| End::now(CloseReason::NotInitialized));
         }
         let message = serde_json::from_slice::<RawMessage>(&frame.payload)
@@ -195,7 +215,13 @@ impl Conn<'_> {
             .and_then(RawMessage::classify);
         let (id, method, params) = match message {
             Ok(Message::Request { id, method, params }) => (id, method, params),
-            // Client notifications are T033's; the host sends no requests.
+            Ok(Message::Notification { method, params }) if ready => {
+                if let Phase::Ready(_, dispatch) = &self.phase {
+                    dispatch.notification(&self.gw.routes, &method, params);
+                }
+                return None;
+            }
+            // The host sends no requests, so it takes no responses.
             Ok(_) if ready => return None,
             Ok(_) => return Some(End::now(CloseReason::NotInitialized)),
             Err(err) => {
@@ -213,23 +239,34 @@ impl Conn<'_> {
                 self.outbox.push_frame(wire::error(Some(&id), &err));
                 Some(End::after_replies(CloseReason::NotInitialized))
             }
-            Phase::Ready(_) => self.on_request(&id, &method, params),
+            Phase::Ready(..) => self.on_request(id, &method, params),
         }
     }
 
     fn initialize(&mut self, id: &RpcId, nonce: &Nonce, params: Value) -> Option<End> {
-        match handshake::initialize(&self.gw.config, nonce, self.verdict, params) {
+        let config = &self.gw.config;
+        match handshake::initialize(config, nonce, &self.pinned, self.verdict, params) {
             Ok((result, session, client)) => {
+                self.deadline = None;
                 self.outbox.push_frame(wire::response(id, &result));
                 let principal = session.principal.clone();
                 let weak_auth = result.host.weak_auth;
+                self.gw.routes.opened(Opened {
+                    conn: self.id.clone(),
+                    principal: principal.clone(),
+                    client: client.clone(),
+                    weak_auth,
+                });
                 let event = AuditEvent::Initialized {
                     principal,
                     client,
                     weak_auth,
                 };
                 self.gw.audit(self.id, event);
-                self.phase = Phase::Ready(session);
+                let outbox = Arc::clone(self.outbox);
+                let principal = session.principal.clone();
+                let dispatch = Box::new(Dispatch::new(self.id.clone(), principal, outbox));
+                self.phase = Phase::Ready(session, dispatch);
                 None
             }
             Err(err) => {
@@ -239,31 +276,16 @@ impl Conn<'_> {
         }
     }
 
-    fn on_request(&mut self, id: &RpcId, method: &str, params: Value) -> Option<End> {
-        let result = match method {
-            Initialize::NAME => {
-                let err = RpcError::app(ErrorCode::Forbidden, "initialize comes once")
-                    .with_reason(ErrorReason::AlreadyInitialized);
-                self.outbox.push_frame(wire::error(Some(id), &err));
-                return Some(End::after_replies(CloseReason::AlreadyInitialized));
-            }
-            // A missing `params` reads as `{}`.
-            Ping::NAME => match params {
-                Value::Null => Ok(Empty {}),
-                params => serde_json::from_value::<Empty>(params)
-                    .map_err(|err| RpcError::new(INVALID_PARAMS, err.to_string())),
-            },
-            // Routing to the executors is T033's; until then nothing serves
-            // the other methods.
-            _ => Err(RpcError::app(
-                ErrorCode::Unsupported,
-                format!("{method} is not served"),
-            )),
-        };
-        self.outbox.push_frame(match result {
-            Ok(result) => wire::response(id, &result),
-            Err(err) => wire::error(Some(id), &err),
-        });
+    fn on_request(&mut self, id: RpcId, method: &str, params: Value) -> Option<End> {
+        if method == Initialize::NAME {
+            let err = RpcError::app(ErrorCode::Forbidden, "initialize comes once")
+                .with_reason(ErrorReason::AlreadyInitialized);
+            self.outbox.push_frame(wire::error(Some(&id), &err));
+            return Some(End::after_replies(CloseReason::AlreadyInitialized));
+        }
+        if let Phase::Ready(_, dispatch) = &self.phase {
+            dispatch.request(&self.gw.routes, id, method, params);
+        }
         None
     }
 }

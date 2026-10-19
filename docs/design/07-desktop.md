@@ -549,6 +549,28 @@ v1.4 按用户决定 F1–F6（`docs/meetings/2026-10-19-ui-fidelity/minutes.md`
 
 M1a 的消息流、store、订阅策略、HostPort 生命周期都按这里的最终形态实现，视觉从简（[5.12.2](12-milestones.md#5122-m1a宿主骨架)）。
 
+**T071 开工前的裁定（2026-10-19）**
+
+- **`ConnectionState`**：采用对象联合：`{status: connecting | handshaking | ready | reconnecting}`，或者 `{status: "failed"; reason}`。
+  - `reason` 是开放枚举的语义码。宿主拉起失败的取值（退出码 4–6、宿主校验失败）由 T075 追加。
+  - `ready` 时第二个参数带上握手结果。
+- **本地拒绝**：
+  - 主进程或 mock 拒绝的请求，经 `onData` 回 JSON-RPC 错误响应 `forbidden`；`initialize` 回 `forbidden/already_initialized`。
+  - 没有 `id` 的消息和批量数组，直接丢弃、不回复。
+  - T076 的 windowBridge 要照做，并通过 HostPort 合同测试。
+- **重连时的顺序**：
+  - 旧连接的数据全部送达后，才推 `reconnecting`；新连接的数据在 `ready` 之后才开始。
+  - 状态和数据必须走同一条有序通道，例如同一个 MessagePort。
+- **握手**：
+  - `handshake(port, options)` 在 host-client 里，认证由调用方经 `auth(hello)` 和 `verifyHostProof` 提供；
+  - host-client 不做 HMAC，证明由原生扩展（T073）计算。
+- **三种计数**：
+  - `gaps`：seq 越过游标的事件数；
+  - `duplicates`：seq 不大于游标的事件数；
+  - `resets`：宿主发来的 `stream/reset`，加上客户端每一次丢弃已有视图（快照替换了游标、`ViewError`、信封解不开）。
+  - 出现重复或缺口时，带游标重新订阅，与 Rust 的 Mirror 一致。
+- **事件校验**：先全部校验。5.7.6 说"生产构建只校验非 delta 事件"，这项性能优化留给 T080。
+
 ## 5.7.7 快捷键、本地化与主题
 
 **快捷键**（UI-4 v1.3：按键沿用 Codex 的默认值，ui-spec 第 5 节）

@@ -5,5 +5,7 @@
 
 pub mod build_kind;
 pub mod client;
+#[cfg(feature = "test-harness")]
+pub mod harness;
 pub mod mirror;
 pub mod verify;
