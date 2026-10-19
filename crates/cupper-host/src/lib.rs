@@ -7,6 +7,7 @@ pub mod durations;
 pub mod exit;
 pub mod failpoint;
 pub mod orchestrator;
+pub mod policy;
 pub mod pure;
 pub mod quiescence;
 pub mod startup;
