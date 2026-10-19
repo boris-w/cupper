@@ -95,3 +95,23 @@ jq -c 'select(.msg.method=="_session/steering" or (.dir=="recv" and .msg.result.
 # 登录状态（s01、s10）
 jq -c 'select(.msg.method=="_auth/status_update") | .msg.params.authStatus | {kind, label}' $R/*/s01-init-session.jsonl $R/*/s10-unauthenticated.jsonl | sort -u
 ```
+
+### 第 3 次（编排者按 2,776 行接受；改用 thiserror，按主题分步提交）
+
+- 改用 thiserror：`config::ConfigError`、`agent::ServeError`，都带原因链；`anyhow` 只留在 `main.rs`，用来打印启动失败的原因链。这一项改动净增 19 行（config +9、agent +7、main +2、Cargo.toml +1），总数 **2,795 行**。
+- 按主题分 9 个提交。每个提交都单独核对过：用 `git archive` 导出到临时目录（`tar -m` 刷新 mtime，避免 cargo 复用旧产物），跑 `cargo build`（0 告警）、`clippy -p cupper-fake-agent --all-targets --all-features -D warnings`、`fmt --check` 和 `cargo test -p cupper-fake-agent`，全部通过。中间各步提交前，还临时放入最终的集成测试，挑当时已有的命令跑过一遍（不随提交入库）。
+
+| 提交 | 内容 | 行数（不含 `Cargo.lock`） |
+|---|---|---|
+| 1 | crate 与启动配置 | +190 |
+| 2 | persona 与 JSON | +539 −1 |
+| 3 | agent 角色与 K1 不变式 | +551 −1 |
+| 4 | SP-4a 原有的 16 条命令 | +260 −15 |
+| 5 | 输出、工具与文件命令 | +88 −1 |
+| 6 | 计划、表单与插话命令 | +139 −8 |
+| 7 | 计时、故障与通知命令，`echo_env` | +93 −11 |
+| 8 | 原始行通道与 `echo_meta` | +56 −6 |
+| 9 | 集成测试 | +922 |
+
+- `Cargo.lock` 随提交 1（新 crate 条目）和提交 2–3（SDK 依赖树）一起提交。重新解析时，SDK 依赖树里有两个传递构建依赖比草稿时新：`cc` 1.9.0、`find-msvc-tools` 0.1.15。
+- 在 HEAD 上，`cargo clippy --workspace --all-targets --all-features --locked -D warnings` 和 `cargo test --workspace --all-features --locked` 都通过，`cupper-protocol` 不受 serde_json `preserve_order` 的影响。
