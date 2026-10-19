@@ -184,3 +184,69 @@ b8d1d15 feat(desktop): add the main-process hardening baseline
     - URL scheme（`cupper-e2e://` 等）没有注册，留给做深链接的任务和处理函数一起加。
 
 详细记录见分支上的 `docs/tasks/T074-desktop-main-skeleton/notes.md`。
+
+## 修复第 1 轮汇报（`fix/T074-test-tmpdir-cleanup`，2026-10-19）
+
+- 执行者：子 agent（与 T021 修复第 2 轮是同一位）
+- 分支：`fix/T074-test-tmpdir-cleanup`
+- 完成日期：2026-10-19
+
+## 做了什么
+
+桌面端测试不再在用户临时目录里留下目录，修复后每次运行新增 0 个；两项验收标准都已满足。
+
+**问题比任务书说的范围大**：每跑一次桌面端测试，会留下 7 个目录，不只 `hardening.test.ts` 那 1 个。
+- `apps/desktop/src/main/hardening.test.ts`：1 个 `cupper-app-protocol-*`。
+- `apps/desktop/src/main/log.test.ts`：2 个 `cupper-log-*`，两个用例各一个。
+- `apps/desktop/src/main/prefs.test.ts`：4 个 `cupper-prefs-*`，四个用例各一个。
+- 修复前用户临时目录里已有 52、92、184 个，正好是每次 1、2、4 个的比例。
+- `apps/`、`packages/` 下用 `mkdtemp`、`tmpdir()` 的只有这三个文件。
+
+**修法**（提交 `dad46c0`）
+- app protocol 一组：`beforeAll` 建的目录在 `afterAll` 里用 `rm(dir, { recursive: true, force: true })` 删除。
+- `log.test.ts`、`prefs.test.ts`：辅助函数每次调用都建一个目录，所以建完后用 vitest 的 `onTestFinished` 登记删除。每个用例结束时删掉自己的目录，用例失败也删。
+- 测试语义没有改。
+
+**Rust 测试排查**：没有每次运行都必然残留的情况，没有改动。
+- `cupper-sys`、`cupper-host` 存储、`xtask` 的 `TempDir`，以及 fake agent 的工作目录，都在 `Drop` 里删除，只有进程被杀时才会残留。
+- `cupper-host` 的 `migrations.rs`、`xtask` 的 `clippy_disallowed_methods.rs` 用 `CARGO_TARGET_TMPDIR`，在 `target/` 下，不进用户临时目录。
+
+## 关键取舍
+
+- **log 和 prefs 用 `onTestFinished`，不用 `afterAll`。** 这两个文件的目录是每个用例在辅助函数里自己建的，在辅助函数里登记删除，不需要另外维护一个目录列表；用例失败时清理也照样执行。
+- **app protocol 一组用 `afterAll`。** 目录在 `beforeAll` 里建、整组共用，对应的就是 `afterAll`。删除前先判断 `dir` 非空，这样 `beforeAll` 在 `mkdtemp` 之前就失败时，清理也不会出错。
+
+## 验证方式
+
+| 验收项 | 结果 |
+|---|---|
+| 修复后连跑 5 次，用户临时目录不再新增 `cupper-app-protocol-*`（按运行前后的目录清单比对，不删已有目录） | 达成。只跑 `pnpm -r run test`（各包的 vitest）5 次：新增 0 个，用例每次 38/38 通过 |
+| 干净 worktree 里 `cargo xtask ci pr --record` | 通过：rust 530、ts 64、license 1。摘要是 `docs/tasks/T074-desktop-main-skeleton/ci/pr-b7a041eeed34.json`。CI 运行期间，用户临时目录也没有新增任何条目 |
+
+**关于"`pnpm test`"**：根目录的 `pnpm test` 跑的是 Rust 测试（`cargo test`）；漏掉目录的 vitest 用例由各包自己的 `test` 脚本运行，CI 的 `ts` 作业就是这样跑的。所以两种都验证了：
+- 先把 `pnpm -r run test` 和根目录的 `pnpm test` 交替各跑 5 次，期间用户临时目录新增了 7 个目录。
+  - 7 个的创建时间是同一秒，那一秒本分支正在跑 Rust 测试，而 Rust 测试不会建这类目录；本分支几次 vitest 运行的开始时间都不在那一秒。
+  - 所以这是别的进程跑未修复代码留下的，不是本分支。
+  - 为了得到一份干净的记录，又在一个很短的时间窗里只跑 `pnpm -r run test` 5 次，新增 0 个（即上表第一行）。
+
+**其他检查**
+- `TMPDIR` 指向一个专用的空目录：修复前 `pnpm -r run test` 一次留下正好 7 个目录，修复后 0 个。
+- 失败路径：在三个文件里各加一条必败断言，3 个用例失败，临时目录里一个也没剩；之后已还原。
+- 同样用专用的空 `TMPDIR` 跑 `cargo test --workspace --all-features`（264 个用例）和宿主的三个特性组合（release 80、dev-auth 83、test-harness 98），结束后目录为空。
+- prettier、eslint（`--max-warnings=0`）、`tsc --build` 都通过。
+- 用户临时目录里已有的残留，一个也没删。我自己建的专用目录用完已删除。
+- 规模：测试代码 +21/−9，`notes.md` +10，在 50 行的上限以内。
+
+## 提交列表
+
+```
+f237b39 docs(task): record the T074 temp-dir cleanup pr CI summary
+b7a041e docs(task): record the T074 temp-dir audit and its verification
+dad46c0 test(desktop): remove the temporary directories the main tests create
+```
+
+## 遗留问题 / 范围外发现
+
+1. **清理范围比任务书写的大。** 用户临时目录里除了 `cupper-app-protocol-*` 的 52 个，还有 `cupper-log-*` 92 个、`cupper-prefs-*` 184 个，也是这次修掉的同一类问题，合并后可以一并清理。
+2. **两个来历不明的存储测试目录。** 用户临时目录里有 2 个 `cupper-store-test-*-linger`，创建于 15:27 和 15:38。当前代码里存储用例用到的名字只有 `no-linger` 和 `linger-stop`，没有 `linger`。应该是别的分支或某次被打断的运行留下的，我没有动。
+3. **验证期间有别处在跑未修复的桌面端测试。** 16:49:20 新增的 7 个目录不是本分支建的，合并前它们还会继续出现。

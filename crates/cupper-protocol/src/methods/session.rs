@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use super::Empty;
 use super::catalog::Catalog;
+use super::git::WorktreeBlocker;
 use crate::annotations::TimestampMs;
 use crate::capabilities::{self, ConfigOptionId};
 use crate::domain::{AgentKind, PromptContent};
@@ -317,6 +318,53 @@ pub struct SessionRenameParams {
 }
 
 method! {
+    /// `session/archive`: close the agent session, keep or remove the
+    /// worktree by the cleanup rules of ADR-10, and take the session off the
+    /// index (design 5.2.6, 5.2.10).
+    request SessionArchive = "session/archive" (SessionArchiveParams) -> SessionArchiveResult {
+        scope: Write, idempotency: Command, milestone: M1b,
+        errors: [Conflict / TurnRunning],
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct SessionArchiveParams {
+    pub command_id: CommandId,
+    pub session_id: SessionId,
+    /// A local session has no worktree; it is `kept`.
+    pub worktree: ArchiveWorktree,
+}
+
+open_enum! {
+    pub enum ArchiveWorktree {
+        Keep => "keep",
+        /// `git worktree remove` without `--force`, unless a cleanup rule blocks it.
+        Remove => "remove",
+        /// The user confirmed after `worktree/check` found `case_only_dirty`:
+        /// with `--force` when case-only paths are the only change.
+        RemoveCaseOnlyDirty => "remove_case_only_dirty",
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct SessionArchiveResult {
+    pub worktree: WorktreeOutcome,
+    /// `blocked` only: the rules that kept the worktree.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blockers: Vec<WorktreeBlocker>,
+}
+
+open_enum! {
+    /// The session is archived in every case.
+    pub enum WorktreeOutcome {
+        Kept => "kept",
+        Removed => "removed",
+        /// A cleanup rule kept the worktree; see `blockers`.
+        Blocked => "blocked",
+    }
+}
+
+method! {
     /// `session/restore`: brings an archived session back (PS-3).
     request SessionRestore = "session/restore" (SessionRestoreParams) -> SessionRestoreResult {
         scope: Write, idempotency: Command, milestone: M1b,
@@ -438,6 +486,7 @@ pub fn register(c: &mut Catalog, g: &mut SchemaGenerator) {
     c.request::<SessionSetConfig>(g);
     c.request::<SessionConfirmConfig>(g);
     c.request::<SessionRename>(g);
+    c.request::<SessionArchive>(g);
     c.request::<SessionRestore>(g);
     c.request::<SessionMarkRead>(g);
     c.request::<SessionGet>(g);
@@ -534,6 +583,14 @@ pub(super) mod tests {
                 json!({"command_id": "c-14", "session_id": "s_1", "title": "Fix the build"}),
                 json!({}),
             ),
+            request::<SessionArchive>(
+                json!({"command_id": "c-20", "session_id": "s_1", "worktree": "remove"}),
+                json!({"worktree": "blocked", "blockers": ["modified_files", "head_only_commits"]}),
+            ),
+            request::<SessionArchive>(
+                json!({"command_id": "c-21", "session_id": "s_1", "worktree": "remove_case_only_dirty"}),
+                json!({"worktree": "removed"}),
+            ),
             request::<SessionRestore>(
                 json!({"command_id": "c-15", "session_id": "s_1"}),
                 json!({"mode": "read_only"}),
@@ -596,5 +653,16 @@ pub(super) mod tests {
             full.with_reason(ErrorReason::QueueFull)
         );
         assert_eq!(ErrorReason::QueueFull.code(), Some(ErrorCode::TooLarge));
+    }
+
+    #[test]
+    fn unit_proto_methods_ext_archive_reports_what_kept_the_worktree() {
+        let raw = json!({"worktree": "blocked", "blockers": ["foreign_lock", "zz_future"]});
+        let result: SessionArchiveResult = roundtrip(&raw);
+        assert_eq!(result.blockers[0], WorktreeBlocker::ForeignLock);
+        let kept: SessionArchiveResult = roundtrip(&json!({"worktree": "kept"}));
+        assert!(kept.blockers.is_empty());
+        open_values::<ArchiveWorktree>(ArchiveWorktree::KNOWN);
+        open_values::<WorktreeOutcome>(WorktreeOutcome::KNOWN);
     }
 }

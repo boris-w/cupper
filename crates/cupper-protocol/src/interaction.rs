@@ -232,6 +232,9 @@ open_enum! {
         TurnCancelled => "turn_cancelled",
         AdapterExited => "adapter_exited",
         HostRestarted => "host_restarted",
+        /// Still pending when its turn ended: the prompt returned or failed
+        /// without waiting for the answer (design 5.3.11).
+        TurnEnded => "turn_ended",
     }
 }
 
@@ -370,6 +373,14 @@ mod tests {
                 "{bad}"
             );
         }
+    }
+
+    #[test]
+    fn unit_proto_events_session_resolved_turn_ended_roundtrips() {
+        let resolved: InteractionResolved = roundtrip(&json!(
+            {"request_id": "r_1", "status": "cancelled", "reason": "turn_ended"}));
+        assert_eq!(resolved.reason, Some(ResolutionReason::TurnEnded));
+        assert_eq!(resolved.status, InteractionStatus::Cancelled);
     }
 
     #[test]

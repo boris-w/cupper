@@ -110,3 +110,40 @@
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料（`notes.md` 等）由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-19，编排者）
+
+执行者开工前按模块估算，总规模约 1,815 行（实现约 1,085 行，测试约 730 行），按守则第 8 条在写代码之前停下汇报。
+
+**裁定：拆分（计划 v1.3.5）。** 本任务收窄为：
+- 连接、监听与 `host.lock`；
+- 准入（uid、签名结论、固定令牌）；
+- 读循环（`recv_closing_fds`，收到 fd 就断开）；
+- 写循环与慢客户端；
+- `host/hello`、只接受一次的 `initialize`、版本协商；
+- `peer` 和 `codesign` 两种认证，以及 principal 与角色；
+- `ping`、审计、testkit。
+
+`dev_key` 和 `harness` 在本任务里一律回 `unauthenticated/bad_key`，不留绕过认证的入口。
+
+新任务 T039 接手的部分：
+- 证明的计算，放进 `cupper-protocol`，是纯函数，CLI 和原生扩展共用，依赖 `hmac =0.12.1` 和 `sha2`；
+- 宿主侧的 `dev_key`（只接受拉起宿主的那个进程）、`harness` 和 `host_proof`；
+- ppid 为 1 时退出；
+- `cupper-sys` 里按 pid 等待退出码（kqueue）；
+- CLI 客户端库的 `harness` 认证；
+- 网关夹具；
+- UNIT-proof-binding、IT-devkey-launcher-only、IT-devkey-orphan-start，以及 IT-handshake 里密钥认证的部分。
+
+T039 依赖 T030 和 T045。T033 的集成测试用 peer 认证，或者在 crate 内直接构造 principal，所以不依赖 T039，关键路径仍是 33。
+
+执行者 notes.md 里的待裁定事项：
+- 第 3–8 条已写进 `03-protocol-v1.md` 5.3.11 末尾的"T030 开工前的裁定"：
+  - 审计记录的落盘归 T037；
+  - 对端的路径、identifier、Team ID 归 T038；
+  - 写循环的范围；
+  - 各构建开放的认证；
+  - 错误码；
+  - 两个时长。
+- 第 1、2 条（`hmac`、kqueue）随密钥认证转给 T039。
+

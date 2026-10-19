@@ -6,6 +6,7 @@
 //! | `x-scope`, `x-idempotent` | every method | the `SCOPE` and `IDEMPOTENCY` constants of [`Method`](crate::rpc::Method) and [`ClientNotification`](crate::rpc::ClientNotification), written by [`crate::schema`] |
 //! | `x-milestone` | every method and notification | the `MILESTONE` constant of [`Method`](crate::rpc::Method) and [`Notification`](crate::rpc::Notification): `M1a`, `M1b`, `M2` or `M3` |
 //! | `x-errors` | every method | the `ERRORS` constant of [`Method`](crate::rpc::Method): `code` or `code/reason`, besides the errors of every method |
+//! | `x-builds` | methods that only some host builds have (`diag/recording_export`, `test/*`) | the `BUILDS` constant of [`Method`](crate::rpc::Method): the host's cargo features, e.g. `["test-harness", "dev-auth"]`; absent when every build, release included, has the method |
 //! | `x-mergeable` | event types that send-time coalescing may merge | `#[schemars(extend("x-mergeable" = true))]` on the event variant, next to its [`Mergeable`](crate::coalesce::Mergeable) rule |
 //! | `x-id` | values that differ from run to run: IDs, command IDs, digests | the types in [`crate::ids`] |
 //! | `x-time` | timestamps and durations | [`TimestampMs`], [`DurationMs`] |
@@ -26,6 +27,7 @@ pub const X_SCOPE: &str = "x-scope";
 pub const X_IDEMPOTENT: &str = "x-idempotent";
 pub const X_MILESTONE: &str = "x-milestone";
 pub const X_ERRORS: &str = "x-errors";
+pub const X_BUILDS: &str = "x-builds";
 pub const X_MERGEABLE: &str = "x-mergeable";
 pub const X_ID: &str = "x-id";
 pub const X_TIME: &str = "x-time";

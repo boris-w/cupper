@@ -11,6 +11,8 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use cupper_protocol::limits::V1;
+
 /// A registered duration: its name in `test_config.durations` and its value
 /// in the design.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +53,12 @@ durations! {
     /// queue runs empty (design 5.2.8). Only on `SystemClock`; it is not a
     /// `Clock` timer (design 5.2.16).
     STORE_BATCH_LINGER = "store_batch_linger", Duration::from_millis(2);
+    /// How long a new turn waits for its start snapshot before it sends the
+    /// prompt anyway (design 5.2.6).
+    TURN_PREPARE = "turn_prepare", Duration::from_secs(3);
+    /// After an interrupt, how long the host waits for the prompt to return
+    /// before it ends the turn as `host_timeout` (design 5.2.6, 5.3.9).
+    INTERRUPT_FALLBACK = "interrupt_fallback", Duration::from_millis(V1.interrupt_fallback_ms);
     /// The registry's own tests: a short coalescing window.
     #[cfg(test)]
     TEST_TICK = "test_tick", Duration::from_millis(40);

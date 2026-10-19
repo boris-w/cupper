@@ -7,7 +7,7 @@
 | T002 | 逐编号结果目前解析的是 libtest 的输出（`crates/xtask/src/ci/ctx.rs` 的 `parse_libtest`）。改用 nextest 的 JUnit 报告时，替换这个函数 | T001 |
 | T002 | ts 作业已经接上 Vitest 的 JSON reporter（`parse_vitest`）。按编号匹配时，JS 标题要以编号原文开头（`ids::owner`） | T070 |
 | T006 | `lightningcss`（MPL-2.0，vite 的依赖）只在开发和测试时使用，不进 App。许可证门禁要按生产依赖闭包计算，否则会误报 | T070 |
-| T015、T071 及以后的 TS 包 | 惯例：包的 `exports` 直接指向 `src/*.ts`；类型检查走 project references；Vitest 只收 `src/**/*.test.ts`；包的 `test` 脚本必须运行 Vitest，作业会在末尾补上 reporter 参数，不用 Vitest 的另起脚本名 | T070 |
+| T015、T071 及以后的 TS 包 | 惯例：包的 `exports` 直接指向 `src/*.ts`；类型检查走 project references；Vitest 只收 `src/**/*.test.ts`；包的 `test` 脚本必须运行 Vitest，作业会在末尾补上 reporter 参数，不用 Vitest 的另起脚本名 | T070（已写入 T015 的 brief） |
 | 写不可见字符测试的任务（T083 等） | 文件写入工具会把 `\uXXXX` 解码成真实字符。测试里需要双向控制符、零宽字符时，用脚本生成或用 `String.fromCodePoint`，提交前扫描确认没有混入真实字符 | T070 |
 | T023 | 宿主 ID 是 `h_` 加 UUIDv4（5.4.4），不归 `IdGen` 管，`cupper-host` 的 `uuid` 也没开 `v4`。需要自己取随机源 | T022 |
 | T023 及以后的 `cupper-host` 任务 | `tests/` 下用到 `ManualClock`、`CoreDriver`、`IdGen::seeded` 的集成测试，要声明 `required-features = ["test-harness"]`。不带特性的 `cargo test -p cupper-host` 会跳过它们 | T022 |
@@ -26,8 +26,8 @@
 | T011 | `Fallback{kind, summary}`（ADR-04）里的 `summary` 是界面文字，和"宿主只下发语义码"的原则冲突。定下 `summary` 的填法：例如只放语义码和参数，或者只作为最后兜底的英文短句，并写明理由 | T010 |
 | T011 | `ErrorData.resolved_by` 目前放在 `details` 里，T011 定义好相关类型后，以附加方式改成具名字段 | T010 |
 | T012 | `ErrorData.supported` 目前放在 `details` 里，依赖版本区间类型，T012 以附加方式改成具名字段 | T010（已写入 brief） |
-| T015 | `Event<B>` 在泛型下由 schemars 自动生成 schema 名，导出时可能要加 `rename`。另外，把 `cargo build -p cupper-protocol --lib --target aarch64-apple-ios-sim` 纳入 `xtask ci`（设计 5.1.6；T010 只手动跑过）| T010 |
-| T011–T015 | `cupper-protocol` 的惯例：`lib.rs` 只放 `mod` 声明；ID 用 `ids` 里的类型；时间用 `TimestampMs`、`DurationMs`，路径用 `WirePath`，这样 `x-id`、`x-time`、`x-path` 注解会自动带上；可合并的事件实现 `Mergeable`，并在变体上标 `x-mergeable`；协议里不用超过 2^53−1 的整数 | T010 |
+| T015 | `Event<B>` 在泛型下由 schemars 自动生成 schema 名，导出时可能要加 `rename`。另外，把 `cargo build -p cupper-protocol --lib --target aarch64-apple-ios-sim` 纳入 `xtask ci`（设计 5.1.6；T010 只手动跑过）| T010（已写入 brief） |
+| T011–T015 | `cupper-protocol` 的惯例：`lib.rs` 只放 `mod` 声明；ID 用 `ids` 里的类型；时间用 `TimestampMs`、`DurationMs`，路径用 `WirePath`，这样 `x-id`、`x-time`、`x-path` 注解会自动带上；可合并的事件实现 `Mergeable`，并在变体上标 `x-mergeable`；协议里不用超过 2^53−1 的整数 | T010（已写入 T015 的 brief） |
 | T075、T090 | e2e 构建的目录布局由 T074 定下：`CUPPER_E2E_DIR` 下的 `data/` 存放 userData，即其中的 `ui/`；`logs/` 存放日志。宿主的数据目录和 harness 密钥文件沿用这个布局。`CUPPER_E2E_DIR` 只编进 e2e 构建 | T074 |
 | T076 | prefs 还没接到 ShellAPI（`init` 的快照、`set`、`onChange`）；preload 目前是空模块；菜单命令走 `shell:command` 通道（`apps/desktop/src/shared/ipc.ts`）。ShellInfo 的 `flavor` 没有自用构建的 `local`，冻结前以附加方式加上，或者映射为 release，写明选了哪种 | T074 |
 | T080（第一个渲染进程任务） | 渲染进程和 preload 的 ESLint 安全规则（5.7.8：禁止 `innerHTML`、`dangerouslySetInnerHTML`、`eval` 等，以及 Trusted Types 策略只能在 `policies.ts` 里创建）还没有加，和 ui-core 一起加 | T074 |
@@ -38,7 +38,7 @@
 | T160、T180 | Electron 自带的 Info.plist 有 5 条用途说明（相机、麦克风、两条蓝牙、音频采集），electron-builder 的 `extendInfo` 删不掉。自用构建和发布构建要在打包后删除，例如用 `afterPack` 钩子（设计 5.10.1、5.10.2） | T074 |
 | T161 | Electron 44 有第 9 个 fuse，@electron/fuses 1.8.0 不认识，读出来是 `undefined`，逐项断言时要处理 | T074 |
 | T012 | `stream/events`、`stream/snapshot`、`history/page` 的参数若整体用派生的 `Deserialize`，一个残缺事件就会让整条通知解析失败。参数类型要让客户端能逐个事件调用 `Event::decode`、`EventBody::decode`（宽容模式） | T011（已写入 brief） |
-| T015 | `Event<EventBody>` 的 schema 名是 `Event`；`UnknownMember` 的 schema 是任意对象，后处理时用 `.loose()` | T011 |
+| T015 | `Event<EventBody>` 的 schema 名是 `Event`；`UnknownMember` 的 schema 是任意对象，后处理时用 `.loose()` | T011（已写入 brief） |
 | T017 | 在 `EventBody` 里加会话流的变体，`stream_kind()` 是穷尽 `match`，会强制给新变体分类；`item.delta` 变体上标 `#[schemars(extend("x-mergeable" = true))]`，并为 `EventBody` 实现 `Mergeable`；条目联合用 `open_union!` 的 `in tag "kind"` 形式；测试复用 `testutil::{roundtrip, open_values}` | T011 |
 | 第一个写事件的宿主任务（T026 或 T027） | 事件的版本常量 `EVENT_VERSION`（`v`）还没定义，按需加上（5.4.6 的事件升级器） | T011（已写入 T026 的 brief） |
 | T037 | 在 `main` 里接入 stdio 重定向：调用 `cupper_sys::redirect_stdio_to_null()`（T021 补充，把 0、1、2 都指向 `/dev/null`）。读载荷的构建读完再调用，发布构建一开始就调用。另外，`main` 目前只为等载荷建了一个 current-thread runtime，可以按 CFRunLoop 的方案重组；数据目录的 0700 和属主检查、把 `test_config.clock` 和 `Durations` 分发给各模块，也都归 T037 | T023 |
@@ -54,7 +54,7 @@
 | T014 | `apply` 规则：`ItemPatch` 里出现的字段整体替换，没出现的保持不变。`late_by_ref` 的键在线上是 `ref.item_id`，在 Rust 里是 `LateToolOutput.of.item_id`。工具调用的用时取自 `item.completed.duration_ms`。快照里的长文本按 `MAX_DELTA_ESCAPED` 拆成 `item.delta` | T017 |
 | T012 | `interaction/respond.outcome` 复用 `InteractionOutcome`；`interaction/get` 的状态复用 `InteractionStatus`（含 `pending`）。宿主核对摘要用 `request_digest`，它返回 `Result`，只在出现超过 2^53 的整数时失败 | T017（已写入 brief） |
 | T013 | `git/diff` 复用 `DiffStat`、`ExcludedPath`、`SnapshotStatus` | T017（已写入 brief） |
-| T015 | `ItemStarted` 的 schema 是外壳属性加 9 个成员的 `anyOf`；`ItemUpdated` 展开 `ItemPatch` 后共 21 个属性；`AnswerValue` 是不带标签的联合（`anyOf`）；`Item`、`InteractionRequest`、`InteractionOutcome` 的兜底成员是 `UnknownMember`，后处理时用 `.loose()` | T017 |
+| T015 | `ItemStarted` 的 schema 是外壳属性加 9 个成员的 `anyOf`；`ItemUpdated` 展开 `ItemPatch` 后共 21 个属性；`AnswerValue` 是不带标签的联合（`anyOf`）；`Item`、`InteractionRequest`、`InteractionOutcome` 的兜底成员是 `UnknownMember`，后处理时用 `.loose()` | T017（已写入 brief） |
 | T053（提取层） | `ToolCall::missing_required(ended)` 不为空时，把 `extraction` 降为 `partial` | T017 |
 | T053 | 封闭枚举的原值用 `tap::k19::original` 读取，路径是 `_meta.cupper.original.<字段名>`，覆盖 `stopReason`、选项 `kind` 和工具调用的 `status`。`initialize` 只声明了 elicitation、`terminal_output`、`plan`，比 SP-1 的客户端少了 `session.{configOptions.boolean, notices, compaction}` 和 `auth.terminal`。不声明 `session.compaction` 时适配器还推不推 compaction，要用录制或兼容剧本确认，必要时在设计 5.6.1 里补上 | T050 |
 | T055 | 回复和 `session/update` 投进同一个邮箱，以保持线上的顺序（K12 依赖这一点）。drop `AcpConnection` 会关闭适配器的 stdin，这是关闭顺序的第 2 步。`RawSink::bounded()` 只建一个，各个实例共用。`steering.supported` 从 `open` 返回的 `InitializeResponse` 顶层的 `_meta` 读取。K28 的规避方式是不对外暴露 `SentRequest`，请求发出时就把回调交给 SDK | T050 |
@@ -76,7 +76,7 @@
 | T026、T043 | 宿主要守的不变式见 5.3.11 末尾"T014 实现时的裁定"：引用某个回合的事件都写在它的 `turn.completed` 之前；交互请求一律属于某个回合，没有进行中的回合时按 K9 开 `autonomous` 回合；回合在它的请求全部解决之前不结束 | T014 审阅（已写入 T026 的 brief） |
 | T033 | 订阅时调用 `sync::subscribe_mode(resume, &LogExtent)`。快照分页用 `paginate(snapshot_ops(), 帧负载减去信封的余量)` | T014 |
 | T045 | 客户端同步状态机归本任务（T014 没做）。遇到 `snapshot`，不论原因（包括未知的 mode），都丢弃视图和游标；核对 `at_seq`、`epoch` 和页序号后组装，之后的事件经 `StreamCursor` 再 `apply`。遇到 `ViewError` 时不带游标重新订阅。`stream/reset` 保留游标 | T014 |
-| T015 | 把 `IndexView`、`SessionView` 导出进 `v1.json`，测试 #16 要比对两端的视图 JSON | T014 |
+| T015 | 把 `IndexView`、`SessionView` 导出进 `v1.json`，测试 #16 要比对两端的视图 JSON | T014（已写入 brief） |
 | T072 | TS reducer 照 5.3.11 末尾"T014 实现时的裁定"的规则和视图 JSON 实现。JSON 对象的键顺序没有含义，比较时按深度相等 | T014 |
 | T030 | `RawMessage::classify` 会把缺省的 `params` 变成 `null`，而 `ping` 这类参数为 `{}` 的方法，按结构体解析时会失败。分发时把 `null` 当作 `{}` | T012（已写入 brief） |
 | T035 | `project/trust_info.diff_from_trusted` 按文件列出差异，所以信任时要另存每个文件的哈希清单，按 P-4 加进 `0001` 的 `projects` 表 | T012 裁定 |
@@ -91,7 +91,7 @@
 | T018、T013 | 用例编号的归属（编排者裁定）：`catalog.rs` 里的跨组测试（往返、矩阵、`command_id`、整数）属于 T012 的 UNIT-proto-methods-core-stream，不改名，它们会自动检查新加的方法。各任务另写以自己编号开头的测试（T018 是 `unit_proto_methods_core_session_`，T013 是 `unit_proto_methods_ext_`），用共享的测试辅助函数检查自己这组的样例和矩阵行，让自己的编号有独立通过的用例 | T012 审阅（已写入 brief） |
 | T018 | 权限矩阵要新增一种格子："scope 允许，但按 SEC-9 由策略拒绝"，用在 `project/add` 等行的 remote_device 一列。T012 用不到，所以没加 | T012（已写入 brief） |
 | T030、T045 | 可以直接用 `methods::handshake::PROTOCOL`、`VersionRange::negotiate`（取双方交集中的最大版本）、`StreamSubscribeParams::resume()`（转成 T014 的 `Resume`）。`nonce`、`proof` 在协议里是字符串，格式校验和转成字节归 T030 | T012（已写入 T030 的 brief） |
-| T015 | 方法目录用 `methods::catalog::catalog(&mut generator)` 导出，之后再 `take_definitions(true)`。`Raw<Event<EventBody>>` 的 schema 名就是 `Event` | T012 |
+| T015 | 方法目录用 `methods::catalog::catalog(&mut generator)` 导出，之后再 `take_definitions(true)`。`Raw<Event<EventBody>>` 的 schema 名就是 `Event` | T012（已写入 brief） |
 | T048 | 重置 T040 分支时，两个时长的登记随 `e03a930` 一起移走了，要在 `durations.rs` 里重新登记：`turn_prepare` 3 s，`interrupt_fallback` 取 `limits::V1`。`Action` 的 large_enum_variant 目前用带 reason 的 `#[expect]` 放过 | T040 |
 | T043、T048 | T018 定义了会话方法的参数类型之后，把 `QueueOp`、`QueueEditError`、`QueueFull` 映射到协议的错误码。队列满对应 `too_large/queue_full`（5.3.11 末尾，编排者裁定） | T040 |
 | T055 | 实现 `driver::api`：用 `PromptTag` 回填 prompt 的结果；用 `AskId` 管理 ACP 的 responder；把 `PromptContent` 转成 ACP 的内容块，图片读 blob 转成 base64，评论按 GT-2 排成文本 | T040 |
@@ -100,8 +100,17 @@
 | T033 | 补发 `after_seq+1..=head_seq` 时，读到的事件可能刚被裁剪掉（补发与裁剪并发）。发现缺口时按 `cursor_expired` 改发快照，或者发 `stream/reset`，由 T033 定。`store::log::read_events` 是公开的，补发用它 | T026 |
 | T030、T037、T043 及以后的 actor 任务 | 关掉 fd 后要判断对端是否已关闭，以读到 EOF 为信号，不要关闭后立刻查 `getsockopt`：别的线程拉子进程时，内核会短暂复制整张 fd 表。另外，std 在 macOS 上建管道和 socketpair 时是先建、后设 close-on-exec，`std::process` 和 `tokio::process` 拉起的子进程可能把它们一直带到自己退出。这再次说明"拉子进程一律经 `cupper_sys::spawn`"的必要 | T021 修复第 2 轮（已写入 T030 的 brief） |
 | T051 以后改 `cupper-fake-agent` 测试的任务 | `unit_fake_scripts_probe` 只要求继承的 fd 以 `0,1,2` 开头，不要改成严格等于 `0,1,2`：并发拉起时别的 fd 可能被带走，接在后面，严格比较会偶发失败 | T021 修复第 2 轮 |
-| T031 | 策略层要实现以下三点：`MATRIX` 里每个 `Sec9` 格子（scope 允许、按 SEC-9 拒绝，见 5.3.11 末尾"T018 实现时的取值"）；`InputEvidence` 的 `key` 与 `digit` 互相一致；`digit` 与所选选项的序号相符（特权选项和效果未知的选项也占序号） | T018 |
+| T031 | 策略层要实现以下三点：`MATRIX` 里每个 `Sec9` 格子（scope 允许、按 SEC-9 拒绝，见 5.3.11 末尾"T018 实现时的取值"）；`InputEvidence` 的 `key` 与 `digit` 互相一致；`digit` 与所选选项的序号相符（特权选项和效果未知的选项也占序号） | T018（已写入 brief） |
 | T035 | `trust_digest` 在协议里是 `Digest` 类型（`d_` 加 64 位十六进制），信任扫描的摘要要按这个形式输出 | T018 |
+| T042 | 按 `Action::Settle { end, asks }` 的 `asks` 结束回合里挂着的请求：`adapter_exited` 时状态为 `expired`，`turn_cancelled` 和 `turn_ended` 时状态为 `cancelled`。中断时 `TurnMachine` 发 `CancelAsks`。Cancelling 期间新到的请求直接取消 | T048 |
+| T043 | `Settle` 之后补齐被放弃条目的 `item.completed`（`abandoned`，Codex 还要加 `may_still_run`）；`Complete` 时补上 `final_item_ids`，写 `turn.completed`；执行 `Action::Attach` 时补上工作区、配置和信任状态；`QueueFull` 映射为 `too_large/queue_full`；从数据库恢复回合序号、队列和 agent 会话（目前只有 `TurnMachine::new`） | T048 |
+| T041 | 自发回合的进入点和退出点是 `Input::AutonomousStarted`、`AutonomousEnded`。Ending 期间到达的更新归属哪个回合，由本任务处理 | T048 |
+| T031 | T013 新增的策略点：git 写操作和 `settings/update` 的 `Sec9` 格子；`auth/elevate` 的 `CliOnly`（`cli` 以外的 principal 一律拒绝）；`git/revert` 的 `input` 证据（`Input` 格子）；`settings/update` 修改安全相关的键时要 privileged；`policy/describe` 每种 `action` 的 `details` 键 | T013（已写入 brief） |
+| T030、T033 | 带 `x-builds` 的方法只在相应特性的构建里注册。UNIT-unsupported-set 要把 M2 的 `diag/export` 算进"返回 `unsupported`"的集合 | T013 |
+| T015 | 方法条目可能带 `x-builds`，导出时要保留。两处 schema 不够精确：`Settings` 的 `cli_path` 实际总会出现（值可为 `null`），但 schema 里不是必填；`SettingsPatch` 的非空键在 schema 里也允许 `null`。都在客户端→宿主方向，宿主会拒绝，生成 TS 时可以考虑收紧 | T013（已写入 brief） |
+| T036、T126 | `apps.terminal`、`apps.editor` 可选的内置应用清单没有设计，界面怎样拿到这个列表，需要补上 | T013 |
+| T047 | `test/*` 的参数形状由 T013 补上：`clock_advance {ms}`、`run_maintenance {task}`、`seed {profile}`，实现时可以细化 | T013 |
+| T002 | `xtask ci rust` 缺了 `cargo build -p cupper-protocol --lib --target aarch64-apple-ios-sim`（5.1.6 要求每个 PR 都跑），T001 时漏掉了，请补上 | T013（改由 T015 做，已写入它的 brief） |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
