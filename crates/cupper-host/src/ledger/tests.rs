@@ -3,6 +3,8 @@
 use std::time::Duration;
 
 use cupper_protocol::error::{ErrorCode, ErrorReason};
+use cupper_protocol::event::{EventBody, Strictness};
+use cupper_protocol::sync::StreamId;
 use rusqlite::params;
 use serde_json::json;
 use tokio::runtime::Runtime;
@@ -11,6 +13,7 @@ use super::*;
 use crate::clock::{ManualClock, MonoTime};
 use crate::gateway::testkit::TempDir;
 use crate::quiescence::Quiescence;
+use crate::store::streams::{Batch, Streams, StreamsConfig};
 use crate::store::{
     Database, Durability, MIGRATIONS, Readers, WRITER, WriterConfig, migrate, open_writer,
 };
@@ -75,6 +78,13 @@ impl Fixture {
                 .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
                 .collect()
         });
+        self.runtime.block_on(read).unwrap()
+    }
+
+    fn count_events(&self) -> u64 {
+        let read = self
+            .readers
+            .read(|conn| conn.query_row("SELECT count(*) FROM events", [], |row| row.get(0)));
         self.runtime.block_on(read).unwrap()
     }
 
@@ -384,6 +394,67 @@ fn unit_ledger_principals_keep_their_own_command_ids() {
         fx.rows(),
         [row("pr_cli", "c1", "done"), row("pr_desktop", "c1", "done")]
     );
+}
+
+#[test]
+fn unit_ledger_result_commits_with_its_first_events_or_not_at_all() {
+    let fx = Fixture::new("ledger-with");
+    let ledger = fx.start();
+    let streams = Streams::new(
+        fx.writer.clone(),
+        fx.readers.clone(),
+        Arc::new(fx.clock.clone()),
+        StreamsConfig::new(1, &Durations::default()),
+    );
+    let handle = fx.runtime.block_on(streams.open(&StreamId::Index)).unwrap();
+    let mut stream = handle.writer().unwrap();
+    let project = |n: u32| {
+        let raw = json!({"type": "project.upserted", "data": {"project_id": format!("p_{n}"),
+            "name": "p", "path": "/w", "is_git": false, "added_at": n, "position": n,
+            "trust_state": "trusted"}});
+        EventBody::decode(&raw, Strictness::Strict).unwrap().value
+    };
+    let params = json!({"path": "/w"});
+
+    let completion =
+        ticket(begin(&ledger, "c1", &params)).complete(Ok(json!({"project_id": "p_1"})));
+    let batch = Batch {
+        bodies: vec![project(1)],
+        with: Some(Box::new(completion.row())),
+        ..Batch::default()
+    };
+    let appended = fx.runtime.block_on(stream.append(batch)).unwrap();
+    assert!(appended.rejected.is_empty());
+    completion.committed();
+    assert_eq!(
+        (fx.count_events(), fx.rows()),
+        (1, vec![row("pr_desktop", "c1", "done")])
+    );
+
+    // The row fails in the transaction: the events go with it.
+    let refuse = "CREATE TEMP TRIGGER refuse BEFORE INSERT ON main.commands
+                  BEGIN SELECT RAISE(ABORT, 'refused'); END";
+    let trigger = fx
+        .writer
+        .submit(Durability::Normal, move |conn| conn.execute_batch(refuse));
+    fx.runtime.block_on(trigger).unwrap();
+    let completion =
+        ticket(begin(&ledger, "c2", &params)).complete(Ok(json!({"project_id": "p_2"})));
+    let waiting = waiter(begin(&ledger, "c2", &params));
+    let batch = Batch {
+        bodies: vec![project(2)],
+        with: Some(Box::new(completion.row())),
+        ..Batch::default()
+    };
+    assert!(fx.runtime.block_on(stream.append(batch)).is_err());
+    drop(completion);
+    assert_eq!(
+        (fx.count_events(), fx.rows()),
+        (1, vec![row("pr_desktop", "c1", "done")])
+    );
+    let internal = fx.runtime.block_on(waiting.outcome()).unwrap_err();
+    assert_eq!(internal.app_code(), Some(&ErrorCode::Internal));
+    drop(ticket(begin(&ledger, "c2", &params)));
 }
 
 #[test]
