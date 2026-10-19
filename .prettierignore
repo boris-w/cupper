@@ -6,3 +6,7 @@ CLAUDE.md
 pnpm-lock.yaml
 # Written by `export-schema` in its own canonical layout (`pnpm gen`).
 protocol/schema/
+# Written by `cargo xtask runtime-pack`; lockfiles and license texts are upstream bytes pinned by hash.
+runtime/manifest.json
+runtime/locks/
+runtime/licenses/
