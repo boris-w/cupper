@@ -494,3 +494,16 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 | 10 | `session.configured.config` 的值、提问回答的 `values` | 配置项的值是字符串，ACP 的配置项是 select 类型。回答的值是带类型的 `AnswerValue`（字符串、数字、布尔、字符串数组），数字用 `serde_json::Number`，保证整数往返时不会变成浮点数 |
 | 11 | `queue.updated` 条目的 `created_by` | `PrincipalId` |
 
+**取值补充（T011 实现时，2026-10-19）**：设计只列了字段，没写取值的地方，按下面实现。
+
+| 类型 | 取值 |
+|---|---|
+| `AgentState` | `unavailable`、`idle`、`starting`、`running`、`crashed` |
+| `CliInstall` | `native`、`npm_shim`、`unsupported_install` |
+| `ConfigDirState` | `default`、`ok`、`rejected` |
+| `AuthState` | `logged_in`、`logged_out`、`unchecked`。不用 `unknown`，因为 `open_enum!` 已经占用了 `Unknown` 这个变体名 |
+| `DiffSide` | `old`、`new` |
+| `FailureCode` | 第 7 条列出的取值，加上 `adapter_crashed`、`cli_missing`、`runtime_failed` |
+| `FallbackKind` | `item`、`hidden` |
+| `CliCompat` | 不新增取值；读不到版本号时记为 `unsupported` |
+
