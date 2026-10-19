@@ -4,8 +4,8 @@
 
 | 接收任务 | 事项 | 来源 |
 |---|---|---|
-| T002 | 逐编号结果目前解析的是 libtest 的输出（`crates/xtask/src/ci/ctx.rs` 的 `parse_libtest`）。改用 nextest 的 JUnit 报告时，替换这个函数 | T001 |
-| T002 | ts 作业已经接上 Vitest 的 JSON reporter（`parse_vitest`）。按编号匹配时，JS 标题要以编号原文开头（`ids::owner`） | T070 |
+| T002 | 逐编号结果目前解析的是 libtest 的输出（`crates/xtask/src/ci/ctx.rs` 的 `parse_libtest`）。改用 nextest 的 JUnit 报告时，替换这个函数 | T001（已写入 brief） |
+| T002 | ts 作业已经接上 Vitest 的 JSON reporter（`parse_vitest`）。按编号匹配时，JS 标题要以编号原文开头（`ids::owner`） | T070（已写入 brief） |
 | T006 | `lightningcss`（MPL-2.0，vite 的依赖）只在开发和测试时使用，不进 App。许可证门禁要按生产依赖闭包计算，否则会误报 | T070 |
 | T015、T071 及以后的 TS 包 | 惯例：包的 `exports` 直接指向 `src/*.ts`；类型检查走 project references；Vitest 只收 `src/**/*.test.ts`；包的 `test` 脚本必须运行 Vitest，作业会在末尾补上 reporter 参数，不用 Vitest 的另起脚本名 | T070（已写入 T015 的 brief） |
 | 写不可见字符测试的任务（T083 等） | 文件写入工具会把 `\uXXXX` 解码成真实字符。测试里需要双向控制符、零宽字符时，用脚本生成或用 `String.fromCodePoint`，提交前扫描确认没有混入真实字符 | T070 |
@@ -50,7 +50,7 @@
 | 新增定时器或故障点的任务 | 定时器的时长登记到 `crates/cupper-host/src/durations.rs`（`DurationKey` 加入 `ALL`）；故障点用 `failpoint!(NAME)`，名字登记到 `failpoint.rs` 的 `ALL`，格式为 `<模块>.<位置>`；故障点的用例断言退出码为 99 | T023 |
 | T030、T045、T073 | 读 cupper 套接字一律用 `cupper_sys::recv_closing_fds`：普通读取会装入 `SCM_RIGHTS` 传来的 fd。网关的用法是 `stream.try_io(Interest::READABLE, \|\| recv_closing_fds(&stream, buf))`，`closed_fds > 0` 时断开连接并记审计（设计 5.8.5 v1.8） | T021（已写入 T030 的 brief）（已写入 T045 的 brief） |
 | T030、T073 | `LOCAL_PEERPID` 在最后一次做 I/O 的进程退出后，仍返回它的旧 pid，这个 pid 可能已经被复用，所以 `dev_key` 证明里的 `pid_c` 取固定令牌的 `pid()`。固定令牌只反映最后一次 I/O，比对要跟在每一次 read 之后。判断"启动时父进程已退出"用 `process_info(自己).ppid == 1`，`p_puniqueid` 只用来比对对端 | T021（已写入 T030 的 brief） |
-| T002 | 缺口编号要登记：IT-sys-peer-macos14、IT-sys-peer-macos15，状态写"缺口：本机替代不了，里程碑退出时由用户确认"；本机跑出的结果只记作 IT-sys-peer-current | T021 |
+| T002 | 缺口编号要登记：IT-sys-peer-macos14、IT-sys-peer-macos15，状态写"缺口：本机替代不了，里程碑退出时由用户确认"；本机跑出的结果只记作 IT-sys-peer-current | T021（已写入 brief） |
 | T014 | `apply` 规则：`ItemPatch` 里出现的字段整体替换，没出现的保持不变。`late_by_ref` 的键在线上是 `ref.item_id`，在 Rust 里是 `LateToolOutput.of.item_id`。工具调用的用时取自 `item.completed.duration_ms`。快照里的长文本按 `MAX_DELTA_ESCAPED` 拆成 `item.delta` | T017 |
 | T012 | `interaction/respond.outcome` 复用 `InteractionOutcome`；`interaction/get` 的状态复用 `InteractionStatus`（含 `pending`）。宿主核对摘要用 `request_digest`，它返回 `Result`，只在出现超过 2^53 的整数时失败 | T017（已写入 brief） |
 | T013 | `git/diff` 复用 `DiffStat`、`ExcludedPath`、`SnapshotStatus` | T017（已写入 brief） |
@@ -74,7 +74,7 @@
 | T018 | 5.3.11 末尾"T012 开工前的裁定"列出的取值，包括 `findings`、`diff_from_trusted`、`fallback_reason`、`blockers`、补充的错误码，以及 `queue_edit` 的 scope | T012 裁定（已写入 brief） |
 | T026 | 每个 `turn.completed` 之后，在同一个事务里先存 `turn_ops(&turn_id, &OpLimits::V1)` 作为回合快照，再调用 `trim(&Window::V1)`。检查点直接存视图的 JSON。`history/page` 用 `paginate(回合 ops, max_bytes)`，`op_index` 是页的起点 | T014（已写入 brief） |
 | T026、T043 | 宿主要守的不变式见 5.3.11 末尾"T014 实现时的裁定"：引用某个回合的事件都写在它的 `turn.completed` 之前；交互请求一律属于某个回合，没有进行中的回合时按 K9 开 `autonomous` 回合；回合在它的请求全部解决之前不结束 | T014 审阅（已写入 T026 的 brief） |
-| T033 | 订阅时调用 `sync::subscribe_mode(resume, &LogExtent)`。快照分页用 `paginate(snapshot_ops(), 帧负载减去信封的余量)` | T014 |
+| T033 | 订阅时调用 `sync::subscribe_mode(resume, &LogExtent)`。快照分页用 `paginate(snapshot_ops(), 帧负载减去信封的余量)` | T014（已写入 brief） |
 | T045 | 客户端同步状态机归本任务（T014 没做）。遇到 `snapshot`，不论原因（包括未知的 mode），都丢弃视图和游标；核对 `at_seq`、`epoch` 和页序号后组装，之后的事件经 `StreamCursor` 再 `apply`。遇到 `ViewError` 时不带游标重新订阅。`stream/reset` 保留游标 | T014（已写入 brief） |
 | T015 | 把 `IndexView`、`SessionView` 导出进 `v1.json`，测试 #16 要比对两端的视图 JSON | T014（已写入 brief） |
 | T072 | TS reducer 照 5.3.11 末尾"T014 实现时的裁定"的规则和视图 JSON 实现。JSON 对象的键顺序没有含义，比较时按深度相等 | T014 |
@@ -97,40 +97,53 @@
 | T055 | 实现 `driver::api`：用 `PromptTag` 回填 prompt 的结果；用 `AskId` 管理 ACP 的 responder；把 `PromptContent` 转成 ACP 的内容块，图片读 blob 转成 base64，评论按 GT-2 排成文本 | T040 |
 | T043 | 会话检查点因 `view_v` 不符而作废时，存储层按 5.4.6 只用回合快照重建视图，会话的配置、能力、队列、`tail`、`detached` 都会缺失。会话 actor 恢复会话时，要重发 `session.configured`、`session.capabilities`，并按数据库里的队列发 `queue.updated` | T026 |
 | T034 | 索引流的检查点作废、日志又已经裁剪时，索引视图会不完整。IndexActor 启动时按 `projects`、`sessions` 两张表重发相应事件 | T026 |
-| T033 | 补发 `after_seq+1..=head_seq` 时，读到的事件可能刚被裁剪掉（补发与裁剪并发）。发现缺口时按 `cursor_expired` 改发快照，或者发 `stream/reset`，由 T033 定。`store::log::read_events` 是公开的，补发用它 | T026 |
+| T033 | 补发 `after_seq+1..=head_seq` 时，读到的事件可能刚被裁剪掉（补发与裁剪并发）。发现缺口时按 `cursor_expired` 改发快照，或者发 `stream/reset`，由 T033 定。`store::log::read_events` 是公开的，补发用它 | T026（已写入 brief） |
 | T030、T037、T043 及以后的 actor 任务 | 关掉 fd 后要判断对端是否已关闭，以读到 EOF 为信号，不要关闭后立刻查 `getsockopt`：别的线程拉子进程时，内核会短暂复制整张 fd 表。另外，std 在 macOS 上建管道和 socketpair 时是先建、后设 close-on-exec，`std::process` 和 `tokio::process` 拉起的子进程可能把它们一直带到自己退出。这再次说明"拉子进程一律经 `cupper_sys::spawn`"的必要 | T021 修复第 2 轮（已写入 T030 的 brief） |
 | T051 以后改 `cupper-fake-agent` 测试的任务 | `unit_fake_scripts_probe` 只要求继承的 fd 以 `0,1,2` 开头，不要改成严格等于 `0,1,2`：并发拉起时别的 fd 可能被带走，接在后面，严格比较会偶发失败 | T021 修复第 2 轮 |
 | T031 | 策略层要实现以下三点：`MATRIX` 里每个 `Sec9` 格子（scope 允许、按 SEC-9 拒绝，见 5.3.11 末尾"T018 实现时的取值"）；`InputEvidence` 的 `key` 与 `digit` 互相一致；`digit` 与所选选项的序号相符（特权选项和效果未知的选项也占序号） | T018（已写入 brief） |
 | T035 | `trust_digest` 在协议里是 `Digest` 类型（`d_` 加 64 位十六进制），信任扫描的摘要要按这个形式输出 | T018 |
 | T042 | 按 `Action::Settle { end, asks }` 的 `asks` 结束回合里挂着的请求：`adapter_exited` 时状态为 `expired`，`turn_cancelled` 和 `turn_ended` 时状态为 `cancelled`。中断时 `TurnMachine` 发 `CancelAsks`。Cancelling 期间新到的请求直接取消 | T048（已写入 brief） |
 | T043 | `Settle` 之后补齐被放弃条目的 `item.completed`（`abandoned`，Codex 还要加 `may_still_run`）；`Complete` 时补上 `final_item_ids`，写 `turn.completed`；执行 `Action::Attach` 时补上工作区、配置和信任状态；`QueueFull` 映射为 `too_large/queue_full`；从数据库恢复回合序号、队列和 agent 会话（目前只有 `TurnMachine::new`） | T048 |
-| T041 | 自发回合的进入点和退出点是 `Input::AutonomousStarted`、`AutonomousEnded`。Ending 期间到达的更新归属哪个回合，由本任务处理 | T048 |
+| T041 | 自发回合的进入点和退出点是 `Input::AutonomousStarted`、`AutonomousEnded`。Ending 期间到达的更新归属哪个回合，由本任务处理 | T048（已写入 brief） |
 | T031 | T013 新增的策略点：git 写操作和 `settings/update` 的 `Sec9` 格子；`auth/elevate` 的 `CliOnly`（`cli` 以外的 principal 一律拒绝）；`git/revert` 的 `input` 证据（`Input` 格子）；`settings/update` 修改安全相关的键时要 privileged；`policy/describe` 每种 `action` 的 `details` 键 | T013（已写入 brief） |
-| T030、T033 | 带 `x-builds` 的方法只在相应特性的构建里注册。UNIT-unsupported-set 要把 M2 的 `diag/export` 算进"返回 `unsupported`"的集合 | T013 |
+| T030、T033 | 带 `x-builds` 的方法只在相应特性的构建里注册。UNIT-unsupported-set 要把 M2 的 `diag/export` 算进"返回 `unsupported`"的集合 | T013（已写入 T033 的 brief） |
 | T015 | 方法条目可能带 `x-builds`，导出时要保留。两处 schema 不够精确：`Settings` 的 `cli_path` 实际总会出现（值可为 `null`），但 schema 里不是必填；`SettingsPatch` 的非空键在 schema 里也允许 `null`。都在客户端→宿主方向，宿主会拒绝，生成 TS 时可以考虑收紧 | T013（已写入 brief） |
 | T036、T126 | `apps.terminal`、`apps.editor` 可选的内置应用清单没有设计，界面怎样拿到这个列表，需要补上 | T013 |
 | T047 | `test/*` 的参数形状由 T013 补上：`clock_advance {ms}`、`run_maintenance {task}`、`seed {profile}`，实现时可以细化 | T013 |
 | T002 | `xtask ci rust` 缺了 `cargo build -p cupper-protocol --lib --target aarch64-apple-ios-sim`（5.1.6 要求每个 PR 都跑），T001 时漏掉了，请补上 | T013（改由 T015 做，已写入它的 brief） |
-| T033 | 网关的发送队列实现 `store::streams` 的 `Sink`：两个方法都在流锁内调用，只能排队，不能回调流；`push` 返回 `Full` 时流会摘掉这个订阅者并调用 `reset`（`slow_consumer`）。订阅时，把响应、快照页或补发标记放进 `subscribe` 的 `start` 回调。补发用 `store::log::read_events(conn, stream, after, head, ..)`。`history/page` 用 `store::history::page`；不带游标时，用 `StreamHandle::read` 取窗口里最早的 `turn_no`；`max_bytes` 自己截到 48,000 | T026 |
+| T033 | 网关的发送队列实现 `store::streams` 的 `Sink`：两个方法都在流锁内调用，只能排队，不能回调流；`push` 返回 `Full` 时流会摘掉这个订阅者并调用 `reset`（`slow_consumer`）。订阅时，把响应、快照页或补发标记放进 `subscribe` 的 `start` 回调。补发用 `store::log::read_events(conn, stream, after, head, ..)`。`history/page` 用 `store::history::page`；不带游标时，用 `StreamHandle::read` 取窗口里最早的 `turn_no`；`max_bytes` 自己截到 48,000 | T026（已写入 brief） |
 | T032、T043 | 命令结果和它产生的事件放进同一个 `Batch`（`Batch::with`），同一事务提交。`Appended::rejected` 不为空，说明写者违反了视图规则，是 bug：要记日志；test-harness 构建里建议直接让用例失败 | T026（已写入 T032 的 brief） |
 | T037 | 组装流：`Streams::new(writer, readers, clock, StreamsConfig::new(epoch, &durations))` | T026 |
 | T039 | 接入点：`handshake::authenticate` 的 match、`GatewayConfig` 里的密钥、传给 `initialize` 的固定令牌、`host_proof` 的返回值、`principal` 里 `pr_test` 那一行（详见 `docs/tasks/T030-gateway-handshake/notes.md`"给 T039 的接入点"）。另外实现握手期限：`host/hello` 之后 10 s 内没有 `initialize` 就断开，审计原因 `handshake_timeout`（5.3.11 末尾，编排者裁定） | T030（已写入 brief） |
 | T047 | 网关的连接任务还没有登记进静止屏障：它们由 I/O 驱动，只有关闭宽限（和 T039 的握手期限）用到 `Clock` 定时器 | T030 |
 | T006 | `xtask ci license` 跑 `cargo deny check` 时要从 GitHub 拉 advisory 数据库，网络出错时整个作业失败（2026-10-19 在 main 上遇到一次，重跑通过）。考虑拉取失败时用已缓存的数据库继续，并在摘要里标记为过期，或者重试 | 编排者 |
-| T033 | 每个请求和客户端通知都先调用 `policy::method(p, M::NAME, M::SCOPE.as_ref())`；再对相应方法调用只看参数的规则 `settings_update`、`set_config`、`git_revert`；`policy/describe` 的处理器按 `Confirmable` 的种类查好 `Facts` 再调用 `describe`。`Denial`、`DescribeError` 都实现了 `Into<RpcError>` | T031 |
+| T033 | 每个请求和客户端通知都先调用 `policy::method(p, M::NAME, M::SCOPE.as_ref())`；再对相应方法调用只看参数的规则 `settings_update`、`set_config`、`git_revert`；`policy/describe` 的处理器按 `Confirmable` 的种类查好 `Facts` 再调用 `describe`。`Denial`、`DescribeError` 都实现了 `Into<RpcError>` | T031（已写入 brief） |
 | T042 | 在检查完 pending、摘要和 `actionable_by` 之后调用 `policy::respond`；收到请求时用 `Clock` 记下 `entered`（`MonoTime`），并传入会话当前的档位。另外请核对：5.3.6 写"所有选项都是 privileged 时 `actionable_by` 只有 `desktop_ui`"，会把 test_harness 排除在外，而权限矩阵里 test_harness 对特权选项是 ✓。请提出方案，由编排者裁定 | T031（已写入 brief） |
 | T043、T044 | `session/create`、`set_config` 的档位：用能力里的 `risk` 换算成 `Tier` 后调用 `policy::tier_change`，映射里没有的模式传 `FullAccess`；`config_unconfirmed` 的判定用 `policy::ceiling`；Attach 之前调用 `policy::attach`（信任门控） | T031 |
 | T077 | 原生确认框按 5.3.11 末尾"T031 实现时的裁定"里各 action 的 `details` 键取内容，文案由界面按语义码组织 | T031 |
-| T071 | 从 `@cupper/protocol` 用 `zEvent`、`zEventBody`、`isKnownEvent`、`KnownEvent`；`isKnownEvent` 为 false 时记日志并显示占位。生成的 `zStreamEventsParams`、`zStreamSnapshotParams`、`zHistoryPageResult` 对数组里每个事件做完整校验，一个没有合法外壳的事件（例如缺 `seq`）会让整条消息失败，而 Rust 的 `Raw<T>` 只让那一条失败：先把 `events`、`ops` 当作 `unknown[]` 取出，再逐个 `zEvent.safeParse`。`protocol/fixtures/methods.json` 可以直接给 mock 宿主用 | T015 |
+| T071 | 从 `@cupper/protocol` 用 `zEvent`、`zEventBody`、`isKnownEvent`、`KnownEvent`；`isKnownEvent` 为 false 时记日志并显示占位。生成的 `zStreamEventsParams`、`zStreamSnapshotParams`、`zHistoryPageResult` 对数组里每个事件做完整校验，一个没有合法外壳的事件（例如缺 `seq`）会让整条消息失败，而 Rust 的 `Raw<T>` 只让那一条失败：先把 `events`、`ops` 当作 `unknown[]` 取出，再逐个 `zEvent.safeParse`。`protocol/fixtures/methods.json` 可以直接给 mock 宿主用 | T015（已写入 brief） |
 | T072 | `zIndexView`、`zSessionView` 及类型已生成；两端视图按深度相等比较。`Item` 等嵌套开放联合在 TS 里无法按标签收窄（`UnknownMember` 带索引签名），需要时生成类似 `isKnownEvent` 的守卫（也可在 T082 定） | T015 |
 | T016 | 冻结前要定：可选字段在 TS 里是 `T \| null`（zod `.nullish()`），宿主从不发 `null`，是否统一改成只是缺省；`Settings.cli_path` 标必填、`SettingsPatch` 的非空键不接受 `null`，在 Rust 里改，两端一起变；`v1.json` 是加了缩进的 JCS，方法目录在 `x-methods` 的三张表里；`protocol` 作业还没有对导出文件单独做整数安全检查（5.1.6），导出时超界会直接失败 | T015 |
 | T006 | npm 依赖闭包里有 `argparse@2.0.1`（Python-2.0，不在 allowlist），经 hey-api → `js-yaml` 和 electron-builder → `js-yaml` 引入，只在开发时使用。许可证门禁按生产依赖闭包计算时不会算进去；如果要连开发依赖一起检查，需要把它列为例外 | T015 |
 | 所有改协议类型的任务 | 改了 `cupper-protocol` 的类型就要跑 `pnpm gen` 并提交生成物（`protocol/schema/v1.json`、`packages/protocol/src/gen/`），`xtask ci protocol` 会卡住漏提交的情况 | T015 |
 | T005 | 自用构建的 CLI：`CUPPER_HOST_CDHASH=<宿主 cdhash，40 位小写十六进制> cargo build -p cupper-cli --release --features self-use`。变量缺失或格式不对会让编译失败 | T045 |
-| T002 | 新增用例编号 UNIT-cli-client（T045，握手与请求关联），计划 v1.3.6 已登记；登记 `tests/ids.toml` 时一并收入 | T045 |
+| T002 | 新增用例编号 UNIT-cli-client（T045，握手与请求关联），计划 v1.3.6 已登记；登记 `tests/ids.toml` 时一并收入 | T045（已写入 brief） |
 | T039 | CLI 侧的接入点：`ClientAuth` 加 `Harness` 变体；`ClientAuth::credentials(&hello, &host)` 已经拿到 nonce 和固定令牌；在 `Client::handshake` 里 `check.accept` 的旁边校验 `host_proof`（详见 `docs/tasks/T045-cli-client-mirror/notes.md` 末尾）。CLI 收到 fd 时断开的用例还没有，T030 合并后可以用 `cupper-sys` 的 `send_with_fds`（`test-util` 特性）补上 | T045（已写入 brief） |
 | T180 | 设置宿主与 UI 的签名要求，都要带 Team ID：CLI 的 `cupper_cli::verify::HOST_REQUIREMENT`，以及网关的 `ui_requirement`（T030）。在那之前，发布版 CLI 不接受任何宿主，宿主的 `codesign` 认证也全部失败 | T045、T030 |
 | T005 | 产物核对：CLI 的 `cupper --build-info` 输出里的 `host_cdhash` 要等于同一产物里宿主的 cdhash | T045 |
+| T046 | 客户端读循环每次读到数据都先查对端令牌；宿主写完就关闭连接时，这批数据会被丢弃，关闭原因是 `Refused(PeerExited)` 而不是 `Eof`（安全上正确）。报告"宿主已退出"时，把两者当作同一种情况 | T049 |
+| T039 合并之后改 `cupper-cli` 测试的任务 | `mirror.rs` 测试里的进程内假宿主，与 `client.rs` 测试里的 `FakeHost` 用途相同，可以合并成一个共用的测试辅助 | T049 |
+| T033 | 账本接线：启动时在 host.db 连接上调用 `Ledger::load`，并 `spawn(ledger.clone().sweeper())`。读循环对命令类请求调用 `begin`，传入原始 params 的 `Value`：`Run(ticket)` 时把 ticket 随命令交给执行者；`Replay` 时直接回复；`Wait(w)` 时另起 task，等 `w.outcome()` 后回复。`LedgerError` 可以直接转成 `RpcError`。`test/run_maintenance` 调用 `Ledger::sweep()` | T032（已写入 brief） |
+| T043、git 执行者（T061 等） | 受理后调用 `ticket.complete(Ok(result))`，把 `Box::new(completion.row())` 放进 `Batch::with`；`append` 成功后调用 `completion.committed()`，失败时丢弃 `completion`。改动用户仓库的 git 命令，在执行 git 之前先 `mark_external().await`。前置条件不满足时用 `reject(err)` | T032 |
+| T016 | 账本回放的结果带 `replayed: true`（5.2.5），协议 schema 里还没有声明。请在冻结前定下声明方式 | T032 审阅 |
+| T037 | 组装存储：在静止屏障里登记 `store::RAW_WRITER`、`store::retention::MAINTENANCE`。启动顺序：`open_writer(raw.db, Database::Raw)` → `prepare_raw` → `RawWriter::spawn(conn, &quiescence)`，再把 `raw.sink()` 交给 T055；`BlobStore::new(data_dir, writer.clone(), clock)`；`Maintenance::new(writer, raw, blobs, data_dir.join("backups"), clock, durations).spawn(&quiescence)`，放在"按 `adapters` 表清理残留"之后。有序退出时先停清理任务，再 `RawWriterThread::stop()`。清理失败目前直接吞掉，有了 host.log 之后要记下；`RawSink::dropped()` 还没有地方展示 | T027 |
+| T033 | blob 传输：`BlobStore::put(data, media_type, Some(hash))`，`Mismatch` 对应 `conflict`，`TooLarge` 对应 `too_large`；客户端声明的 `size` 由 T033 自己和 `data.len()` 比对。`get` 每次都读整个文件并核对哈希，`offset`/`length` 由 T033 截取。图片的 10 MiB 限制（按 agent）不在 `BlobStore` 里 | T027（已写入 brief） |
+| T043、T055 | 事件引用 blob 时，在同一个写操作里调用 `store::blobs::add_ref`，返回 `false` 时让客户端重新上传。T055 用 `RawWriter::sink()` 构造 `Tap` | T027 |
+| T047 | `test/run_maintenance` 的 `raw_frames`、`audit`、`orphan_blobs` 对应 `Maintenance::run(Cleanup::…)`，`ledger` 对应 T032 的 `Ledger::sweep()`。静止屏障要把 `store_raw_writer`、`store_maintenance` 两类参与者算进去 | T027 |
+| T043 | 宿主重启后，用 `InteractionBroker` 的 `Input::Ended` 载入 `interactions` 表里本会话已经结束的请求；写 `interaction.requested` 之前先刷出 normalizer 缓冲的文本，并通知 `IndexActor`；`Respond.tier` 传会话当前的档位；CLI、test_harness 完成的回答要写审计 `interaction.responded`（也涉及 T037） | T042 |
+| T053、T055 | 按 `AskRequest` 交出 agent 的请求：权限请求用 `Classified`，form 模式的 elicitation 用 `Form`（原样带 JSON schema）。`DriverEvent::Ask` 还没有 `toolCallId`，actor 填 `item_id` 需要它，由提取层补上。撤回之后交互代理仍会发一次 `Answer { Cancelled }`，运行时据此放掉应答句柄 | T042 |
+| T110 | Codex 用 `_meta.codex.isOther` 和 `<id>_note` 表达"其他"和备注，目前按 JSON Schema 类型映射成两个字段；要不要合成一题，由本任务决定 | T042 |
+| T016 | `interaction/respond` 的 `x-errors` 里没有 `not_found`，会话里不存在的请求 ID 目前回 `invalid_params`，而 `interaction/get` 回 `not_found`。冻结前补上，并跑 `pnpm gen` | T042 审阅 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

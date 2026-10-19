@@ -143,7 +143,7 @@ fn choose<'r>(
 /// The scope choosing `option` takes: its `requires`, but `privileged` for
 /// an `allow_always` option and one whose kind or effect is unknown,
 /// whatever the option table says (design 5.3.6).
-pub(super) fn requires(option: &InteractionOption) -> Scope {
+pub fn requires(option: &InteractionOption) -> Scope {
     let kind = matches!(
         option.kind,
         OptionKind::AllowAlways | OptionKind::Unknown(_)
