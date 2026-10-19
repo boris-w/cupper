@@ -63,3 +63,18 @@
    - `host/status.clients` 用 `clients.updated` 里的 `ClientInfo` 列表，不只是个数。
    - 错误码补充：`project/trust_info` 加 `unavailable/scan_failed`（重新扫描可能失败）；`session/create` 加 `forbidden/scope`（与 `set_config` 同样受档位规则约束）。
    - `session/queue_edit` 在 5.8.3 里没有单列，矩阵测试按 `session/send` 那一行比对，并在表里注明。
+
+## 拆分后的计划（A：方法基础、握手与流）
+
+编排者裁定拆分（brief 末尾"补充裁定"，计划 v1.3.2）：本任务只做第 0、1、2 组，第 3–5 组归 T018。验收编号改为 UNIT-proto-methods-core-stream。
+
+| 组 | 代码 | 测试 | 小计 |
+|---|---|---|---|
+| 0 方法基础 | 240 | 60 | 300 |
+| 1 握手与生命周期 | 305 | 110 | 415 |
+| 2 流与内容 | 300 | 140 | 440 |
+| **合计** | **845** | **310** | **约 1,155** |
+
+- 停止线：按已完成组的实际偏差推算，总数预计超过约 1,450 行时停下来汇报。
+- `stream/subscribe` 的结果复用 T014 的 `sync::SubscribeMode`、`sync::ResyncReason`。
+- 给 T018、T013 留的扩展点：每个方法组一个文件，文件里用 `method!` 声明，并提供 `register(&mut Catalog, &mut SchemaGenerator)`；`catalog.rs` 为每个组调用一行；测试样例、权限矩阵各加自己的行。
