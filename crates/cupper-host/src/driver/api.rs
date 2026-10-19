@@ -3,11 +3,12 @@
 //! types appear here; ACP's stay inside `driver` (design 5.6).
 //!
 //! Commands and events are plain data, so pure cores can emit and take them.
-//! When the session's actor hands a command to the runtime it adds the reply
-//! channel of a request and, for `Attach`, its own event sender; replies and
-//! events come back to its cores as inputs.
+//! The session's actor hands them to its agent's [`AgentPort`], adding its
+//! own event sender to an attach; replies and events come back to its cores
+//! as inputs.
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::path::PathBuf;
 use std::process::ExitStatus;
 
@@ -19,7 +20,23 @@ use cupper_protocol::index::TitleSource;
 use cupper_protocol::interaction::{InteractionOutcome, InteractionRequest};
 use cupper_protocol::item::{Plan, ToolDiff, ToolKind};
 use cupper_protocol::session::{StopReason, TurnUsage, UsageUpdated};
+use futures::future::BoxFuture;
 use thiserror::Error;
+use tokio::sync::mpsc;
+
+/// Where a session's driver commands go: its agent's `AgentRuntime` (T055).
+pub trait AgentPort: Send + Sync + fmt::Debug {
+    /// [`DriverCommand::Attach`]: the reply, once there is one. The events
+    /// of the attached session go to `events` from then on.
+    fn attach(
+        &self,
+        attach: Attach,
+        events: mpsc::UnboundedSender<DriverEvent>,
+    ) -> BoxFuture<'static, Result<AttachInfo, AgentError>>;
+
+    /// A command without a reply: `Prompt`, `Cancel`, `Close` or `Answer`.
+    fn send(&self, command: DriverCommand);
+}
 
 /// The agent's own ID of a session (ACP `sessionId`), opaque to the host.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

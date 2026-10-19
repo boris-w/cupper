@@ -121,6 +121,7 @@ CREATE TABLE queue_entries (
   content_json TEXT NOT NULL,
   principal    TEXT NOT NULL,
   command_id   TEXT NOT NULL,
+  reply_to     TEXT,                      -- the rejected request it answers (v1.5)
   created_at   INTEGER NOT NULL
 );
 CREATE INDEX queue_by_session ON queue_entries(session_id, position);
