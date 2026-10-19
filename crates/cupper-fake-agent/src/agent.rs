@@ -43,6 +43,16 @@ pub struct Session {
     pub config: Vec<Value>,
     /// The prompt in flight: its number and its cancel signal.
     pub inflight: Option<(u64, watch::Sender<bool>)>,
+    pub steer: Steer,
+}
+
+/// How `_session/steering` is answered: like the persona, or as a script set.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Steer {
+    Persona,
+    Inject,
+    NewTurn,
+    Hang,
 }
 
 pub fn lock(state: &State) -> MutexGuard<'_, Shared> {
@@ -224,6 +234,7 @@ fn open(
         resumed,
         config,
         inflight: None,
+        steer: Steer::Persona,
     };
     shared.sessions.insert(id.to_owned(), session);
     after.push((
@@ -285,7 +296,8 @@ fn prompt(
     cx.spawn(script.prompt(text, number, responder))
 }
 
-/// `_session/steering` (s06; the outcome per persona, K10, K11).
+/// `_session/steering` (s06; the outcome per persona, K10, K11), unless a
+/// `steer_*` command chose the answer.
 fn steering(
     state: &State,
     params: &Value,
@@ -304,13 +316,15 @@ fn steering(
         Err(e) => return responder.respond_with_error(e),
     };
     let prompt_required = params["_meta"]["steering"]["idleBehavior"] == "promptRequired";
-    let outcome = if session.inflight.is_some() {
-        "injected"
-    } else if persona == Persona::Claude && prompt_required {
-        "promptRequired"
-    } else {
+    let outcome = match session.steer {
+        // Never answered: the host gives up after 5 s and queues the message.
+        Steer::Hang => return Ok(()),
+        Steer::Inject => "injected",
+        Steer::NewTurn => "startedNewTurn",
+        Steer::Persona if session.inflight.is_some() => "injected",
         // Codex ignores `idleBehavior` (K11).
-        "startedNewTurn"
+        Steer::Persona if persona == Persona::Claude && prompt_required => "promptRequired",
+        Steer::Persona => "startedNewTurn",
     };
     let (_, never) = watch::channel(false);
     let script = Script::new(

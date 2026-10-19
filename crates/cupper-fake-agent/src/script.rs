@@ -14,6 +14,9 @@
 //! | `write_file <path> <content>` | write a file inside the session's cwd (`\n` is a newline) |
 //! | `permission <tool_id> [execute\|edit]` | ask for permission, then `say permission:<option>` |
 //! | `question <prompt>` | a one-field form, then `say answer:<value>` |
+//! | `form <q>=<a>\|<b> ...` | a multi-question form, then `say form:<content>` |
+//! | `plan_update <markdown>` / `plan_confirm` | a plan / its confirmation, then `say plan:<option>` |
+//! | `steer_ok` / `steer_new_turn` / `steer_hang` | how later `_session/steering` requests are answered |
 //! | `sleep <ms>` / `wait_cancel` | wait / until `session/cancel` |
 //! | `whoami` / `probe` | say the session, inherited fds, env names |
 //! | `spawn_child` / `exit <code>` | start a grandchild in our process group / exit now |
@@ -27,7 +30,7 @@ use futures::future::BoxFuture;
 use serde_json::{Value, json};
 use tokio::sync::{oneshot, watch};
 
-use crate::agent::{State, lock};
+use crate::agent::{self, State, Steer, lock};
 use crate::config::Persona::{self, Claude, Codex};
 use crate::persona;
 
@@ -46,6 +49,12 @@ const COMMANDS: &[&str] = &[
     "write_file",
     "permission",
     "question",
+    "form",
+    "plan_update",
+    "plan_confirm",
+    "steer_ok",
+    "steer_new_turn",
+    "steer_hang",
     "sleep",
     "wait_cancel",
     "whoami",
@@ -103,6 +112,8 @@ pub struct Script {
     session: String,
     cwd: PathBuf,
     cancel: watch::Receiver<bool>,
+    /// The latest `plan_update`, shown by `plan_confirm`.
+    plan: String,
 }
 
 impl Script {
@@ -122,6 +133,7 @@ impl Script {
             session,
             cwd,
             cancel,
+            plan: String::new(),
         }
     }
 
@@ -270,6 +282,20 @@ impl Script {
                 };
                 self.say(&format!("answer:{value}"))?;
             }
+            "form" => return self.form(&args).await,
+            "plan_update" => {
+                self.plan = rest.replace("\\n", "\n");
+                self.update(persona::plan_update(p, &self.session, &self.plan))?;
+            }
+            "plan_confirm" => return self.plan_confirm().await,
+            "steer_ok" | "steer_new_turn" | "steer_hang" => {
+                let steer = match name {
+                    "steer_ok" => Steer::Inject,
+                    "steer_new_turn" => Steer::NewTurn,
+                    _ => Steer::Hang,
+                };
+                agent::live(&mut lock(&self.state), &self.session)?.steer = steer;
+            }
             "sleep" => {
                 if self.wait(num(0)).await {
                     return Ok(cancelled());
@@ -351,6 +377,87 @@ impl Script {
         Ok(Flow::Next)
     }
 
+    async fn form(&mut self, specs: &[&str]) -> Result<Flow, Error> {
+        let questions: Vec<(&str, Vec<&str>)> = specs
+            .iter()
+            .map(|spec| {
+                let (name, options) = spec.split_once('=').unwrap_or((spec, ""));
+                (name, options.split('|').filter(|o| !o.is_empty()).collect())
+            })
+            .collect();
+        let codex = self.persona == Codex;
+        if codex {
+            self.update(persona::thread_status("active", &["waitingOnUserInput"]))?;
+        }
+        let params = persona::form(self.persona, &self.session, &questions);
+        let Some(answer) = self.ask("elicitation/create", params).await? else {
+            return Ok(cancelled());
+        };
+        if codex {
+            self.update(persona::thread_status("active", &[]))?;
+        }
+        let shown = match answer["action"].as_str() {
+            Some("accept") => answer["content"].to_string(),
+            other => other.unwrap_or("invalid").to_owned(),
+        };
+        self.say(&format!("form:{shown}"))?;
+        Ok(Flow::Next)
+    }
+
+    /// Plan confirmation (s05). Claude's approval switches the mode (ExitPlanMode);
+    /// Codex goes idle before asking (K12) and leaves plan mode on approval.
+    async fn plan_confirm(&mut self) -> Result<Flow, Error> {
+        let p = self.persona;
+        let plan = if self.plan.is_empty() {
+            "# Plan\n\nA fake plan.".to_owned()
+        } else {
+            self.plan.clone()
+        };
+        let tool = "fake-exit-plan";
+        let finish = |status: &str| json!({"sessionUpdate": "tool_call_update", "toolCallId": tool, "status": status});
+        match p {
+            Claude => self.update(json!({"sessionUpdate": "tool_call", "toolCallId": tool, "name": "ExitPlanMode",
+                "status": "pending", "title": "Approve Plan", "kind": "switch_mode", "content": []}))?,
+            Codex => self.update(persona::thread_status("idle", &[]))?,
+        }
+        let params = persona::plan_confirm(p, &self.session, &plan);
+        let Some(answer) = self.ask("session/request_permission", params).await? else {
+            return Ok(cancelled());
+        };
+        let picked = answer["outcome"]["optionId"]
+            .as_str()
+            .unwrap_or("cancelled");
+        let (option, value) = match picked {
+            "exit-plan-default" => ("mode", "default"),
+            "exit-plan-auto" | "exit-plan-clear-auto" => ("mode", "auto"),
+            "exit-plan-bypass" => ("mode", "bypassPermissions"),
+            "implement_plan" => ("collaboration_mode", "default"),
+            _ => ("", ""),
+        };
+        if option.is_empty() {
+            if p == Claude {
+                self.update(finish("failed"))?;
+            }
+        } else {
+            let config = self.set_config(option, value)?;
+            if p == Claude {
+                self.update(
+                    json!({"sessionUpdate": "current_mode_update", "currentModeId": value}),
+                )?;
+            }
+            self.update(json!({"sessionUpdate": "config_option_update", "configOptions": config}))?;
+            match p {
+                Claude => {
+                    self.update(finish("completed"))?;
+                    self.update(persona::plan_update(p, &self.session, &plan))?;
+                }
+                Codex => self.update(persona::thread_status("active", &[]))?,
+            }
+        }
+        self.say(&format!("plan:{picked}"))?;
+        Ok(Flow::Next)
+    }
+
     /// Sends a request to the client and waits for the answer. When the turn
     /// is cancelled first, Claude withdraws the request with `$/cancel_request`
     /// (K5) and Codex leaves it pending (K4); `None` then.
@@ -397,6 +504,16 @@ impl Script {
         }
         std::fs::create_dir_all(target.parent().unwrap_or(&self.cwd)).map_err(io)?;
         std::fs::write(&target, content.replace("\\n", "\n")).map_err(io)
+    }
+
+    /// Sets a config option of this session; returns all of them.
+    fn set_config(&self, option: &str, value: &str) -> Result<Vec<Value>, Error> {
+        let mut shared = lock(&self.state);
+        let session = agent::live(&mut shared, &self.session)?;
+        for o in session.config.iter_mut().filter(|o| o["id"] == option) {
+            o["currentValue"] = json!(value);
+        }
+        Ok(session.config.clone())
     }
 
     /// Returns true if the turn was cancelled while waiting.
