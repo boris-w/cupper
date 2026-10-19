@@ -10,12 +10,13 @@
 //!   abandoned at the 10 s deadline stays in flight until it returns; the
 //!   next turn closes and resumes the agent session before its own prompt.
 //! - Once a turn's end is decided, [`Action::Settle`] closes what is still
-//!   open in it, the end snapshot follows, and only then [`Action::Complete`]:
-//!   every event about a turn comes before its `turn.completed` (design
-//!   5.3.11).
+//!   open in it, the end snapshot follows (only for a turn that sent its
+//!   prompt), and only then [`Action::Complete`]: every event about a turn
+//!   comes before its `turn.completed` (design 5.3.11).
 //! - A turn that ends normally takes the next queued message; one cancelled
 //!   or failed pauses the queue, except a cancel the agent made by itself
-//!   (Codex #556, K2).
+//!   (Codex #556, K2). A message sent while idle starts a turn at once and
+//!   ends such a pause; an empty queue is never paused.
 
 use std::mem;
 use std::sync::Arc;
@@ -25,6 +26,7 @@ use cupper_protocol::annotations::{DurationMs, TimestampMs};
 use cupper_protocol::domain::{FailureCode, PromptContent};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{AdapterInstanceId, ItemId, PrincipalId, QueueId, RequestId, TurnId};
+use cupper_protocol::interaction::ResolutionReason;
 use cupper_protocol::item::{Item, ItemCompleted, ItemPatch, ItemStarted, ItemStatus, UserMessage};
 use cupper_protocol::session::{
     PauseReason, QueueEntry, SnapshotPhase, SnapshotReason, SnapshotRecorded, SnapshotStatus,
@@ -151,9 +153,13 @@ pub enum Action {
     /// agent `Cancelled` (T042; Codex does not withdraw them, K4).
     CancelAsks(TurnId),
     /// The turn's end is decided: flush its text, complete its open items as
-    /// `abandoned` and settle its pending requests (T041, T042), all before
-    /// `turn.completed`.
-    Settle(TurnEnd),
+    /// `abandoned` and resolve its pending requests (T041, T042), all before
+    /// `turn.completed`. The requests end `expired` for `adapter_exited`, and
+    /// `cancelled` for the other reasons (design 5.3.11).
+    Settle {
+        end: TurnEnd,
+        asks: ResolutionReason,
+    },
     /// Write `turn.completed`, adding the final answer (T041).
     Complete(TurnEnd),
     Timer(TimerRequest<TurnTimer>),
@@ -647,7 +653,17 @@ impl TurnMachine {
             ended_at: TimestampMs(now.wall_ms),
             duration_ms: DurationMs(u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)),
         };
-        out.push(Action::Settle(end.clone()));
+        let asks = if end.error_code == Some(FailureCode::AdapterExited) {
+            ResolutionReason::AdapterExited
+        } else if outcome.pause == Some(PauseReason::TurnCancelled) {
+            ResolutionReason::TurnCancelled
+        } else {
+            ResolutionReason::TurnEnded
+        };
+        out.push(Action::Settle {
+            end: end.clone(),
+            asks,
+        });
         if matches!(turn.phase, Phase::Prompting(_) | Phase::Cancelling(_)) {
             out.push(Action::Snapshot {
                 turn_id: turn.id.clone(),
@@ -751,96 +767,13 @@ impl Core for TurnMachine {
 mod tests {
     use std::time::Duration;
 
-    use cupper_protocol::domain::{PromptBlock, TextContent};
-
     use super::*;
-    use crate::clock::ManualClock;
-    use crate::driver::api::AgentErrorClass;
-    use crate::pure::CoreDriver;
-
-    fn machine() -> CoreDriver<TurnMachine> {
-        let clock = ManualClock::new();
-        let ids = Arc::new(IdGen::seeded(Arc::new(clock.clone()), 1));
-        CoreDriver::with_clock(TurnMachine::new(ids, &Durations::default()), clock)
-    }
-
-    fn send(text: &str) -> Input {
-        Input::Send(SendRequest {
-            content: vec![PromptBlock::Text(TextContent { text: text.into() })],
-            mode: SendMode::Queue,
-            by: "pr_test".parse().unwrap(),
-            reply_to: None,
-        })
-    }
-
-    fn started(actions: &[Action]) -> TurnId {
-        actions
-            .iter()
-            .find_map(|action| match action {
-                Action::Event(EventBody::TurnStarted(started)) => Some(started.turn_id.clone()),
-                _ => None,
-            })
-            .expect("a turn started")
-    }
-
-    fn snapshot(turn_id: &TurnId, phase: SnapshotPhase) -> Input {
-        Input::Snapshot(SnapshotRecorded {
-            turn_id: turn_id.clone(),
-            phase,
-            status: SnapshotStatus::Skipped,
-            reason: Some(SnapshotReason::NotARepo),
-            excluded: Vec::new(),
-            stat: None,
-        })
-    }
-
-    fn attached() -> Input {
-        Input::Attached(Ok(AttachInfo {
-            session: AgentSessionId("agent-1".into()),
-            instance: AdapterInstanceId::from_uuid(1),
-            capabilities: serde_json::from_value(serde_json::json!({
-                "agent": "claude",
-                "versions": {"adapter": "1", "cli": "1", "cli_compat": "verified"},
-                "prompt": {"image": true, "file_ref": true, "max_image_bytes": 1},
-                "turn": {"queue": true, "steer": {"supported": false, "side_effects": false},
-                         "interrupt": true, "interrupt_stops_commands": true},
-                "session": {"resume": true, "load_history": false, "fork": false},
-                "config": [], "commands": [],
-                "interactions": {"reject_ends_turn": false, "question_forms": true,
-                                 "plan_confirm": true},
-                "extraction": {"exit_code": true, "output_streaming": false, "diff": "per_file",
-                               "thinking": true, "plan": "markdown_only", "run_state": "inferred"}
-            }))
-            .unwrap(),
-        }))
-    }
-
-    fn kinds(actions: &[Action]) -> Vec<&str> {
-        actions
-            .iter()
-            .map(|action| match action {
-                Action::Event(body) => body.tag(),
-                Action::Driver(DriverCommand::Prompt { .. }) => "prompt",
-                Action::Driver(DriverCommand::Cancel { .. }) => "cancel",
-                Action::Driver(DriverCommand::Close { .. }) => "close",
-                Action::Driver(_) => "driver",
-                Action::Attach(AttachTarget::New) => "attach",
-                Action::Attach(AttachTarget::Resume(_)) => "resume",
-                Action::Snapshot { .. } => "snapshot",
-                Action::CancelAsks(_) => "cancel_asks",
-                Action::Settle(_) => "settle",
-                Action::Complete(_) => "complete",
-                Action::Timer(TimerRequest::Set { .. }) => "timer",
-                Action::Timer(TimerRequest::Cancel(_)) => "untimer",
-                Action::Reply(_) => "reply",
-            })
-            .collect()
-    }
+    use crate::orchestrator::testkit::*;
 
     #[test]
     fn turn_machine_runs_a_turn_from_send_to_completed() {
         let mut m = machine();
-        let actions = m.input(send("hi"));
+        let actions = m.input(send("hi", SendMode::Queue));
         let turn = started(&actions);
         assert_eq!(
             kinds(&actions),
@@ -854,25 +787,94 @@ mod tests {
                 "attach"
             ]
         );
-        assert_eq!(kinds(&m.input(attached())), [""; 0]);
+        assert_eq!(kinds(&m.input(attached(1))), [""; 0]);
         assert_eq!(
             kinds(&m.input(snapshot(&turn, SnapshotPhase::Start))),
             ["untimer", "snapshot.recorded", "prompt"]
         );
-        let done = Input::Driver(DriverEvent::PromptDone {
-            tag: PromptTag(1),
-            stop_reason: StopReason::EndTurn,
-            usage: None,
-        });
-        assert_eq!(kinds(&m.input(done)), ["settle", "snapshot"]);
+        assert_eq!(
+            kinds(&m.input(done(1, StopReason::EndTurn))),
+            ["settle", "snapshot"]
+        );
         let end = m.input(snapshot(&turn, SnapshotPhase::End));
         assert_eq!(kinds(&end), ["snapshot.recorded", "complete"]);
-        let failed = Input::Attached(Err(AgentError {
-            class: AgentErrorClass::Other,
-            form: crate::driver::api::AgentErrorForm::Text,
-            message: String::new(),
-        }));
-        assert_eq!(kinds(&m.input(failed)), [""; 0]);
+        let Action::Complete(end) = &end[1] else {
+            panic!("{end:?}")
+        };
+        assert_eq!(end.status, TurnStatus::Completed);
+        assert_eq!(
+            kinds(&m.input(Input::Attached(Err(agent_error())))),
+            [""; 0]
+        );
         assert!(m.advance(Duration::from_secs(60)).is_empty());
+    }
+
+    #[test]
+    fn turn_machine_prompts_after_3_s_without_its_start_snapshot() {
+        let mut m = machine();
+        let turn = started(&m.input(send("hi", SendMode::Queue)));
+        m.input(attached(1));
+        assert!(m.advance(Duration::from_millis(2_999)).is_empty());
+        let late = m.advance(Duration::from_millis(1));
+        assert_eq!(kinds(&late), ["snapshot.recorded", "prompt"]);
+        let Action::Event(EventBody::SnapshotRecorded(record)) = &late[0] else {
+            panic!("{late:?}")
+        };
+        assert_eq!(
+            (&record.status, &record.reason),
+            (&SnapshotStatus::Failed, &Some(SnapshotReason::Timeout))
+        );
+        assert!(m.input(snapshot(&turn, SnapshotPhase::Start)).is_empty());
+    }
+
+    #[test]
+    fn turn_machine_ends_at_the_deadline_then_closes_and_resumes() {
+        let mut m = machine();
+        let first = started(&m.input(send("a", SendMode::Queue)));
+        m.input(attached(1));
+        m.input(snapshot(&first, SnapshotPhase::Start));
+        let queued = m.input(send("b", SendMode::Steer));
+        assert_eq!(kinds(&queued), ["queue.updated", "reply"]);
+        let Action::Reply(Reply::Send(Ok(sent))) = &queued[1] else {
+            panic!("{queued:?}")
+        };
+        assert_eq!(
+            (sent.disposition, sent.fallback),
+            (Disposition::Queued, Some(SteerFallback::Unsupported))
+        );
+        let interrupt = Input::Interrupt {
+            expected_turn: None,
+        };
+        assert_eq!(
+            kinds(&m.input(interrupt)),
+            ["cancel", "cancel_asks", "timer", "reply"]
+        );
+        assert!(m.advance(Duration::from_millis(9_999)).is_empty());
+        let deadline = m.advance(Duration::from_millis(1));
+        assert_eq!(kinds(&deadline), ["untimer", "settle", "snapshot"]);
+        let Action::Settle { end, asks } = &deadline[1] else {
+            panic!("{deadline:?}")
+        };
+        assert_eq!(
+            (&end.status, &end.stop_reason, asks),
+            (
+                &TurnStatus::Cancelled,
+                &Some(StopReason::HostTimeout),
+                &ResolutionReason::TurnCancelled
+            )
+        );
+        let end = m.input(snapshot(&first, SnapshotPhase::End));
+        assert_eq!(
+            kinds(&end),
+            ["snapshot.recorded", "complete", "queue.updated"]
+        );
+        // The queue is paused; a message sent while idle runs at once, ends
+        // the pause, and makes the session close and resume first (K1).
+        let next = m.input(send("c", SendMode::Queue));
+        assert_eq!(kinds(&next)[..2], ["queue.updated", "turn.started"]);
+        assert_eq!(kinds(&next)[next.len() - 2..], ["close", "resume"]);
+        assert!(m.input(done(1, StopReason::Cancelled)).is_empty());
+        m.input(snapshot(&started(&next), SnapshotPhase::Start));
+        assert_eq!(kinds(&m.input(attached(1))), ["prompt"]);
     }
 }

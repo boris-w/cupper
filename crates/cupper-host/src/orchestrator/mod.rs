@@ -2,4 +2,6 @@
 //! state machine and the queue of messages it drains.
 
 pub mod queue;
+#[cfg(test)]
+mod testkit;
 pub mod turn;
