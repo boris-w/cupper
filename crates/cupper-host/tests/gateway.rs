@@ -1,12 +1,16 @@
 //! The gateway as a process (design 5.8.1): `dev_key` is only accepted from
-//! the process that started the host (IT-devkey-launcher-only), and a host
-//! whose launcher has already gone exits (IT-devkey-orphan-start).
+//! the process that started the host (IT-devkey-launcher-only), a host
+//! whose launcher has already gone exits (IT-devkey-orphan-start), and the
+//! CLI's `harness` client and the gateway prove the key to each other.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStderr, Command, ExitStatus, Stdio};
 use std::time::Duration;
 
+use cupper_cli::client::{self, ClientAuth, Options};
+use cupper_cli::harness::HarnessKey;
+use cupper_cli::verify::HostCheck;
 use cupper_host::gateway::testkit::{Client, KEY, TempDir, initialize_params, key_auth};
 use cupper_protocol::frame::{self, FrameDecoder};
 use cupper_protocol::proof::{self, Direction};
@@ -17,7 +21,8 @@ const FIXTURE: &str = env!("CARGO_BIN_EXE_cupper-gateway-fixture");
 const HOST: &str = env!("CARGO_BIN_EXE_cupper-host");
 const GONE: &str = "the process that started the host has already exited";
 
-/// The fixture, started by this process with [`KEY`] as `dev_key`.
+/// The fixture, started by this process with [`KEY`] as `dev_key` and
+/// `harness_key`.
 struct Fixture {
     child: Child,
     socket: PathBuf,
@@ -36,7 +41,8 @@ impl Fixture {
             .stderr(Stdio::piped())
             .spawn()
             .expect("start the fixture");
-        let payload = json!({"dev_key": proof::to_hex(&KEY)});
+        let key = proof::to_hex(&KEY);
+        let payload = json!({"dev_key": key, "harness_key": key});
         writeln!(child.stdin.take().unwrap(), "{payload}").unwrap();
         let mut ready = String::new();
         BufReader::new(child.stdout.take().unwrap())
@@ -122,6 +128,18 @@ async fn it_devkey_launcher_only_accepts_the_process_that_started_the_host() {
     assert!(closed.contains("HandshakeFailed"), "{closed}");
     assert!(closed.contains("process that started the host"), "{closed}");
     assert_eq!(ui.call("ping", Value::Null).await, Ok(json!({})));
+}
+
+#[tokio::test]
+async fn it_handshake_cli_harness_client_and_gateway_prove_the_key() {
+    let fixture = Fixture::start();
+    let options = Options {
+        auth: ClientAuth::Harness(HarnessKey::new(KEY)),
+        ..Options::default()
+    };
+    let cli = client::Client::connect(&fixture.socket, &HostCheck::Harness, options).await;
+    let cli = cli.expect("both proofs hold");
+    assert_eq!(cli.initialized().principal.id.as_str(), "pr_test");
 }
 
 /// The next message `nc` passes on from the host.
