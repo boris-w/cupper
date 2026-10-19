@@ -74,7 +74,7 @@
 | T018 | 5.3.11 末尾"T012 开工前的裁定"列出的取值，包括 `findings`、`diff_from_trusted`、`fallback_reason`、`blockers`、补充的错误码，以及 `queue_edit` 的 scope | T012 裁定（已写入 brief） |
 | T026 | 每个 `turn.completed` 之后，在同一个事务里先存 `turn_ops(&turn_id, &OpLimits::V1)` 作为回合快照，再调用 `trim(&Window::V1)`。检查点直接存视图的 JSON。`history/page` 用 `paginate(回合 ops, max_bytes)`，`op_index` 是页的起点 | T014（已写入 brief） |
 | T026、T043 | 宿主要守的不变式见 5.3.11 末尾"T014 实现时的裁定"：引用某个回合的事件都写在它的 `turn.completed` 之前；交互请求一律属于某个回合，没有进行中的回合时按 K9 开 `autonomous` 回合；回合在它的请求全部解决之前不结束 | T014 审阅（已写入 T026 的 brief） |
-| T033 | 订阅时调用 `sync::subscribe_mode(resume, &LogExtent)`。快照分页用 `paginate(snapshot_ops(), 帧负载减去信封的余量)` | T014 |
+| T033 | 订阅时调用 `sync::subscribe_mode(resume, &LogExtent)`。快照分页用 `paginate(snapshot_ops(), 帧负载减去信封的余量)` | T014（已写入 brief） |
 | T045 | 客户端同步状态机归本任务（T014 没做）。遇到 `snapshot`，不论原因（包括未知的 mode），都丢弃视图和游标；核对 `at_seq`、`epoch` 和页序号后组装，之后的事件经 `StreamCursor` 再 `apply`。遇到 `ViewError` 时不带游标重新订阅。`stream/reset` 保留游标 | T014（已写入 brief） |
 | T015 | 把 `IndexView`、`SessionView` 导出进 `v1.json`，测试 #16 要比对两端的视图 JSON | T014（已写入 brief） |
 | T072 | TS reducer 照 5.3.11 末尾"T014 实现时的裁定"的规则和视图 JSON 实现。JSON 对象的键顺序没有含义，比较时按深度相等 | T014 |
@@ -97,7 +97,7 @@
 | T055 | 实现 `driver::api`：用 `PromptTag` 回填 prompt 的结果；用 `AskId` 管理 ACP 的 responder；把 `PromptContent` 转成 ACP 的内容块，图片读 blob 转成 base64，评论按 GT-2 排成文本 | T040 |
 | T043 | 会话检查点因 `view_v` 不符而作废时，存储层按 5.4.6 只用回合快照重建视图，会话的配置、能力、队列、`tail`、`detached` 都会缺失。会话 actor 恢复会话时，要重发 `session.configured`、`session.capabilities`，并按数据库里的队列发 `queue.updated` | T026 |
 | T034 | 索引流的检查点作废、日志又已经裁剪时，索引视图会不完整。IndexActor 启动时按 `projects`、`sessions` 两张表重发相应事件 | T026 |
-| T033 | 补发 `after_seq+1..=head_seq` 时，读到的事件可能刚被裁剪掉（补发与裁剪并发）。发现缺口时按 `cursor_expired` 改发快照，或者发 `stream/reset`，由 T033 定。`store::log::read_events` 是公开的，补发用它 | T026 |
+| T033 | 补发 `after_seq+1..=head_seq` 时，读到的事件可能刚被裁剪掉（补发与裁剪并发）。发现缺口时按 `cursor_expired` 改发快照，或者发 `stream/reset`，由 T033 定。`store::log::read_events` 是公开的，补发用它 | T026（已写入 brief） |
 | T030、T037、T043 及以后的 actor 任务 | 关掉 fd 后要判断对端是否已关闭，以读到 EOF 为信号，不要关闭后立刻查 `getsockopt`：别的线程拉子进程时，内核会短暂复制整张 fd 表。另外，std 在 macOS 上建管道和 socketpair 时是先建、后设 close-on-exec，`std::process` 和 `tokio::process` 拉起的子进程可能把它们一直带到自己退出。这再次说明"拉子进程一律经 `cupper_sys::spawn`"的必要 | T021 修复第 2 轮（已写入 T030 的 brief） |
 | T051 以后改 `cupper-fake-agent` 测试的任务 | `unit_fake_scripts_probe` 只要求继承的 fd 以 `0,1,2` 开头，不要改成严格等于 `0,1,2`：并发拉起时别的 fd 可能被带走，接在后面，严格比较会偶发失败 | T021 修复第 2 轮 |
 | T031 | 策略层要实现以下三点：`MATRIX` 里每个 `Sec9` 格子（scope 允许、按 SEC-9 拒绝，见 5.3.11 末尾"T018 实现时的取值"）；`InputEvidence` 的 `key` 与 `digit` 互相一致；`digit` 与所选选项的序号相符（特权选项和效果未知的选项也占序号） | T018（已写入 brief） |
@@ -106,18 +106,18 @@
 | T043 | `Settle` 之后补齐被放弃条目的 `item.completed`（`abandoned`，Codex 还要加 `may_still_run`）；`Complete` 时补上 `final_item_ids`，写 `turn.completed`；执行 `Action::Attach` 时补上工作区、配置和信任状态；`QueueFull` 映射为 `too_large/queue_full`；从数据库恢复回合序号、队列和 agent 会话（目前只有 `TurnMachine::new`） | T048 |
 | T041 | 自发回合的进入点和退出点是 `Input::AutonomousStarted`、`AutonomousEnded`。Ending 期间到达的更新归属哪个回合，由本任务处理 | T048（已写入 brief） |
 | T031 | T013 新增的策略点：git 写操作和 `settings/update` 的 `Sec9` 格子；`auth/elevate` 的 `CliOnly`（`cli` 以外的 principal 一律拒绝）；`git/revert` 的 `input` 证据（`Input` 格子）；`settings/update` 修改安全相关的键时要 privileged；`policy/describe` 每种 `action` 的 `details` 键 | T013（已写入 brief） |
-| T030、T033 | 带 `x-builds` 的方法只在相应特性的构建里注册。UNIT-unsupported-set 要把 M2 的 `diag/export` 算进"返回 `unsupported`"的集合 | T013 |
+| T030、T033 | 带 `x-builds` 的方法只在相应特性的构建里注册。UNIT-unsupported-set 要把 M2 的 `diag/export` 算进"返回 `unsupported`"的集合 | T013（已写入 T033 的 brief） |
 | T015 | 方法条目可能带 `x-builds`，导出时要保留。两处 schema 不够精确：`Settings` 的 `cli_path` 实际总会出现（值可为 `null`），但 schema 里不是必填；`SettingsPatch` 的非空键在 schema 里也允许 `null`。都在客户端→宿主方向，宿主会拒绝，生成 TS 时可以考虑收紧 | T013（已写入 brief） |
 | T036、T126 | `apps.terminal`、`apps.editor` 可选的内置应用清单没有设计，界面怎样拿到这个列表，需要补上 | T013 |
 | T047 | `test/*` 的参数形状由 T013 补上：`clock_advance {ms}`、`run_maintenance {task}`、`seed {profile}`，实现时可以细化 | T013 |
 | T002 | `xtask ci rust` 缺了 `cargo build -p cupper-protocol --lib --target aarch64-apple-ios-sim`（5.1.6 要求每个 PR 都跑），T001 时漏掉了，请补上 | T013（改由 T015 做，已写入它的 brief） |
-| T033 | 网关的发送队列实现 `store::streams` 的 `Sink`：两个方法都在流锁内调用，只能排队，不能回调流；`push` 返回 `Full` 时流会摘掉这个订阅者并调用 `reset`（`slow_consumer`）。订阅时，把响应、快照页或补发标记放进 `subscribe` 的 `start` 回调。补发用 `store::log::read_events(conn, stream, after, head, ..)`。`history/page` 用 `store::history::page`；不带游标时，用 `StreamHandle::read` 取窗口里最早的 `turn_no`；`max_bytes` 自己截到 48,000 | T026 |
+| T033 | 网关的发送队列实现 `store::streams` 的 `Sink`：两个方法都在流锁内调用，只能排队，不能回调流；`push` 返回 `Full` 时流会摘掉这个订阅者并调用 `reset`（`slow_consumer`）。订阅时，把响应、快照页或补发标记放进 `subscribe` 的 `start` 回调。补发用 `store::log::read_events(conn, stream, after, head, ..)`。`history/page` 用 `store::history::page`；不带游标时，用 `StreamHandle::read` 取窗口里最早的 `turn_no`；`max_bytes` 自己截到 48,000 | T026（已写入 brief） |
 | T032、T043 | 命令结果和它产生的事件放进同一个 `Batch`（`Batch::with`），同一事务提交。`Appended::rejected` 不为空，说明写者违反了视图规则，是 bug：要记日志；test-harness 构建里建议直接让用例失败 | T026（已写入 T032 的 brief） |
 | T037 | 组装流：`Streams::new(writer, readers, clock, StreamsConfig::new(epoch, &durations))` | T026 |
 | T039 | 接入点：`handshake::authenticate` 的 match、`GatewayConfig` 里的密钥、传给 `initialize` 的固定令牌、`host_proof` 的返回值、`principal` 里 `pr_test` 那一行（详见 `docs/tasks/T030-gateway-handshake/notes.md`"给 T039 的接入点"）。另外实现握手期限：`host/hello` 之后 10 s 内没有 `initialize` 就断开，审计原因 `handshake_timeout`（5.3.11 末尾，编排者裁定） | T030（已写入 brief） |
 | T047 | 网关的连接任务还没有登记进静止屏障：它们由 I/O 驱动，只有关闭宽限（和 T039 的握手期限）用到 `Clock` 定时器 | T030 |
 | T006 | `xtask ci license` 跑 `cargo deny check` 时要从 GitHub 拉 advisory 数据库，网络出错时整个作业失败（2026-10-19 在 main 上遇到一次，重跑通过）。考虑拉取失败时用已缓存的数据库继续，并在摘要里标记为过期，或者重试 | 编排者 |
-| T033 | 每个请求和客户端通知都先调用 `policy::method(p, M::NAME, M::SCOPE.as_ref())`；再对相应方法调用只看参数的规则 `settings_update`、`set_config`、`git_revert`；`policy/describe` 的处理器按 `Confirmable` 的种类查好 `Facts` 再调用 `describe`。`Denial`、`DescribeError` 都实现了 `Into<RpcError>` | T031 |
+| T033 | 每个请求和客户端通知都先调用 `policy::method(p, M::NAME, M::SCOPE.as_ref())`；再对相应方法调用只看参数的规则 `settings_update`、`set_config`、`git_revert`；`policy/describe` 的处理器按 `Confirmable` 的种类查好 `Facts` 再调用 `describe`。`Denial`、`DescribeError` 都实现了 `Into<RpcError>` | T031（已写入 brief） |
 | T042 | 在检查完 pending、摘要和 `actionable_by` 之后调用 `policy::respond`；收到请求时用 `Clock` 记下 `entered`（`MonoTime`），并传入会话当前的档位。另外请核对：5.3.6 写"所有选项都是 privileged 时 `actionable_by` 只有 `desktop_ui`"，会把 test_harness 排除在外，而权限矩阵里 test_harness 对特权选项是 ✓。请提出方案，由编排者裁定 | T031（已写入 brief） |
 | T043、T044 | `session/create`、`set_config` 的档位：用能力里的 `risk` 换算成 `Tier` 后调用 `policy::tier_change`，映射里没有的模式传 `FullAccess`；`config_unconfirmed` 的判定用 `policy::ceiling`；Attach 之前调用 `policy::attach`（信任门控） | T031 |
 | T077 | 原生确认框按 5.3.11 末尾"T031 实现时的裁定"里各 action 的 `details` 键取内容，文案由界面按语义码组织 | T031 |
@@ -133,11 +133,11 @@
 | T005 | 产物核对：CLI 的 `cupper --build-info` 输出里的 `host_cdhash` 要等于同一产物里宿主的 cdhash | T045 |
 | T046 | 客户端读循环每次读到数据都先查对端令牌；宿主写完就关闭连接时，这批数据会被丢弃，关闭原因是 `Refused(PeerExited)` 而不是 `Eof`（安全上正确）。报告"宿主已退出"时，把两者当作同一种情况 | T049 |
 | T039 合并之后改 `cupper-cli` 测试的任务 | `mirror.rs` 测试里的进程内假宿主，与 `client.rs` 测试里的 `FakeHost` 用途相同，可以合并成一个共用的测试辅助 | T049 |
-| T033 | 账本接线：启动时在 host.db 连接上调用 `Ledger::load`，并 `spawn(ledger.clone().sweeper())`。读循环对命令类请求调用 `begin`，传入原始 params 的 `Value`：`Run(ticket)` 时把 ticket 随命令交给执行者；`Replay` 时直接回复；`Wait(w)` 时另起 task，等 `w.outcome()` 后回复。`LedgerError` 可以直接转成 `RpcError`。`test/run_maintenance` 调用 `Ledger::sweep()` | T032 |
+| T033 | 账本接线：启动时在 host.db 连接上调用 `Ledger::load`，并 `spawn(ledger.clone().sweeper())`。读循环对命令类请求调用 `begin`，传入原始 params 的 `Value`：`Run(ticket)` 时把 ticket 随命令交给执行者；`Replay` 时直接回复；`Wait(w)` 时另起 task，等 `w.outcome()` 后回复。`LedgerError` 可以直接转成 `RpcError`。`test/run_maintenance` 调用 `Ledger::sweep()` | T032（已写入 brief） |
 | T043、git 执行者（T061 等） | 受理后调用 `ticket.complete(Ok(result))`，把 `Box::new(completion.row())` 放进 `Batch::with`；`append` 成功后调用 `completion.committed()`，失败时丢弃 `completion`。改动用户仓库的 git 命令，在执行 git 之前先 `mark_external().await`。前置条件不满足时用 `reject(err)` | T032 |
 | T016 | 账本回放的结果带 `replayed: true`（5.2.5），协议 schema 里还没有声明。请在冻结前定下声明方式 | T032 审阅 |
 | T037 | 组装存储：在静止屏障里登记 `store::RAW_WRITER`、`store::retention::MAINTENANCE`。启动顺序：`open_writer(raw.db, Database::Raw)` → `prepare_raw` → `RawWriter::spawn(conn, &quiescence)`，再把 `raw.sink()` 交给 T055；`BlobStore::new(data_dir, writer.clone(), clock)`；`Maintenance::new(writer, raw, blobs, data_dir.join("backups"), clock, durations).spawn(&quiescence)`，放在"按 `adapters` 表清理残留"之后。有序退出时先停清理任务，再 `RawWriterThread::stop()`。清理失败目前直接吞掉，有了 host.log 之后要记下；`RawSink::dropped()` 还没有地方展示 | T027 |
-| T033 | blob 传输：`BlobStore::put(data, media_type, Some(hash))`，`Mismatch` 对应 `conflict`，`TooLarge` 对应 `too_large`；客户端声明的 `size` 由 T033 自己和 `data.len()` 比对。`get` 每次都读整个文件并核对哈希，`offset`/`length` 由 T033 截取。图片的 10 MiB 限制（按 agent）不在 `BlobStore` 里 | T027 |
+| T033 | blob 传输：`BlobStore::put(data, media_type, Some(hash))`，`Mismatch` 对应 `conflict`，`TooLarge` 对应 `too_large`；客户端声明的 `size` 由 T033 自己和 `data.len()` 比对。`get` 每次都读整个文件并核对哈希，`offset`/`length` 由 T033 截取。图片的 10 MiB 限制（按 agent）不在 `BlobStore` 里 | T027（已写入 brief） |
 | T043、T055 | 事件引用 blob 时，在同一个写操作里调用 `store::blobs::add_ref`，返回 `false` 时让客户端重新上传。T055 用 `RawWriter::sink()` 构造 `Tap` | T027 |
 | T047 | `test/run_maintenance` 的 `raw_frames`、`audit`、`orphan_blobs` 对应 `Maintenance::run(Cleanup::…)`，`ledger` 对应 T032 的 `Ledger::sweep()`。静止屏障要把 `store_raw_writer`、`store_maintenance` 两类参与者算进去 | T027 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
