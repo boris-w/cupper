@@ -124,4 +124,6 @@ pub enum CloseReason {
     AlreadyInitialized,
     /// `initialize` failed with this error, which the peer was sent.
     HandshakeFailed(RpcError),
+    /// The host is exiting (design 5.2.13).
+    HostExiting,
 }

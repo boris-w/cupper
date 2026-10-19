@@ -1,10 +1,14 @@
 //! Step 1 of the host's startup (design 5.2.13): the command line,
 //! `--build-info` and the stdin [`payload`]. All three belong to the frozen
-//! startup contract (5.12.5 #9).
+//! startup contract (5.12.5 #9). Step 3 is [`prepare_data_dir`]; the
+//! supervisor runs the rest.
 //!
 //! `test_config` has no switch: it comes only in the stdin payload (plan P-9).
 
 use std::ffi::{OsStr, OsString};
+use std::fs::{self, DirBuilder, Permissions};
+use std::io;
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
@@ -104,6 +108,39 @@ impl CommandError {
             _ => HostExit::Error,
         }
     }
+}
+
+/// Step 3: the data directory is private to this user (design 5.2.13). A
+/// new one is made with mode 0700, and one of this user is set to 0700; one
+/// that is not a directory or belongs to someone else is not used (exit 5).
+/// Each subdirectory is made 0700 by the module that owns it.
+pub fn prepare_data_dir(dir: &Path) -> Result<(), DataDirError> {
+    let unusable = |source| DataDirError {
+        dir: dir.to_owned(),
+        source,
+    };
+    DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(dir)
+        .map_err(unusable)?;
+    let meta = fs::metadata(dir).map_err(unusable)?;
+    if !meta.is_dir() || meta.uid() != cupper_sys::current_uid() {
+        return Err(unusable(io::Error::other("not a directory of this user")));
+    }
+    if meta.mode() & 0o777 != 0o700 {
+        fs::set_permissions(dir, Permissions::from_mode(0o700)).map_err(unusable)?;
+    }
+    Ok(())
+}
+
+/// Exit 5, `HostExit::DataDirUnusable`.
+#[derive(Debug, thiserror::Error)]
+#[error("the data directory {} cannot be used", dir.display())]
+pub struct DataDirError {
+    dir: PathBuf,
+    #[source]
+    source: io::Error,
 }
 
 /// A fresh random UUIDv4 for the host ID, which is `h_` and its 32 hex
@@ -206,6 +243,22 @@ mod tests {
             assert!(matches!(err, CommandError::Unknown(_)), "{args:?}: {err}");
             assert_eq!(err.exit(), HostExit::Error);
         }
+    }
+
+    #[test]
+    fn data_dir_is_made_or_set_private() {
+        let root = std::env::temp_dir().join(format!("cupper-data-dir-{}", std::process::id()));
+        let new = root.join("a/new");
+        prepare_data_dir(&new).unwrap();
+        let mode = |dir: &Path| fs::metadata(dir).unwrap().mode() & 0o777;
+        assert_eq!(mode(&new), 0o700);
+        fs::set_permissions(&new, Permissions::from_mode(0o755)).unwrap();
+        prepare_data_dir(&new).unwrap();
+        assert_eq!(mode(&new), 0o700);
+        let file = root.join("file");
+        fs::write(&file, b"").unwrap();
+        prepare_data_dir(&file).unwrap_err();
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -32,6 +32,7 @@ use crate::store::streams::{Streams, StreamsConfig};
 use crate::store::{
     Database, MIGRATIONS, Readers, WRITER, Writer, WriterConfig, migrate, open_reader, open_writer,
 };
+use crate::supervisor::control::Control;
 
 /// A port that keeps each call and its reply channel for the test to answer.
 #[derive(Debug, Default)]
@@ -151,6 +152,8 @@ impl Fixture {
         let config = StreamsConfig::new(1, &durations);
         let streams = Streams::new(self.writer.clone(), readers.clone(), clock, config);
         routes.streams(streams, readers);
+        let (supervisor, _) = tokio::sync::mpsc::unbounded_channel();
+        Arc::new(Control::new(supervisor, Arc::new([]))).route(&mut routes);
         routes
     }
 }
@@ -342,9 +345,7 @@ const ALLOWED: &[(&str, Why)] = {
         ("git/stage", Later(M1b)),
         ("git/status", Later(M1b)),
         ("git/unstage", Later(M1b)),
-        ("host/exit", Until("T037")),
         ("host/prepare_upgrade", Until("T183")),
-        ("host/status", Until("T037")),
         ("project/remove", Later(M1b)),
         ("session/archive", Later(M1b)),
         ("session/confirm_config", Until("T044")),
