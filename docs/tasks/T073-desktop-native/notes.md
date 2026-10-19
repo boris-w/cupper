@@ -41,7 +41,7 @@
 | 扩展本体：`launch`、`check`、`relay`、`key`、napi 绑定（`feat(native)`） | 953 | 228 | 450 + 270 | 953 |
 | 类型声明与 Node 的 UNIT-native（`test(native)`） | 350 | 192 | 110 + 200 | 1,303 |
 | xtask `rust` 作业（`ci(xtask)`） | 31 / 17 | — | 25 | 1,334 / 17 |
-| `DevKeyAuth` 改取协议的 `Auth`（`refactor(native)`） | 7 / 6 | — | — | **1,341 / 23** |
+| `DevKeyAuth` 改取协议的 `Auth`（`refactor(native)`） | 7 / 6 | — | — | 1,341 / 23（与 `main` 的差 **1,335 / 17**） |
 
 **合计新增 1,335 行、删除 17 行（`git diff --numstat main...HEAD`，不含两个锁文件和本目录）**，其中实现约 915 行，测试约 420 行（Rust 228、Node 192）。比估计（1,115）多 20%，几乎都在 `lib.rs`：napi 绑定的文档注释，加上 `dev-auth` 与发布构建各一份的 `spawnHost`、`connectHost`（估计 200，实际 311）。第一个模块提交后按 +32% 推算约 1,470 行，接近停止线但在其内；第二个模块后已知总数约 1,300，之后只剩 xtask。
 
