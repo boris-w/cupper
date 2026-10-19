@@ -105,6 +105,12 @@
 | T042 | 按 `Action::Settle { end, asks }` 的 `asks` 结束回合里挂着的请求：`adapter_exited` 时状态为 `expired`，`turn_cancelled` 和 `turn_ended` 时状态为 `cancelled`。中断时 `TurnMachine` 发 `CancelAsks`。Cancelling 期间新到的请求直接取消 | T048 |
 | T043 | `Settle` 之后补齐被放弃条目的 `item.completed`（`abandoned`，Codex 还要加 `may_still_run`）；`Complete` 时补上 `final_item_ids`，写 `turn.completed`；执行 `Action::Attach` 时补上工作区、配置和信任状态；`QueueFull` 映射为 `too_large/queue_full`；从数据库恢复回合序号、队列和 agent 会话（目前只有 `TurnMachine::new`） | T048 |
 | T041 | 自发回合的进入点和退出点是 `Input::AutonomousStarted`、`AutonomousEnded`。Ending 期间到达的更新归属哪个回合，由本任务处理 | T048 |
+| T031 | T013 新增的策略点：git 写操作和 `settings/update` 的 `Sec9` 格子；`auth/elevate` 的 `CliOnly`（`cli` 以外的 principal 一律拒绝）；`git/revert` 的 `input` 证据（`Input` 格子）；`settings/update` 修改安全相关的键时要 privileged；`policy/describe` 每种 `action` 的 `details` 键 | T013 |
+| T030、T033 | 带 `x-builds` 的方法只在相应特性的构建里注册。UNIT-unsupported-set 要把 M2 的 `diag/export` 算进"返回 `unsupported`"的集合 | T013 |
+| T015 | 方法条目可能带 `x-builds`，导出时要保留。两处 schema 不够精确：`Settings` 的 `cli_path` 实际总会出现（值可为 `null`），但 schema 里不是必填；`SettingsPatch` 的非空键在 schema 里也允许 `null`。都在客户端→宿主方向，宿主会拒绝，生成 TS 时可以考虑收紧 | T013 |
+| T036、T126 | `apps.terminal`、`apps.editor` 可选的内置应用清单没有设计，界面怎样拿到这个列表，需要补上 | T013 |
+| T047 | `test/*` 的参数形状由 T013 补上：`clock_advance {ms}`、`run_maintenance {task}`、`seed {profile}`，实现时可以细化 | T013 |
+| T002 | `xtask ci rust` 缺了 `cargo build -p cupper-protocol --lib --target aarch64-apple-ios-sim`（5.1.6 要求每个 PR 都跑），T001 时漏掉了，请补上 | T013 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

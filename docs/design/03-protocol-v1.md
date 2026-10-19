@@ -621,3 +621,33 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 - 每个方法各自一个 Params 类型，形状相同也不共用。
 - 权限矩阵新增格子 `Sec9`，含义是 scope 允许，但按 SEC-9 由策略拒绝。它出现在 remote_device 那一列，涉及 `project/add`、`project/remove`，以及 `session/set_config`、`rename`、`restore`、`agents/refresh`、`agents/restart` 所在的行。
 
+**T013 实现时的取值（2026-10-19）**
+
+- 对 5.3.4 的更正：
+  - `git/status.branch`、`git/branches.current` 改为可选，因为 detached HEAD 时没有分支；
+  - `diag/export.include_sessions` 是会话 ID 的列表，依据 5.11.3"用户逐个勾选会话"；
+  - `diag/recording_export` 的 scope 为 `ui_local`，它是唯一与 5.8.3 那一行逐格相符的 scope。
+- 按构建门控的方法：
+  - 新增注解 `x-builds`，取值是宿主的 cargo 特性名，例如 `["test-harness", "dev-auth"]`，没有门控时不写；
+  - `diag/recording_export` 在 test-harness 和 dev-auth 构建里有，`test/*` 只在 test-harness 构建里有；
+  - 宿主在其他构建里不注册这些方法。
+- 阻塞原因枚举 `WorktreeBlocker`，与 ADR-10 的清理规则一一对应：`modified_files`、`untracked_files`、`operation_in_progress`、`foreign_lock`、`head_only_commits`、`unpushed_commits`、`initialized_submodules`。`worktree/check` 和 `session/archive` 共用。
+- `session/archive` 的形状：
+  - 参数 `{command_id, session_id, worktree: keep|remove|remove_case_only_dirty}`；
+  - 结果 `{worktree: kept|removed|blocked, blockers?}`；
+  - 错误码 `conflict/turn_running`。
+- git 方法里的两个参数：
+  - `git/diff.scope` 取 `"unstaged" | "staged" | "last_turn" | {"turn": id}`；
+  - `git/stage`、`unstage`、`revert` 的 `target` 取 `{"all": true} | {"paths": [...]} | {"hunk_ids": [...]}`。
+  - 两者都是封闭的，只由客户端发送，宿主拒绝不认识的取值。
+  - `input` 复用 `InputEvidence`。
+- 设置：
+  - 用 5.2.11 的点号扁平键，`agents.<agent>.cli_path` 按 agent 展开；
+  - patch 里的 `null` 只用来清空可为空的键。
+- `policy/describe.action` 是开放枚举，7 个取值与 5.8.3 的"原生确认"格子一一对应；`details` 是不带文案的语义参数，每种 `action` 带哪些键归 T031。
+- `test/*` 的参数：`clock_advance {ms}`、`run_maintenance {task}`、`seed {profile}`，T047 可以细化。
+- 权限矩阵的新格子：
+  - `Input`：window 的请求必须带 `input`；
+  - `Build`：只在特定构建里有；
+  - `CliOnly`：`auth/elevate` 不要求 scope，策略对 `cli` 以外的 principal 一律拒绝。
+
