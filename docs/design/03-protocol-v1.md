@@ -153,7 +153,7 @@
 | 方法 | 类型 | 参数要点 | 结果要点 | 可能的错误 | 幂等 | scope | 里程碑 |
 |---|---|---|---|---|---|---|---|
 | `session/create` | 请求 | `{command_id, agent, project_id, workspace: {kind: local} \| {kind: worktree, base_ref, branch_hint?}, config?: {permission_mode?, model?, reasoning_effort?}, message: PromptContent}` | `{session_id}`（已受理；第一条消息与受理同事务落盘；工作区准备、agent 连接、第一个回合都在会话流里体现） | `not_found`、`unavailable`（含 `project_untrusted`）、`unsupported`（如非 git 项目选 worktree） | 命令 | write；放宽档位时按档位规则 | M1a（worktree 为 M1b） |
-| `session/send` | 请求 | `{command_id, session_id, content: PromptContent, mode: queue\|steer, expected_turn_id?}` | `{disposition: started\|queued\|steered, turn_id?, queue_id?, fallback_reason?}`；队列暂停时（例如 `config_unconfirmed`、`project_config_changed`）照常排队 | `not_found`、`unavailable`、`too_large` | 命令 | write | M1a（steer 为 M1b） |
+| `session/send` | 请求 | `{command_id, session_id, content: PromptContent, mode: queue\|steer, expected_turn_id?, reply_to?}` | `{disposition: started\|queued\|steered, turn_id?, queue_id?, fallback_reason?}`；队列暂停时（例如 `config_unconfirmed`、`project_config_changed`）照常排队 | `not_found`、`unavailable`、`too_large` | 命令 | write | M1a（steer 为 M1b） |
 | `session/interrupt` | 请求 | `{command_id, session_id, expected_turn_id?}` | `{turn_id?}` | `conflict/turn_mismatch` | 命令 | write | M1a |
 | `session/queue_resume` | 请求 | `{command_id, session_id}` | `{}`：恢复已暂停的队列 | `conflict/config_unconfirmed`、`unavailable/project_untrusted` | 命令 | write | M1a |
 | `session/queue_edit` | 请求 | `{command_id, session_id, expected_version, ops: [QueueOp]}` | `{version, steer?: {disposition: steered\|queued, turn_id?, fallback_reason?}}` | `conflict/version_mismatch`、`not_found`（`queue_id` 不在队列里）、`unsupported`（M1 里的 `remove`、`move`） | 命令 | write | M1b（`replace`、`steer`，用户决定 F3）；M2（`remove`、`move`，CP-8） |
@@ -168,6 +168,8 @@
 | `session/list_archived` | 请求 | `{cursor?}` | `{sessions, next?}` | — | 天然 | read | M1b |
 
 `PromptContent` 是内容块数组：`text {text}`、`image {blob}`、`file_ref {path}`（`@` 引用，相对工作区）、`review_comment {path, line_start, line_end, side, quote, comment}`（GT-2，宿主负责把评论排成给 agent 的文本）。单个 `text` 块超过帧预算时，客户端先 `blob/put`，再用 `text_blob {blob}` 引用。v1.4 起，桌面端把行内评论作为输入框的附件，随下一条消息以 `review_comment` 块发出（GT-2 v1.3，[5.7.4](07-desktop.md#574-窗口与布局)）。
+
+`session/send` 的 `reply_to`（v1.5）：桌面端"拒绝并附一条消息"时，填被拒绝的 `request_id`（[5.7.8](07-desktop.md#578-安全加固的落点) 的 RP-12）。宿主核对这个请求属于同一会话并且已经 resolved，然后把它写进 `user_message` 条目和排队条目，只用于显示"附于对 … 的拒绝"；不改变排队和插话的规则。
 
 `QueueOp`（v1.4 定义，对应用户决定 F3 中"排队消息的编辑和插话"）：
 
@@ -253,7 +255,7 @@
 | `item.completed` | 否 | `{item_id, status: completed\|failed\|cancelled\|abandoned, ended_at, may_still_run?, ...最终字段}` | 条目结束 |
 | `interaction.requested` | 否 | 见 [5.3.6](#536-交互请求模型) | agent 发起请求 |
 | `interaction.resolved` | 否 | `{request_id, status: resolved\|cancelled\|expired, outcome?, resolved_by?: {principal_id, client_kind, client_name}, reason?}` | 处理、撤回、失效 |
-| `queue.updated` | 否 | `{version, paused?: {reason: turn_cancelled\|turn_failed\|turn_interrupted\|config_unconfirmed\|project_config_changed}, entries: [{queue_id, preview, content, created_at, created_by}]}`；`content` 是完整的 `PromptContent`（v1.4，编辑排队消息时用） | 入队、出队、暂停、恢复、编辑 |
+| `queue.updated` | 否 | `{version, paused?: {reason: turn_cancelled\|turn_failed\|turn_interrupted\|config_unconfirmed\|project_config_changed}, entries: [{queue_id, preview, content, reply_to?, created_at, created_by}]}`；`content` 是完整的 `PromptContent`（v1.4，编辑排队消息时用） | 入队、出队、暂停、恢复、编辑 |
 | `snapshot.recorded` | 否 | `{turn_id, phase: start\|end, status: ok\|partial\|failed\|skipped, reason?, excluded: [{path, reason}], stat?: {files, added, removed}}`；`stat` 只在 `phase: end` 时有，是相对起始快照的统计；`reason` 取 `timeout`、`unsafe_repo_config` 等；tree id 不下发 | 拍完快照 |
 | `usage.updated` | 否 | `{context_used, context_size, cost?}`；后写的覆盖先写的 | agent 上报用量（显示是 P1，数据从 M1 起记录） |
 
@@ -261,7 +263,7 @@
 
 | kind | 字段 | 说明 |
 |---|---|---|
-| `user_message` | `content: PromptContent`（文本走 delta），`steered`，`queue_id?` | 用户消息；Steer 进当前回合的标 `steered: true` |
+| `user_message` | `content: PromptContent`（文本走 delta），`steered`，`queue_id?`，`reply_to?`（v1.5） | 用户消息；Steer 进当前回合的标 `steered: true` |
 | `agent_message` | 文本走 delta | Markdown |
 | `thought` | 文本走 delta | 思考或推理摘要，可折叠（MS-2） |
 | `tool_call` | `ToolCall`（见下） | 一次工具调用，按适配器的 `toolCallId` upsert |
