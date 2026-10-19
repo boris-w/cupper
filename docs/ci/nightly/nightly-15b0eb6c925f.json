@@ -1,0 +1,116 @@
+{
+  "artifacts": [],
+  "commit": "15b0eb6c925f24d9ddef9020694efd9cce20e6ee",
+  "duration_ms": 6166,
+  "jobs": [
+    {
+      "duration_ms": 3828,
+      "failed": 0,
+      "name": "rust",
+      "passed": 15,
+      "result": "pass"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "protocol",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 1259,
+      "failed": 0,
+      "name": "ts",
+      "passed": 3,
+      "result": "pass"
+    },
+    {
+      "duration_ms": 1078,
+      "failed": 0,
+      "name": "license",
+      "passed": 1,
+      "result": "pass"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "testdata-scan",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "ui",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "e2e",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "perf",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "release-config",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "security-macos14",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "compat-framework",
+      "passed": 0,
+      "result": "not_implemented"
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "codex-drift",
+      "passed": 0,
+      "result": "not_implemented"
+    }
+  ],
+  "machine": "MacBook Pro (Apple M5 Pro)",
+  "os": "macOS 26.4",
+  "results": [
+    {
+      "commit": "15b0eb6c925f24d9ddef9020694efd9cce20e6ee",
+      "id": "UNIT-ci-lock",
+      "result": "pass",
+      "suite": "nightly"
+    },
+    {
+      "commit": "15b0eb6c925f24d9ddef9020694efd9cce20e6ee",
+      "id": "UNIT-ci-summary",
+      "result": "pass",
+      "suite": "nightly"
+    }
+  ],
+  "target": "nightly",
+  "toolchain": {
+    "cargo": "1.96.0",
+    "cargo_deny": "0.20.2",
+    "node": "24.13.0",
+    "pnpm": "12.14.0",
+    "rustc": "1.96.0"
+  },
+  "version": 1
+}
