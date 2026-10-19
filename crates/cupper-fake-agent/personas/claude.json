@@ -2,69 +2,172 @@
   "initialize": {
     "protocolVersion": 1,
     "agentCapabilities": {
-      "_meta": {"claudeCode": {"promptQueueing": true}, "authStatus": {}},
-      "promptCapabilities": {"image": true, "embeddedContext": true},
-      "mcpCapabilities": {"http": true, "sse": true},
-      "auth": {"logout": {}},
+      "_meta": { "claudeCode": { "promptQueueing": true }, "authStatus": {} },
+      "promptCapabilities": { "image": true, "embeddedContext": true },
+      "mcpCapabilities": { "http": true, "sse": true },
+      "auth": { "logout": {} },
       "providers": {},
       "loadSession": true,
-      "sessionCapabilities": {"additionalDirectories": {}, "close": {}, "delete": {}, "fork": {}, "list": {}, "resume": {}}
+      "sessionCapabilities": {
+        "additionalDirectories": {},
+        "close": {},
+        "delete": {},
+        "fork": {},
+        "list": {},
+        "resume": {}
+      }
     },
-    "agentInfo": {"name": "@agentclientprotocol/claude-agent-acp", "title": "Claude Agent", "version": "0.91.0"},
+    "agentInfo": {
+      "name": "@agentclientprotocol/claude-agent-acp",
+      "title": "Claude Agent",
+      "version": "0.91.0"
+    },
     "authMethods": [
-      {"description": "Use Claude subscription ", "name": "Claude Subscription", "id": "claude-ai-login", "type": "terminal", "args": ["--cli", "auth", "login", "--claudeai"]},
-      {"description": "Use Anthropic Console (API usage billing)", "name": "Anthropic Console", "id": "console-login", "type": "terminal", "args": ["--cli", "auth", "login", "--console"]}
+      {
+        "description": "Use Claude subscription ",
+        "name": "Claude Subscription",
+        "id": "claude-ai-login",
+        "type": "terminal",
+        "args": ["--cli", "auth", "login", "--claudeai"]
+      },
+      {
+        "description": "Use Anthropic Console (API usage billing)",
+        "name": "Anthropic Console",
+        "id": "console-login",
+        "type": "terminal",
+        "args": ["--cli", "auth", "login", "--console"]
+      }
     ],
-    "_meta": {"steering": {"supported": true}}
+    "_meta": { "steering": { "supported": true } }
   },
-  "authStatus": {"kind": "account", "label": "Claude Max", "account": {"plan": "max", "email": "user@example.invalid", "organization": "Example Org"}},
+  "authStatus": {
+    "kind": "account",
+    "label": "Claude Max",
+    "account": { "plan": "max", "email": "user@example.invalid", "organization": "Example Org" }
+  },
   "configOptions": [
-    {"id": "mode", "name": "Mode", "description": "Session permission mode", "category": "mode", "type": "select", "currentValue": "default", "options": [
-      {"value": "default", "name": "Manual", "description": "Always ask before making changes"},
-      {"value": "acceptEdits", "name": "Accept edits", "description": "Automatically accept all file edits"},
-      {"value": "plan", "name": "Plan", "description": "Create a plan before making changes"},
-      {"value": "auto", "name": "Auto", "description": "Claude handles permission decisions"},
-      {"value": "bypassPermissions", "name": "Bypass permissions", "description": "Accepts all permissions"}
-    ]},
-    {"id": "model", "name": "Model", "description": "AI model to use", "category": "model", "type": "select", "currentValue": "default", "options": [
-      {"value": "default", "name": "Default (recommended)", "description": "Opus 5.5"},
-      {"value": "opus", "name": "Opus 5.5", "description": "For complex work and everyday tasks"},
-      {"value": "sonnet", "name": "Sonnet 5.5", "description": "Most efficient for simpler tasks"},
-      {"value": "haiku", "name": "Haiku 5.5", "description": "Fastest for quick answers"}
-    ]},
-    {"id": "effort", "name": "Effort", "description": "Available effort levels for this model", "category": "thought_level", "type": "select", "currentValue": "high", "options": [
-      {"value": "default", "name": "Default"},
-      {"value": "low", "name": "Low"},
-      {"value": "medium", "name": "Medium"},
-      {"value": "high", "name": "High"},
-      {"value": "xhigh", "name": "Xhigh"},
-      {"value": "max", "name": "Max"}
-    ]}
+    {
+      "id": "mode",
+      "name": "Mode",
+      "description": "Session permission mode",
+      "category": "mode",
+      "type": "select",
+      "currentValue": "default",
+      "options": [
+        { "value": "default", "name": "Manual", "description": "Always ask before making changes" },
+        {
+          "value": "acceptEdits",
+          "name": "Accept edits",
+          "description": "Automatically accept all file edits"
+        },
+        { "value": "plan", "name": "Plan", "description": "Create a plan before making changes" },
+        { "value": "auto", "name": "Auto", "description": "Claude handles permission decisions" },
+        {
+          "value": "bypassPermissions",
+          "name": "Bypass permissions",
+          "description": "Accepts all permissions"
+        }
+      ]
+    },
+    {
+      "id": "model",
+      "name": "Model",
+      "description": "AI model to use",
+      "category": "model",
+      "type": "select",
+      "currentValue": "default",
+      "options": [
+        { "value": "default", "name": "Default (recommended)", "description": "Opus 5.5" },
+        {
+          "value": "opus",
+          "name": "Opus 5.5",
+          "description": "For complex work and everyday tasks"
+        },
+        {
+          "value": "sonnet",
+          "name": "Sonnet 5.5",
+          "description": "Most efficient for simpler tasks"
+        },
+        { "value": "haiku", "name": "Haiku 5.5", "description": "Fastest for quick answers" }
+      ]
+    },
+    {
+      "id": "effort",
+      "name": "Effort",
+      "description": "Available effort levels for this model",
+      "category": "thought_level",
+      "type": "select",
+      "currentValue": "high",
+      "options": [
+        { "value": "default", "name": "Default" },
+        { "value": "low", "name": "Low" },
+        { "value": "medium", "name": "Medium" },
+        { "value": "high", "name": "High" },
+        { "value": "xhigh", "name": "Xhigh" },
+        { "value": "max", "name": "Max" }
+      ]
+    }
   ],
   "commands": [
-    {"name": "compact", "description": "Free up context by summarizing the conversation so far", "input": {"hint": "<optional custom summarization instructions>"}},
-    {"name": "context", "description": "Show current context usage", "input": null},
-    {"name": "init", "description": "Initialize a new CLAUDE.md file with codebase documentation", "input": null},
-    {"name": "model", "description": "Set the AI model for Claude Code", "input": {"hint": "<model>"}},
-    {"name": "security-review", "description": "Complete a security review of the pending changes on the current branch", "input": null}
+    {
+      "name": "compact",
+      "description": "Free up context by summarizing the conversation so far",
+      "input": { "hint": "<optional custom summarization instructions>" }
+    },
+    { "name": "context", "description": "Show current context usage", "input": null },
+    {
+      "name": "init",
+      "description": "Initialize a new CLAUDE.md file with codebase documentation",
+      "input": null
+    },
+    {
+      "name": "model",
+      "description": "Set the AI model for Claude Code",
+      "input": { "hint": "<model>" }
+    },
+    {
+      "name": "security-review",
+      "description": "Complete a security review of the pending changes on the current branch",
+      "input": null
+    }
   ],
   "permissionOptions": {
     "execute": [
-      {"optionId": "allow-once", "name": "Yes", "kind": "allow_once"},
-      {"optionId": "allow-with-updates", "name": "Yes, and always allow fake commands", "kind": "allow_always"},
-      {"optionId": "reject", "name": "No", "kind": "reject_once"}
+      { "optionId": "allow-once", "name": "Yes", "kind": "allow_once" },
+      {
+        "optionId": "allow-with-updates",
+        "name": "Yes, and always allow fake commands",
+        "kind": "allow_always"
+      },
+      { "optionId": "reject", "name": "No", "kind": "reject_once" }
     ],
     "edit": [
-      {"optionId": "allow-once", "name": "Yes", "kind": "allow_once"},
-      {"optionId": "allow-with-updates", "name": "Yes, allow all edits during this session", "kind": "allow_always"},
-      {"optionId": "reject", "name": "No", "kind": "reject_once"}
+      { "optionId": "allow-once", "name": "Yes", "kind": "allow_once" },
+      {
+        "optionId": "allow-with-updates",
+        "name": "Yes, allow all edits during this session",
+        "kind": "allow_always"
+      },
+      { "optionId": "reject", "name": "No", "kind": "reject_once" }
     ]
   },
   "planOptions": [
-    {"optionId": "exit-plan-default", "name": "Yes, manually approve edits", "kind": "allow_once"},
-    {"optionId": "exit-plan-clear-auto", "name": "Yes, clear context (3% used) and use auto mode", "kind": "allow_always"},
-    {"optionId": "exit-plan-auto", "name": "Yes, and use auto mode", "kind": "allow_always"},
-    {"optionId": "exit-plan-bypass", "name": "Yes, and bypass permissions", "kind": "allow_always"},
-    {"optionId": "reject", "name": "No, keep planning", "kind": "reject_once"}
+    {
+      "optionId": "exit-plan-default",
+      "name": "Yes, manually approve edits",
+      "kind": "allow_once"
+    },
+    {
+      "optionId": "exit-plan-clear-auto",
+      "name": "Yes, clear context (3% used) and use auto mode",
+      "kind": "allow_always"
+    },
+    { "optionId": "exit-plan-auto", "name": "Yes, and use auto mode", "kind": "allow_always" },
+    {
+      "optionId": "exit-plan-bypass",
+      "name": "Yes, and bypass permissions",
+      "kind": "allow_always"
+    },
+    { "optionId": "reject", "name": "No, keep planning", "kind": "reject_once" }
   ]
 }
