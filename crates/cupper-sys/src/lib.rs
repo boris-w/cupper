@@ -11,6 +11,7 @@
 #![deny(clippy::undocumented_unsafe_blocks)]
 
 mod env;
+mod group;
 mod proc;
 mod spawn;
 mod system;
@@ -18,7 +19,8 @@ mod system;
 mod testutil;
 
 pub use env::Env;
-pub use proc::{ProcessInfo, StartTime, parent_chain, process_info};
+pub use group::{ProcessGroup, Signal};
+pub use proc::{ProcessInfo, StartTime, descendants, parent_chain, process_info};
 pub use spawn::{Child, Command, Stdio, spawn};
 pub use system::{boot_session_uuid, current_uid, user_temp_dir};
 

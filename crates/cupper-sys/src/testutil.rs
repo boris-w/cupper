@@ -5,8 +5,9 @@ use std::fs::File;
 use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::time::{Duration, Instant};
 
-use crate::{Child, Command, Stdio, spawn};
+use crate::{Child, Command, ProcessGroup, Signal, Stdio, spawn};
 
 /// `/bin/cat` reading a pipe and writing a pipe: it stays alive until we close
 /// its stdin.
@@ -23,8 +24,8 @@ pub fn sh(script: &str) -> Command {
     cmd
 }
 
-/// A child that is killed with its process group and waited for when the
-/// test ends, even when it fails.
+/// A child that is killed, with every group of its process tree, and waited
+/// for when the test ends, even when it fails.
 pub struct Owned(pub Child);
 
 impl Owned {
@@ -59,11 +60,10 @@ impl DerefMut for Owned {
 
 impl Drop for Owned {
     fn drop(&mut self) {
-        // Until it is waited for, the child's pid, and so its group id, cannot
-        // be reused, so the signal cannot reach anyone else.
         if matches!(self.0.try_wait(), Ok(None)) {
-            // SAFETY: killpg takes plain integers.
-            unsafe { libc::killpg(self.0.pid(), libc::SIGKILL) };
+            for group in self.0.group().with_descendants() {
+                let _ = group.signal(Signal::Kill);
+            }
             let _ = self.0.wait();
         }
     }
@@ -90,4 +90,33 @@ pub fn inheritable_fd() -> OwnedFd {
     assert!(fd > 2, "dup: {}", std::io::Error::last_os_error());
     // SAFETY: `fd` was just returned by dup and has no other owner.
     unsafe { OwnedFd::from_raw_fd(fd) }
+}
+
+/// Process groups that are killed when the test ends, even when it fails.
+pub struct Groups(pub Vec<ProcessGroup>);
+
+impl Drop for Groups {
+    fn drop(&mut self) {
+        for group in &self.0 {
+            let _ = group.signal(Signal::Kill);
+        }
+    }
+}
+
+/// Polls `done` until it holds or `limit` passes; whether it held.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "tests poll real processes; cupper-sys has no Clock"
+)]
+pub fn eventually(limit: Duration, mut done: impl FnMut() -> bool) -> bool {
+    let deadline = Instant::now() + limit;
+    loop {
+        if done() {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }

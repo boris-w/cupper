@@ -1,6 +1,7 @@
 //! Process facts from libproc and `sysctl`: start time, parent chain, session
 //! and process group (design 5.6.8, 5.8.4).
 
+use std::collections::{HashSet, VecDeque};
 use std::{mem, ptr};
 
 use libc::c_char;
@@ -33,15 +34,13 @@ pub struct ProcessInfo {
     pub name: String,
 }
 
-/// `p_stat` of a process that has exited but not been waited for (`<sys/proc.h>`).
-const SZOMB: u32 = 5;
-
 /// Longest parent chain followed; real chains are a handful of processes deep.
 const MAX_CHAIN: usize = 128;
 
-/// The kernel's short BSD record of `pid`, zombies included. Unlike the full
-/// record (`PROC_PIDTBSDINFO`), it can be read for processes of other users,
-/// which parent chains pass through (`login`, `launchd`).
+/// The kernel's short BSD record of `pid`. Unlike the full record
+/// (`PROC_PIDTBSDINFO`), it can be read for processes of other users, which
+/// parent chains pass through (`login`, `launchd`). Neither can be read for a
+/// zombie.
 fn short_info(pid: i32) -> Option<libc::proc_bsdshortinfo> {
     if pid <= 0 {
         return None;
@@ -113,13 +112,10 @@ pub(crate) fn start_time(pid: i32) -> Option<StartTime> {
     ))
 }
 
-/// Facts about `pid`; `None` when it does not exist, is a zombie, or cannot be
-/// read.
+/// Facts about `pid`; `None` when it does not exist, has exited (a zombie
+/// waiting to be reaped), or cannot be read.
 pub fn process_info(pid: i32) -> Option<ProcessInfo> {
     let info = short_info(pid)?;
-    if info.pbsi_status == SZOMB {
-        return None;
-    }
     let start = start_time(pid)?;
     // SAFETY: getsid takes a plain pid and touches no memory of ours.
     let sid = unsafe { libc::getsid(pid) };
@@ -172,9 +168,85 @@ pub fn parent_chain(pid: i32) -> Vec<ProcessInfo> {
     chain
 }
 
+/// Which pids [`list_pids`] lists.
+#[derive(Clone, Copy)]
+enum Listing {
+    Children(i32),
+    Group(i32),
+}
+
+/// The pids libproc lists, zombies included, grown until the buffer has room
+/// to spare (a full buffer may have been cut short).
+fn list_pids(listing: Listing) -> Vec<i32> {
+    let mut capacity = 64;
+    loop {
+        let mut pids = vec![0 as libc::c_int; capacity];
+        let bytes = libc::c_int::try_from(capacity * mem::size_of::<libc::c_int>())
+            .expect("the process table is far smaller");
+        // SAFETY: the buffer holds `bytes` bytes and the kernel writes at most
+        // that many; both calls return the number of pids written, or -1.
+        let count = unsafe {
+            match listing {
+                Listing::Children(ppid) => {
+                    libc::proc_listchildpids(ppid, pids.as_mut_ptr().cast(), bytes)
+                }
+                Listing::Group(pgid) => {
+                    libc::proc_listpgrppids(pgid, pids.as_mut_ptr().cast(), bytes)
+                }
+            }
+        };
+        let Ok(count) = usize::try_from(count) else {
+            return Vec::new();
+        };
+        if count < capacity {
+            pids.truncate(count);
+            pids.retain(|&pid| pid > 0);
+            return pids;
+        }
+        capacity *= 4;
+    }
+}
+
+/// Live descendants of `pid`, breadth first, without `pid` itself. Once a
+/// process has exited, its children belong to launchd and are no longer found
+/// here (design 5.6.8).
+pub fn descendants(pid: i32) -> Vec<ProcessInfo> {
+    let mut found: Vec<ProcessInfo> = Vec::new();
+    let mut seen = HashSet::from([pid]);
+    let mut queue = VecDeque::from([pid]);
+    while let Some(parent) = queue.pop_front() {
+        for child in list_pids(Listing::Children(parent)) {
+            if !seen.insert(child) {
+                continue;
+            }
+            if let Some(info) = process_info(child).filter(|info| info.ppid == parent) {
+                queue.push_back(child);
+                found.push(info);
+            }
+        }
+    }
+    found
+}
+
+/// Live members of process group `pgid`, as they are now.
+pub(crate) fn group_members(pgid: i32) -> Vec<ProcessInfo> {
+    if pgid <= 0 {
+        return Vec::new();
+    }
+    list_pids(Listing::Group(pgid))
+        .into_iter()
+        .filter_map(process_info)
+        .filter(|info| info.pgid == pgid)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
+    use crate::Command;
+    use crate::testutil::{Owned, eventually};
 
     #[test]
     fn process_info_describes_this_process() {
@@ -193,6 +265,17 @@ mod tests {
         assert_eq!(process_info(0), None);
         assert_eq!(process_info(-1), None);
         assert_eq!(process_info(i32::MAX), None);
+    }
+
+    #[test]
+    fn process_info_of_a_zombie_is_none() {
+        let mut child = Owned::spawn(&Command::new("/usr/bin/true"));
+        assert!(eventually(Duration::from_secs(5), || {
+            process_info(child.pid()).is_none()
+        }));
+        // Still ours to reap, so the pid has not been reused meanwhile.
+        assert_eq!(start_time(child.pid()), Some(child.start()));
+        assert!(child.wait().unwrap().success());
     }
 
     #[test]
