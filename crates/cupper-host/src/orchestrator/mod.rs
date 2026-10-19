@@ -3,6 +3,7 @@
 //! and the coalescer that writes the agent's updates as items, with their
 //! activity groups and the final answer.
 
+pub mod autonomous;
 pub mod coalescer;
 pub mod grouping;
 pub mod interaction;
