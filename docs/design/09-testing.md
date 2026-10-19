@@ -16,7 +16,7 @@
 | 会话层金样例（GOLD-B） | 进程内运行宿主核心 + 内存传输 + 虚拟时钟 | 规范化后的协议事件；只用宿主自己驱动产生的录制 | 每个 PR |
 | 宿主集成测试（IT） | `cargo test`（`test-harness`），真实宿主进程 + 假 agent + cupper-cli 库 | 由 SP-4a 的端到端测试 1–7 扩充：多客户端一致、先到先得、续传、慢客户端、`kill -9` 恢复、命令幂等、帧上限、适配器隔离；加上排队、Steer、中断兜底、自发回合、适配器崩溃、K 清单（[5.6.9](06-agent-driver.md#569-已知问题的规避清单)）、故障点、项目信任、配置档位。**6 个会话在同一个假适配器进程上同时流式输出**，每条输出带会话标识，断言没有串扰（NFR-11、Q8 的宿主侧）；Q8 的后备方案（这种 agent 的 prompt 全局串行）也有用例。外发检查：宿主进程放在拒绝出站网络的 Seatbelt 配置里运行（只用于宿主，纪要 D13） | 每个 PR |
 | TS 单元测试（UNIT） | Vitest | `host-client` 的连接状态机、切帧、命令重试；视图 reducer（与 Rust 视图用同一批金样例交叉验证）；主进程的 `inputGuard`、`windowBridge`（用帧级的 TS mock 宿主，覆盖白名单、真实输入、原生确认、流控、"超过 8 MB 暂停读取 → 宿主重置 → 按游标重新订阅"）；`ui-core` 组件 | 每个 PR |
-| 界面截图回归 | Playwright（Chromium）+ 浏览器版 ShellAPI + TS 写的 mock 宿主 | 主要页面和状态：亮色和暗色、中文和英文、各类条目与卡片、长文本、未知事件的占位；发布 CSP 下 `securitypolicyviolation` 为 0 | 每个 PR；基线只由 CI 的专用工作流生成 |
+| 界面截图回归 | Playwright（Chromium）+ 浏览器版 ShellAPI + TS 写的 mock 宿主 | 主要页面和状态：亮色和暗色、中文和英文、各类条目与卡片、长文本、未知事件的占位；发布 CSP 下 `securitypolicyviolation` 为 0 | 每个 PR；基线由专用脚本生成，渲染因素固定（字体随测试夹具附带），元数据记录系统和 Chromium 版本（v1.3，见 `docs/03-plan.md` 1.8） |
 | 端到端（E2E） | Playwright `_electron` + e2e 构建 + 真实宿主 + 假 agent + cupper-cli | NFR-1 的全部验收项、S1–S4 的主要流程、安全加固项（[5.9.4](#594-端到端测试与-nfr-1-验收)） | PR 跑冒烟子集（按改动路径过滤），每晚跑全集 |
 | 差分测试 | Rust 用 proptest 生成事件序列，交给 Node 进程里的 TS reducer | TS 与 Rust 视图对同一序列给出相同结果，包括 `late_by_ref` | 每晚 |
 | 兼容矩阵（COMPAT） | `cargo xtask compat`，真实 CLI | 锁定的适配器 × CLI 版本（[5.9.5](#595-兼容矩阵)）。框架本身每晚在 CI 里用假 agent 跑一遍 | 手动；框架每晚 |
@@ -280,7 +280,7 @@ flowchart LR
 
 **编号**：`<层>-<范围>-<名称>`，层取 `UNIT`、`PROP`、`GOLD-A`、`GOLD-B`、`IT`、`E2E`、`UI`（界面截图回归）、`SMOKE-SIGNED`、`COMPAT`、`PERF`、`MAN`。引用时一律写完整编号，不用缩写、通配或区间。截图回归的名称以字母开头（如 `UI-layout`），与 PRD 的需求编号（UI-0 等）区分。
 
-**编号与测试的一致性检查**（测试核对 5）：`tools/trace-ids` 从 `docs/design/` 里抽出全部用例编号，与代码里的测试名（Rust 测试函数、Playwright 用例标题都以编号开头）和人工清单比对。每个编号要么有同名的测试或清单项，要么登记在 `tests/pending-ids.toml` 里并写明所属的里程碑；都没有就失败。某个里程碑退出时，`pending-ids.toml` 里属于它的条目必须清空。CI 的 `testdata-scan` 作业运行这项检查（[5.1.6](01-repo-build-ci.md#516-ci-流水线)）。
+**编号与测试的一致性检查**（测试核对 5）：`tools/trace-ids` 从 `docs/design/` 里抽出全部用例编号，与代码里的测试名（Rust 测试函数、Playwright 用例标题都以编号开头）和人工清单比对。每个编号在登记表 `tests/ids.toml` 里写明里程碑、产出任务和所属套件；"待完成"由 trace-ids 根据测试运行报告自动推导，确认用例确实执行并通过，并支持子编号、MAN 证据和"不适用"状态（v1.3，规则见 `docs/03-plan.md` 1.6）。某个里程碑退出时，属于它的编号必须全部完成或标为不适用。CI 的 `testdata-scan` 作业运行这项检查（[5.1.6](01-repo-build-ci.md#516-ci-流水线)）。
 追溯矩阵（[5.12.4](12-milestones.md#5124-追溯矩阵m1-的全部-p0-需求)）和规避清单（[5.6.9](06-agent-driver.md#569-已知问题的规避清单)）都引用编号，并注明在哪个套件里跑：每个 PR、每晚、发布流水线、人工。
 
 **人工验证清单**（结果存档在对应任务的目录或发布记录里）

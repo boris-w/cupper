@@ -121,7 +121,9 @@ cupper/
 
 ## 5.1.6 CI 流水线
 
-托管在 GitHub Actions。所有 job 都不需要登录任何 agent；不使用任何 self-hosted runner（测试 #8、安全 #10）。
+**当前的执行方式（v1.3，用户决定 U-P1，2026-10-16）**：仓库暂时没有远端。下表的每个 job 都由 `cargo xtask ci <job>` 在作者机器上、退出候选提交的干净 worktree 里执行；"每个 PR"指每个任务合并之前，"每晚"指每一波任务合并完、开始下一波之前。入库的只有结构化摘要，原始日志放在 `.private/`。截图基线由专用脚本在本机生成；`security-macos14` 这类本机替代不了的作业，在里程碑退出时列为缺口，由用户确认。细则见 `docs/03-plan.md` 1.8。workflow 文件照写，只调用 `xtask ci`，仓库有远端后直接启用，下表的 runner 一列就是那时的目标环境。
+
+有远端后托管在 GitHub Actions。所有 job 都不需要登录任何 agent；不使用任何 self-hosted runner（测试 #8、安全 #10）。
 
 **通用加固**（安全 #10）：第三方 Action 按提交 SHA 固定；workflow 默认 `permissions: contents: read`，需要更多权限的 job 单独声明；不用 `pull_request_target`；依赖安装用 `pnpm install --frozen-lockfile` 和 `cargo --locked`；macOS runner 固定标签（`macos-15`、`macos-14`），不用 `macos-latest`。
 

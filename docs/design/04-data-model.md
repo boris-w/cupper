@@ -26,7 +26,14 @@
 ```
 
 - **Electron 的 userData 必须显式设到 `cupper/ui/`**。Electron 默认用 `~/Library/Application Support/<productName>`，产品名 "Cupper" 和宿主目录 "cupper" 在大小写不敏感的 APFS 上是同一个目录，不设置就会混在一起。
-- 开发构建用 `cupper-dev/`，e2e 测试每个用例用一个临时目录。三种构建的数据互不相通。
+- 上面的目录树以发布构建为例。四种构建的数据互不相通（v1.3，种类见 [5.7.9](07-desktop.md#579-构建种类)）：
+
+  | 构建 | 数据目录 | 日志目录 | worktree 根目录 |
+  |---|---|---|---|
+  | 发布 | `cupper/` | `~/Library/Logs/cupper/` | `~/.cupper/worktrees/` |
+  | 自用 | `cupper-local/` | `~/Library/Logs/cupper-local/` | `~/.cupper-local/worktrees/` |
+  | 开发 | `cupper-dev/` | `~/Library/Logs/cupper-dev/` | `~/.cupper-dev/worktrees/` |
+  | e2e | 每个用例一个临时目录 | 同一临时目录下 | 同一临时目录下 |
 
 ## 5.4.2 SQLite 表结构
 
