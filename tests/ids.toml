@@ -223,9 +223,14 @@ UNIT-settings = "pr"
 # 进程监护与宿主生命周期
 [T037]
 milestone = "M1a"
-IT-self-check = "pr"
 IT-lifecycle = "pr"
+
+# 宿主生命周期 II：监护、孤立、自检与审计落盘（计划 v1.3.10 由 T037 拆出）
+[T059]
+milestone = "M1a"
+IT-self-check = "pr"
 UNIT-orphan-policy = "pr"
+IT-idle-exit = "pr"
 
 # CLI 提权（宿主侧）
 [T038]
