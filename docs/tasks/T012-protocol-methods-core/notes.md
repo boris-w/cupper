@@ -78,3 +78,40 @@
 - 停止线：按已完成组的实际偏差推算，总数预计超过约 1,450 行时停下来汇报。
 - `stream/subscribe` 的结果复用 T014 的 `sync::SubscribeMode`、`sync::ResyncReason`。
 - 给 T018、T013 留的扩展点：每个方法组一个文件，文件里用 `method!` 声明，并提供 `register(&mut Catalog, &mut SchemaGenerator)`；`catalog.rs` 为每个组调用一行；测试样例、权限矩阵各加自己的行。
+
+## 实际行数
+
+`git diff --numstat 66f816f -- crates/cupper-protocol`，按组归类（测试指 `#[cfg(test)]` 里的行和 `testkit.rs`、`testutil.rs` 的新增）：
+
+| 组 | 文件 | 代码 | 测试 | 小计 | 估计 |
+|---|---|---|---|---|---|
+| 0 方法基础 | `rpc.rs`、`annotations.rs`、`schema.rs`、`error.rs`、`lib.rs`、`methods/mod.rs`、`catalog.rs`、`testkit.rs`、`testutil.rs` | 约 255 | 约 290 | 约 545 | 300 |
+| 1 握手与生命周期 | `methods/handshake.rs` | 308 | 97 | 405 | 415 |
+| 2 流与内容 | `methods/stream.rs` | 306 | 157 | 463 | 440 |
+| **合计** | | **约 870** | **约 545** | **1,411 新增 / 33 删除** | 1,155 |
+
+- 没有做到每完成一组统计一次：三组写完、格式化之后才第一次统计（1,426 行），离 1,450 行的停止线只差一点。之后压缩了两处测试，并把 `schema.rs` 测试里遍历整数 schema 的函数挪进 `testutil` 共用，最终是 1,411 行，在 1,500 行的上限以内。
+- 第 1、2 组和估计基本一致。超出的部分在第 0 组的测试（`catalog.rs` 的跨组测试约 210 行，估计 60 行）：权限矩阵、`command_id`、错误码与里程碑、整数上界、样例覆盖，各自都要从目录和 schema 定义里取数。
+- 按提交拆开：`3a55bbe`（trait 常量与注解）、`bd80dfc`（目录与握手组）、`5186e71`（流组）。每个提交都单独跑过测试。
+
+## 实现时的取舍
+
+- **声明宏 `method!`**：三种写法 `request`、`client_notification`、`host_notification`，参数表与 5.3.4 的列一一对应；`scope: None` 表示无 scope。宏只生成单元类型和 trait 实现，参数和结果类型照常手写。
+- **方法目录**：`Catalog` 是三张按名字排序的 `BTreeMap`；每组提供 `register`，`catalog()` 为每组调用一行。同名注册两次直接 panic。
+- **`Raw<T>`**：`serde(transparent)` 包住 `Value`，另带 `PhantomData<fn() -> T>`；`JsonSchema` 全部转发给 `T`（与 schemars 给 `Box<T>` 的做法相同），所以 `Vec<Raw<EventBody>>` 的 schema 与 `Vec<EventBody>` 完全相同，测试里有比对。只为 `Raw<Event<EventBody>>` 和 `Raw<EventBody>` 提供 `decode`，内部调用 T011 的 `Event::decode`、`EventBody::decode`。
+- **几处小的附加**，供 T030、T045 直接用：`handshake::PROTOCOL`（本 crate 支持的主版本区间）、`VersionRange::negotiate`（交集中的最大值，没有交集就是 `version_unsupported`）、`SubscribeParams::resume()`（`after_seq` 和 `epoch` 都在时才算游标，与 T014 的 `Resume` 一致）。
+- **`Empty`**：`{}`。客户端省略 `params` 时由宿主当作 `{}`，这条已由编排者写进交接事项（T030）。
+- **`InitializeParams` 不实现 `Eq`**：`Auth` 是开放联合，兜底成员是 JSON 对象，只有 `PartialEq`。
+- **`host_notification_entry` 也写出 `x-milestone`**：`ui/navigate` 是 M1b，导出时要能查到。
+- **T010 测试的两处调整**：`error.rs` 里"未知的附加字段能往返"的用例原来用 `supported` 当未知字段，现在它是具名字段了，改用 `quota`，保持原来的测试意图；`schema.rs` 测试的 `integers` 挪进 `testutil`。
+- **权限矩阵的格子**只分 `Y`、`N`、`Native`（原生确认）、`ByMain`（仅由主进程代发）四种。T018 的 `project/add` 等行里有 remote_device 被 SEC-9 收窄的 ✗（scope 允许，策略拒绝），到时需要加一种格子，本任务用不到就没加。
+- `stream/ack` 在 5.8.3 里没有单列，归在"订阅"那一行，表里注明了。
+
+## 给 T018、T013 的说明
+
+加一个方法组：
+1. 新建 `methods/<组>.rs`，用 `method!` 声明，写 `pub fn register(c: &mut Catalog, g: &mut SchemaGenerator)`；
+2. 在 `methods/mod.rs` 加一行 `pub mod <组>;`，在 `catalog::catalog()` 加一行 `<组>::register(&mut catalog, g);`；
+3. 组文件的测试模块写 `pub fn samples() -> Vec<&'static str>`（用 `testkit::request`、`testkit::notification`），并把它加进 `catalog.rs` 的 `unit_proto_methods_core_stream_every_method_roundtrips`；
+4. 在 `catalog.rs` 的 `MATRIX` 里按 5.8.3 加行，第一列写 5.8.3 的行名；目录里每个带 scope 的方法必须恰好出现在一行里，否则测试失败；
+5. 参数必须是具名结构体（schema 里是 `$ref`），`command_id` 的检查从定义里读 `required`。
