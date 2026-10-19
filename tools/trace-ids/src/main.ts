@@ -18,9 +18,9 @@ commands:
   check   check tests/ids.toml against the docs (run by \`xtask ci testdata-scan\`)
   status  list the done, settled, pending and problem IDs
   verify  fail unless every selected ID is done or settled:
-            --milestone <${MILESTONES.join("|")}>  the IDs due by then; results from
-                                  committed summaries of a single commit only
-            --task <Txxx>         the IDs a task produces
+            --milestone <M>  the IDs due by M (${MILESTONES.join(", ")}); results
+                             from committed summaries of a single commit only
+            --task <Txxx>    the IDs a task produces
 
 results, for status and verify (repeatable):
   --summary <file>             a summary written by \`xtask ci --record\`
