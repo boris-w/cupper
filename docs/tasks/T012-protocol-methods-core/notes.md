@@ -88,11 +88,11 @@
 | 0 方法基础 | `rpc.rs`、`annotations.rs`、`schema.rs`、`error.rs`、`lib.rs`、`methods/mod.rs`、`catalog.rs`、`testkit.rs`、`testutil.rs` | 约 255 | 约 290 | 约 545 | 300 |
 | 1 握手与生命周期 | `methods/handshake.rs` | 308 | 97 | 405 | 415 |
 | 2 流与内容 | `methods/stream.rs` | 306 | 157 | 463 | 440 |
-| **合计** | | **约 870** | **约 545** | **1,411 新增 / 33 删除** | 1,155 |
+| **合计** | | **约 870** | **约 545** | **1,412 新增 / 33 删除** | 1,155 |
 
-- 没有做到每完成一组统计一次：三组写完、格式化之后才第一次统计（1,426 行），离 1,450 行的停止线只差一点。之后压缩了两处测试，并把 `schema.rs` 测试里遍历整数 schema 的函数挪进 `testutil` 共用，最终是 1,411 行，在 1,500 行的上限以内。
+- 没有做到每完成一组统计一次：三组写完、格式化之后才第一次统计（1,426 行），离 1,450 行的停止线只差一点。之后压缩了两处测试，并把 `schema.rs` 测试里遍历整数 schema 的函数挪进 `testutil` 共用，最终是 1,412 行（含最后一次改名），在 1,500 行的上限以内。
 - 第 1、2 组和估计基本一致。超出的部分在第 0 组的测试（`catalog.rs` 的跨组测试约 210 行，估计 60 行）：权限矩阵、`command_id`、错误码与里程碑、整数上界、样例覆盖，各自都要从目录和 schema 定义里取数。
-- 按提交拆开：`3a55bbe`（trait 常量与注解）、`bd80dfc`（目录与握手组）、`5186e71`（流组）。每个提交都单独跑过测试。
+- 按提交拆开：`3a55bbe`（trait 常量与注解）、`bd80dfc`（目录与握手组）、`5186e71`（流组）、`d7eab12`（类型改名）。每个提交都单独跑过测试。
 
 ## 实现时的取舍
 
@@ -110,7 +110,7 @@
 ## 给 T018、T013 的说明
 
 加一个方法组：
-1. 新建 `methods/<组>.rs`，用 `method!` 声明，写 `pub fn register(c: &mut Catalog, g: &mut SchemaGenerator)`；
+1. 新建 `methods/<组>.rs`，用 `method!` 声明，写 `pub fn register(c: &mut Catalog, g: &mut SchemaGenerator)`。类型按完整的方法名命名：`session/send` 是 `SessionSend`，参数和结果是 `SessionSendParams`、`SessionSendResult`；
 2. 在 `methods/mod.rs` 加一行 `pub mod <组>;`，在 `catalog::catalog()` 加一行 `<组>::register(&mut catalog, g);`；
 3. 组文件的测试模块写 `pub fn samples() -> Vec<&'static str>`（用 `testkit::request`、`testkit::notification`），并把它加进 `catalog.rs` 的 `unit_proto_methods_core_stream_every_method_roundtrips`；
 4. 在 `catalog.rs` 的 `MATRIX` 里按 5.8.3 加行，第一列写 5.8.3 的行名；目录里每个带 scope 的方法必须恰好出现在一行里，否则测试失败；
