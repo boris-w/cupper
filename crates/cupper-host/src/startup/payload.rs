@@ -303,8 +303,8 @@ mod tests {
                 r#"{{"dev_key": "{KEY}", "harness_key": "{OTHER_KEY}", "test_config": {{"clock": "manual"}}}}"#
             );
             let (reader, mut writer) = stdin();
-            // The newline ends the payload; what follows is not read, and the
-            // writer stays open.
+            // The newline ends the payload: what follows is ignored, and the
+            // end of stdin is not awaited.
             writeln!(writer, "{line}\nnot part of the payload").unwrap();
             let clock = ManualClock::new();
             let payload = runtime()
