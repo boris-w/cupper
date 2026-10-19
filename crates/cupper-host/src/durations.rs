@@ -47,6 +47,10 @@ macro_rules! durations {
 }
 
 durations! {
+    /// How long the store writer waits, once, for more operations after its
+    /// queue runs empty (design 5.2.8). Only on `SystemClock`; it is not a
+    /// `Clock` timer (design 5.2.16).
+    STORE_BATCH_LINGER = "store_batch_linger", Duration::from_millis(2);
     /// The registry's own tests: a short coalescing window.
     #[cfg(test)]
     TEST_TICK = "test_tick", Duration::from_millis(40);
