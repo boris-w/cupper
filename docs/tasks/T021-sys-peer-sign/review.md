@@ -22,3 +22,9 @@
   - `pid_c` 取自固定令牌；
   - 父进程已退出的判断方法；
   - 缺口编号交 T002 登记。
+
+## 合并后发现的问题（2026-10-19，编排者）
+
+- 合并 T017 后，在 main 上跑 `cargo xtask ci pr`，`it_sys_peer_current_plain_reads_install_passed_fds` 失败了一次，断言为 `writers_gone(&pipe)`。单独连跑 `cupper-sys` 的测试 12 次，都没有复现。
+- 推测原因：这个用例故意让 fd 不带 CLOEXEC 装进本进程；同一进程里如果有其他用例在不取 `fd_lock` 的情况下用 `std::process` 拉子进程，子进程会继承这些 fd，导致写端没有全部关闭。
+- 处理：由 T021 的执行者在修复分支 `fix/T021-flaky-peer-test` 上修复。正在运行的其他任务碰到这个失败时，重跑即可，不要去改 `cupper-sys`。
