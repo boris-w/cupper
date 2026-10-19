@@ -4,5 +4,6 @@
 //! module (design 5.6).
 
 pub mod acp;
+pub mod api;
 pub mod tap;
 pub mod transport;
