@@ -3,10 +3,8 @@
 //!
 //! [`MATRIX`] follows `MATRIX` in the tests of `cupper-protocol`'s
 //! `methods/catalog.rs` row by row; that one checks the scopes alone, here a
-//! cell is the policy's verdict on a typical request of the row. One cell
-//! differs in letter only: the window's `interaction/respond` is "真实输入"
-//! in 5.8.3, `I` here and `Y` there. [`FORMS`] adds the rows 5.8.3 has for
-//! one form of a method.
+//! cell is the policy's verdict on a typical request of the row. [`FORMS`]
+//! adds the rows 5.8.3 has for one form of a method.
 
 use std::collections::BTreeSet;
 
