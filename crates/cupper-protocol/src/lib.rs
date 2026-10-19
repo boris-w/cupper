@@ -13,6 +13,7 @@ pub mod envelope;
 pub mod error;
 pub mod frame;
 pub mod ids;
+pub mod index;
 pub mod limits;
 pub mod open_enum;
 pub mod open_union;
