@@ -173,6 +173,8 @@
 | T076 | 对 windowBridge 运行 `hostPortContract`，setup 要提供 `shell`、`host`（一个 `MockHost`）和 `settle`；合同里的请求用例用 `host/status`（scope `read`），不依赖 `ping` 在不在白名单里；握手结果来自 host-client 的 `handshake()`，要去掉 `host_proof`；状态和数据走同一条有序通道 | T071 |
 | T08x 浏览器截图测试 | `MockHost` 的夹具由构造函数传入：用 Vite 导入 `protocol/fixtures/methods.json` 再传进去 | T071 |
 | T080、T145 | `HostClient` 还没有 `notify`（例如 `client/presence`）和 `sendBlob`，需要时加到 `client.ts` | T071 |
+| T043 | 照 `orchestrator/session_props.rs` 的组合核心 `Session` 接线：驱动事件依次交给裁判、回合机，如果是更新再交给合并器；回合机的 `TurnSignal` 立即交给合并器，这一步结束后再交给裁判，裁判的 `Start`、`End`、`Hold` 作为回合机的输入回送；`turn.completed` 由合并器写。请求先送裁判（`Asked`），再送合并器（`Interject`），每次解决之后送 `Resolved`。收到 `Asked` 而开出的自发回合，要在交互代理写出请求之前开好，请求才带上 `turn_id`。回合收尾期间到达的请求，放进随后开的自发回合，裁判会等它解决后才结束这个回合，接线时请确认 | T058 |
+| T110 | 裁判把 thread 状态当作"最近一次报告"：只有 Codex 会报告，Claude 一直是未知，只按静默规则判断。Codex 提取层提供 `threadStatus` 时，要有 idle。工具结束之后又来不带结束状态的更新时，裁判会把它重新记为运行中，回合不会因静默而结束，录制金样例时留意 | T058 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
