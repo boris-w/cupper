@@ -10,9 +10,11 @@
 )]
 #![deny(clippy::undocumented_unsafe_blocks)]
 
+mod env;
 mod proc;
 mod system;
 
+pub use env::Env;
 pub use proc::{ProcessInfo, StartTime, parent_chain, process_info};
 pub use system::{boot_session_uuid, current_uid, user_temp_dir};
 
