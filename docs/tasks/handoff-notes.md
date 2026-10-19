@@ -56,6 +56,11 @@
 | T013 | `git/diff` 复用 `DiffStat`、`ExcludedPath`、`SnapshotStatus` | T017 |
 | T015 | `ItemStarted` 的 schema 是外壳属性加 9 个成员的 `anyOf`；`ItemUpdated` 展开 `ItemPatch` 后共 21 个属性；`AnswerValue` 是不带标签的联合（`anyOf`）；`Item`、`InteractionRequest`、`InteractionOutcome` 的兜底成员是 `UnknownMember`，后处理时用 `.loose()` | T017 |
 | T053（提取层） | `ToolCall::missing_required(ended)` 不为空时，把 `extraction` 降为 `partial` | T017 |
+| T053 | 封闭枚举的原值用 `tap::k19::original` 读取，路径是 `_meta.cupper.original.<字段名>`，覆盖 `stopReason`、选项 `kind` 和工具调用的 `status`。`initialize` 只声明了 elicitation、`terminal_output`、`plan`，比 SP-1 的客户端少了 `session.{configOptions.boolean, notices, compaction}` 和 `auth.terminal`。不声明 `session.compaction` 时适配器还推不推 compaction，要用录制或兼容剧本确认，必要时在设计 5.6.1 里补上 | T050 |
+| T055 | 回复和 `session/update` 投进同一个邮箱，以保持线上的顺序（K12 依赖这一点）。drop `AcpConnection` 会关闭适配器的 stdin，这是关闭顺序的第 2 步。`RawSink::bounded()` 只建一个，各个实例共用。`steering.supported` 从 `open` 返回的 `InitializeResponse` 顶层的 `_meta` 读取。K28 的规避方式是不对外暴露 `SentRequest`，请求发出时就把回调交给 SDK | T050 |
+| T028 | 凭据的识别规则目前在 `driver/tap/redact.rs`（`sk-`、`ghp_`、JWT、`Bearer`、URL 中的 userinfo 和查询参数，只匹配词首）。可以挪到 `diag` 共用，避免两处各自改出差异 | T050 |
+| T025、T047 | 原始帧的方向 `Dir` 目前有 `send`、`recv`、`recv_nonjson`；`stderr` 和 `note` 由写入它们的任务补上 | T050 |
+| 全工作区 | serde_json 的 `preserve_order` 由 SDK 打开，在工作区内是统一生效的，所以 `cupper-protocol` 在工作区构建时也会带上它。导出物一律不能依赖 map 的键顺序（`CLAUDE.md`） | T050 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
