@@ -17,7 +17,7 @@
 | 5 交互请求（`methods/interaction.rs`） | `interaction/respond`、`interaction/get`（2 个） | 6 / 0 / 2，约 18 个字段；`digit` 的 1–9 新类型 | 140 | 50 |
 | 共享文件 | `mod.rs`、`catalog()` 各 3 行；`MATRIX` 7 行（每行注明出处）；SEC-9 格子；抽出矩阵逐格比对的辅助函数 | — | 70 | — |
 | 本任务编号的测试（`catalog.rs`） | 各组样例恰好覆盖本组方法；本组矩阵行逐格比对；SEC-9 格子；里程碑与补充错误码 | — | — | 80 |
-| `session/archive`（等 T013） | 1 个方法，参数和结果各一个枚举，`blockers` 复用 T013 的枚举 | 2 / 0 / 2 | 35 | 10 |
+| `session/archive`（后来移交 T013，见"进度"） | 1 个方法，参数和结果各一个枚举，`blockers` 复用 T013 的枚举 | 2 / 0 / 2 | 35 | 10 |
 | **合计** | 23 个方法 | | **约 985** | **约 350** |
 
 **总计约 1,335 行**，在约 1,500 行的上限以内，比 T012 拆分时的估计（1,090 行）多约 250 行：每个方法单独的参数类型，以及测试按 T012 的实际上调。
@@ -34,10 +34,10 @@
 | 4 会话（不含 `archive`） | `a400a35` | `session.rs` 447 / 138 | 45：矩阵 3 行、测试里的方法清单 | 1,066 | 约 1,330 |
 | 5 交互请求 | `82864b8` | `interaction.rs` 151 / 87 | 18：矩阵 1 行、测试 | 1,322 | 约 1,380 |
 | 队列满（编排者补充裁定） | `03c0b7c` | `session.rs` 测试 +15 | 18：`error.rs` 加 `queue_full`，测试 | 1,355 | 约 1,400 |
-| **合计（不含 `archive`）** | | | | **1,355 新增 / 12 删除**：代码约 825，测试约 530 | 估计 1,290 |
+| **合计（最终）** | | | | **1,355 新增 / 12 删除**：代码约 825，测试约 530 | 估计 1,290（不含 `archive`） |
 
 - 代码比估计少约 120 行，测试多约 180 行。测试超出主要在 `catalog.rs`：rustfmt 把矩阵行的方法清单、断言里的数组逐项展开，矩阵 7 行就有约 70 行；另有 `testkit` 里两个组共用的能力描述样例（22 行）。
-- `session/archive` 估 45 行，加上之后预计约 1,400 行，在 1,450 行的停止线以内。
+- `session/archive` 移交 T013 之后，本任务没有再加代码，最终就是上表的合计，在 1,450 行的停止线以内。
 
 ## 实现时的取舍
 
@@ -60,13 +60,13 @@
 - **`interaction/respond.input`** 是 `InputEvidence {kind, key?, digit?}`。`digit` 是只接受 1–9 的 `KeyDigit`（serde `try_from`），schema 写成 `minimum: 1, maximum: 9` 的整数。`key` 为 `digit` 时必须有 `digit`、`digit` 与所选选项的序号相符，这些都归 T031 的策略检查。
 - **`interaction/get`** 的结果是 `{requested, status, outcome?, resolved_by?, reason?}`：`requested` 是 `interaction.requested` 的数据，后三项与 `interaction.resolved` 相同。
 - **错误码的写法**：
-  - `project/remove`、`session/archive` 的 `conflict`（有运行中的回合）写成 `conflict/turn_running`，与 T012 的 `host/exit` 一致；
+  - `project/remove` 的 `conflict`（有运行中的回合）写成 `conflict/turn_running`，与 T012 的 `host/exit` 一致；T013 补 `session/archive` 时建议同样写；
   - `interaction/respond` 的 `forbidden`（含 `user_activation_required`）只写 `forbidden`，因为原因不止一种；`session/create` 的 `unavailable` 同理。
 - **队列满**（编排者补充裁定）：`ErrorReason` 加 `queue_full`，归在 `too_large` 下；`session/send` 和 `session/queue_edit` 的 `ERRORS` 加 `too_large/queue_full`。
 
 权限矩阵：
 
-- 新增格子 `Sec9`：remote_device 持有这个方法的 scope，由策略模块按 SEC-9 拒绝或收窄。用在 `project/add`、`project/remove`，以及 `session/set_config`（只允许模型和推理强度）、`rename`、`restore`、`agents/refresh`、`agents/restart` 那一行（`archive` 加入后也在这一行）。
+- 新增格子 `Sec9`：remote_device 持有这个方法的 scope，由策略模块按 SEC-9 拒绝或收窄。用在 `project/add`、`project/remove`，以及 `session/set_config`（只允许模型和推理强度）、`rename`、`restore`、`agents/refresh`、`agents/restart` 那一行。
 - 5.8.3 里"按档位规则"那一行、`interaction/respond` 的 privileged 选项那一行，都是资源级规则（T031），不进 `MATRIX`：每个方法只能出现在一行里，方法级的 scope 分别由 `session/create`、`session/set_config` 所在的行和 `interaction/respond`（approve 选项）那一行决定。
 - `session/queue_edit` 按裁定放在 `session/send` 那一行。本任务的只读方法单独一行，名字注明属于 5.8.3 的"订阅……"那一行。
 - T012 的逐格比对抽成 `check_rows`，T012 的全表测试和本任务的测试共用；本任务的测试要求本组的方法单独成行。
@@ -78,5 +78,7 @@
 
 ## 进度
 
-- 第 3、4、5 组和队列满已完成并提交。在 `03c0b7c` 上不带 `--record` 跑过 `cargo xtask ci pr`，全部通过；`cupper-protocol` 能编译到 `aarch64-apple-ios-sim`。带 `--record` 的正式运行留到 `session/archive` 完成之后。
-- `session/archive` 的 `blockers` 要复用 T013 定义的枚举。T013 还没有合并，按 brief 停在这里，等编排者把 main 合入本分支后再做。
+- 第 3、4、5 组和队列满已完成并提交，`cupper-protocol` 能编译到 `aarch64-apple-ios-sim`，`cargo xtask ci pr --record` 的摘要在 `ci/`。
+- **`session/archive` 移交 T013**（编排者裁定）：两个任务互相等对方（本任务等 T013 的阻塞原因枚举，T013 的 `git/revert.input` 要复用本任务的 `InputEvidence`），所以本任务先合并，`session/archive` 由 T013 用它定义的枚举补进 `methods/session.rs`。本分支里没有 `session/archive` 的类型、样例、矩阵方法或 SEC-9 期望项。T013 补的时候要做：
+  - 在 `methods/session.rs` 声明方法（write、命令、M1b，`conflict/turn_running`），参数 `{command_id, session_id, worktree: keep|remove|remove_case_only_dirty}`，结果 `{worktree: kept|removed|blocked, blockers?}`，在 `register` 和 `samples()` 各加一项；
+  - 把 `session/archive` 加进 `catalog.rs` 里 `MATRIX` 的"session/set_config（非档位的配置项）、session/rename、session/archive……"那一行（行名已照 5.8.3 写全），以及 `unit_proto_methods_core_session_sec9_cells` 的期望集合。
