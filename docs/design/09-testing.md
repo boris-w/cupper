@@ -16,7 +16,7 @@
 | 会话层金样例（GOLD-B） | 进程内运行宿主核心 + 内存传输 + 虚拟时钟 | 规范化后的协议事件；只用宿主自己驱动产生的录制 | 每个 PR |
 | 宿主集成测试（IT） | `cargo test`（`test-harness`），真实宿主进程 + 假 agent + cupper-cli 库 | 由 SP-4a 的端到端测试 1–7 扩充：多客户端一致、先到先得、续传、慢客户端、`kill -9` 恢复、命令幂等、帧上限、适配器隔离；加上排队、Steer、中断兜底、自发回合、适配器崩溃、K 清单（[5.6.9](06-agent-driver.md#569-已知问题的规避清单)）、故障点、项目信任、配置档位。**6 个会话在同一个假适配器进程上同时流式输出**，每条输出带会话标识，断言没有串扰（NFR-11、Q8 的宿主侧）；Q8 的后备方案（这种 agent 的 prompt 全局串行）也有用例。外发检查：宿主进程放在拒绝出站网络的 Seatbelt 配置里运行（只用于宿主，纪要 D13） | 每个 PR |
 | TS 单元测试（UNIT） | Vitest | `host-client` 的连接状态机、切帧、命令重试；视图 reducer（与 Rust 视图用同一批金样例交叉验证）；主进程的 `inputGuard`、`windowBridge`（用帧级的 TS mock 宿主，覆盖白名单、真实输入、原生确认、流控、"超过 8 MB 暂停读取 → 宿主重置 → 按游标重新订阅"）；`ui-core` 组件 | 每个 PR |
-| 界面截图回归 | Playwright（Chromium）+ 浏览器版 ShellAPI + TS 写的 mock 宿主 | 主要页面和状态：亮色和暗色、中文和英文、各类条目与卡片、长文本、未知事件的占位；发布 CSP 下 `securitypolicyviolation` 为 0 | 每个 PR；基线由专用脚本生成，渲染因素固定（字体随测试夹具附带），元数据记录系统和 Chromium 版本（v1.3，见 `docs/03-plan.md` 1.8） |
+| 界面截图回归 | Playwright（Chromium）+ 浏览器版 ShellAPI + TS 写的 mock 宿主 | 主要页面和状态：亮色和暗色、中文和英文、各类条目、请求面板、发送按钮三态、窄窗口、长文本、未知事件的占位；发布 CSP 下 `securitypolicyviolation` 为 0 | 每个 PR；基线由专用脚本生成，渲染因素固定（字体随测试夹具附带），元数据记录系统和 Chromium 版本（v1.3，见 `docs/03-plan.md` 1.8） |
 | 端到端（E2E） | Playwright `_electron` + e2e 构建 + 真实宿主 + 假 agent + cupper-cli | NFR-1 的全部验收项、S1–S4 的主要流程、安全加固项（[5.9.4](#594-端到端测试与-nfr-1-验收)） | PR 跑冒烟子集（按改动路径过滤），每晚跑全集 |
 | 差分测试 | Rust 用 proptest 生成事件序列，交给 Node 进程里的 TS reducer | TS 与 Rust 视图对同一序列给出相同结果，包括 `late_by_ref` | 每晚 |
 | 兼容矩阵（COMPAT） | `cargo xtask compat`，真实 CLI | 锁定的适配器 × CLI 版本（[5.9.5](#595-兼容矩阵)）。框架本身每晚在 CI 里用假 agent 跑一遍 | 手动；框架每晚 |
@@ -127,14 +127,21 @@ flowchart LR
 | 编号 | NFR-1 验收项 | 测试 |
 |---|---|---|
 | E2E-NFR1-1 | 订阅会话列表和任意一个会话，内容与桌面一致 | UI 和 CLI 同时订阅；等两端都到达同一个 `head_seq` 后，经测试钩子导出 UI 的 `host-client` 视图，与 CLI 的 `Mirror` 视图比较。只比窗口内的内容，排除 `notification.intent`；视图的序列化格式在 schema 里定义 |
-| E2E-NFR1-2 | 发送、排队、中断、处理审批、回答提问，桌面同步更新 | CLI 依次执行这些命令，Playwright 断言 UI 上的相应变化（新回合、排队条、回合标题显示"已取消"、卡片状态）。至少一个用例走真实用户的路径：CLI 以 `cli` 身份 `elevate`，原生确认框由替换函数批准，之后再发送 |
-| E2E-NFR1-3 | 任何一端处理了审批或提问，另一端自动收起 | 两个方向各一个用例：UI 批准后 CLI 看到 `resolved`；CLI 批准后 UI 卡片收起并显示"已在 cupper-cli 处理"。"两端同时回答"：等卡片的"可以操作"标记（DOM 属性，卡片出现满 500 ms 后才设）出现，再让两端同时回答，断言恰好一个成功、另一端显示"已在别处处理"，不预设谁赢 |
+| E2E-NFR1-2 | 发送、排队、中断、处理审批、回答提问，桌面同步更新 | CLI 依次执行这些命令，Playwright 断言 UI 上的相应变化（新回合、排队消息、回合标题显示"你在 … 后停止了"、请求面板与记录行的状态）。至少一个用例走真实用户的路径：CLI 以 `cli` 身份 `elevate`，原生确认框由替换函数批准，之后再发送 |
+| E2E-NFR1-3 | 任何一端处理了审批或提问，另一端自动收起 | 两个方向各一个用例：UI 批准后 CLI 看到 `resolved`；CLI 批准后 UI 的请求面板收起并显示"已在 cupper-cli 处理"。"两端同时回答"：等请求面板的"可以操作"标记（`data-ready`，待命期结束后才设，[5.7.8](07-desktop.md#578-安全加固的落点) 的 RP-1）出现，再让两端同时回答，断言恰好一个成功、另一端显示"已在别处处理"，不预设谁赢 |
 | E2E-NFR1-4 | 客户端断开期间产生的事件，重连后补齐，不丢不重 | 三种情况：断开 CLI；重载渲染进程（走快照）；经主进程的测试钩子只断开这个窗口的数据连接、不重载（走按游标续传）。断开期间用 `flood` 产生大量事件，含区间事件；`Mirror` 检查 `from` 连续性，`host-client` 的缺口、重置、重复计数为 0 |
 | E2E-NFR1-5 | 宿主被强制结束后重新启动，会话可以继续 | 运行中和等待审批时各 `kill -9` 一次宿主，`kill` 的时机用事件做屏障（等某个条目或交互请求出现）；UI 自动重新拉起宿主；回合为"已中断"、请求为"已失效"、残留进程被清理；下一条消息经 `session/resume` 成功 |
 
 **NFR-2、NFR-9**（M1b 的退出标准）：E2E-NFR2-retry（断线后用同一个 `command_id` 重发，不重复执行）、IT-NFR2-epoch（[5.9.8](#598-其他关键测试) 的 epoch 用例）、E2E-NFR9-adapter-crash、E2E-NFR9-cli-crash、IT-NFR9-failpoints（故障点全集）、IT-NFR9-crash-under-load（高负载写入中反复 `kill -9`，每次做完整性检查）。
 
-**M1b 的端到端**：E2E-S1（两个会话分别在两个 worktree 中运行）、E2E-S2（审批和提问、通知意图）、E2E-S3（审查、行内评论、按 hunk 暂存、提交）、E2E-S4（排队、Steer、中断），用假 agent 跑；用真实 agent 的完整流程走人工检查表（MAN-S1、MAN-S2、MAN-S3、MAN-S4）。
+**DOM 标记**（v1.4，只是 DOM 属性，生产代码里没有测试分支）：
+
+- 请求面板：`data-testid="request-panel"`、`data-request-id`、`data-ready`（待命期结束后才设）、`data-activation="auto|manual"`（RP-3 的两种情况）；
+- 选项：`data-option-index`（从 1 起，与数字键一致）、`data-option-id`、`data-privileged`、`data-effect-unknown`；
+- 输入框：`data-testid="composer"`、`data-send-state="disabled|send|stop"`、`data-esc-armed`（"再按一次 Esc 停止"状态）；
+- 排队消息：`data-queue-id`；请求记录行：`data-request-record`；回合改动卡片：`data-turn-changes`。
+
+**M1b 的端到端**：E2E-S1（两个会话分别在两个 worktree 中运行）、E2E-S2（请求面板上的审批和提问、通知意图）、E2E-S3（审查、行内评论作为附件发出、按 hunk 暂存、提交）、E2E-S4（默认插话、⌘Enter 排队、编辑排队消息、两次 Esc 中断），用假 agent 跑；用真实 agent 的完整流程走人工检查表（MAN-S1、MAN-S2、MAN-S3、MAN-S4）。
 
 **安全相关的端到端**
 
@@ -142,7 +149,8 @@ flowchart LR
 |---|---|---|
 | E2E-SEC-switches | 带未知命令行开关启动，应立即退出 | 每晚的"发布配置、不签名"构建 |
 | E2E-SEC-csp | 渲染进程注入的脚本不执行；创建名为 `default` 的 Trusted Types 策略失败 | e2e |
-| E2E-SEC-real-input | 不经真实输入的 `interaction/respond` 被拒；冷却期内的 Enter 被拒、之后成功；输入证据来自 `before-input-event` | e2e |
+| E2E-SEC-real-input | 不经真实输入的 `interaction/respond` 被拒；冷却期内的 Enter 被拒、之后成功；输入证据来自 `before-input-event`；数字键的证据与选项序号不符时被宿主拒绝 | e2e |
+| E2E-SEC-panel-arming | 请求面板（v1.4）：面板出现时正在输入框里打字，按键不会落到面板上，面板要按 Tab 或点击才响应；待命期内的按键和点击被吞掉；面板出现前按下、出现后松开的点击不算；连续两个请求时第二个重新待命；面板上方有弹出菜单时不响应（[5.7.8](07-desktop.md#578-安全加固的落点) 的 RP-1 至 RP-9） | e2e |
 | E2E-SEC-privileged | 渲染进程无法发出 `privileged` 方法、无法绕过原生确认框 | e2e |
 | E2E-SEC-fake-host | 假宿主占用套接字时 UI 拒绝连接（靠 dev_key 的双向证明） | e2e；发布路径由签名后冒烟覆盖 |
 | E2E-SEC-review-iso | 审查文档与主文档跨源，`parent.document` 访问抛错；别的端口发来的消息被忽略；iframe 的 `revert` 不会直接执行；注入金样例（[5.7.8](07-desktop.md#578-安全加固的落点)） | e2e（M1b） |
@@ -288,11 +296,11 @@ flowchart LR
 | 编号 | 内容 | 谁、什么时候 |
 |---|---|---|
 | MAN-S1、MAN-S2、MAN-S3、MAN-S4 | S1–S4 × Claude 和 Codex 两种 agent 的逐步检查表：步骤、通过条件、CLI 和适配器的版本、日期 | 作者，M1b 退出前 |
-| MAN-keyboard | 实体键盘：Enter 批准、Esc 拒绝、用输入法选词时不触发（[5.7.8](07-desktop.md#578-安全加固的落点)） | 作者，M1a 一次，之后每次升级 Electron 大版本 |
+| MAN-keyboard | 实体键盘：Enter 批准、Esc 拒绝、数字键选择并提交、用输入法选词时不触发（[5.7.8](07-desktop.md#578-安全加固的落点)） | 作者，M1a 一次，之后每次升级 Electron 大版本 |
 | MAN-ime | SP-6 场景 6：流式输出期间用拼音输入 | 作者，SP-6 |
 | MAN-notification | AP-3 的系统通知、helper 的通知身份和点击跳转（Q2、SP-10） | 作者，M1b 开始前 |
 | MAN-tcc | Q21：宿主由 UI 拉起时的 TCC 归属；适配器的 disclaim（SP-10） | 作者，SP-10 |
-| MAN-ui6 | UI-6：同尺寸窗口与截图并排比对 | 作者，M1b |
+| MAN-ui6 | UI-6（v1.3）：与作者本机的 Codex 同尺寸窗口、同一主题并排比对 | 作者，M1b |
 | MAN-upgrade | 升级演练：首次正式发布前一次，之后每个改动了 schema 或运行时的版本一次；含两项负面测试（其他 Team 签名的包被拒、被篡改的 zip 被拒）和安装空窗的处理 | 维护者，发布前 |
 | MAN-node-notarize | U-R3：随 App 公证的 Node 首次执行的耗时 | 维护者，第一次有 Developer ID 的发布构建 |
 | MAN-compat | 兼容矩阵（[5.9.5](#595-兼容矩阵)），产出报告 | 维护者，按 5.9.5 的时机 |

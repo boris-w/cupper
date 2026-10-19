@@ -1,9 +1,9 @@
 # cupper 技术设计
 
-- 版本：v1.3（v1.0 由用户确认，tag `gate/design`；v1.1 补充：Developer ID 发布推迟到用户开通账号之后，新增 Q35，见 5.12.3；v1.2（2026-10-19，计划评审后，P02）：5.6.9、5.9.4、5.9.10、5.10.7、5.12.2、5.12.3、5.12.4 里的用例编号改成完整写法，不再用缩写、通配和区间，5.9.10 增加截图回归的层前缀 `UI`；5.7.9 增加"自用构建"一列，5.12.3 同步引用；v1.3（2026-10-19，计划评审后，编排者）：仓库没有远端时 CI 在本机执行（5.1.6、5.12.2）、冻结时机见计划（5.12.5）、用例登记改为 `tests/ids.toml`（5.9.10）、四种构建的目录清单（5.4.1、5.8.1）、`dev_key` 只接受拉起宿主的进程与各构建的宿主校验方式（5.8.1）、Q35 的更正；P02 第 2 轮另改了 5.7.9：自用构建关闭 `enableCookieEncryption`）
+- 版本：v1.4（v1.0 由用户确认，tag `gate/design`；v1.1 补充：Developer ID 发布推迟到用户开通账号之后，新增 Q35，见 5.12.3；v1.2（2026-10-19，计划评审后，P02）：5.6.9、5.9.4、5.9.10、5.10.7、5.12.2、5.12.3、5.12.4 里的用例编号改成完整写法，不再用缩写、通配和区间，5.9.10 增加截图回归的层前缀 `UI`；5.7.9 增加"自用构建"一列，5.12.3 同步引用；v1.3（2026-10-19，计划评审后，编排者）：仓库没有远端时 CI 在本机执行（5.1.6、5.12.2）、冻结时机见计划（5.12.5）、用例登记改为 `tests/ids.toml`（5.9.10）、四种构建的目录清单（5.4.1、5.8.1）、`dev_key` 只接受拉起宿主的进程与各构建的宿主校验方式（5.8.1）、Q35 的更正；P02 第 2 轮另改了 5.7.9：自用构建关闭 `enableCookieEncryption`；v1.4（2026-10-19，D04，用户决定界面 100% 复刻本机安装的 Codex，PRD v1.3）：5.7.4 按 Codex 重写布局、尺寸、侧边栏状态、消息流、输入框（发送按钮三态、默认插话与 ⌘Enter 排队、排队消息的编辑与插话、附件条）、新建会话页、窄窗口、toast；审批和提问改为替换输入框位置的请求面板（5.7.4、5.7.5），5.7.8 的真实输入规则随之重写（待命期、焦点、数字键与导航键，交安全工程师确认）；5.7.5 的审查面板加文件树和整组操作，行内评论作为附件进入输入框；5.7.7 的快捷键按 Codex 的默认值，cupper 的别名单列；新增 5.7.10 设计参数（token）；协议附加 `SessionSummary.pending_kind`、`queue.updated` 条目的 `content`、`session/queue_edit` 的 `ops`（M1b 实现 `replace`、`steer`）、`input.key: digit`，交互请求模型不变（5.3、5.12.5）；5.2、5.5、5.6.9、5.9.4、5.9.10、5.12 同步；5.13 新增 Q36–Q41 和 ADR-03、ADR-07 的修订建议）
 - 日期：2026-10-16
 - 状态：已确认（2026-10-16，tag `gate/design`）
-- 依据：PRD v1.2（v1.0 打 tag `gate/prd`）；产品-架构对齐会 `docs/meetings/2026-10-16-prd-arch-alignment/`；设计评审会 `docs/meetings/2026-10-16-design-review/`；`gate/design` 前的用户决定 `docs/meetings/2026-10-16-gate-design-decisions/`
+- 依据：PRD v1.3（v1.0 打 tag `gate/prd`）；界面复刻程度的用户决定 `docs/meetings/2026-10-19-ui-fidelity/`（v1.4）；R06 的一手规格 `docs/tasks/R06-codex-desktop-ui-firsthand/ui-spec.md`（v1.4）；产品-架构对齐会 `docs/meetings/2026-10-16-prd-arch-alignment/`；设计评审会 `docs/meetings/2026-10-16-design-review/`；`gate/design` 前的用户决定 `docs/meetings/2026-10-16-gate-design-decisions/`
 
 本文件在阶段 ② 中逐步填充：先通过 ADR 和原型实测确定关键选型，再写详细设计，最后经设计评审和用户确认后打 `gate/design`。
 
@@ -199,13 +199,13 @@ flowchart TB
 | 5.4 数据模型 | [design/04-data-model.md](design/04-data-model.md) | 存储位置；**SQLite 表结构草案**（host.db、raw.db）；数据放在哪里；ID 规则；保留与回收；迁移与事件升级器 |
 | 5.5 关键流程 | [design/05-flows.md](design/05-flows.md) | 时序图：App 启动、新建会话（含 worktree）、发送/排队/插话、审批先到先得、中断（含晚到的输出）、崩溃恢复（宿主、适配器）、升级（含安装空窗）、审查到提交、归档与 worktree 清理、添加项目与信任 |
 | 5.6 Agent 驱动层 | [design/06-agent-driver.md](design/06-agent-driver.md) | 驱动接口；Claude 与 Codex 的提取层对照；交互请求分类；配置项映射与**审批档位**；CLI 发现与版本检查、传给适配器的环境变量；能力缓存；资源回收；**已知问题规避清单（26 项，附回归用例编号）**；线路分接层 |
-| 5.7 桌面端 | [design/07-desktop.md](design/07-desktop.md) | 进程与连接（数据连接的生命周期、测量闸门）；主进程模块；ShellAPI；窗口与布局；组件树与**审查文档**；状态管理；快捷键、本地化与主题；**安全加固的具体落点**（Trusted Types、真实输入）；三种构建 |
+| 5.7 桌面端 | [design/07-desktop.md](design/07-desktop.md) | 进程与连接（数据连接的生命周期、测量闸门）；主进程模块；ShellAPI；窗口与布局（v1.4 按 Codex 重写，含**请求面板**）；组件树与**审查文档**；状态管理；快捷键、本地化与主题；**安全加固的具体落点**（Trusted Types、真实输入、请求面板）；四种构建；**设计参数**（v1.4） |
 | 5.8 安全实现 | [design/08-security.md](design/08-security.md) | 固定令牌认证握手与退化模式的双向证明；principal、角色、scope 与**审批档位规则**；**命令 × principal 权限矩阵**；CLI 提权；进程卫生；审计日志；安全边界说明 |
 | 5.9 测试策略 | [design/09-testing.md](design/09-testing.md) | 测试分层；假 agent（启动配置、剧本、原始行通道）；录制格式与两层金样例；端到端与 NFR-1 验收；兼容矩阵；性能预算与测量方法；**SP-6 测试计划**；故障点与其他关键测试；**测试替身与注入点**；测试编号与人工验证清单 |
 | 5.10 构建与发布 | [design/10-release.md](design/10-release.md) | 包结构；签名与公证；Node 运行时与清单；**打包工具的决定**；更新流程（安装空窗）；Electron 版本；发布流水线（产物检查、签名后冒烟） |
 | 5.11 诊断 | [design/11-diagnostics.md](design/11-diagnostics.md) | 日志与轮转；脱敏；诊断包；崩溃信息 |
 | 5.12 M1a 与 M1b | [design/12-milestones.md](design/12-milestones.md) | 两步的范围与退出标准；**M1 全部 P0 需求的追溯矩阵**（验证列引用用例编号）；**契约冻结清单** |
-| 5.13 待定问题 | [design/13-open-issues.md](design/13-open-issues.md) | 待定问题（已关闭 11 个，仍待定 23 个，含 Q26–Q34）；对 ADR-01 至 ADR-11 的修订建议；对 PRD 的影响（已在 PRD v1.2 落实） |
+| 5.13 待定问题 | [design/13-open-issues.md](design/13-open-issues.md) | 待定问题（已关闭 11 个，仍待定 30 个，含 v1.4 新增的 Q36–Q41）；对 ADR-01 至 ADR-11 的修订建议；对 PRD 的影响（已在 PRD v1.2 落实） |
 
 **本节的主要结论**
 

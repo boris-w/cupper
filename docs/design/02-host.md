@@ -138,7 +138,7 @@ flowchart TB
    - **审批档位**：`session/create` 的 `config`、`session/set_config`、`interaction/respond` 选中带 `mode_after` 的选项，凡是把会话放宽到更高档位的，按 [5.8.2](08-security.md#582-principal角色与-scope) 的档位规则判定；
    - `interaction/respond` 选中的选项 `requires = privileged`（`allow_always` 类、效果未知的选项）时，只接受 `desktop_ui` 的 `control` 角色；
    - `settings/update` 修改安全相关的键（`agents.<agent>.cli_path`、`agents.env_passthrough`、`diagnostics.verbose`）时，同上；
-   - **真实输入证据**：来自 `desktop_ui` 的 `window` 角色的 `interaction/respond` 和 `git/revert`，必须带主进程写入的 `input` 参数（[5.7.8](07-desktop.md#578-安全加固的落点)），缺了一律拒绝（`forbidden`，`reason: user_activation_required`），不因为缺参数而跳过检查。`input.key` 为 `escape` 时，只能用于 `dismissed`，或者 `effect.scope` 为 `reject`、`plan_revise` 的选项；
+   - **真实输入证据**：来自 `desktop_ui` 的 `window` 角色的 `interaction/respond` 和 `git/revert`，必须带主进程写入的 `input` 参数（[5.7.8](07-desktop.md#578-安全加固的落点)），缺了一律拒绝（`forbidden`，`reason: user_activation_required`），不因为缺参数而跳过检查。`input.key` 为 `escape` 时，只能用于 `dismissed`，或者 `effect.scope` 为 `reject`、`plan_revise` 的选项；`input.key` 为 `digit` 时（v1.4，请求面板的数字键），`permission` 和 `plan_confirm` 要求 `digit` 等于所选选项在 `options` 里的序号；
    - `interaction/respond` 来自 `window` 角色时，距请求创建不足 400 ms 的一律拒绝（`conflict`，`reason: too_early`），把 ADR-03 的"约 500 ms 输入保护"落到宿主侧，不依赖渲染进程；
    - **项目信任**：Attach 和发送 prompt 前按信任状态决定能否运行、怎样运行（[5.2.6](#项目信任)）；
    - M3 的 `remote_device` 按 SEC-9 收窄。
@@ -215,6 +215,7 @@ stateDiagram-v2
 | 回合正常结束 | 队列未暂停就取出队首，开 `origin: queued` 的新回合 |
 | 回合被取消、失败或中断 | 队列暂停（`queue.paused`），等用户发新消息或调用 `session/queue_resume`。Codex 拒绝审批导致的取消（#556）不暂停，因为这是用户主动拒绝，后面排着的消息正是"换个做法" |
 | 中断 | 发 `session/cancel`；把挂着的交互请求标为 `cancelled`，对 ACP 回复 `Cancelled`（Codex 不会自己撤回）；进入 `Cancelling`，截止 10 s。截止后宿主把回合标为 `cancelled`（`stop_reason: host_timeout`），之后这个 prompt 的响应直接忽略 |
+| 编辑排队消息（`session/queue_edit`，v1.4） | 按 `expected_version` 检查后执行：`replace` 改写一条，写 `queue.updated`；`steer` 取出这一条，按上面"`mode: steer`"一行的规则插话，回退时放回原位，结果带 `fallback_reason`；`remove`、`move` 属于 CP-8（M2），M1 返回 `unsupported` |
 | 上一个 prompt 一直没有返回，用户又发了消息 | 先对这个 agent 会话执行 `session/close` 再 `session/resume`，然后才发新的 prompt。**同一个 agent 会话绝不同时有两个 prompt**（SP-1：Claude 会丢回复，Codex 会永久挂起） |
 
 ### 崩溃与恢复（NFR-9）
@@ -340,10 +341,11 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 | `unread` 完成未读 | 有回合在最近一次标记已读之后结束 |
 | `idle` 空闲 | 其他 |
 
+- **待处理请求的类别**（v1.4）：`SessionSummary.pending_kind` 取最早一个待处理请求的类别（`approval` 或 `input`），侧边栏据此显示"等待批准"或"需要用户输入"（[5.7.4](07-desktop.md#574-窗口与布局)）。
 - **已读**（U4）：客户端在会话可见且窗口在前台时调用 `session/mark_read`，`up_to_seq` 取已看到的最新 seq，宿主只前移不后退，全局生效。
 - **在场**：每个客户端用 `client/presence` 上报是否在前台、正在看哪个会话。`IndexActor` 判断某个会话"此刻有人在看"时，只采信 `desktop_ui` 的在场（M3 再加上 `remote_device`），沙箱外的命令以只读身份上报在场，压不掉"需要处理"的通知（安全建议 #16）。CLI 的 `session/mark_read` 按 U4 照常推进已读位置，但不影响"需要处理"的通知。
 - **通知意图**：会话进入 `needs_action`、回合结束、出错时，如果此刻没有前台客户端在看这个会话，就写一条 `notification.intent` 事件，同时交给 `notifier` 弹系统通知（按设置开关）。M3 的推送也从这些事件生成。
-- **通知的点击**：通知由宿主 helper 弹出，点击后回调到宿主。宿主经 control 连接给已连接的桌面主进程发 `ui/navigate`，并经 LaunchServices 按 bundle id 激活 Cupper；UI 没在运行时，按 bundle id 启动它并只把 URL 交给它，不走任何应用都能注册的 `cupper://` 通用路由（安全 #7）。导航只切换到对应的会话，不把焦点移到交互卡片上。
+- **通知的点击**：通知由宿主 helper 弹出，点击后回调到宿主。宿主经 control 连接给已连接的桌面主进程发 `ui/navigate`，并经 LaunchServices 按 bundle id 激活 Cupper；UI 没在运行时，按 bundle id 启动它并只把 URL 交给它，不走任何应用都能注册的 `cupper://` 通用路由（安全 #7）。导航只切换到对应的会话，不把焦点移到请求面板上。
 - **通知由宿主弹出**（ADR-01）。宿主内置一小份通知文案（中英文，跟随系统语言），这是"宿主不下发文案"原则的唯一例外，因为通知不经过客户端。helper 的通知身份要由 SP-10 在 M1b 前核实，不行就退回"UI 在时由 UI 弹"（技术选型讨论会的后备方案），见待定问题 Q2。
 - 同时维护 `clients`（连接列表）、`agents`（CLI、适配器、运行时、登录状态、资源占用）、`host`（版本、是否弱认证、是否待升级、防休眠）和提权请求，都写在索引流里。
 
