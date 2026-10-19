@@ -7,7 +7,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::error::{INVALID_REQUEST, RpcError};
+use crate::error::{ErrorCode, ErrorReason, INVALID_REQUEST, RpcError};
 use crate::open_enum;
 
 pub const JSONRPC_VERSION: &str = "2.0";
@@ -53,20 +53,62 @@ impl Idempotency {
     }
 }
 
-/// A request method. Every method declares its scope and idempotency, so a
-/// method that forgets either does not compile (design 5.1.7). The policy
-/// layer reads them, and the schema carries them as `x-scope` and `x-idempotent`.
+/// The first milestone that needs a method (design 5.3.4, column "里程碑").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Milestone {
+    M1a,
+    M1b,
+    M2,
+    M3,
+}
+
+impl Milestone {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::M1a => "M1a",
+            Self::M1b => "M1b",
+            Self::M2 => "M2",
+            Self::M3 => "M3",
+        }
+    }
+}
+
+/// An error a method may return besides those every method may return (see
+/// [`crate::methods`]): a code, narrowed to one reason or not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MethodError {
+    pub code: ErrorCode,
+    pub reason: Option<ErrorReason>,
+}
+
+impl MethodError {
+    /// `code` or `code/reason`, as `x-errors` lists it.
+    pub fn wire(&self) -> String {
+        match &self.reason {
+            Some(reason) => format!("{}/{reason}", self.code),
+            None => self.code.to_string(),
+        }
+    }
+}
+
+/// A request method. Every method declares its scope, idempotency, milestone
+/// and errors, so a method that forgets one does not compile (design 5.1.7).
+/// The policy layer reads them, and the schema carries them as `x-scope`,
+/// `x-idempotent`, `x-milestone` and `x-errors`.
 pub trait Method {
     const NAME: &'static str;
     /// The scope a caller must hold; `None` when any principal may call it.
     const SCOPE: Option<Scope>;
     const IDEMPOTENCY: Idempotency;
+    const MILESTONE: Milestone;
+    const ERRORS: &'static [MethodError];
     type Params: Serialize + DeserializeOwned + JsonSchema;
     type Result: Serialize + DeserializeOwned + JsonSchema;
 }
 
 pub trait Notification {
     const NAME: &'static str;
+    const MILESTONE: Milestone;
     type Params: Serialize + DeserializeOwned + JsonSchema;
 }
 
@@ -197,6 +239,8 @@ mod tests {
         const NAME: &'static str = "ping";
         const SCOPE: Option<Scope> = None;
         const IDEMPOTENCY: Idempotency = Idempotency::Natural;
+        const MILESTONE: Milestone = Milestone::M1a;
+        const ERRORS: &'static [MethodError] = &[];
         type Params = Value;
         type Result = Value;
     }

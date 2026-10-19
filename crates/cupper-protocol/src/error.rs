@@ -8,6 +8,7 @@ use serde_json::{Map, Value};
 
 use crate::annotations::DurationMs;
 use crate::domain::ResolvedBy;
+use crate::methods::handshake::VersionRange;
 use crate::open_enum;
 use crate::rpc::Scope;
 
@@ -86,6 +87,8 @@ open_enum! {
         UnsafeRepoConfig => "unsafe_repo_config",
         RepoConfigChanged => "repo_config_changed",
         FilterUnsupported => "filter_unsupported",
+        /// The session's queue holds its limit of messages (design 5.3.9).
+        QueueFull => "queue_full",
         Steer => "steer",
         Cancel => "cancel",
         Upgrade => "upgrade",
@@ -138,6 +141,7 @@ impl ErrorReason {
             | R::UnsafeRepoConfig
             | R::RepoConfigChanged
             | R::FilterUnsupported => ErrorCode::GitError,
+            R::QueueFull => ErrorCode::TooLarge,
             R::Steer | R::Cancel => ErrorCode::Timeout,
             R::Upgrade | R::UserQuit | R::Idle => ErrorCode::ShuttingDown,
             R::Unknown(_) => return None,
@@ -168,7 +172,10 @@ pub struct ErrorData {
     /// `conflict/already_resolved`: who resolved the request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolved_by: Option<ResolvedBy>,
-    /// Other code-specific details, e.g. `supported`.
+    /// `version_unsupported`: the major versions the host supports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supported: Option<VersionRange>,
+    /// Other code-specific details.
     #[serde(flatten)]
     pub details: Map<String, Value>,
 }
@@ -184,6 +191,7 @@ impl ErrorData {
             agent_message: None,
             retry_after_ms: None,
             resolved_by: None,
+            supported: None,
             details: Map::new(),
         }
     }
@@ -287,7 +295,7 @@ mod tests {
 
         // Unknown codes, reasons and details survive a roundtrip.
         let raw = serde_json::json!({"code": -32000, "message": "x", "data": {
-            "code": "future_code", "reason": "later", "supported": {"min": 1, "max": 1}}});
+            "code": "future_code", "reason": "later", "quota": {"used": 1, "max": 1}}});
         let err: RpcError = serde_json::from_value(raw.clone()).unwrap();
         assert_eq!(
             err.app_code(),
