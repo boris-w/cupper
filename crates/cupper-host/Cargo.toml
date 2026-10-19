@@ -53,6 +53,11 @@ tokio = { version = "1.53.3", features = ["macros"] }
 name = "migrations"
 required-features = ["test-harness"]
 
+# IT-lifecycle runs the host with a `harness_key`.
+[[test]]
+name = "lifecycle"
+required-features = ["test-harness"]
+
 # The gateway alone, for process-level tests (T039, T073).
 [[bin]]
 name = "cupper-gateway-fixture"
