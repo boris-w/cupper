@@ -5,9 +5,13 @@
 //! what other languages generate from.
 
 pub mod annotations;
+pub mod coalesce;
+pub mod envelope;
 pub mod error;
 pub mod frame;
 pub mod ids;
 pub mod limits;
 pub mod open_enum;
 pub mod rpc;
+pub mod sync;
+pub mod text;
