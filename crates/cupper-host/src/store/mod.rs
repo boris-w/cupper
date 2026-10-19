@@ -6,6 +6,9 @@
 //!
 //! SQLite runs only on the store's own threads or under `spawn_blocking`, never
 //! on an async worker (SP-4a).
+//!
+//! On top of them, [`streams`] keeps every stream's seqs, view and
+//! subscribers.
 
 mod connection;
 pub mod epoch;
@@ -13,6 +16,7 @@ pub mod meta;
 mod migrate;
 mod raw;
 mod readers;
+pub mod streams;
 #[cfg(test)]
 mod testutil;
 pub mod upcast;
