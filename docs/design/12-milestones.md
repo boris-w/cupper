@@ -74,14 +74,14 @@
 | MS-3 | 工具活动单行摘要，可展开看输出、diff、退出码；按回合折叠显示耗时；拿不到时降级 | 提取层、`ToolCall`、`group_id`、`final_item_ids` | `item.*`、`turn.*` | M1a（Claude）/ M1b（Codex、折叠） | GOLD-A-tool-fields（各 `tool_kind` 的必填字段）〔PR〕；UNIT-final-items、UNIT-grouping〔PR〕；UI-stream-tools、UI-stream-fold〔PR〕 |
 | MS-4 | 计划和待办清单；运行中的计划药丸"第 n / m 步"（F3） | 提取层、`plan` 条目 | `item.*` | M1b | GOLD-A-claude-s05、GOLD-A-codex-s05（两边的 `plan_update` 都在 s05 里）〔PR〕；IT-plan-entries（假 agent 的 `plan_update`）〔PR〕；Claude 的口径见 PRD v1.2 第 10 节（Q12） |
 | MS-5 | 错误和恢复指引；agent 崩溃后自动重启并提示 | 统一错误条目、`notice`、`AgentRuntime` 重启 | `error`、`notice` 条目 | M1a | IT-K6-crash-resume、IT-K6-output-then-crash、IT-K7-restartable、IT-K17-text-error〔PR〕；E2E-error-guidance〔晚〕 |
-| AP-1 | 审批以请求面板呈现，替换输入框的位置，选项带编号，Enter 批准、Esc 拒绝（v1.3） | 交互代理、请求面板、真实输入检查 | `interaction.*`、`interaction/respond`（`input.key` 含 `digit`） | M1a | E2E-SEC-real-input、E2E-SEC-panel-arming、E2E-approve-enter-esc〔PR〕；MAN-keyboard〔人〕 |
+| AP-1 | 审批以请求面板呈现，替换输入框的位置，选项带编号，Enter 批准、Esc 拒绝（v1.3） | 交互代理、请求面板、真实输入检查 | `interaction.*`、`interaction/respond`（`input.key` 含 `digit`） | M1a | E2E-SEC-real-input、E2E-SEC-panel-arming、E2E-SEC-panel-numbering、E2E-approve-enter-esc、E2E-reject-with-message〔PR〕；MAN-keyboard〔人〕 |
 | AP-2 | 选项和文案以 agent 为准；持久选项要标明 | 选项对照表（`effect`、`requires`）、原生确认 | `Option.effect` | M1a（Claude）/ M1b（Codex） | GOLD-A-option-map（选项对照表）〔PR〕；UNIT-option-map〔PR〕；E2E-persistent-option-native〔晚〕 |
-| AP-3 | 窗口不在前台时发系统通知 | `IndexActor` 通知意图、`notifier`、在场 | `notification.intent`、`client/presence`、`ui/navigate` | M1b | IT-notification-intent〔PR〕；MAN-notification〔人〕 |
+| AP-3 | 窗口不在前台时发系统通知 | `IndexActor` 通知意图、`notifier`、在场 | `notification.intent`、`client/presence`、`ui/navigate` | M1b | IT-notification-intent、UNIT-notifier-no-actions（系统通知没有任何操作按钮）〔PR〕；MAN-notification〔人〕 |
 | AP-4 | 先到先得，晚到提示"已在别处处理" | 会话 actor 串行处理、`resolved_by` | `conflict/already_resolved` | M1a | E2E-NFR1-3〔PR〕 |
 | AP-5 | 结构化提问以请求面板呈现（与 AP-1 相同的形态），任何客户端都能回答，状态为"需要处理"（v1.3） | 交互代理（`question`、`plan_confirm`）、状态计算、请求面板 | `interaction.*`、`SessionSummary.pending_kind` | M1a | IT-form、IT-plan-confirm〔PR〕；E2E-question-panel〔PR〕 |
 | GT-1 | 审查面板：未暂存、最近一回合；以仓库实际状态为准 | git 服务（快照档、diff）、审查面板 | `git/diff`、`git/file_diff`、`snapshot.recorded` | 回合快照 M1a；其余 M1b | IT-git-diff-scopes〔PR〕；IT-git-snapshot-parity〔PR〕；E2E-S3〔晚〕 |
 | GT-2 | 行内评论作为附件进入输入框，随下一条消息发给 agent（v1.3） | 审查文档的评论草稿、输入框的附件条、`review_comment` 内容块 | `session/send` | M1b | E2E-review-comment〔晚〕 |
-| GT-3 | 按全部、文件、hunk 暂存、取消暂存、还原；回合改动卡片的"撤销"（F3） | git 服务（`DiffCache`、仓库档的 `apply`）、整组操作、回合改动卡片 | `git/stage`、`git/unstage`、`git/revert` | M1b | IT-git-hunk（SP-5 的 82 个用例）〔PR〕；E2E-turn-changes-undo〔晚〕；口径见 PRD v1.2 第 10 节（Q13） |
+| GT-3 | 按全部、文件、hunk 暂存、取消暂存、还原；回合改动卡片的"撤销"（F3） | git 服务（`DiffCache`、仓库档的 `apply`）、整组操作、回合改动卡片 | `git/stage`、`git/unstage`、`git/revert` | M1b | IT-git-hunk（SP-5 的 82 个用例）〔PR〕；E2E-turn-changes-undo、E2E-SEC-revert-confirm〔晚〕；口径见 PRD v1.2 第 10 节（Q13） |
 | GT-4 | 提交和推送 | git 服务（用户档） | `git/commit`、`git/push` | M1b | IT-git-commit-push〔PR〕 |
 | GT-5 | 归档时提示清理 worktree，有未提交或未推送内容时不删除 | git 服务（7 条规则） | `worktree/check`、`session/archive` | M1b | IT-worktree-check-rules〔PR〕 |
 | UI-0 | 在外部终端或编辑器中打开工作区 | 宿主 `workspace/open` | `workspace/open` | M1b | E2E-workspace-open（mock 打开动作）〔晚〕 |
@@ -138,7 +138,8 @@ M1 里的 P1 只有 NFR-13（防休眠）顺带做进 M1b，其余 P1 留给 M2�
 - `Option.effect` 的 `unknown`、`tier_after`、`rule`；
 - 新的错误 reason 和 notice code；`ui/navigate`；`host/status` 在测试构建里的 `pid`；
 - schema 注解 `x-id`、`x-time`、`x-path` 和视图的序列化格式；
-- v1.4（界面复刻 Codex）：`SessionSummary.pending_kind`；`queue.updated` 条目的 `content`；`session/queue_edit` 的 `ops`（`replace`、`steer`、`remove`、`move`，M1b 实现前两种，方法本身在 M1a 已有）。
+- v1.4（界面复刻 Codex）：`SessionSummary.pending_kind`；`queue.updated` 条目的 `content`；`session/queue_edit` 的 `ops`（`replace`、`steer`、`remove`、`move`，M1b 实现前两种，方法本身在 M1a 已有）；
+- v1.5（请求面板的安全确认）：`session/send.reply_to`、`user_message.reply_to`、排队条目的 `reply_to`。
 
 **第 3 组：M1b 才做也不违反规则**（界面、内部实现或流水线，不涉及协议形状）
 
