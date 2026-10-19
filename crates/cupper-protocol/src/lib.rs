@@ -18,6 +18,7 @@ pub mod index;
 pub mod interaction;
 pub mod item;
 pub mod limits;
+pub mod methods;
 pub mod open_enum;
 pub mod open_union;
 pub mod rpc;
