@@ -1,0 +1,47 @@
+# cargo-deny: license allowlist, banned crates and security advisories (ADR-11, design 5.1.6).
+
+[graph]
+# What we build and ship: the macOS app and the iOS-simulator check of `cupper-protocol`.
+targets = ["aarch64-apple-darwin", "aarch64-apple-ios-sim"]
+all-features = true
+
+[advisories]
+# Advisories (vulnerabilities, unsound and unmaintained crates) fail the check by default.
+yanked = "deny"
+ignore = []
+
+[licenses]
+# ADR-11 allowlist. Anything else needs a manual review recorded in an ADR or task review
+# before it is added here or as a per-crate exception.
+allow = [
+  "MIT",
+  "ISC",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "Apache-2.0",
+  "0BSD",
+  "Unlicense",
+  "CC0-1.0",
+  "BlueOak-1.0.0",
+]
+confidence-threshold = 0.93
+# The allowlist is policy, not an inventory: unused entries are fine.
+unused-allowed-license = "allow"
+exceptions = []
+
+[licenses.private]
+# Our own crates are `publish = false` and Apache-2.0 (see the workspace manifest).
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Path dependencies inside the workspace are not wildcards in the crates.io sense.
+allow-wildcard-paths = true
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

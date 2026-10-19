@@ -1,0 +1,3 @@
+[alias]
+# `cargo xtask ci <job>`: the single CI entry point (plan 1.8).
+xtask = "run --package xtask --locked --quiet --"

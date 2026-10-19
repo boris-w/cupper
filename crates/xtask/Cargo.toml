@@ -1,0 +1,11 @@
+[package]
+name = "xtask"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Development and CI tasks: `cargo xtask ci <job>`."
+
+[lints]
+workspace = true

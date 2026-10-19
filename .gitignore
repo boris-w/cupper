@@ -9,3 +9,9 @@
 
 # local-only materials (may contain personal or work data; never commit)
 .private/
+
+# build output
+target/
+node_modules/
+dist/
+*.tsbuildinfo
