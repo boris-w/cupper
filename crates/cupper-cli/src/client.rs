@@ -5,9 +5,9 @@
 //! compares the host's token after every read and routes each message: a
 //! response to the request waiting for it, a notification to
 //! [`Client::next`]. The result of [`Client::subscribe`] goes to
-//! [`Client::next`] too, in its place among the notifications, so that a
-//! [`Mirror`](crate::mirror::Mirror) tells the new subscription's data from
-//! what was still on its way for the old one.
+//! [`Client::next`] too, in its place among the notifications, so that the
+//! stream mirror (T049) tells the new subscription's data from what was
+//! still on its way for the old one.
 
 use std::collections::HashMap;
 use std::io;
@@ -100,7 +100,7 @@ pub enum ClientError {
 }
 
 /// How the CLI authenticates (design 5.8.1). T039 adds `harness`, keyed
-/// from `--harness-key-fd`: [`ClientAuth::credentials`] gets the `nonce`
+/// from `--harness-key-fd`: `ClientAuth::credentials` gets the `nonce`
 /// and the host's pinned token its proof binds to, and the handshake then
 /// checks `host_proof`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -127,7 +127,7 @@ pub struct Options {
 }
 
 impl Default for Options {
-    /// `peer`, accepting range events, which [`Mirror`](crate::mirror::Mirror) handles.
+    /// `peer`, accepting range events, which the stream mirror (T049) handles.
     fn default() -> Self {
         Self {
             auth: ClientAuth::Peer,
