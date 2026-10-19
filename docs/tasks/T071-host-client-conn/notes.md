@@ -93,3 +93,49 @@
 - **方案 A：上限提到约 2,200 行，硬停止线约 2,300 行。** 一起做完，与第一次裁定的理由一致。
 - **方案 B：同步部分拆成 T071b。** 内容是 `sync.ts`、`HostClient.subscribe` 及其在断线和重连时的处理、UNIT-hc-sync，约 470 行，与 T075 并行，在 T072 之前完成即可。T071 做完其余部分约 1,700 行。T075 用不到同步部分。代价同第一次汇报：`client.ts` 要在 T071b 里再改一次，多一轮派发和审阅。
 - 只把 mock HostPort 和合同套件移给 T076（约 270 行）不够：T071 仍有约 1,900 行。
+
+## 第二次裁定后（2026-10-19，计划 v1.3.9）
+
+- 采用方案 B：同步部分（`sync.ts`、`HostClient.subscribe`、断线重连后的重新订阅、UNIT-hc-sync）移到新任务 T087。T071 收窄为连接、切帧、握手、请求关联、命令重发、ShellAPI 的协议部分、mock 宿主、mock HostPort 和合同套件，上限约 1,750 行。
+- `testing.ts` 用 `node:fs`、握手的超时由调用方经 `AbortSignal` 传入，两条都认可。
+
+接着 1,052 行往下统计（相对分支起点的净新增）：
+
+| 完成的模块（提交） | 新增 / 删除 | 其中测试 | 累计 |
+|---|---|---|---|
+| 握手失败表压成一行一例（`6ba4622`） | 17 / 43 | 17 / 43 | 1,026 |
+| 浏览器 mock 的 HostPort、合同套件及其在 mock 上的运行（`a4e7ff9`） | 328 | 169 | 1,354 |
+| `client.ts`、`connectShell`、UNIT-hc-conn 的连接用例（`3677194`） | 504 | 149 | **1,858** |
+
+- 合计 1,858 行：代码 1,278 行，测试 580 行（含合同套件 155 行、读 fixtures 的辅助 9 行）。比约 1,750 行的上限多约 6%，低于第一次裁定的 1,900 行硬停止线。
+- 超出来自 `client.ts`：估计约 200 行，实际 309 行。多出的是两条顺序规则：监听方在处理途中发请求、回复又立即到达时，字节块仍要按到达顺序逐块处理，并且每块处理完才确认；`call` 的回调必须同步执行，回复才能和通知保持原来的先后。另一部分是 Prettier 把 import 和对象字面量展开成多行。
+- 写 `client.ts` 的用例之前已经是 1,748 行。剩下的只有 UNIT-hc-conn 必需的连接用例，于是写完再统一说明。删掉了没有使用方、也没有测试的 `notify` 和 `sendBlob`（13 行），需要时由 T080、T145 加回 `client.ts`。
+
+## 实现时的取舍
+
+- **包的边界**：整个 host-client 不 import `node:*` 和 `electron`，ESLint 规则强制（测试和 `testing.ts` 除外）。主进程用同一份代码：把套接字包成 `HostPort`，`handshake()` 之后 `client.attach(port, handshake, rest)`。
+- **shell-api 不依赖 host-client**：浏览器 mock 的 `host` 由调用方注入（`createBrowserShell({ host: createMockShellHost(mockHost) })`），否则两个包会互相引用。
+- **`Handshake`** 是 `InitializeResult` 去掉 `host_proof`：`host_proof` 由主进程校验，渲染进程用不到。合同测试检查结果里没有这个字段。
+- **握手**：
+  - 认证用的是哪种方式，决定要不要校验 `host_proof`：`dev_key`、`harness` 两种基于密钥的认证都要求有 `host_proof`，并且必须通过校验。不按 `weak_auth` 判断，因为只开 `test-harness` 的构建里 `weak_auth` 为 false，却仍用 `harness` 认证。
+  - 宿主回 `shutting_down` 时记为 `closed`（可重试）。
+  - 宿主回 `version_unsupported`、`unauthenticated` 或 `forbidden` 时，原样作为失败原因。
+  - 其他错误记为 `protocol_error`。
+  - 逐帧读取，`initialize` 响应之后的字节留给下一个读取方。
+- **状态机**由驱动方调用 `progress`、`attach`、`detach`、`fail`、`close` 推进。第一次 `ready` 之后，重新拨号和重新握手都算 `reconnecting`，界面只显示一种"正在重新连接"。状态没有变化时不重复通知；`ready` 每次都通知，因为它带着新的握手结果。
+- **断线时的请求**：在途的普通请求以 `ConnectionLost` 失败（TanStack Query 自己重试）；命令留下，下次 `attach` 时按原顺序、用同一个 `command_id` 先发。没有连接时发出的普通请求立即失败，命令排队等待。只有 `close()` 让命令失败。
+- **区分命令**：生成的协议包里没有方法目录，所以由调用方用 `command()` 标明。`command_id` 已有就沿用，否则生成 UUIDv7。
+- **坏帧**（长度为 0、超限、`0x02` 头部截断）：关闭端口，状态记为 `failed: protocol_error`。不是 JSON-RPC 的消息、没有人等的响应，只记日志后跳过。
+- **mock 宿主**和真宿主一致：先发 `host/hello`；核对 nonce；`initialize` 失败或重复时先回错误、再断开；没握手就请求的回 `not_initialized`；没有 fixture 也没有处理函数的方法回 `-32601`。
+- **浏览器 mock 的 HostPort** 像 MessagePort 一样稍后、按顺序投递，第一个监听方出现之前的数据先存着。状态和数据走同一个微任务队列，所以"旧数据 → `reconnecting` → `ready`"的顺序自然成立。合同套件做过变异检查：放行 `initialize`，或者让 `reconnecting` 抢在旧数据前面，对应的用例都会失败。
+
+## 给 T087 的接入点
+
+T087 在 `HostClient` 之上做订阅，不需要改 `client.ts` 的现有逻辑，只加 `subscribe(stream, sink)`：
+
+- **`stream/*` 通知**：`client.onNotification((method, params) => …)` 按到达顺序收到全部通知，`stream/events`、`stream/snapshot`、`stream/reset` 也在其中，按 `params.stream` 分给各流。`params` 是原样的 JSON；按交接事项，`events`、`ops` 先当 `unknown[]` 取出，再逐个 `zEvent`/`zEventBody.safeParse`。
+- **`stream/subscribe` 的结果**：用 `client.call("stream/subscribe", params, done)`，不要用 `request()`。`done` 在处理该帧时同步调用，排在同一个字节块里后面那些通知之前；`request()` 的 Promise 要到微任务里才完成，那时后面的 `stream/events` 已经分发出去，会被当成旧订阅的数据丢掉。`done` 收到三种结果：`{result}`、`{error}`、`{lost: true}`。
+- **断线**：`client.onState(cb)` 收到 `reconnecting`（或 `failed`、`closed`）时，各流进入"等待"并保留游标；在途的订阅请求同时以 `{lost: true}` 结束，忽略即可。
+- **重连**：收到 `ready` 时第二个参数是新的握手结果，其中有 `data_epoch`。这时按游标重新订阅：`attach` 先通知 `ready`，再处理端口上的剩余字节、重发排队的命令，所以订阅请求排在命令前面。
+- **首次订阅**：`client.state.status === "ready"` 时立即发出；否则等下一个 `ready`。
+- **三种计数**放在 T087 的订阅层，按裁定的定义统计；E2E 的 `window.__cupperTest` 从那里导出。
