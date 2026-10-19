@@ -4,6 +4,7 @@
 
 mod license;
 mod rust;
+mod ts;
 
 use anyhow::Result;
 
@@ -35,7 +36,7 @@ const fn locked(name: &'static str, run: Option<fn(&mut JobCtx) -> Result<()>>) 
 pub const JOBS: &[Job] = &[
     job("rust", Some(rust::run)),
     job("protocol", None),
-    job("ts", None),
+    job("ts", Some(ts::run)),
     locked("ui", None),
     job("license", Some(license::run)),
     job("testdata-scan", None),
