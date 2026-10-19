@@ -1,7 +1,7 @@
 //! Open types (design 5.3.1): enums and `type`-tagged unions accept values this
 //! version does not know, so older readers never fail on newer values.
 //!
-//! - Enums: [`open_enum!`](crate::open_enum) keeps unknown strings in `Unknown(String)`.
+//! - Enums: [`open_enum!`](crate::open_enum!) keeps unknown strings in `Unknown(String)`.
 //! - Internally tagged unions (`#[serde(tag = "type")]`) end with an
 //!   `#[serde(untagged)] Unknown(UnknownTagged)` member.
 
