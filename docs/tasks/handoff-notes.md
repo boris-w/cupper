@@ -175,6 +175,10 @@
 | T080、T145 | `HostClient` 还没有 `notify`（例如 `client/presence`）和 `sendBlob`，需要时加到 `client.ts` | T071 |
 | T043 | 照 `orchestrator/session_props.rs` 的组合核心 `Session` 接线：驱动事件依次交给裁判、回合机，如果是更新再交给合并器；回合机的 `TurnSignal` 立即交给合并器，这一步结束后再交给裁判，裁判的 `Start`、`End`、`Hold` 作为回合机的输入回送；`turn.completed` 由合并器写。请求先送裁判（`Asked`），再送合并器（`Interject`），每次解决之后送 `Resolved`。收到 `Asked` 而开出的自发回合，要在交互代理写出请求之前开好，请求才带上 `turn_id`。回合收尾期间到达的请求，放进随后开的自发回合，裁判会等它解决后才结束这个回合，接线时请确认 | T058（已写入 T043 的 brief） |
 | T110 | 裁判把 thread 状态当作"最近一次报告"：只有 Codex 会报告，Claude 一直是未知，只按静默规则判断。Codex 提取层提供 `threadStatus` 时，要有 idle。工具结束之后又来不带结束状态的更新时，裁判会把它重新记为运行中，回合不会因静默而结束，录制金样例时留意 | T058 |
+| T075 | 原生扩展与 host-client 的胶水：`auth: (hello) => conn.auth(hello.nonce)`（返回协议 `Auth` 的 `dev_key` 分支）；`verifyHostProof: (proof) => conn.verifyHostProof(proof)`，信道由扩展记着；`host_proof` 缺失时 host-client 不调用 `verifyHostProof`、直接报 `host_unverified`，这条路径扩展不会自己断开，T075 要在握手失败时调用 `conn.close()`。`connectHost` 抛出的 `code`（`peer_exited`、`peer_execed`、`code_changed`、`unverifiable`、`not_the_host`、`other_user`、`no_requirement`、`connect_failed`）并入 `ConnectionState` 的 `failed.reason`。宿主被杀后重新拉起时复用同一个 `HostKey`。用 `buildInfo()` 核对扩展的构建种类与 App 的 flavor 一致。宿主写完立刻退出时令牌读不到，那批数据会丢弃并记为 `token_changed`（例如最后一条 `host/shutdown`），UI 不要把 `token_changed` 一律当作攻击提示 | T073 |
+| T076 | 原生扩展用 socketpair 转发，每条连接两个线程加一次拷贝；macOS 上 socketpair 和本机套接字的默认缓冲区只有 8 KB，转发会分成很多小块。测量闸门不达标时，在 `cupper-sys` 里加 `setsockopt(SO_SNDBUF/SO_RCVBUF)` | T073 |
+| T161 | `release-config` 可以断言扩展发布构建的 `buildInfo().features` 为空 | T073 |
+| 下一个改 Rust 依赖的任务 | `getrandom 0.4.3` 已有三个使用方（cupper-host、cupper-cli、cupper-desktop-native），按惯例提到 `[workspace.dependencies]` | T073 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

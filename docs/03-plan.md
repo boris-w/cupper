@@ -1586,7 +1586,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T087 host-client I-b：订阅与同步
 - [x] T071 host-client I：连接与续传，ShellAPI 的协议部分
 - [ ] T072 host-client II：视图 reducer 与交叉验证
-- [ ] T073 cupper-desktop-native
+- [x] T073 cupper-desktop-native
 - [x] T074 桌面主进程 I：应用骨架、构建与加固基线
 - [ ] T075 桌面主进程 II：拉起宿主、control 连接与退出确认
 - [ ] T076 桌面主进程 III：windowBridge 与 preload
