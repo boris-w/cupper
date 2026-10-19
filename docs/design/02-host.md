@@ -503,6 +503,27 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 **退出码**：0 正常；3 已有实例；4 数据来自更新的版本；5 数据目录不可用；6 迁移失败（界面给出备份位置和诊断包入口）；1 其他错误（含启动载荷读取超时或格式错误）。
 
+**T037 开工前的裁定（2026-10-19）**
+
+- **启动清理只写库，不追加事件**：上次运行留下的运行中回合标为 `interrupted`，待处理的交互标为 `expired`（`host_restarted`），`sessions.state` 从 `running` 改为 `interrupted`。会话流里对应的 `turn.completed`、`interaction.resolved` 事件，由会话 actor（T043）在载入会话时补写，以守住"每条流只有一个写者"。
+- **数据目录**：
+  - 已存在、属主是当前用户、但权限不是 0700：直接收紧，不报错；
+  - 属主不对，或者不是目录：以退出码 5 退出。
+- **待升级时的空闲退出**：没有运行中的回合、待处理的交互和排队消息时立即退出，不看连接，也不等 10 分钟。
+- **`host/shutdown` 的 `reason`**：SIGTERM、孤立、写线程死亡都用 `user_quit`，不新增取值。写线程死亡时以退出码 1 退出，`last_clean_exit_at` 写不了，有序退出的其余步骤照做。
+- **`host/status.clients`**：从网关的连接登记表推出，T034 复用这张表。
+- **`host/exit` 的回复与 `host/shutdown` 的先后**：两者都在连接关闭之前进入发送队列，先后不保证，客户端不应依赖。
+- **自检**：比较 `current_exe()` 文件的 `file_cdhash` 和 `own_cdhash()`；`own_cdhash()` 失败时不做自检（T059）。
+- **清理残留**：
+  - 没有 ACP 连接，所以跳过 ADR-09 的前两步，直接 TERM → 2 s → KILL，每 50 ms 轮询一次；
+  - 两个时长都登记进 `durations.rs`；
+  - 后代进程组的表由 T055 补上（T059）。
+- **审计格式**：网关夹具的审计行保留 `Debug` 文本，正式格式只用于 `audit` 表（T059）。
+- **组装**：
+  - `Ledger::load` 另开一个 `open_reader` 连接，因为 `Writer::spawn` 会拿走写连接；
+  - `host/exit` 是命令，要登记在带账本的方法表上，所以用 `Routes::new(ledger)` 加账本清理任务；
+  - T043、T034 接上时再调整 `Routes::start` 的签名。
+
 ## 5.2.14 cupper-cli
 
 第二客户端，用于 NFR-1 验收、端到端测试和开发调试。可执行文件随 App 放在 `Cupper.app/Contents/Helpers/cupper`（Apple 的 bundle 布局：可执行代码不放 `Resources`），签名的 identifier 为 `dev.cupper.cli`，与 UI 不同（ADR-05）。设置页提供"安装命令行工具"，在用户选择的目录里建符号链接。
