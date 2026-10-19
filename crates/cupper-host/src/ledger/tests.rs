@@ -8,7 +8,7 @@ use serde_json::json;
 use tokio::runtime::Runtime;
 
 use super::*;
-use crate::clock::ManualClock;
+use crate::clock::{ManualClock, MonoTime};
 use crate::gateway::testkit::TempDir;
 use crate::quiescence::Quiescence;
 use crate::store::{
@@ -16,6 +16,7 @@ use crate::store::{
 };
 
 const METHOD: &str = "session/send";
+const HOUR: Duration = Duration::from_secs(60 * 60);
 
 struct Fixture {
     _dir: TempDir,
@@ -75,6 +76,22 @@ impl Fixture {
                 .collect()
         });
         self.runtime.block_on(read).unwrap()
+    }
+
+    /// Waits until the sweeper has swept and set a timer later than `after`.
+    fn swept(&self, after: MonoTime) {
+        self.runtime.block_on(async {
+            while self.clock.next_deadline().is_none_or(|next| next <= after) {
+                tokio::task::yield_now().await;
+            }
+        });
+    }
+
+    /// Moves the clock to the sweeper's next timer and waits for that sweep.
+    fn next_sweep(&self) {
+        let due = self.clock.next_deadline().expect("the sweeper waits");
+        self.clock.advance_to(due);
+        self.swept(due);
     }
 }
 
@@ -275,6 +292,35 @@ fn unit_ledger_load_refuses_a_bad_row() {
         fx.runtime.block_on(write).unwrap();
         assert!(matches!(fx.load(), Err(LedgerError::Corrupt(_))), "{state}");
     }
+}
+
+#[test]
+fn unit_ledger_commands_expire_after_48_hours_by_clock() {
+    let fx = Fixture::new("ledger-expiry");
+    let ledger = fx.start();
+    let params = json!({});
+    fx.commit(ticket(begin(&ledger, "early", &params)), Ok(json!({})));
+    fx.clock.advance(48 * HOUR);
+    // A host starting now does not load it, though the row is still there.
+    drop(ticket(begin(&fx.start(), "early", &params)));
+    assert_eq!(fx.rows(), [row("pr_desktop", "early", "done")]);
+
+    // The sweeper sweeps at once, then every hour.
+    fx.runtime.spawn(ledger.clone().sweeper());
+    fx.swept(fx.clock.now_mono());
+    drop(ticket(begin(&ledger, "early", &params)));
+    assert!(fx.rows().is_empty());
+    fx.commit(ticket(begin(&ledger, "late", &params)), Ok(json!({})));
+    for _ in 0..47 {
+        fx.next_sweep();
+    }
+    assert_eq!(
+        replay(begin(&ledger, "late", &params)),
+        Ok(json!({"replayed": true}))
+    );
+    fx.next_sweep();
+    drop(ticket(begin(&ledger, "late", &params)));
+    assert!(fx.rows().is_empty());
 }
 
 #[test]

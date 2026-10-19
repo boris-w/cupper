@@ -32,6 +32,8 @@
 //!
 //! The ledger keeps the commands of the last `ledger_retention` (48 hours) in
 //! memory, loaded from the `commands` table at startup, and in the table.
+//! [`Ledger::sweeper`] drops older ones at startup and every `ledger_sweep`
+//! (design 5.4.5).
 
 mod hash;
 mod row;
@@ -54,8 +56,8 @@ pub use hash::params_hash;
 pub use ticket::{Completion, Ticket, Waiter};
 
 use crate::clock::Clock;
-use crate::durations::{Durations, LEDGER_RETENTION};
-use crate::store::{WriteError, Writer};
+use crate::durations::{Durations, LEDGER_RETENTION, LEDGER_SWEEP};
+use crate::store::{Durability, WriteError, Writer};
 
 /// A command's answer: its result, or the error it ended with.
 pub type Outcome = Result<Value, RpcError>;
@@ -124,6 +126,8 @@ struct Shared {
     table: Mutex<HashMap<Key, Entry>>,
     writer: Writer,
     clock: Arc<dyn Clock>,
+    retention: Duration,
+    sweep_every: Duration,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -179,6 +183,8 @@ impl Ledger {
                 table: Mutex::new(table.into_iter().collect()),
                 writer,
                 clock,
+                retention,
+                sweep_every: durations.get(LEDGER_SWEEP),
             }),
         })
     }
@@ -227,6 +233,32 @@ impl Ledger {
     ) -> Result<Option<Repeat>, LedgerError> {
         let (key, hash) = (Key::new(principal, command), params_hash(params)?);
         repeat(self.shared.lock().get(&key), method, &hash)
+    }
+
+    /// Drops the commands that began `ledger_retention` ago or earlier, from
+    /// memory and from the table. A running command stays until it ends.
+    /// Returns how many rows went.
+    pub async fn sweep(&self) -> Result<usize, LedgerError> {
+        let up_to = expired_up_to(self.shared.clock.as_ref(), self.shared.retention);
+        self.shared.lock().retain(|_, entry| {
+            entry.begun.created_at > up_to || matches!(entry.state, State::Running(_))
+        });
+        let receipt =
+            (self.shared.writer).submit(Durability::Normal, move |conn| row::prune(conn, up_to));
+        Ok(receipt.await?)
+    }
+
+    /// Sweeps at once and then every `ledger_sweep`, on `Clock` timers, for as
+    /// long as the task runs. The host spawns it.
+    pub async fn sweeper(self) {
+        let clock = Arc::clone(&self.shared.clock);
+        let mut next = clock.now_mono();
+        loop {
+            clock.timer_at(next).await;
+            // A failed sweep leaves its rows to the next one.
+            let _ = self.sweep().await;
+            next = next + self.shared.sweep_every;
+        }
     }
 }
 

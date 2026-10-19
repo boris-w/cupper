@@ -63,6 +63,11 @@ pub(super) fn delete(conn: &Connection, key: &Key) -> rusqlite::Result<()> {
     Ok(())
 }
 
+/// Deletes the rows created at `up_to` or earlier; returns how many.
+pub(super) fn prune(conn: &Connection, up_to: u64) -> rusqlite::Result<usize> {
+    conn.execute("DELETE FROM commands WHERE created_at <= ?1", [up_to])
+}
+
 /// The rows created after `expired_up_to`: `done` ones replay, and
 /// `pending_external` ones, which never got their outcome, are unknown.
 pub(super) fn load(

@@ -70,6 +70,9 @@ durations! {
     /// How long the command ledger keeps a command after it began (design
     /// 5.2.5, 5.4.5).
     LEDGER_RETENTION = "ledger_retention", Duration::from_secs(48 * 60 * 60);
+    /// How often the ledger drops the commands past their retention (design
+    /// 5.4.5).
+    LEDGER_SWEEP = "ledger_sweep", Duration::from_secs(60 * 60);
     /// The registry's own tests: a short coalescing window.
     #[cfg(test)]
     TEST_TICK = "test_tick", Duration::from_millis(40);
