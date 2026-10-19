@@ -164,6 +164,11 @@
 | T038 | 撤销提权挂在 `IndexPort::closed` 上。`Dispatch` 里的 principal 在 `initialize` 时定下、之后不变；授予提权需要让这条连接的 scope 能更新，要改这里 | T033 |
 | T047 | `test/run_maintenance` 要用账本：给 `Routes` 加一个公开的账本访问函数（现在是 `pub(super)`）。账本清理任务、各连接等待回复的 task 还没有登记进静止屏障 | T033 |
 | T019、T029 | 接入点见 `docs/tasks/T033-gateway-dispatch/notes.md`"给 T019、T029 的接入点"：`stream/*`、`history/page` 登记为 `Target::Streams`，`blob/*` 为 `Target::Blobs`；订阅表和上传缓冲放进每条连接的 `Dispatch`，断开时自动清理；`HOST_FEATURES` 目前为空，由它们补上 | T033 |
+| 所有新增或调整用例编号的任务 | 编号登记在 `tests/ids.toml`（T002）：每个任务只在自己那一段里追加，写明里程碑、套件、状态；`xtask ci testdata-scan` 会把文档里出现但没登记的编号报出来。`node tools/trace-ids/src/main.ts status --summary <摘要>` 可以看哪些编号已完成、待完成 | T002 |
+| T064 | 给 `tools/trace-ids` 加读兼容报告的入口（`--compat <报告>`）；在那之前 COMPAT 编号一直是待完成 | T002 |
+| T173 | MAN 证据的格式先定为 `tests/ids.toml` 里的 `[[evidence]]`（id、date、record、versions），可以在此基础上改 | T002 |
+| 改用 cargo-nextest 的任务 | 替换 `crates/xtask/src/ci/ctx.rs` 的 `parse_libtest`，并考虑在摘要里记"skip"；摘要格式不变时 trace-ids 不用改（它的 JUnit 读取是按格式手写的样例测试的，接上时用真实报告再核对一次） | T002 |
+| T053、T110 | "其余录制"的 GOLD-A 编号，由各自在 `tests/ids.toml` 里追加 | T002 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

@@ -1516,7 +1516,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 **M1a**
 
 - [x] T001 仓库与工程骨架、本机 CI 入口
-- [ ] T002 用例编号登记与 trace-ids
+- [x] T002 用例编号登记与 trace-ids
 - [x] T003 技术验证：Q8（Claude）、Q9、SP-4b #7 与版本复核
 - [ ] T004 xtask runtime-pack 与运行时清单
 - [ ] T005 xtask host-bundle
