@@ -435,6 +435,21 @@ mod tests {
         // And `forbidden/scope`: the tier rules apply to `config` (5.8.2).
         let errors = json!(["not_found", "unavailable", "unsupported", "forbidden/scope"]);
         assert_eq!(entry("session/create")[X_ERRORS], errors);
+        // A full queue leaves the queue as it is (5.3.11, after 5.3.9).
+        let errors = json!([
+            "not_found",
+            "unavailable",
+            "too_large",
+            "too_large/queue_full"
+        ]);
+        assert_eq!(entry("session/send")[X_ERRORS], errors);
+        let full = json!("too_large/queue_full");
+        assert!(
+            entry("session/queue_edit")[X_ERRORS]
+                .as_array()
+                .unwrap()
+                .contains(&full)
+        );
         let errors = json!([
             "conflict/already_resolved",
             "conflict/digest_mismatch",

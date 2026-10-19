@@ -80,7 +80,7 @@ method! {
     /// steers when asked to (design 5.2.6). A paused queue still takes it.
     request SessionSend = "session/send" (SessionSendParams) -> SessionSendResult {
         scope: Write, idempotency: Command, milestone: M1a,
-        errors: [NotFound, Unavailable, TooLarge],
+        errors: [NotFound, Unavailable, TooLarge, TooLarge / QueueFull],
     }
 }
 
@@ -192,7 +192,7 @@ method! {
     /// `session/queue_edit`: edits queued messages (v1.4, decision F3).
     request SessionQueueEdit = "session/queue_edit" (SessionQueueEditParams) -> SessionQueueEditResult {
         scope: Write, idempotency: Command, milestone: M1b,
-        errors: [Conflict / VersionMismatch, NotFound, Unsupported],
+        errors: [Conflict / VersionMismatch, NotFound, Unsupported, TooLarge / QueueFull],
     }
 }
 
@@ -450,6 +450,7 @@ pub(super) mod tests {
     use serde_json::{Value, json};
 
     use super::*;
+    use crate::error::{ErrorCode, ErrorReason, RpcError};
     use crate::methods::testkit::{capabilities, digest, request};
     use crate::testutil::{open_values, roundtrip};
 
@@ -581,5 +582,19 @@ pub(super) mod tests {
         open_values::<Disposition>(Disposition::KNOWN);
         open_values::<FallbackReason>(FallbackReason::KNOWN);
         open_values::<RestoreMode>(RestoreMode::KNOWN);
+    }
+
+    #[test]
+    fn unit_proto_methods_core_session_full_queue_error() {
+        // At the limit of 5.3.9, `session/send` and `session/queue_edit`
+        // leave the queue as it is (5.3.11).
+        let raw = json!({"code": -32000, "message": "queue full",
+            "data": {"code": "too_large", "reason": "queue_full"}});
+        let full = RpcError::app(ErrorCode::TooLarge, "queue full");
+        assert_eq!(
+            roundtrip::<RpcError>(&raw),
+            full.with_reason(ErrorReason::QueueFull)
+        );
+        assert_eq!(ErrorReason::QueueFull.code(), Some(ErrorCode::TooLarge));
     }
 }
