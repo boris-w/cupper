@@ -8,7 +8,7 @@ use schemars::SchemaGenerator;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::{handshake, project, stream};
+use super::{handshake, project, session, stream};
 use crate::rpc::{ClientNotification, HostNotification, Method};
 use crate::schema::{client_notification_entry, host_notification_entry, method_entry};
 
@@ -50,6 +50,7 @@ pub fn catalog(g: &mut SchemaGenerator) -> Catalog {
     handshake::register(&mut catalog, g);
     stream::register(&mut catalog, g);
     project::register(&mut catalog, g);
+    session::register(&mut catalog, g);
     catalog
 }
 
@@ -85,6 +86,7 @@ mod tests {
             handshake::tests::samples(),
             stream::tests::samples(),
             project::tests::samples(),
+            session::tests::samples(),
         ]
         .concat()
         .into_iter()
@@ -159,7 +161,13 @@ mod tests {
         ),
         (
             "订阅、history/page、…、session/list_archived（其中 T018 的方法）",
-            &["agents/capabilities", "project/trust_info"],
+            &[
+                "agents/capabilities",
+                "project/trust_info",
+                "session/get",
+                "session/capabilities",
+                "session/list_archived",
+            ],
             [Y; 7],
         ),
         (
@@ -174,8 +182,31 @@ mod tests {
         ),
         (
             "session/set_config（非档位的配置项）、session/rename、session/archive、session/restore、agents/refresh、agents/restart（remote_device 仅 set_config 的模型和推理强度）",
-            &["agents/refresh", "agents/restart"],
+            &[
+                "session/set_config",
+                "session/rename",
+                "session/restore",
+                "agents/refresh",
+                "agents/restart",
+            ],
             [Y, Y, N, Y, N, Y, Sec9],
+        ),
+        ("session/mark_read", &["session/mark_read"], [Y; 7]),
+        (
+            "session/create（不改变档位）、session/send、session/interrupt、session/queue_resume；session/queue_edit 按 session/send（5.3.11）",
+            &[
+                "session/create",
+                "session/send",
+                "session/interrupt",
+                "session/queue_resume",
+                "session/queue_edit",
+            ],
+            [Y, Y, N, Y, N, Y, Y],
+        ),
+        (
+            "session/confirm_config",
+            &["session/confirm_config"],
+            [Native, N, N, N, N, Y, N],
         ),
     ];
 
@@ -312,7 +343,10 @@ mod tests {
     );
 
     /// The method groups of T018.
-    const SESSION_GROUPS: [Group; 1] = [(project::register, project::tests::samples)];
+    const SESSION_GROUPS: [Group; 2] = [
+        (project::register, project::tests::samples),
+        (session::register, session::tests::samples),
+    ];
 
     /// What `register` adds to the catalog.
     fn names(register: fn(&mut Catalog, &mut SchemaGenerator)) -> BTreeSet<&'static str> {
@@ -355,6 +389,9 @@ mod tests {
             "agents/restart",
             "project/add",
             "project/remove",
+            "session/rename",
+            "session/restore",
+            "session/set_config",
         ];
         assert_eq!(sec9, BTreeSet::from(expected));
         let (catalog, _) = built();
@@ -374,6 +411,10 @@ mod tests {
             ("project/add", "M1a"),
             ("project/remove", "M1b"),
             ("agents/restart", "M1b"),
+            ("session/create", "M1a"),
+            ("session/queue_edit", "M1b"),
+            ("session/set_config", "M1b"),
+            ("session/list_archived", "M1b"),
         ] {
             assert_eq!(entry(name)[X_MILESTONE], milestone, "{name}");
         }
@@ -382,5 +423,8 @@ mod tests {
         assert_eq!(entry("project/trust_info")[X_ERRORS], errors);
         let errors = json!(["conflict/digest_mismatch", "unavailable/scan_failed"]);
         assert_eq!(entry("project/trust")[X_ERRORS], errors);
+        // And `forbidden/scope`: the tier rules apply to `config` (5.8.2).
+        let errors = json!(["not_found", "unavailable", "unsupported", "forbidden/scope"]);
+        assert_eq!(entry("session/create")[X_ERRORS], errors);
     }
 }
