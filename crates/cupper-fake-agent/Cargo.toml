@@ -10,8 +10,11 @@ description = "Scripted ACP agent for host tests: the prompt text is the script 
 [dependencies]
 # Pinned exactly, like the host (design 5.6.10).
 agent-client-protocol = "=3.3.0"
+anyhow.workspace = true
+futures = "0.3.32"
 serde_json.workspace = true
 thiserror.workspace = true
+tokio = { version = "1.53.3", features = ["io-std", "io-util", "macros", "rt", "sync", "time"] }
 
 [lints]
 workspace = true

@@ -4,7 +4,11 @@
 //!
 //! - [`config`]: the start configuration (persona, login state, faults,
 //!   process segment), from the command line;
-//! - [`persona`]: what Claude's and Codex's adapters look like on the wire.
+//! - [`persona`]: what Claude's and Codex's adapters look like on the wire;
+//! - [`agent`]: the SDK's agent role, sessions and the global invariant;
+//! - [`script`]: the prompt text is the script.
 
+pub mod agent;
 pub mod config;
 pub mod persona;
+pub mod script;
