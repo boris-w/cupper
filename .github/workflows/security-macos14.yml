@@ -1,0 +1,40 @@
+# `cargo xtask ci security-macos14` (design 5.1.6, Q24). Dormant until the repository has a remote (U-P1).
+name: security-macos14
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  pull_request:
+    paths:
+      - "crates/cupper-sys/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-macos14:
+    runs-on: macos-14
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # rustup installs the toolchain pinned in rust-toolchain.toml on first use.
+      - run: cargo xtask ci security-macos14
+      # A failed nightly run opens an issue; on a pull request the failure blocks the merge.
+      - if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "security-macos14 failed on $(date -u +%F)" \
+            --body "Nightly run: $RUN_URL"
