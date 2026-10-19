@@ -1,0 +1,42 @@
+[package]
+name = "cupper-desktop-native"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "cupper_native.node: the napi-rs extension through which the desktop main process starts, verifies and talks to the host (design 5.1.3)."
+
+[lib]
+# `libcupper_native.dylib`, shipped as `cupper_native.node` (design 5.1.3).
+name = "cupper_native"
+crate-type = ["cdylib"]
+
+# The build kind comes from this feature (design 5.7.9, 5.8.1); none is the
+# release build, which checks the host's code signature.
+[features]
+# Development, self-use and e2e builds: the desktop starts the host with a
+# one-time `dev_key` and the host proves it (degraded authentication).
+dev-auth = ["dep:getrandom", "dep:serde_json", "napi/serde-json"]
+
+[dependencies]
+cupper-protocol = { path = "../cupper-protocol" }
+cupper-sys = { path = "../cupper-sys" }
+# The key and the client nonce of `dev_key` authentication.
+getrandom = { version = "0.4.3", optional = true }
+# Node-API level 4 (Node 10.16 and later) has every call used here. Symbols are
+# looked up at load time (`dyn-symbols`), so the tests link without Node.
+napi = { version = "=3.14.2", default-features = false, features = ["napi4", "dyn-symbols"] }
+napi-derive = "=3.6.12"
+serde_json = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[dev-dependencies]
+# `send_with_fds`: a host that passes fds.
+cupper-sys = { path = "../cupper-sys", features = ["test-util"] }
+
+[build-dependencies]
+napi-build = "=2.6.0"
+
+[lints]
+workspace = true
