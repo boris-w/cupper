@@ -54,5 +54,10 @@ name = "cupper-gateway-fixture"
 path = "src/bin/gateway_fixture.rs"
 required-features = ["test-harness"]
 
+# IT-devkey-launcher-only and IT-devkey-orphan-start run the fixture with `dev_key`.
+[[test]]
+name = "gateway"
+required-features = ["dev-auth", "test-harness"]
+
 [lints]
 workspace = true
