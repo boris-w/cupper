@@ -98,3 +98,16 @@
 - Q38：会话行尾的时间与 diff 统计；
 - Q39：↑ 恢复上一条；
 - Q40：回到底部按钮的尺寸、斜杠菜单、diff 视图自动切换的阈值、运行中有内容时的发送按钮。
+
+## 安全确认后的补充（第 2 轮）
+
+依据安全工程师的确认 `docs/meetings/2026-10-19-ui-fidelity/security-engineer.md` 中"必须补的"6 条。设计升到 v1.5，计划升到 v1.2，计划 2.7 有逐条的任务变化。
+
+| # | 条件 | 设计 | 计划 |
+|---|---|---|---|
+| 1 | 面板焦点：<br>- 输入框有草稿时不自动获得焦点；<br>- 收到打字键就撤销键盘可操作状态，回到"按 Tab 或点击以处理请求"；<br>- "请再按一次"只用于窗口激活后的冷却期；<br>- 第一下 ⌘Enter 不提交 | 5.7.8 RP-3、RP-5、第 7 条；5.7.4 请求面板；5.9.4 E2E-SEC-panel-arming | T083（UNIT-request-panel）；T092（E2E-SEC-panel-arming 补场景） |
+| 2 | 导航键不触发第 3 条，但清掉尚未用掉的输入 | 5.7.8 第 2 条 | T077（UNIT-input-guard） |
+| 3 | 编号：<br>- 编号等于选项在 `options` 里从 1 起的序号，特权和效果未知的选项也占编号；<br>- 按效果未知选项的编号不起作用；按特权选项的编号走 `requestPrivileged`；<br>- 不重新排序 | 5.7.8 RP-5、RP-6、RP-7、RP-10；5.7.4、5.7.5 请求面板；5.9.4 E2E-SEC-panel-numbering | T083（渲染）、T031（UNIT-policy-matrix）；T092（E2E-SEC-panel-numbering） |
+| 4 | 还原确认：<br>- 审查文档触发的不自动获得焦点，同一时间只显示一个；<br>- 主文档按钮触发的默认焦点在"确认"上 | 5.7.8 RP-11；5.7.5 审查面板与审查文档；5.9.4 E2E-SEC-revert-confirm | T130、T131（K9 不通过时 T139）；E2E-SEC-revert-confirm 放在 T131，因为 T093 在 M1a，而审查面板在 M1b |
+| 5 | "拒绝并附一条消息"：<br>- 拒绝成功后才发送；<br>- `already_resolved`、`expired` 时文字留在输入框，并提示"已在别处处理"；<br>- 遵守"默认排队"的设置和插话能力；<br>- 标明附属于哪一次拒绝 | 5.7.8 RP-12；5.7.4 请求面板；5.3.4 `session/send.reply_to`、5.3.5 `user_message.reply_to`；5.12.5 | T083；T140（插话路径）；T011、T012、T043（`reply_to`）；T093（E2E-reject-with-message） |
+| 6 | 其他：<br>- 通知没有操作按钮的单元测试；<br>- Q41 改为只剩"Codex 的数字键是否选中即提交"未核实，交 T106；设计里的"与 Codex 相同"已改为"未核实"；<br>- MAN-keyboard 保留数字键 | 5.7.8"通知"一行；5.12.4 AP-3；5.13 Q41；5.9.10 | T150（UNIT-notifier-no-actions）、T158；T106；T077 |
