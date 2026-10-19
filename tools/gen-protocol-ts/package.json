@@ -1,0 +1,17 @@
+{
+  "name": "@cupper/gen-protocol-ts",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Generates the TS types and zod schemas of packages/protocol from protocol/schema/v1.json (design 5.3.10).",
+  "type": "module",
+  "scripts": {
+    "gen": "node src/main.ts"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
+    "@types/node": "24.19.1",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3"
+  }
+}
