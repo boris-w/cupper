@@ -4,25 +4,18 @@
 
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::SessionId;
+use cupper_protocol::methods::stream::HistoryCursor;
 use cupper_protocol::view::paginate;
 use rusqlite::Connection;
 
 use super::log;
 use super::streams::StreamError;
 
-/// Where a page starts; `history/page`'s cursor. Without `op_index`: the
-/// turn before `turn_no`. With it: turn `turn_no` from that op on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Cursor {
-    pub turn_no: u32,
-    pub op_index: Option<u32>,
-}
-
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Page {
     pub ops: Vec<EventBody>,
     /// `None` once the first turn is served.
-    pub next: Option<Cursor>,
+    pub next: Option<HistoryCursor>,
 }
 
 /// The page of `session` at `cursor`, its ops' JSON array within `max_bytes`
@@ -30,7 +23,7 @@ pub struct Page {
 pub fn page(
     conn: &Connection,
     session: &SessionId,
-    cursor: Cursor,
+    cursor: HistoryCursor,
     max_bytes: usize,
 ) -> Result<Page, StreamError> {
     let (turn_no, from) = match cursor.op_index {
@@ -50,13 +43,13 @@ pub fn page(
             .map_or(0, |page| page.end);
     let next = if end < ops.len() {
         let op_index = u32::try_from(end).expect("a turn has fewer than 2^32 ops");
-        Some(Cursor {
+        Some(HistoryCursor {
             turn_no,
             op_index: Some(op_index),
         })
     } else {
         let earlier = log::turn_before(conn, session, turn_no)?;
-        earlier.map(|_| Cursor {
+        earlier.map(|_| HistoryCursor {
             turn_no,
             op_index: None,
         })
@@ -90,7 +83,7 @@ mod tests {
                 .insert(&conn)
                 .unwrap();
         }
-        let at = |turn_no, op_index| Cursor { turn_no, op_index };
+        let at = |turn_no, op_index| HistoryCursor { turn_no, op_index };
         let page = |cursor| super::page(&conn, &session, cursor, 400).unwrap();
         let newest = page(at(4, None));
         assert_eq!((newest.ops.len(), newest.next), (3, Some(at(3, None))));
