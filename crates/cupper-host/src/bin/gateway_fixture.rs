@@ -2,13 +2,15 @@
 //! (IT-devkey-launcher-only, IT-devkey-orphan-start, T073's UNIT-native).
 //! Only `test-harness` builds have it.
 //!
-//! It starts like the host (design 5.2.13): `--data-dir <dir>`, created if
-//! missing; in `dev-auth` builds, the launcher check; then the startup
-//! payload on stdin, whose keys it accepts and whose `test_config.durations`
-//! it runs on. Once listening, it prints `{"socket": "<path>"}` on stdout,
-//! then writes each audit record to stderr as a line of JSON:
-//! `{"conn": "c_1", "event": "<the event, as Rust's Debug>"}`. It serves
-//! until killed and otherwise exits with the host's codes.
+//! It starts like the host (design 5.2.13), except that `--data-dir <dir>`
+//! is required, so it never takes the user's own data directory; it is
+//! created if missing. Then come, in `dev-auth` builds, the launcher check
+//! and the startup payload on stdin, whose keys it accepts and whose
+//! `test_config.durations` it runs on. Once listening, it prints
+//! `{"socket": "<path>"}` on stdout, then writes each audit record to stderr
+//! as a line of JSON: `{"conn": "c_1", "event": "<the event, as Rust's
+//! Debug>"}`. It serves until killed and otherwise exits with the host's
+//! codes.
 
 use std::io::Write;
 use std::os::unix::fs::DirBuilderExt;
@@ -23,7 +25,7 @@ use cupper_host::startup::{self, Command, payload};
 use cupper_protocol::ids::HostId;
 
 fn main() -> ExitCode {
-    let data_dir = match Command::parse(std::env::args_os().skip(1), std::env::var_os("HOME")) {
+    let data_dir = match Command::parse(std::env::args_os().skip(1), None) {
         Ok(Command::Run { data_dir }) => data_dir,
         Ok(Command::BuildInfo) => {
             println!("{}", startup::build_info());
