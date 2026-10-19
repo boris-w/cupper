@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "node": {
+    "version": "24.22.0",
+    "url": "https://nodejs.org/dist/v24.22.0/node-v24.22.0-darwin-arm64.tar.gz",
+    "sha256": "6a9724d9b50a5f22b4816cded441b5a8d9ddae546191a5e5b7efa5a5e2ee26d5",
+    "identifier": "dev.cupper.runtime.node"
+  },
+  "codex_acp": {
+    "version": "2.2.2",
+    "url": "https://registry.npmjs.org/@agentclientprotocol/codex-acp/-/codex-acp-2.2.2.tgz",
+    "integrity": "sha512-vNdeNV3jxbqaH7MYvVWzyB6cMOz+YGIV9W1xyBDsQfoii92DulZLM+ahCL2T2G6uohlaB1Yma347p2kLfAab2w=="
+  },
+  "esbuild_wasm": {
+    "version": "0.28.2",
+    "url": "https://registry.npmjs.org/esbuild-wasm/-/esbuild-wasm-0.28.2.tgz",
+    "integrity": "sha512-GccVwhv3mmOUVQHCQm2Ox/rby8n/EqUwvZxE6Pjfikrq/lWw9g9WX/u9EykWnpot3Ko6j426DgQdea2xWKIAQA=="
+  },
+  "claude_agent_acp": {
+    "version": "0.91.0",
+    "lockfile": "locks/claude-agent-acp-0.91.0.package-lock.json",
+    "entry": "node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js",
+    "bundle_sha256": "a8f29655155b8ddfc9dbee3ff6116b928caedb591d61e36afe2034352edcb261"
+  },
+  "files": {
+    "Helpers/node": {
+      "sha256": "1fb0b3faddcf6a221a8c43a2822f89422d457ed5753805d1cc56ef3a9a3bd35d",
+      "cdhash": "0c3517c428a2d19237a96b3a3b757940448023ec"
+    },
+    "Resources/runtime/bundle-claude-acp.mjs": {
+      "sha256": "c003aa992a2ecaee680a3966127ee9338e81184473a4b79bd2a05b3ca1d32528"
+    },
+    "Resources/runtime/codex-acp-2.2.2/LICENSE": {
+      "sha256": "72ea310b40e1ee2c4aa61935d22065155c50bfde288b114c9cfd3e1fa34f8049"
+    },
+    "Resources/runtime/codex-acp-2.2.2/index.mjs": {
+      "sha256": "6b1bb4e7e9caaf4aeca1042ae4aec2dc2433b0b0e4b1614b38a4d41699902aaa"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/LICENSE.md": {
+      "sha256": "b40ec5baec7bb34fa5b1c09521fa3cd52d5fad7adafed74932a2010d3612a681"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/README.md": {
+      "sha256": "6bfb2272db99a435b490effa7c65034cfcce13a17555c4c3bb66aa458a27ffcb"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/bin/esbuild": {
+      "sha256": "b3cdaf234fd51a7908b2ffc4a84b3baa466656ccb2586498de4cc2f77b6f1e1e"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/esbuild.wasm": {
+      "sha256": "b1831a5c0f6cf688034fb94d0419812f165ea316a3380d3fc00a151e562d2eaf"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/esm/browser.d.ts": {
+      "sha256": "e078310f23f0ccfa28a6ac81b5fad81f27150e921f92ab6e648caab42e2d9a14"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/esm/browser.js": {
+      "sha256": "6d637cfbbff3bb5c7c4e6e83d7d46a292a1646600d39de2cc12af4d4d96a8de2"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/esm/browser.min.js": {
+      "sha256": "0d8890748ceca85752d40d62753c6c3517c9ffa3ae369b20485246ac9403b805"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/lib/browser.d.ts": {
+      "sha256": "e078310f23f0ccfa28a6ac81b5fad81f27150e921f92ab6e648caab42e2d9a14"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/lib/browser.js": {
+      "sha256": "91593b8f5d1021600a92443717a52e311bb1e1b772981f6aab76cd0ffba33169"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/lib/browser.min.js": {
+      "sha256": "99b95743dee12457a052902ee9eba66d256b7b954e4ad33557a64bff6093ce2d"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/lib/main.d.ts": {
+      "sha256": "e078310f23f0ccfa28a6ac81b5fad81f27150e921f92ab6e648caab42e2d9a14"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/lib/main.js": {
+      "sha256": "81bf0c392dff41ea8e43c113731c1ebfa31b020d310407e8e3f0c0b65cc2d408"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/package.json": {
+      "sha256": "ddb3a2f245759418b942f786b0df09a45825c11ba67b2ac00dd8156e4f345e2b"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/wasm_exec.js": {
+      "sha256": "0c949f4996f9a89698e4b5c586de32249c3b69b7baadb64d220073cc04acba14"
+    },
+    "Resources/runtime/esbuild-wasm-0.28.2/wasm_exec_node.js": {
+      "sha256": "86b8ce546ecaa462544f3736adc4c19264eedd257c2ec427c9abc6debc1ee184"
+    },
+    "Resources/runtime/locks/claude-agent-acp-0.91.0.package-lock.json": {
+      "sha256": "2fda724a6aa4c04c1fe2f134eb3323c7015cc6020ae3ced3eaf6c7fbe5bf7925"
+    },
+    "Resources/runtime/node-LICENSE": {
+      "sha256": "5888dbb9a1d2b18f2c3e6c5f6af1b39de658372b402a0577b002777f14c62ace"
+    }
+  }
+}
