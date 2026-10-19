@@ -183,6 +183,11 @@
 | T080 | 视图：每帧调用一次 `versions.flush()`；组件用 `versions.subscribe(key, cb)` 和 `versions.of(key)` 订阅（键如 `item:<id>`、`turn:<id>`、`tail`、`session`，`view` 随每次变化）；`complete` 用来显示"加载中"，`error` 显示订阅失败 | T072 |
 | T082 | 视图的 `unknown` 列表（键 `unknown`）是要显示成占位的事件体，实时到达的带着 event 和 `fallback`；占位在消息流里的位置由本任务定 | T072 |
 | 改动视图规则或协议类型的任务 | 视图 JSON 变了就重新生成交叉验证的样例：`UPDATE_GOLDEN=1 cargo test -p cupper-protocol --lib view::parity`，在 PR 里审阅 `protocol/fixtures/views.json` 的差异；TS 侧的 reducer 要同步改 | T072 |
+| T037 | 组装时在 `Routes::start(..)` 之后调用 `routes.streams(streams, readers)`，否则 `stream/subscribe`、`stream/unsubscribe`、`history/page` 仍回 `unsupported`。`AuditEvent::Subscribed`（Q16）只写 host.log，不写 `audit` 表 | T019 |
+| T062 | `TestGateway::start` 和 `cupper-gateway-fixture` 用的是 `Routes::default()`，不提供订阅和历史；进程级用例需要订阅时，在这两个夹具上加 `Routes::streams` | T019 |
+| T029 | outbox 的项现在是 `Item`（带订阅的 feed 编号），blob 分片仍走 `push_frame`；`Target::Streams` 已删除，`Target::Blobs` 还在，由本任务接上 | T019 |
+| 用大合并窗口的客户端（CLI、iOS） | 合并窗口内，同一批里的响应也要等窗口结束才发（与 SP-4a 相同，最多 1 s）。桌面默认 `coalesce_ms = 0`，不受影响；要用大窗口时，改成先发窗口前的响应帧（`gateway/send.rs`） | T019 |
+| 以后排查宿主内存时 | 对不存在的会话订阅或取历史，会把一条空流载入内存，直到空闲淘汰（10 分钟） | T019 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
