@@ -112,3 +112,29 @@ pub fn paginate(ops: &[EventBody], max_bytes: usize) -> Vec<Range<usize>> {
     }
     pages
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Value;
+
+    use super::*;
+
+    /// The views' JSON is part of the schema, so the TS views are held to it (test #16).
+    #[test]
+    fn unit_view_window_views_are_in_the_schema() {
+        let mut g = crate::schema::generator();
+        g.subschema_for::<IndexView>();
+        g.subschema_for::<SessionView>();
+        let defs = Value::Object(g.take_definitions(true));
+        let required = |name: &str| defs[name]["required"].to_string();
+        let session = r#"["turns","tail","items","requests","detached","late_by_ref"]"#;
+        assert_eq!(required("SessionView"), session);
+        assert_eq!(
+            required("IndexView"),
+            r#"["projects","sessions","elevations"]"#
+        );
+        assert_eq!(required("ItemView"), r#"["item","text","output"]"#);
+        let turn_no = &defs["TurnStarted"]["properties"]["turn_no"];
+        assert_eq!(turn_no["maximum"], u32::MAX, "integers stay bounded");
+    }
+}
