@@ -1,7 +1,12 @@
 import type { EventBody } from "@cupper/protocol";
 import { describe, expect, test } from "vitest";
 
+import { HostClient } from "./client";
+import { MockHost } from "./mock/host";
+import { createMockShellHost } from "./mock/port";
+import { connectShell } from "./shell";
 import { StreamSync, type StreamSink, type SyncCounters } from "./sync";
+import { fixtures } from "./testing";
 
 const STREAM = "session/s_1";
 
@@ -224,5 +229,79 @@ describe("UNIT-hc-sync", () => {
     const noSeq = { ...event(9, turn(2)), seq: undefined };
     expect(sync.events(events(event(8, turn(2)), noSeq))).toEqual({ stream: STREAM });
     expect(seen.slice(6)).toEqual(["8: turn.started", "reset"]);
+  });
+
+  test("HostClient.subscribe follows the host, and resumes from the cursor after a reconnect", async () => {
+    const host = new MockHost(fixtures);
+    host.handle("stream/subscribe", ({ id, conn, params }) => {
+      const resume = (params as { after_seq?: number }).after_seq;
+      conn.reply(id, {
+        result: result(resume === undefined ? "snapshot" : "replay", resume ?? 2, 3),
+      });
+      if (resume === undefined) {
+        conn.send({
+          jsonrpc: "2.0",
+          method: "stream/snapshot",
+          params: page(2, 3, 0, true, [turn(1)]),
+        });
+      }
+      const seq = (resume ?? 2) + 1;
+      conn.send({
+        jsonrpc: "2.0",
+        method: "stream/events",
+        params: events(event(seq, item(`i_${seq}`))),
+      });
+      return undefined;
+    });
+    const client = new HostClient({ log: () => undefined });
+    const { seen, sink } = recorder();
+    const unsubscribe = client.subscribe(STREAM, sink);
+    await connectShell(createMockShellHost(host), client);
+    const settle = async (n: number) => {
+      for (let i = 0; i < 50 && seen.length < n; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    };
+    await settle(4);
+    host.connections[0]?.close();
+    await settle(6);
+    expect(seen).toEqual([
+      "reset",
+      "turn.started",
+      "live",
+      "3: item.started",
+      "live",
+      "4: item.started",
+    ]);
+    const subscribes = host.requests.filter((r) => r.method === "stream/subscribe");
+    expect(subscribes.map((r) => r.params)).toEqual([{ stream: STREAM }, WITH_CURSOR(3, 3)]);
+    expect(client.counters).toEqual({ gaps: 0, duplicates: 0, resets: 0 });
+    unsubscribe();
+    expect(host.requests.at(-1)).toMatchObject({
+      method: "stream/unsubscribe",
+      params: { stream: STREAM },
+    });
+    expect(() => client.subscribe("index", sink)).not.toThrow();
+    expect(() => client.subscribe("index", sink)).toThrow("subscribed already");
+  });
+
+  test("HostClient routes only its streams' data, and a stream unsubscribed meanwhile ignores its result", async () => {
+    const host = new MockHost(fixtures);
+    const waiting: (() => void)[] = [];
+    host.handle("stream/subscribe", ({ id, conn }) => {
+      waiting.push(() => conn.reply(id, { result: result("snapshot", 1, 1) }));
+      return undefined;
+    });
+    const client = new HostClient({ log: () => undefined });
+    await connectShell(createMockShellHost(host), client);
+    const index = recorder();
+    const session = recorder();
+    client.subscribe("index", index.sink);
+    client.subscribe(STREAM, session.sink)();
+    waiting.forEach((reply) => reply());
+    host.notify("stream/snapshot", { ...page(1, 1, 0, true, [turn(1)]), stream: "index" });
+    host.notify("stream/snapshot", page(1, 1, 0, true, [turn(1)]));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect([index.seen, session.seen]).toEqual([["reset", "turn.started", "live"], []]);
   });
 });
