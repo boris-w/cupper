@@ -1551,7 +1551,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T042 交互代理纯核心
 - [ ] T043 会话 actor I：创建、发送、中断与持久化
 - [ ] T044 会话 actor II：档位、信任门控、崩溃与晚到输出
-- [ ] T049 cupper-cli I-b：Mirror 与客户端同步状态机
+- [x] T049 cupper-cli I-b：Mirror 与客户端同步状态机
 - [x] T045 cupper-cli I：客户端库与 Mirror
 - [ ] T046 cupper-cli II：命令行
 - [ ] T047 test-harness 测试接口、录制导出与宿主性能
