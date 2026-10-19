@@ -1,0 +1,39 @@
+[package]
+name = "cupper-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "cupper's command-line client: the `cupper` binary and the library the host's integration tests reuse (design 5.2.14)."
+
+# The build kind comes from these features (design 5.7.9, 5.8.1); none is the
+# release build. They never mix in one release binary: each binary is built on
+# its own (design 5.10.7).
+[features]
+# Development builds: accept a host in degraded authentication, checked weakly
+# against the host file next to the CLI.
+dev-auth = []
+# Self-use builds: check the host against the cdhash that `xtask host-bundle`
+# (T005) passes in `CUPPER_HOST_CDHASH` when it compiles the CLI.
+self-use = []
+# e2e builds: `--harness-key-fd` and the `harness` proof (T039).
+test-harness = []
+
+[[bin]]
+name = "cupper"
+path = "src/main.rs"
+
+[dependencies]
+cupper-protocol = { path = "../cupper-protocol" }
+cupper-sys = { path = "../cupper-sys" }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { version = "1.53.3", features = ["io-util", "net", "rt", "sync"] }
+uuid = { version = "1.28.0", default-features = false, features = ["std", "v7"] }
+
+[dev-dependencies]
+tokio = { version = "1.53.3", features = ["macros"] }
+
+[lints]
+workspace = true
