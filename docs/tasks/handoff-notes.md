@@ -129,6 +129,8 @@
 | T005 | 自用构建的 CLI：`CUPPER_HOST_CDHASH=<宿主 cdhash，40 位小写十六进制> cargo build -p cupper-cli --release --features self-use`。变量缺失或格式不对会让编译失败 | T045 |
 | T002 | 新增用例编号 UNIT-cli-client（T045，握手与请求关联），计划 v1.3.6 已登记；登记 `tests/ids.toml` 时一并收入 | T045 |
 | T039 | CLI 侧的接入点：`ClientAuth` 加 `Harness` 变体；`ClientAuth::credentials(&hello, &host)` 已经拿到 nonce 和固定令牌；在 `Client::handshake` 里 `check.accept` 的旁边校验 `host_proof`（详见 `docs/tasks/T045-cli-client-mirror/notes.md` 末尾）。CLI 收到 fd 时断开的用例还没有，T030 合并后可以用 `cupper-sys` 的 `send_with_fds`（`test-util` 特性）补上 | T045 |
+| T180 | 设置宿主与 UI 的签名要求，都要带 Team ID：CLI 的 `cupper_cli::verify::HOST_REQUIREMENT`，以及网关的 `ui_requirement`（T030）。在那之前，发布版 CLI 不接受任何宿主，宿主的 `codesign` 认证也全部失败 | T045、T030 |
+| T005 | 产物核对：CLI 的 `cupper --build-info` 输出里的 `host_cdhash` 要等于同一产物里宿主的 cdhash | T045 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
