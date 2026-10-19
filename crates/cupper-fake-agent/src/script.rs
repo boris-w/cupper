@@ -6,15 +6,19 @@
 //! |---|---|
 //! | `say <text>` / `think <text>` | one message / thought chunk |
 //! | `flood <n> <len>` / `flood_mixed <n> <len>` | `n` chunks of `len` chars at full speed (mixed: every other one a thought) |
+//! | `flood_rate <per_s> <s> <len>` | chunks of `len` chars at a fixed rate for `s` seconds |
 //! | `big <bytes>` | one message chunk of `bytes` chars |
 //! | `tool <id> <kind> <title>` / `long_tool <id> <len>` / `tool_done <id> <bytes>` | start a tool call / with a `len`-char title / complete it with output |
+//! | `terminal <id> <exit> <lines>` | a command with `_meta.terminal_output` and `terminal_exit` |
+//! | `diff <id> <path>` | an edit tool call with a diff |
+//! | `write_file <path> <content>` | write a file inside the session's cwd (`\n` is a newline) |
 //! | `permission <tool_id> [execute\|edit]` | ask for permission, then `say permission:<option>` |
 //! | `question <prompt>` | a one-field form, then `say answer:<value>` |
 //! | `sleep <ms>` / `wait_cancel` | wait / until `session/cancel` |
 //! | `whoami` / `probe` | say the session, inherited fds, env names |
 //! | `spawn_child` / `exit <code>` | start a grandchild in our process group / exit now |
 
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -32,10 +36,14 @@ const COMMANDS: &[&str] = &[
     "think",
     "flood",
     "flood_mixed",
+    "flood_rate",
     "big",
     "tool",
     "long_tool",
     "tool_done",
+    "terminal",
+    "diff",
+    "write_file",
     "permission",
     "question",
     "sleep",
@@ -182,6 +190,7 @@ impl Script {
         let args: Vec<&str> = rest.split_whitespace().collect();
         let arg = |i: usize| args.get(i).copied().unwrap_or("");
         let num = |i: usize| arg(i).parse::<u64>().unwrap_or(0);
+        let p = self.persona;
         match name {
             "say" => self.say(rest)?,
             "think" => self.update(chunk("agent_thought_chunk", rest))?,
@@ -196,6 +205,7 @@ impl Script {
                     self.update(chunk(kind, &filler(num(1), i)))?;
                 }
             }
+            "flood_rate" => return self.flood_rate(num(0), num(1), num(2)).await,
             "big" => self.say(&filler(num(0), 0))?,
             "tool" => {
                 let title = args.get(2..).unwrap_or_default().join(" ");
@@ -214,6 +224,36 @@ impl Script {
                 let output = json!([{"type": "content", "content": {"type": "text", "text": filler(num(1), 0)}}]);
                 self.update(json!({"sessionUpdate": "tool_call_update", "toolCallId": arg(0), "status": "completed", "content": output}))?;
             }
+            "terminal" => {
+                let (id, code) = (arg(0), arg(1).parse::<i64>().unwrap_or(0));
+                let lines: Vec<String> = (1..=num(2)).map(|i| format!("line {i}\n")).collect();
+                self.update(persona::terminal_start(p, id, &self.cwd))?;
+                match p {
+                    // Claude gives all output at the end, after an "Exit code" line on failure (s03).
+                    Claude => {
+                        let head = if code == 0 {
+                            String::new()
+                        } else {
+                            format!("Exit code {code}\n")
+                        };
+                        self.update(persona::terminal_output(
+                            id,
+                            (head + &lines.concat()).trim_end(),
+                        ))?;
+                    }
+                    Codex => {
+                        for line in &lines {
+                            self.update(persona::terminal_output(id, line))?;
+                        }
+                    }
+                }
+                self.update(persona::terminal_exit(id, code))?;
+            }
+            "diff" => {
+                self.update(persona::diff(p, arg(0), &self.cwd.join(arg(1))))?;
+                self.update(json!({"sessionUpdate": "tool_call_update", "toolCallId": arg(0), "status": "completed"}))?;
+            }
+            "write_file" => self.write_file(rest)?,
             "permission" => {
                 let kind = if arg(1).is_empty() { "execute" } else { arg(1) };
                 return self.permission(arg(0), kind).await;
@@ -272,6 +312,19 @@ impl Script {
         Ok(Flow::Next)
     }
 
+    async fn flood_rate(&mut self, per_second: u64, seconds: u64, len: u64) -> Result<Flow, Error> {
+        let period = Duration::from_secs(1) / u32::try_from(per_second.max(1)).unwrap_or(u32::MAX);
+        let mut ticks = real_interval(period);
+        for i in 0..per_second * seconds {
+            tokio::select! {
+                _ = ticks.tick() => {}
+                () = self.cancelled() => return Ok(cancelled()),
+            }
+            self.say(&filler(len, i))?;
+        }
+        Ok(Flow::Next)
+    }
+
     async fn permission(&mut self, tool: &str, kind: &str) -> Result<Flow, Error> {
         let p = self.persona;
         if p == Codex {
@@ -318,6 +371,32 @@ impl Script {
                 Ok(None)
             }
         }
+    }
+
+    /// Writes a file inside the session's cwd: no absolute path, no `..`, and
+    /// no symbolic link that leads out of it.
+    fn write_file(&self, rest: &str) -> Result<(), Error> {
+        let (path, content) = rest.split_once(' ').unwrap_or((rest, ""));
+        let refuse =
+            |why: &str| Error::invalid_params().data(format!("write_file `{path}`: {why}"));
+        let io = |e: std::io::Error| refuse(&e.to_string());
+        if path.is_empty()
+            || !Path::new(path)
+                .components()
+                .all(|c| matches!(c, Component::Normal(_) | Component::CurDir))
+        {
+            return Err(refuse("not a relative path inside the workspace"));
+        }
+        let (root, target) = (self.cwd.canonicalize().map_err(io)?, self.cwd.join(path));
+        let existing = target
+            .ancestors()
+            .find(|a| a.symlink_metadata().is_ok())
+            .unwrap_or(&self.cwd);
+        if !existing.canonicalize().map_err(io)?.starts_with(&root) {
+            return Err(refuse("leads out of the workspace"));
+        }
+        std::fs::create_dir_all(target.parent().unwrap_or(&self.cwd)).map_err(io)?;
+        std::fs::write(&target, content.replace("\\n", "\n")).map_err(io)
     }
 
     /// Returns true if the turn was cancelled while waiting.
@@ -403,4 +482,12 @@ pub fn record_inherited_fds() {
 )]
 async fn real_sleep(ms: u64) {
     tokio::time::sleep(Duration::from_millis(ms)).await;
+}
+
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the fake agent is an external process playing a real adapter in real time"
+)]
+fn real_interval(period: Duration) -> tokio::time::Interval {
+    tokio::time::interval(period)
 }
