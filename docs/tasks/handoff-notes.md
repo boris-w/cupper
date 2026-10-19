@@ -128,7 +128,7 @@
 | 所有改协议类型的任务 | 改了 `cupper-protocol` 的类型就要跑 `pnpm gen` 并提交生成物（`protocol/schema/v1.json`、`packages/protocol/src/gen/`），`xtask ci protocol` 会卡住漏提交的情况 | T015 |
 | T005 | 自用构建的 CLI：`CUPPER_HOST_CDHASH=<宿主 cdhash，40 位小写十六进制> cargo build -p cupper-cli --release --features self-use`。变量缺失或格式不对会让编译失败 | T045 |
 | T002 | 新增用例编号 UNIT-cli-client（T045，握手与请求关联），计划 v1.3.6 已登记；登记 `tests/ids.toml` 时一并收入 | T045（已写入 brief） |
-| T039 | CLI 侧的接入点：`ClientAuth` 加 `Harness` 变体；`ClientAuth::credentials(&hello, &host)` 已经拿到 nonce 和固定令牌；在 `Client::handshake` 里 `check.accept` 的旁边校验 `host_proof`（详见 `docs/tasks/T045-cli-client-mirror/notes.md` 末尾）。CLI 收到 fd 时断开的用例还没有，T030 合并后可以用 `cupper-sys` 的 `send_with_fds`（`test-util` 特性）补上 | T045（已写入 brief） |
+| T039 | CLI 侧的接入点：`ClientAuth` 加 `Harness` 变体；`ClientAuth::credentials(&hello, &host)` 已经拿到 nonce 和固定令牌；在 `Client::handshake` 里 `check.accept` 的旁边校验 `host_proof`（详见 `docs/tasks/T045-cli-client-mirror/notes.md` 末尾）。CLI 收到 fd 时断开的用例已由 T045 补上（`unit_cli_client_passed_fds_or_another_writer_end_the_connection`） | T045（已写入 brief） |
 | T180 | 设置宿主与 UI 的签名要求，都要带 Team ID：CLI 的 `cupper_cli::verify::HOST_REQUIREMENT`，以及网关的 `ui_requirement`（T030）。在那之前，发布版 CLI 不接受任何宿主，宿主的 `codesign` 认证也全部失败 | T045、T030 |
 | T005 | 产物核对：CLI 的 `cupper --build-info` 输出里的 `host_cdhash` 要等于同一产物里宿主的 cdhash | T045 |
 | T046 | 客户端读循环每次读到数据都先查对端令牌；宿主写完就关闭连接时，这批数据会被丢弃，关闭原因是 `Refused(PeerExited)` 而不是 `Eof`（安全上正确）。报告"宿主已退出"时，把两者当作同一种情况 | T049 |
@@ -144,6 +144,10 @@
 | T053、T055 | 按 `AskRequest` 交出 agent 的请求：权限请求用 `Classified`，form 模式的 elicitation 用 `Form`（原样带 JSON schema）。`DriverEvent::Ask` 还没有 `toolCallId`，actor 填 `item_id` 需要它，由提取层补上。撤回之后交互代理仍会发一次 `Answer { Cancelled }`，运行时据此放掉应答句柄 | T042 |
 | T110 | Codex 用 `_meta.codex.isOther` 和 `<id>_note` 表达"其他"和备注，目前按 JSON Schema 类型映射成两个字段；要不要合成一题，由本任务决定 | T042 |
 | T016 | `interaction/respond` 的 `x-errors` 里没有 `not_found`，会话里不存在的请求 ID 目前回 `invalid_params`，而 `interaction/get` 回 `not_found`。冻结前补上，并跑 `pnpm gen` | T042 审阅 |
+| T073 | 网关夹具 `cupper-gateway-fixture` 要用 `--features dev-auth,test-harness` 构建，必须给 `--data-dir`，stdin 读启动载荷；监听后 stdout 输出 `{"socket": ...}`，审计按 JSON 行写到 stderr。`dev_key` 只接受拉起夹具的那个进程（Node 测试进程）；`host_proof` 按夹具的 pid 校验。证明的已知答案见 UNIT-proof-binding（`cupper-protocol::proof`） | T039 |
+| T046 | `--harness-key-fd` 的参数解析接 `cupper_cli::harness::HarnessKey::read_fd`；输出里"宿主未经签名校验"的标记用 `HostCheck::is_weak(&auth)`（e2e 构建里带了 harness 密钥就不算弱） | T039 |
+| T037 | `main` 里 `startup::launcher()` 返回的拉起方 ID，要放进 `GatewayConfig::dev_key`（`DevKey { key, launcher }`）。新增关闭原因 `HandshakeTimeout`，审计记为 `handshake_timeout`。夹具的审计行目前是 `Debug` 文本，正式的审计格式归本任务 | T039 |
+| T047 | 每条还没 `initialize` 的连接持有一个握手期限计时器（`gateway_handshake`，10 s），静止屏障要把它算进去 | T039 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
