@@ -88,3 +88,77 @@ T010 的教训是低估了格式化后的行数和测试，所以这次把测试
 | 9 | 用量里的 `cost` | 是数字还是带币种的结构，没有定 | 按 ACP `usage_update` 的形状写成 `{amount, currency}` |
 | 10 | `session.configured.config` 的值、提问回答的 `values` | 类型没有定 | 配置项的值用字符串（ACP 的配置项是 select 类型）；回答的值用带类型的 `AnswerValue`（字符串、数字、布尔、字符串数组）。数字用 `serde_json::Number`，保证往返时整数不会变成浮点数 |
 | 11 | `queue.updated` 条目的 `created_by` | 类型没有定 | 用 `PrincipalId` |
+
+## 实现（第 2 轮：收窄后的范围）
+
+编排者批准了拆分：本任务实现上文的 T011a，T011b 改编为 T017。设计空缺的裁定见设计 5.3.11 和 5.4.4（v1.7）。
+
+### 实际行数
+
+按守则第 8 条，每个模块完成后统计一次。最终 `crates/cupper-protocol` 新增 1,491 行，删除 60 行：代码约 1,015 行，测试约 475 行。
+
+| 文件 | 新增 / 删除 | 其中测试 |
+|---|---|---|
+| `open_union.rs`（新） | 236 / 0 | 98 |
+| `domain.rs`（新） | 255 / 0 | 75 |
+| `capabilities.rs`（新） | 225 / 0 | 61 |
+| `index.rs`（新） | 342 / 0 | 0（经 `EventBody` 测） |
+| `event.rs`（新） | 293 / 0 | 174 |
+| `testutil.rs`（新，只在测试时编译） | 19 / 0 | 19 |
+| `envelope.rs`、`ids.rs`、`error.rs`、`open_enum.rs`、`lib.rs` | 121 / 60 | 约 50 |
+
+- 比估计的约 1,055 行多出约 40%，但没有超过 1,500 行的上限。
+- 多出来的主要是两部分：
+  - 契约类型上的文档注释。T015 会把它们导出成 schema 和 TS 的说明，所以没有省。
+  - 索引流的开放枚举比估计的多：最后有 16 个，rustfmt 下每个占 8–12 行。
+- 写到 `event.rs` 时累计是 1,500 行。之后只精简了 `decode` 的写法，没有再加代码。
+
+### 实现时的取舍
+
+**`open_union!` 与解码**
+
+- `open_union!` 有两种形式：
+  - **内部标签**（`in tag "<字段>"`，字段名任意，T017 的条目用 `kind`）：`Unknown` 是 `UnknownMember`，原样保存整个对象，标签也在里面。
+  - **邻接标签**（只接受字面的 `in tag "type", content "data"`，只给事件体用）：`Unknown` 是信封里的 `UnknownEvent`。
+- **删掉了 T010 的 `UnknownTagged` 及其测试** `unit_proto_base_open_union_unknown_members_roundtrip`。按 5.3.11，不再用派生的 `untagged` 兜底，这个类型已经没有使用方。开放联合的覆盖移到了 UNIT-proto-events-index。
+- **严格/宽容解码的入口**是 `Event::<EventBody>::decode(&Value, Strictness)` 和 `EventBody::decode`，降级的单位是一个事件。
+  - 信封本身残缺时，两种模式都报错：没有 seq，就没法给事件定位。
+  - 事件体缺 `type` 时同样报错。
+
+**信封的 `fallback`**
+
+- `kind` 改为开放枚举 `FallbackKind`，取值 `item`、`hidden`。
+- `Fallback::new` 在 debug 构建里断言 `summary` 不超过 120 个字符。
+
+**设计只列了字段、没有列取值的地方**
+
+| 位置 | 取值 |
+|---|---|
+| `AgentState` | `unavailable`、`idle`、`starting`、`running`、`crashed` |
+| `CliInstall` | `native`、`npm_shim`、`unsupported_install`（5.6.6） |
+| `ConfigDirState` | `default`、`ok`、`rejected` |
+| `AuthState` | `logged_in`、`logged_out`、`unchecked`。不用 `unknown`：`open_enum!` 已经占用了 `Unknown` 这个变体名 |
+| `DiffSide`（`review_comment.side`） | `old`、`new` |
+| `agents.updated` 的 git | `git: {version?, lfs?}` |
+| `FailureCode` 中宿主侧的取值 | 除 5.3.11 列出的 `adapter_exited`、`host_restarted`，另加 `adapter_crashed`、`cli_missing`、`runtime_failed`（对应 agent 不可用的几种原因） |
+
+**其他字段**
+
+- `CliCompat` 不加新取值：读不到版本号时记为 `unsupported`，写在文档里。
+- 5.3.5 中没有标可选的字段，都写成必填：`SessionSummary.title` 在 `title_source: none` 时为空字符串；`BlobRef.media_type` 必填。
+- `host.updated.last_exit_abnormal` 写成布尔值，只在为 true 时出现，与 5.3.5 的 `?` 一致。
+- 共用的结构：`Content` 和 `PromptBlock` 的 `text` 都用 `TextContent`；`image`、`text_blob` 都用 `BlobBlock {blob}`。
+
+**`EVENT_VERSION`**：这次没有定义。由第一个写事件的任务按需加上（宿主写 `v` 时）。
+
+### 留给后续任务
+
+- **T017**
+  - 在 `EventBody` 里加会话流的变体。`stream_kind()` 用的是穷尽的 `match`，漏写会编译不过。
+  - `item.delta` 变体上加 `#[schemars(extend("x-mergeable" = true))]`，并为 `EventBody` 实现 `Mergeable`。
+  - 条目联合用 `open_union!` 的 `in tag "kind"` 形式。
+  - 测试可以复用 `testutil::{roundtrip, open_values}`。
+- **T012**：`stream/events`、`stream/snapshot`、`history/page` 的参数如果整体用派生的 `Deserialize` 解析，其中一个残缺事件会让整条通知失败。客户端要能逐个事件调用 `Event::decode` / `EventBody::decode`（宽容模式）。宿主一侧只写不读，不受影响。
+- **T015**
+  - 实测 `Event<EventBody>` 的 schema 名是 `Event`，结构是信封的字段加上 11 个成员的 `anyOf`（10 个已知类型和 `UnknownEvent`）。
+  - 内部标签联合的兜底成员 `UnknownMember` 的 schema 是任意对象，后处理时用 `.loose()`。
