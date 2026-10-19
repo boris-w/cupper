@@ -180,6 +180,9 @@
 | T161 | `release-config` 可以断言扩展发布构建的 `buildInfo().features` 为空 | T073 |
 | 下一个改 Rust 依赖的任务 | `getrandom 0.4.3` 已有三个使用方（cupper-host、cupper-cli、cupper-desktop-native），按惯例提到 `[workspace.dependencies]` | T073 |
 | T080 | `client.counters` 是全部流的计数之和，E2E 的 `window.__cupperTest` 可以直接导出。`StreamSink` 的约定见 T072 的任务书。"生产构建只校验非 delta 事件"仍未做，目前每个事件都用 zod 解析 | T087 |
+| T080 | 视图：每帧调用一次 `versions.flush()`；组件用 `versions.subscribe(key, cb)` 和 `versions.of(key)` 订阅（键如 `item:<id>`、`turn:<id>`、`tail`、`session`，`view` 随每次变化）；`complete` 用来显示"加载中"，`error` 显示订阅失败 | T072 |
+| T082 | 视图的 `unknown` 列表（键 `unknown`）是要显示成占位的事件体，实时到达的带着 event 和 `fallback`；占位在消息流里的位置由本任务定 | T072 |
+| 改动视图规则或协议类型的任务 | 视图 JSON 变了就重新生成交叉验证的样例：`UPDATE_GOLDEN=1 cargo test -p cupper-protocol --lib view::parity`，在 PR 里审阅 `protocol/fixtures/views.json` 的差异；TS 侧的 reducer 要同步改 | T072 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
