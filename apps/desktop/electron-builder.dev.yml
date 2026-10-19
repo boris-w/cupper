@@ -1,0 +1,17 @@
+# The dev build (design 5.7.9): its own identity and data directory, signed
+# ad hoc, fuses left as Electron ships them.
+appId: dev.cupper.app.dev
+productName: cupper Dev
+directories:
+  output: dist/pack/dev
+files:
+  - package.json
+  - dist/main/**
+  - dist/preload/**
+  - dist/renderer/**
+npmRebuild: false
+mac:
+  target: dir
+  identity: "-"
+  hardenedRuntime: false
+  minimumSystemVersion: "14.0"

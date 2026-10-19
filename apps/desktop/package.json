@@ -1,0 +1,23 @@
+{
+  "name": "@cupper/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "The Electron app: main process, preload and the renderer entry.",
+  "type": "module",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "build:dev": "vite build --mode dev && electron-builder --config electron-builder.dev.yml",
+    "build:e2e": "vite build --mode e2e && electron-builder --config electron-builder.e2e.yml",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cupper/i18n": "workspace:*",
+    "@cupper/shell-api": "workspace:*",
+    "@types/node": "24.19.1",
+    "electron": "44.9.0",
+    "electron-builder": "26.17.0",
+    "vite": "8.3.3",
+    "vitest": "5.0.3"
+  }
+}

@@ -4,5 +4,9 @@ packages:
   - tools/*
 
 # Dependency build scripts stay off, as pnpm does by default. Packages that must
-# run one (electron's download, esbuild) are approved here one by one, with a reason.
-allowBuilds: {}
+# run one are approved here one by one, with a reason; `false` records a script
+# we reviewed and keep off.
+allowBuilds:
+  # Picks the 7-Zip binary for building Windows installers (electron-builder's
+  # Squirrel.Windows target). Cupper ships for macOS only.
+  electron-winstaller: false

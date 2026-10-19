@@ -1,0 +1,29 @@
+# The e2e build (design 5.7.9): packaged and fused like a release, with two
+# differences. The Node inspector stays on, because Playwright drives the
+# main process through it; cookie encryption is off, because with an ad-hoc
+# signature it could prompt for the keychain. Signed ad hoc, without the
+# hardened runtime, which would need `disable-library-validation`.
+appId: dev.cupper.app.e2e
+productName: Cupper E2E
+directories:
+  output: dist/pack/e2e
+files:
+  - package.json
+  - dist/main/**
+  - dist/preload/**
+  - dist/renderer/**
+npmRebuild: false
+mac:
+  target: dir
+  identity: "-"
+  hardenedRuntime: false
+  minimumSystemVersion: "14.0"
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: true
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  loadBrowserProcessSpecificV8Snapshot: false
+  grantFileProtocolExtraPrivileges: false
