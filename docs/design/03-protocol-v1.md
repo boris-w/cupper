@@ -609,3 +609,15 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
   - Prompt 的内容直接用协议的 `PromptContent`，由 T055 转成 ACP 的内容块；
   - `TurnMachine` 发 `Action::Attach(AttachTarget)`，由会话 actor 补上工作区、配置和信任状态。
 - **队列满**（编排者裁定）：排队消息已到 5.3.9 的上限（每会话 50 条）时，`session/send` 和 `session/queue_edit` 返回 `too_large/queue_full`，队列不变。
+
+**T018 实现时的取值（2026-10-19）**
+
+- `agents/capabilities` 的结果是 `{cached?: {capabilities, captured_at}}`。能力缓存为空时没有 `cached`，客户端据此调用 `agents/refresh`。
+- `session/get` 的结果是 `{summary, workspace, archived_at?}`。
+- `session/list_archived` 用结构化游标 `{archived_at, session_id}`。
+- `interaction/get` 的结果是 `{requested, status, outcome?, resolved_by?, reason?}`。
+- `interaction/respond.input` 是 `InputEvidence {kind, key?, digit?}`，`digit` 只接受 1–9（`KeyDigit`）。T013 的 `git/revert.input` 复用同一个类型。
+- `trust_digest` 用 `Digest` 类型（`d_` 加 64 位十六进制），T035 要按这个形式输出。
+- 每个方法各自一个 Params 类型，形状相同也不共用。
+- 权限矩阵新增格子 `Sec9`，含义是 scope 允许，但按 SEC-9 由策略拒绝。它出现在 remote_device 那一列，涉及 `project/add`、`project/remove`，以及 `session/set_config`、`rename`、`restore`、`agents/refresh`、`agents/restart` 所在的行。
+
