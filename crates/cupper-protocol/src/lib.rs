@@ -17,3 +17,4 @@ pub mod rpc;
 pub mod schema;
 pub mod sync;
 pub mod text;
+pub mod transport;
