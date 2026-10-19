@@ -274,6 +274,16 @@ UNIT-question-mapping = "pr"
 milestone = "M1a"
 IT-orch-lifecycle = "pr"
 
+# 会话 actor I-b：交互接线（计划 v1.3.11 由 T043 拆出）
+[T088]
+milestone = "M1a"
+IT-orch-interaction = "pr"
+
+# 会话 actor I-c：恢复、空闲退出与超长输出（计划 v1.3.11 由 T043 拆出）
+[T089]
+milestone = "M1a"
+IT-orch-recovery = "pr"
+
 # 会话 actor II：档位、信任门控、崩溃与晚到输出
 [T044]
 milestone = "M1a"
