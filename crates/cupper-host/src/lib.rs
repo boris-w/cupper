@@ -16,3 +16,4 @@ pub mod quiescence;
 pub mod startup;
 pub mod store;
 pub mod supervisor;
+pub mod trust;
