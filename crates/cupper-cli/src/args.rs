@@ -76,6 +76,9 @@ pub enum Command {
         reason: Option<String>,
     },
     Repl,
+    /// Test builds: `test/clock_advance` by this many milliseconds (design 5.2.16).
+    #[cfg(feature = "test-harness")]
+    ClockAdvance(u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -169,6 +172,14 @@ pub fn command(words: &[String]) -> Result<Command, UsageError> {
             }
         }
         "repl" => Command::Repl,
+        #[cfg(feature = "test-harness")]
+        "clock-advance" => {
+            let ms = flags.text(0)?;
+            let ms = ms
+                .parse()
+                .map_err(|_| usage(format!("`{ms}` is not milliseconds")))?;
+            Command::ClockAdvance(ms)
+        }
         other => return Err(usage(format!("no command `{other}`"))),
     };
     flags.done(name)?;
@@ -296,6 +307,15 @@ mod tests {
 
     fn words(line: &str) -> Vec<String> {
         split(line).unwrap()
+    }
+
+    #[cfg(feature = "test-harness")]
+    #[test]
+    fn unit_cli_args_clock_advance_in_test_builds() {
+        let advance = command(&words("clock-advance 150")).unwrap();
+        assert_eq!(advance, Command::ClockAdvance(150));
+        assert!(command(&words("clock-advance soon")).is_err());
+        assert!(command(&words("clock-advance")).is_err());
     }
 
     #[test]

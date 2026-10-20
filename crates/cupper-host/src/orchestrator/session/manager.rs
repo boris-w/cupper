@@ -1,5 +1,8 @@
 //! `SessionManager` (design 5.2.6): the table of session actors, the
-//! gateway's [`SessionPort`], and `session/create`.
+//! gateway's [`SessionPort`], and `session/create`. A call for a session
+//! without an actor starts one that loads the session from the store first
+//! ([`load`](super::load)); its mailbox is in the table from the start, so a
+//! session has one actor however many calls come at once.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -32,8 +35,9 @@ use rusqlite::OptionalExtension;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 
-use super::actor::{Mail, Parts, SessionActor, Stop};
-use super::core::SessionCore;
+use super::actor::{Mail, Parts, SessionActor, Start, Stop};
+use super::core::{Input, SessionCore};
+use super::load::load;
 use super::rows::Rows;
 use super::{IndexNotes, internal, not_found, parse, tier_of};
 use crate::clock::{Clock, IdGen};
@@ -43,11 +47,11 @@ use crate::gateway::{AuditRecord, Call, Port, Reply, SessionPort};
 use crate::git::GitTool;
 use crate::ledger::Outcome;
 use crate::orchestrator::queue::preview;
-use crate::orchestrator::turn::{SendMode, SendRequest};
+use crate::orchestrator::turn::{self, SendMode, SendRequest};
 use crate::policy::{self, Confirmable, Facts};
-use crate::quiescence::{ActorKind, Quiescence};
+use crate::quiescence::{ActorKind, Participant, Quiescence};
 use crate::store::streams::{Batch, StreamView, Streams};
-use crate::store::{Durability, Readers, Writer};
+use crate::store::{Durability, Readers};
 use crate::supervisor::watch::Admission;
 use crate::supervisor::{Activity, Part};
 
@@ -58,7 +62,6 @@ pub const SESSION: ActorKind = ActorKind::new("session");
 #[derive(Debug, Clone)]
 pub struct SessionDeps {
     pub streams: Streams,
-    pub writer: Writer,
     pub readers: Readers,
     pub clock: Arc<dyn Clock>,
     pub ids: Arc<IdGen>,
@@ -95,6 +98,34 @@ struct Handle {
     running: Arc<AtomicBool>,
     pending: Arc<AtomicU32>,
     queued: Arc<AtomicU32>,
+}
+
+/// The actor's side of a [`Handle`]'s counters: a turn runs, the pending
+/// requests, the queued messages.
+pub(super) type Counters = (Arc<AtomicBool>, Arc<AtomicU32>, Arc<AtomicU32>);
+
+/// The other ends of a [`Handle`], for its actor.
+type Ends = (
+    mpsc::UnboundedReceiver<Mail>,
+    mpsc::UnboundedReceiver<Stop>,
+    Counters,
+);
+
+impl Handle {
+    fn new() -> (Self, Ends) {
+        let (mail, inbox) = mpsc::unbounded_channel();
+        let (stop, stops) = mpsc::unbounded_channel();
+        let counters = Counters::default();
+        let (running, pending, queued) = counters.clone();
+        let handle = Self {
+            mail,
+            stop,
+            running,
+            pending,
+            queued,
+        };
+        (handle, (inbox, stops, counters))
+    }
 }
 
 impl SessionManager {
@@ -242,17 +273,13 @@ impl SessionManager {
             setter,
         );
         core.require_trust_checks();
-        let (mail, inbox) = mpsc::unbounded_channel();
-        let (stop, stops) = mpsc::unbounded_channel();
-        let running = Arc::new(AtomicBool::new(false));
-        let (pending, queued) = (Arc::new(AtomicU32::new(0)), Arc::new(AtomicU32::new(0)));
+        let (handle, (inbox, stops, (running, pending, queued))) = Handle::new();
         let parts = Parts {
             id: id.clone(),
             core,
             clock: Arc::clone(&deps.clock),
             stream,
             writer,
-            db: deps.writer.clone(),
             readers: deps.readers.clone(),
             agent,
             cwd: PathBuf::from(path),
@@ -260,9 +287,9 @@ impl SessionManager {
             project_config,
             configured,
             cached,
-            running: Arc::clone(&running),
-            pending: Arc::clone(&pending),
-            queued: Arc::clone(&queued),
+            running,
+            pending,
+            queued,
             audit: deps.audit.clone(),
             index: Arc::clone(&deps.index),
             project: params.project_id.clone(),
@@ -276,15 +303,14 @@ impl SessionManager {
             by: principal.id,
             reply_to: None,
         };
-        let participant = deps.quiescence.enter(SESSION);
-        tokio::spawn(SessionActor::run(parts, inbox, stops, first, participant));
-        let handle = Handle {
-            mail,
-            stop,
-            running,
-            pending,
-            queued,
+        let start = Start {
+            first: Input::Machine(turn::Input::Send(first)),
+            commands: HashMap::new(),
+            project_gate: false,
+            ignore_for_good: false,
         };
+        let participant = deps.quiescence.enter(SESSION);
+        tokio::spawn(SessionActor::run(parts, inbox, stops, start, participant));
         self.sessions().insert(id, handle);
         if let Some(completion) = completion {
             completion.committed();
@@ -360,13 +386,76 @@ impl SessionManager {
         &self,
         id: &SessionId,
     ) -> BoxFuture<'static, Result<(), RpcError>> {
-        let mail = self.sessions().get(id).map(|h| h.mail.clone());
         let (done, finished) = oneshot::channel();
-        let sent = mail.is_some_and(|mail| mail.send(Mail::IgnoreProjectConfig(done)).is_ok());
-        if !sent {
-            return Box::pin(future::ready(Err(not_found("session"))));
+        if self
+            .mailbox(id)
+            .send(Mail::IgnoreProjectConfig(done))
+            .is_err()
+        {
+            return Box::pin(future::ready(Err(internal("the session stopped"))));
         }
-        Box::pin(finished.map(|done| done.map_err(|_| internal("the session stopped"))))
+        let stopped = || Err(internal("the session stopped"));
+        Box::pin(finished.map(move |done| done.unwrap_or_else(|_| stopped())))
+    }
+
+    /// The mailbox of session `id`'s actor. Without one, an actor starts
+    /// that loads the session first; until then its mailbox holds the calls.
+    fn mailbox(&self, id: &SessionId) -> mpsc::UnboundedSender<Mail> {
+        let mut sessions = self.sessions();
+        if let Some(handle) = sessions.get(id) {
+            return handle.mail.clone();
+        }
+        let (handle, ends) = Handle::new();
+        let mail = handle.mail.clone();
+        sessions.insert(id.clone(), handle);
+        drop(sessions);
+        let participant = self.shared.deps.quiescence.enter(SESSION);
+        let loading = self
+            .clone()
+            .loading(id.clone(), mail.clone(), ends, participant);
+        tokio::spawn(loading);
+        mail
+    }
+
+    /// Takes session `id`'s actor out of the table, if `mail` is its mailbox.
+    fn forget(&self, id: &SessionId, mail: &mpsc::UnboundedSender<Mail>) {
+        let mut sessions = self.sessions();
+        if sessions.get(id).is_some_and(|h| h.mail.same_channel(mail)) {
+            sessions.remove(id);
+        }
+    }
+
+    /// Loads session `id`, then runs its actor. When the load fails, the
+    /// mailbox leaves the table and every call that came meanwhile gets the
+    /// error; the next call tries again.
+    async fn loading(
+        self,
+        id: SessionId,
+        mail: mpsc::UnboundedSender<Mail>,
+        (mut inbox, stops, counters): Ends,
+        participant: Participant,
+    ) {
+        let err = match load(&self.shared.deps, &id, counters).await {
+            Ok((parts, start)) => {
+                return SessionActor::run(parts, inbox, stops, start, participant).await;
+            }
+            Err(err) => err,
+        };
+        self.forget(&id, &mail);
+        inbox.close();
+        while let Some(mail) = inbox.recv().await {
+            match mail {
+                Mail::Call(call, reply) => {
+                    if let Some(ticket) = call.ticket {
+                        ticket.reject(err.clone());
+                    }
+                    let _ = reply.send(Err(err.clone()));
+                }
+                Mail::IgnoreProjectConfig(done) => {
+                    let _ = done.send(Err(err.clone()));
+                }
+            }
+        }
     }
 
     fn running_turns(&self) -> u32 {
@@ -391,7 +480,7 @@ struct Accepted {
 }
 
 /// The agent's capabilities in the host's cache (design 5.6.7), if any.
-async fn cached(
+pub(super) async fn cached(
     readers: &Readers,
     agent: &AgentKind,
 ) -> Result<Option<SessionCapabilities>, RpcError> {
@@ -447,8 +536,8 @@ impl Part for SessionManager {
 
 impl Port for SessionManager {
     /// Queues a session's call in its actor's mailbox; `session/create` runs
-    /// in the reply's task. A session without an actor is `not_found` until
-    /// T089 loads sessions from the store.
+    /// in the reply's task. A mailbox that closed as its load failed is
+    /// tried once more.
     fn deliver(&self, call: Call) -> Reply {
         let new_turn = [SessionCreate::NAME, SessionSend::NAME].contains(&call.method);
         if let Some(err) = new_turn
@@ -460,20 +549,24 @@ impl Port for SessionManager {
         if call.method == SessionCreate::NAME {
             return Box::pin(self.clone().create(call));
         }
-        let id = parse::<SessionId>(&call.params["session_id"]);
-        let mail = id
-            .ok()
-            .and_then(|id| self.sessions().get(&id).map(|h| h.mail.clone()));
-        let Some(mail) = mail else {
+        let Ok(id) = parse::<SessionId>(&call.params["session_id"]) else {
             return refuse(call, not_found("session"));
         };
-        let (reply, answer) = oneshot::channel();
-        let sent = mail.send(Mail::Call(Box::new(call), reply));
-        if let Err(mpsc::error::SendError(Mail::Call(call, _))) = sent {
-            return refuse(*call, internal("the session stopped"));
+        let mut call = Box::new(call);
+        for _ in 0..2 {
+            let (reply, answer) = oneshot::channel();
+            match self.mailbox(&id).send(Mail::Call(call, reply)) {
+                Ok(()) => {
+                    let stopped = || Err(internal("the session stopped before it replied"));
+                    return Box::pin(
+                        answer.map(move |outcome| outcome.unwrap_or_else(|_| stopped())),
+                    );
+                }
+                Err(mpsc::error::SendError(Mail::Call(back, _))) => call = back,
+                Err(_) => unreachable!("a call went in"),
+            }
         }
-        let stopped = || Err(internal("the session stopped before it replied"));
-        Box::pin(answer.map(move |outcome| outcome.unwrap_or_else(|_| stopped())))
+        refuse(*call, internal("the session stopped"))
     }
 }
 

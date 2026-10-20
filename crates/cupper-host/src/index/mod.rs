@@ -76,6 +76,7 @@ use crate::trust::{Scan, Trust};
 
 pub use self::budget::{BUDGET, DETAIL_MAX};
 pub(crate) use self::projects::{Context as ScanContext, git_of};
+pub(crate) use self::status::status_of;
 
 /// The index actor's kind in the quiescence barrier.
 pub const INDEX: ActorKind = ActorKind::new("index");

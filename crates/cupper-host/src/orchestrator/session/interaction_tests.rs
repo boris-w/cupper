@@ -28,7 +28,7 @@ pub(super) fn ask(n: u64, options: Vec<InteractionOption>) -> DriverEvent {
     }
 }
 
-fn once() -> InteractionOption {
+pub(super) fn once() -> InteractionOption {
     option("once", "allow_once", "once", "approve")
 }
 

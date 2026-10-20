@@ -105,8 +105,18 @@ export function bridgeHost(
     open: async () => {
       current?.close();
       const { port, handshake } = await open();
-      current = new WindowHostPort(port, states);
-      return { port: current, handshake };
+      const opened = new WindowHostPort(port, states);
+      current = opened;
+      // contextBridge copies an object's own properties only: methods on a
+      // class's prototype would not reach the main world.
+      const exposed: HostPort = {
+        send: (json) => opened.send(json),
+        sendBlob: (hash, offset, last, bytes) => opened.sendBlob(hash, offset, last, bytes),
+        onData: (cb) => opened.onData(cb),
+        ack: (bytes) => opened.ack(bytes),
+        close: () => opened.close(),
+      };
+      return { port: exposed, handshake };
     },
     onConnectionState: (cb) => states.add(cb),
   };

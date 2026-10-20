@@ -1,31 +1,11 @@
-import { createContext, use, type ReactNode } from "react";
+import { use } from "react";
 
-import { Composer } from "../composer/Composer";
 import { ComposerArea } from "../composer/QueueList";
 import { SessionBanners } from "../session/SessionBanners";
+import { NewSessionPage } from "../newsession/NewSessionPage";
 import { StreamList } from "../stream/StreamList";
 import { useRouter } from "./router";
-
-/** The places later tasks fill: the sidebar's parts (T081) and the composers (T086, T083). */
-export interface Slots {
-  sidebarHeader?: ReactNode;
-  sidebarList?: ReactNode;
-  sidebarFooter?: ReactNode;
-  newSessionComposer?: ReactNode;
-  sessionComposer?: ReactNode;
-}
-
-export const SlotsContext = createContext<Slots>({});
-
-/** The new session page: the composer's top sits at 42% of the window's height. */
-export function NewSessionPage() {
-  const { newSessionComposer } = use(SlotsContext);
-  return (
-    <div className="mx-auto w-full max-w-(--layout-thread-max-w) px-(--layout-thread-gutter) pt-[calc(var(--layout-home-composer-anchor)-var(--layout-titlebar-h))]">
-      {newSessionComposer ?? <Composer />}
-    </div>
-  );
-}
+import { SlotsContext } from "./slots";
 
 /** A session: banners and the message stream above, the composer at the bottom. */
 export function SessionPage({ sessionId }: { sessionId: string }) {

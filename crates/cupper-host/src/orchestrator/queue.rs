@@ -54,6 +54,17 @@ pub enum QueueEditError {
 }
 
 impl QueueCore {
+    /// The queue as the store has it: `sessions.queue_version` and
+    /// `queue_paused`, and `queue_entries` in order (T089).
+    pub fn restored(version: u64, paused: Option<PauseReason>, entries: Vec<QueueEntry>) -> Self {
+        let entries = entries.into();
+        Self {
+            version,
+            paused,
+            entries,
+        }
+    }
+
     pub fn count(&self) -> u32 {
         u32::try_from(self.entries.len()).unwrap_or(u32::MAX)
     }

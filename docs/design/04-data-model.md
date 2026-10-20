@@ -78,6 +78,7 @@ CREATE TABLE sessions (
   initial_prompt_json TEXT,                  -- 第一条消息，随受理事务写入，第一个回合开始时清空（5.2.6）
   mode_set_by       TEXT,                    -- 设定当前审批档位的 principal 稳定 ID；默认档位记为创建者（5.2.6）
   full_access_confirmed_at INTEGER,          -- 经原生确认进入 full_access 的时间
+  project_config_ignored INTEGER NOT NULL DEFAULT 0,  -- 1：用户选了"不加载项目配置继续"，重启后仍不加载（5.2.6）
   state             TEXT NOT NULL,           -- idle | running | error | interrupted；供崩溃恢复使用的粗粒度状态
   read_only         INTEGER NOT NULL DEFAULT 0,    -- 分支已不存在的已恢复会话（PS-3）
   queue_version     INTEGER NOT NULL DEFAULT 0,

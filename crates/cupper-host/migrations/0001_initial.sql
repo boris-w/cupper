@@ -36,6 +36,7 @@ CREATE TABLE sessions (
   initial_prompt_json TEXT,
   mode_set_by       TEXT,
   full_access_confirmed_at INTEGER,
+  project_config_ignored INTEGER NOT NULL DEFAULT 0,  -- 1: the project's configuration stays out for good
   state             TEXT NOT NULL,           -- idle | running | error | interrupted
   read_only         INTEGER NOT NULL DEFAULT 0,
   queue_version     INTEGER NOT NULL DEFAULT 0,

@@ -27,8 +27,7 @@ use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{CommandId, PrincipalId, ProjectId, QueueId, SessionId, TurnId};
 use cupper_protocol::ids::{Digest, RequestId};
 use cupper_protocol::index::{PendingKind, SessionStatus, SessionSummary, TrustState};
-use cupper_protocol::interaction::InteractionOutcome;
-use cupper_protocol::interaction::InteractionRequest;
+use cupper_protocol::interaction::{InteractionOutcome, InteractionRequest};
 use cupper_protocol::item::{NoticeCode, NoticeParams};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::methods::interaction::{
@@ -52,6 +51,7 @@ use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 
 use super::core::{Action, Input, Key, SessionCore};
+use super::load::request as stored;
 use super::rows::Rows;
 use super::{IndexNotes, Note, internal, mode_tier, not_found, parse, tier_of};
 use crate::clock::Clock;
@@ -62,7 +62,7 @@ use crate::driver::api::{
 use crate::durations::Durations;
 use crate::gateway::{AuditEvent, AuditRecord, Call, ConfigState, TrustChange};
 use crate::git::GitTool;
-use crate::index::{ScanContext, git_of};
+use crate::index::{ScanContext, git_of, status_of};
 use crate::ledger::{Outcome, Ticket};
 use crate::orchestrator::interaction::{self, Respond};
 use crate::orchestrator::notice_with;
@@ -72,7 +72,7 @@ use crate::policy;
 use crate::pure::{Alarm, Core, TimerTable};
 use crate::quiescence::{Participant, Quiescence};
 use crate::store::streams::{Batch, StreamHandle, StreamView, StreamWriter};
-use crate::store::{Durability, Readers, Writer};
+use crate::store::{Durability, Readers};
 use crate::trust::{self, Scan};
 
 /// A call and where its reply goes.
@@ -80,7 +80,7 @@ pub(super) enum Mail {
     Call(Box<Call>, oneshot::Sender<Outcome>),
     /// Leave the project's configuration out from now on (design 5.2.6:
     /// "不加载项目配置继续"); the host's own entry until M1b's method.
-    IgnoreProjectConfig(oneshot::Sender<()>),
+    IgnoreProjectConfig(oneshot::Sender<Result<(), RpcError>>),
 }
 /// The host's exit, whether forced, and the reply once the session took it.
 pub(super) type Stop = (bool, oneshot::Sender<()>);
@@ -103,8 +103,6 @@ pub(super) struct Parts {
     pub clock: Arc<dyn Clock>,
     pub stream: StreamHandle,
     pub writer: StreamWriter,
-    /// For rows that go without events.
-    pub db: Writer,
     pub readers: Readers,
     pub agent: Arc<dyn AgentPort>,
     /// The workspace, as a real path.
@@ -130,6 +128,19 @@ pub(super) struct Parts {
     pub durations: Durations,
     /// For the work it hands to tasks of their own (T047).
     pub quiescence: Quiescence,
+}
+
+/// What the actor starts with besides its parts: its first input, and what
+/// the actor had of a session loaded from the store (T089).
+pub(super) struct Start {
+    /// The first message of a new session, or [`Input::Restored`].
+    pub first: Input,
+    /// The command that queued each message.
+    pub commands: HashMap<QueueId, CommandId>,
+    /// The gate was shut for `project_config_changed`.
+    pub project_gate: bool,
+    /// "不加载项目配置继续" was chosen.
+    pub ignore_for_good: bool,
 }
 
 pub(super) struct SessionActor {
@@ -207,39 +218,46 @@ struct Step {
     reply: Option<Reply>,
     /// Who set the tier now, and whether full access was just confirmed.
     set_by: Option<(PrincipalId, bool)>,
+    /// The project's configuration stays out for good from now on.
+    ignored: bool,
     audit: Vec<AuditRecord>,
 }
 
 impl SessionActor {
-    /// Runs the session, starting with its first message, until the mailbox
+    /// Runs the session, starting with its first input, until the mailbox
     /// closes; it counts in the quiescence barrier meanwhile.
     pub(super) async fn run(
         parts: Parts,
         inbox: mpsc::UnboundedReceiver<Mail>,
         mut stops: mpsc::UnboundedReceiver<Stop>,
-        first: SendRequest,
+        start: Start,
         participant: Participant,
     ) {
         let (events, mut agent) = mpsc::unbounded_channel();
         let (attached, mut attaches) = mpsc::unbounded_channel();
         let (rescanned, mut rescans) = mpsc::unbounded_channel();
         let alarm = Alarm::new(Arc::clone(&parts.clock));
-        let load_wanted = parts.project_config == ProjectConfigPolicy::Load;
+        let Start {
+            first,
+            commands,
+            project_gate,
+            ignore_for_good,
+        } = start;
+        let load_wanted = parts.project_config == ProjectConfigPolicy::Load || project_gate;
         let mut actor = Self {
             parts,
             timers: TimerTable::new(),
             alarm,
-            commands: HashMap::new(),
+            commands,
             inbox,
             events,
             attached,
             rescanned,
-            load_wanted,
-            project_gate: false,
-            ignore_for_good: false,
+            load_wanted: load_wanted && !ignore_for_good,
+            project_gate,
+            ignore_for_good,
             deferred: None,
         };
-        let first = Input::Machine(turn::Input::Send(first));
         actor.input(first, None, Step::default()).await;
         // Idle until a branch brings work, which runs once the others are
         // dropped.
@@ -258,7 +276,7 @@ impl SessionActor {
                 Next::Mail(Some(Mail::Call(call, reply))) => actor.call(*call, reply).await,
                 Next::Mail(Some(Mail::IgnoreProjectConfig(done))) => {
                     actor.ignore_project_config().await;
-                    let _ = done.send(());
+                    let _ = done.send(Ok(()));
                 }
                 Next::Mail(None) => break,
                 Next::Agent(event) => actor.agent(event).await,
@@ -334,7 +352,11 @@ impl SessionActor {
                 return;
             }
             InteractionGet::NAME => {
-                let _ = reply.send(parse(&params).and_then(|p| self.interaction(p)));
+                let found = match parse(&params) {
+                    Ok(params) => self.interaction(params).await,
+                    Err(err) => Err(err),
+                };
+                let _ = reply.send(found);
                 return;
             }
             method => Err(RpcError::app(ErrorCode::Unsupported, method)),
@@ -441,11 +463,20 @@ impl SessionActor {
         tier_of(self.capabilities().as_ref(), mode)
     }
 
-    /// `interaction/get`, for a request in the session's view: the pending
-    /// ones and those of the latest turns.
-    fn interaction(&self, p: InteractionGetParams) -> Outcome {
+    /// `interaction/get`: a request in the session's view (the pending ones
+    /// and those of the latest turns), else one of the `interactions` table.
+    async fn interaction(&self, p: InteractionGetParams) -> Outcome {
         let found = self.view(|view| view.requests.get(&p.request_id).cloned());
-        let request = found.ok_or_else(|| not_found("request"))?;
+        let request = match found {
+            Some(request) => request,
+            None => {
+                let (session, request) = (self.parts.id.to_string(), p.request_id.to_string());
+                let row = (self.parts.readers).read(move |conn| stored(conn, &session, &request));
+                row.await
+                    .map_err(internal)?
+                    .ok_or_else(|| not_found("request"))?
+            }
+        };
         let resolved = request.resolved.as_ref();
         Ok(json!(InteractionGetResult {
             status: request.status().clone(),
@@ -506,6 +537,7 @@ impl SessionActor {
             check,
             reply,
             set_by,
+            ignored,
             audit: records,
         } = step;
         let mut answer = None;
@@ -553,6 +585,9 @@ impl SessionActor {
         if let Some((by, confirmed)) = set_by {
             changes.set_by(&self.parts.id, at, &by, confirmed);
         }
+        if ignored {
+            changes.ignored(&self.parts.id, at);
+        }
         self.forget_dequeued(&events);
         let asks = events.iter().any(|b| {
             matches!(
@@ -567,31 +602,23 @@ impl SessionActor {
             changes.write(conn)?;
             record.map_or(Ok(()), |record| record(conn))
         };
-        let committed = if events.is_empty() {
-            // Rows without events: a transaction of their own, if any.
-            let write = (!idle).then(|| self.parts.db.submit(Durability::Normal, with));
-            match write {
-                Some(write) => write.await.map_err(|e| e.to_string()),
-                None => Ok(()),
-            }
-        } else {
-            let batch = Batch {
-                bodies: events,
-                cause,
-                durability: Durability::Normal,
-                with: Some(Box::new(with)),
-            };
-            let appended = self.parts.writer.append(batch).await;
-            let rejected = appended.as_ref().map(|a| a.rejected.as_slice());
-            if let Ok(rejected @ [_, ..]) = rejected {
-                let bug = format!("session {}: the view rejected {rejected:?}", self.parts.id);
-                if cfg!(any(test, feature = "test-harness")) {
-                    panic!("{bug}");
-                }
-                tracing::error!("{bug}");
-            }
-            appended.map(drop).map_err(|e| e.to_string())
+        // Rows without events commit alone, if there are any.
+        let batch = Batch {
+            bodies: events,
+            cause,
+            durability: Durability::Normal,
+            with: (!idle).then(|| Box::new(with) as _),
         };
+        let appended = self.parts.writer.append(batch).await;
+        let rejected = appended.as_ref().map(|a| a.rejected.as_slice());
+        if let Ok(rejected @ [_, ..]) = rejected {
+            let bug = format!("session {}: the view rejected {rejected:?}", self.parts.id);
+            if cfg!(any(test, feature = "test-harness")) {
+                panic!("{bug}");
+            }
+            tracing::error!("{bug}");
+        }
+        let committed = appended.map(drop).map_err(|e| e.to_string());
         if let (Ok(()), Some(completion)) = (&committed, completion) {
             completion.committed();
         }
@@ -767,7 +794,10 @@ impl SessionActor {
     async fn ignore_project_config(&mut self) {
         (self.load_wanted, self.ignore_for_good) = (false, true);
         self.parts.project_config = ProjectConfigPolicy::Ignore;
-        let mut step = Step::default();
+        let mut step = Step {
+            ignored: true,
+            ..Step::default()
+        };
         if self.parts.configured.project_config != ProjectConfig::Ignored {
             self.parts.configured.project_config = ProjectConfig::Ignored;
             let configured = self.parts.configured.clone();
@@ -979,18 +1009,9 @@ impl SessionActor {
             let failed = last.filter(|t| t.status == TurnStatus::Failed);
             (pending(view), failed.and_then(|t| t.error_code.clone()))
         });
-        let unread = ended > read;
-        let status = if pending.0 > 0 {
-            SessionStatus::NeedsAction
-        } else if self.parts.core.turn_id().is_some() {
-            SessionStatus::Running
-        } else if unread && last_failed.is_some() {
-            SessionStatus::Error
-        } else if unread {
-            SessionStatus::Unread
-        } else {
-            SessionStatus::Idle
-        };
+        let (unread, running) = (ended > read, self.parts.core.turn_id().is_some());
+        let count = u32::try_from(pending.0).unwrap_or(u32::MAX);
+        let status = status_of(count, running, unread, last_failed.is_some());
         let configured = &self.parts.configured;
         let summary = SessionSummary {
             session_id: self.parts.id.clone(),
@@ -1003,7 +1024,7 @@ impl SessionActor {
             error_code: last_failed.filter(|_| status == SessionStatus::Error),
             status,
             unread,
-            pending_interactions: u32::try_from(pending.0).unwrap_or(u32::MAX),
+            pending_interactions: count,
             pending_kind: pending.1.map(|(kind, _)| kind),
             last_activity_at: TimestampMs(active),
             read_only,
@@ -1081,7 +1102,8 @@ async fn rescan(readers: Readers, project: ProjectId, cwd: PathBuf, mut cx: Scan
         return fail("project_missing");
     };
     cx.writable = roots.into_iter().map(PathBuf::from).collect();
-    let Some(path) = std::fs::canonicalize(&cwd).ok().filter(|p| p.is_dir()) else {
+    let path = move || std::fs::canonicalize(cwd).ok().filter(|p| p.is_dir());
+    let Some(path) = tokio::task::spawn_blocking(path).await.ok().flatten() else {
         return fail("workspace_missing");
     };
     let root = match git_of(&path, &cx).await {

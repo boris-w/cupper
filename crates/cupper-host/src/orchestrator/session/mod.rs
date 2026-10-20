@@ -9,7 +9,10 @@ pub mod core;
 mod gating_tests;
 #[cfg(test)]
 mod interaction_tests;
+mod load;
 mod manager;
+#[cfg(test)]
+mod recovery_tests;
 mod rows;
 #[cfg(test)]
 pub(super) mod tests;

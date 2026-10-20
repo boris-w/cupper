@@ -19,8 +19,9 @@ import { useHost, useT } from "../app/providers";
 import { useToasts } from "../feedback/toaster";
 import { usePrivileged } from "../feedback/privileged";
 import { useUi } from "../state/provider";
-import { BUTTON, OptionsKind, QuestionKind, Terminal, text, type KindProps } from "./kinds";
-import { handled, panelKey, skipOutcome, type PanelKey } from "./logic";
+import { ContentBox } from "./fulltext";
+import { BUTTON, OptionsKind, QuestionKind, text, type KindProps } from "./kinds";
+import { handled, panelKey, skipOutcome, type Handled, type PanelKey } from "./logic";
 import { useRespond } from "./respond";
 
 /** RP-1: the panel takes no key or click for this long, counted again from each key. */
@@ -263,37 +264,8 @@ function Body(
     return null;
   }
   switch (request.type) {
-    case "permission": {
-      const command = text(request.tool.command);
-      const detail = text(request.detail);
-      const reject = skipOutcome(request);
-      return (
-        <OptionsKind
-          {...props}
-          options={request.options}
-          truncated={request.content_truncated}
-          skip={reject}
-          rejectWithMessage={
-            reject.type === "selected" ? (text) => props.rejectWithMessage(text, reject) : undefined
-          }
-        >
-          {request.title && (
-            <p className="px-4 pb-2 text-sm text-fg-secondary">{escapeInvisible(request.title)}</p>
-          )}
-          {command !== undefined && <Terminal command={command} />}
-          {request.tool.paths.length > 0 && (
-            <ul className="px-4 pb-2 font-mono text-code">
-              {request.tool.paths.map((path) => (
-                <li key={path}>{escapeInvisible(path)}</li>
-              ))}
-            </ul>
-          )}
-          {detail && (
-            <p className="px-4 pb-2 text-sm whitespace-pre-wrap text-fg-secondary">{detail}</p>
-          )}
-        </OptionsKind>
-      );
-    }
+    case "permission":
+      return <PermissionBody {...props} request={request} />;
     case "plan_confirm":
       return (
         <OptionsKind
@@ -320,4 +292,65 @@ function Body(
       props.keys.current = () => undefined;
       return null;
   }
+}
+
+/**
+ * A permission: its title, command, paths and details. Truncated content
+ * keeps the allowing options off until every blob in it is expanded and
+ * loaded (security #6); collapsing one or a failed download takes them back.
+ */
+function PermissionBody(
+  props: Parameters<typeof Body>[0] & { request: Extract<Handled, { type: "permission" }> },
+) {
+  const t = useT();
+  const { request } = props;
+  const reject = skipOutcome(request);
+  const [seen, setSeen] = useState({ command: false, detail: false });
+  const seeCommand = useCallback(
+    (now: boolean) => setSeen((was) => ({ ...was, command: now })),
+    [],
+  );
+  const seeDetail = useCallback((now: boolean) => setSeen((was) => ({ ...was, detail: now })), []);
+  const { command, paths } = request.tool;
+  const blobs = { command: command?.type === "blob", detail: request.detail?.type === "blob" };
+  const whole =
+    (blobs.command || blobs.detail) &&
+    (!blobs.command || seen.command) &&
+    (!blobs.detail || seen.detail);
+  return (
+    <OptionsKind
+      {...props}
+      options={request.options}
+      truncated={request.content_truncated && !whole}
+      skip={reject}
+      rejectWithMessage={
+        reject.type === "selected"
+          ? (message) => props.rejectWithMessage(message, reject)
+          : undefined
+      }
+    >
+      {request.title && (
+        <p className="px-4 pb-2 text-sm text-fg-secondary">{escapeInvisible(request.title)}</p>
+      )}
+      {command && (
+        <ContentBox label={t("request:terminal")} content={command} onSeen={seeCommand} />
+      )}
+      {paths.length > 0 && (
+        <ul className="px-4 pb-2 font-mono text-code">
+          {paths.map((path) => (
+            <li key={path}>{escapeInvisible(path)}</li>
+          ))}
+        </ul>
+      )}
+      {request.detail?.type === "blob" ? (
+        <ContentBox label={t("request:detail")} content={request.detail} onSeen={seeDetail} />
+      ) : (
+        text(request.detail) && (
+          <p className="px-4 pb-2 text-sm whitespace-pre-wrap text-fg-secondary">
+            {text(request.detail)}
+          </p>
+        )
+      )}
+    </OptionsKind>
+  );
 }

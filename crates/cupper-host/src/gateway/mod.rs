@@ -49,6 +49,7 @@ pub use self::audit::{
 };
 pub use self::dispatch::{Call, Granted, IndexPort, Opened, Port, Reply, SessionPort};
 pub use self::handshake::Session;
+pub(crate) use self::handshake::principal as principal_of;
 pub use self::routes::Routes;
 use crate::clock::Clock;
 use crate::durations::{Durations, GATEWAY_ACCEPT_BACKOFF};

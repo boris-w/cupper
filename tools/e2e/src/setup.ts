@@ -11,6 +11,13 @@ import { sweep } from "./fixture";
 import { BUILT, DEFAULTS_DOMAIN, ROOTS } from "./paths";
 
 export default async function setup() {
+  // `/usr/bin/git` is a stub that asks to install the command line tools
+  // unless Xcode or they are selected; the hosts run it.
+  try {
+    execFileSync("xcode-select", ["-p"], { stdio: "ignore" });
+  } catch {
+    throw new Error("no Xcode or command line tools: `/usr/bin/git` would not run");
+  }
   const missing = Object.values(BUILT).filter((path) => !existsSync(path));
   if (missing.length > 0) {
     throw new Error(
