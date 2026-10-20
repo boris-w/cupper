@@ -234,6 +234,11 @@
 | T096 | 从 `trust::Scan.files` 的 `path`、`content` 解析 findings（扫描已保留完整内容，不必再读文件）；`Finding.target`、`outside_workspace` 直接取 `ScannedFile` 上的字段 | T035 |
 | T034 | 信任扫描放进阻塞线程池（模块是同步的）；错误映射：`ScanError` → `unavailable/scan_failed`，`DigestMismatch` → `conflict/digest_mismatch`；写库用 `Manifest::to_json`、`TrustedBy::as_str`；findings 在 T096 之前回空列表 | T035 |
 | T044 | 每次 Attach、每次发 prompt 之前、每个回合结束时调用 `trust::scan` 和 `Trust::rescanned`；git 根目录经 T098 的仓库档取得 | T035 |
+| T007 | `ControlConnection.client` 是 control 连接上的 `HostClient`，`host/status`、`host/exit` 直接用它的 `request`、`command`；退出确认挂在现有的 `will-quit` 之前；"无法验证宿主"对应的失败码是 `unauthenticated` 或 `host_unverified`（新的 UI 实例拿新 key 去连还在运行的旧宿主时出现）。启动等待和环境变量白名单的两处改动见 T007 的任务书 | T075 |
+| T076 | 数据连接用同一个 launcher 打开：`open({role: "window", features: …})`；`SocketPort.ack` 现在是空操作，按窗口的流控由本任务做 | T075 |
+| T090、T016 及打包 App 的任务 | `build:dev`、`build:e2e`、`test:launch` 都需要本机先跑过一次 `cargo xtask runtime-pack`（`host-bundle` 要用它的暂存目录）；原生扩展在 `Resources/native/`，宿主用 `extraFiles` 放进 `Helpers/` 并加 `signIgnore` | T075 |
+| T044 | 档位用 `driver::claude::capabilities::tier()`；能力里 `permission_mode` 各取值的 `risk` 已按档位表给出，表外的模式是 `full_access` | T095 |
+| 显示工具审批的界面任务 | T095 只填了 `interaction.requested.item_id`，`permission.tool.item_id` 仍为空；界面需要时另补 | T095 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

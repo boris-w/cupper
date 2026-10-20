@@ -7,12 +7,15 @@ use std::time::Duration;
 use cupper_protocol::domain::PrincipalKind;
 use cupper_protocol::ids::RequestId;
 use cupper_protocol::interaction::InteractionOption;
+use cupper_protocol::item::ToolKind;
 use cupper_protocol::rpc::Scope::{Approve, Read, UiLocal, Write};
 use cupper_protocol::session::StopReason;
 use serde_json::{Value, json};
 
 use super::tests::{Fixture, code, data, done, harness, on, principal, send, tags};
-use crate::driver::api::{AskAnswer, AskId, AskRequest, DriverCommand, DriverEvent, PromptTag};
+use crate::driver::api::{
+    AskAnswer, AskId, AskRequest, DriverCommand, DriverEvent, NormUpdate, PromptTag,
+};
 use crate::gateway::AuditEvent;
 use crate::policy::testkit::{option, permission};
 
@@ -177,6 +180,39 @@ async fn it_orch_interaction_outside_a_turn_opens_one_until_answered() {
     assert_eq!(resolved["status"], "resolved");
     let all = tags(&bodies);
     assert!(all.rfind("interaction.resolved") < all.rfind("turn.completed"));
+}
+
+/// A request about a tool call names the call's item; one about a call the
+/// session has not seen names none.
+#[tokio::test]
+async fn it_orch_interaction_request_names_its_tool_calls_item() {
+    let mut f = Fixture::new("item").await;
+    let id = f.started().await;
+    f.emit(DriverEvent::Update(NormUpdate::ToolStart {
+        tool_call_id: "toolu_1".into(),
+        tool_kind: ToolKind::Execute,
+        title: "ls".into(),
+        paths: Vec::new(),
+        command: Some("ls".into()),
+        cwd: None,
+    }));
+    for (n, call) in [(1, "toolu_1"), (2, "toolu_unknown")] {
+        let DriverEvent::Ask { ask, request, .. } = ask(n, vec![once()]) else {
+            unreachable!()
+        };
+        let tool_call_id = Some(call.to_owned());
+        f.emit(DriverEvent::Ask {
+            ask,
+            tool_call_id,
+            request,
+        });
+    }
+    let asked = asked(&f, &json!(id), 2).await;
+    let started = data(&f.events(&id, "item.started", 2).await, "item.started");
+    let tool = started.iter().find(|item| item["kind"] == "tool_call");
+    let tool = tool.expect("the tool call's item");
+    assert_eq!(asked[0]["item_id"], tool["item_id"]);
+    assert_eq!(asked[1].get("item_id"), None);
 }
 
 #[tokio::test]

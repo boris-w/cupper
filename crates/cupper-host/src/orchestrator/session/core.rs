@@ -42,7 +42,7 @@ pub struct SessionCore {
     /// The turn requests go into: from `turn.started` until its Settle.
     open: Option<TurnId>,
     /// Requests that came while no turn was open, for the next one.
-    held: Vec<(AskId, AskRequest, AdapterInstanceId)>,
+    held: Vec<(AskId, AskRequest, AdapterInstanceId, Option<String>)>,
     /// The adapter instance of the last attach.
     instance: Option<AdapterInstanceId>,
 }
@@ -176,24 +176,33 @@ impl SessionCore {
 
     /// A request from the agent: the judge first, so that a turn is open
     /// for it. Without an attached instance it cannot be answered later.
-    fn ask(&mut self, ask: AskId, request: AskRequest, now: Now, out: &mut Vec<Action>) {
+    fn ask(
+        &mut self,
+        ask: AskId,
+        tool_call: Option<String>,
+        request: AskRequest,
+        now: Now,
+        out: &mut Vec<Action>,
+    ) {
         let Some(instance) = self.instance.clone() else {
             let answer = AskAnswer::Cancelled;
             return out.push(Action::Driver(DriverCommand::Answer { ask, answer }));
         };
         self.judge(autonomous::Input::Asked, now, out);
-        self.held.push((ask, request, instance));
+        self.held.push((ask, request, instance, tool_call));
         self.write_held(now, out);
     }
 
-    /// Writes the held requests into the open turn, if there is one.
+    /// Writes the held requests into the open turn, if there is one, each
+    /// naming the item of its tool call when there is one.
     fn write_held(&mut self, now: Now, out: &mut Vec<Action>) {
         let Some(turn_id) = self.open.clone() else {
             return;
         };
-        for (ask, request, instance) in mem::take(&mut self.held) {
+        for (ask, request, instance, tool_call) in mem::take(&mut self.held) {
             self.coalesce(coalescer::Input::Interject, now, out);
-            let (turn_id, item_id) = (turn_id.clone(), None);
+            let item_id = tool_call.and_then(|call| self.coalescer.item_of(&call));
+            let turn_id = turn_id.clone();
             let ask = interaction::Ask {
                 ask,
                 instance,
@@ -238,7 +247,7 @@ impl SessionCore {
     ) {
         let dropped = self
             .held
-            .extract_if(.., |(ask, _, instance)| gone(ask, instance));
+            .extract_if(.., |(ask, _, instance, _)| gone(ask, instance));
         for _ in dropped.collect::<Vec<_>>() {
             self.judge(autonomous::Input::Resolved, now, out);
         }
@@ -277,9 +286,11 @@ impl Core for SessionCore {
         let mut out = Vec::new();
         match input {
             Input::Machine(input) => self.machine(input, now, &mut out),
-            Input::Agent(DriverEvent::Ask { ask, request, .. }) => {
-                self.ask(ask, request, now, &mut out)
-            }
+            Input::Agent(DriverEvent::Ask {
+                ask,
+                tool_call_id,
+                request,
+            }) => self.ask(ask, tool_call_id, request, now, &mut out),
             Input::Agent(DriverEvent::AskWithdrawn(ask)) => {
                 if self.held.iter().any(|(held, ..)| *held == ask) {
                     self.drop_held(|held, _| *held == ask, now, &mut out);
