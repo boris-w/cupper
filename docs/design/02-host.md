@@ -410,7 +410,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 **仓库可执行配置指纹**
 
-- 内容：仓库的 `config` 及其 include 的文件、worktree 的 `config.worktree`、`hooks/` 和 `core.hooksPath` 指向的目录下的文件（名称和哈希）、`info/attributes`、工作区里的全部 `.gitattributes`。
+- 内容：有效配置的全部来源文件（仓库的 `config` 及其 include 的文件、worktree 的 `config.worktree`，也包括全局和系统配置：从扁平的配置列表里分不清哪些 include 属于仓库配置，而全局配置被改写同样会改变可执行配置；`.git/config`、`config.worktree` 不存在时也记下，之后新建了能被发现。T097 实现时的裁定，2026-10-20）、`hooks/` 和 `core.hooksPath` 指向的目录下的文件（名称和哈希）、`info/attributes`、工作区里的全部 `.gitattributes`。
 - 计算时机：回合开始和结束时（随快照），以及每次仓库档调用的前后。
 - 回合前后不同时，在回合里写 `notice{code: repo_config_changed, params: {paths}}`；审查面板顶部醒目提示；用户档的确认文案带上这一条。
 
