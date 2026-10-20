@@ -82,3 +82,86 @@
 两点约束（编排者要求确认）：
 - 跟帧边界只是旁听：入方向的字节照旧进 16 ms 的批，按原样转给窗口，流控（超过 8 MB 暂停读取）不变；
 - 解析失败只影响重发表，不影响转发。
+
+## 实现中定下的几点
+
+- **"命令"的范围**：
+  - 第 4 条说"任何一条出方向命令都会用掉尚未消耗的输入"。这里的"命令"取协议里幂等方式为 `command` 的方法，也就是带 `command_id` 的那些；读请求和通知不消耗输入。
+  - 原因：渲染进程在后台不断发读请求（订阅、翻页），要是读请求也消耗输入，用户按下 Enter 和 `interaction/respond` 发出之间，输入可能已经被一条读请求用掉。
+- **按键分类**：
+  - 输入法组合中的键算打字键：不记录，并且按第 3 条压住其后 1 秒内的 Enter、Space 和数字键，用 Enter 选词之后紧接着的 Enter 也不算。
+  - 单独的修饰键（Shift、⌘、⌃、⌥、CapsLock、Fn）什么都不改变，否则按 ⌘Enter 时先到的 ⌘ 会清掉输入。
+  - 带 ⌘、⌃、⌥ 的白名单键（⌘Enter 除外）和自动重复的白名单键不记录，也不算打字。
+  - Shift 不影响判断：Shift+数字得到的是符号，本来就不在白名单里。
+- **焦点不在主框架时**（例如在审查文档里），按键和点击整个不处理，也不算打字。这与设计 RP-11 的说明一致："审查文档里的按键主进程不记录"。
+- **激活冷却**：只压键盘。窗口激活的那次点击按 macOS 默认不送到页面（`acceptFirstMouse` 为 false），所以点击不受冷却限制。
+- **重发表**：
+  - 只记需要真实输入的两个方法（`interaction/respond`、`git/revert`）。记录的内容是：参数哈希（去掉 `input` 后按键名排序的 JSON 的 sha-256）和当时用的证据；重发时写回原来的证据。
+  - 记录在桥里：一个文档实例一个桥，文档变了，表自然是空的。
+  - 换连接时，等待中的请求 `id` 清空，记录保留。这正是规则 9 要放行的情形：连接断了，宿主还没回应。
+- **入方向的帧**：
+  - `FrameDecoder` 只是旁听。字节照旧进 16 ms 的批，按原样转给窗口，流控不变：已有的 UNIT-bridge-flow 用例照常通过。
+  - 解析失败只换一个新的解码器，不影响转发，有用例覆盖。
+  - 代价：每个入方向字节在主进程里多复制一次（`FrameDecoder` 的拼接）。留给 T078 的测量闸门一并评估。
+- **给 T134 的接口**：
+  - `guardOf(webContents)?.take()`：用掉一次输入；不超过 1 秒时返回证据 `{kind, key?, digit?}`，否则返回 `undefined`。
+  - "Esc 不能触发特权操作"由 T134 自己判断：看取到的证据里 `key` 是不是 `escape`。
+
+## Q26 复测（Electron 44.9.0，playwright-core 1.63.0）
+
+脚本和原始结果在 `q26/`：
+- `main.cjs`：一个带按钮、输入框和同源 iframe 的窗口，记录 `before-input-event`、`input-event`，以及页面 keydown 的 `isTrusted`。
+- `run.mjs`：用 Playwright 的 Electron 支持拉起它，逐项操作，输出 `result.json`。
+
+运行方式：`node run.mjs <装了 playwright-core 的目录> <Electron 可执行文件>`。复测时 playwright-core 装在临时目录，用完已删。
+
+| # | 问题 | 结论 |
+|---|---|---|
+| 1 | Playwright 的键盘输入是否触发 `before-input-event` | **不触发**。`page.keyboard.press("Enter")` 没有产生 `before-input-event`；但产生了 `input-event` 的 keyDown 和 keyUp，页面收到的 keydown 是 `isTrusted: true`。与 Electron 34 上的结论相同 |
+| 2 | `sendInputEvent` 是否触发它，页面的 keydown 是否 `isTrusted` | **触发**。`sendInputEvent({type: "keyDown", keyCode: "Return"})` 产生了 `before-input-event`，`key`、`code` 都是 `Enter`；页面收到的 keydown 是 `isTrusted: true`。`input-event` 里对应的是 `rawKeyDown` |
+| 3 | `input-event` 的键盘事件运行时是否带键码 | **带**。字段有 `key`、`code`、`isComposing`、`isAutoRepeat`、`shift`、`control`、`alt`、`meta`、`location`、`modifiers`（另有内部的 `_modifiers`），类型定义里只有 `type` 和 `modifiers`。可以留作后备，但设计仍只用 `before-input-event` 识别键盘 |
+| 4 | `page.click()` 是否产生 `input-event` | **产生**。同一按钮（`left`）的 `mouseDown`、`mouseUp` 各一次 |
+| 5 | 用 `webContents.focusedFrame` 判断主框架是否可靠 | **可靠**。焦点在主文档的输入框时，`focusedFrame` 与 `mainFrame` 是同一个对象，`frameTreeNodeId` 也相同；焦点在 iframe 的输入框时两者都不同（`url` 为 `about:srcdoc`）。实现按 `frameTreeNodeId` 比较，不依赖对象同一 |
+
+对设计的影响：
+- e2e 的按键照设计经 `sendInputEvent` 发出，走生产的 inputGuard；Playwright 的键盘输入不会被记成真实输入。
+- 点击用 `page.click()`。
+
+## MAN-keyboard（待作者确认）
+
+每次升级 Electron 大版本，用实体键盘在开发构建里各做一次，结果按 `tests/ids.toml` 末尾的格式登记证据（`versions = { electron = "<当前版本>" }`）。
+
+前提：请求面板（T083）和 e2e 之外的真实会话；可以用假 agent 产生一个权限请求。下面两件事要等 T083 做出请求面板才能完整执行，本任务只能把清单写好：
+- 用 Enter 和数字键提交请求面板；
+- 面板上的输入法选词。
+
+1. **Enter 批准**：
+   - 面板出现后，等待命期过去（约 0.5 秒），按 Enter；
+   - 选中的选项被提交，宿主接受；
+   - 在主进程日志或宿主审计里能看到这次回答带着 `input: {kind: "key", key: "enter"}`。
+2. **Esc 拒绝**：
+   - 面板出现后按 Esc，请求以拒绝或 `dismissed` 结束；
+   - 带 `input.key: "escape"`。
+3. **数字键选择并提交**：
+   - 按某个选项的编号（例如 2）；
+   - 提交的就是 `options` 里第 2 项，带 `input: {kind: "key", key: "digit", digit: 2}`；
+   - 按一个效果未知的选项的编号，不起作用。
+4. **输入法选词时不触发**：
+   - 切到中文输入法，在输入框里输入拼音，面板出现时用 Enter 选词；
+   - 选词不会提交面板，也不会被记作真实输入；
+   - 选词后立即按 Enter，也不算（1 秒内）。
+
+另外两项可以顺手确认：
+- 窗口刚激活（从别的 App 切回来）1 秒内按 Enter 被拒，面板提示"请再按一次"；
+- 刚在输入框打完字立即按 Enter，不被记作真实输入。
+
+## 实际规模
+
+| 模块 | 新增 / 删除 | 草估 |
+|---|---|---|
+| inputGuard 纯逻辑、接线、焦点时间（提交 16e9215，不含测试） | 179 / 11 | 195 |
+| 证据写入与重发表（提交 03ed6a3，不含测试） | 82 / 5 | 80 |
+| 测试（UNIT-input-guard 的纯逻辑和接线；桥的证据写入；已有用例的调整） | 348 / 6 | 330 |
+| **合计**（相对分支起点） | **608 / 21** | 约 605–690 |
+
+Q26 的复测脚本和结果是物料，在 `q26/` 下，不计入上表。
