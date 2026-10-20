@@ -67,3 +67,32 @@
 | 测试小计 | **约 335**，×1.1 ≈ **370** |
 
 **合计约 715 行**，在约 800 以内。IT-elevate 的规模把握最小，写完独立部分时再推算一次。
+
+## 进度（T038 未合并，独立部分已完成）
+
+### 已完成的模块与行数
+
+按 `git diff --numstat`（相对估计提交 d93a4b9，不含 `Cargo.lock`、生成物、schema、fixtures 和文档）：新增 549 行。
+
+| 模块 | 新增 | 其中测试 |
+|---|---|---|
+| `cupper-sys`：`has_tty`、`AuditToken::signing_identity`、`setsid` | 107 | 约 20 |
+| 协议 `VerifiedRequester.bundled_cli`（另有生成物、schema、fixture 各几行） | 4 | — |
+| 血缘纯函数 `requester::lineage` 与 UNIT-lineage-signals | 146 | 约 70 |
+| 核实信息的采集 `requester::ProcessRequesters::find` | 169 | 约 35 |
+| 探针 `cupper-elevate-probe`（cupper-cli，`required-features = ["test-harness"]`） | 101 | — |
+| 假 agent `spawn`；xtask 构建探针 | 21 | — |
+
+### 剩下的（等 T038 合并）
+
+- `impl elevation::Requesters for ProcessRequesters`：`find` 的 `Ok` 对应 `Clear`，`Err(signals)` 对应 `Descendant`；`supervisor` 里用它替换 `FailClosed`，宿主路径取 `current_exe` 的真实路径。约 15 行。
+- IT-elevate：约 200–230 行。
+
+**推算合计约 770–790 行**，贴着约 800 的线。
+
+### 实现时定下的细节
+
+- **`ProcessRequesters::find` 的返回**：`Result<VerifiedRequester, Vec<String>>`。T038 的接口已在它的分支上提交（`elevation.rs` 的 `Requesters`、`Examined`、`FailClosed`），形状和 notes 里写的一致，合并后只需映射一下。
+- **签名身份的显示**：有 Team ID 时为 `identifier (TEAMID)`，否则只有 identifier，即 ad-hoc 或 Apple 自家的代码。未签名时没有这个字段。
+- **pid 复用**：按 pid 读到的路径和祖先链，只有在令牌的 `csops` 仍然答得出 cdhash 时才算数，否则按 `unchecked` 处理。
+- **探针的路径约定**：同假 agent，在 `target/<profile>/cupper-elevate-probe`。xtask 的 rust 作业在测试前构建它。
