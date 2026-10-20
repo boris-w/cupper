@@ -1,0 +1,119 @@
+{
+  "playwrightKeyboard": {
+    "beforeInput": [],
+    "inputEvent": [
+      {
+        "type": "keyDown",
+        "key": "Enter",
+        "code": "Enter",
+        "isAutoRepeat": false,
+        "isComposing": false,
+        "shift": false,
+        "control": false,
+        "alt": false,
+        "meta": false,
+        "location": 0,
+        "_modifiers": 8388608,
+        "modifiers": []
+      },
+      {
+        "type": "keyUp",
+        "key": "Enter",
+        "code": "Enter",
+        "isAutoRepeat": false,
+        "isComposing": false,
+        "shift": false,
+        "control": false,
+        "alt": false,
+        "meta": false,
+        "location": 0,
+        "_modifiers": 8388608,
+        "modifiers": []
+      }
+    ],
+    "pageKeys": [
+      {
+        "key": "Enter",
+        "isTrusted": true
+      }
+    ]
+  },
+  "sendInputEvent": {
+    "beforeInput": [
+      {
+        "type": "keyDown",
+        "key": "Enter",
+        "code": "Enter"
+      },
+      {
+        "type": "keyUp",
+        "key": "Enter",
+        "code": "Enter"
+      }
+    ],
+    "inputEvent": [
+      {
+        "type": "rawKeyDown",
+        "key": "Enter",
+        "code": "Enter",
+        "isAutoRepeat": false,
+        "isComposing": false,
+        "shift": false,
+        "control": false,
+        "alt": false,
+        "meta": false,
+        "location": 0,
+        "_modifiers": 0,
+        "modifiers": []
+      },
+      {
+        "type": "keyUp",
+        "key": "Enter",
+        "code": "Enter",
+        "isAutoRepeat": false,
+        "isComposing": false,
+        "shift": false,
+        "control": false,
+        "alt": false,
+        "meta": false,
+        "location": 0,
+        "_modifiers": 0,
+        "modifiers": []
+      }
+    ],
+    "pageKeys": [
+      {
+        "key": "Enter",
+        "isTrusted": true
+      }
+    ]
+  },
+  "keyboardInputEventFields": [
+    "_modifiers,alt,code,control,isAutoRepeat,isComposing,key,location,meta,modifiers,shift,type",
+    "_modifiers,alt,code,control,isAutoRepeat,isComposing,key,location,meta,modifiers,shift,type",
+    "_modifiers,alt,code,control,isAutoRepeat,isComposing,key,location,meta,modifiers,shift,type",
+    "_modifiers,alt,code,control,isAutoRepeat,isComposing,key,location,meta,modifiers,shift,type"
+  ],
+  "pageClick": [
+    {
+      "type": "mouseDown",
+      "button": "left"
+    },
+    {
+      "type": "mouseUp",
+      "button": "left"
+    }
+  ],
+  "focusedFrame": {
+    "inMain": {
+      "sameObject": true,
+      "sameNode": true,
+      "url": "data:text/html,…(the probe page)"
+    },
+    "inFrame": {
+      "sameObject": false,
+      "sameNode": false,
+      "url": "about:srcdoc"
+    }
+  }
+}

@@ -1,6 +1,6 @@
 // The main process's side of the ShellAPI (design 5.7.3) besides the data
 // connection: the static facts, the preferences, links, the directory picker,
-// and the appearance and focus the windows follow. Only a window's main
+// and the appearance the windows follow; the focus comes with the input guard. Only a window's main
 // document is answered.
 
 import { isExternalUrl, type ShellInfo } from "@cupper/shell-api";
@@ -16,7 +16,6 @@ import {
 
 import type { Flavor } from "../shared/flavor";
 import {
-  FOCUS_CHANGED,
   OPEN_EXTERNAL,
   PICK_DIRECTORY,
   PREFS_CHANGED,
@@ -97,11 +96,4 @@ export function serveShell(options: {
     }),
   );
   nativeTheme.on("updated", () => broadcast(THEME_CHANGED, theme()));
-}
-
-/** Tells `window`'s documents when it gains or loses focus. */
-export function followFocus(window: BrowserWindow): void {
-  const tell = (focused: boolean) => window.webContents.send(FOCUS_CHANGED, focused, Date.now());
-  window.on("focus", () => tell(true));
-  window.on("blur", () => tell(false));
 }
