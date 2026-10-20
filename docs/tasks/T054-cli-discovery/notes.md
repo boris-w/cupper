@@ -53,6 +53,23 @@ brief 举的拆法（"登录 shell、可信 PATH、CLI 解析与版本" / "清�
 
 不拆也可以：上限提到约 1,700 行，由一个执行者顺序完成，工期约为拆分后的较大一半的 1.6 倍。
 
+## 拆分后的估计（编排者裁定后，计划 v1.3.13）
+
+T054 收窄为"可信 PATH、CLI 解析与环境变量规则"，登录 shell 和版本检测拆给 T094。上限约 1,100 行，硬停止线 1,200。下面是重新逐模块估的行数（实现、测试都按写出来的行数估，不再乘系数）：
+
+| 模块 | 内容 | 实现 | 测试 |
+|---|---|---|---|
+| `manifest.rs` | 内嵌清单，解析 `env.allow`、`env.deny`、`cli` 范围 | 55 | 25 |
+| xtask、清单数据 | `Manifest` 加 `cli`；测试样例补字段；`runtime/manifest.json` 加 `cli` 段 | 25 + 数据 15 | 3 |
+| `driver/locate/trust.rs` | 可信 PATH、"在边界之内"判断 | 55 | 75 |
+| `driver/locate/resolve.rs` | 布局表、Mach-O 判定、npm 入口认定 | 95 | 110 |
+| `driver/locate/testkit.rs` | 目录树样例的小工具（只在测试里） | — | 35 |
+| `driver/locate/mod.rs` | `CliLocator`：查找顺序、常见位置、nvm 当前版本、`git`、`git-lfs` | 110 | 90 |
+| `driver/locate/env_rules.rs` | 配置目录校验、适配器环境变量规则、提示码 | 120 | 130 |
+| **合计** | | **约 475** | **约 470** |
+
+合计约 **950 行**，在上限之内，余量约 150 行。
+
 ## 安装布局的核实（Q19，Claude 部分）
 
 只读地列了本机目录，另外读了 npm registry 的公开元数据（`registry.npmjs.org`、`data.jsdelivr.com` 的文件列表、`cdn.jsdelivr.net` 上的 `install.cjs`；curl 默认 User-Agent，不带任何个人信息）。没有运行 `claude`，没有安装任何包，没有读 `~/.claude`、`~/.codex`。
