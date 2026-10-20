@@ -1065,7 +1065,8 @@ async fn rescan(readers: Readers, project: ProjectId, cwd: PathBuf, mut cx: Scan
         return fail("project_missing");
     };
     cx.writable = roots.into_iter().map(PathBuf::from).collect();
-    let Some(path) = std::fs::canonicalize(&cwd).ok().filter(|p| p.is_dir()) else {
+    let path = move || std::fs::canonicalize(cwd).ok().filter(|p| p.is_dir());
+    let Some(path) = tokio::task::spawn_blocking(path).await.ok().flatten() else {
         return fail("workspace_missing");
     };
     let root = match git_of(&path, &cx).await {
