@@ -50,3 +50,41 @@ pub async fn write(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use cupper_protocol::ids::SessionId;
+    use cupper_protocol::session::ConfirmationReason;
+
+    use super::*;
+    use crate::clock::ManualClock;
+    use crate::gateway::{AuditEvent, ConfigState};
+    use crate::quiescence::Quiescence;
+    use crate::store::testutil::{TempDir, host_writer, query};
+
+    #[tokio::test]
+    async fn unit_audit_format_a_session_s_record_is_stored_without_a_connection() {
+        let (dir, clock) = (TempDir::new("audit"), ManualClock::new());
+        let (writer, _thread) = host_writer(&dir, &clock);
+        let quiescence = Quiescence::new();
+        quiescence.register(AUDIT);
+        let (records, audit) = mpsc::unbounded_channel();
+        let written = tokio::spawn(write(audit, writer, quiescence.enter(AUDIT)));
+        let config = ConfigState {
+            session_id: SessionId::from_uuid(1),
+            mode: None,
+            tier: None,
+            set_by: "pr_cli".parse().unwrap(),
+        };
+        let reason = ConfirmationReason::FullAccessUnconfirmed;
+        let event = AuditEvent::ConfigUnconfirmed { reason, config };
+        let (at_ms, conn) = (1_000, None);
+        records.send(AuditRecord { at_ms, conn, event }).unwrap();
+        drop(records);
+        written.await.unwrap();
+        let sql = "SELECT ts || ' ' || event || ' ' || coalesce(conn_id, '-') || ' ' || principal
+                   FROM audit";
+        let rows: Vec<String> = query(&dir.host_db(), sql, |row| row.get(0));
+        assert_eq!(rows, ["1000 config.unconfirmed - pr_cli"]);
+    }
+}

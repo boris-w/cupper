@@ -391,3 +391,173 @@ fn code(value: &impl std::fmt::Debug) -> String {
     }
     code
 }
+
+#[cfg(test)]
+mod tests {
+    use cupper_protocol::domain::{ClientKind, PrincipalKind};
+
+    use super::*;
+
+    /// The event name, principal and detail of `event`.
+    fn formal(event: AuditEvent) -> (String, Option<String>, Value) {
+        assert!(event.kept());
+        let formal = event.formal();
+        assert_eq!(formal.peer, None);
+        let principal = formal.principal.map(|p| p.to_string());
+        (formal.event, principal, formal.detail)
+    }
+
+    fn parsed(json: &str) -> Value {
+        serde_json::from_str(json).unwrap()
+    }
+
+    #[test]
+    fn unit_audit_format_names_and_holds_each_event() {
+        let id = |id: &str| id.parse::<PrincipalId>().unwrap();
+        let config = ConfigState {
+            session_id: SessionId::from_uuid(1),
+            mode: Some("bypass".into()),
+            tier: Some(Tier::FullAccess),
+            set_by: id("pr_test"),
+        };
+        let reason = ConfirmationReason::TierAboveSetter;
+        let principal = Principal {
+            id: id("pr_cli"),
+            kind: PrincipalKind::Cli,
+            role: None,
+            scopes: vec![Scope::Read],
+        };
+        let client = ClientIdentity {
+            kind: ClientKind::Cli,
+            name: "cupper".into(),
+            version: "1.0".into(),
+        };
+        let after = Duration::from_millis(1_500);
+        let closed = |reason| AuditEvent::Closed {
+            reason,
+            after,
+            principal: Some(id("pr_cli")),
+        };
+        let (elevation, project) = (ElevationId::from_uuid(3), ProjectId::from_uuid(4));
+        let elevated = |step| AuditEvent::Elevation {
+            step,
+            scopes: vec![Scope::Write],
+        };
+        let trust = |change| AuditEvent::ProjectTrust {
+            project_id: project.clone(),
+            change,
+        };
+        let digest: Digest = format!("d_0123456789abcdef{}", "0".repeat(48))
+            .parse()
+            .unwrap();
+        let refusal = Refusal {
+            kind: RefusalKind::PeerExited,
+            call: "getsockopt(LOCAL_PEERTOKEN)",
+            code: 57,
+        };
+        let (s, e, p) = (
+            r#""s_00000000000000000000000000000001""#,
+            r#""e_00000000000000000000000000000003""#,
+            r#""p_00000000000000000000000000000004""#,
+        );
+        let configured = format!(
+            r#"{{"mode":"bypass","reason":"tier_above_setter","session_id":{s},"tier":"full_access"}}"#
+        );
+        let cases = [
+            (
+                AuditEvent::Rejected(Rejection::OtherUser { uid: 502 }),
+                ("conn.rejected", None, r#"{"error":"other_user","uid":502}"#.into()),
+            ),
+            (
+                AuditEvent::Rejected(Rejection::Unidentified(refusal)),
+                ("conn.rejected", None, r#"{"call":"getsockopt(LOCAL_PEERTOKEN)","error":"peer_exited"}"#.into()),
+            ),
+            (
+                AuditEvent::Initialized { principal, client, weak_auth: true },
+                ("conn.initialized", Some("pr_cli"), r#"{"client_kind":"cli","client_name":"cupper","client_version":"1.0","kind":"cli","role":null,"weak_auth":true}"#.into()),
+            ),
+            (
+                closed(CloseReason::HostExiting),
+                ("conn.closed", Some("pr_cli"), r#"{"after_ms":1500,"reason":"host_exiting"}"#.into()),
+            ),
+            (
+                AuditEvent::InteractionResponded {
+                    session_id: config.session_id.clone(),
+                    request_id: RequestId::from_uuid(2),
+                    outcome: InteractionOutcome::Dismissed,
+                    principal: id("pr_test"),
+                },
+                ("interaction.responded", Some("pr_test"), format!(r#"{{"outcome":{{"type":"dismissed"}},"request_id":"r_00000000000000000000000000000002","session_id":{s}}}"#)),
+            ),
+            (
+                AuditEvent::ConfigUnconfirmed { reason: reason.clone(), config: config.clone() },
+                ("config.unconfirmed", Some("pr_test"), configured.clone()),
+            ),
+            (
+                AuditEvent::ConfigConfirmed { reason, config },
+                ("config.confirmed", Some("pr_test"), configured),
+            ),
+            (
+                elevated(ElevationStep::Requested(elevation.clone())),
+                ("elevation.requested", None, format!(r#"{{"elevation_id":{e},"scopes":["write"]}}"#)),
+            ),
+            (
+                elevated(ElevationStep::Resolved(elevation, ElevationDecision::Granted)),
+                ("elevation.granted", None, format!(r#"{{"elevation_id":{e},"scopes":["write"]}}"#)),
+            ),
+            (
+                elevated(ElevationStep::Lineage(vec!["sandboxed".into()])),
+                ("elevation.lineage_refused", None, r#"{"scopes":["write"],"signals":["sandboxed"]}"#.into()),
+            ),
+            (
+                elevated(ElevationStep::RateLimited),
+                ("elevation.rate_limited", None, r#"{"scopes":["write"]}"#.into()),
+            ),
+            (
+                trust(TrustChange::Trusted { by: id("pr_desktop"), digest: digest.clone() }),
+                ("project.trust.trusted", Some("pr_desktop"), format!(r#"{{"digest":"0123456789abcdef","project_id":{p}}}"#)),
+            ),
+            (
+                trust(TrustChange::Stale { digest }),
+                ("project.trust.stale", None, format!(r#"{{"digest":"0123456789abcdef","project_id":{p}}}"#)),
+            ),
+            (
+                trust(TrustChange::ScanFailed { error: "link_cycle".into() }),
+                ("project.trust.scan_failed", None, format!(r#"{{"error":"link_cycle","project_id":{p}}}"#)),
+            ),
+        ];
+        for (event, (name, principal, detail)) in cases {
+            let expected = (
+                name.to_owned(),
+                principal.map(str::to_owned),
+                parsed(&detail),
+            );
+            assert_eq!(formal(event), expected);
+        }
+    }
+
+    #[test]
+    fn unit_audit_format_accepted_carries_the_peer_and_subscribed_stays_out() {
+        let accepted = AuditEvent::Accepted {
+            pid: 7,
+            pid_version: 1,
+            verdict: Verdict::Other(None),
+            path: Some("/usr/local/bin/cupper".into()),
+            identifier: Some("dev.cupper.cli".into()),
+            team_id: None,
+        };
+        let formal = accepted.formal();
+        let peer = r#"{"identifier":"dev.cupper.cli","path":"/usr/local/bin/cupper","pid":7,"team_id":null}"#;
+        assert_eq!(formal.event, "conn.accepted");
+        assert_eq!(formal.peer, Some(parsed(peer)));
+        assert_eq!(formal.detail, parsed(r#"{"error":null,"verdict":"other"}"#));
+        let subscribed = AuditEvent::Subscribed {
+            stream: StreamId::Index,
+            mode: SubscribeMode::Snapshot,
+            reason: None,
+            lag: None,
+        };
+        assert!(!subscribed.kept());
+        assert_eq!(subscribed.formal().event, "stream.subscribed");
+    }
+}
