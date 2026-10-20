@@ -51,7 +51,7 @@ use crate::orchestrator::turn::{self, SendMode, SendRequest};
 use crate::policy::{self, Confirmable, Facts};
 use crate::quiescence::{ActorKind, Participant, Quiescence};
 use crate::store::streams::{Batch, StreamView, Streams};
-use crate::store::{Durability, Readers};
+use crate::store::{BlobStore, Durability, Readers};
 use crate::supervisor::watch::Admission;
 use crate::supervisor::{Activity, Part};
 
@@ -76,6 +76,7 @@ pub struct SessionDeps {
     pub git: Option<GitTool>,
     /// Whether new sessions and turns are accepted (design 5.2.13).
     pub admission: Arc<Admission>,
+    pub blobs: BlobStore,
 }
 
 /// The session manager. Clones share it; the host has one.
@@ -312,6 +313,7 @@ impl SessionManager {
             git: deps.git.clone(),
             durations: deps.durations.clone(),
             quiescence: deps.quiescence.clone(),
+            blobs: deps.blobs.clone(),
         };
         let first = SendRequest {
             content: params.message,

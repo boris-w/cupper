@@ -28,7 +28,7 @@ use std::sync::Arc;
 
 use cupper_protocol::annotations::{DurationMs, TimestampMs};
 use cupper_protocol::capabilities::ConfigOptionId;
-use cupper_protocol::domain::Tier;
+use cupper_protocol::domain::{BlobRef, Tier};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{AdapterInstanceId, ItemId, PrincipalId, RequestId, SessionId, TurnId};
 use cupper_protocol::interaction::{InteractionResolved, InteractionStatus, ResolutionReason};
@@ -79,6 +79,8 @@ pub enum Input {
     Expired(Key),
     /// The session was loaded from the store; its first input.
     Restored(Box<Restored>),
+    /// The actor stored a tool's output as a blob, or could not.
+    Spilled(Box<coalescer::Spill>, Option<BlobRef>),
 }
 
 /// A session as the store has it, and what the previous run left open in
@@ -130,6 +132,8 @@ pub enum Action {
     Answer(interaction::Reply),
     /// The guard's `Unconfirmed` and `SetBy`, which the actor records.
     Tier(tier_guard::Action),
+    /// Store this output as a blob, then step [`Input::Spilled`].
+    Spill(Box<coalescer::Spill>),
     Timer(TimerRequest<Key>),
 }
 
@@ -462,6 +466,7 @@ impl SessionCore {
             out.push(match action {
                 coalescer::Action::Event(body) => Action::Event(body),
                 coalescer::Action::Timer(request) => timer(request, Key::Flush),
+                coalescer::Action::Spill(spill) => Action::Spill(spill),
             });
         }
     }
@@ -540,6 +545,9 @@ impl Core for SessionCore {
                 self.coalesce(coalescer::Input::Expired(key), now, &mut out)
             }
             Input::Restored(restored) => self.restore(*restored, now, &mut out),
+            Input::Spilled(spill, blob) => {
+                self.coalesce(coalescer::Input::Spilled(spill, blob), now, &mut out)
+            }
         }
         out
     }

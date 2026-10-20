@@ -19,6 +19,11 @@
 //!   turn, referring to the original, whose events stay as they were.
 //! - A tool call's `extraction` is `partial` while a field its kind requires
 //!   is missing; when it ends, the fields it got by then decide (T017).
+//! - A tool's output over the inline limit turns `truncated`: the buffered
+//!   deltas go out first, then no more; its tail and size are written at
+//!   most once a tick. At its end the actor stores it as a blob
+//!   ([`Action::Spill`]), and `item.completed` refers to it; a turn's end
+//!   leaves it `abandoned` with its tail (design 5.3.5).
 
 use std::collections::HashMap;
 use std::mem;
@@ -26,7 +31,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use cupper_protocol::annotations::{DurationMs, TimestampMs, WirePath};
-use cupper_protocol::domain::{Content, TextContent};
+use cupper_protocol::domain::{BlobContent, BlobRef, Content, TextContent};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{GroupId, ItemId, TurnId};
 use cupper_protocol::item::{
@@ -34,6 +39,7 @@ use cupper_protocol::item::{
     ItemUpdated, LateToolOutput, Notice, NoticeCode, OutputState, Plan, ToolCall, ToolKind,
     ToolRef,
 };
+use cupper_protocol::limits::V1;
 use cupper_protocol::session::TurnCompleted;
 use cupper_protocol::text::{
     MAX_DELTA_ESCAPED, MAX_LABEL_CHARS, escaped_len, split_escaped, truncate_chars,
@@ -43,7 +49,7 @@ use super::grouping::{Role, TurnItems};
 use super::turn::{TurnEnd, TurnSignal};
 use crate::clock::{IdGen, MonoTime, Now};
 use crate::driver::api::{CompactionPhase, NormUpdate, ToolOutput, ToolStatus};
-use crate::durations::{Durations, ITEM_COALESCE};
+use crate::durations::{Durations, ITEM_COALESCE, OUTPUT_TAIL};
 use crate::pure::{Core, TimerRequest};
 
 #[derive(Debug)]
@@ -57,6 +63,11 @@ pub struct Coalescer {
     tools: HashMap<String, Tool>,
     /// Text waiting for the window to end.
     pending: Option<(ItemId, DeltaField, String)>,
+    /// Each tool item's output so far, and its escaped length, while inline.
+    outputs: HashMap<ItemId, (String, usize)>,
+    /// Outputs over the inline limit.
+    long: HashMap<ItemId, Long>,
+    tick: Duration,
     /// The step being taken: its time and its actions so far.
     now: Now,
     out: Vec<Action>,
@@ -69,6 +80,8 @@ pub enum Input {
     /// Another event goes into the turn next: an interaction request.
     Interject,
     Expired(FlushTimer),
+    /// The actor stored a [`Spill`]'s output, or could not.
+    Spilled(Box<Spill>, Option<BlobRef>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,10 +93,66 @@ pub enum Action {
     /// Append to the session stream.
     Event(EventBody),
     Timer(TimerRequest<FlushTimer>),
+    Spill(Box<Spill>),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct FlushTimer;
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FlushTimer {
+    /// The text waiting for the window.
+    Text,
+    /// The tail of an output over the inline limit.
+    Tail(ItemId),
+}
+
+/// A tool's output over the inline limit as the tool ends, for the actor to
+/// store as a blob; [`Input::Spilled`] brings it back.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Spill {
+    /// The whole output, up to `max_blob_bytes`.
+    pub text: String,
+    target: Target,
+    status: ItemStatus,
+    patch: ItemPatch,
+}
+
+/// An output over the inline limit.
+#[derive(Debug, Default)]
+struct Long {
+    text: String,
+    /// What came, past `max_blob_bytes` too.
+    bytes: u64,
+    /// A tick is set; the tail changed since it was written.
+    ticking: bool,
+    due: bool,
+}
+
+impl Long {
+    fn add(&mut self, text: &str, whole: bool) {
+        if whole {
+            (self.text, self.bytes) = (String::new(), 0);
+        }
+        self.bytes += text.len() as u64;
+        let mut end = (V1.max_blob_bytes as usize).saturating_sub(self.text.len());
+        end = end.min(text.len());
+        // Up to the blob's limit, on a character's boundary.
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        self.text.push_str(&text[..end]);
+        self.due = true;
+    }
+
+    /// Its last 4,000 characters, and its size.
+    fn shown(&self, patch: ItemPatch) -> ItemPatch {
+        let tail = self.text.char_indices().rev().nth(3_999);
+        let tail = &self.text[tail.map_or(0, |(at, _)| at)..];
+        ItemPatch {
+            output_tail: Some(tail.to_owned()),
+            output_bytes: Some(self.bytes),
+            ..patch
+        }
+    }
+}
 
 #[derive(Debug)]
 struct OpenTurn {
@@ -97,7 +166,7 @@ struct OpenTurn {
 }
 
 /// An item that can still change.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct Target {
     id: ItemId,
     started: MonoTime,
@@ -139,6 +208,9 @@ impl Coalescer {
             held: Vec::new(),
             tools: HashMap::new(),
             pending: None,
+            outputs: HashMap::new(),
+            long: HashMap::new(),
+            tick: durations.get(OUTPUT_TAIL),
             now: Now {
                 mono: MonoTime::ZERO,
                 wall_ms: 0,
@@ -189,7 +261,7 @@ impl Coalescer {
                 self.pending = Some((item.id.clone(), field, text));
                 let at = self.now.mono + self.window;
                 let set = TimerRequest::Set {
-                    key: FlushTimer,
+                    key: FlushTimer::Text,
                     at,
                 };
                 self.out.extend((!first).then_some(Action::Timer(set)));
@@ -410,24 +482,8 @@ impl Coalescer {
             _ => &mut tool.item,
         };
         match output {
-            Some(ToolOutput::Append(text)) => {
-                let first = !mem::replace(&mut target.streaming, true);
-                if first {
-                    let state = Some(OutputState::Streaming);
-                    self.patch(
-                        target,
-                        ItemPatch {
-                            output_state: state,
-                            ..ItemPatch::default()
-                        },
-                    );
-                }
-                self.append(target, DeltaField::Output, text, first);
-            }
-            Some(ToolOutput::Replace(text)) => {
-                patch.output = Some(Content::Text(TextContent { text }));
-                patch.output_state = Some(OutputState::Complete);
-            }
+            Some(ToolOutput::Append(text)) => self.output(target, text, false, &mut patch),
+            Some(ToolOutput::Replace(text)) => self.output(target, text, true, &mut patch),
             None => {}
         }
         let status = match status {
@@ -444,8 +500,106 @@ impl Coalescer {
             patch.extraction = (extraction != tool.call.extraction).then_some(extraction);
         }
         let target = target.clone();
-        self.end(&target, status, false, patch);
+        match self.output_ended(&target.id) {
+            Some(long) => {
+                let patch = long.shown(patch);
+                let (text, status) = (long.text, status);
+                let spill = Box::new(Spill {
+                    text,
+                    target,
+                    status,
+                    patch,
+                });
+                self.out.push(Action::Spill(spill));
+            }
+            None => self.end(&target, status, false, patch),
+        }
         tool.phase = ToolPhase::Done;
+    }
+
+    /// A tool's output: deltas while it stays within the inline limit, then
+    /// `truncated`. A whole output that fits goes inline at once.
+    fn output(&mut self, target: &mut Target, text: String, whole: bool, patch: &mut ItemPatch) {
+        let id = target.id.clone();
+        if let Some(long) = self.long.get_mut(&id) {
+            long.add(&text, whole);
+            return self.tail(&id, false);
+        }
+        let (so_far, escaped) = self.outputs.entry(id.clone()).or_default();
+        if whole {
+            so_far.clear();
+            *escaped = 0;
+        }
+        let fits = *escaped + escaped_len(&text) <= V1.max_inline_bytes as usize;
+        if fits && whole {
+            patch.output = Some(Content::Text(TextContent { text }));
+            patch.output_state = Some(OutputState::Complete);
+        } else if fits {
+            so_far.push_str(&text);
+            *escaped += escaped_len(&text);
+            let first = !mem::replace(&mut target.streaming, true);
+            if first {
+                let state = Some(OutputState::Streaming);
+                let patch = ItemPatch {
+                    output_state: state,
+                    ..ItemPatch::default()
+                };
+                self.patch(target, patch);
+            }
+            self.append(target, DeltaField::Output, text, first);
+        } else {
+            let mut long = Long::default();
+            long.add(&self.outputs.remove(&id).unwrap_or_default().0, true);
+            long.add(&text, false);
+            self.long.insert(id.clone(), long);
+            self.tail(&id, false);
+        }
+    }
+
+    /// Writes an output's tail and size, at most once a tick: a change
+    /// within a tick waits for its end.
+    fn tail(&mut self, id: &ItemId, tick: bool) {
+        let Some(long) = self.long.get_mut(id) else {
+            return;
+        };
+        long.ticking &= !tick;
+        if long.ticking || !long.due {
+            return;
+        }
+        (long.ticking, long.due) = (true, false);
+        let state = Some(OutputState::Truncated);
+        let patch = long.shown(ItemPatch {
+            output_state: state,
+            ..ItemPatch::default()
+        });
+        let item_id = id.clone();
+        self.emit(EventBody::ItemUpdated(ItemUpdated { item_id, patch }));
+        let (key, at) = (FlushTimer::Tail(id.clone()), self.now.mono + self.tick);
+        self.out.push(Action::Timer(TimerRequest::Set { key, at }));
+    }
+
+    /// The tool item ends: its output over the inline limit, if it was.
+    fn output_ended(&mut self, id: &ItemId) -> Option<Long> {
+        self.outputs.remove(id);
+        let long = self.long.remove(id)?;
+        let cancel = TimerRequest::Cancel(FlushTimer::Tail(id.clone()));
+        self.out.push(Action::Timer(cancel));
+        Some(long)
+    }
+
+    /// The actor stored the output, or could not: then it stays truncated.
+    fn spilled(&mut self, spill: Spill, blob: Option<BlobRef>) {
+        let (preview, mut patch) = (spill.patch.output_tail.clone(), spill.patch);
+        let blob = blob.map(|blob| BlobContent {
+            blob,
+            preview: preview.unwrap_or_default(),
+        });
+        patch.output_state = Some(match blob {
+            Some(_) => OutputState::Complete,
+            None => OutputState::Truncated,
+        });
+        patch.output = blob.map(Content::Blob);
+        self.end(&spill.target, spill.status, false, patch);
     }
 
     fn plan(&mut self, plan: Plan) {
@@ -483,12 +637,9 @@ impl Coalescer {
             tool.phase = ToolPhase::Abandoned;
             let execute = tool.call.tool_kind == ToolKind::Execute;
             let may_still_run = interrupted && !self.stops_commands && execute;
-            self.end(
-                &item,
-                ItemStatus::Abandoned,
-                may_still_run,
-                ItemPatch::default(),
-            );
+            let output = self.output_ended(&item.id);
+            let patch = output.map_or_else(ItemPatch::default, |l| l.shown(ItemPatch::default()));
+            self.end(&item, ItemStatus::Abandoned, may_still_run, patch);
         }
     }
 
@@ -592,7 +743,9 @@ impl Core for Coalescer {
                 self.flush();
                 self.turn.iter_mut().for_each(|turn| turn.items.end_group());
             }
-            Input::Expired(FlushTimer) => self.flush(),
+            Input::Expired(FlushTimer::Text) => self.flush(),
+            Input::Expired(FlushTimer::Tail(id)) => self.tail(&id, true),
+            Input::Spilled(spill, blob) => self.spilled(*spill, blob),
         }
         mem::take(&mut self.out)
     }
@@ -600,7 +753,7 @@ impl Core for Coalescer {
     fn timer_request(action: &Action) -> Option<TimerRequest<FlushTimer>> {
         match action {
             Action::Timer(request) => Some(request.clone()),
-            Action::Event(_) => None,
+            Action::Event(_) | Action::Spill(_) => None,
         }
     }
 
@@ -680,7 +833,7 @@ mod tests {
     fn events(actions: Vec<Action>) -> Vec<EventBody> {
         let event = |action| match action {
             Action::Event(body) => Some(body),
-            Action::Timer(_) => None,
+            Action::Timer(_) | Action::Spill(_) => None,
         };
         actions.into_iter().filter_map(event).collect()
     }
@@ -969,7 +1122,7 @@ mod tests {
                 wrote |= written.iter().any(|e| matches!(e, EventBody::ItemDelta(_)));
                 self.logs[0].extend(written);
                 self.logs[1].extend(events(self.b.input(input)));
-                self.logs[1].extend(events(self.b.input(Input::Expired(FlushTimer))));
+                self.logs[1].extend(events(self.b.input(Input::Expired(FlushTimer::Text))));
             }
             if interject {
                 assert!(
