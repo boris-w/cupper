@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
-use cupper_cli::client::{self, Client, ClientAuth, Options};
+use cupper_cli::client::{self, Client, ClientAuth, ClientError, Options};
 use cupper_cli::harness::HarnessKey;
 use cupper_cli::verify::HostCheck;
 use cupper_host::clock::{Clock, SystemClock};
@@ -16,11 +16,12 @@ use cupper_host::driver::runtime::launch;
 use cupper_host::gateway::testkit::{KEY, TempDir};
 use cupper_host::store::{Database, MIGRATIONS, migrate, open_reader, open_writer};
 use cupper_protocol::ids::{ProjectId, SessionId};
+use cupper_protocol::methods::interaction::InteractionRespond;
 use cupper_protocol::methods::session::{SessionCreate, SessionSend};
 use cupper_protocol::proof;
 use cupper_protocol::transport::socket_path;
 use rusqlite::Connection;
-use serde_json::json;
+use serde_json::{Value, json};
 
 pub const HOST: &str = env!("CARGO_BIN_EXE_cupper-host");
 /// How long the host may take to come up or to exit.
@@ -36,7 +37,17 @@ pub fn spawn_with(data_dir: &Path, test_config: serde_json::Value) -> Child {
 }
 
 pub fn spawn_from(program: &Path, data_dir: &Path, test_config: serde_json::Value) -> Child {
-    let mut child = Command::new(program)
+    start(&mut Command::new(program), data_dir, &payload(test_config))
+}
+
+/// The startup payload: [`KEY`] as `harness_key`, and `test_config`.
+pub fn payload(test_config: serde_json::Value) -> Value {
+    json!({"harness_key": proof::to_hex(&KEY), "test_config": test_config})
+}
+
+/// Runs `command` with `--data-dir <data_dir>`, `payload` on its stdin.
+pub fn start(command: &mut Command, data_dir: &Path, payload: &Value) -> Child {
+    let mut child = command
         .arg("--data-dir")
         .arg(data_dir)
         .stdin(Stdio::piped())
@@ -44,7 +55,6 @@ pub fn spawn_from(program: &Path, data_dir: &Path, test_config: serde_json::Valu
         .stderr(Stdio::null())
         .spawn()
         .expect("start the host");
-    let payload = json!({"harness_key": proof::to_hex(&KEY), "test_config": test_config});
     writeln!(child.stdin.take().unwrap(), "{payload}").unwrap();
     child
 }
@@ -57,15 +67,19 @@ pub async fn wait(clock: &SystemClock) {
 
 /// The `harness` client, once the host listens.
 pub async fn connect(data_dir: &Path) -> client::Client {
+    let options = Options {
+        auth: ClientAuth::Harness(HarnessKey::new(KEY)),
+        ..Options::default()
+    };
+    connect_with(data_dir, options).await
+}
+
+pub async fn connect_with(data_dir: &Path, options: Options) -> client::Client {
     let socket = socket_path(data_dir, &cupper_sys::user_temp_dir().unwrap());
     let clock = SystemClock::new();
     let give_up = clock.now_mono() + PATIENCE;
     loop {
-        let options = Options {
-            auth: ClientAuth::Harness(HarnessKey::new(KEY)),
-            ..Options::default()
-        };
-        match client::Client::connect(&socket, &HostCheck::Harness, options).await {
+        match client::Client::connect(&socket, &HostCheck::Harness, options.clone()).await {
             Ok(client) => return client,
             Err(err) => assert!(clock.now_mono() < give_up, "cannot connect: {err}"),
         }
@@ -131,21 +145,32 @@ pub async fn fake_agent_host_from(
     dir: &TempDir,
     config: serde_json::Value,
 ) -> (PathBuf, Child, Client) {
+    let data_dir = fake_agent_data(dir);
+    let host = spawn_from(host, &data_dir, fake_agent_config(config));
+    let client = connect(&data_dir).await;
+    (data_dir, host, client)
+}
+
+/// A data directory in `dir` with `dir` as a trusted project.
+pub fn fake_agent_data(dir: &TempDir) -> PathBuf {
     let (data_dir, conn) = migrated(dir);
     let sql = "INSERT INTO projects (project_id, path, name, position, added_at, trust_state)
                VALUES (?1, ?2, 'p', 0, 1, 'trusted')";
     let path = dir.path().to_str().unwrap();
     conn.execute(sql, [&ProjectId::from_uuid(1).to_string(), path])
         .unwrap();
+    data_dir
+}
+
+/// `test_config` with the fake agent and no login shell, more in `config`.
+pub fn fake_agent_config(config: serde_json::Value) -> Value {
     let program = launch::fake_agent();
     let mut test_config = json!({"agents": {"claude": {"program": program}}, "login_env": {}});
     test_config
         .as_object_mut()
         .unwrap()
         .extend(config.as_object().unwrap().clone());
-    let host = spawn_from(host, &data_dir, test_config);
-    let client = connect(&data_dir).await;
-    (data_dir, host, client)
+    test_config
 }
 
 /// `session/create` with the message `text`; the session.
@@ -199,4 +224,67 @@ pub async fn advance(client: &client::Client, ms: u64) {
     use cupper_protocol::methods::admin::{TestClockAdvance, TestClockAdvanceParams};
     let params = TestClockAdvanceParams { ms: DurationMs(ms) };
     client.request::<TestClockAdvance>(params).await.unwrap();
+}
+
+/// `value` as `T`.
+pub fn typed<T: serde::de::DeserializeOwned>(value: Value) -> T {
+    serde_json::from_value(value).unwrap()
+}
+
+/// The `data` of the session's events of type `kind`, once there are `n`.
+pub async fn events(data_dir: &Path, session: &SessionId, kind: &str, n: usize) -> Vec<Value> {
+    let sql = format!(
+        "SELECT json_extract(json, '$.data') FROM events
+         WHERE stream = 'session/{session}' AND type = '{kind}' ORDER BY seq"
+    );
+    let clock = SystemClock::new();
+    let give_up = clock.now_mono() + PATIENCE;
+    loop {
+        let rows = query(&data_dir.join("host.db"), &sql);
+        if rows.len() >= n {
+            return rows
+                .iter()
+                .map(|row| serde_json::from_str(row).unwrap())
+                .collect();
+        }
+        assert!(clock.now_mono() < give_up, "{kind}: {rows:?}");
+        wait(&clock).await;
+    }
+}
+
+/// Answers `asked` with `outcome`.
+pub async fn respond(
+    client: &Client,
+    session: &SessionId,
+    asked: &Value,
+    outcome: Value,
+) -> Result<(), ClientError> {
+    let params = json!({"command_id": client::command_id(), "session_id": session,
+        "request_id": asked["request_id"], "request_digest": asked["digest"],
+        "outcome": outcome});
+    client
+        .request::<InteractionRespond>(typed(params))
+        .await
+        .map(drop)
+}
+
+/// Waits until the audit holds `want` of `events`, with their principals.
+pub async fn audited(data_dir: &Path, events: &str, want: &[&str]) {
+    let sql = format!(
+        "SELECT event || ' ' || coalesce(principal, '-') FROM audit
+         WHERE event IN ({events}) ORDER BY id"
+    );
+    until(data_dir, "host.db", &sql, want).await;
+}
+
+/// The error codes of a request the host refused: `data.code` and its reason.
+pub fn refused<T: std::fmt::Debug>(answered: Result<T, ClientError>) -> (String, String) {
+    let Err(ClientError::Rpc(err)) = answered else {
+        panic!("refused: {answered:?}")
+    };
+    let code = err.app_code().map(ToString::to_string).unwrap_or_default();
+    (
+        code,
+        err.reason().map(ToString::to_string).unwrap_or_default(),
+    )
 }
