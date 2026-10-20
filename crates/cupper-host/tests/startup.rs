@@ -68,7 +68,8 @@ fn it_runtime_install_self_test_outside_a_bundle_exits_1() {
         problems.iter().all(|p| p["problem"] == "missing"),
         "{report}"
     );
-    let runtime = serde_json::json!({"esbuild-wasm": "missing", "node": "missing"});
+    let runtime = ["claude-agent-acp", "esbuild-wasm", "node"].map(|c| (c, "missing"));
+    let runtime = serde_json::json!(std::collections::BTreeMap::from(runtime));
     assert_eq!(report["runtime"], runtime);
     assert!(!std::path::Path::new(data_dir).exists());
 }
