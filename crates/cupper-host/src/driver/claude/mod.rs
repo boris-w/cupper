@@ -261,6 +261,8 @@ pub fn agent_error(error: &Error) -> AgentError {
         -32000 => AgentErrorClass::NotLoggedIn,
         _ if data.contains("Session not found") => AgentErrorClass::SessionNotFound,
         -32603 if error.message.contains("exited unexpectedly") => AgentErrorClass::ProcessExited,
+        // The SDK fails what is in flight once the adapter's output ends.
+        _ if data.contains("incoming_transport_closed") => AgentErrorClass::AdapterExited,
         _ => AgentErrorClass::Other,
     };
     let agent_code = code.into();
