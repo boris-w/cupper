@@ -27,7 +27,7 @@ use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{CommandId, PrincipalId, ProjectId, QueueId, SessionId, TurnId};
 use cupper_protocol::ids::{Digest, RequestId};
 use cupper_protocol::index::{PendingKind, SessionStatus, SessionSummary, TrustState};
-use cupper_protocol::interaction::{InteractionOutcome, InteractionRequest};
+use cupper_protocol::interaction::{InteractionOption, InteractionOutcome, InteractionRequest};
 use cupper_protocol::item::{NoticeCode, NoticeParams};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::methods::interaction::{
@@ -53,7 +53,7 @@ use tokio::sync::{mpsc, oneshot};
 use super::core::{Action, Input, Key, SessionCore};
 use super::load::request as stored;
 use super::rows::Rows;
-use super::{IndexNotes, Note, internal, mode_tier, not_found, parse, tier_of};
+use super::{IndexNotes, Note, internal, mode_tier, not_found, parse, privileged, tier_of};
 use crate::clock::Clock;
 use crate::driver::api::{
     AgentError, AgentPort, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent,
@@ -68,7 +68,7 @@ use crate::orchestrator::interaction::{self, Respond};
 use crate::orchestrator::notice_with;
 use crate::orchestrator::tier_guard;
 use crate::orchestrator::turn::{self, Disposition, SendMode, SendRequest, SteerFallback};
-use crate::policy;
+use crate::policy::{self, Confirmable, Facts};
 use crate::pure::{Alarm, Core, TimerTable};
 use crate::quiescence::{Participant, Quiescence};
 use crate::store::streams::{Batch, StreamHandle, StreamView, StreamWriter};
@@ -141,6 +141,8 @@ pub(super) struct Start {
     pub project_gate: bool,
     /// "不加载项目配置继续" was chosen.
     pub ignore_for_good: bool,
+    /// The row still holds the first message, which has not started a turn.
+    pub initial: bool,
 }
 
 pub(super) struct SessionActor {
@@ -161,6 +163,9 @@ pub(super) struct SessionActor {
     ignore_for_good: bool,
     /// A `session/send` whose reply waits for the check before its turn.
     deferred: Option<Command>,
+    /// The row holds the first message until it leaves the machine's hold
+    /// for a turn or the queue (design 5.2.6).
+    initial: bool,
 }
 
 /// Why the project's trust range is rescanned (design 5.2.6).
@@ -192,7 +197,7 @@ struct Command {
     ticket: Option<Ticket>,
     cause: Option<Cause>,
     reply: oneshot::Sender<Outcome>,
-    audit: Option<AuditRecord>,
+    audit: Vec<AuditRecord>,
     /// `session/send`: its reply may come with a later step.
     deferrable: bool,
 }
@@ -242,6 +247,7 @@ impl SessionActor {
             commands,
             project_gate,
             ignore_for_good,
+            initial,
         } = start;
         let load_wanted = parts.project_config == ProjectConfigPolicy::Load || project_gate;
         let mut actor = Self {
@@ -257,6 +263,7 @@ impl SessionActor {
             project_gate,
             ignore_for_good,
             deferred: None,
+            initial,
         };
         actor.input(first, None, Step::default()).await;
         // Idle until a branch brings work, which runs once the others are
@@ -296,7 +303,7 @@ impl SessionActor {
 
     async fn call(&mut self, call: Call, reply: oneshot::Sender<Outcome>) {
         let (principal, params) = (call.principal, call.params);
-        let mut audit = None;
+        let mut audit = Vec::new();
         let mut step = Step::default();
         // An option that moves the tier makes its chooser the setter.
         let mut chosen = None;
@@ -323,8 +330,16 @@ impl SessionActor {
                         principal: principal.id.clone(),
                     };
                     let (at_ms, conn) = (self.parts.clock.now_wall_ms(), Some(call.conn.clone()));
-                    audit = Some(AuditRecord { at_ms, conn, event });
+                    audit.push(AuditRecord { at_ms, conn, event });
                 }
+                let option = self.option(&params);
+                let facts = Facts {
+                    option: option.clone(),
+                    ..Facts::default()
+                };
+                let command = Confirmable::Respond(params.clone());
+                let at = self.parts.clock.now_wall_ms();
+                audit.extend(privileged(command, &facts, &principal.id, &call.conn, at));
                 let resolved_by = ResolvedBy {
                     principal_id: principal.id.clone(),
                     client_kind: call.client.kind,
@@ -332,8 +347,7 @@ impl SessionActor {
                 };
                 let tier = self.tier();
                 let principal = principal.clone();
-                chosen = self
-                    .option_tier(&params)
+                chosen = (option.and_then(|o| policy::option_tier(&o.effect)))
                     .map(|tier| (params.request_id.clone(), tier));
                 Input::Respond(Box::new(Respond {
                     principal,
@@ -412,8 +426,8 @@ impl SessionActor {
         Ok(Input::Tier(tier_guard::Input::Confirmed { by: by.clone() }))
     }
 
-    /// The tier the option chosen in `params` puts the session in, if any.
-    fn option_tier(&self, params: &InteractionRespondParams) -> Option<Tier> {
+    /// The option chosen in `params`, as the pending request has it.
+    fn option(&self, params: &InteractionRespondParams) -> Option<InteractionOption> {
         let InteractionOutcome::Selected(selected) = &params.outcome else {
             return None;
         };
@@ -424,8 +438,10 @@ impl SessionActor {
                 InteractionRequest::PlanConfirm(p) => &p.options,
                 _ => return None,
             };
-            let option = options.iter().find(|o| o.option_id == selected.option_id)?;
-            policy::option_tier(&option.effect)
+            options
+                .iter()
+                .find(|o| o.option_id == selected.option_id)
+                .cloned()
         })
     }
 
@@ -541,7 +557,7 @@ impl SessionActor {
             audit: records,
         } = step;
         let mut answer = None;
-        let mut audit = None;
+        let mut audit = Vec::new();
         let mut completion = None;
         let mut cause = None;
         // A send's reply comes with the step that decides its turn.
@@ -563,7 +579,9 @@ impl SessionActor {
                 Some(Reply::Done) => Ok(json!({})),
                 None => Err(internal("the command had no reply")),
             };
-            audit = command.audit.filter(|_| outcome.is_ok());
+            if outcome.is_ok() {
+                audit = command.audit;
+            }
             match (&outcome, command.ticket) {
                 (Ok(result), Some(ticket)) => {
                     completion = Some(ticket.complete(Ok(result.clone())))
@@ -587,6 +605,12 @@ impl SessionActor {
         }
         if ignored {
             changes.ignored(&self.parts.id, at);
+        }
+        // Queued, not run: the queue has it now, and a load must not run it
+        // again.
+        if self.initial && !self.parts.core.holding() {
+            self.initial = false;
+            changes.first_taken(&self.parts.id, at);
         }
         self.forget_dequeued(&events);
         let asks = events.iter().any(|b| {

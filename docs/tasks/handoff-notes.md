@@ -371,6 +371,8 @@
 | T069 | 第一个回合可能停在准备阶段：`turn.started` 已写出、附加与发送前的重扫还没做完时项目配置变了，回合等闸门重新打开。T068 没有覆盖，补一条"信任恢复后这个回合能正常发出" | T068 |
 | 显示信任原因的界面任务（M1b） | 闸门已因 `project_config_changed` 关着时，再次重扫失败（例如悬空链接）不追加提示，原因只在审计的 `project.trust.scan_failed` 里。界面要显示最新原因时要改宿主的提示规则 | T068 |
 | T065、T064 | 假 agent 的回放（T067）：`--replay <录制>` 按 `--segment`/`--segment-file` 选段，不经 SDK、逐行读写 stdio；与下一个 `send` 帧比对（id 重映射、`cwd`/`path` 占位、`_meta` 忽略、其余精确），通过后按序发出 `recv` 帧，时间压到 1/100，比对失败以 71 退出并写出帧号和字段路径。段末的 `instance_exited` 按压缩后的时间退出，不区分退出是否因客户端先关了 stdin；宿主驱动的录制里如果退出是宿主关 stdin 造成的，回放可能比宿主更早退出，届时要在录制里标出"由客户端关闭"，回放据此等 stdin 关闭。路径字段只认 `cwd`、`path`；B 层只用宿主自己驱动的录制（设计 5.9.2） | T067 |
+| T141 | `session/set_config` 的特权审计（T169 留下）：在判定通过处调用 `orchestrator/session/mod.rs` 的 `privileged()`，传入 `Confirmable::SetConfig` 和会话事实；`privileged()` 现在只为 `create`、`respond` 取了方法名，补一个分支即可 | T169 |
+| T069、T091 | 崩溃后的重建（T169）：检查点作废、日志被修剪时，载入补写缺失的 `session.configured`、`session.capabilities`（只在连接过 agent 时，来自能力缓存）、`queue.updated`；准备阶段崩溃的会话在宿主启动时由 `SessionManager::reopen` 主动载入并重开第一个回合；被中断回合里没结束的条目先补写 `item.completed`（工具调用 `abandoned`，执行类命令按 agent 的中断是否停命令标 `may_still_run`）。日志被修剪掉的待处理请求不补写 `interaction.resolved`（表里已是 `expired`） | T169 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

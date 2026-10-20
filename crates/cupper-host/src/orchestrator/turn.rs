@@ -380,6 +380,11 @@ impl TurnMachine {
         }
     }
 
+    /// A message sent while idle waits for its check.
+    pub fn holding(&self) -> bool {
+        self.held.is_some()
+    }
+
     /// The attached agent session.
     pub fn agent_session(&self) -> Option<&AgentSessionId> {
         match &self.link {

@@ -12,7 +12,7 @@ use cupper_protocol::rpc::Scope::{Approve, Read, UiLocal, Write};
 use cupper_protocol::session::StopReason;
 use serde_json::{Value, json};
 
-use super::tests::{Fixture, code, data, done, harness, on, principal, send, tags};
+use super::tests::{Fixture, code, create, data, done, harness, on, principal, send, tags};
 use crate::driver::api::{
     AskAnswer, AskId, AskRequest, DriverCommand, DriverEvent, NormUpdate, PromptTag,
 };
@@ -274,4 +274,65 @@ async fn it_orch_interaction_reply_to_names_an_answered_request() {
     let bodies = f.events(&id, "turn.started", 2).await;
     let message = data(&bodies, "item.started").pop().unwrap();
     assert_eq!(message["reply_to"], reply_to);
+}
+
+/// The `privileged.executed` records so far: method, action and details.
+fn executed(f: &mut Fixture) -> Vec<(&'static str, Value, Value)> {
+    let records = std::iter::from_fn(|| f.audit.try_recv().ok());
+    let records = records.filter_map(|record| match record.event {
+        AuditEvent::Privileged {
+            method,
+            action,
+            details,
+            ..
+        } => Some((method, json!(action), details)).filter(|_| record.conn.is_some()),
+        _ => None,
+    });
+    records.collect()
+}
+
+#[tokio::test]
+async fn unit_audit_session_privileged_records_full_access_and_privileged_options() {
+    // A session created in full access records; one in `auto` does not.
+    let mut f = Fixture::new("privileged-create").await;
+    for (n, mode) in ["auto", "bypass"].into_iter().enumerate() {
+        let mut params = create(&format!("c-{n}"));
+        params["config"] = json!({"permission_mode": mode});
+        f.ok("session/create", params).await;
+    }
+    let created = executed(&mut f);
+    assert_eq!(created.len(), 1);
+    let (method, action, details) = &created[0];
+    assert_eq!((*method, action), ("session/create", &json!("full_access")));
+    assert_eq!(details["mode"], "bypass");
+
+    // An answer with an option that takes `privileged` records once it
+    // went through; a refused one and an ordinary one do not.
+    let mut f = Fixture::new("privileged-respond").await;
+    let session = json!(f.started().await);
+    f.emit(ask(1, vec![once(), always()]));
+    let first = asked(&f, &session, 1).await;
+    let mut wrong = answer(&first[0], selected("always"), "r-1");
+    wrong["request_digest"] = json!(format!("d_{}", "0".repeat(64)));
+    f.err("interaction/respond", wrong).await;
+    assert!(executed(&mut f).is_empty());
+    f.ok(
+        "interaction/respond",
+        answer(&first[0], selected("always"), "r-2"),
+    )
+    .await;
+    let (method, action, details) = executed(&mut f).pop().unwrap();
+    assert_eq!(
+        (method, action),
+        ("interaction/respond", json!("privileged_option"))
+    );
+    assert_eq!(details["option_id"], "always");
+    f.emit(ask(2, vec![once()]));
+    let asked = asked(&f, &session, 2).await;
+    f.ok(
+        "interaction/respond",
+        answer(&asked[1], selected("once"), "r-3"),
+    )
+    .await;
+    assert!(executed(&mut f).is_empty());
 }

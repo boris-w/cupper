@@ -39,7 +39,7 @@ use super::actor::{Mail, Parts, SessionActor, Start, Stop};
 use super::core::{Input, SessionCore};
 use super::load::load;
 use super::rows::Rows;
-use super::{IndexNotes, internal, not_found, parse, tier_of};
+use super::{IndexNotes, internal, not_found, parse, privileged, tier_of};
 use crate::clock::{Clock, IdGen};
 use crate::driver::api::{AgentPort, ProjectConfigPolicy};
 use crate::durations::Durations;
@@ -154,6 +154,7 @@ impl SessionManager {
             principal,
             params,
             ticket,
+            conn,
             ..
         } = call;
         let accepted = match self.accept(&principal, &params).await {
@@ -175,6 +176,8 @@ impl SessionManager {
             confirmed,
         } = accepted;
         let deps = &self.shared.deps;
+        // In full access, which only `privileged` may set (design 5.8.6).
+        let executed = confirmed.then(|| Confirmable::Create(params.clone()));
         let id = SessionId::from_uuid(deps.ids.new_id().as_u128());
         let stream_id = StreamId::Session(id.clone());
         let stream = deps.streams.open(&stream_id).await.map_err(internal)?;
@@ -243,6 +246,16 @@ impl SessionManager {
             })),
         };
         writer.append(batch).await.map_err(internal)?;
+        let facts = Facts {
+            mode_tier: Some(Tier::FullAccess),
+            project_path: Some(WirePath(path.clone())),
+            ..Facts::default()
+        };
+        let executed = executed.and_then(|c| privileged(c, &facts, &principal.id, &conn, at));
+        if let Some(record) = executed {
+            // Nobody listening is the receiver's choice.
+            let _ = deps.audit.send(record);
+        }
         let summary = SessionSummary {
             session_id: id.clone(),
             project_id: params.project_id.clone(),
@@ -308,6 +321,7 @@ impl SessionManager {
             commands: HashMap::new(),
             project_gate: false,
             ignore_for_good: false,
+            initial: true,
         };
         let participant = deps.quiescence.enter(SESSION);
         tokio::spawn(SessionActor::run(parts, inbox, stops, start, participant));
@@ -396,6 +410,27 @@ impl SessionManager {
         }
         let stopped = || Err(internal("the session stopped"));
         Box::pin(finished.map(move |done| done.unwrap_or_else(|_| stopped())))
+    }
+
+    /// Loads the sessions whose first message never started a turn: the
+    /// host stopped while they prepared (design 5.2.13), and their actors
+    /// take the message up again.
+    pub async fn reopen(&self) {
+        let read = self.shared.deps.readers.read(|conn| {
+            let mut select = conn.prepare(
+                "SELECT session_id FROM sessions
+                 WHERE initial_prompt_json IS NOT NULL AND archived_at IS NULL",
+            )?;
+            let ids = select.query_map([], |r| r.get::<_, String>(0))?;
+            ids.collect::<rusqlite::Result<Vec<_>>>()
+        });
+        let ids = read.await.unwrap_or_else(|err| {
+            tracing::error!("the sessions to reopen could not be read: {err}");
+            Vec::new()
+        });
+        for id in ids.iter().filter_map(|id| id.parse().ok()) {
+            self.mailbox(&id);
+        }
     }
 
     /// The mailbox of session `id`'s actor. Without one, an actor starts
