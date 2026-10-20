@@ -268,6 +268,7 @@ impl SessionManager {
             project: params.project_id.clone(),
             git: deps.git.clone(),
             durations: deps.durations.clone(),
+            quiescence: deps.quiescence.clone(),
         };
         let first = SendRequest {
             content: params.message,

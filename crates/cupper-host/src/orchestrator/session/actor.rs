@@ -70,7 +70,7 @@ use crate::orchestrator::tier_guard;
 use crate::orchestrator::turn::{self, Disposition, SendMode, SendRequest, SteerFallback};
 use crate::policy;
 use crate::pure::{Alarm, Core, TimerTable};
-use crate::quiescence::Participant;
+use crate::quiescence::{Participant, Quiescence};
 use crate::store::streams::{Batch, StreamHandle, StreamView, StreamWriter};
 use crate::store::{Durability, Readers, Writer};
 use crate::trust::{self, Scan};
@@ -128,6 +128,8 @@ pub(super) struct Parts {
     /// Finds the git root of the trust range (`Discovery::git`).
     pub git: Option<GitTool>,
     pub durations: Durations,
+    /// For the work it hands to tasks of their own (T047).
+    pub quiescence: Quiescence,
 }
 
 pub(super) struct SessionActor {
@@ -684,10 +686,13 @@ impl SessionActor {
             durations: self.parts.durations.clone(),
             audit: self.parts.audit.clone(),
         };
+        let hold = self.parts.quiescence.hold();
         tokio::spawn(async move {
             let found = rescan(readers, project, cwd, cx).await;
             // The actor may have stopped.
             let _ = back.send((purpose, found));
+            // Let go once the actor has the result.
+            drop(hold);
         });
     }
 
