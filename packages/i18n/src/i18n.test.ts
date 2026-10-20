@@ -6,7 +6,15 @@ describe("createI18n", () => {
   test("is ready on return, with every feature file as a namespace", () => {
     const i18n = createI18n();
     expect(i18n.isInitialized).toBe(true);
-    expect(NAMESPACES).toEqual(["command", "host", "privileged", "shell", "sidebar", "stream", "update"]);
+    expect(NAMESPACES).toEqual([
+      "command",
+      "host",
+      "privileged",
+      "shell",
+      "sidebar",
+      "stream",
+      "update",
+    ]);
     expect(i18n.t("command:new_session")).toBe("新建会话");
     expect(i18n.t("update:ready")).toBe("重启以更新");
   });

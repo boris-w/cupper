@@ -17,6 +17,7 @@ pub mod orchestrator;
 pub mod policy;
 pub mod pure;
 pub mod quiescence;
+pub mod requester;
 pub mod runtime;
 pub mod startup;
 pub mod store;

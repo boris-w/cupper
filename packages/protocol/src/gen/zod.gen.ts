@@ -2586,6 +2586,7 @@ export const zItemView = z.object({
  * What the host checked about the requesting process.
  */
 export const zVerifiedRequester = z.object({
+  bundled_cli: z.boolean(),
   executable: zWirePath,
   has_tty: z.boolean(),
   origin_unverifiable: z.boolean(),

@@ -20,6 +20,35 @@ use super::{AuditEvent, AuditRecord, CloseReason, Gateway, GatewayConfig, Routes
 use crate::clock::{Clock, SystemClock};
 use crate::durations::Durations;
 
+const ALONE_ENV: &str = "HOST_TEST_ALONE";
+
+/// Runs the test `path` (its full name, `module::tests::name`) in a test
+/// process of its own, where no other test starts processes meanwhile: a
+/// process started on another thread briefly holds a copy of every fd of
+/// this one, and with it any `flock` taken through such an fd (T021).
+/// Returns `true` in that process, where the caller goes on with the test
+/// body; in the calling process it starts that process, checks that exactly
+/// this test ran and passed, and returns `false`. As in `cupper-sys`, whose
+/// test helpers are private to it.
+pub fn alone(path: &str) -> bool {
+    if std::env::var_os(ALONE_ENV).is_some_and(|name| name == path) {
+        return true;
+    }
+    let out = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([path, "--exact", "--test-threads=1"])
+        .env(ALONE_ENV, path)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout) + String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{path} failed on its own:\n{text}");
+    assert!(
+        text.contains("test result: ok. 1 passed"),
+        "{path} did not run on its own:\n{text}"
+    );
+    false
+}
+
 /// The key of the test gateway's `dev_key` and `harness_key`.
 pub const KEY: Bytes32 = [0x5a; 32];
 
@@ -235,6 +264,8 @@ pub(crate) struct Peer {
     pub(super) dispatch: super::dispatch::Dispatch,
     /// The connection as the index hears of it; its token is this process's.
     pub(crate) opened: super::Opened,
+    /// The connection's clock, for when a grant ends.
+    pub(crate) clock: crate::clock::ManualClock,
     outbox: Arc<super::outbox::Outbox>,
     replies: Vec<Value>,
     next_id: i64,
@@ -255,9 +286,9 @@ impl Peer {
             cupper_protocol::limits::V1.max_queue_bytes as usize,
         ));
         let conn = cupper_protocol::ids::ConnId::from_index(index);
-        let clock = Arc::new(crate::clock::ManualClock::new());
+        let clock = crate::clock::ManualClock::new();
         let audit = tokio::sync::mpsc::unbounded_channel().0;
-        let auditor = super::audit::Auditor::new(conn.clone(), audit, clock);
+        let auditor = super::audit::Auditor::new(conn.clone(), audit, Arc::new(clock.clone()));
         use cupper_protocol::domain::{ClientKind, PrincipalKind};
         let kind = match principal.kind {
             PrincipalKind::Cli => ClientKind::Cli,
@@ -292,6 +323,7 @@ impl Peer {
         Self {
             dispatch,
             opened,
+            clock,
             outbox,
             replies: Vec::new(),
             next_id: 0,

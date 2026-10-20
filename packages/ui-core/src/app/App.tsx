@@ -6,6 +6,7 @@ import { TooltipProvider } from "../components/Tooltip";
 import { ToasterProvider } from "../feedback/toaster";
 import { LayoutStore } from "../layout/store";
 import { Shell } from "../shell/Shell";
+import { StateProvider, UiProvider } from "../state/provider";
 import { Page, SlotsContext, type Slots } from "./pages";
 import { HostProvider, I18nProvider, ShellProvider, ThemeProvider } from "./providers";
 import { RouterProvider, type Route } from "./router";
@@ -19,7 +20,7 @@ export interface AppProps {
 
 /** The root of design 5.7.5 on any ShellAPI: Electron's, or the browser mock. */
 export function App({ api, info, slots = {}, initialRoute }: AppProps) {
-  const [store] = useState(() => new LayoutStore(api.prefs, info.prefs));
+  const [store] = useState(() => new LayoutStore(api.prefs, info.prefs, initialRoute));
   useEffect(() => () => store.close(), [store]);
   return (
     <ShellProvider api={api} info={info}>
@@ -27,15 +28,19 @@ export function App({ api, info, slots = {}, initialRoute }: AppProps) {
         <ThemeProvider>
           <ToasterProvider>
             <HostProvider>
-              <RouterProvider initial={initialRoute}>
-                <SlotsContext value={slots}>
-                  <TooltipProvider>
-                    <Shell store={store}>
-                      <Page />
-                    </Shell>
-                  </TooltipProvider>
-                </SlotsContext>
-              </RouterProvider>
+              <UiProvider ui={store.ui}>
+                <StateProvider>
+                  <RouterProvider>
+                    <SlotsContext value={slots}>
+                      <TooltipProvider>
+                        <Shell store={store}>
+                          <Page />
+                        </Shell>
+                      </TooltipProvider>
+                    </SlotsContext>
+                  </RouterProvider>
+                </StateProvider>
+              </UiProvider>
             </HostProvider>
           </ToasterProvider>
         </ThemeProvider>

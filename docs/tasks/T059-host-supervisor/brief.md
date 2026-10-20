@@ -1,7 +1,7 @@
 # T059 宿主生命周期 II：监护、孤立、自检与审计落盘
 
 - 派发日期：2026-10-20
-- 执行者：子 agent（Rust 工程师，宿主核心）。T037 的执行者接手，因为 `Host::start`、`Host::exit`、`supervisor::Part` 都是它写的
+- 执行者：子 agent（Rust 工程师，宿主安全）。T054、T060、T098、T044、T109、T038、T080 的执行者接手（T038 动过 supervisor 和网关的审计）
 - 分支：`feat/T059-host-supervisor`
 - 依赖：T037（已合并）。T062（宿主集成测试 I）依赖本任务
 
@@ -68,8 +68,34 @@ T037 开工前按守则第 8 条拆成两半（计划 v1.3.9）：T037 做启动
 
 ## 工作方式
 
-在原来的 T037 worktree 里，从最新的 main 开新分支：`git checkout -b feat/T059-host-supervisor main`。T037 的分支已经合并，不要再往它上面提交。
+在原来的 T054 worktree 里，从最新的 main 开新分支：`git checkout -b feat/T059-host-supervisor main`。T080 的分支已经合并，不要再往它上面提交。
 
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 派发时的更新（2026-10-20，编排者）
+
+本任务书写于 T037 合并时，之后合进来的任务改变了几处前提，以本节为准：
+
+1. **会话管理器、`AgentRuntime`、索引都已组装进宿主**（T055、T034）。"是否接受新会话和新回合"直接接到真实的会话管理器上，不再用替身。
+2. **运行时安装器接进启动不归本任务**：计划 v1.3.23 新增了 T129。`handoff-notes.md` 里那行"T059（宿主启动接线）"的安装器部分由 T129 做。本任务只需在启动顺序里留出"自检之后"的位置，并在 `notes.md` 写明 T129 接在哪里；`Failed(BundleChanged)` 转入待升级的入口由本任务的监护核心提供。
+3. **审计同时写 host.log**（T028 已合并，交接）：去掉"先只写表"的过渡写法。
+4. **审计的新事件与字段**都要映射进正式格式：
+   - T088 的 `interaction.responded`；
+   - T044 的 `config.unconfirmed`、`config.confirmed`（`AuditRecord.conn` 已是 `Option<ConnId>`）；
+   - T038 的 `AuditEvent::Elevation`（各 `step`）；
+   - T109 的信任相关记录（如有）。
+5. **`conn.accepted` 补对端信息**（T038 的交接）：可执行文件路径、签名 identifier、Team ID，用 T133 在 `cupper-sys` 加的按审计令牌取签名身份的函数；`gateway/audit.rs` 开头"归 T038"的注释改掉。
+6. **残留清理读 `adapters.groups`**（`[[pgid, start_us], …]`，T008 加的列）和适配器自己的进程组；关闭适配器的例程 T008 已有，能复用就复用。
+7. **静止屏障**（T047）：
+   - 新的 actor 种类要在 `Host::start` 里登记；
+   - 等待点包进 `Participant::idle(fut)`；
+   - 脱离发起方的 task 持有 `Hold`，交出结果后再释放。
+   - 监护核心的定时器照索引 actor 的做法：一个闹钟、一张定时器表。
+8. **`routes.streams(streams, readers)` 仍未接**（核对过 main 上的 `supervisor/mod.rs`），第 7 项照做。
+9. **用例的进程卫生**：
+   - 写"拿锁、放开、再拿"或依赖 fd 不被复制的用例时，用 `gateway::testkit::alone`（T037 修复 1）；
+   - 拉起孙进程的用例不能留残留进程（T008 修复 1 进行中，做法以它为准）。
+
+规模：加上这些，本任务很可能超过约 1,500 行。开工前的估计请按模块列清楚。超线时的拆法：先考虑把"审计落盘、正式格式与 `conn.accepted` 补信息"整块拿出去。

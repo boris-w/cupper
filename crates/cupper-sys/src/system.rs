@@ -138,6 +138,18 @@ pub fn redirect_stdio_to_null() -> Result<()> {
     Ok(())
 }
 
+/// Makes this process the leader of a new session and process group, with no
+/// controlling terminal; its pid is their id. Fails for a process that leads
+/// a group already.
+pub fn setsid() -> Result<i32> {
+    // SAFETY: setsid takes no arguments and touches no memory of ours.
+    let sid = unsafe { libc::setsid() };
+    if sid < 0 {
+        return Err(Error::last_os("setsid"));
+    }
+    Ok(sid)
+}
+
 /// The real user ID of this process.
 pub fn current_uid() -> u32 {
     // SAFETY: getuid has no preconditions and cannot fail.

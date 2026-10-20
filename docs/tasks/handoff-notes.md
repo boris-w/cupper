@@ -261,7 +261,6 @@
 | T100 | 在 `Host::start` 里调用 `routes.presence(..)`（`session/mark_read`、`client/presence` 在那之前对真实宿主回 `unsupported`）；状态计算接在 `IndexActor::pending` 旁边；对账时按行补出的会话摘要只是起点 | T034 |
 | T059 | `HostUpdated.pending_upgrade` 改为取自检的结果 | T034 |
 | 用 git 的任务（T061、T109 等） | git 从 `Discovery::git`（`Option<GitTool>`）取；找不到 git 时为 `None` | T034 |
-| 修复锁用例的偶发失败（待派） | `gateway::listen::tests::host_lock_is_held_once_and_names_its_holder` 偶发失败：释放 `host.lock` 后立刻再拿，报"已被占用"。应是 T021 查明的窗口（别的测试线程 `posix_spawn` 时 fd 表被短暂复制）。改成单独进程隔离（`cupper-sys` 的 `testutil::alone` 那样），或释放后在短时限内重试 | T034 |
 | T059（宿主启动接线） | 运行时安装器的后台校验：`Installer::new(runtime::plans(manifest::embedded()), Box::new(BundleDir::of_this_host()?), runtime::runtime_dir(&data_dir), in_use)`，放进 `spawn_blocking(move || installer.run(|s| tx.send_replace(s.clone())))`，状态写进索引流的 `agents`；要在宿主的 cdhash 自检之后才开始；`Failed(BundleChanged)` 时转入待升级；`in_use` 启动时为空 | T056 |
 | T111 | codex-acp 的文件在 `runtime::plan::split` 里加 | T056 |
 | T109 | 闸门用 `turn::Input::Gate(Some(PauseReason::ProjectConfigChanged))` 关、`Gate(None)` 开；闸门同一时刻只有一个原因，`config_unconfirmed` 和 `project_config_changed` 可能同时出现，要改成原因的集合 | T044 |
@@ -310,6 +309,10 @@
 | T082、T083 | 行类型注册表在 `packages/ui-core/src/rows/registry.tsx`：`RowRegistry<R extends {kind: string}>` 的 `register`、`resolve`，`<RowView registry row>` 按 kind 画出组件；同一个 kind 注册两次抛错；不认识的 kind 只显示一句占位（不渲染行里的数据）。可以各建一个实例或共用一个，在模块加载时注册 | T128 |
 | T153 | 顶栏"打开"和"⋯"已是挂着空菜单的工具栏按钮（`<Menu trigger={<ToolbarButton …/>}>`），菜单项归本任务 | T128 |
 | T106、T152 | 待核对：侧边面板被自动收起时，开关仍显示为按下（跟随用户意图）；开关滑块用 `--color-surface-elevated`，暗色下偏深；tooltip 阴影在 ui-spec 3.6 有、5.7.10 没有 token | T128 |
+| T135 | `VerifiedRequester.bundled_cli` 已加（T133）：提权框按它醒目标出"申请方不是本 App 自带的命令行工具"。开发和测试构建是 ad-hoc 签名，`bundled_cli` 恒为否；签名构建出来后实测一次为真的情况 | T133 |
+| T090、T092 | CLI 提权的 e2e 可以照用 IT-elevate 的做法：探针 `cupper-elevate-probe`（`cupper-cli` 下，需要 `test-harness` 特性，参数 `--data-dir`、`--out`、`--setsid`，按 JSON 行写下每一步结果）；假 agent 的 `spawn <program> [args...]` 在自己的会话和进程组里拉起程序；未决和结束的申请可以从 `host.db` 里索引流的 `elevation.*` 事件轮询 | T133 |
+| 写"拿锁、放开、再拿"或依赖 fd 不被复制的用例 | 同一测试进程里别的线程拉起子进程时，子进程 exec 之前持有本进程 fd 的副本，`flock` 随副本留着（带 `O_CLOEXEC` 也一样）。这类用例放进单独的测试进程：`cupper-host` 用 `gateway::testkit::alone`（环境变量 `HOST_TEST_ALONE`），`cupper-sys` 用 `testutil::alone` | T037 修复 1 |
+| T081、T082、T083、T086、T137 | 状态层（T080，`packages/ui-core/src/state/`）：会话页用 `useStreams().session(id)` 拿 store，索引用 `useStreams().index`；条目用 `useEntry(view, key)`（索引的键如 `sessions`、`projects`、`elevations`、`session:<id>`、`project:<id>`、`host`、`clients`）；草稿、附件、滚动位置用 `useUi()`；查询键约定全局 `[method, …]`、会话 `["session", id, method, …]`，需要失效时在 `staleKeys` 里加一条；示例查询 `useArchivedSessions()` | T080 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
