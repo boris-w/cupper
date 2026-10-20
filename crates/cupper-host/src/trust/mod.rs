@@ -23,10 +23,11 @@
 //! - **States** follow [`Trust`]: pure functions of the old state and a scan.
 //!
 //! Reading the files blocks: callers run [`scan`] on the blocking pool
-//! (design 5.2.3). Findings for the native confirmation are T096's; they read
-//! [`ScannedFile::content`].
+//! (design 5.2.3). [`Scan::findings`] lists what the native confirmation
+//! shows, from [`ScannedFile::content`].
 
 mod digest;
+mod findings;
 mod state;
 #[cfg(test)]
 mod tests;
