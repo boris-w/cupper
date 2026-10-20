@@ -123,6 +123,14 @@ durations! {
     /// How long a probe waits for the agent's command list after its session
     /// opened (design 5.6.7).
     PROBE_COMMANDS = "probe_commands", Duration::from_millis(200);
+    /// How long an elevation request waits for the user (design 5.8.4).
+    ELEVATION_PENDING = "elevation_pending", Duration::from_secs(120);
+    /// How long a granted elevation holds at most (design 5.8.4).
+    ELEVATION_GRANT = "elevation_grant", Duration::from_secs(900);
+    /// Two denials within this long silence elevation requests (security #8).
+    ELEVATION_DENIALS = "elevation_denials", Duration::from_secs(600);
+    /// How long elevation requests stay silenced after two denials.
+    ELEVATION_QUIET = "elevation_quiet", Duration::from_secs(600);
     /// How long the agent has to take back a tier it raised by itself during
     /// a turn before the turn is interrupted (design 5.2.6, check 4).
     CONFIG_REVERT = "config_revert", Duration::from_secs(2);
