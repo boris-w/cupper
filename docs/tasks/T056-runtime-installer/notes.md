@@ -1,0 +1,53 @@
+# T056 工作笔记
+
+- 执行者：子 agent（工程师；T004、T005、T094、T028、T075、T007 的执行者接手）
+
+## 开工前的规模估计
+
+行数指 rustfmt 展开后的行，含注释和空行，不含 `Cargo.lock`。"草估"是逐模块的估计；实现按我近几个任务的实际偏差乘 1.3（T028 约 1.3，T075、T007 约 1.0），另列计划 1.1 的 1.7 倍作对照。
+
+核对现状时确认的几点：
+- `cupper-host` 里还没有 HTTP 客户端。设计 5.1.3 给宿主定的是 `reqwest`（rustls）；本机已缓存 `reqwest` 0.12.28、`hyper-rustls`、`rustls` 0.23、`ring` 0.17。
+  - 加密实现要选 `ring`：rustls 默认的 `aws-lc-rs` 带 OpenSSL 许可证，不在 ADR-11 的白名单里；
+  - 根证书用系统的（`rustls-native-certs`），不用 `webpki-roots`：后者是 CDLA-Permissive-2.0。
+- `test_config.runtime.registry_url` 已经有了（T023），注入点不用新加。
+- `manifest.rs`（T054）只解析了 `cli`、`env`，要加 `node`、`esbuild_wasm`、`claude_agent_acp`、`files`。
+
+**实现**
+
+| 模块 | 内容 | 草估 |
+|---|---|---|
+| `manifest.rs` 加字段 | 版本、identifier、锁文件、入口、打包哈希；`files`（sha-256，Node 另有 cdhash） | 40 |
+| 组件状态机（纯核心） | 每个组件 `missing` → `installing` → `ready`，失败为 `failed{network, hash_mismatch, disk, bundle_changed}`；网络错误按 `Clock` 退避重试 3 次，哈希不符不重试；驱动层执行动作、用 `Clock` 定时 | 150 |
+| 从包内复制 | 按清单把包内文件复制进 staging，边读边算 sha-256，写下的字节就是核对过的字节（复制中包被替换，哈希就对不上）；Node 另核对 cdhash；不复制 codex-acp（T111） | 80 |
+| 安装与提交 | `<数据目录>/runtime/<组件>/<版本>/`；清理残留的 staging；已装的按 `.installed.json` 核对，坏了挪到一边重装；写 `.installed.json` 后 `rename(2)` 原子提交；旧版本在没有适配器使用时回收（"使用中"由调用方给） | 120 |
+| 按锁文件下载 | 解析锁文件（跳过 optional、dev、link，路径检查）；`resolved` 必须在 `registry.npmjs.org` 下，换成注入的 registry；`reqwest` 下载（UA `cupper-research`、超时）；SRI 校验后才解包；解包只取普通文件、不越界；并发若干个；不运行任何包脚本 | 170 |
+| 本机打包 | 经 `cupper_sys::spawn` 用随包 Node 跑打包脚本，环境变量只有 `PATH`（只含 Node 所在目录），用 `Clock` 限时；产物 sha-256 与清单一致才算成功，然后删掉 npm 树 | 60 |
+| `--self-test` | 启动参数；核对包内文件与内嵌清单、已安装的运行时与 `.installed.json`；输出一行 JSON，退出码 0 或 1 | 40 |
+| 依赖与配置 | `reqwest`（`rustls`、`ring`、系统根证书）；`deny.toml` 核对 | 10 |
+| **实现小计** | | **670**；乘 1.3 约 **870**（乘 1.7 约 1,140） |
+
+**测试**
+
+| 项 | 内容 | 草估 |
+|---|---|---|
+| 清单与状态机 | 内嵌清单的新字段；状态机的转换、重试与退避（`ManualClock`） | 70 |
+| 复制、安装与提交 | 复制时哈希不符；cdhash 不符；staging 残留；`.installed.json` | 50 |
+| 下载与解包 | 越界路径、链接、SRI 不符；optional 包不下载；非官方地址被拒 | 60 |
+| 打包 | 假的"Node"（脚本）产出固定内容；产物哈希不符为 `bundle_changed`；环境只有 `PATH` | 30 |
+| IT-runtime-install | 本地夹具：自己造的小 tarball、`tokio` 写的最小 HTTP registry、假的打包器。5 种故障（哈希不一致、网络失败重试 3 次、提交前被杀、安装后被篡改、重复运行）加"复制中包被替换"；正常安装全流程 | 250 |
+| `--self-test` | 完整、缺文件、被改过三种 | 30 |
+| **测试小计** | | **490** |
+
+**合计约 1,360 行**（实现乘 1.3）到 **1,630 行**（实现乘 1.7）。中间值贴着约 1,500 行的线，偏高的估计超线。按任务书，开工前停下汇报，没有写代码。
+
+## 拆分建议
+
+按任务书举的拆法，"复制、提交与自检"和"下载与本机打包"分开。两半都在宿主的同一个 `runtime` 模块下，后一半用前一半的状态机和提交流程。
+
+| 拆分 | 模块 | 用例 | 估计 |
+|---|---|---|---|
+| **T056a 运行时目录：复制、原子提交与 `--self-test`** | `manifest.rs` 加字段；组件状态机与驱动；从包内复制（含 Node 的 cdhash）；安装目录、staging、`.installed.json`、原子提交、坏了挪开重装、旧版本回收；`--self-test` | IT-runtime-install 中不需要下载的部分：哈希不一致（包内文件）、提交前被杀、安装后被篡改、重复运行、复制中包被替换；`--self-test` 的用例 | 实现草估约 430，乘 1.3 约 560；测试约 270；合计约 **830** |
+| **T056b 按锁文件下载与本机打包** | `reqwest` 依赖；锁文件解析与 registry 注入；下载、SRI、解包的路径检查；网络错误的退避重试（接 T056a 的状态机）；本机打包与哈希核对 | IT-runtime-install 的其余部分：网络失败重试 3 次、SRI 不符、越界的 tarball、打包产物不符、经本地 registry 的完整安装 | 实现草估约 240，乘 1.3 约 310；测试约 220；合计约 **530** |
+
+T056a 先做，T064（兼容套件框架）依赖的"运行时目录里有 Node 和 esbuild-wasm"在 T056a 完成后就有。claude-agent-acp 要等 T056b 完成后才装得上。IT-runtime-install 可以拆成两个子编号（例如 `-copy` 和 `-download`），或者只在 T056b 完成时算整体通过，由编排者定。
