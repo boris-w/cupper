@@ -3,6 +3,7 @@ import { createContext, use, type ReactNode } from "react";
 import { Composer } from "../composer/Composer";
 import { ComposerArea } from "../composer/QueueList";
 import { SessionBanners } from "../session/SessionBanners";
+import { StreamList } from "../stream/StreamList";
 import { useRouter } from "./router";
 
 /** The places later tasks fill: the sidebar's parts (T081) and the composers (T086, T083). */
@@ -32,7 +33,7 @@ export function SessionPage({ sessionId }: { sessionId: string }) {
   return (
     <div className="mx-auto flex h-full w-full max-w-(--layout-thread-max-w) flex-col px-(--layout-thread-gutter)">
       <SessionBanners sessionId={sessionId} />
-      <div className="min-h-0 flex-1" />
+      <StreamList sessionId={sessionId} />
       <div className="shrink-0 pb-(--layout-composer-bottom)">
         {sessionComposer ?? <ComposerArea sessionId={sessionId} />}
       </div>

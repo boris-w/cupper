@@ -61,5 +61,21 @@
   "error_cli_missing": "没有找到命令行工具。",
   "error_runtime_failed": "agent 的运行时不可用。",
   "error_host_restarted": "宿主重新启动过，这个回合已中断。",
-  "error_other": "agent 出错了。"
+  "error_other": "agent 出错了。",
+  "history_more": "加载更早的历史",
+  "history_loading": "正在加载…",
+  "history_failed": "没有加载成功，点击重试",
+  "turn_processed": "已处理 {{duration}}",
+  "turn_cancelled": "你在 {{duration}} 后停止了",
+  "turn_interrupted": "已中断",
+  "turn_failed": "失败",
+  "duration_s": "{{s}} 秒",
+  "duration_ms": "{{m}} 分 {{s}} 秒",
+  "show_more": "显示更多",
+  "show_less": "收起",
+  "copy": "复制",
+  "comments": "{{count}} 条评论",
+  "text_blob": "长文本",
+  "image": "图片",
+  "to_bottom": "回到底部"
 }
