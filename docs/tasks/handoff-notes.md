@@ -299,6 +299,8 @@
 | T078 | 窗口桥为了认出宿主的回应（`command_id` 重发表），入方向每个字节在主进程里多一次复制（`FrameDecoder` 的拼接），JSON 只在重发表非空时解析；测量主进程事件循环延迟时一并评估 | T077 |
 | T090、T092 | Q26 已在 Electron 44.9.0 上复测（设计 13 的 Q26 已关闭）：Playwright 的键盘输入不触发 `before-input-event`，不会被记成真实输入；e2e 的按键要经 `webContents.sendInputEvent` 发出；`page.click()` 产生同一按钮的 `mouseDown`、`mouseUp`。复测脚本在 `docs/tasks/T077-desktop-input-privileged/q26/` | T077 |
 | 作者（MAN-keyboard） | 实体键盘确认四项：Enter 批准、Esc 拒绝、数字键选择并提交、输入法选词时不触发。清单在 `docs/tasks/T077-desktop-input-privileged/notes.md`；涉及请求面板的部分要等 T083 做出面板。执行后按 `tests/ids.toml` 末尾的格式登记证据 | T077 |
+| T081、T082、T083、T086 等界面任务 | 截图用例照 `tools/ui-screenshots` 的 notes"后续界面任务怎样加用例"：spec 标题以编号开头；`open(page, fixture)` 打开（夹具可设 `info` 与 mock 宿主的 `methods`，页面上有 `window.cupperShell`、`window.cupperHost`）；`pnpm ui:baseline` 生成基线，看图后连同 `meta.json` 一起提交；新文案出现字体子集外的字时 `fonts.test.ts` 报错，按 notes 重做子集。主文档的 CSP 现在在 `@cupper/shell-api` 的 `csp.ts` | T118 |
+| T090 | 截图回归用 Playwright 自带的 Chromium（156），App 的 Electron 44 是 Chromium 152；如果以后要求截图引擎与 App 一致，改用 `_electron` 驱动 | T118 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
