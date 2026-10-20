@@ -40,7 +40,7 @@
 
 ## 用例的变异检查
 
-把 `cmd.global_args(overrides.global)` 临时改成不加覆盖，`it_git_repo_tier_malicious_no_program_of_the_repository_runs` 在第一批调用就失败（恶意过滤器被执行、调用报错），改回后通过。没有提交这次改动。
+把 `cmd.global_args(overrides.global)` 临时改成不加覆盖，`it_git_repo_tier_malicious_no_program_of_the_repository_runs` 在第一批调用处就失败（没有覆盖时调用报错，`expect("runs with the overrides")` 不成立），改回后通过。没有单独核对这时留下了哪些标记文件。没有提交这次改动。
 
 ## 指纹的耗时（T060 发现第 4 条）
 
