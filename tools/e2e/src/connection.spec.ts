@@ -9,7 +9,7 @@ import { join } from "node:path";
 
 import type { Cupper } from "./fixture";
 import { expect, test } from "./fixture";
-import { sampleNetwork, texts, type Flow } from "./helpers";
+import { offMachine, sampleNetwork, texts, type Flow } from "./helpers";
 import { signal, tree } from "./procs";
 import { dial, FakeHost, initialize, keyProof, socketPath, type Message } from "./raw";
 
@@ -145,8 +145,7 @@ test.describe(() => {
     const tree = cupper.processes().length;
     console.log(JSON.stringify({ q27: { took, tree, pids, caught } }));
     expect(caught, "nettop sees the control's flow").toBeDefined();
-    const loopback = /^(127\.|::1[.:]|\*[.:])/;
-    const off = flows.filter((f) => !loopback.test(f.remote) && !f.remote.startsWith("192.0.2.1"));
+    const off = offMachine(flows).filter((flow) => !flow.remote.startsWith("192.0.2.1"));
     expect(off).toEqual([]);
   });
 });
