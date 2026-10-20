@@ -644,7 +644,8 @@ mod tests {
             "conflict/digest_mismatch",
             "conflict/too_early",
             "expired",
-            "forbidden"
+            "forbidden",
+            "not_found"
         ]);
         assert_eq!(entry("interaction/respond")[X_ERRORS], errors);
     }
