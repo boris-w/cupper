@@ -5,11 +5,15 @@
 import type { SessionView } from "@cupper/host-client";
 import type { PromptBlock, QueueUpdated } from "@cupper/protocol";
 
+import { useEffect, useRef } from "react";
+
 import { useT } from "../app/providers";
+import { useToasts } from "../feedback/toaster";
+import { RequestPanel, type ComposerActivity } from "../request/RequestPanel";
 import { useStreams } from "../state/provider";
 import { useEntry } from "../state/stream";
 import { Composer } from "./Composer";
-import { useSend } from "./send";
+import { useSend, useSessionState } from "./send";
 
 const count = (content: PromptBlock[], type: string) =>
   content.filter((block) => block.type === type).length;
@@ -66,14 +70,55 @@ function Queue({ queue, resume }: { queue: QueueUpdated | null | undefined; resu
   );
 }
 
+/** The pending requests in creation order: the first takes the composer's place. */
+const pending = (view: SessionView) =>
+  Object.values(view.toJSON().requests)
+    .filter((request) => !request.resolved)
+    .toSorted((a, b) => a.requested.created_at - b.requested.created_at);
+
 function SessionArea({ sessionId, view }: { sessionId: string; view: SessionView }) {
+  const t = useT();
+  const { show } = useToasts();
   const { resume } = useSend(sessionId, undefined);
-  useEntry(view, "session");
-  const queue = view.toJSON().queue;
+  const { agent } = useSessionState(sessionId);
+  const activity = useRef<ComposerActivity>({ focused: false, typedAt: 0 });
+  const shown = useRef(new Set<string>());
+  const answered = useRef(new Set<string>());
+  // Any change: a new request lands in a turn or in the tail, and resolves under its own key.
+  useEntry(view, "view");
+  const first = pending(view)[0]?.requested;
+  if (first) shown.current.add(first.request_id);
+
+  // AP-4: a request shown here and answered by another client folds away with a toast.
+  const { requests, queue } = view.toJSON();
+  useEffect(() => {
+    for (const id of shown.current) {
+      const resolved = requests[id]?.resolved;
+      if (!resolved) continue;
+      shown.current.delete(id);
+      const by = resolved.resolved_by?.client_name;
+      if (by && resolved.status === "resolved" && !answered.current.has(id)) {
+        show({ id: `elsewhere:${id}`, text: t("request:handled_elsewhere", { client: by }) });
+      }
+    }
+  });
+
+  const name = t(`sidebar:agent_${agent}`, { defaultValue: agent });
   return (
     <>
       <Queue queue={queue} resume={resume} />
-      <Composer sessionId={sessionId} paused={Boolean(queue?.paused)} />
+      {first ? (
+        <RequestPanel
+          key={first.request_id}
+          sessionId={sessionId}
+          requested={first}
+          agent={name}
+          activity={activity}
+          onAnswered={(id) => answered.current.add(id)}
+        />
+      ) : (
+        <Composer sessionId={sessionId} paused={Boolean(queue?.paused)} activity={activity} />
+      )}
     </>
   );
 }
