@@ -138,6 +138,30 @@ fn tool(root: &Path, git: &Path, lfs: Option<PathBuf>) -> GitTool {
     tool
 }
 
+/// `git.unsafe_repo_config`: the index's way into the repo tier records the
+/// refusal, with the file in the work tree it came from.
+#[tokio::test]
+async fn unit_audit_producers_git_of_records_a_refused_repo_config() {
+    let fx = Fixture::new().await;
+    let (audit, mut records) = tokio::sync::mpsc::unbounded_channel();
+    let repo = fs::canonicalize(fx.path("include")).expect("include");
+    let cx = crate::index::ScanContext {
+        git: Some(fx.tool.clone()),
+        writable: vec![repo.clone()],
+        clock: std::sync::Arc::new(fx.clock.clone()),
+        durations: Durations::default(),
+        audit,
+    };
+    assert!(crate::index::git_of(&repo, &cx).await.is_err());
+    let inc = repo.join("inc.cfg").display().to_string();
+    let formal = records.try_recv().expect("a record").event.formal();
+    let detail = serde_json::json!({"command": "rev_parse", "reason": "writable", "origin": inc});
+    assert_eq!(
+        (formal.event.as_str(), formal.detail),
+        ("git.unsafe_repo_config", detail)
+    );
+}
+
 #[tokio::test]
 async fn it_git_repo_tier_malicious_no_program_of_the_repository_runs() {
     let fx = Fixture::new().await;

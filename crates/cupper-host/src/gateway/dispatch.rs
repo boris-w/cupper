@@ -20,21 +20,24 @@ use cupper_protocol::frame::BlobChunkHeader;
 use cupper_protocol::ids::{CommandId, ConnId};
 use cupper_protocol::index::Elevation;
 use cupper_protocol::limits::V1;
-use cupper_protocol::methods::admin::SettingsUpdate;
+use cupper_protocol::methods::admin::{
+    AuthElevationGet, ConfirmAction, PolicyDescribe, PolicyDescribeParams, SettingsUpdate,
+};
 use cupper_protocol::methods::git::GitRevert;
 use cupper_protocol::methods::handshake::{ClientIdentity, Principal};
 use cupper_protocol::methods::session::SessionSetConfig;
 use cupper_protocol::methods::stream::{
     BlobPut, BlobPutParams, StreamSubscribeParams, StreamUnsubscribeParams,
 };
-use cupper_protocol::rpc::{Idempotency, Method, RpcId};
+use cupper_protocol::rpc::{Idempotency, Method, RpcId, Scope};
 use cupper_sys::AuditToken;
+use futures::FutureExt;
 use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-use super::audit::Auditor;
+use super::audit::{AuditEvent, Auditor};
 use super::blobs::{self, Uploads};
 use super::outbox::Outbox;
 use super::routes::{Entry, Routes, Target};
@@ -150,6 +153,8 @@ pub(super) struct Dispatch {
     inflight: Arc<Semaphore>,
     subscriptions: Subscriptions,
     uploads: Mutex<Uploads>,
+    /// For `privileged.executed`.
+    auditor: Auditor,
 }
 
 /// How a request is answered.
@@ -174,7 +179,8 @@ impl Dispatch {
     ) -> Self {
         let clock = auditor.clock();
         let inflight = Arc::new(Semaphore::new(V1.max_inflight_requests as usize));
-        let subscriptions = Subscriptions::start(Arc::clone(&outbox), auditor, subscriptions);
+        let subscriptions =
+            Subscriptions::start(Arc::clone(&outbox), auditor.clone(), subscriptions);
         Self {
             conn,
             principal,
@@ -185,6 +191,7 @@ impl Dispatch {
             inflight,
             subscriptions,
             uploads: Mutex::default(),
+            auditor,
         }
     }
 
@@ -275,8 +282,23 @@ impl Dispatch {
             },
             Idempotency::Natural | Idempotency::None => None,
         };
+        let executed = privileged(&principal, name, entry, &params);
         let reply = match &entry.target {
-            Target::Port(port) => port.deliver(self.call(principal, name, params, ticket)),
+            Target::Port(port) => {
+                let reply = port.deliver(self.call(principal, name, params, ticket));
+                match executed {
+                    Some(event) => {
+                        let auditor = self.auditor.clone();
+                        let recorded = reply.inspect(move |outcome| {
+                            if outcome.is_ok() {
+                                auditor.record(event);
+                            }
+                        });
+                        Box::pin(recorded)
+                    }
+                    None => reply,
+                }
+            }
             Target::Ping => return Answer::Now(Ok(json!({}))),
             Target::Describe(sessions) => describe::describe(sessions.as_ref(), &params),
             Target::History(source) => Box::pin(history::page(source.clone(), params)),
@@ -375,4 +397,32 @@ fn frame(id: &RpcId, outcome: Outcome) -> Vec<u8> {
         Ok(result) => wire::response(id, &result),
         Err(err) => wire::error(Some(id), &err),
     }
+}
+
+/// `privileged.executed` for a call that takes `privileged` (design 5.8.6):
+/// a method of that scope, queries aside, or a security-related setting. Its
+/// action and details are `policy/describe`'s, where they need none of the
+/// sessions' facts.
+fn privileged(
+    principal: &Principal,
+    name: &'static str,
+    entry: &Entry,
+    params: &Value,
+) -> Option<AuditEvent> {
+    let queries = [PolicyDescribe::NAME, AuthElevationGet::NAME];
+    let scoped = entry.scope == Some(Scope::Privileged) && !queries.contains(&name);
+    if !scoped && name != SettingsUpdate::NAME {
+        return None;
+    }
+    let (method, params) = (name.to_owned(), params.clone());
+    let command = Confirmable::parse(&PolicyDescribeParams { method, params });
+    let described = command.and_then(|c| policy::describe(&c, &Facts::default()));
+    let described = described.ok();
+    let security = (described.as_ref()).is_some_and(|d| d.action == ConfirmAction::SecuritySetting);
+    (scoped || security).then(|| AuditEvent::Privileged {
+        method: name,
+        principal: principal.id.clone(),
+        action: described.as_ref().map(|d| d.action.clone()),
+        details: described.map_or_else(|| json!({}), |d| json!(d.details)),
+    })
 }
