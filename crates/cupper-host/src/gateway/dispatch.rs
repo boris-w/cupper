@@ -36,6 +36,7 @@ use super::outbox::Outbox;
 use super::routes::{Entry, Routes, Target};
 use super::subscribe::Subscriptions;
 use super::{REPLY, describe, history, wire};
+use crate::clock::Clock;
 use crate::ledger::{Begin, Outcome, Repeat, Ticket};
 use crate::policy::{self, Confirmable, Facts};
 use crate::quiescence::Participant;
@@ -118,10 +119,12 @@ impl Granted {
             .clone()
     }
 
-    /// `principal` with the granted scopes too.
-    fn widen(&self, principal: &Principal) -> Principal {
+    /// `principal` with the granted scopes too, until `expires_at` at
+    /// `now_ms`: should the index fail to end a grant, it ends all the same.
+    fn widen(&self, principal: &Principal, now_ms: u64) -> Principal {
         let mut principal = principal.clone();
-        for scope in self.get().into_iter().flat_map(|e| e.scopes) {
+        let current = self.get().filter(|e| e.expires_at.0 > now_ms);
+        for scope in current.into_iter().flat_map(|e| e.scopes) {
             if !principal.scopes.contains(&scope) {
                 principal.scopes.push(scope);
             }
@@ -137,6 +140,8 @@ pub(super) struct Dispatch {
     principal: Principal,
     client: ClientIdentity,
     granted: Arc<Granted>,
+    /// For when a grant ends.
+    clock: Arc<dyn Clock>,
     outbox: Arc<Outbox>,
     inflight: Arc<Semaphore>,
     subscriptions: Subscriptions,
@@ -162,6 +167,7 @@ impl Dispatch {
         auditor: Auditor,
         subscriptions: Participant,
     ) -> Self {
+        let clock = auditor.clock();
         let inflight = Arc::new(Semaphore::new(V1.max_inflight_requests as usize));
         let subscriptions = Subscriptions::start(Arc::clone(&outbox), auditor, subscriptions);
         Self {
@@ -169,6 +175,7 @@ impl Dispatch {
             principal,
             client,
             granted,
+            clock,
             outbox,
             inflight,
             subscriptions,
@@ -200,7 +207,11 @@ impl Dispatch {
         let Some((name, entry)) = routes.notification_entry(method) else {
             return;
         };
-        let (params, principal) = (or_empty(params), self.granted.widen(&self.principal));
+        let (params, principal) = (
+            or_empty(params),
+            self.granted
+                .widen(&self.principal, self.clock.now_wall_ms()),
+        );
         if Self::admit(&principal, name, entry, &params).is_err() {
             return;
         }
@@ -221,7 +232,11 @@ impl Dispatch {
         let Some((name, entry)) = entry.filter(|(_, entry)| entry.target.serves()) else {
             return Answer::Now(Err(unsupported(method)));
         };
-        let (params, principal) = (or_empty(params), self.granted.widen(&self.principal));
+        let (params, principal) = (
+            or_empty(params),
+            self.granted
+                .widen(&self.principal, self.clock.now_wall_ms()),
+        );
         if let Err(err) = Self::admit(&principal, name, entry, &params) {
             return Answer::Now(Err(err));
         }

@@ -622,6 +622,13 @@ UNIT-ui-lint-rules = "pr"
 milestone = "M1a"
 UI-sidebar = "pr"
 UI-banners = "pr"
+UNIT-ui-sidebar = "pr"
+
+# ui-core III-b：会话页警告框（计划 v1.3.29 由 T081 拆出）
+[T137]
+milestone = "M1a"
+UI-session-banners = "pr"
+UNIT-ui-session-banners = "pr"
 
 # ui-core IV：消息流
 [T082]

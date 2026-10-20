@@ -733,3 +733,37 @@ async fn it_command_order_through_the_read_loop_and_clients_open_and_close() {
     assert_eq!(gw.closed().await, crate::gateway::CloseReason::PeerClosed);
     assert_eq!(fixture.index.clients(), ["opened c_1 pr_cli", "closed c_1"]);
 }
+
+/// The index ends a grant on its timer; past `expires_at` the gateway
+/// widens nothing even when the index has not (T038 review).
+#[tokio::test]
+async fn it_elevate_a_grant_ends_at_its_time_in_the_gateway_too() {
+    use cupper_protocol::annotations::TimestampMs;
+    use cupper_protocol::index::Elevation;
+    let fixture = Fixture::new();
+    let routes = fixture.start();
+    let mut peer = Peer::new(principal(
+        "pr_cli",
+        PrincipalKind::Cli,
+        None,
+        &[Scope::Read],
+    ));
+    let expires_at = TimestampMs(peer.clock.now_wall_ms() + 1_000);
+    let scopes = vec![Scope::Write];
+    peer.opened
+        .granted
+        .set(Some(Elevation { scopes, expires_at }));
+    let interrupt = |command| json!({"command_id": command, "session_id": session(1)});
+    let id = peer.send(&routes, "session/interrupt", interrupt("c-1"));
+    fixture
+        .sessions
+        .take()
+        .into_iter()
+        .for_each(|d| d.answer(Ok(json!({}))));
+    assert_eq!(peer.reply(id).await, Ok(json!({})));
+    peer.clock.advance(Duration::from_secs(1));
+    let refused = peer
+        .call(&routes, "session/interrupt", interrupt("c-2"))
+        .await;
+    assert_eq!(code(&refused.unwrap_err()), ("forbidden", "scope"));
+}

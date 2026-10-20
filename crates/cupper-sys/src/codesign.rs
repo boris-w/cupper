@@ -6,8 +6,9 @@ use std::ffi::c_void;
 use std::path::Path;
 use std::{fmt, io, mem, ptr};
 
+use core_foundation::array::CFArray;
 use core_foundation::base::{CFType, CFTypeRef, OSStatus, TCFType};
-use core_foundation::data::CFData;
+use core_foundation::data::{CFData, CFDataRef};
 use core_foundation::dictionary::{CFDictionary, CFDictionaryRef};
 use core_foundation::string::{CFString, CFStringRef};
 use core_foundation::url::{CFURL, CFURLRef};
@@ -36,6 +37,12 @@ const ERRNO_BASE: OSStatus = 100_000;
 unsafe extern "C" {
     static kSecGuestAttributeAudit: CFStringRef;
     static kSecCodeInfoUnique: CFStringRef;
+    static kSecCodeInfoIdentifier: CFStringRef;
+    static kSecCodeInfoTeamIdentifier: CFStringRef;
+    static kSecCodeInfoCertificates: CFStringRef;
+
+    fn SecCodeCopySelf(flags: u32, code: *mut SecObjectRef) -> OSStatus;
+    fn SecCertificateCopyData(certificate: SecObjectRef) -> CFDataRef;
 
     fn SecCodeCopyGuestWithAttributes(
         host: SecObjectRef,
@@ -137,6 +144,18 @@ impl CodeStatus {
     }
 }
 
+/// Who signed a program, as its signature says (design 5.8.4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SigningIdentity {
+    pub identifier: String,
+    /// The Team ID of a developer's signature; none for ad-hoc and Apple's
+    /// own code.
+    pub team_id: Option<String>,
+    /// The DER of the signing certificate; none for ad-hoc code, which has
+    /// no certificate.
+    pub leaf_certificate: Option<Vec<u8>>,
+}
+
 /// A code directory hash: names one signed build of one program.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Cdhash(pub [u8; 20]);
@@ -202,6 +221,14 @@ impl AuditToken {
         let mut status: u32 = 0;
         self.csops(CS_OPS_STATUS, "csops(CS_OPS_STATUS)", &mut status)?;
         Ok(CodeStatus(status))
+    }
+
+    /// The signing identity of the code the process this token names runs;
+    /// `None` when it is unsigned.
+    pub fn signing_identity(&self) -> std::result::Result<Option<SigningIdentity>, Refusal> {
+        let code = self.guest_code()?;
+        identity_of(&code)
+            .map_err(|status| self.security_refusal("SecCodeCopySigningInformation", status))
     }
 
     /// The cdhash of the code the process this token names runs.
@@ -290,6 +317,62 @@ impl AuditToken {
     }
 }
 
+/// The signing identity of this process's own code (`SecCodeCopySelf`):
+/// what the host compares a requester's with (design 5.8.4).
+pub fn own_signing_identity() -> Result<Option<SigningIdentity>> {
+    let mut code: SecObjectRef = ptr::null();
+    // SAFETY: `code` is a valid out pointer.
+    let status = unsafe { SecCodeCopySelf(K_SEC_CS_DEFAULT_FLAGS, &mut code) };
+    security_result("SecCodeCopySelf", status)?;
+    // SAFETY: on success the code object is a new object we own.
+    let code = unsafe { CFType::wrap_under_create_rule(code) };
+    identity_of(&code).map_err(|status| Error::Security {
+        call: "SecCodeCopySigningInformation",
+        status,
+    })
+}
+
+/// The identifier, Team ID and leaf certificate in `code`'s signature.
+fn identity_of(code: &CFType) -> std::result::Result<Option<SigningIdentity>, OSStatus> {
+    let mut info: CFDictionaryRef = ptr::null();
+    // SAFETY: `code` is a live code object; `info` is a valid out pointer.
+    let status = unsafe {
+        SecCodeCopySigningInformation(code.as_CFTypeRef(), K_SEC_CS_SIGNING_INFORMATION, &mut info)
+    };
+    if status != 0 {
+        return Err(status);
+    }
+    // SAFETY: on success the dictionary is a new object we own, keyed by
+    // CFStrings.
+    let info: CFDictionary<CFString, CFType> =
+        unsafe { CFDictionary::wrap_under_create_rule(info) };
+    // SAFETY: constants of the Security framework, valid while the process
+    // runs.
+    let key = |key: CFStringRef| unsafe { CFString::wrap_under_get_rule(key) };
+    let text = |name| Some(info.find(key(name))?.downcast::<CFString>()?.to_string());
+    // SAFETY: as above.
+    let (identifier, team, certificates) = unsafe {
+        (
+            kSecCodeInfoIdentifier,
+            kSecCodeInfoTeamIdentifier,
+            kSecCodeInfoCertificates,
+        )
+    };
+    let chain = info
+        .find(key(certificates))
+        .and_then(|value| value.downcast::<CFArray>());
+    let leaf = chain.as_ref().and_then(|chain| chain.get(0)).map(|leaf| {
+        // SAFETY: the array holds SecCertificateRefs, the leaf first; the
+        // copy is a new CFData we own.
+        unsafe { CFData::wrap_under_create_rule(SecCertificateCopyData(*leaf)) }.to_vec()
+    });
+    Ok(text(identifier).map(|identifier| SigningIdentity {
+        identifier,
+        team_id: text(team),
+        leaf_certificate: leaf,
+    }))
+}
+
 /// The cdhash this process runs with. Compared with [`file_cdhash`] of its
 /// own executable, it tells whether an upgrade has replaced the code on disk
 /// (SP-4b; the host's self-check, design 5.2.13).
@@ -315,15 +398,7 @@ pub fn pid_cdhash(pid: i32) -> Result<Cdhash> {
 /// The cdhash of the signed code at `path`, a bundle or an executable, for
 /// the architecture this process runs.
 pub fn file_cdhash(path: &Path) -> Result<Cdhash> {
-    let url = CFURL::from_path(path, path.is_dir()).ok_or(Error::InvalidArgument("path"))?;
-    let mut code: SecObjectRef = ptr::null();
-    // SAFETY: `url` is a live CFURL; `code` is a valid out pointer.
-    let status = unsafe {
-        SecStaticCodeCreateWithPath(url.as_concrete_TypeRef(), K_SEC_CS_DEFAULT_FLAGS, &mut code)
-    };
-    security_result("SecStaticCodeCreateWithPath", status)?;
-    // SAFETY: on success the code object is a new object we own.
-    let code = unsafe { CFType::wrap_under_create_rule(code) };
+    let code = static_code(path)?;
     let mut info: CFDictionaryRef = ptr::null();
     // SAFETY: `code` is a live static code object; `info` is a valid out
     // pointer.
@@ -350,6 +425,19 @@ pub fn file_cdhash(path: &Path) -> Result<Cdhash> {
     let hash = <[u8; 20]>::try_from(unique.bytes())
         .map_err(|_| Error::Unexpected("kSecCodeInfoUnique"))?;
     Ok(Cdhash(hash))
+}
+
+/// The signed code at `path`, as it is on disk.
+fn static_code(path: &Path) -> Result<CFType> {
+    let url = CFURL::from_path(path, path.is_dir()).ok_or(Error::InvalidArgument("path"))?;
+    let mut code: SecObjectRef = ptr::null();
+    // SAFETY: `url` is a live CFURL; `code` is a valid out pointer.
+    let status = unsafe {
+        SecStaticCodeCreateWithPath(url.as_concrete_TypeRef(), K_SEC_CS_DEFAULT_FLAGS, &mut code)
+    };
+    security_result("SecStaticCodeCreateWithPath", status)?;
+    // SAFETY: on success the code object is a new object we own.
+    Ok(unsafe { CFType::wrap_under_create_rule(code) })
 }
 
 fn security_result(call: &'static str, status: OSStatus) -> Result<()> {
@@ -454,6 +542,31 @@ mod tests {
             .unwrap_err();
         assert_eq!(refusal.kind, RefusalKind::GetTaskAllow, "{refusal}");
         assert!(CodeStatus(refusal.code as u32).has(CodeStatus::GET_TASK_ALLOW));
+    }
+
+    #[test]
+    fn signing_identity_of_an_ad_hoc_signed_peer() {
+        let _fds = fd_lock();
+        let dir = TempDir::new();
+        let peer = running(&dir, "identity", HARDENED);
+        let identity = peer.token.signing_identity().unwrap().unwrap();
+        let fields = (
+            identity.identifier.as_str(),
+            &identity.team_id,
+            &identity.leaf_certificate,
+        );
+        assert_eq!(fields, (PROBE_ID, &None, &None));
+        // This test binary is ad-hoc signed too: no certificate.
+        let own = own_signing_identity().unwrap().unwrap();
+        assert_eq!(own.leaf_certificate, None);
+    }
+
+    #[test]
+    fn signing_identity_of_apple_code_has_its_leaf_certificate() {
+        let cat = identity_of(&static_code(Path::new("/bin/cat")).unwrap());
+        let identity = cat.unwrap().unwrap();
+        assert_eq!(identity.identifier, "com.apple.cat");
+        assert!(identity.leaf_certificate.is_some_and(|der| der.len() > 100));
     }
 
     #[test]

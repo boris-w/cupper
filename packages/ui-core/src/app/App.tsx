@@ -2,8 +2,10 @@ import type { ShellAPI, ShellInfo } from "@cupper/shell-api";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
+import { TooltipProvider } from "../components/Tooltip";
 import { LayoutStore } from "../layout/store";
 import { Shell } from "../shell/Shell";
+import { StateProvider, UiProvider } from "../state/provider";
 import { Page, SlotsContext, type Slots } from "./pages";
 import { HostProvider, I18nProvider, ShellProvider, ThemeProvider } from "./providers";
 import { RouterProvider, type Route } from "./router";
@@ -17,20 +19,26 @@ export interface AppProps {
 
 /** The root of design 5.7.5 on any ShellAPI: Electron's, or the browser mock. */
 export function App({ api, info, slots = {}, initialRoute }: AppProps) {
-  const [store] = useState(() => new LayoutStore(api.prefs, info.prefs));
+  const [store] = useState(() => new LayoutStore(api.prefs, info.prefs, initialRoute));
   useEffect(() => () => store.close(), [store]);
   return (
     <ShellProvider api={api} info={info}>
       <I18nProvider locale={info.locale}>
         <ThemeProvider>
           <HostProvider>
-            <RouterProvider initial={initialRoute}>
-              <SlotsContext value={slots}>
-                <Shell store={store}>
-                  <Page />
-                </Shell>
-              </SlotsContext>
-            </RouterProvider>
+            <UiProvider ui={store.ui}>
+              <StateProvider>
+                <RouterProvider>
+                  <SlotsContext value={slots}>
+                    <TooltipProvider>
+                      <Shell store={store}>
+                        <Page />
+                      </Shell>
+                    </TooltipProvider>
+                  </SlotsContext>
+                </RouterProvider>
+              </StateProvider>
+            </UiProvider>
           </HostProvider>
         </ThemeProvider>
       </I18nProvider>

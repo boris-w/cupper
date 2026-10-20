@@ -45,7 +45,6 @@ use crate::driver::runtime::agents::{Agents, Find};
 use crate::driver::runtime::launch::{self, Launch};
 use crate::driver::runtime::{AGENT_RUNTIME, AgentRuntime, RuntimeDeps};
 use crate::durations::Durations;
-use crate::elevation::FailClosed;
 use crate::exit::HostExit;
 use crate::gateway::listen::{HostLock, ListenError};
 use crate::gateway::{Gateway, GatewayConfig, Routes};
@@ -54,6 +53,7 @@ use crate::index::{INDEX, IndexDeps, IndexError, IndexHandle};
 use crate::ledger::{Ledger, LedgerError, SWEEPER};
 use crate::orchestrator::session::{SessionDeps, SessionManager};
 use crate::quiescence::Quiescence;
+use crate::requester::ProcessRequesters;
 use crate::startup::payload::Payload;
 use crate::startup::{DataDirError, prepare_data_dir};
 use crate::store::epoch::{self, BootSessionError};
@@ -223,8 +223,11 @@ impl Host {
                 power_assertion: false,
                 last_exit_abnormal: run.abnormal,
             },
-            // Lineage and the requester's details are T133's.
-            requesters: Arc::new(FailClosed),
+            requesters: Arc::new(ProcessRequesters::new(
+                readers.clone(),
+                &std::env::current_exe().unwrap_or_default(),
+                cupper_sys::own_signing_identity().ok().flatten(),
+            )),
             audit: records.clone(),
         })
         .await?;

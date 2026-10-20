@@ -31,6 +31,7 @@ fn ask(n: u8, scopes: &[Scope]) -> Input {
         parent_chain: Vec::new(),
         has_tty: true,
         origin_unverifiable: false,
+        bundled_cli: false,
     };
     let said = SelfReported {
         client_name: "cupper".into(),

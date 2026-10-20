@@ -201,6 +201,27 @@ pub fn process_info(pid: i32) -> Option<ProcessInfo> {
     })
 }
 
+/// `pbi_flags`: the process has a controlling terminal (`<sys/proc_info.h>`).
+const PROC_FLAG_CONTROLT: u32 = 0x2;
+
+/// Whether `pid` has a controlling terminal (design 5.8.4); `None` when it
+/// cannot be read: gone, a zombie, or another user's (the full BSD record
+/// needs the same user).
+pub fn has_tty(pid: i32) -> Option<bool> {
+    if pid <= 0 {
+        return None;
+    }
+    // SAFETY: proc_bsdinfo holds only integers and C char arrays, for which
+    // all-zero bytes are a valid value.
+    let mut info: libc::proc_bsdinfo = unsafe { mem::zeroed() };
+    let size = mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
+    // SAFETY: the buffer is one proc_bsdinfo of `size` bytes and the kernel
+    // writes at most `size` bytes into it.
+    let written =
+        unsafe { libc::proc_pidinfo(pid, libc::PROC_PIDTBSDINFO, 0, (&raw mut info).cast(), size) };
+    (written == size).then_some(info.pbi_flags & PROC_FLAG_CONTROLT != 0)
+}
+
 /// The resident memory of `pid` in bytes (`PROC_PIDTASKINFO`); `None` when
 /// it does not exist, has exited, or cannot be read.
 pub fn resident_size(pid: i32) -> Option<u64> {
@@ -358,6 +379,16 @@ mod tests {
         assert!(!me.name.is_empty());
         let again = process_info(me.pid).unwrap();
         assert_eq!(again.start, me.start);
+    }
+
+    #[test]
+    fn has_tty_of_a_child_in_a_session_of_its_own_is_false() {
+        let mut command = Command::new("/bin/sleep");
+        command.arg("5").new_session();
+        let child = Owned::spawn(&command);
+        assert_eq!(has_tty(child.pid()), Some(false));
+        assert!(has_tty(std::process::id() as i32).is_some());
+        assert_eq!(has_tty(i32::MAX), None);
     }
 
     #[test]

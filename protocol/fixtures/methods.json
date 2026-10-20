@@ -498,6 +498,7 @@
       "scopes": ["write", "approve"],
       "self_reported": { "client_name": "cupper-cli", "reason": "apply the review" },
       "verified": {
+        "bundled_cli": false,
         "executable": "/usr/local/bin/cupper",
         "has_tty": true,
         "origin_unverifiable": false,

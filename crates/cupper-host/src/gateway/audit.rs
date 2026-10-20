@@ -123,6 +123,11 @@ impl Auditor {
         }
     }
 
+    /// The connection's clock.
+    pub fn clock(&self) -> Arc<dyn Clock> {
+        Arc::clone(&self.clock)
+    }
+
     pub fn record(&self, event: AuditEvent) {
         let at_ms = self.clock.now_wall_ms();
         let conn = Some(self.conn.clone());

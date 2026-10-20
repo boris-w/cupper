@@ -3462,6 +3462,12 @@ export type UserMessage = {
  * What the host checked about the requesting process.
  */
 export type VerifiedRequester = {
+  /**
+   * The command-line tool this app comes with: at `Contents/Helpers/cupper`
+   * beside the host, running code with the CLI's identifier and the
+   * host's own signing certificate.
+   */
+  bundled_cli: boolean;
   executable: WirePath;
   has_tty: boolean;
   /**

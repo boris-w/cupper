@@ -22,7 +22,7 @@ import {
   type BlobChunk,
 } from "./frame";
 import { Listeners } from "./listeners";
-import { StreamSync, type StreamSink, type SyncCounters } from "./sync";
+import { StreamSync, type StreamSink, type SyncCounters, type Validation } from "./sync";
 
 export type ClientState = ConnectionState | { status: "closed" };
 
@@ -45,6 +45,8 @@ export interface HostClientOptions {
   commandId?: () => string;
   /** Protocol oddities: broken frames, messages that are not JSON-RPC, responses nobody waits for. */
   log?: (message: string) => void;
+  /** `all` by default; production builds take `non_delta` (design 5.7.6). */
+  validation?: Validation;
 }
 
 interface Call {
@@ -86,8 +88,11 @@ export class HostClient {
   readonly #log: (message: string) => void;
   readonly #streams = new Map<string, StreamSync>();
   readonly #counters: SyncCounters = { gaps: 0, duplicates: 0, resets: 0 };
+  /** What its streams check with zod; the views the streams feed follow it. */
+  readonly validation: Validation;
 
   constructor(options: HostClientOptions = {}) {
+    this.validation = options.validation ?? "all";
     this.#commandId = options.commandId ?? (() => uuidv7());
     this.#log = options.log ?? ((message) => console.warn(`host-client: ${message}`));
     // Registered first: streams see each notification and state before other listeners do.
@@ -116,7 +121,7 @@ export class HostClient {
     if (this.#streams.has(stream)) {
       throw new Error(`${stream} is subscribed already`);
     }
-    const sync = new StreamSync(stream, sink, this.#counters, this.#log);
+    const sync = new StreamSync(stream, sink, this.#counters, this.#log, this.validation);
     this.#streams.set(stream, sync);
     if (this.#state.status === "ready") {
       this.#subscribe(sync, sync.subscribe());
@@ -209,6 +214,13 @@ export class HostClient {
    */
   call(method: string, params: unknown, done: (outcome: Outcome) => void): void {
     this.#start({ method, params, done, command: false });
+  }
+
+  /** Sends a client notification, such as `client/presence`; without a connection it is dropped. */
+  notify(method: string, params: unknown = {}): void {
+    if (this.#port && this.#state.status === "ready") {
+      this.#port.send(JSON.stringify({ jsonrpc: "2.0", method, params }));
+    }
   }
 
   request<R = unknown>(method: string, params: unknown = {}): Promise<R> {
