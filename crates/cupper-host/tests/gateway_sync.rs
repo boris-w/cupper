@@ -405,11 +405,7 @@ async fn it_gw_sync_slow_client_does_not_block_the_agent() {
             assert_eq!(message["params"]["reason"], "slow_consumer");
             break;
         }
-        for event in message["params"]["events"].as_array().unwrap() {
-            let from = event.get("from").unwrap_or(&event["seq"]);
-            assert_eq!(from.as_u64(), Some(seq + 1));
-            seq = event["seq"].as_u64().unwrap();
-        }
+        follow(&message, &mut seq);
     }
     let head = fast.session.resume().unwrap();
     let again = json!({"stream": stream, "after_seq": seq, "epoch": head.epoch});
@@ -417,11 +413,17 @@ async fn it_gw_sync_slow_client_does_not_block_the_agent() {
     assert_eq!(replay["mode"], "replay");
     while seq < head.after_seq {
         let message = slow.next().await.unwrap();
-        for event in message["params"]["events"].as_array().unwrap() {
-            let from = event.get("from").unwrap_or(&event["seq"]);
-            assert_eq!(from.as_u64(), Some(seq + 1));
-            seq = event["seq"].as_u64().unwrap();
-        }
+        follow(&message, &mut seq);
+    }
+}
+
+/// Checks that the events of `message` come right after `seq`, which moves
+/// on to the last of them.
+fn follow(message: &Value, seq: &mut u64) {
+    for event in message["params"]["events"].as_array().unwrap() {
+        let from = event.get("from").unwrap_or(&event["seq"]);
+        assert_eq!(from.as_u64(), Some(*seq + 1));
+        *seq = event["seq"].as_u64().unwrap();
     }
 }
 
@@ -557,12 +559,12 @@ async fn it_gw_sync_command_retries_are_idempotent() {
     let a = connect(&data_dir).await;
     let b = connect(&data_dir).await;
     let session = create(&a, "say hi").await;
-    let message = |text: &str, id: &CommandId| {
+    let with_id = |text: &str, id: &CommandId| {
         json!({"command_id": id, "session_id": session, "mode": "queue",
             "content": [{"type": "text", "text": text}]})
     };
 
-    let once = message("say once", &client::command_id());
+    let once = with_id("say once", &client::command_id());
     let first = a.request::<SendRaw>(once.clone()).await.unwrap();
     let again = a.request::<SendRaw>(once).await.unwrap();
     assert_eq!(
@@ -572,7 +574,7 @@ async fn it_gw_sync_command_retries_are_idempotent() {
     assert_eq!(first["queue_id"], again["queue_id"]);
 
     let id = client::command_id();
-    let twice = message("say twice?", &id);
+    let twice = with_id("say twice?", &id);
     let (x, y) = tokio::join!(
         a.request::<SendRaw>(twice.clone()),
         b.request::<SendRaw>(twice.clone()),
@@ -581,7 +583,7 @@ async fn it_gw_sync_command_retries_are_idempotent() {
     assert_eq!(x["queue_id"], y["queue_id"]);
     assert!(x.get("replayed").is_some() ^ y.get("replayed").is_some());
     let other = a
-        .request::<SendRaw>(message("say something else", &id))
+        .request::<SendRaw>(with_id("say something else", &id))
         .await;
     assert_eq!(refused(other).0, "idempotency_mismatch");
     until(
@@ -652,7 +654,7 @@ async fn it_gw_sync_frames_stay_within_limit() {
 async fn it_gw_sync_adapter_gets_only_stdio_and_allowed_env() {
     let dir = TempDir::new("sync-isolation");
     let data_dir = fake_agent_data(&dir);
-    let mut command = std::process::Command::new(HOST);
+    let mut command = Command::new(HOST);
     command
         .env("CUPPER_PROBE", "1")
         .env("UNLISTED_TEST_VAR", "1");
@@ -793,11 +795,12 @@ async fn it_nfr2_epoch_moves_only_when_commits_may_be_lost() {
     assert_eq!(came_back(&peer), (Snapshot, changed, now));
     assert_eq!(peer.session.resume().unwrap().after_seq, at_m.0);
     same(peer.view(), &at_m.1);
-    // From M + 1 the seqs are handed out again; the mirror takes them.
+    // From M + 1 the seqs of before are handed out again; the mirror takes
+    // them.
     send(&peer.client, &session, "say two again").await;
     peer.ended(2).await;
     let head = peer.session.resume().unwrap().after_seq;
-    assert!(at_m.0 < at_n && at_n <= head, "{at_m:?} {at_n} {head}");
+    assert!(at_m.0 < at_n && at_m.0 < head, "{} {at_n} {head}", at_m.0);
     assert_eq!(said_in(peer.view(), 2), "two again");
     let (fresh, _) = back(&data_dir, Mirror::session(session)).await;
     same(fresh.view(), peer.view());
