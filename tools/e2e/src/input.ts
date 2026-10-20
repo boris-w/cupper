@@ -11,7 +11,8 @@ export type Modifier = "shift" | "control" | "alt" | "meta";
 
 /**
  * Gives the window the focus, then waits out the second in which the guard
- * counts no key after a window gains focus (its rule 7).
+ * counts no key after a window gains focus (its rule 7). A test that counts
+ * on the focus, through keys or clicks as real input, is tagged `@focus`.
  */
 export async function focusWindow(cupper: Cupper): Promise<void> {
   const window = await cupper.app.browserWindow(cupper.window);

@@ -4,7 +4,9 @@
 //! the current commit every time, and the summary records their digests. In
 //! `ci pr` it runs the `@smoke` tests, and only when the commits since `main`
 //! touch a path the app is built from (`E2E_PATHS`) or there is nothing to
-//! compare; `ci e2e` and `ci nightly` run every test.
+//! compare; `ci e2e` and `ci nightly` run every test, those tagged `@focus`
+//! last and one at a time: they need the window's focus, which another
+//! test's app takes when it starts.
 
 use std::fs;
 use std::path::Path;
@@ -82,12 +84,18 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         });
     }
 
-    let mut test = ctx.command("pnpm");
-    test.args(["--dir", SUITE, "exec", "playwright", "test"]);
+    let mut suite = |step: &str, args: &[&str]| {
+        let mut test = ctx.command("pnpm");
+        test.args(["--dir", SUITE, "exec", "playwright", "test"])
+            .args(args);
+        ctx.playwright(step, &mut test)
+    };
     if smoke {
-        test.args(["--grep", "@smoke"]);
+        return suite("test-e2e", &["--grep", "@smoke"]);
     }
-    ctx.playwright("test-e2e", &mut test)
+    let rest = suite("test-e2e", &["--grep-invert", "@focus"]);
+    let focus = suite("test-e2e-focus", &["--grep", "@focus", "--workers", "1"]);
+    rest.and(focus)
 }
 
 fn touches_e2e(path: &str) -> bool {
