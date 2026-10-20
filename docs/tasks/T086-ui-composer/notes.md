@@ -50,3 +50,10 @@ M1a 没有产生附件的入口（图片、`@`、审查评论都在 M1b），截
 - **测试**：UNIT-composer-ime（判定函数，和组件里输入法选词的 Enter 不发送、之后的 Enter 发送）、UNIT-composer-esc（处理顺序，运行中两次 Esc 发 `session/interrupt`，别的键和失焦解除，空闲时 Esc 无动作，焦点在外面时 Esc 移回输入框）、附件条（显示、删除、随消息发出）。组件测试用 MockHost 连一个真的 `HostClient`，经导出的 `HostContext` 放进组件树，用真的 `StateProvider` 订阅索引。
 - **截图**：UI-composer（暂停的队列加待发送的草稿，两种主题；运行中的停止态）。其余基线（UI-shell、UI-sidebar、UI-banners、UI-session-banners）因为每页都多了输入框，只在主区有变化，重新生成后看过。UI-csp-zero 为 0。
 - 没做：队列暂停时再发新消息的"发送消息？"确认框（设计里 M1 有，任务书没列）；附件条的截图（见上文"附件条的截图"，等裁定）。
+
+## 裁定后补做：队列暂停时再发送
+
+- 裁定：附件条只在 Vitest 里覆盖，截图留给 M1b 第一个能产生附件的任务；"发送消息？"确认在本任务做，用界面里的确认，不走原生确认框。
+- 做法：队列暂停时按发送，输入框上方先出一个警告框（T128 的 `Alert`）："发送"发出消息、成功后 `session/queue_resume`；"取消"或 Esc 收起并保留草稿。Esc 的处理顺序里它算作浮层。输入框经 `ComposerArea` 得到队列是否暂停（`ComposerArea` 读会话视图，排队消息改为按 props 画）。
+- 用例：先取消（不发送、草稿还在），再发送（一条 `session/send`，随后一条 `session/queue_resume`）。
+- 规模：这一项约 76 行，现在合计 **791 行**。长文本估约 110 行，合计推算约 900，贴线，按裁定停下。
