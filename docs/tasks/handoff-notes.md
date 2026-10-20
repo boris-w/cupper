@@ -367,6 +367,9 @@
 | T169、T175 | 会话的载入（T089）：`orchestrator/session/load.rs` 读 `sessions`、`queue_entries`、最后一个回合、已结束的 `interactions` 和会话视图，组成 `Parts` 与首个输入 `Input::Restored`；管理器先把邮箱放进表再起载入任务，同一会话只起一个 actor，`forget` 只在邮箱匹配时才从表里撤出（空闲退出用它）。测试里模拟重启用 `Fixture::restart`，启动清理是 `supervisor::recover::end_previous_run`。视图里缺配置时载入现在回内部错误，由 T169 改为重建 | T089 |
 | T091、T069 | 宿主重启后（T089）：旧会话在第一次调用时按需载入；待处理请求补写 `interaction.resolved{expired, host_restarted}`，运行中回合补写 `turn.completed{interrupted}`；队列里有消息的一律以 `turn_interrupted` 暂停，要用户操作（例如 `queue/resume` 或新的 `send`）才继续。设定者按 `mode_set_by` 找回，来源不明或 CLI 设定的档位重启后可能进入 `config_unconfirmed`，要 `session/confirm_config` | T089 |
 | 动 `policy/describe` 的任务 | `SessionPort::facts`（只供 `policy/describe` 用）仍要求会话已在内存里；会话未载入时描述里不带所选选项的信息（T089 没有改，重启后待处理请求都已过期，影响小） | T089 |
+| T062、T063、T069（宿主的进程级用例） | 共用夹具在 `crates/cupper-host/tests/common/mod.rs`（T068 从 `lifecycle.rs` 挪出）：拉起宿主、harness 客户端、假 agent、等表、退出码、`session/create`、`session/send`、时钟推进。宿主守卫 `Running` 改为先 SIGTERM 再等退出，宿主能停下适配器，不再留下适配器和孙进程；新的测试目标要在 `Cargo.toml` 里要求 `test-harness` 特性 | T068 |
+| T069 | 第一个回合可能停在准备阶段：`turn.started` 已写出、附加与发送前的重扫还没做完时项目配置变了，回合等闸门重新打开。T068 没有覆盖，补一条"信任恢复后这个回合能正常发出" | T068 |
+| 显示信任原因的界面任务（M1b） | 闸门已因 `project_config_changed` 关着时，再次重扫失败（例如悬空链接）不追加提示，原因只在审计的 `project.trust.scan_failed` 里。界面要显示最新原因时要改宿主的提示规则 | T068 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
