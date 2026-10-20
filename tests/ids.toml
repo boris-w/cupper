@@ -402,8 +402,18 @@ IT-q8-fallback-claude = { suite = "pr", status = "na", reason = "K1 已通过（
 # Git 服务 I：GitCmd 三档与仓库档防护
 [T060]
 milestone = "M1a"
-IT-git-repo-tier-malicious = "pr"
+UNIT-git-cmd = "pr"
+
+# Git 服务 I-b：仓库档的规则与指纹（计划 v1.3.16 由 T060 拆出）
+[T097]
+milestone = "M1a"
+UNIT-git-repo-rules = "pr"
 UNIT-git-fingerprint = "pr"
+
+# Git 服务 I-c：仓库档的执行（计划 v1.3.16 由 T060 拆出）
+[T098]
+milestone = "M1a"
+IT-git-repo-tier-malicious = "pr"
 
 # Git 服务 II：快照档与回合快照
 [T061]

@@ -402,8 +402,8 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 1. **每次**调用前执行 `git config --list --show-origin --includes -z`，得到有效配置和每个键的来源文件。
 2. 任何一个配置来源位于工作区内，或位于其他 agent 可写的位置（任一会话的工作区、任一项目目录）时，不执行这次调用，返回 `git_error`（`reason: unsafe_repo_config`），并在会话流里写 `notice{code: unsafe_repo_config}`。**仓库自己的 git 目录除外**：本地模式下 `.git/config`、worktree 的 `config.worktree` 本来就在项目目录里，这部分由第 3、4 条的覆盖和第 6 条的指纹兜底（两个 agent 的沙箱也都保护 `.git`）；例外只限这几个文件，`include.path` 指向 git 目录之外的工作区文件时，仍按本条拒绝。`core.hooksPath` 指向工作区的情况也不受此限，因为它总被无条件覆盖。
 3. 无条件覆盖：`-c core.fsmonitor=false -c core.hooksPath=<数据目录>/git/empty-hooks`；加 `--no-pager`（并设 `GIT_PAGER=cat`）；生成补丁的命令一律加 `--no-ext-diff --no-textconv`。
-4. 可执行类键：`filter.*.clean`、`filter.*.smudge`、`filter.*.process`、`diff.*.command`、`diff.*.textconv`、`merge.*.driver`、`core.sshCommand`、`core.pager`、`core.editor`、`core.askPass`、`core.gitProxy`、`sequence.editor`、`gpg.program`、`gpg.*.program`、`credential.helper`、`credential.*.helper`、`uploadpack.packObjectsHook`、`remote.*.receivepack`、`remote.*.uploadpack`。取值不在白名单里的（白名单只有 git-lfs 的标准取值），一律用 `-c <键>=` 置空。实验确认：置空的过滤器按原样处理内容、不执行程序。
-5. 覆盖后 git 报错（例如过滤器设了 `required=true`，置空后 git 会直接报错退出）：这次调用失败，返回 `git_error`（`reason: unsafe_repo_config`），**不去掉覆盖重试**。
+4. 可执行类键：`filter.*.clean`、`filter.*.smudge`、`filter.*.process`、`diff.*.command`、`diff.*.textconv`、`merge.*.driver`、`core.sshCommand`、`core.pager`、`core.editor`、`core.askPass`、`core.gitProxy`、`sequence.editor`、`gpg.program`、`gpg.*.program`、`credential.helper`、`credential.*.helper`、`uploadpack.packObjectsHook`、`remote.*.receivepack`、`remote.*.uploadpack`，以及 T060 补充的 `diff.external`、`core.alternateRefsCommand`、`gpg.ssh.defaultKeyCommand`、`submodule.*.update`、`pager.*`。取值不在白名单里的（白名单只有 git-lfs 的标准取值），一律用 `-c <键>=` 置空。实验确认：置空的过滤器按原样处理内容、不执行程序。`alias.*` 不在清单里：git 不让别名覆盖内置命令，宿主只用内置命令。**子段里带 `=` 的可执行类键置空不掉**（git 在第一个 `=` 处切分 `-c` 的参数，`-c 'filter.a=b.clean='` 实际给 `filter.a` 赋了值；T060 用 git 2.50 实测），出现这种键时直接拒绝，返回 `unsafe_repo_config`。
+5. 覆盖后 git 报错：这次调用失败，**不去掉覆盖重试**。被置空的过滤器设了 `required=true`（置空后 git 会直接报错退出）时返回 `git_error`（`reason: unsafe_repo_config`）；其余失败按普通的 git 失败返回，因为几乎每次调用都会置空一些键（例如 Apple 的 git 自带的系统配置 `credential.helper=osxkeychain`），不能一概归因于覆盖。
 6. 调用结束后再算一次指纹（下文）。指纹变了：只读命令丢弃结果、返回 `git_error`（`reason: repo_config_changed`）；写操作已经发生，结果照常返回；两种情况都写 `notice{code: repo_config_changed}`。
 
 实验还发现，`write-tree` 这类看似不碰工作区的命令也会因为 racy 检测去读文件、运行 clean 过滤器，也会触发 fsmonitor 和 `post-index-change` hook。所以仓库档的防护对**每一次**调用都适用，包括辅助命令。
@@ -444,7 +444,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 - `GitCmd` 构造器：每类命令一组固定参数，统一 `-z`；只读命令加 `--no-optional-locks`；固定加 `-c core.quotepath=false`。
 - **程序的路径**（安全核对 2）：宿主启动时（以及 `agents/refresh` 时）把 `git` 和 `git-lfs` 解析成绝对路径，之后只用这两个绝对路径，不在每次调用时按 PATH 查找。解析时只看登录 shell 的 PATH 里的**可信条目**：是绝对路径，并且不在任何项目、工作区、worktree 根目录下，也不在临时目录（`$TMPDIR`、`/tmp`、`/private/var/folders`）下。解析结果和来源目录写进索引流的 `agents` 状态。
-- **环境**：git 子进程的 PATH 只保留上述可信条目（git 自己再拉起的 `ssh`、`gpg` 等也只能从这些目录里找到）；`LC_ALL=C`，便于解析报错；`GIT_TERMINAL_PROMPT=0`；继承 `SSH_AUTH_SOCK`。
+- **环境**：git 子进程的 PATH 只保留上述可信条目（git 自己再拉起的 `ssh`、`gpg` 等也只能从这些目录里找到）；`LC_ALL=C`，便于解析报错；`GIT_TERMINAL_PROMPT=0`；继承 `SSH_AUTH_SOCK`。仓库档和用户档还带 `HOME`，让 git 读到用户的全局配置（`core.autocrlf`、`user.name` 等）：全局配置和其他来源一样过第 2 条的来源检查和第 4 条的置空，所以读它是安全的（T060 发现）。快照档用自己的白名单配置，是否带 `HOME` 由 T061 定。
 - **工作目录**：git 子进程的工作目录设为 cupper 自己的目录（`<数据目录>/git/`），目标仓库经 `-C <路径>`（仓库档、用户档）或 `GIT_DIR`、`GIT_WORK_TREE`（快照档）指定。
 - 所有 git 子进程都经 `cupper-sys::spawn` 拉起（[5.8.5](08-security.md#585-进程卫生)）。
 - 超时：只读命令 30 s；快照 60 s；`worktree add` 10 分钟（输出进度事件）；`push` 5 分钟。
