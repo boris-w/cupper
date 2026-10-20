@@ -8,7 +8,7 @@ mod facts;
 pub mod git;
 mod ids;
 mod jobs;
-mod lock;
+pub mod lock;
 mod summary;
 
 use std::ffi::OsString;
@@ -182,6 +182,7 @@ fn run_job(job: &Job, target: &str, root: &Path, log_dir: &Path) -> JobReport {
     let watch = Stopwatch::start();
     let mut ctx = JobCtx::new(root, log_dir, job.name);
     ctx.target = target;
+    ctx.machine_lock = job.machine_lock;
     let result = machine_lock(job).and_then(|_lock| run(&mut ctx));
     if let Err(err) = &result {
         eprintln!("  {err:#}");
