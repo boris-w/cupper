@@ -46,6 +46,7 @@ const SUMMARY: Shape = Shape::Object(&[
             ("passed", Shape::Scalar),
             ("failed", Shape::Scalar),
             ("duration_ms", Shape::Scalar),
+            ("skipped", Shape::List(&Shape::Scalar)),
         ])),
     ),
     (
@@ -94,6 +95,7 @@ pub fn build(run: &Run) -> Value {
                 "passed": report.passed,
                 "failed": report.failed,
                 "duration_ms": report.duration_ms,
+                "skipped": report.skipped,
             })
         })
         .collect();
@@ -253,6 +255,7 @@ mod tests {
                     case("ci::tests::unit_ci_lock_b", false),
                     case("ci::tests::helper", true),
                 ],
+                skipped: vec!["sensitive-words".to_owned()],
             },
             JobReport {
                 name: "e2e",
@@ -261,6 +264,7 @@ mod tests {
                 failed: 0,
                 duration_ms: 0,
                 cases: Vec::new(),
+                skipped: Vec::new(),
             },
         ];
         build(&Run {
@@ -287,6 +291,7 @@ mod tests {
             ])
         );
         assert_eq!(summary["jobs"][1]["result"], "not_implemented");
+        assert_eq!(summary["jobs"][0]["skipped"], json!(["sensitive-words"]));
 
         for (object, extra) in [
             ("", "hostname"),

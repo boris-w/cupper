@@ -24,6 +24,8 @@ pub struct JobCtx<'a> {
     pub passed: u64,
     pub failed: u64,
     pub cases: Vec<TestCase>,
+    /// Steps that did not run; the summary lists them.
+    pub skipped: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +43,7 @@ impl<'a> JobCtx<'a> {
             passed: 0,
             failed: 0,
             cases: Vec::new(),
+            skipped: Vec::new(),
         }
     }
 
@@ -69,6 +72,12 @@ impl<'a> JobCtx<'a> {
             self.failed += 1;
             bail!("`{step}` failed (log: {})", self.shown(&log))
         }
+    }
+
+    /// Records a step that does not run, and says why on the terminal.
+    pub fn skip(&mut self, step: &str, reason: &str) {
+        eprintln!("  {step:<12} skipped: {reason}");
+        self.skipped.push(step.to_owned());
     }
 
     /// Runs a libtest-based step (`cargo test`) and records every test case.

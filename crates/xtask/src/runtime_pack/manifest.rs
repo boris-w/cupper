@@ -24,6 +24,7 @@ pub struct Manifest {
     pub codex_acp: NpmPackage,
     pub esbuild_wasm: NpmPackage,
     pub claude_agent_acp: ClaudeAgentAcp,
+    pub cli: Cli,
     pub env: Env,
     pub files: BTreeMap<String, FileHash>,
 }
@@ -55,6 +56,32 @@ pub struct ClaudeAgentAcp {
     pub lockfile: String,
     pub entry: String,
     pub bundle_sha256: String,
+}
+
+/// The CLI versions the pinned adapters were verified with (design 5.6.6).
+/// Maintained by hand until compat reports write it (T064, T066).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Cli {
+    pub claude: CliRange,
+    pub codex: CliRange,
+}
+
+/// Semantic versions: `verified` is inclusive; below `unsupported_below`
+/// the CLI is known to fail.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CliRange {
+    pub verified: VersionSpan,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unsupported_below: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VersionSpan {
+    pub min: String,
+    pub max: String,
 }
 
 /// Classes are names or prefixes ending in `*`: `allow`, the fixed allowlist

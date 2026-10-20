@@ -8,7 +8,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use cupper_protocol::error::RpcError;
-use cupper_protocol::ids::{ConnId, PrincipalId};
+use cupper_protocol::ids::{ConnId, PrincipalId, RequestId, SessionId};
+use cupper_protocol::interaction::InteractionOutcome;
 use cupper_protocol::methods::handshake::{ClientIdentity, Principal};
 use cupper_protocol::sync::{ResyncReason, StreamId, SubscribeMode};
 use cupper_sys::{Refusal, RefusalKind};
@@ -60,6 +61,14 @@ pub enum AuditEvent {
         /// How far the cursor was behind the head, when it came with the
         /// host's epoch and was not ahead.
         lag: Option<u64>,
+    },
+    /// `interaction.responded`: an answer the CLI or the test harness gave
+    /// (design 5.8.6); the session actor records it.
+    InteractionResponded {
+        session_id: SessionId,
+        request_id: RequestId,
+        outcome: InteractionOutcome,
+        principal: PrincipalId,
     },
 }
 

@@ -325,7 +325,7 @@ fn prop_interaction_case_rejections_are_semantic_codes() {
         (Rejection::DigestMismatch, "-32000 conflict digest_mismatch"),
         (Rejection::NotActionable, "-32000 forbidden role"),
         (Denial::TooEarly.into(), "-32000 conflict too_early"),
-        (Rejection::Unknown, "-32602 null null"),
+        (Rejection::Unknown, "-32000 not_found null"),
         (AnswerError::Outcome.into(), "-32602 null null"),
     ] {
         assert_eq!(wire(rejection.clone()), expected, "{rejection:?}");
