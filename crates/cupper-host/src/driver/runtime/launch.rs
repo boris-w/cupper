@@ -33,6 +33,7 @@ use crate::durations::Durations;
 use crate::manifest;
 use crate::runtime::{self, Installed};
 use crate::store::{Durability, RawSink, Receipt, Writer};
+use crate::supervisor::watch::SelfCheck;
 
 /// What the adapter runs.
 #[derive(Debug, Clone)]
@@ -219,6 +220,8 @@ pub struct Context {
     pub writer: Writer,
     pub raw: RawSink,
     pub log: Option<Arc<AdapterLog>>,
+    /// Runs before each adapter starts (design 5.2.13).
+    pub self_check: Option<SelfCheck>,
 }
 
 /// A running adapter instance.
@@ -274,6 +277,9 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
         }
     };
     command.env(launch.env.clone()).new_session();
+    if let Some(check) = &cx.self_check {
+        check.check();
+    }
     for stdio in [Command::stdin, Command::stdout, Command::stderr] {
         stdio(&mut command, Stdio::Pipe);
     }

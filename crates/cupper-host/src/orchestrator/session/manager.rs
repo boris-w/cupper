@@ -19,7 +19,7 @@ use cupper_protocol::index::{
 use cupper_protocol::interaction::{InteractionOutcome, InteractionRequest};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::methods::session::{
-    SessionCreate, SessionCreateParams, SessionCreateResult, WorkspaceSpec,
+    SessionCreate, SessionCreateParams, SessionCreateResult, SessionSend, WorkspaceSpec,
 };
 use cupper_protocol::rpc::Method;
 use cupper_protocol::session::{
@@ -48,6 +48,7 @@ use crate::policy::{self, Confirmable, Facts};
 use crate::quiescence::{ActorKind, Quiescence};
 use crate::store::streams::{Batch, StreamView, Streams};
 use crate::store::{Durability, Readers, Writer};
+use crate::supervisor::watch::Admission;
 use crate::supervisor::{Activity, Part};
 
 /// The session actors in the quiescence barrier.
@@ -70,6 +71,8 @@ pub struct SessionDeps {
     pub index: Arc<dyn IndexNotes>,
     /// Finds the git root of a project's trust range (`Discovery::git`).
     pub git: Option<GitTool>,
+    /// Whether new sessions and turns are accepted (design 5.2.13).
+    pub admission: Arc<Admission>,
 }
 
 /// The session manager. Clones share it; the host has one.
@@ -91,6 +94,7 @@ struct Handle {
     stop: mpsc::UnboundedSender<Stop>,
     running: Arc<AtomicBool>,
     pending: Arc<AtomicU32>,
+    queued: Arc<AtomicU32>,
 }
 
 impl SessionManager {
@@ -241,7 +245,7 @@ impl SessionManager {
         let (mail, inbox) = mpsc::unbounded_channel();
         let (stop, stops) = mpsc::unbounded_channel();
         let running = Arc::new(AtomicBool::new(false));
-        let pending = Arc::new(AtomicU32::new(0));
+        let (pending, queued) = (Arc::new(AtomicU32::new(0)), Arc::new(AtomicU32::new(0)));
         let parts = Parts {
             id: id.clone(),
             core,
@@ -258,6 +262,7 @@ impl SessionManager {
             cached,
             running: Arc::clone(&running),
             pending: Arc::clone(&pending),
+            queued: Arc::clone(&queued),
             audit: deps.audit.clone(),
             index: Arc::clone(&deps.index),
             project: params.project_id.clone(),
@@ -277,6 +282,7 @@ impl SessionManager {
             stop,
             running,
             pending,
+            queued,
         };
         self.sessions().insert(id, handle);
         if let Some(completion) = completion {
@@ -411,14 +417,17 @@ fn refuse(call: Call, err: RpcError) -> Reply {
 
 impl Part for SessionManager {
     fn activity(&self) -> Activity {
-        let pending = self
-            .sessions()
-            .values()
-            .map(|h| h.pending.load(Ordering::Relaxed))
-            .sum();
+        let sum = |count: fn(&Handle) -> &AtomicU32| {
+            let sessions = self.sessions();
+            sessions
+                .values()
+                .map(|h| count(h).load(Ordering::Relaxed))
+                .sum()
+        };
         Activity {
             running_turns: self.running_turns(),
-            pending_interactions: pending,
+            pending_interactions: sum(|h| &h.pending),
+            queued_messages: sum(|h| &h.queued),
         }
     }
 
@@ -440,6 +449,13 @@ impl Port for SessionManager {
     /// in the reply's task. A session without an actor is `not_found` until
     /// T089 loads sessions from the store.
     fn deliver(&self, call: Call) -> Reply {
+        let new_turn = [SessionCreate::NAME, SessionSend::NAME].contains(&call.method);
+        if let Some(err) = new_turn
+            .then(|| self.shared.deps.admission.refusal())
+            .flatten()
+        {
+            return refuse(call, err);
+        }
         if call.method == SessionCreate::NAME {
             return Box::pin(self.clone().create(call));
         }

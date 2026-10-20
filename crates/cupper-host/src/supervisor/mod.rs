@@ -2,17 +2,19 @@
 //! 3 to 10, and [`Host::run`] serves until one of the triggers of the orderly
 //! exit comes, then exits.
 //!
-//! The orderly exit comes on `host/exit` ([`control`]), on SIGTERM, and when
-//! the store writer has died (T024 review: the host cannot run without it).
-//! Idle exit, the orphaned state, the self-check, the cleanup of leftover
-//! adapters and the audit table are T059's.
+//! The orderly exit comes on `host/exit` ([`control`]), on SIGTERM, when
+//! the store writer has died (T024 review: the host cannot run without it),
+//! and from the [`watch`]: idle, orphaned, or once an upgrade waits. Before
+//! retention starts, [`reap`] ends the adapters a previous run left.
 
 pub mod control;
 #[cfg(feature = "test-harness")]
 mod harness;
+mod reap;
 mod recover;
 #[cfg(feature = "test-harness")]
 mod seed;
+pub mod watch;
 
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
@@ -32,6 +34,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use self::control::Control;
+use self::watch::{Admission, SelfCheck, Watch, WatchDeps};
 #[cfg(feature = "test-harness")]
 use crate::clock::ManualClock;
 use crate::clock::{Clock, IdGen, SystemClock};
@@ -93,6 +96,17 @@ pub trait Part: Send + Sync + fmt::Debug {
 pub struct Activity {
     pub running_turns: u32,
     pub pending_interactions: u32,
+    pub queued_messages: u32,
+}
+
+impl std::iter::Sum for Activity {
+    fn sum<I: Iterator<Item = Self>>(parts: I) -> Self {
+        parts.fold(Self::default(), |sum, part| Self {
+            running_turns: sum.running_turns + part.running_turns,
+            pending_interactions: sum.pending_interactions + part.pending_interactions,
+            queued_messages: sum.queued_messages + part.queued_messages,
+        })
+    }
 }
 
 /// Why the host exits.
@@ -105,6 +119,12 @@ pub enum Exit {
     Terminated,
     /// The store writer died: exit 1, without `last_clean_exit_at`.
     WriterDied,
+    /// No clients and no work for `supervisor_idle`.
+    Idle,
+    /// The process that started the host exited, and no turn runs.
+    Orphaned,
+    /// The code on disk changed, and nothing is left to finish.
+    Upgrade,
 }
 
 /// The running host.
@@ -184,7 +204,13 @@ impl Host {
         let ledger = Ledger::load(&reader, writer.clone(), clock.clone(), &durations)?;
         quiescence.register(SWEEPER);
         let sweeper = tokio::spawn(ledger.clone().sweeper(quiescence.enter(SWEEPER)));
+        reap::previous_run(&reader, &writer, &*clock, &durations).await?;
         let maintenance = maintenance.spawn(&quiescence);
+        // The runtime installer (T129) starts after the self-check is set up,
+        // and reports `Failed(BundleChanged)` through `Watch::bundle_changed`.
+        let (watch, watching) = Watch::new();
+        let self_check = SelfCheck::new(watch.clone());
+        let admission = Arc::new(Admission::default());
 
         // Claude's runtime and the sessions on it, in the order they stop.
         let ids = Arc::new(IdGen::new(clock.clone()));
@@ -239,6 +265,7 @@ impl Host {
             writer: writer.clone(),
             raw: raw_sink,
             log: log.ok(),
+            self_check: self_check.clone(),
         };
         quiescence.register(AGENT_RUNTIME);
         let deps = RuntimeDeps {
@@ -276,6 +303,7 @@ impl Host {
             audit: records.clone(),
             index: Arc::new(index.clone()),
             git,
+            admission: Arc::clone(&admission),
         });
         let parts: Arc<[Arc<dyn Part>]> = Arc::new([
             Arc::new(sessions.clone()),
@@ -283,9 +311,14 @@ impl Host {
             Arc::new(index.clone()),
         ]);
         let (to_supervisor, exits) = mpsc::unbounded_channel();
-        let control = Arc::new(Control::new(to_supervisor, Arc::clone(&parts)));
+        let control = Arc::new(Control::new(
+            to_supervisor.clone(),
+            Arc::clone(&parts),
+            Arc::clone(&admission),
+        ));
         let mut routes = Routes::new(ledger.clone());
         routes.watched_by(&quiescence);
+        routes.streams(streams.clone(), readers.clone());
         control.route(&mut routes);
         #[cfg(feature = "test-harness")]
         Arc::new(harness::Harness {
@@ -325,9 +358,23 @@ impl Host {
             #[cfg(feature = "test-harness")]
             harness_key: payload.harness_key,
         };
-        let gateway = Gateway::new(config, clock.clone(), durations, routes, records);
+        let gateway = Gateway::new(config, clock.clone(), durations.clone(), routes, records);
         control.serve_for(&gateway);
         index.serve_for(&gateway);
+        if let Some(check) = self_check {
+            gateway.check_self_with(check);
+        }
+        watching.start(WatchDeps {
+            clock: clock.clone(),
+            durations: durations.clone(),
+            quiescence: quiescence.clone(),
+            parts: Arc::clone(&parts),
+            gateway: Arc::downgrade(&gateway),
+            index: index.clone(),
+            admission,
+            exits: to_supervisor,
+            parent: cfg!(feature = "dev-auth").then(std::os::unix::process::parent_id),
+        });
         let terminate = signal(SignalKind::terminate())?;
         let (listener, socket) = lock.bind()?;
         let serving = tokio::spawn(Arc::clone(&gateway).serve(listener));
@@ -373,11 +420,17 @@ impl Host {
     /// The orderly exit (design 5.2.13).
     async fn exit(self, exit: Exit) -> HostExit {
         self.serving.abort();
+        let reason = shutdown_reason(exit);
+        tracing::info!(?exit, reason = reason.as_str(), "orderly exit");
         self.gateway.broadcast::<HostShutdown>(&HostShutdownParams {
-            reason: ShutdownReason::UserQuit,
+            reason,
             restart_expected: false,
         });
-        let force = exit != (Exit::Requested { force: false });
+        // The watch's exits come only once no turn runs.
+        let force = matches!(
+            exit,
+            Exit::Requested { force: true } | Exit::Terminated | Exit::WriterDied
+        );
         for part in self.parts.iter() {
             part.stop(force).await;
         }
@@ -409,6 +462,16 @@ impl Host {
         self.gateway.close_all().await;
         let _ = std::fs::remove_file(&self.socket);
         code
+    }
+}
+
+/// `host/shutdown`'s reason: SIGTERM, the orphaned state and a dead writer
+/// take `user_quit` too (ruled before T037).
+fn shutdown_reason(exit: Exit) -> ShutdownReason {
+    match exit {
+        Exit::Idle => ShutdownReason::Idle,
+        Exit::Upgrade => ShutdownReason::Upgrade,
+        _ => ShutdownReason::UserQuit,
     }
 }
 
