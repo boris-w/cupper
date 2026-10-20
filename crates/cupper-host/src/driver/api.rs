@@ -92,9 +92,6 @@ pub enum DriverCommand {
     /// Answers an agent request; every ask gets one, unless its adapter
     /// instance exited first. `AskAnswer::Cancelled` is ACP's `Cancelled`.
     Answer { ask: AskId, answer: AskAnswer },
-    /// Request, replied with `Result<SessionCapabilities, AgentError>`, while
-    /// the capability cache is empty (design 5.6.7).
-    Probe,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

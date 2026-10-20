@@ -612,11 +612,26 @@ impl SessionActor {
         self.input(input, None, step).await;
     }
 
+    /// A command list the session's capabilities do not have yet goes into
+    /// the stream with them (design 5.6.2).
+    fn commands_changed(&self, event: &DriverEvent) -> Step {
+        let mut step = Step::default();
+        if let DriverEvent::CommandsChanged(commands) = event
+            && let Some(mut caps) = self.written_capabilities()
+            && caps.commands != *commands
+        {
+            caps.commands.clone_from(commands);
+            step.events.push(EventBody::SessionCapabilities(caps));
+        }
+        step
+    }
+
     /// An event of the agent. A change of its options rewrites the
     /// configuration, and the guard checks the permission mode.
     async fn agent(&mut self, event: DriverEvent) {
         let DriverEvent::ConfigChanged(options) = event else {
-            return self.input(Input::Agent(event), None, Step::default()).await;
+            let step = self.commands_changed(&event);
+            return self.input(Input::Agent(event), None, step).await;
         };
         let mut step = Step::default();
         let config = options
