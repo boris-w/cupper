@@ -621,3 +621,63 @@ fn answer(asked: &InteractionRequested, fields: &[(String, String)]) -> Result<V
     }
     Ok(json!({"type": "answer", "values": values}))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use cupper_protocol::error::{ErrorCode, ErrorReason, RpcError};
+
+    use super::*;
+
+    fn refused(code: ErrorCode, reason: Option<ErrorReason>) -> Failure {
+        let error = RpcError::app(code, "refused");
+        Failure::Refused(reason.map_or(error.clone(), |reason| error.with_reason(reason)))
+    }
+
+    #[test]
+    fn unit_cli_exit_codes_by_failure() {
+        let cases = [
+            (Failure::Usage(UsageError("x".into())), 2),
+            (Failure::HostGone, 3),
+            (Failure::Unverified("x".into()), 4),
+            (Failure::Other("x".into()), 1),
+            (refused(ErrorCode::Forbidden, Some(ErrorReason::Scope)), 1),
+            (Failure::Denied, 10),
+            (refused(ErrorCode::Timeout, None), 11),
+            (refused(ErrorCode::RateLimited, None), 12),
+            (
+                refused(ErrorCode::Forbidden, Some(ErrorReason::Lineage)),
+                13,
+            ),
+        ];
+        for (failure, code) in cases {
+            assert_eq!(failure.exit_code(), code, "{failure:?}");
+        }
+    }
+
+    #[test]
+    fn unit_cli_exit_codes_a_host_gone_however_it_went() {
+        let refusal = |kind| cupper_sys::Refusal {
+            kind,
+            call: "proc_pidinfo",
+            code: 3,
+        };
+        let gone = [
+            ClientError::Closed(None),
+            ClientError::Closed(Some(CloseReason::Eof)),
+            ClientError::Closed(Some(CloseReason::Refused(refusal(RefusalKind::PeerExited)))),
+            ClientError::Io(io::Error::from(io::ErrorKind::NotFound)),
+            ClientError::Io(io::Error::from(io::ErrorKind::ConnectionRefused)),
+        ];
+        for err in gone {
+            assert_eq!(Failure::from(err).exit_code(), 3);
+        }
+        let execed =
+            ClientError::Closed(Some(CloseReason::Refused(refusal(RefusalKind::PeerExeced))));
+        let denied = ClientError::Io(io::Error::from(io::ErrorKind::PermissionDenied));
+        for other in [execed, denied] {
+            assert_eq!(Failure::from(other).exit_code(), 1);
+        }
+    }
+}

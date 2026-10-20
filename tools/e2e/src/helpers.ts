@@ -20,6 +20,8 @@ declare global {
       state(): { status: string };
       /** The streams the window follows: `{seq, complete, view}` by stream. */
       views(): Record<string, unknown>;
+      /** A command sent as the window: `{result}`, or `{error}` from the bridge or the host. */
+      command(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>>;
     };
   }
 }

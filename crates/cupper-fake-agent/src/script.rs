@@ -59,6 +59,7 @@ const COMMANDS: &[&str] = &[
     "diff",
     "write_file",
     "permission",
+    "permission_options",
     "question",
     "form",
     "plan_update",
@@ -92,7 +93,7 @@ const COMMANDS: &[&str] = &[
 pub type Command = (String, String);
 
 /// Splits a prompt into commands, or `None` when it is not a script. `;` ends
-/// a command, except inside the JSON value of `raw`.
+/// a command, except inside the JSON value of `raw` and `permission_options`.
 pub fn parse(text: &str) -> Option<Vec<Command>> {
     let mut commands = Vec::new();
     let mut rest = text;
@@ -109,7 +110,7 @@ pub fn parse(text: &str) -> Option<Vec<Command>> {
             return None;
         }
         let after = after.trim_start_matches([' ', '\t']);
-        let len = if name == "raw" {
+        let len = if name == "raw" || name == "permission_options" {
             let mut values = serde_json::Deserializer::from_str(after).into_iter::<Value>();
             values.next()?.ok()?;
             let len = values.byte_offset();
@@ -319,7 +320,13 @@ impl Script {
             "write_file" => self.write_file(rest)?,
             "permission" => {
                 let kind = if arg(1).is_empty() { "execute" } else { arg(1) };
-                return self.permission(arg(0), kind).await;
+                return self.permission(arg(0), kind, None).await;
+            }
+            // A command's permission with these ACP options, e.g. of a kind
+            // nobody knows (E2E-SEC-panel-numbering).
+            "permission_options" => {
+                let options = serde_json::from_str(rest).map_err(|_| Error::invalid_params())?;
+                return self.permission("p1", "execute", Some(options)).await;
             }
             "question" => {
                 let schema = json!({"type": "object", "properties": {"answer": {"type": "string", "title": "Answer"}}, "required": ["answer"]});
@@ -480,12 +487,20 @@ impl Script {
         Ok(Flow::Next)
     }
 
-    async fn permission(&mut self, tool: &str, kind: &str) -> Result<Flow, Error> {
+    async fn permission(
+        &mut self,
+        tool: &str,
+        kind: &str,
+        options: Option<Value>,
+    ) -> Result<Flow, Error> {
         let p = self.persona;
         if p == Codex {
             self.update(persona::thread_status("active", &["waitingOnApproval"]))?;
         }
-        let params = persona::permission(p, &self.session, tool, kind, &self.cwd);
+        let mut params = persona::permission(p, &self.session, tool, kind, &self.cwd);
+        if let Some(options) = options {
+            params["options"] = options;
+        }
         let Some(answer) = self.ask("session/request_permission", params).await? else {
             return Ok(cancelled());
         };
