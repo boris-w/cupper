@@ -394,9 +394,17 @@ UNIT-login-shell = "pr"
 milestone = "M1a"
 IT-process-hygiene = "pr"
 IT-K13-echo-cwd = "pr"
-IT-K21-reap-group = "pr"
 IT-K26-client-info = "pr"
+
+# 驱动层 II-b：适配器的生命周期（计划 v1.3.18 由 T055 拆出）
+[T008]
+milestone = "M1a"
+IT-K21-reap-group = "pr"
 IT-adapter-restart = "pr"
+
+# 驱动层 II-c：能力与状态（计划 v1.3.18 由 T055 拆出）
+[T009]
+milestone = "M1a"
 UNIT-commands-dedup = "pr"
 
 # 运行时安装器
