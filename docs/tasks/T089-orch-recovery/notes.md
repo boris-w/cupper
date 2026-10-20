@@ -105,3 +105,22 @@ a 仍然超出 850。要压到线以内，可以再把"检查点作废时重发"
   - 视图里仍待处理的请求，补写 `interaction.resolved{expired, host_restarted}`，写在 `turn.completed` 之前。
 - 回合里没结束的条目不补写，不在本任务范围内（见汇报）。
 - 载入后没有回合在运行。队列里有消息、又没有暂停时，一律以 `turn_interrupted` 暂停，等用户继续，不在重启后自己开始回合。
+
+## 实际行数（`git diff --numstat`，自分支点起，新增行）
+
+| 模块 | 文件 | 新增 |
+|---|---|---|
+| 按需载入与读行 | `session/load.rs`（读行、构造 `Parts` 与 `Restored`、找回设定者、读表的 `interaction/get`）、`manager.rs`（邮箱先入表、载入失败的回复与重试）、握手映射公开 | 312 + 135 + 7 |
+| 核心的恢复入口 | `core.rs`、`turn.rs`、`queue.rs`、`tier_guard.rs` | 132 |
+| actor | `Start`、`interaction/get` 读表、提交统一走流写者、`ignore_for_good` 写行、`canonicalize` | 82（删 60） |
+| `append` 空 `bodies` | `append.rs` | 11 |
+| `session/get` 与索引 | `index/status.rs` 的 `status_of` 两边共用 | 20 |
+| `ignore_for_good` 的列 | `0001`、`rows.rs`、数据模型 5.4.2 | 8 |
+| 启动清理抽成函数 | `supervisor/recover.rs`、`mod.rs`（测试用重启调用同一段 SQL） | 19 |
+| 测试 | `recovery_tests.rs` 167、夹具加重启 56、其余 13 | 236 |
+| **合计** | | **958**（实现 722、测试 236），在硬停止线 980 以内，超出约 900 的上限 |
+
+超出的主要来源：
+- 读行与类型转换比估计多，约 120 行；
+- 夹具为模拟重启而重构，约 40 行；
+- 为让每一步都经流写者提交，顺手统一了 actor 的提交路径。这一项新增与删除大致相抵。
