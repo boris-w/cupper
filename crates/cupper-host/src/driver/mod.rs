@@ -5,5 +5,6 @@
 
 pub mod acp;
 pub mod api;
+pub mod probe;
 pub mod tap;
 pub mod transport;
