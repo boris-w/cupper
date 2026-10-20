@@ -215,6 +215,11 @@ IT-project-add-trust = "pr"
 milestone = "M1a"
 UNIT-trust-scan = "pr"
 
+# 项目信任 findings 解析（计划 v1.3.15 由 T035 拆出）
+[T096]
+milestone = "M1a"
+UNIT-trust-findings = "pr"
+
 # 设置
 [T036]
 milestone = "M1a"

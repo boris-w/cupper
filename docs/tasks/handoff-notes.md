@@ -221,6 +221,7 @@
 | T059 | 落盘新的审计记录 `InteractionResponded`，记为 `interaction.responded`。T088 之后 `Gateway::new` 接收宿主建好的审计发送端（`supervisor` 里的 `records`），网关和会话共用；T059 把它的接收端接到写线程 | T088 |
 | T089 | 宿主重启后用 `interactions.request_json`（整个 `interaction.requested`）和状态，经 `Input::Ended` 把已结束的请求交给交互代理；`interaction/get` 对淘汰出视图的请求可以改从表里读 | T088 |
 | T053 | `DriverEvent::Ask` 带上 `toolCallId` 之后，在 `SessionCore::write_held` 里填上 `item_id`（T088 已合并；T053 的分支开得早，做不了的话合并时由编排者处理或交给 T095） | T088 |
+| T034 | 信任扫描的 findings 由 T096 解析；T096 合并之前 `project/add`、`project/trust` 的 findings 先留空列表。findings 的 `detail` 原样输出不截断，文件多时 `project/add` 的结果可能超过 64,000 字节的帧上限，要在本任务里处理（例如分页或只给摘要） | T035 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
