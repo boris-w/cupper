@@ -8,6 +8,7 @@ pub mod exit;
 pub mod failpoint;
 pub mod gateway;
 pub mod ledger;
+pub mod manifest;
 pub mod orchestrator;
 pub mod policy;
 pub mod pure;

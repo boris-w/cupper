@@ -22,6 +22,21 @@
     "entry": "node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js",
     "bundle_sha256": "a8f29655155b8ddfc9dbee3ff6116b928caedb591d61e36afe2034352edcb261"
   },
+  "cli": {
+    "claude": {
+      "verified": {
+        "min": "2.1.200",
+        "max": "2.1.296"
+      }
+    },
+    "codex": {
+      "verified": {
+        "min": "0.150.1",
+        "max": "0.163.0"
+      },
+      "unsupported_below": "0.140.0"
+    }
+  },
   "env": {
     "allow": [
       "PATH",
