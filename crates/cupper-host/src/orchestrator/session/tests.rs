@@ -265,7 +265,7 @@ impl Fixture {
         let ((records, audit), index) = (mpsc::unbounded_channel(), Arc::new(Index::default()));
         let deps = SessionDeps {
             streams: streams.clone(),
-            readers,
+            readers: readers.clone(),
             clock: Arc::clone(&shared),
             ids: Arc::new(IdGen::seeded(Arc::clone(&shared), 1)),
             durations: durations.clone(),
@@ -281,6 +281,7 @@ impl Fixture {
         let mut routes = Routes::new(ledger);
         let manager = SessionManager::new(deps);
         routes.sessions(Arc::new(manager.clone()));
+        routes.streams(streams.clone(), readers);
         (routes, streams, seen, audit, index, manager)
     }
 
@@ -371,6 +372,12 @@ impl Fixture {
         self.attach().await;
         self.prompt().await;
         serde_json::from_value(created["session_id"].clone()).unwrap()
+    }
+
+    /// Subscribes to session `id`'s stream, and lets the subscription go.
+    pub fn subscribe(&self, id: &SessionId) {
+        let stream = json!({"stream": StreamId::Session(id.clone())});
+        Peer::new(harness()).send(&self.routes, "stream/subscribe", stream);
     }
 
     /// The session's events in the log, once there are `n` of type `tag`.

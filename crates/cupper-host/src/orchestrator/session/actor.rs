@@ -59,7 +59,7 @@ use crate::driver::api::{
     AgentError, AgentPort, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent,
     ProjectConfigPolicy,
 };
-use crate::durations::Durations;
+use crate::durations::{Durations, SESSION_IDLE};
 use crate::gateway::{AuditEvent, AuditRecord, Call, ConfigState, TrustChange};
 use crate::git::GitTool;
 use crate::index::{ScanContext, git_of, status_of};
@@ -69,7 +69,7 @@ use crate::orchestrator::notice_with;
 use crate::orchestrator::tier_guard;
 use crate::orchestrator::turn::{self, Disposition, SendMode, SendRequest, SteerFallback};
 use crate::policy::{self, Confirmable, Facts};
-use crate::pure::{Alarm, Core, TimerTable};
+use crate::pure::{Alarm, Core, TimerRequest, TimerTable};
 use crate::quiescence::{Participant, Quiescence};
 use crate::store::streams::{Batch, StreamHandle, StreamView, StreamWriter};
 use crate::store::{Durability, Readers};
@@ -93,7 +93,12 @@ enum Next {
     Rescanned(Purpose, Rescan),
     Stop(Stop),
     Alarm,
+    Idle,
 }
+
+/// The actor's own timer: it leaves memory once idle this long.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct IdleTimer;
 
 /// What the actor starts with: its session's stream, its agent, and what an
 /// attach adds to the turn machine's target (design 5.2.6).
@@ -149,6 +154,9 @@ pub(super) struct SessionActor {
     parts: Parts,
     timers: TimerTable<Key>,
     alarm: Alarm,
+    idle: (TimerTable<IdleTimer>, Alarm),
+    /// Rescans and attaches under way.
+    outstanding: u32,
     /// The command that queued each message, for its `queue_entries` row.
     commands: HashMap<QueueId, CommandId>,
     inbox: mpsc::UnboundedReceiver<Mail>,
@@ -230,18 +238,22 @@ struct Step {
 
 impl SessionActor {
     /// Runs the session, starting with its first input, until the mailbox
-    /// closes; it counts in the quiescence barrier meanwhile.
+    /// closes, or until it was idle for `session_idle` (design 5.2.3): then
+    /// it closes its agent session and hands back its mailbox, whose calls
+    /// go to the session's next actor. It counts in the quiescence barrier
+    /// meanwhile.
     pub(super) async fn run(
         parts: Parts,
         inbox: mpsc::UnboundedReceiver<Mail>,
         mut stops: mpsc::UnboundedReceiver<Stop>,
         start: Start,
         participant: Participant,
-    ) {
+    ) -> Option<mpsc::UnboundedReceiver<Mail>> {
         let (events, mut agent) = mpsc::unbounded_channel();
         let (attached, mut attaches) = mpsc::unbounded_channel();
         let (rescanned, mut rescans) = mpsc::unbounded_channel();
         let alarm = Alarm::new(Arc::clone(&parts.clock));
+        let idle = (TimerTable::new(), Alarm::new(Arc::clone(&parts.clock)));
         let Start {
             first,
             commands,
@@ -254,6 +266,8 @@ impl SessionActor {
             parts,
             timers: TimerTable::new(),
             alarm,
+            idle,
+            outstanding: 0,
             commands,
             inbox,
             events,
@@ -269,6 +283,7 @@ impl SessionActor {
         // Idle until a branch brings work, which runs once the others are
         // dropped.
         loop {
+            actor.follow_idle();
             let next = participant.idle(async {
                 tokio::select! {
                     mail = actor.inbox.recv() => Next::Mail(mail),
@@ -277,6 +292,7 @@ impl SessionActor {
                     Some((purpose, found)) = rescans.recv() => Next::Rescanned(purpose, found),
                     Some(stop) = stops.recv() => Next::Stop(stop),
                     () = actor.alarm.rung() => Next::Alarm,
+                    () = actor.idle.1.rung() => Next::Idle,
                 }
             });
             match next.await {
@@ -285,7 +301,7 @@ impl SessionActor {
                     actor.ignore_project_config().await;
                     let _ = done.send(Ok(()));
                 }
-                Next::Mail(None) => break,
+                Next::Mail(None) => return None,
                 Next::Agent(event) => actor.agent(event).await,
                 Next::Attached(result) => actor.attach_done(result).await,
                 Next::Rescanned(purpose, found) => actor.trust(purpose, found).await,
@@ -297,8 +313,42 @@ impl SessionActor {
                     let _ = done.send(());
                 }
                 Next::Alarm => actor.expired().await,
+                Next::Idle if actor.is_idle() => {
+                    let detach = Input::Machine(turn::Input::Detach);
+                    actor.input(detach, None, Step::default()).await;
+                    return Some(actor.inbox);
+                }
+                Next::Idle => {}
             }
         }
+    }
+
+    /// Times the idle exit from now while nothing goes on; anything going on
+    /// cancels it.
+    fn follow_idle(&mut self) {
+        let request = match self.is_idle() {
+            true => {
+                let at = self.parts.clock.now_mono() + self.parts.durations.get(SESSION_IDLE);
+                TimerRequest::Set { key: IdleTimer, at }
+            }
+            false => TimerRequest::Cancel(IdleTimer),
+        };
+        self.idle.0.apply(request);
+        self.idle.1.follow(&self.idle.0);
+    }
+
+    /// No turn runs, no request waits, no queued message will run (a paused
+    /// queue waits for the user), no timer of the cores is set and nothing
+    /// is under way. Subscribers do not count: they read the stream, not the
+    /// actor.
+    fn is_idle(&self) -> bool {
+        let pending = self.parts.pending.load(Ordering::Relaxed);
+        self.parts.core.turn_id().is_none()
+            && pending == 0
+            && self.parts.core.queued() == 0
+            && self.timers.is_empty()
+            && self.outstanding == 0
+            && self.deferred.is_none()
     }
 
     async fn call(&mut self, call: Call, reply: oneshot::Sender<Outcome>) {
@@ -727,7 +777,8 @@ impl SessionActor {
 
     /// Rescans the project's trust range in a task of its own (design
     /// 5.2.6); the result comes back to [`trust`](Self::trust).
-    fn rescan(&self, purpose: Purpose) {
+    fn rescan(&mut self, purpose: Purpose) {
+        self.outstanding += 1;
         let (readers, project) = (self.parts.readers.clone(), self.parts.project.clone());
         let (cwd, back) = (self.parts.cwd.clone(), self.rescanned.clone());
         let cx = ScanContext {
@@ -752,6 +803,7 @@ impl SessionActor {
     /// `project_config_changed`, with a notice; the index records a project
     /// that became `stale`. A trusted project again reopens it.
     async fn trust(&mut self, purpose: Purpose, found: Rescan) {
+        self.outstanding -= 1;
         if let Some(scan) = found.scan.clone().filter(|_| found.stale) {
             self.parts.index.rescanned(&self.parts.project, scan);
         }
@@ -836,7 +888,8 @@ impl SessionActor {
         }
     }
 
-    fn attach(&self, target: AttachTarget) {
+    fn attach(&mut self, target: AttachTarget) {
+        self.outstanding += 1;
         let attach = Attach {
             target,
             cwd: self.parts.cwd.clone(),
@@ -854,6 +907,7 @@ impl SessionActor {
     /// An attach came back: its capabilities and configuration go into the
     /// stream when they changed, the agent's session into the row.
     async fn attach_done(&mut self, result: Result<AttachInfo, AgentError>) {
+        self.outstanding -= 1;
         let mut step = Step::default();
         let mut mode = None;
         if let Ok(info) = &result {
