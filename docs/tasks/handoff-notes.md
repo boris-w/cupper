@@ -222,6 +222,9 @@
 | T089 | 宿主重启后用 `interactions.request_json`（整个 `interaction.requested`）和状态，经 `Input::Ended` 把已结束的请求交给交互代理；`interaction/get` 对淘汰出视图的请求可以改从表里读 | T088 |
 | T053 | `DriverEvent::Ask` 带上 `toolCallId` 之后，在 `SessionCore::write_held` 里填上 `item_id`（T088 已合并；T053 的分支开得早，做不了的话合并时由编排者处理或交给 T095） | T088 |
 | T034 | 信任扫描的 findings 由 T096 解析；T096 合并之前 `project/add`、`project/trust` 的 findings 先留空列表。findings 的 `detail` 原样输出不截断，文件多时 `project/add` 的结果可能超过 64,000 字节的帧上限，要在本任务里处理（例如分页或只给摘要） | T035 |
+| T059 | T028 已合并：审计记录除了写 `audit` 表，还要按 5.8.6 同时写 host.log（`tracing` 事件，字段按 `diag` 的约定）；T059 任务书里"T028 合并之前先只写表"的过渡写法不再需要 | T028 |
+| T055 | 每种 agent 开一个 `diag::stderr::AdapterLog`（`AdapterLog::open(目录, agent, clock, redactor)`），每个实例调用一次 `read(instance_id, 管道)`；每个实例在内存里保留最后 64 KB（整行、已脱敏），可直接放进 `error` 条目的错误详情。实例 ID 作为行前缀，不受长串规则约束 | T028 |
+| 以后在宿主里加日志的任务 | 宿主自己的 ID 和哈希作为字段记录（字段名带 `id`、`hash`、`digest`、`blob`），不要拼进消息正文，否则 40 字符以上的会被当成长串替换；prompt、正文、命令输出、文件内容一律经 `diag::Content`（`info` 级别只记种类和长度） | T028 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
