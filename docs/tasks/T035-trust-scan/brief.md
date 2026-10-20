@@ -66,3 +66,22 @@
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 1,445 行（草估 1,015 已贴线），在写代码之前停下汇报，建议按任务书举的例子拆分。
+
+**裁定：采用方案 A，拆分（计划 v1.3.15）。**
+- **T035 收窄为范围、摘要与状态**：`trust/mod.rs`、`walk.rs`、`digest.rs`、`state.rs`，以及 `projects` 表的清单列（`0001` 与 5.4.2 两处）。验收 UNIT-trust-scan（范围、链接、上限、摘要、状态与差异）。规模改为 L，上限约 1,100 行，硬停止线 1,200。T034 的 `project/add`、`project/trust` 先把 findings 留成空列表。
+- **新增 T096**（依赖 T035）：findings 解析（`findings.rs`、TOML 依赖、`FindingKind` 新增 `unparsed`），新增编号 UNIT-trust-findings。`tests/ids.toml` 已在 main 上改好。T068 改为也依赖 T096。
+
+执行者列的 9 项待裁定：
+1. `FindingKind` 加 `Unparsed => "unparsed"`，改 5.3.11 的那一行，重新生成 schema 和 TS：认可，归 T096。
+2. TOML 依赖 `toml_edit = "=0.25.17"`（`default-features = false, features = ["parse"]`）：认可，归 T096，以 `cargo deny` 通过为准。
+3. "工作区之外"以工作区为界，只有经过链接、且目标 realpath 不在工作区之下的才标 `outside_workspace`；上级目录里的文件本身不算：认可，与 5.2.6"链接目标在工作区之外的"一致。链接指向同一仓库里工作区之外的位置也会被标出，偏保守，接受。
+4. `stale` 之后内容又改回原样，仍保持 `stale` 直到再次确认：认可，与 5.2.6"直到再次确认"一致。
+5. 16 MB 按 16 MiB 计，上限只数文件：认可。
+6. 清单列 `projects.trust_manifest TEXT`，JSON `{"<相对路径>": "<sha-256 十六进制>"}`：认可；序列化时键按相对路径排序（用有序 map），不依赖 serde_json 的 map 键顺序（代码约束）。
+7. 摘要编码（每个字段 8 字节大端长度前缀、版本标签 `cupper-trust-v1`、没有文件时为固定值）：认可，写进模块文档。
+8. `detail` 原样输出不截断，`project/add` 的结果可能超过帧上限：认可，交给 T034 处理，已写进交接。
+9. git 根目录必须是工作区或它的上级（两边先取 realpath），否则扫描失败，`root_not_ancestor`：认可。

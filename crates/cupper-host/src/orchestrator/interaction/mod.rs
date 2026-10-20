@@ -148,7 +148,8 @@ impl From<Rejection> for RpcError {
         let message = rejection.to_string();
         let app = |code, reason| RpcError::app(code, &message).with_reason(reason);
         match rejection {
-            Rejection::Unknown | Rejection::Answer(_) => RpcError::new(INVALID_PARAMS, message),
+            Rejection::Unknown => RpcError::app(ErrorCode::NotFound, message),
+            Rejection::Answer(_) => RpcError::new(INVALID_PARAMS, message),
             Rejection::AlreadyResolved(by) => {
                 app(ErrorCode::Conflict, ErrorReason::AlreadyResolved)
                     .with_data(|data| data.resolved_by = by)
@@ -176,6 +177,11 @@ impl InteractionBroker {
             ended: HashMap::new(),
             closed: None,
         }
+    }
+
+    /// How request `id` ended, once it has.
+    pub fn ended(&self, id: &RequestId) -> Option<&InteractionResolved> {
+        self.ended.get(id)
     }
 
     fn ask(&mut self, ask: Ask, now: Now, out: &mut Vec<Action>) {

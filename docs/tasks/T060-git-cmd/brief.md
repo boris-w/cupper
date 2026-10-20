@@ -77,3 +77,21 @@
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 1,335 行，在写代码之前停下汇报，建议拆成三份、前两份并行。
+
+**裁定：采用方案一（计划 v1.3.16）。**
+- **T060 收窄为 GitCmd 与三档类型**：`GitTool`、环境、工作目录、带 stdin 和 stderr 的 git 拉起辅助（T094 的 `probe::run` 不够用，另写在 `git/` 下）；`GitCmd<档位>` 与命令表、快照档的最小入口；`compile_fail` 编译期证明；时长登记。验收新增的 UNIT-git-cmd（环境断言、固定参数、编译期分档）。规模 M，上限约 650 行，硬停止线 750。T061 只依赖这部分。
+- **新增 T097**（与 T060 并行）：仓库档的规则与指纹，全是纯函数（配置输出的解析、来源检查、覆盖参数的计算、仓库布局与指纹），验收新增的 UNIT-git-repo-rules 和由本任务移过去的 UNIT-git-fingerprint。另一位执行者做。
+- **新增 T098**（依赖 T060、T097）：仓库档的执行（`RepoTier::run`、`GitError`、notice 信号），验收由本任务移过去的 IT-git-repo-tier-malicious。T034、T044 改为依赖 T098。`tests/ids.toml` 已在 main 上改好。
+
+**对执行者发现的裁定**（已写进设计 5.2.10）：
+1. 子段里带 `=` 的可执行类键置空不掉：直接拒绝，返回 `unsafe_repo_config`（归 T097 的规则）。
+2. 覆盖后 git 报错：只有被置空的过滤器设了 `required=true` 时判为 `unsafe_repo_config`，其余按普通 git 失败返回；都不去掉覆盖重试（归 T097、T098）。
+3. 仓库档和用户档的环境带 `HOME`（全局配置照样过来源检查和置空，读它是安全的），`worktree add` 因此能读到用户的 `core.autocrlf` 等；快照档是否带由 T061 定。本任务的环境构造按此实现。
+4. 指纹遍历 `.gitattributes` 的耗时：先按设计实现，T098 的用例里顺带记一次合成大仓库的耗时，需要缓存时另提。
+5. 置空清单补 `diff.external`、`core.alternateRefsCommand`、`gpg.ssh.defaultKeyCommand`、`submodule.*.update`、`pager.*`（纵深防御，代价很小）；`alias.*` 不加：git 不让别名覆盖内置命令，宿主只用内置命令。
+6. 本机没有 git-lfs：用假的 git-lfs 脚本核实 `clean`、`smudge` 改写成绝对路径后能用；`filter-process` 记为未实测（Q32）。
+7. 另写 git 用的拉起辅助：认可。

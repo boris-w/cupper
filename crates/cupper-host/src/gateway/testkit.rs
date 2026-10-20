@@ -94,7 +94,8 @@ impl TestGateway {
         let dir = TempDir::new("gateway");
         let lock = HostLock::acquire(dir.path()).expect("take host.lock");
         let (listener, socket) = lock.bind().expect("bind the socket");
-        let (gateway, audit) = Gateway::new(config, clock, Durations::default(), routes);
+        let (records, audit) = tokio::sync::mpsc::unbounded_channel();
+        let gateway = Gateway::new(config, clock, Durations::default(), routes, records);
         Self {
             socket,
             serving: tokio::spawn(Arc::clone(&gateway).serve(listener)),
@@ -247,8 +248,22 @@ impl Peer {
         let clock = Arc::new(crate::clock::ManualClock::new());
         let audit = tokio::sync::mpsc::unbounded_channel().0;
         let auditor = super::audit::Auditor::new(conn.clone(), audit, clock);
+        use cupper_protocol::domain::{ClientKind, PrincipalKind};
+        let kind = match principal.kind {
+            PrincipalKind::Cli => ClientKind::Cli,
+            PrincipalKind::DesktopUi => ClientKind::Desktop,
+            _ => ClientKind::Test,
+        };
+        let (name, version) = (format!("{kind}-peer"), "1".to_owned());
+        let client = cupper_protocol::methods::handshake::ClientIdentity {
+            kind,
+            name,
+            version,
+        };
+        let dispatch =
+            super::dispatch::Dispatch::new(conn, principal, client, Arc::clone(&outbox), auditor);
         Self {
-            dispatch: super::dispatch::Dispatch::new(conn, principal, Arc::clone(&outbox), auditor),
+            dispatch,
             outbox,
             replies: Vec::new(),
             next_id: 0,

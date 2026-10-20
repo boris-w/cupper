@@ -7,7 +7,9 @@
 //! result (design 5.2.3, rule 3); only then does the reply go out, and the
 //! step's driver commands and attaches. An attach runs in a task of its own
 //! and comes back as an input; so does a snapshot, which is `skipped` until
-//! T061 brings git snapshots (plan 1.3).
+//! T061 brings git snapshots (plan 1.3). The index hears of the requests as
+//! they appear and resolve; the audit channel of answers from the CLI and the
+//! test harness (design 5.8.6).
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::mem;
@@ -16,13 +18,18 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use cupper_protocol::annotations::TimestampMs;
-use cupper_protocol::capabilities::SessionCapabilities as Capabilities;
+use cupper_protocol::capabilities::{ConfigOptionId, SessionCapabilities as Capabilities};
+use cupper_protocol::domain::{PrincipalKind, ResolvedBy, Tier};
 use cupper_protocol::envelope::Cause;
-use cupper_protocol::error::{ErrorCode, ErrorReason, RpcError};
+use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::{CommandId, QueueId, SessionId, TurnId};
+use cupper_protocol::ids::{CommandId, PrincipalId, QueueId, SessionId, TurnId};
 use cupper_protocol::index::{PendingKind, SessionStatus, SessionSummary};
 use cupper_protocol::interaction::InteractionRequest;
+use cupper_protocol::methods::interaction::{
+    InteractionGet, InteractionGetParams, InteractionGetResult, InteractionRespond,
+    InteractionRespondParams,
+};
 use cupper_protocol::methods::session::{
     self as methods, Disposition as Wire, FallbackReason, SessionCapabilities, SessionGet,
     SessionGetResult, SessionInterrupt, SessionInterruptParams, SessionInterruptResult,
@@ -32,20 +39,22 @@ use cupper_protocol::rpc::Method;
 use cupper_protocol::session::{
     SessionConfigured, SnapshotPhase, SnapshotRecorded, SnapshotStatus, TurnStatus,
 };
+use cupper_protocol::view::SessionView;
 use rusqlite::OptionalExtension;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 
 use super::core::{Action, Input, Key, SessionCore};
 use super::rows::Rows;
-use super::{internal, not_found, parse};
+use super::{IndexNotes, internal, not_found, parse, tier_of};
 use crate::clock::Clock;
 use crate::driver::api::{
     AgentError, AgentPort, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent,
     ProjectConfigPolicy,
 };
-use crate::gateway::Call;
+use crate::gateway::{AuditEvent, AuditRecord, Call};
 use crate::ledger::{Outcome, Ticket};
+use crate::orchestrator::interaction::{self, Respond};
 use crate::orchestrator::turn::{self, Disposition, SendMode, SendRequest, SteerFallback};
 use crate::pure::{Alarm, Core, TimerTable};
 use crate::quiescence::Participant;
@@ -78,6 +87,8 @@ pub(super) struct Parts {
     pub cached: Option<Capabilities>,
     /// Set while a turn runs, for `running_turns`.
     pub running: Arc<AtomicBool>,
+    pub audit: mpsc::UnboundedSender<AuditRecord>,
+    pub index: Arc<dyn IndexNotes>,
 }
 
 pub(super) struct SessionActor {
@@ -91,11 +102,19 @@ pub(super) struct SessionActor {
     attached: mpsc::UnboundedSender<Result<AttachInfo, AgentError>>,
 }
 
-/// A command on its way: its ledger ticket and its reply.
+/// A command on its way: its ledger ticket, its reply, and what the audit
+/// records once it succeeds.
 struct Command {
     ticket: Option<Ticket>,
     cause: Option<Cause>,
     reply: oneshot::Sender<Outcome>,
+    audit: Option<AuditRecord>,
+}
+
+/// The reply a step gives a command.
+enum Reply {
+    Turn(turn::Reply),
+    Interaction(interaction::Reply),
 }
 
 /// What a step asks of the actor besides its events.
@@ -106,7 +125,7 @@ struct Step {
     agent_session: Option<String>,
     driver: Vec<DriverCommand>,
     attach: Vec<AttachTarget>,
-    reply: Option<turn::Reply>,
+    reply: Option<Reply>,
 }
 
 impl SessionActor {
@@ -150,36 +169,53 @@ impl SessionActor {
 
     async fn call(&mut self, call: Call, reply: oneshot::Sender<Outcome>) {
         let (principal, params) = (call.principal, call.params);
+        let mut audit = None;
         let input = match call.method {
-            SessionSend::NAME => parse::<SessionSendParams>(&params).map(|p| {
-                turn::Input::Send(SendRequest {
-                    content: p.content,
-                    mode: match p.mode {
-                        methods::SendMode::Steer => SendMode::Steer,
-                        _ => SendMode::Queue,
-                    },
-                    by: principal.id.clone(),
-                    // Checked and written by T088.
-                    reply_to: None,
-                })
+            SessionSend::NAME => parse(&params).and_then(|p| self.send(p, &principal.id)),
+            SessionInterrupt::NAME => parse::<SessionInterruptParams>(&params).map(|p| {
+                let expected_turn = p.expected_turn_id;
+                Input::Machine(turn::Input::Interrupt { expected_turn })
             }),
-            SessionInterrupt::NAME => {
-                parse::<SessionInterruptParams>(&params).map(|p| turn::Input::Interrupt {
-                    expected_turn: p.expected_turn_id,
-                })
-            }
-            SessionQueueResume::NAME => Ok(turn::Input::QueueResume),
+            SessionQueueResume::NAME => Ok(Input::Machine(turn::Input::QueueResume)),
+            InteractionRespond::NAME => parse::<InteractionRespondParams>(&params).map(|params| {
+                if matches!(
+                    principal.kind,
+                    PrincipalKind::Cli | PrincipalKind::TestHarness
+                ) {
+                    let event = AuditEvent::InteractionResponded {
+                        session_id: self.parts.id.clone(),
+                        request_id: params.request_id.clone(),
+                        outcome: params.outcome.clone(),
+                        principal: principal.id.clone(),
+                    };
+                    let (at_ms, conn) = (self.parts.clock.now_wall_ms(), call.conn.clone());
+                    audit = Some(AuditRecord { at_ms, conn, event });
+                }
+                let resolved_by = ResolvedBy {
+                    principal_id: principal.id.clone(),
+                    client_kind: call.client.kind,
+                    client_name: call.client.name,
+                };
+                let tier = self.tier();
+                let principal = principal.clone();
+                Input::Respond(Box::new(Respond {
+                    principal,
+                    resolved_by,
+                    tier,
+                    params,
+                }))
+            }),
             SessionGet::NAME => {
                 let _ = reply.send(self.get().await);
                 return;
             }
             SessionCapabilities::NAME => {
-                let capabilities = self.capabilities();
-                let _ = reply.send(
-                    capabilities
-                        .map(|c| json!(c))
-                        .ok_or_else(|| not_found("capabilities")),
-                );
+                let capabilities = self.capabilities().map(|c| json!(c));
+                let _ = reply.send(capabilities.ok_or_else(|| not_found("capabilities")));
+                return;
+            }
+            InteractionGet::NAME => {
+                let _ = reply.send(parse(&params).and_then(|p| self.interaction(p)));
                 return;
             }
             method => Err(RpcError::app(ErrorCode::Unsupported, method)),
@@ -205,9 +241,51 @@ impl SessionActor {
             ticket,
             cause,
             reply,
+            audit,
         };
-        self.input(Input::Machine(input), Some(command), Step::default())
-            .await;
+        self.input(input, Some(command), Step::default()).await;
+    }
+
+    /// `session/send`; `reply_to` must name a request of this session that
+    /// was answered (design 5.3.4, v1.5).
+    fn send(&self, p: SessionSendParams, by: &PrincipalId) -> Result<Input, RpcError> {
+        if let Some(id) = &p.reply_to
+            && !self.parts.core.answered(id)
+        {
+            let message = format!("{id} is not an answered request of this session");
+            return Err(RpcError::new(INVALID_PARAMS, message));
+        }
+        Ok(Input::Machine(turn::Input::Send(SendRequest {
+            content: p.content,
+            mode: match p.mode {
+                methods::SendMode::Steer => SendMode::Steer,
+                _ => SendMode::Queue,
+            },
+            by: by.clone(),
+            reply_to: p.reply_to,
+        })))
+    }
+
+    /// The session's tier now, by its permission mode; `None` while unknown.
+    fn tier(&self) -> Option<Tier> {
+        let config = &self.parts.configured.config;
+        let mode = config.get(ConfigOptionId::PermissionMode.as_str())?;
+        tier_of(self.capabilities().as_ref(), mode)
+    }
+
+    /// `interaction/get`, for a request in the session's view: the pending
+    /// ones and those of the latest turns.
+    fn interaction(&self, p: InteractionGetParams) -> Outcome {
+        let found = self.view(|view| view.requests.get(&p.request_id).cloned());
+        let request = found.ok_or_else(|| not_found("request"))?;
+        let resolved = request.resolved.as_ref();
+        Ok(json!(InteractionGetResult {
+            status: request.status().clone(),
+            outcome: resolved.and_then(|r| r.outcome.clone()),
+            resolved_by: resolved.and_then(|r| r.resolved_by.clone()),
+            reason: resolved.and_then(|r| r.reason.clone()),
+            requested: request.requested,
+        }))
     }
 
     /// Steps the core with `input` and whatever its actions bring back, one
@@ -219,13 +297,16 @@ impl SessionActor {
                 match action {
                     Action::Event(body) => step.events.push(body),
                     Action::Timer(request) => self.timers.apply(request),
-                    Action::Machine(turn::Action::Driver(command)) => step.driver.push(command),
+                    Action::Driver(command) => step.driver.push(command),
+                    Action::Answer(reply) => step.reply = Some(Reply::Interaction(reply)),
                     Action::Machine(turn::Action::Attach(target)) => step.attach.push(target),
                     Action::Machine(turn::Action::Snapshot { turn_id, phase }) => {
                         inputs.push_back(skipped(turn_id, phase))
                     }
-                    Action::Machine(turn::Action::Reply(reply)) => step.reply = Some(reply),
-                    // The turn's requests: the interaction broker's (T088).
+                    Action::Machine(turn::Action::Reply(reply)) => {
+                        step.reply = Some(Reply::Turn(reply))
+                    }
+                    // The core keeps the machine's other actions.
                     Action::Machine(_) => {}
                 }
             }
@@ -247,13 +328,16 @@ impl SessionActor {
             reply,
         } = step;
         let mut answer = None;
+        let mut audit = None;
         let mut completion = None;
         let mut cause = None;
         if let Some(command) = command {
             let outcome = match reply {
-                Some(reply) => self.outcome(reply, command.cause.as_ref()),
+                Some(Reply::Turn(reply)) => self.outcome(reply, command.cause.as_ref()),
+                Some(Reply::Interaction(reply)) => reply.map(|r| json!(r)).map_err(RpcError::from),
                 None => Err(internal("the command had no reply")),
             };
+            audit = command.audit.filter(|_| outcome.is_ok());
             match (&outcome, command.ticket) {
                 (Ok(result), Some(ticket)) => {
                     completion = Some(ticket.complete(Ok(result.clone())))
@@ -266,11 +350,19 @@ impl SessionActor {
         }
         let at = self.parts.clock.now_wall_ms();
         let first_seq = self.parts.writer.head() + 1;
-        let mut changes = Rows::of(&self.parts.id, first_seq, at, &events, &self.commands);
+        let instance = self.parts.core.instance();
+        let (id, commands) = (&self.parts.id, &self.commands);
+        let mut changes = Rows::of(id, first_seq, at, &events, commands, instance);
         if let Some(agent_session) = agent_session {
             changes.agent_session(&self.parts.id, at, agent_session);
         }
         self.forget_dequeued(&events);
+        let asks = events.iter().any(|b| {
+            matches!(
+                b,
+                EventBody::InteractionRequested(_) | EventBody::InteractionResolved(_)
+            )
+        });
         let idle = changes.is_empty() && completion.is_none();
         let record = completion.as_ref().map(|c| c.row());
         let with = move |conn: &rusqlite::Connection| {
@@ -298,7 +390,7 @@ impl SessionActor {
                 if cfg!(any(test, feature = "test-harness")) {
                     panic!("{bug}");
                 }
-                eprintln!("cupper-host: {bug}");
+                tracing::error!("{bug}");
             }
             appended.map(drop).map_err(|e| e.to_string())
         };
@@ -311,6 +403,15 @@ impl SessionActor {
         }
         if committed.is_err() {
             return;
+        }
+        if let Some(record) = audit {
+            // Nobody listening is the receiver's choice.
+            let _ = self.parts.audit.send(record);
+        }
+        if asks {
+            let (count, oldest) = self.view(pending);
+            let count = u32::try_from(count).unwrap_or(u32::MAX);
+            self.parts.index.pending(&self.parts.id, count, oldest);
         }
         for command in driver {
             self.parts.agent.send(command);
@@ -427,7 +528,7 @@ impl SessionActor {
             .or_else(|| self.parts.cached.clone())
     }
 
-    fn view<T>(&self, read: impl FnOnce(&cupper_protocol::view::SessionView) -> T) -> T {
+    fn view<T>(&self, read: impl FnOnce(&SessionView) -> T) -> T {
         self.parts.stream.read(|view, _| match view {
             StreamView::Session(view) => read(view),
             StreamView::Index(_) => unreachable!("a session's stream"),
@@ -464,22 +565,9 @@ impl SessionActor {
         let (project, title, title_source, read_only, read, ended, active, archived) =
             row.ok_or_else(|| not_found("session"))?;
         let (pending, last_failed) = self.view(|view| {
-            let pending: Vec<&InteractionRequest> = (view.requests.values())
-                .filter(|r| r.is_pending())
-                .map(|r| &r.requested.request)
-                .collect();
-            let kind = pending.first().map(|r| match r {
-                InteractionRequest::Question(_) | InteractionRequest::AuthUrl(_) => {
-                    PendingKind::Input
-                }
-                _ => PendingKind::Approval,
-            });
             let last = view.turns.iter().rev().find_map(|t| t.completed.as_ref());
             let failed = last.filter(|t| t.status == TurnStatus::Failed);
-            (
-                (pending.len(), kind),
-                failed.and_then(|t| t.error_code.clone()),
-            )
+            (pending(view), failed.and_then(|t| t.error_code.clone()))
         });
         let unread = ended > read;
         let status = if pending.0 > 0 {
@@ -517,6 +605,17 @@ impl SessionActor {
         };
         Ok(json!(result))
     }
+}
+
+/// The session's pending requests, and the class of the oldest.
+fn pending(view: &SessionView) -> (usize, Option<PendingKind>) {
+    let mut pending: Vec<_> = view.requests.values().filter(|r| r.is_pending()).collect();
+    pending.sort_by_key(|r| r.requested.created_at.0);
+    let kind = pending.first().map(|r| match r.requested.request {
+        InteractionRequest::Question(_) | InteractionRequest::AuthUrl(_) => PendingKind::Input,
+        _ => PendingKind::Approval,
+    });
+    (pending.len(), kind)
 }
 
 /// The snapshot port until T061: every snapshot is `skipped`, without a

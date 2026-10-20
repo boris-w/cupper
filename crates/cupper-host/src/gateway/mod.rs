@@ -103,15 +103,15 @@ pub struct Gateway {
 }
 
 impl Gateway {
-    /// A gateway serving `routes`, and the receiving end of its audit
-    /// records.
+    /// A gateway serving `routes`, recording into `audit`, the host's audit
+    /// channel, which the session actors write into too.
     pub fn new(
         config: GatewayConfig,
         clock: Arc<dyn Clock>,
         durations: Durations,
         routes: Routes,
-    ) -> (Arc<Self>, mpsc::UnboundedReceiver<AuditRecord>) {
-        let (audit, records) = mpsc::unbounded_channel();
+        audit: mpsc::UnboundedSender<AuditRecord>,
+    ) -> Arc<Self> {
         let gateway = Self {
             config,
             clock,
@@ -123,7 +123,7 @@ impl Gateway {
             closing: watch::Sender::new(false),
             live: watch::Sender::new(0),
         };
-        (Arc::new(gateway), records)
+        Arc::new(gateway)
     }
 
     /// Accepts connections on `listener` for as long as the task runs; each

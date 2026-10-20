@@ -215,6 +215,11 @@ IT-project-add-trust = "pr"
 milestone = "M1a"
 UNIT-trust-scan = "pr"
 
+# 项目信任 findings 解析（计划 v1.3.15 由 T035 拆出）
+[T096]
+milestone = "M1a"
+UNIT-trust-findings = "pr"
+
 # 设置
 [T036]
 milestone = "M1a"
@@ -397,8 +402,18 @@ IT-q8-fallback-claude = { suite = "pr", status = "na", reason = "K1 已通过（
 # Git 服务 I：GitCmd 三档与仓库档防护
 [T060]
 milestone = "M1a"
-IT-git-repo-tier-malicious = "pr"
+UNIT-git-cmd = "pr"
+
+# Git 服务 I-b：仓库档的规则与指纹（计划 v1.3.16 由 T060 拆出）
+[T097]
+milestone = "M1a"
+UNIT-git-repo-rules = "pr"
 UNIT-git-fingerprint = "pr"
+
+# Git 服务 I-c：仓库档的执行（计划 v1.3.16 由 T060 拆出）
+[T098]
+milestone = "M1a"
+IT-git-repo-tier-malicious = "pr"
 
 # Git 服务 II：快照档与回合快照
 [T061]
@@ -512,6 +527,11 @@ UNIT-main-hardening = "pr"
 [T075]
 milestone = "M1a"
 UNIT-launcher = "pr"
+
+# 桌面主进程 II-b：退出确认与重启宿主（计划 v1.3.17 由 T075 拆出）
+[T007]
+milestone = "M1a"
+UNIT-host-restart = "pr"
 
 # 桌面主进程 III：windowBridge 与 preload
 [T076]

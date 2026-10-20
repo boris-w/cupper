@@ -1,15 +1,17 @@
 //! IT-orch-lifecycle: session commands from the gateway's dispatch, through
 //! the policy and the ledger, to the session actors and the store, with an
-//! in-process agent, on `ManualClock`.
+//! in-process agent, on `ManualClock`. The fixture serves IT-orch-interaction
+//! too.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use cupper_protocol::capabilities::SessionCapabilities;
 use cupper_protocol::domain::{AgentKind, PrincipalKind, PromptContent};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{AdapterInstanceId, ProjectId, SessionId, TurnId};
+use cupper_protocol::index::PendingKind;
 use cupper_protocol::limits::{MAX_SAFE_INTEGER, V1};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::rpc::Scope;
@@ -20,15 +22,15 @@ use futures::future::BoxFuture;
 use serde_json::{Value, json};
 use tokio::sync::{Notify, mpsc, oneshot};
 
-use super::{SessionDeps, SessionManager};
+use super::{IndexNotes, SessionDeps, SessionManager};
 use crate::clock::{Clock, IdGen, ManualClock};
 use crate::driver::api::{
     AgentError, AgentPort, AgentSessionId, Attach, AttachInfo, AttachTarget, DriverCommand,
     DriverEvent, NormUpdate, ProjectConfigPolicy, PromptTag,
 };
 use crate::durations::Durations;
-use crate::gateway::Routes;
 use crate::gateway::testkit::Peer;
+use crate::gateway::{AuditRecord, Routes};
 use crate::ledger::Ledger;
 use crate::orchestrator::testkit::text;
 use crate::quiescence::Quiescence;
@@ -78,7 +80,7 @@ impl Sink for Wake {
 }
 
 /// Claude's, with three permission modes; the host's cache has them too.
-fn caps() -> SessionCapabilities {
+pub(super) fn caps() -> SessionCapabilities {
     let mode = |value, risk| json!({"value": value, "name": value, "risk": risk});
     serde_json::from_value(json!({
         "agent": "claude",
@@ -98,44 +100,44 @@ fn caps() -> SessionCapabilities {
     .unwrap()
 }
 
-fn principal(id: &str, kind: PrincipalKind, scopes: &[Scope]) -> Principal {
+pub(super) fn principal(id: &str, kind: PrincipalKind, scopes: &[Scope]) -> Principal {
     let value = json!({"id": id, "kind": kind, "scopes": scopes});
     serde_json::from_value(value).unwrap()
 }
 
-fn harness() -> Principal {
+pub(super) fn harness() -> Principal {
     use Scope::*;
     let scopes = [Read, Write, Approve, Privileged, UiLocal, Test];
     principal("pr_test", PrincipalKind::TestHarness, &scopes)
 }
 
-fn create(command: &str) -> Value {
+pub(super) fn create(command: &str) -> Value {
     json!({"command_id": command, "agent": "claude", "project_id": ProjectId::from_uuid(1),
         "workspace": {"kind": "local"}, "message": text("hi")})
 }
 
-fn send(session: &SessionId, command: &str, message: &str) -> Value {
+pub(super) fn send(session: &SessionId, command: &str, message: &str) -> Value {
     json!({"command_id": command, "session_id": session, "mode": "queue",
         "content": text(message)})
 }
 
-fn on(session: &SessionId, command: &str) -> Value {
+pub(super) fn on(session: &SessionId, command: &str) -> Value {
     json!({"command_id": command, "session_id": session})
 }
 
 /// `data.code` and `data.reason` of an error, space-separated.
-fn code(error: Value) -> String {
+pub(super) fn code(error: Value) -> String {
     let field = |name| error["data"][name].as_str().unwrap_or("").to_owned();
     format!("{} {}", field("code"), field("reason"))
 }
 
 /// The event types, space-separated.
-fn tags(bodies: &[EventBody]) -> String {
+pub(super) fn tags(bodies: &[EventBody]) -> String {
     let tags: Vec<&str> = bodies.iter().map(EventBody::tag).collect();
     tags.join(" ")
 }
 
-fn done(tag: PromptTag, stop_reason: StopReason) -> DriverEvent {
+pub(super) fn done(tag: PromptTag, stop_reason: StopReason) -> DriverEvent {
     let usage = None;
     DriverEvent::PromptDone {
         tag,
@@ -145,26 +147,38 @@ fn done(tag: PromptTag, stop_reason: StopReason) -> DriverEvent {
 }
 
 /// The data of the session's events of type `tag`, as JSON.
-fn data(bodies: &[EventBody], tag: &str) -> Vec<Value> {
+pub(super) fn data(bodies: &[EventBody], tag: &str) -> Vec<Value> {
     let of = bodies.iter().filter(|b| b.tag() == tag);
     of.map(|b| json!(b)["data"].clone()).collect()
 }
 
-struct Fixture {
+/// The index's notes: each session's pending count, in order.
+#[derive(Debug, Default)]
+pub(super) struct Index(pub Mutex<Vec<u32>>);
+
+impl IndexNotes for Index {
+    fn pending(&self, _: &SessionId, count: u32, _: Option<PendingKind>) {
+        self.0.lock().unwrap().push(count);
+    }
+}
+
+pub(super) struct Fixture {
     dir: TempDir,
-    clock: ManualClock,
+    pub clock: ManualClock,
     routes: Routes,
     streams: Streams,
     seen: mpsc::UnboundedReceiver<Seen>,
     /// The attached session's events.
     events: Option<mpsc::UnboundedSender<DriverEvent>>,
+    pub audit: mpsc::UnboundedReceiver<AuditRecord>,
+    pub index: Arc<Index>,
     _writer: WriterThread,
 }
 
 impl Fixture {
     /// The host's sessions on a fresh `host.db` with a trusted project and
     /// Claude's capabilities cached.
-    async fn new(name: &str) -> Self {
+    pub async fn new(name: &str) -> Self {
         let (dir, clock) = (TempDir::new(name), ManualClock::new());
         let (writer, thread) = host_writer(&dir, &clock);
         let project = ProjectId::from_uuid(1).to_string();
@@ -189,6 +203,7 @@ impl Fixture {
         let streams = Streams::new(writer.clone(), readers.clone(), Arc::clone(&shared), config);
         let (agent, seen) = mpsc::unbounded_channel();
         let agent = Arc::new(Agent(agent)) as Arc<dyn AgentPort>;
+        let ((records, audit), index) = (mpsc::unbounded_channel(), Arc::new(Index::default()));
         let deps = SessionDeps {
             streams: streams.clone(),
             writer: writer.clone(),
@@ -198,6 +213,8 @@ impl Fixture {
             durations: durations.clone(),
             agents: HashMap::from([(AgentKind::Claude, agent)]),
             quiescence: Quiescence::new(),
+            audit: records,
+            index: Arc::clone(&index) as Arc<dyn IndexNotes>,
         };
         let conn = open_reader(&dir.host_db()).unwrap();
         let mut routes = Routes::new(Ledger::load(&conn, writer, shared, &durations).unwrap());
@@ -210,25 +227,27 @@ impl Fixture {
             streams,
             seen,
             events,
+            audit,
+            index,
             _writer,
         }
     }
 
-    async fn call(&self, by: Principal, method: &str, params: Value) -> Result<Value, Value> {
+    pub async fn call(&self, by: Principal, method: &str, params: Value) -> Result<Value, Value> {
         Peer::new(by).call(&self.routes, method, params).await
     }
 
     /// The result of a request from the test harness, which holds every scope.
-    async fn ok(&self, method: &str, params: Value) -> Value {
+    pub async fn ok(&self, method: &str, params: Value) -> Value {
         self.call(harness(), method, params).await.unwrap()
     }
 
-    async fn err(&self, method: &str, params: Value) -> String {
+    pub async fn err(&self, method: &str, params: Value) -> String {
         code(self.call(harness(), method, params).await.unwrap_err())
     }
 
     /// Answers the next attach with the agent's session `agent-1`.
-    async fn attach(&mut self) -> Attach {
+    pub async fn attach(&mut self) -> Attach {
         let Some(Seen::Attach(attach, events, reply)) = self.seen.recv().await else {
             panic!("an attach")
         };
@@ -245,26 +264,26 @@ impl Fixture {
         attach
     }
 
-    async fn command(&mut self) -> DriverCommand {
+    pub async fn command(&mut self) -> DriverCommand {
         match self.seen.recv().await {
             Some(Seen::Command(command)) => command,
             other => panic!("{other:?}"),
         }
     }
 
-    async fn prompt(&mut self) -> (PromptTag, PromptContent) {
+    pub async fn prompt(&mut self) -> (PromptTag, PromptContent) {
         match self.command().await {
             DriverCommand::Prompt { tag, content, .. } => (tag, content),
             other => panic!("{other:?}"),
         }
     }
 
-    fn emit(&self, event: DriverEvent) {
+    pub fn emit(&self, event: DriverEvent) {
         self.events.as_ref().unwrap().send(event).unwrap();
     }
 
     /// A session with the message `hi`, its agent attached and its prompt sent.
-    async fn started(&mut self) -> SessionId {
+    pub async fn started(&mut self) -> SessionId {
         let created = self.ok("session/create", create("c-1")).await;
         self.attach().await;
         self.prompt().await;
@@ -272,7 +291,7 @@ impl Fixture {
     }
 
     /// The session's events in the log, once there are `n` of type `tag`.
-    async fn events(&self, session: &SessionId, tag: &str, n: usize) -> Vec<EventBody> {
+    pub async fn events(&self, session: &SessionId, tag: &str, n: usize) -> Vec<EventBody> {
         let stream = StreamId::Session(session.clone());
         let handle = self.streams.open(&stream).await.unwrap();
         let wake = Arc::new(Wake::default());
@@ -290,7 +309,7 @@ impl Fixture {
     }
 
     /// One text column of `sql`'s rows.
-    fn rows(&self, sql: &str) -> Vec<String> {
+    pub fn rows(&self, sql: &str) -> Vec<String> {
         query(&self.dir.host_db(), sql, |row| row.get(0))
     }
 }
