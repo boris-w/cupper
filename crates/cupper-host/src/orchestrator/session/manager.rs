@@ -39,7 +39,7 @@ use super::actor::{Mail, Parts, SessionActor, Start, Stop};
 use super::core::{Input, SessionCore};
 use super::load::load;
 use super::rows::Rows;
-use super::{IndexNotes, internal, not_found, parse, tier_of};
+use super::{IndexNotes, internal, not_found, parse, privileged, tier_of};
 use crate::clock::{Clock, IdGen};
 use crate::driver::api::{AgentPort, ProjectConfigPolicy};
 use crate::durations::Durations;
@@ -154,6 +154,7 @@ impl SessionManager {
             principal,
             params,
             ticket,
+            conn,
             ..
         } = call;
         let accepted = match self.accept(&principal, &params).await {
@@ -175,6 +176,8 @@ impl SessionManager {
             confirmed,
         } = accepted;
         let deps = &self.shared.deps;
+        // In full access, which only `privileged` may set (design 5.8.6).
+        let executed = confirmed.then(|| Confirmable::Create(params.clone()));
         let id = SessionId::from_uuid(deps.ids.new_id().as_u128());
         let stream_id = StreamId::Session(id.clone());
         let stream = deps.streams.open(&stream_id).await.map_err(internal)?;
@@ -243,6 +246,16 @@ impl SessionManager {
             })),
         };
         writer.append(batch).await.map_err(internal)?;
+        let facts = Facts {
+            mode_tier: Some(Tier::FullAccess),
+            project_path: Some(WirePath(path.clone())),
+            ..Facts::default()
+        };
+        let executed = executed.and_then(|c| privileged(c, &facts, &principal.id, &conn, at));
+        if let Some(record) = executed {
+            // Nobody listening is the receiver's choice.
+            let _ = deps.audit.send(record);
+        }
         let summary = SessionSummary {
             session_id: id.clone(),
             project_id: params.project_id.clone(),
