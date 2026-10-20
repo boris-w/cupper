@@ -9,12 +9,11 @@ mod common;
 
 use std::path::{Path, PathBuf};
 
-use cupper_cli::client::{self, Client, ClientError};
+use cupper_cli::client::{self, Client};
 use cupper_host::clock::{Clock, SystemClock};
 use cupper_host::driver::runtime::launch;
 use cupper_host::gateway::testkit::TempDir;
 use cupper_protocol::ids::{ProjectId, SessionId};
-use cupper_protocol::methods::interaction::InteractionRespond;
 use cupper_protocol::methods::project::{
     ProjectAdd, ProjectTrust, ProjectTrustInfo, ProjectTrustInfoParams,
 };
@@ -60,10 +59,6 @@ async fn trust(client: &Client, project: &ProjectId) {
     client.request::<ProjectTrust>(typed(params)).await.unwrap();
 }
 
-fn typed<T: serde::de::DeserializeOwned>(value: Value) -> T {
-    serde_json::from_value(value).unwrap()
-}
-
 /// A session in `project` whose first message is `text`.
 async fn start(client: &Client, project: &ProjectId, text: &str) -> SessionId {
     let params = json!({"command_id": client::command_id(), "agent": "claude",
@@ -71,27 +66,6 @@ async fn start(client: &Client, project: &ProjectId, text: &str) -> SessionId {
         "message": [{"type": "text", "text": text}]});
     let created = client.request::<SessionCreate>(typed(params)).await;
     created.unwrap().session_id
-}
-
-/// The `data` of the session's events of type `kind`, once there are `n`.
-async fn events(data_dir: &Path, session: &SessionId, kind: &str, n: usize) -> Vec<Value> {
-    let sql = format!(
-        "SELECT json_extract(json, '$.data') FROM events
-         WHERE stream = 'session/{session}' AND type = '{kind}' ORDER BY seq"
-    );
-    let clock = SystemClock::new();
-    let give_up = clock.now_mono() + PATIENCE;
-    loop {
-        let rows = query(&data_dir.join("host.db"), &sql);
-        if rows.len() >= n {
-            return rows
-                .iter()
-                .map(|row| serde_json::from_str(row).unwrap())
-                .collect();
-        }
-        assert!(clock.now_mono() < give_up, "{kind}: {rows:?}");
-        wait(&clock).await;
-    }
 }
 
 /// Waits until the agent has said `text` in the session.
@@ -106,22 +80,6 @@ async fn said(data_dir: &Path, session: &SessionId, text: &str) {
         assert!(clock.now_mono() < give_up, "not said: {text}");
         wait(&clock).await;
     }
-}
-
-/// Answers `asked` with `outcome`.
-async fn respond(
-    client: &Client,
-    session: &SessionId,
-    asked: &Value,
-    outcome: Value,
-) -> Result<(), ClientError> {
-    let params = json!({"command_id": client::command_id(), "session_id": session,
-        "request_id": asked["request_id"], "request_digest": asked["digest"],
-        "outcome": outcome});
-    client
-        .request::<InteractionRespond>(typed(params))
-        .await
-        .map(drop)
 }
 
 /// The session's status and pending kind in the index, once they are `want`.
@@ -155,15 +113,6 @@ fn configure(dir: &Path, hooks: &str) {
         r#"{{"hooks": {{"Stop": [{{"hooks": [{{"type": "command", "command": "{hooks}"}}]}}]}}}}"#
     );
     std::fs::write(dir.join(".claude/settings.json"), settings).unwrap();
-}
-
-/// Waits until the audit holds `want` of `events`, with their principals.
-async fn audited(data_dir: &Path, events: &str, want: &[&str]) {
-    let sql = format!(
-        "SELECT event || ' ' || coalesce(principal, '-') FROM audit
-         WHERE event IN ({events}) ORDER BY id"
-    );
-    until(data_dir, "host.db", &sql, want).await;
 }
 
 /// IT-form (AP-5): a form's request panel, answered by any client; the
@@ -220,18 +169,6 @@ async fn it_plan_confirm_the_chosen_option_goes_back_to_the_agent() {
     let last = configured.last().unwrap();
     assert_eq!(last["config"]["permission_mode"], "auto");
     assert!(last.get("confirmation_required").is_none(), "{last}");
-}
-
-/// The error codes of an answer the host refused: `data.code` and its reason.
-fn refused(answered: Result<(), ClientError>) -> (String, String) {
-    let Err(ClientError::Rpc(err)) = answered else {
-        panic!("refused: {answered:?}")
-    };
-    let code = err.app_code().map(ToString::to_string).unwrap_or_default();
-    (
-        code,
-        err.reason().map(ToString::to_string).unwrap_or_default(),
-    )
 }
 
 /// IT-interaction-expire (SEC-10): an answer counts only for the request and
