@@ -5,10 +5,11 @@
 pub mod lineage;
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use cupper_protocol::annotations::WirePath;
 use cupper_protocol::methods::admin::{ChainProcess, VerifiedRequester};
-use cupper_sys::{AuditToken, ProcessInfo, StartTime};
+use cupper_sys::{AuditToken, ProcessInfo, SigningIdentity, StartTime};
 use futures::FutureExt;
 use futures::future::BoxFuture;
 
@@ -20,18 +21,34 @@ use crate::store::Readers;
 /// `ancestor`, or `unchecked` when the process could not be examined.
 pub type Finding = Result<VerifiedRequester, Vec<String>>;
 
+/// The CLI's signing identifier (design 5.2.14).
+const CLI_IDENTIFIER: &str = "dev.cupper.cli";
+
 /// Examines requesters against the `adapters` table and this app's CLI.
 #[derive(Debug, Clone)]
 pub struct ProcessRequesters {
     readers: Readers,
-    /// `Contents/Helpers/cupper`, when the host runs inside the app.
-    bundled: Option<PathBuf>,
+    bundled: Option<Arc<Bundled>>,
+}
+
+/// What tells the app's own CLI, without reading the app bundle (design
+/// 5.8.4): where it is, and the host's own signature.
+#[derive(Debug)]
+struct Bundled {
+    /// `Contents/Helpers/cupper` beside the host's bundle.
+    path: PathBuf,
+    /// The host's signing certificate.
+    certificate: Vec<u8>,
 }
 
 impl ProcessRequesters {
-    /// `host_exe`: the host's own executable, its links resolved.
-    pub fn new(readers: Readers, host_exe: &Path) -> Self {
-        let bundled = bundled_cli(host_exe);
+    /// `host_exe`: the host's own executable; `host`: its own signature
+    /// ([`cupper_sys::own_signing_identity`]). Outside the app, or signed ad
+    /// hoc, no requester is the app's CLI.
+    pub fn new(readers: Readers, host_exe: &Path, host: Option<SigningIdentity>) -> Self {
+        let certificate = host.and_then(|host| host.leaf_certificate);
+        let bundled = bundled_cli(host_exe).zip(certificate);
+        let bundled = bundled.map(|(path, certificate)| Arc::new(Bundled { path, certificate }));
         Self { readers, bundled }
     }
 
@@ -77,7 +94,7 @@ fn live_adapters(conn: &rusqlite::Connection) -> rusqlite::Result<Vec<LiveAdapte
 
 /// Blocking: the process table and code signatures. What is read by pid
 /// counts only if the token still names a running process afterwards.
-fn examine(token: &AuditToken, adapters: &[LiveAdapter], bundled: Option<&Path>) -> Finding {
+fn examine(token: &AuditToken, adapters: &[LiveAdapter], bundled: Option<&Bundled>) -> Finding {
     let pid = token.pid();
     let chain = cupper_sys::parent_chain(pid);
     let now: Vec<ProcessInfo> = adapters
@@ -88,7 +105,7 @@ fn examine(token: &AuditToken, adapters: &[LiveAdapter], bundled: Option<&Path>)
     if !signals.is_empty() {
         return Err(signals.iter().map(|s| s.as_str().to_owned()).collect());
     }
-    let (Ok(executable), Ok(cdhash), false) =
+    let (Ok(executable), Ok(_), false) =
         (cupper_sys::pid_path(pid), token.cdhash(), chain.is_empty())
     else {
         return Err(unchecked());
@@ -107,16 +124,13 @@ fn examine(token: &AuditToken, adapters: &[LiveAdapter], bundled: Option<&Path>)
     let launchd = |p: Option<&ProcessInfo>| p.is_some_and(|p| p.pid == 1);
     // No terminal, launchd as the parent, or a chain cut short.
     let origin_unverifiable = !has_tty || launchd(chain.get(1)) || !launchd(chain.last());
-    let signing = token
-        .signing_identity()
-        .ok()
-        .flatten()
-        .map(|id| match id.team_id {
-            Some(team) => format!("{} ({team})", id.identifier),
-            None => id.identifier,
-        });
-    let ours = |path: &Path| cupper_sys::file_cdhash(path).is_ok_and(|ours| ours == cdhash);
-    let bundled_cli = bundled.is_some_and(|path| executable == path && ours(path));
+    let identity = token.signing_identity().ok().flatten();
+    let bundled_cli =
+        bundled.is_some_and(|bundled| is_bundled(&executable, identity.as_ref(), bundled));
+    let signing = identity.map(|id| match id.team_id {
+        Some(team) => format!("{} ({team})", id.identifier),
+        None => id.identifier,
+    });
     Ok(VerifiedRequester {
         executable: WirePath(executable.display().to_string()),
         signing,
@@ -125,6 +139,18 @@ fn examine(token: &AuditToken, adapters: &[LiveAdapter], bundled: Option<&Path>)
         has_tty,
         origin_unverifiable,
         bundled_cli,
+    })
+}
+
+/// The app's own CLI: at the path beside the host's bundle (compared as
+/// text), running code with the CLI's identifier and the host's own signing
+/// certificate. Ad-hoc code has no certificate, so it never is.
+fn is_bundled(executable: &Path, identity: Option<&SigningIdentity>, bundled: &Bundled) -> bool {
+    identity.is_some_and(|identity| {
+        let certificate = identity.leaf_certificate.as_ref();
+        executable == bundled.path
+            && identity.identifier == CLI_IDENTIFIER
+            && certificate == Some(&bundled.certificate)
     })
 }
 
@@ -139,14 +165,19 @@ mod tests {
         let (ours, theirs) = UnixStream::pair().unwrap();
         let token = cupper_sys::peer_token(&ours).unwrap();
         let exe = std::fs::canonicalize(std::env::current_exe().unwrap()).unwrap();
-        // This test process as the app's CLI, with no adapter running.
-        let verified = examine(&token, &[], Some(&exe)).unwrap();
+        // No adapter runs; this ad-hoc signed process is no app's CLI, even
+        // where the app's CLI would be.
+        let certificate = vec![1];
+        let bundled = Bundled {
+            path: exe.clone(),
+            certificate,
+        };
+        let verified = examine(&token, &[], Some(&bundled)).unwrap();
         assert_eq!(verified.pid, std::process::id());
         assert_eq!(verified.executable.0, exe.display().to_string());
-        assert!(verified.bundled_cli && verified.signing.is_some());
+        assert!(!verified.bundled_cli && verified.signing.is_some());
         let parent = std::os::unix::process::parent_id();
         assert_eq!(verified.parent_chain[0].pid, parent);
-        assert!(!examine(&token, &[], None).unwrap().bundled_cli);
         // The test's parent as an adapter: this process descends from it.
         let parent = cupper_sys::process_info(parent as i32).unwrap();
         let (pid, pgid, start) = (parent.pid, parent.pgid, parent.start);
@@ -154,6 +185,41 @@ mod tests {
         let signals = examine(&token, &[adapter], None).unwrap_err();
         assert!(signals.contains(&"ancestor".to_owned()), "{signals:?}");
         drop(theirs);
+    }
+
+    #[test]
+    fn bundled_cli_needs_the_path_identifier_and_host_certificate() {
+        let path = PathBuf::from("/A/Cupper.app/Contents/Helpers/cupper");
+        let bundled = Bundled {
+            path: path.clone(),
+            certificate: vec![7],
+        };
+        let identity = |identifier: &str, certificate: Option<u8>| SigningIdentity {
+            identifier: identifier.to_owned(),
+            team_id: None,
+            leaf_certificate: certificate.map(|byte| vec![byte]),
+        };
+        let other = Path::new("/usr/local/bin/cupper");
+        let cases = [
+            (
+                path.as_path(),
+                Some(identity(CLI_IDENTIFIER, Some(7))),
+                true,
+            ),
+            (other, Some(identity(CLI_IDENTIFIER, Some(7))), false),
+            (&path, Some(identity("dev.cupper.app", Some(7))), false),
+            (&path, Some(identity(CLI_IDENTIFIER, Some(8))), false),
+            // Ad hoc: no certificate.
+            (&path, Some(identity(CLI_IDENTIFIER, None)), false),
+            (&path, None, false),
+        ];
+        for (n, (executable, identity, expected)) in cases.into_iter().enumerate() {
+            assert_eq!(
+                is_bundled(executable, identity.as_ref(), &bundled),
+                expected,
+                "{n}"
+            );
+        }
     }
 
     #[test]

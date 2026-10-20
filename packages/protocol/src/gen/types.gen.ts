@@ -3463,8 +3463,9 @@ export type UserMessage = {
  */
 export type VerifiedRequester = {
   /**
-   * The command-line tool this app comes with: its path and the cdhash
-   * of the code it runs are those of `Contents/Helpers/cupper`.
+   * The command-line tool this app comes with: at `Contents/Helpers/cupper`
+   * beside the host, running code with the CLI's identifier and the
+   * host's own signing certificate.
    */
   bundled_cli: boolean;
   executable: WirePath;

@@ -9129,7 +9129,7 @@
       "description": "What the host checked about the requesting process.",
       "properties": {
         "bundled_cli": {
-          "description": "The command-line tool this app comes with: its path and the cdhash\nof the code it runs are those of `Contents/Helpers/cupper`.",
+          "description": "The command-line tool this app comes with: at `Contents/Helpers/cupper`\nbeside the host, running code with the CLI's identifier and the\nhost's own signing certificate.",
           "type": "boolean"
         },
         "executable": {
