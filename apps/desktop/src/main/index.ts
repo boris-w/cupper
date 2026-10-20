@@ -41,6 +41,7 @@ import { hardenWebContents } from "./security/navigation";
 import { restrictPermissions } from "./security/permissions";
 import { enforceSwitchAllowlist } from "./security/switches";
 import { guardOf, watchInput } from "./input";
+import { controlHost, Privileged } from "./privileged";
 import { serveShell } from "./shell";
 import { MAIN_DOCUMENT_URL, mainWindowOptions } from "./window";
 
@@ -125,7 +126,14 @@ function start() {
 async function ready() {
   restrictPermissions(session.defaultSession);
   const prefs = await Prefs.open(join(dirs.userData, "prefs.json"));
-  serveShell({ flavor, prefs, openExternal });
+  const privileged =
+    host &&
+    new Privileged({
+      now: () => Date.now(),
+      host: controlHost(host.control.client, (ms) => new Promise((done) => setTimeout(done, ms))),
+      t: (key, values) => t(`privileged:${key}`, values),
+    });
+  serveShell({ flavor, prefs, openExternal, ...(privileged ? { privileged } : {}) });
   const renderer = join(import.meta.dirname, "../renderer");
   protocol.handle(
     APP_SCHEME,

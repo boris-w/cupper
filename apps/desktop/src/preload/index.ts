@@ -2,12 +2,12 @@
 // is bundled into one CommonJS file and may only require `electron`. The
 // ShellAPI goes to the main world as `window.shell`; the renderer gets no
 // Electron object, and reaches the host only through the windowBridge's port.
-// Privileged actions come with real input (T077); navigation and the updater's
-// state come once their senders exist.
+// Navigation and the updater's state come once their senders exist.
 
 import {
   SHELL_GLOBAL,
   type Handshake,
+  type PrivilegedResult,
   type ShellAPI,
   type ShellInfo,
   type Unsubscribe,
@@ -24,6 +24,7 @@ import {
   PICK_DIRECTORY,
   PREFS_CHANGED,
   PREFS_SET,
+  PRIVILEGED,
   SHELL_INIT,
   THEME_CHANGED,
   UPDATE_STATE,
@@ -75,7 +76,8 @@ function on<Args extends unknown[]>(channel: string, cb: (...args: Args) => void
 const shell: ShellAPI = {
   init: () => ipcRenderer.invoke(SHELL_INIT) as Promise<ShellInfo>,
   host: bridgeHost(openHost),
-  requestPrivileged: () => Promise.resolve({ status: "failed", error: "unsupported" }),
+  requestPrivileged: (action) =>
+    ipcRenderer.invoke(PRIVILEGED, action) as Promise<PrivilegedResult>,
   onCommand: (cb) => on(COMMAND_CHANNEL, cb),
   onNavigate: (cb) => on(NAVIGATE, cb),
   openExternal: (url) => ipcRenderer.send(OPEN_EXTERNAL, url),
