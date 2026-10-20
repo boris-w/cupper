@@ -8,13 +8,15 @@ use std::path::{Path, PathBuf};
 pub const USAGE: &str =
     "usage: cupper-fake-agent [--persona claude|codex] [--auth logged-in|logged-out]
                          [--fault <name>[@<segment>]]... [--segment <n>] [--segment-file <path>]
-faults: exit_on_start, initialize_hang, set_config_error, resume_error";
+faults: exit_on_start, initialize_hang, set_config_error, resume_error, linger";
 
 const FAULTS: &[&str] = &[
     "exit_on_start",
     "initialize_hang",
     "set_config_error",
     "resume_error",
+    // Ignore SIGTERM, and stay after stdin closes (the host's closing order, 5.6.8).
+    "linger",
 ];
 
 #[derive(Debug, thiserror::Error)]
