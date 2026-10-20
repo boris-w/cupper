@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist/tsc",
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "types": ["node"]
+  },
+  "include": ["src", "*.config.ts"],
+  "references": [
+    { "path": "../../packages/host-client" },
+    { "path": "../../packages/shell-api" },
+    { "path": "../../packages/ui-core" }
+  ]
+}

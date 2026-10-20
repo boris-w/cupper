@@ -268,7 +268,10 @@ impl Conn<'_> {
                     principal: principal.clone(),
                     client: client.clone(),
                     weak_auth,
+                    token: self.pinned,
+                    granted: Arc::default(),
                 };
+                let granted = Arc::clone(&opened.granted);
                 let since_ms = self.gw.clock.now_wall_ms();
                 let outbox = Arc::clone(self.outbox);
                 self.gw.clients.add(opened.clone(), since_ms, outbox);
@@ -291,6 +294,7 @@ impl Conn<'_> {
                     self.id.clone(),
                     principal,
                     client,
+                    granted,
                     outbox,
                     auditor,
                     subscriptions,

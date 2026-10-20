@@ -45,6 +45,7 @@ use crate::driver::runtime::agents::{Agents, Find};
 use crate::driver::runtime::launch::{self, Launch};
 use crate::driver::runtime::{AGENT_RUNTIME, AgentRuntime, RuntimeDeps};
 use crate::durations::Durations;
+use crate::elevation::FailClosed;
 use crate::exit::HostExit;
 use crate::gateway::listen::{HostLock, ListenError};
 use crate::gateway::{Gateway, GatewayConfig, Routes};
@@ -201,6 +202,8 @@ impl Host {
         // launch both take this result.
         let found = finder.discover(project_roots(&reader)?).await;
         let git = git_tool(&found, &data_dir)?;
+        // The audit records go into the `audit` table from T059 on.
+        let (records, _audit) = mpsc::unbounded_channel();
         // Step 7: the index stream, before the socket.
         quiescence.register(INDEX);
         let index = IndexHandle::start(IndexDeps {
@@ -220,6 +223,9 @@ impl Host {
                 power_assertion: false,
                 last_exit_abnormal: run.abnormal,
             },
+            // Lineage and the requester's details are T133's.
+            requesters: Arc::new(FailClosed),
+            audit: records.clone(),
         })
         .await?;
         let launch = finder.launch_found(&found).await;
@@ -255,8 +261,6 @@ impl Host {
             })
         };
         let agents = Agents::new(claude.clone(), readers.clone(), writer.clone(), find);
-        // The audit records go into the `audit` table from T059 on.
-        let (records, _audit) = mpsc::unbounded_channel();
         let sessions = SessionManager::new(SessionDeps {
             streams: streams.clone(),
             writer: writer.clone(),

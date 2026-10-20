@@ -19,6 +19,8 @@ pub struct JobCtx<'a> {
     pub root: &'a Path,
     log_dir: &'a Path,
     job: &'static str,
+    /// What `xtask ci` was asked to run: the job itself, or a composite such as `pr`.
+    pub target: &'a str,
     /// Checks and test cases that passed or failed. A step without test cases
     /// (fmt, clippy, cargo deny, ...) counts as one check.
     pub passed: u64,
@@ -40,6 +42,7 @@ impl<'a> JobCtx<'a> {
             root,
             log_dir,
             job,
+            target: job,
             passed: 0,
             failed: 0,
             cases: Vec::new(),
@@ -96,10 +99,29 @@ impl<'a> JobCtx<'a> {
         output_file.push(&report);
         cmd.args(["--reporter=default", "--reporter=json"])
             .arg(output_file);
+        let root = self.root;
+        self.reported(step, cmd, &report, |text| parse_vitest(text, root))
+    }
+
+    /// Runs a Playwright step and records every test case from its JSON report.
+    pub fn playwright(&mut self, step: &str, cmd: &mut Command) -> Result<()> {
+        let report = self.step_file(step, "json");
+        cmd.arg("--reporter=list,json")
+            .env("PLAYWRIGHT_JSON_OUTPUT_FILE", &report);
+        self.reported(step, cmd, &report, parse_playwright)
+    }
+
+    fn reported(
+        &mut self,
+        step: &str,
+        cmd: &mut Command,
+        report: &Path,
+        parse: impl FnOnce(&str) -> Result<Vec<TestCase>>,
+    ) -> Result<()> {
         let (ok, log) = self.exec(step, cmd)?;
-        let cases = match fs::read_to_string(&report) {
-            Ok(text) => parse_vitest(&text, self.root),
-            Err(err) => Err(err).context("Vitest wrote no JSON report"),
+        let cases = match fs::read_to_string(report) {
+            Ok(text) => parse(&text),
+            Err(err) => Err(err).context("the step wrote no JSON report"),
         };
         match cases {
             Ok(cases) => self.tally(step, ok, &log, cases),
@@ -234,6 +256,55 @@ pub fn parse_vitest(report: &str, root: &Path) -> Result<Vec<TestCase>> {
     Ok(cases)
 }
 
+/// Test cases from Playwright's JSON report, named `<file>::<describe>...::<test>`
+/// with the file relative to the test directory. Skipped tests are left out.
+/// An error outside the tests (the global setup threw) counts as one failed
+/// case named `playwright`.
+pub fn parse_playwright(report: &str) -> Result<Vec<TestCase>> {
+    let report: Value = serde_json::from_str(report).context("parse the Playwright JSON report")?;
+    let suites = report["suites"]
+        .as_array()
+        .context("the Playwright JSON report has no `suites`")?;
+    let mut cases = Vec::new();
+    for suite in suites {
+        playwright_suite(suite, &mut Vec::new(), &mut cases);
+    }
+    if report["errors"]
+        .as_array()
+        .is_some_and(|errors| !errors.is_empty())
+    {
+        cases.push(TestCase {
+            name: "playwright".to_owned(),
+            passed: false,
+        });
+    }
+    Ok(cases)
+}
+
+fn playwright_suite<'a>(suite: &'a Value, titles: &mut Vec<&'a str>, cases: &mut Vec<TestCase>) {
+    titles.push(suite["title"].as_str().unwrap_or_default());
+    for spec in suite["specs"].as_array().into_iter().flatten() {
+        let tests = spec["tests"].as_array().into_iter().flatten();
+        let statuses: Vec<&str> = tests.filter_map(|test| test["status"].as_str()).collect();
+        if statuses.iter().all(|status| *status == "skipped") {
+            continue;
+        }
+        let name: Vec<&str> = titles
+            .iter()
+            .copied()
+            .chain(spec["title"].as_str())
+            .collect();
+        cases.push(TestCase {
+            name: name.join("::"),
+            passed: statuses.iter().all(|status| *status == "expected"),
+        });
+    }
+    for child in suite["suites"].as_array().into_iter().flatten() {
+        playwright_suite(child, titles, cases);
+    }
+    titles.pop();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -316,5 +387,40 @@ test result: FAILED. 2 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out
         );
         assert!(parse_vitest("{}", Path::new("/")).is_err());
         assert!(parse_vitest("not json", Path::new("/")).is_err());
+    }
+
+    #[test]
+    fn playwright_report_yields_cases_that_ran() {
+        // Shaped like Playwright 1.64's report: a file with a describe block,
+        // a failed and a skipped test, and an error from the global setup.
+        let report = r#"{
+          "suites": [{
+            "title": "shell.spec.ts",
+            "specs": [
+              {"title": "UI-a light", "tests": [{"status": "expected"}]},
+              {"title": "UI-a dark", "tests": [{"status": "unexpected"}]},
+              {"title": "UI-b later", "tests": [{"status": "skipped"}]}
+            ],
+            "suites": [{
+              "title": "UI-c",
+              "specs": [{"title": "narrow", "tests": [{"status": "expected"}]}]
+            }]
+          }],
+          "errors": [{"message": "the baselines were made on another Chromium"}]
+        }"#;
+        let case = |name: &str, passed| TestCase {
+            name: name.to_owned(),
+            passed,
+        };
+        assert_eq!(
+            parse_playwright(report).expect("valid report"),
+            [
+                case("shell.spec.ts::UI-a light", true),
+                case("shell.spec.ts::UI-a dark", false),
+                case("shell.spec.ts::UI-c::narrow", true),
+                case("playwright", false),
+            ]
+        );
+        assert!(parse_playwright("{}").is_err());
     }
 }

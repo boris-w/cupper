@@ -130,7 +130,7 @@ type NavigateTarget = { kind: 'session'; session_id: string; request_id?: string
 type PrivilegedAction =
   | { kind: 'interaction'; session_id: string; request_id: string; option_id: string }
   | { kind: 'set_config'; session_id: string; option: string; value: string }
-  | { kind: 'confirm_config'; session_id: string }
+  | { kind: 'confirm_config'; session_id: string }   // 内容（config_digest、原因、当前配置）由主进程经 control 连接订阅一次会话流、取 session.configured（T134）
   | { kind: 'create_session'; params: SessionCreateParams }
   | { kind: 'add_project' }                   // 选目录、project/add、信任确认一次完成
   | { kind: 'trust_project'; project_id: string }

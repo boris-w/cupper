@@ -19,5 +19,6 @@ export type {
 } from "./shell-api";
 export { SHELL_GLOBAL } from "./shell-api";
 export { commandHandler, type CommandHandlers } from "./commands";
+export { MAIN_DOCUMENT_CSP } from "./csp";
 export { isExternalUrl } from "./links";
 export { isKnownTarget } from "./navigation";

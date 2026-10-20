@@ -77,3 +77,21 @@ T077 合并之后，在原来的 T004 worktree 里从最新的 main 开新分支
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 940–1,055 行，贴线；另外发现 `confirm_config` 的内容没有来源。在写代码之前停下汇报。
+
+**1. `confirm_config` 采用 (a)**：主进程在 control 连接上用 host-client 的 `SessionView` 订阅一次会话流，等快照到齐（`live`）后取 `session.configured`（`config_digest`、需要确认的原因、当前配置），再退订。
+- 理由：原生确认框的内容必须来自宿主，不能由渲染进程给出。(b) 让渲染进程提供 `config_digest`，确认框也显示不出档位和原因，失去原生确认的意义。
+- `ShellAPI` 接口不变。已在设计 5.7.3 的 `PrivilegedAction` 处注明。
+- 订阅失败或超时就返回 `failed`，不弹框。
+
+**2. 规模：放宽，不拆分**：上限约 1,100 行，硬停止线 1,200；推算贴线也先停下。剩下的模块彼此依赖紧，拆开要多一轮派发，得不偿失（与 T038 的第 2 次裁定同理）。
+
+**3. 核对结果都认可**：
+- `policy/describe` 要完整参数：先拼出整条命令（带 `command_id`），取描述后用同一个 `command_id` 发出；
+- 各 action 的内容来源如 `notes.md` 所列；
+- `settings` 在 T036 之前返回 `failed`；
+- `bundled_cli` 按现有字段实现、写进交接；
+- T038 执行者提的三点按你的安排处理。
