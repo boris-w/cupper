@@ -86,3 +86,8 @@
   - 会话层要 privileged 的操作（切到 `full_access`、选 privileged 选项）由会话 actor 判定，网关看不到，这次没有记，交接。
 - **`admit` 的 `verify`**：移进 `spawn_blocking`，原处 `await` 结论，结论出来之前连接不往下走；检查本身出错按"不是 UI"处理。
 - **另一处同步调用 Security 框架的地方**：`Gateway::serve` 在接受连接的循环里同步调用 `SelfCheck::check`（T059），它走 `file_cdhash`。我没有改，在汇报里提出。
+
+## CI
+
+- 第一次 `cargo xtask ci pr` 失败在 IT-audit-retention：CI 用全部特性构建，`dev-auth` 打开后宿主一启动就记 `host.weak_auth`，而用例只预期了 `host.started`。用例改为按 `dev-auth` 预期这一条，于是在 CI 里也验证了 `host.weak_auth` 的产生点。修正增 5 行、删 2 行。
+- 重跑通过。
