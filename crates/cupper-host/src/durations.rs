@@ -104,6 +104,9 @@ durations! {
     /// How long `--version` of a CLI, git or git-lfs, and `xcode-select -p`,
     /// may take (design 5.6.6, 5.2.10).
     VERSION_PROBE = "version_probe", Duration::from_secs(5);
+    /// How long the runtime installer may take to download one npm package
+    /// (design 5.2.12, T115 ruling).
+    RUNTIME_DOWNLOAD = "runtime_download", Duration::from_secs(60);
     /// A git command other than those below: the read-only ones and the repo
     /// tier's writes (design 5.2.10).
     GIT_COMMAND = "git_command", Duration::from_secs(30);

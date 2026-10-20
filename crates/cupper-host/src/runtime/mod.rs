@@ -9,8 +9,11 @@
 //! claude-agent-acp, downloaded and bundled on this machine, joins in T115,
 //! with the `network` and `hash_mismatch` failures; codex-acp in T111.
 
+#[cfg(test)]
+mod download_tests;
 mod files;
 mod machine;
+pub mod npm;
 mod plan;
 pub mod self_test;
 #[cfg(test)]
@@ -57,6 +60,11 @@ pub enum Reason {
     BundleChanged,
     /// The runtime directory cannot be written.
     Disk,
+    /// The registry could not be reached, failed or took too long; retried.
+    Network,
+    /// A download is not what the lockfile pins, or cannot be accepted: a
+    /// tarball path that leaves its package; never retried.
+    HashMismatch,
 }
 
 pub type Statuses = BTreeMap<Component, Status>;

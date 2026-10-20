@@ -27,7 +27,7 @@ pub struct Manifest {
     pub env: EnvClasses,
     pub node: Pinned,
     pub esbuild_wasm: Pinned,
-    pub claude_agent_acp: Pinned,
+    pub claude_agent_acp: ClaudeAgentAcp,
     /// The runtime's files by their path in the app bundle.
     pub files: BTreeMap<String, FileHash>,
 }
@@ -41,6 +41,20 @@ pub const CLAUDE_BUNDLE: &str = "Resources/runtime/bundle-claude-acp.mjs";
 #[derive(Debug, Deserialize)]
 pub struct Pinned {
     pub version: String,
+}
+
+/// claude-agent-acp, downloaded by its lockfile and bundled on this machine
+/// (ADR-08).
+#[derive(Debug, Deserialize)]
+pub struct ClaudeAgentAcp {
+    pub version: String,
+    /// Under `Resources/runtime/`.
+    pub lockfile: String,
+    /// The bundle's entry point in the npm tree.
+    pub entry: String,
+    /// What the bundle hashes to: esbuild-wasm's output is the same bytes
+    /// on every machine (design 5.10.3).
+    pub bundle_sha256: String,
 }
 
 /// What a runtime file must hash to before it runs (ADR-08).
@@ -118,6 +132,13 @@ mod tests {
         for hash in manifest.files.values() {
             assert_eq!(hash.sha256.len(), 64, "{hash:?}");
         }
+        let claude = &manifest.claude_agent_acp;
+        assert_eq!(claude.bundle_sha256.len(), 64);
+        assert!(
+            manifest
+                .files
+                .contains_key(&format!("Resources/runtime/{}", claude.lockfile))
+        );
     }
 
     #[test]
