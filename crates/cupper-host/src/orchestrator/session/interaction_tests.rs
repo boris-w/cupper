@@ -20,6 +20,7 @@ fn ask(n: u64, options: Vec<InteractionOption>) -> DriverEvent {
     let request = AskRequest::Classified(permission(options));
     DriverEvent::Ask {
         ask: AskId(n),
+        tool_call_id: None,
         request,
     }
 }

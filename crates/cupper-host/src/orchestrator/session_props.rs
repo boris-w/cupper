@@ -191,6 +191,8 @@ impl World {
             update(NormUpdate::ToolUpdate {
                 tool_call_id,
                 title,
+                command: None,
+                paths: None,
                 status,
                 output,
                 exit_code,
@@ -244,6 +246,7 @@ impl World {
                     title: "Run".into(),
                     paths: Vec::new(),
                     command: Some("make".into()),
+                    cwd: Some(cupper_protocol::annotations::WirePath("/work".into())),
                 });
             }
             Op::Output(n) => {
@@ -288,7 +291,11 @@ impl World {
                 self.asks.push((ask, None));
                 let option = option("allow", "allow_once", "once", "approve");
                 let request = AskRequest::Classified(permission(vec![option]));
-                In::Agent(DriverEvent::Ask { ask, request })
+                In::Agent(DriverEvent::Ask {
+                    ask,
+                    tool_call_id: None,
+                    request,
+                })
             }
             Op::Resolve => {
                 let (ask, written) = self.asks.first().cloned()?;

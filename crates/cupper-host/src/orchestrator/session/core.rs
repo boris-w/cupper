@@ -277,7 +277,7 @@ impl Core for SessionCore {
         let mut out = Vec::new();
         match input {
             Input::Machine(input) => self.machine(input, now, &mut out),
-            Input::Agent(DriverEvent::Ask { ask, request }) => {
+            Input::Agent(DriverEvent::Ask { ask, request, .. }) => {
                 self.ask(ask, request, now, &mut out)
             }
             Input::Agent(DriverEvent::AskWithdrawn(ask)) => {
