@@ -47,3 +47,18 @@ T055 合并之后，在原来的 T052 worktree 里从最新的 main 开新分支
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 625 行，按偏差推算约 700–750 行，贴线，停下汇报。
+
+**裁定：不拆，上限放宽到约 850 行，硬停止线 900。** 按执行者提的顺序分步提交：先 A（命令列表进 attach 与按会话去重、`session.capabilities` 只在变化时写、登录状态、能力缓存的写和读；T063 的 IT-K14、IT-auth-none 依赖它），再 B（探测与探测目录、`agents/capabilities`、`agents/refresh`、`AgentStatus` 与语义码映射、交给索引的接口）。
+
+执行者的取舍全部认可：
+1. `Probe` 改成 `AgentRuntime` 上带回复的 `probe()`，删掉 `api.rs` 里没有别处使用的 `DriverCommand::Probe`。
+2. attach 不等命令列表：会话打开期间收到的列表随 attach 回复带上，还没收到的用 agent 级最近一份；之后的变化经去重后的 `CommandsChanged` 送到会话 actor。探测按 5.6.7 最多等 200 ms，计时经 `Clock`。
+3. 能力缓存在 attach 成功、命令列表变化、探测完成时写；读时适配器或 CLI 版本不符就当作没有；宿主启动时删掉版本不符的行。
+4. `agents/refresh` 重跑 `supervisor::discover` 和 `claude_launch`（开放这两个函数给 agents 端口），结果换掉运行时下次拉起用的 `Launch`；缓存为空时再探测一次。
+5. `ConfigChanged` 写 `session.capabilities` 的部分不动（T044）；`rss_bytes` 留空、`crashed` 等 T008。
+
+与 T008 在 `driver/runtime/mod.rs` 上的冲突，合并时由编排者处理。
