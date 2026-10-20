@@ -328,6 +328,7 @@ version = "0.0.0"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
+ "cupper-protocol",
  "futures",
  "serde_json",
  "thiserror",
