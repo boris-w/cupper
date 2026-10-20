@@ -26,7 +26,7 @@ use tokio::sync::mpsc;
 use super::{Activity, Exit, Part};
 use crate::clock::{Clock, MonoTime, Now};
 use crate::durations::{Durations, SUPERVISOR_IDLE, SUPERVISOR_OBSERVE};
-use crate::gateway::Gateway;
+use crate::gateway::{AuditEvent, AuditRecord, Gateway, HostEvent};
 use crate::index::IndexHandle;
 use crate::pure::{Alarm, Core, TimerRequest, TimerTable};
 use crate::quiescence::{ActorKind, Participant, Quiescence};
@@ -242,9 +242,14 @@ impl SelfCheck {
         Some(Self { exe, own, watch })
     }
 
-    /// On each new connection and before an adapter starts.
-    pub fn check(&self) {
-        if cupper_sys::file_cdhash(&self.exe).ok() != Some(self.own) {
+    /// On each new connection and before an adapter starts. Reading the
+    /// code on disk can take long, so it runs off the async threads (T138);
+    /// a check that cannot finish counts as a changed executable.
+    pub async fn check(&self) {
+        let (exe, own) = (self.exe.clone(), self.own);
+        let same =
+            tokio::task::spawn_blocking(move || cupper_sys::file_cdhash(&exe).ok() == Some(own));
+        if !same.await.unwrap_or(false) {
             self.watch.bundle_changed();
         }
     }
@@ -263,6 +268,8 @@ pub struct WatchDeps {
     pub parent: Option<u32>,
     /// Set while the runtime installer installs.
     pub installing: Arc<AtomicBool>,
+    /// For `host.pending_upgrade`.
+    pub audit: mpsc::UnboundedSender<AuditRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -353,6 +360,9 @@ impl Watcher {
                     self.deps.admission.close(closed);
                     if closed == Closed::PendingUpgrade {
                         self.deps.index.pending_upgrade();
+                        let event = AuditEvent::Host(HostEvent::PendingUpgrade);
+                        let (at_ms, conn) = (self.deps.clock.now_wall_ms(), None);
+                        let _ = self.deps.audit.send(AuditRecord { at_ms, conn, event });
                     }
                 }
                 Action::Exit(exit) => {

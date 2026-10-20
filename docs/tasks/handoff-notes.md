@@ -353,6 +353,12 @@
 | T168 | "展开看全文"的接入点（T165）：`request/RequestPanel.tsx` 的 `Body` 把 `content_truncated` 作为 `truncated` 传给 `OptionsKind`；`request/logic.ts` 的 `isEnabled(option, truncated)` 决定允许类选项能否选；`request/kinds.tsx` 的 `Terminal` 已有"展开 / 收起"，`blob` 类内容的 `text()` 现在返回 `undefined`、不显示 | T165 |
 | T146 | 请求记录行（`request/RequestRow.tsx`，登记为 `request`）的文字由纯函数 `record()` 决定：等待处理、已拒绝、已批准：{标题}、已询问 n 个问题、未回答。"已询问 n 个问题"按设计可以展开看回答，这次只写了数目 | T165 |
 | T093 | E2E-reject-with-message（T165）：自由输入行只在权限请求有不持久的拒绝选项时出现，编号是"选项数 + 1"，按这个数字只聚焦、不提交；1 秒内打过字时按 Enter 只提示"点击提交"、不发请求；拒绝收到 `already_resolved`、`expired` 时 `respond` 返回 `elsewhere`，不发跟进，附言接在输入框原有草稿之后（空一行），toast"已在别处处理"；多个待处理请求时标题行有 `data-request-count` | T165 |
+| T169 | 会话层的 `privileged.executed`（T163 的遗留）：网关只在应答成功后记 scope 为 `privileged` 的方法（`gateway/dispatch.rs` 的 `privileged()`），看不到会话事实。经 `session/create`、`session/set_config` 切到 `full_access`，经 `interaction/respond` 选写入权限规则的特权选项，由会话 actor 的 `tier_change`、`policy::respond` 判定，要在判定通过处发出，格式照 `supervisor/audit.rs` 的 `formal()`；只记代码和取值，不写文案 | T163 |
+| 以后接入仓库档调用的任务（T061、T121 等） | `git.unsafe_repo_config` 目前只在 `index::projects::locate`（命令类别 `rev_parse`）发出。仓库档的其他调用接进来时照它的做法：拿 `GitError::refusal()` 的原因和工作区内的文件或键（不含值），经 `ScanContext` 的审计发送端发出 | T163 |
+| 所有宿主任务 | 不要在 tokio 工作线程上同步调用慢的系统接口：Security 框架（签名、cdhash）、读整个大文件算哈希等一律放进 `spawn_blocking`，原处 `await` 结论，失败与 join 失败按拒绝处理。T138、T163 已把 `admit` 的 `verify`、审计的 `read_peer`、网关与适配器启动前的自检、运行时的 sha256 校验挪过去；`Host::start` 在开始服务之前的一次性调用除外 | T163 |
+| T144 | 新建会话页（T085）在 `packages/ui-core/src/newsession/NewSessionPage.tsx`：agent 下拉现在只列 Claude，可用状态取自索引视图的 `AgentStatus`（不是 `agents/capabilities`，后者只有缓存的能力描述），原因码由导出的纯函数 `unavailable(status)` 推出（`cli_missing`、`not_logged_in`、`runtime_failed`，其余算 `unavailable`）；选中的 agent 和工作区经 `Composer` 的 `create` 属性传给 `useSend`（`composer/send.ts` 的 `NewSession`、`DEFAULT_NEW_SESSION`）。M1a 在 agent 不可用时仍允许发送、由宿主按语义码报错；按 AG-4"不支持的功能不出现"，是否直接禁止发送由本任务一并定 | T085 |
+| T093 | E2E-new-session-agent-claude：新建会话页的标题里项目名就是选择器，菜单末尾是"添加项目"（走 `privileged({kind: "add_project"})`，主进程弹 `showOpenDialog`，替换见 T167）；动作条有"Claude ⌄"和"本地"；没有项目时 `data-send-state` 为 `disabled` | T085 |
+| ui-core 里写组件测试、用 MockHost 回放索引的任务 | 只对 `index` 流回放索引的 ops：否则新建的会话流也会收到这些 ops，视图报错后反复重新订阅，vitest 会耗尽内存（T085 的 `newsession/new-session.test.tsx`） | T085 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

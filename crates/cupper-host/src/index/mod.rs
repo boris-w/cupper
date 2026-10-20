@@ -425,6 +425,7 @@ impl IndexActor {
             writable,
             clock: Arc::clone(&self.deps.clock),
             durations: self.deps.durations.clone(),
+            audit: self.deps.audit.clone(),
         };
         let (mail, hold) = (self.mail.clone(), self.deps.quiescence.hold());
         tokio::spawn(async move {

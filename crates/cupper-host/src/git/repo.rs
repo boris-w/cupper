@@ -74,6 +74,21 @@ impl GitError {
         }
     }
 
+    /// Why the repo tier refused to run git, and the file or key in the
+    /// workspace it is about, for `git.unsafe_repo_config` (design 5.8.6).
+    pub fn refusal(&self) -> Option<(&'static str, Option<String>)> {
+        let shown = |path: &PathBuf| Some(path.display().to_string());
+        Some(match self {
+            Self::Unsafe(Unsafe::Writable(path)) => ("writable", shown(path)),
+            Self::Unsafe(Unsafe::Unresolved(path)) => ("unresolved", shown(path)),
+            Self::Unsafe(Unsafe::Origin(origin)) => ("origin", Some(origin.clone())),
+            Self::Unsafe(Unsafe::Unnullable(key)) => ("unnullable", Some(key.clone())),
+            Self::Unsafe(Unsafe::Malformed) => ("malformed", None),
+            Self::RequiredFilter(filters) => ("required_filter", Some(filters.join(","))),
+            _ => return None,
+        })
+    }
+
     /// `error.data.code`: the reason's, `timeout`, or `git_error`.
     pub fn code(&self) -> ErrorCode {
         match (self.reason().and_then(|reason| reason.code()), self) {
