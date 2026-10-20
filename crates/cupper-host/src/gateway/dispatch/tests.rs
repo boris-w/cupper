@@ -300,6 +300,37 @@ async fn it_command_order_per_session_in_arrival_order_and_sessions_apart() {
 }
 
 #[tokio::test]
+async fn unit_audit_producers_a_privileged_call_is_recorded_once_it_succeeds() {
+    let fixture = Fixture::new();
+    let routes = fixture.start();
+    let mut peer = Peer::new(control());
+    let digest = format!("d_{}", "0".repeat(64));
+    let trust = json!({"command_id": "t-1", "project_id": "p_1", "trust_digest": digest});
+    for outcome in [Err(internal()), Ok(json!({"trust_state": "trusted"}))] {
+        let id = peer.send(&routes, "project/trust", trust.clone());
+        fixture.index.take().pop().unwrap().answer(outcome);
+        let _ = peer.reply(id).await;
+    }
+    let described = json!({"method": "project/trust", "params": trust});
+    peer.call(&routes, "policy/describe", described)
+        .await
+        .unwrap();
+    // The failed call and the query left nothing; the other, one record.
+    let record = peer.audit.try_recv().unwrap();
+    assert!(peer.audit.try_recv().is_err());
+    let formal = record.event.formal();
+    assert_eq!(formal.event, "privileged.executed");
+    assert_eq!(formal.principal.unwrap().as_str(), "pr_desktop");
+    let details = json!({"project_id": "p_1", "trust_digest": digest});
+    let expected = json!({"method": "project/trust", "action": "trust_project",
+        "details": details});
+    assert_eq!(
+        (record.conn.unwrap().as_str(), formal.detail),
+        ("c_1", expected)
+    );
+}
+
+#[tokio::test]
 async fn it_command_order_65th_request_in_flight_is_rate_limited() {
     let fixture = Fixture::new();
     let routes = fixture.start();
