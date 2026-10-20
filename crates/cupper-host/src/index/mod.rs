@@ -122,6 +122,8 @@ enum Mail {
     Status(Input),
     Rescanned(ProjectId, Scan),
     Agent(Box<AgentStatus>),
+    /// The self-check found the code on disk changed.
+    PendingUpgrade,
     Checkpoint(oneshot::Sender<()>),
     /// `test/seed` wrote sessions: reconcile with the tables again.
     #[cfg(feature = "test-harness")]
@@ -186,6 +188,11 @@ impl IndexHandle {
         let (done, reconciled) = oneshot::channel();
         let _ = self.mail.send(Mail::Reconcile(done));
         let _ = reconciled.await;
+    }
+
+    /// `host.updated` says an upgrade waits (design 5.2.13).
+    pub fn pending_upgrade(&self) {
+        let _ = self.mail.send(Mail::PendingUpgrade);
     }
 
     /// The gateway whose clients `clients.updated` lists; set once it exists.
@@ -322,6 +329,11 @@ impl IndexActor {
                 }
                 Mail::Rescanned(project, scan) => self.rescanned(project, scan).await,
                 Mail::Agent(status) => self.agent(*status).await,
+                Mail::PendingUpgrade => {
+                    self.deps.host.pending_upgrade = true;
+                    self.append(EventBody::HostUpdated(self.deps.host.clone()))
+                        .await;
+                }
                 #[cfg(feature = "test-harness")]
                 Mail::Reconcile(done) => {
                     if let Ok(mut tables) = self.deps.readers.read(rows::read).await {

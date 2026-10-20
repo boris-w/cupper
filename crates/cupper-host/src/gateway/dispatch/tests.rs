@@ -161,7 +161,7 @@ impl Fixture {
             Arc::new(self.clock.clone()),
         ));
         let (supervisor, _) = tokio::sync::mpsc::unbounded_channel();
-        Arc::new(Control::new(supervisor, Arc::new([]))).route(&mut routes);
+        Arc::new(Control::new(supervisor, Arc::new([]), Arc::default())).route(&mut routes);
         // The host's agents port (T009), stood in for by the sessions' stub.
         let agents = || Arc::clone(&self.sessions) as Arc<dyn Port>;
         routes.add::<AgentsCapabilities>(agents());

@@ -5,19 +5,20 @@
 //! runtime sets.
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::pin::pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::*;
-use crate::clock::{Clock, ManualClock, MonoTime};
+use crate::clock::{Clock, ManualClock, MonoTime, SystemClock};
 use crate::driver::api::{NormUpdate, PromptTag};
 use crate::driver::probe::login_shell::{Failure, LoginEnv};
 use crate::orchestrator::testkit::text;
 use crate::store::testutil::{TempDir, host_writer, query, raw_db, raw_rows};
 use crate::store::{Durability, RAW_WRITER, RawWriter, RawWriterThread, WriterThread};
 use cupper_protocol::index::AgentStatus;
-use cupper_sys::{ProcessInfo, process_info};
+use cupper_sys::{ProcessGroup, ProcessInfo, process_info};
 
 type Events = mpsc::UnboundedReceiver<DriverEvent>;
 
@@ -57,6 +58,7 @@ impl Fixture {
             writer,
             raw,
             log,
+            self_check: None,
         };
         let (ids, durations) = (Arc::new(IdGen::seeded(shared, 1)), Durations::default());
         let runtime = AgentRuntime::start(RuntimeDeps {
@@ -176,6 +178,81 @@ fn said_pid(said: &str) -> ProcessInfo {
     process_info(pid).unwrap()
 }
 
+/// The process groups of an adapter's tree, recorded while it runs. Dropped,
+/// whether the test passed or failed, it kills those still alive: the same
+/// group id and start time, so nothing else. A test process killed outright
+/// leaves its record in `cupper-test-groups` under the temp dir, and the
+/// next test that records groups kills what is left of it.
+struct Groups {
+    groups: Vec<ProcessGroup>,
+    record: PathBuf,
+}
+
+impl Groups {
+    fn of(adapter: &ProcessInfo) -> Self {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join("cupper-test-groups");
+        fs::create_dir_all(&dir).unwrap();
+        for entry in fs::read_dir(&dir).unwrap().flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let pid = name.split('-').next().and_then(|pid| pid.parse().ok());
+            if pid.is_some_and(|pid| process_info(pid).is_none()) {
+                let left = fs::read_to_string(entry.path()).unwrap_or_default();
+                kill(&left.lines().filter_map(group).collect::<Vec<_>>());
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+        let leader = ProcessGroup {
+            pgid: adapter.pgid,
+            start: adapter.start,
+        };
+        let groups = leader.with_descendants();
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        let record = dir.join(format!("{}-{n}", std::process::id()));
+        let lines = groups
+            .iter()
+            .map(|g| format!("{} {}\n", g.pgid, g.start.as_micros()));
+        fs::write(&record, lines.collect::<String>()).unwrap();
+        Self { groups, record }
+    }
+
+    /// Whether every group is gone, given 5 s for the signals to land.
+    async fn gone(&self) -> bool {
+        let clock = SystemClock::new();
+        let give_up = clock.now_mono() + Duration::from_secs(5);
+        while self.groups.iter().any(ProcessGroup::is_alive) {
+            if clock.now_mono() >= give_up {
+                return false;
+            }
+            clock
+                .timer_at(clock.now_mono() + Duration::from_millis(10))
+                .await;
+        }
+        true
+    }
+}
+
+impl Drop for Groups {
+    fn drop(&mut self) {
+        kill(&self.groups);
+        let _ = fs::remove_file(&self.record);
+    }
+}
+
+/// `<pgid> <start in µs>`, as `Groups` records a group.
+fn group(line: &str) -> Option<ProcessGroup> {
+    let (pgid, start) = line.split_once(' ')?;
+    let start = cupper_sys::StartTime::from_micros(start.parse().ok()?);
+    let pgid = pgid.parse().ok()?;
+    Some(ProcessGroup { pgid, start })
+}
+
+fn kill(groups: &[ProcessGroup]) {
+    for group in groups {
+        let _ = group.signal(cupper_sys::Signal::Kill);
+    }
+}
+
 /// An index that hears nothing.
 #[derive(Debug)]
 struct Deaf;
@@ -204,6 +281,7 @@ fn runtime(dir: &TempDir) -> AgentRuntime {
         writer,
         raw,
         log,
+        self_check: None,
     };
     let ids = Arc::new(IdGen::seeded(clock, 1));
     AgentRuntime::start(RuntimeDeps {
@@ -321,15 +399,25 @@ async fn it_k21_reap_group_a_stop_reaps_descendants_in_groups_of_their_own() {
     let f = Fixture::new("k21-stop", &[], None, None);
     let mut session = f.attach().await.unwrap();
     let said = f.say(&mut session, "spawn_child; spawn_group_child").await;
-    let (adapter, child) = (f.adapter(), said_pid(&said));
+    let child = said_pid(&said);
     assert_eq!(child.pgid, child.pid);
-    // The adapter exits once its stdin closes; the child holds its stdout
-    // until the SIGTERM of the third step.
-    assert!(f.stop().await >= Duration::from_secs(3));
-    assert_eq!(
-        [process_info(adapter.pid), process_info(child.pid)],
-        [None, None]
-    );
+    let tree = Groups::of(&f.adapter());
+    assert_eq!(tree.groups.len(), 2);
+    f.stop().await;
+    assert!(tree.gone().await);
+}
+
+/// Here the adapter leaves before any signal: the clock stops short of
+/// SIGTERM's turn, 3 s after stdin closed. The groups found when the stop
+/// began get the signals all the same.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_k21_reap_group_an_adapter_that_leaves_first_still_loses_its_descendants() {
+    let f = Fixture::new("k21-left", &[], None, None);
+    let mut session = f.attach().await.unwrap();
+    f.say(&mut session, "spawn_child; spawn_group_child").await;
+    let tree = Groups::of(&f.adapter());
+    f.tick(2, f.runtime.stop(false)).await;
+    assert!(tree.gone().await);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -357,6 +445,7 @@ async fn it_k21_reap_group_sampling_finds_the_groups_a_crash_leaves() {
     let f = Fixture::new("k21-sample", &[], Some("/bin/sleep"), Some(1 << 30));
     let mut session = f.attach().await.unwrap();
     let child = said_pid(&f.say(&mut session, "spawn_group_child").await);
+    let tree = Groups::of(&f.adapter());
     // The first sample, 30 s after the start.
     let mut resources = f.runtime.resources();
     let sampled = (*f
@@ -368,7 +457,7 @@ async fn it_k21_reap_group_sampling_finds_the_groups_a_crash_leaves() {
     assert_eq!((sampled.rss_bytes, sampled.claude_processes), (1 << 30, 1));
     // The adapter dies; the group it left is killed, as sampling found it.
     f.crash(&mut session).await;
-    assert_eq!(process_info(child.pid), None);
+    assert!(tree.gone().await);
     let groups = f.column("SELECT groups FROM adapters");
     assert_eq!(
         groups,

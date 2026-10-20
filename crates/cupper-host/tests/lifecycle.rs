@@ -4,23 +4,27 @@
 //! session runs a turn with the fake agent, and read marks and presence reach
 //! the index. IT-project-add-trust adds and
 //! trusts a project in a git repository built here; IT-clock-advance and
-//! IT-seed drive the test interface. The tests talk to the host as the CLI's
+//! IT-seed drive the test interface; IT-self-check and IT-idle-exit the
+//! supervisor's watch. The tests talk to the host as the CLI's
 //! `harness` client.
 
 use std::io::Write;
+use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
-use cupper_cli::client::{self, Client, ClientAuth, Incoming, Options};
+use cupper_cli::client::{self, Client, ClientAuth, ClientError, Incoming, Options};
 use cupper_cli::harness::HarnessKey;
 use cupper_cli::verify::HostCheck;
 use cupper_host::clock::{Clock, SystemClock};
+use cupper_host::diag::log::log_dir;
 use cupper_host::driver::runtime::launch;
 use cupper_host::gateway::listen::HostLock;
 use cupper_host::gateway::testkit::{KEY, TempDir};
 use cupper_host::store::meta::{self, MetaKey};
 use cupper_host::store::{Database, MIGRATIONS, migrate, open_reader, open_writer};
+use cupper_protocol::error::ErrorReason;
 use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::methods::Empty;
 use cupper_protocol::methods::admin::{
@@ -30,8 +34,9 @@ use cupper_protocol::methods::handshake::{
     ClientPresence, ClientPresenceParams, HostExit, HostExitParams, HostStatus,
 };
 use cupper_protocol::methods::session::{
-    SessionCreate, SessionMarkRead, SessionMarkReadParams, SessionSend,
+    SessionCreate, SessionInterrupt, SessionMarkRead, SessionMarkReadParams, SessionSend,
 };
+use cupper_protocol::methods::stream::StreamSubscribe;
 use cupper_protocol::proof;
 use cupper_protocol::recording::{Body, INSTANCE_EXITED, INSTANCE_STARTED, Recording};
 use cupper_protocol::transport::socket_path;
@@ -48,7 +53,11 @@ fn spawn(data_dir: &Path) -> Child {
 }
 
 fn spawn_with(data_dir: &Path, test_config: serde_json::Value) -> Child {
-    let mut child = Command::new(HOST)
+    spawn_from(Path::new(HOST), data_dir, test_config)
+}
+
+fn spawn_from(program: &Path, data_dir: &Path, test_config: serde_json::Value) -> Child {
+    let mut child = Command::new(program)
         .arg("--data-dir")
         .arg(data_dir)
         .stdin(Stdio::piped())
@@ -158,9 +167,27 @@ async fn it_lifecycle_startup_ends_what_the_last_run_left_running() {
                   ('r_2', 's_1', 'permission', 'd', 'pending', 'a_1', '{}', 3);",
     )
     .unwrap();
+    // And an adapter, in a session of its own, with a descendant's group
+    // that ignores SIGTERM: this test's children, nobody else's.
+    let start = |script: &str| {
+        let mut command = cupper_sys::Command::new("/bin/sh");
+        command.args(["-c", script]).new_session();
+        cupper_sys::spawn(&command).unwrap()
+    };
+    let mut adapter = start("exec /bin/sleep 60");
+    let mut tool = start("trap '' TERM; /bin/sleep 60; :");
+    let groups = json!([[tool.pid(), tool.start().as_micros()]]).to_string();
+    conn.execute(
+        "INSERT INTO adapters (instance_id, agent, pid, pgid, start_us, adapter_version,
+             node_version, started_at, groups)
+           VALUES ('a_1', 'claude', ?1, ?1, ?2, '1', '1', 1, ?3)",
+        (adapter.pid(), adapter.start().as_micros(), groups),
+    )
+    .unwrap();
     drop(conn);
 
-    let mut host = spawn(&data_dir);
+    let config = json!({"login_env": {}, "durations": {"reap_term_wait_ms": 200}});
+    let mut host = spawn_with(&data_dir, config);
     let client = connect(&data_dir).await;
     assert_eq!(client.initialized().principal.id.as_str(), "pr_test");
     let rows = |sql| column(&data_dir, sql);
@@ -180,6 +207,9 @@ async fn it_lifecycle_startup_ends_what_the_last_run_left_running() {
         rows("SELECT session_id || ' ' || state FROM sessions ORDER BY session_id"),
         ["s_1 interrupted", "s_2 idle"]
     );
+    let signals = [adapter.wait().unwrap(), tool.wait().unwrap()].map(|s| s.signal());
+    assert_eq!(signals, [Some(15), Some(9)], "SIGTERM, then SIGKILL");
+    assert_eq!(rows("SELECT exit_status FROM adapters"), ["reaped"]);
     terminate(&host);
     assert_eq!(exit_code(&mut host).await, 0);
 }
@@ -290,6 +320,14 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
 /// A host with the fake agent on a trusted project in `dir`, more of
 /// `test_config` in `config`; its data directory and the harness client.
 async fn fake_agent_host(dir: &TempDir, config: serde_json::Value) -> (PathBuf, Child, Client) {
+    fake_agent_host_from(Path::new(HOST), dir, config).await
+}
+
+async fn fake_agent_host_from(
+    host: &Path,
+    dir: &TempDir,
+    config: serde_json::Value,
+) -> (PathBuf, Child, Client) {
     let (data_dir, conn) = migrated(dir);
     let sql = "INSERT INTO projects (project_id, path, name, position, added_at, trust_state)
                VALUES (?1, ?2, 'p', 0, 1, 'trusted')";
@@ -302,7 +340,7 @@ async fn fake_agent_host(dir: &TempDir, config: serde_json::Value) -> (PathBuf, 
         .as_object_mut()
         .unwrap()
         .extend(config.as_object().unwrap().clone());
-    let host = spawn_with(&data_dir, test_config);
+    let host = spawn_from(host, &data_dir, test_config);
     let client = connect(&data_dir).await;
     (data_dir, host, client)
 }
@@ -919,5 +957,97 @@ async fn it_gw_blob_put_and_get_through_the_gateway() {
     assert_eq!(code(err), Some(ErrorCode::NotFound));
 
     terminate(&host);
+    assert_eq!(exit_code(&mut host).await, 0);
+}
+
+/// IT-idle-exit: a connection keeps the host up; with nobody connected it
+/// exits in order once `supervisor_idle` has passed. The stream methods are
+/// served on the way.
+#[tokio::test]
+async fn it_idle_exit_once_nobody_is_connected_for_the_idle_time() {
+    let dir = TempDir::new("idle");
+    let data_dir = dir.path().join("data");
+    let durations = json!({"supervisor_idle_ms": 300, "supervisor_observe_ms": 20});
+    let mut host = spawn_with(&data_dir, json!({"login_env": {}, "durations": durations}));
+    let client = connect(&data_dir).await;
+    let params = serde_json::from_value(json!({"stream": "index"})).unwrap();
+    let subscribed = client.request::<StreamSubscribe>(params).await.unwrap();
+    assert_eq!(subscribed.stream.to_string(), "index");
+    let clock = SystemClock::new();
+    let until = clock.now_mono() + Duration::from_millis(900);
+    while clock.now_mono() < until {
+        wait(&clock).await;
+    }
+    assert!(host.try_wait().unwrap().is_none(), "connected, it stays");
+    drop(client);
+    assert_eq!(exit_code(&mut host).await, 0);
+    let (start, clean) = (MetaKey::LastStartAt, MetaKey::LastCleanExitAt);
+    assert!(meta_ms(&data_dir, clean) >= meta_ms(&data_dir, start));
+    let log = std::fs::read_to_string(log_dir(&data_dir).join("host.log")).unwrap();
+    let exits: Vec<serde_json::Value> = log
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .filter(|line: &serde_json::Value| line["message"] == "orderly exit")
+        .collect();
+    assert_eq!(exits.len(), 1, "{log}");
+    assert_eq!(exits[0]["fields"]["reason"], "idle");
+}
+
+/// IT-self-check: the host runs from a copy of its executable; with the copy
+/// gone, the next connection finds the code on disk changed. New sessions are
+/// refused and the host says an upgrade waits; once the running turn ends it
+/// exits with `upgrade`.
+#[tokio::test]
+async fn it_self_check_a_changed_executable_makes_the_host_wait_for_an_upgrade() {
+    let dir = TempDir::new("self-check");
+    let exe = dir.path().join("cupper-host");
+    std::fs::copy(HOST, &exe).unwrap();
+    let config = json!({"durations": {"supervisor_observe_ms": 20}});
+    let (data_dir, mut host, mut client) = fake_agent_host_from(&exe, &dir, config).await;
+    let session = create(&client, "wait_cancel").await;
+    until(
+        &data_dir,
+        "host.db",
+        "SELECT status FROM turns",
+        &["running"],
+    )
+    .await;
+    std::fs::remove_file(&exe).unwrap();
+    drop(connect(&data_dir).await);
+    let clock = SystemClock::new();
+    while !client
+        .request::<HostStatus>(Empty {})
+        .await
+        .unwrap()
+        .pending_upgrade
+    {
+        wait(&clock).await;
+    }
+    let params = json!({"command_id": client::command_id(), "agent": "claude",
+        "project_id": ProjectId::from_uuid(1), "workspace": {"kind": "local"},
+        "message": [{"type": "text", "text": "say hi"}]});
+    let refused = client.request::<SessionCreate>(serde_json::from_value(params).unwrap());
+    let Err(ClientError::Rpc(err)) = refused.await else {
+        panic!("a new session while an upgrade waits");
+    };
+    assert_eq!(err.reason(), Some(&ErrorReason::PendingUpgrade), "{err}");
+    let sql = "SELECT CAST(json_extract(json, '$.data.pending_upgrade') AS TEXT) FROM events
+               WHERE stream = 'index' AND type = 'host.updated' ORDER BY seq DESC LIMIT 1";
+    until(&data_dir, "host.db", sql, &["1"]).await;
+
+    let params = json!({"command_id": client::command_id(), "session_id": session});
+    let interrupt = client.request::<SessionInterrupt>(serde_json::from_value(params).unwrap());
+    // Its reply races the exit it brings about.
+    let _ = interrupt.await;
+    loop {
+        match client.next().await {
+            Some(Incoming::Other { method, params }) if method == "host/shutdown" => {
+                assert_eq!(params["reason"], "upgrade");
+                break;
+            }
+            Some(_) => {}
+            None => panic!("no host/shutdown"),
+        }
+    }
     assert_eq!(exit_code(&mut host).await, 0);
 }
