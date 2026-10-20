@@ -499,7 +499,7 @@ export const zFieldType = z.union([
 ]);
 
 /**
- * Open enum: unknown values must be accepted. Known: hook env api_key_helper status_line mcp_server skill agent command codex_config
+ * Open enum: unknown values must be accepted. Known: hook env api_key_helper status_line mcp_server skill agent command codex_config unparsed
  */
 export const zFindingKind = z.union([
   z.enum([
@@ -512,6 +512,7 @@ export const zFindingKind = z.union([
     "agent",
     "command",
     "codex_config",
+    "unparsed",
   ]),
   z.string(),
 ]);
