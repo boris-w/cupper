@@ -84,9 +84,11 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         });
     }
 
+    // The display stays awake while the suite runs: once it sleeps the
+    // screen locks, and the app's windows can be neither seen nor focused.
     let mut suite = |step: &str, args: &[&str]| {
-        let mut test = ctx.command("pnpm");
-        test.args(["--dir", SUITE, "exec", "playwright", "test"])
+        let mut test = ctx.command("caffeinate");
+        test.args(["-d", "pnpm", "--dir", SUITE, "exec", "playwright", "test"])
             .args(args);
         ctx.playwright(step, &mut test)
     };
