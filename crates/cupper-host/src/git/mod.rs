@@ -188,3 +188,107 @@ impl Prepared {
         run::run(clock, self.command, self.input, limit).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+    use crate::clock::ManualClock;
+    use crate::driver::probe::testkit::script;
+    use crate::durations::{GIT_COMMAND, GIT_WORKTREE_ADD};
+    use crate::store::testutil::TempDir;
+
+    /// What the fake git recorded: its environment without the variables
+    /// `/bin/sh` sets itself, its arguments, stdin and working directory.
+    fn recorded(dir: &Path) -> [String; 4] {
+        let read = |name: &str| fs::read_to_string(dir.join(name)).expect("recorded");
+        let shell_own = |line: &&str| {
+            !["PWD=", "OLDPWD=", "SHLVL=", "_="]
+                .iter()
+                .any(|p| line.starts_with(p))
+        };
+        let env = read("env");
+        let mut env: Vec<&str> = env.lines().filter(shell_own).collect();
+        env.sort();
+        let args = read("args").lines().collect::<Vec<_>>().join(" ");
+        [
+            env.join(" "),
+            args,
+            read("stdin"),
+            read("cwd").trim().into(),
+        ]
+    }
+
+    #[tokio::test]
+    async fn unit_git_cmd_tiers_pass_only_their_environment_and_fixed_arguments() {
+        let dir = TempDir::new("git-cmd");
+        let out = dir.path().display();
+        let body = format!(
+            "env > '{out}/env'; printf '%s\\n' \"$@\" > '{out}/args'; /bin/cat > '{out}/stdin'; pwd -P > '{out}/cwd'"
+        );
+        let git = script(dir.path(), "git", &body);
+        let trusted = ["/opt/homebrew/bin", "/usr/bin"].map(PathBuf::from);
+        let (home, sock) = (Some("/home/user".into()), Some("/agent.sock".into()));
+        let data = dir.path().join("data");
+        let tool = GitTool::new(git, None, &trusted, home, sock, &data).expect("tool");
+        let (clock, durations) = (ManualClock::new(), Durations::default());
+        let cwd = fs::canonicalize(data.join("git")).expect("git's working directory");
+        let hooks = format!("core.hooksPath={}/git/empty-hooks", data.display());
+        let base = "GIT_PAGER=cat GIT_TERMINAL_PROMPT=0";
+        let path = "PATH=/opt/homebrew/bin:/usr/bin SSH_AUTH_SOCK=/agent.sock";
+
+        let cmd = GitCmd::repo(RepoOp::RevParse)
+            .config("filter.x.clean", "")
+            .args(["HEAD"]);
+        let prepared = tool.repo_tier(Path::new("/repo")).prepare(cmd);
+        assert!(prepared.read_only && prepared.timeout == GIT_COMMAND);
+        prepared.run(&clock, &durations).await.expect("runs");
+        let args = format!(
+            "--no-pager --no-optional-locks -c core.quotepath=false -c filter.x.clean= \
+             -c core.fsmonitor=false -c {hooks} -C /repo rev-parse HEAD"
+        );
+        let env = format!("{base} HOME=/home/user LC_ALL=C {path}");
+        let want = [env, args, String::new(), cwd.display().to_string()];
+        assert_eq!(recorded(dir.path()), want);
+
+        // A write: no `--no-optional-locks`; its input arrives on stdin.
+        let cmd = GitCmd::repo(RepoOp::Stage).input(b"the patch".to_vec());
+        let prepared = tool.repo_tier(Path::new("/repo")).prepare(cmd);
+        assert!(!prepared.read_only);
+        prepared.run(&clock, &durations).await.expect("runs");
+        let [_, args, stdin, _] = recorded(dir.path());
+        let want = format!(
+            "--no-pager -c core.quotepath=false -c core.fsmonitor=false -c {hooks} \
+             -C /repo apply --whitespace=nowarn --cached"
+        );
+        assert_eq!((args, stdin.as_str()), (want, "the patch"));
+
+        // The snapshot tier: its GIT_DIR and work tree, no HOME, no `-C`.
+        let tier = tool.snapshot_tier(Path::new("/data/git/ws"), Path::new("/work"));
+        tier.prepare(GitCmd::snapshot(SnapshotOp::LsFiles))
+            .run(&clock, &durations)
+            .await
+            .expect("runs");
+        let [env, args, ..] = recorded(dir.path());
+        let want = format!("GIT_DIR=/data/git/ws {base} GIT_WORK_TREE=/work LC_ALL=C {path}");
+        assert_eq!(env, want);
+        let want = format!(
+            "--no-pager --no-optional-locks -c core.quotepath=false -c core.fsmonitor=false \
+             -c {hooks} ls-files -z --cached --others --exclude-standard"
+        );
+        assert_eq!(args, want);
+
+        // `worktree add` gets the long timeout; reads have `-z` where git has it.
+        let add = GitCmd::repo(RepoOp::WorktreeAdd);
+        assert_eq!(
+            (add.is_read_only(), add.timeout()),
+            (false, GIT_WORKTREE_ADD)
+        );
+        let config = GitCmd::repo(RepoOp::ConfigList).line(&[], &[]);
+        assert_eq!(
+            config.last().map(OsString::as_os_str),
+            Some(OsStr::new("-z"))
+        );
+    }
+}
