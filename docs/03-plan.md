@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.44
+- 版本：v1.3.45
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -258,7 +258,8 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | **T088** | 会话 actor I-b：交互接线 | feat | 5.2.7、5.3.6、5.3.4（交互） | T043 | 做：把交互代理接进组合核心（替换性质测试里的计数替身）、`interaction/respond`、`interaction/get`、`session/send.reply_to` 的核对（写进用户消息和排队条目）、`interactions` 行、通知索引的接口、`interaction.responded` 审计（带 `ConnId` 的网关审计记录）。不做：恢复（T089） | 新增 IT-orch-interaction | M | 否 | H.orch |
 | T089 | 会话 actor I-c：载入与恢复 | feat | 5.2.6、5.2.8、5.5.5 | T043 | 做：按需载入（`deliver` 与重启后的 `get`；并发载入同一会话只起一个 actor）；`TurnMachine`、`QueueCore`（含 `command_id`、`reply_to`、暂停原因）、设定者、信任闸门从库恢复；`ignore_for_good` 持久化（迁移 `0002`）；`Input::Ended` 载入已结束的请求，`interaction/get` 读表；补写 T037 启动清理留下的事件并决定是否暂停队列；`StreamWriter::append` 空 `bodies` 的行为；恢复后 `session/get` 与索引一致。检查点作废与准备阶段崩溃拆给 T169，空闲退出与超长输出拆给 T175（v1.3.38）。不做：崩溃与晚到输出的后续（T044） | 新增 IT-orch-recovery | M | 否 | H.orch |
 | T169 | 会话 actor I-d：崩溃后的重建与会话层的特权审计 | feat | 5.2.6（崩溃与恢复）、5.2.8、5.8.6 | T089、T163 | 做：检查点作废（`view_v` 不符、日志已修剪）时从行和能力缓存重发 `session.configured`、`session.capabilities`、`queue.updated`；准备阶段崩溃后重开第一个回合，第一条消息不丢；被中断回合里没结束的条目（如进行中的工具调用）补写 `item.completed`（v1.3.41）；会话层的 `privileged.executed`（经 `session/create`、`session/set_config` 切到 `full_access`，经 `interaction/respond` 选写入权限规则的特权选项，在会话 actor 判定通过处发出，格式照 T163 的 `formal()`）（v1.3.39） | 新增 IT-orch-rebuild、UNIT-audit-session-privileged | M | 否 | H.orch |
-| T175 | 会话 actor I-e：空闲退出与超长输出 | feat | 5.2.6、5.4.6 | T089 | 做：actor 空闲 10 分钟退出（经 `Clock`、可经 `test_config.durations` 缩短，登记进静止屏障），退出后再投递走按需载入；订阅会话流时会话不在内存也触发按需载入，让重启后的补写马上进流（v1.3.43）；超长工具输出转 blob、标 `truncated`、尾部每秒更新 | 新增 IT-orch-actor-idle、IT-orch-long-output | S | 否 | H.orch |
+| T175 | 会话 actor I-e：空闲退出与订阅时载入 | feat | 5.2.6、5.2.13 | T089 | 做：actor 空闲 10 分钟退出（经 `Clock`、可经 `test_config.durations` 缩短，登记进静止屏障），退出后再投递走按需载入；订阅会话流时会话不在内存也触发按需载入，让重启后的补写马上进流（v1.3.43）。超长输出拆给 T177（v1.3.45） | 新增 IT-orch-actor-idle | S | 否 | H.orch |
+| T177 | 会话 actor I-f：超长工具输出 | feat | 5.3（`output_state`）、5.2.6 | T175 | 做：超过内联上限后停发 delta、转 `truncated`，宿主每秒至多一次用 `item.updated` 更新 `output_tail` 和 `output_bytes`，结束时给出 blob 引用加尾部预览；状态与节拍在合并器（纯核心）里，写 blob 由 actor await，`item.completed` 排在 blob 引用之后；回合结束时仍在运行的超长工具记 `abandoned`、保留尾部、不写 blob（v1.3.45 由 T175 拆出） | 新增 IT-orch-long-output | S | 否 | H.orch |
 | **T044** | 会话 actor II：档位、越权、崩溃与晚到输出 | feat | 5.2.6（配置项、崩溃与恢复、晚到的工具输出） | T035、T043、T088、T095、T098 | 做：档位核对与 `config_unconfirmed`、回合中越权先改回再中断、发送闸门（暂停期间空闲时也不开回合）、`session/confirm_config`、`facts` 的 `mode_tier`（`session/set_config` 仍是 M1b，越权判断预留它作为合法来源）；适配器退出后 resume 与 `agent_restarted`、K6、K7；`late_tool_output` 与 `may_still_run` 的核对。不做：信任门控（v1.3.19 起归 T109）；进程级集成测试（T062、T063、T068） | 新增 IT-orch-gating（进程内） | L | 否 | H.orch |
 | T045 | cupper-cli I：客户端库、连接与宿主校验 | feat | 5.2.14、5.3.3 | T012、T014、T020 | 做：迁移 SP-4a 的 client：构建种类（特性 `dev-auth`、`self-use`、`test-harness`，都不开为发布）与 `--build-info`、套接字发现、按构建种类校验宿主（5.8.1：发布按签名要求；自用按编译期写入的宿主 cdhash，经审计令牌比对，之后每次读取比对令牌；开发按同目录宿主文件的 cdhash 弱校验并在输出里标"宿主未经签名校验"；e2e 由 T039 补上 `harness` 证明），发布构建拒绝 `weak_auth`；连接与握手（peer）、请求关联、`command_id`。不做：Mirror 与客户端同步状态机（v1.3.6 起归 T049）；子命令；cdhash 的写入（T005） | 新增 UNIT-cli-host-verify（四种构建的校验分支；cdhash 不符时拒绝连接）、UNIT-cli-client（握手与请求关联） | M | 否 | H.cli |
 | T049 | cupper-cli I-b：Mirror 与客户端同步状态机 | feat | 5.2.14、5.3.3 | T045 | 做：纯核心 `Mirror<V: View>`（只能经 `Mirror::index()`、`Mirror::session(id)` 构造）；`Waiting`、`Loading`、`Live` 三态；只有游标对得上的 `replay` 才保留视图和游标，其余（包括未知的 mode）一律丢弃；快照页核对 `at_seq`、`epoch` 和页序号；连续性缺口带游标重新订阅，`ViewError` 或信封解码失败不带游标重新订阅；`stream/reset` 保留游标；`Waiting` 时旧订阅的数据一律忽略。不做：子命令（T046） | 新增 UNIT-mirror | S | 否 | H.cli |
@@ -321,7 +322,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T097 | Git 服务 I-b：仓库档的规则与指纹 | feat | 5.2.10（仓库档：每次调用前读配置、仓库可执行配置指纹） | T022 | 做：纯函数：`git config --list --show-origin --includes -z` 输出的解析、配置来源检查（工作区内与其他 agent 可写的位置，git 目录除外、include 到工作区照样拒绝）、覆盖参数的计算（无条件覆盖、可执行类键置空、git-lfs 标准取值例外、子段带 `=` 的键拒绝）、仓库布局与可执行配置指纹。不做：执行（T098） | 新增 UNIT-git-repo-rules；UNIT-git-fingerprint（v1.3.16 由 T060 移来） | M | 否 | H.git |
 | T098 | Git 服务 I-c：仓库档的执行 | feat | 5.2.10（仓库档） | T060、T097 | 做：`RepoTier::run` 把 T060 的 `GitCmd` 与 T097 的规则接起来：调用前读配置并检查、覆盖、执行、不重试（被置空的 `required=true` 过滤器导致失败才判 `unsafe_repo_config`）、调用后比对指纹（只读命令丢结果）、`GitError` 与 notice 信号 | IT-git-repo-tier-malicious（v1.3.16 由 T060 移来） | S | 否 | H.git |
 | T094 | 登录 shell 环境与版本检测 | feat | 5.6.6（登录 shell、版本检查）、5.2.10（git 版本检测） | T020、T022 | 做：带 `Clock` 超时的拉起辅助、登录 shell 取环境（标记截取、解析、退回常见路径与语义码）、`--version` 与四种版本分类、git 版本（暂定最低 2.39）与 git-lfs 检测（`/usr/bin/git` 是 xcode-select 占位程序时不运行它）。不做：可信 PATH 与 CLI 解析（T054） | UNIT-version-classify（v1.3.13 由 T054 移来）；新增 UNIT-login-shell | M | 否 | H.drv |
-| **T099** | M1a 退出验收 | chore | 5.12.2（退出标准）；1.8 | T006、T016、T036、T061、T062、T063、T066、T067、T068、T069、T091、T092、T093、T117、T129、T136、T138、T163、T164、T168、T175、T176 | 做：在退出候选的同一个提交上：`xtask ci e2e --suite nfr1` 连跑 20 次，再跑 5 次降速变体，`xtask ci pr` 与 `xtask ci nightly` 各通过一次；核对 UNIT-unsupported-set、M1a 的待完成登记为空（按入库的逐编号结果清单复核）、契约已冻结；写记录（含本机替代不了的缺口：IT-sys-peer-macos14、IT-sys-peer-macos15，CI 负载下的稳定性）。不稳定用例的修复另开 fix 任务 | 运行记录（结构化摘要）存档；缺口经用户确认；M1a 同步会纪要 | M | 知情：运行期间不操作机器；是：确认缺口、参加同步会 | C |
+| **T099** | M1a 退出验收 | chore | 5.12.2（退出标准）；1.8 | T006、T016、T036、T061、T062、T063、T066、T067、T068、T069、T091、T092、T093、T117、T129、T136、T138、T163、T164、T168、T175、T176、T177 | 做：在退出候选的同一个提交上：`xtask ci e2e --suite nfr1` 连跑 20 次，再跑 5 次降速变体，`xtask ci pr` 与 `xtask ci nightly` 各通过一次；核对 UNIT-unsupported-set、M1a 的待完成登记为空（按入库的逐编号结果清单复核）、契约已冻结；写记录（含本机替代不了的缺口：IT-sys-peer-macos14、IT-sys-peer-macos15，CI 负载下的稳定性）。不稳定用例的修复另开 fix 任务 | 运行记录（结构化摘要）存档；缺口经用户确认；M1a 同步会纪要 | M | 知情：运行期间不操作机器；是：确认缺口、参加同步会 | C |
 | T100 | 索引 II：状态计算、已读、在场与通知意图 | feat | 5.2.9 | T034 | 做：会话状态计算（含 v1.4 的 `pending_kind`）与 100 ms 合并的纯核心、`IndexNotes` 扩充与会话 actor 的接线（会话创建、回合开始与结束、标题、分支、归档、最近活动）、`session/mark_read`、只采信 desktop_ui 的在场、`notification.intent`、`agents` 的接口（T009 的 `AgentStatus`）。不做：系统通知；通知意图的进程级用例（T062） | UNIT-index-status（含 `pending_kind`）；新增 UNIT-index-intent（直接向 IndexActor 输入状态变化）（v1.3.19 由 T034 移来） | M | 否 | H.idx |
 
 **注**
@@ -1180,7 +1181,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | W4 | T015、T026、T027、T030、**T031**、T032、**T041**、T045、**T048**、T053、T056 | T053 起 A 层金样例进入 `xtask ci rust` |
 | W5 | T005、**T033**、T039、T019、T029、**T058**、T037、T059、T042、T049、T055、T071、T073 | T055 合并后假 agent 可以经驱动跑通；K1 已通过，T057 不派发 |
 | W6 | T034、T036、**T043**、**T088**、T089、T072、T087、T075、T084、T067、T094、T095、T096、T097、T098、T007、T008、T009、T100、T109、T115、T116、T117、T118、T128、T129、T133 | T043 用进程内驱动替身；T084 只依赖 T071，与 T080 并行 |
-| W7 | T038、**T044**、T047、T061、T076、T080、T136、T137、T138、T163、T164、T165、T166、T167、T168、T169、T175 | T044 合并后 T063、T068 立即可派 |
+| W7 | T038、**T044**、T047、T061、T076、T080、T136、T137、T138、T163、T164、T165、T166、T167、T168、T169、T175、T177 | T044 合并后 T063、T068 立即可派 |
 | W8 | **T046**、T062、T063、T064、T065、T068、T069、T077、T134、T135、T078、T081、T082、T083、T086 | T078 测量闸门（K2）；T077 含 MAN-keyboard |
 | W9 | T066、T085、**T090** | T066 用真实 Claude（K12）；T078 不达标时 T079 先于 T016 |
 | W10 | T016、**T091**、**T092**、T176、**T093** | T016 契约冻结（K3） |
@@ -1774,7 +1775,8 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T167 e2e 辅助函数
 - [x] T168 请求面板与用户气泡的全文
 - [x] T169 会话 actor I-d：崩溃后的重建与会话层的特权审计
-- [ ] T175 会话 actor I-e：空闲退出与超长输出
+- [ ] T175 会话 actor I-e：空闲退出与订阅时载入
+- [ ] T177 会话 actor I-f：超长工具输出
 
 **M1b**
 
@@ -1896,3 +1898,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.42 | 2026-10-20 | T169 写完四项后统计为新增 486 行，超过硬停止线 420（会话层审计约 134 行在最后一个提交里，用例比估计多约 70）。代码已完成、变异检查通过，拆出审计只会多一轮评审和 CI，编排者裁定不拆、规模改为 M，按现状收尾 |
 | v1.3.43 | 2026-10-20 | T091 发现：宿主重启后，窗口重新订阅会话流不会触发载入，被杀的回合在界面上一直显示运行中、请求面板也还在，直到这个会话收到下一条命令。"订阅会话流时按需载入"并进 T175（同属 actor 的生命周期，约 40 行）；设计 5.2.13 补这条规则 |
 | v1.3.44 | 2026-10-20 | T092 开工前按守则第 8 条拆分（估计约 920 行）：T092 收窄为窗口内的安全（CSP、真实输入、面板待命、面板编号、特权操作、二次 `initialize`、`exit_code()` 单元测试，约 520 行）；新增 T176（原始协议客户端与假宿主、fake-host、cli-fake-host、no-key-client、egress 与 Q27、上传缓冲的评估，约 400 行），依赖 T090、T167，与 T092 并行；T099 改为也依赖 T176 |
+| v1.3.45 | 2026-10-20 | T175 写完空闲退出与订阅时载入（新增 242 行）后，推算加上超长输出约 452 行，超过约 430 的停止线；执行者逐模块统计，在动手写超长输出之前停下。超长输出拆给新增的 T177（约 210 行，IT-orch-long-output 由 T175 移来），依赖 T175，同一个执行者接着做；T099 改为也依赖 T177 |
