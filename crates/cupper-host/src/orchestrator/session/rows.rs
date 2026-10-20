@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 
+use cupper_protocol::domain::Content;
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{AdapterInstanceId, CommandId, PrincipalId, QueueId, SessionId};
 use cupper_protocol::session::TurnStatus;
@@ -210,6 +211,15 @@ impl Rows {
                             int(at),
                         ],
                     );
+                }
+                // The session keeps the blob of a tool's output (T177).
+                EventBody::ItemCompleted(c) => {
+                    if let Some(Content::Blob(b)) = &c.patch.output {
+                        rows.push(
+                            "INSERT OR IGNORE INTO blob_refs (hash, owner) VALUES (?1, ?2)",
+                            vec![text(&b.blob.hash), s()],
+                        );
+                    }
                 }
                 EventBody::SessionConfigured(c) => {
                     rows.session(session, at, "config_json = ?3", vec![json(&c.config)])

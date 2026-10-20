@@ -14,6 +14,8 @@ mod interaction_tests;
 mod load;
 mod manager;
 #[cfg(test)]
+mod output_tests;
+#[cfg(test)]
 mod rebuild_tests;
 #[cfg(test)]
 mod recovery_tests;

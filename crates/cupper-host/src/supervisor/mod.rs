@@ -358,6 +358,7 @@ impl Host {
             index: Arc::new(index.clone()),
             git,
             admission: Arc::clone(&admission),
+            blobs: blobs.clone(),
         });
         sessions.reopen().await;
         let parts: Arc<[Arc<dyn Part>]> = Arc::new([
