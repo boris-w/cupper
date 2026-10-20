@@ -18,6 +18,8 @@ declare global {
     __cupperTest: {
       counters(): { gaps: number; duplicates: number; resets: number };
       state(): { status: string };
+      /** The streams the window follows: `{seq, complete, view}` by stream. */
+      views(): Record<string, unknown>;
     };
   }
 }

@@ -25,6 +25,8 @@ use cupper_protocol::methods::project::ProjectAdd;
 use cupper_protocol::methods::session::{SessionCreate, SessionInterrupt, SessionSend};
 use cupper_protocol::methods::stream::{HistoryPage, StreamUnsubscribe};
 use cupper_protocol::rpc::{Method, Scope};
+#[cfg(feature = "test-harness")]
+use cupper_protocol::view::IndexView;
 use cupper_protocol::view::{SessionView, View};
 use cupper_sys::RefusalKind;
 use serde_json::{Value, json};
@@ -253,6 +255,16 @@ impl Cli {
                 self.call::<TestClockAdvance>(json!({"ms": ms})).await?;
                 out.emit(json!({"advanced_ms": ms}), || format!("advanced {ms} ms"));
             }
+            #[cfg(feature = "test-harness")]
+            Command::View(None) => {
+                self.follow(Mirror::index(), |v: &IndexView| json!(v))
+                    .await?
+            }
+            #[cfg(feature = "test-harness")]
+            Command::View(Some(session)) => {
+                let json = |v: &SessionView| json!(v);
+                self.follow(Mirror::session(session), json).await?;
+            }
             Command::Respond {
                 session,
                 request,
@@ -285,6 +297,38 @@ impl Cli {
     async fn next(&mut self) -> Result<Incoming, Failure> {
         let next = self.client.next().await;
         next.ok_or_else(|| ClientError::Closed(self.client.close_reason()).into())
+    }
+
+    /// Prints `{stream, seq, resubscribed, view}` each time `mirror` is live
+    /// after a batch; `resubscribed` counts the times it subscribed again
+    /// after a gap or a view it could not apply (design 5.3.3).
+    #[cfg(feature = "test-harness")]
+    async fn follow<V: View>(
+        &mut self,
+        mirror: Mirror<V>,
+        json: fn(&V) -> Value,
+    ) -> Result<(), Failure> {
+        let mut mirror = self.live(mirror).await?;
+        let mut resubscribed = 0;
+        loop {
+            let seq = mirror.resume().map(|resume| resume.after_seq);
+            let line = json!({"stream": mirror.stream(), "seq": seq,
+                "resubscribed": resubscribed, "view": json(mirror.view())});
+            self.out
+                .emit(line, || format!("{} at {seq:?}", mirror.stream()));
+            loop {
+                let incoming = self.next().await?;
+                if let Some(params) = mirror.handle(&incoming).map_err(Failure::Refused)? {
+                    resubscribed += 1;
+                    self.client.subscribe(params).await?;
+                }
+                if mirror.is_live()
+                    && matches!(incoming, Incoming::Events(_) | Incoming::Snapshot(_))
+                {
+                    break;
+                }
+            }
+        }
     }
 
     /// `mirror`, subscribed and caught up.
@@ -429,7 +473,9 @@ impl Cli {
         Ok(())
     }
 
-    /// Answers a pending request with what `outcome` makes of it.
+    /// Answers a request with what `outcome` makes of it. One that another
+    /// client answered first still goes to the host, whose
+    /// `conflict/already_resolved` says so (design 5.3.6).
     async fn respond(
         &mut self,
         session: SessionId,
@@ -437,8 +483,8 @@ impl Cli {
         outcome: impl FnOnce(&InteractionRequested) -> Result<Value, Failure>,
     ) -> Result<(), Failure> {
         let view = self.session(&session).await?;
-        let found = view.requests.get(&request).filter(|r| r.is_pending());
-        let asked = found.ok_or_else(|| Failure::Other(format!("no pending request {request}")))?;
+        let found = view.requests.get(&request);
+        let asked = found.ok_or_else(|| Failure::Other(format!("no request {request}")))?;
         let outcome = outcome(&asked.requested)?;
         let respond = json!({"command_id": command_id(), "session_id": session, "request_id": request,
             "request_digest": asked.requested.digest, "outcome": outcome});

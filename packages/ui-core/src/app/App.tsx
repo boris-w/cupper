@@ -18,7 +18,7 @@ export interface AppProps {
   info: ShellInfo;
   slots?: Slots;
   initialRoute?: Route;
-  /** Called with the window's host client once it exists (e2e builds' `window.__cupperTest`). */
+  /** Called with the window's host client when it is made, before any subscription (e2e builds' `window.__cupperTest`). */
   onClient?: (client: HostClient) => void;
 }
 
