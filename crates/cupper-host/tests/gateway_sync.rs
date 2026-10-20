@@ -1,5 +1,6 @@
-//! Gateway sync on a host process (design 5.9.1, 5.9.8): IT-gw-sync
-//! (SP-4a's end-to-end tests 1-7 and adapter isolation). The agent is the
+//! Gateway sync and history on a host process (design 5.9.1, 5.9.8):
+//! IT-gw-sync (SP-4a's end-to-end tests 1-7 and adapter isolation),
+//! IT-NFR2-epoch and IT-history-from-host. The agent is the
 //! claude-shaped fake agent; the tests talk to the host through the CLI
 //! library's client and stream mirror, as the CLI's `harness` client.
 
@@ -14,19 +15,21 @@ use cupper_cli::mirror::{self, Mirror};
 use cupper_host::clock::{Clock, SystemClock};
 use cupper_host::gateway::testkit::{self, KEY, TempDir, initialize_params, key_auth};
 use cupper_protocol::domain::BlobRef;
+use cupper_protocol::event::Strictness;
 use cupper_protocol::frame::BlobChunkHeader;
 use cupper_protocol::ids::{BlobHash, CommandId, SessionId};
 use cupper_protocol::item::Item;
 use cupper_protocol::methods::session::{SessionQueueResume, SessionSend};
 use cupper_protocol::methods::stream::{
-    BlobGet, BlobGetParams, BlobPut, BlobPutParams, StreamSubscribeResult,
+    BlobGet, BlobGetParams, BlobPut, BlobPutParams, HistoryPage, HistoryPageParams,
+    StreamSubscribeParams, StreamSubscribeResult,
 };
 use cupper_protocol::rpc::{Idempotency, Method, MethodError, Milestone, Scope};
 use cupper_protocol::session::TurnStatus;
-use cupper_protocol::sync::{StreamId, SubscribeMode};
+use cupper_protocol::sync::{ResyncReason, StreamId, SubscribeMode};
 use cupper_protocol::text::MAX_LABEL_CHARS;
 use cupper_protocol::transport::socket_path;
-use cupper_protocol::view::{IndexView, SessionView};
+use cupper_protocol::view::{IndexView, SessionView, View};
 use cupper_sys::{ProcessGroup, Signal, StartTime};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -669,4 +672,176 @@ async fn it_gw_sync_adapter_gets_only_stdio_and_allowed_env() {
 fn message(session: &SessionId, text: &str) -> Value {
     json!({"command_id": client::command_id(), "session_id": session, "mode": "queue",
         "content": [{"type": "text", "text": text}]})
+}
+
+/// Boot session UUIDs the host is told it runs in.
+const BOOTS: [&str; 4] = [
+    "8D4E1A0C-0000-4000-8000-00000000000A",
+    "8D4E1A0C-0000-4000-8000-00000000000B",
+    "8D4E1A0C-0000-4000-8000-00000000000C",
+    "8D4E1A0C-0000-4000-8000-00000000000D",
+];
+
+/// The host with the fake agent, on boot `boot`.
+fn boot(data_dir: &Path, boot: &str) -> Running {
+    let config = fake_agent_config(json!({"boot_session_uuid": boot}));
+    Running(spawn_with(data_dir, config))
+}
+
+/// The orderly exit.
+async fn stop(mut host: Running) {
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
+}
+
+fn kill9(mut host: Running) {
+    host.0.kill().unwrap();
+    host.0.wait().unwrap();
+}
+
+/// A new connection subscribing with the mirror `away`, once it is live;
+/// its `data_epoch` from `initialize`.
+async fn back(data_dir: &Path, away: Mirror<SessionView>) -> (Peer, u64) {
+    let client = connect(data_dir).await;
+    let epoch = client.initialized().host.data_epoch;
+    let mut peer = Peer::with(client, away).await;
+    peer.until(|p| p.session.is_live()).await;
+    (peer, epoch)
+}
+
+/// How the last subscription of the session came back.
+fn came_back(peer: &Peer) -> (SubscribeMode, Option<ResyncReason>, u64) {
+    let last = peer.subscribed.last().unwrap();
+    (last.mode.clone(), last.reason.clone(), last.epoch)
+}
+
+/// IT-NFR2-epoch (design 5.9.8, minutes D5) on one data directory through
+/// six starts: `data_epoch` goes up only after an unclean exit across a
+/// reboot. `kill -9` on the same boot keeps it, and so does a clean exit
+/// before a reboot; `kill -9` and then a reboot counts as a power loss and
+/// costs one more full snapshot. A cursor past the head is `cursor_ahead`.
+/// A power loss that took the latest commits away: the client's old epoch
+/// gets a snapshot, and the seqs the host hands out again are taken as new.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_nfr2_epoch_moves_only_when_commits_may_be_lost() {
+    use SubscribeMode::{Replay, Snapshot};
+    let dir = TempDir::new("epoch");
+    let data_dir = fake_agent_data(&dir);
+    let host = boot(&data_dir, BOOTS[0]);
+    let client = connect(&data_dir).await;
+    let epoch = client.initialized().host.data_epoch;
+    let session = create(&client, "say one").await;
+    let mut peer = Peer::new(client, &session).await;
+    peer.ended(1).await;
+    assert_eq!(came_back(&peer).2, epoch);
+
+    kill9(host);
+    let host = boot(&data_dir, BOOTS[0]);
+    let (mut peer, now) = back(&data_dir, peer.session).await;
+    assert_eq!((came_back(&peer), now), ((Replay, None, epoch), epoch));
+    // The same epoch, a cursor past the head.
+    let head = peer.session.resume().unwrap();
+    let ahead = StreamSubscribeParams {
+        stream: peer.stream.clone(),
+        after_seq: Some(head.after_seq + 5),
+        epoch: Some(epoch),
+    };
+    peer.client.subscribe(ahead).await.unwrap();
+    peer.until(|p| p.subscribed.len() == 2 && p.session.is_live())
+        .await;
+    let ahead = Some(ResyncReason::CursorAhead);
+    assert_eq!(came_back(&peer), (Snapshot, ahead, epoch));
+
+    stop(host).await;
+    let host = boot(&data_dir, BOOTS[1]);
+    let (peer, now) = back(&data_dir, peer.session).await;
+    assert_eq!((came_back(&peer), now), ((Replay, None, epoch), epoch));
+
+    kill9(host);
+    let host = boot(&data_dir, BOOTS[2]);
+    let (mut peer, now) = back(&data_dir, peer.session).await;
+    let changed = Some(ResyncReason::EpochChanged);
+    assert_eq!(now, epoch + 1);
+    assert_eq!(came_back(&peer), (Snapshot, changed.clone(), now));
+
+    // The power loss: a copy of the store at seq M, as the disk may keep
+    // it, while the host runs on to seq N.
+    let copy = dir.path().join("at-m.db");
+    let store = cupper_host::store::open_reader(&data_dir.join("host.db")).unwrap();
+    store
+        .execute("VACUUM INTO ?1", [copy.to_str().unwrap()])
+        .unwrap();
+    let at_m = (
+        peer.session.resume().unwrap().after_seq,
+        peer.view().clone(),
+    );
+    send(&peer.client, &session, "say two").await;
+    peer.ended(2).await;
+    let at_n = peer.session.resume().unwrap().after_seq;
+    stop(host).await;
+    for wal in ["host.db-wal", "host.db-shm"] {
+        let _ = std::fs::remove_file(data_dir.join(wal));
+    }
+    std::fs::copy(&copy, data_dir.join("host.db")).unwrap();
+    let _host = boot(&data_dir, BOOTS[3]);
+    let (mut peer, now) = back(&data_dir, peer.session).await;
+    assert_eq!(now, epoch + 2);
+    assert_eq!(came_back(&peer), (Snapshot, changed, now));
+    assert_eq!(peer.session.resume().unwrap().after_seq, at_m.0);
+    same(peer.view(), &at_m.1);
+    // From M + 1 the seqs are handed out again; the mirror takes them.
+    send(&peer.client, &session, "say two again").await;
+    peer.ended(2).await;
+    let head = peer.session.resume().unwrap().after_seq;
+    assert!(at_m.0 < at_n && at_n <= head, "{at_m:?} {at_n} {head}");
+    assert_eq!(said_in(peer.view(), 2), "two again");
+    let (fresh, _) = back(&data_dir, Mirror::session(session)).await;
+    same(fresh.view(), peer.view());
+}
+
+/// IT-history-from-host (PS-8, K8): after a restart the history comes from
+/// the host's turn snapshots. A client with nothing cached subscribes to
+/// the window of 20 turns and pages the older ones with `history/page`;
+/// together they are what a client saw live. No adapter starts: nothing
+/// comes from the agent's replay.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_history_from_host_pages_the_turns_before_the_window() {
+    let dir = TempDir::new("history");
+    let data_dir = fake_agent_data(&dir);
+    let host = boot(&data_dir, BOOTS[0]);
+    let client = connect(&data_dir).await;
+    let session = create(&client, "say turn 1").await;
+    let mut live = Peer::new(client, &session).await;
+    for n in 2..=22 {
+        send(&live.client, &session, &format!("say turn {n}")).await;
+    }
+    live.ended(22).await;
+    stop(host).await;
+
+    let _host = boot(&data_dir, BOOTS[0]);
+    let (fresh, _) = back(&data_dir, Mirror::session(session.clone())).await;
+    let window = fresh.view().turns.iter().map(|t| t.started.turn_no);
+    assert_eq!(window.collect::<Vec<_>>(), (3..=22).collect::<Vec<_>>());
+    let mut view = fresh.view().clone();
+    let mut cursor = None;
+    loop {
+        let params = HistoryPageParams {
+            session_id: session.clone(),
+            cursor,
+            max_bytes: None,
+        };
+        let page = fresh.client.request::<HistoryPage>(params).await.unwrap();
+        for op in &page.ops {
+            view.apply(&op.decode(Strictness::Strict).unwrap().value)
+                .unwrap();
+        }
+        cursor = page.next;
+        if cursor.is_none() {
+            break;
+        }
+    }
+    same(&view, live.view());
+    assert_eq!(said_in(&view, 1), "turn 1");
+    let adapters = "SELECT CAST(count(*) AS TEXT) FROM adapters";
+    assert_eq!(column(&data_dir, adapters), ["1"]);
 }
