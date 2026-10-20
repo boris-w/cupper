@@ -26,6 +26,7 @@
 //! | `auth_none` | `_auth/status_update {kind: none}`, then `-32000` |
 //! | `whoami` / `echo_env` / `echo_meta` / `probe` | say the session, cwd, clientInfo, env names, `_meta`, inherited fds |
 //! | `spawn_child` / `exit <code>` | start a grandchild in our process group / exit now |
+//! | `stderr <text>` | write `text` as a line to stderr |
 //! | `spawn_group_child [program]` | start `program` (`/bin/sleep`) for an hour in a new process group, holding our stdout; say its pid |
 //! | `raw <json>` | write the JSON value as one line, verbatim (`${session}` is the session id) |
 
@@ -81,6 +82,7 @@ const COMMANDS: &[&str] = &[
     "probe",
     "spawn_child",
     "spawn_group_child",
+    "stderr",
     "exit",
     "raw",
 ];
@@ -445,6 +447,7 @@ impl Script {
                     .map_err(|e| Error::internal_error().data(e.to_string()))?;
                 self.say(&format!("pid={}", child.id()))?;
             }
+            "stderr" => eprintln!("{rest}"),
             "exit" => std::process::exit(i32::try_from(num(0)).unwrap_or(1)),
             "raw" => self.notify(
                 RAW_METHOD,
