@@ -252,6 +252,11 @@ IT-audit-retention = "pr"
 milestone = "M1a"
 UNIT-audit-producers = "pr"
 
+# 输入框的长文本（计划 v1.3.33 由 T086 拆出）
+[T164]
+milestone = "M1a"
+UNIT-composer-long-text = "pr"
+
 # CLI 提权（宿主侧）
 [T038]
 milestone = "M1a"
@@ -699,7 +704,6 @@ UI-new-session = "pr"
 [T086]
 milestone = "M1a"
 UNIT-composer-ime = "pr"
-UNIT-composer-long-text = "pr"
 UNIT-composer-esc = "pr"
 UI-composer = "pr"
 
