@@ -25,6 +25,8 @@ use cupper_protocol::methods::project::ProjectAdd;
 use cupper_protocol::methods::session::{SessionCreate, SessionInterrupt, SessionSend};
 use cupper_protocol::methods::stream::{HistoryPage, StreamUnsubscribe};
 use cupper_protocol::rpc::{Method, Scope};
+#[cfg(feature = "test-harness")]
+use cupper_protocol::view::IndexView;
 use cupper_protocol::view::{SessionView, View};
 use cupper_sys::RefusalKind;
 use serde_json::{Value, json};
@@ -253,6 +255,16 @@ impl Cli {
                 self.call::<TestClockAdvance>(json!({"ms": ms})).await?;
                 out.emit(json!({"advanced_ms": ms}), || format!("advanced {ms} ms"));
             }
+            #[cfg(feature = "test-harness")]
+            Command::View(None) => {
+                self.follow(Mirror::index(), |v: &IndexView| json!(v))
+                    .await?
+            }
+            #[cfg(feature = "test-harness")]
+            Command::View(Some(session)) => {
+                let json = |v: &SessionView| json!(v);
+                self.follow(Mirror::session(session), json).await?;
+            }
             Command::Respond {
                 session,
                 request,
@@ -285,6 +297,38 @@ impl Cli {
     async fn next(&mut self) -> Result<Incoming, Failure> {
         let next = self.client.next().await;
         next.ok_or_else(|| ClientError::Closed(self.client.close_reason()).into())
+    }
+
+    /// Prints `{stream, seq, resubscribed, view}` each time `mirror` is live
+    /// after a batch; `resubscribed` counts the times it subscribed again
+    /// after a gap or a view it could not apply (design 5.3.3).
+    #[cfg(feature = "test-harness")]
+    async fn follow<V: View>(
+        &mut self,
+        mirror: Mirror<V>,
+        json: fn(&V) -> Value,
+    ) -> Result<(), Failure> {
+        let mut mirror = self.live(mirror).await?;
+        let mut resubscribed = 0;
+        loop {
+            let seq = mirror.resume().map(|resume| resume.after_seq);
+            let line = json!({"stream": mirror.stream(), "seq": seq,
+                "resubscribed": resubscribed, "view": json(mirror.view())});
+            self.out
+                .emit(line, || format!("{} at {seq:?}", mirror.stream()));
+            loop {
+                let incoming = self.next().await?;
+                if let Some(params) = mirror.handle(&incoming).map_err(Failure::Refused)? {
+                    resubscribed += 1;
+                    self.client.subscribe(params).await?;
+                }
+                if mirror.is_live()
+                    && matches!(incoming, Incoming::Events(_) | Incoming::Snapshot(_))
+                {
+                    break;
+                }
+            }
+        }
     }
 
     /// `mirror`, subscribed and caught up.
