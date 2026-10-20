@@ -78,7 +78,7 @@ test(
 
 test(
   "E2E-SEC-real-input: Playwright's keys never count, and keys count only after the window's cooldown",
-  { tag: "@focus" },
+  { tag: ["@focus", "@smoke"] },
   async ({ cupper }) => {
     const stream = await onScreen(cupper, "say first");
     const request = await permission(cupper, stream);
@@ -109,7 +109,7 @@ test(
 
 test(
   "E2E-SEC-panel-arming: typing or a draft keeps the focus off the panel; a typing key revokes; the first cmd-Enter waits",
-  { tag: "@focus" },
+  { tag: ["@focus", "@smoke"] },
   async ({ cupper }) => {
     const stream = await onScreen(cupper, "say first");
     const [panel, t] = [requestPanel(cupper), await texts(cupper)];
@@ -158,7 +158,7 @@ test(
 
 test(
   "E2E-SEC-panel-arming: arming swallows keys and clicks, a click begun before counts not, each request arms, a menu takes the keys",
-  { tag: "@focus" },
+  { tag: ["@focus", "@smoke"] },
   async ({ cupper }) => {
     const stream = await onScreen(cupper, "say first");
     const panel = requestPanel(cupper);
@@ -215,7 +215,7 @@ test(
 
 test(
   "E2E-SEC-panel-numbering: every option has its number; unknown effect takes none; privileged asks natively; a wrong digit is refused",
-  { tag: "@focus" },
+  { tag: ["@focus", "@smoke"] },
   async ({ cupper }) => {
     const stream = await onScreen(cupper, "say first");
     const options = [
@@ -262,7 +262,7 @@ test(
 
 test(
   "E2E-SEC-privileged: the window cannot send privileged methods; the native dialog shows what the host verified",
-  { tag: "@focus" },
+  { tag: ["@focus", "@smoke"] },
   async ({ cupper }) => {
     await cupper.launch();
     await cupper.connected();
