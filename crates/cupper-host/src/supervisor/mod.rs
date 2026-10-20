@@ -232,6 +232,8 @@ impl Host {
             #[cfg(feature = "test-harness")]
             agent: (payload.test_config.agents.claude.as_ref())
                 .map(|agent| (agent.program.clone(), agent.args.clone())),
+            #[cfg(feature = "test-harness")]
+            in_process: payload.test_config.in_process.clone(),
         };
         // Discovery runs the login shell once; the index's git and Claude's
         // launch both take this result.
@@ -638,6 +640,8 @@ struct Finder {
     login_env: Option<BTreeMap<String, String>>,
     #[cfg(feature = "test-harness")]
     agent: Option<(PathBuf, Vec<String>)>,
+    #[cfg(feature = "test-harness")]
+    in_process: Option<launch::InProcess>,
 }
 
 impl Finder {
@@ -654,6 +658,12 @@ impl Finder {
     async fn launch_found(&self, found: &Discovery) -> Launch {
         let (clock, durations) = (&*self.clock, &self.durations);
         let (host, login) = (&found.host, &found.login);
+        #[cfg(feature = "test-harness")]
+        if let Some(agents) = &self.in_process {
+            let mut launch = launch::injected(PathBuf::new(), Vec::new(), host, login);
+            launch.program = launch::Program::InProcess(agents.clone());
+            return launch;
+        }
         #[cfg(feature = "test-harness")]
         if let Some((program, args)) = &self.agent {
             return launch::injected(program.clone(), args.clone(), host, login);

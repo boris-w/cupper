@@ -44,6 +44,26 @@ pub enum Program {
     /// The runtime installer's node running the adapter's bundle, both
     /// checked before each start (ADR-08).
     Runtime { node: Installed, bundle: Installed },
+    /// `test-harness`: the adapter is played inside this process, over an
+    /// in-memory transport (the B-layer golden runner, design 5.9.3).
+    #[cfg(feature = "test-harness")]
+    InProcess(InProcess),
+}
+
+/// `test-harness`: where in-process adapters go. Each start sends the
+/// agent's end of a new in-memory transport.
+#[cfg(feature = "test-harness")]
+#[derive(Debug, Clone)]
+pub struct InProcess(pub mpsc::UnboundedSender<InProcessAgent>);
+
+/// One in-process adapter instance, as its player gets it.
+#[cfg(feature = "test-harness")]
+#[derive(Debug)]
+pub struct InProcessAgent {
+    /// What the host writes to the adapter, and what it reads from it.
+    pub stream: tokio::io::DuplexStream,
+    /// The adapter's exit code; dropping it is exit 0.
+    pub exit: tokio::sync::oneshot::Sender<i32>,
 }
 
 /// How the agent's adapters start.
@@ -231,7 +251,9 @@ pub struct Instance {
     /// Dropping it closes the adapter's stdin, as a stop does.
     pub conn: Option<AcpConnection>,
     pub init: InitializeResponse,
-    pub group: ProcessGroup,
+    /// `None` for an in-process adapter, which has no process: nothing
+    /// signals, samples or reaps it.
+    pub group: Option<ProcessGroup>,
     /// Its latest stderr, for the details of an `error` item.
     pub tail: Option<Tail>,
 }
@@ -260,6 +282,8 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
         return Err(failed(class, "the agent's CLI was not found"));
     }
     let mut command = match &launch.program {
+        #[cfg(feature = "test-harness")]
+        Program::InProcess(agents) => return in_process(agents, cx, id, mailbox, exited).await,
         Program::Injected { program, args } => {
             let mut command = Command::new(program);
             command.args(args);
@@ -325,7 +349,7 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
             id,
             conn: Some(conn),
             init,
-            group,
+            group: Some(group),
             tail,
         }),
         Err(err) => {
@@ -333,6 +357,43 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
             Err(failed(RuntimeFailed, err))
         }
     }
+}
+
+/// `test-harness`: instance `id` played in this process. It is never spawned,
+/// so it has no process group and no `adapters` row: neither a stop nor the
+/// next start's cleanup has anything to signal.
+#[cfg(feature = "test-harness")]
+async fn in_process<M: From<FromAgent> + Send + 'static>(
+    agents: &InProcess,
+    cx: &Context,
+    id: AdapterInstanceId,
+    mailbox: mpsc::UnboundedSender<M>,
+    exited: impl FnOnce(ExitStatus) + Send + 'static,
+) -> Result<Instance, AgentError> {
+    let (transport, stream) = crate::driver::transport::MemoryTransport::pair(1 << 20);
+    let (exit, code) = tokio::sync::oneshot::channel();
+    let gone = |_| failed(AgentErrorClass::RuntimeFailed, "no player for the adapter");
+    agents
+        .0
+        .send(InProcessAgent { stream, exit })
+        .map_err(gone)?;
+    let tap = Tap::new(id.to_string(), Arc::clone(&cx.clock), cx.raw.clone());
+    let recorder = tap.recorder();
+    recorder.note(&json!({"event": INSTANCE_STARTED}));
+    tokio::spawn(async move {
+        let code = code.await.unwrap_or(0);
+        recorder.note(&json!({"event": INSTANCE_EXITED, "code": code, "signal": null}));
+        exited(ExitStatus::from_raw(code << 8));
+    });
+    let opened = AcpConnection::open(transport, tap, mailbox).await;
+    let (conn, init) = opened.map_err(|e| failed(AgentErrorClass::RuntimeFailed, e))?;
+    Ok(Instance {
+        id,
+        conn: Some(conn),
+        init,
+        group: None,
+        tail: None,
+    })
 }
 
 /// The `adapters` row, written as soon as the process runs, so that a host
