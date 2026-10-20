@@ -304,6 +304,9 @@
 | T133 | 实现 `elevation::Requesters`（`examine(AuditToken) -> Examined`：`Clear(VerifiedRequester)` 或 `Descendant { signals }`），在 supervisor 里把 `Arc::new(FailClosed)` 换掉；`examine` 收到的是连接的固定令牌；`signals` 原样进审计。另加第二道防线：网关 `Granted::widen` 只靠索引的定时器撤销，自身不核对 `expires_at`，给网关一个 `Clock`，在 `widen` 里也按 `expires_at` 判断（索引 actor 卡住时授权不会超过 15 分钟） | T038 |
 | T134、T090 | `auth/elevation_respond`：不认识的 `decision` 按拒绝，`scopes` 只取申请范围之内的；`auth/elevation_get` 对已不在未决的申请回 `not_found`；授权到期时间在 `clients.updated` 的 `elevated.expires_at`；`auth/elevate` 被拒回 `granted: []`、过期回 `timeout`、限频回 `rate_limited` 带 `retry_after_ms` | T038 |
 | T059 | `conn.accepted` 审计记录里的对端可执行文件路径、签名 identifier、Team ID 还没填（`gateway/audit.rs` 开头的注释仍写"归 T038"，改掉）；T133 在 `cupper-sys` 加了按审计令牌取签名身份的函数，可以直接用。另有边界情况：`elevation.requested` 写入失败时，之后的 `elevation.resolved` 在视图里找不到申请 | T038 |
+| T036 | 特权操作 `settings` 现在返回 `failed`（`unsupported`）：`settings/update` 接上后，照 `set_config` 的结构补上：`policy/describe`（`security_setting`）→ 原生确认框 → `settings/update`（`apps/desktop/src/main/privileged/actions.ts`） | T134 |
+| T135 | 提权框加"申请方不是本 App 自带的命令行工具"：在 `apps/desktop/src/main/privileged/dialogs.ts` 的 `elevationBox` 里按 `VerifiedRequester.bundled_cli` 加一行醒目提示，文案放 `privileged` 命名空间；信任项目、新建会话的确认框要显示项目路径（`project/trust_info`、`policy/describe` 的 `details` 现在都只有 `project_id`） | T134 |
+| 所有写中文文案的任务 | 截图夹具的中文字体是 GB2312 符号区加一级汉字的子集，T118 的 `fonts.test.ts` 检查全部 locale 文件；`⚠` 这类符号不在子集里，会让检查失败（T134 合并时遇到，改成了"【注意】"）。需要子集外的字时按 `tools/ui-screenshots` 的 notes 重做子集 | T134 合并 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
