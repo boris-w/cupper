@@ -228,6 +228,9 @@
 | T095 | `driver/claude/ask.rs` 的 `option()` 是换成按工具区分的对照表的位置；换表后 s04、s04b、s05 等的金样例用 `UPDATE_GOLDEN=1` 重新生成并评审。`capabilities.rs` 里 `permission_mode` 每个取值都标 `full_access` 是档位表之前的过渡写法。`SessionCore` 对 `DriverEvent::Ask` 的匹配用 `..` 暂时忽略了 `tool_call_id`（T053 合并时），填 `item_id` 由本任务接上（已写入 brief） | T053、T088 |
 | T055 | 接 T053 的提取层：每个会话建 `ClaudeSession::new(cwd, config)`；`AskId`、`PromptTag` 由运行时分配；`CommandsChanged` 按 5.6.2 去重（金样例里每次 `available_commands_update` 都是完整列表）；`capabilities()` 要从 CLI 定位那边拿到 `Versions`（已写入 brief） | T053 |
 | T064、T066 | 宿主不声明 `session.compaction` 时适配器还推不推 `compaction_update`，录制回答不了（SP-1 的客户端声明了它），用兼容剧本核对；提取层照常处理这类更新 | T053 |
+| T098 | 带防护的 `RepoTier::run` 放在 `git/` 下：读配置用 `GitCmd::repo(RepoOp::ConfigList)`；T097 算出的覆盖经 `.config(键, 值)` 加进命令；运行用 `tier.prepare(cmd).run(clock, durations)`；指纹变化时按 `Prepared::read_only` 决定丢弃结果还是照常返回。T097 的接口：`parse(输出, 运行目录)` → `check_sources(&entries, &Bounds { git_dir, common_dir, writable })` → `overrides(&entries, &Setup { hooks, lfs, patch })`，`global` 放在子命令之前、`command` 放在子命令之后；覆盖后失败时只有 `required` 不为空才判 `unsafe_repo_config`；调用前后各取一次 `Fingerprint::take(&Layout::read(工作区)?, &entries)`，`changed` 就是 `repo_config_changed` 的 `paths`。`core.hooksPath` 以 `~/` 开头时 T097 没有展开（纯函数不读环境），需要的话由本任务传入展开后的路径 | T060、T097 |
+| T061 | 在 `SnapshotOp` 里加快照档命令，生成补丁的要带 `--no-ext-diff --no-textconv`；在 `SnapshotTier::prepare` 里补 `GIT_INDEX_FILE`、`GIT_OBJECT_DIRECTORY`、`GIT_ALTERNATE_OBJECT_DIRECTORIES`、`GIT_CONFIG_NOSYSTEM`、`GIT_CONFIG_GLOBAL`，并决定是否带 `HOME`；快照用 `GIT_SNAPSHOT` 超时 | T060 |
+| T123 | 用户档加一个 `User` 标记和 `UserTier`：不加 hooks 的覆盖，带 `HOME`；`push` 用 `GIT_PUSH` 超时 | T060 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
