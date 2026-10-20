@@ -7,6 +7,7 @@
 import {
   zEventBody,
   zRpcError,
+  type BlobGetResult,
   type BlobRef,
   type HistoryCursor,
   type HistoryPageResult,
@@ -272,6 +273,42 @@ export class HostClient {
     const blob = { hash, size: bytes.length, media_type: mediaType };
     await this.request("blob/put", blob);
     return blob;
+  }
+
+  /**
+   * Reads a whole blob (design 5.3.4): `blob/get` sends its `0x02` chunks
+   * ahead of its result, so by the result every chunk is in. They join by
+   * offset, must number the result's `chunks` and leave no gap, and the bytes
+   * must hash to `ref.hash`; anything else rejects.
+   */
+  async getBlob(ref: { hash: string }): Promise<Uint8Array<ArrayBuffer>> {
+    const chunks = new Map<number, Uint8Array>();
+    const off = this.onBlobChunk((chunk) => {
+      if (chunk.hash === ref.hash) chunks.set(chunk.offset, chunk.bytes);
+    });
+    let result: BlobGetResult;
+    try {
+      result = await this.request<BlobGetResult>("blob/get", { hash: ref.hash });
+    } finally {
+      off();
+    }
+    const bytes = new Uint8Array(result.length);
+    let at = 0;
+    for (const [offset, piece] of [...chunks].sort(([a], [b]) => a - b)) {
+      if (offset !== at || at + piece.length > bytes.length) {
+        throw new Error(`blob ${ref.hash}: no bytes at ${at}`);
+      }
+      bytes.set(piece, offset);
+      at += piece.length;
+    }
+    if (chunks.size !== result.chunks || at !== result.length) {
+      throw new Error(`blob ${ref.hash}: ${chunks.size} of ${result.chunks} chunks`);
+    }
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+    if (Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("") !== ref.hash) {
+      throw new Error(`blob ${ref.hash}: the bytes do not match the hash`);
+    }
+    return bytes;
   }
 
   /**
