@@ -28,6 +28,14 @@ pub struct JobCtx<'a> {
     pub cases: Vec<TestCase>,
     /// Steps that did not run; the summary lists them.
     pub skipped: Vec<String>,
+    /// What the job built and tested, by digest (e2e, plan 1.8).
+    pub artifacts: Vec<Artifact>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Artifact {
+    pub name: String,
+    pub sha256: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +55,7 @@ impl<'a> JobCtx<'a> {
             failed: 0,
             cases: Vec::new(),
             skipped: Vec::new(),
+            artifacts: Vec::new(),
         }
     }
 

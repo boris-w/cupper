@@ -19,7 +19,7 @@ use std::process::ExitCode;
 use anyhow::{Context, Result, bail};
 
 use crate::clock::{self, Stopwatch};
-use ctx::{JobCtx, TestCase};
+use ctx::{Artifact, JobCtx, TestCase};
 use jobs::Job;
 use lock::MachineLock;
 
@@ -75,6 +75,7 @@ struct JobReport {
     duration_ms: u64,
     cases: Vec<TestCase>,
     skipped: Vec<String>,
+    artifacts: Vec<Artifact>,
 }
 
 struct Options<'a> {
@@ -170,6 +171,7 @@ fn run_job(job: &Job, target: &str, root: &Path, log_dir: &Path) -> JobReport {
         duration_ms: 0,
         cases: Vec::new(),
         skipped: Vec::new(),
+        artifacts: Vec::new(),
     };
     let Some(run) = job.run else {
         eprintln!("{}: not implemented yet, skipped", job.name);
@@ -194,6 +196,7 @@ fn run_job(job: &Job, target: &str, root: &Path, log_dir: &Path) -> JobReport {
     report.duration_ms = watch.elapsed_ms();
     report.cases = ctx.cases;
     report.skipped = ctx.skipped;
+    report.artifacts = ctx.artifacts;
     report
 }
 
@@ -284,7 +287,7 @@ mod tests {
     #[test]
     fn unimplemented_and_unknown_jobs_are_refused_up_front() {
         let repo = clean_repo("ci-refused");
-        let err = run(&args(&["e2e"]), repo.path()).expect_err("not implemented");
+        let err = run(&args(&["perf"]), repo.path()).expect_err("not implemented");
         assert!(err.to_string().contains("not implemented"), "{err}");
         let err = run(&args(&["deploy"]), repo.path()).expect_err("unknown");
         assert!(err.to_string().contains("unknown job"), "{err}");
