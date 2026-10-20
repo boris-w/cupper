@@ -70,3 +70,47 @@
 | 再加 `git.unsafe_repo_config`、`host.*` 的产生者 | 725 | 625–755 |
 
 两种口径都贴着或超过约 650 的线，按任务书开工前停下汇报。拆分建议见汇报。
+
+## 裁定后（方案 A，上限约 700、硬停止线 780）
+
+### 统计（`git diff --numstat`，只算 `crates/`）
+
+| 时点 | 增 | 删 | 净增 |
+|---|---|---|---|
+| 正式格式与会话侧（`config.*`） | 298 | 43 | 255 |
+| 加上 `project.trust.*` 产生者 | 389 | 63 | 326 |
+| 加上审计写入 task 与组装（实现完成） | 450 | 65 | 385 |
+| 加上 UNIT-audit-format（压缩前 653，压缩后） | 658 | 65 | 593 |
+| 加上 IT-audit-retention 与信任产生点的 IT | 734 | 66 | 668 |
+| 定稿 | 738 | 67 | 671 |
+
+实现约 380 行（估计 350），测试约 290 行（估计 300）。UNIT-audit-format 第一版有 218 行（rustfmt 把每个结构体展开），推算会到 800 上下、越过硬停止线，于是先压缩：用例改成单行的 JSON 文本比对，去掉一个重复的关闭原因，写入 task 的用例只留一条记录。之后推算在 680 左右，才接着写 IT。
+
+### 过程记录
+
+- **正式格式**在 `gateway/audit.rs`：
+  - `AuditEvent::formal()` 给出事件名、principal、`peer_json`、`detail_json`；`kept()` 说明是否进表，`stream.subscribed` 只进 host.log。
+  - `host.*`、`git.unsafe_repo_config`、`privileged.executed` 在 `formal()` 的文档里注明随产生者由 T163 加。
+  - `CloseReason`、`RefusalKind`、`io::ErrorKind` 的代码按变体名转蛇形（`HostExiting` → `host_exiting`），UNIT-audit-format 核对。
+- **审计写入**：`supervisor/audit.rs`，一个新的静止屏障种类 `audit`。
+  - 在 `Participant::idle` 里等接收端，每条先写 host.log（`tracing` 事件，字段 `event`、`conn`、`principal`、`peer`、`detail`），再经写线程插入 `audit` 表；
+  - 写失败时记 warn。
+- **`conn.accepted`**：在 `admit` 里取 `pid_path` 和 `AuditToken::signing_identity`，记可执行文件路径、签名 identifier、Team ID；取不到时为空。
+- **`config.*`**：
+  - 两条都记实际模式与档位、设定者。离开时，设定者取同一步的 `SetBy`（`session/confirm_config` 或被准许的选项），没有时取 `TierGuard` 当前的设定者。
+  - `config.confirmed` 的原因是离开的那一种。
+  - T044 的 `ConfigUnconfirmed` 改成了 `{reason, config: ConfigState}`。
+- **`project.trust.*`**：
+  - `trusted`：`project/trust` 成功之后记录；
+  - `stale`：`project/add`（已有项目）、`project/trust_info`、`IndexActor::rescanned` 让受信任的项目变为 stale 时记录；
+  - `scan_failed`：`project/trust`、`trust_info` 的扫描失败（项目 ID 来自参数），以及会话重扫时扫描本身失败（`Rescan.scan_failed`）时记录。
+  - 新路径的 `project/add` 扫描失败时还没有项目，不记。
+- **不写秘密**：
+  - 握手失败只记错误码和 `data`，不记 `message`，因为参数非法时 serde 的报错可能引用客户端发来的内容；
+  - 令牌、密钥、登录 shell 的环境本来就不在任何审计事件里。
+- **`elevation.requested` 写入失败**：审计在索引写批次之前单独发出，审计表里照样有，不另记（编排者已认可）。
+- **IT-audit-retention 的 90 天**：
+  - 不能直接把时钟推 91 天：每小时一次的账本清理让 `test/clock_advance` 要逐步走两千多个期限，约 30 s；而且途中每天的审计清理会先把旧记录删掉，`test/run_maintenance` 就验证不到。
+  - 改为：宿主运行时直接插入两条旧记录，一条早于 90 天 1 ms，一条晚 1 ms。先 `run_maintenance` 一次，只剩后者；手动时钟推进 2 ms 后再跑一次，后者也被删，新近的连接记录留着。
+- **进程卫生**：新 IT 的宿主进程包在 `Running` 守卫里，drop 时结束。临时让用例中途 panic，没有留下宿主进程。
+- **`conn.closed`（`host_exiting`）只进 host.log**：有序退出时 `close_all` 排在写线程停止之后，这些记录到达时表已经写不进去了。要进表，就得调整退出顺序：先关连接、排空审计写入，再停写线程。这一步属于 `Host::run`（T059），而 T163 加 `host.exiting` 时也需要同样的排空，交接给 T163。
