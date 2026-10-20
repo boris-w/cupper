@@ -26,8 +26,10 @@
 //! | `auth_none` | `_auth/status_update {kind: none}`, then `-32000` |
 //! | `whoami` / `echo_env` / `echo_meta` / `probe` | say the session, cwd, clientInfo, env names, `_meta`, inherited fds |
 //! | `spawn_child` / `exit <code>` | start a grandchild in our process group / exit now |
+//! | `spawn_group_child [program]` | start `program` (`/bin/sleep`) for an hour in a new process group, holding our stdout; say its pid |
 //! | `raw <json>` | write the JSON value as one line, verbatim (`${session}` is the session id) |
 
+use std::os::unix::process::CommandExt;
 use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -78,6 +80,7 @@ const COMMANDS: &[&str] = &[
     "echo_meta",
     "probe",
     "spawn_child",
+    "spawn_group_child",
     "exit",
     "raw",
 ];
@@ -428,6 +431,19 @@ impl Script {
                     .arg("3600")
                     .spawn()
                     .map_err(|e| Error::internal_error().data(e.to_string()))?;
+            }
+            "spawn_group_child" => {
+                // Claude's tool commands run in a session of their own (T003): killing the
+                // adapter's group misses them. A new group is the same to the host.
+                let program = Some(arg(0))
+                    .filter(|p| !p.is_empty())
+                    .unwrap_or("/bin/sleep");
+                let child = std::process::Command::new(program)
+                    .arg("3600")
+                    .process_group(0)
+                    .spawn()
+                    .map_err(|e| Error::internal_error().data(e.to_string()))?;
+                self.say(&format!("pid={}", child.id()))?;
             }
             "exit" => std::process::exit(i32::try_from(num(0)).unwrap_or(1)),
             "raw" => self.notify(

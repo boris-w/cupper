@@ -241,6 +241,7 @@ impl Host {
             probe_dir: data_dir.join("probe").join("claude"),
             durations: durations.clone(),
             notes: Arc::new(NoAgentNotes),
+            rss: test_rss(&payload),
         };
         let claude = AgentRuntime::start(deps);
         let find: Find = {
@@ -489,6 +490,17 @@ impl Finder {
         }
         let (dir, locator) = (&self.data_dir, &found.locator);
         launch::production(clock, durations, dir, host, login, locator).await
+    }
+}
+
+/// `test_config.rss_samples` of Claude (design 5.9.9).
+fn test_rss(payload: &Payload) -> Option<u64> {
+    #[cfg(feature = "test-harness")]
+    return payload.test_config.rss_samples.claude;
+    #[cfg(not(feature = "test-harness"))]
+    {
+        let _ = payload;
+        None
     }
 }
 

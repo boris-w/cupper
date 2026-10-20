@@ -195,7 +195,12 @@ async fn it_orch_gating_crashes_restart_and_resume() {
     // The adapter exits: the turn fails; the next message resumes.
     let instance = AdapterInstanceId::from_uuid(1);
     let status = ExitStatus::from_raw(9);
-    f.emit(DriverEvent::AdapterExited { instance, status });
+    let stderr = String::new();
+    f.emit(DriverEvent::AdapterExited {
+        instance,
+        status,
+        stderr,
+    });
     let bodies = f.events(&session, "turn.completed", 1).await;
     assert_eq!(
         data(&bodies, "turn.completed")[0]["error_code"],

@@ -248,8 +248,8 @@ pub struct Context {
 #[derive(Debug)]
 pub struct Instance {
     pub id: AdapterInstanceId,
-    /// Dropping it closes the adapter's stdin.
-    pub conn: AcpConnection,
+    /// Dropping it closes the adapter's stdin, as a stop does.
+    pub conn: Option<AcpConnection>,
     pub init: InitializeResponse,
     pub group: ProcessGroup,
     /// Its latest stderr, for the details of an `error` item.
@@ -328,7 +328,7 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
     match opened {
         Ok((conn, init)) => Ok(Instance {
             id,
-            conn,
+            conn: Some(conn),
             init,
             group,
             tail,
@@ -378,6 +378,20 @@ async fn record(cx: &Context, id: &AdapterInstanceId, group: &ProcessGroup, laun
     });
     // Without the row the host only loses the cleanup of a crash.
     let _ = write.await;
+}
+
+/// The groups of the instance's descendants in its `adapters` row, for the
+/// cleanup after a crash of the host (design 5.2.13).
+pub fn record_groups(writer: &Writer, id: &AdapterInstanceId, groups: &[ProcessGroup]) {
+    let groups: Vec<_> = groups
+        .iter()
+        .map(|g| (g.pgid, g.start.as_micros()))
+        .collect();
+    let (id, groups) = (id.to_string(), serde_json::json!(groups).to_string());
+    drop(writer.submit(Durability::Normal, move |conn| {
+        let sql = "UPDATE adapters SET groups = ?2 WHERE instance_id = ?1";
+        conn.execute(sql, (id, groups)).map(drop)
+    }));
 }
 
 /// The instance's end in its `adapters` row.
