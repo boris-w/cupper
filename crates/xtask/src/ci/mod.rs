@@ -73,6 +73,7 @@ struct JobReport {
     failed: u64,
     duration_ms: u64,
     cases: Vec<TestCase>,
+    skipped: Vec<String>,
 }
 
 struct Options<'a> {
@@ -157,6 +158,7 @@ fn run_job(job: &Job, root: &Path, log_dir: &Path) -> JobReport {
         failed: 0,
         duration_ms: 0,
         cases: Vec::new(),
+        skipped: Vec::new(),
     };
     let Some(run) = job.run else {
         eprintln!("{}: not implemented yet, skipped", job.name);
@@ -179,6 +181,7 @@ fn run_job(job: &Job, root: &Path, log_dir: &Path) -> JobReport {
     report.failed = ctx.failed;
     report.duration_ms = watch.elapsed_ms();
     report.cases = ctx.cases;
+    report.skipped = ctx.skipped;
     report
 }
 
@@ -213,6 +216,10 @@ fn print_reports(reports: &[JobReport]) {
                 report.duration_ms as f64 / 1000.0
             ),
         }
+    }
+    for report in reports.iter().filter(|report| !report.skipped.is_empty()) {
+        let steps = report.skipped.join(", ");
+        eprintln!("  skipped steps: {} / {steps}", report.name);
     }
     for report in reports {
         for case in report.cases.iter().filter(|case| !case.passed) {

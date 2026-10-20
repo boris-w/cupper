@@ -16,6 +16,12 @@ pub fn head(root: &Path) -> Result<String> {
     git(root, &["rev-parse", "--verify", "HEAD"])
 }
 
+/// The git directory that every work tree of the repository shares.
+pub fn common_dir(root: &Path) -> Result<PathBuf> {
+    let args = ["rev-parse", "--path-format=absolute", "--git-common-dir"];
+    Ok(PathBuf::from(git(root, &args)?))
+}
+
 /// Fails unless `git status` is empty: no staged, unstaged or untracked changes.
 pub fn ensure_clean(root: &Path) -> Result<()> {
     let status = git(root, &["status", "--porcelain=v1", "--untracked-files=all"])?;

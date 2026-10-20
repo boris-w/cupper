@@ -61,7 +61,7 @@
 | T028 | 凭据的识别规则目前在 `driver/tap/redact.rs`（`sk-`、`ghp_`、JWT、`Bearer`、URL 中的 userinfo 和查询参数，只匹配词首）。可以挪到 `diag` 共用，避免两处各自改出差异 | T050 |
 | T025、T047 | 原始帧的方向 `Dir` 目前有 `send`、`recv`、`recv_nonjson`；`stderr` 和 `note` 由写入它们的任务补上 | T050（已写入 T025 的 brief） |
 | 全工作区 | serde_json 的 `preserve_order` 由 SDK 打开，在工作区内是统一生效的，所以 `cupper-protocol` 在工作区构建时也会带上它。导出物一律不能依赖 map 的键顺序（`CLAUDE.md`） | T050 |
-| T052 | 回放模式落地时，加一项自动比对：假 agent 的 persona（能力、configOptions、默认模式、命令列表、权限选项 ID）与 SP-1 录制的形态一致。T051 里这一项只用测试里的常量逐条核对 | T051 |
+| T067（v1.3.12 由 T052 拆出） | 回放模式落地时，加一项自动比对：假 agent 的 persona（能力、configOptions、默认模式、命令列表、权限选项 ID）与 SP-1 录制的形态一致。T051 里这一项只用测试里的常量逐条核对 | T051 |
 | T037、T043 及以后的 actor 任务 | 任何 `posix_spawn`（包括带 `CLOEXEC_DEFAULT` 的 `cupper_sys::spawn`）都会在内核里短暂复制整张 fd 表。别的线程正在拉起子进程时，刚关掉的 fd 可能还被持有片刻。凡是"关掉 fd 后立刻判断对端已关闭"的逻辑都要容忍这个窗口；测试里用 `cupper_sys` 的 `testutil::alone` 隔离这类断言 | T021（已写入 T037 的 brief）（已写入 T043 的 brief） |
 | T025 | 用 `store::open_writer(path, Database::Host)`（或 `Raw`）打开连接，迁移在这个连接上跑完，再交给 `Writer::spawn`：迁移需要自己的事务，`VACUUM INTO` 也不能在事务里执行，所以不能作为写线程的操作。`Readers::open` 放在写连接打开之后 | T024（已写入 brief） |
 | T037 | 启动第 5 步：`epoch::decide(LastExit::from_meta(..), Boot::since(meta.boot_session_uuid, current_boot_session(&payload)?))`，然后写 `last_start_at` 和 `boot.to_string()`。`Writer::spawn` 之前先 `quiescence.register(store::WRITER)`，写线程配置用 `WriterConfig::for_startup(&payload, &durations)`。有序退出时，把写 `last_clean_exit_at` 作为 `stop()` 之前的最后一个操作提交 | T024（已写入 brief） |
@@ -80,7 +80,7 @@
 | T072 | TS reducer 照 5.3.11 末尾"T014 实现时的裁定"的规则和视图 JSON 实现。JSON 对象的键顺序没有含义，比较时按深度相等 | T014（已写入 brief） |
 | T030 | `RawMessage::classify` 会把缺省的 `params` 变成 `null`，而 `ping` 这类参数为 `{}` 的方法，按结构体解析时会失败。分发时把 `null` 当作 `{}` | T012（已写入 brief） |
 | T035 | `project/trust_info.diff_from_trusted` 按文件列出差异，所以信任时要另存每个文件的哈希清单，按 P-4 加进 `0001` 的 `projects` 表 | T012 裁定 |
-| T052 | 假 agent 的 `--segment-file <路径>` 每次启动段号加 1，重启后的实例接着演下一段，用来回放多实例录制。persona 与 SP-1 录制的 jq 摘取命令在 `docs/tasks/T051-fake-agent-scripts/notes.md` 里，自动比对可以直接用 | T051 |
+| T067（v1.3.12 由 T052 拆出） | 假 agent 的 `--segment-file <路径>` 每次启动段号加 1，重启后的实例接着演下一段，用来回放多实例录制。persona 与 SP-1 录制的 jq 摘取命令在 `docs/tasks/T051-fake-agent-scripts/notes.md` 里，自动比对可以直接用 | T051 |
 | T055、T062、T090 | 假 agent 是独立的二进制，cargo 不支持跨 crate 的 `CARGO_BIN_EXE_*`。T055 定一个拿路径的做法（例如测试前先 `cargo build -p cupper-fake-agent`，再按 target 目录推出路径，或由 `xtask ci` 先构建），后面的任务照用。配置只经命令行参数（`--persona`、`--auth`、`--fault`、`--segment`、`--segment-file`），因为宿主的环境变量规则会过滤掉我们自己的变量。同一会话收到第二个在途 prompt 时，假 agent 以退出码 70 退出 | T051 |
 | T037 | host.db 的启动顺序：`open_writer(host.db, Database::Host)` → `store::migrate(&mut conn, MIGRATIONS, &data_dir.join("backups"), &*clock)` → 用 `meta::get` 读出 epoch 判定的输入，用 `meta::set` 写 `LastStartAt`、`BootSessionUuid`、`DataEpoch` → `Writer::spawn`。raw.db：`open_writer(raw.db, Database::Raw)` → `prepare_raw(&mut conn, &RAW_SCHEMA)`。退出码：`TooNew` → 4；`Failed` → 6，界面显示 `backup`；`Backup`、`Unreadable`、`BadVersion` 建议用 5 | T025（已写入 brief） |
 | T026 | 写事件时 `v` 取 `Upcasters::host().current(type)`，可以替代 T011 交接里的 `EVENT_VERSION`；读事件时调用 `upcast(type, v, data)`。检查点：写 `view_v`，读时调用 `checkpoint_fate(view_v)`；`VIEW_VERSION` 从 `store::upcast` 挪到 `cupper-protocol::view`，和视图类型放在一起（编排者裁定）。`turn_snapshots.v` 是整个快照一个版本，而事件的 `v` 是按类型分的，ops 里的事件体也不带 `v`，请定下这一列的含义，例如让每个 op 带自己的 `v` | T025（已写入 brief） |
@@ -188,7 +188,7 @@
 | T029 | outbox 的项现在是 `Item`（带订阅的 feed 编号），blob 分片仍走 `push_frame`；`Target::Streams` 已删除，`Target::Blobs` 还在，由本任务接上 | T019 |
 | 用大合并窗口的客户端（CLI、iOS） | 合并窗口内，同一批里的响应也要等窗口结束才发（与 SP-4a 相同，最多 1 s）。桌面默认 `coalesce_ms = 0`，不受影响；要用大窗口时，改成先发窗口前的响应帧（`gateway/send.rs`） | T019 |
 | 以后排查宿主内存时 | 对不存在的会话订阅或取历史，会把一条空流载入内存，直到空闲淘汰（10 分钟） | T019 |
-| T058 的修复（T088 之前或同时） | 组合核心的性质测试有稳定的反例：`orchestrator::session_props::prop_autonomous_dequeue_guard_queue_waits_while_the_agent_works`，断言"Guard: after a turn ended on silence, the queue waits for 30 s of quiet"失败。种子：`cc 7390a05ebe580707816e5bab38bbf67b0501e1d444018d9994dbaf6d6edc9900 # shrinks to ops = [Send, Send, Interrupt, Text(0), Advance(25000), Advance(25000), Thread(true)]`。main 上和 T043 之后的 `SessionCore` 都能复现，先判断是裁判、组合接线还是性质本身写错了。CI 在修好之前可能随机撞上。`proptest-regressions/` 定为入库（proptest 的推荐做法），修复时把这个种子文件一并提交 | T037、T043（编排者复现） |
+| T058 的修复（T088 之前或同时） | 组合核心的性质测试有稳定的反例：`orchestrator::session_props::prop_autonomous_dequeue_guard_queue_waits_while_the_agent_works`，断言"Guard: after a turn ended on silence, the queue waits for 30 s of quiet"失败。种子：`cc 7390a05ebe580707816e5bab38bbf67b0501e1d444018d9994dbaf6d6edc9900 # shrinks to ops = [Send, Send, Interrupt, Text(0), Advance(25000), Advance(25000), Thread(true)]`。main 上和 T043 之后的 `SessionCore` 都能复现，先判断是裁判、组合接线还是性质本身写错了。CI 在修好之前可能随机撞上。`proptest-regressions/` 定为入库（proptest 的推荐做法），修复时把这个种子文件一并提交 | T037、T043（编排者复现）（已修复，`fix/T058-dequeue-guard`） |
 | T088 | agent 发来的请求（`DriverEvent::Ask`）现在没人应答，actor 也不处理 `CancelAsks`、`Settle`；接线点是 `SessionCore` 的请求计数（`Input::Asked`、`Input::Resolved`）和 actor 的 `Action::Machine(_)` 分支。`send` 的 `reply_to` 还没写进 `SendRequest`，`queue_entries.reply_to` 列和行的写法已经有了。还要补 `interactions` 的行和 `facts.option` | T043 |
 | T089 | 不在内存里的会话，`deliver` 和重启后的 `get` 现在都回 `not_found`，按需载入接在 `SessionManager::deliver` 里；排队消息到命令的对照（`command_id`）要从 `queue_entries` 恢复。载入时补写 T037 启动清理留下的 `turn.completed{interrupted}` 和交互的 `expired` 事件，并决定是否暂停队列 | T043、T037 |
 | T044 | 信任状态只在 `session/create` 时判定一次，attach 和每次 prompt 之前的重扫由本任务做；`facts` 对 `session/set_config` 还没有 `mode_tier` | T043 |
@@ -204,6 +204,14 @@
 | T006（license-gate） | codex-acp 内联依赖的许可证声明，按上游 v2.2.2 标签的 `package-lock.json` 生成；SP-2 的锁文件是按版本范围自己解析的，与上游实际内联的版本不同（例如 `@agentclientprotocol/sdk` 1.5.0 对 1.8.0），明细见 `docs/tasks/T004-runtime-pack/notes.md` | T004 |
 | T161、T180 | 5.10.7 第 2 步的 Node GPG 核对还是手工做的，自动化需要 `gpgv` 和锁定的 Node 发布公钥环。清单里 Node 的 sha-256 和 cdhash 是 ad-hoc 签名的值，Developer ID 签名后都会变：发布流水线要按发布身份重新生成并内嵌清单，设计里要写明每种构建内嵌哪一份 | T004 |
 | T064、T066 | 清单里还没有"已验证 CLI 范围"（5.10.3，由兼容报告生成）。T066 升级适配器时，重新评估静态扫描对 SDK 动态读取环境变量的覆盖（5.6.6 的已知局限） | T004 |
+| T110 | 出队保护放开之后，空闲时 Codex 报 thread active 不会挡住出队：`queue_resume` 或排队消息会把 prompt 发给 thread 仍在运行的 Codex 会话。这符合 5.2.6（threadStatus 只用于显示运行状态和界定自发回合）和 T058 的决定；Claude 再工作一定有输出，输出会开自发回合挡住出队，所以只有 Codex 有这个空隙。接入 Codex 时评估是否要让空闲时的 thread active 也挡住出队 | T058 修复第 1 轮 |
+| 组装 `Cupper.app` 的任务、T161 | 5.10.2 要求两个 Info.plist 都不含用途说明：`host-bundle` 只产出宿主的那一份（CLI 没有 Info.plist），`Cupper.app` 的那一份由 electron-builder 产出，要由组装它的任务断言，T161 的 `release-config` 每晚复核 | T005 |
+| T075、T180 | 宿主的 cdhash 随 Info.plist、运行时文件和二进制变化，自用构建的 CLI 必须与同一次 `cargo xtask host-bundle` 产出的 `CupperHost.app` 配套分发。Developer ID 签名之后 Node 和宿主都按发布身份重签，清单里 Node 的 sha-256 和 cdhash 要重算（另见 T004 的交接）。产物在 `target/host-bundle/<kind>/`，编译中间目录是 `target/host-bundle/build/`（每个 worktree 约 1.2 GB） | T005 |
+| 改 5.7.9 构建身份的任务 | IT-host-bundle-layout 直接读设计 5.7.9 的"宿主的 bundle id""CLI 的 identifier"两行与 `crates/xtask/src/host_bundle.rs` 的 `KINDS` 比对，改一边要同步另一边 | T005 |
+| T055 | 接 T094 的 `driver/probe`：登录 shell 要保留的名字传内嵌清单的 `env.allow` 加放行名单；初始环境建议取宿主自己的 `HOME`、`USER`、`LOGNAME`、`SHELL`、`TMPDIR`、`LANG`、`LC_*`、`PATH`；`TestConfig.login_env` 有值时直接构造 `LoginEnv { vars, failure: None }`，不运行 shell；`SHELL` 为空时用 `LoginEnv::fallback(Failure::ShellMissing)`；`xcode-select -p` 和 `--version` 用同一份白名单环境；版本范围从内嵌清单取版本号字符串；语义码到协议字段的映射归 T055、T034 | T094 |
+| 接日志的任务（T028 及以后） | `LoginEnv.vars` 的值（登录 shell 取到的环境）不能写进 host.log 或诊断包；`Debug` 已经只打印变量名，不要另外手动打印这些值 | T094 |
+| T053、T067 | 录制格式库在 `cupper-protocol::recording`：读文件后用 `Recording::parse(&str)`，分段用 `segments()`（按 `instance` 切分，从 0 起，与假 agent 的 `--segment` 编号一致）；判断 note 事件用 `Body::event()`，常量 `INSTANCE_STARTED`、`INSTANCE_EXITED`。SP-1 的 48 份录制在 `testdata/recordings/claude-agent-acp/0.91.0/2.1.296/`（18 份）、`codex-acp/2.2.2/0.160.1/`（16 份）、`codex-acp/2.2.2/0.159.2/`（14 份），`usage` 只有 `gold-a`，头行的 `scenario` 取文件名 | T052 |
+| T047 | `diag/recording_export` 逐行写出用 `Header::to_line`、`Frame::to_line`（`cupper-protocol::recording`），导出前过 `tools/sanitize` | T052 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

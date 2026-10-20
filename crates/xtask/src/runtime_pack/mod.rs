@@ -12,8 +12,7 @@
 mod claude;
 mod envscan;
 mod fetch;
-mod manifest;
-mod sign;
+pub mod manifest;
 mod unpack;
 
 use std::collections::BTreeMap;
@@ -24,6 +23,7 @@ use std::process::ExitCode;
 use anyhow::{Context, Result, bail};
 
 use crate::ci::git;
+use crate::codesign::{self, Signing};
 use fetch::{Download, Pin};
 use manifest::{FileHash, Manifest};
 
@@ -101,7 +101,13 @@ fn run(root: &Path, verify: bool) -> Result<()> {
     ];
     unpack::extract_members(&node_tgz, &members)?;
     let entitlements = source.join("node.entitlements.plist");
-    let cdhash = sign::sign(&node, &pinned.node.identifier, &entitlements)?;
+    // Re-signed with cupper's identity: hardened runtime, `allow-jit` only (ADR-08).
+    let signing = Signing {
+        identifier: &pinned.node.identifier,
+        hardened_runtime: true,
+        entitlements: Some(&entitlements),
+    };
+    let cdhash = codesign::sign(&node, &signing)?;
     let codex = runtime.join(format!("codex-acp-{}", pinned.codex_acp.version));
     let members = [
         ("dist/index.js", codex.join("index.mjs")),
@@ -197,7 +203,7 @@ fn conclude(
 }
 
 /// The sha-256 of every file below `dir`, keyed by its `/`-separated path.
-fn hash_tree(dir: &Path) -> Result<BTreeMap<String, FileHash>> {
+pub fn hash_tree(dir: &Path) -> Result<BTreeMap<String, FileHash>> {
     let mut files = BTreeMap::new();
     let mut pending = vec![dir.to_path_buf()];
     while let Some(next) = pending.pop() {
