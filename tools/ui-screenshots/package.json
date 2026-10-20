@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@cupper/host-client": "workspace:*",
+    "@cupper/protocol": "workspace:*",
     "@cupper/shell-api": "workspace:*",
     "@cupper/ui-core": "workspace:*",
     "@playwright/test": "1.64.1",
