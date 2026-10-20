@@ -84,3 +84,58 @@
 2. **孙进程用新的进程组还是新的会话**：建议用标准库的 `process_group(0)`（见发现 3）。如果一定要 `setsid`，需要给 `cupper-sys::spawn` 加一种继承 fd 的标准流，或者让假 agent 依赖 `cupper-sys`，规模另计。
 3. **"立即重启"的含义**：建议是有 attach 在等时按退避定时拉起，否则等下次使用再拉起；两种情况都遵守退避。
 4. **`crashed` 之后怎么恢复**：需要 `agents/restart`。建议另派，或者归 T009。本任务只留一个清除 `crashed` 的方法。
+
+## 裁定之后（方案二：不拆，上限约 850，硬线 900）
+
+### 实际规模
+
+按 `git diff --numstat`（相对估计提交 ab30ccd，不含 `Cargo.lock` 和文档）：新增 804 行，删除 138 行。实现约 520，测试约 285。
+
+| 模块 | 新增 |
+|---|---|
+| `cupper-sys` 常驻内存（含测试 6） | 24 |
+| 假 agent：`spawn_group_child`、`linger` | 33 |
+| 时长登记 | 16 |
+| `lifecycle.rs`：重启策略、并集、发信号、采样（含单测 22） | 146 |
+| 运行时接线（`mod.rs`）：定时器、重启、关闭顺序、意外退出、采样、接口 | 280 |
+| `launch.rs`：连接可关闭、`record_groups`；`api.rs`：`Crashed`、`stderr`；宿主传入时长和 `rss_samples` | 39 |
+| 迁移的 `groups` 列 | 2 |
+| 运行时用例（夹具改写，T055 的三条用例迁到新夹具） | 265 |
+
+估计 760、推算 830，实际 804。
+
+### 做法与取舍
+
+- **定时器**：运行时用 `TimerTable` 加 `Alarm`，和会话 actor 一样，键有五种：`Start`、`Sample`、`Stdin`、`Term`、`Kill`。重启策略 `Restarts` 是纯核心，单测覆盖退避序列、窗口滑出和第 5 次进入 `crashed`。
+- **关闭顺序**：
+  1. 收到 `stop` 时**先**枚举后代：这时适配器还活着，枚举的结果并上采样记下的组；
+  2. 逐个 `session/close`，全部回复或 3 s 后关闭 stdin；
+  3. 3 s 后再枚举一次，并上第 1 步的结果，逐组 SIGTERM；
+  4. 2 s 后逐组 SIGKILL，不再等连接关闭，只等进程退出。
+
+  设计里的第 3 步（关 stdin 之后再枚举）在适配器正常退出时已经找不到后代了，所以在第 1 步就先记下。`stop(force)` 和不强制走同一个顺序，最长 3 + 3 + 2 s。
+- **意外退出**：
+  - 适配器自己退出时，对它的进程组和采样记下的组直接 SIGKILL，连接最多再等 2 s（`Kill` 定时器）；
+  - 算一次失败。有 attach 在等时按退避定时拉起，否则等下次使用；
+  - 拉起失败（`Started(Err)`）也算一次失败。
+- **`claude` 进程数（Q43）**：按"可执行文件的真实路径等于定位到的 CLI 的真实路径"来数，不按进程名。
+  - 内核的短进程名跟着链接的目标走：原生安装的 CLI 文件名是版本号，经链接以 `claude` 启动时，进程名也不是 `claude`；
+  - 用例里把 `/bin/sleep` 当作 CLI。
+- **采样**：
+  - 每 30 s 一次，统计适配器进程组和后代进程组所有成员的常驻内存，`rss_samples` 有值时用注入值；
+  - 记下的组取并集，并去掉已经不在的；写进 `adapters.groups`；
+  - 经 `AgentRuntime::resources()` 的 `watch` 接收端提供；`claude` 进程数超过会话数时写一条警告日志。
+- **用例的时钟**：
+  - `Fixture::tick` 在等待期间把时钟推到运行时设的、不超过给定上限的截止时间。下一次采样在 30 s 之后，所以等重启时不会被推过去。
+  - 退避用例的时间是精确的：1 s、2 s，以及 1 + 2 + 4 + 8 s。
+  - 关闭用例只断言上下限：适配器在 I/O 上等待时，时钟可能先被推到 `Stdin` 的截止时间。
+- 假 agent 的 `linger`：stdin 关闭后 `serve` 可能以 "transport closed" 出错，这时也要留下来，否则就测不到 SIGKILL 那一步（已修，见 `fix(fake-agent)` 提交）。
+- 用例都在通过的路径上确认没有残留进程：子进程和孙进程在 `stop` 或崩溃之后都不在了。只向用例自己拉起的进程组发信号，`ProcessGroup::signal` 会先核对组号和启动时间。
+
+### 交接
+
+- **T111**：`agents/restart` 调 `AgentRuntime::clear_crashed()`。
+- **T009 / T100**：`AgentStatus` 和设置页的内存显示读 `AgentRuntime::resources()`；`crashed` 状态目前只体现在 attach 返回的错误类 `Crashed` 上（`FailureCode::AdapterCrashed`）。
+- **T059**：宿主启动时按 `adapters` 表清理残留，`groups` 列里是采样记下的 `[[pgid, start_us], …]`。
+- **会话侧**：`AdapterExited.stderr` 已经带上最后的 stderr（脱敏），但会话 actor 还没有把它写进 `error` 条目的详情（MS-5）。
+- **Codex 的回收**（5.6.8：常驻内存超过 2 GiB，或 30 分钟没有回合）：可以用 `resources()`，归 Codex 接入的任务。
