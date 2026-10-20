@@ -20,10 +20,10 @@ fn main() -> anyhow::Result<()> {
         let term = linger
             .then(|| signal(SignalKind::terminate()))
             .transpose()?;
-        agent::serve(config, agent::stdio()).await?;
+        let served = agent::serve(config, agent::stdio()).await;
         if let Some(_term) = term {
             std::future::pending::<()>().await;
         }
-        anyhow::Ok(())
+        anyhow::Ok(served?)
     })
 }
