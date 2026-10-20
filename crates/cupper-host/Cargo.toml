@@ -77,6 +77,11 @@ required-features = ["test-harness"]
 name = "interaction_trust"
 required-features = ["test-harness"]
 
+# IT-gw-sync and the other T062 cases run the host with a `harness_key`.
+[[test]]
+name = "gateway_sync"
+required-features = ["test-harness"]
+
 # The gateway alone, for process-level tests (T039, T073).
 [[bin]]
 name = "cupper-gateway-fixture"
