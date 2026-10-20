@@ -42,8 +42,8 @@ use tokio::net::UnixListener;
 use tokio::sync::{mpsc, watch};
 
 use self::audit::Auditor;
-pub use self::audit::{AuditEvent, AuditRecord, CloseReason, Rejection};
-pub use self::dispatch::{Call, IndexPort, Opened, Port, Reply, SessionPort};
+pub use self::audit::{AuditEvent, AuditRecord, CloseReason, ElevationStep, Rejection};
+pub use self::dispatch::{Call, Granted, IndexPort, Opened, Port, Reply, SessionPort};
 pub use self::handshake::Session;
 pub use self::routes::Routes;
 use crate::clock::Clock;

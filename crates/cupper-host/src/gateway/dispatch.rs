@@ -13,10 +13,11 @@
 //! 5.3.11, rulings before T033).
 
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
 use cupper_protocol::ids::{CommandId, ConnId};
+use cupper_protocol::index::Elevation;
 use cupper_protocol::limits::V1;
 use cupper_protocol::methods::admin::SettingsUpdate;
 use cupper_protocol::methods::git::GitRevert;
@@ -24,6 +25,7 @@ use cupper_protocol::methods::handshake::{ClientIdentity, Principal};
 use cupper_protocol::methods::session::SessionSetConfig;
 use cupper_protocol::methods::stream::{StreamSubscribeParams, StreamUnsubscribeParams};
 use cupper_protocol::rpc::{Idempotency, Method, RpcId};
+use cupper_sys::AuditToken;
 use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -85,13 +87,47 @@ pub trait IndexPort: Port {
 }
 
 /// A connection that finished `initialize`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Opened {
     pub conn: ConnId,
     pub principal: Principal,
     pub client: ClientIdentity,
     /// The host runs on degraded authentication (ADR-05).
     pub weak_auth: bool,
+    /// The peer's token, pinned on accept (design 5.8.1).
+    pub token: AuditToken,
+    /// What an elevation granted the connection; the index sets it.
+    pub granted: Arc<Granted>,
+}
+
+/// The scopes an elevation granted one connection, until `expires_at`
+/// (design 5.8.4). Read as each call is admitted: a call admitted after a
+/// grant ends has the connection's own scopes; one already running finishes.
+#[derive(Debug, Default)]
+pub struct Granted(Mutex<Option<Elevation>>);
+
+impl Granted {
+    pub fn set(&self, elevation: Option<Elevation>) {
+        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = elevation;
+    }
+
+    pub fn get(&self) -> Option<Elevation> {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// `principal` with the granted scopes too.
+    fn widen(&self, principal: &Principal) -> Principal {
+        let mut principal = principal.clone();
+        for scope in self.get().into_iter().flat_map(|e| e.scopes) {
+            if !principal.scopes.contains(&scope) {
+                principal.scopes.push(scope);
+            }
+        }
+        principal
+    }
 }
 
 /// An initialized connection's side of dispatching.
@@ -100,6 +136,7 @@ pub(super) struct Dispatch {
     conn: ConnId,
     principal: Principal,
     client: ClientIdentity,
+    granted: Arc<Granted>,
     outbox: Arc<Outbox>,
     inflight: Arc<Semaphore>,
     subscriptions: Subscriptions,
@@ -120,6 +157,7 @@ impl Dispatch {
         conn: ConnId,
         principal: Principal,
         client: ClientIdentity,
+        granted: Arc<Granted>,
         outbox: Arc<Outbox>,
         auditor: Auditor,
         subscriptions: Participant,
@@ -130,6 +168,7 @@ impl Dispatch {
             conn,
             principal,
             client,
+            granted,
             outbox,
             inflight,
             subscriptions,
@@ -161,14 +200,14 @@ impl Dispatch {
         let Some((name, entry)) = routes.notification_entry(method) else {
             return;
         };
-        let params = or_empty(params);
-        if self.admit(name, entry, &params).is_err() {
+        let (params, principal) = (or_empty(params), self.granted.widen(&self.principal));
+        if Self::admit(&principal, name, entry, &params).is_err() {
             return;
         }
         if let Target::Port(port) = &entry.target {
             let (hold, reply) = (
                 routes.quiescence().hold(),
-                port.deliver(self.call(name, params, None)),
+                port.deliver(self.call(principal, name, params, None)),
             );
             tokio::spawn(async move {
                 let _hold = hold;
@@ -182,8 +221,8 @@ impl Dispatch {
         let Some((name, entry)) = entry.filter(|(_, entry)| entry.target.serves()) else {
             return Answer::Now(Err(unsupported(method)));
         };
-        let params = or_empty(params);
-        if let Err(err) = self.admit(name, entry, &params) {
+        let (params, principal) = (or_empty(params), self.granted.widen(&self.principal));
+        if let Err(err) = Self::admit(&principal, name, entry, &params) {
             return Answer::Now(Err(err));
         }
         let Ok(place) = Arc::clone(&self.inflight).try_acquire_owned() else {
@@ -202,7 +241,7 @@ impl Dispatch {
             Idempotency::Natural | Idempotency::None => None,
         };
         let reply = match &entry.target {
-            Target::Port(port) => port.deliver(self.call(name, params, ticket)),
+            Target::Port(port) => port.deliver(self.call(principal, name, params, ticket)),
             Target::Ping => return Answer::Now(Ok(json!({}))),
             Target::Describe(sessions) => describe::describe(sessions.as_ref(), &params),
             Target::History(source) => Box::pin(history::page(source.clone(), params)),
@@ -224,9 +263,13 @@ impl Dispatch {
     }
 
     /// The method level, the parameters, and the rules that read only them
-    /// (design 5.2.5).
-    fn admit(&self, name: &str, entry: &Entry, params: &Value) -> Result<(), RpcError> {
-        let principal = &self.principal;
+    /// (design 5.2.5), for the principal with what it was granted.
+    fn admit(
+        principal: &Principal,
+        name: &str,
+        entry: &Entry,
+        params: &Value,
+    ) -> Result<(), RpcError> {
         policy::method(principal, name, entry.scope.as_ref())?;
         (entry.validate)(params)?;
         match name {
@@ -244,10 +287,16 @@ impl Dispatch {
         Ok(ledger.begin(&self.principal.id, &command, name, params)?)
     }
 
-    fn call(&self, method: &'static str, params: Value, ticket: Option<Ticket>) -> Call {
+    fn call(
+        &self,
+        principal: Principal,
+        method: &'static str,
+        params: Value,
+        ticket: Option<Ticket>,
+    ) -> Call {
         Call {
             conn: self.conn.clone(),
-            principal: self.principal.clone(),
+            principal,
             client: self.client.clone(),
             method,
             params,
