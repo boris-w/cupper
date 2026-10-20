@@ -4,12 +4,12 @@
 // offers a key without its proof is cut off.
 
 import { randomBytes } from "node:crypto";
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { Cupper } from "./fixture";
 import { expect, test } from "./fixture";
-import { texts } from "./helpers";
+import { sampleNetwork, texts, type Flow } from "./helpers";
 import { signal, tree } from "./procs";
 import { dial, FakeHost, initialize, keyProof, socketPath, type Message } from "./raw";
 
@@ -113,3 +113,40 @@ test(
     }
   },
 );
+
+// The host installs the adapter's npm tree at start, one of the two egresses
+// SEC-6 allows; a registry on a closed loopback port keeps it on this machine.
+test.describe(() => {
+  test.use({ testConfig: { runtime: { registry_url: "http://127.0.0.1:9/" } } });
+
+  test("E2E-SEC-egress: no connection leaves the machine while a session runs; nettop sees deep into the tree", async ({
+    cupper,
+  }) => {
+    await cupper.launch();
+    await cupper.connected();
+    // The positive control (Q27): a child of the fake agent holds a UDP socket
+    // connected to a documentation address (RFC 5737); connecting sends nothing.
+    const control = join(cupper.root, "control.sh");
+    writeFileSync(control, "exec /usr/bin/nc -u -w 20 192.0.2.1 9 < /dev/null\n");
+    const script = `spawn /bin/sh ${control}; flood 200 100; sleep 3000; say done`;
+    await cupper.cli.ok(["new", "--agent", "claude", "--project", cupper.repo, script]);
+    const flows: Flow[] = [];
+    const took: number[] = [];
+    let caught: number | undefined;
+    for (let n = 0; n < 15; n++) {
+      const started = performance.now();
+      const sample = sampleNetwork(cupper);
+      took.push(Math.round(performance.now() - started));
+      flows.push(...sample);
+      caught ??= sample.some((flow) => flow.remote.startsWith("192.0.2.1")) ? n : undefined;
+      await new Promise((done) => setTimeout(done, 200));
+    }
+    const pids = new Set(flows.map((flow) => flow.pid)).size;
+    const tree = cupper.processes().length;
+    console.log(JSON.stringify({ q27: { took, tree, pids, caught } }));
+    expect(caught, "nettop sees the control's flow").toBeDefined();
+    const loopback = /^(127\.|::1[.:]|\*[.:])/;
+    const off = flows.filter((f) => !loopback.test(f.remote) && !f.remote.startsWith("192.0.2.1"));
+    expect(off).toEqual([]);
+  });
+});
