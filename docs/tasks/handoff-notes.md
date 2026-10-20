@@ -338,6 +338,9 @@
 | 运行期间重新安装运行时的任务（M1b 起） | 安装器只在宿主启动时运行（T129），`in_use` 为空、没有运行期间的重启入口；要在运行期间重新安装时，需要把运行中适配器的版本传进 `in_use`，并加一个重新触发的入口。安装器只在 App 包里运行（`BundleDir::is_app()`），开发和测试用的 `target/debug/cupper-host` 不启动它；进程级用例经只在 test-harness 构建里生效的 `test_config.runtime.manifest` 注入测试清单 | T129 |
 | 作者（MAN-keyboard） | 请求面板（T083）另加的实体键盘确认项：Enter 批准、Esc 拒绝（有特权选项时 Esc 不弹原生确认框）、数字键选择并提交（特权选项的编号弹原生确认框，效果未知选项的编号没反应）、输入法选词时按 Enter 不发送也不提交；建议一并看：打字时来请求面板不抢焦点，切回应用 1 秒内按 Enter 提示"请再按一次"。清单在 `docs/tasks/T083-ui-request-panel/notes.md`，与 T077 的那份一起执行 | T083 |
 | e2e（T091–T093）、T167 | 请求面板的 DOM 标记（T083）：`data-request-panel`、`data-request-kind`、`data-ready`（待命 500 ms 结束后）、`data-activation`（`auto` 或 `manual`）；有待处理的请求时 `ComposerArea` 按创建顺序取第一个显示面板 | T083 |
+| T166、T165、T146 | 消息流的行（T082）：形状以 `packages/ui-core/src/rows/stream.ts` 为准（`notes.md` 有对照表），每种行都有 `kind`、`key` 和要显示的数据，行组件是 `row` 的纯函数；登记用 `registerRow(kind, Component)`（属性 `{ row: RowOf<"kind"> }`，每种只能登记一次），并在 `rows/index.ts` 加 import；没有登记的 kind 显示占位。待 T166 登记：`agent_message`、`thought`、`tool`、`activity_group`、`notice`、`error`；T165：`request`（在它登记之前，待处理的请求条目在流里显示为占位，UI-request-panel 的基线里就是这样）；T146：`plan`、`late_tool_output`。消息流在 `app/pages.tsx` 的 `SessionPage` 里横幅之下、输入框之上，每行外层已有行间距 | T082 |
+| T091（或 T090 之后的 e2e） | 消息流"插入历史后视口不跳"只在 `ScrollKeeper` 的单元测试里验证过（jsdom 没有布局），要在真实环境里确认一次 | T082 |
+| 第一个在界面里读 blob 的任务 | 用户气泡里的长文本块现在只显示"长文本"，要等 host-client 的 `getBlob` | T082 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
