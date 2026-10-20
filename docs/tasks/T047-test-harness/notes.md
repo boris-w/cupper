@@ -110,3 +110,53 @@
 | `test/seed`；索引按表重新对账的 test-harness 入口 | 260 |
 | IT-clock-advance（含枚举用例）、IT-seed | 230 |
 | **合计** | **约 1,100** |
+
+### 实际行数
+
+按提交统计（`git diff --numstat`，只算 `crates/`）。
+
+| 提交 | 内容 | 增 | 删 |
+|---|---|---|---|
+| `feat(host): the quiescence barrier counts …` | `quiescence.rs`（含单元测试 2 个） | 269 | 23 |
+| `feat(host): test/clock_advance, run_maintenance and seed …` | 各参与者接线、`Routes::watched_by`、`supervisor/harness.rs`、`supervisor/seed.rs`、索引的重新对账入口、UNIT-unsupported-set | 631 | 96 |
+| `test(host): IT-clock-advance and IT-seed` | 两个 IT、种类枚举用例、seed 拒收检查 | 175 | 10 |
+| **合计** | | **1,075** | 129 |
+
+净增约 946 行，比估计的约 1,100 少。
+
+### 实现要点
+
+- **屏障**（裁定第 1 条）：
+  - 参与者从 `enter` 起就算忙；只有在 `Participant::idle(fut)` 里、并且内层 future 返回 Pending 时，才记为闲。
+  - `idle` 给内层 future 换上自己的唤醒器：任何唤醒都先记为忙，再转给原来的唤醒器。如果唤醒发生在 poll 和"记为闲"之间，按唤醒计数判定，不会被覆盖成闲。
+  - 参与者结束后，迟到的唤醒不再计数。
+  - `idle_blocking` 给写线程用；`Hold` 给脱离发起方的工作用。`settled()` 等忙的参与者和 `Hold` 都归零。
+- **各参与者**：
+  - 写线程：每个提交的操作带一个 `Hold`，回执发出之后才放；
+  - 原始帧写线程：帧来自外部的适配器，不持有 `Hold`；
+  - Maintenance、账本清理（新种类 `ledger_sweeper`）：在定时器上 idle；
+  - 网关：连接（`gateway_conn`，读循环、握手期限、关闭宽限）、发送循环（`gateway_send`，队列和合并窗口）、订阅表（`gateway_subscriptions`）、等待回复的 task（`gateway_reply`）；客户端通知持有 `Hold`；
+  - 索引 actor：在邮箱上 idle；它另起的准备 task 持有 `Hold`，把结果交给 actor 之后才放；
+  - 会话 actor 和 `AgentRuntime`：把 `select!` 改成先在 `idle` 里等到"下一件事"，再在外面处理。
+- **`test/clock_advance`**：
+  - 在屏障之外单独起一个 task 执行；回复所在的 task 在等它时是闲的，所以屏障能静止。
+  - 先等静止，然后沿 `next_deadline` 逐个 `advance_to`，每一步都等静止，最后推进到目标时间，再等一次静止。
+  - 宿主跑在系统时钟上时，返回 `unsupported`。
+- **`test/run_maintenance`**：`ledger` 调用 `Ledger::sweep`，其余三种调用 `Maintenance::run`。为此另建了一个 `Maintenance` 实例；`Routes::ledger` 已改为公开。
+- **`test/seed`**：
+  - 会话挂在排序第一的项目下，所以需要先添加一个项目。
+  - 每个会话：`session.configured` 和 `sessions` 行一起写；每个回合一个批次，含 `turn.started`、用户消息、按比例生成的条目、`turn.completed`，同一事务里写 `turns` 行并更新 `last_turn_end_seq`。回合快照和检查点由流的写者照常带出。
+  - 视图拒收任何事件就报错。
+  - 最后让索引按表重新对账（`IndexHandle::reconcile`，只在 test-harness 构建里有）。
+- **SP-1 的比例**：用一次性脚本统计了 48 份录制（2026-10-20）。每个 prompt 里，agent 消息 68 条（文本均长 67 字符）、工具调用 67 个、思考 23 条（均长 44 字符），每回合平均 2.5 个条目。据此取每 20 个条目里消息 9、工具 8、思考 3。
+- **种类枚举**：in-crate 用例启动真实的 `Host`，用它登记的种类与源码里所有 `ActorKind::new("…")` 比对。为此 `Host` 在 test-harness 的测试构建里留着 `quiescence` 字段。
+- **注入点核对**：`clock`（本任务接上手动时钟）、`durations`、`failpoints`、`boot_session_uuid`、`agents`、`login_env` 都已接上；`notifier` 归 T150，`runtime.registry_url` 归 T056/T115，`rss_samples` 归 T008。`host/status.pid` 在 T037 时已经有了。
+
+## 给其他任务的接入点
+
+- **新增 actor 的任务**（T059、T100、T116 等）：
+  - 种类要在 `Host::start` 里登记，否则枚举用例会失败；
+  - 等待点要放进 `Participant::idle`；
+  - 脱离发起方的 task 要持有 `Hold`，在把结果交出去之后再放。
+- **T116**：在 `supervisor/harness.rs` 旁边登记 `diag/recording_export`（test-harness 和 dev-auth 构建），并删掉 UNIT-unsupported-set 里对应的 `Until("T116")` 一行。
+- **T117**：`test/seed` 要求先有一个项目。冷启动数据集（200 个会话、单会话 1,000 条消息）用 `items_per_turn` 和 `turns` 组合出来；索引快照在 seed 返回时已经包含这些会话。
