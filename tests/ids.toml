@@ -592,7 +592,6 @@ UNIT-hostport-contract-bridge = "pr"
 [T077]
 milestone = "M1a"
 UNIT-input-guard = "pr"
-UNIT-privileged = "pr"
 # 每个 Electron 大版本做一次（T077，之后 T107 等）；证据要与当前的大版本相符
 MAN-keyboard = { suite = "man", versions = { electron = "major" } }
 
@@ -656,6 +655,11 @@ UNIT-ui-row-registry = "pr"
 [T129]
 milestone = "M1a"
 IT-runtime-startup = "pr"
+
+# 桌面主进程 V：特权操作与原生确认框（计划 v1.3.26 由 T077 拆出）
+[T134]
+milestone = "M1a"
+UNIT-privileged = "pr"
 
 # ui-core VI：新建会话页（M1a）
 [T085]
