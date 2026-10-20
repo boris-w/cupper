@@ -102,22 +102,13 @@ mod tests {
                 .map(|root| tree.path(&format!("home/user/{root}"))),
             [tree.path("tmp")],
         );
-        let entries = [
-            "usr/bin",
-            "home/user/projects/app/bin",
-            "home/user/workspaces/s1/bin",
-            "home/user/.cupper/worktrees/app-1a2b/s2/bin",
-            "home/user/.cupper/worktrees",
-            "tmp/bin",
-            "home/user/bin",
-            "home/user/projects/apple/bin",
-            "home/user/opt/bin",
-            "home/user/missing",
-        ];
-        let mut path_var: Vec<String> = entries
-            .iter()
-            .map(|e| tree.path(e).display().to_string())
-            .collect();
+        let entries = "usr/bin home/user/projects/app/bin home/user/workspaces/s1/bin
+            home/user/.cupper/worktrees/app-1a2b/s2/bin home/user/.cupper/worktrees tmp/bin
+            home/user/bin home/user/projects/apple/bin home/user/opt/bin home/user/missing";
+        let entries = entries
+            .split_whitespace()
+            .map(|e| tree.path(e).display().to_string());
+        let mut path_var: Vec<String> = entries.collect();
         path_var.extend(["usr/bin", "", "."].map(String::from));
         // A component prefix is not containment: `apple` is not inside `app`.
         // `opt/bin` is `usr/bin` again after realpath, so it appears once.
