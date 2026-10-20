@@ -59,7 +59,7 @@ pub(crate) fn check(
     });
     let problems: Vec<_> = problems.collect();
     let runtime = plans.iter().map(|plan| {
-        let verdict = Slot::new(runtime_dir, plan).check();
+        let verdict = Slot::new(runtime_dir, plan.clone()).check();
         (plan.component.name(), verdict.name())
     });
     Report {

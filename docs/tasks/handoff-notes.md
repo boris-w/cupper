@@ -279,6 +279,17 @@
 | T089 | 从库恢复会话时：信任闸门的原因和"想加载项目配置"的标志只在内存里，可以从 `session.configured.project_config` 和恢复后的第一次重扫重新得出；"不加载项目配置继续"的选择（`ignore_for_good`）需要持久化，例如加一个会话行字段，否则重启后会话可能重新加载项目配置 | T109 |
 | T089、T061 | `actor.rs` 的 `rescan` 里 `std::fs::canonicalize` 在 tokio 任务里同步执行；这里再加文件操作时一起挪进 `spawn_blocking` | T109 |
 | T068 | IT-orch-trust-gating 只在进程内覆盖信任门控；进程级用例可以照它的 6 个场景（发 prompt 前变化、回合中变化后"继续"、未信任以 `Ignore` 运行、工作区消失、两个闸门原因的两种顺序、git 根目录的 `.claude/`）。会话夹具的项目是临时目录里真实存在的 `app/`；测试构建里有 `GitTool::with_test_env` | T109 |
+| T129 | 构造 `Installer`：`plans` 用 `runtime::plans(manifest::embedded())`；`bundle` 用 `Arc::new(BundleDir::of_this_host()?)`；`dir` 用 `runtime::runtime_dir(data_dir)`；`in_use` 是运行中适配器所用的版本；`registry` 取 `test_config.runtime.registry_url`，没有时用 `npm::REGISTRY`；`proxy` 是登录 shell 的 `HTTPS_PROXY`；`durations`。在后台 `run(&clock, publish)`，状态写进索引流的 `agents`；排在宿主的 cdhash 自检（T059）之后；`Failed(BundleChanged)` 时转入待升级。接线之前，生产环境的运行时目录是空的，Claude 适配器拉起前的核对会失败，报 `RuntimeFailed`。另外 `npm::download` 用 `response.bytes()` 整个读进内存、没有大小上限，加一个上限（例如按固定的 64 MB 截断） | T115 |
+| 本机单独跑 `cargo test` 的人 | `cargo clean` 之后，`driver::runtime` 的几个用例要先 `cargo build -p cupper-fake-agent`；`cargo xtask ci` 会先构建它 | T115 |
+| T064 | 录制导出（`diag/recording_export`，test-harness、dev-auth 构建）：`blob/get` 有执行者（T029）之前，直接按 `blobs/sha256/<前两位>/<hash>` 读数据目录里的文件；头行的 `scenario` 先填会话 ID、`usage` 先填 `gold-b`、`replay`，入库时按剧本改写；跑 `tools/sanitize` 时，用例临时根目录的链接路径和真实路径都要作为 `--base` 传入；导出受 `max_blob_bytes` 限制；导出的 blob 没有被引用，过了宽限期会被当作孤儿清掉，要及时取走。按会话导出时没有 `sessionId` 的帧都保留，每个宿主只跑一个会话就不受影响 | T116 |
+| T063 | 缺陷（T055 起）：`AdapterLog` 打开失败时 launch 不读适配器的 stderr、直接关掉管道，适配器再写 stderr 会收到 SIGPIPE，stderr 原始帧也没有了。修法：没有日志时也起一个只写原始帧的读取任务（T116 的 `notes.md`） | T116 |
+| 需要等原始帧落盘的用例 | 原始帧不持有静止屏障的 `Hold`；IT-recording-export 轮询 `raw.db` 等 note 齐了再导出（T116 的 `notes.md`）。`instance_exited` 在进程退出时写，它的 `seq` 可能排在最后几行 stdout 之前 | T116 |
+| T125 | 改标题和归档要通知索引：给 `orchestrator::session::Note` 加标题变体（标题、来源）；归档时状态核心删掉这一项，并写 `session.removed{archived}`（启动时的对账已经会补）。agent 起标题的任务同样走标题变体 | T100 |
+| T150 | 系统通知接在 `IndexActor::step` 处理 `Action::Intent` 的地方，或者读索引流里的 `notification.intent`。意图的原因：进入 `needs_action`（待处理数从 0 变成大于 0）、回合 `completed`、回合 `failed`；`cancelled`、`interrupted` 不写；前台的 `desktop_ui` 在看这个会话时、或 100 ms 内请求已经答完时丢掉 | T100 |
+| T089 | 恢复会话时，会话 actor 的 `Pending` 等通知会照常进入索引的状态核心；启动时核心已经从 `sessions` 行补入了这些会话。另有两件：① `StreamWriter::append` 遇到空的 `bodies` 直接返回，`with` 里的行写入不执行（文档里没写），给它补文档，并在 `bodies` 为空、`with` 非空时报错或照常执行行写入；② `session/get` 按行和会话视图自己算状态，规则与索引一致但实现两份，恢复时留意两边一致 | T100 |
+| T046 | CLI 上报在场可以用 `Client::notify::<ClientPresence>`；索引不采信 CLI 的在场（只采信前台的 `desktop_ui`） | T100 |
+| T036 | `AgentsUpdated.git` 现在为空：`GitTool` 不知道 git 和 git-lfs 的版本。设置页要显示时，把 T094 的 git 版本检测结果接进来 | T100 |
+| T068 | 缺陷（T109 起）：`orchestrator/session/actor.rs` 的 `rescan` 用 `tokio::spawn` 另起任务，没有持有静止屏障的 `Hold`；任务里有数据库读取、git 子进程和 `spawn_blocking`，违反 T047 的规则（另起的 task 要持有 `Hold` 直到交回结果）。进程级信任用例里 `test/clock_advance` 可能在重扫完成前就返回。按 1.2 的上限就地修 | T100 合并时发现 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

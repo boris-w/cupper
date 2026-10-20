@@ -226,7 +226,7 @@ pub fn raw_rows(dir: &TempDir) -> Vec<RawFrame> {
     let sql = "SELECT instance_id, seq, ts, dir, agent_session_id, frame FROM raw_frames
                ORDER BY instance_id, seq";
     query(&dir.path().join("raw.db"), sql, |row| {
-        let dir = [Dir::Send, Dir::Recv, Dir::RecvNonjson]
+        let dir = Dir::ALL
             .into_iter()
             .find(|dir| dir.as_str() == row.get_ref_unwrap(3).as_str().unwrap_or_default());
         Ok(RawFrame {

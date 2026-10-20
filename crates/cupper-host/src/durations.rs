@@ -126,6 +126,14 @@ durations! {
     /// How long the agent has to take back a tier it raised by itself during
     /// a turn before the turn is interrupted (design 5.2.6, check 4).
     CONFIG_REVERT = "config_revert", Duration::from_secs(2);
+    /// How long the runtime installer may take to download one npm package
+    /// (design 5.2.12, T115 ruling).
+    RUNTIME_DOWNLOAD = "runtime_download", Duration::from_secs(60);
+    /// The runtime installer's first wait before it tries a failed download
+    /// again; each next wait is twice as long (T115 ruling: 2, 4, 8 s).
+    RUNTIME_RETRY = "runtime_retry", Duration::from_secs(2);
+    /// How long bundling claude-agent-acp may take (T115 ruling).
+    RUNTIME_BUNDLE = "runtime_bundle", Duration::from_secs(120);
     /// A git command other than those below: the read-only ones and the repo
     /// tier's writes (design 5.2.10).
     GIT_COMMAND = "git_command", Duration::from_secs(30);

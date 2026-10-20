@@ -69,8 +69,8 @@ flowchart TB
 
 | actor | 数量 | 邮箱输入 | 它是谁的唯一写者 |
 |---|---|---|---|
-| `SessionActor` | 每个活跃会话 1 个；空闲 10 分钟后退出 | 网关转来的会话命令；驱动事件；git 快照完成；定时器 | 该会话的会话流；`sessions`、`turns`、`interactions`、`queue` 中属于该会话的行 |
-| `IndexActor` | 1 | 会话状态变化、项目命令、已读、在场、客户端连接与断开、agent 和宿主状态、提权请求 | 索引流；`projects` 表 |
+| `SessionActor` | 每个活跃会话 1 个；空闲 10 分钟后退出 | 网关转来的会话命令；驱动事件；git 快照完成；定时器 | 该会话的会话流；`sessions`、`turns`、`interactions`、`queue` 中属于该会话的行（`sessions.last_read_seq` 一列除外，见 `IndexActor`） |
+| `IndexActor` | 1 | 会话状态变化、项目命令、已读、在场、客户端连接与断开、agent 和宿主状态、提权请求 | 索引流；`projects` 表；`sessions.last_read_seq` 一列（已读要对没有加载的会话也生效，会话 actor 只读这一列；T100，2026-10-20） |
 | `AgentRuntime` | 每种 agent 1 个（ADR-09） | 会话发来的驱动命令；适配器退出；资源采样定时器 | 适配器进程；`adapters` 表 |
 | `RuntimeInstaller` | 1 | 安装、校验请求 | `runtime/` 目录 |
 | `Supervisor` | 1 | 子进程登记、自检请求、空闲计时、防休眠引用计数 | 进程记录、电源断言 |
