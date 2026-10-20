@@ -231,6 +231,9 @@
 | T098 | 带防护的 `RepoTier::run` 放在 `git/` 下：读配置用 `GitCmd::repo(RepoOp::ConfigList)`；T097 算出的覆盖经 `.config(键, 值)` 加进命令；运行用 `tier.prepare(cmd).run(clock, durations)`；指纹变化时按 `Prepared::read_only` 决定丢弃结果还是照常返回。T097 的接口：`parse(输出, 运行目录)` → `check_sources(&entries, &Bounds { git_dir, common_dir, writable })` → `overrides(&entries, &Setup { hooks, lfs, patch })`，`global` 放在子命令之前、`command` 放在子命令之后；覆盖后失败时只有 `required` 不为空才判 `unsafe_repo_config`；调用前后各取一次 `Fingerprint::take(&Layout::read(工作区)?, &entries)`，`changed` 就是 `repo_config_changed` 的 `paths`。`core.hooksPath` 以 `~/` 开头时 T097 没有展开（纯函数不读环境），需要的话由本任务传入展开后的路径 | T060、T097 |
 | T061 | 在 `SnapshotOp` 里加快照档命令，生成补丁的要带 `--no-ext-diff --no-textconv`；在 `SnapshotTier::prepare` 里补 `GIT_INDEX_FILE`、`GIT_OBJECT_DIRECTORY`、`GIT_ALTERNATE_OBJECT_DIRECTORIES`、`GIT_CONFIG_NOSYSTEM`、`GIT_CONFIG_GLOBAL`，并决定是否带 `HOME`；快照用 `GIT_SNAPSHOT` 超时 | T060 |
 | T123 | 用户档加一个 `User` 标记和 `UserTier`：不加 hooks 的覆盖，带 `HOME`；`push` 用 `GIT_PUSH` 超时 | T060 |
+| T096 | 从 `trust::Scan.files` 的 `path`、`content` 解析 findings（扫描已保留完整内容，不必再读文件）；`Finding.target`、`outside_workspace` 直接取 `ScannedFile` 上的字段 | T035 |
+| T034 | 信任扫描放进阻塞线程池（模块是同步的）；错误映射：`ScanError` → `unavailable/scan_failed`，`DigestMismatch` → `conflict/digest_mismatch`；写库用 `Manifest::to_json`、`TrustedBy::as_str`；findings 在 T096 之前回空列表 | T035 |
+| T044 | 每次 Attach、每次发 prompt 之前、每个回合结束时调用 `trust::scan` 和 `Trust::rescanned`；git 根目录经 T098 的仓库档取得 | T035 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
