@@ -219,7 +219,12 @@ impl Conn<'_> {
     fn on_frame(&mut self, frame: Frame) -> Option<End> {
         let ready = matches!(self.phase, Phase::Ready(..));
         if frame.frame_type != FrameType::Json {
-            // Blob chunks are T029's; before `initialize` nothing else counts.
+            // Before `initialize` nothing but JSON counts.
+            if let (Phase::Ready(_, dispatch), FrameType::BlobChunk) =
+                (&self.phase, frame.frame_type)
+            {
+                dispatch.chunk(&frame.payload);
+            }
             return (!ready).then(|| End::now(CloseReason::NotInitialized));
         }
         let message = serde_json::from_slice::<RawMessage>(&frame.payload)

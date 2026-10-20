@@ -29,6 +29,7 @@ use crate::durations::Durations;
 use crate::gateway::Routes;
 use crate::gateway::testkit::{Client, Peer, TempDir, TestGateway};
 use crate::quiescence::Quiescence;
+use crate::store::blobs::BlobStore;
 use crate::store::streams::{Streams, StreamsConfig};
 use crate::store::{
     Database, MIGRATIONS, Readers, WRITER, Writer, WriterConfig, migrate, open_reader, open_writer,
@@ -154,6 +155,11 @@ impl Fixture {
         let config = StreamsConfig::new(1, &durations);
         let streams = Streams::new(self.writer.clone(), readers.clone(), clock, config);
         routes.streams(streams, readers);
+        routes.blobs(BlobStore::new(
+            self.dir.path(),
+            self.writer.clone(),
+            Arc::new(self.clock.clone()),
+        ));
         let (supervisor, _) = tokio::sync::mpsc::unbounded_channel();
         Arc::new(Control::new(supervisor, Arc::new([]), Arc::default())).route(&mut routes);
         // The host's agents port (T009), stood in for by the sessions' stub.
@@ -345,8 +351,6 @@ const ALLOWED: &[(&str, Why)] = {
     use Why::{Builds, Later, Until};
     &[
         ("agents/restart", Later(M1b)),
-        ("blob/get", Until("T029")),
-        ("blob/put", Until("T029")),
         ("diag/export", Later(M2)),
         // Builds `test-harness` and `dev-auth` only.
         (

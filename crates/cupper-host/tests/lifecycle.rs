@@ -835,6 +835,131 @@ async fn it_elevate_lineage_waits_limits_expiry_grant_and_close() {
     assert_eq!(exit_code(&mut host).await, 0);
 }
 
+/// The harness client asking for the blob features, once the host listens.
+async fn connect_for_blobs(data_dir: &Path) -> client::Client {
+    use cupper_protocol::methods::handshake::Feature;
+    let socket = socket_path(data_dir, &cupper_sys::user_temp_dir().unwrap());
+    let options = Options {
+        auth: ClientAuth::Harness(HarnessKey::new(KEY)),
+        features: vec![Feature::BlobGet, Feature::BlobPut],
+        ..Options::default()
+    };
+    let client = client::Client::connect(&socket, &HostCheck::Harness, options).await;
+    let client = client.expect("the host listens");
+    assert!(client.initialized().features.contains(&Feature::BlobPut));
+    client
+}
+
+/// Sends `data` as the chunks of `hash`, up to `upto` of them.
+async fn send_chunks(client: &client::Client, hash: [u8; 32], data: &[u8], upto: usize) {
+    use cupper_protocol::frame::BlobChunkHeader;
+    let pieces: Vec<&[u8]> = data.chunks(BlobChunkHeader::MAX_DATA).collect();
+    for (n, piece) in pieces.iter().enumerate().take(upto) {
+        let offset = (n * BlobChunkHeader::MAX_DATA) as u64;
+        let header = BlobChunkHeader {
+            hash,
+            offset,
+            last: n + 1 == pieces.len(),
+        };
+        client.send_blob_chunk(&header, piece).await.unwrap();
+    }
+}
+
+/// IT-gw-blob: a blob of three chunks put and got through the gateway of a
+/// real host, whole and by range; a size or hash that does not match, a size
+/// past the limit and an unknown hash refused; an upload cut off by a
+/// disconnect leaves nothing behind.
+#[tokio::test]
+async fn it_gw_blob_put_and_get_through_the_gateway() {
+    use cupper_protocol::error::ErrorCode;
+    use cupper_protocol::ids::BlobHash;
+    use cupper_protocol::methods::stream::{BlobGet, BlobGetParams, BlobPut, BlobPutParams};
+    use sha2::{Digest as _, Sha256};
+
+    let dir = TempDir::new("blobs");
+    let data_dir = dir.path().join("data");
+    let mut host = spawn_with(&data_dir, json!({}));
+    drop(connect(&data_dir).await);
+    let data: Vec<u8> = (0..150_000u32).map(|n| (n % 251) as u8).collect();
+    let raw: [u8; 32] = Sha256::digest(&data).into();
+    let hash = BlobHash::from_sha256(&raw);
+    let put = |hash: &BlobHash, size: u64| BlobPutParams {
+        hash: hash.clone(),
+        size,
+        media_type: "application/octet-stream".into(),
+    };
+    let code = |err: client::ClientError| match err {
+        client::ClientError::Rpc(err) => err.data.map(|data| data.code),
+        other => panic!("{other}"),
+    };
+
+    // Cut off halfway: the next connection puts the same blob as if new.
+    let cut = connect_for_blobs(&data_dir).await;
+    send_chunks(&cut, raw, &data, 2).await;
+    drop(cut);
+    let mut client = connect_for_blobs(&data_dir).await;
+    send_chunks(&client, raw, &data, 3).await;
+    let stored = client
+        .request::<BlobPut>(put(&hash, 150_000))
+        .await
+        .unwrap();
+    assert_eq!(stored.hash, hash);
+
+    for (offset, length, want) in [
+        (None, None, &data[..]),
+        (Some(70_000), Some(10), &data[70_000..70_010]),
+    ] {
+        let params = BlobGetParams {
+            hash: hash.clone(),
+            offset,
+            length,
+        };
+        let got = client.request::<BlobGet>(params).await.unwrap();
+        let mut bytes = Vec::new();
+        for _ in 0..got.chunks {
+            let Some(Incoming::Blob { header, data }) = client.next().await else {
+                panic!("a chunk comes ahead of the response");
+            };
+            assert_eq!(
+                (header.hash, header.offset),
+                (raw, got.offset + bytes.len() as u64)
+            );
+            bytes.extend_from_slice(&data);
+        }
+        assert_eq!((got.size, bytes.as_slice()), (150_000, want));
+    }
+
+    // The same bytes under a size or a hash of something else.
+    send_chunks(&client, raw, &data, 3).await;
+    let err = client
+        .request::<BlobPut>(put(&hash, 149_999))
+        .await
+        .unwrap_err();
+    assert_eq!(code(err), Some(ErrorCode::Conflict));
+    let other = BlobHash::from_sha256(&[7; 32]);
+    send_chunks(&client, [7; 32], &data, 3).await;
+    let err = client
+        .request::<BlobPut>(put(&other, 150_000))
+        .await
+        .unwrap_err();
+    assert_eq!(code(err), Some(ErrorCode::Conflict));
+    let err = client
+        .request::<BlobPut>(put(&other, 33 << 20))
+        .await
+        .unwrap_err();
+    assert_eq!(code(err), Some(ErrorCode::TooLarge));
+    let params = BlobGetParams {
+        hash: other,
+        offset: None,
+        length: None,
+    };
+    let err = client.request::<BlobGet>(params).await.unwrap_err();
+    assert_eq!(code(err), Some(ErrorCode::NotFound));
+
+    terminate(&host);
+    assert_eq!(exit_code(&mut host).await, 0);
+}
+
 /// IT-idle-exit: a connection keeps the host up; with nobody connected it
 /// exits in order once `supervisor_idle` has passed. The stream methods are
 /// served on the way.

@@ -341,6 +341,7 @@ impl Host {
             blobs: blobs.clone(),
         })
         .route(&mut routes);
+        routes.blobs(blobs.clone());
         routes.sessions(Arc::new(sessions));
         Arc::new(agents).route(&mut routes);
         routes.index(Arc::new(index.clone()));
