@@ -119,3 +119,43 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page).toHaveScreenshot(`session-banners-${theme}.png`);
   });
 }
+
+const queued = (queue_id: string, text: string) => ({
+  ...{ queue_id, preview: text, content: [{ type: "text", text }] },
+  ...{ created_at: 1, created_by: "desktop" },
+});
+
+const QUEUE = {
+  type: "queue.updated",
+  data: {
+    version: 2,
+    paused: { reason: "turn_interrupted" },
+    entries: [queued("q_1", "再补一个边界用例\n第二行不显示"), queued("q_2", "然后更新说明")],
+  },
+} as EventBody;
+
+const visit = (page: Page, session_id: string) =>
+  page.evaluate(
+    (id) => window.cupperShell.navigate({ kind: "session", session_id: id }),
+    session_id,
+  );
+
+for (const theme of ["light", "dark"] as const) {
+  test(`UI-composer ${theme}: a paused queue above a draft ready to send`, async ({ page }) => {
+    await open(page, { info: { theme }, streams: { index: INDEX, "session/s_6": [QUEUE] } });
+    await visit(page, "s_6");
+    await page.getByRole("textbox").fill("这一步先跳过");
+    await expect(page.locator("[data-send-state=send]")).toBeVisible();
+    await expect(page.locator("[data-queue-paused]")).toBeVisible();
+    await page.mouse.move(650, 780);
+    await expect(page).toHaveScreenshot(`composer-${theme}.png`);
+  });
+}
+
+test("UI-composer stop: an empty composer on a running turn stops it", async ({ page }) => {
+  await open(page, { streams: { index: INDEX } });
+  await visit(page, "s_1");
+  await expect(page.locator("[data-send-state=stop]")).toBeVisible();
+  await page.mouse.move(650, 780);
+  await expect(page).toHaveScreenshot("composer-stop.png");
+});

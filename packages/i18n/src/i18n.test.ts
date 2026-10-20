@@ -8,6 +8,7 @@ describe("createI18n", () => {
     expect(i18n.isInitialized).toBe(true);
     expect(NAMESPACES).toEqual([
       "command",
+      "composer",
       "host",
       "privileged",
       "shell",
