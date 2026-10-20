@@ -294,6 +294,12 @@ impl Host {
             },
         })
         .route(&mut routes);
+        #[cfg(any(feature = "test-harness", feature = "dev-auth"))]
+        Arc::new(crate::diag::recording_export::RecordingExport {
+            data_dir: data_dir.clone(),
+            blobs: blobs.clone(),
+        })
+        .route(&mut routes);
         routes.sessions(Arc::new(sessions));
         Arc::new(agents).route(&mut routes);
         routes.index(Arc::new(index.clone()));
