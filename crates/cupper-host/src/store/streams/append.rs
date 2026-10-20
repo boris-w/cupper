@@ -94,7 +94,11 @@ impl StreamWriter {
         } = batch;
         if bodies.is_empty() {
             if let Some(with) = with {
-                self.handle.registry().writer.submit(durability, with).await?;
+                self.handle
+                    .registry()
+                    .writer
+                    .submit(durability, with)
+                    .await?;
             }
             return Ok(Appended {
                 head: self.head(),

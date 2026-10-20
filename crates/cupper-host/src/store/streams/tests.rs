@@ -138,7 +138,9 @@ fn store_streams_append_commits_the_turn_end_whole_and_reloads() {
     assert_eq!(fx.append(&mut writer, vec![turn(2)]).head, 5);
     // A batch without events commits its own rows alone.
     let rows = Batch {
-        with: Some(Box::new(|conn| conn.execute_batch("CREATE TABLE extra (x)"))),
+        with: Some(Box::new(|conn| {
+            conn.execute_batch("CREATE TABLE extra (x)")
+        })),
         ..Batch::default()
     };
     assert_eq!(fx.runtime.block_on(writer.append(rows)).unwrap().head, 5);
