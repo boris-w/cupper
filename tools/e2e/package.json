@@ -1,0 +1,17 @@
+{
+  "name": "@cupper/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "The e2e suite: Playwright drives the e2e build of the app, its real host, the fake agent and the CLI (design 5.9.4).",
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@cupper/i18n": "workspace:*",
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.19.1",
+    "electron": "44.9.0"
+  }
+}
