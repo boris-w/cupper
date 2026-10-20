@@ -63,7 +63,7 @@ brief 建议"windowBridge 与合同测试"和"preload 的 ShellAPI 与预测量"
 - **渲染进程只有端口**：preload 用 `contextBridge` 只暴露 `window.shell`；它的 `host` 只能经 windowBridge 的 MessagePort 收发，端口上只认 `send`、`blob`、`ack`、`close` 四种消息，其余一律丢弃；`send` 的 JSON 解析、白名单、重新序列化之后才写到套接字，`blob` 由 `HostPort.sendBlob` 组帧（头部不合规、超过帧上限、超过待上传限额都不发）。
 - **重连**：断开时先把批里的旧数据发出，再推 `reconnecting`；等 control 连接 `ready()`（control 失败或关闭时以它的原因推 `failed`），再经同一个 launcher 开新的数据连接；新连接的 `ready`（带握手）之后才转发它的数据。
 - **文档绑定**：`host:open` 只接受窗口主框架、`app://cupper` 下的文档；同一个 webContents 再次 `open` 时先关掉旧的桥；主框架的跨文档导航、`render-process-gone`、`destroyed` 都关闭桥。
-- **e2e 钩子**：e2e 构建在主进程的 `globalThis.__cupperE2E.disconnectWindow(webContentsId)`，供 Playwright 的 `electronApp.evaluate` 调用；release、local、dev 的产物里没有它（已用 vite 构建核对）。
+- **e2e 钩子**：e2e 构建在主进程的 `globalThis.__cupperE2E.disconnectWindow(webContentsId)`，供 Playwright 的 `electronApp.evaluate` 调用；release 和 dev 的产物里没有它（已用 vite 构建核对）。local 构建核对不了：vite 拒绝 `--mode local`（"local" 与 `.env.local` 的后缀冲突），这是 T074 留下的范围外问题，已在汇报里提出。
 - **只回答主文档**：`shell:init`、`prefs:set`、选目录、外链都检查发送方是窗口主框架上的 `app://cupper` 文档。
 - **占位**：`requestPrivileged` 返回 `{status: "failed", error: "unsupported"}`（T077）；`onNavigate`、`updates.onState` 只注册监听，`installNow` 什么都不做（深链接、更新器的任务）。
 
