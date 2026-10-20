@@ -22,7 +22,7 @@ mod system;
 #[cfg(test)]
 mod testutil;
 
-pub use codesign::{Cdhash, CodeStatus, Requirement, file_cdhash, own_cdhash};
+pub use codesign::{Cdhash, CodeStatus, Requirement, file_cdhash, own_cdhash, pid_cdhash};
 pub use env::Env;
 pub use exit::ExitWatch;
 pub use group::{ProcessGroup, Signal};
@@ -32,7 +32,8 @@ pub use peer::{
     AuditToken, Received, Refusal, RefusalKind, peer_pid, peer_token, peer_uid, recv_closing_fds,
 };
 pub use proc::{
-    ProcessInfo, StartTime, UniqueIds, descendants, parent_chain, process_info, unique_ids,
+    ProcessInfo, StartTime, UniqueIds, descendants, parent_chain, pid_path, process_info,
+    unique_ids,
 };
 pub use runloop::{RunLoop, RunLoopStop};
 pub use spawn::{Child, Command, Stdio, spawn};
