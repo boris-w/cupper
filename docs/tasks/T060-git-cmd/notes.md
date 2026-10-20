@@ -84,3 +84,16 @@ T060 只做 GitCmd 与三档类型；仓库档的规则与指纹是 T097（并�
 4. **指纹要遍历整个工作区找 `.gitattributes`**，大仓库（几十万个文件）每次仓库档调用前后各一次，可能要上百毫秒到一秒。打算先按设计实现（跳过 `.git`，不跟随符号链接），实测后再看是否需要缓存或改用 index 里的路径。
 5. **设计第 4 条清单之外的可执行类键**：`diff.external`、`core.alternateRefsCommand`、`gpg.ssh.defaultKeyCommand`、`submodule.*.update = !命令`、`pager.<命令>`、`alias.*`（`!` 开头）。其中 `pager.*` 有 `--no-pager` 兜底，`diff.external` 有 `--no-ext-diff` 兜底，`alias.*` 只在按别名调用时生效，另外几个只在仓库档不会用到的命令（fetch、push、签名、submodule update）里执行。打算按设计的清单实现，把这几项交给安全评审决定是否加入清单。
 6. 本机没有 git-lfs，标准取值的改写用假的 git-lfs 脚本核实（只覆盖 `clean`、`smudge`；`filter-process` 走长连接协议，假脚本不实现，记为未实测）。
+
+## 实际行数（逐模块）与停下的原因
+
+`git diff --numstat`，不含本文件。
+
+| 完成的模块（提交） | 新增 / 删除 | 实现 | 测试 | 估计（实现 + 测试） |
+|---|---|---|---|---|
+| 拉起辅助与时长登记（`feat(host): run a git command ...`） | 198 / 0 | 145 | 53 | 117 + 50 |
+| `GitCmd`、命令表、两档类型与环境（`feat(host): GitCmd and the repo and snapshot tier types`） | 411 / 1 | 390 | 21（`compile_fail` 文档测试） | 260 + 30 |
+
+**目前 609 行**。还差 UNIT-git-cmd 的单元测试：用假 git 记下两档收到的环境、参数和工作目录，逐个命令核对只读命令带 `--no-optional-locks`、超时键正确，估计约 75 行。**推算约 685 行，超过约 650 的上限，在 750 的硬停止线以内**，按裁定"贴线也先停下"，停下汇报。
+
+超出来自实现：`mod.rs`（环境、两档的入口、`Prepared`）比估计多约 80 行，主要是 rustfmt 对结构体字面量和链式调用的展开；命令表按设计列全了 18 个仓库档命令。能再压的地方不多（几个访问器合并约 10 行）。
