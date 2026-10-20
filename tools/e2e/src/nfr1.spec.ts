@@ -5,17 +5,7 @@ import type { Output } from "./cli";
 import { expect, test, type Cupper } from "./fixture";
 import { disconnectWindow, elevate, events, hostClient, texts, untilEvent } from "./helpers";
 import { activatePanel, focusWindow, panelReady, pressDigit, requestPanel } from "./input";
-import { asked, bothViews, follow, id, openSession, pattern, session } from "./nfr1";
-
-/** A session on screen whose first turn is over; its stream. */
-async function onScreen(cupper: Cupper, script: string): Promise<string> {
-  await cupper.launch();
-  await cupper.connected();
-  const stream = await session(cupper, script);
-  await untilEvent(cupper, stream, (event) => event.type === "turn.completed");
-  await openSession(cupper, script);
-  return stream;
-}
+import { asked, bothViews, follow, id, onScreen, openSession, pattern } from "./nfr1";
 
 /** The seq of the next `type` in `stream` after `seq`. */
 const next = async (cupper: Cupper, stream: string, type: string, seq: number) =>
