@@ -196,10 +196,12 @@ mod tests {
             git: git.clone(),
             xcode_select: dir.path().join("none"),
         };
+        fs::remove_file(&ran).expect("reset the marker");
         let report = detect(&clock, &durations, Some(&git), None, &stub, &Env::new()).await;
         assert_eq!(
             report.problems(),
             ["git_needs_command_line_tools", "git_lfs_missing"]
         );
+        assert!(!ran.exists(), "no xcode-select, no stub");
     }
 }
