@@ -161,6 +161,9 @@ pub(super) struct SessionActor {
     ignore_for_good: bool,
     /// A `session/send` whose reply waits for the check before its turn.
     deferred: Option<Command>,
+    /// The host exits: the adapter is stopped next, which is no crash to
+    /// tell the user about (`agent_restarted`, K7).
+    stopping: bool,
 }
 
 /// Why the project's trust range is rescanned (design 5.2.6).
@@ -257,6 +260,7 @@ impl SessionActor {
             project_gate,
             ignore_for_good,
             deferred: None,
+            stopping: false,
         };
         actor.input(first, None, Step::default()).await;
         // Idle until a branch brings work, which runs once the others are
@@ -283,6 +287,7 @@ impl SessionActor {
                 Next::Attached(result) => actor.attach_done(result).await,
                 Next::Rescanned(purpose, found) => actor.trust(purpose, found).await,
                 Next::Stop((force, done)) => {
+                    actor.stopping = true;
                     if force {
                         let exit = Input::Machine(turn::Input::HostExit);
                         actor.input(exit, None, Step::default()).await;
@@ -885,6 +890,9 @@ impl SessionActor {
     /// An event of the agent. A change of its options rewrites the
     /// configuration, and the guard checks the permission mode.
     async fn agent(&mut self, event: DriverEvent) {
+        if self.stopping && matches!(event, DriverEvent::AdapterExited { .. }) {
+            return;
+        }
         let DriverEvent::ConfigChanged(options) = event else {
             let step = self.commands_changed(&event);
             return self.input(Input::Agent(event), None, step).await;
