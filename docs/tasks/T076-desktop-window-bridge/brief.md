@@ -61,3 +61,22 @@ T074（prefs、preload、`shell:command`、`flavor`）、T071（方法目录、�
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 1,250 行（按偏差可能到 1,450），贴近上限，停下汇报。
+
+**裁定：不拆，上限仍是约 1,500 行，硬停止线 1,600。** 估计在上限之内，而且 A 部分本来就要先做。按执行者提的顺序分步提交：
+- **A**（T077、T078 依赖）：方法目录、windowBridge、`host:open` 的接线与文档绑定、preload 里的 `ShellAPI.host`、e2e 断连钩子，四个 UNIT 编号的用例；
+- **B**：preload 的其余 ShellAPI（`init`、prefs、`shell:command`、`flavor`、主题、焦点、外链、选目录）及其主进程接线；预测量。
+每完成一个模块统计一次；推算超过 1,500 行时停下汇报。
+
+执行者的取舍全部认可：
+1. **"重新序列化后与原文不同的被拒"按 T071 的合同解释**：桥从不转发原始字节；超出 ±(2^53−1) 的整数直接拒绝（解析后数值会变，协议本来就不允许）；重复键按合同处理，转发重新序列化的结果。验收标准里的这一句以此为准。
+2. **白名单**：放行 scope 为 `read`、`write`、`approve`、`ui_local` 的方法和两个客户端通知；本地拒绝 `privileged`、`test`、scope 为 `none` 的方法和未知方法；带 `id` 的请求被拒时回 `forbidden`（`initialize` 回 `forbidden/already_initialized`），没有 `id` 的消息直接丢弃；`interaction/respond`、`git/revert` 的真实输入检查归 T077。
+3. **重连顺序**：先把旧连接已收到的数据发完再推 `reconnecting`；等 control 连接就绪再开新的数据连接；新连接 `ready` 之后才转发新数据；状态和数据走同一个 MessagePort。
+4. **上传限额**：按每个窗口统计还没有对应 `blob/put` 的 `0x02` 字节数，超过握手结果里的 `max_pending_upload_bytes` 就拒绝。
+5. **`flavor`**：以附加方式加上 `local`。
+6. **还没有实现方的成员**：`requestPrivileged` 先返回 `{status: "failed"}`，T077 接上；`updates`、`onNavigate` 先只注册监听，等更新器和深链接的任务接上。已写进交接。
+
+预测量写成任务目录下的用例文件，用一次性的 vitest 配置运行，数字写进 `notes.md`，不进 CI：认可。

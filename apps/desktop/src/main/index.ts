@@ -1,7 +1,8 @@
 // The main process (design 5.7.2): the app, its window, the hardening
-// baseline (design 5.7.8) and the control connection to the host, started
-// before the app is ready (design 5.5.1). The window bridge (T076) builds on
-// this.
+// baseline (design 5.7.8), the control connection to the host, started
+// before the app is ready (design 5.5.1), the quit check (NFR-8) and, in
+// keyed builds, restarting a host it cannot verify (design 5.8.1), and each
+// window document's data connection through its window bridge (design 5.7.1).
 
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -9,10 +10,12 @@ import { join } from "node:path";
 import { createI18n } from "@cupper/i18n";
 import {
   app,
+  autoUpdater,
   BrowserWindow,
   ipcMain,
   Menu,
   MessageChannelMain,
+  powerMonitor,
   protocol,
   session,
   shell,
@@ -22,6 +25,8 @@ import { isReleaseLike } from "../shared/flavor";
 import { COMMAND_CHANNEL, HOST_OPEN } from "../shared/ipc";
 import { WindowBridges } from "./bridge/bridges";
 import { startHost } from "./host";
+import { confirmQuit, confirmRestart, tellRestartRefused, type Translate } from "./host/dialogs";
+import { QuitGuard, type QuitHost } from "./host/lifecycle";
 import { MainLog } from "./log";
 import { menuTemplate } from "./menu";
 import { appDirs, e2eDirs, type AppDirs } from "./paths";
@@ -56,6 +61,9 @@ app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
 let host: ReturnType<typeof startHost> | undefined;
+let i18n: ReturnType<typeof createI18n> | undefined;
+const t: Translate = (key, values) => (i18n ??= createI18n()).t(key, values);
+const quit = new QuitGuard(quitHost, (status) => confirmQuit(t, status));
 
 if (app.requestSingleInstanceLock()) {
   start();
@@ -87,11 +95,26 @@ function start() {
   app.on("activate", showMainWindow);
   // Closing the last window leaves the app running, as on macOS (design 5.7.1).
   app.on("window-all-closed", () => undefined);
+  // Before `will-quit`: running turns and waiting requests are asked about.
+  app.on("before-quit", (event) => {
+    if (!quit.settled) {
+      event.preventDefault();
+      void quit.decide().then((decision) => decision === "quit" && app.quit());
+    }
+  });
   app.on("will-quit", () => host?.control.close());
   try {
     const e2eRoot = __CUPPER_FLAVOR__ === "e2e" ? process.env.CUPPER_E2E_DIR : undefined;
     const version = app.getVersion();
     host = startHost({ flavor, dataDir: dirs.data, version, e2eRoot, log });
+    host.control.client.onState((state) => {
+      const unverified =
+        state.status === "failed" && ["unauthenticated", "host_unverified"].includes(state.reason);
+      if (unverified && flavor !== "release") {
+        const dialogs = { confirm: () => confirmRestart(t), refused: () => tellRestartRefused(t) };
+        void app.whenReady().then(() => host?.restart(dialogs));
+      }
+    });
   } catch (error) {
     log.error("cannot start the host connection", { error: String(error) });
   }
@@ -107,9 +130,12 @@ async function ready() {
     APP_SCHEME,
     appProtocolHandler({ cupper: { root: renderer, csp: MAIN_DOCUMENT_CSP } }),
   );
-  const i18n = createI18n(app.getPreferredSystemLanguages()[0]);
+  // Shutdown, logout and installing an update quit without asking (design 5.7.1).
+  powerMonitor.on("shutdown", () => quit.skip());
+  autoUpdater.on("before-quit-for-update", () => quit.skip());
+  const text = (i18n = createI18n(app.getPreferredSystemLanguages()[0]));
   const template = menuTemplate({
-    label: (id, n) => i18n.t(id, { ns: "command", n }),
+    label: (id, n) => text.t(id, { ns: "command", n }),
     onCommand: (cmd) => BrowserWindow.getFocusedWindow()?.webContents.send(COMMAND_CHANNEL, cmd),
     devTools: flavor === "dev",
   });
@@ -174,6 +200,22 @@ function showMainWindow() {
     log.error("renderer gone", { reason: details.reason, exitCode: details.exitCode });
   });
   void window.loadURL(MAIN_DOCUMENT_URL);
+}
+
+/** `host/status` and `host/exit` on the control connection, each given a few seconds. */
+function quitHost(): QuitHost | undefined {
+  const client = host?.control.client;
+  const within = <T>(ms: number, call: Promise<T>) =>
+    Promise.race([
+      call,
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+    ]);
+  return (
+    client && {
+      status: () => within(2000, client.request("host/status")),
+      exit: (force) => within(3000, client.command("host/exit", { force })),
+    }
+  );
 }
 
 function openExternal(url: string) {

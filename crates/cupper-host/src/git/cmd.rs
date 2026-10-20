@@ -142,7 +142,8 @@ impl SnapshotOp {
 #[derive(Debug)]
 pub struct GitCmd<T> {
     spec: Spec,
-    config: Vec<(String, String)>,
+    /// The caller's global options and `-c`s.
+    global: Vec<OsString>,
     args: Vec<OsString>,
     input: Option<Vec<u8>>,
     tier: PhantomData<fn() -> T>,
@@ -162,11 +163,11 @@ impl GitCmd<Snapshot> {
 
 impl<T> GitCmd<T> {
     fn new(spec: Spec) -> Self {
-        let (config, args, input) = (Vec::new(), Vec::new(), None);
+        let (global, args, input) = (Vec::new(), Vec::new(), None);
         let tier = PhantomData;
         Self {
             spec,
-            config,
+            global,
             args,
             input,
             tier,
@@ -181,8 +182,15 @@ impl<T> GitCmd<T> {
 
     /// Adds `-c key=value`. The tier's own `-c`s come later, so this cannot
     /// override them.
-    pub fn config(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.config.push((key.into(), value.into()));
+    pub fn config(self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        let pair = format!("{}={}", key.into(), value.into());
+        self.global_args(["-c".into(), pair.into()])
+    }
+
+    /// Adds global options and `-c` pairs as they are, such as the repo
+    /// tier's overrides (T097), whose keys need not be UTF-8.
+    pub fn global_args(mut self, args: impl IntoIterator<Item = OsString>) -> Self {
+        self.global.extend(args);
         self
     }
 
@@ -213,10 +221,7 @@ impl<T> GitCmd<T> {
             line.push("--no-optional-locks".into());
         }
         line.extend(["-c".into(), "core.quotepath=false".into()]);
-        for (key, value) in &self.config {
-            line.extend(["-c".into(), format!("{key}={value}").into()]);
-        }
-        line.extend(fixed.iter().chain(target).cloned());
+        line.extend(self.global.iter().chain(fixed).chain(target).cloned());
         line.extend(self.spec.words.iter().map(OsString::from));
         line.extend(self.args.iter().cloned());
         line

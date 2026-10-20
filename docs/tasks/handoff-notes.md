@@ -239,6 +239,15 @@
 | T090、T016 及打包 App 的任务 | `build:dev`、`build:e2e`、`test:launch` 都需要本机先跑过一次 `cargo xtask runtime-pack`（`host-bundle` 要用它的暂存目录）；原生扩展在 `Resources/native/`，宿主用 `extraFiles` 放进 `Helpers/` 并加 `signIgnore` | T075 |
 | T044 | 档位用 `driver::claude::capabilities::tier()`；能力里 `permission_mode` 各取值的 `risk` 已按档位表给出，表外的模式是 `full_access` | T095 |
 | 显示工具审批的界面任务 | T095 只填了 `interaction.requested.item_id`，`permission.tool.item_id` 仍为空；界面需要时另补 | T095 |
+| T034 | T096 已合并：`project/add`、`project/trust_info` 把 `scan.findings()` 填进 `TrustScan.findings`（之前的"先回空列表"不再需要）。`.codex` 按叶子配置项列，文件多时 findings 很多，与 `detail` 不截断一起由本任务的帧上限处理覆盖 | T096 |
+| T077 | preload 的 `requestPrivileged` 在 T076 里先返回 `{status: "failed"}`，由本任务接上；windowBridge 照常放行 `interaction/respond`、`git/revert`，真实输入检查由本任务加 | T076 |
+| 更新器、深链接的任务 | preload 的 `updates`、`onNavigate` 在 T076 里只注册了监听，主进程还没有发送方，由这些任务接上 | T076 |
+| T034、T044 | 仓库档调用写成 `tool.repo_tier(仓库).run(clock, durations, 全部项目和工作区根目录, GitCmd::repo(op).args(..))`；取 git 根目录用 `RepoOp::RevParse` 加 `--show-toplevel`；错误经 `GitError::code()`、`reason()` 转成协议错误；`notice()` 和 `Done::notice` 由调用方写进会话流，路径是绝对的 realpath，写进会话流时是否改成相对仓库的路径由调用方定 | T098 |
+| `git/status` 等频繁走仓库档的任务 | 指纹每次要遍历整个工作区找 `.gitattributes`（合成仓库 5,000 个目录约 70 ms，带大 `node_modules` 的仓库到一秒级）。上线前缓存 `.gitattributes` 清单（按目录 mtime 失效），或只扫 index 里出现的目录 | T098 |
+| 以后整理 git 模块时 | T097 的 `overrides.global` 里也带 `--no-pager` 和两个无条件的 `-c`，与 T060 档位固定的参数重复；无害（档位固定的仍排在最后），去重时在 `overrides` 里拿掉这三项 | T098 |
+| T090 | E2E-quit-confirm：真实地弹出退出确认，需要一个运行中的回合或待处理的请求（例如用假 agent），再在主进程里替换 `dialog.showMessageBox`；关机路径可以经 `powerMonitor` 的 `shutdown` 事件触发。空闲时退出 App 不发 `host/exit`，宿主按空闲规则自行退出（编排者确认） | T007 |
+| 更新流程的任务 | `before-quit-for-update` 现在只挂好了跳过退出确认的钩子；实现更新流程时确认它确实经 Electron 的 `autoUpdater` 发出这个事件 | T007 |
+| 做"需要重启宿主"页面的界面任务 | 重启宿主的确认目前由主进程直接弹原生框；界面做页面时改为经 ShellAPI 触发 `startControl` 返回的 `restart` | T007 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

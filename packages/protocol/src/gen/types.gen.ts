@@ -1163,7 +1163,7 @@ export type Finding = {
 };
 
 /**
- * Open enum: unknown values must be accepted. Known: hook env api_key_helper status_line mcp_server skill agent command codex_config
+ * Open enum: unknown values must be accepted. Known: hook env api_key_helper status_line mcp_server skill agent command codex_config unparsed
  */
 export type FindingKind =
   | "hook"
@@ -1175,6 +1175,7 @@ export type FindingKind =
   | "agent"
   | "command"
   | "codex_config"
+  | "unparsed"
   | (string & {});
 
 /**
