@@ -104,6 +104,9 @@ struct Handle {
 /// requests, the queued messages.
 pub(super) type Counters = (Arc<AtomicBool>, Arc<AtomicU32>, Arc<AtomicU32>);
 
+/// An actor's mailboxes.
+type Mailboxes = (mpsc::UnboundedReceiver<Mail>, mpsc::UnboundedReceiver<Stop>);
+
 /// The other ends of a [`Handle`], for its actor.
 type Ends = (
     mpsc::UnboundedReceiver<Mail>,
@@ -324,7 +327,11 @@ impl SessionManager {
             initial: true,
         };
         let participant = deps.quiescence.enter(SESSION);
-        tokio::spawn(SessionActor::run(parts, inbox, stops, start, participant));
+        let (actor, mail) = ((parts, start), handle.mail.clone());
+        let run = self
+            .clone()
+            .run(id.clone(), mail, actor, (inbox, stops), participant);
+        tokio::spawn(run);
         self.sessions().insert(id, handle);
         if let Some(completion) = completion {
             completion.committed();
@@ -452,6 +459,42 @@ impl SessionManager {
         mail
     }
 
+    /// Runs session `id`'s actor. Once it left memory idle, its mailbox
+    /// leaves the table and the calls in it go to the session's next actor,
+    /// which loads it again: the stream's writer is free by then.
+    async fn run(
+        self,
+        id: SessionId,
+        mail: mpsc::UnboundedSender<Mail>,
+        (parts, start): (Parts, Start),
+        (inbox, stops): Mailboxes,
+        participant: Participant,
+    ) {
+        let left = SessionActor::run(parts, inbox, stops, start, participant).await;
+        let Some(mut inbox) = left else {
+            return;
+        };
+        self.forget(&id, &mail);
+        inbox.close();
+        while let Ok(left) = inbox.try_recv() {
+            // A mailbox that closed at once answers nobody; its caller sees
+            // the session stop.
+            let _ = self.mailbox(&id).send(left);
+        }
+    }
+
+    /// Session `id` has an actor.
+    #[cfg(test)]
+    pub(super) fn in_memory(&self, id: &SessionId) -> bool {
+        self.sessions().contains_key(id)
+    }
+
+    /// Once every actor waits and nothing is held (design 5.2.16).
+    #[cfg(test)]
+    pub(super) async fn settled(&self) {
+        self.shared.deps.quiescence.settled().await;
+    }
+
     /// Takes session `id`'s actor out of the table, if `mail` is its mailbox.
     fn forget(&self, id: &SessionId, mail: &mpsc::UnboundedSender<Mail>) {
         let mut sessions = self.sessions();
@@ -471,9 +514,7 @@ impl SessionManager {
         participant: Participant,
     ) {
         let err = match load(&self.shared.deps, &id, counters).await {
-            Ok((parts, start)) => {
-                return SessionActor::run(parts, inbox, stops, start, participant).await;
-            }
+            Ok(actor) => return self.run(id, mail, actor, (inbox, stops), participant).await,
             Err(err) => err,
         };
         self.forget(&id, &mail);
@@ -606,6 +647,12 @@ impl Port for SessionManager {
 }
 
 impl SessionPort for SessionManager {
+    /// Loads the session unless it is in memory; a load that fails leaves
+    /// the subscription as it is.
+    fn wake(&self, id: &SessionId) {
+        self.mailbox(id);
+    }
+
     fn facts(&self, command: &Confirmable) -> BoxFuture<'static, Result<Facts, RpcError>> {
         let mut facts = Facts {
             running_turns: self.running_turns(),
