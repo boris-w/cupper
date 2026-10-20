@@ -645,6 +645,11 @@ milestone = "M1a"
 UNIT-ui-components = "pr"
 UNIT-ui-row-registry = "pr"
 
+# 运行时安装器 III：接进宿主启动（计划 v1.3.23）
+[T129]
+milestone = "M1a"
+IT-runtime-startup = "pr"
+
 # ui-core VI：新建会话页（M1a）
 [T085]
 milestone = "M1a"
