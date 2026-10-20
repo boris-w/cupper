@@ -252,6 +252,12 @@
 | T078 | 预测量脚本可以直接改成真实环境的测量：`docs/tasks/T076-desktop-window-bridge/premeasure.test.ts`，一次性的 vitest 配置在同一目录；e2e 断连钩子是 `__cupperE2E.disconnectWindow(webContentsId)`；预测量的数字和局限见该任务的 `notes.md` | T076 |
 | T160 | 自用构建跑不起来：`vite build --mode local` 被 vite 拒绝（"local" 与 `.env.local` 的后缀冲突）。换模式名，或改由别的方式传入 flavor | T076 |
 | 深链接、通知点击、更新器的任务 | preload 的 `onNavigate` 在 `shell:navigate` 通道上收，`updates.onState` 在 `updates:state` 通道上收，`installNow` 待接；主进程目前没有发送方 | T076 |
+| T034 | 发现链已由 T055 写成 `supervisor::discover(login_env, clock, durations, reader) -> rusqlite::Result<Discovery>`，返回 `Discovery { host, login, locator }`；`GitTool` 从同一个 `locator` 取（`tool("git")`、`trusted_path()`），作为 `Discovery` 的新字段加进去，不另起一套。`CliLocator` 有 `boundaries()`，边界目前只有项目路径 | T055 |
+| T044 | `AgentRuntime` 现在丢弃 `SetConfig` 命令；越权改回时要用它，接上 | T055 |
+| T056 | `launch::production` 现在从 `<数据目录>/runtime/node`（对应清单 `files` 的 `Helpers/node`）和 `<数据目录>/runtime/bundle-claude-acp.mjs`（对应 `Resources/runtime/bundle-claude-acp.mjs`）拉起；运行时目录的布局定下后改这两个路径 | T055 |
+| T140 | `AgentRuntime` 现在丢弃 `Steer` 命令 | T055 |
+| T036 | 设置里的 `agents.env_passthrough` 还没接，`adapter_env` 拿到的放行名单是空的 | T055 |
+| T110（第二种 agent） | 第二种 agent 接进来时需要一个自己的 `ActorKind` | T055 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
