@@ -41,6 +41,14 @@ impl TrustedBy {
             Self::AutoEmpty => "auto_empty",
         }
     }
+
+    /// Back from [`as_str`](Self::as_str).
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "auto_empty" => Some(Self::AutoEmpty),
+            id => id.parse().ok().map(Self::Principal),
+        }
+    }
 }
 
 /// `project/trust` with a digest the rescan no longer has

@@ -6089,11 +6089,29 @@
             "null"
           ]
         },
+        "diff_omitted": {
+          "description": "Changes left out of `diff_from_trusted` for the frame's sake.",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "findings": {
           "items": {
             "$ref": "#/$defs/Finding"
           },
           "type": "array"
+        },
+        "findings_omitted": {
+          "description": "As [`TrustScan::findings_omitted`].",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "state": {
           "$ref": "#/$defs/TrustState"
@@ -8671,6 +8689,15 @@
             "$ref": "#/$defs/Finding"
           },
           "type": "array"
+        },
+        "findings_omitted": {
+          "description": "Findings left out to keep the result within its frame; the digest\ncovers them all (T034).",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "state": {
           "$ref": "#/$defs/TrustState"

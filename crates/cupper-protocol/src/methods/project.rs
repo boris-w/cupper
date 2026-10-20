@@ -41,6 +41,10 @@ pub struct ProjectAddResult {
 pub struct TrustScan {
     pub state: TrustState,
     pub findings: Vec<Finding>,
+    /// Findings left out to keep the result within its frame; the digest
+    /// covers them all (T034).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub findings_omitted: Option<u32>,
     /// What `project/trust` echoes back.
     pub trust_digest: Digest,
 }
@@ -119,10 +123,16 @@ pub struct ProjectTrustInfoParams {
 pub struct ProjectTrustInfoResult {
     pub state: TrustState,
     pub findings: Vec<Finding>,
+    /// As [`TrustScan::findings_omitted`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub findings_omitted: Option<u32>,
     pub trust_digest: Digest,
     /// `stale` only: the files changed since the project was trusted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub diff_from_trusted: Option<Vec<TrustedFileChange>>,
+    /// Changes left out of `diff_from_trusted` for the frame's sake.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diff_omitted: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

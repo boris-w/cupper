@@ -107,6 +107,9 @@ durations! {
     /// How long a probe waits for the agent's command list after its session
     /// opened (design 5.6.7).
     PROBE_COMMANDS = "probe_commands", Duration::from_millis(200);
+    /// How long the agent has to take back a tier it raised by itself during
+    /// a turn before the turn is interrupted (design 5.2.6, check 4).
+    CONFIG_REVERT = "config_revert", Duration::from_secs(2);
     /// A git command other than those below: the read-only ones and the repo
     /// tier's writes (design 5.2.10).
     GIT_COMMAND = "git_command", Duration::from_secs(30);

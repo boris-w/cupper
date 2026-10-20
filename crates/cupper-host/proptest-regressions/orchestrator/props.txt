@@ -1,0 +1,10 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 9dc4cdb0acef6c5b337e504a0d9063816994965eb9df41c0ab5b7a48e259fbf1 # shrinks to ops = [Send(Queue), Attach(true), Exit]
+cc 252ab79e14ef7a43c611b6c4c00d2113844a55c49404b21e1e0079668a4db97b # shrinks to ops = [Send(Queue), Attach(true), Exit]
+cc c0753418d1a5124ec8bd8d0fa505703d7952107cb6d0bfaaec5bf0ab0de3344b # shrinks to ops = [Send(Queue), Attach(true), Exit]
+cc f7c9e3e73c6689798f8ec1d1c1f91e7359f14508e56848da231de3cd05605e4f # shrinks to ops = [Send(Queue), Attach(true), Exit]

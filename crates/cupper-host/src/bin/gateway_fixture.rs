@@ -31,6 +31,7 @@ fn main() -> ExitCode {
             println!("{}", startup::build_info());
             return HostExit::Ok.into();
         }
+        Ok(Command::SelfTest { .. }) => return fail(&"no --self-test here", HostExit::Error),
         Err(err) => return fail(&err, err.exit()),
     };
     #[cfg(feature = "dev-auth")]

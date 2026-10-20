@@ -20,8 +20,8 @@ use cupper_protocol::methods::handshake::{ClientPresence, Ping};
 use cupper_protocol::methods::interaction::{InteractionGet, InteractionRespond};
 use cupper_protocol::methods::project::{ProjectAdd, ProjectTrust, ProjectTrustInfo};
 use cupper_protocol::methods::session::{
-    SessionCapabilities, SessionCreate, SessionGet, SessionInterrupt, SessionMarkRead,
-    SessionQueueResume, SessionSend,
+    SessionCapabilities, SessionConfirmConfig, SessionCreate, SessionGet, SessionInterrupt,
+    SessionMarkRead, SessionQueueResume, SessionSend,
 };
 use cupper_protocol::methods::stream::{
     BlobGet, BlobPut, HistoryPage, StreamSubscribe, StreamUnsubscribe,
@@ -131,7 +131,8 @@ impl Routes {
         let sweeper = tokio::spawn(ledger.clone().sweeper());
         let mut routes = Self::new(ledger);
         routes.sessions(sessions);
-        routes.index(index);
+        routes.index(Arc::clone(&index));
+        routes.presence(index);
         Ok((routes, sweeper))
     }
 
@@ -160,6 +161,7 @@ impl Routes {
         self.add::<SessionSend>(to());
         self.add::<SessionInterrupt>(to());
         self.add::<SessionQueueResume>(to());
+        self.add::<SessionConfirmConfig>(to());
         self.add::<SessionGet>(to());
         self.add::<SessionCapabilities>(to());
         self.add::<InteractionRespond>(to());
@@ -167,16 +169,20 @@ impl Routes {
         self.insert::<PolicyDescribe>(Target::Describe(port));
     }
 
-    /// The index port (T034) serves the project, read and presence methods
-    /// of M1a, and hears of every connection that opens and closes.
+    /// The index port (T034) serves the project methods of M1a, and hears
+    /// of every connection that opens and closes.
     pub fn index(&mut self, port: Arc<dyn IndexPort>) {
         let to = || Arc::clone(&port) as Arc<dyn Port>;
         self.add::<ProjectAdd>(to());
         self.add::<ProjectTrust>(to());
         self.add::<ProjectTrustInfo>(to());
-        self.add::<SessionMarkRead>(to());
-        self.notification::<ClientPresence>(to());
         self.index = Some(port);
+    }
+
+    /// The index port also serves read marks and presence (T100).
+    pub fn presence(&mut self, port: Arc<dyn IndexPort>) {
+        self.add::<SessionMarkRead>(Arc::clone(&port) as Arc<dyn Port>);
+        self.notification::<ClientPresence>(port);
     }
 
     /// The gateway serves `stream/subscribe`, `stream/unsubscribe` and

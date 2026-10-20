@@ -11,14 +11,16 @@ pub mod control;
 mod recover;
 
 use std::collections::{BTreeMap, HashMap};
+use std::ffi::OsString;
 use std::fmt;
 use std::future::poll_fn;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::pin::pin;
 use std::sync::Arc;
 use std::task::Poll;
 
 use cupper_protocol::domain::AgentKind;
+use cupper_protocol::index::HostUpdated;
 use cupper_protocol::methods::handshake::{HostShutdown, HostShutdownParams, ShutdownReason};
 use futures::future::BoxFuture;
 use tokio::signal::unix::{Signal, SignalKind, signal};
@@ -41,8 +43,10 @@ use crate::durations::Durations;
 use crate::exit::HostExit;
 use crate::gateway::listen::{HostLock, ListenError};
 use crate::gateway::{Gateway, GatewayConfig, Routes};
+use crate::git::GitTool;
+use crate::index::{INDEX, IndexDeps, IndexError, IndexHandle};
 use crate::ledger::{Ledger, LedgerError};
-use crate::orchestrator::session::{NoIndex, SessionDeps, SessionManager};
+use crate::orchestrator::session::{SessionDeps, SessionManager};
 use crate::quiescence::Quiescence;
 use crate::startup::payload::Payload;
 use crate::startup::{DataDirError, prepare_data_dir};
@@ -104,10 +108,6 @@ pub struct Host {
     writer: Writer,
     writer_thread: WriterThread,
     raw_thread: RawWriterThread,
-    /// The stream registry, which the session and index actors (T043, T034)
-    /// write and read through.
-    #[expect(dead_code, reason = "the index actor (T034) takes it")]
-    streams: Streams,
     parts: Arc<[Arc<dyn Part>]>,
     gateway: Arc<Gateway>,
     serving: JoinHandle<()>,
@@ -122,8 +122,7 @@ pub struct Host {
 
 impl Host {
     /// Steps 3 to 10 of the startup (design 5.2.13). The logs (step 2) are
-    /// T028's, the index stream (step 7) T034's. Blocking I/O: run it on the
-    /// main thread, within the runtime.
+    /// T028's. Blocking I/O: run it on the main thread, within the runtime.
     pub async fn start(start: Start) -> Result<Self, StartError> {
         let Start {
             data_dir, payload, ..
@@ -183,7 +182,31 @@ impl Host {
             agent: (payload.test_config.agents.claude.as_ref())
                 .map(|agent| (agent.program.clone(), agent.args.clone())),
         };
-        let launch = finder.launch(project_roots(&reader)?).await;
+        // Discovery runs the login shell once; the index's git and Claude's
+        // launch both take this result.
+        let found = finder.discover(project_roots(&reader)?).await;
+        let git = git_tool(&found, &data_dir)?;
+        // Step 7: the index stream, before the socket.
+        quiescence.register(INDEX);
+        let index = IndexHandle::start(IndexDeps {
+            streams: streams.clone(),
+            readers: readers.clone(),
+            clock: clock.clone(),
+            ids: ids.clone(),
+            durations: durations.clone(),
+            git,
+            quiescence: quiescence.clone(),
+            host: HostUpdated {
+                version: env!("CARGO_PKG_VERSION").to_owned(),
+                weak_auth: cfg!(feature = "dev-auth"),
+                // The self-check (T059) and the power assertion (T156).
+                pending_upgrade: false,
+                power_assertion: false,
+                last_exit_abnormal: run.abnormal,
+            },
+        })
+        .await?;
+        let launch = finder.launch_found(&found).await;
         let redactor = Redactor::for_this_machine();
         let log = AdapterLog::open(&log_dir(&data_dir), "claude", clock.clone(), redactor);
         let cx = launch::Context {
@@ -218,7 +241,7 @@ impl Host {
         // The audit records go into the `audit` table from T059 on.
         let (records, _audit) = mpsc::unbounded_channel();
         let sessions = SessionManager::new(SessionDeps {
-            streams: streams.clone(),
+            streams,
             writer: writer.clone(),
             readers,
             clock: clock.clone(),
@@ -227,15 +250,20 @@ impl Host {
             agents: HashMap::from([(AgentKind::Claude, Arc::new(claude.clone()) as _)]),
             quiescence: quiescence.clone(),
             audit: records.clone(),
-            index: Arc::new(NoIndex),
+            index: Arc::new(index.clone()),
         });
-        let parts: Arc<[Arc<dyn Part>]> = Arc::new([Arc::new(sessions.clone()), Arc::new(claude)]);
+        let parts: Arc<[Arc<dyn Part>]> = Arc::new([
+            Arc::new(sessions.clone()),
+            Arc::new(claude),
+            Arc::new(index.clone()),
+        ]);
         let (to_supervisor, exits) = mpsc::unbounded_channel();
         let control = Arc::new(Control::new(to_supervisor, Arc::clone(&parts)));
         let mut routes = Routes::new(ledger);
         control.route(&mut routes);
         routes.sessions(Arc::new(sessions));
         Arc::new(agents).route(&mut routes);
+        routes.index(Arc::new(index.clone()));
         let config = GatewayConfig {
             host_id: run.host_id,
             data_epoch: run.epoch,
@@ -251,6 +279,7 @@ impl Host {
         };
         let gateway = Gateway::new(config, clock.clone(), durations, routes, records);
         control.serve_for(&gateway);
+        index.serve_for(&gateway);
         let terminate = signal(SignalKind::terminate())?;
         let (listener, socket) = lock.bind()?;
         let serving = tokio::spawn(Arc::clone(&gateway).serve(listener));
@@ -259,7 +288,6 @@ impl Host {
             writer,
             writer_thread,
             raw_thread,
-            streams,
             parts,
             gateway,
             serving,
@@ -336,8 +364,8 @@ impl Host {
 
 /// CLI discovery (design 5.6.6, 5.2.10): the host's own environment, the
 /// login shell's (or `test_config.login_env`), and a locator on the trusted
-/// entries of its `PATH`, outside every project. The git tool (T034) comes
-/// from the same locator.
+/// entries of its `PATH`, outside every project. The git tool comes from the
+/// same locator.
 #[derive(Debug)]
 struct Discovery {
     host: BTreeMap<String, String>,
@@ -367,6 +395,26 @@ async fn discover(
     }
 }
 
+/// The git tool (T034), from the same locator: `None` when no trusted `PATH`
+/// entry has a git.
+fn git_tool(found: &Discovery, data_dir: &Path) -> Result<Option<GitTool>, StartError> {
+    let locator = &found.locator;
+    let Some(git) = locator.tool("git") else {
+        return Ok(None);
+    };
+    let (lfs, trusted) = (locator.tool("git-lfs"), locator.trusted_path());
+    let home = PathBuf::from(found.host.get("HOME").cloned().unwrap_or_default());
+    let ssh = found.login.vars.get("SSH_AUTH_SOCK").map(OsString::from);
+    Ok(Some(GitTool::new(
+        git,
+        lfs,
+        trusted,
+        Some(home),
+        ssh,
+        data_dir,
+    )?))
+}
+
 /// The projects' paths, the boundaries of trusted `PATH` entries.
 fn project_roots(reader: &rusqlite::Connection) -> rusqlite::Result<Vec<PathBuf>> {
     let mut projects = reader.prepare("SELECT path FROM projects WHERE removed_at IS NULL")?;
@@ -388,9 +436,18 @@ struct Finder {
 }
 
 impl Finder {
+    async fn discover(&self, roots: Vec<PathBuf>) -> Discovery {
+        discover(self.login_env.clone(), &*self.clock, &self.durations, roots).await
+    }
+
+    /// Discovers again, then finds the launch: what `agents/refresh` does.
     async fn launch(&self, roots: Vec<PathBuf>) -> Launch {
+        let found = self.discover(roots).await;
+        self.launch_found(&found).await
+    }
+
+    async fn launch_found(&self, found: &Discovery) -> Launch {
         let (clock, durations) = (&*self.clock, &self.durations);
-        let found = discover(self.login_env.clone(), clock, durations, roots).await;
         let (host, login) = (&found.host, &found.login);
         #[cfg(feature = "test-harness")]
         if let Some((program, args)) = &self.agent {
@@ -440,6 +497,8 @@ pub enum StartError {
     Ledger(#[from] LedgerError),
     #[error(transparent)]
     Boot(#[from] BootSessionError),
+    #[error("cannot load the index stream")]
+    Index(#[from] IndexError),
     #[error("cannot start a thread or the signal handler")]
     Io(#[from] std::io::Error),
 }
@@ -455,7 +514,8 @@ impl StartError {
             | Self::Migrate(_)
             | Self::Sql(_)
             | Self::Meta(_)
-            | Self::Ledger(_) => HostExit::DataDirUnusable,
+            | Self::Ledger(_)
+            | Self::Index(_) => HostExit::DataDirUnusable,
             Self::Boot(_) | Self::Io(_) => HostExit::Error,
         }
     }
