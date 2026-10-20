@@ -15,7 +15,21 @@ use crate::{Error, Result};
 /// canonical upper-case form. It changes on every boot, so the host can tell
 /// records of an earlier boot from its own (`data_epoch`, design 5.2.8).
 pub fn boot_session_uuid() -> Result<String> {
-    let name = c"kern.bootsessionuuid";
+    let uuid = sysctl_string(c"kern.bootsessionuuid")?;
+    if !is_uuid(&uuid) {
+        return Err(Error::Unexpected("kern.bootsessionuuid"));
+    }
+    Ok(uuid)
+}
+
+/// The machine's host name (`kern.hostname`), such as `name.local`; the logs
+/// redact it (design 5.11.2).
+pub fn host_name() -> Result<String> {
+    sysctl_string(c"kern.hostname")
+}
+
+/// A string-valued sysctl.
+fn sysctl_string(name: &CStr) -> Result<String> {
     let mut len: libc::size_t = 0;
     // SAFETY: `name` is NUL-terminated; a null `oldp` only asks for the size,
     // which the kernel writes to `len`; no new value is set.
@@ -40,12 +54,11 @@ pub fn boot_session_uuid() -> Result<String> {
         return Err(Error::last_os("sysctlbyname"));
     }
     buf.truncate(len);
-    let uuid = CStr::from_bytes_until_nul(&buf)
+    CStr::from_bytes_until_nul(&buf)
         .ok()
         .and_then(|s| s.to_str().ok())
-        .filter(|s| is_uuid(s))
-        .ok_or(Error::Unexpected("kern.bootsessionuuid"))?;
-    Ok(uuid.to_owned())
+        .map(str::to_owned)
+        .ok_or(Error::Unexpected("a sysctl string"))
 }
 
 fn is_uuid(s: &str) -> bool {
@@ -142,6 +155,11 @@ mod tests {
         let uuid = boot_session_uuid().unwrap();
         assert!(is_uuid(&uuid), "{uuid}");
         assert_eq!(boot_session_uuid().unwrap(), uuid);
+    }
+
+    #[test]
+    fn host_name_is_not_empty() {
+        assert!(!host_name().unwrap().is_empty());
     }
 
     #[test]

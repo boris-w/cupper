@@ -1,8 +1,8 @@
 //! Property tests of the session's cores together (design 5.9.8), on
 //! virtual time, through the actor's own [`SessionCore`]: the turn machine,
-//! the autonomous judge and the coalescer, with requests counted and
-//! resolved at a turn's Settle. A [`World`] models the agent and the actor's
-//! ports, answers the cores' actions, and checks the log as it is written.
+//! the autonomous judge, the coalescer and the interaction broker. A
+//! [`World`] models the agent and the actor's ports, answers the cores'
+//! actions, and checks the log as it is written.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::os::unix::process::ExitStatusExt;
@@ -12,19 +12,23 @@ use std::time::Duration;
 
 use cupper_protocol::domain::Cost;
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::{AdapterInstanceId, ItemId, TurnId};
+use cupper_protocol::ids::{AdapterInstanceId, Digest, ItemId, RequestId, SessionId, TurnId};
 use cupper_protocol::item::{Item, ItemStatus};
 use cupper_protocol::session::{SnapshotPhase, StopReason, TurnOrigin, TurnStatus, UsageUpdated};
 use proptest::prelude::*;
+use serde_json::{from_value, json};
 
 use super::session::core::{Action as Out, Input as In, SessionCore};
 use super::testkit::{agent_error, attached, send, snapshot};
 use super::turn::{self, SendMode};
 use crate::clock::{IdGen, ManualClock, MonoTime};
 use crate::driver::api::{
-    DriverCommand, DriverEvent, NormUpdate, PromptTag, RunState, ToolOutput, ToolStatus,
+    AskId, AskRequest, DriverCommand, DriverEvent, NormUpdate, PromptTag, RunState, ToolOutput,
+    ToolStatus,
 };
 use crate::durations::Durations;
+use crate::orchestrator::interaction::Respond;
+use crate::policy::testkit::{column, option, permission};
 use crate::pure::{CoreDriver, Step};
 
 #[derive(Debug, Clone)]
@@ -95,10 +99,17 @@ struct World {
     snapshots: Vec<(TurnId, SnapshotPhase)>,
     tools: Vec<String>,
     finished: HashSet<String>,
+    /// An instance is attached: requests can be answered.
+    attached: bool,
     // What the judge should know.
     running: BTreeSet<String>,
     thread_active: Option<bool>,
-    asks: usize,
+    /// Requests not resolved, in the order asked, with their request ID and
+    /// digest once written.
+    asks: Vec<(AskId, Option<(RequestId, Digest)>)>,
+    next_ask: u64,
+    /// Resolutions asked for so far; two in three answer, if they can.
+    resolves: u64,
     // The log so far.
     current: Option<(TurnId, TurnOrigin, MonoTime)>,
     settled: HashSet<TurnId>,
@@ -126,7 +137,7 @@ impl World {
         let clock = ManualClock::new();
         let ids = Arc::new(IdGen::seeded(Arc::new(clock.clone()), 1));
         let durations = Durations::default();
-        let session = SessionCore::new(ids, &durations, false);
+        let session = SessionCore::new(SessionId::from_uuid(1), ids, &durations, false);
         Self {
             prop,
             d: CoreDriver::with_clock(session, clock),
@@ -138,7 +149,10 @@ impl World {
             finished: HashSet::new(),
             running: BTreeSet::new(),
             thread_active: None,
-            asks: 0,
+            attached: false,
+            asks: Vec::new(),
+            next_ask: 0,
+            resolves: 0,
             current: None,
             settled: HashSet::new(),
             completed: HashSet::new(),
@@ -191,6 +205,7 @@ impl World {
             Op::Attach(_) if !self.attaching => return None,
             Op::Attach(ok) => {
                 self.attaching = false;
+                self.attached = ok;
                 In::Machine(if ok {
                     attached(self.instance)
                 } else {
@@ -265,15 +280,35 @@ impl World {
                 };
                 In::Agent(DriverEvent::RunState(state))
             }
+            // Only an attached agent asks.
+            Op::Ask if !self.attached => return None,
             Op::Ask => {
-                self.asks += 1;
-                In::Asked
+                self.next_ask += 1;
+                let ask = AskId(self.next_ask);
+                self.asks.push((ask, None));
+                let option = option("allow", "allow_once", "once", "approve");
+                let request = AskRequest::Classified(permission(vec![option]));
+                In::Agent(DriverEvent::Ask { ask, request })
             }
             Op::Resolve => {
-                self.asks = self.asks.saturating_sub(1);
-                In::Resolved
+                let (ask, written) = self.asks.first().cloned()?;
+                self.resolves += 1;
+                match written {
+                    Some((request_id, digest)) if !self.resolves.is_multiple_of(3) => {
+                        In::Respond(Box::new(dismiss(request_id, digest)))
+                    }
+                    // Withdrawn before it was written: no event tells.
+                    None => {
+                        self.asks.remove(0);
+                        In::Agent(DriverEvent::AskWithdrawn(ask))
+                    }
+                    Some(_) => In::Agent(DriverEvent::AskWithdrawn(ask)),
+                }
             }
             Op::Exit => {
+                // Requests not written yet go with the instance.
+                self.attached = false;
+                self.asks.retain(|(_, written)| written.is_some());
                 self.prompts.clear();
                 self.thread_active = None;
                 self.instance += 1;
@@ -329,7 +364,7 @@ impl World {
         for (at, out) in self.d.run([step]) {
             self.observe(at, out);
         }
-        let free = self.running.is_empty() && self.asks == 0;
+        let free = self.running.is_empty() && self.asks.is_empty();
         if done && autonomous && free {
             let ended = !matches!(self.current, Some((_, TurnOrigin::Autonomous, _)));
             self.must(
@@ -349,10 +384,8 @@ impl World {
 
     fn observe(&mut self, at: MonoTime, out: Out) {
         match out {
-            Out::Machine(turn::Action::Driver(DriverCommand::Prompt { tag, .. })) => {
-                self.prompts.push(tag)
-            }
-            Out::Machine(turn::Action::Driver(DriverCommand::Close { .. })) => self.prompts.clear(),
+            Out::Driver(DriverCommand::Prompt { tag, .. }) => self.prompts.push(tag),
+            Out::Driver(DriverCommand::Close { .. }) => self.prompts.clear(),
             Out::Machine(turn::Action::Attach(_)) => self.attaching = true,
             Out::Machine(turn::Action::Snapshot { turn_id, phase }) => {
                 self.snapshots.push((turn_id, phase))
@@ -360,7 +393,7 @@ impl World {
             Out::Machine(turn::Action::Settle { end, .. }) => {
                 let judged = matches!(self.current, Some((_, TurnOrigin::Autonomous, _)))
                     && end.status == TurnStatus::Completed;
-                let free = self.running.is_empty() && self.asks == 0;
+                let free = self.running.is_empty() && self.asks.is_empty();
                 self.must(
                     Prop::Guard,
                     !judged || free,
@@ -369,10 +402,9 @@ impl World {
                 self.settled.insert(end.turn_id);
                 // Abandoned; the broker resolves the turn's requests.
                 self.running.clear();
-                self.asks = 0;
             }
             Out::Event(body) => self.event(at, body),
-            Out::Machine(_) | Out::Timer(_) => {}
+            Out::Machine(_) | Out::Driver(_) | Out::Answer(_) | Out::Timer(_) => {}
         }
     }
 
@@ -463,6 +495,23 @@ impl World {
             EventBody::QueueUpdated(update) => {
                 self.queue = (update.entries.len(), update.paused.is_some())
             }
+            EventBody::InteractionRequested(requested) => {
+                let turn = requested.turn_id.expect("requests go into a turn");
+                let running = self.current.as_ref().is_some_and(|(t, ..)| *t == turn);
+                let ok = running && !self.settled.contains(&turn);
+                self.must(
+                    Immutable,
+                    ok,
+                    "requests go into the running turn, before it settles",
+                );
+                let written = (requested.request_id, requested.digest);
+                let first = self.asks.iter_mut().find(|(_, w)| w.is_none());
+                first.expect("a request asked for").1 = Some(written);
+            }
+            EventBody::InteractionResolved(resolved) => {
+                let id = Some(&resolved.request_id);
+                self.asks.retain(|(_, w)| w.as_ref().map(|(r, _)| r) != id);
+            }
             _ => {}
         }
     }
@@ -491,7 +540,7 @@ impl World {
         let now = self.d.now().mono;
         if let Some((_, TurnOrigin::Autonomous, started)) = &self.current {
             let free =
-                self.running.is_empty() && self.asks == 0 && self.thread_active != Some(true);
+                self.running.is_empty() && self.asks.is_empty() && self.thread_active != Some(true);
             let due = (*started).max(self.poke) + Duration::from_secs(10);
             self.must(
                 Prop::Guard,
@@ -529,7 +578,7 @@ impl World {
             while self.unfinished(0).is_some() {
                 self.apply(Op::Done(0));
             }
-            while self.asks > 0 {
+            while !self.asks.is_empty() {
                 self.apply(Op::Resolve);
             }
             if self.thread_active == Some(true) {
@@ -552,6 +601,22 @@ impl World {
             self.settled.len(),
             "every turn completes"
         );
+    }
+}
+
+/// The test harness dismisses a written request.
+fn dismiss(request_id: RequestId, request_digest: Digest) -> Respond {
+    let params = json!({"command_id": "c-1", "session_id": SessionId::from_uuid(1),
+        "request_id": request_id, "request_digest": request_digest,
+        "outcome": {"type": "dismissed"}});
+    let by = json!({"principal_id": "pr_test", "client_kind": "test", "client_name": "props"});
+    let (principal, tier) = (column("test_harness"), None);
+    let (resolved_by, params) = (from_value(by).unwrap(), from_value(params).unwrap());
+    Respond {
+        principal,
+        resolved_by,
+        tier,
+        params,
     }
 }
 

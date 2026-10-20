@@ -22,7 +22,7 @@ method! {
         scope: Approve, idempotency: Command, milestone: M1a,
         errors: [
             Conflict / AlreadyResolved, Conflict / DigestMismatch, Conflict / TooEarly,
-            Expired, Forbidden,
+            Expired, Forbidden, NotFound,
         ],
     }
 }

@@ -1,13 +1,15 @@
-//! `cupper-host`, the session host process (design 5.2). It runs step 1 of the
-//! startup sequence (design 5.2.13): the command line, `--build-info`, in
-//! `dev-auth` builds the launcher (design 5.8.1), and the stdin payload; then
-//! stdio goes to `/dev/null`. The supervisor runs the other steps on the tokio
+//! `cupper-host`, the session host process (design 5.2). It runs steps 1 and 2
+//! of the startup sequence (design 5.2.13): the command line, `--build-info`,
+//! in `dev-auth` builds the launcher (design 5.8.1), and the stdin payload;
+//! then `host.log`, and stdio goes to `/dev/null`. The supervisor runs the other steps on the tokio
 //! workers, while the main thread runs its `CFRunLoop` until the host exits
 //! (design 5.2.3).
 
 use std::process::ExitCode;
+use std::sync::Arc;
 
 use cupper_host::clock::SystemClock;
+use cupper_host::diag;
 use cupper_host::exit::HostExit;
 use cupper_host::startup::{self, Command, payload};
 use cupper_host::supervisor::{Host, Start};
@@ -22,11 +24,6 @@ fn main() -> ExitCode {
         }
         Err(err) => return fail(&err, err.exit()),
     };
-    // A release build reads no payload, so it lets go of stdio at once.
-    #[cfg(not(any(feature = "dev-auth", feature = "test-harness")))]
-    if let Err(err) = cupper_sys::redirect_stdio_to_null() {
-        return fail(&err, HostExit::Error);
-    }
     #[cfg(feature = "dev-auth")]
     let launcher = match startup::launcher() {
         Ok(launcher) => launcher,
@@ -51,9 +48,14 @@ fn main() -> ExitCode {
     if let Err(err) = cupper_host::failpoint::arm(&payload.test_config.failpoints) {
         return fail(&err, HostExit::Error);
     }
-    #[cfg(any(feature = "dev-auth", feature = "test-harness"))]
+    // Step 2, while stderr can still tell when the log cannot be started.
+    let logs = diag::log::log_dir(&data_dir);
+    let echo = cfg!(all(feature = "dev-auth", not(feature = "test-harness")));
+    if let Err(err) = diag::log::init(&logs, Arc::new(clock), echo) {
+        eprintln!("cupper-host: no host.log in {}: {err}", logs.display());
+    }
     if let Err(err) = cupper_sys::redirect_stdio_to_null() {
-        return fail(&err, HostExit::Error);
+        return logged(&err, HostExit::Error);
     }
     let start = Start {
         data_dir,
@@ -61,12 +63,13 @@ fn main() -> ExitCode {
         #[cfg(feature = "dev-auth")]
         launcher,
     };
-    // From here on the reasons go to the log (T028); the code tells the
-    // desktop what to do (design 5.7.1).
+    // The code tells the desktop what to do (design 5.7.1); the reason goes
+    // to the log.
     let host = match runtime.block_on(Host::start(start)) {
         Ok(host) => host,
-        Err(err) => return fail(&err, err.exit()),
+        Err(err) => return logged(&err, err.exit()),
     };
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), "the host started");
     let main_loop = RunLoop::current();
     let stop = StopOnDrop(main_loop.stopper());
     let running = runtime.spawn(async move {
@@ -75,6 +78,7 @@ fn main() -> ExitCode {
     });
     main_loop.run();
     let exit = runtime.block_on(running).unwrap_or(HostExit::Error);
+    tracing::info!(code = exit.code(), "the host exits");
     // Nothing of the host is left to wait for.
     runtime.shutdown_background();
     exit.into()
@@ -89,7 +93,14 @@ impl Drop for StopOnDrop {
     }
 }
 
+/// Before the log: the reason goes to stderr, for the launcher to see.
 fn fail(err: &dyn std::fmt::Display, exit: HostExit) -> ExitCode {
     eprintln!("cupper-host: {err}");
+    exit.into()
+}
+
+/// After it: stdio is `/dev/null`, so the reason goes to `host.log`.
+fn logged(err: &dyn std::fmt::Display, exit: HostExit) -> ExitCode {
+    tracing::error!(code = exit.code(), "the host cannot run: {err}");
     exit.into()
 }

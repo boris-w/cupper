@@ -335,6 +335,7 @@ dependencies = [
  "shuttle",
  "thiserror",
  "tokio",
+ "tracing",
  "uuid",
 ]
 

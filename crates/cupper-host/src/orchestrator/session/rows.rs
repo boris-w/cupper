@@ -1,12 +1,12 @@
-//! A session's rows in `sessions`, `turns` and `queue_entries` (design
-//! 5.4.2). Its actor is their one writer (design 5.2.3); they commit in the
+//! A session's rows in `sessions`, `turns`, `queue_entries` and
+//! `interactions` (design 5.4.2). Its actor is their one writer (design 5.2.3); they commit in the
 //! transaction of the events they follow.
 
 use std::collections::HashMap;
 use std::fmt::Display;
 
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::{CommandId, QueueId, SessionId};
+use cupper_protocol::ids::{AdapterInstanceId, CommandId, QueueId, SessionId};
 use cupper_protocol::session::TurnStatus;
 use rusqlite::Connection;
 use rusqlite::types::Value;
@@ -64,13 +64,15 @@ impl Rows {
     }
 
     /// The changes `bodies`, from seq `first_seq` on, make; `commands` names
-    /// the command that queued each message.
+    /// the command that queued each message, `instance` the adapter instance
+    /// a request belongs to (SEC-10).
     pub(super) fn of(
         session: &SessionId,
         first_seq: u64,
         at: u64,
         bodies: &[EventBody],
         commands: &HashMap<QueueId, CommandId>,
+        instance: Option<&AdapterInstanceId>,
     ) -> Self {
         let mut rows = Self::default();
         let s = || text(session);
@@ -147,6 +149,48 @@ impl Rows {
                     let paused = q.paused.as_ref().map_or(Value::Null, |p| text(&p.reason));
                     let set = "queue_version = ?3, queue_paused = ?4";
                     rows.session(session, at, set, vec![int(q.version), paused]);
+                }
+                // `request_json` keeps the whole request as written, to answer
+                // it again after a restart (T089).
+                EventBody::InteractionRequested(r) => {
+                    let kind = serde_json::to_value(&r.request).expect("protocol values serialize");
+                    let kind = text(kind["type"].as_str().unwrap_or_default());
+                    let (turn, item) = (r.turn_id.as_ref(), r.item_id.as_ref());
+                    let instance = instance.map_or_else(|| text(""), text);
+                    rows.push(
+                        "INSERT INTO interactions (request_id, session_id, turn_id, item_id, kind,
+                             digest, status, adapter_instance, request_json, created_at)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', ?7, ?8, ?9)",
+                        vec![
+                            text(&r.request_id),
+                            s(),
+                            turn.map_or(Value::Null, text),
+                            item.map_or(Value::Null, text),
+                            kind,
+                            text(&r.digest),
+                            instance,
+                            json(r),
+                            int(r.created_at.0),
+                        ],
+                    );
+                }
+                EventBody::InteractionResolved(r) => {
+                    let outcome = r.outcome.as_ref().map_or(Value::Null, json);
+                    let by = r.resolved_by.as_ref().map_or(Value::Null, json);
+                    let reason = r.reason.as_ref().map_or(Value::Null, text);
+                    rows.push(
+                        "UPDATE interactions SET status = ?2, outcome_json = ?3, resolved_by = ?4,
+                             reason = ?5, resolved_at = ?6
+                         WHERE request_id = ?1",
+                        vec![
+                            text(&r.request_id),
+                            text(&r.status),
+                            outcome,
+                            by,
+                            reason,
+                            int(at),
+                        ],
+                    );
                 }
                 EventBody::SessionConfigured(c) => {
                     rows.session(session, at, "config_json = ?3", vec![json(&c.config)])

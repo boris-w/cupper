@@ -48,6 +48,8 @@ pub type Reply = BoxFuture<'static, Outcome>;
 pub struct Call {
     pub conn: ConnId,
     pub principal: Principal,
+    /// Who the client said it was in `initialize`.
+    pub client: ClientIdentity,
     pub method: &'static str,
     /// Valid for the method; `{}` when the client left them out.
     pub params: Value,
@@ -96,6 +98,7 @@ pub struct Opened {
 pub(super) struct Dispatch {
     conn: ConnId,
     principal: Principal,
+    client: ClientIdentity,
     outbox: Arc<Outbox>,
     inflight: Arc<Semaphore>,
     subscriptions: Subscriptions,
@@ -115,6 +118,7 @@ impl Dispatch {
     pub(super) fn new(
         conn: ConnId,
         principal: Principal,
+        client: ClientIdentity,
         outbox: Arc<Outbox>,
         auditor: Auditor,
     ) -> Self {
@@ -123,6 +127,7 @@ impl Dispatch {
         Self {
             conn,
             principal,
+            client,
             outbox,
             inflight,
             subscriptions,
@@ -233,6 +238,7 @@ impl Dispatch {
         Call {
             conn: self.conn.clone(),
             principal: self.principal.clone(),
+            client: self.client.clone(),
             method,
             params,
             ticket,

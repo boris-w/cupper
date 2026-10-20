@@ -175,8 +175,10 @@ impl Host {
             #[cfg(feature = "test-harness")]
             harness_key: payload.harness_key,
         };
-        // The audit records go into the `audit` table from T059 on.
-        let (gateway, _audit) = Gateway::new(config, clock.clone(), durations, routes);
+        // The audit records go into the `audit` table from T059 on; the
+        // session manager (T055) gets a clone of `records`.
+        let (records, _audit) = mpsc::unbounded_channel();
+        let gateway = Gateway::new(config, clock.clone(), durations, routes, records);
         control.serve_for(&gateway);
         let terminate = signal(SignalKind::terminate())?;
         let (listener, socket) = lock.bind()?;
