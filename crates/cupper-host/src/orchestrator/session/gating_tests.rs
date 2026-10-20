@@ -6,7 +6,7 @@ use std::os::unix::process::ExitStatusExt;
 use std::process::ExitStatus;
 use std::time::Duration;
 
-use cupper_protocol::domain::PrincipalKind;
+use cupper_protocol::domain::{PrincipalKind, Tier};
 use cupper_protocol::ids::{AdapterInstanceId, SessionId};
 use cupper_protocol::item::ToolKind;
 use cupper_protocol::rpc::Scope::{Approve, Read, Write};
@@ -75,15 +75,14 @@ async fn it_orch_gating_config_unconfirmed_holds_messages_until_confirmed() {
     assert_eq!(required["reason"], "full_access_unconfirmed");
     assert_eq!(notices(&f, &session, 2).await, ["config_unconfirmed"]);
     let record = f.audit.recv().await.unwrap();
-    let AuditEvent::ConfigUnconfirmed { reason, mode, .. } = record.event else {
+    let AuditEvent::ConfigUnconfirmed { reason, config } = record.event else {
         panic!("{record:?}")
     };
-    let expected = (
-        None,
-        ConfirmationReason::FullAccessUnconfirmed,
-        Some("bypass".into()),
-    );
-    assert_eq!((record.conn, reason, mode), expected);
+    let full = ConfirmationReason::FullAccessUnconfirmed;
+    let bypass = (Some("bypass".into()), Some(Tier::FullAccess));
+    assert_eq!((record.conn, &reason), (None, &full));
+    assert_eq!((config.mode.clone(), config.tier.clone()), bypass);
+    assert_eq!(config.set_by.as_str(), "pr_test");
 
     // The first turn holds its prompt; once it is interrupted, a message sent
     // while idle is queued, and resuming the queue does not release it.
@@ -110,6 +109,16 @@ async fn it_orch_gating_config_unconfirmed_holds_messages_until_confirmed() {
         (json!("k-2"), required["config_digest"].clone());
     assert_eq!(f.ok("session/confirm_config", confirm).await, json!({}));
     assert_eq!(f.prompt().await.1, text("next"));
+    // `config.confirmed`: what it left, with the tier and who confirmed it.
+    let record = f.audit.recv().await.unwrap();
+    let AuditEvent::ConfigConfirmed {
+        reason,
+        config: confirmed,
+    } = record.event
+    else {
+        panic!("{record:?}")
+    };
+    assert_eq!((reason, confirmed), (full, config));
     assert!(configured(&f, &session, 3).await["confirmation_required"].is_null());
     let set = "SELECT mode_set_by || ' ' || (full_access_confirmed_at IS NOT NULL) FROM sessions";
     assert_eq!(f.rows(set), ["pr_test 1"]);
