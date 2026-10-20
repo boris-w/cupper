@@ -84,7 +84,7 @@ pub fn status(launch: &Launch, running: Running, auth: &AuthStatus) -> AgentStat
             failure: None,
         },
         auth: auth.clone(),
-        // Sampling is T008's.
+        // The runtime's latest sample, which it adds.
         rss_bytes: None,
         config_dir: launch.config_dir.clone(),
     }
