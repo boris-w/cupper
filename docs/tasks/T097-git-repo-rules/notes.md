@@ -49,3 +49,57 @@
   - 另立一个任务做布局与指纹，约 230 行。
 
   T098 要等两份都合并。适合有另一位执行者空闲的情况。
+
+## 裁定之后
+
+编排者采用方案一，不拆，上限约 700 行，硬停止线 780 行（任务书末尾"补充裁定"）。
+
+### 实际规模
+
+| 提交 | 内容 | 增 |
+|---|---|---|
+| `feat(host): the repo tier's configuration rules` | `git/rules.rs` 262、测试 197、`git/mod.rs`、`lib.rs` | 464 |
+| `feat(host): fingerprint a repository's executable configuration` | `git/stamp.rs` 148、测试 84、`git/mod.rs` | 235 |
+| 合计 | | **699** |
+
+第一稿合计 706 行，超过 700 行的汇报线。把 shell 引号的写法压成几行后降到 699 行，没有删减任何检查。测试里的长清单都写成按空白切分的字符串，免得 rustfmt 一行一项地展开。
+
+## 实现要点
+
+- **解析**（`rules::parse`）：
+  - 去掉末尾的 `\0` 后按 `\0` 切分，两段一组；不成对或末尾没有 `\0` 时，判为 `Malformed`；
+  - 键和值都按字节保存，值在第一个 `\n` 处与键分开，所以值里可以有换行；
+  - `file:` 后的相对路径拼到 git 运行的目录上；
+  - 来源只认 `file:` 和 `command line:`，其余（`blob:`、`standard input:` 等）记为 `Other`，来源检查一律拒绝。
+- **来源检查**（`rules::check_sources`）：
+  - 来源文件和 agent 可写的根目录都取 realpath；已经不存在的根目录跳过；
+  - 来源解析不了（`Unresolved`）时拒绝；
+  - 只有 common dir 的 `config` 和本 worktree 的 git 目录下的 `config.worktree` 例外。所以 git 目录里的其他文件（例如 include 进来的 `.git/inc`）、主工作区的 `config.worktree`（当前是另一个 worktree 时）都照样拒绝；
+  - `core.hooksPath` 的值不参与检查。
+- **覆盖参数**（`rules::overrides`）：
+  - 每个键取最后一个值；
+  - 可执行类键按"段、有没有子段、变量名"匹配。git 输出的段名和变量名已是小写，子段区分大小写；
+  - git-lfs 只认三个标准取值，程序改成单引号括起的绝对路径；
+  - 给出 `global`（放在子命令之前：`--no-pager` 和 `-c`）、`command`（补丁命令的两个参数）和 `required`；
+  - `--no-pager` 放在这里，是因为它属于 5.2.10 第 3 条的无条件覆盖；T060 若也加，重复无害。
+- **指纹**（`stamp`）：
+  - `Layout::read` 把 git 目录和 common dir 取成 realpath；
+  - 指纹按路径记 sha-256，文件不存在记为 `None`。所以新建、修改、删除都会出现在 `changed` 的结果里；
+  - `core.hooksPath` 取最后一个值，相对路径从工作区根目录算起；
+  - 遍历 `.gitattributes` 时跳过 `.git`，不进入符号链接指向的目录。
+
+## 已知的限制
+
+- `core.hooksPath` 以 `~/` 开头时没有展开，因为纯函数不读环境变量。这个目录在仓库档里总被覆盖，不会执行；只是它的内容不进指纹。需要的话由 T098 传入展开后的路径。
+- git-lfs 的 `filter-process` 没有实测，仍是 Q32。
+
+## 给 T098 的接入点
+
+- **调用顺序**：每次调用前
+  1. `parse(输出, 运行目录)`；
+  2. `check_sources(&entries, &Bounds { git_dir, common_dir, writable })`，`writable` 是全部项目和全部会话的工作区根目录；
+  3. `overrides(&entries, &Setup { hooks, lfs, patch })`，`global` 放在子命令之前，`command` 放在子命令之后。
+
+  `Unsafe` 的任一变体都对应 `git_error`（`reason: unsafe_repo_config`）。
+- **覆盖后失败**：只有 `Overrides.required` 不为空时判为 `unsafe_repo_config`。
+- **指纹**：调用前后各 `Fingerprint::take(&Layout::read(工作区)?, &entries)`，`changed` 不为空即 `repo_config_changed`，`params.paths` 取它的结果。
