@@ -119,7 +119,18 @@ async function setup(opts: { ops?: object[]; request?: object; respond?: () => o
   const ready = () => act(() => vi.advanceTimersByTime(500));
   const methods = () => mock.requests.map((r) => r.method).filter((m) => !m.startsWith("stream/"));
   const sent = () => mock.requests.filter((r) => r.method === "session/send").map((r) => r.params);
-  return { ui, controls, push, panel, responses, press, ready, methods, sent };
+  return { ui, controls, push, panel, responses, press, ready, methods, sent, mock };
+}
+
+/** blob/get serves `text`, its one chunk carrying `bytes` (other bytes fail the hash). */
+async function serveBlob(mock: MockHost, text: string, bytes = new TextEncoder().encode(text)) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  const hash = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  mock.handle("blob/get", ({ conn }) => {
+    conn.sendBlob({ hash, offset: 0, last: true, bytes });
+    return { result: { hash, chunks: 1, offset: 0, length: bytes.length, size: bytes.length } };
+  });
+  return { hash, media_type: "text/plain", size: bytes.length };
 }
 
 describe("UNIT-request-panel", () => {
@@ -416,5 +427,51 @@ describe("UNIT-request-followup", () => {
       resolved: { status: "resolved", outcome: { type: "answer", values: {} } },
     };
     expect(record(asked as never)).toEqual(["request:record_asked", { count: 2 }]);
+  });
+});
+
+describe("UNIT-blob-fulltext: the request panel", () => {
+  const FULL = `rm -rf build${String.fromCodePoint(0x202e)}`;
+  const truncated = (blob: object) =>
+    requested({
+      ...{ type: "permission", title: "Run", content_truncated: true, options: OPTIONS },
+      tool: { tool_kind: "execute", paths: [], command: { type: "blob", blob, preview: "rm -rf" } },
+    });
+  /** Whether "允许一次" is off. */
+  const allowOff = () => screen.getAllByRole("option")[0]?.getAttribute("aria-disabled") === "true";
+  const until = async (done: () => boolean) => {
+    for (let n = 0; n < 20 && !done(); n++) await frame();
+  };
+
+  test("allowing waits for the full text, escaped; collapsing takes it back", async () => {
+    const run = await setup();
+    await run.push(truncated(await serveBlob(run.mock, FULL)));
+    expect(allowOff()).toBe(true);
+    expect(screen.getByText("rm -rf")).toBeTruthy();
+    expect(run.methods()).not.toContain("blob/get");
+    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    await until(() => !allowOff());
+    // Shown in a box that scrolls; allowing needs no scrolling to its end.
+    expect(screen.getByText("rm -rf build\\u{202E}").className).toContain("overflow-y-auto");
+    expect(screen.queryByText(/已截断/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "收起" }));
+    expect(allowOff()).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    expect(allowOff()).toBe(false);
+    expect(run.methods().filter((method) => method === "blob/get")).toHaveLength(1);
+  });
+
+  test("a failed download or other bytes keep only rejecting, with a retry", async () => {
+    const run = await setup();
+    const blob = await serveBlob(run.mock, FULL, new TextEncoder().encode("rm -rf /"));
+    await run.push(truncated(blob));
+    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    await until(() => screen.queryByText("全文没有载入") !== null);
+    expect(allowOff()).toBe(true);
+    expect(screen.queryByText("rm -rf /")).toBeNull();
+    await serveBlob(run.mock, FULL);
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await until(() => !allowOff());
+    expect(screen.getByText("rm -rf build\\u{202E}")).toBeTruthy();
   });
 });
