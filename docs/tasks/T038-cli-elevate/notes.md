@@ -102,3 +102,32 @@ pub struct FailClosed;
 | IT-elevation-grant | 进程内：索引、路由、两个 CLI `Peer` 与一个 control `Peer`，真实的固定令牌（socketpair 取自己的令牌），测试用 `Requesters`；授予后能写、另一条连接不能；断开与 15 分钟撤销；`ManualClock` | 200 |
 
 **推算约 1,000 行**，超过约 900 的上限、碰到 1,000 的硬停止线，按裁定停下汇报。
+
+## 第 2 次裁定后（上限约 1,150，硬停止线 1,250）
+
+### 各模块的实际行数
+
+| 提交 | 内容 | 新增 / 删除 | 其中测试 |
+|---|---|---|---|
+| `feat(host): the elevation core ...` | 纯核心、`Requesters` 接口与 `FailClosed`、四个时长、UNIT-elevation-core | 490 / 0 | 152 |
+| `feat(host): connections admit calls with the scopes granted to them` | 网关的已授 scope 格子（`Granted`）；`Opened` 带固定令牌和格子；`Dispatch` 受理时合并；`clients.updated` 的 `elevated`；审计事件 `Elevation` | 92 / 18 | 1 |
+| `feat(host): the index serves CLI elevation` | `IndexActor` 接线（`index/elevations.rs`）、`Routes::index` 登记三个方法、`supervisor` 传 `FailClosed` 与审计发送端、启动时把上次遗留的未决申请记为过期；核心的 `Scopes` 动作改成 `Revoked`；测试用 `Peer` 能指定连接号并像读循环那样开、关连接；IT-elevation-grant | 601 / 58 | 206 |
+
+整个分支相对 main（不含 docs）：**新增 1,150、删除 43**，其中测试约 340（`elevation/tests.rs`、`index/tests.rs` 新增部分、`Peer` 的扩展）。没有超过约 1,150 的上限。IndexActor 接线比估计（200）多，主要是 rustfmt 的结构体字面量换行；为此压缩过一轮（`serves` 换成 `auth/` 前缀、格子写入合并成一个 `grant`、审计里把批准、拒绝、过期合成 `Resolved(id, decision)`）。
+
+### 做法与取舍
+
+- **授权绑定连接与固定令牌**：授权按 `ConnId` 记在核心里，格子随连接走。连接的令牌在接受时固定，之后每次读都核对（5.8.1，`conn.rs`），换了进程连接就断，所以按连接绑定也就绑定了令牌；令牌本身随 `Opened` 交给索引，只用来交给 `Requesters::examine`。
+- **scope 合并的位置**：`Dispatch` 每次受理时把格子里的 scope 并进 principal（`Granted::widen`），`policy::method`、`settings_update` 等规则和交给执行者的 `Call.principal` 都用合并后的。权限矩阵本来就按 `principal.scopes` 判（矩阵里有 `cli + write`、`cli + approve` 两列），不用改。
+- **15 分钟到期**：由索引的定时器撤销（`Revoked` 清空格子），不在 `Dispatch` 里比时间，免得网关也要读时钟。定时器响到格子清空之间只有一次邮箱往返。
+- **核心的动作调整**：原来批准时发 `Scopes { scopes }`、撤销时发空的 `Scopes`；接线时发现格子要的到期时间在 `Resolved::Granted { ends_in }` 里，于是批准只走 `Resolved`，撤销单独成 `Revoked(conn)`。这只是核心的输出，不是与 T133 的窄接口，`Requesters`、`Examined`、`FailClosed` 没有变。
+- **`auth/elevate` 的 scope**：只接受 `write`、`approve`（或两者），其他（如 `privileged`）一律 `invalid_params`；批准时核心再取"申请的"与"勾选的"交集。
+- **`auth/elevation_respond` 的 `decision`**：开放枚举里不认识的值按拒绝处理（保守）。命令的结果和 `elevation.resolved` 同一个事务提交（5.2.3 规则 3）；申请已不在未决时回 `expired`。
+- **回复的形状**：批准回 `granted` 与 `expires_at`；拒绝回 `granted: []`（不是错误）；2 分钟无决定回 `timeout`；被限频回 `rate_limited` 带 `retry_after_ms`（未决期间取未决申请剩余的时间，静默期取静默剩余的时间）；`FailClosed` 下一律 `forbidden`（`lineage`）。
+- **申请方中途断开**：检查回到 actor 时连接已关就丢弃，不生成未决；未决期间断开，核心把它记为过期（`elevation.resolved` 为 `expired`）。
+- **重启遗留**：上次运行留在索引视图里的未决申请，启动对账时写 `elevation.resolved`（`expired`），否则横幅会一直挂着。
+- **审计**：`AuditEvent::Elevation { step, scopes }`，`step` 为 `Requested`、`Resolved(id, granted|denied|expired)`、`Lineage(signals)`、`RateLimited`；申请与被拒记申请的范围，批准记实际授予的范围。授权到期或随断开结束不单独记（5.8.6 的表里没有，`conn.closed` 已有断开）。
+
+### IT-elevation-grant（进程内）
+
+真实的 `host.db`、索引流与账本，`ManualClock`；两条 CLI 连接和一条 control 连接都是网关测试用的 `Peer`（直接驱动 `Dispatch`），`Peer::open`、`Peer::close` 像读循环那样把连接登记到网关的客户端表并通知索引；固定令牌取本进程自己的（socketpair）；`Requesters` 用测试实现，一律判"不是后代"。覆盖：未授权时 `project/add` 被拒（`forbidden`/`scope`）；申请后另一条连接的申请被限频（`retry_after_ms` 为 120,000）；`elevation_get` 给出核实信息和截到 200 字的自述；批准时勾选了未申请的 `approve` 也只授予 `write`，CLI 收到 `granted` 和 `expires_at`；这条连接的 `project/add` 成功、另一条仍被拒；`clients.updated` 里这条连接的 `elevated`；15 分钟后撤销；再次授予后断开即撤销；审计记录的顺序与内容。拒绝、2 分钟过期和静默的判定在 UNIT-elevation-core 里。
