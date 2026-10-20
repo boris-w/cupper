@@ -113,8 +113,14 @@ fn unit_orphan_policy_orphaned_refuses_and_waits_for_running_turns() {
         ),
         (
             "clients do not keep it",
-            &[See(2, 0, 0, 0), Orphan],
+            &[See(2, 0, 0, 0), Orphan, See(2, 0, 0, 0)],
             &["0 close Orphaned", "0 exit Orphaned"],
+        ),
+        // The turn may have started after that look.
+        (
+            "not on a look from before",
+            &[See(0, 0, 0, 0), Orphan, See(0, 1, 0, 0)],
+            &["0 close Orphaned"],
         ),
         (
             "once",
@@ -131,8 +137,8 @@ fn unit_orphan_policy_orphaned_refuses_and_waits_for_running_turns() {
 fn unit_orphan_policy_pending_upgrade_exits_once_nothing_is_left() {
     let cases: &[(&str, &[Step], &[&str])] = &[
         (
-            "at once, clients or not",
-            &[See(3, 0, 0, 0), Changed],
+            "at the next look, clients or not",
+            &[See(3, 0, 0, 0), Changed, See(3, 0, 0, 0)],
             &["0 close PendingUpgrade", "0 exit Upgrade"],
         ),
         (
@@ -178,7 +184,7 @@ fn unit_orphan_policy_upgrade_comes_before_orphaned_before_idle() {
         // A pending request keeps the upgrade waiting, not the orphaned exit.
         (
             "orphaned exits first",
-            &[See(0, 0, 1, 0), Changed, Orphan],
+            &[See(0, 0, 1, 0), Changed, Orphan, See(0, 0, 1, 0)],
             &["0 close PendingUpgrade", "0 exit Orphaned"],
         ),
         (
