@@ -356,6 +356,22 @@ describe("UNIT-request-followup", () => {
     expect(screen.getByText("已在别处处理")).toBeTruthy();
   });
 
+  test("answered elsewhere with a draft in the composer: the draft stays, the text follows it", async () => {
+    const run = await setup({ respond: () => hostError("conflict", "already_resolved") });
+    act(() => run.ui.getState().setDraft("s_1", "原来的草稿"));
+    await run.push(permission());
+    await run.ready();
+    const row = screen.getByRole("textbox", { name: "否，并告诉 Claude 应该怎么做" });
+    fireEvent.mouseDown(row);
+    row.focus();
+    fireEvent.change(row, { target: { value: "先别跑测试" } });
+    act(() => vi.advanceTimersByTime(1000));
+    await run.press("Enter");
+    await settle();
+    expect(run.sent()).toEqual([]);
+    expect(run.ui.getState().drafts.s_1).toBe("原来的草稿\n\n先别跑测试");
+  });
+
   test("an Enter right after typing only says to click; the click submits", async () => {
     const run = await rejecting();
     fireEvent.keyDown(run.row, { key: "x" });

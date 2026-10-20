@@ -119,7 +119,12 @@ export function RequestPanel(props: {
       : skipOutcome(request);
   const click = (fn: () => void) => () => downWhileReady.current && fn();
   // RP-12: the rejection first; the follow-up only once it went, queued and
-  // tied to the request. Answered elsewhere, the text goes back to the composer.
+  // tied to the request. Otherwise the text goes back to the composer, after
+  // a draft already there with a blank line between.
+  const keepInComposer = (message: string) => {
+    const draft = ui.getState().drafts[sessionId];
+    ui.getState().setDraft(sessionId, draft ? `${draft}\n\n${message}` : message);
+  };
   const rejectWithMessage = async (message: string) => {
     const outcome = skipOutcome(request as never);
     const how = await respond(requested, outcome);
@@ -133,11 +138,11 @@ export function RequestPanel(props: {
         reply_to: requested.request_id,
       };
       await client.command("session/send", params).catch(() => {
-        ui.getState().setDraft(sessionId, message);
+        keepInComposer(message);
         show({ id: "follow-up", text: t("composer:send_failed", { code: "follow_up" }) });
       });
     } else if (how === "elsewhere") {
-      ui.getState().setDraft(sessionId, message);
+      keepInComposer(message);
     } else if (how !== "failed") {
       setHint(how === "again" ? "again" : "manual");
       if (how === "revoke") revoke();
