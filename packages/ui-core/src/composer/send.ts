@@ -1,8 +1,10 @@
 // Sending from the composer (design 5.7.4): M1a has no steer, so a message
 // sent while a turn runs is queued (`mode: queue` starts a turn when none
 // runs). On the new session page, the first message creates the session.
+// Text that would not fit the request in one frame goes up as a blob first
+// and is sent as a `text_blob` (design 5.3.4).
 
-import { ConnectionLost, RpcFailure } from "@cupper/host-client";
+import { ConnectionLost, MAX_FRAME_BYTES, RpcFailure } from "@cupper/host-client";
 import type { PromptBlock } from "@cupper/protocol";
 import { useCallback, useEffect, useState } from "react";
 
@@ -13,6 +15,11 @@ import { useEntry } from "../state/stream";
 
 /** The draft key of the new session page. */
 export const NEW_DRAFT = "new";
+
+/** What the envelope and `command_id` add to a request's params, with room to spare. */
+const ENVELOPE_BYTES = 1_024;
+
+const utf8 = (text: string) => new TextEncoder().encode(text);
 
 function codeOf(error: unknown): string {
   if (error instanceof RpcFailure) {
@@ -38,7 +45,8 @@ export function useSessionState(sessionId?: string) {
 }
 
 export function useSend(sessionId: string | undefined, projectId: string | undefined) {
-  const { client } = useHost();
+  const { client, handshake } = useHost();
+  const budget = (handshake?.limits.max_frame_bytes ?? MAX_FRAME_BYTES) - ENVELOPE_BYTES;
   const ui = useUi();
   const t = useT();
   const { show } = useToasts();
@@ -62,13 +70,28 @@ export function useSend(sessionId: string | undefined, projectId: string | undef
       const state = ui.getState();
       state.setDraft(key, "");
       state.setAttachments(key, []);
+      const params = (blocks: PromptBlock[]) =>
+        sessionId !== undefined
+          ? { session_id: sessionId, mode: "queue", content: blocks }
+          : {
+              agent: "claude",
+              project_id: projectId,
+              workspace: { kind: "local" },
+              message: blocks,
+            };
       try {
+        let fitted = content;
+        if (utf8(JSON.stringify(params(content))).length > budget && text.trim()) {
+          const blob = await client.putBlob(utf8(text), "text/plain");
+          fitted = [{ type: "text_blob", blob }, ...attachments];
+        }
         if (sessionId !== undefined) {
-          await client.command("session/send", { session_id: sessionId, mode: "queue", content });
+          await client.command("session/send", params(fitted));
         } else {
-          const workspace = { kind: "local" };
-          const params = { agent: "claude", project_id: projectId, workspace, message: content };
-          const created = await client.command<{ session_id: string }>("session/create", params);
+          const created = await client.command<{ session_id: string }>(
+            "session/create",
+            params(fitted),
+          );
           ui.getState().navigate({ page: "session", sessionId: created.session_id });
         }
         return true;
@@ -81,7 +104,7 @@ export function useSend(sessionId: string | undefined, projectId: string | undef
         return false;
       }
     },
-    [client, ui, key, sessionId, projectId, fail],
+    [client, ui, key, sessionId, projectId, fail, budget],
   );
 
   const command = useCallback(

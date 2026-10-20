@@ -323,6 +323,8 @@ impl AgentRuntime {
             },
             participant,
         };
+        // The index lists the agent from the start.
+        actor.notify();
         tokio::spawn(actor.run(inbox));
         let resources = sampled;
         Self { mail, resources }

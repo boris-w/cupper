@@ -107,6 +107,10 @@ pub async fn fetch(
         .await
 }
 
+/// The largest tarball taken; a larger one is a network failure, read no
+/// further than that (T115 review).
+pub const MAX_TARBALL: usize = 64 << 20;
+
 async fn download(
     client: &reqwest::Client,
     clock: &dyn Clock,
@@ -114,17 +118,25 @@ async fn download(
     package: &Package,
 ) -> Result<Vec<u8>, Reason> {
     let get = async {
-        let response = client.get(&package.url).send().await.ok()?;
-        let ok = response.status().is_success();
-        let bytes = response.bytes().await.ok()?;
-        ok.then_some(bytes)
+        let mut response = client.get(&package.url).send().await.ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await.ok()? {
+            bytes.extend_from_slice(&chunk);
+            if bytes.len() > MAX_TARBALL {
+                return None;
+            }
+        }
+        Some(bytes)
     };
     let bytes = tokio::select! {
         bytes = get => bytes.ok_or(Reason::Network)?,
         () = pin!(clock.timer_at(clock.now_mono() + limit)) => return Err(Reason::Network),
     };
     match sri_matches(&package.integrity, &bytes) {
-        true => Ok(bytes.into()),
+        true => Ok(bytes),
         false => Err(Reason::HashMismatch),
     }
 }

@@ -56,9 +56,10 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     let mut fake_agent = ctx.cargo();
     fake_agent.args(["build", "-p", "cupper-fake-agent", "--locked"]);
     ctx.check("fake-agent", &mut fake_agent)?;
-    // And IT-elevate's probe, which the fake agent starts (T133).
-    let mut probe = ctx.cargo();
-    probe.args([
+    // And the e2e build of the CLI with IT-elevate's probe: IT-cli-commands
+    // runs `cupper`, the fake agent starts the probe (T133, T046).
+    let mut cli = ctx.cargo();
+    cli.args([
         "build",
         "-p",
         "cupper-cli",
@@ -66,8 +67,7 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         "test-harness",
         "--locked",
     ]);
-    probe.args(["--bin", "cupper-elevate-probe"]);
-    ctx.check("elevate-probe", &mut probe)?;
+    ctx.check("cli-e2e", &mut cli)?;
     let mut test = ctx.cargo();
     test.args([
         "test",

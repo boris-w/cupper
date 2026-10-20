@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use cupper_protocol::domain::ClientKind;
 use cupper_protocol::error::RpcError;
-use cupper_protocol::frame::{self, FrameDecoder, FrameType, MAX_FRAME_BYTES};
+use cupper_protocol::frame::{self, BlobChunkHeader, FrameDecoder, FrameType, MAX_FRAME_BYTES};
 use cupper_protocol::ids::CommandId;
 use cupper_protocol::methods::handshake::{
     Auth, ClientIdentity, Feature, HostHello, HostHelloParams, Initialize, InitializeParams,
@@ -59,6 +59,11 @@ pub enum Incoming {
         method: String,
         params: Value,
     },
+    /// A `0x02` chunk of `blob/get`, ahead of its response.
+    Blob {
+        header: BlobChunkHeader,
+        data: Vec<u8>,
+    },
 }
 
 /// Why the reader stopped.
@@ -90,6 +95,8 @@ pub enum ClientError {
     Rpc(#[from] RpcError),
     #[error(transparent)]
     Encode(#[from] frame::EncodeError),
+    #[error(transparent)]
+    Frame(#[from] frame::FrameError),
     #[error("a result that does not match its method: {0}")]
     Result(#[from] serde_json::Error),
     #[error("connection closed: {0:?}")]
@@ -320,6 +327,20 @@ impl Client {
         Ok(())
     }
 
+    /// Sends one `0x02` chunk of a blob to put.
+    pub async fn send_blob_chunk(
+        &self,
+        header: &BlobChunkHeader,
+        data: &[u8],
+    ) -> Result<(), ClientError> {
+        let bytes = header.encode_chunk(data)?;
+        if let Some(reason) = self.close_reason() {
+            return Err(ClientError::Closed(Some(reason)));
+        }
+        self.writer.lock().await.write_all(&bytes).await?;
+        Ok(())
+    }
+
     /// Sends `stream/subscribe`; the response comes from [`Client::next`]
     /// as [`Incoming::Subscribed`].
     pub async fn subscribe(&self, params: StreamSubscribeParams) -> Result<(), ClientError> {
@@ -419,7 +440,13 @@ async fn read_frames(
                 Ok(None) => break,
                 Err(err) => return CloseReason::Frame(err.to_string()),
             };
-            // Blob chunks only follow `blob/get`, which the CLI does not call.
+            if frame.frame_type == FrameType::BlobChunk {
+                if let Ok((header, data)) = BlobChunkHeader::decode(&frame.payload) {
+                    let data = data.to_vec();
+                    let _ = tx.send(Incoming::Blob { header, data });
+                }
+                continue;
+            }
             if frame.frame_type != FrameType::Json {
                 continue;
             }

@@ -30,11 +30,18 @@ pub use files::{Verdict, verify};
 use machine::{Action, Input, InstallCore};
 pub use plan::{ADAPTER, ComponentPlan, Npm, Source, plans};
 
+use cupper_protocol::index::{RuntimeFailure, RuntimeState};
+
 use crate::clock::Clock;
 use crate::driver::probe;
 use crate::durations::{self, Durations};
 use crate::manifest::{self, FileHash};
 use crate::pure::{Core, TimerTable};
+use crate::quiescence::ActorKind;
+
+/// The installer's kind in the quiescence barrier: busy between its waits,
+/// which are downloads, bundling and file work as well as its timers.
+pub const INSTALLER: ActorKind = ActorKind::new("runtime_installer");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Component {
@@ -86,6 +93,29 @@ pub enum Reason {
 
 pub type Statuses = BTreeMap<Component, Status>;
 
+/// Claude's adapter runtime as `agents.updated` shows it: the first failure,
+/// else installing, else ready once every component is.
+pub fn adapter_state(statuses: &Statuses) -> (RuntimeState, Option<RuntimeFailure>) {
+    let failed = statuses.values().find_map(|status| match status {
+        Status::Failed(reason) => Some(*reason),
+        _ => None,
+    });
+    let failure = failed.map(|reason| match reason {
+        Reason::BundleChanged => RuntimeFailure::BundleChanged,
+        Reason::Disk => RuntimeFailure::Disk,
+        Reason::Network => RuntimeFailure::Network,
+        Reason::HashMismatch => RuntimeFailure::HashMismatch,
+    });
+    let any = |wanted: Status| statuses.values().any(|status| *status == wanted);
+    let state = match () {
+        () if failure.is_some() => RuntimeState::Failed,
+        () if any(Status::Installing) => RuntimeState::Installing,
+        () if statuses.values().all(|status| *status == Status::Ready) => RuntimeState::Ready,
+        () => RuntimeState::Missing,
+    };
+    (state, failure)
+}
+
 /// `<data dir>/runtime`.
 pub fn runtime_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("runtime")
@@ -107,6 +137,12 @@ impl BundleDir {
         let contents = exe.parent().and_then(Path::parent);
         let contents = contents.ok_or_else(|| io::Error::other("the host is not in a bundle"))?;
         Ok(Self(contents.to_owned()))
+    }
+
+    /// Whether the host runs from an app bundle; outside one, as in
+    /// development and tests, there is no runtime to install.
+    pub fn is_app(&self) -> bool {
+        self.0.ends_with("Contents")
     }
 }
 
