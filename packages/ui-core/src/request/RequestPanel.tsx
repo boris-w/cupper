@@ -15,7 +15,8 @@ import {
 
 import { escapeInvisible } from "@cupper/i18n";
 
-import { useT } from "../app/providers";
+import { useHost, useT } from "../app/providers";
+import { useToasts } from "../feedback/toaster";
 import { usePrivileged } from "../feedback/privileged";
 import { useUi } from "../state/provider";
 import { BUTTON, OptionsKind, QuestionKind, Terminal, text, type KindProps } from "./kinds";
@@ -43,6 +44,9 @@ export function RequestPanel(props: {
   agent: string;
   activity: MutableRefObject<ComposerActivity>;
   onAnswered: (requestId: string) => void;
+  /** Its place among the pending requests, for "1 / 3". */
+  position: number;
+  total: number;
 }) {
   const { sessionId, requested } = props;
   const request = requested.request;
@@ -94,6 +98,8 @@ export function RequestPanel(props: {
     // Decided once, when the panel appears.
   }, []);
 
+  const { client } = useHost();
+  const { show } = useToasts();
   const answer = (outcome: InteractionOutcome) =>
     void respond(requested, outcome).then((how) => {
       if (how === "sent") props.onAnswered(requested.request_id);
@@ -112,7 +118,40 @@ export function RequestPanel(props: {
       ? { type: "dismissed" as const }
       : skipOutcome(request);
   const click = (fn: () => void) => () => downWhileReady.current && fn();
-  const kind: KindProps = { requested, answer, confirm, click, keys, listRef: list };
+  // RP-12: the rejection first; the follow-up only once it went, queued and
+  // tied to the request. Answered elsewhere, the text goes back to the composer.
+  const rejectWithMessage = async (message: string) => {
+    const outcome = skipOutcome(request as never);
+    const how = await respond(requested, outcome);
+    if (how === "sent") {
+      props.onAnswered(requested.request_id);
+      const content = [{ type: "text", text: message }];
+      const params = {
+        session_id: sessionId,
+        mode: "queue",
+        content,
+        reply_to: requested.request_id,
+      };
+      await client.command("session/send", params).catch(() => {
+        ui.getState().setDraft(sessionId, message);
+        show({ id: "follow-up", text: t("composer:send_failed", { code: "follow_up" }) });
+      });
+    } else if (how === "elsewhere") {
+      ui.getState().setDraft(sessionId, message);
+    } else if (how !== "failed") {
+      setHint(how === "again" ? "again" : "manual");
+      if (how === "revoke") revoke();
+    }
+  };
+  const kind: KindProps = {
+    requested,
+    agent: props.agent,
+    answer,
+    confirm,
+    click,
+    keys,
+    listRef: list,
+  };
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (!ready) {
@@ -174,6 +213,11 @@ export function RequestPanel(props: {
     >
       <div className="flex items-start gap-2 px-4 pt-3 pb-2">
         <p className="min-w-0 flex-1 text-chat font-medium">{title}</p>
+        {props.total > 1 && (
+          <span data-request-count="" className="pt-0.5 text-sm text-fg-tertiary">
+            {t("request:count", { position: props.position, total: props.total })}
+          </span>
+        )}
         <button
           type="button"
           onClick={click(() => answer(close))}
@@ -185,7 +229,7 @@ export function RequestPanel(props: {
           </span>
         </button>
       </div>
-      <Body {...kind} />
+      <Body {...kind} rejectWithMessage={(message) => void rejectWithMessage(message)} />
       {hint && (
         <p role="status" className="px-4 pb-3 text-sm text-fg-tertiary">
           {t(
@@ -202,7 +246,7 @@ export function RequestPanel(props: {
 }
 
 /** The kind's content, options and buttons; a kind this build does not handle only closes. */
-function Body(props: KindProps) {
+function Body(props: KindProps & { rejectWithMessage: (text: string) => void }) {
   const t = useT();
   const { request } = props.requested;
   if (!handled(request)) {
@@ -219,6 +263,9 @@ function Body(props: KindProps) {
           options={request.options}
           truncated={request.content_truncated}
           skip={skipOutcome(request)}
+          rejectWithMessage={
+            skipOutcome(request).type === "selected" ? props.rejectWithMessage : undefined
+          }
         >
           {request.title && (
             <p className="px-4 pb-2 text-sm text-fg-secondary">{escapeInvisible(request.title)}</p>
@@ -244,6 +291,7 @@ function Body(props: KindProps) {
           options={request.options}
           truncated={false}
           skip={skipOutcome(request)}
+          rejectWithMessage={undefined}
         >
           <p className="mx-4 mb-2 max-h-60 overflow-y-auto text-sm whitespace-pre-wrap">
             {text(request.plan)}

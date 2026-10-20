@@ -15,6 +15,7 @@ import { DEFAULT_PREFS } from "../layout/layout";
 import { StateProvider, UiProvider } from "../state/provider";
 import { createUiStore } from "../state/ui";
 import { initialSelection, move, panelKey, skipOutcome } from "./logic";
+import { record } from "./RequestRow";
 
 beforeEach(() =>
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"], now: 100_000 }),
@@ -64,6 +65,7 @@ async function setup(opts: { ops?: object[]; request?: object; respond?: () => o
     return undefined;
   });
   mock.handle("interaction/respond", () => (opts.respond?.() ?? { result: {} }) as never);
+  mock.handle("session/send", () => ({ result: { disposition: "queued" } }));
   const client = new HostClient();
   const conn = mock.connect();
   conn.initialized = true;
@@ -115,7 +117,9 @@ async function setup(opts: { ops?: object[]; request?: object; respond?: () => o
     );
   };
   const ready = () => act(() => vi.advanceTimersByTime(500));
-  return { ui, controls, push, panel, responses, press, ready };
+  const methods = () => mock.requests.map((r) => r.method).filter((m) => !m.startsWith("stream/"));
+  const sent = () => mock.requests.filter((r) => r.method === "session/send").map((r) => r.params);
+  return { ui, controls, push, panel, responses, press, ready, methods, sent };
 }
 
 describe("UNIT-request-panel", () => {
@@ -305,5 +309,96 @@ describe("UNIT-request-panel", () => {
     expect(run.panel()).toBeNull();
     expect(screen.getByText("已在 cupper-cli 处理")).toBeTruthy();
     expect(screen.getByRole("textbox")).toBeTruthy();
+  });
+});
+
+describe("UNIT-request-followup", () => {
+  /** A permission on screen with the keyboard, and the text typed in its free row. */
+  async function rejecting(respond?: () => object) {
+    const run = await setup(respond ? { respond } : {});
+    screen.getByRole("textbox").focus();
+    act(() => vi.advanceTimersByTime(2000));
+    await run.push(permission());
+    await run.ready();
+    await run.press("5");
+    const row = screen.getByRole("textbox", { name: "否，并告诉 Claude 应该怎么做" });
+    expect(document.activeElement).toBe(row);
+    fireEvent.change(row, { target: { value: "先别跑测试" } });
+    act(() => vi.advanceTimersByTime(1000));
+    return { ...run, row };
+  }
+  const settle = () =>
+    act(async () => {
+      for (let tick = 0; tick < 20; tick++) await Promise.resolve();
+    });
+
+  test("the free row is number 5; the rejection goes first, then the follow-up with reply_to", async () => {
+    const run = await rejecting();
+    await run.press("Enter");
+    await settle();
+    expect(run.methods()).toEqual(["interaction/respond", "session/send"]);
+    expect(run.responses()).toEqual([{ type: "selected", option_id: "o4" }]);
+    expect(run.sent()).toEqual([
+      expect.objectContaining({
+        mode: "queue",
+        reply_to: "r_1",
+        content: [{ type: "text", text: "先别跑测试" }],
+      }),
+    ]);
+  });
+
+  test("answered elsewhere: no follow-up, the text goes back to the composer", async () => {
+    const run = await rejecting(() => hostError("conflict", "already_resolved"));
+    await run.press("Enter");
+    await settle();
+    expect(run.sent()).toEqual([]);
+    expect(run.ui.getState().drafts.s_1).toBe("先别跑测试");
+    expect(screen.getByText("已在别处处理")).toBeTruthy();
+  });
+
+  test("an Enter right after typing only says to click; the click submits", async () => {
+    const run = await rejecting();
+    fireEvent.keyDown(run.row, { key: "x" });
+    await run.press("Enter");
+    expect(screen.getByText("点击提交")).toBeTruthy();
+    expect(run.methods()).toEqual([]);
+    const submit = screen.getByRole("button", { name: /提交/ });
+    fireEvent.mouseDown(submit);
+    await act(async () => void fireEvent.click(submit));
+    await settle();
+    expect(run.methods()).toEqual(["interaction/respond", "session/send"]);
+  });
+
+  test("several requests show their count; the record line follows the outcome", async () => {
+    const run = await setup();
+    await run.push(permission(), {
+      ...permission(),
+      data: { ...permission().data, request_id: "r_2" },
+    });
+    expect(screen.getByText("1 / 2")).toBeTruthy();
+    const view = (outcome?: object, status = "resolved") => ({
+      requested: {
+        ...(permission().data as object),
+        request: { type: "permission", title: "Run tests", options: OPTIONS },
+      },
+      ...(outcome || status !== "resolved"
+        ? { resolved: { request_id: "r_1", status, outcome } }
+        : {}),
+    });
+    expect(record(view() as never)).toEqual(["request:record_pending"]);
+    expect(record(view({ type: "selected", option_id: "o1" }) as never)).toEqual([
+      "request:record_approved",
+      { title: "Run tests" },
+    ]);
+    expect(record(view({ type: "selected", option_id: "o4" }) as never)).toEqual([
+      "request:record_rejected",
+    ]);
+    expect(record(view({ type: "dismissed" }) as never)).toEqual(["request:record_unanswered"]);
+    expect(record(view(undefined, "expired") as never)).toEqual(["request:record_unanswered"]);
+    const asked = {
+      requested: { request: { type: "question", fields: [{}, {}] } },
+      resolved: { status: "resolved", outcome: { type: "answer", values: {} } },
+    };
+    expect(record(asked as never)).toEqual(["request:record_asked", { count: 2 }]);
   });
 });

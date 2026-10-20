@@ -2,6 +2,7 @@
 // header with its outcome, the user's message, and the placeholder of what
 // this build cannot show.
 
+import { escapeInvisible } from "@cupper/i18n";
 import type { PromptBlock } from "@cupper/protocol";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
@@ -77,6 +78,13 @@ function UserMessageRow({ row }: { row: RowOf<"user_message"> }) {
   const comments = row.content.filter((block) => block.type === "review_comment").length;
   return (
     <div className="group flex flex-col items-end">
+      {row.replyTo && (
+        <p className="pb-1 text-xs text-fg-tertiary">
+          {row.replyTitle
+            ? t("stream:reply_to", { title: escapeInvisible(row.replyTitle) })
+            : t("stream:reply_to_other")}
+        </p>
+      )}
       <div className="max-w-[70%] rounded-bubble bg-user-bubble px-4 py-2.5 text-chat">
         {/* Folds past 12 lines. */}
         <div ref={body} className={open ? "" : "line-clamp-12"}>
