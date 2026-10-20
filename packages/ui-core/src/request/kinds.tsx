@@ -272,7 +272,14 @@ export function QuestionKind(props: KindProps & { fields: QuestionField[] }) {
     }
     record(field.type === "boolean" ? choice.value === "true" : choice.value);
   };
-  const submitField = () => (field.type === "multi_choice" ? finish(values) : choose(selected));
+  // Text typed in the field answers it, by "提交" as by Enter (design 5.7.4);
+  // a multiple choice takes it beside the ticked ones.
+  const submitField = () => {
+    const multi = field.type === "multi_choice";
+    if (!custom.trim()) return multi ? finish(values) : choose(selected);
+    if (!multi) return record(field.type === "number" ? Number(custom) : custom);
+    record([...valueLabel(values[field.field_id]), custom]);
+  };
   props.keys.current = (key) => {
     if (key.type === "digit") choose(key.index);
     if (key.type === "up" || key.type === "down")
@@ -312,7 +319,7 @@ export function QuestionKind(props: KindProps & { fields: QuestionField[] }) {
             event.key === "Enter" &&
             !event.nativeEvent.isComposing &&
             custom.trim() &&
-            record(field.type === "number" ? Number(custom) : custom)
+            submitField()
           }
           className="mx-4 mt-1 rounded-lg border border-border bg-transparent px-2 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />

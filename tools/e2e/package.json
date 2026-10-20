@@ -6,7 +6,8 @@
   "description": "The e2e suite: Playwright drives the e2e build of the app, its real host, the fake agent and the CLI (design 5.9.4).",
   "type": "module",
   "scripts": {
-    "test:e2e": "playwright test --grep-invert @focus; rest=$?; playwright test --grep @focus --workers 1 && exit $rest"
+    "test:e2e": "cargo xtask lock -- caffeinate -d sh -c '[ \"$1\" = -- ] && shift; playwright test --grep-invert @focus --pass-with-no-tests \"$@\"; rest=$?; playwright test --grep @focus --workers 1 --pass-with-no-tests \"$@\" && exit $rest' e2e",
+    "test:e2e:one": "cargo xtask lock -- caffeinate -d playwright test --workers 1"
   },
   "devDependencies": {
     "@cupper/i18n": "workspace:*",

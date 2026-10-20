@@ -84,20 +84,22 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         });
     }
 
+    // The display stays awake while the suite runs: once it sleeps the
+    // screen locks, and the app's windows can be neither seen nor focused.
     let mut suite = |step: &str, args: &[&str]| {
-        let mut test = ctx.command("pnpm");
-        test.args(["--dir", SUITE, "exec", "playwright", "test"])
+        let mut test = ctx.command("caffeinate");
+        test.args(["-d", "pnpm", "--dir", SUITE, "exec", "playwright", "test"])
             .args(args);
         ctx.playwright(step, &mut test)
     };
-    if smoke {
-        let rest = suite("test-e2e", &["--grep", "@smoke", "--grep-invert", "@focus"]);
+    let (rest, focus): (&[&str], &str) = if smoke {
         let both = "(?=.*@smoke)(?=.*@focus)";
-        let focus = suite("test-e2e-focus", &["--grep", both, "--workers", "1"]);
-        return rest.and(focus);
-    }
-    let rest = suite("test-e2e", &["--grep-invert", "@focus"]);
-    let focus = suite("test-e2e-focus", &["--grep", "@focus", "--workers", "1"]);
+        (&["--grep", "@smoke", "--grep-invert", "@focus"], both)
+    } else {
+        (&["--grep-invert", "@focus"], "@focus")
+    };
+    let rest = suite("test-e2e", rest);
+    let focus = suite("test-e2e-focus", &["--grep", focus, "--workers", "1"]);
     rest.and(focus)
 }
 
