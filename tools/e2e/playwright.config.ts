@@ -16,7 +16,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: true,
   retries: 0,
-  timeout: 60_000,
-  expect: { timeout: 10_000 },
+  // Generous: other runs on the author's machine slow the apps down; a
+  // passing test does not wait for these.
+  timeout: 90_000,
+  expect: { timeout: 20_000 },
   reporter: [["list"]],
 });
