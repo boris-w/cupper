@@ -247,6 +247,11 @@ milestone = "M1a"
 UNIT-audit-format = "pr"
 IT-audit-retention = "pr"
 
+# 审计产生者补全（计划 v1.3.32）
+[T163]
+milestone = "M1a"
+UNIT-audit-producers = "pr"
+
 # CLI 提权（宿主侧）
 [T038]
 milestone = "M1a"
