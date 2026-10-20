@@ -2,3 +2,4 @@
 
 pub mod full;
 pub mod redact;
+pub mod rotate;
