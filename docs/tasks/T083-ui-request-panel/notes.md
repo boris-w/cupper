@@ -59,3 +59,24 @@
 截断的内容（`content_truncated`）：只显示"已截断：内容没有完整显示，只能拒绝"，允许类选项不可选。展开全文要下载 blob，客户端还没有下载接口，留给后续（T164 一带）。
 
 剩下 UI-request-panel：三类请求 × 待命、可以操作、手动激活，两种主题，估约 60–90 行，合计推算约 1,230–1,260，贴近约 1,300 的上限，按裁定先停下。
+
+## 截图与收尾（裁定：按现在的范围写完）
+
+- UI-request-panel（`tools/ui-screenshots/src/request.spec.ts`）：权限请求、键盘可操作（输入框有焦点时作为实时事件到达），亮色、暗色；同一请求等待 Tab 或点击（加载时就在）；计划确认；提问。每个用例都先断言 `data-ready` 和 `data-activation`。顺手修了两处显示：主按钮上的 Enter 键帽改用按钮自身颜色（原来在深色底上看不见），终端框加了边框（原来和输入框同色）。
+- 规模：合计 **1,270 行**（实现约 900，测试约 370），在硬停止线 1,400 以内。
+- 审阅截图：`screenshots/`，截图页换回系统字体后截取，1280 × 820，与 UI-request-panel 同样的五个场景。按 F2，没有查看本机 Codex App 包。
+
+## "展开看全文"的接入点（交 T165 评估）
+
+- 截断的判断：`request/RequestPanel.tsx` 的 `Body` 把 `request.content_truncated` 作为 `truncated` 传给 `OptionsKind`；允许类选项是否可选由 `request/logic.ts` 的 `isEnabled(option, truncated)` 决定（初始选中、方向键、数字键、点击都经过它）。
+- 展开：`request/kinds.tsx` 的 `Terminal` 已有"展开 / 收起"。`blob` 类的 `Content`（命令 `tool.command`、说明 `detail`）现在由 `text()` 返回 `undefined`，不显示。接上 host-client 的 `getBlob` 后：`Terminal` 在展开时按 `BlobRef` 下载全文并显示（转义同样走 `escapeInvisible`），全部内容都看过之后，`Body` 改传 `truncated={false}`（例如在面板里记一个"已看过全文"的状态）。
+
+## 需要作者用实体键盘确认的几项（MAN-keyboard，涉及请求面板的部分）
+
+Playwright 和 `sendInputEvent` 都不经过系统的按键事件，下面几项要在 e2e 构建里用实体键盘确认：
+
+1. **Enter 批准**：输入框有焦点、为空、2 秒没打字时来一个权限请求，等约半秒，按 Enter，选中的"允许"被批准。
+2. **Esc 拒绝**：同样的请求按 Esc，回答的是不持久的拒绝选项；有"本会话内都允许"这类特权选项时，Esc 不会弹原生确认框。
+3. **数字键选择并提交**：按选项的编号直接提交；按特权选项的编号弹原生确认框；按"效果未知"选项的编号没有反应。
+4. **输入法**：在输入框里用中文输入法选词时按 Enter，不发送消息；在提问的"在此输入"里选词时按 Enter，不提交回答。
+5. 另外两项（属于面板自己的规则，建议一并看）：输入框里正在打字时来请求，面板不抢焦点、按键不落到面板上；切到别的应用再切回来，1 秒内按 Enter 被拒时面板提示"请再按一次"，过了 1 秒再按就能提交。
