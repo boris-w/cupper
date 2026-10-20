@@ -1,5 +1,6 @@
 export { App, mount, type AppProps } from "./app/App";
-export { SessionPage, type Slots } from "./app/pages";
+export { SessionPage } from "./app/pages";
+export { type Slots } from "./app/slots";
 export { NewSessionPage } from "./newsession/NewSessionPage";
 export * from "./app/providers";
 export { useRouter, type Route, type RouterValue } from "./app/router";

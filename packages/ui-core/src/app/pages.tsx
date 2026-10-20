@@ -1,21 +1,11 @@
-import { createContext, use, type ReactNode } from "react";
+import { use } from "react";
 
 import { ComposerArea } from "../composer/QueueList";
 import { SessionBanners } from "../session/SessionBanners";
 import { NewSessionPage } from "../newsession/NewSessionPage";
 import { StreamList } from "../stream/StreamList";
 import { useRouter } from "./router";
-
-/** The places later tasks fill: the sidebar's parts (T081) and the composers (T086, T083). */
-export interface Slots {
-  sidebarHeader?: ReactNode;
-  sidebarList?: ReactNode;
-  sidebarFooter?: ReactNode;
-  newSessionComposer?: ReactNode;
-  sessionComposer?: ReactNode;
-}
-
-export const SlotsContext = createContext<Slots>({});
+import { SlotsContext } from "./slots";
 
 /** A session: banners and the message stream above, the composer at the bottom. */
 export function SessionPage({ sessionId }: { sessionId: string }) {

@@ -6,7 +6,7 @@ import { escapeInvisible } from "@cupper/i18n";
 import type { AgentStatus, ProjectUpserted } from "@cupper/protocol";
 import { use, useMemo, useState } from "react";
 
-import { SlotsContext } from "../app/pages";
+import { SlotsContext } from "../app/slots";
 import { useT } from "../app/providers";
 import { useRouter } from "../app/router";
 import { ChevronDownIcon } from "../components/icons";
