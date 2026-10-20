@@ -44,7 +44,7 @@ export interface HostValue {
   handshake: Handshake | undefined;
 }
 
-const HostContext = createContext<HostValue | null>(null);
+export const HostContext = createContext<HostValue | null>(null);
 
 const VALIDATION = import.meta.env.PROD ? "non_delta" : "all";
 

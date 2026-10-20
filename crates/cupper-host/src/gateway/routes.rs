@@ -39,6 +39,7 @@ use crate::clock::Clock;
 use crate::durations::Durations;
 use crate::ledger::{Ledger, LedgerError, SWEEPER};
 use crate::quiescence::Quiescence;
+use crate::store::blobs::BlobStore;
 use crate::store::streams::Streams;
 use crate::store::{Readers, Writer};
 
@@ -74,9 +75,8 @@ pub(super) enum Target {
     Subscribe(Source),
     Unsubscribe,
     History(Source),
-    /// `blob/get`, `blob/put`: the gateway serves them itself from T029 on,
-    /// and `unsupported` until then.
-    Blobs,
+    /// `blob/get`, `blob/put`, from the blob store.
+    Blobs(BlobStore),
 }
 
 /// What the gateway serves subscriptions and history pages from.
@@ -85,14 +85,6 @@ pub(super) struct Source {
     pub streams: Streams,
     /// Replays and history pages read through these.
     pub readers: Readers,
-}
-
-impl Target {
-    /// Whether the method is served; until it is, it is `unsupported` like
-    /// a method nobody registered.
-    pub(super) fn serves(&self) -> bool {
-        !matches!(self, Self::Blobs)
-    }
 }
 
 impl Default for Routes {
@@ -106,8 +98,6 @@ impl Default for Routes {
         };
         routes.watched_by(&Quiescence::new());
         routes.insert::<Ping>(Target::Ping);
-        routes.insert::<BlobGet>(Target::Blobs);
-        routes.insert::<BlobPut>(Target::Blobs);
         routes
     }
 }
@@ -205,6 +195,12 @@ impl Routes {
         self.insert::<StreamSubscribe>(Target::Subscribe(source.clone()));
         self.insert::<StreamUnsubscribe>(Target::Unsubscribe);
         self.insert::<HistoryPage>(Target::History(source));
+    }
+
+    /// The gateway serves `blob/get` and `blob/put` from `store` (T029).
+    pub fn blobs(&mut self, store: BlobStore) {
+        self.insert::<BlobGet>(Target::Blobs(store.clone()));
+        self.insert::<BlobPut>(Target::Blobs(store));
     }
 
     pub(super) fn request_entry(&self, method: &str) -> Option<(&'static str, &Entry)> {
