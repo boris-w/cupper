@@ -45,7 +45,8 @@ pub struct Batch {
     pub durability: Durability,
     /// Runs in the batch's transaction after the events: the rows they go
     /// with, such as the command's result (design 5.2.3, rule 3). If it
-    /// fails, nothing of the batch is committed.
+    /// fails, nothing of the batch is committed. Without events it runs in
+    /// a transaction of its own.
     pub with: Option<Write>,
 }
 
@@ -82,7 +83,8 @@ impl StreamWriter {
     }
 
     /// Appends `batch` in the three steps. On an error nothing was committed
-    /// or published, and the seqs are given out again.
+    /// or published, and the seqs are given out again. A batch without
+    /// events commits only its `with`, if it has one.
     pub async fn append(&mut self, batch: Batch) -> Result<Appended, StreamError> {
         let Batch {
             bodies,
@@ -91,6 +93,13 @@ impl StreamWriter {
             with,
         } = batch;
         if bodies.is_empty() {
+            if let Some(with) = with {
+                self.handle
+                    .registry()
+                    .writer
+                    .submit(durability, with)
+                    .await?;
+            }
             return Ok(Appended {
                 head: self.head(),
                 rejected: Vec::new(),

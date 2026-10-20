@@ -236,8 +236,12 @@ fn check_key(
 }
 
 /// The principal of `kind` in `role`. Only the desktop UI has roles, and it
-/// must name one (design 5.8.1, 5.8.2).
-fn principal(kind: PrincipalKind, role: Option<ClientRole>) -> Result<Principal, RpcError> {
+/// must name one (design 5.8.1, 5.8.2). A session loaded from the store
+/// finds its setter by it, too (T089).
+pub(crate) fn principal(
+    kind: PrincipalKind,
+    role: Option<ClientRole>,
+) -> Result<Principal, RpcError> {
     use Scope::{Approve, Privileged, Read, UiLocal, Write};
     let (id, scopes) = match (&kind, &role) {
         (PrincipalKind::DesktopUi, Some(ClientRole::Control)) => (

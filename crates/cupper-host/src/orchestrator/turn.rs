@@ -43,8 +43,8 @@ use cupper_protocol::item::{
     Item, ItemCompleted, ItemPatch, ItemStarted, ItemStatus, NoticeCode, UserMessage,
 };
 use cupper_protocol::session::{
-    PauseReason, QueueEntry, SnapshotPhase, SnapshotReason, SnapshotRecorded, SnapshotStatus,
-    StopReason, TurnOrigin, TurnStarted, TurnStatus, TurnUsage,
+    PauseReason, QueueEntry, QueueUpdated, SnapshotPhase, SnapshotReason, SnapshotRecorded,
+    SnapshotStatus, StopReason, TurnOrigin, TurnStarted, TurnStatus, TurnUsage,
 };
 use thiserror::Error;
 
@@ -386,6 +386,24 @@ impl TurnMachine {
             Link::Attached { session, .. } => Some(session),
             _ => None,
         }
+    }
+
+    /// A session loaded from the store (T089): the agent session to resume,
+    /// the last turn's number, the queue and the reasons the gate is shut
+    /// for. No turn runs, so a queue with messages pauses for
+    /// `turn_interrupted`: after a restart nothing starts before the user
+    /// says so.
+    pub fn restore(
+        &mut self,
+        agent_session: Option<AgentSessionId>,
+        last_turn_no: u32,
+        queue: QueueCore,
+        gate: Vec<PauseReason>,
+    ) -> Option<QueueUpdated> {
+        self.link = Link::Detached(agent_session);
+        self.last_turn_no = last_turn_no;
+        (self.queue, self.gate) = (queue, gate);
+        self.queue.pause(PauseReason::TurnInterrupted)
     }
 
     /// Messages wait for [`Action::Check`] from now on.
