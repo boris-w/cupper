@@ -3,6 +3,7 @@
 @import "tailwindcss/preflight.css" layer(base);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "./tokens.css";
+@import "./stream.css";
 
 /* The app's renderer is the Vite root, so the classes in ui-core are listed here. */
 @source "..";
