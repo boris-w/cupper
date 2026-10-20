@@ -220,6 +220,12 @@ impl Rows {
         rows
     }
 
+    /// "不加载项目配置继续": the session leaves its project's configuration
+    /// out for good, across restarts too.
+    pub(super) fn ignored(&mut self, session: &SessionId, at: u64) {
+        self.session(session, at, "project_config_ignored = 1", Vec::new());
+    }
+
     /// The agent's session to resume, from an attach.
     pub(super) fn agent_session(&mut self, session: &SessionId, at: u64, id: String) {
         self.session(session, at, "agent_session_id = ?3", vec![Value::Text(id)]);

@@ -97,6 +97,29 @@ impl TierGuard {
         }
     }
 
+    /// A session loaded from the store (T089): its last permission mode,
+    /// with the tier, and why it awaited confirmation, if it did. The mode
+    /// is checked at once, against the setter as found again.
+    pub fn restore(
+        &mut self,
+        mode: Option<(String, Tier)>,
+        unconfirmed: Option<ConfirmationReason>,
+    ) -> Vec<Action> {
+        let mut out = Vec::new();
+        self.unconfirmed = unconfirmed;
+        if let Some((mode, tier)) = mode {
+            let violation = self.violation(&tier);
+            if violation.is_none() && self.unconfirmed.is_none() {
+                self.accepted = Some(mode.clone());
+            }
+            self.actual = Some((mode, tier));
+            if violation.is_some() {
+                self.unconfirm(violation, &mut out);
+            }
+        }
+        out
+    }
+
     /// Who set the session's tier.
     pub fn setter(&self) -> &PrincipalId {
         &self.setter.id
