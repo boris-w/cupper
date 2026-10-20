@@ -56,13 +56,15 @@ fn group(path: &str) -> String {
     }
 }
 
-/// `(stop line, hard stop)` from the brief's sections on its size and
-/// rulings, later ones overriding: "上限约 1,000", "超过约 850 行",
-/// "停止线：850"; "硬停止线 950", "硬线 1,100".
+/// `(stop line, hard stop)` from the template's line `- 停止线：<n>；硬停止线：<n>`,
+/// the last one; without it, from the prose of the brief's sections on its
+/// size and rulings, later ones overriding: "上限约 1,000", "超过约 850 行";
+/// "硬停止线 950", "硬线 1,100".
 pub fn stop_lines(brief: &str) -> (Option<u64>, Option<u64>) {
+    let fixed = brief.lines().rfind(|line| line.starts_with("- 停止线："));
     let (mut stop, mut hard) = (None, None);
-    let mut counted = false;
-    for line in brief.lines() {
+    let mut counted = fixed.is_some();
+    for line in fixed.map_or_else(|| brief.lines().collect(), |line| vec![line]) {
         if let Some(title) = line.strip_prefix("## ") {
             counted = title.contains("规模") || title.contains("裁定");
             continue;
@@ -242,7 +244,8 @@ mod tests {
         assert_eq!(stop_lines(brief), (Some(850), Some(950)));
         let ruled = format!("{brief}\n## 补充裁定\n- 上限约 1,000 行，硬停止线 1,100。\n");
         assert_eq!(stop_lines(&ruled), (Some(1000), Some(1100)));
-        let fixed = "## 规模\n- 停止线：600；硬停止线：680\n";
+        // The template's line wins over any prose, later rulings included.
+        let fixed = "## 规模\n- 停止线：600；硬停止线：680\n\n## 补充裁定\n上限约 700\n";
         assert_eq!(stop_lines(fixed), (Some(600), Some(680)));
         assert_eq!(stop_lines("## 规模\nS，估约 150 行。\n"), (None, None));
         assert_eq!(stop_lines("## 注意\n不超过 100 行\n"), (None, None));
