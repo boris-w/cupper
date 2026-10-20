@@ -14,6 +14,7 @@ use cupper_protocol::ids::{ConnId, SessionId};
 use cupper_protocol::methods::admin::SettingsUpdate;
 use cupper_protocol::methods::catalog::catalog;
 use cupper_protocol::methods::git::GitRevert;
+use cupper_protocol::methods::project::{AgentsCapabilities, AgentsRefresh};
 use cupper_protocol::methods::session::SessionSetConfig;
 use cupper_protocol::rpc::{Milestone, Scope};
 use cupper_protocol::schema::generator;
@@ -154,6 +155,10 @@ impl Fixture {
         routes.streams(streams, readers);
         let (supervisor, _) = tokio::sync::mpsc::unbounded_channel();
         Arc::new(Control::new(supervisor, Arc::new([]))).route(&mut routes);
+        // The host's agents port (T009), stood in for by the sessions' stub.
+        let agents = || Arc::clone(&self.sessions) as Arc<dyn Port>;
+        routes.add::<AgentsCapabilities>(agents());
+        routes.add::<AgentsRefresh>(agents());
         routes
     }
 }
@@ -324,8 +329,6 @@ const ALLOWED: &[(&str, Why)] = {
     use Milestone::{M1b, M2, M3};
     use Why::{Later, Until};
     &[
-        ("agents/capabilities", Until("T055")),
-        ("agents/refresh", Until("T055")),
         ("agents/restart", Later(M1b)),
         ("auth/elevate", Until("T038")),
         ("auth/elevation_get", Until("T038")),
@@ -348,7 +351,6 @@ const ALLOWED: &[(&str, Why)] = {
         ("host/prepare_upgrade", Until("T183")),
         ("project/remove", Later(M1b)),
         ("session/archive", Later(M1b)),
-        ("session/confirm_config", Until("T044")),
         ("session/list_archived", Later(M1b)),
         ("session/queue_edit", Later(M1b)),
         ("session/rename", Later(M1b)),

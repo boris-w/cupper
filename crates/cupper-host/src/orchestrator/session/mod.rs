@@ -6,6 +6,8 @@
 mod actor;
 pub mod core;
 #[cfg(test)]
+mod gating_tests;
+#[cfg(test)]
 mod interaction_tests;
 mod manager;
 mod rows;
@@ -14,7 +16,7 @@ pub(super) mod tests;
 
 use std::fmt;
 
-use cupper_protocol::capabilities::{ConfigOptionId, SessionCapabilities};
+use cupper_protocol::capabilities::{ConfigOption, ConfigOptionId, SessionCapabilities};
 use cupper_protocol::domain::Tier;
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
 use cupper_protocol::ids::SessionId;
@@ -24,27 +26,34 @@ use serde_json::Value;
 
 pub use manager::{SESSION, SessionDeps, SessionManager};
 
-/// What the index (T034's `IndexActor`) hears from the sessions.
+/// What the index (`crate::index::IndexHandle`) hears from the sessions.
 pub trait IndexNotes: Send + Sync + fmt::Debug {
     /// The session's pending requests changed (design 5.2.7, step 4): how
     /// many there are, and the class of the oldest.
     fn pending(&self, session: &SessionId, count: u32, oldest: Option<PendingKind>);
 }
 
-/// The index until T034: it hears nothing.
-#[derive(Debug)]
-pub struct NoIndex;
-
-impl IndexNotes for NoIndex {
-    fn pending(&self, _: &SessionId, _: u32, _: Option<PendingKind>) {}
-}
-
 /// The tier of permission mode `mode` by the agent's mapping.
 fn tier_of(capabilities: Option<&SessionCapabilities>, mode: &str) -> Option<Tier> {
-    let mut options = capabilities?.config.iter();
-    let option = options.find(|o| o.id == ConfigOptionId::PermissionMode)?;
+    risk(&capabilities?.config, mode)
+}
+
+fn risk(options: &[ConfigOption], mode: &str) -> Option<Tier> {
+    let option = options
+        .iter()
+        .find(|o| o.id == ConfigOptionId::PermissionMode)?;
     let value = option.values.iter().find(|v| v.value == mode)?;
     Some(value.risk.clone())
+}
+
+/// The permission mode `options` have now and its tier: one the mapping
+/// does not know is full access (design 5.6.5).
+fn mode_tier(options: &[ConfigOption]) -> Option<(String, Tier)> {
+    let option = options
+        .iter()
+        .find(|o| o.id == ConfigOptionId::PermissionMode)?;
+    let tier = risk(options, &option.current).unwrap_or(Tier::FullAccess);
+    Some((option.current.clone(), tier))
 }
 
 /// `params` as `T`; the gateway checked them against the method already.

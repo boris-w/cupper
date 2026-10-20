@@ -324,6 +324,13 @@ impl World {
                 self.current = Some((started.turn_id.clone(), started.origin.clone()));
                 self.started_at.insert(started.turn_id.clone(), at);
             }
+            // A notice without a turn (`agent_restarted`, ...).
+            Action::Event(EventBody::ItemStarted(item)) if item.turn_id.is_none() => {
+                assert!(
+                    matches!(item.item, Item::Notice(_)),
+                    "only notices go without a turn"
+                );
+            }
             Action::Event(EventBody::ItemStarted(item)) => {
                 let turn = item.turn_id.clone().expect("the user message's turn");
                 self.items.insert(item.item_id.clone(), turn);

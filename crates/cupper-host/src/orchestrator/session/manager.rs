@@ -132,6 +132,7 @@ impl SessionManager {
             project_config,
             config,
             cached,
+            confirmed,
         } = accepted;
         let deps = &self.shared.deps;
         let id = SessionId::from_uuid(deps.ids.new_id().as_u128());
@@ -160,7 +161,7 @@ impl SessionManager {
             },
             confirmation_required: None,
         };
-        let row = Rows::created(
+        let mut row = Rows::created(
             [
                 id.to_string(),
                 params.project_id.to_string(),
@@ -173,6 +174,9 @@ impl SessionManager {
             ],
             deps.clock.now_wall_ms(),
         );
+        if confirmed {
+            row.set_by(&id, deps.clock.now_wall_ms(), &principal.id, true);
+        }
         let result = json!(SessionCreateResult {
             session_id: id.clone()
         });
@@ -198,7 +202,14 @@ impl SessionManager {
             })),
         };
         writer.append(batch).await.map_err(internal)?;
-        let core = SessionCore::new(id.clone(), Arc::clone(&deps.ids), &deps.durations, false);
+        let setter = (principal.clone(), confirmed);
+        let core = SessionCore::new(
+            id.clone(),
+            Arc::clone(&deps.ids),
+            &deps.durations,
+            false,
+            setter,
+        );
         let (mail, inbox) = mpsc::unbounded_channel();
         let (stop, stops) = mpsc::unbounded_channel();
         let running = Arc::new(AtomicBool::new(false));
@@ -277,10 +288,13 @@ impl SessionManager {
         };
         let cached = cached(&deps.readers, &params.agent).await?;
         let initial = params.config.clone().unwrap_or_default();
+        let mut confirmed = false;
         if let Some(mode) = &initial.permission_mode {
             // A mode the mapping does not know is full access (design 5.6.5).
             let tier = tier_of(cached.as_ref(), mode).unwrap_or(Tier::FullAccess);
             policy::tier_change(principal, None, &tier)?;
+            // Full access takes the native confirmation (design 5.8.2).
+            confirmed = policy::tier_rank(&tier) == policy::tier_rank(&Tier::FullAccess);
         }
         let config = [
             (ConfigOptionId::PermissionMode, initial.permission_mode),
@@ -297,6 +311,7 @@ impl SessionManager {
             project_config,
             config,
             cached,
+            confirmed,
         })
     }
 
@@ -317,6 +332,8 @@ struct Accepted {
     project_config: ProjectConfigPolicy,
     config: BTreeMap<String, String>,
     cached: Option<SessionCapabilities>,
+    /// Created in full access, which the native confirmation allowed.
+    confirmed: bool,
 }
 
 /// The agent's capabilities in the host's cache (design 5.6.7), if any.
@@ -430,6 +447,22 @@ impl SessionPort for SessionManager {
                         let mut options = options.iter();
                         options.find(|o| o.option_id == selected.option_id).cloned()
                     });
+                    Ok(facts)
+                })
+            }
+            // The mode asked for, by the session's own mapping (M1b).
+            Confirmable::SetConfig(params)
+                if params.option == ConfigOptionId::PermissionMode
+                    && self.sessions().contains_key(&params.session_id) =>
+            {
+                Box::pin(async move {
+                    let stream = StreamId::Session(params.session_id.clone());
+                    let handle = deps.streams.open(&stream).await.map_err(internal)?;
+                    let caps = handle.read(|view, _| match view {
+                        StreamView::Session(view) => view.capabilities.clone(),
+                        StreamView::Index(_) => None,
+                    });
+                    facts.mode_tier = tier_of(caps.as_ref(), &params.value);
                     Ok(facts)
                 })
             }

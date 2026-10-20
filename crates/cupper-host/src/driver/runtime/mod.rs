@@ -23,14 +23,26 @@
 //!   closed, 3 s each; then SIGTERM to the adapter's group and those of all
 //!   its descendants, found before any signal, and SIGKILL 2 s later.
 //! - **Every 30 s** it samples the processes ([`lifecycle::sample`]): their
-//!   memory for [`AgentRuntime::resources`], and the descendants' groups,
-//!   kept in the `adapters` row for the cleanup after a crash of the host.
-//! - Steering (T140) and probing (T009) are not served yet; their commands
-//!   are dropped.
+//!   memory for [`AgentRuntime::resources`] and the agent's status, and the
+//!   descendants' groups, kept in the `adapters` row for the cleanup after a
+//!   crash of the host.
+//! - **Command lists** (design 5.6.2): Claude pushes its whole list when a
+//!   session opens and at every turn's start. An attach answers with the
+//!   agent's latest list without waiting for the session's own; after that a
+//!   session hears `CommandsChanged` only when its list differs from the one
+//!   it has. Attaches and changed lists refresh the capability cache.
+//! - **Probing** (design 5.6.7): a session in an empty directory of its own,
+//!   its options and its command list (waited for a while), then closed.
+//! - The login state the agent reports, and a prompt failing on it, go into
+//!   the agent's status for the index (`status`).
+//! - Steering (T140) is not served yet; its commands are dropped.
 
+pub mod agents;
+pub mod cache;
 pub mod content;
 pub mod launch;
 pub mod lifecycle;
+pub mod status;
 #[cfg(test)]
 mod tests;
 
@@ -39,6 +51,7 @@ use std::fs;
 use std::future;
 use std::mem;
 use std::path::PathBuf;
+use std::pin::pin;
 use std::process::ExitStatus;
 use std::sync::Arc;
 use std::time::Duration;
@@ -51,12 +64,19 @@ use agent_client_protocol::schema::v1::{
 };
 use agent_client_protocol::{Error, RequestCancellation, Responder};
 use futures::FutureExt;
-use futures::future::BoxFuture;
+use futures::future::{BoxFuture, Either, select};
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot, watch};
 
+use cupper_protocol::capabilities::{SessionCapabilities, SlashCommand};
+use cupper_protocol::domain::AgentKind;
+use sha2::{Digest, Sha256};
+
+use cupper_protocol::index::{AgentState, AgentStatus, AuthState, AuthStatus};
+
 use self::launch::{Context, Instance, Launch};
 use self::lifecycle::{Resources, Restarts};
+use self::status::{AgentNotes, Running};
 use super::acp::{AcpConnection, FromAgent};
 use super::api::{
     AgentError, AgentErrorClass, AgentErrorForm, AgentPort, AgentSessionId, AskAnswer, AskId,
@@ -64,7 +84,9 @@ use super::api::{
 };
 use super::claude::{self, ClaudeSession, capabilities};
 use crate::clock::IdGen;
-use crate::durations::{ADAPTER_CLOSE_WAIT, ADAPTER_TERM_WAIT, Durations, RESOURCE_SAMPLE};
+use crate::durations::{
+    ADAPTER_CLOSE_WAIT, ADAPTER_TERM_WAIT, Durations, PROBE_COMMANDS, RESOURCE_SAMPLE,
+};
 use crate::pure::{Alarm, TimerRequest, TimerTable};
 use crate::quiescence::{ActorKind, Participant, Quiescence};
 use crate::store::BlobStore;
@@ -84,7 +106,10 @@ pub struct RuntimeDeps {
     /// Images and long text of prompts.
     pub blobs: BlobStore,
     pub quiescence: Quiescence,
+    /// `<data dir>/probe/<agent>/`, made empty for every probe (design 5.2.6).
+    pub probe_dir: PathBuf,
     pub durations: Durations,
+    pub notes: Arc<dyn AgentNotes>,
     /// `test_config.rss_samples`: the memory samples report.
     pub rss: Option<u64>,
 }
@@ -103,6 +128,10 @@ enum Mail {
     Withdrawn(AskId),
     Stop(oneshot::Sender<()>),
     ClearCrashed,
+    Probe(oneshot::Sender<Result<SessionCapabilities, AgentError>>),
+    Status(oneshot::Sender<AgentStatus>),
+    /// `agents/refresh` found the CLI again (design 5.6.6).
+    Relaunch(Box<Launch>),
 }
 
 /// An attach on its way.
@@ -144,6 +173,8 @@ struct Route {
     events: mpsc::UnboundedSender<DriverEvent>,
     claude: ClaudeSession,
     cwd: PathBuf,
+    /// The digest of the command list the session has, once it attached.
+    commands: Option<[u8; 32]>,
 }
 
 /// An attach applying its configuration, option by option.
@@ -207,7 +238,17 @@ struct Actor {
     /// The descendants' groups sampling found, still alive.
     recorded: Vec<ProcessGroup>,
     resources: watch::Sender<Option<Resources>>,
+    /// The agent's latest command list, from any session.
+    commands: Vec<SlashCommand>,
+    /// What the capability cache holds.
+    cached: Option<SessionCapabilities>,
+    auth: AuthStatus,
     _participant: Participant,
+}
+
+fn digest(commands: &[SlashCommand]) -> [u8; 32] {
+    let json = serde_json::to_vec(commands).expect("commands serialize");
+    Sha256::digest(json).into()
 }
 
 /// The instance, its connection while its stdin is open, and its wire.
@@ -244,6 +285,12 @@ impl AgentRuntime {
             Alarm::new(deps.cx.clock.clone()),
             Restarts::new(&deps.durations),
         );
+        let versions = &deps.launch.versions;
+        drop(cache::invalidate(
+            &deps.cx.writer,
+            &AgentKind::Claude,
+            versions,
+        ));
         let actor = Actor {
             deps,
             mail: mail.downgrade(),
@@ -262,6 +309,13 @@ impl AgentRuntime {
             restarts,
             recorded: Vec::new(),
             resources,
+            commands: Vec::new(),
+            cached: None,
+            auth: AuthStatus {
+                state: AuthState::Unchecked,
+                kind: None,
+                plan: None,
+            },
             _participant: participant,
         };
         tokio::spawn(actor.run(inbox));
@@ -277,6 +331,33 @@ impl AgentRuntime {
     /// Forgets the failures, so that a `crashed` agent starts again.
     pub fn clear_crashed(&self) {
         let _ = self.mail.send(Mail::ClearCrashed);
+    }
+}
+
+impl AgentRuntime {
+    /// The agent's capabilities from a session of its own (design 5.6.7).
+    pub fn probe(&self) -> BoxFuture<'static, Result<SessionCapabilities, AgentError>> {
+        let (reply, answer) = oneshot::channel();
+        let _ = self.mail.send(Mail::Probe(reply));
+        let gone = || {
+            Err(error(
+                AgentErrorClass::ProcessExited,
+                "the runtime went away",
+            ))
+        };
+        Box::pin(answer.map(move |reply| reply.unwrap_or_else(|_| gone())))
+    }
+
+    /// The agent's status now; `None` once the runtime is gone.
+    pub fn status(&self) -> BoxFuture<'static, Option<AgentStatus>> {
+        let (reply, answer) = oneshot::channel();
+        let _ = self.mail.send(Mail::Status(reply));
+        Box::pin(answer.map(Result::ok))
+    }
+
+    /// Starts the next instance with `launch`.
+    pub fn relaunch(&self, launch: Launch) {
+        let _ = self.mail.send(Mail::Relaunch(Box::new(launch)));
     }
 }
 
@@ -392,7 +473,7 @@ impl Actor {
         let Some(instance) = &self.instance else {
             return;
         };
-        let cli = (self.deps.launch.cli.as_ref()).and_then(|(cli, _)| fs::canonicalize(cli).ok());
+        let cli = (self.deps.launch.cli.as_ref()).and_then(|cli| fs::canonicalize(&cli.path).ok());
         let (resources, groups) = lifecycle::sample(&instance.group, cli.as_deref(), self.deps.rss);
         let groups = lifecycle::union(groups, &self.recorded);
         self.recorded = groups.into_iter().filter(ProcessGroup::is_alive).collect();
@@ -406,6 +487,7 @@ impl Actor {
             );
         }
         self.resources.send_replace(Some(resources));
+        self.notify();
         self.set(Due::Sample, self.deps.durations.get(RESOURCE_SAMPLE));
     }
 
@@ -471,9 +553,92 @@ impl Actor {
             }
             Mail::ClearCrashed => {
                 self.restarts.clear();
+                self.notify();
                 self.ensure_started();
             }
+            Mail::Probe(reply) => self.probe(reply),
+            Mail::Status(reply) => {
+                let _ = reply.send(self.status());
+            }
+            Mail::Relaunch(launch) => {
+                self.deps.launch = *launch;
+                self.notify();
+            }
         }
+    }
+
+    fn status(&self) -> AgentStatus {
+        let running = match (&self.instance, &self.wire) {
+            (Some(_), _) => Running::Yes,
+            (None, Some(_)) => Running::Starting,
+            (None, None) => Running::No,
+        };
+        let mut status = status::status(&self.deps.launch, running, &self.auth);
+        status.rss_bytes = self.resources.borrow().map(|r| r.rss_bytes);
+        if self.restarts.next_start().is_none() {
+            status.state = AgentState::Crashed;
+        }
+        status
+    }
+
+    fn notify(&self) {
+        self.deps.notes.agent(self.status());
+    }
+
+    /// Opens a session in a fresh probe directory, which counts as trusted;
+    /// answers with its capabilities once its command list came, or after a
+    /// while without one, then closes it.
+    fn probe(&mut self, reply: oneshot::Sender<Result<SessionCapabilities, AgentError>>) {
+        let dir = self.deps.probe_dir.clone();
+        if let Err(err) = fresh_dir(&dir) {
+            let _ = reply.send(Err(error(AgentErrorClass::Other, err)));
+            return;
+        }
+        let (events, mut heard) = mpsc::unbounded_channel();
+        let (attached, info) = oneshot::channel();
+        let attach = Attach {
+            target: AttachTarget::New,
+            cwd: dir,
+            config: Default::default(),
+            project_config: ProjectConfigPolicy::Load,
+        };
+        let (mail, clock) = (self.mail.clone(), Arc::clone(&self.deps.cx.clock));
+        let writer = self.deps.cx.writer.clone();
+        let wait = self.deps.durations.get(PROBE_COMMANDS);
+        self.attach(Pending {
+            attach,
+            events,
+            reply: attached,
+        });
+        tokio::spawn(async move {
+            let info = match info.await {
+                Ok(Ok(info)) => info,
+                Ok(Err(err)) => return drop(reply.send(Err(err))),
+                Err(_) => return drop(reply.send(Err(error(AgentErrorClass::Other, "gone")))),
+            };
+            let mut caps = info.capabilities;
+            let commands = async {
+                while let Some(event) = heard.recv().await {
+                    if let DriverEvent::CommandsChanged(commands) = event {
+                        return Some(commands);
+                    }
+                }
+                None
+            };
+            if caps.commands.is_empty() {
+                let timer = clock.timer_at(clock.now_mono() + wait);
+                if let Either::Left((Some(commands), _)) = select(pin!(commands), timer).await {
+                    caps.commands = commands;
+                }
+            }
+            let close = DriverCommand::Close {
+                session: info.session,
+            };
+            mail.upgrade().map(|mail| mail.send(Mail::Command(close)));
+            // In the cache before the answer, for `agents/capabilities`.
+            let _ = cache::write(&writer, &caps.agent, clock.now_wall_ms(), &caps).await;
+            let _ = reply.send(Ok(caps));
+        });
     }
 
     /// Starts an instance for the waiting attaches unless one runs or is
@@ -516,6 +681,7 @@ impl Actor {
         match started {
             Ok(instance) => {
                 self.instance = Some(instance);
+                self.notify();
                 self.set(Due::Sample, self.deps.durations.get(RESOURCE_SAMPLE));
                 if self.stopping.is_some() {
                     return self.begin_stop();
@@ -527,6 +693,7 @@ impl Actor {
             Err(err) => {
                 self.wire = None;
                 self.restarts.failed(self.now());
+                self.notify();
                 for pending in mem::take(&mut self.waiting) {
                     let _ = pending.reply.send(Err(err.clone()));
                 }
@@ -641,6 +808,10 @@ impl Actor {
                     }
                     Err(err) => {
                         let error = claude::agent_error(&err);
+                        if error.class == AgentErrorClass::NotLoggedIn {
+                            self.auth.state = AuthState::LoggedOut;
+                            self.notify();
+                        }
                         DriverEvent::PromptFailed { tag, error }
                     }
                 };
@@ -669,6 +840,7 @@ impl Actor {
                 events,
                 claude,
                 cwd,
+                commands: None,
             },
         );
         let reply = pending.reply;
@@ -702,17 +874,50 @@ impl Actor {
         }
         let opening = self.opening.remove(&session).expect("just found");
         let config = capabilities::config_options(&opening.options);
+        let commands = self.commands.clone();
         if let Some(route) = self.sessions.get_mut(&session) {
             route.claude.set_config(&opening.options);
+            route.commands = Some(digest(&commands));
         }
         let versions = self.deps.launch.versions.clone();
-        let caps = capabilities::capabilities(&instance.init, versions, config, Vec::new());
+        let caps = capabilities::capabilities(&instance.init, versions, config, commands);
         let info = AttachInfo {
             session: AgentSessionId(session),
             instance: instance.id.clone(),
-            capabilities: caps,
+            capabilities: caps.clone(),
         };
         let _ = opening.reply.send(Ok(info));
+        self.cache(caps);
+    }
+
+    /// Refreshes the capability cache.
+    fn cache(&mut self, caps: SessionCapabilities) {
+        let at = self.deps.cx.clock.now_wall_ms();
+        drop(cache::write(&self.deps.cx.writer, &caps.agent, at, &caps));
+        self.cached = Some(caps);
+    }
+
+    /// A session's command list: the agent's latest, and the session's if it
+    /// has attached and has another; the cache's when it differs.
+    fn commands(&mut self, session: &str, commands: Vec<SlashCommand>) {
+        let sum = digest(&commands);
+        let opening = self.opening.contains_key(session);
+        if let Some(route) = self.sessions.get_mut(session)
+            && !opening
+            && route.commands != Some(sum)
+        {
+            route.commands = Some(sum);
+            let _ = route
+                .events
+                .send(DriverEvent::CommandsChanged(commands.clone()));
+        }
+        if let Some(mut caps) = self.cached.clone()
+            && caps.commands != commands
+        {
+            caps.commands.clone_from(&commands);
+            self.cache(caps);
+        }
+        self.commands = commands;
     }
 
     async fn command(&mut self, command: DriverCommand) {
@@ -778,7 +983,7 @@ impl Actor {
                 });
                 drop(sent);
             }
-            DriverCommand::Attach(_) | DriverCommand::Steer { .. } | DriverCommand::Probe => {}
+            DriverCommand::Attach(_) | DriverCommand::Steer { .. } => {}
         }
     }
 
@@ -801,7 +1006,10 @@ impl Actor {
                     return;
                 };
                 for event in route.claude.update(&notification.update) {
-                    let _ = route.events.send(event);
+                    match event {
+                        DriverEvent::CommandsChanged(commands) => self.commands(&session, commands),
+                        event => self.to_session(&session, event),
+                    }
                 }
             }
             FromAgent::Permission(request, responder) => {
@@ -840,8 +1048,10 @@ impl Actor {
                 self.closed = true;
                 self.end();
             }
-            // The login state is T009's.
-            FromAgent::AuthStatus(_) => {}
+            FromAgent::AuthStatus(update) => {
+                self.auth = status::auth(&update);
+                self.notify();
+            }
         }
     }
 
@@ -919,5 +1129,18 @@ impl Actor {
                 self.ensure_started();
             }
         }
+        self.notify();
     }
+}
+
+/// Empties `dir` for a probe: removed, then made again, the user's only
+/// (design 5.2.6).
+fn fresh_dir(dir: &std::path::Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    match fs::remove_dir_all(dir) {
+        Err(err) if err.kind() != std::io::ErrorKind::NotFound => return Err(err),
+        _ => {}
+    }
+    fs::create_dir_all(dir)?;
+    fs::set_permissions(dir, fs::Permissions::from_mode(0o700))
 }

@@ -19,7 +19,7 @@ use crate::driver::api::{
 use crate::gateway::AuditEvent;
 use crate::policy::testkit::{option, permission};
 
-fn ask(n: u64, options: Vec<InteractionOption>) -> DriverEvent {
+pub(super) fn ask(n: u64, options: Vec<InteractionOption>) -> DriverEvent {
     let request = AskRequest::Classified(permission(options));
     DriverEvent::Ask {
         ask: AskId(n),
@@ -37,17 +37,17 @@ fn always() -> InteractionOption {
 }
 
 /// `interaction/respond` params answering `asked` with `outcome`.
-fn answer(asked: &Value, outcome: Value, command: &str) -> Value {
+pub(super) fn answer(asked: &Value, outcome: Value, command: &str) -> Value {
     json!({"command_id": command, "session_id": asked["session"], "request_id":
         asked["request_id"], "request_digest": asked["digest"], "outcome": outcome})
 }
 
-fn selected(option: &str) -> Value {
+pub(super) fn selected(option: &str) -> Value {
     json!({"type": "selected", "option_id": option})
 }
 
 /// The requests written so far, each with its session for [`answer`].
-async fn asked(f: &Fixture, session: &Value, n: usize) -> Vec<Value> {
+pub(super) async fn asked(f: &Fixture, session: &Value, n: usize) -> Vec<Value> {
     let session = serde_json::from_value(session.clone()).unwrap();
     let bodies = f.events(&session, "interaction.requested", n).await;
     let mut asked = data(&bodies, "interaction.requested");
@@ -55,7 +55,7 @@ async fn asked(f: &Fixture, session: &Value, n: usize) -> Vec<Value> {
     asked
 }
 
-async fn answered(f: &mut Fixture) -> (AskId, AskAnswer) {
+pub(super) async fn answered(f: &mut Fixture) -> (AskId, AskAnswer) {
     match f.command().await {
         DriverCommand::Answer { ask, answer } => (ask, answer),
         other => panic!("{other:?}"),

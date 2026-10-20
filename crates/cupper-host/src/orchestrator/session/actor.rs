@@ -18,26 +18,32 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use cupper_protocol::annotations::TimestampMs;
+use cupper_protocol::canonical;
 use cupper_protocol::capabilities::{ConfigOptionId, SessionCapabilities as Capabilities};
 use cupper_protocol::domain::{PrincipalKind, ResolvedBy, Tier};
 use cupper_protocol::envelope::Cause;
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{CommandId, PrincipalId, QueueId, SessionId, TurnId};
+use cupper_protocol::ids::{Digest, RequestId};
 use cupper_protocol::index::{PendingKind, SessionStatus, SessionSummary};
+use cupper_protocol::interaction::InteractionOutcome;
 use cupper_protocol::interaction::InteractionRequest;
+use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::methods::interaction::{
     InteractionGet, InteractionGetParams, InteractionGetResult, InteractionRespond,
     InteractionRespondParams,
 };
 use cupper_protocol::methods::session::{
-    self as methods, Disposition as Wire, FallbackReason, SessionCapabilities, SessionGet,
-    SessionGetResult, SessionInterrupt, SessionInterruptParams, SessionInterruptResult,
-    SessionQueueResume, SessionSend, SessionSendParams, SessionSendResult,
+    self as methods, Disposition as Wire, FallbackReason, SessionCapabilities,
+    SessionConfirmConfig, SessionConfirmConfigParams, SessionGet, SessionGetResult,
+    SessionInterrupt, SessionInterruptParams, SessionInterruptResult, SessionQueueResume,
+    SessionSend, SessionSendParams, SessionSendResult,
 };
 use cupper_protocol::rpc::Method;
 use cupper_protocol::session::{
-    SessionConfigured, SnapshotPhase, SnapshotRecorded, SnapshotStatus, TurnStatus,
+    ConfirmationReason, ConfirmationRequired, SessionConfigured, SnapshotPhase, SnapshotRecorded,
+    SnapshotStatus, TurnStatus,
 };
 use cupper_protocol::view::SessionView;
 use rusqlite::OptionalExtension;
@@ -46,7 +52,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use super::core::{Action, Input, Key, SessionCore};
 use super::rows::Rows;
-use super::{IndexNotes, internal, not_found, parse, tier_of};
+use super::{IndexNotes, internal, mode_tier, not_found, parse, tier_of};
 use crate::clock::Clock;
 use crate::driver::api::{
     AgentError, AgentPort, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent,
@@ -55,7 +61,9 @@ use crate::driver::api::{
 use crate::gateway::{AuditEvent, AuditRecord, Call};
 use crate::ledger::{Outcome, Ticket};
 use crate::orchestrator::interaction::{self, Respond};
+use crate::orchestrator::tier_guard;
 use crate::orchestrator::turn::{self, Disposition, SendMode, SendRequest, SteerFallback};
+use crate::policy;
 use crate::pure::{Alarm, Core, TimerTable};
 use crate::quiescence::Participant;
 use crate::store::streams::{Batch, StreamHandle, StreamView, StreamWriter};
@@ -119,6 +127,8 @@ struct Command {
 enum Reply {
     Turn(turn::Reply),
     Interaction(interaction::Reply),
+    /// `{}`.
+    Done,
 }
 
 /// What a step asks of the actor besides its events.
@@ -130,6 +140,9 @@ struct Step {
     driver: Vec<DriverCommand>,
     attach: Vec<AttachTarget>,
     reply: Option<Reply>,
+    /// Who set the tier now, and whether full access was just confirmed.
+    set_by: Option<(PrincipalId, bool)>,
+    audit: Vec<AuditRecord>,
 }
 
 impl SessionActor {
@@ -163,9 +176,7 @@ impl SessionActor {
                     Some((call, reply)) => actor.call(call, reply).await,
                     None => break,
                 },
-                Some(event) = agent.recv() => {
-                    actor.input(Input::Agent(event), None, Step::default()).await
-                }
+                Some(event) = agent.recv() => actor.agent(event).await,
                 Some(result) = attaches.recv() => actor.attach_done(result).await,
                 Some((force, done)) = stops.recv() => {
                     if force {
@@ -182,6 +193,9 @@ impl SessionActor {
     async fn call(&mut self, call: Call, reply: oneshot::Sender<Outcome>) {
         let (principal, params) = (call.principal, call.params);
         let mut audit = None;
+        let mut step = Step::default();
+        // An option that moves the tier makes its chooser the setter.
+        let mut chosen = None;
         let input = match call.method {
             SessionSend::NAME => parse(&params).and_then(|p| self.send(p, &principal.id)),
             SessionInterrupt::NAME => parse::<SessionInterruptParams>(&params).map(|p| {
@@ -189,6 +203,10 @@ impl SessionActor {
                 Input::Machine(turn::Input::Interrupt { expected_turn })
             }),
             SessionQueueResume::NAME => Ok(Input::Machine(turn::Input::QueueResume)),
+            SessionConfirmConfig::NAME => {
+                step.reply = Some(Reply::Done);
+                parse(&params).and_then(|p| self.confirm(p, &principal))
+            }
             InteractionRespond::NAME => parse::<InteractionRespondParams>(&params).map(|params| {
                 if matches!(
                     principal.kind,
@@ -200,7 +218,7 @@ impl SessionActor {
                         outcome: params.outcome.clone(),
                         principal: principal.id.clone(),
                     };
-                    let (at_ms, conn) = (self.parts.clock.now_wall_ms(), call.conn.clone());
+                    let (at_ms, conn) = (self.parts.clock.now_wall_ms(), Some(call.conn.clone()));
                     audit = Some(AuditRecord { at_ms, conn, event });
                 }
                 let resolved_by = ResolvedBy {
@@ -210,6 +228,9 @@ impl SessionActor {
                 };
                 let tier = self.tier();
                 let principal = principal.clone();
+                chosen = self
+                    .option_tier(&params)
+                    .map(|tier| (params.request_id.clone(), tier));
                 Input::Respond(Box::new(Respond {
                     principal,
                     resolved_by,
@@ -236,7 +257,7 @@ impl SessionActor {
             .ok()
             .map(|command_id| Cause {
                 command_id,
-                principal: principal.id,
+                principal: principal.id.clone(),
             });
         let input = match input {
             Ok(input) => input,
@@ -255,7 +276,50 @@ impl SessionActor {
             reply,
             audit,
         };
-        self.input(input, Some(command), Step::default()).await;
+        self.input(input, Some(command), step).await;
+        if let Some((request, tier)) = chosen
+            && self.resolved_by(&request).as_ref() == Some(&principal.id)
+        {
+            let set = tier_guard::Input::Set {
+                by: principal,
+                tier,
+            };
+            self.input(Input::Tier(set), None, Step::default()).await;
+        }
+    }
+
+    /// `session/confirm_config`: the configuration the confirmation saw is
+    /// still the session's.
+    fn confirm(&self, p: SessionConfirmConfigParams, by: &Principal) -> Result<Input, RpcError> {
+        if p.config_digest != config_digest(&self.parts.configured) {
+            let err = RpcError::app(ErrorCode::Conflict, "the configuration changed meanwhile");
+            return Err(err.with_reason(ErrorReason::DigestMismatch));
+        }
+        Ok(Input::Tier(tier_guard::Input::Confirmed { by: by.clone() }))
+    }
+
+    /// The tier the option chosen in `params` puts the session in, if any.
+    fn option_tier(&self, params: &InteractionRespondParams) -> Option<Tier> {
+        let InteractionOutcome::Selected(selected) = &params.outcome else {
+            return None;
+        };
+        self.view(|view| {
+            let request = &view.requests.get(&params.request_id)?.requested.request;
+            let options = match request {
+                InteractionRequest::Permission(p) => &p.options,
+                InteractionRequest::PlanConfirm(p) => &p.options,
+                _ => return None,
+            };
+            let option = options.iter().find(|o| o.option_id == selected.option_id)?;
+            policy::option_tier(&option.effect)
+        })
+    }
+
+    fn resolved_by(&self, request: &RequestId) -> Option<PrincipalId> {
+        self.view(|view| {
+            let resolved = view.requests.get(request)?.resolved.as_ref()?;
+            Some(resolved.resolved_by.as_ref()?.principal_id.clone())
+        })
     }
 
     /// `session/send`; `reply_to` must name a request of this session that
@@ -320,6 +384,13 @@ impl SessionActor {
                     }
                     // The core keeps the machine's other actions.
                     Action::Machine(_) => {}
+                    Action::Tier(tier_guard::Action::Unconfirmed(reason)) => {
+                        self.unconfirmed(reason, &mut step)
+                    }
+                    Action::Tier(tier_guard::Action::SetBy { by, confirmed }) => {
+                        step.set_by = Some((by, confirmed))
+                    }
+                    Action::Tier(_) => {}
                 }
             }
             self.commit(mem::take(&mut step), command.take()).await;
@@ -338,6 +409,8 @@ impl SessionActor {
             driver,
             attach,
             reply,
+            set_by,
+            audit: records,
         } = step;
         let mut answer = None;
         let mut audit = None;
@@ -347,6 +420,7 @@ impl SessionActor {
             let outcome = match reply {
                 Some(Reply::Turn(reply)) => self.outcome(reply, command.cause.as_ref()),
                 Some(Reply::Interaction(reply)) => reply.map(|r| json!(r)).map_err(RpcError::from),
+                Some(Reply::Done) => Ok(json!({})),
                 None => Err(internal("the command had no reply")),
             };
             audit = command.audit.filter(|_| outcome.is_ok());
@@ -367,6 +441,9 @@ impl SessionActor {
         let mut changes = Rows::of(id, first_seq, at, &events, commands, instance);
         if let Some(agent_session) = agent_session {
             changes.agent_session(&self.parts.id, at, agent_session);
+        }
+        if let Some((by, confirmed)) = set_by {
+            changes.set_by(&self.parts.id, at, &by, confirmed);
         }
         self.forget_dequeued(&events);
         let asks = events.iter().any(|b| {
@@ -416,7 +493,7 @@ impl SessionActor {
         if committed.is_err() {
             return;
         }
-        if let Some(record) = audit {
+        for record in audit.into_iter().chain(records) {
             // Nobody listening is the receiver's choice.
             let _ = self.parts.audit.send(record);
         }
@@ -498,6 +575,7 @@ impl SessionActor {
     /// stream when they changed, the agent's session into the row.
     async fn attach_done(&mut self, result: Result<AttachInfo, AgentError>) {
         let mut step = Step::default();
+        let mut mode = None;
         if let Ok(info) = &result {
             let caps = &info.capabilities;
             self.parts
@@ -517,9 +595,96 @@ impl SessionActor {
                 step.events.push(EventBody::SessionConfigured(configured));
             }
             step.agent_session = Some(info.session.0.clone());
+            mode = mode_tier(&caps.config);
+        }
+        // The tier is checked before the turn may send its prompt.
+        if let Some((mode, tier)) = mode {
+            let during_turn = false;
+            let mode = tier_guard::Input::Mode {
+                mode,
+                tier,
+                during_turn,
+            };
+            self.input(Input::Tier(mode), None, mem::take(&mut step))
+                .await;
         }
         let input = Input::Machine(turn::Input::Attached(result));
         self.input(input, None, step).await;
+    }
+
+    /// A command list the session's capabilities do not have yet goes into
+    /// the stream with them (design 5.6.2).
+    fn commands_changed(&self, event: &DriverEvent) -> Step {
+        let mut step = Step::default();
+        if let DriverEvent::CommandsChanged(commands) = event
+            && let Some(mut caps) = self.written_capabilities()
+            && caps.commands != *commands
+        {
+            caps.commands.clone_from(commands);
+            step.events.push(EventBody::SessionCapabilities(caps));
+        }
+        step
+    }
+
+    /// An event of the agent. A change of its options rewrites the
+    /// configuration, and the guard checks the permission mode.
+    async fn agent(&mut self, event: DriverEvent) {
+        let DriverEvent::ConfigChanged(options) = event else {
+            let step = self.commands_changed(&event);
+            return self.input(Input::Agent(event), None, step).await;
+        };
+        let mut step = Step::default();
+        let config = options
+            .iter()
+            .map(|o| (o.id.to_string(), o.current.clone()));
+        let config: BTreeMap<String, String> = config.collect();
+        if config != self.parts.configured.config {
+            self.parts.configured.config = config;
+            let configured = self.parts.configured.clone();
+            step.events.push(EventBody::SessionConfigured(configured));
+        }
+        match mode_tier(&options) {
+            Some((mode, tier)) => {
+                let during_turn = true;
+                let mode = tier_guard::Input::Mode {
+                    mode,
+                    tier,
+                    during_turn,
+                };
+                self.input(Input::Tier(mode), None, step).await
+            }
+            None => self.commit(step, None).await,
+        }
+    }
+
+    /// The session enters `config_unconfirmed`, or leaves it: the
+    /// configuration says so, and the audit records the entry.
+    fn unconfirmed(&mut self, reason: Option<ConfirmationReason>, step: &mut Step) {
+        let required = reason.clone().map(|reason| ConfirmationRequired {
+            reason,
+            config_digest: config_digest(&self.parts.configured),
+        });
+        self.parts.configured.confirmation_required = required;
+        let configured = self.parts.configured.clone();
+        step.events.push(EventBody::SessionConfigured(configured));
+        if let Some(reason) = reason {
+            let mode = self
+                .parts
+                .configured
+                .config
+                .get(ConfigOptionId::PermissionMode.as_str());
+            let event = AuditEvent::ConfigUnconfirmed {
+                session_id: self.parts.id.clone(),
+                reason,
+                mode: mode.cloned(),
+            };
+            let at_ms = self.parts.clock.now_wall_ms();
+            step.audit.push(AuditRecord {
+                at_ms,
+                conn: None,
+                event,
+            });
+        }
     }
 
     /// Feeds each timer due now to the core, one step each: a step may
@@ -629,6 +794,11 @@ fn pending(view: &SessionView) -> (usize, Option<PendingKind>) {
         _ => PendingKind::Approval,
     });
     (pending.len(), kind)
+}
+
+/// What `session/confirm_config` echoes back: the digest of the options.
+fn config_digest(configured: &SessionConfigured) -> Digest {
+    canonical::digest(&configured.config).expect("a map of strings has a canonical form")
 }
 
 /// The snapshot port until T061: every snapshot is `skipped`, without a

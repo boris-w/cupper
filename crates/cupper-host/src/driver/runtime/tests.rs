@@ -5,6 +5,7 @@
 //! runtime sets.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::pin::pin;
 use std::sync::Arc;
 
@@ -14,7 +15,7 @@ use crate::driver::api::{NormUpdate, PromptTag};
 use crate::driver::probe::login_shell::{Failure, LoginEnv};
 use crate::orchestrator::testkit::text;
 use crate::store::testutil::{TempDir, host_writer, query, raw_db, raw_rows};
-use crate::store::{RAW_WRITER, RawWriter, RawWriterThread, WriterThread};
+use crate::store::{Durability, RAW_WRITER, RawWriter, RawWriterThread, WriterThread};
 use cupper_sys::{ProcessInfo, process_info};
 
 type Events = mpsc::UnboundedReceiver<DriverEvent>;
@@ -43,7 +44,11 @@ impl Fixture {
         let login = LoginEnv::fallback(Failure::ShellMissing);
         let args = args.iter().map(|arg| (*arg).to_owned()).collect();
         let mut launch = launch::injected(launch::fake_agent(), args, &host, &login);
-        launch.cli = cli.map(|cli| (cli.into(), String::new()));
+        launch.cli = cli.map(|cli| launch::Cli {
+            path: cli.into(),
+            version: String::new(),
+            install: cupper_protocol::index::CliInstall::Native,
+        });
         let blobs = BlobStore::new(dir.path(), writer.clone(), Arc::clone(&shared));
         let (raw, log) = (raw.sink(), None);
         let cx = Context {
@@ -59,7 +64,9 @@ impl Fixture {
             ids,
             blobs,
             quiescence,
+            probe_dir: dir.path().join("probe"),
             durations,
+            notes: Arc::new(status::NoAgentNotes),
             rss,
         });
         let raw = Some(raw_thread);
@@ -166,6 +173,81 @@ impl Fixture {
 fn said_pid(said: &str) -> ProcessInfo {
     let pid = said.rsplit("pid=").next().unwrap().parse().unwrap();
     process_info(pid).unwrap()
+}
+
+/// A runtime of the fake agent, on `dir`'s stores; probes in `dir/probe`.
+fn runtime(dir: &TempDir) -> AgentRuntime {
+    let clock = ManualClock::new();
+    let (writer, _writer) = host_writer(dir, &clock);
+    let quiescence = Quiescence::new();
+    quiescence.register(RAW_WRITER);
+    quiescence.register(AGENT_RUNTIME);
+    let (raw, _raw) = RawWriter::spawn(raw_db(dir), &quiescence).unwrap();
+    let clock: Arc<dyn Clock> = Arc::new(clock);
+    let var = |(k, v): (&str, &str)| (k.to_owned(), v.to_owned());
+    let host = BTreeMap::from([("HOME", "/h"), ("SECRET", "x"), ("TERM", "dumb")].map(var));
+    let login = LoginEnv::fallback(Failure::ShellMissing);
+    let launch = launch::injected(launch::fake_agent(), Vec::new(), &host, &login);
+    let (raw, log) = (raw.sink(), None);
+    let blobs = BlobStore::new(dir.path(), writer.clone(), Arc::clone(&clock));
+    let cx = Context {
+        clock: Arc::clone(&clock),
+        writer,
+        raw,
+        log,
+    };
+    let ids = Arc::new(IdGen::seeded(clock, 1));
+    AgentRuntime::start(RuntimeDeps {
+        launch,
+        cx,
+        ids,
+        blobs,
+        quiescence,
+        probe_dir: dir.path().join("probe"),
+        durations: Durations::default(),
+        notes: Arc::new(status::NoAgentNotes),
+        rss: None,
+    })
+}
+
+/// A new session in `cwd`, and what it hears.
+async fn attach(
+    runtime: &AgentRuntime,
+    cwd: &Path,
+) -> (AttachInfo, mpsc::UnboundedReceiver<DriverEvent>) {
+    let (events, heard) = mpsc::unbounded_channel();
+    let (target, cwd, config) = (AttachTarget::New, cwd.to_owned(), BTreeMap::new());
+    let project_config = ProjectConfigPolicy::Load;
+    let attach = Attach {
+        target,
+        cwd,
+        config,
+        project_config,
+    };
+    (runtime.attach(attach, events).await.unwrap(), heard)
+}
+
+/// Runs `script` as prompt `tag`; what the session heard until it was done.
+async fn prompt(
+    runtime: &AgentRuntime,
+    session: &AgentSessionId,
+    (tag, script): (u64, &str),
+    heard: &mut mpsc::UnboundedReceiver<DriverEvent>,
+) -> Vec<DriverEvent> {
+    let (session, tag, content) = (session.clone(), PromptTag(tag), text(script));
+    runtime.send(DriverCommand::Prompt {
+        session,
+        tag,
+        content,
+    });
+    let mut events = Vec::new();
+    loop {
+        match heard.recv().await.unwrap() {
+            DriverEvent::PromptDone { .. } => return events,
+            DriverEvent::PromptFailed { error, .. } => panic!("{error:?}"),
+            event => events.push(event),
+        }
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -317,4 +399,123 @@ async fn it_adapter_restart_backs_off_then_crashed() {
         f.attach().await.unwrap_err().class,
         AgentErrorClass::RuntimeFailed
     );
+}
+
+/// The fake agent's command list comes once to the session, after the
+/// attach or with it; each turn's start repeats it without an event. A
+/// different list comes, and so does the old one when it returns; the
+/// capability cache follows.
+#[tokio::test(flavor = "multi_thread")]
+async fn unit_commands_dedup_the_same_list_is_not_sent_again() {
+    let dir = TempDir::new("dedup");
+    // A row of another adapter version, which the runtime drops as it starts.
+    let (writer, thread) = host_writer(&dir, &ManualClock::new());
+    let stale = |conn: &rusqlite::Connection| {
+        let sql = "INSERT INTO agent_capabilities (agent, adapter_version, captured_at, json)
+                   VALUES ('claude', 'old', 0, '{}')";
+        conn.execute(sql, []).map(drop)
+    };
+    writer.submit(Durability::Normal, stale).await.unwrap();
+    drop((writer, thread));
+    let runtime = runtime(&dir);
+    let (info, mut heard) = attach(&runtime, dir.path()).await;
+    let changed = |events: Vec<DriverEvent>| -> Vec<usize> {
+        let lists = events.into_iter().filter_map(|event| match event {
+            DriverEvent::CommandsChanged(commands) => Some(commands.len()),
+            _ => None,
+        });
+        lists.collect()
+    };
+    let persona = 5;
+    let first = changed(prompt(&runtime, &info.session, (1, "say a"), &mut heard).await);
+    let attached = info.capabilities.commands.len();
+    assert!(
+        (attached, first.as_slice()) == (persona, &[])
+            || (attached, first.as_slice()) == (0, &[persona]),
+        "{attached} {first:?}"
+    );
+    assert_eq!(
+        changed(prompt(&runtime, &info.session, (2, "say b"), &mut heard).await),
+        [] as [usize; 0]
+    );
+    let other = r#"raw {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"${session}","update":{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"x","description":"y"}]}}}"#;
+    assert_eq!(
+        changed(prompt(&runtime, &info.session, (3, other), &mut heard).await),
+        [1]
+    );
+    assert_eq!(
+        changed(prompt(&runtime, &info.session, (4, "say c"), &mut heard).await),
+        [persona]
+    );
+    runtime.stop(true).await;
+    let rows: Vec<(String, String)> = query(
+        &dir.host_db(),
+        "SELECT adapter_version, json FROM agent_capabilities",
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    );
+    let [(version, json)] = &rows[..] else {
+        panic!("{rows:?}")
+    };
+    let cached: SessionCapabilities = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        (version, cached.commands.len()),
+        (&cached.versions.adapter, persona)
+    );
+}
+
+/// A probe empties its directory (0700), opens a session there, reads its
+/// options and command list, and fills the cache; `agents/capabilities`
+/// reads it, and `agents/refresh` relaunches and reports the agent.
+#[tokio::test(flavor = "multi_thread")]
+async fn agents_probe_cache_and_refresh() {
+    use std::os::unix::fs::PermissionsExt;
+
+    use self::agents::Agents;
+    use crate::store::Readers;
+    use cupper_protocol::index::{AgentState, AuthState, RuntimeState};
+
+    let dir = TempDir::new("probe");
+    let probe = dir.path().join("probe");
+    fs::create_dir_all(&probe).unwrap();
+    fs::write(probe.join("left-over"), "x").unwrap();
+    let runtime = runtime(&dir);
+    let (writer, _thread) = host_writer(&dir, &ManualClock::new());
+    let readers = Readers::open(&dir.host_db()).unwrap();
+    let find: agents::Find = Arc::new(|| {
+        let login = LoginEnv::fallback(Failure::ShellMissing);
+        let launch = launch::injected(launch::fake_agent(), Vec::new(), &BTreeMap::new(), &login);
+        Box::pin(async move { launch })
+    });
+    let agents = Agents::new(runtime.clone(), readers, writer, find);
+    let claude = AgentKind::Claude;
+    assert_eq!(agents.capabilities(&claude).await.unwrap().cached, None);
+    let codex = agents.capabilities(&AgentKind::Codex).await.unwrap_err();
+    assert_eq!(
+        codex.app_code(),
+        Some(&cupper_protocol::error::ErrorCode::Unavailable)
+    );
+
+    let refreshed = agents.refresh(&claude).await.unwrap().status;
+    assert_eq!(fs::read_dir(&probe).unwrap().count(), 0);
+    assert_eq!(
+        fs::metadata(&probe).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
+    let cached = agents.capabilities(&claude).await.unwrap().cached.unwrap();
+    assert_eq!(cached.capabilities.commands.len(), 5);
+    assert!(cached.capabilities.turn.steer.supported);
+    assert_eq!(
+        (
+            refreshed.state,
+            refreshed.auth.state,
+            refreshed.adapter.runtime
+        ),
+        (
+            AgentState::Running,
+            AuthState::LoggedIn,
+            RuntimeState::Ready
+        )
+    );
+    assert!(refreshed.cli.is_none());
+    runtime.stop(true).await;
 }

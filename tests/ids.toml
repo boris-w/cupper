@@ -324,7 +324,15 @@ IT-cli-commands = "pr"
 milestone = "M1a"
 IT-clock-advance = "pr"
 IT-seed = "pr"
+
+# 录制导出（计划 v1.3.21 由 T047 拆出）
+[T116]
+milestone = "M1a"
 IT-recording-export = "pr"
+
+# 宿主性能测量与趋势（计划 v1.3.21 由 T047 拆出）
+[T117]
+milestone = "M1a"
 PERF-host-cold-start = "nightly"
 PERF-index-snapshot = "nightly"
 PERF-host-memory = "nightly"

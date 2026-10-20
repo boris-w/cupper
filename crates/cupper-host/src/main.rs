@@ -1,7 +1,7 @@
 //! `cupper-host`, the session host process (design 5.2). It runs steps 1 and 2
-//! of the startup sequence (design 5.2.13): the command line, `--build-info`,
-//! in `dev-auth` builds the launcher (design 5.8.1), and the stdin payload;
-//! then `host.log`, and stdio goes to `/dev/null`. The supervisor runs the other steps on the tokio
+//! of the startup sequence (design 5.2.13): the command line, `--build-info`
+//! and `--self-test`, in `dev-auth` builds the launcher (design 5.8.1), and
+//! the stdin payload; then `host.log`, and stdio goes to `/dev/null`. The supervisor runs the other steps on the tokio
 //! workers, while the main thread runs its `CFRunLoop` until the host exits
 //! (design 5.2.3).
 
@@ -22,6 +22,7 @@ fn main() -> ExitCode {
             println!("{}", startup::build_info());
             return HostExit::Ok.into();
         }
+        Ok(Command::SelfTest { data_dir }) => return self_test(&data_dir),
         Err(err) => return fail(&err, err.exit()),
     };
     #[cfg(feature = "dev-auth")]
@@ -82,6 +83,22 @@ fn main() -> ExitCode {
     // Nothing of the host is left to wait for.
     runtime.shutdown_background();
     exit.into()
+}
+
+/// One line of JSON; exit 0 when the bundle matches the embedded manifest.
+fn self_test(data_dir: &std::path::Path) -> ExitCode {
+    match cupper_host::runtime::self_test::for_host(data_dir) {
+        Ok(report) => {
+            println!("{}", serde_json::json!(report));
+            if report.ok {
+                HostExit::Ok
+            } else {
+                HostExit::Error
+            }
+            .into()
+        }
+        Err(err) => fail(&err, HostExit::Error),
+    }
 }
 
 /// Stops the main thread's run loop as the host exits, a panic included.
