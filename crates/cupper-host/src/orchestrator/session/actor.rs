@@ -203,6 +203,8 @@ struct Step {
     reply: Option<Reply>,
     /// Who set the tier now, and whether full access was just confirmed.
     set_by: Option<(PrincipalId, bool)>,
+    /// The project's configuration stays out for good from now on.
+    ignored: bool,
     audit: Vec<AuditRecord>,
 }
 
@@ -502,6 +504,7 @@ impl SessionActor {
             check,
             reply,
             set_by,
+            ignored,
             audit: records,
         } = step;
         let mut answer = None;
@@ -548,6 +551,9 @@ impl SessionActor {
         }
         if let Some((by, confirmed)) = set_by {
             changes.set_by(&self.parts.id, at, &by, confirmed);
+        }
+        if ignored {
+            changes.ignored(&self.parts.id, at);
         }
         self.forget_dequeued(&events);
         let asks = events.iter().any(|b| {
@@ -751,7 +757,10 @@ impl SessionActor {
     async fn ignore_project_config(&mut self) {
         (self.load_wanted, self.ignore_for_good) = (false, true);
         self.parts.project_config = ProjectConfigPolicy::Ignore;
-        let mut step = Step::default();
+        let mut step = Step {
+            ignored: true,
+            ..Step::default()
+        };
         if self.parts.configured.project_config != ProjectConfig::Ignored {
             self.parts.configured.project_config = ProjectConfig::Ignored;
             let configured = self.parts.configured.clone();

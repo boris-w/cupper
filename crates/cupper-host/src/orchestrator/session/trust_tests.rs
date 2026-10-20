@@ -118,6 +118,9 @@ async fn it_orch_trust_gating_a_change_during_a_turn_and_going_on_without_it() {
         "session.configured",
     );
     assert_eq!(configured.last().unwrap()["project_config"], "ignored");
+    // The choice outlives the host (T089).
+    let ignored = "SELECT project_config_ignored || '' FROM sessions";
+    assert_eq!(f.rows(ignored), ["1"]);
 }
 
 #[tokio::test]
