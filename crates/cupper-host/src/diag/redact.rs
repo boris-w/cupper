@@ -271,4 +271,31 @@ mod tests {
             assert!(matches!(credentials(text), Cow::Borrowed(_)), "{text}");
         }
     }
+
+    #[test]
+    fn unit_redact_auth_status_keeps_the_kind_and_plan_name_only() {
+        // Logged in with an account: the plan stays, who it is goes.
+        let account = json!({"jsonrpc": "2.0", "method": AUTH_STATUS_METHOD, "params": {
+            "authStatus": {"kind": "account", "label": "Claude Pro",
+                "account": {"plan": "pro", "email": "jdoe@example.invalid",
+                    "organization": "Example Org", "uuid": "0199a1b2-c3d4"},
+                "token": "sk-ant-oat01-AbCdEf0123456789xyz"},
+            "_meta": {"accountEmail": "jdoe@example.invalid"}}});
+        let kept = account_fields(&account).expect("an auth status");
+        assert_eq!(
+            kept["params"],
+            json!({"authStatus": {"kind": "account", "label": "Claude Pro", "account": {"plan": "pro"}}})
+        );
+        assert_eq!(kept["method"], AUTH_STATUS_METHOD);
+        let text = kept.to_string();
+        for gone in ["jdoe", "Example Org", "0199a1b2", "sk-ant", "_meta"] {
+            assert!(!text.contains(gone), "{gone} in {text}");
+        }
+        // An API key login has no account at all.
+        let key = json!({"method": AUTH_STATUS_METHOD, "params": {"authStatus": {"kind": "api_key", "keyHint": "sk-...xyz"}}});
+        assert_eq!(
+            account_fields(&key).expect("an auth status")["params"],
+            json!({"authStatus": {"kind": "api_key"}})
+        );
+    }
 }

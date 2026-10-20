@@ -36,7 +36,9 @@ pub use proc::{
 };
 pub use runloop::{RunLoop, RunLoopStop};
 pub use spawn::{Child, Command, Stdio, spawn};
-pub use system::{boot_session_uuid, current_uid, redirect_stdio_to_null, user_temp_dir};
+pub use system::{
+    boot_session_uuid, current_uid, host_name, redirect_stdio_to_null, user_temp_dir,
+};
 
 /// Errors from system interfaces.
 #[derive(Debug, thiserror::Error)]
