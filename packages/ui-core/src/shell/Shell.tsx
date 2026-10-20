@@ -10,6 +10,7 @@ import { useHost, useShell, useT } from "../app/providers";
 import { ChevronDownIcon, MoreIcon, PaneIcon } from "../components/icons";
 import { Menu } from "../components/Menu";
 import { ToolbarButton } from "../components/ToolbarButton";
+import { ConnectionToast } from "../feedback/ConnectionToast";
 import { computeLayout, ratioOf, type Layout, type Viewport } from "../layout/layout";
 import type { LayoutStore } from "../layout/store";
 import { Splitter } from "./Splitter";
@@ -27,6 +28,7 @@ function useViewport(): Viewport {
 
 export function Shell({ store, children }: { store: LayoutStore; children: ReactNode }) {
   const { api } = useShell();
+  const { state } = useHost();
   const t = useT();
   const view = useViewport();
   const { prefs, overlayOpen } = useSyncExternalStore(store.subscribe, store.getState);
@@ -57,6 +59,7 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
   const docked = layout.sidebar.visible && !narrow;
   return (
     <div className="flex h-full">
+      <ConnectionToast state={state} />
       <div className="fixed top-2 left-(--layout-traffic-lights-w) z-30">
         <ToolbarButton
           label={t("shell:toggle_sidebar")}

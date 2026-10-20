@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { TooltipProvider } from "../components/Tooltip";
+import { ToasterProvider } from "../feedback/toaster";
 import { LayoutStore } from "../layout/store";
 import { Shell } from "../shell/Shell";
 import { Page, SlotsContext, type Slots } from "./pages";
@@ -24,17 +25,19 @@ export function App({ api, info, slots = {}, initialRoute }: AppProps) {
     <ShellProvider api={api} info={info}>
       <I18nProvider locale={info.locale}>
         <ThemeProvider>
-          <HostProvider>
-            <RouterProvider initial={initialRoute}>
-              <SlotsContext value={slots}>
-                <TooltipProvider>
-                  <Shell store={store}>
-                    <Page />
-                  </Shell>
-                </TooltipProvider>
-              </SlotsContext>
-            </RouterProvider>
-          </HostProvider>
+          <ToasterProvider>
+            <HostProvider>
+              <RouterProvider initial={initialRoute}>
+                <SlotsContext value={slots}>
+                  <TooltipProvider>
+                    <Shell store={store}>
+                      <Page />
+                    </Shell>
+                  </TooltipProvider>
+                </SlotsContext>
+              </RouterProvider>
+            </HostProvider>
+          </ToasterProvider>
         </ThemeProvider>
       </I18nProvider>
     </ShellProvider>
