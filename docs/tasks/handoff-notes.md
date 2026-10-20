@@ -322,6 +322,10 @@
 | T106、T152 | 待核对的文案：会话页"未信任"警告框的说明在 1280 宽时折成两行；`stale` 的项目在侧边栏同样标"未信任"，要不要单独起名（例如"需重新信任"） | T137 |
 | T063 | ① `tests/lifecycle.rs` 的进程级用例在 `terminate(&host)` 之前失败时，拉起的 `cupper-host` 连同假 agent 一直运行（`std::process::Child` 在 drop 时不结束子进程），本机曾积下十几个 ppid 为 1 的宿主；宿主进程也用 drop 守卫结束，做法参照 T008 修复 1 的 `Groups` 守卫（按组号加启动时间记录、drop 时只杀仍是原组的、记录写临时目录以便测试进程被杀后下次清理）。② 本地单独跑 IT-elevate 要先 `cargo build -p cupper-cli --features test-harness --bin cupper-elevate-probe`（CI 会自动做），探针缺失时让用例直接报出原因 | T008 修复 1 |
 | 拉起孙进程的进程级用例 | 照 T008 修复 1：孙进程出现之后、停止之前建 `Groups` 守卫，用 `gone()`（最多 5 s）断言进程消失，靠 drop 兜底；检查残留的命令在 `docs/tasks/T008-adapter-lifecycle/notes-fix1.md` | T008 修复 1 |
+| T129 | 安装器接进启动的接入点（T059）：在 `Host::start` 的 `Watch::new()` 之后启动安装器；`Failed(BundleChanged)` 时调 `Watch::bundle_changed()` 转入待升级；安装器忙闲填进 `Observed.installer_busy`（现在固定为 `false`，代码里有注释），空闲退出和待升级退出都要等它 | T059 |
+| T090、T091 | 待升级退出时，中断回合的命令回复与退出赛跑，可能来不及发出；命令结果在账本里，重连后用同一个 `command_id` 重试能拿到，不要断言一定收到这条回复。空闲退出要等完全空闲 10 分钟（`supervisor_idle`，可经 `test_config.durations` 缩短），暂停中的排队消息不算活动 | T059 |
+| T163 | `host.*` 的产生点：启动在 `Host::start`，退出在 `Host::run` 交出 `Exit` 的地方（空闲、孤立、待升级各有取值，host.log 已有一行 `orderly exit`），进入待升级在 `supervisor/watch` 的自检路径 | T059 |
+| T055 等复用者 | 启动时的残留清理 `supervisor/reap.rs` 的 `reap()`：TERM → 按 `Clock` 每 50 ms 看一次 → 2 s 后 KILL，只发给仍是记录中那个的组；可以直接复用 | T059 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

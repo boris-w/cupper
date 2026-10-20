@@ -131,6 +131,16 @@ durations! {
     ELEVATION_DENIALS = "elevation_denials", Duration::from_secs(600);
     /// How long elevation requests stay silenced after two denials.
     ELEVATION_QUIET = "elevation_quiet", Duration::from_secs(600);
+    /// How long the host stays without clients and work before it exits
+    /// (design 5.2.13).
+    SUPERVISOR_IDLE = "supervisor_idle", Duration::from_secs(600);
+    /// How often the supervisor looks at the clients, the work and the
+    /// parent process.
+    SUPERVISOR_OBSERVE = "supervisor_observe", Duration::from_secs(1);
+    /// How long the cleanup of a previous run's adapters waits after SIGTERM
+    /// before SIGKILL, and how often it looks (rulings before T037).
+    REAP_TERM_WAIT = "reap_term_wait", Duration::from_secs(2);
+    REAP_POLL = "reap_poll", Duration::from_millis(50);
     /// How long the agent has to take back a tier it raised by itself during
     /// a turn before the turn is interrupted (design 5.2.6, check 4).
     CONFIG_REVERT = "config_revert", Duration::from_secs(2);

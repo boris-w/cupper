@@ -145,6 +145,11 @@ impl SessionCore {
         self.machine.turn_id()
     }
 
+    /// How many queued messages will run.
+    pub fn queued(&self) -> u32 {
+        self.machine.queued()
+    }
+
     /// The adapter instance of the last attach.
     pub fn instance(&self) -> Option<&AdapterInstanceId> {
         self.instance.as_ref()

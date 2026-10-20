@@ -31,8 +31,8 @@ pub mod testkit;
 mod tests;
 pub mod wire;
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use cupper_protocol::ids::{ConnId, HostId};
 use cupper_protocol::index::ClientInfo;
@@ -51,6 +51,7 @@ use crate::durations::{Durations, GATEWAY_ACCEPT_BACKOFF};
 use crate::quiescence::{ActorKind, Participant};
 #[cfg(any(feature = "dev-auth", feature = "test-harness"))]
 use crate::startup::payload::SecretKey;
+use crate::supervisor::watch::SelfCheck;
 
 /// The verdict on a peer's code signature, taken on accept (design 5.8.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -101,6 +102,8 @@ pub struct Gateway {
     closing: watch::Sender<bool>,
     /// How many connection tasks run.
     live: watch::Sender<usize>,
+    /// Runs on each new connection (design 5.2.13).
+    self_check: OnceLock<SelfCheck>,
 }
 
 impl Gateway {
@@ -123,6 +126,7 @@ impl Gateway {
             clients: clients::Clients::default(),
             closing: watch::Sender::new(false),
             live: watch::Sender::new(0),
+            self_check: OnceLock::new(),
         };
         Arc::new(gateway)
     }
@@ -133,6 +137,9 @@ impl Gateway {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
+                    if let Some(check) = self.self_check.get() {
+                        check.check();
+                    }
                     let index = self.connections.fetch_add(1, Ordering::Relaxed) + 1;
                     let live = Live::enter(Arc::clone(&self));
                     tokio::spawn(conn::run(live, stream, ConnId::from_index(index)));
@@ -144,6 +151,11 @@ impl Gateway {
                 }
             }
         }
+    }
+
+    /// The self-check each new connection runs, set once.
+    pub fn check_self_with(&self, check: SelfCheck) {
+        let _ = self.self_check.set(check);
     }
 
     /// The initialized connections, oldest first, as `host/status` and

@@ -370,6 +370,16 @@ impl TurnMachine {
         self.turn.as_ref().map(|turn| &turn.id)
     }
 
+    /// The queued messages that will run: none while the queue is paused,
+    /// which waits for the user (design 5.2.13's idle exit).
+    pub fn queued(&self) -> u32 {
+        if self.queue.paused().is_some() {
+            0
+        } else {
+            self.queue.count()
+        }
+    }
+
     /// The attached agent session.
     pub fn agent_session(&self) -> Option<&AgentSessionId> {
         match &self.link {
