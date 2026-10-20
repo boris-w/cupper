@@ -9,6 +9,11 @@ use tokio::signal::unix::{SignalKind, signal};
 /// `anyhow` only here, to print the cause chain of a failed start.
 fn main() -> anyhow::Result<()> {
     let config = Config::parse(std::env::args().skip(1))?;
+    if config.fault("exit_on_start") {
+        std::process::exit(1);
+    }
+    // Before the runtime opens descriptors of its own.
+    script::record_inherited_fds();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
@@ -23,10 +28,6 @@ fn main() -> anyhow::Result<()> {
             replay::EXIT_MISMATCH
         }));
     }
-    if config.fault("exit_on_start") {
-        std::process::exit(1);
-    }
-    script::record_inherited_fds();
     let linger = config.fault("linger");
     runtime.block_on(async {
         // Handling SIGTERM replaces its default action: the process stays.
