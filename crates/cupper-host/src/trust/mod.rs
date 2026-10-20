@@ -19,12 +19,14 @@
 //!   order of the relative paths: a fixed value when there is no file, and a
 //!   new value for every change of content, path or link target. A
 //!   [`Manifest`] keeps each file's hash for `diff_from_trusted`.
+//! - **States** follow [`Trust`]: pure functions of the old state and a scan.
 //!
 //! Reading the files blocks: callers run [`scan`] on the blocking pool
 //! (design 5.2.3). Findings for the native confirmation are T096's; they read
 //! [`ScannedFile::content`].
 
 mod digest;
+mod state;
 #[cfg(test)]
 mod tests;
 mod walk;
@@ -34,6 +36,7 @@ use std::path::{Path, PathBuf};
 use cupper_protocol::ids::Digest;
 
 pub use self::digest::Manifest;
+pub use self::state::{DigestMismatch, Trust, Trusted, TrustedBy};
 pub use self::walk::{MAX_BYTES, MAX_FILES, ScanError};
 
 /// The project configuration in a scan's range, as of the scan.

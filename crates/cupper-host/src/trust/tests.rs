@@ -1,11 +1,15 @@
-//! UNIT-trust-scan: the range, links, limits and digest of the trust scan, on trees this test builds in fresh temporary directories.
+//! UNIT-trust-scan: the range, links, limits, digest, states and diff of the
+//! trust scan, on trees this test builds in fresh temporary directories.
 
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use cupper_protocol::ids::Digest;
+use cupper_protocol::ids::{Digest, PrincipalId};
+use cupper_protocol::index::TrustState;
+use cupper_protocol::item::DiffChange;
+use cupper_protocol::methods::project::TrustedFileChange;
 use sha2::{Digest as _, Sha256};
 
 use super::*;
@@ -59,6 +63,11 @@ impl Drop for Tree {
 
 fn paths(scan: &Scan) -> Vec<&str> {
     scan.files.iter().map(|file| file.path.as_str()).collect()
+}
+
+fn change(path: &str, change: DiffChange) -> TrustedFileChange {
+    let path = cupper_protocol::annotations::WirePath(path.into());
+    TrustedFileChange { path, change }
 }
 
 #[test]
@@ -199,4 +208,66 @@ fn unit_trust_scan_digest_follows_content_paths_and_link_targets_only() {
     let tag: [u8; 32] = Sha256::digest(b"cupper-trust-v1").into();
     assert_eq!(empty.digest, Digest::from_sha256(&tag));
     assert!(empty.files.is_empty());
+}
+
+#[test]
+fn unit_trust_scan_states_and_diff_from_trusted() {
+    let t = Tree::new("states");
+    let by: PrincipalId = "pr_test".parse().unwrap();
+
+    // Added with no file: trusted at once; a file appearing makes it stale.
+    let empty = t.scan().unwrap();
+    let auto = Trust::added(&empty, 1);
+    assert_eq!(auto.state, TrustState::Trusted);
+    assert_eq!(auto.trusted.as_ref().unwrap().by.as_str(), "auto_empty");
+    t.file("ws/.claude/settings.json", "{}");
+    let first = t.scan().unwrap();
+    let appeared = auto.rescanned(&first);
+    assert_eq!(appeared.state, TrustState::Stale);
+    let added = change(".claude/settings.json", DiffChange::Add);
+    assert_eq!(appeared.diff_from_trusted(&first), Some(vec![added]));
+
+    // Added with a file: untrusted until confirmed with the digest seen.
+    let untrusted = Trust::added(&first, 2);
+    assert_eq!(untrusted.state, TrustState::Untrusted);
+    assert_eq!(untrusted.rescanned(&first), untrusted);
+    assert_eq!(untrusted.diff_from_trusted(&first), None);
+    let mismatch = Trust::confirmed(&first, &empty.digest, by.clone(), 3);
+    assert_eq!(mismatch, Err(DigestMismatch));
+    let trusted = Trust::confirmed(&first, &first.digest, by, 3).unwrap();
+    let record = trusted.trusted.as_ref().unwrap();
+    assert_eq!((record.by.as_str(), record.at_ms), ("pr_test", 3));
+    assert_eq!(record.manifest, first.manifest());
+    assert_eq!(trusted.rescanned(&first), trusted);
+    assert_eq!(trusted.diff_from_trusted(&first), None);
+
+    // Changed, added, deleted.
+    t.file("ws/.claude/settings.json", r#"{"env": {}}"#);
+    t.file("ws/.mcp.json", "{}");
+    let second = t.scan().unwrap();
+    let stale = trusted.rescanned(&second);
+    assert_eq!(stale.state, TrustState::Stale);
+    let expected = [
+        change(".claude/settings.json", DiffChange::Update),
+        change(".mcp.json", DiffChange::Add),
+    ];
+    assert_eq!(stale.diff_from_trusted(&second).unwrap(), expected);
+    fs::remove_file(t.path("ws/.claude/settings.json")).unwrap();
+    let third = t.scan().unwrap();
+    let deleted = change(".claude/settings.json", DiffChange::Delete);
+    assert_eq!(stale.diff_from_trusted(&third).unwrap()[0], deleted);
+
+    // Back to what was trusted: still stale until confirmed again.
+    t.file("ws/.claude/settings.json", "{}");
+    fs::remove_file(t.path("ws/.mcp.json")).unwrap();
+    let back = t.scan().unwrap();
+    assert_eq!(back.digest, first.digest);
+    assert_eq!(stale.rescanned(&back).state, TrustState::Stale);
+    assert_eq!(stale.diff_from_trusted(&back), Some(vec![]));
+
+    // The manifest column: keys in order, read back as written.
+    let json = second.manifest().to_json();
+    assert!(json.starts_with(r#"{".claude/settings.json":""#), "{json}");
+    assert!(json.find(".mcp.json") > json.find(".claude"), "{json}");
+    assert_eq!(Manifest::from_json(&json).unwrap(), second.manifest());
 }
