@@ -18,7 +18,7 @@ use cupper_protocol::methods::handshake::{ClientIdentity, Principal};
 use cupper_protocol::rpc::Scope;
 use cupper_protocol::session::ConfirmationReason;
 use cupper_protocol::sync::{ResyncReason, StreamId, SubscribeMode};
-use cupper_sys::{Refusal, RefusalKind};
+use cupper_sys::{AuditToken, Refusal, RefusalKind};
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
@@ -38,11 +38,12 @@ pub struct AuditRecord {
 pub enum AuditEvent {
     /// `conn.accepted`: a peer of this user, its pinned token and the verdict
     /// on its signature, with the executable it runs and who signed that,
-    /// when they could be read.
+    /// once [`AuditEvent::read_peer`] could read them.
     Accepted {
         pid: i32,
         pid_version: u32,
         verdict: Verdict,
+        token: AuditToken,
         path: Option<String>,
         identifier: Option<String>,
         team_id: Option<String>,
@@ -221,6 +222,30 @@ pub struct Formal {
 }
 
 impl AuditEvent {
+    /// Reads the executable and signature of a `conn.accepted` peer, while
+    /// its token still names the process. Up to hundreds of milliseconds for
+    /// a large unsigned program: the audit writer calls it off the async
+    /// threads, so it holds up no connection.
+    pub fn read_peer(&mut self) {
+        if let Self::Accepted {
+            token,
+            path,
+            identifier,
+            team_id,
+            ..
+        } = self
+        {
+            let exe = cupper_sys::pid_path(token.pid()).ok();
+            let signed = token.signing_identity().ok().flatten();
+            let alive = token.unique_id().is_ok();
+            *path = exe
+                .filter(|_| alive)
+                .map(|p| p.to_string_lossy().into_owned());
+            (*identifier, *team_id) =
+                signed.map_or((None, None), |s| (Some(s.identifier), s.team_id));
+        }
+    }
+
     /// Whether the record goes into the `audit` table; `stream.subscribed`
     /// goes to `host.log` only (rulings before T033).
     pub fn kept(&self) -> bool {
@@ -541,18 +566,26 @@ mod tests {
 
     #[test]
     fn unit_audit_format_accepted_carries_the_peer_and_subscribed_stays_out() {
-        let accepted = AuditEvent::Accepted {
-            pid: 7,
-            pid_version: 1,
+        // This process on the other end: read, it is this test binary.
+        let (ours, _theirs) = std::os::unix::net::UnixStream::pair().unwrap();
+        let token = cupper_sys::peer_token(&ours).unwrap();
+        let mut accepted = AuditEvent::Accepted {
+            pid: token.pid(),
+            pid_version: token.pid_version(),
             verdict: Verdict::Other(None),
-            path: Some("/usr/local/bin/cupper".into()),
-            identifier: Some("dev.cupper.cli".into()),
+            token,
+            path: None,
+            identifier: None,
             team_id: None,
         };
+        accepted.read_peer();
         let formal = accepted.formal();
-        let peer = r#"{"identifier":"dev.cupper.cli","path":"/usr/local/bin/cupper","pid":7,"team_id":null}"#;
+        let exe = std::fs::canonicalize(std::env::current_exe().unwrap()).unwrap();
+        let peer = formal.peer.unwrap();
         assert_eq!(formal.event, "conn.accepted");
-        assert_eq!(formal.peer, Some(parsed(peer)));
+        assert_eq!(peer["pid"], json!(std::process::id()));
+        assert_eq!(peer["path"], json!(exe.to_string_lossy()));
+        assert!(peer["identifier"].is_string(), "{peer}");
         assert_eq!(formal.detail, parsed(r#"{"error":null,"verdict":"other"}"#));
         let subscribed = AuditEvent::Subscribed {
             stream: StreamId::Index,

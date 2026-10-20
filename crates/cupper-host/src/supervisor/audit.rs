@@ -7,7 +7,7 @@
 
 use tokio::sync::mpsc;
 
-use crate::gateway::AuditRecord;
+use crate::gateway::{AuditEvent, AuditRecord};
 use crate::quiescence::{ActorKind, Participant};
 use crate::store::{Durability, Writer};
 
@@ -20,7 +20,17 @@ pub async fn write(
     writer: Writer,
     participant: Participant,
 ) {
-    while let Some(record) = participant.idle(records.recv()).await {
+    while let Some(mut record) = participant.idle(records.recv()).await {
+        if let AuditEvent::Accepted { .. } = record.event {
+            let read = tokio::task::spawn_blocking(move || {
+                record.event.read_peer();
+                record
+            });
+            let Ok(read) = read.await else {
+                continue;
+            };
+            record = read;
+        }
         let formal = record.event.formal();
         let conn = record.conn.map(|conn| conn.to_string());
         let principal = formal.principal.map(|principal| principal.to_string());
