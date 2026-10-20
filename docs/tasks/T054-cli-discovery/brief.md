@@ -99,6 +99,6 @@ GUI 进程自己的 PATH 里没有 Homebrew、nvm 等目录（SP-2），所以�
 **对执行者发现的裁定**（已写进设计）：
 1. **npm 安装按布局表认，不按 shebang 认**：5.6.6"解析成原生二进制"已按你核实的结果改写（2.1.120 起的 `bin/claude.exe`、postinstall 没跑时的占位文件与平台包位置、2.1.100 及以前的纯 JS `cli.js` 判为 `unsupported_install`，只认表里列出的位置）。
 2. **pnpm 全局安装的 `#!/bin/sh` 脚本**：M1a 判为 `unsupported_install`，不解析脚本内容。
-3. **`/usr/bin/git` 的 xcode-select 占位程序**：5.2.10 已补上处理方式：先用 `xcode-select -p` 确认开发者目录存在、且其下的 `usr/bin/git` 存在，才运行；否则判为 git 缺失并提示安装命令行工具，绝不运行占位程序。解析路径时（T054）把"是否为占位程序"作为结果的一部分给出，运行版本检测的 T094 据此决定是否运行。
+3. **`/usr/bin/git` 的 xcode-select 占位程序**：5.2.10 已补上处理方式：先用 `xcode-select -p` 确认开发者目录存在、且其下的 `usr/bin/git` 存在，才运行；否则判为 git 缺失并提示安装命令行工具，绝不运行占位程序。这一步要运行 `xcode-select -p`，属于"拉起进程"那一半，归 T094；T054 只负责解析出 git 的绝对路径。
 4. 原生安装器的布局本机没有、核实不了：按官方文档和 registry 元数据写进布局表，在 `notes.md` 里标"未在本机核实"。
 5. codex 的布局变化记在 `notes.md` 里供 T111 参考即可。
