@@ -258,6 +258,10 @@
 | T140 | `AgentRuntime` 现在丢弃 `Steer` 命令 | T055 |
 | T036 | 设置里的 `agents.env_passthrough` 还没接，`adapter_env` 拿到的放行名单是空的 | T055 |
 | T110（第二种 agent） | 第二种 agent 接进来时需要一个自己的 `ActorKind` | T055 |
+| T100 | 在 `Host::start` 里调用 `routes.presence(..)`（`session/mark_read`、`client/presence` 在那之前对真实宿主回 `unsupported`）；状态计算接在 `IndexActor::pending` 旁边；对账时按行补出的会话摘要只是起点 | T034 |
+| T059 | `HostUpdated.pending_upgrade` 改为取自检的结果 | T034 |
+| 用 git 的任务（T061、T109 等） | git 从 `Discovery::git`（`Option<GitTool>`）取；找不到 git 时为 `None` | T034 |
+| 修复锁用例的偶发失败（待派） | `gateway::listen::tests::host_lock_is_held_once_and_names_its_holder` 偶发失败：释放 `host.lock` 后立刻再拿，报"已被占用"。应是 T021 查明的窗口（别的测试线程 `posix_spawn` 时 fd 表被短暂复制）。改成单独进程隔离（`cupper-sys` 的 `testutil::alone` 那样），或释放后在短时限内重试 | T034 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
