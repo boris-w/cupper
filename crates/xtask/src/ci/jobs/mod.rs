@@ -3,6 +3,7 @@
 //! its file and fills in `run`; the composites already list it.
 
 mod differential;
+mod e2e;
 mod license;
 mod protocol;
 mod rust;
@@ -46,7 +47,7 @@ pub const JOBS: &[Job] = &[
     job("license", Some(license::run)),
     job("testdata-scan", Some(testdata_scan::run)),
     job("differential", Some(differential::run)),
-    locked("e2e", None),
+    locked("e2e", Some(e2e::run)),
     locked("perf", None),
     job("security-macos14", Some(security::run)),
     job("compat-framework", None),

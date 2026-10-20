@@ -61,7 +61,14 @@ function entries(view: ViewJson, list: Entry[], rows: StreamRow[]): void {
   for (const entry of list) {
     if ("request" in entry) {
       close();
-      rows.push({ kind: "request", key: `request:${entry.request}`, requestId: entry.request });
+      const request = view.requests[entry.request];
+      const key = `request:${entry.request}`;
+      rows.push({
+        kind: "request",
+        key,
+        requestId: entry.request,
+        ...(request ? { request } : {}),
+      });
       continue;
     }
     const item = view.items[entry.item];
@@ -81,6 +88,14 @@ function entries(view: ViewJson, list: Entry[], rows: StreamRow[]): void {
     }
     close();
     const row = item && itemRow(item);
+    if (row?.kind === "user_message" && row.replyTo) {
+      const asked = view.requests[row.replyTo]?.requested.request as {
+        title?: unknown;
+        prompt?: unknown;
+      };
+      const title = asked?.title ?? asked?.prompt;
+      if (typeof title === "string") row.replyTitle = title;
+    }
     if (row) {
       rows.push(row);
     }

@@ -11,13 +11,14 @@ import type {
   InteractionRequested,
   QuestionField,
 } from "@cupper/protocol";
-import { useState, type MutableRefObject, type ReactNode, type Ref } from "react";
+import { useRef, useState, type MutableRefObject, type ReactNode, type Ref } from "react";
 
 import { useT } from "../app/providers";
 import { initialSelection, isEnabled, isPrivileged, move, type PanelKey } from "./logic";
 
 export interface KindProps {
   requested: InteractionRequested;
+  agent: string;
   answer(outcome: InteractionOutcome): void;
   /** A privileged option goes to the native dialog (RP-7). */
   confirm(option: InteractionOption): void;
@@ -30,6 +31,8 @@ export interface KindProps {
 
 export const BUTTON =
   "rounded-lg px-2.5 py-1 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+/** Rule 3 of real input: keys typed this recently make the next Enter no real input. */
+const TYPING_MS = 1000;
 const KEYCAP = "ml-1.5 rounded-xs border border-current px-1 text-xs opacity-60";
 
 export const text = (content?: Content | null) =>
@@ -118,12 +121,19 @@ export function OptionsKind(
     options: InteractionOption[];
     truncated: boolean;
     skip: InteractionOutcome;
+    /** RP-12: reject, then send this text as a follow-up; only with a rejecting option. */
+    rejectWithMessage?: (text: string) => void;
     children: ReactNode;
   },
 ) {
   const t = useT();
   const { options, truncated } = props;
   const [selected, setSelected] = useState(() => initialSelection(options, truncated));
+  const [message, setMessage] = useState("");
+  const [clickHint, setClickHint] = useState(false);
+  const typedAt = useRef(0);
+  const messageRef = useRef<HTMLInputElement>(null);
+  const send = () => message.trim() && props.rejectWithMessage?.(message.trim());
   const choose = (index: number, byKey: boolean) => {
     const option = options[index];
     // Unknown effect: no number, no Enter; a click leads to the native dialog (RP-6).
@@ -138,6 +148,8 @@ export function OptionsKind(
     }
   };
   props.keys.current = (key) => {
+    // The free text row is numbered after the options (RP-5).
+    if (key.type === "digit" && key.index === options.length) messageRef.current?.focus();
     if (key.type === "digit") choose(key.index, true);
     if (key.type === "up" || key.type === "down")
       setSelected(move(options, selected, key.type === "up" ? -1 : 1, truncated));
@@ -165,12 +177,38 @@ export function OptionsKind(
         listRef={props.listRef}
         click={props.click}
       />
+      {props.rejectWithMessage && (
+        <label className="mx-2 flex items-center gap-2 px-2 py-1.5 text-sm">
+          <span className="w-4 shrink-0 text-fg-tertiary">{options.length + 1}.</span>
+          <input
+            ref={messageRef}
+            value={message}
+            placeholder={t("request:message", { agent: props.agent })}
+            aria-label={t("request:message", { agent: props.agent })}
+            onChange={(event) => {
+              setMessage(event.target.value);
+              setClickHint(false);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+                typedAt.current = Date.now();
+                return;
+              }
+              // Rule 3: an Enter right after typing is no real input; a click is (RP-5).
+              return Date.now() - typedAt.current < TYPING_MS ? setClickHint(true) : send();
+            }}
+            className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-fg/50"
+          />
+        </label>
+      )}
       <Footer
         skip={() => props.answer(props.skip)}
-        submit={() => choose(selected, false)}
-        canSubmit={selected >= 0}
+        submit={() => (message.trim() ? send() : choose(selected, false))}
+        canSubmit={selected >= 0 || message.trim() !== ""}
         click={props.click}
-      />
+      >
+        {clickHint && <span className="text-fg-tertiary">{t("request:click_submit")}</span>}
+      </Footer>
     </>
   );
 }
