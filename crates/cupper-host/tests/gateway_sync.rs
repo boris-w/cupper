@@ -1,12 +1,14 @@
-//! Gateway sync and history on a host process (design 5.9.1, 5.9.8):
-//! IT-gw-sync (SP-4a's end-to-end tests 1-7 and adapter isolation),
-//! IT-NFR2-epoch and IT-history-from-host. The agent is the
+//! Gateway sync, history and notification intents on a host process
+//! (design 5.9.1, 5.9.8): IT-gw-sync (SP-4a's end-to-end tests 1-7 and
+//! adapter isolation), IT-NFR2-epoch, IT-history-from-host,
+//! IT-notification-intent and IT-host-orphaned. The agent is the
 //! claude-shaped fake agent; the tests talk to the host through the CLI
 //! library's client and stream mirror, as the CLI's `harness` client.
 
 mod common;
 
 use std::path::Path;
+use std::process::Command;
 use std::time::Duration;
 
 use cupper_cli::client::{self, Client, ClientAuth, ClientError, Incoming, Options};
@@ -19,11 +21,13 @@ use cupper_protocol::event::Strictness;
 use cupper_protocol::frame::BlobChunkHeader;
 use cupper_protocol::ids::{BlobHash, CommandId, SessionId};
 use cupper_protocol::item::Item;
-use cupper_protocol::methods::session::{SessionQueueResume, SessionSend};
+use cupper_protocol::methods::handshake::{ClientPresence, ClientPresenceParams};
+use cupper_protocol::methods::session::{SessionInterrupt, SessionQueueResume, SessionSend};
 use cupper_protocol::methods::stream::{
     BlobGet, BlobGetParams, BlobPut, BlobPutParams, HistoryPage, HistoryPageParams,
     StreamSubscribeParams, StreamSubscribeResult,
 };
+use cupper_protocol::proof;
 use cupper_protocol::rpc::{Idempotency, Method, MethodError, Milestone, Scope};
 use cupper_protocol::session::TurnStatus;
 use cupper_protocol::sync::{ResyncReason, StreamId, SubscribeMode};
@@ -844,4 +848,210 @@ async fn it_history_from_host_pages_the_turns_before_the_window() {
     assert_eq!(said_in(&view, 1), "turn 1");
     let adapters = "SELECT CAST(count(*) AS TEXT) FROM adapters";
     assert_eq!(column(&data_dir, adapters), ["1"]);
+}
+
+/// Waits until the index holds `want`, the reasons of its intents in order.
+async fn intents(data_dir: &Path, want: &[&str]) {
+    let sql = "SELECT json_extract(json, '$.data.reason') FROM events
+               WHERE stream = 'index' AND type = 'notification.intent' ORDER BY seq";
+    until(data_dir, "host.db", sql, want).await;
+}
+
+/// Sends `text` and waits for it to end as the session's `n`th turn.
+async fn turn(client: &Client, data_dir: &Path, session: &SessionId, text: &str, n: usize) {
+    send(client, session, text).await;
+    events(data_dir, session, "turn.completed", n).await;
+}
+
+/// `client/presence` of the `dev_key` desktop connection `ui`; the ping
+/// after it makes sure the host has read it.
+async fn presence(ui: &mut testkit::Client, foreground: bool, session: &SessionId) {
+    let params = json!({"foreground": foreground, "session_id": session});
+    let notification = json!({"jsonrpc": "2.0", "method": "client/presence", "params": params});
+    ui.send(&notification).await;
+    ui.call("ping", Value::Null).await.unwrap();
+}
+
+/// IT-notification-intent (AP-3): needing action, a turn completed and a
+/// turn failed each bring one `notification.intent` once the 100 ms of
+/// coalescing are over; a request answered within them brings none, nor
+/// does an interrupted turn. The presence of the harness's client counts
+/// for nothing (security #16); a desktop window in front on the session
+/// keeps intents back while it watches (`dev-auth` builds, which have the
+/// desktop's `dev_key`).
+#[tokio::test(flavor = "multi_thread")]
+async fn it_notification_intent_once_per_change_unless_watched() {
+    let dir = TempDir::new("intent");
+    let data_dir = fake_agent_data(&dir);
+    let mut payload = payload(fake_agent_config(json!({"clock": "manual"})));
+    if cfg!(feature = "dev-auth") {
+        payload["dev_key"] = json!(proof::to_hex(&KEY));
+    }
+    let _host = Running(start(&mut Command::new(HOST), &data_dir, &payload));
+    let client = connect(&data_dir).await;
+    let allow = json!({"type": "selected", "option_id": "allow-once"});
+
+    let session = create(&client, "permission t1; say done").await;
+    let asked = events(&data_dir, &session, "interaction.requested", 1).await;
+    advance(&client, 100).await;
+    intents(&data_dir, &["needs_action"]).await;
+    respond(&client, &session, &asked[0], allow.clone())
+        .await
+        .unwrap();
+    events(&data_dir, &session, "turn.completed", 1).await;
+    advance(&client, 100).await;
+    let mut want = vec!["needs_action", "turn_completed"];
+    intents(&data_dir, &want).await;
+
+    // Answered within the 100 ms: only the end of the turn.
+    send(&client, &session, "permission t2; say again").await;
+    let asked = events(&data_dir, &session, "interaction.requested", 2).await;
+    respond(&client, &session, &asked[1], allow).await.unwrap();
+    events(&data_dir, &session, "turn.completed", 2).await;
+    advance(&client, 100).await;
+    want.push("turn_completed");
+    intents(&data_dir, &want).await;
+
+    // Interrupted: none.
+    send(&client, &session, "wait_cancel").await;
+    events(&data_dir, &session, "turn.started", 3).await;
+    let interrupt = json!({"command_id": client::command_id(), "session_id": session});
+    let interrupted = client.request::<SessionInterrupt>(typed(interrupt)).await;
+    interrupted.unwrap();
+    events(&data_dir, &session, "turn.completed", 3).await;
+    advance(&client, 100).await;
+    let mut ended = 3;
+
+    if cfg!(feature = "dev-auth") {
+        let socket = socket_path(&data_dir, &cupper_sys::user_temp_dir().unwrap());
+        let mut ui = testkit::Client::connect(&socket).await;
+        let nonce = ui.hello().await;
+        let (auth, _) = key_auth("dev_key", &KEY, &nonce, std::process::id() as i32);
+        let mut params = initialize_params(&nonce, auth);
+        params["client"]["kind"] = json!("desktop");
+        params["role"] = json!("control");
+        ui.call("initialize", params).await.unwrap();
+        presence(&mut ui, true, &session).await;
+        turn(&client, &data_dir, &session, "say watched", 4).await;
+        advance(&client, 100).await;
+        presence(&mut ui, false, &session).await;
+        turn(&client, &data_dir, &session, "say unwatched", 5).await;
+        advance(&client, 100).await;
+        want.push("turn_completed");
+        intents(&data_dir, &want).await;
+        ended = 5;
+    }
+
+    let params = ClientPresenceParams {
+        foreground: true,
+        session_id: Some(session.clone()),
+    };
+    client.notify::<ClientPresence>(params).await.unwrap();
+    turn(&client, &data_dir, &session, "exit 1", ended + 1).await;
+    advance(&client, 100).await;
+    want.push("error");
+    intents(&data_dir, &want).await;
+}
+
+/// IT-host-orphaned (P-19, T059's rule, `dev-auth` builds): the process
+/// that started the host exits while a turn waits for an answer. The host
+/// starts no new sessions or turns, lets the turn finish, and then exits
+/// in order.
+#[cfg(feature = "dev-auth")]
+#[tokio::test(flavor = "multi_thread")]
+async fn it_host_orphaned_finishes_the_turn_then_exits() {
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::Stdio;
+
+    use cupper_protocol::annotations::DurationMs;
+    use cupper_protocol::ids::ProjectId;
+    use cupper_protocol::methods::admin::{TestClockAdvance, TestClockAdvanceParams};
+    use cupper_protocol::methods::session::SessionCreate;
+    use cupper_sys::ExitWatch;
+
+    /// A host this test did not start itself: SIGTERM at the end if it still
+    /// runs, once its pid and start time say it is the same process.
+    struct Adopted {
+        pid: i32,
+        start: StartTime,
+    }
+
+    impl Drop for Adopted {
+        fn drop(&mut self) {
+            let same = cupper_sys::process_info(self.pid).is_some_and(|p| p.start == self.start);
+            if let (true, Ok(exit)) = (same, ExitWatch::new(self.pid)) {
+                let pid = self.pid.to_string();
+                let _ = Command::new("/bin/kill").args(["-TERM", &pid]).status();
+                let _ = exit.wait(PATIENCE);
+            }
+        }
+    }
+
+    let dir = TempDir::new("orphaned");
+    let data_dir = fake_agent_data(&dir);
+    // sh starts the host and turns into `sleep`, the host's parent until
+    // the test ends it.
+    let script =
+        r#"exec 3<&0; "$0" "$1" "$2" <&3 3<&- >/dev/null 2>&1 & echo $!; exec /bin/sleep 3600"#;
+    let sh = Command::new("/bin/sh")
+        .args(["-c", script, HOST, "--data-dir"])
+        .arg(&data_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn();
+    let mut parent = Running(sh.unwrap());
+    let config = fake_agent_config(json!({"clock": "manual"}));
+    writeln!(parent.0.stdin.take().unwrap(), "{}", payload(config)).unwrap();
+    let mut line = String::new();
+    let stdout = parent.0.stdout.take().unwrap();
+    BufReader::new(stdout).read_line(&mut line).unwrap();
+    let pid: i32 = line.trim().parse().unwrap();
+    let host = cupper_sys::process_info(pid).unwrap();
+    assert_eq!(host.ppid as u32, parent.0.id());
+    let _host = Adopted {
+        pid,
+        start: host.start,
+    };
+    let exited = ExitWatch::new(pid).unwrap();
+
+    let client = connect(&data_dir).await;
+    let session = create(
+        &client,
+        "tool t1 execute Run tests; permission t1; say done",
+    )
+    .await;
+    let asked = events(&data_dir, &session, "interaction.requested", 1).await;
+    terminate(&parent.0);
+    parent.0.wait().unwrap();
+    let adopted = || cupper_sys::process_info(pid).is_some_and(|p| p.ppid == 1);
+    eventually("launchd adopts the host", adopted).await;
+    // The host looks at its parent every `supervisor_observe`.
+    advance(&client, 1_000).await;
+    let send = client.request::<SessionSend>(typed(message(&session, "say more")));
+    assert_eq!(refused(send.await).0, "unavailable");
+    let params = json!({"command_id": client::command_id(), "agent": "claude",
+        "project_id": ProjectId::from_uuid(1), "workspace": {"kind": "local"},
+        "message": [{"type": "text", "text": "say new"}]});
+    let created = client.request::<SessionCreate>(typed(params)).await;
+    assert_eq!(refused(created).0, "unavailable");
+
+    let allow = json!({"type": "selected", "option_id": "allow-once"});
+    respond(&client, &session, &asked[0], allow).await.unwrap();
+    let ended = events(&data_dir, &session, "turn.completed", 1).await;
+    assert_eq!(ended[0]["status"], "completed");
+    // It may be gone before the answer to the advance.
+    let observe = TestClockAdvanceParams {
+        ms: DurationMs(1_000),
+    };
+    let _ = client.request::<TestClockAdvance>(observe).await;
+    let status = tokio::task::spawn_blocking(move || exited.wait(PATIENCE));
+    let status = status.await.unwrap().unwrap().expect("the host exits");
+    assert_eq!(status.code(), Some(0));
+    let exiting = "SELECT detail_json FROM audit WHERE event = 'host.exiting'";
+    let exiting: Value = serde_json::from_str(&column(&data_dir, exiting)[0]).unwrap();
+    assert_eq!(exiting, json!({"force": false, "reason": "orphaned"}));
+    let left = "SELECT CAST(count(*) AS TEXT) FROM adapters WHERE ended_at IS NULL";
+    assert_eq!(column(&data_dir, left), ["0"]);
+    let turns = "SELECT CAST(count(*) AS TEXT) FROM turns";
+    assert_eq!(column(&data_dir, turns), ["1"]);
 }
