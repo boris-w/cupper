@@ -208,6 +208,8 @@
 | 组装 `Cupper.app` 的任务、T161 | 5.10.2 要求两个 Info.plist 都不含用途说明：`host-bundle` 只产出宿主的那一份（CLI 没有 Info.plist），`Cupper.app` 的那一份由 electron-builder 产出，要由组装它的任务断言，T161 的 `release-config` 每晚复核 | T005 |
 | T075、T180 | 宿主的 cdhash 随 Info.plist、运行时文件和二进制变化，自用构建的 CLI 必须与同一次 `cargo xtask host-bundle` 产出的 `CupperHost.app` 配套分发。Developer ID 签名之后 Node 和宿主都按发布身份重签，清单里 Node 的 sha-256 和 cdhash 要重算（另见 T004 的交接）。产物在 `target/host-bundle/<kind>/`，编译中间目录是 `target/host-bundle/build/`（每个 worktree 约 1.2 GB） | T005 |
 | 改 5.7.9 构建身份的任务 | IT-host-bundle-layout 直接读设计 5.7.9 的"宿主的 bundle id""CLI 的 identifier"两行与 `crates/xtask/src/host_bundle.rs` 的 `KINDS` 比对，改一边要同步另一边 | T005 |
+| T055 | 接 T094 的 `driver/probe`：登录 shell 要保留的名字传内嵌清单的 `env.allow` 加放行名单；初始环境建议取宿主自己的 `HOME`、`USER`、`LOGNAME`、`SHELL`、`TMPDIR`、`LANG`、`LC_*`、`PATH`；`TestConfig.login_env` 有值时直接构造 `LoginEnv { vars, failure: None }`，不运行 shell；`SHELL` 为空时用 `LoginEnv::fallback(Failure::ShellMissing)`；`xcode-select -p` 和 `--version` 用同一份白名单环境；版本范围从内嵌清单取版本号字符串；语义码到协议字段的映射归 T055、T034 | T094 |
+| 接日志的任务（T028 及以后） | `LoginEnv.vars` 的值（登录 shell 取到的环境）不能写进 host.log 或诊断包；`Debug` 已经只打印变量名，不要另外手动打印这些值 | T094 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
