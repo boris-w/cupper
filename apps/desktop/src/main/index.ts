@@ -8,6 +8,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { createI18n } from "@cupper/i18n";
+import { MAIN_DOCUMENT_CSP } from "@cupper/shell-api";
 import {
   app,
   autoUpdater,
@@ -31,12 +32,7 @@ import { MainLog } from "./log";
 import { menuTemplate } from "./menu";
 import { appDirs, e2eDirs, type AppDirs } from "./paths";
 import { Prefs } from "./prefs";
-import {
-  APP_SCHEME,
-  APP_SCHEME_PRIVILEGES,
-  MAIN_DOCUMENT_CSP,
-  appProtocolHandler,
-} from "./security/app-protocol";
+import { APP_SCHEME, APP_SCHEME_PRIVILEGES, appProtocolHandler } from "./security/app-protocol";
 import { hardenWebContents } from "./security/navigation";
 import { restrictPermissions } from "./security/permissions";
 import { enforceSwitchAllowlist } from "./security/switches";
