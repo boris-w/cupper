@@ -57,7 +57,11 @@ pub use ticket::{Completion, Ticket, Waiter};
 
 use crate::clock::Clock;
 use crate::durations::{Durations, LEDGER_RETENTION, LEDGER_SWEEP};
+use crate::quiescence::{ActorKind, Participant};
 use crate::store::{Durability, WriteError, Writer};
+
+/// The sweeper's kind in the quiescence barrier.
+pub const SWEEPER: ActorKind = ActorKind::new("ledger_sweeper");
 
 /// A command's answer: its result, or the error it ended with.
 pub type Outcome = Result<Value, RpcError>;
@@ -249,12 +253,12 @@ impl Ledger {
     }
 
     /// Sweeps at once and then every `ledger_sweep`, on `Clock` timers, for as
-    /// long as the task runs. The host spawns it.
-    pub async fn sweeper(self) {
+    /// long as the task runs. The host spawns it, as [`SWEEPER`].
+    pub async fn sweeper(self, participant: Participant) {
         let clock = Arc::clone(&self.shared.clock);
         let mut next = clock.now_mono();
         loop {
-            clock.timer_at(next).await;
+            participant.idle(clock.timer_at(next)).await;
             // A failed sweep leaves its rows to the next one.
             let _ = self.sweep().await;
             next = next + self.shared.sweep_every;

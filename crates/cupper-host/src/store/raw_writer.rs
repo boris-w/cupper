@@ -231,8 +231,8 @@ struct RawBatcher {
 
 impl RawBatcher {
     fn run(mut self, inbox: &Receiver<Message>, participant: Participant) {
-        let _participant = participant;
-        let mut next = inbox.recv().ok();
+        // Idle while it waits for frames, which come from the outside world.
+        let mut next = participant.idle_blocking(|| inbox.recv()).ok();
         while let Some(message) = next.take() {
             match message {
                 Message::Frame(first) => {
@@ -255,7 +255,7 @@ impl RawBatcher {
                 }
             }
             if next.is_none() {
-                next = inbox.recv().ok();
+                next = participant.idle_blocking(|| inbox.recv()).ok();
             }
         }
     }

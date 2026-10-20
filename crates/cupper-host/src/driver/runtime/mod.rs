@@ -196,7 +196,7 @@ struct Actor {
     /// What the capability cache holds.
     cached: Option<SessionCapabilities>,
     auth: AuthStatus,
-    _participant: Participant,
+    participant: Participant,
 }
 
 fn digest(commands: &[SlashCommand]) -> [u8; 32] {
@@ -244,7 +244,7 @@ impl AgentRuntime {
                 kind: None,
                 plan: None,
             },
-            _participant: participant,
+            participant,
         };
         tokio::spawn(actor.run(inbox));
         Self { mail }
@@ -329,13 +329,17 @@ impl Actor {
                     None => future::pending().await,
                 }
             };
-            // A branch's handler runs once the other branch is dropped.
-            tokio::select! {
-                mail = inbox.recv() => match mail {
-                    Some(mail) => self.mail(mail).await,
-                    None => break,
-                },
-                Some(wire) = wire => self.wire(wire),
+            // Idle until either brings work; it runs after both are dropped.
+            let next = self.participant.idle(async {
+                tokio::select! {
+                    mail = inbox.recv() => Either::Left(mail),
+                    Some(wire) = wire => Either::Right(wire),
+                }
+            });
+            match next.await {
+                Either::Left(Some(mail)) => self.mail(mail).await,
+                Either::Left(None) => break,
+                Either::Right(wire) => self.wire(wire),
             }
         }
     }

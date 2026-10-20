@@ -2,8 +2,9 @@
 //! left running ends at startup, `host/exit` and SIGTERM exit in order, and
 //! a host that cannot start exits with the code of the startup contract, and
 //! a session runs a turn with the fake agent. IT-project-add-trust adds and
-//! trusts a project in a git repository built here. The tests talk to the
-//! host as the CLI's `harness` client.
+//! trusts a project in a git repository built here; IT-clock-advance and
+//! IT-seed drive the test interface. The tests talk to the host as the CLI's
+//! `harness` client.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -394,6 +395,97 @@ async fn it_project_add_trust_through_the_gateway() {
         "SELECT trust_state || ' ' || (git_common_dir IS NOT NULL) FROM projects",
     );
     assert_eq!(states, ["stale 1"]);
+    terminate(&host);
+    assert_eq!(exit_code(&mut host).await, 0);
+}
+
+/// Adds the directory `dir`, empty and outside git, as a project.
+async fn add_project(client: &client::Client, dir: &Path) {
+    use cupper_protocol::annotations::WirePath;
+    use cupper_protocol::methods::project::{ProjectAdd, ProjectAddParams};
+    std::fs::create_dir_all(dir).unwrap();
+    let path = WirePath(dir.to_str().unwrap().into());
+    let params = ProjectAddParams {
+        command_id: client::command_id(),
+        path,
+    };
+    client.request::<ProjectAdd>(params).await.unwrap();
+}
+
+async fn advance(client: &client::Client, ms: u64) {
+    use cupper_protocol::annotations::DurationMs;
+    use cupper_protocol::methods::admin::{TestClockAdvance, TestClockAdvanceParams};
+    let params = TestClockAdvanceParams { ms: DurationMs(ms) };
+    client.request::<TestClockAdvance>(params).await.unwrap();
+}
+
+/// On a manual clock, `test/clock_advance` returns once what the timers set
+/// off is done: a handshake deadline closed its connection, and the ledger's
+/// hourly sweeps removed what passed its 48 hours, through the writer.
+#[tokio::test]
+async fn it_clock_advance_returns_once_the_host_settled() {
+    let dir = TempDir::new("clock");
+    let data_dir = dir.path().join("data");
+    let config = json!({"clock": "manual", "login_env": {"PATH": "/usr/bin:/bin"}});
+    let mut host = spawn_with(&data_dir, config);
+    let client = connect(&data_dir).await;
+    add_project(&client, &dir.path().join("work")).await;
+    let commands = || column(&data_dir, "SELECT CAST(count(*) AS TEXT) FROM commands");
+    assert_eq!(commands(), ["1"]);
+
+    let socket = socket_path(&data_dir, &cupper_sys::user_temp_dir().unwrap());
+    let mut silent = cupper_host::gateway::testkit::Client::connect(&socket).await;
+    silent.hello().await;
+    advance(&client, 9_999).await;
+    advance(&client, 1).await;
+    // Closed by the handshake deadline, before the advance returned.
+    assert_eq!(silent.next().await, None);
+
+    advance(&client, 49 * 3_600_000).await;
+    assert_eq!(commands(), ["0"]);
+    terminate(&host);
+    assert_eq!(exit_code(&mut host).await, 0);
+}
+
+/// `test/seed` writes sessions through the stream writers, turn snapshots
+/// and checkpoints included, and the index lists them.
+#[tokio::test]
+async fn it_seed_writes_sessions_the_normal_way() {
+    use cupper_protocol::methods::admin::{SeedMix, SeedProfile, TestSeed, TestSeedParams};
+
+    let dir = TempDir::new("seed");
+    let data_dir = dir.path().join("data");
+    let mut host = spawn(&data_dir);
+    let client = connect(&data_dir).await;
+    add_project(&client, &dir.path().join("work")).await;
+    let profile = SeedProfile {
+        sessions: 3,
+        turns: 2,
+        items_per_turn: 20,
+        mix: SeedMix::Sp1,
+        large_turn_items: Some(2_000),
+    };
+    client
+        .request::<TestSeed>(TestSeedParams { profile })
+        .await
+        .unwrap();
+
+    let count = |sql| column(&data_dir, sql);
+    assert_eq!(count("SELECT CAST(count(*) AS TEXT) FROM sessions"), ["3"]);
+    assert_eq!(count("SELECT CAST(count(*) AS TEXT) FROM turns"), ["7"]);
+    assert_eq!(
+        count("SELECT CAST(count(*) AS TEXT) FROM turn_snapshots"),
+        ["7"]
+    );
+    let checkpoints =
+        "SELECT CAST(count(*) AS TEXT) FROM checkpoints WHERE stream LIKE 'session/%'";
+    assert_eq!(count(checkpoints), ["3"]);
+    // The large turn: its 2,000 items start, and the messages have text.
+    let large = "SELECT CAST(max(json_array_length(ops)) AS TEXT) FROM turn_snapshots";
+    let ops: u32 = count(large)[0].parse().unwrap();
+    assert!(ops > 4_000, "{ops}");
+    let listed = "SELECT CAST(count(*) AS TEXT) FROM events WHERE stream = 'index' AND type = 'session.upserted'";
+    assert_eq!(count(listed), ["3"]);
     terminate(&host);
     assert_eq!(exit_code(&mut host).await, 0);
 }

@@ -213,7 +213,6 @@ impl Maintenance {
     pub fn spawn(self, quiescence: &Quiescence) -> JoinHandle<()> {
         let participant = quiescence.enter(MAINTENANCE);
         tokio::spawn(async move {
-            let _participant = participant;
             let mut schedule = Schedule::starting(self.clock.now_mono());
             loop {
                 // A cleanup that failed runs again on its next round; the host
@@ -222,7 +221,7 @@ impl Maintenance {
                 let Some(next) = schedule.next_deadline() else {
                     return;
                 };
-                self.clock.timer_at(next).await;
+                participant.idle(self.clock.timer_at(next)).await;
             }
         })
     }
