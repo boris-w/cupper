@@ -139,7 +139,8 @@ impl World {
         let clock = ManualClock::new();
         let ids = Arc::new(IdGen::seeded(Arc::new(clock.clone()), 1));
         let durations = Durations::default();
-        let session = SessionCore::new(SessionId::from_uuid(1), ids, &durations, false);
+        let setter = (crate::policy::testkit::column("UI control"), false);
+        let session = SessionCore::new(SessionId::from_uuid(1), ids, &durations, false, setter);
         Self {
             prop,
             d: CoreDriver::with_clock(session, clock),
@@ -414,7 +415,7 @@ impl World {
                 self.running.clear();
             }
             Out::Event(body) => self.event(at, body),
-            Out::Machine(_) | Out::Driver(_) | Out::Answer(_) | Out::Timer(_) => {}
+            Out::Machine(_) | Out::Driver(_) | Out::Answer(_) | Out::Timer(_) | Out::Tier(_) => {}
         }
     }
 

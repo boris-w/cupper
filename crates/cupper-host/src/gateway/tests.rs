@@ -91,7 +91,7 @@ async fn it_handshake_hello_then_one_initialize_as_read_only_cli() {
     assert_eq!(client.next().await, None, "closed after the refusal");
 
     let accepted = gw.record().await;
-    assert_eq!(accepted.conn.as_str(), "c_1");
+    assert_eq!(accepted.conn.as_ref().map(|c| c.as_str()), Some("c_1"));
     let AuditEvent::Accepted { pid, verdict, .. } = accepted.event else {
         panic!("{accepted:?}");
     };

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::{AdapterInstanceId, CommandId, QueueId, SessionId};
+use cupper_protocol::ids::{AdapterInstanceId, CommandId, PrincipalId, QueueId, SessionId};
 use cupper_protocol::session::TurnStatus;
 use rusqlite::Connection;
 use rusqlite::types::Value;
@@ -61,6 +61,25 @@ impl Rows {
             params.chain([text(source), int(at)]).collect(),
         );
         rows
+    }
+
+    /// Who set the session's tier, and, when `confirmed`, that full access
+    /// was confirmed now (design 5.2.6).
+    pub(super) fn set_by(
+        &mut self,
+        session: &SessionId,
+        at: u64,
+        by: &PrincipalId,
+        confirmed: bool,
+    ) {
+        let set = "mode_set_by = ?3, \
+            full_access_confirmed_at = CASE WHEN ?4 THEN ?2 ELSE full_access_confirmed_at END";
+        self.session(
+            session,
+            at,
+            set,
+            vec![text(by), Value::Integer(confirmed.into())],
+        );
     }
 
     /// The changes `bodies`, from seq `first_seq` on, make; `commands` names

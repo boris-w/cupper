@@ -16,6 +16,7 @@ pub mod session;
 mod session_props;
 #[cfg(test)]
 mod testkit;
+pub mod tier_guard;
 pub mod turn;
 
 use cupper_protocol::annotations::{DurationMs, TimestampMs};

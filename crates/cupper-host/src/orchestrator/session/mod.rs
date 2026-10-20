@@ -14,7 +14,7 @@ pub(super) mod tests;
 
 use std::fmt;
 
-use cupper_protocol::capabilities::{ConfigOptionId, SessionCapabilities};
+use cupper_protocol::capabilities::{ConfigOption, ConfigOptionId, SessionCapabilities};
 use cupper_protocol::domain::Tier;
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
 use cupper_protocol::ids::SessionId;
@@ -41,10 +41,25 @@ impl IndexNotes for NoIndex {
 
 /// The tier of permission mode `mode` by the agent's mapping.
 fn tier_of(capabilities: Option<&SessionCapabilities>, mode: &str) -> Option<Tier> {
-    let mut options = capabilities?.config.iter();
-    let option = options.find(|o| o.id == ConfigOptionId::PermissionMode)?;
+    risk(&capabilities?.config, mode)
+}
+
+fn risk(options: &[ConfigOption], mode: &str) -> Option<Tier> {
+    let option = options
+        .iter()
+        .find(|o| o.id == ConfigOptionId::PermissionMode)?;
     let value = option.values.iter().find(|v| v.value == mode)?;
     Some(value.risk.clone())
+}
+
+/// The permission mode `options` have now and its tier: one the mapping
+/// does not know is full access (design 5.6.5).
+fn mode_tier(options: &[ConfigOption]) -> Option<(String, Tier)> {
+    let option = options
+        .iter()
+        .find(|o| o.id == ConfigOptionId::PermissionMode)?;
+    let tier = risk(options, &option.current).unwrap_or(Tier::FullAccess);
+    Some((option.current.clone(), tier))
 }
 
 /// `params` as `T`; the gateway checked them against the method already.
