@@ -9,7 +9,9 @@
     "format": "cargo fmt --all && prettier --write .",
     "gen": "cargo run --package cupper-protocol --bin export-schema --locked --quiet -- protocol/schema/v1.json && node tools/gen-protocol-ts/src/main.ts",
     "lint": "cargo fmt --all --check && cargo clippy --workspace --all-targets --all-features --locked -- -D warnings && prettier --check . && eslint --max-warnings=0 .",
-    "test": "cargo test --workspace --all-features --locked"
+    "test": "cargo test --workspace --all-features --locked",
+    "test:ui": "pnpm --filter @cupper/ui-screenshots run test:ui",
+    "ui:baseline": "pnpm --filter @cupper/ui-screenshots run ui:baseline"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

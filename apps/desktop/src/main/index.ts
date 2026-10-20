@@ -8,6 +8,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { createI18n } from "@cupper/i18n";
+import { MAIN_DOCUMENT_CSP } from "@cupper/shell-api";
 import {
   app,
   autoUpdater,
@@ -31,16 +32,12 @@ import { MainLog } from "./log";
 import { menuTemplate } from "./menu";
 import { appDirs, e2eDirs, type AppDirs } from "./paths";
 import { Prefs } from "./prefs";
-import {
-  APP_SCHEME,
-  APP_SCHEME_PRIVILEGES,
-  MAIN_DOCUMENT_CSP,
-  appProtocolHandler,
-} from "./security/app-protocol";
+import { APP_SCHEME, APP_SCHEME_PRIVILEGES, appProtocolHandler } from "./security/app-protocol";
 import { hardenWebContents } from "./security/navigation";
 import { restrictPermissions } from "./security/permissions";
 import { enforceSwitchAllowlist } from "./security/switches";
-import { followFocus, serveShell } from "./shell";
+import { guardOf, watchInput } from "./input";
+import { serveShell } from "./shell";
 import { MAIN_DOCUMENT_URL, mainWindowOptions } from "./window";
 
 const flavor = __CUPPER_FLAVOR__;
@@ -150,6 +147,7 @@ async function ready() {
 function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
   const bridges = new WindowBridges({
     connect: openWindow,
+    guard: guardOf,
     controlReady: () => control.ready(),
     schedule: (task, ms) => void setTimeout(task, ms),
     channel: () => {
@@ -189,7 +187,7 @@ function showMainWindow() {
   const window = new BrowserWindow(mainWindowOptions(flavor, preload));
   mainWindow = window;
   window.once("ready-to-show", () => window.show());
-  followFocus(window);
+  watchInput(window, () => Date.now());
   window.on("closed", () => {
     mainWindow = null;
   });

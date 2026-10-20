@@ -90,3 +90,14 @@
 3. **共享的已授 scope**：认可。每次调用在受理时读这个格子；撤销之后的调用按撤销后的 scope 判定，已经受理、正在执行的调用照常完成。把这条写进 `notes.md`。固定令牌随 `Opened` 交给索引。
 4. **窄接口在 T133 接上之前的生产实现必须 fail closed**：血缘一律判为"无法排除是适配器的后代"，`auth/elevate` 返回 `forbidden`（`lineage`）。这样 main 上任何时候都没有不经血缘检查就能进入确认的路径。IT-elevation-grant 用一个测试实现，判为"不是后代"。
 5. **时钟**：T047 已合并，test-harness 构建里有 `test/clock_advance` 和手动时钟。本任务的进程内用例直接用 `ManualClock`；T133 的进程级用例经 `test/clock_advance` 推进，不靠缩短的真实时长等待。
+
+## 第 2 次补充裁定（2026-10-20，编排者）
+
+执行者做完纯核心（490 行，该模块估 380，多约 29%），推算总量约 1,000 行，碰到硬停止线，停下汇报。
+
+**裁定：不再拆分，放宽上限（计划 v1.3.25）。**
+- IT-elevation-grant 是本任务的核心验收，拆走或移给 T133 都会增加两边的协调，得不偿失。
+- 规模改为 L。剩余模块按已做部分的实际偏差（约 +30%）推算，上限约 1,150 行，硬停止线 1,250；推算贴线也先停下。
+- IT-elevation-grant 尽量复用网关已有的进程内夹具（`Peer` 等），不另起一套。
+
+**窄接口认可**：`Requesters::examine(AuditToken) -> Examined`（`Clear(VerifiedRequester)` 或 `Descendant { signals }`），生产实现 `FailClosed`，经 `IndexDeps.requesters` 注入。先查血缘、再查限频的顺序与 5.8.4 的时序图一致。未决期间第二个申请的 `retry_after` 取未决申请剩余的时间，认可。

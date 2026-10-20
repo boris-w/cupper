@@ -16,6 +16,7 @@ use crate::driver::probe::login_shell::{Failure, LoginEnv};
 use crate::orchestrator::testkit::text;
 use crate::store::testutil::{TempDir, host_writer, query, raw_db, raw_rows};
 use crate::store::{Durability, RAW_WRITER, RawWriter, RawWriterThread, WriterThread};
+use cupper_protocol::index::AgentStatus;
 use cupper_sys::{ProcessInfo, process_info};
 
 type Events = mpsc::UnboundedReceiver<DriverEvent>;
@@ -66,7 +67,7 @@ impl Fixture {
             quiescence,
             probe_dir: dir.path().join("probe"),
             durations,
-            notes: Arc::new(status::NoAgentNotes),
+            notes: Arc::new(Deaf),
             rss,
         });
         let raw = Some(raw_thread);
@@ -175,6 +176,14 @@ fn said_pid(said: &str) -> ProcessInfo {
     process_info(pid).unwrap()
 }
 
+/// An index that hears nothing.
+#[derive(Debug)]
+struct Deaf;
+
+impl AgentNotes for Deaf {
+    fn agent(&self, _: AgentStatus) {}
+}
+
 /// A runtime of the fake agent, on `dir`'s stores; probes in `dir/probe`.
 fn runtime(dir: &TempDir) -> AgentRuntime {
     let clock = ManualClock::new();
@@ -205,7 +214,7 @@ fn runtime(dir: &TempDir) -> AgentRuntime {
         quiescence,
         probe_dir: dir.path().join("probe"),
         durations: Durations::default(),
-        notes: Arc::new(status::NoAgentNotes),
+        notes: Arc::new(Deaf),
         rss: None,
     })
 }

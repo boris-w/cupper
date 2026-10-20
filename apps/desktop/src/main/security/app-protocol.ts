@@ -18,24 +18,6 @@ export const APP_SCHEME_PRIVILEGES: CustomScheme = {
   privileges: { standard: true, secure: true, supportFetchAPI: true, codeCache: true },
 };
 
-/** The main document's CSP (design 5.7.8). */
-export const MAIN_DOCUMENT_CSP = [
-  "default-src 'none'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' blob: data:",
-  "font-src 'self'",
-  "worker-src 'self'",
-  "connect-src 'none'",
-  "frame-src app://cupper-review",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-ancestors 'none'",
-  "require-trusted-types-for 'script'",
-  "trusted-types cupper-worker",
-].join("; ");
-
 export interface AppHost {
   /** The directory the host serves. */
   root: string;

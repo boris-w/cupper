@@ -8,6 +8,7 @@ import { HOST_PORT } from "../../shared/ipc";
 import { MAIN_DOCUMENT_URL } from "../window";
 import { WindowBridges } from "./bridges";
 import { fixtures, mockConnect, settle } from "./testing";
+import { InputGuard } from "../input/guard";
 
 /** A window's webContents, as far as the bridges use it. */
 function contents(id: number) {
@@ -27,6 +28,7 @@ function bridges(host: MockHost) {
     connect: () => mockConnect(host),
     controlReady: async () => undefined,
     schedule: (task) => void setTimeout(task, 0),
+    guard: () => new InputGuard(() => 0),
     channel: () => ({
       bridge: { post: () => undefined, onMessage: () => undefined, close: () => undefined },
       window: {} as MessagePortMain,

@@ -130,7 +130,7 @@ type NavigateTarget = { kind: 'session'; session_id: string; request_id?: string
 type PrivilegedAction =
   | { kind: 'interaction'; session_id: string; request_id: string; option_id: string }
   | { kind: 'set_config'; session_id: string; option: string; value: string }
-  | { kind: 'confirm_config'; session_id: string }
+  | { kind: 'confirm_config'; session_id: string }   // 内容（config_digest、原因、当前配置）由主进程经 control 连接订阅一次会话流、取 session.configured（T134）
   | { kind: 'create_session'; params: SessionCreateParams }
   | { kind: 'add_project' }                   // 选目录、project/add、信任确认一次完成
   | { kind: 'trust_project'; project_id: string }
@@ -677,7 +677,7 @@ M1a 的消息流、store、订阅策略、HostPort 生命周期都按这里的�
    - 前 1 秒内按过打字键（白名单和导航键以外的键）时，紧接着的 Enter、Space 或数字键不记作真实输入（⌘Enter 除外）。
    - 按下打字键时，清掉尚未用掉的输入。
 4. **一次输入只能用一次**：
-   - 这个窗口发出的**任何一条**出方向命令，都会用掉尚未消耗的输入。
+   - 这个窗口发出的**任何一条**出方向命令，都会用掉尚未消耗的输入。"命令"指幂等方式为 `command` 的方法；读请求（订阅、翻页）和通知不消耗：渲染进程在后台不断发读请求，否则用户按下 Enter 到 `respond` 发出之间，输入可能已被一条读请求用掉（T077，2026-10-20）。
    - 需要真实输入的命令（`interaction/respond`、`git/revert`、`requestPrivileged`）要求有一个不超过 1 秒、尚未用掉的输入。
    - 主进程转发时把证据写进 `input: {kind, key?, digit?}`，覆盖渲染进程自己填的值。数字键写成 `key: digit` 加 `digit: n`。
 5. **Esc 和拒绝类选项**：

@@ -9,6 +9,7 @@ mod rust;
 mod security;
 mod testdata_scan;
 mod ts;
+mod ui;
 
 use anyhow::Result;
 
@@ -41,7 +42,7 @@ pub const JOBS: &[Job] = &[
     job("rust", Some(rust::run)),
     job("protocol", Some(protocol::run)),
     job("ts", Some(ts::run)),
-    locked("ui", None),
+    locked("ui", Some(ui::run)),
     job("license", Some(license::run)),
     job("testdata-scan", Some(testdata_scan::run)),
     job("differential", Some(differential::run)),

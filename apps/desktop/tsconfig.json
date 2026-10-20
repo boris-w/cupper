@@ -11,6 +11,7 @@
     { "path": "../../packages/host-client" },
     { "path": "../../packages/i18n" },
     { "path": "../../packages/protocol" },
-    { "path": "../../packages/shell-api" }
+    { "path": "../../packages/shell-api" },
+    { "path": "../../packages/ui-core" }
   ]
 }

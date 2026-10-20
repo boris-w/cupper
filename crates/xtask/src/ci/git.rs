@@ -35,6 +35,19 @@ pub fn ensure_clean(root: &Path) -> Result<()> {
     )
 }
 
+/// The paths the commits since `main` changed, or `None` when there is
+/// nothing to compare: no `main` branch, or no commit ahead of it.
+pub fn changed_since_main(root: &Path) -> Result<Option<Vec<String>>> {
+    let Ok(base) = git(root, &["merge-base", "main", "HEAD"]) else {
+        return Ok(None);
+    };
+    if base == head(root)? {
+        return Ok(None);
+    }
+    let names = git(root, &["diff", "--name-only", &base, "HEAD"])?;
+    Ok(Some(names.lines().map(str::to_owned).collect()))
+}
+
 fn git(dir: &Path, args: &[&str]) -> Result<String> {
     let output = Command::new("git")
         .arg("-C")
@@ -78,5 +91,24 @@ mod tests {
         ensure_clean(dir).expect_err("unstaged edit");
         run_git(dir, &["add", "README"]);
         ensure_clean(dir).expect_err("staged edit");
+    }
+
+    #[test]
+    fn changed_paths_are_the_commits_since_main() {
+        let repo = clean_repo("git-changed");
+        let dir = repo.path();
+        run_git(dir, &["branch", "-M", "main"]);
+        assert_eq!(changed_since_main(dir).expect("on main"), None);
+
+        run_git(dir, &["checkout", "--quiet", "-b", "task"]);
+        fs::create_dir(dir.join("ui")).expect("mkdir");
+        fs::write(dir.join("ui/page.ts"), "changed\n").expect("write");
+        run_git(dir, &["add", "ui/page.ts"]);
+        run_git(dir, &["commit", "--quiet", "-m", "task"]);
+        let changed = changed_since_main(dir).expect("on a branch");
+        assert_eq!(changed, Some(vec!["ui/page.ts".to_owned()]));
+
+        run_git(dir, &["branch", "-D", "main"]);
+        assert_eq!(changed_since_main(dir).expect("no main"), None);
     }
 }

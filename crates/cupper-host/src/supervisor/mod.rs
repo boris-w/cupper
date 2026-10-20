@@ -43,9 +43,9 @@ use crate::driver::locate::trust::{Boundaries, system_temp_dirs};
 use crate::driver::probe::login_shell::LoginEnv;
 use crate::driver::runtime::agents::{Agents, Find};
 use crate::driver::runtime::launch::{self, Launch};
-use crate::driver::runtime::status::NoAgentNotes;
 use crate::driver::runtime::{AGENT_RUNTIME, AgentRuntime, RuntimeDeps};
 use crate::durations::Durations;
+use crate::elevation::FailClosed;
 use crate::exit::HostExit;
 use crate::gateway::listen::{HostLock, ListenError};
 use crate::gateway::{Gateway, GatewayConfig, Routes};
@@ -202,11 +202,14 @@ impl Host {
         // launch both take this result.
         let found = finder.discover(project_roots(&reader)?).await;
         let git = git_tool(&found, &data_dir)?;
+        // The audit records go into the `audit` table from T059 on.
+        let (records, _audit) = mpsc::unbounded_channel();
         // Step 7: the index stream, before the socket.
         quiescence.register(INDEX);
         let index = IndexHandle::start(IndexDeps {
             streams: streams.clone(),
             readers: readers.clone(),
+            db: writer.clone(),
             clock: clock.clone(),
             ids: ids.clone(),
             durations: durations.clone(),
@@ -220,6 +223,9 @@ impl Host {
                 power_assertion: false,
                 last_exit_abnormal: run.abnormal,
             },
+            // Lineage and the requester's details are T133's.
+            requesters: Arc::new(FailClosed),
+            audit: records.clone(),
         })
         .await?;
         let launch = finder.launch_found(&found).await;
@@ -240,7 +246,7 @@ impl Host {
             quiescence: quiescence.clone(),
             probe_dir: data_dir.join("probe").join("claude"),
             durations: durations.clone(),
-            notes: Arc::new(NoAgentNotes),
+            notes: Arc::new(index.clone()),
             rss: test_rss(&payload),
         };
         let claude = AgentRuntime::start(deps);
@@ -255,8 +261,6 @@ impl Host {
             })
         };
         let agents = Agents::new(claude.clone(), readers.clone(), writer.clone(), find);
-        // The audit records go into the `audit` table from T059 on.
-        let (records, _audit) = mpsc::unbounded_channel();
         let sessions = SessionManager::new(SessionDeps {
             streams: streams.clone(),
             writer: writer.clone(),
@@ -304,6 +308,7 @@ impl Host {
         routes.sessions(Arc::new(sessions));
         Arc::new(agents).route(&mut routes);
         routes.index(Arc::new(index.clone()));
+        routes.presence(Arc::new(index.clone()));
         let config = GatewayConfig {
             host_id: run.host_id,
             data_epoch: run.epoch,
