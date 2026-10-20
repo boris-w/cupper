@@ -39,5 +39,11 @@ test("UI-csp-zero: no violation under the main document's CSP", async ({ page })
   await page.getByRole("button", { name: "切换侧边面板" }).click();
   await page.getByRole("button", { name: "切换侧边栏" }).click();
   await page.evaluate(() => window.cupperShell.setTheme("dark"));
+  // Radix's menus and tooltips render into portals and insert their own styles.
+  await page.getByRole("button", { name: "会话菜单" }).click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "切换侧边面板" }).focus();
+  await expect(page.getByRole("tooltip")).toBeVisible();
   expect(await violations(page)).toEqual([]);
 });

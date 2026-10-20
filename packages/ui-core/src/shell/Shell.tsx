@@ -1,13 +1,15 @@
 // The three columns of design 5.7.4: the sidebar, the session area under its
 // title bar, and the side panel. The widths come from `computeLayout`; they
-// reach the DOM as inline `width`, never as CSS custom properties. The buttons
-// are plain placeholders on the tokens until T128 brings the base components.
+// reach the DOM as inline `width`, never as CSS custom properties.
 
 import { commandHandler } from "@cupper/shell-api";
 import { use, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { SlotsContext } from "../app/pages";
 import { useHost, useShell, useT } from "../app/providers";
+import { ChevronDownIcon, MoreIcon, PaneIcon } from "../components/icons";
+import { Menu } from "../components/Menu";
+import { ToolbarButton } from "../components/ToolbarButton";
 import { computeLayout, ratioOf, type Layout, type Viewport } from "../layout/layout";
 import type { LayoutStore } from "../layout/store";
 import { Splitter } from "./Splitter";
@@ -21,36 +23,6 @@ function useViewport(): Viewport {
     return () => window.removeEventListener("resize", onResize);
   }, []);
   return view;
-}
-
-function ToolbarButton(props: {
-  label: string;
-  pressed?: boolean;
-  onClick?: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={props.label}
-      title={props.label}
-      aria-pressed={props.pressed}
-      onClick={props.onClick}
-      className="app-no-drag flex h-7 items-center rounded-lg px-2 text-sm text-fg-tertiary hover:bg-hover aria-pressed:bg-btn-secondary"
-    >
-      {props.children}
-    </button>
-  );
-}
-
-/** A pane outline with one side filled: the sidebar (left) or the side panel (right). */
-function PaneIcon({ side }: { side: "left" | "right" }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden>
-      <rect x="1.5" y="2.5" width="13" height="11" rx="2.5" />
-      <path d={side === "left" ? "M6 2.5v11" : "M10 2.5v11"} />
-    </svg>
-  );
 }
 
 export function Shell({ store, children }: { store: LayoutStore; children: ReactNode }) {
@@ -88,6 +60,7 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
       <div className="fixed top-2 left-(--layout-traffic-lights-w) z-30">
         <ToolbarButton
           label={t("shell:toggle_sidebar")}
+          shortcut="⌘B"
           pressed={layout.sidebar.visible}
           onClick={() => store.toggleSidebar(narrow)}
         >
@@ -151,19 +124,34 @@ function TitleBar(props: { inset: boolean; sidePanelOpen: boolean; onSidePanel: 
     >
       <div className="min-w-0 flex-1" />
       {handshake?.host.weak_auth && (
-        <span title={t("shell:weak_auth_detail")} className="px-2 text-xs text-warning">
-          {t("shell:weak_auth")}
-        </span>
+        <ToolbarButton label={t("shell:weak_auth_detail")}>
+          <span className="text-warning">{t("shell:weak_auth")}</span>
+        </ToolbarButton>
       )}
-      <ToolbarButton label={t("shell:open")}>{t("shell:open")}</ToolbarButton>
+      {/* The menus' items come with T153. */}
+      <Menu
+        trigger={
+          <ToolbarButton label={t("shell:open")}>
+            {t("shell:open")}
+            <ChevronDownIcon />
+          </ToolbarButton>
+        }
+      />
       <ToolbarButton
         label={t("shell:toggle_side_panel")}
+        shortcut="⌥⌘B"
         pressed={props.sidePanelOpen}
         onClick={props.onSidePanel}
       >
         <PaneIcon side="right" />
       </ToolbarButton>
-      <ToolbarButton label={t("shell:session_menu")}>⋯</ToolbarButton>
+      <Menu
+        trigger={
+          <ToolbarButton label={t("shell:session_menu")}>
+            <MoreIcon />
+          </ToolbarButton>
+        }
+      />
     </header>
   );
 }

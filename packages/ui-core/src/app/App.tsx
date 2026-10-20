@@ -2,6 +2,7 @@ import type { ShellAPI, ShellInfo } from "@cupper/shell-api";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
+import { TooltipProvider } from "../components/Tooltip";
 import { LayoutStore } from "../layout/store";
 import { Shell } from "../shell/Shell";
 import { StateProvider, UiProvider } from "../state/provider";
@@ -29,9 +30,11 @@ export function App({ api, info, slots = {}, initialRoute }: AppProps) {
               <StateProvider>
                 <RouterProvider>
                   <SlotsContext value={slots}>
-                    <Shell store={store}>
-                      <Page />
-                    </Shell>
+                    <TooltipProvider>
+                      <Shell store={store}>
+                        <Page />
+                      </Shell>
+                    </TooltipProvider>
                   </SlotsContext>
                 </RouterProvider>
               </StateProvider>
