@@ -104,6 +104,8 @@
 
 估计 760、推算 830，实际 804。
 
+之后按协调追加了 `SetConfig`（T044 的"回合中越权先改回"在生产路径上要用）：新增 65 行，删除 13 行，包括运行时、`api.rs` 的文档、`ClaudeSession::config()` 和一条用例。合计新增 869 行，超过约 850 的上限，在 900 的硬线以内。
+
 ### 做法与取舍
 
 - **定时器**：运行时用 `TimerTable` 加 `Alarm`，和会话 actor 一样，键有五种：`Start`、`Sample`、`Stdin`、`Term`、`Kill`。重启策略 `Restarts` 是纯核心，单测覆盖退避序列、窗口滑出和第 5 次进入 `crashed`。
@@ -131,6 +133,12 @@
   - 关闭用例只断言上下限：适配器在 I/O 上等待时，时钟可能先被推到 `Stdin` 的截止时间。
 - 假 agent 的 `linger`：stdin 关闭后 `serve` 可能以 "transport closed" 出错，这时也要留下来，否则就测不到 SIGKILL 那一步（已修，见 `fix(fake-agent)` 提交）。
 - 用例都在通过的路径上确认没有残留进程：子进程和孙进程在 `stop` 或崩溃之后都不在了。只向用例自己拉起的进程组发信号，`ProcessGroup::signal` 会先核对组号和启动时间。
+
+- **`SetConfig`**：
+  - 会话发来的是 cupper 的选项 ID（如 `permission_mode`），按会话当前的选项换成 agent 自己的 ID 后发 `session/set_config_option`；
+  - 回复里的全部选项经 `ClaudeSession::set_config` 变成 `ConfigChanged` 送回该会话；
+  - agent 拒绝时什么也不发，由 T044 的守卫按自己的期限处理；
+  - 用例名用 IT-orch-gating 开头（T044 的编号）。
 
 ### 交接
 
