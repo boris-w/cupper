@@ -167,7 +167,7 @@ flowchart LR
 | SMOKE-SIGNED-handshake-matrix | 握手矩阵 | 同上 |
 | SMOKE-SIGNED-reject-fake-host | 拒绝假宿主 | 同上 |
 | SMOKE-SIGNED-reject-weak-host | 拒绝 `weak_auth` 宿主 | 同上 |
-| E2E-SEC-egress | SEC-6、NFR-4：App 运行期间除更新检查和运行时安装外没有外发连接。整个 App 放进 Seatbelt 会让 Chromium 的子进程崩溃（测试工程师实测），所以改用 `nettop` 对 App 的进程树采样，具体方法由 Q27 确定；宿主单独的外发检查用 Seatbelt，在宿主集成测试里做 | e2e（每晚） |
+| E2E-SEC-egress | SEC-6、NFR-4：App 运行期间除更新检查和运行时安装外没有外发连接。整个 App 放进 Seatbelt 会让 Chromium 的子进程崩溃（测试工程师实测），所以改用 `nettop` 对 App 的进程树采样（Q27，T176 验证可行）：`nettop -L 1 -n -x` 后跟进程树里所有 pid 一次采完，一个样本约 150 ms；只有持有套接字的进程才出现在输出里，所以必须有正对照（假 agent 拉起的 `nc -u` 连到文档地址 192.0.2.1，UDP `connect` 不发包），采不到正对照就判失败。局限：采样是快照，比采样周期（约 350 ms）还短的连接可能漏掉，所以它证明的是"运行期间没有持续的外发"，不是"一个包都没发"；更严格要 pf 或抓包（要 root）。本机有代理的 fake-IP 时，远端显示代理分配的地址，用例把一切非回环的远端都算作外发。宿主单独的外发检查用 Seatbelt，在宿主集成测试里做 | e2e（每晚） |
 
 ## 5.9.5 兼容矩阵
 

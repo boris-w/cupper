@@ -75,6 +75,10 @@ bundle identifier 的前缀定为 `dev.cupper`（Q5，已定（2026-10-16），�
   - 父进程退出后，宿主进入"孤立"状态：不再开始新回合，运行中的回合结束后有序退出。
   - 这条的价值有限，只在密钥经崩溃转储、日志等意外途径泄露时起作用；但改动小，也不会让人误以为认证变强了。
 - 客户端出示 `auth: dev_key`、证明却错误或缺失时，返回 `unauthenticated` 并断开，不降级成只读的 cli。不出示 `dev_key` 的同 uid 客户端，照常按 cli 只读接入。
+- **握手拒绝的细节**（T176 实测，2026-10-20）：
+  - 先核对"对端是不是拉起宿主的那个进程"，再核对证明：不是的话，不看证明，直接回 `unauthenticated/bad_key`；是的话，证明错误或缺失回 `unauthenticated/bad_proof`。两者都断开连接。
+  - 构建不提供的认证方式（例如 e2e、开发构建不提供 `codesign`）回 `unauthenticated/bad_key` 并断开。
+  - 只有 `desktop_ui` 有角色（5.8.2）；其他身份在 `initialize` 里带 `role` 时回 `forbidden/role` 并断开，不忽略这个字段。
 - 宿主在 `initialize` 结果里设 `weak_auth: true`，UI 首次启动时说明一次，之后在标题栏放标记、在设置页常驻显示（ADR-05）。
 - **局限与条件**（Q22，已定（2026-10-16），见 `docs/meetings/2026-10-16-gate-design-decisions/minutes.md`；口径记录在 PRD v1.2 第 10 节）：
   - 密钥只有拉起宿主的那个 UI 实例知道。UI 崩溃后重启，新实例连不上还在运行的宿主，只能提示"需要重启宿主"，确认后向 `host.lock` 中记录的 pid 发 SIGTERM，运行中的回合会被中断。所以退化模式下 NFR-8 的"界面崩溃不影响会话"不成立；发布构建不受影响，并由签名后冒烟测试覆盖（[5.10.7](10-release.md#5107-发布流水线)）。
