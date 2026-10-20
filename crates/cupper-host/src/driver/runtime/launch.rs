@@ -30,7 +30,7 @@ use crate::driver::tap::Tap;
 use crate::driver::transport::StdioTransport;
 use crate::durations::Durations;
 use crate::manifest::{self, FileHash};
-use crate::store::{Durability, RawSink, Writer};
+use crate::store::{Durability, RawSink, Receipt, Writer};
 
 /// What the adapter runs.
 #[derive(Debug, Clone)]
@@ -343,12 +343,12 @@ async fn record(cx: &Context, id: &AdapterInstanceId, group: &ProcessGroup, laun
 }
 
 /// The instance's end in its `adapters` row.
-pub fn ended(writer: &Writer, at: u64, id: &AdapterInstanceId, status: ExitStatus) {
+pub fn ended(writer: &Writer, at: u64, id: &AdapterInstanceId, status: ExitStatus) -> Receipt<()> {
     let (id, status) = (id.to_string(), status.to_string());
-    drop(writer.submit(Durability::Normal, move |conn| {
+    writer.submit(Durability::Normal, move |conn| {
         let sql = "UPDATE adapters SET ended_at = ?2, exit_status = ?3 WHERE instance_id = ?1";
         conn.execute(sql, (id, at, status)).map(drop)
-    }));
+    })
 }
 
 #[cfg(test)]

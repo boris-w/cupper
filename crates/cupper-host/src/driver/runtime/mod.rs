@@ -24,6 +24,7 @@ pub mod content;
 pub mod launch;
 
 use std::collections::HashMap;
+use std::fs;
 use std::future;
 use std::mem;
 use std::path::PathBuf;
@@ -294,7 +295,8 @@ impl Actor {
             let started = launch::start(&launch, &cx, id.clone(), wire.clone(), exited).await;
             let _ = wire.send(Wire::Started(Box::new(started)));
             if let Ok(status) = exit.await {
-                launch::ended(&cx.writer, cx.clock.now_wall_ms(), &id, status);
+                // Recorded before the sessions hear of it.
+                let _ = launch::ended(&cx.writer, cx.clock.now_wall_ms(), &id, status).await;
                 let _ = wire.send(Wire::Exited(status));
             }
         });
@@ -323,12 +325,14 @@ impl Actor {
         }
     }
 
-    fn attach(&mut self, pending: Pending) {
+    fn attach(&mut self, mut pending: Pending) {
         let (Some(instance), Some((wire, _))) = (&self.instance, &self.wire) else {
             self.waiting.push(pending);
             return self.ensure_started();
         };
-        let cwd = pending.attach.cwd.clone();
+        // The agent gets the real path (K13).
+        let cwd = fs::canonicalize(&pending.attach.cwd).unwrap_or(pending.attach.cwd);
+        pending.attach.cwd = cwd.clone();
         // Untrusted: Claude loads the user's settings only (design 5.2.6).
         let meta = (pending.attach.project_config == ProjectConfigPolicy::Ignore).then(|| {
             let options = json!({"settingSources": ["user"]});
