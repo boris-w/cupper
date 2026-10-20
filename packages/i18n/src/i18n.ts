@@ -8,13 +8,14 @@ import command from "./locales/zh-CN/command.json";
 import host from "./locales/zh-CN/host.json";
 import privileged from "./locales/zh-CN/privileged.json";
 import shell from "./locales/zh-CN/shell.json";
+import sidebar from "./locales/zh-CN/sidebar.json";
 import stream from "./locales/zh-CN/stream.json";
 import update from "./locales/zh-CN/update.json";
 
 export const DEFAULT_LOCALE = "zh-CN";
 
 const resources = {
-  "zh-CN": { command, host, privileged, shell, stream, update },
+  "zh-CN": { command, host, privileged, shell, sidebar, stream, update },
 };
 
 export type Namespace = keyof (typeof resources)["zh-CN"];

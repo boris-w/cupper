@@ -140,6 +140,14 @@
   --ease-enter: cubic-bezier(0.19, 1, 0.22, 1);
   --ease-exit: cubic-bezier(0.8, 0, 0.4, 1);
   --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+  /* Spinners: one turn in 1.25 s; reduced motion stops them (below). */
+  --animate-spin: spin 1.25s linear infinite;
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 }
 
 :root {

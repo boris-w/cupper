@@ -8,8 +8,18 @@ import { createMockShellHost, MockHost } from "@cupper/host-client/mock";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
 import { mount } from "@cupper/ui-core";
 
-const { info, methods } = window.cupperFixture;
+const { info, methods, index } = window.cupperFixture;
 const host = new MockHost(methods);
+// Every stream starts from a one-page snapshot: the index holds the fixture's ops.
+host.handle("stream/subscribe", ({ params, conn }) => {
+  const { stream } = params as { stream: string };
+  const page = { stream, at_seq: 0, epoch: 1, page: 0, last: true };
+  queueMicrotask(() => {
+    const ops = stream === "index" ? index : [];
+    conn.send({ jsonrpc: "2.0", method: "stream/snapshot", params: { ...page, ops } });
+  });
+  return { result: { stream, mode: "snapshot", at_seq: 0, epoch: 1, head_seq: 0 } };
+});
 const { shell, controls } = createBrowserShell({ info, host: createMockShellHost(host) });
 window.cupperHost = host;
 window.cupperShell = controls;

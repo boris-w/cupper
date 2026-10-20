@@ -414,6 +414,9 @@ importers:
       '@cupper/host-client':
         specifier: workspace:*
         version: link:../../packages/host-client
+      '@cupper/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@cupper/shell-api':
         specifier: workspace:*
         version: link:../../packages/shell-api

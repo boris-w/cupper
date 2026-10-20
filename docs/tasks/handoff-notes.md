@@ -315,6 +315,9 @@
 | T081、T082、T083、T086、T137 | 状态层（T080，`packages/ui-core/src/state/`）：会话页用 `useStreams().session(id)` 拿 store，索引用 `useStreams().index`；条目用 `useEntry(view, key)`（索引的键如 `sessions`、`projects`、`elevations`、`session:<id>`、`project:<id>`、`host`、`clients`）；草稿、附件、滚动位置用 `useUi()`；查询键约定全局 `[method, …]`、会话 `["session", id, method, …]`，需要失效时在 `staleKeys` 里加一条；示例查询 `useArchivedSessions()` | T080 |
 | 第一个用 `new Worker` 的任务（审查文档、Shiki 等） | Worker 的脚本 URL 必须经 `ui-core/src/security/policies.ts` 的 `workerScriptUrl(url)` 取（只放行 `app://cupper/assets/` 下的同源脚本）；不能另建 Trusted Types 策略 | T136 |
 | 所有界面任务（及评审） | ESLint 安全、样式、import、文案规则已生效（T136）。JSX 文案和 `aria-label`、`title`、`alt`、`placeholder`、`label` 等属性的字面量走 `t()`，只放行不含文字字母的文本和产品名、agent 名；其他例外要带理由的行内禁用注释。静态检查拦不下的写法（`style` 的值、拼进 `className` 的 agent 文本、别处取到的 `<style>`、`window` 的别名、自定义组件用别的属性名接收文案）列在 `docs/tasks/T136-ui-security-rules/notes.md`，评审照它看 | T136 |
+| 界面任务的截图用例 | 截图页的索引流夹具（T081）：mock 宿主对每个订阅回 snapshot 模式，再发一页 `stream/snapshot`，索引流的 op 来自夹具、其他流为空；会话流的夹具照此加 | T081 |
+| T152 | 截图比对用 Playwright 默认的逐像素阈值 0.2，悬停底色（正文色 5.3%）这类细微差异比不出来；要不要调严，随视觉修正一并决定 | T081 |
+| T153 | 侧边栏项目行悬停时的"+"旁有一个空菜单、会话行还没有菜单按钮和右键菜单，菜单项归本任务（`ui-core/src/sidebar/`） | T081 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
