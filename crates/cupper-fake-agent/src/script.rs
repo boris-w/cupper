@@ -27,6 +27,7 @@
 //! | `whoami` / `echo_env` / `echo_meta` / `probe` | say the session, cwd, clientInfo, env names, `_meta`, inherited fds |
 //! | `spawn_child` / `exit <code>` | start a grandchild in our process group / exit now |
 //! | `stderr <text>` | write `text` as a line to stderr |
+//! | `spawn <program> [args...]` | start `program` in our session and group, with our stdio; do not wait |
 //! | `spawn_group_child [program]` | start `program` (`/bin/sleep`) for an hour in a new process group, holding our stdout; say its pid |
 //! | `raw <json>` | write the JSON value as one line, verbatim (`${session}` is the session id) |
 
@@ -83,6 +84,7 @@ const COMMANDS: &[&str] = &[
     "spawn_child",
     "spawn_group_child",
     "stderr",
+    "spawn",
     "exit",
     "raw",
 ];
@@ -448,6 +450,13 @@ impl Script {
                 self.say(&format!("pid={}", child.id()))?;
             }
             "stderr" => eprintln!("{rest}"),
+            "spawn" => {
+                // An MCP server or a hook of the CLI, or a probe that leaves.
+                std::process::Command::new(arg(0))
+                    .args(args.get(1..).unwrap_or_default())
+                    .spawn()
+                    .map_err(|e| Error::internal_error().data(e.to_string()))?;
+            }
             "exit" => std::process::exit(i32::try_from(num(0)).unwrap_or(1)),
             "raw" => self.notify(
                 RAW_METHOD,
