@@ -100,5 +100,12 @@ cargo test -p cupper-protocol --test recordings
 | 1 | 格式库 `recording.rs`（实现约 335，测试约 108） | +443 | 443 |
 | 2 | `tools/sanitize`（实现 524，测试 250） | +774 | 1,217 |
 | 3 | 转换脚本 102、读全部录制的测试 58 | +160 | 1,377 |
+| 4 | xtask：`testdata-scan` 加两步、`git::common_dir`、跳过记录进摘要（实现约 45，测试约 55，另删 4） | +138 −4 | 1,519 |
 
-格式库的实现比估计多约 75 行（错误类型和分段校验），测试少约 60 行（错误用例改成一张表）；`tools/sanitize` 与估计持平。剩下 xtask 一项估约 160 行，预计合计约 1,540 行。
+格式库的实现比估计多约 75 行（错误类型和分段校验），测试少约 60 行（错误用例改成一张表）；`tools/sanitize` 与估计持平；xtask 比估计少约 20 行。合计约 1,520 行，在 1,600 行的上限以内。
+
+## xtask 的接入
+
+- `testdata-scan` 在 `trace-ids check` 之后依次跑 `pii-scan`（通用模式）和 `sensitive-words`（本机清单），范围都是 `testdata` 和 `docs/tasks/*/ci/*.json`。
+- 清单经 `git rev-parse --path-format=absolute --git-common-dir` 找到主仓库，取它下面的 `.private/sensitive-words.txt`。清单不存在时，终端上显示 `sensitive-words skipped: no local sensitive word list (...)`，作业不失败，摘要的作业条目里 `skipped` 为 `["sensitive-words"]`，结果汇总里也列出跳过的步骤。
+- UNIT-sensitive-list 分两处：TS（`tools/sanitize/src/scan.test.ts`）测清单格式、命中时退出码为 1、输出只有文件、行号和条目序号；Rust（`testdata_scan.rs`）测从链接的 worktree 找到主仓库的清单、清单缺失时跳过并记进摘要、在本仓库的 `testdata/` 上用临时清单跑这一步，命中时步骤失败、日志里没有命中的词。
