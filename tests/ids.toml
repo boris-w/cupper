@@ -325,6 +325,7 @@ UNIT-mirror = "pr"
 [T046]
 milestone = "M1a"
 IT-cli-commands = "pr"
+UNIT-cli-args = "pr"
 
 # test-harness 测试接口、录制导出与宿主性能
 [T047]
