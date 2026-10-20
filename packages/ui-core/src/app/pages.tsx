@@ -1,8 +1,8 @@
 import { createContext, use, type ReactNode } from "react";
 
-import { Composer } from "../composer/Composer";
 import { ComposerArea } from "../composer/QueueList";
 import { SessionBanners } from "../session/SessionBanners";
+import { NewSessionPage } from "../newsession/NewSessionPage";
 import { StreamList } from "../stream/StreamList";
 import { useRouter } from "./router";
 
@@ -16,16 +16,6 @@ export interface Slots {
 }
 
 export const SlotsContext = createContext<Slots>({});
-
-/** The new session page: the composer's top sits at 42% of the window's height. */
-export function NewSessionPage() {
-  const { newSessionComposer } = use(SlotsContext);
-  return (
-    <div className="mx-auto w-full max-w-(--layout-thread-max-w) px-(--layout-thread-gutter) pt-[calc(var(--layout-home-composer-anchor)-var(--layout-titlebar-h))]">
-      {newSessionComposer ?? <Composer />}
-    </div>
-  );
-}
 
 /** A session: banners and the message stream above, the composer at the bottom. */
 export function SessionPage({ sessionId }: { sessionId: string }) {
