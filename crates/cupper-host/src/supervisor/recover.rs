@@ -21,6 +21,8 @@ use crate::store::meta::{self, MetaKey};
 pub(super) struct Run {
     pub host_id: HostId,
     pub epoch: u64,
+    /// The previous run did not exit in order (`host.updated`).
+    pub abnormal: bool,
 }
 
 pub(super) fn begin_run(
@@ -63,5 +65,10 @@ pub(super) fn begin_run(
         [now_ms],
     )?;
     tx.commit()?;
-    Ok(Run { host_id, epoch })
+    let abnormal = last_exit == LastExit::Unclean;
+    Ok(Run {
+        host_id,
+        epoch,
+        abnormal,
+    })
 }

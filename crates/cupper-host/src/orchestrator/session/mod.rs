@@ -24,19 +24,11 @@ use serde_json::Value;
 
 pub use manager::{SESSION, SessionDeps, SessionManager};
 
-/// What the index (T034's `IndexActor`) hears from the sessions.
+/// What the index (`crate::index::IndexHandle`) hears from the sessions.
 pub trait IndexNotes: Send + Sync + fmt::Debug {
     /// The session's pending requests changed (design 5.2.7, step 4): how
     /// many there are, and the class of the oldest.
     fn pending(&self, session: &SessionId, count: u32, oldest: Option<PendingKind>);
-}
-
-/// The index until T034: it hears nothing.
-#[derive(Debug)]
-pub struct NoIndex;
-
-impl IndexNotes for NoIndex {
-    fn pending(&self, _: &SessionId, _: u32, _: Option<PendingKind>) {}
 }
 
 /// The tier of permission mode `mode` by the agent's mapping.

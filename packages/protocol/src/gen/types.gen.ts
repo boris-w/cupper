@@ -2311,7 +2311,15 @@ export type ProjectTrustInfoResult = {
    * `stale` only: the files changed since the project was trusted.
    */
   diff_from_trusted?: Array<TrustedFileChange> | null;
+  /**
+   * Changes left out of `diff_from_trusted` for the frame's sake.
+   */
+  diff_omitted?: number | null;
   findings: Array<Finding>;
+  /**
+   * As [`TrustScan::findings_omitted`].
+   */
+  findings_omitted?: number | null;
   state: TrustState;
   trust_digest: Digest;
 };
@@ -3275,6 +3283,11 @@ export type ToolRef = {
  */
 export type TrustScan = {
   findings: Array<Finding>;
+  /**
+   * Findings left out to keep the result within its frame; the digest
+   * covers them all (T034).
+   */
+  findings_omitted?: number | null;
   state: TrustState;
   /**
    * What `project/trust` echoes back.
