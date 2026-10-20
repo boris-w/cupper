@@ -14,12 +14,13 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 
 use self::lineage::LiveAdapter;
+use crate::elevation::{Examined, Requesters};
 use crate::store::Readers;
 
 /// Clear, with what the dialog shows; or an adapter's possible descendant,
 /// with the signals for the audit record: `same_session`, `same_group`,
 /// `ancestor`, or `unchecked` when the process could not be examined.
-pub type Finding = Result<VerifiedRequester, Vec<String>>;
+type Finding = Result<VerifiedRequester, Vec<String>>;
 
 /// The CLI's signing identifier (design 5.2.14).
 const CLI_IDENTIFIER: &str = "dev.cupper.cli";
@@ -51,17 +52,24 @@ impl ProcessRequesters {
         let bundled = bundled.map(|(path, certificate)| Arc::new(Bundled { path, certificate }));
         Self { readers, bundled }
     }
+}
 
-    /// Examines the process that `token` names.
-    pub fn find(&self, token: AuditToken) -> BoxFuture<'static, Finding> {
+impl Requesters for ProcessRequesters {
+    fn examine(&self, token: AuditToken) -> BoxFuture<'static, Examined> {
         let (readers, bundled) = (self.readers.clone(), self.bundled.clone());
         async move {
-            let Ok(adapters) = readers.read(live_adapters).await else {
-                return Err(unchecked());
+            let found = match readers.read(live_adapters).await {
+                Ok(adapters) => {
+                    let examined = move || examine(&token, &adapters, bundled.as_deref());
+                    let examined = tokio::task::spawn_blocking(examined).await;
+                    examined.unwrap_or_else(|_| Err(unchecked()))
+                }
+                Err(_) => Err(unchecked()),
             };
-            let examined = move || examine(&token, &adapters, bundled.as_deref());
-            let examined = tokio::task::spawn_blocking(examined).await;
-            examined.unwrap_or_else(|_| Err(unchecked()))
+            match found {
+                Ok(verified) => Examined::Clear(verified),
+                Err(signals) => Examined::Descendant { signals },
+            }
         }
         .boxed()
     }
