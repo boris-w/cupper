@@ -4,7 +4,14 @@
 // renderer through `ShellAPI.host` (`connectShell`), the main process over its
 // sockets (T075). Stream sync (`subscribe`) builds on `call`, `onNotification` and `onState`.
 
-import { zRpcError, type BlobRef, type RpcError } from "@cupper/protocol";
+import {
+  zEventBody,
+  zRpcError,
+  type BlobRef,
+  type HistoryCursor,
+  type HistoryPageResult,
+  type RpcError,
+} from "@cupper/protocol";
 import type {
   ConnectionFailure,
   ConnectionState,
@@ -265,6 +272,27 @@ export class HostClient {
     const blob = { hash, size: bytes.length, media_type: mediaType };
     await this.request("blob/put", blob);
     return blob;
+  }
+
+  /**
+   * One page of a session's turns before its window (design 5.3.3) into
+   * `sink`, applied as snapshot ops are; resolves to the cursor of the next
+   * page, or `undefined` once the session's first turn is in.
+   */
+  async historyPage(
+    sessionId: string,
+    sink: StreamSink,
+    cursor?: HistoryCursor,
+  ): Promise<HistoryCursor | undefined> {
+    const params = { session_id: sessionId, ...(cursor ? { cursor } : {}) };
+    const page = await this.request<HistoryPageResult>("history/page", params);
+    for (const op of page.ops) {
+      const body = zEventBody.safeParse(op);
+      if (body.success) {
+        sink.apply(body.data);
+      }
+    }
+    return page.next ?? undefined;
   }
 
   #subscribe(sync: StreamSync, params: object): void {
