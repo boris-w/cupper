@@ -114,8 +114,8 @@ struct World {
     /// start its 10 s over.
     quiet_since: MonoTime,
     poke: MonoTime,
-    /// The end of an autonomous turn ended on silence, until a turn the user
-    /// starts or another end.
+    /// The end of an autonomous turn ended on silence, until the agent has
+    /// been quiet for 30 s after it, a turn the user starts, or another end.
     guard: Option<MonoTime>,
     /// Output came while the turn was ending.
     after_prompt: bool,
@@ -311,6 +311,13 @@ impl World {
                 None => return,
             },
         };
+        // Once the agent has been quiet for 30 s after a silent end, the
+        // queue may move; activity after that does not hold it again
+        // (design 5.2.6: "结束后再静默 30 s 才允许出队").
+        let over = |end: MonoTime| now >= end.max(self.quiet_since) + Duration::from_secs(30);
+        if self.guard.is_some_and(over) {
+            self.guard = None;
+        }
         if output || matches!(op, Op::Thread(true)) {
             self.quiet_since = now;
         }
