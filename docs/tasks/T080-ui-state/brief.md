@@ -92,3 +92,26 @@
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 1,160 行（实现约 760、测试约 400），在写代码之前停下，建议拆成两份。
+
+**裁定：两分法，但查询并回本任务（计划 v1.3.28）。**
+- **T080 留下**：
+  - host-client 的 `notify` 与校验模式；
+  - 流 store 与按帧 flush；订阅策略；
+  - zustand 界面状态（接管路由与布局 store，修过期回传）；Provider 接线；
+  - **TanStack Query 的客户端、按事件失效与一个示例查询**。
+  - 验收：UNIT-ui-store，新增 UNIT-ui-query。
+  - 上限约 950 行，硬停止线 1,050；推算贴线也先停下。
+- **新增 T136（安全规则）**：`policies.ts`；ESLint 安全、import、文案规则；UNIT-ui-lint-rules 移过去。
+  - 只依赖 T084，与本任务并行；合并时已合并的界面代码要全部通过。
+  - 不挡界面任务，T099 改为也依赖它。
+- **理由**：起初按执行者的切法把查询放进 T136，T086（要用 `files/search`）就得依赖 T136，T136 因此进了关键路径。查询并回本任务后，关键路径不变。
+- `tests/ids.toml` 已在 main 上改好：T080 段为 UNIT-ui-store、UNIT-ui-query；T136 段为 UNIT-ui-lint-rules。
+
+**核对结果都认可**：
+- "到达即应用、应用后确认"已由 host-client 做到，store 只包一层 sink 按帧 flush；
+- 校验模式要改 host-client，对 `item.delta` 换成只查 `seq`、`from` 的轻量检查，由 ui-core 在生产构建打开；
+- 过期 prefs 回传用"每个键一个待回传的写入序号队列"来丢弃。

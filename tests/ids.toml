@@ -610,6 +610,11 @@ IT-ticket-auth = { suite = "pr", status = "conditional", reason = "K2 测量闸�
 [T080]
 milestone = "M1a"
 UNIT-ui-store = "pr"
+UNIT-ui-query = "pr"
+
+# ui-core I-b：安全规则（计划 v1.3.28 由 T080 拆出）
+[T136]
+milestone = "M1a"
 UNIT-ui-lint-rules = "pr"
 
 # ui-core III：侧边栏、横幅与 toast
