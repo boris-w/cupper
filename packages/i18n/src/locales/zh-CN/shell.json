@@ -10,7 +10,7 @@
   "open": "打开",
   "session_menu": "会话菜单",
   "weak_auth": "弱认证",
-  "weak_auth_detail": "会话宿主以降级的本地认证运行",
+  "weak_auth_detail": "弱认证：会话宿主以降级的本地认证运行",
   "host_connecting": "正在连接会话宿主",
   "host_handshaking": "正在连接会话宿主",
   "host_ready": "已连接会话宿主",

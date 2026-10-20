@@ -13,6 +13,8 @@ export const PREFS_SET = "prefs:set";
 export const PREFS_CHANGED = "prefs:changed";
 /** Renderer → main: `ShellAPI.openExternal`. */
 export const OPEN_EXTERNAL = "shell:open-external";
+/** Renderer → main: `ShellAPI.requestPrivileged`. */
+export const PRIVILEGED = "shell:privileged";
 /** Renderer → main: `ShellAPI.pickDirectory`. */
 export const PICK_DIRECTORY = "shell:pick-directory";
 /** Main → renderer: the system's appearance. */
