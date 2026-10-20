@@ -36,6 +36,8 @@ const ERRNO_BASE: OSStatus = 100_000;
 unsafe extern "C" {
     static kSecGuestAttributeAudit: CFStringRef;
     static kSecCodeInfoUnique: CFStringRef;
+    static kSecCodeInfoIdentifier: CFStringRef;
+    static kSecCodeInfoTeamIdentifier: CFStringRef;
 
     fn SecCodeCopyGuestWithAttributes(
         host: SecObjectRef,
@@ -137,6 +139,15 @@ impl CodeStatus {
     }
 }
 
+/// Who signed a program, as its signature says (design 5.8.4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SigningIdentity {
+    pub identifier: String,
+    /// The Team ID of a developer's signature; none for ad-hoc and Apple's
+    /// own code.
+    pub team_id: Option<String>,
+}
+
 /// A code directory hash: names one signed build of one program.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Cdhash(pub [u8; 20]);
@@ -202,6 +213,42 @@ impl AuditToken {
         let mut status: u32 = 0;
         self.csops(CS_OPS_STATUS, "csops(CS_OPS_STATUS)", &mut status)?;
         Ok(CodeStatus(status))
+    }
+
+    /// The signing identity of the code the process this token names runs;
+    /// `None` when it is unsigned.
+    pub fn signing_identity(&self) -> std::result::Result<Option<SigningIdentity>, Refusal> {
+        let code = self.guest_code()?;
+        let mut info: CFDictionaryRef = ptr::null();
+        // SAFETY: `code` is a live code object; `info` is a valid out pointer.
+        let status = unsafe {
+            SecCodeCopySigningInformation(
+                code.as_CFTypeRef(),
+                K_SEC_CS_SIGNING_INFORMATION,
+                &mut info,
+            )
+        };
+        if status != 0 {
+            return Err(self.security_refusal("SecCodeCopySigningInformation", status));
+        }
+        // SAFETY: on success the dictionary is a new object we own, keyed by
+        // CFStrings.
+        let info: CFDictionary<CFString, CFType> =
+            unsafe { CFDictionary::wrap_under_create_rule(info) };
+        let text = |key: CFStringRef| {
+            // SAFETY: a constant of the Security framework, valid while the
+            // process runs.
+            let key = unsafe { CFString::wrap_under_get_rule(key) };
+            let value = info.find(&key)?.downcast::<CFString>()?;
+            Some(value.to_string())
+        };
+        // SAFETY: as above, for both keys.
+        let (identifier, team) = unsafe { (kSecCodeInfoIdentifier, kSecCodeInfoTeamIdentifier) };
+        let identity = text(identifier).map(|identifier| SigningIdentity {
+            identifier,
+            team_id: text(team),
+        });
+        Ok(identity)
     }
 
     /// The cdhash of the code the process this token names runs.
@@ -454,6 +501,18 @@ mod tests {
             .unwrap_err();
         assert_eq!(refusal.kind, RefusalKind::GetTaskAllow, "{refusal}");
         assert!(CodeStatus(refusal.code as u32).has(CodeStatus::GET_TASK_ALLOW));
+    }
+
+    #[test]
+    fn signing_identity_of_an_ad_hoc_signed_peer() {
+        let _fds = fd_lock();
+        let dir = TempDir::new();
+        let peer = running(&dir, "identity", HARDENED);
+        let identity = peer.token.signing_identity().unwrap().unwrap();
+        assert_eq!(
+            (identity.identifier.as_str(), identity.team_id),
+            (PROBE_ID, None)
+        );
     }
 
     #[test]
