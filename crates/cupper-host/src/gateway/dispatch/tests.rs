@@ -341,9 +341,6 @@ const ALLOWED: &[(&str, Why)] = {
     use Why::{Builds, Later, Until};
     &[
         ("agents/restart", Later(M1b)),
-        ("auth/elevate", Until("T038")),
-        ("auth/elevation_get", Until("T038")),
-        ("auth/elevation_respond", Until("T038")),
         ("blob/get", Until("T029")),
         ("blob/put", Until("T029")),
         ("diag/export", Later(M2)),

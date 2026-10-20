@@ -69,7 +69,7 @@ fn words(actions: &[Action]) -> Vec<String> {
         Action::Resolved { id, outcome, .. } => {
             Some(format!("{id} {}", json!(format!("{outcome:?}"))))
         }
-        Action::Scopes { conn, scopes } => Some(format!("{conn} scopes {}", json!(scopes))),
+        Action::Revoked(conn) => Some(format!("{conn} revoked")),
         Action::Responded(result) => Some(format!("responded {}", result.is_ok())),
         Action::Timer(_) => None,
     };
@@ -130,23 +130,12 @@ fn unit_elevation_core_grants_what_was_asked_until_close_or_fifteen_minutes() {
     // `approve` was not asked for: it is not granted.
     let granted = words(&c.input(respond(1, Some(&[Scope::Write, Scope::Approve]))));
     let ends = "Granted { scopes: [Write], ends_in: 900s }";
-    assert_eq!(
-        granted,
-        [
-            "responded true",
-            "c_1 scopes [\"write\"]",
-            &format!("e_1 \"{ends}\"")
-        ]
-    );
+    assert_eq!(granted, ["responded true", &format!("e_1 \"{ends}\"")]);
     c.advance(14 * MIN);
-    assert!(
-        c.advance(MIN)
-            .iter()
-            .any(|a| matches!(a, Action::Scopes { scopes, .. } if scopes.is_empty()))
-    );
+    assert_eq!(words(&c.advance(MIN)), ["c_1 revoked"]);
     // A closed connection loses its grant at once.
     c.input(ask(2, &[Scope::Write, Scope::Approve]));
     c.input(respond(2, Some(&[Scope::Approve])));
-    assert_eq!(words(&c.input(Input::Closed(conn(2)))), ["c_2 scopes []"]);
+    assert_eq!(words(&c.input(Input::Closed(conn(2)))), ["c_2 revoked"]);
     assert!(c.advance(20 * MIN).is_empty(), "nothing left to end");
 }

@@ -233,6 +233,8 @@ pub fn key_auth(kind: &str, key: &Bytes32, nonce: &str, pid: i32) -> (Value, Cha
 #[cfg(test)]
 pub(crate) struct Peer {
     pub(super) dispatch: super::dispatch::Dispatch,
+    /// The connection as the index hears of it; its token is this process's.
+    pub(crate) opened: super::Opened,
     outbox: Arc<super::outbox::Outbox>,
     replies: Vec<Value>,
     next_id: i64,
@@ -241,10 +243,18 @@ pub(crate) struct Peer {
 #[cfg(test)]
 impl Peer {
     pub(crate) fn new(principal: cupper_protocol::methods::handshake::Principal) -> Self {
+        Self::on(1, principal)
+    }
+
+    /// Connection `c_<index>`.
+    pub(crate) fn on(
+        index: u64,
+        principal: cupper_protocol::methods::handshake::Principal,
+    ) -> Self {
         let outbox = Arc::new(super::outbox::Outbox::new(
             cupper_protocol::limits::V1.max_queue_bytes as usize,
         ));
-        let conn = cupper_protocol::ids::ConnId::from_index(1);
+        let conn = cupper_protocol::ids::ConnId::from_index(index);
         let clock = Arc::new(crate::clock::ManualClock::new());
         let audit = tokio::sync::mpsc::unbounded_channel().0;
         let auditor = super::audit::Auditor::new(conn.clone(), audit, clock);
@@ -260,22 +270,47 @@ impl Peer {
             name,
             version,
         };
-        let subscriptions = Routes::default().quiescence().enter(super::SUBSCRIPTIONS);
-        let dispatch = super::dispatch::Dispatch::new(
+        let pair = std::os::unix::net::UnixStream::pair().expect("a socket pair");
+        let opened = super::Opened {
             conn,
             principal,
             client,
-            Arc::default(),
+            weak_auth: false,
+            token: cupper_sys::peer_token(&pair.0).expect("our own token"),
+            granted: Arc::default(),
+        };
+        let subscriptions = Routes::default().quiescence().enter(super::SUBSCRIPTIONS);
+        let dispatch = super::dispatch::Dispatch::new(
+            opened.conn.clone(),
+            opened.principal.clone(),
+            opened.client.clone(),
+            Arc::clone(&opened.granted),
             Arc::clone(&outbox),
             auditor,
             subscriptions,
         );
         Self {
             dispatch,
+            opened,
             outbox,
             replies: Vec::new(),
             next_id: 0,
         }
+    }
+
+    /// Finishes `initialize` as the read loop does: `gateway` lists the
+    /// connection and the index of `routes` hears of it.
+    pub(crate) fn open(&self, gateway: &Gateway, routes: &Routes) {
+        let outbox = Arc::clone(&self.outbox);
+        let since_ms = gateway.clock.now_wall_ms();
+        (gateway.clients).add(self.opened.clone(), since_ms, outbox);
+        routes.opened(self.opened.clone());
+    }
+
+    /// Closes the connection as the read loop does.
+    pub(crate) fn close(&self, gateway: &Gateway, routes: &Routes) {
+        gateway.clients.remove(&self.opened.conn);
+        routes.closed(&self.opened.conn);
     }
 
     /// Sends a request; returns its id.

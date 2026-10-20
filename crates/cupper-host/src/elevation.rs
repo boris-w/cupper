@@ -128,11 +128,8 @@ pub enum Action {
         conn: ConnId,
         outcome: Outcome,
     },
-    /// The connection's granted scopes: empty when the grant ended.
-    Scopes {
-        conn: ConnId,
-        scopes: Vec<Scope>,
-    },
+    /// The connection's grant ended.
+    Revoked(ConnId),
     /// The reply to `Respond`: `Err` when the request is no longer pending.
     Responded(Result<(), NotPending>),
     Timer(TimerRequest<ElevationTimer>),
@@ -248,10 +245,6 @@ impl ElevationCore {
         let ends = now + self.grant_for;
         self.grants.insert(conn.clone(), ends);
         out.push(set(ElevationTimer::Grant(conn.clone()), ends));
-        out.push(Action::Scopes {
-            conn: conn.clone(),
-            scopes: scopes.clone(),
-        });
         let outcome = Outcome::Granted {
             scopes,
             ends_in: self.grant_for,
@@ -263,10 +256,7 @@ impl ElevationCore {
     fn closed(&mut self, conn: ConnId, out: &mut Vec<Action>) {
         if self.grants.remove(&conn).is_some() {
             out.push(cancel(ElevationTimer::Grant(conn.clone())));
-            out.push(Action::Scopes {
-                conn: conn.clone(),
-                scopes: Vec::new(),
-            });
+            out.push(Action::Revoked(conn.clone()));
         }
         if let Some(pending) = self.pending.take_if(|p| p.conn == conn) {
             out.push(cancel(ElevationTimer::Pending(pending.id.clone())));
@@ -303,10 +293,7 @@ impl Core for ElevationCore {
             }
             Input::Expired(ElevationTimer::Grant(conn)) => {
                 if self.grants.remove(&conn).is_some() {
-                    out.push(Action::Scopes {
-                        conn,
-                        scopes: Vec::new(),
-                    });
+                    out.push(Action::Revoked(conn));
                 }
             }
         }

@@ -10,12 +10,14 @@
 //! - Projects and trust are in `projects`; the slow part of each call runs in
 //!   a task of its own and comes back to the actor as a message (rule 5).
 //! - `clients.updated` lists [`Gateway::clients`] on every connection opened
-//!   or closed.
+//!   or closed, and on every elevation granted or ended.
+//! - Elevation (design 5.8.4) is in [`elevations`].
 //! - Session status, read marks, presence, notification intents and agents
 //!   are T100's; [`IndexNotes`] so far takes the pending requests into the
 //!   summary.
 
 mod budget;
+mod elevations;
 mod projects;
 mod rows;
 
@@ -38,11 +40,13 @@ use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
 use tokio::sync::{mpsc, oneshot};
 
+use self::elevations::{Asking, Elevations};
 use self::projects::{Context, Prepared};
 use self::rows::{Project, Tables};
 use crate::clock::{Clock, IdGen};
 use crate::durations::Durations;
-use crate::gateway::{Call, Gateway, IndexPort, Opened, Port, Reply};
+use crate::elevation::{Ask, Requesters};
+use crate::gateway::{AuditRecord, Call, Gateway, IndexPort, Opened, Port, Reply};
 use crate::git::GitTool;
 use crate::ledger::{Outcome, Ticket};
 use crate::orchestrator::session::IndexNotes;
@@ -70,6 +74,10 @@ pub struct IndexDeps {
     pub quiescence: Quiescence,
     /// `host.updated` of this run.
     pub host: HostUpdated,
+    /// What examines a CLI that asks for elevation.
+    pub requesters: Arc<dyn Requesters>,
+    /// The host's audit channel (design 5.8.6).
+    pub audit: mpsc::UnboundedSender<AuditRecord>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -91,7 +99,9 @@ pub struct IndexHandle {
 enum Mail {
     Call(Box<Call>, oneshot::Sender<Outcome>),
     Prepared(Box<Done>),
-    Clients,
+    Opened(Box<Opened>),
+    Closed(ConnId),
+    Examined(Box<(Ask, Asking)>),
     Pending(SessionId, u32, Option<PendingKind>),
     Rescanned(ProjectId, Scan),
     Checkpoint(oneshot::Sender<()>),
@@ -128,6 +138,7 @@ impl IndexHandle {
             handle,
             writer,
             tables,
+            elevations: Elevations::new(&deps.durations, Arc::clone(&deps.clock)),
             mail: mail.clone(),
             gateway: Arc::clone(&gateway),
             deps,
@@ -166,12 +177,12 @@ impl Port for IndexHandle {
 }
 
 impl IndexPort for IndexHandle {
-    fn opened(&self, _: Opened) {
-        let _ = self.mail.send(Mail::Clients);
+    fn opened(&self, client: Opened) {
+        let _ = self.mail.send(Mail::Opened(Box::new(client)));
     }
 
-    fn closed(&self, _: &ConnId) {
-        let _ = self.mail.send(Mail::Clients);
+    fn closed(&self, conn: &ConnId) {
+        let _ = self.mail.send(Mail::Closed(conn.clone()));
     }
 }
 
@@ -203,6 +214,7 @@ struct IndexActor {
     handle: StreamHandle,
     writer: StreamWriter,
     tables: Tables,
+    elevations: Elevations,
     /// For the tasks it starts to answer.
     mail: mpsc::UnboundedSender<Mail>,
     gateway: Arc<OnceLock<Weak<Gateway>>>,
@@ -211,8 +223,26 @@ struct IndexActor {
 
 impl IndexActor {
     async fn run(mut self, mut inbox: mpsc::UnboundedReceiver<Mail>, participant: Participant) {
-        while let Some(mail) = participant.idle(inbox.recv()).await {
+        loop {
+            let next = participant.idle(async {
+                tokio::select! {
+                    mail = inbox.recv() => Some(mail),
+                    () = self.elevations.alarm.rung() => None,
+                }
+            });
+            let mail = match next.await {
+                Some(Some(mail)) => mail,
+                Some(None) => break,
+                None => {
+                    self.rung().await;
+                    continue;
+                }
+            };
             match mail {
+                // Elevation's three methods.
+                Mail::Call(call, reply) if call.method.starts_with("auth/") => {
+                    self.elevation_call(*call, reply).await
+                }
                 Mail::Call(call, reply) => self.call(*call, reply),
                 Mail::Prepared(done) => {
                     let Done {
@@ -226,7 +256,18 @@ impl IndexActor {
                     };
                     let _ = reply.send(outcome);
                 }
-                Mail::Clients => self.clients().await,
+                Mail::Opened(opened) => {
+                    self.opened(*opened);
+                    self.clients().await
+                }
+                Mail::Closed(conn) => {
+                    self.closed(conn).await;
+                    self.clients().await
+                }
+                Mail::Examined(asked) => {
+                    let (ask, asking) = *asked;
+                    self.examined(ask, asking).await
+                }
                 Mail::Pending(session, count, oldest) => self.pending(session, count, oldest).await,
                 Mail::Rescanned(project, scan) => self.rescanned(project, scan).await,
                 #[cfg(feature = "test-harness")]

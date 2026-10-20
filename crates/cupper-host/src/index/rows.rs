@@ -11,8 +11,8 @@ use cupper_protocol::annotations::{TimestampMs, WirePath};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::index::{
-    HostUpdated, ProjectRemoved, ProjectUpserted, RemovalReason, SessionRemoved, SessionStatus,
-    SessionSummary,
+    ElevationDecision, ElevationResolved, HostUpdated, ProjectRemoved, ProjectUpserted,
+    RemovalReason, SessionRemoved, SessionStatus, SessionSummary,
 };
 use cupper_protocol::view::IndexView;
 use rusqlite::Error::FromSqlConversionFailure;
@@ -191,6 +191,15 @@ pub(super) fn reconcile(view: &IndexView, tables: &Tables, host: &HostUpdated) -
     }
     if view.host.as_ref() != Some(host) {
         bodies.push(EventBody::HostUpdated(host.clone()));
+    }
+    // A request of the last run ended with its connection.
+    for elevation_id in view.elevations.keys().cloned() {
+        let decision = ElevationDecision::Expired;
+        let resolved = ElevationResolved {
+            elevation_id,
+            decision,
+        };
+        bodies.push(EventBody::ElevationResolved(resolved));
     }
     bodies
 }
