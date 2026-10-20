@@ -287,6 +287,8 @@ impl Host {
         let mut routes = Routes::new(ledger.clone());
         routes.watched_by(&quiescence);
         control.route(&mut routes);
+        // `stream/subscribe`, `stream/unsubscribe` and `history/page`.
+        routes.streams(streams.clone(), readers.clone());
         #[cfg(feature = "test-harness")]
         Arc::new(harness::Harness {
             clock: injected.manual.clone(),
