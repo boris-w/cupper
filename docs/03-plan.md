@@ -1688,7 +1688,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T044 会话 actor II：档位、越权、崩溃与晚到输出
 - [x] T049 cupper-cli I-b：Mirror 与客户端同步状态机
 - [x] T045 cupper-cli I：客户端库与 Mirror
-- [ ] T046 cupper-cli II：命令行
+- [x] T046 cupper-cli II：命令行
 - [x] T047 test-harness 测试接口与静止屏障
 - [x] T050 驱动层 I：传输、线路分接与 ACP 连接
 - [x] T051 假 agent：剧本模式与 persona
