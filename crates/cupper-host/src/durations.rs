@@ -104,6 +104,22 @@ durations! {
     /// How long `--version` of a CLI, git or git-lfs, and `xcode-select -p`,
     /// may take (design 5.6.6, 5.2.10).
     VERSION_PROBE = "version_probe", Duration::from_secs(5);
+    /// How long an adapter has to answer `session/close`, and then to exit
+    /// once its stdin is closed (design 5.6.8, 5.2.13).
+    ADAPTER_CLOSE_WAIT = "adapter_close_wait", Duration::from_secs(3);
+    /// How long an adapter's process groups have after SIGTERM before
+    /// SIGKILL; and how long its connection may stay open after it exited
+    /// (design 5.6.8).
+    ADAPTER_TERM_WAIT = "adapter_term_wait", Duration::from_secs(2);
+    /// The wait before an adapter starts again after one failure; it doubles
+    /// with each failure in [`ADAPTER_CRASH_WINDOW`] (design 5.6.8).
+    ADAPTER_BACKOFF = "adapter_backoff", Duration::from_secs(1);
+    /// The longest such wait.
+    ADAPTER_BACKOFF_MAX = "adapter_backoff_max", Duration::from_secs(30);
+    /// Five failures within it make the agent `crashed` (design 5.6.8).
+    ADAPTER_CRASH_WINDOW = "adapter_crash_window", Duration::from_secs(300);
+    /// How often a runtime samples its adapter's processes (design 5.2.13).
+    RESOURCE_SAMPLE = "resource_sample", Duration::from_secs(30);
     /// A git command other than those below: the read-only ones and the repo
     /// tier's writes (design 5.2.10).
     GIT_COMMAND = "git_command", Duration::from_secs(30);

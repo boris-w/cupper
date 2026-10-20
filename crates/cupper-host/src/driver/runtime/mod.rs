@@ -22,6 +22,7 @@
 
 pub mod content;
 pub mod launch;
+pub mod lifecycle;
 #[cfg(test)]
 mod tests;
 

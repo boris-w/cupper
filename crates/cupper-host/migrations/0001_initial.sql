@@ -151,7 +151,8 @@ CREATE TABLE adapters (
   cli_version     TEXT,
   started_at      INTEGER NOT NULL,
   ended_at        INTEGER,
-  exit_status     TEXT
+  exit_status     TEXT,
+  groups          TEXT                       -- [[pgid, start_us], ...] of descendants, sampled
 );
 CREATE INDEX adapters_live ON adapters(agent) WHERE ended_at IS NULL;
 
