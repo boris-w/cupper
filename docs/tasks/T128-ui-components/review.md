@@ -7,7 +7,7 @@
 ## 核对
 
 - **规模**：413 行（实现 272、测试 141；不含 notes、lock、截图），在约 500 的停止线以内；开工前估 440。
-- **CI**：执行者的摘要 `pr-464c7733177b.json` 通过。合并 main（含 T038、T118）之后在本 worktree 重跑 `cargo xtask ci pr --record`，第一次碰上 T008 的 K21 回收用例偶发失败（与本任务无关，已开 T008 修复 1），重跑后 `pr-3efb98e8bb48.json` 通过（rust 1795、protocol 185、ts 386、license、testdata-scan、ui 7）。合并没有冲突。
+- **CI**：执行者的摘要 `pr-464c7733177b.json` 通过。合并 main（含 T038、T118）之后在本 worktree 重跑 `cargo xtask ci pr --record`，第一次碰上 T008 的 K21 回收用例偶发失败（与本任务无关，已开 T008 修复 1），重跑后 `pr-3efb98e8bb48.json` 通过（rust 1795、protocol 185、ts 386、license、testdata-scan、ui 7）。合并没有冲突。之后 main 合进了 T134，再合一次 main 时 i18n 的命名空间清单冲突（T134 加了 `privileged`，本任务加了 `stream`），两者都保留（`091a732`）；只动了 TS，编排者重跑了 `xtask ci ts`（394 通过）和 `xtask ci ui`（7 通过）。
 
 ## 逐项意见
 
