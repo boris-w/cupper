@@ -49,7 +49,10 @@ export function useSend(sessionId: string | undefined, projectId: string | undef
   );
   const key = sessionId ?? NEW_DRAFT;
 
-  /** Clears the draft at once, and puts it back if the message did not go and nothing was typed since. */
+  /**
+   * Clears the draft at once, and puts it back if the message did not go and
+   * nothing was typed since. Resolves to whether the message went.
+   */
   const send = useCallback(
     async (text: string, attachments: readonly PromptBlock[]) => {
       const content: PromptBlock[] = [
@@ -68,12 +71,14 @@ export function useSend(sessionId: string | undefined, projectId: string | undef
           const created = await client.command<{ session_id: string }>("session/create", params);
           ui.getState().navigate({ page: "session", sessionId: created.session_id });
         }
+        return true;
       } catch (error) {
         if (!ui.getState().drafts[key]) {
           ui.getState().setDraft(key, text);
           ui.getState().setAttachments(key, attachments);
         }
         fail(error);
+        return false;
       }
     },
     [client, ui, key, sessionId, projectId, fail],

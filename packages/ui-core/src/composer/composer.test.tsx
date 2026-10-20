@@ -12,8 +12,8 @@ import { ToasterProvider } from "../feedback/toaster";
 import { DEFAULT_PREFS } from "../layout/layout";
 import { StateProvider, UiProvider } from "../state/provider";
 import { createUiStore } from "../state/ui";
-import { Composer } from "./Composer";
 import { escapeAction, sends } from "./keys";
+import { ComposerArea } from "./QueueList";
 
 afterEach(cleanup);
 
@@ -27,17 +27,17 @@ const summary = (status: string) => ({
 });
 
 /** A composer on session s_1, its host a MockHost that answers every command. */
-async function setup(status = "idle") {
+async function setup(status = "idle", session: object[] = []) {
   const mock = new MockHost([{ method: "initialize", params: {}, result: {} }]);
   mock.handle("stream/subscribe", ({ id, conn, params }) => {
     const { stream } = params as { stream: string };
     conn.reply(id, { result: { stream, mode: "snapshot", at_seq: 1, head_seq: 1, epoch: 1 } });
-    const ops = stream === "index" ? [summary(status)] : [];
+    const ops = stream === "index" ? [summary(status)] : session;
     const page = { stream, at_seq: 1, epoch: 1, page: 0, last: true, ops };
     conn.send({ jsonrpc: "2.0", method: "stream/snapshot", params: page });
     return undefined;
   });
-  for (const method of ["session/send", "session/interrupt"]) {
+  for (const method of ["session/send", "session/interrupt", "session/queue_resume"]) {
     mock.handle(method, () => ({ result: { disposition: "queued" } }));
   }
   const client = new HostClient();
@@ -58,7 +58,7 @@ async function setup(status = "idle") {
             <UiProvider ui={ui}>
               <StateProvider>
                 <RouterProvider>
-                  <Composer sessionId="s_1" />
+                  <ComposerArea sessionId="s_1" />
                 </RouterProvider>
               </StateProvider>
             </UiProvider>
@@ -166,5 +166,30 @@ describe("the attachment strip", () => {
       expect.objectContaining({ content: [{ type: "text", text: "看一下" }, comment] }),
     ]);
     expect(ui.getState().attachments.s_1).toEqual([]);
+  });
+});
+
+describe("sending while the queue is paused", () => {
+  test("asks first: send resumes the queue after the message, cancel keeps the draft", async () => {
+    const paused = {
+      type: "queue.updated",
+      data: { version: 1, entries: [], paused: { reason: "turn_interrupted" } },
+    };
+    const { area, requests, ui } = await setup("idle", [paused]);
+    type(area, "接着做");
+    fireEvent.keyDown(area, { key: "Enter" });
+    expect(screen.getByText("队列已暂停。发出这条消息，并让队列继续吗？")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(requests("session/send")).toEqual([]);
+    expect(ui.getState().drafts.s_1).toBe("接着做");
+    fireEvent.keyDown(area, { key: "Enter" });
+    await act(
+      async () =>
+        void fireEvent.click(screen.getAllByRole("button", { name: "发送" })[0] as HTMLElement),
+    );
+    expect(requests("session/send")).toHaveLength(1);
+    expect(requests("session/queue_resume")).toEqual([
+      expect.objectContaining({ session_id: "s_1" }),
+    ]);
   });
 });

@@ -3,7 +3,7 @@
 // M1b (T140, T149).
 
 import type { SessionView } from "@cupper/host-client";
-import type { PromptBlock } from "@cupper/protocol";
+import type { PromptBlock, QueueUpdated } from "@cupper/protocol";
 
 import { useT } from "../app/providers";
 import { useStreams } from "../state/provider";
@@ -14,16 +14,8 @@ import { useSend } from "./send";
 const count = (content: PromptBlock[], type: string) =>
   content.filter((block) => block.type === type).length;
 
-export function QueueList({ sessionId }: { sessionId: string }) {
-  const view = useStreams().session(sessionId)?.view;
-  return view ? <Queue sessionId={sessionId} view={view} /> : null;
-}
-
-function Queue({ sessionId, view }: { sessionId: string; view: SessionView }) {
+function Queue({ queue, resume }: { queue: QueueUpdated | null | undefined; resume: () => void }) {
   const t = useT();
-  const { resume } = useSend(sessionId, undefined);
-  useEntry(view, "session");
-  const queue = view.toJSON().queue;
   if (!queue || (queue.entries.length === 0 && !queue.paused)) {
     return null;
   }
@@ -74,12 +66,24 @@ function Queue({ sessionId, view }: { sessionId: string; view: SessionView }) {
   );
 }
 
-/** The session page's composer place: queued messages above the composer. */
-export function ComposerArea({ sessionId }: { sessionId: string }) {
+function SessionArea({ sessionId, view }: { sessionId: string; view: SessionView }) {
+  const { resume } = useSend(sessionId, undefined);
+  useEntry(view, "session");
+  const queue = view.toJSON().queue;
   return (
     <>
-      <QueueList sessionId={sessionId} />
-      <Composer sessionId={sessionId} />
+      <Queue queue={queue} resume={resume} />
+      <Composer sessionId={sessionId} paused={Boolean(queue?.paused)} />
     </>
+  );
+}
+
+/** The session page's composer place: queued messages above the composer. */
+export function ComposerArea({ sessionId }: { sessionId: string }) {
+  const view = useStreams().session(sessionId)?.view;
+  return view ? (
+    <SessionArea sessionId={sessionId} view={view} />
+  ) : (
+    <Composer sessionId={sessionId} />
   );
 }

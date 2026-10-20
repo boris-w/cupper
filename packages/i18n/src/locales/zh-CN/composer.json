@@ -16,5 +16,7 @@
   "queue_paused_turn_interrupted": "队列已暂停，因为你中断了回合",
   "queue_paused_turn_failed": "队列已暂停，因为回合失败了",
   "queue_paused_other": "队列已暂停",
-  "resume": "继续"
+  "resume": "继续",
+  "paused_send": "队列已暂停。发出这条消息，并让队列继续吗？",
+  "cancel": "取消"
 }

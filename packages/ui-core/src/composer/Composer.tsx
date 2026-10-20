@@ -9,6 +9,7 @@ import { useStore } from "zustand";
 
 import { useT } from "../app/providers";
 import { useRouter } from "../app/router";
+import { Alert } from "../components/Alert";
 import { ArrowUpIcon, CloseIcon, StopIcon } from "../components/icons";
 import { useUi } from "../state/provider";
 import { EXTENSIONS, OverlayContext } from "./extensions";
@@ -16,6 +17,8 @@ import { escapeAction, SEND_KEY_PREF, sends } from "./keys";
 import { NEW_DRAFT, usePref, useSend, useSessionState } from "./send";
 
 const NONE: readonly PromptBlock[] = [];
+const ACTION =
+  "rounded-lg bg-btn-secondary px-2.5 py-1 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring";
 
 function Attachments(props: { blocks: readonly PromptBlock[]; remove: (index: number) => void }) {
   const t = useT();
@@ -57,7 +60,7 @@ function Attachments(props: { blocks: readonly PromptBlock[]; remove: (index: nu
 }
 
 /** The composer of a session, or of the new session page when `sessionId` is absent. */
-export function Composer({ sessionId }: { sessionId?: string }) {
+export function Composer({ sessionId, paused = false }: { sessionId?: string; paused?: boolean }) {
   const t = useT();
   const ui = useUi();
   const { route } = useRouter();
@@ -68,9 +71,11 @@ export function Composer({ sessionId }: { sessionId?: string }) {
   const projectId = sessionId
     ? undefined
     : (route.page === "new" && route.projectId) || firstProject;
-  const { send, interrupt } = useSend(sessionId, projectId);
+  const { send, interrupt, resume } = useSend(sessionId, projectId);
   const sendKey = usePref(SEND_KEY_PREF) === "mod_enter" ? "mod_enter" : "enter";
   const [armed, setArmed] = useState(false);
+  /** Sending while the queue is paused asks first (design 5.7.4): send and resume, or cancel. */
+  const [confirming, setConfirming] = useState(false);
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const closeOverlay = useRef<(() => void) | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
@@ -78,7 +83,21 @@ export function Composer({ sessionId }: { sessionId?: string }) {
   const ready = sessionId !== undefined || projectId !== undefined;
   const empty = draft.trim() === "" && attachments.length === 0;
   const state = empty ? (running ? "stop" : "disabled") : ready ? "send" : "disabled";
-  const submit = () => state === "send" && void send(draft, attachments);
+  const submit = () => {
+    if (state === "send") {
+      return paused ? setConfirming(true) : void send(draft, attachments);
+    }
+  };
+  const confirmSend = async () => {
+    setConfirming(false);
+    if (await send(draft, attachments)) {
+      resume();
+    }
+  };
+  const cancel = () => {
+    setConfirming(false);
+    area.current?.focus();
+  };
 
   // Esc from outside the composer (and outside other fields, menus and dialogs) brings the focus back.
   useEffect(() => {
@@ -110,6 +129,29 @@ export function Composer({ sessionId }: { sessionId?: string }) {
           {t("composer:esc_hint")}
         </p>
       )}
+      {confirming && (
+        <div className="pb-2" onKeyDown={(event) => event.key === "Escape" && cancel()}>
+          <Alert
+            action={
+              <span className="flex shrink-0 gap-1">
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => void confirmSend()}
+                  className={ACTION}
+                >
+                  {t("composer:send")}
+                </button>
+                <button type="button" onClick={cancel} className={ACTION}>
+                  {t("composer:cancel")}
+                </button>
+              </span>
+            }
+          >
+            {t("composer:paused_send")}
+          </Alert>
+        </div>
+      )}
       <div
         data-composer=""
         data-esc-armed={armed || undefined}
@@ -138,14 +180,10 @@ export function Composer({ sessionId }: { sessionId?: string }) {
               }
               return;
             }
-            const action = escapeAction({
-              focused: true,
-              overlayOpen: closeOverlay.current !== null,
-              running,
-              armed,
-            });
+            const overlayOpen = confirming || closeOverlay.current !== null;
+            const action = escapeAction({ focused: true, overlayOpen, running, armed });
             if (action === "close_overlay") {
-              closeOverlay.current?.();
+              return confirming ? setConfirming(false) : closeOverlay.current?.();
             }
             setArmed(action === "arm");
             if (action === "interrupt") {
