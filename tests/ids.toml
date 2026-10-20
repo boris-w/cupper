@@ -728,6 +728,7 @@ UI-composer = "pr"
 milestone = "M1a"
 E2E-single-instance = "nightly"
 E2E-quit-confirm = "nightly"
+UNIT-ci-e2e = "pr"
 
 # NFR-1 验收套件
 [T091]
