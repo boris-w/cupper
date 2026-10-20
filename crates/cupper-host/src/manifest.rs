@@ -2,11 +2,12 @@
 //!
 //! The host never reads the manifest in the app bundle while it runs: its
 //! trust comes from the host binary's signature. This module parses the
-//! fields the host uses; the runtime installer (T056) adds its own here.
+//! fields the host uses.
 
+use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 const TEXT: &str = include_str!("../../../runtime/manifest.json");
 
@@ -22,8 +23,27 @@ pub fn embedded() -> &'static Manifest {
 /// The fields the host uses. Fields the host does not use are skipped.
 #[derive(Debug, Deserialize)]
 pub struct Manifest {
+    pub node: Pinned,
+    pub esbuild_wasm: Pinned,
     pub cli: Cli,
     pub env: EnvClasses,
+    /// Every bundled file that is run or loaded, by its path under
+    /// `CupperHost.app/Contents` (design 5.10.3).
+    pub files: BTreeMap<String, FileHash>,
+}
+
+/// A pinned component's version.
+#[derive(Debug, Deserialize)]
+pub struct Pinned {
+    pub version: String,
+}
+
+/// Lowercase hex. A Mach-O also has the cdhash its signature gives it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileHash {
+    pub sha256: String,
+    #[serde(default)]
+    pub cdhash: Option<String>,
 }
 
 /// The CLI versions the pinned adapters were verified with (design 5.6.6).
@@ -86,6 +106,11 @@ mod tests {
         }
         assert!(manifest.env.allow.iter().any(|p| p == "PATH"));
         assert!(manifest.env.deny.iter().any(|p| p == "CUPPER_*"));
+        let node = &manifest.files["Helpers/node"];
+        assert_eq!(node.cdhash.as_ref().map(String::len), Some(40));
+        for hash in manifest.files.values() {
+            assert_eq!(hash.sha256.len(), 64, "{hash:?}");
+        }
     }
 
     #[test]
