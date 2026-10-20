@@ -104,7 +104,7 @@ T054 收窄为"可信 PATH、CLI 解析与环境变量规则"，登录 shell 和
 | 内嵌清单、xtask 结构体、清单的 `cli` 段（`feat(host): embed the runtime manifest`） | 143 / 0 | 99 + 数据 15 | 29 | 80 + 数据 15 + 28 |
 | 可信 PATH 与目录树小工具（`feat(host): trusted PATH entries`） | 202 / 0 | 85 | 117 | 55 + 110 |
 | 解析器与布局表（`feat(host): data-driven resolver`）；目录树改成文本表 | 264 / 30 | 142 | 92 | 95 + 110 |
-| `CliLocator`（`feat(host): CliLocator finds ...`） | 293 / 1 | 180 | 120 | 110 + 90 |
+| `CliLocator`（`feat(host): CliLocator finds ...`） | 293 / 1 | 173 | 120 | 110 + 90 |
 | 可信 PATH 用例的样例改成文本（`test(host)`） | 7 / 16 | — | −9 | — |
 | 环境变量规则与配置目录校验（`feat(host): adapter environment rules`） | 303 / 0 | 186 | 116 | 120 + 130 |
 
