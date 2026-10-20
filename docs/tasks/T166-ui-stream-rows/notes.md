@@ -85,3 +85,38 @@
 | **合计** | **约 778** |
 
 剩下的是 T082 合并后的部分：登记进注册表、接会话页，约 40；UI-stream-markdown、UI-stream-tools 的夹具和用例，约 120。推算合计约 **940**，在约 1,000 的停止线以内，但贴近。样式文件比估计多，是 prettier 把每个选择器拆成一行的结果。
+
+## T082 合并之后
+
+- **登记**：`rows/index.ts` 加 `import "./messages"`、`import "./tools"`。六种行各自 `registerRow`，组件属性是 `{ row: RowOf<kind> }`：
+  - `agent_message`：`Markdown`；
+  - `thought`、`notice`、`error`：`messages.tsx` 的三个行组件；
+  - `tool`：内部的 `ToolLine`；
+  - `activity_group`：组内各条也用 `ToolLine`。
+- **类型与时长**：工具组件改用 T082 的 `ToolData`；思考的时长改用 T082 的 `useDuration`（`stream:duration_s`、`stream:duration_ms`），去掉了我自己的格式化函数和两个文案键。
+- **截图时发现、已改的三处**：
+  - streamdown 把粗体画成带 `font-semibold` 的 `span`，表格外面套一个带边框的 `div`，用的都是本仓库不生成的工具类：粗体不粗，表格是双层边框。改成自己的 `strong` 和 `table`（外层只有横向滚动）。
+  - 工具行按 5.7.4 用三级文字色的 80%（`text-fg-tertiary/80`）。
+  - 截图夹具里的 ✓、✗ 不在固定字体的子集里，会回退到系统字体，基线因此跟机器有关；改成子集里有的 √、×。
+- **截图**：`tools/ui-screenshots/src/stream.spec.ts` 覆盖两种主题：
+  - UI-stream-markdown：思考、标题、粗体、行内代码、链接、有序与嵌套列表、代码块、表格、引用、显示成链接的图片、显示成文字的原始 HTML；
+  - UI-stream-tools：展开的活动组、编辑、失败并展开输出的命令（ANSI 着色）、提示、错误、运行中的命令。
+
+  每个用例还断言 `securitypolicyviolation` 为 0。回合的开始时间设在页面固定时钟之前 12 秒，回合标题显示"已处理 12 秒"。
+- **审阅截图**（`screenshots/`）：用一个用后删掉的临时用例，加载同样的夹具，把 `--font-sans` 换回系统字体（SF Pro、苹方）后截取，1280 × 820（2 倍像素），共四张：Markdown 与工具行，各亮、暗两种。按 F2，没有查看本机 Codex App 包。
+
+## 行数（不含 notes、lock、截图）
+
+| 模块 | 新增 | 估计 |
+|---|---|---|
+| 依赖 | 4 | 10 |
+| Markdown | 106 | 120 |
+| ANSI | 94 | 60 |
+| 工具行与活动组（含图标 20） | 166 | 190 |
+| 思考、提示与错误 | 84 | 80 |
+| 样式 | 149 | （在 Markdown 与各行里） |
+| 文案 | 约 54 | 50 |
+| 登记 | 2 | 25 |
+| UNIT-md-injection | 约 135 | 150 |
+| UI-stream-markdown、UI-stream-tools | 约 104 | 120 |
+| **合计** | **约 898** | 约 860 |
