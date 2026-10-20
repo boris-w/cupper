@@ -3,7 +3,7 @@
 // and, in e2e builds, the startup payload the test fixture leaves under
 // `CUPPER_E2E_DIR` (design 5.9.9).
 
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import type { Flavor } from "../../shared/flavor";
@@ -11,6 +11,7 @@ import type { MainLog } from "../log";
 import { ControlConnection } from "./control";
 import { HostLauncher } from "./launcher";
 import { loadNative } from "./native";
+import { stopLockedHost } from "./restart";
 
 /**
  * The host gets the fixed allowlist of design 5.6.6 from the app's
@@ -45,13 +46,24 @@ export interface HostSetup {
   log: MainLog;
 }
 
-/** Loads the extension and starts the control connection, the host with it if needed. */
+/** What restarting the host asks and tells the user. */
+export interface RestartDialogs {
+  confirm(): Promise<boolean>;
+  refused(): Promise<void>;
+}
+
+/**
+ * Loads the extension and starts the control connection, the host with it if
+ * needed. `restart` stops the host in `host.lock` if it is this build's, then
+ * connects again (design 5.8.1).
+ */
 export function startControl({ flavor, dataDir, version, e2eRoot, log }: HostSetup) {
   const contents = join(dirname(process.execPath), "..");
   const native = loadNative(join(process.resourcesPath, "native", "cupper_native.node"), flavor);
+  const program = join(contents, "Helpers", "CupperHost.app", "Contents", "MacOS", "cupper-host");
   const launcher = new HostLauncher({
     native,
-    program: join(contents, "Helpers", "CupperHost.app", "Contents", "MacOS", "cupper-host"),
+    program,
     dataDir,
     env: hostEnv(process.env),
     ...(e2eRoot === undefined ? {} : { payload: () => e2ePayload(e2eRoot) }),
@@ -60,5 +72,30 @@ export function startControl({ flavor, dataDir, version, e2eRoot, log }: HostSet
   const control = new ControlConnection(launcher, options, log);
   control.client.onState((state) => log.info("host connection", { ...state }));
   void control.connect();
-  return control;
+  const restart = async (dialogs: RestartDialogs) => {
+    if (!(await dialogs.confirm())) {
+      return;
+    }
+    const { native: ext } = native;
+    const stopped = stopLockedHost({
+      lockFile: join(dataDir, "host.lock"),
+      expected: { path: realpathSync(program), cdhash: ext.fileCdhash(program) },
+      image: (pid) => ext.processImage(pid),
+      terminate: (pid) => process.kill(pid, "SIGTERM"),
+    });
+    log.info("restarting the host", { outcome: stopped.outcome });
+    if (stopped.outcome === "not_this_build") {
+      await dialogs.refused();
+      return;
+    }
+    // An orderly exit closes the adapters first (design 5.2.13): up to 10 s.
+    for (let waited = 0; stopped.outcome === "stopped" && waited < 10_000; waited += 50) {
+      if (ext.processImage(stopped.pid) === null) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    await control.connect();
+  };
+  return { control, restart };
 }
