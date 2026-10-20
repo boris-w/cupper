@@ -263,6 +263,13 @@ milestone = "M1a"
 UNIT-request-followup = "pr"
 UI-request-records = "pr"
 
+# ui-core IV-b：消息流 II：消息行与 Markdown（计划 v1.3.35 由 T082 拆出）
+[T166]
+milestone = "M1a"
+UNIT-md-injection = "pr"
+UI-stream-markdown = "pr"
+UI-stream-tools = "pr"
+
 # CLI 提权（宿主侧）
 [T038]
 milestone = "M1a"
@@ -656,10 +663,8 @@ UNIT-ui-session-banners = "pr"
 # ui-core IV：消息流
 [T082]
 milestone = "M1a"
-UNIT-md-injection = "pr"
-UI-stream-markdown = "pr"
-UI-stream-tools = "pr"
 UNIT-stream-anchor = "pr"
+UNIT-stream-rows = "pr"
 
 # ui-core V：请求面板与请求记录行
 [T083]

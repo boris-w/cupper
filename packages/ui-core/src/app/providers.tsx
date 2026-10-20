@@ -10,6 +10,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -27,12 +28,19 @@ export interface ShellValue {
   info: ShellInfo;
 }
 
-const ShellContext = createContext<ShellValue | null>(null);
+const ShellContext = createContext<(ShellValue & { focusedAt: { current: number } }) | null>(null);
 
-export function ShellProvider({ children, ...value }: ShellValue & { children: ReactNode }) {
-  const { api, info } = value;
+/** The shell, and when the window last came forward (design 5.7.8 rule 7), from the first render on. */
+export function ShellProvider({ children, api, info }: ShellValue & { children: ReactNode }) {
+  const focusedAt = useRef(0);
+  useEffect(
+    () => api.window.onFocusChange((focused, at) => focused && (focusedAt.current = at)),
+    [api],
+  );
   return (
-    <ShellContext value={useMemo(() => ({ api, info }), [api, info])}>{children}</ShellContext>
+    <ShellContext value={useMemo(() => ({ api, info, focusedAt }), [api, info])}>
+      {children}
+    </ShellContext>
   );
 }
 
