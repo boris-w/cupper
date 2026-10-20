@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 pub const USAGE: &str =
     "usage: cupper-fake-agent [--persona claude|codex] [--auth logged-in|logged-out]
                          [--fault <name>[@<segment>]]... [--segment <n>] [--segment-file <path>]
+                         [--replay <recording>]
 faults: exit_on_start, initialize_hang, set_config_error, resume_error, linger";
 
 const FAULTS: &[&str] = &[
@@ -53,6 +54,8 @@ pub struct Config {
     /// per start through `--segment-file` so a restarted agent goes on with
     /// the next segment (the replay of multi-instance recordings, T052).
     pub segment: u64,
+    /// Play this recording's segment instead of scripts (design 5.9.2).
+    pub replay: Option<PathBuf>,
     /// Faults active in this segment.
     faults: Vec<String>,
 }
@@ -63,6 +66,7 @@ impl Config {
             persona: Persona::Claude,
             logged_in: true,
             segment: 0,
+            replay: None,
             faults: Vec::new(),
         };
         let mut faults = Vec::new();
@@ -80,6 +84,7 @@ impl Config {
                 ("--fault", _) => faults.push(value),
                 ("--segment", n) => config.segment = n.parse().map_err(ConfigError::Segment)?,
                 ("--segment-file", _) => segment_file = Some(PathBuf::from(value)),
+                ("--replay", _) => config.replay = Some(PathBuf::from(value)),
                 _ => return Err(ConfigError::Usage(format!("bad option `{flag} {value}`"))),
             }
         }
@@ -140,11 +145,12 @@ mod tests {
             (c.persona, c.logged_in, c.segment),
             (Persona::Claude, true, 0)
         );
-        let c = parse("--persona codex --auth logged-out --segment 2").unwrap();
+        let c = parse("--persona codex --auth logged-out --segment 2 --replay r.jsonl").unwrap();
         assert_eq!(
             (c.persona, c.logged_in, c.segment),
             (Persona::Codex, false, 2)
         );
+        assert_eq!(c.replay, Some(PathBuf::from("r.jsonl")));
         let c = parse("--segment 1 --fault resume_error@0 --fault set_config_error@1").unwrap();
         assert!(c.fault("set_config_error") && !c.fault("resume_error"));
         assert!(matches!(

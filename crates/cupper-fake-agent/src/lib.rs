@@ -6,12 +6,14 @@
 //!   process segment), from the command line;
 //! - [`persona`]: what Claude's and Codex's adapters look like on the wire;
 //! - [`agent`]: the SDK's agent role, sessions and the global invariant;
-//! - [`script`]: the prompt text is the script.
+//! - [`script`]: the prompt text is the script;
+//! - [`replay`]: or a recording is played instead.
 //!
-//! Everything goes through the SDK except the lines of the `raw` command,
-//! which reach stdout verbatim.
+//! Everything goes through the SDK except the lines of the `raw` command
+//! and of a replay, which reach stdout verbatim.
 
 pub mod agent;
 pub mod config;
 pub mod persona;
+pub mod replay;
 pub mod script;
