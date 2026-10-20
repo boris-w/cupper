@@ -33,9 +33,10 @@ use super::audit::Auditor;
 use super::outbox::Outbox;
 use super::routes::{Entry, Routes, Target};
 use super::subscribe::Subscriptions;
-use super::{describe, history, wire};
+use super::{REPLY, describe, history, wire};
 use crate::ledger::{Begin, Outcome, Repeat, Ticket};
 use crate::policy::{self, Confirmable, Facts};
+use crate::quiescence::Participant;
 
 #[cfg(test)]
 mod tests;
@@ -121,9 +122,10 @@ impl Dispatch {
         client: ClientIdentity,
         outbox: Arc<Outbox>,
         auditor: Auditor,
+        subscriptions: Participant,
     ) -> Self {
         let inflight = Arc::new(Semaphore::new(V1.max_inflight_requests as usize));
-        let subscriptions = Subscriptions::start(Arc::clone(&outbox), auditor);
+        let subscriptions = Subscriptions::start(Arc::clone(&outbox), auditor, subscriptions);
         Self {
             conn,
             principal,
@@ -140,8 +142,9 @@ impl Dispatch {
             Answer::Now(outcome) => self.outbox.push_frame(frame(&id, outcome)),
             Answer::Later(reply, place) => {
                 let outbox = Arc::clone(&self.outbox);
+                let participant = routes.quiescence().enter(REPLY);
                 tokio::spawn(async move {
-                    let outcome = reply.await;
+                    let outcome = participant.idle(reply).await;
                     // Free the place first: the client may send its next
                     // request as soon as it reads this reply.
                     drop(place);
@@ -163,7 +166,14 @@ impl Dispatch {
             return;
         }
         if let Target::Port(port) = &entry.target {
-            tokio::spawn(port.deliver(self.call(name, params, None)));
+            let (hold, reply) = (
+                routes.quiescence().hold(),
+                port.deliver(self.call(name, params, None)),
+            );
+            tokio::spawn(async move {
+                let _hold = hold;
+                reply.await
+            });
         }
     }
 

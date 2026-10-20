@@ -66,6 +66,15 @@ pub(super) type Mail = (Call, oneshot::Sender<Outcome>);
 /// The host's exit, whether forced, and the reply once the session took it.
 pub(super) type Stop = (bool, oneshot::Sender<()>);
 
+/// What woke the actor.
+enum Next {
+    Mail(Option<Mail>),
+    Agent(DriverEvent),
+    Attached(Result<AttachInfo, AgentError>),
+    Stop(Stop),
+    Alarm,
+}
+
 /// What the actor starts with: its session's stream, its agent, and what an
 /// attach adds to the turn machine's target (design 5.2.6).
 pub(super) struct Parts {
@@ -140,7 +149,7 @@ impl SessionActor {
         inbox: mpsc::UnboundedReceiver<Mail>,
         mut stops: mpsc::UnboundedReceiver<Stop>,
         first: SendRequest,
-        _participant: Participant,
+        participant: Participant,
     ) {
         let (events, mut agent) = mpsc::unbounded_channel();
         let (attached, mut attaches) = mpsc::unbounded_channel();
@@ -156,25 +165,35 @@ impl SessionActor {
         };
         let first = Input::Machine(turn::Input::Send(first));
         actor.input(first, None, Step::default()).await;
-        // A branch's handler runs once the other branches are dropped.
+        // Idle until a branch brings work, which runs once the others are
+        // dropped.
         loop {
-            tokio::select! {
-                mail = actor.inbox.recv() => match mail {
-                    Some((call, reply)) => actor.call(call, reply).await,
-                    None => break,
-                },
-                Some(event) = agent.recv() => {
-                    actor.input(Input::Agent(event), None, Step::default()).await
+            let next = participant.idle(async {
+                tokio::select! {
+                    mail = actor.inbox.recv() => Next::Mail(mail),
+                    Some(event) = agent.recv() => Next::Agent(event),
+                    Some(result) = attaches.recv() => Next::Attached(result),
+                    Some(stop) = stops.recv() => Next::Stop(stop),
+                    () = actor.alarm.rung() => Next::Alarm,
                 }
-                Some(result) = attaches.recv() => actor.attach_done(result).await,
-                Some((force, done)) = stops.recv() => {
+            });
+            match next.await {
+                Next::Mail(Some((call, reply))) => actor.call(call, reply).await,
+                Next::Mail(None) => break,
+                Next::Agent(event) => {
+                    actor
+                        .input(Input::Agent(event), None, Step::default())
+                        .await
+                }
+                Next::Attached(result) => actor.attach_done(result).await,
+                Next::Stop((force, done)) => {
                     if force {
                         let exit = Input::Machine(turn::Input::HostExit);
                         actor.input(exit, None, Step::default()).await;
                     }
                     let _ = done.send(());
                 }
-                () = actor.alarm.rung() => actor.expired().await,
+                Next::Alarm => actor.expired().await,
             }
         }
     }

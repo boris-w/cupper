@@ -29,12 +29,13 @@ use super::audit::{AuditEvent, CloseReason, Rejection};
 use super::dispatch::{Dispatch, Opened};
 use super::handshake::{self, Nonce, Session};
 use super::outbox::{Coalesce, Outbox};
-use super::{Gateway, Live, Verdict, send, wire};
+use super::{Gateway, Live, SEND, SUBSCRIPTIONS, Verdict, send, wire};
 use crate::clock::Timer;
 use crate::durations::{GATEWAY_CLOSE_GRACE, GATEWAY_HANDSHAKE};
+use crate::quiescence::Participant;
 
 pub(super) async fn run(live: Live, stream: UnixStream, id: ConnId) {
-    let gw: &Gateway = &live.0;
+    let (gw, participant): (&Gateway, &Participant) = (&live.0, &live.1);
     let opened = gw.clock.now_mono();
     let Some((pinned, verdict)) = admit(gw, &stream, &id) else {
         return;
@@ -42,7 +43,9 @@ pub(super) async fn run(live: Live, stream: UnixStream, id: ConnId) {
     let (reader, writer) = stream.into_split();
     let outbox = Arc::new(Outbox::new(V1.max_queue_bytes as usize));
     let clock = Arc::clone(&gw.clock);
-    let mut writing = tokio::spawn(send::write_loop(writer, Arc::clone(&outbox), clock));
+    let sending = gw.routes.quiescence().enter(SEND);
+    let writing = send::write_loop(writer, Arc::clone(&outbox), clock, sending);
+    let mut writing = tokio::spawn(writing);
     let handshake = gw.durations.get(GATEWAY_HANDSHAKE);
     let deadline = gw.clock.timer_at(gw.clock.now_mono() + handshake);
     let nonce = handshake::new_nonce();
@@ -56,14 +59,16 @@ pub(super) async fn run(live: Live, stream: UnixStream, id: ConnId) {
         phase: Phase::Hello(nonce),
         deadline: Some(deadline),
     };
-    let end = conn.read_loop(&reader).await;
+    let end = conn.read_loop(&reader, participant).await;
     if end.flush {
         // Let the writer send the error behind the close, but not wait on a
         // peer that does not read.
         outbox.finish();
         let grace = gw.durations.get(GATEWAY_CLOSE_GRACE);
         let grace = std::pin::pin!(gw.clock.timer_at(gw.clock.now_mono() + grace));
-        futures::future::select(&mut writing, grace).await;
+        participant
+            .idle(futures::future::select(&mut writing, grace))
+            .await;
     }
     outbox.close();
     writing.abort();
@@ -165,7 +170,8 @@ struct Conn<'a> {
 }
 
 impl Conn<'_> {
-    async fn read_loop(&mut self, reader: &OwnedReadHalf) -> End {
+    /// Waits on the peer and on the deadlines as an idle participant.
+    async fn read_loop(&mut self, reader: &OwnedReadHalf, participant: &Participant) -> End {
         let stream: &UnixStream = reader.as_ref();
         let mut buf = vec![0; MAX_FRAME_BYTES];
         let mut decoder = FrameDecoder::new();
@@ -174,7 +180,7 @@ impl Conn<'_> {
             let got = {
                 let read = std::pin::pin!(read(stream, &mut buf));
                 let end = std::pin::pin!(interrupted(self.deadline.as_mut(), &mut closing));
-                match future::select(read, end).await {
+                match participant.idle(future::select(read, end)).await {
                     Either::Left((got, _)) => got,
                     Either::Right((end, _)) => return end,
                 }
@@ -280,7 +286,15 @@ impl Conn<'_> {
                 let outbox = Arc::clone(self.outbox);
                 let principal = session.principal.clone();
                 let auditor = self.gw.auditor(self.id);
-                let dispatch = Dispatch::new(self.id.clone(), principal, client, outbox, auditor);
+                let subscriptions = self.gw.routes.quiescence().enter(SUBSCRIPTIONS);
+                let dispatch = Dispatch::new(
+                    self.id.clone(),
+                    principal,
+                    client,
+                    outbox,
+                    auditor,
+                    subscriptions,
+                );
                 let dispatch = Box::new(dispatch);
                 self.phase = Phase::Ready(session, dispatch);
                 None

@@ -34,6 +34,7 @@ use super::dispatch::internal;
 use super::outbox::{Item, Outbox};
 use super::routes::Source;
 use super::wire;
+use crate::quiescence::Participant;
 use crate::store::Readers;
 use crate::store::streams::{StreamError, StreamHandle, Subscription};
 
@@ -65,7 +66,7 @@ enum Op {
 
 impl Subscriptions {
     /// Spawns the task; call within a tokio runtime.
-    pub fn start(outbox: Arc<Outbox>, auditor: Auditor) -> Self {
+    pub fn start(outbox: Arc<Outbox>, auditor: Auditor, participant: Participant) -> Self {
         let (ops, queued) = mpsc::unbounded_channel();
         let live = HashMap::new();
         let table = Table {
@@ -73,7 +74,7 @@ impl Subscriptions {
             auditor,
             live,
         };
-        tokio::spawn(table.run(queued));
+        tokio::spawn(table.run(queued, participant));
         Self { ops }
     }
 
@@ -115,8 +116,8 @@ struct Live {
 }
 
 impl Table {
-    async fn run(mut self, mut ops: mpsc::UnboundedReceiver<Op>) {
-        while let Some(op) = ops.recv().await {
+    async fn run(mut self, mut ops: mpsc::UnboundedReceiver<Op>, participant: Participant) {
+        while let Some(op) = participant.idle(ops.recv()).await {
             match op {
                 Op::Subscribe {
                     id,

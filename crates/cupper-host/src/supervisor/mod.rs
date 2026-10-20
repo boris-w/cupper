@@ -8,7 +8,11 @@
 //! adapters and the audit table are T059's.
 
 pub mod control;
+#[cfg(feature = "test-harness")]
+mod harness;
 mod recover;
+#[cfg(feature = "test-harness")]
+mod seed;
 
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
@@ -28,6 +32,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use self::control::Control;
+#[cfg(feature = "test-harness")]
+use crate::clock::ManualClock;
 use crate::clock::{Clock, IdGen, SystemClock};
 use crate::diag::full::Redactor;
 use crate::diag::log::log_dir;
@@ -43,7 +49,7 @@ use crate::gateway::listen::{HostLock, ListenError};
 use crate::gateway::{Gateway, GatewayConfig, Routes};
 use crate::git::GitTool;
 use crate::index::{INDEX, IndexDeps, IndexError, IndexHandle};
-use crate::ledger::{Ledger, LedgerError};
+use crate::ledger::{Ledger, LedgerError, SWEEPER};
 use crate::orchestrator::session::{SessionDeps, SessionManager};
 use crate::quiescence::Quiescence;
 use crate::startup::payload::Payload;
@@ -125,7 +131,8 @@ impl Host {
         let Start {
             data_dir, payload, ..
         } = start;
-        let (clock, durations, login_env) = injected(&payload);
+        let injected = injected(&payload);
+        let (clock, durations) = (injected.clock.clone(), injected.durations.clone());
         prepare_data_dir(&data_dir)?;
         let lock = HostLock::acquire(&data_dir)?;
         let host_db = data_dir.join("host.db");
@@ -155,22 +162,28 @@ impl Host {
         );
         let blobs = BlobStore::new(&data_dir, writer.clone(), clock.clone());
         let backups = data_dir.join("backups");
-        let maintenance = retention::Maintenance::new(
-            writer.clone(),
-            raw,
-            blobs.clone(),
-            backups,
-            clock.clone(),
-            durations.clone(),
-        );
+        let maintain = || {
+            let (raw, blobs, backups) = (raw.clone(), blobs.clone(), backups.clone());
+            retention::Maintenance::new(
+                writer.clone(),
+                raw,
+                blobs,
+                backups,
+                clock.clone(),
+                durations.clone(),
+            )
+        };
+        let maintenance = maintain();
         // The ledger reads beside the writer, which took the write connection.
         let reader = open_reader(&host_db).map_err(StartError::Open)?;
         let ledger = Ledger::load(&reader, writer.clone(), clock.clone(), &durations)?;
-        let sweeper = tokio::spawn(ledger.clone().sweeper());
+        quiescence.register(SWEEPER);
+        let sweeper = tokio::spawn(ledger.clone().sweeper(quiescence.enter(SWEEPER)));
         let maintenance = maintenance.spawn(&quiescence);
 
         // Claude's runtime and the sessions on it, in the order they stop.
         let ids = Arc::new(IdGen::new(clock.clone()));
+        let login_env = injected.login_env.clone();
         let found = discover(login_env, &*clock, &durations, &reader, &data_dir).await?;
         // Step 7: the index stream, before the socket.
         quiescence.register(INDEX);
@@ -206,18 +219,18 @@ impl Host {
             launch,
             cx,
             ids: ids.clone(),
-            blobs,
+            blobs: blobs.clone(),
             quiescence: quiescence.clone(),
         };
         let claude = AgentRuntime::start(deps);
         // The audit records go into the `audit` table from T059 on.
         let (records, _audit) = mpsc::unbounded_channel();
         let sessions = SessionManager::new(SessionDeps {
-            streams,
+            streams: streams.clone(),
             writer: writer.clone(),
-            readers,
+            readers: readers.clone(),
             clock: clock.clone(),
-            ids,
+            ids: ids.clone(),
             durations: durations.clone(),
             agents: HashMap::from([(AgentKind::Claude, Arc::new(claude.clone()) as _)]),
             quiescence: quiescence.clone(),
@@ -231,8 +244,24 @@ impl Host {
         ]);
         let (to_supervisor, exits) = mpsc::unbounded_channel();
         let control = Arc::new(Control::new(to_supervisor, Arc::clone(&parts)));
-        let mut routes = Routes::new(ledger);
+        let mut routes = Routes::new(ledger.clone());
+        routes.watched_by(&quiescence);
         control.route(&mut routes);
+        #[cfg(feature = "test-harness")]
+        Arc::new(harness::Harness {
+            clock: injected.manual.clone(),
+            quiescence: quiescence.clone(),
+            maintenance: Arc::new(maintain()),
+            ledger,
+            seeder: seed::Seeder {
+                streams,
+                readers,
+                ids,
+                clock: clock.clone(),
+                index: index.clone(),
+            },
+        })
+        .route(&mut routes);
         routes.sessions(Arc::new(sessions));
         routes.index(Arc::new(index.clone()));
         let config = GatewayConfig {
@@ -403,22 +432,42 @@ async fn claude_launch(
 
 /// The clock, the durations and the login shell's environment of
 /// `test_config` (design 5.9.9), or of production.
-fn injected(payload: &Payload) -> (Arc<dyn Clock>, Durations, Option<BTreeMap<String, String>>) {
+fn injected(payload: &Payload) -> Injected {
     #[cfg(feature = "test-harness")]
     {
         use crate::startup::test_config::ClockKind;
-        let clock: Arc<dyn Clock> = match payload.test_config.clock {
-            ClockKind::System => Arc::new(SystemClock::new()),
-            ClockKind::Manual => Arc::new(crate::clock::ManualClock::new()),
+        let manual = (payload.test_config.clock == ClockKind::Manual).then(ManualClock::new);
+        let clock: Arc<dyn Clock> = match &manual {
+            Some(manual) => Arc::new(manual.clone()),
+            None => Arc::new(SystemClock::new()),
         };
-        let login_env = payload.test_config.login_env.clone();
-        (clock, payload.test_config.durations.clone(), login_env)
+        Injected {
+            clock,
+            durations: payload.test_config.durations.clone(),
+            login_env: payload.test_config.login_env.clone(),
+            manual,
+        }
     }
     #[cfg(not(feature = "test-harness"))]
     {
         let _ = payload;
-        (Arc::new(SystemClock::new()), Durations::default(), None)
+        Injected {
+            clock: Arc::new(SystemClock::new()),
+            durations: Durations::default(),
+            login_env: None,
+        }
     }
+}
+
+/// What `test_config` (design 5.9.9) sets, or production.
+struct Injected {
+    clock: Arc<dyn Clock>,
+    durations: Durations,
+    /// Stands in for the login shell.
+    login_env: Option<BTreeMap<String, String>>,
+    /// The clock `test/clock_advance` moves, when the host runs on one.
+    #[cfg(feature = "test-harness")]
+    manual: Option<ManualClock>,
 }
 
 /// Why the host could not start, with its exit code (design 5.2.13).

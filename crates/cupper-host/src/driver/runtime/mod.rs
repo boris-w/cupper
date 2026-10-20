@@ -41,7 +41,7 @@ use agent_client_protocol::schema::v1::{
 };
 use agent_client_protocol::{Error, RequestCancellation, Responder};
 use futures::FutureExt;
-use futures::future::BoxFuture;
+use futures::future::{BoxFuture, Either};
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 
@@ -160,7 +160,7 @@ struct Actor {
     last_ask: u64,
     /// A stop waiting for the instance's end, and whether it is forced.
     stopping: Option<(oneshot::Sender<()>, bool)>,
-    _participant: Participant,
+    participant: Participant,
 }
 
 fn error(class: AgentErrorClass, message: impl ToString) -> AgentError {
@@ -190,7 +190,7 @@ impl AgentRuntime {
             asks: HashMap::new(),
             last_ask: 0,
             stopping: None,
-            _participant: participant,
+            participant,
         };
         tokio::spawn(actor.run(inbox));
         Self { mail }
@@ -248,13 +248,17 @@ impl Actor {
                     None => future::pending().await,
                 }
             };
-            // A branch's handler runs once the other branch is dropped.
-            tokio::select! {
-                mail = inbox.recv() => match mail {
-                    Some(mail) => self.mail(mail).await,
-                    None => break,
-                },
-                Some(wire) = wire => self.wire(wire),
+            // Idle until either brings work; it runs after both are dropped.
+            let next = self.participant.idle(async {
+                tokio::select! {
+                    mail = inbox.recv() => Either::Left(mail),
+                    Some(wire) = wire => Either::Right(wire),
+                }
+            });
+            match next.await {
+                Either::Left(Some(mail)) => self.mail(mail).await,
+                Either::Left(None) => break,
+                Either::Right(wire) => self.wire(wire),
             }
         }
     }

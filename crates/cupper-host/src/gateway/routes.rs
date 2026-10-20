@@ -35,7 +35,8 @@ use tokio::task::JoinHandle;
 use super::dispatch::{IndexPort, Opened, Port, SessionPort, typed};
 use crate::clock::Clock;
 use crate::durations::Durations;
-use crate::ledger::{Ledger, LedgerError};
+use crate::ledger::{Ledger, LedgerError, SWEEPER};
+use crate::quiescence::Quiescence;
 use crate::store::streams::Streams;
 use crate::store::{Readers, Writer};
 
@@ -48,6 +49,8 @@ pub struct Routes {
     notifications: HashMap<&'static str, Entry>,
     ledger: Option<Ledger>,
     index: Option<Arc<dyn IndexPort>>,
+    /// Where the gateway's tasks take part in the barrier.
+    quiescence: Quiescence,
 }
 
 #[derive(Debug)]
@@ -97,7 +100,9 @@ impl Default for Routes {
             notifications: HashMap::new(),
             ledger: None,
             index: None,
+            quiescence: Quiescence::new(),
         };
+        routes.watched_by(&Quiescence::new());
         routes.insert::<Ping>(Target::Ping);
         routes.insert::<BlobGet>(Target::Blobs);
         routes.insert::<BlobPut>(Target::Blobs);
@@ -126,9 +131,11 @@ impl Routes {
         durations: &Durations,
         sessions: Arc<dyn SessionPort>,
         index: Arc<dyn IndexPort>,
+        quiescence: &Quiescence,
     ) -> Result<(Self, JoinHandle<()>), LedgerError> {
         let ledger = Ledger::load(conn, writer, clock, durations)?;
-        let sweeper = tokio::spawn(ledger.clone().sweeper());
+        quiescence.register(SWEEPER);
+        let sweeper = tokio::spawn(ledger.clone().sweeper(quiescence.enter(SWEEPER)));
         let mut routes = Self::new(ledger);
         routes.sessions(sessions);
         routes.index(Arc::clone(&index));
@@ -204,8 +211,22 @@ impl Routes {
         Some((name, entry))
     }
 
-    pub(super) fn ledger(&self) -> Option<&Ledger> {
+    /// The ledger, for `test/run_maintenance` (T047).
+    pub fn ledger(&self) -> Option<&Ledger> {
         self.ledger.as_ref()
+    }
+
+    /// The gateway's tasks take part in `quiescence`'s barrier (T047); its
+    /// kinds are registered there. A fresh registry stands in until then.
+    pub fn watched_by(&mut self, quiescence: &Quiescence) {
+        for kind in super::KINDS {
+            quiescence.register(kind);
+        }
+        self.quiescence = quiescence.clone();
+    }
+
+    pub(super) fn quiescence(&self) -> &Quiescence {
+        &self.quiescence
     }
 
     pub(super) fn opened(&self, client: Opened) {
