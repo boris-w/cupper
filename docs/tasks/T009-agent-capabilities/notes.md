@@ -39,3 +39,26 @@
 | B | 探测与探测目录、`agents/capabilities`、`agents/refresh`、`AgentStatus` 与语义码映射、交给索引的接口 | 约 350 |
 
 不拆的话，按 A、B 的顺序提交。
+
+## 编排者裁定（2026-10-20）
+
+不拆，上限放宽到约 850 行，硬停止线 900；先 A 后 B。5 条取舍全部认可。
+
+## 进度统计
+
+| 提交 | 内容 | 行数 | 累计 |
+|---|---|---|---|
+| A | 命令列表按会话去重（摘要）、attach 带上最近的列表、会话 actor 只在列表变化时写 `session.capabilities`、能力缓存的写入与启动时作废；测试辅助的拆分、UNIT-commands-dedup（运行时与会话两处） | +262 −16 | 262 |
+| B | `probe()` 与探测目录、登录状态、`AgentStatus` 与语义码映射、交给索引的接口与空实现、`Launch` 补字段、缓存的读取、`agents/capabilities` 与 `agents/refresh` 的端口、发现链抽成 `Finder`、宿主组装；探测与 `agents/*` 的用例、状态映射的单测 | +621 −46 | 883 |
+
+合计 +883 −62，超过约 850 行的上限约 4%，在 900 的硬线以内。B 比估计多，主要是 `agents/refresh` 复用发现链：`discover` 原来拿着一个 `rusqlite::Connection` 跨 `await`，放不进 `Send` 的 future，改成先读项目根目录再发现，并把 `claude_launch` 变成可复用的 `Finder`（+43 −26）；另外为了收在硬线内，压缩过状态映射的单测和探测的等待。
+
+## 实现里的取舍
+
+- **命令列表**：运行时按会话记一份列表的 sha-256 摘要（设计 5.6.2），会话打开期间收到的列表不单独发事件；attach 的回复带 agent 级的最近一份列表，第一次会话时它可能还是空的，随后的列表经 `CommandsChanged` 到会话 actor，由它写一条新的 `session.capabilities`。
+- **缓存**：attach 成功、列表变化、探测完成都写；探测在回复前等写入提交，`agents/capabilities` 随后就能读到。宿主启动时和 `agents/refresh` 换 `Launch` 时，删掉适配器或 CLI 版本不符的行。
+- **探测**：目录 `<数据目录>/probe/claude/`，每次删掉重建、0700；会话按已信任打开（`project_config: load`）；列表等待时长登记为 `probe_commands`（200 ms），计时经 `Clock`；之后发 `session/close`。
+- **登录状态**：`_auth/status_update` 的 kind 为 `none` 时是 `logged_out`，其余 `logged_in`，只留 kind 和套餐名（K16）；prompt 以 `not_logged_in` 失败时改为 `logged_out`。
+- **`AgentStatus`**：没找到 CLI 时 `state: unavailable`、不带 `cli`；运行时核对失败时 `adapter.runtime: failed`；运行时目录里缺文件时 `missing`；注入的程序视为 `ready`；版本分类在 `cli.compat`；`rss_bytes` 留空（T008）。实例开始、结束、登录状态变化、重新查找时交给索引；T034 之前是空实现 `NoAgentNotes`。
+- **`agents/refresh`**：重跑登录 shell、定位和版本检查（注入的假 agent 照常注入），先作废旧版本的缓存，再换 `Launch`，缓存为空且 CLI 可用时探测一次，最后返回状态。Codex 在 M1a 没有运行时，两个方法都回 `unavailable`。
+- **网关**：`agents/capabilities`、`agents/refresh` 由宿主组装时登记；分派测试的夹具照宿主的做法用会话的桩登记这两个方法，unsupported 清单删两行。
