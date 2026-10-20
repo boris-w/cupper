@@ -80,3 +80,87 @@
 5. **`@smoke` 的范围**：`ids.toml` 里两个编号都标的是 `nightly`。建议 PR 只跑一条夹具自检（App 起来、UI 连上、CLI 看得到宿主），两个编号留在每晚。
 6. **位置**：新建工作区包 `tools/e2e/`（与 `tools/ui-screenshots/` 并列），根目录加 `pnpm test:e2e`（5.1.5）。
 7. **`ci e2e` 的构建**：`runtime-pack` 的暂存目录不在时，作业自己先跑一次（只下载公开物料）；在的话直接用。e2e 的 App 和 `CupperHost.app` 每次都由当前提交构建，摘要记下两者的目录摘要。
+
+## 裁定之后（方案一：T090 收窄，上限约 1,000，硬线 1,100；辅助另立 T167）
+
+### 实际规模
+
+按 `git diff --numstat main...HEAD`（不含 `pnpm-lock.yaml` 和文档）：新增 963 行，删除 15 行。
+
+| 模块 | 新增 |
+|---|---|
+| 套件骨架：`package.json`、`tsconfig.json`、`playwright.config.ts`、`setup.ts`、`paths.ts`，根目录 `test:e2e` | 110 |
+| 夹具 `fixture.ts` 与进程表 `procs.ts` | 328 |
+| CLI 包装 `cli.ts` | 73 |
+| 原生确认框 `dialogs.ts` | 86 |
+| 用例：`app.spec.ts`（E2E-single-instance、E2E-quit-confirm 三条）、`smoke.spec.ts` | 125 |
+| `@cupper/i18n` 的 JSON 导入属性 | 8 |
+| `xtask ci e2e`：`jobs/e2e.rs`（含 UNIT-ci-e2e 两条约 55 行）、产物摘要接进摘要、摘要用例 | 233 |
+
+- 写到 1,066 行时超过了约 1,000 的线。
+- 我把 CLI 包装里的 `repl`、`watch`、以 `cli` 身份连接，以及 `showMessageBoxSync` 的替换都拿掉了，落到 960 行；之后修清理路径又加了 3 行。
+- 拿掉的部分本任务没有用例用到，按"没人用的代码不进 main"，由 T167 跟用到它们的辅助一起加。
+
+### 做法与取舍
+
+- **临时根目录**：
+  - 放在 `$TMPDIR/cupper-e2e/t-XXXXXX/`，布局照 `CUPPER_E2E_DIR`：`data/`、`logs/`、`harness_key`（0600）、`test_config.json`，另有 `repo/`。
+  - `test_config` 默认带 `agents.claude` 指向假 agent、`login_env: {}`、`notifier: record`；用例可以经 `test.use({ testConfig })` 覆盖。
+  - 临时仓库用固定的作者信息、`HOME` 指向仓库目录，不读本机的 git 配置。
+- **进程回收**：
+  - 进程以 pid 加 `ps` 的启动时间识别，pid 被复用时不会误发信号。
+  - 宿主从 `host.lock` 取 pid，并且要求命令行正好是 `<e2e 宿主> --data-dir <本用例的 data>`，只认本用例的宿主。
+  - 用例结束时依次：结束 CLI；照关机路径退出 App（`powerMonitor` 的 `shutdown`，不弹退出确认）；SIGTERM 宿主（有序退出会先关适配器）；记下的进程 5 s 内还在的，SIGKILL 并让用例失败。
+  - 每个根目录记下属主（Playwright worker 的 pid 和启动时间）和本用例拉起的进程。
+  - 下一次 globalSetup 清理属主已不在的根目录：
+    - 先结束记下的进程、命令行里带这个根目录（按真实路径，`$TMPDIR` 是符号链接）的进程，以及它们下面的进程；
+    - 再删目录。
+  - 照 T008 修复 1、T063 的守卫做法，覆盖 worker 被杀的情况。
+  - plist：globalTeardown 先 `defaults delete dev.cupper.app.e2e`（经 cfprefsd，缓存一并清掉），再删文件。
+- **CLI 包装**：
+  - 用 `host-bundle --kind e2e` 在宿主旁边构建的 e2e CLI（test-harness 特性，`BUILD` 为 `E2e`，按 harness 证明校验宿主）。
+  - 以 `test_harness` 身份连接（拥有全部 scope，建会话不用提权），key 从密钥文件经 fd 3 传入；`--json` 输出按行解析。
+- **原生确认框**：
+  - 经 `electronApp.evaluate` 替换 `dialog.showMessageBox`，记录选项（`message`、`detail`、`buttons`、`defaultId`、`cancelId`、`checkboxLabel`）。
+  - 调用一直挂起，直到用例 `answer(序号, 按钮, 复选框)`。
+  - App 启动后立即替换，任何确认框都不会真的弹出、抢走焦点。
+- **用例**：
+  - E2E-single-instance：
+    - 先隐藏窗口；用同一个 `CUPPER_E2E_DIR` 再启动一次，第二个实例以 0 退出；
+    - 第一个实例的窗口重新显示，`main.log` 有"another instance is running"；
+    - 宿主 pid 不变。
+  - E2E-quit-confirm 三条（T007 的交接）：
+    - 有运行中的回合（假 agent 的 `wait_cancel`）：退出时弹框，文案与 `@cupper/i18n` 按 App 的语言算出的完全一致；取消后 App 和回合都在，下次退出再问；确认后 App 退出，宿主收到 `host/exit` 后结束；
+    - 空闲时退出：不弹框，宿主不退出，App 的连接都已断开；
+    - 关机路径：有运行中的回合也不问，App 什么也不发给宿主。这也验证了夹具回收所用的路径。
+  - `@smoke` 的夹具自检：没有编号（任务书允许），PR 只跑它。
+- **`@cupper/i18n` 的导入属性**（范围外的小改动）：
+  - 用例在 Node 里直接加载 `@cupper/i18n` 算期望文案，Node 的 ESM 加载器要求 JSON 导入带 `with { type: "json" }`。
+  - 8 行 import 加了属性；Vite、Vitest、`tsc` 都接受，i18n 的单元测试和 e2e 构建都已验证。
+- **`xtask ci e2e`**：
+  - 步骤依次为：
+    1. `pnpm install`；
+    2. 暂存目录不在时跑 `cargo xtask runtime-pack`（只下载 `runtime/manifest.json` 钉住哈希的公开物料）；
+    3. `cargo build -p cupper-fake-agent`；
+    4. `pnpm build:e2e`；
+    5. 记下 `Cupper E2E.app`、`CupperHost.app`、`cupper` 的摘要；
+    6. Playwright。
+  - 目录摘要：按路径排序，每个文件记路径和内容的 sha-256，每个符号链接记路径和指向，不跟随链接（Electron 框架里的 `Versions/Current` 等），再整体取 sha-256。
+  - `ci pr` 加 `--grep @smoke`，并按 `E2E_PATHS` 过滤：`apps/desktop/`、`packages/`、`crates/cupper-*`、`runtime/`、`tools/e2e/`、host-bundle 与 runtime-pack 的 xtask 代码、各锁文件和工作区清单。
+  - `JobCtx` 加 `artifacts`，经 `JobReport` 写进摘要原有的 `artifacts` 字段（白名单早已有这一项）。
+  - "未实现的作业被拒"那条用例原来拿 `e2e` 举例，改成 `perf`。
+
+### 验证
+
+- `cargo xtask ci e2e`：通过，3 项检查加 5 条用例。
+  - 第一次因为磁盘满（codesign 报 internal error）失败；清出空间后重跑通过。
+  - 磁盘满时我只删了本 worktree 的 `target/debug` 等构建产物，没有动别的 worktree。
+- 套件连跑 10 次（workers 为 2）全绿，每次 3.1–4.3 s。每次跑完都检查过：
+  - 没有本 worktree 的 App、宿主、假 agent、CLI 进程；
+  - `$TMPDIR/cupper-e2e/` 为空；
+  - plist 不在。
+  - 改了清理路径之后又连跑 10 次，同样全绿、无残留。
+- 中途杀掉测试进程的情况：
+  - 用一条临时的、会停住的用例（没有提交）在回合运行中 `kill -9` Playwright 的进程，App、宿主、假 agent 和根目录都留了下来；
+  - 下一次运行的 globalSetup 把它们全部清掉。
+  - 用一个命令行带根目录的 `sh` 和它的子进程 `sleep` 也验证过，子进程一并结束。
