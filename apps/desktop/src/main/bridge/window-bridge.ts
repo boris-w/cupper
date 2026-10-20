@@ -10,17 +10,26 @@
 //   without an `id`, a batch and anything that is not a JSON object are
 //   dropped. Integers beyond ±(2^53 − 1) would change in the parse, so a
 //   message with one is refused too.
+// - Real input (design 5.7.8, rules 4 and 9): every command uses up the
+//   window's input not used yet; `interaction/respond` and `git/revert` need
+//   it, at most 1 s old, and carry it as `input`, over whatever the window
+//   wrote. Without it they are refused here, `user_activation_required`,
+//   unless they repeat, with the same parameters, a command the host has
+//   not answered: the connection dropped before it could.
 // - Flow control: past 8 MB the window has not acknowledged, the bridge
 //   stops reading the connection until it does.
 // - When the connection drops, everything it brought reaches the window, then
 //   `reconnecting`; once the control connection is back, a new one is made,
 //   and its data follows its `ready`. States and data share the one port.
 
-import { encodeJson } from "@cupper/host-client";
-import { CLIENT_NOTIFICATIONS, METHODS } from "@cupper/protocol";
+import { createHash } from "node:crypto";
+
+import { encodeJson, FRAME_JSON, FrameDecoder } from "@cupper/host-client";
+import { CLIENT_NOTIFICATIONS, METHODS, type InputEvidence } from "@cupper/protocol";
 import type { Handshake, HostPort } from "@cupper/shell-api";
 
 import type { ToWindow } from "../../shared/ipc";
+import type { InputGuard } from "../input";
 
 /** Unacknowledged bytes past which the bridge stops reading (design 5.7.1). */
 export const MAX_UNACKED_BYTES = 8 * 1024 * 1024;
@@ -28,6 +37,8 @@ export const MAX_UNACKED_BYTES = 8 * 1024 * 1024;
 export const BATCH_MS = 16;
 /** The scopes a window may use; `privileged`, `test` and `none` stay local (design 5.7.8). */
 const WINDOW_SCOPES = ["read", "write", "approve", "ui_local"];
+/** The commands that need real input (design 5.7.8, rule 4). */
+const REAL_INPUT = new Set(["interaction/respond", "git/revert"]);
 
 /** A handshaken data connection. */
 export interface DataConnection {
@@ -54,6 +65,8 @@ export interface BridgeDeps {
   controlReady(): Promise<void>;
   /** `setTimeout` in the app. */
   schedule(task: () => void, ms: number): void;
+  /** The window's real input. */
+  input: Pick<InputGuard, "take">;
 }
 
 /** Whether a window may send `method`: as a request when it has an `id`. */
@@ -65,6 +78,16 @@ export function allowed(method: string, request: boolean): boolean {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** A command's parameters, `input` left out, in one form whatever the key order. */
+function paramsHash(params: Record<string, unknown>): string {
+  const rest = Object.fromEntries(Object.entries(params).filter(([key]) => key !== "input"));
+  const sorted = (_key: string, value: unknown) =>
+    isRecord(value)
+      ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : 1)))
+      : value;
+  return createHash("sha256").update(JSON.stringify(rest, sorted)).digest("hex");
+}
 
 /** Whether `value` holds an integer the parse may have changed. */
 function unsafeInteger(value: unknown): boolean {
@@ -91,6 +114,12 @@ export class WindowBridge {
   #paused = false;
   /** Uploaded bytes by blob, until the `blob/put` that commits it. */
   readonly #uploads = new Map<string, number>();
+  /** Forwarded commands that needed input, by `command_id`, until the host answers (rule 9). */
+  readonly #released = new Map<string, { hash: string; input: InputEvidence }>();
+  /** Their `command_id`s by request `id`, on this connection. */
+  readonly #awaiting = new Map<unknown, string>();
+  /** Follows the inbound frames to see those answers; the bytes go on as they came. */
+  #frames = new FrameDecoder();
 
   constructor(window: WindowPort, deps: BridgeDeps) {
     this.#window = window;
@@ -125,6 +154,8 @@ export class WindowBridge {
   #use(conn: DataConnection): void {
     this.#conn = conn;
     this.#paused = false;
+    this.#frames = new FrameDecoder();
+    this.#awaiting.clear();
     conn.onClose(() => void this.#lost(conn));
     if (conn.rest.length > 0) {
       this.#inbound(conn.rest);
@@ -168,6 +199,29 @@ export class WindowBridge {
       this.#deps.schedule(() => this.#flush(), BATCH_MS);
     }
     this.#throttle();
+    this.#answered(bytes);
+  }
+
+  /** Drops the retransmit records of the commands the host answered (rule 9). */
+  #answered(bytes: Uint8Array): void {
+    try {
+      this.#frames.push(bytes);
+      for (let frame = this.#frames.next(); frame; frame = this.#frames.next()) {
+        if (frame.type !== FRAME_JSON || this.#awaiting.size === 0) {
+          continue;
+        }
+        const reply: unknown = JSON.parse(new TextDecoder().decode(frame.payload));
+        const id = isRecord(reply) && !("method" in reply) ? reply.id : undefined;
+        const command = this.#awaiting.get(id);
+        if (command !== undefined) {
+          this.#awaiting.delete(id);
+          this.#released.delete(command);
+        }
+      }
+    } catch {
+      // Not frames the window can use either; it hears so from its own decoder.
+      this.#frames = new FrameDecoder();
+    }
   }
 
   #flush(): void {
@@ -242,6 +296,21 @@ export class WindowBridge {
     }
     if (!allowed(method, request) || unsafeInteger(message)) {
       return refuse();
+    }
+    // Rule 4: any command uses up the input not used yet.
+    const input = METHODS[method]?.idempotent === "command" ? this.#deps.input.take() : undefined;
+    if (REAL_INPUT.has(method)) {
+      const params = isRecord(message.params) ? message.params : {};
+      const command = typeof params.command_id === "string" ? params.command_id : undefined;
+      const hash = paramsHash(params);
+      const released = command === undefined ? undefined : this.#released.get(command);
+      const evidence = input ?? (released?.hash === hash ? released.input : undefined);
+      if (!request || command === undefined || evidence === undefined) {
+        return refuse("user_activation_required");
+      }
+      message.params = { ...params, input: evidence };
+      this.#released.set(command, { hash, input: evidence });
+      this.#awaiting.set(message.id, command);
     }
     if (method === "blob/put" && isRecord(message.params)) {
       this.#uploads.delete(String(message.params.hash));
