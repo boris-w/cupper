@@ -126,14 +126,17 @@ function ProjectGroup(props: {
   const shown = expanded ? sessions : sessions.slice(0, SHOWN_SESSIONS);
   return (
     <section aria-label={project.name}>
-      <div className={`${ROW} group hover:bg-hover`}>
+      <div className={`${ROW} group relative hover:bg-hover`}>
         <FolderIcon />
         <span className="min-w-0 flex-1 truncate">{project.name}</span>
+        {/* At the row's end like a session's label; the actions take its place on hover. */}
         {project.trust_state !== "trusted" && (
-          <span className="text-xs text-warning">{t("sidebar:untrusted")}</span>
+          <span className="shrink-0 text-xs text-warning group-focus-within:invisible group-hover:invisible group-has-[[data-state=open]]:invisible">
+            {t("sidebar:untrusted")}
+          </span>
         )}
         {/* The menu's items come with T153. */}
-        <span className="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-data-[state=open]:opacity-100">
+        <span className="absolute right-(--layout-row-px) flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-data-[state=open]:opacity-100">
           <RowButton
             label={t("sidebar:new_session_in", { project: project.name })}
             onClick={() => navigate({ page: "new", projectId: project.project_id })}
@@ -233,7 +236,8 @@ export function ElevationBanner({ elevations }: { elevations: ElevationRequested
       className="m-2 flex items-center gap-3 rounded-xl bg-surface-panel p-3 text-sm shadow-card"
     >
       <div className="min-w-0 flex-1">
-        <p>{t("sidebar:elevation", { client: first.client_name })}</p>
+        {/* Generic (design 5.8.4): the requester's own name is unverified; the native dialog shows what the host verified. */}
+        <p>{t("sidebar:elevation")}</p>
         {rest.length > 0 && (
           <p className="text-xs text-fg-tertiary">
             {t("sidebar:elevation_more", { count: rest.length })}
