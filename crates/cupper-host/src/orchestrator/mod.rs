@@ -22,19 +22,27 @@ pub mod turn;
 use cupper_protocol::annotations::{DurationMs, TimestampMs};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::ItemId;
-use cupper_protocol::item::{Item, ItemCompleted, ItemStarted, ItemStatus, Notice, NoticeCode};
+use cupper_protocol::item::{
+    Item, ItemCompleted, ItemStarted, ItemStatus, Notice, NoticeCode, NoticeParams,
+};
 
 use crate::clock::{IdGen, Now};
 
 /// A notice without a turn: the view shows it in the running turn, or after
 /// the last one (design 5.3.3).
 pub(crate) fn notice(ids: &IdGen, now: Now, code: NoticeCode) -> [EventBody; 2] {
+    notice_with(ids, now, code, NoticeParams::default())
+}
+
+pub(crate) fn notice_with(
+    ids: &IdGen,
+    now: Now,
+    code: NoticeCode,
+    params: NoticeParams,
+) -> [EventBody; 2] {
     let item_id = ItemId::from_uuid(ids.new_id_at(now.wall_ms).as_u128());
     let at = TimestampMs(now.wall_ms);
-    let item = Item::Notice(Notice {
-        code,
-        params: Default::default(),
-    });
+    let item = Item::Notice(Notice { code, params });
     let started = ItemStarted {
         item_id: item_id.clone(),
         turn_id: None,

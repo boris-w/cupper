@@ -275,6 +275,10 @@
 | T111 | `agents/restart` 调 `AgentRuntime::clear_crashed()`；Codex 的回收（超过 2 GiB，或 30 分钟没有回合）用 `AgentRuntime::resources()`（`watch` 接收端） | T008 |
 | T059 | 宿主启动时的残留清理读 `adapters.groups`（`[[pgid, start_us], …]`，T008 加的列）以及适配器自己的进程组 | T008 |
 | 会话侧显示错误详情的任务（MS-5） | `DriverEvent::AdapterExited` 已带 `stderr`（每个实例最后 64 KB），还没有写进 `error` 条目的详情 | T008 |
+| M1b 的信任确认界面（加"不加载项目配置继续"的协议方法） | 协议方法直接调宿主内部入口 `SessionManager::ignore_project_config(&SessionId)`：会话空闲时关闭 agent 会话，下一个回合以 `Ignore` resume，并去掉 `project_config_changed` 这个闸门原因。界面区分两种 notice：`notice{project_config_changed}` 没有 `params.reason` 表示项目配置的内容变了；有 `reason` 表示重扫失败（`workspace_missing`、`project_missing`、仓库档错误的 reason、`ScanError::code()`），按不可信处理 | T109 |
+| T089 | 从库恢复会话时：信任闸门的原因和"想加载项目配置"的标志只在内存里，可以从 `session.configured.project_config` 和恢复后的第一次重扫重新得出；"不加载项目配置继续"的选择（`ignore_for_good`）需要持久化，例如加一个会话行字段，否则重启后会话可能重新加载项目配置 | T109 |
+| T089、T061 | `actor.rs` 的 `rescan` 里 `std::fs::canonicalize` 在 tokio 任务里同步执行；这里再加文件操作时一起挪进 `spawn_blocking` | T109 |
+| T068 | IT-orch-trust-gating 只在进程内覆盖信任门控；进程级用例可以照它的 6 个场景（发 prompt 前变化、回合中变化后"继续"、未信任以 `Ignore` 运行、工作区消失、两个闸门原因的两种顺序、git 根目录的 `.claude/`）。会话夹具的项目是临时目录里真实存在的 `app/`；测试构建里有 `GitTool::with_test_env` | T109 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

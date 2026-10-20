@@ -50,9 +50,10 @@ use crate::quiescence::{ActorKind, Participant, Quiescence};
 use crate::store::streams::{Batch, StreamError, StreamHandle, StreamView, StreamWriter, Streams};
 use crate::store::{Durability, ReadError, Readers};
 use crate::supervisor::{Activity, Part};
-use crate::trust::Trust;
+use crate::trust::{Scan, Trust};
 
 pub use self::budget::{BUDGET, DETAIL_MAX};
+pub(crate) use self::projects::{Context as ScanContext, git_of};
 
 /// The index actor's kind in the quiescence barrier.
 pub const INDEX: ActorKind = ActorKind::new("index");
@@ -92,6 +93,7 @@ enum Mail {
     Prepared(Box<Done>),
     Clients,
     Pending(SessionId, u32, Option<PendingKind>),
+    Rescanned(ProjectId, Scan),
     Checkpoint(oneshot::Sender<()>),
     /// `test/seed` wrote sessions: reconcile with the tables again.
     #[cfg(feature = "test-harness")]
@@ -179,6 +181,10 @@ impl IndexNotes for IndexHandle {
             .mail
             .send(Mail::Pending(session.clone(), count, oldest));
     }
+
+    fn rescanned(&self, project: &ProjectId, scan: Scan) {
+        let _ = self.mail.send(Mail::Rescanned(project.clone(), scan));
+    }
 }
 
 impl Part for IndexHandle {
@@ -222,6 +228,7 @@ impl IndexActor {
                 }
                 Mail::Clients => self.clients().await,
                 Mail::Pending(session, count, oldest) => self.pending(session, count, oldest).await,
+                Mail::Rescanned(project, scan) => self.rescanned(project, scan).await,
                 #[cfg(feature = "test-harness")]
                 Mail::Reconcile(done) => {
                     if let Ok(tables) = self.deps.readers.read(rows::read).await {
@@ -448,6 +455,32 @@ impl IndexActor {
             summary.pending_interactions = count;
             summary.pending_kind = oldest;
             self.append(EventBody::SessionUpserted(summary)).await;
+        }
+    }
+
+    /// A session rescanned its project (design 5.2.6): a trusted project
+    /// whose configuration changed becomes `stale`.
+    async fn rescanned(&mut self, id: ProjectId, scan: Scan) {
+        let Some(project) = self.tables.projects.get(&id) else {
+            return;
+        };
+        let trust = project.trust.rescanned(&scan);
+        if trust == project.trust {
+            return;
+        }
+        let project = Project {
+            trust,
+            ..project.clone()
+        };
+        let row = project.clone();
+        let batch = Batch {
+            bodies: vec![EventBody::ProjectUpserted(project.upserted())],
+            with: Some(Box::new(move |conn| projects::update(&row, conn))),
+            ..Batch::default()
+        };
+        // Lost, it is found again by the next rescan.
+        if self.writer.append(batch).await.is_ok() {
+            self.tables.projects.insert(id, project);
         }
     }
 
