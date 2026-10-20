@@ -11,6 +11,8 @@
 //!   nothing is queued, whatever the clients (ruled before T037).
 //!
 //! An upgrade comes before the orphaned state, which comes before idleness.
+//! Either exit waits for a look taken after new sessions and turns were
+//! closed: an earlier one may miss a turn that started since.
 //! [`WatchCore`] decides; the actor looks at the clients, the work and the
 //! parent every `supervisor_observe` and carries the decisions out.
 
@@ -144,12 +146,14 @@ impl Core for WatchCore {
             Input::Observed(seen) => self.seen = Some(seen),
             Input::Orphaned if !self.orphaned => {
                 self.orphaned = true;
+                self.seen = None;
                 if !self.upgrade {
                     out.push(Action::Close(Closed::Orphaned));
                 }
             }
             Input::BundleChanged if !self.upgrade => {
                 self.upgrade = true;
+                self.seen = None;
                 out.push(Action::Close(Closed::PendingUpgrade));
             }
             Input::Orphaned | Input::BundleChanged => {}

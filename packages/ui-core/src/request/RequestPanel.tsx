@@ -74,9 +74,9 @@ export function RequestPanel(props: {
     return () => clearTimeout(timer.current);
   }, [arm]);
 
-  const activate = () => {
+  const activate = (clearHint = true) => {
     setActive(true);
-    setHint(null);
+    if (clearHint) setHint(null);
     cmdEnterSeen.current = false;
   };
   const revoke = () => {
@@ -212,8 +212,11 @@ export function RequestPanel(props: {
       onFocus={() => !active && ready && activate()}
       onMouseDownCapture={() => {
         downWhileReady.current = ready;
-        if (ready) activate();
+        // The hint goes once the click is over: taking it away now would move
+        // the buttons under the pointer, and the click would miss (RP-2).
+        if (ready) activate(false);
       }}
+      onClickCapture={() => downWhileReady.current && setHint(null)}
       className="rounded-composer bg-surface-composer shadow-composer"
     >
       <div className="flex items-start gap-2 px-4 pt-3 pb-2">

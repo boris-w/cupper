@@ -378,6 +378,11 @@
 | T063 | 假 agent 不对外暴露收到的是 `session/resume` 还是 `session/new`，E2E-NFR1-5 只能确认下一条消息在新宿主上跑完。K 清单要直接断言 resume 时，给假 agent 加一个可观察的记录 | T091 |
 | e2e（T092、T093） | 视图导出：界面的 `__cupperTest.views()` 按流给出 `{seq, complete, view}`；CLI 的 `cupper view index|<会话>`（test-harness 构建）每批事件后输出 `{stream, seq, resubscribed, view}`；`tools/e2e/src/nfr1.ts` 有"等两端到达宿主最后的 seq 再取视图"的辅助。`HostProvider` 在创建 client 时就调 `onClient`。T167 夹具 `processes()` 的注释说宿主不是 App 的子进程，实际是 Electron 主进程直接拉起的，T092 顺手改正 | T091 |
 | T177、T069 | 会话 actor 的空闲退出（T175）：六条同时满足才算空闲（没有运行中回合、待处理交互、会出队的排队消息、核心计时器、在途重扫或连接、等信任检查的 `send` 回复），订阅者不算；时长 `session_idle` 600 s，可经 `test_config.durations` 缩短。到时 actor 关闭 agent 会话、放下全部部件（含流写者）、交回收件箱，管理器 `forget` 后把收件箱里的调用经按需载入重新投递。订阅会话流时经 `SessionPort::wake` 触发载入。测试里等在途工作结束用 `SessionManager::settled`（只在测试里编译）。T177 的接入点：`Parts`、`SessionDeps` 还没有 blob 存储；合并器的计时器键只有 `FlushTimer`，要扩成枚举 | T175 |
+| T177 | T062 迁 SP-4a t1、t7 时暂缺两条 blob 断言（大工具输出转 blob、500 kB 工具输出）：现在一条约 500 kB 的 `item.completed` 超过一帧，在线客户端重置后再也收不到这个会话的事件，新订阅者被断开。T177 完成后把它们补回 `crates/cupper-host/tests/gateway_sync.rs` | T062 |
+| T069 | 孤立修法（T062）后仍有微秒级窗口：关闭新回合之前已受理、会话 actor 还没置上 `running` 的回合可能被漏看，彻底消除要在受理时计数（接口层面）；`lifecycle.rs` 的 `it_gw_blob_put_and_get_through_the_gateway` 在机器高负载时失败过一次（SIGTERM 后 30 s 宿主没退出），没复现；一次附加有时连写两条 `session.capabilities`，同一回合的事件数因此不固定，不要断言精确个数 | T062 |
+| T117 | 假 agent 的 `flood_mixed` 每个条目约 3.5 ms、线性增长（2,000 条要 7 s，SP-4a 的 `flood_mixed 6000 200` 要 20 s 以上），与每块长度无关；是否达标请在宿主性能测量里判断 | T062 |
+| 宿主的进程级用例 | `tests/gateway_sync.rs`（T062）加入共用夹具：宿主可按自定载荷和 `Command` 拉起，客户端可按指定选项连接，假 agent 的数据目录与 `test_config` 分两步以便重启；停读的客户端要用 testkit 的原始套接字（CLI 库的读任务总在读）；宿主不是测试子进程时，守卫先按 pid 和启动时间核对再发 SIGTERM，用 `ExitWatch` 等退出 | T062 |
+| 所有跑 e2e 的任务 | **e2e 一律经持锁入口跑**（T093）：整套用 `pnpm test:e2e`（两段，可跟 `-- <spec>`），单个 spec 或用例用 `pnpm --filter @cupper/e2e run test:e2e:one <spec> -g <名称>`（不加 `--`）；别的写法套一层 `cargo xtask lock -- <命令>`。**不要直接运行 `playwright test`**：几个 e2e App 同时开着会互相抢焦点、遮挡窗口，`@focus` 用例偶发失败。持锁运行的命令带 `CUPPER_MACHINE_LOCK=held`，嵌套不再等锁。运行期间 `caffeinate -d` 防止显示器睡眠；**屏幕已锁或显示器已睡时 globalSetup 直接报错**（`@focus` 用例需要可见、能拿到焦点的窗口），解锁后重跑 | T093 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
