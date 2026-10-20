@@ -216,6 +216,11 @@
 | T060 | git 子进程的 PATH 直接用 `CliLocator::trusted_path()`；git 的绝对路径用 `CliLocator::tool("git")` | T054 |
 | T111 | Codex 的安装布局加一个 `resolve::Layout`；`env_rules::CODEX` 的变量名已有。本机 codex 的 npm 布局已经和 SP-2 记录的不同（原生二进制在平台包 `codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex`），见 `docs/tasks/T054-cli-discovery/notes.md` | T054 |
 | T066 | T054 有两处有意保守的取舍要用真实环境确认：常见位置的 `~/.npm-global/bin` 来自 npm 文档，不是实测；nvm 只看默认的 `~/.nvm`，不读 `NVM_DIR`。原生安装器的布局也没在本机核实 | T054 |
+| T055 | `SessionDeps` 多了 `audit` 和 `index`：`audit` 用交给 `Gateway::new` 的同一个发送端（`supervisor` 里的 `records`）；`index` 在 T034 之前用 `NoIndex` | T088 |
+| T034 | 实现 `IndexNotes`（会话在请求写出或解决之后报告待处理的个数和最早一个的类别），换掉 `NoIndex` | T088 |
+| T059 | 落盘新的审计记录 `InteractionResponded`，记为 `interaction.responded`。T088 之后 `Gateway::new` 接收宿主建好的审计发送端（`supervisor` 里的 `records`），网关和会话共用；T059 把它的接收端接到写线程 | T088 |
+| T089 | 宿主重启后用 `interactions.request_json`（整个 `interaction.requested`）和状态，经 `Input::Ended` 把已结束的请求交给交互代理；`interaction/get` 对淘汰出视图的请求可以改从表里读 | T088 |
+| T053 | `DriverEvent::Ask` 带上 `toolCallId` 之后，在 `SessionCore::write_held` 里填上 `item_id`（T088 已合并；T053 的分支开得早，做不了的话合并时由编排者处理或交给 T095） | T088 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
