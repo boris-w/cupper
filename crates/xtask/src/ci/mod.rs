@@ -11,6 +11,7 @@ mod jobs;
 mod lock;
 mod summary;
 
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -102,6 +103,7 @@ fn parse(args: &[String]) -> Result<Options<'_>> {
 
 fn run(args: &[String], cwd: &Path) -> Result<bool> {
     let Options { target, record } = parse(args)?;
+    refuse_golden_update(std::env::var_os("UPDATE_GOLDEN"))?;
     let selected =
         jobs::resolve(target).with_context(|| format!("unknown job `{target}`\n\n{}", usage()))?;
     if let [job] = selected.as_slice()
@@ -148,6 +150,15 @@ fn run(args: &[String], cwd: &Path) -> Result<bool> {
         eprintln!("summary written to {}", shown.display());
     }
     Ok(reports.iter().all(|report| report.outcome != Outcome::Fail))
+}
+
+/// Goldens change by hand and get reviewed in the PR; CI only compares
+/// (design 5.9.3).
+fn refuse_golden_update(update_golden: Option<OsString>) -> Result<()> {
+    if update_golden.is_some() {
+        bail!("UPDATE_GOLDEN is set: goldens are updated by hand and reviewed, never in CI");
+    }
+    Ok(())
 }
 
 fn run_job(job: &Job, root: &Path, log_dir: &Path) -> JobReport {
@@ -260,6 +271,13 @@ mod tests {
         assert!(parse(&args(&["pr", "rust"])).is_err());
         assert!(parse(&args(&["--verbose", "pr"])).is_err());
         assert!(parse(&args(&[])).is_err());
+    }
+
+    #[test]
+    fn ci_refuses_to_update_goldens() {
+        refuse_golden_update(None).expect("not set");
+        let err = refuse_golden_update(Some("1".into())).expect_err("set");
+        assert!(err.to_string().contains("UPDATE_GOLDEN"), "{err}");
     }
 
     #[test]
