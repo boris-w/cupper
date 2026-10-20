@@ -344,6 +344,8 @@
 | T163 | ① 有序退出时 `conn.closed{host_exiting}` 只进了 host.log、没进表（`Host::exit` 先停写线程再 `close_all`），加 `host.exiting` 时一并改成先关连接、排空审计写入、再停写线程；② `admit` 里的 `verify(ui_requirement)` 也在异步线程上同步调用 Security 框架，未正式签名的大程序或第一次调用会慢，检查一遍，必要时移到 `spawn_blocking`（T138 修 IT-idle-exit 时查出同类问题：`signing_identity()` 一次约 600 ms，卡住了宿主的定时器）；③ `project/add` 新路径扫描失败时还没有项目 ID，没有审计 | T138 |
 | 读 `config.unconfirmed` 审计或事件的代码 | T044 的 `ConfigUnconfirmed` 现在是 `{reason, config: ConfigState}`（T138） | T138 |
 | 在宿主的连接路径或异步线程上做系统调用的任务 | 不要在 tokio 工作线程上同步调用可能慢的系统 API（Security 框架的签名查询、读大文件等），用 `spawn_blocking`；否则会卡住宿主的定时器（监护、合并窗口都受影响），T138 的 IT-idle-exit 就是这样失败的 | T138 |
+| T143 | 代码块现在是最简单的 `pre`/`code`（`packages/ui-core/src/rows/markdown.tsx`）：`rehype-sanitize` 的 schema 去掉了 `code` 上的全部 class，agent 写的 `language-*` 也在内。做高亮时语言信息要从别处取，或者在 schema 里只放行与已知语言列表相符的值；不能整体放开 class（T136 的关切：agent 的 class 可能命中本应用的样式） | T166 |
+| 任何显示 agent Markdown 的任务（T143、T146 等） | 一律用 `rows/markdown.tsx` 的 `Markdown` 组件及它导出的 `remarkPlugins`、`rehypePlugins`，不另建管线：插件全部显式给出，没有 `rehype-raw`、开了 `skipHtml`；schema 只放行 http(s)；链接经 `ShellAPI.openExternal`；图片只显示成链接、从不加载。streamdown 的默认组件里 `pre`、`code`、`strong`、`table` 已换成普通元素，代码块控件和链接确认弹窗关掉了 | T166 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
