@@ -1,7 +1,8 @@
 //! IT-lifecycle: the host as a process (design 5.2.13). What the previous run
 //! left running ends at startup, `host/exit` and SIGTERM exit in order, and
-//! a host that cannot start exits with the code of the startup contract, and
-//! a session runs a turn with the fake agent. IT-project-add-trust adds and
+//! a host that cannot start exits with the code of the startup contract, a
+//! session runs a turn with the fake agent, and read marks and presence reach
+//! the index. IT-project-add-trust adds and
 //! trusts a project in a git repository built here; IT-clock-advance and
 //! IT-seed drive the test interface. The tests talk to the host as the CLI's
 //! `harness` client.
@@ -20,10 +21,12 @@ use cupper_host::gateway::listen::HostLock;
 use cupper_host::gateway::testkit::{KEY, TempDir};
 use cupper_host::store::meta::{self, MetaKey};
 use cupper_host::store::{Database, MIGRATIONS, migrate, open_reader, open_writer};
-use cupper_protocol::ids::ProjectId;
+use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::methods::Empty;
-use cupper_protocol::methods::handshake::{HostExit, HostExitParams, HostStatus};
-use cupper_protocol::methods::session::SessionCreate;
+use cupper_protocol::methods::handshake::{
+    ClientPresence, ClientPresenceParams, HostExit, HostExitParams, HostStatus,
+};
+use cupper_protocol::methods::session::{SessionCreate, SessionMarkRead, SessionMarkReadParams};
 use cupper_protocol::proof;
 use cupper_protocol::transport::socket_path;
 use rusqlite::Connection;
@@ -171,6 +174,47 @@ async fn it_lifecycle_startup_ends_what_the_last_run_left_running() {
     assert_eq!(exit_code(&mut host).await, 0);
 }
 
+/// `session/mark_read` moves `last_read_seq` forward only, and no further
+/// than the last turn's end; `client/presence` is served.
+#[tokio::test]
+async fn it_lifecycle_read_marks_and_presence_reach_the_index() {
+    let dir = TempDir::new("read-marks");
+    let (data_dir, conn) = migrated(&dir);
+    conn.execute_batch(
+        "INSERT INTO projects (project_id, path, name, position, added_at)
+           VALUES ('p_1', '/p', 'p', 0, 1);
+         INSERT INTO sessions (session_id, project_id, agent, workspace_kind, workspace_path,
+             state, last_turn_end_seq, last_read_seq, created_at, updated_at)
+           VALUES ('s_1', 'p_1', 'claude', 'local', '/p', 'idle', 9, 2, 1, 1);",
+    )
+    .unwrap();
+    drop(conn);
+
+    let mut host = spawn(&data_dir);
+    let client = connect(&data_dir).await;
+    let session_id: SessionId = "s_1".parse().unwrap();
+    let presence = ClientPresenceParams {
+        foreground: true,
+        session_id: Some(session_id.clone()),
+    };
+    client.notify::<ClientPresence>(presence).await.unwrap();
+    let mut marks = Vec::new();
+    for up_to_seq in [5, 3, 100] {
+        let params = SessionMarkReadParams {
+            session_id: session_id.clone(),
+            up_to_seq,
+        };
+        client.request::<SessionMarkRead>(params).await.unwrap();
+        marks.extend(column(
+            &data_dir,
+            "SELECT CAST(last_read_seq AS TEXT) FROM sessions",
+        ));
+    }
+    assert_eq!(marks, ["5", "5", "9"]);
+    terminate(&host);
+    assert_eq!(exit_code(&mut host).await, 0);
+}
+
 /// How the test asks the host to exit.
 #[derive(Debug, Clone, Copy)]
 enum Trigger {
@@ -262,6 +306,18 @@ async fn it_lifecycle_runs_a_turn_with_the_fake_agent() {
     // The adapter stopped with the host.
     let ended = rows("SELECT instance_id FROM adapters WHERE ended_at IS NOT NULL");
     assert_eq!(ended.len(), 1);
+    // The index heard of the session, its turn and the agent.
+    let index = |data: &str, kind: &str| {
+        let sql = format!(
+            "SELECT json_extract(json, '$.data.{data}') FROM events
+                           WHERE stream = 'index' AND type = '{kind}' ORDER BY seq"
+        );
+        column(&data_dir, &sql)
+    };
+    let statuses = index("status", "session.upserted");
+    assert_eq!(statuses.last().map(String::as_str), Some("unread"));
+    assert_eq!(index("reason", "notification.intent"), ["turn_completed"]);
+    assert!(!index("agents", "agents.updated").is_empty());
 }
 
 #[tokio::test]
