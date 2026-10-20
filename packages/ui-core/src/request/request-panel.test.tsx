@@ -212,6 +212,20 @@ describe("UNIT-request-panel", () => {
     expect(run.panel()?.dataset.activation).toBe("auto");
   });
 
+  test("a click on a panel waiting for Tab or a click keeps the hint until the click is over", async () => {
+    const run = await setup();
+    await run.push(permission());
+    await run.ready();
+    const skip = screen.getByRole("button", { name: /跳过/ });
+    fireEvent.mouseDown(skip);
+    // Nothing moved under the pointer between its press and its release.
+    expect(run.panel()?.dataset.activation).toBe("auto");
+    expect(screen.getByRole("status").textContent).toBe("按 Tab 或点击以处理请求");
+    await act(async () => void fireEvent.click(skip));
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(run.responses()).toEqual([{ type: "selected", option_id: "o4" }]);
+  });
+
   test("numbers are positions in options: privileged confirms, unknown effect does nothing", async () => {
     const run = await setup();
     screen.getByRole("textbox").focus();
@@ -308,6 +322,39 @@ describe("UNIT-request-panel", () => {
     await act(async () => void fireEvent.mouseDown(screen.getByRole("button", { name: /关闭/ })));
     await act(async () => void fireEvent.click(screen.getByRole("button", { name: /关闭/ })));
     expect(unsupported.responses()).toEqual([{ type: "dismissed" }]);
+  });
+
+  test("typed text answers its field by 提交 or by Enter, beside a multiple choice's ticks", async () => {
+    const field = (type: string, choices?: object[]) => ({
+      ...{ field_id: "f", label: "问题", type, required: true, allow_custom: true },
+      ...(choices && { choices }),
+    });
+    const ask = (f: object) =>
+      requested({ type: "question", prompt: "怎么做？", unsupported_schema: false, fields: [f] });
+    const run = await setup({ ops: [ask(field("text"))] });
+    await run.ready();
+    fireEvent.change(screen.getByRole("textbox", { name: "在此输入" }), {
+      target: { value: "用 pnpm" },
+    });
+    const submit = screen.getByRole("button", { name: /提交/ });
+    fireEvent.mouseDown(submit);
+    await act(async () => void fireEvent.click(submit));
+    expect(run.responses()).toEqual([{ type: "answer", values: { f: "用 pnpm" } }]);
+    cleanup();
+
+    const choices = [
+      { label: "甲", value: "a" },
+      { label: "乙", value: "b" },
+    ];
+    const multi = await setup({ ops: [ask(field("multi_choice", choices))] });
+    await multi.ready();
+    const first = screen.getByRole("option", { name: /甲/ });
+    fireEvent.mouseDown(first);
+    await act(async () => void fireEvent.click(first));
+    const other = screen.getByRole("textbox", { name: "在此输入" });
+    fireEvent.change(other, { target: { value: "丙" } });
+    await act(async () => void fireEvent.keyDown(other, { key: "Enter" }));
+    expect(multi.responses()).toEqual([{ type: "answer", values: { f: ["a", "丙"] } }]);
   });
 
   test("a request answered by another client folds away with a toast", async () => {

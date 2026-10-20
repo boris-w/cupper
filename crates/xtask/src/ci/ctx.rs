@@ -10,6 +10,7 @@ use std::process::{Command, Stdio};
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
+use super::lock;
 use crate::clock::Stopwatch;
 
 /// Lines of a failed step's log echoed to the terminal.
@@ -30,6 +31,9 @@ pub struct JobCtx<'a> {
     pub skipped: Vec<String>,
     /// What the job built and tested, by digest (e2e, plan 1.8).
     pub artifacts: Vec<Artifact>,
+    /// The job holds the machine lock: what it runs is told so, and a
+    /// `cargo xtask lock` among it does not wait for the lock.
+    pub machine_lock: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,6 +60,7 @@ impl<'a> JobCtx<'a> {
             cases: Vec::new(),
             skipped: Vec::new(),
             artifacts: Vec::new(),
+            machine_lock: false,
         }
     }
 
@@ -66,6 +71,9 @@ impl<'a> JobCtx<'a> {
             .stdin(Stdio::null())
             .env("CARGO_TERM_COLOR", "never")
             .env("NO_COLOR", "1");
+        if self.machine_lock {
+            cmd.env(lock::HELD_ENV, lock::HELD);
+        }
         cmd
     }
 
@@ -317,6 +325,21 @@ fn playwright_suite<'a>(suite: &'a Value, titles: &mut Vec<&'a str>, cases: &mut
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unit_ci_lock_a_job_holding_it_tells_what_it_runs() {
+        let root = Path::new("/");
+        let mut ctx = JobCtx::new(root, root, "e2e");
+        let told = |ctx: &JobCtx| {
+            let held = Some(OsStr::new(lock::HELD));
+            ctx.command("true")
+                .get_envs()
+                .any(|(name, value)| name == lock::HELD_ENV && value == held)
+        };
+        assert!(!told(&ctx));
+        ctx.machine_lock = true;
+        assert!(told(&ctx));
+    }
 
     #[test]
     fn libtest_output_yields_cases_that_ran() {

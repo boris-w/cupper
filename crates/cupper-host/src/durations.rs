@@ -78,6 +78,9 @@ durations! {
     /// How long an item's later text fragments wait to be written as one
     /// delta (design 5.2.16, ADR-06).
     ITEM_COALESCE = "item_coalesce", Duration::from_millis(40);
+    /// How often at most a tool output over the inline limit shows its tail
+    /// (design 5.3.5).
+    OUTPUT_TAIL = "output_tail", Duration::from_secs(1);
     /// How long an autonomous turn may go without updates, and with no tool
     /// running, before the host ends it (design 5.2.6, Q10).
     AUTONOMOUS_SILENCE = "autonomous_silence", Duration::from_secs(10);

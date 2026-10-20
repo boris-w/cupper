@@ -219,6 +219,7 @@ pub(super) async fn load(
         git: deps.git.clone(),
         durations: deps.durations.clone(),
         quiescence: deps.quiescence.clone(),
+        blobs: deps.blobs.clone(),
     };
     let start = Start {
         first: Input::Restored(Box::new(restored)),

@@ -198,6 +198,18 @@ fn unit_fake_scripts_permission_codex_cancel_ends_the_turn() {
 }
 
 #[test]
+fn unit_fake_scripts_permission_with_given_options() {
+    let mut fake = Fake::start(CLAUDE);
+    fake.answers.push_back(selected("maybe"));
+    let options = r#"[{"optionId": "maybe", "name": "Maybe", "kind": "allow_maybe"}]"#;
+    fake.prompt(&format!("permission_options {options}; say after"));
+    let asked = fake.find(request("session/request_permission"));
+    assert_eq!(ids(&asked["params"]["options"], "optionId"), ["maybe"]);
+    assert_eq!(asked["params"]["options"][0]["kind"], "allow_maybe");
+    assert_eq!(fake.texts(), ["permission:maybe", "after"]);
+}
+
+#[test]
 fn unit_fake_scripts_cancel_withdraws_only_claudes_permission() {
     for (args, withdraws) in [(CLAUDE, true), (CODEX, false)] {
         let mut fake = Fake::start(args);

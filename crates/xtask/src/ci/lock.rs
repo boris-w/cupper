@@ -5,10 +5,25 @@
 //! The lock is an advisory `flock` on a file in the per-user temporary directory.
 //! The kernel drops it when the holder's file descriptor closes, including when
 //! the process is killed, so a crashed run never leaves a stale lock behind.
+//!
+//! `cargo xtask lock -- <command>` runs a command under the lock, such as the
+//! e2e suite outside `xtask ci` (T093). What runs under the lock has
+//! [`HELD_ENV`] set, and a `lock` that sees it runs its command at once: the
+//! lock is already this run's, and taking it again would wait forever.
 
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io;
+use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
+use std::process::{Command, ExitCode};
+
+/// Set for what runs under the machine lock, to [`HELD`].
+pub const HELD_ENV: &str = "CUPPER_MACHINE_LOCK";
+pub const HELD: &str = "held";
+
+pub const USAGE: &str = "usage: cargo xtask lock -- <command> [args...]
+
+Runs the command holding the machine lock, and exits with its exit code.";
 
 pub struct MachineLock {
     _file: File,
@@ -43,12 +58,50 @@ impl MachineLock {
     }
 }
 
+/// `cargo xtask lock -- <command>`.
+pub fn main(args: &[String]) -> ExitCode {
+    let command = args.strip_prefix(&["--".to_owned()]).unwrap_or(args);
+    if command.is_empty() {
+        eprintln!("{USAGE}");
+        return ExitCode::from(2);
+    }
+    let held = std::env::var_os(HELD_ENV).is_some_and(|value| value == HELD);
+    match run_locked(command, held, &MachineLock::default_path()) {
+        Ok(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
+        Err(err) => {
+            eprintln!("xtask lock: {err}");
+            ExitCode::from(2)
+        }
+    }
+}
+
+/// Runs `command` holding the lock at `path`, unless `held`; its exit code,
+/// or 128 plus the signal that ended it.
+fn run_locked(command: &[String], held: bool, path: &Path) -> io::Result<i32> {
+    let _lock = if held {
+        None
+    } else {
+        Some(MachineLock::acquire(path, || {
+            eprintln!("xtask lock: waiting for the machine lock held by another run");
+        })?)
+    };
+    let (program, args) = command.split_first().ok_or(io::ErrorKind::InvalidInput)?;
+    let status = Command::new(program)
+        .args(args)
+        .env(HELD_ENV, HELD)
+        .status()?;
+    Ok(status
+        .code()
+        .unwrap_or_else(|| 128 + status.signal().unwrap_or(0)))
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::{BufRead, BufReader, Read, Write};
     use std::process::{Command, Stdio};
     use std::sync::mpsc;
     use std::thread;
+    use std::time::Duration;
 
     use super::*;
     use crate::testutil::TempDir;
@@ -92,6 +145,40 @@ mod tests {
         drop(events);
         let rest: Vec<_> = seen.iter().collect();
         assert_eq!(rest, ["first: done", "second: running"]);
+    }
+
+    fn sh(script: &str) -> [String; 3] {
+        ["sh".to_owned(), "-c".to_owned(), script.to_owned()]
+    }
+
+    #[test]
+    fn unit_ci_lock_command_passes_its_exit_code_and_is_told_it_holds_the_lock() {
+        let dir = TempDir::new("lock-run");
+        let path = dir.path().join("machine.lock");
+        assert_eq!(run_locked(&sh("exit 3"), false, &path).expect("run"), 3);
+        let told = format!(r#"test "${HELD_ENV}" = {HELD}"#);
+        assert_eq!(run_locked(&sh(&told), false, &path).expect("run"), 0);
+        assert_eq!(
+            run_locked(&sh("kill -TERM $$"), false, &path).expect("run"),
+            128 + 15
+        );
+        // Released once the command is over.
+        let mut waited = false;
+        let _lock = MachineLock::acquire(&path, || waited = true).expect("acquire");
+        assert!(!waited, "the lock outlived its command");
+    }
+
+    #[test]
+    fn unit_ci_lock_command_under_the_lock_does_not_wait_for_it() {
+        let dir = TempDir::new("lock-held");
+        let path = dir.path().join("machine.lock");
+        let _held = MachineLock::acquire(&path, || {}).expect("hold");
+        let (done, ran) = mpsc::channel();
+        thread::spawn(move || {
+            let code = run_locked(&sh("exit 7"), true, &path).expect("run");
+            done.send(code).expect("send");
+        });
+        assert_eq!(ran.recv_timeout(Duration::from_secs(10)), Ok(7));
     }
 
     const HOLDER_ENV: &str = "XTASK_TEST_LOCK_HOLDER";

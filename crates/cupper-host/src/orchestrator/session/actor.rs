@@ -72,7 +72,7 @@ use crate::policy::{self, Confirmable, Facts};
 use crate::pure::{Alarm, Core, TimerRequest, TimerTable};
 use crate::quiescence::{Participant, Quiescence};
 use crate::store::streams::{Batch, StreamHandle, StreamView, StreamWriter};
-use crate::store::{Durability, Readers};
+use crate::store::{BlobStore, Durability, Readers};
 use crate::trust::{self, Scan};
 
 /// A call and where its reply goes.
@@ -133,6 +133,8 @@ pub(super) struct Parts {
     pub durations: Durations,
     /// For the work it hands to tasks of their own (T047).
     pub quiescence: Quiescence,
+    /// Where tool outputs over the inline limit go.
+    pub blobs: BlobStore,
 }
 
 /// What the actor starts with besides its parts: its first input, and what
@@ -586,6 +588,13 @@ impl SessionActor {
                         step.set_by = Some((by, confirmed))
                     }
                     Action::Tier(_) => {}
+                    // Stored before anything refers to it (design 5.2.6).
+                    Action::Spill(mut spill) => {
+                        let text = mem::take(&mut spill.text).into_bytes();
+                        let put = self.parts.blobs.put(text, "text/plain".into(), None);
+                        let blob = put.await.ok();
+                        inputs.push_front(Input::Spilled(spill, blob));
+                    }
                 }
             }
             self.commit(mem::take(&mut step), command.take()).await;

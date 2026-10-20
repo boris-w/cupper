@@ -38,7 +38,7 @@ use crate::orchestrator::testkit::text;
 use crate::quiescence::Quiescence;
 use crate::store::streams::{Published, Push, Sink, Streams, StreamsConfig};
 use crate::store::testutil::{TempDir, host_writer, query};
-use crate::store::{Durability, Readers, Writer, WriterThread, log, open_reader};
+use crate::store::{BlobStore, Durability, Readers, Writer, WriterThread, log, open_reader};
 use crate::supervisor::end_previous_run;
 use crate::supervisor::{Activity, Part};
 use crate::trust::Scan;
@@ -263,6 +263,7 @@ impl Fixture {
         let (agent, seen) = mpsc::unbounded_channel();
         let agent = Arc::new(Agent(agent)) as Arc<dyn AgentPort>;
         let ((records, audit), index) = (mpsc::unbounded_channel(), Arc::new(Index::default()));
+        let blobs = BlobStore::new(dir.path(), writer.clone(), Arc::clone(&shared));
         let deps = SessionDeps {
             streams: streams.clone(),
             readers: readers.clone(),
@@ -275,6 +276,7 @@ impl Fixture {
             index: Arc::clone(&index) as Arc<dyn IndexNotes>,
             git,
             admission: Arc::default(),
+            blobs: blobs.clone(),
         };
         let conn = open_reader(&dir.host_db()).unwrap();
         let ledger = Ledger::load(&conn, writer.clone(), shared, &durations).unwrap();
@@ -282,6 +284,7 @@ impl Fixture {
         let manager = SessionManager::new(deps);
         routes.sessions(Arc::new(manager.clone()));
         routes.streams(streams.clone(), readers);
+        routes.blobs(blobs);
         (routes, streams, seen, audit, index, manager)
     }
 
@@ -372,6 +375,14 @@ impl Fixture {
         self.attach().await;
         self.prompt().await;
         serde_json::from_value(created["session_id"].clone()).unwrap()
+    }
+
+    /// The bytes `blob/get` sends of blob `hash`.
+    pub async fn blob(&self, hash: &Value) -> Vec<u8> {
+        let mut peer = Peer::new(harness());
+        let params = json!({"hash": hash});
+        peer.call(&self.routes, "blob/get", params).await.unwrap();
+        peer.blob
     }
 
     /// Subscribes to session `id`'s stream, and lets the subscription go.
