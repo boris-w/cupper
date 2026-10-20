@@ -7,12 +7,13 @@ import { createInstance, type i18n } from "i18next";
 import command from "./locales/zh-CN/command.json";
 import host from "./locales/zh-CN/host.json";
 import shell from "./locales/zh-CN/shell.json";
+import stream from "./locales/zh-CN/stream.json";
 import update from "./locales/zh-CN/update.json";
 
 export const DEFAULT_LOCALE = "zh-CN";
 
 const resources = {
-  "zh-CN": { command, host, shell, update },
+  "zh-CN": { command, host, shell, stream, update },
 };
 
 export type Namespace = keyof (typeof resources)["zh-CN"];
