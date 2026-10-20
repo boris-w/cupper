@@ -17,6 +17,8 @@
 //!   (Codex). A later update of an abandoned tool call is late output (K3): a
 //!   `late_tool_output` item in the turn running then, one per tool call and
 //!   turn, referring to the original, whose events stay as they were.
+//! - A tool call's `extraction` is `partial` while a field its kind requires
+//!   is missing; when it ends, the fields it got by then decide (T017).
 
 use std::collections::HashMap;
 use std::mem;
@@ -108,7 +110,8 @@ struct Tool {
     /// The original item, as late output refers to it.
     of: ToolRef,
     item: Target,
-    execute: bool,
+    /// The call's fields so far.
+    call: ToolCall,
     phase: ToolPhase,
 }
 
@@ -260,13 +263,16 @@ impl Coalescer {
                 title,
                 paths,
                 command,
+                cwd,
             } => {
-                let tool = tool_call(tool_kind, label(&title), paths, command);
+                let tool = tool_call(tool_kind, label(&title), paths, command, cwd);
                 self.tool(tool_call_id, Some(tool), None, None, None);
             }
             NormUpdate::ToolUpdate {
                 tool_call_id,
                 title,
+                command,
+                paths,
                 status,
                 output,
                 exit_code,
@@ -274,6 +280,7 @@ impl Coalescer {
             } => {
                 let mut patch = ItemPatch::default();
                 (patch.title, patch.exit_code, patch.diffs) = (title, exit_code, diffs);
+                (patch.command, patch.paths) = (command, paths);
                 self.tool(tool_call_id, None, Some(patch), output, status);
             }
             NormUpdate::Plan(plan) => self.plan(plan),
@@ -325,13 +332,11 @@ impl Coalescer {
                 .as_ref()
                 .and_then(|p| p.title.clone())
                 .unwrap_or_else(|| call.clone());
-            let tool = start
-                .unwrap_or_else(|| tool_call(ToolKind::Other, label(&title), Vec::new(), None));
-            let (execute, title, command) = (
-                tool.tool_kind == ToolKind::Execute,
-                tool.title.clone(),
-                tool.command.clone(),
-            );
+            let tool = start.unwrap_or_else(|| {
+                tool_call(ToolKind::Other, label(&title), Vec::new(), None, None)
+            });
+            let (call_fields, title, command) =
+                (tool.clone(), tool.title.clone(), tool.command.clone());
             let item = self.start(Item::ToolCall(tool), Role::ToolCall);
             let turn_id = self.open_turn().id.clone();
             let of = ToolRef {
@@ -346,7 +351,7 @@ impl Coalescer {
                 Tool {
                     of,
                     item,
-                    execute,
+                    call: call_fields,
                     phase,
                 },
             );
@@ -390,6 +395,10 @@ impl Coalescer {
         output: Option<ToolOutput>,
         status: Option<ToolStatus>,
     ) {
+        let running = matches!(tool.phase, ToolPhase::Running);
+        if running {
+            merge(&mut tool.call, &patch);
+        }
         let target = match &mut tool.phase {
             ToolPhase::Late(item, _) => item,
             _ => &mut tool.item,
@@ -421,6 +430,13 @@ impl Coalescer {
             _ if patch == ItemPatch::default() => return,
             _ => return self.patch(target, patch),
         };
+        if running {
+            let extraction = match tool.call.missing_required(true).is_empty() {
+                true => Extraction::Full,
+                false => Extraction::Partial,
+            };
+            patch.extraction = (extraction != tool.call.extraction).then_some(extraction);
+        }
         let target = target.clone();
         self.end(&target, status, false, patch);
         tool.phase = ToolPhase::Done;
@@ -459,7 +475,8 @@ impl Coalescer {
         for (item, call) in open {
             let tool = self.tools.get_mut(&call).expect("an open tool call");
             tool.phase = ToolPhase::Abandoned;
-            let may_still_run = interrupted && !self.stops_commands && tool.execute;
+            let execute = tool.call.tool_kind == ToolKind::Execute;
+            let may_still_run = interrupted && !self.stops_commands && execute;
             self.end(
                 &item,
                 ItemStatus::Abandoned,
@@ -487,6 +504,18 @@ impl Coalescer {
     }
 }
 
+/// Takes the fields of `patch` that decide a call's `extraction`.
+fn merge(call: &mut ToolCall, patch: &ItemPatch) {
+    if let Some(title) = &patch.title {
+        call.title.clone_from(title);
+    }
+    if let Some(paths) = &patch.paths {
+        call.paths.clone_from(paths);
+    }
+    call.command = patch.command.clone().or(call.command.take());
+    call.exit_code = patch.exit_code.or(call.exit_code);
+}
+
 /// A late output item keeps its reference: only the exit code changes.
 fn late_patch(patch: Option<ItemPatch>) -> ItemPatch {
     let exit_code = patch.and_then(|patch| patch.exit_code);
@@ -503,6 +532,7 @@ fn tool_call(
     title: String,
     paths: Vec<WirePath>,
     command: Option<String>,
+    cwd: Option<WirePath>,
 ) -> ToolCall {
     let mut tool = ToolCall {
         tool_kind: kind,
@@ -511,7 +541,7 @@ fn tool_call(
         query: None,
         url: None,
         command,
-        cwd: None,
+        cwd,
         exit_code: None,
         signal: None,
         output: None,
@@ -615,6 +645,8 @@ mod tests {
         let update = NormUpdate::ToolUpdate {
             tool_call_id,
             title,
+            command: None,
+            paths: None,
             status,
             output,
             exit_code,
@@ -630,6 +662,7 @@ mod tests {
             title: "Run tests".to_owned(),
             paths: Vec::new(),
             command: Some("cargo test".to_owned()),
+            cwd: Some(WirePath("/work".to_owned())),
         })
     }
 
@@ -656,6 +689,61 @@ mod tests {
             }
         }
         out
+    }
+
+    /// Claude's command arrives in an update after the start (T053); the
+    /// fields the call has when it ends decide its `extraction` (T017).
+    #[test]
+    fn coalescer_tool_extraction_follows_the_fields_a_call_ends_with() {
+        let mut c = coalescer();
+        c.input(started(1));
+        let (tool_kind, paths, cwd) = (ToolKind::Execute, Vec::new(), Some(WirePath("/w".into())));
+        for id in ["full", "partial"] {
+            let (tool_call_id, title, command) = (id.to_owned(), "Terminal".to_owned(), None);
+            let start = NormUpdate::ToolStart {
+                tool_call_id,
+                tool_kind: tool_kind.clone(),
+                title,
+                paths: paths.clone(),
+                command,
+                cwd: cwd.clone(),
+            };
+            let start = events(c.input(Input::Update(start)));
+            let [
+                EventBody::ItemStarted(ItemStarted {
+                    item: Item::ToolCall(call),
+                    ..
+                }),
+            ] = &start[..]
+            else {
+                panic!("{start:?}")
+            };
+            assert_eq!((&call.extraction, &call.cwd), (&Extraction::Partial, &cwd));
+        }
+        let mut update = |id: &str, command: Option<&str>, exit_code, status| {
+            let update = NormUpdate::ToolUpdate {
+                tool_call_id: id.to_owned(),
+                title: command.map(str::to_owned),
+                command: command.map(str::to_owned),
+                paths: None,
+                status,
+                output: None,
+                exit_code,
+                diffs: None,
+            };
+            events(c.input(Input::Update(update)))
+        };
+        let ended = |events: Vec<EventBody>| match &events[..] {
+            [EventBody::ItemCompleted(end)] => end.patch.extraction.clone(),
+            _ => panic!("{events:?}"),
+        };
+        update("full", Some("ls"), None, None);
+        let done = update("full", None, Some(0), Some(ToolStatus::Completed));
+        assert_eq!(ended(done), Some(Extraction::Full));
+        // No exit code: still partial, so nothing to change.
+        update("partial", Some("ls"), None, None);
+        let done = update("partial", None, None, Some(ToolStatus::Failed));
+        assert_eq!(ended(done), None);
     }
 
     #[test]

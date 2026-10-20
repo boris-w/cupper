@@ -177,6 +177,8 @@ impl World {
             update(NormUpdate::ToolUpdate {
                 tool_call_id,
                 title,
+                command: None,
+                paths: None,
                 status,
                 output,
                 exit_code,
@@ -229,6 +231,7 @@ impl World {
                     title: "Run".into(),
                     paths: Vec::new(),
                     command: Some("make".into()),
+                    cwd: Some(cupper_protocol::annotations::WirePath("/work".into())),
                 });
             }
             Op::Output(n) => {
