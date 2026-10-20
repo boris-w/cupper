@@ -1,3 +1,4 @@
+import type { HostClient } from "@cupper/host-client";
 import type { ShellAPI, ShellInfo } from "@cupper/shell-api";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -16,10 +17,12 @@ export interface AppProps {
   info: ShellInfo;
   slots?: Slots;
   initialRoute?: Route;
+  /** Called with the window's host client once it exists (e2e builds' `window.__cupperTest`). */
+  onClient?: (client: HostClient) => void;
 }
 
 /** The root of design 5.7.5 on any ShellAPI: Electron's, or the browser mock. */
-export function App({ api, info, slots = {}, initialRoute }: AppProps) {
+export function App({ api, info, slots = {}, initialRoute, onClient }: AppProps) {
   const [store] = useState(() => new LayoutStore(api.prefs, info.prefs, initialRoute));
   useEffect(() => () => store.close(), [store]);
   return (
@@ -27,7 +30,7 @@ export function App({ api, info, slots = {}, initialRoute }: AppProps) {
       <I18nProvider locale={info.locale}>
         <ThemeProvider>
           <ToasterProvider>
-            <HostProvider>
+            <HostProvider onClient={onClient}>
               <UiProvider ui={store.ui}>
                 <StateProvider>
                   <RouterProvider>
@@ -50,12 +53,16 @@ export function App({ api, info, slots = {}, initialRoute }: AppProps) {
 }
 
 /** Asks the shell for its facts, then renders the app into the document's `#root`. */
-export async function mount(api: ShellAPI, slots?: Slots): Promise<void> {
+export async function mount(
+  api: ShellAPI,
+  slots?: Slots,
+  onClient?: (client: HostClient) => void,
+): Promise<void> {
   const element = document.getElementById("root");
   if (!element) {
     throw new Error("the document has no #root");
   }
   const info = await api.init();
   document.documentElement.lang = info.locale;
-  createRoot(element).render(<App api={api} info={info} slots={slots} />);
+  createRoot(element).render(<App api={api} info={info} slots={slots} onClient={onClient} />);
 }
