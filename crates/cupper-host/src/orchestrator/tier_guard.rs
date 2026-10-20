@@ -111,6 +111,15 @@ impl TierGuard {
 
     fn mode(&mut self, mode: String, tier: Tier, during_turn: bool, now: Now) -> Vec<Action> {
         let mut out = Vec::new();
+        // Another option changed; the mode did not (a repeat while a revert
+        // is pending is the agent raising it again).
+        let same = self
+            .actual
+            .as_ref()
+            .is_some_and(|(actual, _)| *actual == mode);
+        if same && self.reverting.is_none() {
+            return out;
+        }
         self.actual = Some((mode.clone(), tier.clone()));
         // An option the policy allowed makes its chooser the setter.
         let chosen = self.chosen.take();
