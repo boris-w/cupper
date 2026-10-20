@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
-use cupper_cli::client::{self, ClientAuth, Incoming, Options};
+use cupper_cli::client::{self, Client, ClientAuth, Incoming, Options};
 use cupper_cli::harness::HarnessKey;
 use cupper_cli::verify::HostCheck;
 use cupper_host::clock::{Clock, SystemClock};
@@ -23,11 +23,15 @@ use cupper_host::store::meta::{self, MetaKey};
 use cupper_host::store::{Database, MIGRATIONS, migrate, open_reader, open_writer};
 use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::methods::Empty;
+use cupper_protocol::methods::admin::DiagRecordingExport;
 use cupper_protocol::methods::handshake::{
     ClientPresence, ClientPresenceParams, HostExit, HostExitParams, HostStatus,
 };
-use cupper_protocol::methods::session::{SessionCreate, SessionMarkRead, SessionMarkReadParams};
+use cupper_protocol::methods::session::{
+    SessionCreate, SessionMarkRead, SessionMarkReadParams, SessionSend,
+};
 use cupper_protocol::proof;
+use cupper_protocol::recording::{Body, INSTANCE_EXITED, INSTANCE_STARTED, Recording};
 use cupper_protocol::transport::socket_path;
 use rusqlite::Connection;
 use serde_json::json;
@@ -116,7 +120,11 @@ fn migrated(dir: &TempDir) -> (PathBuf, Connection) {
 }
 
 fn column(data_dir: &Path, sql: &str) -> Vec<String> {
-    let conn = open_reader(&data_dir.join("host.db")).unwrap();
+    query(&data_dir.join("host.db"), sql)
+}
+
+fn query(db: &Path, sql: &str) -> Vec<String> {
+    let conn = open_reader(db).unwrap();
     let mut query = conn.prepare(sql).unwrap();
     let rows = query.query_map([], |row| row.get(0)).unwrap();
     rows.collect::<Result<_, _>>().unwrap()
@@ -277,35 +285,63 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
     }
 }
 
-#[tokio::test]
-async fn it_lifecycle_runs_a_turn_with_the_fake_agent() {
-    let dir = TempDir::new("turn");
-    let (data_dir, conn) = migrated(&dir);
-    let project = ProjectId::from_uuid(1).to_string();
+/// A host with the fake agent on a trusted project in `dir`, `durations`
+/// overridden; its data directory and the harness client.
+async fn fake_agent_host(dir: &TempDir, durations: serde_json::Value) -> (PathBuf, Child, Client) {
+    let (data_dir, conn) = migrated(dir);
     let sql = "INSERT INTO projects (project_id, path, name, position, added_at, trust_state)
                VALUES (?1, ?2, 'p', 0, 1, 'trusted')";
     let path = dir.path().to_str().unwrap();
-    conn.execute(sql, [&project, path]).unwrap();
+    conn.execute(sql, [&ProjectId::from_uuid(1).to_string(), path])
+        .unwrap();
     let program = launch::fake_agent();
-    let test_config = json!({"agents": {"claude": {"program": program}}, "login_env": {}});
-    let mut host = spawn_with(&data_dir, test_config);
+    let test_config = json!({"agents": {"claude": {"program": program}}, "login_env": {},
+        "durations": durations});
+    let host = spawn_with(&data_dir, test_config);
     let client = connect(&data_dir).await;
+    (data_dir, host, client)
+}
+
+/// `session/create` with the message `text`; the session.
+async fn create(client: &Client, text: &str) -> SessionId {
     let params = json!({"command_id": client::command_id(), "agent": "claude",
-        "project_id": project, "workspace": {"kind": "local"},
-        "message": [{"type": "text", "text": "say hello"}]});
+        "project_id": ProjectId::from_uuid(1), "workspace": {"kind": "local"},
+        "message": [{"type": "text", "text": text}]});
     let params = serde_json::from_value(params).unwrap();
-    client.request::<SessionCreate>(params).await.unwrap();
-    let (clock, rows) = (SystemClock::new(), |sql| column(&data_dir, sql));
+    client
+        .request::<SessionCreate>(params)
+        .await
+        .unwrap()
+        .session_id
+}
+
+/// Waits until `sql` reads `expected` in `db` of `data_dir`.
+async fn until(data_dir: &Path, db: &str, sql: &str, expected: &[&str]) {
+    let clock = SystemClock::new();
     let give_up = clock.now_mono() + PATIENCE;
-    while rows("SELECT status FROM turns") != ["completed"] {
-        assert!(clock.now_mono() < give_up, "the turn did not complete");
+    while query(&data_dir.join(db), sql) != expected {
+        assert!(clock.now_mono() < give_up, "{sql}: not {expected:?}");
         wait(&clock).await;
     }
+}
+
+#[tokio::test]
+async fn it_lifecycle_runs_a_turn_with_the_fake_agent() {
+    let dir = TempDir::new("turn");
+    let (data_dir, mut host, client) = fake_agent_host(&dir, json!({})).await;
+    create(&client, "say hello").await;
+    until(
+        &data_dir,
+        "host.db",
+        "SELECT status FROM turns",
+        &["completed"],
+    )
+    .await;
     terminate(&host);
     assert_eq!(exit_code(&mut host).await, 0);
     // The adapter stopped with the host.
-    let ended = rows("SELECT instance_id FROM adapters WHERE ended_at IS NOT NULL");
-    assert_eq!(ended.len(), 1);
+    let sql = "SELECT instance_id FROM adapters WHERE ended_at IS NOT NULL";
+    assert_eq!(column(&data_dir, sql).len(), 1);
     // The index heard of the session, its turn and the agent.
     let index = |data: &str, kind: &str| {
         let sql = format!(
@@ -318,6 +354,87 @@ async fn it_lifecycle_runs_a_turn_with_the_fake_agent() {
     assert_eq!(statuses.last().map(String::as_str), Some("unread"));
     assert_eq!(index("reason", "notification.intent"), ["turn_completed"]);
     assert!(!index("agents", "agents.updated").is_empty());
+}
+
+/// A recording of two instances: the first writes to stderr and exits, the
+/// second starts for the next message. The export reads back, and
+/// `tools/sanitize` takes it.
+#[tokio::test]
+async fn it_recording_export_two_instances_read_back_and_sanitize() {
+    let dir = TempDir::new("recording");
+    let (data_dir, mut host, client) =
+        fake_agent_host(&dir, json!({"adapter_backoff_ms": 1})).await;
+    let session = create(&client, "say hi; stderr oops").await;
+    let turns = "SELECT status FROM turns ORDER BY turn_no";
+    until(&data_dir, "host.db", turns, &["completed"]).await;
+    for (text, statuses) in [
+        ("exit 0", &["completed", "failed"][..]),
+        ("say again", &["completed", "failed", "completed"]),
+    ] {
+        let params = json!({"command_id": client::command_id(), "session_id": session,
+            "mode": "queue", "content": [{"type": "text", "text": text}]});
+        client
+            .request::<SessionSend>(serde_json::from_value(params).unwrap())
+            .await
+            .unwrap();
+        until(&data_dir, "host.db", turns, statuses).await;
+    }
+    // Raw frames hold no barrier: wait for the notes to land.
+    let notes = "SELECT json_extract(frame, '$.event') FROM raw_frames WHERE dir = 'note'
+                 ORDER BY ts, seq";
+    let events = ["instance_started", "instance_exited", "instance_started"];
+    until(&data_dir, "raw.db", notes, &events).await;
+
+    let params = serde_json::from_value(json!({"session_id": session})).unwrap();
+    let blob = client
+        .request::<DiagRecordingExport>(params)
+        .await
+        .unwrap()
+        .blob;
+    let hash = blob.hash.to_string();
+    let path = data_dir.join("blobs/sha256").join(&hash[..2]).join(&hash);
+    let text = std::fs::read_to_string(path).unwrap();
+    let recording = Recording::parse(&text).unwrap();
+    let segments: Vec<_> = recording.segments().collect();
+    assert_eq!(segments.len(), 2);
+    let first = segments[0].iter().map(|frame| &frame.body);
+    assert!(
+        first
+            .clone()
+            .any(|body| *body == Body::Stderr("oops".into()))
+    );
+    assert!(
+        first
+            .clone()
+            .any(|body| body.event() == Some(INSTANCE_EXITED))
+    );
+    for segment in &segments {
+        assert_eq!(segment[0].body.event(), Some(INSTANCE_STARTED));
+    }
+
+    // Into a directory of its own, then through `tools/sanitize`.
+    let (input, output) = (dir.path().join("in"), dir.path().join("out"));
+    std::fs::create_dir(&input).unwrap();
+    std::fs::write(input.join("recording.jsonl"), &text).unwrap();
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let real = std::fs::canonicalize(dir.path()).unwrap();
+    let sanitized = Command::new("node")
+        .current_dir(&repo)
+        .args(["tools/sanitize/src/main.ts", "sanitize", "--in"])
+        .args([
+            &input,
+            Path::new("--out"),
+            &output,
+            Path::new("--base"),
+            dir.path(),
+        ])
+        .args([Path::new("--base"), &real])
+        .stdout(Stdio::null())
+        .status()
+        .unwrap();
+    assert!(sanitized.success());
+    terminate(&host);
+    assert_eq!(exit_code(&mut host).await, 0);
 }
 
 #[tokio::test]

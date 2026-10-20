@@ -114,6 +114,7 @@ pub fn kinds(actions: &[Action]) -> Vec<&str> {
             Action::Timer(TimerRequest::Set { .. }) => "timer",
             Action::Timer(TimerRequest::Cancel(_)) => "untimer",
             Action::Reply(_) => "reply",
+            Action::Check => "check",
         })
         .collect()
 }

@@ -17,9 +17,15 @@
 //!   or failed pauses the queue, except a cancel the agent made by itself
 //!   (Codex #556, K2). A message sent while idle starts a turn at once and
 //!   ends such a pause; an empty queue is never paused.
-//! - While the session's gate is shut (`config_unconfirmed`, and T109's
-//!   `project_config_changed`), every message is queued, a preparing turn
-//!   does not send its prompt, and only reopening the gate resumes the queue.
+//! - While the session's gate is shut, for any of its reasons
+//!   (`config_unconfirmed`, `project_config_changed`), every message is
+//!   queued, a preparing turn does not send its prompt, and only reopening
+//!   the gate resumes the queue.
+//! - With checks required, a message turns into a turn only after
+//!   [`Action::Check`] passed (the project trust rescan before every prompt,
+//!   design 5.2.6): a message sent while idle waits outside the queue and its
+//!   reply waits too; one that fails the check goes into the queue, which the
+//!   gate holds.
 //! - A prompt that fails with "Session not found" before any update is sent
 //!   once more after a resume (K6); an exited adapter or CLI leaves an
 //!   `agent_restarted` notice (K7).
@@ -67,8 +73,20 @@ pub struct TurnMachine {
     queue: QueueCore,
     /// Set by the autonomous judge's [`Input::HoldQueue`].
     hold: bool,
-    /// Set by [`Input::Gate`].
-    gate: Option<PauseReason>,
+    /// The reasons the gate is shut for, in the order they came.
+    gate: Vec<PauseReason>,
+    /// Turns from messages wait for [`Action::Check`].
+    checks: bool,
+    check: Check,
+    /// A message sent while idle, waiting for its check.
+    held: Option<(SendRequest, Option<SteerFallback>)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Check {
+    None,
+    Pending,
+    Passed,
 }
 
 #[derive(Debug)]
@@ -134,8 +152,17 @@ pub enum Input {
     /// The judge's dequeue guard: while held, an idle session takes no
     /// queued message; a message sent while idle still starts its turn.
     HoldQueue(bool),
-    /// Shuts the session's gate for a reason, or reopens it.
-    Gate(Option<PauseReason>),
+    /// Shuts the session's gate for a reason, or takes the reason away.
+    Gate {
+        reason: PauseReason,
+        shut: bool,
+    },
+    /// The reply to [`Action::Check`]; a failed check shuts the gate for
+    /// `project_config_changed`, a passed one takes that reason away.
+    Checked(bool),
+    /// Closes the idle agent session, so that the next turn resumes it with
+    /// the attach's new settings.
+    Detach,
     Expired(TurnTimer),
     /// The host's forced exit (design 5.2.13): the running turn completes
     /// `interrupted` at once, its requests expire (`host_restarted`), and no
@@ -176,6 +203,9 @@ pub enum Action {
         turn_id: TurnId,
         phase: SnapshotPhase,
     },
+    /// Check whether a message may start a turn, and reply with
+    /// [`Input::Checked`].
+    Check,
     /// The turn was interrupted: cancel its pending requests and answer the
     /// agent `Cancelled` (T042; Codex does not withdraw them, K4).
     CancelAsks(TurnId),
@@ -328,7 +358,10 @@ impl TurnMachine {
             turn: None,
             queue: QueueCore::default(),
             hold: false,
-            gate: None,
+            gate: Vec::new(),
+            checks: false,
+            check: Check::None,
+            held: None,
         }
     }
 
@@ -345,37 +378,95 @@ impl TurnMachine {
         }
     }
 
-    fn gate(&mut self, gate: Option<PauseReason>, out: &mut Vec<Action>) {
-        let update = match (&gate, self.gate.take()) {
-            (Some(reason), _) => self.queue.pause(reason.clone()),
-            (None, Some(was)) if self.queue.paused() == Some(&was) => self.queue.resume(),
-            (None, _) => None,
-        };
-        out.extend(update.map(|u| Action::Event(EventBody::QueueUpdated(u))));
-        self.gate = gate;
+    /// Messages wait for [`Action::Check`] from now on.
+    pub fn require_checks(&mut self) {
+        self.checks = true;
+    }
+
+    /// The queue shows the first reason still there.
+    fn gate(&mut self, reason: PauseReason, shut: bool, out: &mut Vec<Action>) {
+        let had = self.gate.contains(&reason);
+        let mut updates = Vec::new();
+        if shut && !had {
+            updates.push(self.queue.pause(reason.clone()));
+            self.gate.push(reason);
+        } else if !shut && had {
+            self.gate.retain(|r| *r != reason);
+            if self.queue.paused() == Some(&reason) {
+                updates.push(self.queue.resume());
+                let next = self.gate.first().cloned();
+                updates.extend(next.map(|next| self.queue.pause(next)));
+            }
+        }
+        let updates = updates.into_iter().flatten();
+        out.extend(updates.map(|u| Action::Event(EventBody::QueueUpdated(u))));
+    }
+
+    fn checked(&mut self, passed: bool, now: Now, out: &mut Vec<Action>) {
+        self.check = Check::None;
+        self.gate(PauseReason::ProjectConfigChanged, !passed, out);
+        match self.held.take() {
+            Some((send, fallback)) if passed && self.turn.is_none() => {
+                self.start_sent(send, fallback, now, out)
+            }
+            Some((send, fallback)) => self.enqueue(send, fallback, now, out),
+            None if passed => self.check = Check::Passed,
+            None => {}
+        }
+    }
+
+    fn request_check(&mut self, out: &mut Vec<Action>) {
+        if self.check != Check::Pending {
+            self.check = Check::Pending;
+            out.push(Action::Check);
+        }
     }
 
     fn send(&mut self, send: SendRequest, now: Now, out: &mut Vec<Action>) {
         let fallback = (send.mode == SendMode::Steer).then_some(SteerFallback::Unsupported);
-        if self.turn.is_none() && self.gate.is_none() {
+        if self.turn.is_none() && self.gate.is_empty() && self.held.is_none() {
             // A new message ends a pause the last turn left (design 5.2.6).
             if let Some(update) = self.queue.resume() {
                 out.push(Action::Event(EventBody::QueueUpdated(update)));
             }
-            let message = Message {
-                content: send.content,
-                queue_id: None,
-                reply_to: send.reply_to,
-            };
-            let turn_id = self.start(TurnOrigin::User, Some(message), now, out);
-            out.push(Action::Reply(Reply::Send(Ok(Sent {
-                disposition: Disposition::Started,
-                turn_id: Some(turn_id),
-                queue_id: None,
-                fallback,
-            }))));
-            return;
+            if self.checks {
+                self.held = Some((send, fallback));
+                return self.request_check(out);
+            }
+            return self.start_sent(send, fallback, now, out);
         }
+        self.enqueue(send, fallback, now, out);
+    }
+
+    /// A turn for a message sent while idle, and the reply.
+    fn start_sent(
+        &mut self,
+        send: SendRequest,
+        fallback: Option<SteerFallback>,
+        now: Now,
+        out: &mut Vec<Action>,
+    ) {
+        let message = Message {
+            content: send.content,
+            queue_id: None,
+            reply_to: send.reply_to,
+        };
+        let turn_id = self.start(TurnOrigin::User, Some(message), now, out);
+        out.push(Action::Reply(Reply::Send(Ok(Sent {
+            disposition: Disposition::Started,
+            turn_id: Some(turn_id),
+            queue_id: None,
+            fallback,
+        }))));
+    }
+
+    fn enqueue(
+        &mut self,
+        send: SendRequest,
+        fallback: Option<SteerFallback>,
+        now: Now,
+        out: &mut Vec<Action>,
+    ) {
         let queue_id = QueueId::from_uuid(self.ids.new_id_at(now.wall_ms).as_u128());
         let entry = QueueEntry {
             queue_id: queue_id.clone(),
@@ -387,10 +478,7 @@ impl TurnMachine {
         };
         let sent = self.queue.push(entry).map(|update| {
             out.push(Action::Event(EventBody::QueueUpdated(update)));
-            let paused = self
-                .gate
-                .clone()
-                .and_then(|reason| self.queue.pause(reason));
+            let paused = (self.gate.first().cloned()).and_then(|reason| self.queue.pause(reason));
             out.extend(paused.map(|u| Action::Event(EventBody::QueueUpdated(u))));
             Sent {
                 disposition: Disposition::Queued,
@@ -414,6 +502,8 @@ impl TurnMachine {
         let id = TurnId::from_uuid(self.ids.new_id_at(now.wall_ms).as_u128());
         let at = TimestampMs(now.wall_ms);
         self.last_turn_no += 1;
+        // A check counts for one turn.
+        self.check = Check::None;
         out.push(Action::Event(EventBody::TurnStarted(TurnStarted {
             turn_id: id.clone(),
             turn_no: self.last_turn_no,
@@ -473,11 +563,11 @@ impl TurnMachine {
     /// connects, closes and resumes a session with a prompt still in flight
     /// (K1), or sends its prompt.
     fn advance(&mut self, now: Now, out: &mut Vec<Action>) {
-        if self.turn.is_none()
-            && !self.hold
-            && self.gate.is_none()
-            && let Some((entry, update)) = self.queue.pop()
-        {
+        let ready =
+            self.turn.is_none() && !self.hold && self.gate.is_empty() && self.held.is_none();
+        if ready && self.checks && self.check != Check::Passed && self.queue.ready() {
+            self.request_check(out);
+        } else if ready && let Some((entry, update)) = self.queue.pop() {
             out.push(Action::Event(EventBody::QueueUpdated(update)));
             let message = Message {
                 content: entry.content,
@@ -516,7 +606,7 @@ impl TurnMachine {
                 self.inflight = None;
                 self.link = Link::Attaching(Some(session));
             }
-            Link::Attached { session, .. } if *snapshot_done && self.gate.is_none() => {
+            Link::Attached { session, .. } if *snapshot_done && self.gate.is_empty() => {
                 self.last_tag += 1;
                 let tag = PromptTag(self.last_tag);
                 let content = mem::take(content);
@@ -845,7 +935,7 @@ impl Core for TurnMachine {
             Input::Interrupt { expected_turn } => self.interrupt(expected_turn, now, &mut out),
             // A shut gate keeps the queue paused.
             Input::QueueResume => {
-                let resumed = self.gate.is_none().then(|| self.queue.resume()).flatten();
+                let resumed = self.gate.is_empty().then(|| self.queue.resume()).flatten();
                 if let Some(update) = resumed {
                     out.push(Action::Event(EventBody::QueueUpdated(update)));
                 }
@@ -900,7 +990,17 @@ impl Core for TurnMachine {
                 }
             }
             Input::HoldQueue(hold) => self.hold = hold,
-            Input::Gate(gate) => self.gate(gate, &mut out),
+            Input::Gate { reason, shut } => self.gate(reason, shut, &mut out),
+            Input::Checked(passed) => self.checked(passed, now, &mut out),
+            Input::Detach => {
+                if let (None, Link::Attached { session, .. }) = (&self.turn, &self.link) {
+                    let session = session.clone();
+                    out.push(Action::Driver(DriverCommand::Close {
+                        session: session.clone(),
+                    }));
+                    self.link = Link::Detached(Some(session));
+                }
+            }
             Input::Expired(timer) => self.expired(timer, now, &mut out),
             Input::HostExit => {
                 self.hold = true;

@@ -24,7 +24,7 @@ use crate::orchestrator::testkit::text;
 use crate::policy::testkit::{option, with_mode};
 
 /// The agent's options with the permission mode `mode`.
-fn changed(mode: &str) -> DriverEvent {
+pub(super) fn changed(mode: &str) -> DriverEvent {
     let mut options = caps().config;
     options[0].current = mode.into();
     DriverEvent::ConfigChanged(options)
@@ -195,7 +195,12 @@ async fn it_orch_gating_crashes_restart_and_resume() {
     // The adapter exits: the turn fails; the next message resumes.
     let instance = AdapterInstanceId::from_uuid(1);
     let status = ExitStatus::from_raw(9);
-    f.emit(DriverEvent::AdapterExited { instance, status });
+    let stderr = String::new();
+    f.emit(DriverEvent::AdapterExited {
+        instance,
+        status,
+        stderr,
+    });
     let bodies = f.events(&session, "turn.completed", 1).await;
     assert_eq!(
         data(&bodies, "turn.completed")[0]["error_code"],

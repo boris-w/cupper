@@ -210,7 +210,7 @@ impl Host {
             clock: clock.clone(),
             ids: ids.clone(),
             durations: durations.clone(),
-            git,
+            git: git.clone(),
             quiescence: quiescence.clone(),
             host: HostUpdated {
                 version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -241,6 +241,7 @@ impl Host {
             probe_dir: data_dir.join("probe").join("claude"),
             durations: durations.clone(),
             notes: Arc::new(index.clone()),
+            rss: test_rss(&payload),
         };
         let claude = AgentRuntime::start(deps);
         let find: Find = {
@@ -267,6 +268,7 @@ impl Host {
             quiescence: quiescence.clone(),
             audit: records.clone(),
             index: Arc::new(index.clone()),
+            git,
         });
         let parts: Arc<[Arc<dyn Part>]> = Arc::new([
             Arc::new(sessions.clone()),
@@ -291,6 +293,12 @@ impl Host {
                 clock: clock.clone(),
                 index: index.clone(),
             },
+        })
+        .route(&mut routes);
+        #[cfg(any(feature = "test-harness", feature = "dev-auth"))]
+        Arc::new(crate::diag::recording_export::RecordingExport {
+            data_dir: data_dir.clone(),
+            blobs: blobs.clone(),
         })
         .route(&mut routes);
         routes.sessions(Arc::new(sessions));
@@ -490,6 +498,17 @@ impl Finder {
         }
         let (dir, locator) = (&self.data_dir, &found.locator);
         launch::production(clock, durations, dir, host, login, locator).await
+    }
+}
+
+/// `test_config.rss_samples` of Claude (design 5.9.9).
+fn test_rss(payload: &Payload) -> Option<u64> {
+    #[cfg(feature = "test-harness")]
+    return payload.test_config.rss_samples.claude;
+    #[cfg(not(feature = "test-harness"))]
+    {
+        let _ = payload;
+        None
     }
 }
 

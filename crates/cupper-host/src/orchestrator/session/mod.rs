@@ -13,6 +13,8 @@ mod manager;
 mod rows;
 #[cfg(test)]
 pub(super) mod tests;
+#[cfg(test)]
+mod trust_tests;
 
 use std::fmt;
 
@@ -20,22 +22,28 @@ use cupper_protocol::capabilities::{ConfigOption, ConfigOptionId, SessionCapabil
 use cupper_protocol::domain::FailureCode;
 use cupper_protocol::domain::Tier;
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
-use cupper_protocol::ids::{RequestId, SessionId};
+use cupper_protocol::ids::{ProjectId, RequestId, SessionId};
 use cupper_protocol::index::{PendingKind, SessionSummary};
 use cupper_protocol::session::TurnStatus;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
+use crate::trust::Scan;
+
 pub use manager::{SESSION, SessionDeps, SessionManager};
 
 /// What the index (`crate::index::IndexHandle`) hears from the sessions:
-/// what a committed step changed, for the status (design 5.2.9).
+/// what a committed step changed, for the status (design 5.2.9), and the
+/// trust rescans.
 pub trait IndexNotes: Send + Sync + fmt::Debug {
     /// A new session, before its first turn.
     fn created(&self, summary: SessionSummary);
     /// `notes` were committed at `at` (wall ms), the session's latest
     /// activity.
     fn note(&self, session: &SessionId, at: u64, notes: Vec<Note>);
+    /// A session rescanned its project's trust range (design 5.2.6); the
+    /// index records a trusted project that became `stale`.
+    fn rescanned(&self, project: &ProjectId, scan: Scan);
 }
 
 /// One change of a session the index computes its status from.

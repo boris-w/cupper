@@ -49,7 +49,7 @@ pub fn auth(update: &AuthStatusUpdate) -> AuthStatus {
 pub fn status(launch: &Launch, running: Running, auth: &AuthStatus) -> AgentStatus {
     let runtime = match (&launch.program, launch.unavailable) {
         (_, Some(AgentErrorClass::RuntimeFailed)) => RuntimeState::Failed,
-        (Program::Runtime { node, bundle }, _) if !node.exists() || !bundle.exists() => {
+        (Program::Runtime { node, bundle }, _) if !node.path.exists() || !bundle.path.exists() => {
             RuntimeState::Missing
         }
         _ => RuntimeState::Ready,
@@ -76,7 +76,7 @@ pub fn status(launch: &Launch, running: Running, auth: &AuthStatus) -> AgentStat
             failure: None,
         },
         auth: auth.clone(),
-        // Sampling is T008's.
+        // The runtime's latest sample, which it adds.
         rss_bytes: None,
         config_dir: launch.config_dir.clone(),
     }
@@ -90,7 +90,19 @@ mod tests {
     use cupper_protocol::index::ConfigDirState;
     use serde_json::json;
 
+    use crate::manifest::FileHash;
+    use crate::runtime::Installed;
+
     use super::*;
+
+    fn missing(path: &str) -> Installed {
+        let hash = FileHash {
+            sha256: String::new(),
+            cdhash: None,
+        };
+        let path = PathBuf::from(path);
+        Installed { path, hash }
+    }
 
     fn launch(unavailable: Option<AgentErrorClass>) -> Launch {
         let versions = Versions {
@@ -100,8 +112,8 @@ mod tests {
         };
         Launch {
             program: Program::Runtime {
-                node: PathBuf::from("/missing/node"),
-                bundle: PathBuf::from("/missing/bundle"),
+                node: missing("/missing/node"),
+                bundle: missing("/missing/bundle"),
             },
             env: cupper_sys::Env::new(),
             versions,

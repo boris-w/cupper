@@ -5504,6 +5504,13 @@
             "array",
             "null"
           ]
+        },
+        "reason": {
+          "description": "`project_config_changed`: the scan's failure (`too_many_files`, ...),\nwhen the rescan failed rather than found a change.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "type": "object"

@@ -280,3 +280,34 @@ async fn unit_index_intent_only_when_no_desktop_ui_in_front_watches() {
     assert_eq!(status(&claimed), SessionStatus::NeedsAction);
     assert_eq!(status(&alone), SessionStatus::Unread);
 }
+
+/// IT-orch-trust-gating's other half: a session's rescan reaches the index,
+/// which records a trusted project whose configuration changed as `stale`.
+#[tokio::test]
+async fn it_orch_trust_gating_the_index_records_a_stale_project() {
+    let fx = Fx::new("index-stale");
+    let id = ProjectId::from_uuid(1);
+    let empty = fx.dir.path().join("app");
+    std::fs::create_dir(&empty).unwrap();
+    let trusted = crate::trust::scan(&empty, None).unwrap().digest.to_string();
+    let row = id.to_string();
+    let rows = fx.db.submit(Durability::Normal, move |conn| {
+        conn.execute(
+            "INSERT INTO projects (project_id, path, name, position, added_at, trust_state,
+                 trust_digest, trust_manifest, trusted_at, trusted_by)
+             VALUES (?1, '/work/app', 'app', 0, 1, 'trusted', ?2, '{}', 1, 'pr_desktop')",
+            [&row, &trusted],
+        )
+    });
+    rows.await.unwrap();
+    let index = fx.start().await;
+    std::fs::write(empty.join(".mcp.json"), "{}").unwrap();
+    index.rescanned(&id, crate::trust::scan(&empty, None).unwrap());
+    // The checkpoint comes after the rescan in the actor's mailbox.
+    Part::stop(&index, false).await;
+    assert_eq!(fx.sql("SELECT trust_state FROM projects").await, ["stale"]);
+    assert_eq!(
+        fx.view().await.0.projects[&id].trust_state,
+        TrustState::Stale
+    );
+}

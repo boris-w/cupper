@@ -2085,6 +2085,11 @@ export type NoticeParams = {
   attempt?: number | null;
   max?: number | null;
   paths?: Array<WirePath> | null;
+  /**
+   * `project_config_changed`: the scan's failure (`too_many_files`, ...),
+   * when the rescan failed rather than found a change.
+   */
+  reason?: string | null;
 };
 
 /**

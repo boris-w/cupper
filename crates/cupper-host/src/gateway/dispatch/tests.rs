@@ -11,7 +11,7 @@ use std::time::Duration;
 use cupper_protocol::annotations::{X_BUILDS, X_MILESTONE};
 use cupper_protocol::domain::{ClientRole, PrincipalKind};
 use cupper_protocol::ids::{ConnId, SessionId};
-use cupper_protocol::methods::admin::SettingsUpdate;
+use cupper_protocol::methods::admin::{DiagRecordingExport, SettingsUpdate};
 use cupper_protocol::methods::catalog::catalog;
 use cupper_protocol::methods::git::GitRevert;
 use cupper_protocol::methods::project::{AgentsCapabilities, AgentsRefresh};
@@ -160,6 +160,8 @@ impl Fixture {
         let agents = || Arc::clone(&self.sessions) as Arc<dyn Port>;
         routes.add::<AgentsCapabilities>(agents());
         routes.add::<AgentsRefresh>(agents());
+        // The host's recording export (T116), stood in for by the index's.
+        routes.add::<DiagRecordingExport>(Arc::clone(&self.index) as Arc<dyn Port>);
         // As the host's test interface (T047) in `test-harness` builds.
         if cfg!(feature = "test-harness") {
             use cupper_protocol::methods::admin::{TestClockAdvance, TestRunMaintenance, TestSeed};
@@ -332,9 +334,11 @@ enum Why {
     Later(Milestone),
     /// The task that brings its executor.
     Until(&'static str),
-    /// Served only in the builds of its `x-builds`, which this one is not.
-    Builds,
+    /// Served only in the builds of its `x-builds`; whether this is one.
+    Builds(bool),
 }
+
+const HARNESS: bool = cfg!(feature = "test-harness");
 
 const ALLOWED: &[(&str, Why)] = {
     use Milestone::{M1b, M2, M3};
@@ -348,7 +352,10 @@ const ALLOWED: &[(&str, Why)] = {
         ("blob/put", Until("T029")),
         ("diag/export", Later(M2)),
         // Builds `test-harness` and `dev-auth` only.
-        ("diag/recording_export", Until("T116")),
+        (
+            "diag/recording_export",
+            Builds(HARNESS || cfg!(feature = "dev-auth")),
+        ),
         ("files/search", Later(M1b)),
         ("git/branches", Later(M1b)),
         ("git/commit", Later(M1b)),
@@ -371,9 +378,9 @@ const ALLOWED: &[(&str, Why)] = {
         ("settings/update", Until("T036")),
         ("stream/ack", Later(M3)),
         // Build `test-harness` only.
-        ("test/clock_advance", Builds),
-        ("test/run_maintenance", Builds),
-        ("test/seed", Builds),
+        ("test/clock_advance", Builds(HARNESS)),
+        ("test/run_maintenance", Builds(HARNESS)),
+        ("test/seed", Builds(HARNESS)),
         ("workspace/open", Later(M1b)),
         ("worktree/check", Later(M1b)),
     ]
@@ -421,10 +428,7 @@ async fn unit_unsupported_set_is_what_the_milestones_allow() {
         }
     }
     unsupported.sort_unstable();
-    let harness = cfg!(feature = "test-harness");
-    let allowed = ALLOWED
-        .iter()
-        .filter(|(_, why)| !(harness && *why == Why::Builds));
+    let allowed = ALLOWED.iter().filter(|(_, why)| *why != Why::Builds(true));
     let allowed: Vec<&str> = allowed.map(|(name, _)| *name).collect();
     assert_eq!(unsupported, allowed);
 
@@ -438,7 +442,7 @@ async fn unit_unsupported_set_is_what_the_milestones_allow() {
         let milestone = milestones[name];
         match why {
             Why::Later(later) => assert_eq!(milestone, later.as_str(), "{name}"),
-            Why::Until(_) | Why::Builds => {
+            Why::Until(_) | Why::Builds(_) => {
                 assert!(["M1a", "M1b"].contains(&milestone), "{name}")
             }
         }
@@ -447,11 +451,10 @@ async fn unit_unsupported_set_is_what_the_milestones_allow() {
 
 #[tokio::test]
 async fn unit_unsupported_set_gated_methods_only_in_their_builds() {
-    use cupper_protocol::methods::admin::DiagRecordingExport;
-    // `test/clock_advance` as the fixture routes it, like the host.
+    // `test/clock_advance` and `diag/recording_export` as the fixture routes
+    // them, like the host.
     let fixture = Fixture::new();
-    let mut routes = fixture.start();
-    routes.add::<DiagRecordingExport>(Arc::clone(&fixture.index) as Arc<dyn Port>);
+    let routes = fixture.start();
     let harness_build = cfg!(feature = "test-harness");
     let cases = [
         ("test/clock_advance", json!({"ms": 5}), harness_build),

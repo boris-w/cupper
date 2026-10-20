@@ -289,6 +289,10 @@ pub struct NoticeParams {
     pub max: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub paths: Option<Vec<WirePath>>,
+    /// `project_config_changed`: the scan's failure (`too_many_files`, ...),
+    /// when the rescan failed rather than found a change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 /// The uniform error item (ADR-06).

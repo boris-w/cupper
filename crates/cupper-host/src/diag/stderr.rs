@@ -73,11 +73,12 @@ impl AdapterLog {
     }
 
     /// Reads `stderr` of `instance` until it closes; the tail fills as lines
-    /// arrive.
+    /// arrive, and `each` gets every line as it was (for the raw frames).
     pub fn read(
         self: &Arc<Self>,
         instance: String,
         stderr: impl AsyncRead + Unpin + Send + 'static,
+        each: impl Fn(&str) + Send + 'static,
     ) -> (Tail, JoinHandle<()>) {
         let tail = Tail::default();
         let (log, filled) = (Arc::clone(self), tail.clone());
@@ -86,7 +87,9 @@ impl AdapterLog {
             let mut line = Vec::new();
             while let Ok(true) = next_line(&mut reader, &mut line).await {
                 let text = String::from_utf8_lossy(&line);
-                let text = log.redactor.text(text.trim_end_matches(['\n', '\r']));
+                let text = text.trim_end_matches(['\n', '\r']);
+                each(text);
+                let text = log.redactor.text(text);
                 let time = rfc3339(log.clock.now_wall_ms());
                 let entry = format!("{time} {instance} {text}");
                 // A log that cannot be written has nowhere to say so.
@@ -138,7 +141,7 @@ mod tests {
         let log = AdapterLog::open(dir.path(), "claude", Arc::new(ManualClock::new()), redactor)
             .expect("open");
         let (mut write, read) = pipe::pipe().expect("a pipe");
-        let (tail, reading) = log.read("i_0199a1b2".into(), read);
+        let (tail, reading) = log.read("i_0199a1b2".into(), read, |_| {});
         for line in lines {
             write.write_all(line.as_bytes()).await.expect("write");
         }

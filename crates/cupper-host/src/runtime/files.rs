@@ -50,33 +50,30 @@ struct Record {
 
 impl Record {
     fn of(plan: &ComponentPlan) -> Self {
-        let files = plan
-            .files
-            .iter()
-            .map(|(path, f)| (path.clone(), f.hash.clone()));
         Self {
             component: plan.component.name().to_owned(),
             version: plan.version.clone(),
-            files: files.collect(),
+            files: plan.files.clone(),
         }
     }
 }
 
 /// One component's directory in the runtime directory.
-pub(crate) struct Slot<'a> {
+#[derive(Clone)]
+pub(crate) struct Slot {
     dir: PathBuf,
-    plan: &'a ComponentPlan,
+    pub plan: ComponentPlan,
 }
 
-impl<'a> Slot<'a> {
-    pub fn new(runtime_dir: &Path, plan: &'a ComponentPlan) -> Self {
+impl Slot {
+    pub fn new(runtime_dir: &Path, plan: ComponentPlan) -> Self {
         Self {
             dir: runtime_dir.join(plan.component.name()),
             plan,
         }
     }
 
-    fn version_dir(&self) -> PathBuf {
+    pub fn version_dir(&self) -> PathBuf {
         self.dir.join(&self.plan.version)
     }
 
@@ -108,43 +105,59 @@ impl<'a> Slot<'a> {
         let record = fs::read(dir.join(INSTALLED)).ok();
         let record = record.and_then(|text| serde_json::from_slice::<Record>(&text).ok());
         let mut files = self.plan.files.iter();
-        match record == Some(Record::of(self.plan))
-            && files.all(|(path, f)| verify(&dir.join(path), &f.hash).is_ok())
+        match record == Some(Record::of(&self.plan))
+            && files.all(|(path, hash)| verify(&dir.join(path), hash).is_ok())
         {
             true => Verdict::Intact,
             false => Verdict::Broken,
         }
     }
 
-    /// Copies the plan's files into a staging directory and commits it.
-    pub fn install(&self, bundle: &dyn Bundle, replace: bool) -> Result<(), Reason> {
+    /// Copies `sources`, the plan's files in the bundle, and commits them.
+    pub fn install(
+        &self,
+        bundle: &dyn Bundle,
+        sources: &BTreeMap<String, String>,
+        replace: bool,
+    ) -> Result<(), Reason> {
+        let staging = self.begin()?;
+        let files = sources
+            .iter()
+            .map(|(path, source)| (path.as_str(), source.as_str(), &self.plan.files[path]));
+        match copy_in(bundle, &staging, files) {
+            Ok(()) => self.commit(&staging, replace),
+            Err(reason) => Err(self.abandon(reason)),
+        }
+    }
+
+    /// A new, empty staging directory.
+    pub fn begin(&self) -> Result<PathBuf, Reason> {
         let staging = self.aside("staging");
-        let result = self.fill(bundle, &staging).and_then(|()| {
+        let _ = fs::remove_dir_all(&staging);
+        create_dirs(&staging)?;
+        Ok(staging)
+    }
+
+    /// Writes the record into `staging` and commits it; `replace` moves the
+    /// broken version directory aside first.
+    pub fn commit(&self, staging: &Path, replace: bool) -> Result<(), Reason> {
+        let record = serde_json::to_vec(&Record::of(&self.plan)).expect("a record serializes");
+        let written = fs::write(staging.join(INSTALLED), record).map_err(disk);
+        let result = written.and_then(|()| {
             if replace {
                 fs::rename(self.version_dir(), self.aside("discard")).map_err(disk)?;
             }
-            fs::rename(&staging, self.version_dir()).map_err(disk)
+            fs::rename(staging, self.version_dir()).map_err(disk)
         });
-        // What cannot be removed now, the next run's `clean` removes.
-        let _ = fs::remove_dir_all(&staging);
         let _ = fs::remove_dir_all(self.aside("discard"));
-        result
+        result.map_err(|reason| self.abandon(reason))
     }
 
-    fn fill(&self, bundle: &dyn Bundle, staging: &Path) -> Result<(), Reason> {
-        let _ = fs::remove_dir_all(staging);
-        let mut dirs = DirBuilder::new();
-        dirs.recursive(true).mode(0o700);
-        dirs.create(staging).map_err(disk)?;
-        for (path, file) in &self.plan.files {
-            let target = staging.join(path);
-            if let Some(parent) = target.parent() {
-                dirs.create(parent).map_err(disk)?;
-            }
-            copy(bundle, &file.source, &target, &file.hash)?;
-        }
-        let record = serde_json::to_vec(&Record::of(self.plan)).expect("a record serializes");
-        fs::write(staging.join(INSTALLED), record).map_err(disk)
+    /// Removes the staging directory of an install that failed for
+    /// `reason`; what cannot be removed now, the next run's `clean` removes.
+    pub fn abandon(&self, reason: Reason) -> Reason {
+        let _ = fs::remove_dir_all(self.aside("staging"));
+        reason
     }
 
     /// Removes the component's other versions, except those in `in_use`.
@@ -180,6 +193,26 @@ fn entries(dir: &Path) -> io::Result<Vec<fs::DirEntry>> {
     }
 }
 
+/// Copies files from the bundle into `dir`: `(path in dir, path in the
+/// bundle, hash)`.
+pub(crate) fn copy_in<'f>(
+    bundle: &dyn Bundle,
+    dir: &Path,
+    files: impl IntoIterator<Item = (&'f str, &'f str, &'f FileHash)>,
+) -> Result<(), Reason> {
+    for (path, source, hash) in files {
+        let target = dir.join(path);
+        create_dirs(target.parent().unwrap_or(dir))?;
+        copy(bundle, source, &target, hash)?;
+    }
+    Ok(())
+}
+
+fn create_dirs(dir: &Path) -> Result<(), Reason> {
+    let mut dirs = DirBuilder::new();
+    dirs.recursive(true).mode(0o700).create(dir).map_err(disk)
+}
+
 /// Copies one bundled file, hashing the bytes as it writes them: a bundle
 /// changed or replaced during the copy gives a hash that does not match.
 fn copy(bundle: &dyn Bundle, source: &str, target: &Path, hash: &FileHash) -> Result<(), Reason> {
@@ -205,7 +238,7 @@ fn copy(bundle: &dyn Bundle, source: &str, target: &Path, hash: &FileHash) -> Re
 
 /// Checks the file at `path` against `hash`. The error names what differs:
 /// `missing`, `unreadable`, `sha256` or `cdhash`.
-pub(crate) fn verify(path: &Path, hash: &FileHash) -> Result<(), &'static str> {
+pub fn verify(path: &Path, hash: &FileHash) -> Result<(), &'static str> {
     let file = File::open(path).map_err(|err| match err.kind() {
         io::ErrorKind::NotFound => "missing",
         _ => "unreadable",
