@@ -30,7 +30,7 @@ export interface KindProps {
 
 export const BUTTON =
   "rounded-lg px-2.5 py-1 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
-const KEYCAP = "ml-1.5 rounded-xs border border-border px-1 text-xs text-fg-tertiary";
+const KEYCAP = "ml-1.5 rounded-xs border border-current px-1 text-xs opacity-60";
 
 export const text = (content?: Content | null) =>
   content?.type === "text" && "text" in content ? escapeInvisible(String(content.text)) : undefined;
@@ -180,7 +180,7 @@ export function Terminal({ command }: { command: string }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   return (
-    <div className="mx-4 mb-2 overflow-hidden rounded-lg bg-surface-code text-code">
+    <div className="mx-4 mb-2 overflow-hidden rounded-lg border border-border bg-surface-code text-code">
       <div className="flex items-center justify-between px-3 py-1 text-xs text-fg-tertiary">
         {t("request:terminal")}
         <button
