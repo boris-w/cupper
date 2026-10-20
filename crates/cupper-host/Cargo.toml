@@ -17,7 +17,7 @@ test-harness = []
 [dependencies]
 # The ACP SDK is pinned to the exact release T003 validated (ADR-02, design 5.6.10).
 # `unstable_plan_operations`: the `plan` client capability and `plan_update` (design 5.6.1).
-agent-client-protocol = { version = "=3.3.0", features = ["unstable_plan_operations"] }
+agent-client-protocol = { version = "=3.3.0", features = ["unstable_end_turn_token_usage", "unstable_plan_operations"] }
 # The SDK only asks for ^3.3.0 of its derive macros; keep them on the same release.
 agent-client-protocol-derive = "=3.3.0"
 cupper-protocol = { path = "../cupper-protocol" }
@@ -33,6 +33,8 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true
 thiserror = "2.0.21"
+# `host.log` (design 5.11.1); the ACP SDK already depends on this release.
+tracing = { version = "=0.1.44", default-features = false, features = ["std"] }
 # `macros`: the session actor's `select!`; `rt-multi-thread`: the host's
 # workers beside the main thread's run loop; `signal`: SIGTERM starts the
 # orderly exit (design 5.2.3, 5.2.13).

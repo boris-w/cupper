@@ -276,6 +276,7 @@ flowchart LR
 | harness 密钥 | 启动载荷的 `harness_key`；CLI 用 `--harness-key-fd` | test-harness；CLI 的测试构建 | — |
 | 宿主的 pid | `host/status` 的 `pid` | test-harness | 不返回 |
 | e2e 的临时根目录（数据目录、userData、worktree 根目录、harness 密钥文件） | e2e 版主进程读取环境变量 `CUPPER_E2E_DIR` | e2e 构建（Vite `define` 门控） | — |
+| e2e 的启动载荷（T075 开工前的裁定，2026-10-20） | 测试夹具在 `CUPPER_E2E_DIR` 下写 `harness_key`（64 位小写十六进制加换行，权限 0600）和 `test_config.json`（宿主 `test_config` 的 JSON）；e2e 版主进程拉起宿主时读这两个文件，连同自己生成的 `dev_key` 组装成启动载荷经 stdin 写给宿主；CLI 用同一个 `harness_key` 经 `--harness-key-fd` 接入 | e2e 构建（Vite `define` 门控） | — |
 | 原生确认框 | Playwright 经 `electronApp.evaluate` 在主进程里替换 `dialog.showMessageBox`，替换函数记录调用参数 | e2e 构建（保留 `enableNodeCliInspectArguments`） | — |
 | 渲染进程的视图导出 | `window.__cupperTest`，导出 `host-client` 的视图和计数 | e2e 构建 | — |
 | 只断开某个窗口的数据连接 | 主进程的测试钩子 | e2e 构建 | — |
