@@ -44,7 +44,19 @@ export function useSessionState(sessionId?: string) {
   };
 }
 
-export function useSend(sessionId: string | undefined, projectId: string | undefined) {
+/** What a new session is created with (design 5.7.4); fixed once it exists. */
+export interface NewSession {
+  agent: string;
+  workspace: { kind: string };
+}
+
+export const DEFAULT_NEW_SESSION: NewSession = { agent: "claude", workspace: { kind: "local" } };
+
+export function useSend(
+  sessionId: string | undefined,
+  projectId: string | undefined,
+  create: NewSession = DEFAULT_NEW_SESSION,
+) {
   const { client, handshake } = useHost();
   const budget = (handshake?.limits.max_frame_bytes ?? MAX_FRAME_BYTES) - ENVELOPE_BYTES;
   const ui = useUi();
@@ -73,12 +85,7 @@ export function useSend(sessionId: string | undefined, projectId: string | undef
       const params = (blocks: PromptBlock[]) =>
         sessionId !== undefined
           ? { session_id: sessionId, mode: "queue", content: blocks }
-          : {
-              agent: "claude",
-              project_id: projectId,
-              workspace: { kind: "local" },
-              message: blocks,
-            };
+          : { ...create, project_id: projectId, message: blocks };
       try {
         let fitted = content;
         if (utf8(JSON.stringify(params(content))).length > budget && text.trim()) {
@@ -104,7 +111,7 @@ export function useSend(sessionId: string | undefined, projectId: string | undef
         return false;
       }
     },
-    [client, ui, key, sessionId, projectId, fail, budget],
+    [client, ui, key, sessionId, projectId, fail, budget, create],
   );
 
   const command = useCallback(

@@ -2,13 +2,18 @@ import * as RadixMenu from "@radix-ui/react-dropdown-menu";
 import type { ReactElement, ReactNode } from "react";
 
 /** A menu on `trigger`, such as a ToolbarButton (ui-spec 3.4–3.6); `children` are its items. */
-export function Menu(props: { trigger: ReactElement; children?: ReactNode }) {
+export function Menu(props: {
+  trigger: ReactElement;
+  children?: ReactNode;
+  /** Where the menu lines up with its trigger; its end by default. */
+  align?: "start" | "center" | "end";
+}) {
   return (
     <RadixMenu.Root>
       <RadixMenu.Trigger asChild>{props.trigger}</RadixMenu.Trigger>
       <RadixMenu.Portal>
         <RadixMenu.Content
-          align="end"
+          align={props.align ?? "end"}
           sideOffset={4}
           className="z-50 min-w-40 rounded-xl bg-surface-elevated p-1 text-sm shadow-menu"
         >
