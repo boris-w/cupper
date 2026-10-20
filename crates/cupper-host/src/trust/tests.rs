@@ -168,6 +168,35 @@ fn unit_trust_scan_limits_count_files_and_bytes_with_link_targets() {
     assert_eq!(t.scan().unwrap_err().code(), "too_large");
 }
 
+/// Directory links that fork at every level without a cycle: 2^20 visits
+/// without the guard, which stops the walk at the 20,001st entry.
+#[test]
+fn unit_trust_scan_forking_directory_links_hit_the_entry_limit() {
+    use crate::clock::{Clock, SystemClock};
+
+    let t = Tree::new("fork");
+    const LEVELS: usize = 20;
+    fs::create_dir(t.path("ws/.claude")).unwrap();
+    for level in 1..=LEVELS {
+        fs::create_dir_all(t.path(&format!("ws/fork/l{level}"))).unwrap();
+    }
+    for level in 0..LEVELS {
+        let dir = match level {
+            0 => t.path("ws/.claude"),
+            _ => t.path(&format!("ws/fork/l{level}")),
+        };
+        let next = t.path(&format!("ws/fork/l{}", level + 1));
+        symlink(&next, dir.join("a")).unwrap();
+        symlink(&next, dir.join("b")).unwrap();
+    }
+    let clock = SystemClock::new();
+    let started = clock.now_mono();
+    let err = t.scan().unwrap_err();
+    let took = clock.now_mono().saturating_duration_since(started);
+    assert_eq!(err.code(), "too_many_entries", "{err}");
+    assert!(took < std::time::Duration::from_secs(10), "{took:?}");
+}
+
 #[test]
 fn unit_trust_scan_digest_follows_content_paths_and_link_targets_only() {
     let t = Tree::new("digest");

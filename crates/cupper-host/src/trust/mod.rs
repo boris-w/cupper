@@ -11,7 +11,8 @@
 //!   file counts with its target's content. A dangling link, a cycle or a
 //!   target that is neither a regular file nor a directory fails the scan.
 //! - **Limits**: more than [`MAX_FILES`] files or [`MAX_BYTES`] bytes (link
-//!   targets included) fail the scan; [`ScanError::code`] tells the dialog why.
+//!   targets included) fail the scan, and so do more than [`MAX_ENTRIES`]
+//!   entries visited; [`ScanError::code`] tells the dialog why.
 //! - **Digest** (rulings before T035): each file's sha-256 covers its path
 //!   relative to the workspace, its target's realpath and its whole content,
 //!   each preceded by its length as 8 bytes big-endian. The project's digest
@@ -37,7 +38,7 @@ use cupper_protocol::ids::Digest;
 
 pub use self::digest::Manifest;
 pub use self::state::{DigestMismatch, Trust, Trusted, TrustedBy};
-pub use self::walk::{MAX_BYTES, MAX_FILES, ScanError};
+pub use self::walk::{MAX_BYTES, MAX_ENTRIES, MAX_FILES, ScanError};
 
 /// The project configuration in a scan's range, as of the scan.
 #[derive(Debug, Clone, PartialEq, Eq)]

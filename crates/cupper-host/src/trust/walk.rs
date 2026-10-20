@@ -12,6 +12,11 @@ use super::digest::file_hash;
 pub const MAX_FILES: usize = 2_000;
 /// More bytes than this, link targets included, fail the scan.
 pub const MAX_BYTES: u64 = 16 << 20;
+/// More entries visited than this, files and directories, each time a
+/// directory link leads into them again, fail the scan: directory links that
+/// fork without a cycle would otherwise take exponential time (rulings after
+/// T035).
+pub const MAX_ENTRIES: usize = 20_000;
 
 /// What the CLIs load at each level (design 5.2.6).
 const NAMES: [&str; 3] = [".claude", ".mcp.json", ".codex"];
@@ -29,6 +34,8 @@ pub enum ScanError {
     TooManyFiles,
     #[error("more than {MAX_BYTES} bytes")]
     TooLarge,
+    #[error("more than {MAX_ENTRIES} entries visited")]
+    TooManyEntries,
     #[error("the symlink {} leads nowhere", .0.display())]
     DanglingLink(PathBuf),
     #[error("the symlink {} leads into a cycle", .0.display())]
@@ -50,6 +57,7 @@ impl ScanError {
             Self::RootNotAncestor(_) => "root_not_ancestor",
             Self::TooManyFiles => "too_many_files",
             Self::TooLarge => "too_large",
+            Self::TooManyEntries => "too_many_entries",
             Self::DanglingLink(_) => "dangling_link",
             Self::LinkCycle(_) => "link_cycle",
             Self::NotRegular(_) => "not_regular",
@@ -75,6 +83,7 @@ pub(super) fn walk(
         workspace: workspace.clone(),
         files: Vec::new(),
         bytes: 0,
+        entries: 0,
         ancestors: Vec::new(),
     };
     let (mut level, mut up) = (workspace.as_path(), String::new());
@@ -94,6 +103,7 @@ struct Walker {
     workspace: PathBuf,
     files: Vec<ScannedFile>,
     bytes: u64,
+    entries: usize,
     /// The realpaths of the directories being walked, to tell a cycle.
     ancestors: Vec<PathBuf>,
 }
@@ -106,6 +116,10 @@ impl Walker {
             Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(()),
             Err(err) => return Err(unreadable(path, err)),
         };
+        if self.entries == MAX_ENTRIES {
+            return Err(ScanError::TooManyEntries);
+        }
+        self.entries += 1;
         let target = fs::canonicalize(path).map_err(|err| match err.raw_os_error() {
             _ if err.kind() == io::ErrorKind::NotFound => ScanError::DanglingLink(path.into()),
             Some(ELOOP) => ScanError::LinkCycle(path.into()),
@@ -123,7 +137,9 @@ impl Walker {
                 let name = entry.map_err(|err| unreadable(&target, err))?.file_name();
                 // APFS names are UTF-8.
                 let rel = format!("{rel}/{}", name.to_string_lossy());
-                self.entry(&path.join(&name), rel, linked)?;
+                // Through the directory's realpath: resolving the path through
+                // every link above again would cost more at every level.
+                self.entry(&target.join(&name), rel, linked)?;
             }
             self.ancestors.pop();
             return Ok(());
