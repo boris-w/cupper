@@ -212,6 +212,20 @@ describe("UNIT-request-panel", () => {
     expect(run.panel()?.dataset.activation).toBe("auto");
   });
 
+  test("a click on a panel waiting for Tab or a click keeps the hint until the click is over", async () => {
+    const run = await setup();
+    await run.push(permission());
+    await run.ready();
+    const skip = screen.getByRole("button", { name: /跳过/ });
+    fireEvent.mouseDown(skip);
+    // Nothing moved under the pointer between its press and its release.
+    expect(run.panel()?.dataset.activation).toBe("auto");
+    expect(screen.getByRole("status").textContent).toBe("按 Tab 或点击以处理请求");
+    await act(async () => void fireEvent.click(skip));
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(run.responses()).toEqual([{ type: "selected", option_id: "o4" }]);
+  });
+
   test("numbers are positions in options: privileged confirms, unknown effect does nothing", async () => {
     const run = await setup();
     screen.getByRole("textbox").focus();
