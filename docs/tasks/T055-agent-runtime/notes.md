@@ -130,6 +130,8 @@
   实际目录布局由 T056 定，届时改 `launch::production` 里的两个路径即可。
 - **T034**：发现链见上。现在的边界只有项目路径；工作区和 worktree 的根目录要等它们出现后再加。
 - 第二种 agent 接进来时，需要一个自己的 `ActorKind`，因为 `AGENT_RUNTIME` 只能登记一次。
+- **写适配器退出 `error` 条目的任务**（T008 的 `crashed` 一带）：每个实例的 stderr 尾部（`Instance.tail`，最后 64 KB，已脱敏）已经留着，但 `DriverEvent::AdapterExited` 还不带它，`error` 条目的详情里还没有。
+- 设置里的 `agents.env_passthrough` 还没接：`adapter_env` 目前拿到的放行名单是空的。
 
 ### 范围外的发现
 
