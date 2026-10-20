@@ -246,6 +246,43 @@ fn it_runtime_install_recycles_the_versions_nothing_uses() {
 }
 
 #[test]
+fn it_runtime_install_self_test_checks_the_bundle_and_reports_the_runtime() {
+    let mut fixture = Fixture::new("self-test");
+    let bundle = BundleDir(fixture.contents());
+    let report = |f: &Fixture| self_test::check(&f.files, &bundle, &f.plans(), &f.runtime());
+    let runtime = |report: &self_test::Report| report.runtime.values().copied().collect::<Vec<_>>();
+    let fresh = report(&fixture);
+    assert!(
+        fresh.ok && fresh.problems.is_empty() && fresh.files == 4,
+        "{fresh:?}"
+    );
+    assert_eq!(runtime(&fresh), ["missing", "missing"]);
+    fixture.run();
+    fs::remove_file(fixture.runtime().join("node/1.0.0/LICENSE")).unwrap();
+    let installed = report(&fixture);
+    assert!(installed.ok, "the runtime does not decide: {installed:?}");
+    assert_eq!(runtime(&installed), ["ready", "broken"]);
+
+    fs::remove_file(fixture.contents().join("Resources/runtime/node-LICENSE")).unwrap();
+    fixture.write(&format!("{ESBUILD}/package.json"), b"[]");
+    fixture.files.get_mut("Helpers/node").unwrap().cdhash = Some("00".repeat(20));
+    let broken = report(&fixture);
+    let problems: Vec<_> = broken
+        .problems
+        .iter()
+        .map(|p| (p.file.as_str(), p.problem))
+        .collect();
+    let package = format!("{ESBUILD}/package.json");
+    let want = [
+        ("Helpers/node", "cdhash"),
+        (package.as_str(), "sha256"),
+        ("Resources/runtime/node-LICENSE", "missing"),
+    ];
+    assert!(!broken.ok);
+    assert_eq!(problems, want);
+}
+
+#[test]
 fn plans_of_the_embedded_manifest_cover_node_and_esbuild_wasm() {
     let manifest = manifest::embedded();
     let plans = plans(manifest);

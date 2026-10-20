@@ -19,8 +19,8 @@ pub mod payload;
 #[cfg(feature = "test-harness")]
 pub mod test_config;
 
-/// `cupper-host [--data-dir <dir>] [--build-info]`.
-pub const USAGE: &str = "usage: cupper-host [--data-dir <dir>] [--build-info]";
+/// `cupper-host [--data-dir <dir>] [--build-info | --self-test]`.
+pub const USAGE: &str = "usage: cupper-host [--data-dir <dir>] [--build-info | --self-test]";
 
 /// The compile-time features of this build, in a fixed order. Release builds
 /// have none; the release pipeline checks that through `--build-info`.
@@ -36,6 +36,10 @@ pub const FEATURES: &[&str] = &[
 pub enum Command {
     /// Print [`build_info`] and exit 0.
     BuildInfo,
+    /// Check the bundle against the embedded manifest and exit
+    /// ([`runtime::self_test`](crate::runtime::self_test)); the runtime
+    /// directory under `data_dir` is only read.
+    SelfTest { data_dir: PathBuf },
     /// Run the host on this data directory (absolute).
     Run { data_dir: PathBuf },
 }
@@ -49,6 +53,7 @@ impl Command {
         home: Option<OsString>,
     ) -> Result<Self, CommandError> {
         let mut build_info = false;
+        let mut self_test = false;
         let mut data_dir = None;
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -57,6 +62,11 @@ impl Command {
                     return Err(CommandError::Repeated("--build-info"));
                 }
                 build_info = true;
+            } else if arg == "--self-test" {
+                if self_test {
+                    return Err(CommandError::Repeated("--self-test"));
+                }
+                self_test = true;
             } else if arg == "--data-dir" {
                 if data_dir.is_some() {
                     return Err(CommandError::Repeated("--data-dir"));
@@ -77,7 +87,11 @@ impl Command {
             Some(dir) => dir,
             None => default_data_dir(home.as_deref()).ok_or(CommandError::NoHome)?,
         };
-        Ok(Self::Run { data_dir })
+        Ok(if self_test {
+            Self::SelfTest { data_dir }
+        } else {
+            Self::Run { data_dir }
+        })
     }
 }
 
@@ -205,18 +219,25 @@ mod tests {
                 data_dir: "/tmp/cupper-dev".into()
             }
         );
-        // `--build-info` needs no data directory and wins over `--data-dir`.
+        // `--build-info` needs no data directory and wins over the rest.
         assert_eq!(parse(&["--build-info"], None).unwrap(), Command::BuildInfo);
         assert_eq!(
-            parse(&["--data-dir", "/d", "--build-info"], None).unwrap(),
+            parse(&["--data-dir", "/d", "--self-test", "--build-info"], None).unwrap(),
             Command::BuildInfo
+        );
+        assert_eq!(
+            parse(&["--self-test", "--data-dir", "/d"], None).unwrap(),
+            Command::SelfTest {
+                data_dir: "/d".into()
+            }
         );
     }
 
     #[test]
     fn command_line_rejects_what_it_does_not_know() {
         let cases: &[(&[&str], Option<&str>, HostExit)] = &[
-            (&["--self-test"], None, HostExit::Error),
+            (&["--self-tests"], None, HostExit::Error),
+            (&["--self-test", "--self-test"], None, HostExit::Error),
             (&["--data-dir"], None, HostExit::Error),
             (&["--data-dir", "relative/dir"], None, HostExit::Error),
             (

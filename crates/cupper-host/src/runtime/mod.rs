@@ -12,6 +12,7 @@
 mod files;
 mod machine;
 mod plan;
+pub mod self_test;
 #[cfg(test)]
 mod tests;
 
