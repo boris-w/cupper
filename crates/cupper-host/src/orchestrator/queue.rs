@@ -85,6 +85,11 @@ impl QueueCore {
         Some(self.updated())
     }
 
+    /// A message would leave the queue now.
+    pub fn ready(&self) -> bool {
+        self.paused.is_none() && !self.entries.is_empty()
+    }
+
     /// Why the queue is paused, if it is.
     pub fn paused(&self) -> Option<&PauseReason> {
         self.paused.as_ref()

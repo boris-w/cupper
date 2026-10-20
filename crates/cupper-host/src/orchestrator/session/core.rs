@@ -311,9 +311,16 @@ impl SessionCore {
                 }
                 tier_guard::Action::Timer(request) => out.push(timer(request, Key::Revert)),
                 tier_guard::Action::Unconfirmed(reason) => {
-                    let gate = reason.as_ref().map(|_| PauseReason::ConfigUnconfirmed);
-                    self.machine(turn::Input::Gate(gate), now, out);
-                    if reason.is_some() {
+                    let (pause, shut) = (PauseReason::ConfigUnconfirmed, reason.is_some());
+                    self.machine(
+                        turn::Input::Gate {
+                            reason: pause,
+                            shut,
+                        },
+                        now,
+                        out,
+                    );
+                    if shut {
                         let notice = notice(&self.ids, now, NoticeCode::ConfigUnconfirmed);
                         out.extend(notice.map(Action::Event));
                     }
