@@ -1,0 +1,147 @@
+/* The message stream's rows: Markdown (design 5.7.10), ANSI colours, the
+   shimmer of running work and the fade of a scrolling list. Static CSS only:
+   no value here comes from an agent. The Markdown rules are outside the
+   layers so that they win over utility classes streamdown's components carry. */
+
+.md {
+  font-size: var(--text-chat);
+  line-height: var(--text-chat--line-height);
+  overflow-wrap: anywhere;
+}
+.md > * {
+  margin: 0;
+}
+.md > * + * {
+  margin-top: 14px;
+}
+.md h1,
+.md h2,
+.md h3 {
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.4;
+}
+.md h1 {
+  font-size: 21px;
+  margin: 14px 0 7px;
+}
+.md h2 {
+  font-size: 17.5px;
+}
+.md h3 {
+  font-size: 15.75px;
+}
+.md ul,
+.md ol {
+  padding-left: 21px;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li {
+  padding-left: 5.25px;
+}
+.md strong {
+  font-weight: var(--font-weight-semibold);
+}
+.md li::marker {
+  font-weight: var(--font-weight-semibold);
+}
+.md code {
+  font-family: var(--font-mono);
+  font-size: max(var(--text-code), 0.875em);
+}
+.md :not(pre) > code {
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+  background: var(--color-btn-secondary);
+}
+.md pre {
+  padding: 12px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-code);
+  line-height: 1.6;
+}
+.md blockquote {
+  padding-left: 12px;
+  border-left: 2px solid var(--color-border-strong);
+  color: var(--color-fg-secondary);
+}
+.md table {
+  border-collapse: collapse;
+}
+.md th,
+.md td {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ANSI colours (SGR 30–37, 90–97): fixed classes, never a colour of the output. */
+.ansi-black,
+.ansi-white {
+  color: var(--color-fg-tertiary);
+}
+.ansi-red {
+  color: var(--color-diff-del);
+}
+.ansi-green {
+  color: var(--color-diff-add);
+}
+.ansi-yellow {
+  color: var(--color-diff-mod);
+}
+.ansi-blue {
+  color: var(--color-code-name);
+}
+.ansi-magenta {
+  color: var(--color-code-variable);
+}
+.ansi-cyan {
+  color: var(--color-accent);
+}
+.ansi-bold {
+  font-weight: var(--font-weight-semibold);
+}
+.ansi-dim {
+  opacity: 0.6;
+}
+.ansi-underline {
+  text-decoration: underline;
+}
+
+/* Running work: a light sweeping left to right every 2 s (design 5.7.10). */
+.shimmer {
+  background: linear-gradient(90deg, currentColor 40%, var(--color-fg) 50%, currentColor 60%) 0 0 /
+    300% 100%;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 2s linear infinite;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    animation: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+/* A list that scrolls fades out at both ends. */
+.fade-y {
+  mask-image: linear-gradient(transparent, #000 12px, #000 calc(100% - 12px), transparent);
+}
