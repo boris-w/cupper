@@ -52,3 +52,15 @@ T035（三个时机的调用方式）、T044（闸门的用法、原因改成集
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 780 行（可能到约 840），贴近约 850 的上限，并提出四个影响协议可见行为的问题，停下汇报。
+
+**裁定：不拆，上限放宽到约 950 行，硬停止线 1,000。** 可拆出去的部分只有约 100 行。执行者的方案草图（扫描复用 `index::projects::prepare`、`IndexNotes::rescanned`、`SessionDeps` 接上 `Discovery` 的 git、夹具改用临时目录里的真实项目、闸门改成原因的集合、`TurnMachine` 开回合前先发检查请求、自发回合不检查、回合结束后后台重扫）认可。
+
+四个问题：
+1. **空闲时发送**：选 (b)。消息先挂起、不进队列，命令的回复推迟到检查结束：通过就写 `turn.started`、回复 `started`；发现 `stale` 就放进因闸门而暂停的队列、回复 `queued`。协议语义不变，`origin` 仍是 `user`，IT-orch-lifecycle 的事件序列不受影响。
+2. **扫描失败**（工作区不见了、文件太多、悬空链接等）：按不可信处理，失败时关闭（fail closed）。对 `Load` 的会话同样关闸门、写 notice（`project_config_changed`，`params` 里带扫描失败的语义码），Attach 用 `Ignore`。
+3. **Attach 前发现 `stale`**（例如适配器退出后的 resume）：用 `Ignore` 去 attach，同时关闸门；闸门已经扣住 prompt，不阻止 attach 本身。
+4. **重新信任之后开闸门**：闸门因 `project_config_changed` 关着时，`session/send` 和 `session/queue_resume` 各触发一次重扫，结果是 `trusted` 就去掉这个原因；不需要 `IndexActor` 反过来通知会话。
