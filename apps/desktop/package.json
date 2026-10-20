@@ -9,7 +9,8 @@
   "scripts": {
     "build:dev": "cargo build --locked --release -p cupper-desktop-native --features dev-auth --target-dir ../../target/host-bundle/build && cargo xtask host-bundle --kind dev && vite build --mode dev && electron-builder --config electron-builder.dev.yml",
     "build:e2e": "cargo build --locked --release -p cupper-desktop-native --features dev-auth --target-dir ../../target/host-bundle/build && cargo xtask host-bundle --kind e2e && vite build --mode e2e && electron-builder --config electron-builder.e2e.yml",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:launch": "cargo build --locked -p cupper-desktop-native --features dev-auth && cargo xtask host-bundle --kind e2e --debug && CUPPER_HOST_BUNDLE=../../target/host-bundle/e2e vitest run src/main/host/launch.test.ts"
   },
   "devDependencies": {
     "@cupper/desktop-native": "workspace:*",
