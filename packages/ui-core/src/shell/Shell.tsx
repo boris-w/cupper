@@ -5,7 +5,7 @@
 import { commandHandler } from "@cupper/shell-api";
 import { use, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
-import { SlotsContext } from "../app/pages";
+import { SlotsContext } from "../app/slots";
 import { useHost, useShell, useT } from "../app/providers";
 import { ChevronDownIcon, MoreIcon, PaneIcon } from "../components/icons";
 import { Menu } from "../components/Menu";

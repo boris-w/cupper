@@ -269,6 +269,8 @@ pub(crate) struct Peer {
     outbox: Arc<super::outbox::Outbox>,
     replies: Vec<Value>,
     next_id: i64,
+    /// What the connection recorded.
+    pub(crate) audit: UnboundedReceiver<AuditRecord>,
 }
 
 #[cfg(test)]
@@ -287,7 +289,7 @@ impl Peer {
         ));
         let conn = cupper_protocol::ids::ConnId::from_index(index);
         let clock = crate::clock::ManualClock::new();
-        let audit = tokio::sync::mpsc::unbounded_channel().0;
+        let (audit, records) = tokio::sync::mpsc::unbounded_channel();
         let auditor = super::audit::Auditor::new(conn.clone(), audit, Arc::new(clock.clone()));
         use cupper_protocol::domain::{ClientKind, PrincipalKind};
         let kind = match principal.kind {
@@ -327,6 +329,7 @@ impl Peer {
             outbox,
             replies: Vec::new(),
             next_id: 0,
+            audit: records,
         }
     }
 

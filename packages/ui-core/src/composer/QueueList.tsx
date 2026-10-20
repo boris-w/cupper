@@ -86,7 +86,8 @@ function SessionArea({ sessionId, view }: { sessionId: string; view: SessionView
   const answered = useRef(new Set<string>());
   // Any change: a new request lands in a turn or in the tail, and resolves under its own key.
   useEntry(view, "view");
-  const first = pending(view)[0]?.requested;
+  const waiting = pending(view);
+  const first = waiting[0]?.requested;
   if (first) shown.current.add(first.request_id);
 
   // AP-4: a request shown here and answered by another client folds away with a toast.
@@ -115,6 +116,8 @@ function SessionArea({ sessionId, view }: { sessionId: string; view: SessionView
           agent={name}
           activity={activity}
           onAnswered={(id) => answered.current.add(id)}
+          position={1}
+          total={waiting.length}
         />
       ) : (
         <Composer sessionId={sessionId} paused={Boolean(queue?.paused)} activity={activity} />

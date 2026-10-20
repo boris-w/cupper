@@ -266,11 +266,16 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
             command
         }
         Program::Runtime { node, bundle } => {
-            for file in [node, bundle] {
-                let path = file.path.display();
-                let check = runtime::verify(&file.path, &file.hash);
-                check.map_err(|problem| failed(RuntimeFailed, format!("{path}: {problem}")))?;
-            }
+            // Hashing the runtime reads it whole: off the async threads.
+            let files = [node.clone(), bundle.clone()];
+            let verified = tokio::task::spawn_blocking(move || {
+                files.iter().try_for_each(|file| {
+                    let problem = runtime::verify(&file.path, &file.hash).err();
+                    problem.map_or(Ok(()), |p| Err(format!("{}: {p}", file.path.display())))
+                })
+            });
+            let verified = verified.await.unwrap_or_else(|err| Err(err.to_string()));
+            verified.map_err(|problem| failed(RuntimeFailed, problem))?;
             let mut command = Command::new(&node.path);
             command.arg(&bundle.path);
             command
@@ -278,7 +283,7 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
     };
     command.env(launch.env.clone()).new_session();
     if let Some(check) = &cx.self_check {
-        check.check();
+        check.check().await;
     }
     for stdio in [Command::stdin, Command::stdout, Command::stderr] {
         stdio(&mut command, Stdio::Pipe);

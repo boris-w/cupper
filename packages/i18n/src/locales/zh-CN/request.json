@@ -27,5 +27,14 @@
   "custom": "在此输入",
   "yes": "是",
   "no": "否",
-  "failed": "回答没有发出（{{code}}）"
+  "failed": "回答没有发出（{{code}}）",
+  "elsewhere": "已在别处处理",
+  "count": "{{position}} / {{total}}",
+  "message": "否，并告诉 {{agent}} 应该怎么做",
+  "click_submit": "点击提交",
+  "record_pending": "等待处理",
+  "record_approved": "已批准：{{title}}",
+  "record_rejected": "已拒绝",
+  "record_asked": "已询问 {{count}} 个问题",
+  "record_unanswered": "未回答"
 }

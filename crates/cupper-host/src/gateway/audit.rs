@@ -14,6 +14,7 @@ use cupper_protocol::ids::{
 };
 use cupper_protocol::index::ElevationDecision;
 use cupper_protocol::interaction::InteractionOutcome;
+use cupper_protocol::methods::admin::ConfirmAction;
 use cupper_protocol::methods::handshake::{ClientIdentity, Principal};
 use cupper_protocol::rpc::Scope;
 use cupper_protocol::session::ConfirmationReason;
@@ -95,6 +96,24 @@ pub enum AuditEvent {
         reason: ConfirmationReason,
         config: ConfigState,
     },
+    /// `host.*` (design 5.2.13).
+    Host(HostEvent),
+    /// `git.unsafe_repo_config`: the repo tier refused to run `command`
+    /// (design 5.2.10); `origin` is the file or key in the workspace.
+    GitUnsafe {
+        command: String,
+        reason: String,
+        origin: Option<String>,
+    },
+    /// `privileged.executed`: a call that took `privileged` succeeded; what
+    /// `policy/describe` calls its action, when it can tell without the
+    /// sessions' facts.
+    Privileged {
+        method: &'static str,
+        principal: PrincipalId,
+        action: Option<ConfirmAction>,
+        details: Value,
+    },
     /// `project.trust.*` (design 5.2.6).
     ProjectTrust {
         project_id: ProjectId,
@@ -117,6 +136,22 @@ pub struct ConfigState {
     pub tier: Option<Tier>,
     /// Who set the tier.
     pub set_by: PrincipalId,
+}
+
+/// What `host.*` records.
+#[derive(Debug, Clone, PartialEq)]
+pub enum HostEvent {
+    Started {
+        version: String,
+    },
+    /// The host runs with degraded local authentication (ADR-05).
+    WeakAuth,
+    PendingUpgrade,
+    /// The orderly exit: `reason` is the `Exit` it took.
+    Exiting {
+        reason: String,
+        force: bool,
+    },
 }
 
 /// What became of a project's trust.
@@ -252,9 +287,7 @@ impl AuditEvent {
         !matches!(self, Self::Subscribed { .. })
     }
 
-    /// The record's event name and contents (design 5.8.6). `host.*`,
-    /// `git.unsafe_repo_config` and `privileged.executed` come with their
-    /// producers (T163).
+    /// The record's event name and contents (design 5.8.6).
     pub fn formal(&self) -> Formal {
         let (event, principal, detail) = match self {
             Self::Accepted {
@@ -364,6 +397,39 @@ impl AuditEvent {
                     peer: None,
                     detail,
                 };
+            }
+            Self::Host(event) => {
+                let (event, detail) = match event {
+                    HostEvent::Started { version } => ("started", json!({"version": version})),
+                    HostEvent::WeakAuth => ("weak_auth", json!({})),
+                    HostEvent::PendingUpgrade => ("pending_upgrade", json!({})),
+                    HostEvent::Exiting { reason, force } => {
+                        ("exiting", json!({"reason": reason, "force": force}))
+                    }
+                };
+                return Formal {
+                    event: format!("host.{event}"),
+                    principal: None,
+                    peer: None,
+                    detail,
+                };
+            }
+            Self::GitUnsafe {
+                command,
+                reason,
+                origin,
+            } => {
+                let detail = json!({"command": command, "reason": reason, "origin": origin});
+                ("git.unsafe_repo_config", None, detail)
+            }
+            Self::Privileged {
+                method,
+                principal,
+                action,
+                details,
+            } => {
+                let detail = json!({"method": method, "action": action, "details": details});
+                ("privileged.executed", Some(principal), detail)
             }
             Self::ProjectTrust { project_id, change } => {
                 let (event, by, mut detail) = match change {
@@ -559,6 +625,69 @@ mod tests {
                 name.to_owned(),
                 principal.map(str::to_owned),
                 parsed(&detail),
+            );
+            assert_eq!(formal(event), expected);
+        }
+    }
+
+    #[test]
+    fn unit_audit_producers_host_git_and_privileged_records() {
+        let host = |event| AuditEvent::Host(event);
+        let exiting = HostEvent::Exiting {
+            reason: "idle".into(),
+            force: false,
+        };
+        let git = AuditEvent::GitUnsafe {
+            command: "rev_parse".into(),
+            reason: "unnullable".into(),
+            origin: Some("filter.a=b.clean".into()),
+        };
+        let privileged = AuditEvent::Privileged {
+            method: "host/exit",
+            principal: "pr_desktop".parse().unwrap(),
+            action: None,
+            details: json!({}),
+        };
+        let cases = [
+            (
+                host(HostEvent::Started {
+                    version: "1.0".into(),
+                }),
+                "host.started",
+                None,
+                r#"{"version":"1.0"}"#,
+            ),
+            (host(HostEvent::WeakAuth), "host.weak_auth", None, "{}"),
+            (
+                host(HostEvent::PendingUpgrade),
+                "host.pending_upgrade",
+                None,
+                "{}",
+            ),
+            (
+                host(exiting),
+                "host.exiting",
+                None,
+                r#"{"force":false,"reason":"idle"}"#,
+            ),
+            (
+                git,
+                "git.unsafe_repo_config",
+                None,
+                r#"{"command":"rev_parse","origin":"filter.a=b.clean","reason":"unnullable"}"#,
+            ),
+            (
+                privileged,
+                "privileged.executed",
+                Some("pr_desktop"),
+                r#"{"action":null,"details":{},"method":"host/exit"}"#,
+            ),
+        ];
+        for (event, name, principal, detail) in cases {
+            let expected = (
+                name.to_owned(),
+                principal.map(str::to_owned),
+                parsed(detail),
             );
             assert_eq!(formal(event), expected);
         }

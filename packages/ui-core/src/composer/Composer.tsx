@@ -15,7 +15,7 @@ import type { ComposerActivity } from "../request/RequestPanel";
 import { useUi } from "../state/provider";
 import { EXTENSIONS, OverlayContext } from "./extensions";
 import { escapeAction, SEND_KEY_PREF, sends } from "./keys";
-import { NEW_DRAFT, usePref, useSend, useSessionState } from "./send";
+import { NEW_DRAFT, usePref, useSend, useSessionState, type NewSession } from "./send";
 
 const NONE: readonly PromptBlock[] = [];
 const ACTION =
@@ -66,8 +66,10 @@ export function Composer(props: {
   paused?: boolean;
   /** Where the composer reports focus and typing, for the request panel that may replace it (RP-3). */
   activity?: MutableRefObject<ComposerActivity>;
+  /** On the new session page: the agent and workspace the session is created with. */
+  create?: NewSession;
 }) {
-  const { sessionId, paused = false, activity } = props;
+  const { sessionId, paused = false, activity, create } = props;
   const t = useT();
   const ui = useUi();
   const { route } = useRouter();
@@ -78,7 +80,7 @@ export function Composer(props: {
   const projectId = sessionId
     ? undefined
     : (route.page === "new" && route.projectId) || firstProject;
-  const { send, interrupt, resume } = useSend(sessionId, projectId);
+  const { send, interrupt, resume } = useSend(sessionId, projectId, create);
   const sendKey = usePref(SEND_KEY_PREF) === "mod_enter" ? "mod_enter" : "enter";
   const [armed, setArmed] = useState(false);
   /** Sending while the queue is paused asks first (design 5.7.4): send and resume, or cancel. */

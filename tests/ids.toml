@@ -329,10 +329,22 @@ IT-orch-lifecycle = "pr"
 milestone = "M1a"
 IT-orch-interaction = "pr"
 
-# 会话 actor I-c：恢复、空闲退出与超长输出（计划 v1.3.11 由 T043 拆出）
+# 会话 actor I-c：载入与恢复（计划 v1.3.11 由 T043 拆出，v1.3.38 再拆出 T169、T175）
 [T089]
 milestone = "M1a"
 IT-orch-recovery = "pr"
+
+# 会话 actor I-d：崩溃后的重建与会话层的特权审计（计划 v1.3.38 由 T089 拆出，v1.3.39 并入 T163 的遗留）
+[T169]
+milestone = "M1a"
+IT-orch-rebuild = "pr"
+UNIT-audit-session-privileged = "pr"
+
+# 会话 actor I-e：空闲退出与超长输出（计划 v1.3.38 由 T089 拆出）
+[T175]
+milestone = "M1a"
+IT-orch-actor-idle = "pr"
+IT-orch-long-output = "pr"
 
 # 会话 actor II：档位、信任门控、崩溃与晚到输出
 [T044]

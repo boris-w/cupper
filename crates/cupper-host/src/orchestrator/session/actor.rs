@@ -682,6 +682,7 @@ impl SessionActor {
             writable: Vec::new(),
             clock: Arc::clone(&self.parts.clock),
             durations: self.parts.durations.clone(),
+            audit: self.parts.audit.clone(),
         };
         tokio::spawn(async move {
             let found = rescan(readers, project, cwd, cx).await;

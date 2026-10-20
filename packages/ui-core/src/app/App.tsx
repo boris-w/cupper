@@ -8,7 +8,8 @@ import { ToasterProvider } from "../feedback/toaster";
 import { LayoutStore } from "../layout/store";
 import { Shell } from "../shell/Shell";
 import { StateProvider, UiProvider } from "../state/provider";
-import { Page, SlotsContext, type Slots } from "./pages";
+import { Page } from "./pages";
+import { SlotsContext, type Slots } from "./slots";
 import { HostProvider, I18nProvider, ShellProvider, ThemeProvider } from "./providers";
 import { RouterProvider, type Route } from "./router";
 
