@@ -152,6 +152,7 @@ pub(super) async fn load(
         project: stored.project.parse().map_err(internal)?,
         git: deps.git.clone(),
         durations: deps.durations.clone(),
+        quiescence: deps.quiescence.clone(),
     };
     let start = Start {
         first: Input::Restored(Box::new(restored)),
