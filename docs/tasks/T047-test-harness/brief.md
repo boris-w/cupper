@@ -61,3 +61,21 @@ T034 合并之后，在原来的 T037 worktree 里从最新的 main 开新分支
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 1,900–2,150 行，在写代码之前停下汇报，建议按任务书的三分法拆分。
+
+**裁定：采用方案 A（计划 v1.3.21）。**
+- **T047 收窄为**：静止屏障、各参与者接线、`test/clock_advance`、`test/run_maintenance`、`test/seed`、`host/status.pid`、已能接上的注入点核对。验收 IT-clock-advance、IT-seed。上限约 1,500 行，硬停止线 1,600；推算超线就停下（届时可把 seed 再拆出去）。T064 依赖这部分。
+- **新增 T116（录制导出）**：`diag/recording_export`，IT-recording-export 移过去。T064 改为也依赖 T116。
+- **新增 T117（性能测量与趋势）**：三个 PERF 移过去，依赖本任务的 `test/seed`，挂在 T099 下。`tests/ids.toml` 已在 main 上改好。
+
+5 项待裁定：
+1. **屏障的判定**：`Participant::idle(fut)` 包一个唤醒器，唤醒时先记为忙、下次 poll 返回 Pending 才记为闲，覆盖在途消息和已触发未消费的定时器；写线程按"提交到回执之间"计在途，另起的 task 和 `spawn_blocking` 在发起方同步拿到参与者，等待外部 I/O 的连接任务算闲。认可，满足交接里的要求。
+2. **录制导出的脱敏**（归 T116）：选 (a)。宿主导出未脱敏的录制（这个方法只在 test-harness、dev-auth 构建里有），调用方入库前跑 `tools/sanitize`，与设计 5.9.3 的流程图一致；不在宿主里移植规则。
+3. **`stderr` 和 `note` 写进原始帧**（归 T116）：同时写进 `raw.db`，按结构化脱敏处理；涉及驱动（T050、T055）的代码，在 T116 范围内。
+4. **性能历史序列**（归 T117）：`testdata/perf/history.jsonl`，每行 `{date, version, metric, p50_ms, p95_ms, max_ms, n}`，不含机器名和路径；`xtask ci perf` 作业的实现在 T117 范围内。
+5. **seed 之后让索引看见新会话**：给 `IndexHandle` 加一个只在 test-harness 构建里存在的入口，复用 T034 的对账。认可。
+
+注入点：只核对已经能接上的；`runtime.registry_url` 由 T056/T115、`rss_samples` 由 T008 接收。
