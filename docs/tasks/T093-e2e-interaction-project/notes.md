@@ -85,6 +85,36 @@
   - 这里不要加 `--`：playwright 会把 `--` 之后的 `-g` 当成文件名。
 - 不要再直接运行 `playwright test`。需要别的写法时，套一层 `cargo xtask lock -- <命令>`。
 - 跑之前先有构建：`cargo build -p cupper-fake-agent` 和 `pnpm build:e2e`。
+- **前提：屏幕没锁、显示器醒着**。
+  - 锁屏或显示器睡着时，App 的窗口既看不见也拿不到焦点，带 `@focus` 的用例会像用例出错一样失败。
+  - 所以 globalSetup 开跑前就检查，遇到这种情况直接报错退出，报错信息写明是屏幕的原因。
+  - 运行期间，`test:e2e`、`test:e2e:one` 和 `xtask ci` 的 e2e 作业都在 `caffeinate -d` 下跑，显示器不会睡，也就不会接着锁屏。`caffeinate` 随命令一起结束，不会留下。
+  - 已经锁着的屏幕它帮不上忙，要先解锁。
+
+## 锁屏与显示器睡眠（修复第 2 轮）
+
+- **(c) 防止显示器睡眠**（7fa83db，+9/−5）：
+  - 两个入口改成 `cargo xtask lock -- caffeinate -d ...`；
+  - `ci/jobs/e2e.rs` 的两段 playwright 也套上 `caffeinate -d`；
+  - 另外更新 `playwright.config.ts` 的说明。
+  - `caffeinate -d <命令>` 持有 PreventUserIdleDisplaySleep 断言，直到命令结束，并原样返回命令的退出码（实测 `exit 3` 得 3）。
+- **(b) 锁屏时报错**（6328de5，+37/−3，在 `tools/e2e/src/setup.ts`）：
+  - 检测方法：用 `osascript -l JavaScript` 调 CoreGraphics。
+    - `CGSessionCopyCurrentDictionary()` 里的 `CGSSessionScreenIsLocked` 为 true，表示锁屏；
+    - `kCGSSessionOnConsoleKey` 不为 true，表示这个登录会话不在前台；
+    - `CGDisplayIsAsleep(CGMainDisplayID())`，表示主显示器睡着。
+  - 一次调用约 70 ms，不需要额外权限。
+  - 锁屏那个键就是 `ioreg` 里 `IOConsoleUsers` 会话字典的同一个键。
+- **实测**：
+  - **没锁、显示器醒着**：
+    - 检查得到 `{"locked":false,"asleep":false,"away":false}`；
+    - 经 `test:e2e:one` 跑 E2E-question-panel（`@focus`）通过，跑完没有留下 `caffeinate`。
+  - **锁着**：没有在新代码上实测。
+    - 今晚 19:51–20:56 锁屏期间，用 `ioreg -n Root -d1 -a` 看到过 `CGSSessionScreenIsLocked = true`，屏幕解锁后这个键消失；这和检测读的是同一份会话字典。
+    - 新的检测脚本是在屏幕解锁之后才写的。
+  - **显示器睡着**：试过用 `pmset displaysleepnow` 让显示器睡，但它在同一秒就被唤醒了（`pmset -g log` 里 21:02:12 关、21:02:12 开），检查仍得到 `asleep:false`，于是 `test:e2e:one` 照常跑了 smoke 用例。
+    - 用户正在用这台机器，所以没有再试，也没有锁屏。
+- **其他检查**：xtask 单元测试 39 个、`pnpm lint` 通过。
 
 ## 实际规模
 
