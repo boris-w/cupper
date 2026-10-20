@@ -139,6 +139,8 @@ pub(super) struct Start {
     pub project_gate: bool,
     /// "不加载项目配置继续" was chosen.
     pub ignore_for_good: bool,
+    /// The row still holds the first message, which has not started a turn.
+    pub initial: bool,
 }
 
 pub(super) struct SessionActor {
@@ -159,6 +161,9 @@ pub(super) struct SessionActor {
     ignore_for_good: bool,
     /// A `session/send` whose reply waits for the check before its turn.
     deferred: Option<Command>,
+    /// The row holds the first message until it leaves the machine's hold
+    /// for a turn or the queue (design 5.2.6).
+    initial: bool,
 }
 
 /// Why the project's trust range is rescanned (design 5.2.6).
@@ -240,6 +245,7 @@ impl SessionActor {
             commands,
             project_gate,
             ignore_for_good,
+            initial,
         } = start;
         let load_wanted = parts.project_config == ProjectConfigPolicy::Load || project_gate;
         let mut actor = Self {
@@ -255,6 +261,7 @@ impl SessionActor {
             project_gate,
             ignore_for_good,
             deferred: None,
+            initial,
         };
         actor.input(first, None, Step::default()).await;
         // Idle until a branch brings work, which runs once the others are
@@ -585,6 +592,12 @@ impl SessionActor {
         }
         if ignored {
             changes.ignored(&self.parts.id, at);
+        }
+        // Queued, not run: the queue has it now, and a load must not run it
+        // again.
+        if self.initial && !self.parts.core.holding() {
+            self.initial = false;
+            changes.first_taken(&self.parts.id, at);
         }
         self.forget_dequeued(&events);
         let asks = events.iter().any(|b| {

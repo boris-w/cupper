@@ -307,6 +307,7 @@ impl SessionManager {
             commands: HashMap::new(),
             project_gate: false,
             ignore_for_good: false,
+            initial: true,
         };
         let participant = deps.quiescence.enter(SESSION);
         tokio::spawn(SessionActor::run(parts, inbox, stops, start, participant));
@@ -395,6 +396,27 @@ impl SessionManager {
         }
         let stopped = || Err(internal("the session stopped"));
         Box::pin(finished.map(move |done| done.unwrap_or_else(|_| stopped())))
+    }
+
+    /// Loads the sessions whose first message never started a turn: the
+    /// host stopped while they prepared (design 5.2.13), and their actors
+    /// take the message up again.
+    pub async fn reopen(&self) {
+        let read = self.shared.deps.readers.read(|conn| {
+            let mut select = conn.prepare(
+                "SELECT session_id FROM sessions
+                 WHERE initial_prompt_json IS NOT NULL AND archived_at IS NULL",
+            )?;
+            let ids = select.query_map([], |r| r.get::<_, String>(0))?;
+            ids.collect::<rusqlite::Result<Vec<_>>>()
+        });
+        let ids = read.await.unwrap_or_else(|err| {
+            tracing::error!("the sessions to reopen could not be read: {err}");
+            Vec::new()
+        });
+        for id in ids.iter().filter_map(|id| id.parse().ok()) {
+            self.mailbox(&id);
+        }
     }
 
     /// The mailbox of session `id`'s actor. Without one, an actor starts
