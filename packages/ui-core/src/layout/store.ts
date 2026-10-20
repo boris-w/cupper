@@ -1,11 +1,19 @@
 // The layout preferences, kept by the shell (`ShellAPI.prefs`): the startup
 // snapshot comes from `ShellInfo.prefs`, changes from any window through
 // `onChange`. A drag updates the store at every move and saves once at the
-// end. The state layer of T080 takes this over.
+// end. The state lives in the UI store (`state/ui.ts`).
+//
+// A save comes back through `onChange` too, after the shell has written it,
+// and saves come back in the order they were made. While a later save of
+// the same key waits for its echo, an earlier echo is stale: applied, it
+// would set the width back for a moment as keys repeat on a handle.
 
 import type { ShellAPI, Unsubscribe } from "@cupper/shell-api";
 
+import { createUiStore, type LayoutState, type Route, type UiStore } from "../state/ui";
 import { DEFAULT_PREFS, type LayoutPrefs } from "./layout";
+
+export type { LayoutState } from "../state/ui";
 
 /** The preference key of each layout field. */
 export const PREF_KEYS: Record<keyof LayoutPrefs, string> = {
@@ -37,48 +45,50 @@ export function readPrefs(stored: Record<string, unknown>): LayoutPrefs {
   return prefs;
 }
 
-export interface LayoutState {
-  prefs: LayoutPrefs;
-  /** The floating sidebar of a narrow window; not saved. */
-  overlayOpen: boolean;
-}
-
 export class LayoutStore {
-  #state: LayoutState;
+  /** The UI store the layout lives in, with the route and the per-session state. */
+  readonly ui: UiStore;
   readonly #prefs: ShellAPI["prefs"];
-  readonly #listeners = new Set<() => void>();
   readonly #off: Unsubscribe;
+  /** Per key, the saves whose echo has not come back yet, oldest first. */
+  readonly #unheard = new Map<string, number[]>();
+  #saves = 0;
 
-  constructor(prefs: ShellAPI["prefs"], snapshot: Record<string, unknown>) {
+  constructor(prefs: ShellAPI["prefs"], snapshot: Record<string, unknown>, route?: Route) {
     this.#prefs = prefs;
-    this.#state = { prefs: readPrefs(snapshot), overlayOpen: false };
+    this.ui = createUiStore({ prefs: readPrefs(snapshot), overlayOpen: false }, route);
     this.#off = prefs.onChange((key, value) => {
+      const unheard = this.#unheard.get(key) ?? [];
+      if (unheard.shift() !== undefined && unheard.length > 0) {
+        return;
+      }
       const field = FIELDS.find((name) => PREF_KEYS[name] === key);
       if (field && VALID[field](value)) {
-        this.#update({ prefs: { ...this.#state.prefs, [field]: value } });
+        this.#update({ prefs: { ...this.getState().prefs, [field]: value } });
       }
     });
   }
 
-  readonly subscribe = (listener: () => void): Unsubscribe => {
-    this.#listeners.add(listener);
-    return () => this.#listeners.delete(listener);
-  };
+  readonly subscribe = (listener: () => void): Unsubscribe => this.ui.subscribe(listener);
 
-  readonly getState = (): LayoutState => this.#state;
+  readonly getState = (): LayoutState => this.ui.getState().layout;
 
   /** Sets a preference; `save: false` keeps it in memory, as during a drag. */
   set<K extends keyof LayoutPrefs>(field: K, value: LayoutPrefs[K], save = true): void {
-    this.#update({ prefs: { ...this.#state.prefs, [field]: value } });
+    this.#update({ prefs: { ...this.getState().prefs, [field]: value } });
     if (save) {
-      this.#prefs.set(PREF_KEYS[field], value).catch((err: unknown) => {
-        console.warn(`layout: cannot save ${PREF_KEYS[field]}`, err);
+      const [key, n] = [PREF_KEYS[field], ++this.#saves];
+      this.#unheard.set(key, [...(this.#unheard.get(key) ?? []), n]);
+      this.#prefs.set(key, value).catch((err: unknown) => {
+        // No echo comes for it.
+        this.#unheard.set(key, this.#unheard.get(key)?.filter((m) => m !== n) ?? []);
+        console.warn(`layout: cannot save ${key}`, err);
       });
     }
   }
 
   setOverlay(open: boolean): void {
-    if (open !== this.#state.overlayOpen) {
+    if (open !== this.getState().overlayOpen) {
       this.#update({ overlayOpen: open });
     }
   }
@@ -86,25 +96,21 @@ export class LayoutStore {
   /** ⌘B: the floating sidebar in a narrow window, the docked one otherwise. */
   toggleSidebar(narrow: boolean): void {
     if (narrow) {
-      this.setOverlay(!this.#state.overlayOpen);
+      this.setOverlay(!this.getState().overlayOpen);
     } else {
-      this.set("sidebarOpen", !this.#state.prefs.sidebarOpen);
+      this.set("sidebarOpen", !this.getState().prefs.sidebarOpen);
     }
   }
 
   toggleSidePanel(): void {
-    this.set("sidePanelOpen", !this.#state.prefs.sidePanelOpen);
+    this.set("sidePanelOpen", !this.getState().prefs.sidePanelOpen);
   }
 
   close(): void {
     this.#off();
-    this.#listeners.clear();
   }
 
   #update(patch: Partial<LayoutState>): void {
-    this.#state = { ...this.#state, ...patch };
-    for (const listener of this.#listeners) {
-      listener();
-    }
+    this.ui.setState((state) => ({ layout: { ...state.layout, ...patch } }));
   }
 }

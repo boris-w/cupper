@@ -15,10 +15,13 @@
   "dependencies": {
     "@cupper/host-client": "workspace:*",
     "@cupper/i18n": "workspace:*",
+    "@cupper/protocol": "workspace:*",
     "@cupper/shell-api": "workspace:*",
+    "@tanstack/react-query": "5.104.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "tailwindcss": "4.3.3"
+    "tailwindcss": "4.3.3",
+    "zustand": "5.0.15"
   },
   "devDependencies": {
     "@types/react": "19.3.0",

@@ -1,26 +1,28 @@
 // A small state router: the main area shows one page, chosen by `Route`. No
 // URLs: the document never navigates (design 5.7.8). Deep links and the menu
-// arrive through the shell.
+// arrive through the shell. The route lives in the UI store.
 
 import { commandHandler, isKnownTarget } from "@cupper/shell-api";
-import { createContext, use, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
+import { useStore } from "zustand";
 
-import { required, useShell } from "./providers";
+import { useUi } from "../state/provider";
+import type { Route } from "../state/ui";
+import { useShell } from "./providers";
 
-/** The page in the main area; the state layer of T080 keeps this shape. */
-export type Route = { page: "new"; projectId?: string } | { page: "session"; sessionId: string };
+export type { Route } from "../state/ui";
 
 export interface RouterValue {
   route: Route;
   navigate(route: Route): void;
 }
 
-const RouterContext = createContext<RouterValue | null>(null);
-
-export function RouterProvider({ initial, children }: { initial?: Route; children: ReactNode }) {
+/** Follows the menu and the shell's navigation into the route. */
+export function RouterProvider({ children }: { children: ReactNode }) {
   const { api } = useShell();
-  const [route, navigate] = useState<Route>(initial ?? { page: "new" });
+  const ui = useUi();
   useEffect(() => {
+    const { navigate } = ui.getState();
     const offCommand = api.onCommand(
       commandHandler({ new_session: () => navigate({ page: "new" }) }),
     );
@@ -34,10 +36,13 @@ export function RouterProvider({ initial, children }: { initial?: Route; childre
       offCommand();
       offNavigate();
     };
-  }, [api]);
-  return (
-    <RouterContext value={useMemo(() => ({ route, navigate }), [route])}>{children}</RouterContext>
-  );
+  }, [api, ui]);
+  return children;
 }
 
-export const useRouter = () => required(use(RouterContext), "RouterProvider");
+export function useRouter(): RouterValue {
+  const ui = useUi();
+  const route = useStore(ui, (state) => state.route);
+  const navigate = useStore(ui, (state) => state.navigate);
+  return useMemo(() => ({ route, navigate }), [route, navigate]);
+}
