@@ -79,23 +79,23 @@ fn within(path: &Path, dirs: &[PathBuf]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::driver::locate::testkit::{Node, Tree};
+    use crate::driver::locate::testkit::Tree;
 
     #[test]
     fn unit_realpath_trusted_path_skips_entries_agents_can_write() {
+        // `bin` and `opt` look outside but are not, after realpath.
         let tree = Tree::new(
             "trust",
-            &[
-                ("usr/bin", Node::Dir),
-                ("home/user/projects/app/bin", Node::Dir),
-                ("home/user/projects/apple/bin", Node::Dir),
-                ("home/user/workspaces/s1/bin", Node::Dir),
-                ("home/user/.cupper/worktrees/app-1a2b/s2/bin", Node::Dir),
-                ("tmp/bin", Node::Dir),
-                // Outside on its face, inside after realpath.
-                ("home/user/bin", Node::Link("projects/app/bin")),
-                ("home/user/opt", Node::Link("../../usr")),
-            ],
+            "
+            usr/bin                                       dir
+            home/user/projects/app/bin                    dir
+            home/user/projects/apple/bin                  dir
+            home/user/workspaces/s1/bin                   dir
+            home/user/.cupper/worktrees/app-1a2b/s2/bin   dir
+            tmp/bin                                       dir
+            home/user/bin                                 -> projects/app/bin
+            home/user/opt                                 -> ../../usr
+            ",
         );
         let boundaries = Boundaries::new(
             ["projects/app", "workspaces/s1", ".cupper/worktrees"]
@@ -142,7 +142,7 @@ mod tests {
             assert_eq!(boundaries.trusted(Path::new(temp)), None, "{temp}");
         }
         assert!(boundaries.outside_roots(Path::new("/private/tmp")));
-        let tree = Tree::new("trust-roots", &[("project/conf", Node::Dir)]);
+        let tree = Tree::new("trust-roots", "project/conf dir");
         let boundaries = Boundaries::new([tree.path("project")], []);
         assert!(!boundaries.outside_roots(&tree.path("project/conf")));
         assert!(boundaries.outside_roots(tree.root()));
