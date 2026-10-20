@@ -151,7 +151,11 @@ export class Cupper {
     }
   }
 
-  /** The app's processes and the host's, as they run now: the host is not the app's child. */
+  /**
+   * The app's processes and the host's, as they run now. The app's main
+   * process starts the host, but the host outlives it, and one the app
+   * started again after a kill is found by `host.lock`.
+   */
   processes(table = processes()): Proc[] {
     const host = this.host(table);
     const app = this.#main?.pid;
