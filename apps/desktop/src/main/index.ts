@@ -1,6 +1,7 @@
-// The main process (design 5.7.2): the app, its window and the hardening
-// baseline (design 5.7.8). The host connection (T075) and the window bridge
-// (T076) build on this.
+// The main process (design 5.7.2): the app, its window, the hardening
+// baseline (design 5.7.8) and the control connection to the host, started
+// before the app is ready (design 5.5.1). The window bridge (T076) builds on
+// this.
 
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -10,6 +11,8 @@ import { app, BrowserWindow, Menu, protocol, session, shell } from "electron";
 
 import { isReleaseLike } from "../shared/flavor";
 import { COMMAND_CHANNEL } from "../shared/ipc";
+import { startControl } from "./host";
+import type { ControlConnection } from "./host/control";
 import { MainLog } from "./log";
 import { menuTemplate } from "./menu";
 import { appDirs, e2eDirs, type AppDirs } from "./paths";
@@ -41,6 +44,7 @@ protocol.registerSchemesAsPrivileged([APP_SCHEME_PRIVILEGES]);
 app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
+let control: ControlConnection | undefined;
 
 if (app.requestSingleInstanceLock()) {
   start();
@@ -72,6 +76,14 @@ function start() {
   app.on("activate", showMainWindow);
   // Closing the last window leaves the app running, as on macOS (design 5.7.1).
   app.on("window-all-closed", () => undefined);
+  app.on("will-quit", () => control?.close());
+  try {
+    const e2eRoot = __CUPPER_FLAVOR__ === "e2e" ? process.env.CUPPER_E2E_DIR : undefined;
+    const version = app.getVersion();
+    control = startControl({ flavor, dataDir: dirs.data, version, e2eRoot, log });
+  } catch (error) {
+    log.error("cannot start the host connection", { error: String(error) });
+  }
   void app.whenReady().then(ready);
 }
 

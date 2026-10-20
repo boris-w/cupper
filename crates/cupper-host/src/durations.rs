@@ -104,6 +104,15 @@ durations! {
     /// How long `--version` of a CLI, git or git-lfs, and `xcode-select -p`,
     /// may take (design 5.6.6, 5.2.10).
     VERSION_PROBE = "version_probe", Duration::from_secs(5);
+    /// A git command other than those below: the read-only ones and the repo
+    /// tier's writes (design 5.2.10).
+    GIT_COMMAND = "git_command", Duration::from_secs(30);
+    /// A turn snapshot in the snapshot tier (design 5.2.10).
+    GIT_SNAPSHOT = "git_snapshot", Duration::from_secs(60);
+    /// `git worktree add`, which checks out the whole tree (design 5.2.10).
+    GIT_WORKTREE_ADD = "git_worktree_add", Duration::from_secs(600);
+    /// `git push` in the user tier (design 5.2.10).
+    GIT_PUSH = "git_push", Duration::from_secs(300);
     /// The registry's own tests: a short coalescing window.
     #[cfg(test)]
     TEST_TICK = "test_tick", Duration::from_millis(40);

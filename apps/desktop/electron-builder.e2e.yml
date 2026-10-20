@@ -13,7 +13,17 @@ files:
   - dist/preload/**
   - dist/renderer/**
 npmRebuild: false
+# The native extension, outside the asar, and the host bundle in Helpers
+# (design 5.10.1); `build:e2e` builds both first.
+extraResources:
+  - from: ../../target/host-bundle/build/release/libcupper_native.dylib
+    to: native/cupper_native.node
+extraFiles:
+  - from: ../../target/host-bundle/e2e/CupperHost.app
+    to: Helpers/CupperHost.app
 mac:
+  # `host-bundle` signed it; signing it again would change its cdhash.
+  signIgnore: ["CupperHost\\.app"]
   target: dir
   identity: "-"
   hardenedRuntime: false
