@@ -47,7 +47,7 @@ use crate::orchestrator::turn::{SendMode, SendRequest};
 use crate::policy::{self, Confirmable, Facts};
 use crate::quiescence::{ActorKind, Quiescence};
 use crate::store::streams::{Batch, StreamView, Streams};
-use crate::store::{Durability, Readers, Writer};
+use crate::store::{Durability, Readers};
 use crate::supervisor::watch::Admission;
 use crate::supervisor::{Activity, Part};
 
@@ -58,7 +58,6 @@ pub const SESSION: ActorKind = ActorKind::new("session");
 #[derive(Debug, Clone)]
 pub struct SessionDeps {
     pub streams: Streams,
-    pub writer: Writer,
     pub readers: Readers,
     pub clock: Arc<dyn Clock>,
     pub ids: Arc<IdGen>,
@@ -252,7 +251,6 @@ impl SessionManager {
             clock: Arc::clone(&deps.clock),
             stream,
             writer,
-            db: deps.writer.clone(),
             readers: deps.readers.clone(),
             agent,
             cwd: PathBuf::from(path),

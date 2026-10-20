@@ -136,6 +136,13 @@ fn store_streams_append_commits_the_turn_end_whole_and_reloads() {
     let failed = fx.runtime.block_on(writer.append(failing));
     assert!(matches!(failed, Err(StreamError::Write(WriteError::Op(_)))));
     assert_eq!(fx.append(&mut writer, vec![turn(2)]).head, 5);
+    // A batch without events commits its own rows alone.
+    let rows = Batch {
+        with: Some(Box::new(|conn| conn.execute_batch("CREATE TABLE extra (x)"))),
+        ..Batch::default()
+    };
+    assert_eq!(fx.runtime.block_on(writer.append(rows)).unwrap().head, 5);
+    assert_eq!(fx.sql::<u64>("SELECT count(*) FROM extra"), 0);
     assert_eq!(
         fx.view(&fx.streams(Retention::DESIGN), &session()),
         handle.read(|v, h| (v.clone(), h))

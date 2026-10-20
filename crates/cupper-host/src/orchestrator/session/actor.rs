@@ -72,7 +72,7 @@ use crate::policy;
 use crate::pure::{Alarm, Core, TimerTable};
 use crate::quiescence::Participant;
 use crate::store::streams::{Batch, StreamHandle, StreamView, StreamWriter};
-use crate::store::{Durability, Readers, Writer};
+use crate::store::{Durability, Readers};
 use crate::trust::{self, Scan};
 
 /// A call and where its reply goes.
@@ -103,8 +103,6 @@ pub(super) struct Parts {
     pub clock: Arc<dyn Clock>,
     pub stream: StreamHandle,
     pub writer: StreamWriter,
-    /// For rows that go without events.
-    pub db: Writer,
     pub readers: Readers,
     pub agent: Arc<dyn AgentPort>,
     /// The workspace, as a real path.
@@ -565,31 +563,23 @@ impl SessionActor {
             changes.write(conn)?;
             record.map_or(Ok(()), |record| record(conn))
         };
-        let committed = if events.is_empty() {
-            // Rows without events: a transaction of their own, if any.
-            let write = (!idle).then(|| self.parts.db.submit(Durability::Normal, with));
-            match write {
-                Some(write) => write.await.map_err(|e| e.to_string()),
-                None => Ok(()),
-            }
-        } else {
-            let batch = Batch {
-                bodies: events,
-                cause,
-                durability: Durability::Normal,
-                with: Some(Box::new(with)),
-            };
-            let appended = self.parts.writer.append(batch).await;
-            let rejected = appended.as_ref().map(|a| a.rejected.as_slice());
-            if let Ok(rejected @ [_, ..]) = rejected {
-                let bug = format!("session {}: the view rejected {rejected:?}", self.parts.id);
-                if cfg!(any(test, feature = "test-harness")) {
-                    panic!("{bug}");
-                }
-                tracing::error!("{bug}");
-            }
-            appended.map(drop).map_err(|e| e.to_string())
+        // Rows without events commit alone, if there are any.
+        let batch = Batch {
+            bodies: events,
+            cause,
+            durability: Durability::Normal,
+            with: (!idle).then(|| Box::new(with) as _),
         };
+        let appended = self.parts.writer.append(batch).await;
+        let rejected = appended.as_ref().map(|a| a.rejected.as_slice());
+        if let Ok(rejected @ [_, ..]) = rejected {
+            let bug = format!("session {}: the view rejected {rejected:?}", self.parts.id);
+            if cfg!(any(test, feature = "test-harness")) {
+                panic!("{bug}");
+            }
+            tracing::error!("{bug}");
+        }
+        let committed = appended.map(drop).map_err(|e| e.to_string());
         if let (Ok(()), Some(completion)) = (&committed, completion) {
             completion.committed();
         }

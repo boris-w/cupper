@@ -232,7 +232,6 @@ impl Fixture {
         let ((records, audit), index) = (mpsc::unbounded_channel(), Arc::new(Index::default()));
         let deps = SessionDeps {
             streams: streams.clone(),
-            writer: writer.clone(),
             readers,
             clock: Arc::clone(&shared),
             ids: Arc::new(IdGen::seeded(Arc::clone(&shared), 1)),

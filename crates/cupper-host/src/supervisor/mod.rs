@@ -336,7 +336,6 @@ impl Host {
         let agents = Agents::new(claude.clone(), readers.clone(), writer.clone(), find);
         let sessions = SessionManager::new(SessionDeps {
             streams: streams.clone(),
-            writer: writer.clone(),
             readers: readers.clone(),
             clock: clock.clone(),
             ids: ids.clone(),
