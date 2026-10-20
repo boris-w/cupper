@@ -169,11 +169,12 @@ pub(super) fn trust_result(trust: &Trust) -> Value {
     })
 }
 
-pub(super) fn info_result(trust: &Trust, scan: &Scan) -> Value {
+pub(super) fn info_result(project: &Project, trust: &Trust, scan: &Scan) -> Value {
     let findings: Vec<Finding> = scan.findings();
     let diff: Option<Vec<TrustedFileChange>> = trust.diff_from_trusted(scan);
     let fitted = budget::fit(findings, diff);
     json!(ProjectTrustInfoResult {
+        path: project.upserted().path,
         state: trust.state.clone(),
         findings: fitted.findings,
         findings_omitted: fitted.findings_omitted,

@@ -2325,6 +2325,11 @@ export type ProjectTrustInfoResult = {
    * As [`TrustScan::findings_omitted`].
    */
   findings_omitted?: number | null;
+  /**
+   * The project's directory, as the host resolved it when it was added:
+   * the native confirmation names the project by it.
+   */
+  path: WirePath;
   state: TrustState;
   trust_digest: Digest;
 };

@@ -121,6 +121,9 @@ pub struct ProjectTrustInfoParams {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ProjectTrustInfoResult {
+    /// The project's directory, as the host resolved it when it was added:
+    /// the native confirmation names the project by it.
+    pub path: WirePath,
     pub state: TrustState,
     pub findings: Vec<Finding>,
     /// As [`TrustScan::findings_omitted`].
@@ -262,13 +265,15 @@ pub(super) mod tests {
             ),
             request::<ProjectTrustInfo>(
                 json!({"project_id": "p_1"}),
-                json!({"state": "stale", "findings": findings, "trust_digest": digest('c'),
+                json!({"path": "/work/app", "state": "stale", "findings": findings,
+                    "trust_digest": digest('c'),
                     "diff_from_trusted": [{"path": ".mcp.json", "change": "update"},
                         {"path": "../.codex/config.toml", "change": "add"}]}),
             ),
             request::<ProjectTrustInfo>(
                 json!({"project_id": "p_1"}),
-                json!({"state": "untrusted", "findings": [], "trust_digest": digest('a')}),
+                json!({"path": "/work/app", "state": "untrusted", "findings": [],
+                    "trust_digest": digest('a')}),
             ),
             request::<ProjectRemove>(json!({"command_id": "c-4", "project_id": "p_1"}), json!({})),
             request::<AgentsCapabilities>(
