@@ -1,13 +1,15 @@
 import {
   decodeBlobChunk,
+  encodeFrame,
   FRAME_BLOB,
+  FRAME_JSON,
   FrameDecoder,
   MAX_BLOB_CHUNK_BYTES,
   MAX_FRAME_BYTES,
 } from "@cupper/host-client";
 import { MockHost, type MockConnection } from "@cupper/host-client/mock";
-import { CLIENT_NOTIFICATIONS, METHODS } from "@cupper/protocol";
-import { describe, expect, test } from "vitest";
+import { CLIENT_NOTIFICATIONS, METHODS, type InputEvidence } from "@cupper/protocol";
+import { describe, expect, test, vi } from "vitest";
 
 import type { ToWindow } from "../../shared/ipc";
 import { fixtures, mockConnect, settle, wired } from "./testing";
@@ -37,6 +39,7 @@ function bridged(host: MockHost, deps: Partial<BridgeDeps> = {}) {
       return conn;
     },
     controlReady: async () => undefined,
+    input: { take: () => undefined },
     schedule: (task) => void timers.push(task),
     ...deps,
   });
@@ -54,6 +57,7 @@ function bridged(host: MockHost, deps: Partial<BridgeDeps> = {}) {
 }
 
 const conn = (host: MockHost) => host.connections.at(-1) as MockConnection;
+const CLICK = { kind: "click" } as const;
 
 describe("UNIT-bridge-whitelist", () => {
   test("only read, write, approve and ui_local methods pass; the rest stay local", () => {
@@ -71,12 +75,14 @@ describe("UNIT-bridge-whitelist", () => {
 
   test("every method of the catalog reaches the host or is refused with forbidden", async () => {
     const host = new MockHost(fixtures);
-    const { bridge, send, flush, messages } = bridged(host);
+    // With real input, so that the commands that need it pass too.
+    const { bridge, send, flush, messages } = bridged(host, { input: { take: () => CLICK } });
     await bridge.open();
     const methods = Object.keys(METHODS);
-    methods.forEach((method, id) =>
-      send({ type: "send", json: JSON.stringify({ jsonrpc: "2.0", id, method }) }),
-    );
+    methods.forEach((method, id) => {
+      const params = { command_id: `c_${id}` };
+      send({ type: "send", json: JSON.stringify({ jsonrpc: "2.0", id, method, params }) });
+    });
     await settle();
     flush();
     const reached = conn(host)
@@ -239,5 +245,131 @@ describe("UNIT-bridge-lifecycle", () => {
     await settle();
     expect(host.connections.every((c) => c.closed)).toBe(true);
     expect(states).toEqual(["reconnecting", "ready"]);
+  });
+});
+
+describe("UNIT-input-guard (window bridge)", () => {
+  const ENTER: InputEvidence = { kind: "key", key: "enter" };
+  const command = (id: number, method: string, params: Record<string, unknown>) => ({
+    type: "send",
+    json: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
+  });
+  const respond = (id: number, command_id: string, outcome = "dismissed") =>
+    command(id, "interaction/respond", {
+      command_id,
+      session_id: "s_1",
+      request_id: "r_1",
+      request_digest: "d",
+      outcome: { type: outcome },
+      input: { kind: "native_confirm" },
+    });
+  /** The guard's input: what the test gives, once. */
+  const once = () => {
+    let next: InputEvidence | undefined;
+    const take = vi.fn(() => {
+      const evidence = next;
+      next = undefined;
+      return evidence;
+    });
+    return { give: (evidence: InputEvidence) => void (next = evidence), take };
+  };
+  const refusedFor = (messages: unknown[], id: number) =>
+    messages.some(
+      (m) =>
+        (m as { id?: number }).id === id &&
+        (m as { error?: { data: { reason?: string } } }).error?.data.reason ===
+          "user_activation_required",
+    );
+
+  test("respond and revert carry the main process's evidence, or are refused here", async () => {
+    const host = new MockHost(fixtures);
+    const input = once();
+    const { bridge, send, flush, messages } = bridged(host, { input });
+    await bridge.open();
+    input.give(ENTER);
+    send(respond(1, "c_1"));
+    send(respond(2, "c_2"));
+    send(command(3, "git/revert", { command_id: "c_3", session_id: "s_1" }));
+    input.give({ kind: "click" });
+    send(command(4, "git/revert", { command_id: "c_4", session_id: "s_1" }));
+    await settle();
+    flush();
+    const sent = conn(host).messages().slice(1) as { id: number; params: unknown }[];
+    expect(sent.map((m) => m.id)).toEqual([1, 4]);
+    expect(sent[0]?.params).toMatchObject({ command_id: "c_1", input: ENTER });
+    expect(sent[1]?.params).toMatchObject({ input: { kind: "click" } });
+    expect([2, 3].every((id) => refusedFor(messages(), id))).toBe(true);
+  });
+
+  test("every command uses up the input, reads and notifications do not", async () => {
+    const host = new MockHost(fixtures);
+    const input = once();
+    const { bridge, send } = bridged(host, { input });
+    await bridge.open();
+    send(command(1, "session/get", { session_id: "s_1" }));
+    send({ type: "send", json: JSON.stringify({ jsonrpc: "2.0", method: "ui/focus" }) });
+    expect(input.take).not.toHaveBeenCalled();
+    send(command(2, "session/rename", { command_id: "c_1", session_id: "s_1", title: "t" }));
+    expect(input.take).toHaveBeenCalledTimes(1);
+  });
+
+  test("an unanswered command goes again without input on the next connection, until answered", async () => {
+    const host = new MockHost(fixtures);
+    host.handle("interaction/respond", () => undefined);
+    const input = once();
+    const { bridge, send, flush, messages } = bridged(host, { input });
+    await bridge.open();
+    input.give(ENTER);
+    send(respond(1, "c_1"));
+    send(respond(2, "c_1", "selected"));
+    conn(host).close();
+    await settle();
+    send(respond(3, "c_1"));
+    await settle();
+    expect(conn(host).messages().slice(1)).toMatchObject([{ id: 3, params: { input: ENTER } }]);
+    conn(host).reply(3, { result: {} });
+    send(respond(4, "c_1"));
+    await settle();
+    flush();
+    expect([2, 4].every((id) => refusedFor(messages(), id))).toBe(true);
+    // Another document instance knows none of its commands.
+    const other = bridged(host, { input: once() });
+    await other.bridge.open();
+    host.handle("interaction/respond", () => undefined);
+    other.send(respond(1, "c_9"));
+    await settle();
+    other.flush();
+    expect(refusedFor(other.messages(), 1)).toBe(true);
+  });
+
+  test("frames the bridge cannot read go to the window as they came", async () => {
+    const host = new MockHost(fixtures);
+    host.handle("interaction/respond", () => undefined);
+    const input = once();
+    let push: (chunk: ArrayBuffer) => void = () => undefined;
+    const connect = async () => {
+      const real = await mockConnect(host);
+      const onData = (cb: (chunk: ArrayBuffer) => void) => ((push = cb), real.port.onData(cb));
+      return { ...real, port: { ...real.port, onData } };
+    };
+    const { bridge, send, flush, posted } = bridged(host, { input, connect });
+    await bridge.open();
+    input.give(ENTER);
+    send(respond(1, "c_1"));
+    const bad = encodeFrame(FRAME_JSON, new TextEncoder().encode("{not json"));
+    push(bad.slice().buffer);
+    conn(host).reply(1, { result: {} });
+    send(respond(2, "c_1"));
+    await settle();
+    flush();
+    const decoder = new FrameDecoder();
+    posted.forEach((m) => m.type === "data" && decoder.push(new Uint8Array(m.chunk)));
+    const payloads: string[] = [];
+    for (let frame = decoder.next(); frame; frame = decoder.next()) {
+      payloads.push(new TextDecoder().decode(frame.payload));
+    }
+    expect(payloads[0]).toBe("{not json");
+    // The answer after it still ended the retransmit record.
+    expect(payloads.some((p) => p.includes('"id":2') && p.includes("user_activation"))).toBe(true);
   });
 });
