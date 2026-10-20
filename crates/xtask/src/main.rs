@@ -2,6 +2,7 @@
 
 mod ci;
 mod clock;
+mod codesign;
 mod runtime_pack;
 #[cfg(test)]
 mod testutil;
