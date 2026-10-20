@@ -4,6 +4,7 @@
 //! its stderr in the adapter log and its `adapters` row.
 
 use std::collections::BTreeMap;
+use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 use std::sync::Arc;
@@ -12,7 +13,9 @@ use agent_client_protocol::schema::v1::InitializeResponse;
 use cupper_protocol::capabilities::{CliCompat, Versions};
 use cupper_protocol::ids::AdapterInstanceId;
 use cupper_protocol::index::{CliInstall, ConfigDirState};
+use cupper_protocol::recording::{INSTANCE_EXITED, INSTANCE_STARTED};
 use cupper_sys::{Command, Env, ProcessGroup, Signal, Stdio};
+use serde_json::json;
 use tokio::net::unix::pipe;
 use tokio::sync::mpsc;
 
@@ -277,9 +280,15 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
     let mut child = cupper_sys::spawn(&command).map_err(|e| failed(RuntimeFailed, e))?;
     let group = child.group();
     record(cx, &id, &group, launch).await;
+    // The instance's raw frames begin and end with its notes (design 5.9.3).
+    let tap = Tap::new(id.to_string(), Arc::clone(&cx.clock), cx.raw.clone());
+    let recorder = tap.recorder();
+    recorder.note(&json!({"event": INSTANCE_STARTED}));
     let pipes = (child.stdin.take(), child.stdout.take(), child.stderr.take());
     tokio::task::spawn_blocking(move || {
         if let Ok(status) = child.wait() {
+            let (code, signal) = (status.code(), status.signal());
+            recorder.note(&json!({"event": INSTANCE_EXITED, "code": code, "signal": signal}));
             exited(status);
         }
     });
@@ -287,16 +296,17 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
         unreachable!("all three are pipes")
     };
     let tail = match (&cx.log, pipe::Receiver::from_owned_fd(stderr)) {
-        (Some(log), Ok(stderr)) => Some(log.read(id.to_string(), stderr).0),
+        (Some(log), Ok(stderr)) => {
+            let recorder = tap.recorder();
+            let each = move |line: &str| recorder.stderr(line);
+            Some(log.read(id.to_string(), stderr, each).0)
+        }
         _ => None,
     };
     let opened = match StdioTransport::new(stdin, stdout) {
-        Ok(transport) => {
-            let tap = Tap::new(id.to_string(), Arc::clone(&cx.clock), cx.raw.clone());
-            AcpConnection::open(transport, tap, mailbox)
-                .await
-                .map_err(|e| e.to_string())
-        }
+        Ok(transport) => AcpConnection::open(transport, tap, mailbox)
+            .await
+            .map_err(|e| e.to_string()),
         Err(err) => Err(err.to_string()),
     };
     match opened {
