@@ -188,7 +188,7 @@
 | T029 | outbox 的项现在是 `Item`（带订阅的 feed 编号），blob 分片仍走 `push_frame`；`Target::Streams` 已删除，`Target::Blobs` 还在，由本任务接上 | T019 |
 | 用大合并窗口的客户端（CLI、iOS） | 合并窗口内，同一批里的响应也要等窗口结束才发（与 SP-4a 相同，最多 1 s）。桌面默认 `coalesce_ms = 0`，不受影响；要用大窗口时，改成先发窗口前的响应帧（`gateway/send.rs`） | T019 |
 | 以后排查宿主内存时 | 对不存在的会话订阅或取历史，会把一条空流载入内存，直到空闲淘汰（10 分钟） | T019 |
-| T058 的修复（T088 之前或同时） | 组合核心的性质测试有稳定的反例：`orchestrator::session_props::prop_autonomous_dequeue_guard_queue_waits_while_the_agent_works`，断言"Guard: after a turn ended on silence, the queue waits for 30 s of quiet"失败。种子：`cc 7390a05ebe580707816e5bab38bbf67b0501e1d444018d9994dbaf6d6edc9900 # shrinks to ops = [Send, Send, Interrupt, Text(0), Advance(25000), Advance(25000), Thread(true)]`。main 上和 T043 之后的 `SessionCore` 都能复现，先判断是裁判、组合接线还是性质本身写错了。CI 在修好之前可能随机撞上。`proptest-regressions/` 定为入库（proptest 的推荐做法），修复时把这个种子文件一并提交 | T037、T043（编排者复现） |
+| T058 的修复（T088 之前或同时） | 组合核心的性质测试有稳定的反例：`orchestrator::session_props::prop_autonomous_dequeue_guard_queue_waits_while_the_agent_works`，断言"Guard: after a turn ended on silence, the queue waits for 30 s of quiet"失败。种子：`cc 7390a05ebe580707816e5bab38bbf67b0501e1d444018d9994dbaf6d6edc9900 # shrinks to ops = [Send, Send, Interrupt, Text(0), Advance(25000), Advance(25000), Thread(true)]`。main 上和 T043 之后的 `SessionCore` 都能复现，先判断是裁判、组合接线还是性质本身写错了。CI 在修好之前可能随机撞上。`proptest-regressions/` 定为入库（proptest 的推荐做法），修复时把这个种子文件一并提交 | T037、T043（编排者复现）（已修复，`fix/T058-dequeue-guard`） |
 | T088 | agent 发来的请求（`DriverEvent::Ask`）现在没人应答，actor 也不处理 `CancelAsks`、`Settle`；接线点是 `SessionCore` 的请求计数（`Input::Asked`、`Input::Resolved`）和 actor 的 `Action::Machine(_)` 分支。`send` 的 `reply_to` 还没写进 `SendRequest`，`queue_entries.reply_to` 列和行的写法已经有了。还要补 `interactions` 的行和 `facts.option` | T043 |
 | T089 | 不在内存里的会话，`deliver` 和重启后的 `get` 现在都回 `not_found`，按需载入接在 `SessionManager::deliver` 里；排队消息到命令的对照（`command_id`）要从 `queue_entries` 恢复。载入时补写 T037 启动清理留下的 `turn.completed{interrupted}` 和交互的 `expired` 事件，并决定是否暂停队列 | T043、T037 |
 | T044 | 信任状态只在 `session/create` 时判定一次，attach 和每次 prompt 之前的重扫由本任务做；`facts` 对 `session/set_config` 还没有 `mode_tier` | T043 |
@@ -204,6 +204,10 @@
 | T006（license-gate） | codex-acp 内联依赖的许可证声明，按上游 v2.2.2 标签的 `package-lock.json` 生成；SP-2 的锁文件是按版本范围自己解析的，与上游实际内联的版本不同（例如 `@agentclientprotocol/sdk` 1.5.0 对 1.8.0），明细见 `docs/tasks/T004-runtime-pack/notes.md` | T004 |
 | T161、T180 | 5.10.7 第 2 步的 Node GPG 核对还是手工做的，自动化需要 `gpgv` 和锁定的 Node 发布公钥环。清单里 Node 的 sha-256 和 cdhash 是 ad-hoc 签名的值，Developer ID 签名后都会变：发布流水线要按发布身份重新生成并内嵌清单，设计里要写明每种构建内嵌哪一份 | T004 |
 | T064、T066 | 清单里还没有"已验证 CLI 范围"（5.10.3，由兼容报告生成）。T066 升级适配器时，重新评估静态扫描对 SDK 动态读取环境变量的覆盖（5.6.6 的已知局限） | T004 |
+| T110 | 出队保护放开之后，空闲时 Codex 报 thread active 不会挡住出队：`queue_resume` 或排队消息会把 prompt 发给 thread 仍在运行的 Codex 会话。这符合 5.2.6（threadStatus 只用于显示运行状态和界定自发回合）和 T058 的决定；Claude 再工作一定有输出，输出会开自发回合挡住出队，所以只有 Codex 有这个空隙。接入 Codex 时评估是否要让空闲时的 thread active 也挡住出队 | T058 修复第 1 轮 |
+| 组装 `Cupper.app` 的任务、T161 | 5.10.2 要求两个 Info.plist 都不含用途说明：`host-bundle` 只产出宿主的那一份（CLI 没有 Info.plist），`Cupper.app` 的那一份由 electron-builder 产出，要由组装它的任务断言，T161 的 `release-config` 每晚复核 | T005 |
+| T075、T180 | 宿主的 cdhash 随 Info.plist、运行时文件和二进制变化，自用构建的 CLI 必须与同一次 `cargo xtask host-bundle` 产出的 `CupperHost.app` 配套分发。Developer ID 签名之后 Node 和宿主都按发布身份重签，清单里 Node 的 sha-256 和 cdhash 要重算（另见 T004 的交接）。产物在 `target/host-bundle/<kind>/`，编译中间目录是 `target/host-bundle/build/`（每个 worktree 约 1.2 GB） | T005 |
+| 改 5.7.9 构建身份的任务 | IT-host-bundle-layout 直接读设计 5.7.9 的"宿主的 bundle id""CLI 的 identifier"两行与 `crates/xtask/src/host_bundle.rs` 的 `KINDS` 比对，改一边要同步另一边 | T005 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
