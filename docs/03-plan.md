@@ -1583,7 +1583,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T051 假 agent：剧本模式与 persona
 - [x] T052 录制格式、SP-1 录制转换与敏感信息扫描
 - [ ] T053 Claude 提取层、选项对照表与 A 层金样例
-- [ ] T054 CLI 发现：可信 PATH、CLI 解析与环境变量规则
+- [x] T054 CLI 发现：可信 PATH、CLI 解析与环境变量规则
 - [ ] T055 驱动层 II：AgentRuntime 与 Claude 接入
 - [ ] T056 运行时安装器
 - [ ] T057 （条件）Q8 后备：同一种 agent 的 prompt 全局串行（K1 已通过，不触发）
