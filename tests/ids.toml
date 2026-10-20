@@ -244,7 +244,14 @@ IT-idle-exit = "pr"
 # CLI 提权（宿主侧）
 [T038]
 milestone = "M1a"
+UNIT-elevation-core = "pr"
+IT-elevation-grant = "pr"
+
+# CLI 提权 II：血缘、核实信息与 IT-elevate（计划 v1.3.24 由 T038 拆出）
+[T133]
+milestone = "M1a"
 IT-elevate = "pr"
+UNIT-lineage-signals = "pr"
 
 # 会话纯核心 I：驱动接口与队列
 [T040]
