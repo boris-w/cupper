@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
+import { HostClient } from "@cupper/host-client";
+import { MockHost } from "@cupper/host-client/mock";
 import type { ToolCall } from "@cupper/protocol";
-import { cleanup, render, screen } from "@testing-library/react";
+import type { Handshake } from "@cupper/shell-api";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { I18nProvider, ShellProvider } from "../app/providers";
+import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
 import { ansiSpans, AnsiText } from "./ansi";
 import "./index";
 import { Markdown } from "./markdown";
@@ -140,5 +143,40 @@ describe("UNIT-md-injection", () => {
     expect(screen.getByText("plan\\u{200B}")).toBeTruthy();
     expect(screen.getByText("<b>x</b>")).toBeTruthy();
     inert(container);
+  });
+});
+
+describe("UNIT-blob-fulltext: a long text in the user's bubble", () => {
+  test("its size until 显示更多, which downloads it; then the text, folding as ever", async () => {
+    const text = "第一行\n".repeat(3000);
+    const bytes = new TextEncoder().encode(text);
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+    const hash = Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+    const host = new MockHost([{ method: "initialize", params: {}, result: {} }]);
+    host.handle("blob/get", ({ conn }) => {
+      conn.sendBlob({ hash, offset: 0, last: true, bytes });
+      return { result: { hash, chunks: 1, offset: 0, length: bytes.length, size: bytes.length } };
+    });
+    const client = new HostClient();
+    const conn = host.connect();
+    conn.initialized = true;
+    client.attach(conn.port(), {} as Handshake);
+    const row: StreamRow = {
+      ...{ kind: "user_message", key: "1", itemId: "i_1", steered: false },
+      content: [
+        { type: "text_blob", blob: { hash, media_type: "text/plain", size: bytes.length } },
+      ],
+    };
+    const { container } = show(
+      <HostContext value={{ client, state: client.state, handshake: undefined }}>
+        <RowView registry={streamRows} row={row} />
+      </HostContext>,
+    );
+    expect(screen.getByText("长文本 · 30 KB")).toBeTruthy();
+    expect(host.requests.map((request) => request.method)).not.toContain("blob/get");
+    await userEvent.click(screen.getByRole("button", { name: "显示更多" }));
+    await waitFor(() => expect(container.textContent).toContain("第一行\n第一行"));
+    await userEvent.click(screen.getByRole("button", { name: "收起" }));
+    expect(screen.getByRole("button", { name: "显示更多" })).toBeTruthy();
   });
 });
