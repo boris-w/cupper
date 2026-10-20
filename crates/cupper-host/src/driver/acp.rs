@@ -346,6 +346,49 @@ mod tests {
         );
     }
 
+    /// What GOLD-B's sync rests on (T065): SDK 3.3.0 hands each message the
+    /// agent sends to its handler, or a reply to its callback, before it
+    /// reads the next, so once the answer to an unknown request is back,
+    /// everything the agent sent before it has reached the mailbox. An SDK
+    /// that dispatches otherwise fails this first.
+    #[tokio::test]
+    async fn gold_b_fake_sdk_answers_an_unknown_request_after_what_came_before() {
+        let (conn, mut agent, mut inbox, _) = connect().await;
+        let (replied, mut reply) = mpsc::unbounded_channel();
+        let on_reply = move |result: Result<_, Error>| {
+            let _ = replied.send(result.is_ok());
+        };
+        conn.request(prompt("s-1"), on_reply).unwrap();
+        let asked = agent.recv().await.unwrap();
+        let chunk = |n: u32| {
+            json!({"jsonrpc": "2.0", "method": "session/update", "params":
+            {"sessionId": "s-1", "update": {"sessionUpdate": "agent_message_chunk",
+             "content": {"type": "text", "text": n.to_string()}}}})
+        };
+        for n in 0..50 {
+            agent.send(chunk(n)).await;
+        }
+        let done =
+            json!({"jsonrpc": "2.0", "id": asked["id"], "result": {"stopReason": "end_turn"}});
+        agent.send(done).await;
+        agent
+            .send(json!({"jsonrpc": "2.0", "id": "sync", "method": "_cupper/sync"}))
+            .await;
+        let answer = agent.recv().await.unwrap();
+        assert_eq!(
+            (&answer["id"], &answer["error"]["code"]),
+            (&json!("sync"), &json!(-32601))
+        );
+        let updates = std::iter::from_fn(|| inbox.try_recv().ok());
+        assert_eq!(
+            updates
+                .filter(|m| matches!(m, FromAgent::Update(_)))
+                .count(),
+            50
+        );
+        assert_eq!(reply.try_recv(), Ok(true));
+    }
+
     #[tokio::test]
     async fn unit_acp_unhandled_requests_get_method_not_found_and_notifications_are_dropped() {
         let (_conn, mut agent, mut inbox, _) = connect().await;

@@ -34,6 +34,17 @@ impl Fixture {
     /// The fake agent with `args`; `cli` is the CLI whose processes count as
     /// `claude`.
     fn new(name: &str, args: &[&str], cli: Option<&str>, rss: Option<u64>) -> Self {
+        let args = args.iter().map(|arg| (*arg).to_owned()).collect();
+        let mut launch = launch::injected(launch::fake_agent(), args, &host(), &login());
+        launch.cli = cli.map(|cli| launch::Cli {
+            path: cli.into(),
+            version: String::new(),
+            install: cupper_protocol::index::CliInstall::Native,
+        });
+        Self::with(name, launch, rss)
+    }
+
+    fn with(name: &str, launch: Launch, rss: Option<u64>) -> Self {
         let (dir, clock) = (TempDir::new(name), ManualClock::new());
         let (writer, _writer) = host_writer(&dir, &clock);
         let quiescence = Quiescence::new();
@@ -41,16 +52,6 @@ impl Fixture {
         quiescence.register(AGENT_RUNTIME);
         let (raw, raw_thread) = RawWriter::spawn(raw_db(&dir), &quiescence).unwrap();
         let shared: Arc<dyn Clock> = Arc::new(clock.clone());
-        let var = |(k, v): (&str, &str)| (k.to_owned(), v.to_owned());
-        let host = BTreeMap::from([("HOME", "/h"), ("SECRET", "x"), ("TERM", "dumb")].map(var));
-        let login = LoginEnv::fallback(Failure::ShellMissing);
-        let args = args.iter().map(|arg| (*arg).to_owned()).collect();
-        let mut launch = launch::injected(launch::fake_agent(), args, &host, &login);
-        launch.cli = cli.map(|cli| launch::Cli {
-            path: cli.into(),
-            version: String::new(),
-            install: cupper_protocol::index::CliInstall::Native,
-        });
         let blobs = BlobStore::new(dir.path(), writer.clone(), Arc::clone(&shared));
         let (raw, log) = (raw.sink(), None);
         let cx = Context {
@@ -170,6 +171,15 @@ impl Fixture {
         self.tick(8, self.runtime.stop(false)).await;
         self.clock.now_mono().saturating_duration_since(start)
     }
+}
+
+fn host() -> BTreeMap<String, String> {
+    let var = |(k, v): (&str, &str)| (k.to_owned(), v.to_owned());
+    BTreeMap::from([("HOME", "/h"), ("SECRET", "x"), ("TERM", "dumb")].map(var))
+}
+
+fn login() -> LoginEnv {
+    LoginEnv::fallback(Failure::ShellMissing)
 }
 
 /// The pid an agent said as `pid=<pid>`, and that process.
@@ -335,6 +345,93 @@ async fn prompt(
             event => events.push(event),
         }
     }
+}
+
+/// Plays an in-process adapter: answers `initialize` and `session/new`,
+/// nothing else, and exits once `release` fires, stdin closed or not.
+#[cfg(feature = "test-harness")]
+fn player(
+    mut started: mpsc::UnboundedReceiver<launch::InProcessAgent>,
+    release: oneshot::Receiver<()>,
+) {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    tokio::spawn(async move {
+        let agent = started.recv().await.unwrap();
+        let (read, mut write) = tokio::io::split(agent.stream);
+        let mut lines = BufReader::new(read).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let msg: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let result = match msg["method"].as_str() {
+                Some("initialize") => json!({"protocolVersion": 1, "agentCapabilities": {}}),
+                Some("session/new") => json!({"sessionId": "s"}),
+                _ => continue,
+            };
+            let reply = json!({"jsonrpc": "2.0", "id": msg["id"], "result": result});
+            write
+                .write_all(format!("{reply}\n").as_bytes())
+                .await
+                .unwrap();
+        }
+        let _ = release.await;
+        drop(agent.exit);
+    });
+}
+
+/// GOLD-B's in-process adapter (T065) has no process: `launch::start` gives
+/// it no process group and writes no `adapters` row, so neither a stop nor
+/// the next start's cleanup has any group, ours or 0, 1, -1, to signal. A
+/// stop that waits for it walks every deadline, SIGTERM's and SIGKILL's
+/// included, with nothing to send.
+#[cfg(feature = "test-harness")]
+#[tokio::test(flavor = "multi_thread")]
+async fn gold_b_fake_in_process_adapter_has_no_process_to_signal() {
+    let (agents, started) = mpsc::unbounded_channel();
+    let mut launch = launch::injected(PathBuf::new(), Vec::new(), &host(), &login());
+    launch.program = launch::Program::InProcess(launch::InProcess(agents));
+
+    let (dir, clock) = (TempDir::new("in-process-launch"), ManualClock::new());
+    let (writer, _writer) = host_writer(&dir, &clock);
+    let quiescence = Quiescence::new();
+    quiescence.register(RAW_WRITER);
+    let (raw, _raw) = RawWriter::spawn(raw_db(&dir), &quiescence).unwrap();
+    let (clock, raw, log, self_check) = (Arc::new(clock), raw.sink(), None, None);
+    let cx = Context {
+        clock,
+        writer,
+        raw,
+        log,
+        self_check,
+    };
+    let (_release, release) = oneshot::channel();
+    player(started, release);
+    let (mailbox, _heard) = mpsc::unbounded_channel::<FromAgent>();
+    let id = AdapterInstanceId::from_uuid(1);
+    let instance = launch::start(&launch, &cx, id, mailbox, |_| ())
+        .await
+        .unwrap();
+    assert!(instance.group.is_none());
+
+    let (agents, started) = mpsc::unbounded_channel();
+    launch.program = launch::Program::InProcess(launch::InProcess(agents));
+    let f = Fixture::with("in-process", launch, None);
+    let (release, released) = oneshot::channel();
+    player(started, released);
+    f.attach().await.unwrap();
+    assert_eq!(
+        f.column("SELECT instance_id FROM adapters"),
+        Vec::<String>::new()
+    );
+    // 3 s for the session to close, 3 s after stdin closed, 2 s after the
+    // SIGTERM it does not get; then it exits.
+    let killed = f.clock.now_mono() + Duration::from_secs(8);
+    let exit = async {
+        while f.clock.now_mono() < killed {
+            tokio::task::yield_now().await;
+        }
+        release.send(()).unwrap();
+    };
+    let (took, ()) = tokio::join!(f.stop(), exit);
+    assert_eq!(took, Duration::from_secs(8));
 }
 
 #[tokio::test(flavor = "multi_thread")]

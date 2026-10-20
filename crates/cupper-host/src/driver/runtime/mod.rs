@@ -466,9 +466,9 @@ impl Actor {
                 Due::Stdin => self.close_stdin(),
                 Due::Term => self.term(),
                 Due::Kill => {
-                    if let Some(instance) = &self.instance {
+                    if let Some(group) = self.instance.as_ref().and_then(|i| i.group) {
                         let stopped = self.stopping.as_mut().map(|s| mem::take(&mut s.groups));
-                        let groups = lifecycle::union(vec![instance.group], &self.recorded);
+                        let groups = lifecycle::union(vec![group], &self.recorded);
                         let groups = lifecycle::union(groups, &stopped.unwrap_or_default());
                         lifecycle::signal(&groups, Signal::Kill);
                     }
@@ -487,10 +487,12 @@ impl Actor {
         let (Some(instance), Some(stopping)) = (&self.instance, &mut self.stopping) else {
             return;
         };
-        let groups = lifecycle::union(instance.group.with_descendants(), &self.recorded);
-        stopping.groups = lifecycle::union(groups, &stopping.groups);
         stopping.signalled = true;
-        lifecycle::signal(&stopping.groups, Signal::Term);
+        if let Some(group) = instance.group {
+            let groups = lifecycle::union(group.with_descendants(), &self.recorded);
+            stopping.groups = lifecycle::union(groups, &stopping.groups);
+            lifecycle::signal(&stopping.groups, Signal::Term);
+        }
         for due in [Due::Stdin, Due::Term] {
             self.timers.apply(TimerRequest::Cancel(due));
         }
@@ -499,11 +501,12 @@ impl Actor {
 
     /// Samples the instance's processes, and samples again in 30 s.
     fn sample(&mut self) {
-        let Some(instance) = &self.instance else {
+        let Some((instance, group)) = self.instance.as_ref().and_then(|i| Some((i, i.group?)))
+        else {
             return;
         };
         let cli = (self.deps.launch.cli.as_ref()).and_then(|cli| fs::canonicalize(&cli.path).ok());
-        let (resources, groups) = lifecycle::sample(&instance.group, cli.as_deref(), self.deps.rss);
+        let (resources, groups) = lifecycle::sample(&group, cli.as_deref(), self.deps.rss);
         let groups = lifecycle::union(groups, &self.recorded);
         self.recorded = groups.into_iter().filter(ProcessGroup::is_alive).collect();
         launch::record_groups(&self.deps.cx.writer, &instance.id, &self.recorded);
@@ -571,7 +574,8 @@ impl Actor {
                     return;
                 }
                 // Before any signal, while the adapter still runs (5.6.8).
-                let found = self.instance.as_ref().map(|i| i.group.with_descendants());
+                let group = self.instance.as_ref().and_then(|i| i.group);
+                let found = group.as_ref().map(ProcessGroup::with_descendants);
                 let groups = lifecycle::union(found.unwrap_or_default(), &self.recorded);
                 self.stopping = Some(Stopping {
                     done,
@@ -781,8 +785,9 @@ impl Actor {
         match wire {
             Wire::Started(started) => self.started(*started),
             Wire::Exited(status) => {
-                if let Some(instance) = self.instance.as_ref().filter(|_| self.stopping.is_none()) {
-                    let groups = lifecycle::union(vec![instance.group], &self.recorded);
+                let group = self.instance.as_ref().and_then(|i| i.group);
+                if let Some(group) = group.filter(|_| self.stopping.is_none()) {
+                    let groups = lifecycle::union(vec![group], &self.recorded);
                     lifecycle::signal(&groups, Signal::Kill);
                     self.set(Due::Kill, self.deps.durations.get(ADAPTER_TERM_WAIT));
                 } else if self.stopping.as_ref().is_some_and(|s| !s.signalled) {
