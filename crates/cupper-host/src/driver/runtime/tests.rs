@@ -57,6 +57,7 @@ impl Fixture {
             writer,
             raw,
             log,
+            self_check: None,
         };
         let (ids, durations) = (Arc::new(IdGen::seeded(shared, 1)), Durations::default());
         let runtime = AgentRuntime::start(RuntimeDeps {
@@ -204,6 +205,7 @@ fn runtime(dir: &TempDir) -> AgentRuntime {
         writer,
         raw,
         log,
+        self_check: None,
     };
     let ids = Arc::new(IdGen::seeded(clock, 1));
     AgentRuntime::start(RuntimeDeps {

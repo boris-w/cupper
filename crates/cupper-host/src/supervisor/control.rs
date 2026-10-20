@@ -10,6 +10,7 @@ use futures::FutureExt;
 use serde_json::json;
 use tokio::sync::mpsc;
 
+use super::watch::Admission;
 use super::{Activity, Exit, Part};
 use crate::gateway::{Call, Gateway, Port, Reply, Routes};
 
@@ -19,17 +20,20 @@ pub struct Control {
     gateway: OnceLock<Weak<Gateway>>,
     supervisor: mpsc::UnboundedSender<Exit>,
     parts: Arc<[Arc<dyn Part>]>,
+    admission: Arc<Admission>,
 }
 
 impl Control {
     pub(crate) fn new(
         supervisor: mpsc::UnboundedSender<Exit>,
         parts: Arc<[Arc<dyn Part>]>,
+        admission: Arc<Admission>,
     ) -> Self {
         Self {
             gateway: OnceLock::new(),
             supervisor,
             parts,
+            admission,
         }
     }
 
@@ -43,13 +47,7 @@ impl Control {
     }
 
     fn activity(&self) -> Activity {
-        self.parts
-            .iter()
-            .map(|part| part.activity())
-            .fold(Activity::default(), |sum, part| Activity {
-                running_turns: sum.running_turns + part.running_turns,
-                pending_interactions: sum.pending_interactions + part.pending_interactions,
-            })
+        self.parts.iter().map(|part| part.activity()).sum()
     }
 
     fn status(&self) -> HostStatusResult {
@@ -57,8 +55,7 @@ impl Control {
         let gateway = self.gateway.get().and_then(Weak::upgrade);
         HostStatusResult {
             version: env!("CARGO_PKG_VERSION").to_owned(),
-            // Set by the self-check from T059 on.
-            pending_upgrade: false,
+            pending_upgrade: self.admission.pending_upgrade(),
             running_turns: activity.running_turns,
             pending_interactions: activity.pending_interactions,
             clients: gateway.map(|gateway| gateway.clients()).unwrap_or_default(),
