@@ -96,3 +96,23 @@
 - **签名身份的显示**：有 Team ID 时为 `identifier (TEAMID)`，否则只有 identifier，即 ad-hoc 或 Apple 自家的代码。未签名时没有这个字段。
 - **pid 复用**：按 pid 读到的路径和祖先链，只有在令牌的 `csops` 仍然答得出 cdhash 时才算数，否则按 `unchecked` 处理。
 - **探针的路径约定**：同假 agent，在 `target/<profile>/cupper-elevate-probe`。xtask 的 rust 作业在测试前构建它。
+
+## 裁定之后：`bundled_cli` 不读 App 包
+
+- **判定改为两条都满足**：
+  - 申请方的可执行文件路径等于按宿主自己的位置推出的 `Contents/Helpers/cupper`，按路径比较；
+  - 经审计令牌取申请方**运行中的代码**，它的签名 identifier 是 `dev.cupper.cli`，叶证书（DER）与宿主自己的相同。
+- ad-hoc 签名没有证书，一律判为否；宿主自己是 ad-hoc 签名（开发、测试构建）时，就不设这项比对。
+- **`cupper-sys` 的配合**：
+  - `SigningIdentity` 加了 `leaf_certificate`，取自 `kSecCodeInfoCertificates` 的第一张，用 `SecCertificateCopyData` 取 DER；
+  - 新增 `own_signing_identity()`，用 `SecCodeCopySelf` 取宿主自己的签名。
+- **取证书的用例**：令牌只能拿到自己建的套接字对端的身份，拿不到别的进程的，所以改用 `/bin/cat` 的静态代码（测试里读文件无妨）。判定本身是纯函数，用造的身份表驱动。
+- 协议字段的说明随之改写，并重新生成。
+
+### 行数
+
+相对 d93a4b9 新增 681 行（不含 lock、生成物和文档）。这一项改动本身新增约 130 行：
+- `codesign.rs` +97 −43，其中静态代码的创建抽成了共用函数；
+- `requester/mod.rs` +88 −22，含判定的表驱动用例。
+
+剩下：接口接线约 15 行，最少场景的 IT-elevate 约 150–180 行。**推算合计约 850–880 行**，略超约 850 的上限，在 950 的硬线以内。
