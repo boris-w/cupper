@@ -66,6 +66,8 @@ impl Client {
             principal,
             client,
             weak_auth,
+            token: _,
+            granted,
         } = &self.opened;
         // How the principal was authenticated (design 5.8.1, 5.8.2).
         let auth = match principal.kind {
@@ -81,8 +83,7 @@ impl Client {
             client_version: client.version.clone(),
             since: TimestampMs(self.since_ms),
             auth,
-            // Elevations are T038's.
-            elevated: None,
+            elevated: granted.get(),
         }
     }
 }

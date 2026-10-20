@@ -265,6 +265,7 @@ impl Peer {
             conn,
             principal,
             client,
+            Arc::default(),
             Arc::clone(&outbox),
             auditor,
             subscriptions,
