@@ -198,7 +198,12 @@ test(
   "E2E-reject-with-message: the rejection first, then the message, queued and tied to it",
   { tag: ["@focus", "@smoke"] },
   async ({ cupper }) => {
-    const { stream } = await session(cupper, "permission r0; sleep 2000; say done");
+    // The turn goes on to ask again (Claude's turn outlives a rejection): it
+    // still runs when the follow-up comes, whatever the machine's load.
+    const { id: sessionId, stream } = await session(
+      cupper,
+      "permission r0; permission r1; say done",
+    );
     const t = await texts(cupper);
     const panel = requestPanel(cupper);
     const id = await request(cupper, stream, 0);
@@ -218,6 +223,7 @@ test(
     const resolved = await mentioning(cupper, stream, "interaction.resolved", id);
     // Queued while the turn still runs (M1a queues), then sent as its own turn.
     const queued = await mentioning(cupper, stream, "queue.updated", `"reply_to":"${id}"`);
+    await cupper.cli.ok(["approve", sessionId, await request(cupper, stream, 1)]);
     const sent = await mentioning(cupper, stream, "item.started", `"reply_to":"${id}"`);
     expect(resolved.seq).toBeLessThan(queued.seq);
     expect(sent.data).toMatchObject({ kind: "user_message", content: [{ text: "nope" }] });
