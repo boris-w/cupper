@@ -43,3 +43,45 @@
 b 依赖 a（IT-elevate 要走完整的提权流程）。a 在前、b 在后；如果想并行，b 可以先做 cupper-sys 的三个系统调用和血缘判定（纯函数加进程表），最后再接 a 的接口、写 IT。
 
 另一种：不拆，上限提到约 1,500。
+
+## 裁定后的范围（计划 v1.3.24）
+
+T038 = 提权的状态与授权；血缘、核实信息、`bundled_cli`、cupper-sys 补充、探针与 IT-elevate 归 T133。上限约 900 行，硬停止线 1,000。
+
+## 与 T133 的窄接口（先定下，T133 照此实现）
+
+```rust
+// crates/cupper-host/src/elevation.rs
+
+/// What the host finds out about the process behind a connection that asks
+/// for elevation (design 5.8.4). T133 implements it; until then the host
+/// runs `FailClosed`.
+pub trait Requesters: Send + Sync + fmt::Debug {
+    /// Examines the peer that `token` names (the connection's pinned token).
+    /// May read the process table, code signatures and the `adapters` table.
+    fn examine(&self, token: AuditToken) -> BoxFuture<'static, Examined>;
+}
+
+pub enum Examined {
+    /// None of the three signals matched: the dialog shows `verified`.
+    Clear(VerifiedRequester),
+    /// An adapter's descendant, or it cannot be ruled out (the process is
+    /// gone, a lookup failed). `signals` go into the audit record, e.g.
+    /// `same_session`, `same_group`, `ancestor`, `unchecked`.
+    Descendant { signals: Vec<String> },
+}
+
+/// Until T133: every requester counts as a possible descendant, so
+/// `auth/elevate` is `forbidden` (`lineage`) and nothing reaches the dialog.
+pub struct FailClosed;
+```
+
+- `VerifiedRequester` 是协议里的类型（`methods::admin`），T133 给它加 `bundled_cli` 一类的字段时，接口不用变。
+- 注入点：`IndexDeps.requesters: Arc<dyn Requesters>`；`supervisor` 里传 `Arc::new(FailClosed)`，T133 换成真实实现。
+- 调用时机：`IndexActor` 收到 `auth/elevate` 后，在一个任务里调用 `examine`，结果回到 actor 再交给纯核心；核心先看血缘，再看限频。
+
+## 共享的已授 scope
+
+- 网关的 `Opened` 多带两项：连接的固定令牌（`token: AuditToken`）和一个共享格子（`granted: Arc<Granted>`）。`Dispatch` 与 `IndexActor` 拿的是同一个格子。
+- **每次调用在受理时读这个格子**：`Dispatch::admit` 和交给执行者的 `Call.principal` 都是"原 scope 加上格子里的 scope"。撤销之后受理的调用按撤销后的 scope 判定；已经受理、正在执行的调用照常完成。
+- `clients.updated` 的 `elevated` 也从这个格子取。
