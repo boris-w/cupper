@@ -121,7 +121,7 @@ fn package_dir(path: &Path, dir: &str, entry: &str) -> Option<PathBuf> {
     Some(package)
 }
 
-fn is_executable(path: &Path) -> bool {
+pub(super) fn is_executable(path: &Path) -> bool {
     fs::metadata(path).is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
 }
 
