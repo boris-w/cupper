@@ -114,3 +114,23 @@
   - 改为：宿主运行时直接插入两条旧记录，一条早于 90 天 1 ms，一条晚 1 ms。先 `run_maintenance` 一次，只剩后者；手动时钟推进 2 ms 后再跑一次，后者也被删，新近的连接记录留着。
 - **进程卫生**：新 IT 的宿主进程包在 `Running` 守卫里，drop 时结束。临时让用例中途 panic，没有留下宿主进程。
 - **`conn.closed`（`host_exiting`）只进 host.log**：有序退出时 `close_all` 排在写线程停止之后，这些记录到达时表已经写不进去了。要进表，就得调整退出顺序：先关连接、排空审计写入，再停写线程。这一步属于 `Host::run`（T059），而 T163 加 `host.exiting` 时也需要同样的排空，交接给 T163。
+
+## 合并 main 后的修复：IT-idle-exit
+
+- **现象**：合并 T059、T129 之后，`it_idle_exit_once_nobody_is_connected_for_the_idle_time` 每次都失败：客户端还连着，宿主就以 `idle` 退出了。
+- **原因**：
+  - `admit` 里新加的 `AuditToken::signing_identity()` 在异步工作线程上同步执行。对体积大、未正式签名的程序（这里是 lifecycle 测试二进制），一次要约 600 ms；临时加的日志显示前后相差 627 ms。
+  - 这段时间里宿主的定时器跟着停了，监护的观察本该每 20 ms 一次，实际只在启动时和阻塞结束后各发生一次；
+  - 而且客户端在 `admit` 结束、握手完成之前，还不算进 `gateway.clients()`；
+  - 这条 IT 把空闲时长设成 300 ms，所以宿主看到的是一段超过 300 ms 的空闲，就退出了。
+- **修法**（修在 T138 这一边，不动 T059、T129 的代码）：
+  - `conn.accepted` 改为带上钉住的 `AuditToken`，路径、identifier、Team ID 一开始为空；
+  - 审计写入 task 收到 `conn.accepted` 时，经 `spawn_blocking` 调用 `AuditEvent::read_peer()` 读出它们，按记录顺序写入；
+  - 读完路径之后再核对令牌（`unique_id`），对不上就不记路径。
+  - 连接不再等这次查询，异步线程也不再阻塞。
+  - 代价：对端如果在写入 task 读之前就退出了，这三项为空。写入 task 正常是在接受连接后毫秒级就处理到这条记录的。
+- **修复的规模**：增 59、删 18，净增 41。
+- **验证**：
+  - IT-idle-exit 连跑 5 次全部通过，IT-audit-retention 和全部 `cupper-host` 测试通过；
+  - UNIT-audit-format 改为对本进程取令牌、`read_peer` 后核对路径就是本测试二进制、identifier 是字符串。
+- **CI 的插曲**：第一次重跑时，xtask 的 `it_host_bundle_layout_of_a_self_use_build` 报"building cupper-host failed (exit status: 101)"。当时磁盘只剩 3.8 GB，是环境问题：删掉本 worktree 的增量编译缓存（约 50 GB）后重跑，通过。
