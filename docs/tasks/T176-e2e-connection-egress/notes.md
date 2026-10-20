@@ -35,3 +35,50 @@
 停止线约 430，硬停止线 480。每写完一个用例或模块统计一次，记在下面。
 
 ## 按模块统计
+
+每个模块提交后用 `git diff --numstat` 统计（相对合并 main 后的 5c2dfc1；不含 notes 和 `pnpm-lock.yaml`）：
+
+| 模块 | 新增 | 删除 | 估计 | 累计新增 |
+|---|---|---|---|---|
+| `raw.ts`（原始客户端 + 假宿主） | 140 | 0 | 100 | 140 |
+| fake-host、cli-fake-host、no-key-client 三条用例 | 115 | 0 | 115 | 255 |
+| 上传缓冲的上限与 Rust 单测 | 37 | 1 | 40 | 292 |
+| E2E-SEC-egress | 37 | 1 | 65 | 329 |
+
+合计新增 329，在约 430 的停止线以内。
+
+## 过程记录
+
+### 假宿主
+
+- 第一版让假宿主在 App 启动前就占住套接字。宿主校验失败后，App 在 `whenReady` 时弹出"需要重启会话宿主"，这时 e2e 的对话框替身还没装上（它在 `launch` 之后才装），弹出的是真的原生对话框，窗口也一直没出现，用例 60 s 超时。改成"接管"的情形：App 连上真宿主之后，删掉套接字文件、假宿主占住同一路径，再 SIGKILL 真宿主；App 重连时连到假宿主，校验 `host_proof` 失败，弹出的确认框由替身记下。启动时就被占住的情形 e2e 目前测不了。
+- App 和 CLI 发给假宿主的都只有 `initialize`，`auth` 只有 `type`、`c_nonce`、`proof` 三个字段，整段内容里没有 `harness_key`。
+
+### 握手的拒绝（实际的错误码）
+
+| 情形 | 结果 |
+|---|---|
+| `peer` | `pr_cli`，只有 `read`；`session/send` 得到 `forbidden/scope` |
+| `peer` 加 `role: window` | `forbidden/role` |
+| `codesign`（e2e 构建不提供） | `unauthenticated/bad_key` |
+| `dev_key` 证明错误（对端不是拉起宿主的进程） | `unauthenticated/bad_key`，在核对证明之前就拒 |
+| `dev_key` 缺证明 | `unauthenticated/bad_proof` |
+| `harness` 证明错误、格式不对 | `unauthenticated/bad_proof` |
+
+带密钥的四种都在回错误后断开连接。
+
+### 上传缓冲
+
+- 复现（原始客户端以 `harness` 接入，有 `write`）：50 万个第一片就乱序、或者零长度的分片（每个 46 字节，共 23 MB，约 1.6 s 发完），宿主 RSS 涨了约 122 MB（每个条目约 250 字节），断开后也没有还给系统。
+- 修复：每条连接最多 64 个未决的 blob，第 65 个 blob 的分片丢弃，它的 `blob/put` 会因"分片加起来不等于大小"失败。修复后同样发 50 万个分片，RSS 涨 12.6 MB（读缓冲），第二轮 1.5 MB。
+
+### Q27
+
+- 正对照：假 agent 拉起的 `/bin/sh` 再 `exec nc -u -w 20 192.0.2.1 9 < /dev/null`，UDP `connect` 不发包。
+- 不设 `runtime.registry_url` 时，宿主启动后会对 npm 仓库建 8 条 HTTPS 连接（运行时安装，SEC-6 允许的两类外发之一）；nettop 采到了，归在宿主的 pid 上。用例把仓库指到回环上关着的端口。
+- 本机有代理的 fake-IP（198.18.0.0/15），远端地址显示的是代理分配的地址，不是真实目的地；用例把一切非回环的远端都算外发，所以代理挡不住检查，但要知道连的是谁，得另查 DNS。
+- 10 次连跑的数据见汇报。
+
+### 连跑
+
+10 次 `cargo xtask ci e2e`（持机器锁，两段），每次 39 项全过，127–134 s；每次跑完本 worktree 没有残留进程，`$TMPDIR/cupper-e2e/` 为空。
