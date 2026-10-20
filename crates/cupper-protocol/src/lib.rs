@@ -22,6 +22,7 @@ pub mod methods;
 pub mod open_enum;
 pub mod open_union;
 pub mod proof;
+pub mod recording;
 pub mod rpc;
 pub mod schema;
 pub mod session;

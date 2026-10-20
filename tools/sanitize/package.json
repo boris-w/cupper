@@ -1,0 +1,16 @@
+{
+  "name": "@cupper/sanitize",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Redacts recordings before they enter testdata/ and scans committed test data for personal data (design 5.9.3).",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "vite": "8.3.3",
+    "vitest": "5.0.3"
+  }
+}

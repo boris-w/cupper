@@ -205,6 +205,17 @@
 | T161、T180 | 5.10.7 第 2 步的 Node GPG 核对还是手工做的，自动化需要 `gpgv` 和锁定的 Node 发布公钥环。清单里 Node 的 sha-256 和 cdhash 是 ad-hoc 签名的值，Developer ID 签名后都会变：发布流水线要按发布身份重新生成并内嵌清单，设计里要写明每种构建内嵌哪一份 | T004 |
 | T064、T066 | 清单里还没有"已验证 CLI 范围"（5.10.3，由兼容报告生成）。T066 升级适配器时，重新评估静态扫描对 SDK 动态读取环境变量的覆盖（5.6.6 的已知局限） | T004 |
 | T110 | 出队保护放开之后，空闲时 Codex 报 thread active 不会挡住出队：`queue_resume` 或排队消息会把 prompt 发给 thread 仍在运行的 Codex 会话。这符合 5.2.6（threadStatus 只用于显示运行状态和界定自发回合）和 T058 的决定；Claude 再工作一定有输出，输出会开自发回合挡住出队，所以只有 Codex 有这个空隙。接入 Codex 时评估是否要让空闲时的 thread active 也挡住出队 | T058 修复第 1 轮 |
+| 组装 `Cupper.app` 的任务、T161 | 5.10.2 要求两个 Info.plist 都不含用途说明：`host-bundle` 只产出宿主的那一份（CLI 没有 Info.plist），`Cupper.app` 的那一份由 electron-builder 产出，要由组装它的任务断言，T161 的 `release-config` 每晚复核 | T005 |
+| T075、T180 | 宿主的 cdhash 随 Info.plist、运行时文件和二进制变化，自用构建的 CLI 必须与同一次 `cargo xtask host-bundle` 产出的 `CupperHost.app` 配套分发。Developer ID 签名之后 Node 和宿主都按发布身份重签，清单里 Node 的 sha-256 和 cdhash 要重算（另见 T004 的交接）。产物在 `target/host-bundle/<kind>/`，编译中间目录是 `target/host-bundle/build/`（每个 worktree 约 1.2 GB） | T005 |
+| 改 5.7.9 构建身份的任务 | IT-host-bundle-layout 直接读设计 5.7.9 的"宿主的 bundle id""CLI 的 identifier"两行与 `crates/xtask/src/host_bundle.rs` 的 `KINDS` 比对，改一边要同步另一边 | T005 |
+| T055 | 接 T094 的 `driver/probe`：登录 shell 要保留的名字传内嵌清单的 `env.allow` 加放行名单；初始环境建议取宿主自己的 `HOME`、`USER`、`LOGNAME`、`SHELL`、`TMPDIR`、`LANG`、`LC_*`、`PATH`；`TestConfig.login_env` 有值时直接构造 `LoginEnv { vars, failure: None }`，不运行 shell；`SHELL` 为空时用 `LoginEnv::fallback(Failure::ShellMissing)`；`xcode-select -p` 和 `--version` 用同一份白名单环境；版本范围从内嵌清单取版本号字符串；语义码到协议字段的映射归 T055、T034 | T094 |
+| 接日志的任务（T028 及以后） | `LoginEnv.vars` 的值（登录 shell 取到的环境）不能写进 host.log 或诊断包；`Debug` 已经只打印变量名，不要另外手动打印这些值 | T094 |
+| T053、T067 | 录制格式库在 `cupper-protocol::recording`：读文件后用 `Recording::parse(&str)`，分段用 `segments()`（按 `instance` 切分，从 0 起，与假 agent 的 `--segment` 编号一致）；判断 note 事件用 `Body::event()`，常量 `INSTANCE_STARTED`、`INSTANCE_EXITED`。SP-1 的 48 份录制在 `testdata/recordings/claude-agent-acp/0.91.0/2.1.296/`（18 份）、`codex-acp/2.2.2/0.160.1/`（16 份）、`codex-acp/2.2.2/0.159.2/`（14 份），`usage` 只有 `gold-a`，头行的 `scenario` 取文件名 | T052 |
+| T047 | `diag/recording_export` 逐行写出用 `Header::to_line`、`Frame::to_line`（`cupper-protocol::recording`），导出前过 `tools/sanitize` | T052 |
+| T055 | 接 T054 的 `driver/locate`：`Boundaries::new(各项目和工作区根目录加 worktree 根目录, system_temp_dirs($TMPDIR))`；`CliLocator::new(boundaries, 登录 shell 的 PATH, 家目录).locate(&resolve::CLAUDE, cli_path)`；`check_config_dir(值, cupper_sys::current_uid(), &boundaries)`；`adapter_env(env_rules::CLAUDE, 宿主环境, 登录 shell 的变量表, binary, config_dir, 放行名单)`；已验证范围从 `manifest::embedded().cli.claude` 取，交给 T094 的分类函数；git、git-lfs 的绝对路径来自 `CliLocator::tool`，交给 T094 的检测函数 | T054 |
+| T060 | git 子进程的 PATH 直接用 `CliLocator::trusted_path()`；git 的绝对路径用 `CliLocator::tool("git")` | T054 |
+| T111 | Codex 的安装布局加一个 `resolve::Layout`；`env_rules::CODEX` 的变量名已有。本机 codex 的 npm 布局已经和 SP-2 记录的不同（原生二进制在平台包 `codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex`），见 `docs/tasks/T054-cli-discovery/notes.md` | T054 |
+| T066 | T054 有两处有意保守的取舍要用真实环境确认：常见位置的 `~/.npm-global/bin` 来自 npm 文档，不是实测；nvm 只看默认的 `~/.nvm`，不读 `NVM_DIR`。原生安装器的布局也没在本机核实 | T054 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
