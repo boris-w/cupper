@@ -22,7 +22,7 @@ use serde_json::{Value, json};
 use crate::clock::{Clock, IdGen};
 use crate::index::IndexHandle;
 use crate::ledger::Outcome;
-use crate::store::streams::{Batch, Streams};
+use crate::store::streams::{Appended, Batch, StreamError, Streams};
 use crate::store::{Durability, Readers};
 
 /// Of every 20 items: 9 messages, 8 tool calls, 3 thoughts.
@@ -120,7 +120,7 @@ impl Seeder {
             })),
             ..Batch::default()
         };
-        writer.append(batch).await.map_err(|e| e.to_string())?;
+        appended(writer.append(batch).await)?;
         let sizes = (0..profile.turns).map(|_| profile.items_per_turn);
         for (no, items) in (1..).zip(sizes.chain(large)) {
             let bodies = self.turn(no, items)?;
@@ -145,7 +145,7 @@ impl Seeder {
                 })),
                 ..Batch::default()
             };
-            writer.append(batch).await.map_err(|e| e.to_string())?;
+            appended(writer.append(batch).await)?;
         }
         Ok(())
     }
@@ -171,21 +171,25 @@ impl Seeder {
                 "agent_message" => "Seeded answer text, about as long as an SP-1 message is. ",
                 "thought" => "Seeded thought, about as long as SP-1's.",
                 _ => {
-                    let title = format!("Run step {n}");
                     data["tool_kind"] = json!("execute");
-                    data["title"] = json!(title);
+                    data["title"] = json!(format!("Run step {n}"));
+                    data["command"] = json!(format!("make step-{n}"));
                     data["paths"] = json!([]);
                     data["output_state"] = json!("none");
+                    data["extraction"] = json!("full");
                     ""
                 }
             };
             events.push(json!({"type": "item.started", "data": data}));
-            if !text.is_empty() {
+            let mut done = json!({"item_id": item, "status": "completed", "ended_at": now,
+                "duration_ms": 0});
+            if text.is_empty() {
+                done["exit_code"] = json!(0);
+            } else {
                 events.push(json!({"type": "item.delta", "data": {"item_id": item,
                     "field": "text", "text": text}}));
             }
-            events.push(json!({"type": "item.completed", "data": {"item_id": item,
-                "status": "completed", "ended_at": now, "duration_ms": 0}}));
+            events.push(json!({"type": "item.completed", "data": done}));
             if *kind == "agent_message" {
                 last_message = Some(item);
             }
@@ -194,6 +198,15 @@ impl Seeder {
             "status": "completed", "ended_at": now, "duration_ms": 0,
             "final_item_ids": last_message.into_iter().collect::<Vec<_>>()}}));
         events.into_iter().map(body).collect()
+    }
+}
+
+/// An append that committed, and that the view took whole.
+fn appended(append: Result<Appended, StreamError>) -> Result<(), String> {
+    let appended = append.map_err(|err| err.to_string())?;
+    match appended.rejected.first() {
+        Some((seq, err)) => Err(format!("the view refused seq {seq}: {err}")),
+        None => Ok(()),
     }
 }
 

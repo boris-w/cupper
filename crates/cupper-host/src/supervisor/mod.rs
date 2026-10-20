@@ -120,6 +120,9 @@ pub struct Host {
     exits: mpsc::UnboundedReceiver<Exit>,
     terminate: Signal,
     socket: PathBuf,
+    /// The barrier's registry, for the test that every kind is in it.
+    #[cfg(all(test, feature = "test-harness"))]
+    quiescence: Quiescence,
     /// Released last, as the host exits.
     _lock: HostLock,
 }
@@ -295,6 +298,8 @@ impl Host {
             exits,
             terminate,
             socket,
+            #[cfg(all(test, feature = "test-harness"))]
+            quiescence,
             _lock: lock,
         })
     }
@@ -510,5 +515,60 @@ impl StartError {
             | Self::Index(_) => HostExit::DataDirUnusable,
             Self::Boot(_) | Self::Io(_) => HostExit::Error,
         }
+    }
+}
+
+#[cfg(all(test, feature = "test-harness"))]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::*;
+    use crate::gateway::testkit::TempDir;
+
+    /// The kinds of actor the source declares (`ActorKind::new("<name>")`).
+    fn declared() -> BTreeSet<String> {
+        let mut names = BTreeSet::new();
+        let mut dirs = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("src")];
+        while let Some(dir) = dirs.pop() {
+            for path in std::fs::read_dir(dir)
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+            {
+                if path.is_dir() {
+                    dirs.push(path);
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap_or_default();
+                for (_, rest) in text
+                    .match_indices("ActorKind::new(\"")
+                    .map(|(at, _)| text.split_at(at + 16))
+                {
+                    let name = rest.split('"').next().unwrap();
+                    if name.bytes().all(|b| b.is_ascii_lowercase() || b == b'_') {
+                        names.insert(name.to_owned());
+                    }
+                }
+            }
+        }
+        names
+    }
+
+    /// A kind of actor the host does not register would escape the barrier.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn it_clock_advance_the_host_registers_every_kind_of_actor() {
+        let dir = TempDir::new("kinds");
+        let mut payload = Payload::default();
+        let path = BTreeMap::from([("PATH".to_owned(), "/usr/bin:/bin".to_owned())]);
+        payload.test_config.login_env = Some(path);
+        let start = Start {
+            data_dir: dir.path().join("data"),
+            payload,
+            #[cfg(feature = "dev-auth")]
+            launcher: 0,
+        };
+        let host = Host::start(start).await.unwrap();
+        let kinds = host.quiescence.kinds();
+        let registered: BTreeSet<String> = kinds.iter().map(|k| k.name().to_owned()).collect();
+        assert_eq!(registered, declared());
     }
 }
