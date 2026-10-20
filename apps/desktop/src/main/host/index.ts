@@ -6,11 +6,18 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import type { Feature } from "@cupper/protocol";
+
 import type { Flavor } from "../../shared/flavor";
+import type { DataConnection } from "../bridge/window-bridge";
 import type { MainLog } from "../log";
 import { ControlConnection } from "./control";
 import { HostLauncher } from "./launcher";
 import { loadNative } from "./native";
+
+/** What a window's connection asks for (design 5.3.2). */
+const WINDOW_FEATURES: Feature[] = ["stream.coalesce", "blob.get", "blob.put", "history.page"];
+const TIMEOUT_MS = 5000;
 
 /** The host gets the fixed allowlist of design 5.6.6 from the app's environment. */
 const ENV_ALLOW = [
@@ -63,8 +70,12 @@ export interface HostSetup {
   log: MainLog;
 }
 
-/** Loads the extension and starts the control connection, the host with it if needed. */
-export function startControl({ flavor, dataDir, version, e2eRoot, log }: HostSetup) {
+/**
+ * Loads the extension and starts the control connection, the host with it if
+ * needed; `openWindow` makes the windows' data connections with the same
+ * launcher (design 5.7.1).
+ */
+export function startHost({ flavor, dataDir, version, e2eRoot, log }: HostSetup) {
   const contents = join(dirname(process.execPath), "..");
   const native = loadNative(join(process.resourcesPath, "native", "cupper_native.node"), flavor);
   const launcher = new HostLauncher({
@@ -74,9 +85,31 @@ export function startControl({ flavor, dataDir, version, e2eRoot, log }: HostSet
     env: hostEnv(process.env),
     ...(e2eRoot === undefined ? {} : { payload: () => e2ePayload(e2eRoot) }),
   });
-  const options = { role: "control" as const, features: [], flavor, version, timeoutMs: 5000 };
+  const options = {
+    role: "control" as const,
+    features: [],
+    flavor,
+    version,
+    timeoutMs: TIMEOUT_MS,
+  };
   const control = new ControlConnection(launcher, options, log);
   control.client.onState((state) => log.info("host connection", { ...state }));
   void control.connect();
-  return control;
+  const openWindow = async (): Promise<DataConnection> => {
+    const window = { role: "window" as const, features: WINDOW_FEATURES, flavor, version };
+    const { port, handshake, rest, socket } = await launcher.open({
+      ...window,
+      timeoutMs: TIMEOUT_MS,
+    });
+    const onClose = (cb: () => void) => void socket.once("close", cb);
+    return {
+      port,
+      handshake,
+      rest,
+      pause: () => socket.pause(),
+      resume: () => socket.resume(),
+      onClose,
+    };
+  };
+  return { control, openWindow };
 }

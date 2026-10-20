@@ -7,12 +7,21 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { createI18n } from "@cupper/i18n";
-import { app, BrowserWindow, Menu, protocol, session, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  Menu,
+  MessageChannelMain,
+  protocol,
+  session,
+  shell,
+} from "electron";
 
 import { isReleaseLike } from "../shared/flavor";
-import { COMMAND_CHANNEL } from "../shared/ipc";
-import { startControl } from "./host";
-import type { ControlConnection } from "./host/control";
+import { COMMAND_CHANNEL, HOST_OPEN } from "../shared/ipc";
+import { WindowBridges } from "./bridge/bridges";
+import { startHost } from "./host";
 import { MainLog } from "./log";
 import { menuTemplate } from "./menu";
 import { appDirs, e2eDirs, type AppDirs } from "./paths";
@@ -44,7 +53,7 @@ protocol.registerSchemesAsPrivileged([APP_SCHEME_PRIVILEGES]);
 app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
-let control: ControlConnection | undefined;
+let host: ReturnType<typeof startHost> | undefined;
 
 if (app.requestSingleInstanceLock()) {
   start();
@@ -76,11 +85,11 @@ function start() {
   app.on("activate", showMainWindow);
   // Closing the last window leaves the app running, as on macOS (design 5.7.1).
   app.on("window-all-closed", () => undefined);
-  app.on("will-quit", () => control?.close());
+  app.on("will-quit", () => host?.control.close());
   try {
     const e2eRoot = __CUPPER_FLAVOR__ === "e2e" ? process.env.CUPPER_E2E_DIR : undefined;
     const version = app.getVersion();
-    control = startControl({ flavor, dataDir: dirs.data, version, e2eRoot, log });
+    host = startHost({ flavor, dataDir: dirs.data, version, e2eRoot, log });
   } catch (error) {
     log.error("cannot start the host connection", { error: String(error) });
   }
@@ -101,7 +110,38 @@ function ready() {
     devTools: flavor === "dev",
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  if (host) {
+    serveWindows(host);
+  }
   showMainWindow();
+}
+
+/** Each window document's data connection, through its windowBridge (design 5.7.1). */
+function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
+  const bridges = new WindowBridges({
+    connect: openWindow,
+    controlReady: () => control.ready(),
+    schedule: (task, ms) => void setTimeout(task, ms),
+    channel: () => {
+      const { port1, port2 } = new MessageChannelMain();
+      const bridge = {
+        post: (message: unknown) => port1.postMessage(message),
+        onMessage: (cb: (message: unknown) => void) => {
+          port1.on("message", (event) => cb(event.data));
+          port1.start();
+        },
+        close: () => port1.close(),
+      };
+      return { bridge, window: port2 };
+    },
+  });
+  ipcMain.handle(HOST_OPEN, (event) => bridges.open(event.sender, event.senderFrame));
+  if (__CUPPER_FLAVOR__ === "e2e") {
+    // For the e2e tests' `electronApp.evaluate`: a window loses its
+    // connection without a reload (E2E-NFR1-4).
+    const disconnectWindow = (webContentsId: number) => bridges.disconnect(webContentsId);
+    Object.assign(globalThis, { __cupperE2E: { disconnectWindow } });
+  }
 }
 
 function showMainWindow() {

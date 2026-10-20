@@ -59,6 +59,8 @@ export default defineConfig(({ mode }) => {
           sourcemap: true,
           rolldownOptions: {
             input: { index: at("src/preload/index.ts") },
+            // Electron's own module at runtime, not the npm package that finds its binary.
+            external: ["electron"],
             output: { format: "cjs", entryFileNames: "[name].cjs", codeSplitting: false },
           },
         },

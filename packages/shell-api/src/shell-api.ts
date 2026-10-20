@@ -13,6 +13,9 @@ import type {
   SettingsPatch,
 } from "@cupper/protocol";
 
+/** The ShellAPI's name in the main world: the preload exposes it as `window.shell`. */
+export const SHELL_GLOBAL = "shell";
+
 /** Cancels a subscription. Calling it again does nothing. */
 export type Unsubscribe = () => void;
 
