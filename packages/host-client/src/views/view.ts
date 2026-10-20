@@ -11,7 +11,7 @@ import {
   type RpcError,
 } from "@cupper/protocol";
 
-import type { StreamSink } from "../sync";
+import { trusted, type StreamSink, type Validation } from "../sync";
 import { Versions } from "./versions";
 
 /** A body that does not fit the view; the stream starts over (T087). */
@@ -42,7 +42,8 @@ export abstract class StreamView<T> implements StreamSink {
   unknown: Placeholder[] = [];
   protected state: T;
 
-  constructor() {
+  /** Under `non_delta`, an `item.delta` is folded without zod, as the stream let it through. */
+  constructor(readonly validation: Validation = "all") {
     this.state = this.empty();
   }
 
@@ -60,8 +61,8 @@ export abstract class StreamView<T> implements StreamSink {
 
   /** Throws a `ViewError`, and then has changed nothing. */
   apply(body: EventBody, event?: Event): void {
-    if (isKnownEvent(body)) {
-      this.fold(body);
+    if (trusted(this.validation, body.type) || isKnownEvent(body)) {
+      this.fold(body as KnownEventBody);
     } else {
       this.unknown.push(event ? { body, event } : { body });
       this.versions.touch("unknown");

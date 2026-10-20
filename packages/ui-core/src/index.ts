@@ -11,3 +11,8 @@ export { Switch } from "./components/Switch";
 export { ToolbarButton } from "./components/ToolbarButton";
 export { Tooltip, TooltipProvider } from "./components/Tooltip";
 export { RowRegistry, RowView, UnsupportedRow, type Row, type RowComponent } from "./rows/registry";
+export { ARCHIVED, createQueryClient, staleKeys, useArchivedSessions } from "./state/query";
+export { StateProvider, UiProvider, useStreams, useUi } from "./state/provider";
+export { Frames, StreamStore, useEntry } from "./state/stream";
+export { RECENT, Subscriptions } from "./state/subscriptions";
+export { createUiStore, type UiState, type UiStore } from "./state/ui";

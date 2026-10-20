@@ -1,8 +1,105 @@
-// Base lint rules for every TS package. The security rules for the renderer and
-// `ui-core` (design 5.7.8) are added by the tasks that create those packages.
+// Lint rules: the base rules for every TS package, then the renderer's
+// security, import, style and text rules (design 5.7.8, 5.1.7). They use
+// built-in rules only; the selectors of `no-restricted-syntax` are put
+// together per group of files here, since a later config object replaces a
+// rule's options rather than adding to them. UNIT-ui-lint-rules has a sample
+// that breaks each rule.
+import { builtinModules } from "node:module";
+
 import js from "@eslint/js";
 import { defineConfig, globalIgnores } from "eslint/config";
 import tseslint from "typescript-eslint";
+
+const UI_CORE = ["packages/ui-core/src/**/*.{ts,tsx}"];
+const UI_CORE_COMPONENTS = ["packages/ui-core/src/**/*.tsx"];
+const POLICIES = "packages/ui-core/src/security/policies.ts";
+const RENDERER = [
+  ...UI_CORE,
+  "apps/desktop/src/renderer/**/*.ts",
+  "apps/desktop/src/preload/**/*.ts",
+];
+const TESTS = ["**/*.test.ts", "**/*.test.tsx"];
+
+const OPEN = "Links go through ShellAPI.openExternal; the app opens no windows (design 5.7.8).";
+const NO_NODE = "ui-core runs in the sandboxed renderer: no Electron, no Node (design 5.1.7).";
+const MARKUP = "Render text, never markup: agent text would become HTML (design 5.7.8).";
+const STYLE_TEXT =
+  "No agent string may reach style text, insertRule or a CSS custom property (design 5.7.8): use fixed classes.";
+
+const RESTRICTED_PROPERTIES = [
+  { object: "document", property: "write", message: MARKUP },
+  { object: "document", property: "writeln", message: MARKUP },
+  { object: "window", property: "open", message: OPEN },
+  { object: "globalThis", property: "open", message: OPEN },
+  { property: "insertRule", message: STYLE_TEXT },
+  { property: "replaceSync", message: STYLE_TEXT },
+  { property: "adoptedStyleSheets", message: STYLE_TEXT },
+];
+
+const SECURITY = [
+  { selector: "MemberExpression[property.name=/^(inner|outer)HTML$/]", message: MARKUP },
+  { selector: "MemberExpression[property.value=/^(inner|outer)HTML$/]", message: MARKUP },
+  { selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']", message: MARKUP },
+  { selector: "CallExpression[callee.property.name='insertAdjacentHTML']", message: MARKUP },
+];
+
+const STYLE = [
+  { selector: "JSXOpeningElement[name.name='style']", message: STYLE_TEXT },
+  {
+    selector: "CallExpression[callee.property.name='createElement'][arguments.0.value='style']",
+    message: STYLE_TEXT,
+  },
+  {
+    selector:
+      "CallExpression[callee.property.name='setProperty']:not([arguments.0.type='Literal'])",
+    message: STYLE_TEXT,
+  },
+  {
+    selector: "CallExpression[callee.property.name='setProperty'][arguments.0.value=/^--/]",
+    message: STYLE_TEXT,
+  },
+  { selector: "JSXAttribute[name.name='style'] Property[key.value=/^--/]", message: STYLE_TEXT },
+  { selector: "JSXAttribute[name.name='style'] Property[computed=true]", message: STYLE_TEXT },
+  { selector: "MemberExpression[property.name='cssText']", message: STYLE_TEXT },
+  {
+    selector: "CallExpression[callee.property.name='setAttribute'][arguments.0.value='style']",
+    message: STYLE_TEXT,
+  },
+];
+
+const NO_POLICY = {
+  selector: "CallExpression[callee.property.name='createPolicy']",
+  message: "Trusted Types policies come from ui-core/src/security/policies.ts only (design 5.7.8).",
+};
+const ONLY_WORKER_POLICY = {
+  selector:
+    "CallExpression[callee.property.name='createPolicy']:not([arguments.0.name='WORKER_POLICY'])",
+  message: "The one policy is cupper-worker; a default policy never exists (design 5.7.8).",
+};
+
+// UI text comes from @cupper/i18n (5.1.7). Text with no letters passes:
+// punctuation, digits and symbols read the same in every language. So do
+// the product's and the agents' names, which are not translated.
+const NAMES = "^\\s*(Cupper|Claude|Codex)\\s*$";
+const LABELS =
+  "/^(aria-label|aria-description|aria-roledescription|aria-placeholder|aria-valuetext|title|alt|placeholder|label)$/";
+const I18N = "UI text comes from @cupper/i18n (design 5.1.7); `t()` it.";
+const TEXT = [
+  { selector: `JSXText[value=/\\p{L}/u]:not([value=/${NAMES}/])`, message: I18N },
+  {
+    selector: `:matches(JSXElement, JSXFragment) > JSXExpressionContainer > Literal[value=/\\p{L}/u]:not([value=/${NAMES}/])`,
+    message: I18N,
+  },
+  {
+    selector: ":matches(JSXElement, JSXFragment) > JSXExpressionContainer > TemplateLiteral",
+    message: I18N,
+  },
+  { selector: `JSXAttribute[name.name=${LABELS}] > Literal`, message: I18N },
+  {
+    selector: `JSXAttribute[name.name=${LABELS}] > JSXExpressionContainer > :matches(Literal, TemplateLiteral)`,
+    message: I18N,
+  },
+];
 
 export default defineConfig(
   // Mirrors .gitignore (ESLint does not read it), plus docs and prototype code.
@@ -25,5 +122,39 @@ export default defineConfig(
     files: ["packages/host-client/src/**/*.ts"],
     ignores: ["**/*.test.ts", "packages/host-client/src/testing.ts"],
     rules: { "no-restricted-imports": ["error", { patterns: ["node:*", "electron"] }] },
+  },
+  // What runs in the main document: ui-core, the renderer's entry and the preload.
+  {
+    files: RENDERER,
+    rules: {
+      "no-eval": "error",
+      "no-new-func": "error",
+      "no-restricted-globals": ["error", { name: "open", message: OPEN }],
+      "no-restricted-properties": ["error", ...RESTRICTED_PROPERTIES],
+      "no-restricted-syntax": ["error", ...SECURITY, ...STYLE, NO_POLICY],
+    },
+  },
+  {
+    files: [POLICIES],
+    rules: { "no-restricted-syntax": ["error", ...SECURITY, ...STYLE, ONLY_WORKER_POLICY] },
+  },
+  {
+    files: UI_CORE_COMPONENTS,
+    ignores: TESTS,
+    rules: { "no-restricted-syntax": ["error", ...SECURITY, ...STYLE, NO_POLICY, ...TEXT] },
+  },
+  // ui-core never reaches Electron or Node (design 5.1.7); its tests run in Node.
+  {
+    files: UI_CORE,
+    ignores: TESTS,
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ["electron", ...builtinModules].map((name) => ({ name, message: NO_NODE })),
+          patterns: [{ group: ["node:*", "electron/*"], message: NO_NODE }],
+        },
+      ],
+    },
   },
 );

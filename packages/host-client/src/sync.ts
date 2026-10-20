@@ -11,6 +11,8 @@
 //   again with its cursor. After a ViewError (the sink throws), or an event
 //   without a readable envelope, it starts over without one.
 // - `stream/reset` keeps the cursor.
+// - Under `non_delta` validation (production builds, design 5.7.6), an
+//   `item.delta` skips zod: only its `seq` and `from` are checked.
 // - Until the result of a subscription arrives, whatever else comes for the
 //   stream belongs to an older subscription and is ignored.
 //
@@ -53,6 +55,15 @@ export interface SyncCounters {
   resets: number;
 }
 
+/** Which events zod checks: all of them, or all but `item.delta`. */
+export type Validation = "all" | "non_delta";
+
+/** An `item.delta` that `validation` lets through without zod. */
+export const trusted = (validation: Validation, type: unknown) =>
+  validation === "non_delta" && type === "item.delta";
+
+const integer = (value: unknown) => Number.isSafeInteger(value);
+
 export interface Cursor {
   epoch: number;
   seq: number;
@@ -77,6 +88,7 @@ export class StreamSync {
     private readonly sink: StreamSink,
     private readonly counters: SyncCounters,
     private readonly log: (message: string) => void,
+    private readonly validation: Validation = "all",
   ) {}
 
   get cursor(): Cursor | undefined {
@@ -169,19 +181,19 @@ export class StreamSync {
       return this.#restart();
     }
     for (const item of parsed.data.events) {
-      const event = zEvent.safeParse(item);
-      if (!event.success) {
+      const event = this.#envelope(item);
+      if (!event) {
         this.log(`${this.stream}: an event without a readable envelope`);
         return this.#restart();
       }
-      const { seq } = event.data;
-      const first = event.data.from ?? seq;
+      const { seq } = event;
+      const first = event.from ?? seq;
       if (first !== cursor.seq + 1 || seq < first) {
         this.counters[first <= cursor.seq ? "duplicates" : "gaps"] += 1;
         return this.subscribe();
       }
       cursor.seq = seq;
-      if (!this.#apply(event.data, event.data)) {
+      if (!this.#apply(event, event)) {
         return this.#restart();
       }
     }
@@ -197,8 +209,22 @@ export class StreamSync {
     return this.subscribe();
   }
 
+  #envelope(item: unknown): Event | undefined {
+    const raw = item as Partial<Record<string, unknown>> | null;
+    if (trusted(this.validation, raw?.type)) {
+      const fits = integer(raw?.seq) && (raw?.from === undefined || integer(raw.from));
+      return fits ? (raw as Event) : undefined;
+    }
+    const event = zEvent.safeParse(item);
+    return event.success ? event.data : undefined;
+  }
+
   #apply(body: EventBody, event?: Event): boolean {
-    if (isKnownEventType(body.type) && !isKnownEvent(body)) {
+    if (
+      !trusted(this.validation, body.type) &&
+      isKnownEventType(body.type) &&
+      !isKnownEvent(body)
+    ) {
       this.log(`${this.stream}: malformed data in ${body.type}, shown as unknown`);
     }
     try {

@@ -9,6 +9,7 @@
   "include": ["src", "*.config.ts"],
   "references": [
     { "path": "../../packages/host-client" },
+    { "path": "../../packages/protocol" },
     { "path": "../../packages/shell-api" },
     { "path": "../../packages/ui-core" }
   ]

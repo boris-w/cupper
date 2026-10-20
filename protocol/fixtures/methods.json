@@ -623,6 +623,7 @@
     "method": "project/trust_info",
     "params": { "project_id": "p_1" },
     "result": {
+      "path": "/work/app",
       "diff_from_trusted": [
         { "change": "update", "path": ".mcp.json" },
         { "change": "add", "path": "../.codex/config.toml" }
@@ -656,6 +657,7 @@
     "method": "project/trust_info",
     "params": { "project_id": "p_1" },
     "result": {
+      "path": "/work/app",
       "findings": [],
       "state": "untrusted",
       "trust_digest": "d_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

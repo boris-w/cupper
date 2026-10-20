@@ -30,7 +30,13 @@ export {
   type Outcome,
 } from "./client";
 export { connectShell } from "./shell";
-export { StreamSync, type Cursor, type StreamSink, type SyncCounters } from "./sync";
+export {
+  StreamSync,
+  type Cursor,
+  type StreamSink,
+  type SyncCounters,
+  type Validation,
+} from "./sync";
 export { IndexView } from "./views/index-view";
 export { SessionView } from "./views/session-view";
 export { Versions } from "./views/versions";

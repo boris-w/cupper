@@ -16,5 +16,10 @@
   "host_ready": "已连接会话宿主",
   "host_reconnecting": "正在重新连接会话宿主",
   "host_failed": "无法连接会话宿主",
-  "host_closed": "已断开会话宿主"
+  "host_closed": "已断开会话宿主",
+  "dismiss": "关闭",
+  "privileged_busy": "已有一个确认框打开，请先处理它",
+  "privileged_cooldown": "取消得太频繁了，请 {{seconds}} 秒后再试",
+  "privileged_activation": "这个操作需要你直接点击按钮",
+  "privileged_failed": "操作没有完成（{{code}}）"
 }
