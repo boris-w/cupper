@@ -161,6 +161,9 @@ pub struct VerifiedRequester {
     pub has_tty: bool,
     /// The chain ends at launchd, or there is no controlling terminal.
     pub origin_unverifiable: bool,
+    /// The command-line tool this app comes with: its path and the cdhash
+    /// of the code it runs are those of `Contents/Helpers/cupper`.
+    pub bundled_cli: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -421,7 +424,7 @@ pub(super) mod tests {
                 json!({"elevation_id": "e_1"}),
                 json!({"verified": {"executable": "/usr/local/bin/cupper", "signing": "Developer ID",
                     "pid": 4242, "parent_chain": [{"pid": 4100, "executable": "/bin/zsh"}],
-                    "has_tty": true, "origin_unverifiable": false},
+                    "has_tty": true, "origin_unverifiable": false, "bundled_cli": false},
                     "self_reported": {"client_name": "cupper-cli", "reason": "apply the review"},
                     "scopes": ["write", "approve"]}),
             ),
