@@ -163,6 +163,24 @@ impl StreamWriter {
         })
     }
 
+    /// Writes the checkpoint of the view at the head now, unless one stands
+    /// there already: the orderly exit's for every stream (design 5.2.8).
+    pub async fn checkpoint(&mut self) -> Result<(), StreamError> {
+        let head = self.head();
+        if head == self.checkpoint_at {
+            return Ok(());
+        }
+        let registry = self.handle.registry();
+        let json = self.handle.stream().read(|view, _| view.to_json())?;
+        let (stream, now) = (self.handle.id().to_string(), registry.clock.now_wall_ms());
+        let saved = registry.writer.submit(Durability::Normal, move |conn| {
+            log::save_checkpoint(conn, &stream, head, &json, now)
+        });
+        saved.await?;
+        self.checkpoint_at = head;
+        Ok(())
+    }
+
     /// A session stream checkpoints when a turn completes (design 5.2.8); the
     /// index stream every [`INDEX_CHECKPOINT_EVERY`] events.
     fn checkpoint_due(&self, events: &[Arc<Published>], last: u64) -> bool {
