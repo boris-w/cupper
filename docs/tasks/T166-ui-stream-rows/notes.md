@@ -36,3 +36,52 @@
 | **合计** | **约 535，乘 1.1 约 590** | **约 270** |
 
 合计约 **860 行**，在约 1,000 的停止线以内，开工。先做不依赖 T082 的部分（组件、Markdown 配置、ANSI、文案、UNIT-md-injection），做完时若 T082 还没合并，停下汇报。
+
+## 独立部分的实现记录（T082 合并之前）
+
+- **Markdown**（`rows/markdown.tsx`）：
+  - 插件全部显式给出。remark 只有 GFM；rehype 依次是 `rehype-sanitize`、`rehype-harden`，不含 `rehype-raw`，原始 HTML 显示成文字。
+  - sanitize 的 schema 以 hast-util-sanitize 的默认值为底：`href`、`src`、`cite` 只认 http、https；去掉 `code` 上 agent 给的 class（`language-*`），其余默认允许的 class 都是固定值。
+  - harden 必须给 `defaultOrigin` 才能用具体的前缀，否则抛错；给了 origin 又会把相对链接解析成那个 origin 下的绝对链接。所以前缀给 `*`，靠前面的 schema 限定协议。harden 仍会挡下 `javascript:`、`data:` 等，被挡的链接和图片只留文字。
+  - 组件：`a` 只在 http(s) 时是链接，点击时 `preventDefault` 后经 `ShellAPI.openExternal` 打开；`img` 一律显示成指向图片的链接，从不加载；`pre`、`code` 用最简单的元素（高亮和代码块按钮归 T143）。另外关掉 streamdown 的 `linkSafety` 弹窗、`controls` 按钮，加 `skipHtml`。
+  - 排版：静态 CSS `styles/stream.css` 的 `.md`，按 5.7.10。规则不在任何 layer 里，以压过 streamdown 默认组件带的、碰巧在本仓库生成了的工具类。
+- **ANSI**（`rows/ansi.tsx`）：SGR 的前景色（30–37、90–97）、粗体、暗淡、下划线映射到固定 class；256 色、真彩色、背景色跳过；其他 CSI、OSC、两字节转义直接丢掉。
+- **工具行**（`rows/tools.tsx`）：
+  - 图标按 `tool_kind`；文案 `stream:tool_<kind>` 或 `_running`，`target` 依次取命令、查询、URL、路径（多个时"等 n 个文件"），最后是 agent 的标题，经 `escapeInvisible`。不认识的种类按 `other` 处理，直接显示标题。
+  - 运行中带闪光；失败时行尾标"失败"；有输出的命令可以展开输出块（标题条加等宽正文，最高 240，ANSI 着色，截断时注明只显示最后一部分）。
+  - 活动组按种类计数（"运行了 2 条命令，读取了 1 个文件"），展开箭头只在悬停时显示，展开后的列表最高 224，上下渐隐（静态的 `mask-image`）。
+  - 组件的属性 `Tool` 与 T082 的 `ToolData` 结构相同；合并后改用它。
+- **思考、提示与错误**（`rows/messages.tsx`）：思考的文字是纯文本（`escapeInvisible`）；提示和错误按代码取文案，不认识的代码用兜底文案；错误下方显示 agent 原文（纯文本）。恢复指引是 T143 的事。
+- **UNIT-md-injection**（`rows/messages.test.tsx`，jsdom）：
+  - `<script>`、`<img onerror>`、`javascript:` 与 `mailto:` 链接、远程图片、data 图片、`<style>` 与带 `style` 和 `class` 的原始 HTML、CSS 代码块：渲染后没有 `script`、`style`、`img` 元素，没有 `on*` 和 `style` 属性，链接只有 http(s)，没有 agent 的 class；
+  - 链接点击走 `openExternal`；
+  - ANSI 的映射；
+  - 工具、思考、错误行里的 agent 文本都是文字，不可见字符显示成转义。
+
+## 对照 T136"静态检查拦不下的样式写法"的自查
+
+1. **样式值来自 agent 文本**：本任务的组件没有写任何 `style`。streamdown 自带的内联样式只有固定值（表格最高 300 一类）；会带内联样式和 CSS 自定义属性的动画（`animated`）没有开，代码块的 `--sdm-*` 随默认代码块组件一起被替换掉了。
+2. **class 名拼 agent 文本**：
+   - ANSI 的 class 只来自固定列表；
+   - 工具图标按种类查固定的路径表；
+   - 文案键里的种类、提示代码、错误代码都先过固定列表；
+   - Markdown 里 agent 的 class 被 schema 去掉，剩下的默认 class 都是固定值（`task-list-item`、`sr-only` 等）。
+3. **间接写 `<style>`**：没有。
+4. **`window` 的别名**：没有；外部链接经 `ShellAPI.openExternal`。
+5. **自定义组件的文案属性**：`Alert` 收 `children`，`ToolIcon` 收种类，都不是文案属性。
+
+## 进度与行数（独立部分完成，T082 未合并）
+
+| 模块 | 新增 |
+|---|---|
+| 依赖（`package.json`，不含 lock） | 4 |
+| Markdown | 94 |
+| ANSI | 94 |
+| 工具行与活动组（含图标 20） | 164 |
+| 思考、提示与错误 | 90 |
+| 样式 `stream.css` | 145 |
+| 文案 | 56 |
+| UNIT-md-injection | 131 |
+| **合计** | **约 778** |
+
+剩下的是 T082 合并后的部分：登记进注册表、接会话页，约 40；UI-stream-markdown、UI-stream-tools 的夹具和用例，约 120。推算合计约 **940**，在约 1,000 的停止线以内，但贴近。样式文件比估计多，是 prettier 把每个选择器拆成一行的结果。
