@@ -4,13 +4,14 @@
 //! too.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use cupper_protocol::capabilities::{SessionCapabilities, SlashCommand};
 use cupper_protocol::domain::{AgentKind, PrincipalKind, PromptContent};
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::{AdapterInstanceId, ProjectId, SessionId, TurnId};
+use cupper_protocol::ids::{AdapterInstanceId, Digest, ProjectId, SessionId, TurnId};
 use cupper_protocol::index::PendingKind;
 use cupper_protocol::limits::{MAX_SAFE_INTEGER, V1};
 use cupper_protocol::methods::handshake::Principal;
@@ -31,6 +32,7 @@ use crate::driver::api::{
 use crate::durations::Durations;
 use crate::gateway::testkit::Peer;
 use crate::gateway::{AuditRecord, Routes};
+use crate::git::GitTool;
 use crate::ledger::Ledger;
 use crate::orchestrator::testkit::text;
 use crate::quiescence::Quiescence;
@@ -38,6 +40,7 @@ use crate::store::streams::{Published, Push, Sink, Streams, StreamsConfig};
 use crate::store::testutil::{TempDir, host_writer, query};
 use crate::store::{Durability, Readers, WriterThread, log, open_reader};
 use crate::supervisor::{Activity, Part};
+use crate::trust::Scan;
 
 type Attached = oneshot::Sender<Result<AttachInfo, AgentError>>;
 
@@ -153,13 +156,18 @@ pub(super) fn data(bodies: &[EventBody], tag: &str) -> Vec<Value> {
     of.map(|b| json!(b)["data"].clone()).collect()
 }
 
-/// The index's notes: each session's pending count, in order.
+/// The index's notes: each session's pending count, and the digest of each
+/// rescan of a project, in order.
 #[derive(Debug, Default)]
-pub(super) struct Index(pub Mutex<Vec<u32>>);
+pub(super) struct Index(pub Mutex<Vec<u32>>, pub Mutex<Vec<Digest>>);
 
 impl IndexNotes for Index {
     fn pending(&self, _: &SessionId, count: u32, _: Option<PendingKind>) {
         self.0.lock().unwrap().push(count);
+    }
+
+    fn rescanned(&self, _: &ProjectId, scan: Scan) {
+        self.1.lock().unwrap().push(scan.digest);
     }
 }
 
@@ -178,18 +186,28 @@ pub(super) struct Fixture {
 }
 
 impl Fixture {
-    /// The host's sessions on a fresh `host.db` with a trusted project and
-    /// Claude's capabilities cached.
+    /// The host's sessions on a fresh `host.db` with a trusted project in
+    /// `app/` and Claude's capabilities cached.
     pub async fn new(name: &str) -> Self {
+        Self::with_git(name, None).await
+    }
+
+    /// As [`new`](Self::new), with a git for the trust range's root.
+    pub async fn with_git(name: &str, git: Option<GitTool>) -> Self {
         let (dir, clock) = (TempDir::new(name), ManualClock::new());
         let (writer, thread) = host_writer(&dir, &clock);
-        let project = ProjectId::from_uuid(1).to_string();
+        std::fs::create_dir(dir.path().join("app")).unwrap();
+        let app = std::fs::canonicalize(dir.path().join("app")).unwrap();
+        let project = [
+            ProjectId::from_uuid(1).to_string(),
+            app.display().to_string(),
+        ];
         let cached = json!(caps()).to_string();
         let seed = move |conn: &rusqlite::Connection| {
             conn.execute(
                 "INSERT INTO projects (project_id, path, name, position, added_at, trust_state)
-                 VALUES (?1, '/work/app', 'app', 0, 0, 'trusted')",
-                [project],
+                 VALUES (?1, ?2, 'app', 0, 0, 'trusted')",
+                project,
             )?;
             conn.execute(
                 "INSERT INTO agent_capabilities (agent, adapter_version, captured_at, json)
@@ -217,6 +235,7 @@ impl Fixture {
             quiescence: Quiescence::new(),
             audit: records,
             index: Arc::clone(&index) as Arc<dyn IndexNotes>,
+            git,
         };
         let conn = open_reader(&dir.host_db()).unwrap();
         let mut routes = Routes::new(Ledger::load(&conn, writer, shared, &durations).unwrap());
@@ -323,6 +342,17 @@ impl Fixture {
         }
     }
 
+    /// The project's directory, as a realpath.
+    pub fn project(&self) -> PathBuf {
+        std::fs::canonicalize(self.dir.path().join("app")).unwrap()
+    }
+
+    /// Runs `sql` with `param` on `host.db` while no session writes.
+    pub fn exec(&self, sql: &str, param: String) {
+        let conn = rusqlite::Connection::open(self.dir.host_db()).unwrap();
+        conn.execute(sql, [param]).unwrap();
+    }
+
     /// One text column of `sql`'s rows.
     pub fn rows(&self, sql: &str) -> Vec<String> {
         query(&self.dir.host_db(), sql, |row| row.get(0))
@@ -339,7 +369,7 @@ async fn it_orch_lifecycle_create_runs_the_first_message_as_a_turn() {
     let session: SessionId = serde_json::from_value(created["session_id"].clone()).unwrap();
     let attach = f.attach().await;
     assert_eq!(attach.target, AttachTarget::New);
-    assert_eq!(attach.cwd.to_str(), Some("/work/app"));
+    assert_eq!(attach.cwd, f.project());
     assert_eq!(attach.project_config, ProjectConfigPolicy::Load);
     let (tag, content) = f.prompt().await;
     assert_eq!(content, text("hi"));
@@ -381,7 +411,7 @@ async fn it_orch_lifecycle_create_runs_the_first_message_as_a_turn() {
         &summary["title_source"],
     ];
     assert_eq!(shown, ["unread", "hi", "prompt"]);
-    let workspace = json!({"kind": "local", "path": "/work/app"});
+    let workspace = json!({"kind": "local", "path": f.project()});
     assert_eq!(got["workspace"], workspace);
     let session = json!({"session_id": session});
     assert_eq!(f.ok("session/capabilities", session).await, json!(caps()));

@@ -2102,6 +2102,7 @@ export const zNoticeParams = z.object({
   attempt: z.int().gte(0).lte(4294967295).nullish(),
   max: z.int().gte(0).lte(4294967295).nullish(),
   paths: z.array(zWirePath).nullish(),
+  reason: z.string().nullish(),
 });
 
 export const zNotice = z.object({

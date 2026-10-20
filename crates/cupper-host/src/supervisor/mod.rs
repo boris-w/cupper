@@ -210,7 +210,7 @@ impl Host {
             clock: clock.clone(),
             ids: ids.clone(),
             durations: durations.clone(),
-            git,
+            git: git.clone(),
             quiescence: quiescence.clone(),
             host: HostUpdated {
                 version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -268,6 +268,7 @@ impl Host {
             quiescence: quiescence.clone(),
             audit: records.clone(),
             index: Arc::new(index.clone()),
+            git,
         });
         let parts: Arc<[Arc<dyn Part>]> = Arc::new([
             Arc::new(sessions.clone()),
