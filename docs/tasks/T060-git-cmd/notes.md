@@ -52,6 +52,30 @@ a、b 互不依赖（b 的输入是配置输出的字节、仓库路径和边界
 
 **方案三（不拆）**：上限提到约 1,400 行，由一个执行者顺序完成。
 
+## 收窄后的范围与估计（编排者裁定后，计划 v1.3.16）
+
+T060 只做 GitCmd 与三档类型；仓库档的规则与指纹是 T097（并行），仓库档的执行是 T098。上限约 650 行，硬停止线 750。
+
+| 模块 | 内容 | 实现 | 测试 |
+|---|---|---|---|
+| `git/mod.rs` | `GitTool`（git、git-lfs 的绝对路径，可信 PATH，`HOME`，`SSH_AUTH_SOCK`，创建 `<数据目录>/git/` 与 `empty-hooks`）；各档的环境；档位标记 `Repo`、`Snapshot`；`RepoTier`、`SnapshotTier` 把 `GitCmd` 变成 `cupper_sys::Command` | 110 | — |
+| `git/cmd.rs` | `GitCmd<档位>`：参数、`-c`、stdin；仓库档命令表（`RepoOp`，5.2.10 的只读引用类、写操作，加 T098 用的 `config --list --show-origin --includes -z`）；快照档最小入口（`SnapshotOp::LsFiles`）；命令行的拼装；`compile_fail` 文档测试 | 150 | 30 |
+| `git/run.rs` | 拉起辅助：stdin 写入、stdout 与 stderr 分别收集并设上限、`Clock` 超时后按进程组结束 | 105 | 50 |
+| `durations.rs` | `GIT_COMMAND` 30 s、`GIT_SNAPSHOT` 60 s、`GIT_WORKTREE_ADD` 10 分钟、`GIT_PUSH` 5 分钟 | 12 | — |
+| UNIT-git-cmd | 假 git 记下收到的环境和参数：两档的环境只有规定的变量；各命令的固定参数 | — | 80 |
+| **合计** | | **约 377** | **约 160** |
+
+合计约 540 行；文档注释和 rustfmt 的展开按 T054 的经验再留约 10%，推算约 **590 行**，在上限之内。每完成一个模块统计一次，推算超过约 650 行就停下汇报。
+
+## 与 T097、T098 的接口约定
+
+- **命令行的顺序**：`git --no-pager [--no-optional-locks] -c core.quotepath=false [调用方的 -c ...] [档位固定的 -c ...] [-C <仓库>] <子命令和固定参数> <调用方参数>`。档位固定的 `-c` 放在最后，调用方加的 `-c` 覆盖不了它们。
+- **仓库档无条件的覆盖由 T060 的 `RepoTier` 固定加上**：`-c core.fsmonitor=false`、`-c core.hooksPath=<数据目录>/git/empty-hooks`、`--no-pager`（环境里也有 `GIT_PAGER=cat`）。快照档同样固定加这两个 `-c`（5.2.10）。**T097 只计算取决于配置的覆盖**（置空、git-lfs 改写），结果是 `(键, 值)` 的列表，由 T098 经 `GitCmd::config(键, 值)` 加进命令；键里有 `=` 的由 T097 拒绝。
+- git-lfs 的绝对路径：`GitTool::git_lfs()`；没有时为 `None`。
+- 读配置的命令是 `RepoOp::ConfigList`（`config --list --show-origin --includes -z`），T098 用它取 T097 要解析的字节。
+- 执行：T060 提供 `RepoTier::command(&GitCmd<Repo>) -> cupper_sys::Command` 和 `git::run::run`；带防护的 `RepoTier::run` 是 T098 的。快照档的 `SnapshotTier::command` 目前只设 `GIT_DIR`、`GIT_WORK_TREE`，其余环境（index、对象库、配置）由 T061 补。
+- 生成补丁的命令要加的 `--no-ext-diff --no-textconv`：T060 的命令表里还没有生成补丁的命令，由加这类命令的任务（T061 的 `diff-tree -p`）写进它们的固定参数。
+
 ## 实现前想到的几点（供执行者，与拆法无关）
 
 1. **`-c <键>=` 置空遇到子段里带 `=` 的键会失效**：git 在第一个 `=` 处切分 `-c` 的参数，`[filter "a=b"] clean = ...` 的置空会变成给 `filter.a` 赋值，原来的 `filter.a=b.clean` 仍然生效（属性里可以写 `filter=a=b`）。已在临时仓库里用本机的 git 2.50 核实：`-c 'filter.a=b.clean='` 之后 `config --get filter.a` 是 `b.clean=`，`filter.a=b.clean` 仍是原值。打算对这种键直接拒绝（`unsafe_repo_config`），不尝试转义。
