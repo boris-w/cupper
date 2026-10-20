@@ -2,9 +2,11 @@
 // host through the native extension when nothing listens. Keyed builds make
 // one `HostKey` and keep the startup payload only in memory; a host started
 // again after it died gets the same key and the same payload. Connecting is
-// tried every 10 ms for 500 ms after a start; the host's exit codes 4–6
-// (design 5.2.13) end the attempt with their reasons, and 3 (another host
-// holds the lock) means connecting to that one.
+// tried every 10 ms for 500 ms after a start, and up to 10 s while the host
+// we started still runs: the first run of a new binary waits for the
+// system's check (design 5.7.2, 5.5.1). The host's exit codes 4–6 (design
+// 5.2.13) end the attempt with their reasons, and 3 (another host holds the
+// lock) means connecting to that one.
 
 import type { DevAuthNative, HostKey, HostProcess, ReleaseNative } from "@cupper/desktop-native";
 import type { ConnectionFailure } from "@cupper/shell-api";
@@ -24,6 +26,8 @@ const realClock: Clock = {
 
 const RETRY_MS = 10;
 const BUDGET_MS = 500;
+/** While the host we started runs. */
+const STARTING_MS = 10_000;
 
 /** The exit codes that end an attempt, as `failed.reason`. */
 const EXIT_REASONS: Partial<Record<number, ConnectionFailure>> = {
@@ -75,7 +79,7 @@ export class HostLauncher {
       throw new HostFailure("updating");
     }
     const clock = this.#config.clock ?? realClock;
-    const deadline = clock.now() + BUDGET_MS;
+    const start = clock.now();
     let exited: Promise<number | undefined> | undefined = this.#spawn().exit.then((e) => e.code);
     for (;;) {
       const tick = clock.sleep(RETRY_MS).then(() => "tick" as const);
@@ -90,7 +94,7 @@ export class HostLauncher {
       if (next !== "absent") {
         return next;
       }
-      if (clock.now() >= deadline) {
+      if (clock.now() >= start + (exited ? STARTING_MS : BUDGET_MS)) {
         throw new HostFailure("host_unreachable");
       }
     }
