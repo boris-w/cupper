@@ -3,6 +3,7 @@
 //! types appear here; ACP's stay inside `driver` (design 5.6).
 //!
 //! Commands and events are plain data, so pure cores can emit and take them.
+//! Events serialize for the extraction goldens (design 5.9.3).
 //! The session's actor hands them to its agent's [`AgentPort`], adding its
 //! own event sender to an attach; replies and events come back to its cores
 //! as inputs.
@@ -21,6 +22,7 @@ use cupper_protocol::interaction::{InteractionOutcome, InteractionRequest};
 use cupper_protocol::item::{Plan, ToolDiff, ToolKind};
 use cupper_protocol::session::{StopReason, TurnUsage, UsageUpdated};
 use futures::future::BoxFuture;
+use serde::Serialize;
 use thiserror::Error;
 use tokio::sync::mpsc;
 
@@ -39,17 +41,17 @@ pub trait AgentPort: Send + Sync + fmt::Debug {
 }
 
 /// The agent's own ID of a session (ACP `sessionId`), opaque to the host.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct AgentSessionId(pub String);
 
 /// Names one prompt of a session. Its result carries the tag back, so a late
 /// result of a prompt the host gave up on is not taken for the current one.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 pub struct PromptTag(pub u64);
 
 /// Names a request from the agent (a permission or a question). The runtime
 /// keeps the request's ACP responder under this ID until `Answer`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct AskId(pub u64);
 
 /// What a session asks of its agent's runtime. "Request" marks the commands
@@ -147,7 +149,8 @@ pub enum AskAnswer {
 }
 
 /// What the agent asks, as the runtime hands it over.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AskRequest {
     /// `session/request_permission`, classified, with its options' effects
     /// from the option table (design 5.6.4).
@@ -157,7 +160,7 @@ pub enum AskRequest {
     Form(FormAsk),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct FormAsk {
     pub message: String,
     /// `requestedSchema`, as JSON.
@@ -165,12 +168,15 @@ pub struct FormAsk {
 }
 
 /// What the runtime reports to a session.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DriverEvent {
     Update(NormUpdate),
     /// A request from the agent (design 5.6.4).
     Ask {
         ask: AskId,
+        /// The tool call it is about, which names its item (ACP `toolCallId`).
+        tool_call_id: Option<String>,
         request: AskRequest,
     },
     /// The agent took a request back (`$/cancel_request`, K5).
@@ -203,13 +209,14 @@ pub enum DriverEvent {
         max: u32,
     },
     /// Sent to every session of the agent.
+    #[serde(skip)]
     AdapterExited {
         instance: AdapterInstanceId,
         status: ExitStatus,
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct RunState {
     pub active: bool,
     pub waiting_on_approval: bool,
@@ -218,7 +225,8 @@ pub struct RunState {
 }
 
 /// A `session/update` after extraction (design 5.6.3).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum NormUpdate {
     AgentText {
         message_id: Option<String>,
@@ -233,10 +241,15 @@ pub enum NormUpdate {
         title: String,
         paths: Vec<WirePath>,
         command: Option<String>,
+        /// The session's workspace, for commands.
+        cwd: Option<WirePath>,
     },
+    /// What changed; Claude completes a call's parameters in updates.
     ToolUpdate {
         tool_call_id: String,
         title: Option<String>,
+        command: Option<String>,
+        paths: Option<Vec<WirePath>>,
         status: Option<ToolStatus>,
         output: Option<ToolOutput>,
         exit_code: Option<i32>,
@@ -250,7 +263,8 @@ pub enum NormUpdate {
 }
 
 /// ACP's tool call status, after the tap's K19 fallback.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ToolStatus {
     Pending,
     InProgress,
@@ -258,7 +272,8 @@ pub enum ToolStatus {
     Failed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ToolOutput {
     /// More output: an `item.delta` with `field: output`.
     Append(String),
@@ -266,14 +281,15 @@ pub enum ToolOutput {
     Replace(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CompactionPhase {
     Started,
     Completed,
 }
 
 /// An agent error of any of the three forms (ADR-06), with cupper's class.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Error, Serialize)]
 #[error("agent error ({class:?}): {message}")]
 pub struct AgentError {
     pub class: AgentErrorClass,
@@ -283,7 +299,8 @@ pub struct AgentError {
 }
 
 /// cupper's classes of agent errors (design 5.6.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AgentErrorClass {
     NotLoggedIn,
     CliTooOld,
@@ -295,7 +312,8 @@ pub enum AgentErrorClass {
     Other,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AgentErrorForm {
     /// A JSON-RPC error, with the agent's code.
     Rpc { agent_code: i64 },

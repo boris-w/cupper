@@ -26,7 +26,7 @@ pub(super) fn may_apply(line: &str) -> bool {
 
 /// Rewrites every unknown value in `msg`, a message or a batch; returns
 /// whether anything changed.
-pub(super) fn rewrite(msg: &mut Value) -> bool {
+pub(crate) fn rewrite(msg: &mut Value) -> bool {
     match msg {
         Value::Array(batch) => batch
             .iter_mut()

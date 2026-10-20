@@ -347,6 +347,8 @@ mod tests {
         update(NormUpdate::ToolUpdate {
             tool_call_id,
             title,
+            command: None,
+            paths: None,
             status,
             output,
             exit_code,
