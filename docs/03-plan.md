@@ -1705,7 +1705,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T077 桌面主进程 IV：真实输入与 Q26
 - [ ] T078 测量闸门：主进程转发
 - [ ] T079 （条件）utilityProcess 宿主桥加委托票据
-- [ ] T080 ui-core I：状态层
+- [x] T080 ui-core I：状态层
 - [ ] T081 ui-core III：侧边栏、横幅与 toast
 - [ ] T082 ui-core IV：消息流
 - [ ] T083 ui-core V：请求面板与请求记录行
