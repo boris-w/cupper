@@ -97,6 +97,11 @@ impl TierGuard {
         }
     }
 
+    /// Who set the session's tier.
+    pub fn setter(&self) -> &PrincipalId {
+        &self.setter.id
+    }
+
     /// Why `tier` needs a confirmation with the current setter, if it does.
     fn violation(&self, tier: &Tier) -> Option<ConfirmationReason> {
         let rank = |tier: &Tier| policy::tier_rank(tier);

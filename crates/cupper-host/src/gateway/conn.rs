@@ -119,12 +119,17 @@ fn admit(gw: &Gateway, stream: &UnixStream, id: &ConnId) -> Option<(AuditToken, 
         None => Verdict::Other(None),
     };
     let (pid, pid_version) = (pinned.pid(), pinned.pid_version());
+    // The audit writer reads who signed what the peer runs (design 5.8.6).
     gw.audit(
         id,
         AuditEvent::Accepted {
             pid,
             pid_version,
             verdict,
+            token: pinned,
+            path: None,
+            identifier: None,
+            team_id: None,
         },
     );
     Some((pinned, verdict))

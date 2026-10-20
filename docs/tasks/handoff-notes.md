@@ -341,6 +341,9 @@
 | T166、T165、T146 | 消息流的行（T082）：形状以 `packages/ui-core/src/rows/stream.ts` 为准（`notes.md` 有对照表），每种行都有 `kind`、`key` 和要显示的数据，行组件是 `row` 的纯函数；登记用 `registerRow(kind, Component)`（属性 `{ row: RowOf<"kind"> }`，每种只能登记一次），并在 `rows/index.ts` 加 import；没有登记的 kind 显示占位。待 T166 登记：`agent_message`、`thought`、`tool`、`activity_group`、`notice`、`error`；T165：`request`（在它登记之前，待处理的请求条目在流里显示为占位，UI-request-panel 的基线里就是这样）；T146：`plan`、`late_tool_output`。消息流在 `app/pages.tsx` 的 `SessionPage` 里横幅之下、输入框之上，每行外层已有行间距 | T082 |
 | T091（或 T090 之后的 e2e） | 消息流"插入历史后视口不跳"只在 `ScrollKeeper` 的单元测试里验证过（jsdom 没有布局），要在真实环境里确认一次 | T082 |
 | 第一个在界面里读 blob 的任务 | 用户气泡里的长文本块现在只显示"长文本"，要等 host-client 的 `getBlob` | T082 |
+| T163 | ① 有序退出时 `conn.closed{host_exiting}` 只进了 host.log、没进表（`Host::exit` 先停写线程再 `close_all`），加 `host.exiting` 时一并改成先关连接、排空审计写入、再停写线程；② `admit` 里的 `verify(ui_requirement)` 也在异步线程上同步调用 Security 框架，未正式签名的大程序或第一次调用会慢，检查一遍，必要时移到 `spawn_blocking`（T138 修 IT-idle-exit 时查出同类问题：`signing_identity()` 一次约 600 ms，卡住了宿主的定时器）；③ `project/add` 新路径扫描失败时还没有项目 ID，没有审计 | T138 |
+| 读 `config.unconfirmed` 审计或事件的代码 | T044 的 `ConfigUnconfirmed` 现在是 `{reason, config: ConfigState}`（T138） | T138 |
+| 在宿主的连接路径或异步线程上做系统调用的任务 | 不要在 tokio 工作线程上同步调用可能慢的系统 API（Security 框架的签名查询、读大文件等），用 `spawn_blocking`；否则会卡住宿主的定时器（监护、合并窗口都受影响），T138 的 IT-idle-exit 就是这样失败的 | T138 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

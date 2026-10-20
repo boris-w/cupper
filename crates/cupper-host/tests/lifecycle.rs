@@ -596,7 +596,9 @@ async fn it_project_add_trust_through_the_gateway() {
         )
         .unwrap();
     }
-    let info = ProjectTrustInfoParams { project_id };
+    let info = ProjectTrustInfoParams {
+        project_id: project_id.clone(),
+    };
     let info = client.request::<ProjectTrustInfo>(info).await.unwrap();
     assert_eq!(info.state, TrustState::Stale);
     let resolved = std::fs::canonicalize(&app).unwrap();
@@ -620,6 +622,15 @@ async fn it_project_add_trust_through_the_gateway() {
         "SELECT trust_state || ' ' || (git_common_dir IS NOT NULL) FROM projects",
     );
     assert_eq!(states, ["stale 1"]);
+    // A link that leads nowhere fails the scan; the audit has each step.
+    let gone = app.join(".claude/agents/gone.md");
+    std::os::unix::fs::symlink(dir.path().join("nowhere"), gone).unwrap();
+    let info = ProjectTrustInfoParams { project_id };
+    assert!(client.request::<ProjectTrustInfo>(info).await.is_err());
+    let trust = "SELECT substr(event, 15) || ' ' || coalesce(principal, '-') FROM audit
+                 WHERE event LIKE 'project.trust.%' ORDER BY id";
+    let steps = ["trusted pr_test", "stale -", "scan_failed -"];
+    until(&data_dir, "host.db", trust, &steps).await;
     terminate(&host);
     assert_eq!(exit_code(&mut host).await, 0);
 }
@@ -635,6 +646,70 @@ async fn add_project(client: &client::Client, dir: &Path) {
         path,
     };
     client.request::<ProjectAdd>(params).await.unwrap();
+}
+
+/// A host a test started: killed when the test ends, passed or failed.
+struct Running(Child);
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+/// IT-audit-retention: what the gateway records lands in the `audit` table,
+/// in its formal shape, and in `host.log`; `test/run_maintenance` keeps 90
+/// days of it, on the manual clock.
+#[tokio::test]
+async fn it_audit_retention_records_land_and_last_90_days() {
+    use cupper_protocol::methods::admin::{TestRunMaintenance, TestRunMaintenanceParams};
+
+    let dir = TempDir::new("audit");
+    let data_dir = dir.path().join("data");
+    let test_config = json!({"login_env": {}, "clock": "manual"});
+    let mut host = Running(spawn_with(&data_dir, test_config));
+    let client = connect(&data_dir).await;
+    drop(connect(&data_dir).await);
+    let events = "SELECT event || ' ' || coalesce(principal, '-') FROM audit ORDER BY id";
+    let opened = ["conn.accepted -", "conn.initialized pr_test"];
+    let first = [&opened[..], &opened, &["conn.closed pr_test"]].concat();
+    until(&data_dir, "host.db", events, &first).await;
+    let log = std::fs::read_to_string(data_dir.join("logs/host.log")).unwrap();
+    let logged: Vec<_> = (log.lines())
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .filter(|line| line["message"] == "audit")
+        .map(|line| line["fields"]["event"].as_str().unwrap().to_owned())
+        .collect();
+    let first_events: Vec<_> = first.iter().map(|e| e.split(' ').next().unwrap()).collect();
+    assert_eq!(&logged[..5], first_events);
+
+    // Two records from about 90 days ago, one just past the limit: the
+    // manual clock decides which `test/run_maintenance` drops.
+    let now: u64 = query(
+        &data_dir.join("host.db"),
+        "SELECT CAST(min(ts) AS TEXT) FROM audit",
+    )[0]
+    .parse()
+    .unwrap();
+    let days_90 = 90 * 24 * 3_600_000;
+    let old = Connection::open(data_dir.join("host.db")).unwrap();
+    old.busy_timeout(PATIENCE).unwrap();
+    for (ts, event) in [(now - days_90 - 1, "old"), (now - days_90 + 1, "edge")] {
+        let sql = "INSERT INTO audit (ts, event) VALUES (?1, ?2)";
+        old.execute(sql, rusqlite::params![ts, event]).unwrap();
+    }
+    let task = || TestRunMaintenanceParams {
+        task: serde_json::from_value(json!("audit")).unwrap(),
+    };
+    let kept = |edge: &[&'static str]| [&first[..], edge].concat();
+    client.request::<TestRunMaintenance>(task()).await.unwrap();
+    assert_eq!(query(&data_dir.join("host.db"), events), kept(&["edge -"]));
+    advance(&client, 2).await;
+    client.request::<TestRunMaintenance>(task()).await.unwrap();
+    assert_eq!(query(&data_dir.join("host.db"), events), kept(&[]));
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
 }
 
 async fn advance(client: &client::Client, ms: u64) {
@@ -1287,16 +1362,6 @@ async fn it_self_check_a_changed_executable_makes_the_host_wait_for_an_upgrade()
         }
     }
     assert_eq!(exit_code(&mut host).await, 0);
-}
-
-/// Kills the host a test left running, whatever its outcome.
-struct Running(Child);
-
-impl Drop for Running {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
 }
 
 /// Stands in for node running the bundling script (as in IT-runtime-download):
