@@ -1628,7 +1628,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T088 会话 actor I-b：交互接线
 - [ ] T089 会话 actor I-c：恢复、空闲退出与超长输出
 - [x] T043 会话 actor I：创建、发送、中断与持久化
-- [ ] T044 会话 actor II：档位、越权、崩溃与晚到输出
+- [x] T044 会话 actor II：档位、越权、崩溃与晚到输出
 - [x] T049 cupper-cli I-b：Mirror 与客户端同步状态机
 - [x] T045 cupper-cli I：客户端库与 Mirror
 - [ ] T046 cupper-cli II：命令行
