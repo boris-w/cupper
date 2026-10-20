@@ -61,7 +61,7 @@
 | T028 | 凭据的识别规则目前在 `driver/tap/redact.rs`（`sk-`、`ghp_`、JWT、`Bearer`、URL 中的 userinfo 和查询参数，只匹配词首）。可以挪到 `diag` 共用，避免两处各自改出差异 | T050 |
 | T025、T047 | 原始帧的方向 `Dir` 目前有 `send`、`recv`、`recv_nonjson`；`stderr` 和 `note` 由写入它们的任务补上 | T050（已写入 T025 的 brief） |
 | 全工作区 | serde_json 的 `preserve_order` 由 SDK 打开，在工作区内是统一生效的，所以 `cupper-protocol` 在工作区构建时也会带上它。导出物一律不能依赖 map 的键顺序（`CLAUDE.md`） | T050 |
-| T052 | 回放模式落地时，加一项自动比对：假 agent 的 persona（能力、configOptions、默认模式、命令列表、权限选项 ID）与 SP-1 录制的形态一致。T051 里这一项只用测试里的常量逐条核对 | T051 |
+| T067（v1.3.12 由 T052 拆出） | 回放模式落地时，加一项自动比对：假 agent 的 persona（能力、configOptions、默认模式、命令列表、权限选项 ID）与 SP-1 录制的形态一致。T051 里这一项只用测试里的常量逐条核对 | T051 |
 | T037、T043 及以后的 actor 任务 | 任何 `posix_spawn`（包括带 `CLOEXEC_DEFAULT` 的 `cupper_sys::spawn`）都会在内核里短暂复制整张 fd 表。别的线程正在拉起子进程时，刚关掉的 fd 可能还被持有片刻。凡是"关掉 fd 后立刻判断对端已关闭"的逻辑都要容忍这个窗口；测试里用 `cupper_sys` 的 `testutil::alone` 隔离这类断言 | T021（已写入 T037 的 brief）（已写入 T043 的 brief） |
 | T025 | 用 `store::open_writer(path, Database::Host)`（或 `Raw`）打开连接，迁移在这个连接上跑完，再交给 `Writer::spawn`：迁移需要自己的事务，`VACUUM INTO` 也不能在事务里执行，所以不能作为写线程的操作。`Readers::open` 放在写连接打开之后 | T024（已写入 brief） |
 | T037 | 启动第 5 步：`epoch::decide(LastExit::from_meta(..), Boot::since(meta.boot_session_uuid, current_boot_session(&payload)?))`，然后写 `last_start_at` 和 `boot.to_string()`。`Writer::spawn` 之前先 `quiescence.register(store::WRITER)`，写线程配置用 `WriterConfig::for_startup(&payload, &durations)`。有序退出时，把写 `last_clean_exit_at` 作为 `stop()` 之前的最后一个操作提交 | T024（已写入 brief） |
@@ -80,7 +80,7 @@
 | T072 | TS reducer 照 5.3.11 末尾"T014 实现时的裁定"的规则和视图 JSON 实现。JSON 对象的键顺序没有含义，比较时按深度相等 | T014（已写入 brief） |
 | T030 | `RawMessage::classify` 会把缺省的 `params` 变成 `null`，而 `ping` 这类参数为 `{}` 的方法，按结构体解析时会失败。分发时把 `null` 当作 `{}` | T012（已写入 brief） |
 | T035 | `project/trust_info.diff_from_trusted` 按文件列出差异，所以信任时要另存每个文件的哈希清单，按 P-4 加进 `0001` 的 `projects` 表 | T012 裁定 |
-| T052 | 假 agent 的 `--segment-file <路径>` 每次启动段号加 1，重启后的实例接着演下一段，用来回放多实例录制。persona 与 SP-1 录制的 jq 摘取命令在 `docs/tasks/T051-fake-agent-scripts/notes.md` 里，自动比对可以直接用 | T051 |
+| T067（v1.3.12 由 T052 拆出） | 假 agent 的 `--segment-file <路径>` 每次启动段号加 1，重启后的实例接着演下一段，用来回放多实例录制。persona 与 SP-1 录制的 jq 摘取命令在 `docs/tasks/T051-fake-agent-scripts/notes.md` 里，自动比对可以直接用 | T051 |
 | T055、T062、T090 | 假 agent 是独立的二进制，cargo 不支持跨 crate 的 `CARGO_BIN_EXE_*`。T055 定一个拿路径的做法（例如测试前先 `cargo build -p cupper-fake-agent`，再按 target 目录推出路径，或由 `xtask ci` 先构建），后面的任务照用。配置只经命令行参数（`--persona`、`--auth`、`--fault`、`--segment`、`--segment-file`），因为宿主的环境变量规则会过滤掉我们自己的变量。同一会话收到第二个在途 prompt 时，假 agent 以退出码 70 退出 | T051 |
 | T037 | host.db 的启动顺序：`open_writer(host.db, Database::Host)` → `store::migrate(&mut conn, MIGRATIONS, &data_dir.join("backups"), &*clock)` → 用 `meta::get` 读出 epoch 判定的输入，用 `meta::set` 写 `LastStartAt`、`BootSessionUuid`、`DataEpoch` → `Writer::spawn`。raw.db：`open_writer(raw.db, Database::Raw)` → `prepare_raw(&mut conn, &RAW_SCHEMA)`。退出码：`TooNew` → 4；`Failed` → 6，界面显示 `backup`；`Backup`、`Unreadable`、`BadVersion` 建议用 5 | T025（已写入 brief） |
 | T026 | 写事件时 `v` 取 `Upcasters::host().current(type)`，可以替代 T011 交接里的 `EVENT_VERSION`；读事件时调用 `upcast(type, v, data)`。检查点：写 `view_v`，读时调用 `checkpoint_fate(view_v)`；`VIEW_VERSION` 从 `store::upcast` 挪到 `cupper-protocol::view`，和视图类型放在一起（编排者裁定）。`turn_snapshots.v` 是整个快照一个版本，而事件的 `v` 是按类型分的，ops 里的事件体也不带 `v`，请定下这一列的含义，例如让每个 op 带自己的 `v` | T025（已写入 brief） |

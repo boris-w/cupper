@@ -332,8 +332,12 @@ UNIT-fake-scripts = "pr"
 [T052]
 milestone = "M1a"
 UNIT-rec-format = "pr"
-UNIT-replay = "pr"
 UNIT-sensitive-list = "pr"
+
+# 假 agent 回放模式与 persona 比对（计划 v1.3.12 由 T052 拆出）
+[T067]
+milestone = "M1a"
+UNIT-replay = "pr"
 
 # Claude 提取层、选项对照表与 A 层金样例
 [T053]
