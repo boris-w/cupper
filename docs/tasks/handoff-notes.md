@@ -330,6 +330,9 @@
 | T083 | 请求面板替换输入框的位置：`composer/QueueList.tsx` 的 `ComposerArea` 里按有没有待处理的请求选择请求面板或 `Composer`，排队消息保持在两者上方；草稿和附件在 `useUi()` 里，切回来原样还在。Esc、Enter 的判定在 `composer/keys.ts`（纯函数） | T086 |
 | T140、T141、T142、T145、T149 | 输入框的扩展点（T086）：底栏的项目放进 `composer/extensions/` 作为新文件（默认导出 `side`、`order`、`Component`）；浮层挂到 `OverlayContext.container`，打开时用 `setClose` 登记关闭函数；附件条已能显示 `image`、`file_ref`、`review_comment`，附件条的截图留给其中第一个能产生附件的任务。插话（`mode: steer`）、"已转为排队"的提示归 T140 | T086 |
 | e2e（T090–T093） | 输入框的 DOM 标记：`data-composer`、`data-send-state`（`disabled`、`send`、`stop`）、`data-esc-armed` | T086 |
+| T164 | host-client 的 `putBlob`（T029 没做）：用 `crypto.subtle.digest` 算 sha-256，按 `MAX_BLOB_CHUNK_BYTES` 切片，经已有的 `HostPort.sendBlob` 发出，再请求 `blob/put`。宿主端：单个 blob 上限 32 MiB、每连接合计 64 MiB；分片偏移必须接在已收字节之后，否则记为乱序（`conflict`）；分片按 `blob/put` 的 `write` scope 检查（含提权授予的） | T029 |
+| 第一个在界面里读 blob 的任务（T145 等）、T064 | host-client 的 `getBlob` 没做：用 `onBlobChunk` 收集分片按 `offset` 拼起来，收齐 `blob/get` 结果里的 `chunks` 数为止（分片一定先于结果到达；空范围也有一个"最后一片"）。CLI 的 `Client` 已能收发分片（`send_blob_chunk`、`Incoming::Blob`），T064 读录制导出可以直接用 | T029 |
+| T092 | 加固评估：网关的上传缓冲按哈希建条目，刚发第一片就超限或乱序的哈希会留下空条目，直到 `blob/put` 或断开；是否加"每连接未决上传数"的上限 | T029 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
