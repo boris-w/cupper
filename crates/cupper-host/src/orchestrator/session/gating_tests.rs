@@ -24,7 +24,7 @@ use crate::orchestrator::testkit::text;
 use crate::policy::testkit::{option, with_mode};
 
 /// The agent's options with the permission mode `mode`.
-fn changed(mode: &str) -> DriverEvent {
+pub(super) fn changed(mode: &str) -> DriverEvent {
     let mut options = caps().config;
     options[0].current = mode.into();
     DriverEvent::ConfigChanged(options)

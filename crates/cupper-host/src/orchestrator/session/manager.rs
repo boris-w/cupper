@@ -38,6 +38,7 @@ use crate::clock::{Clock, IdGen};
 use crate::driver::api::{AgentPort, ProjectConfigPolicy};
 use crate::durations::Durations;
 use crate::gateway::{AuditRecord, Call, Port, Reply, SessionPort};
+use crate::git::GitTool;
 use crate::ledger::Outcome;
 use crate::orchestrator::queue::preview;
 use crate::orchestrator::turn::{SendMode, SendRequest};
@@ -65,6 +66,8 @@ pub struct SessionDeps {
     /// The host's audit channel, the gateway's too.
     pub audit: mpsc::UnboundedSender<AuditRecord>,
     pub index: Arc<dyn IndexNotes>,
+    /// Finds the git root of a project's trust range (`Discovery::git`).
+    pub git: Option<GitTool>,
 }
 
 /// The session manager. Clones share it; the host has one.
@@ -203,13 +206,14 @@ impl SessionManager {
         };
         writer.append(batch).await.map_err(internal)?;
         let setter = (principal.clone(), confirmed);
-        let core = SessionCore::new(
+        let mut core = SessionCore::new(
             id.clone(),
             Arc::clone(&deps.ids),
             &deps.durations,
             false,
             setter,
         );
+        core.require_trust_checks();
         let (mail, inbox) = mpsc::unbounded_channel();
         let (stop, stops) = mpsc::unbounded_channel();
         let running = Arc::new(AtomicBool::new(false));
@@ -232,6 +236,9 @@ impl SessionManager {
             pending: Arc::clone(&pending),
             audit: deps.audit.clone(),
             index: Arc::clone(&deps.index),
+            project: params.project_id.clone(),
+            git: deps.git.clone(),
+            durations: deps.durations.clone(),
         };
         let first = SendRequest {
             content: params.message,
@@ -313,6 +320,22 @@ impl SessionManager {
             cached,
             confirmed,
         })
+    }
+
+    /// "不加载项目配置继续" (design 5.2.6): session `id` leaves its project's
+    /// configuration out from now on and resumes its agent session without
+    /// it. The host's own entry; the method on the wire is M1b's.
+    pub fn ignore_project_config(
+        &self,
+        id: &SessionId,
+    ) -> BoxFuture<'static, Result<(), RpcError>> {
+        let mail = self.sessions().get(id).map(|h| h.mail.clone());
+        let (done, finished) = oneshot::channel();
+        let sent = mail.is_some_and(|mail| mail.send(Mail::IgnoreProjectConfig(done)).is_ok());
+        if !sent {
+            return Box::pin(future::ready(Err(not_found("session"))));
+        }
+        Box::pin(finished.map(|done| done.map_err(|_| internal("the session stopped"))))
     }
 
     fn running_turns(&self) -> u32 {
@@ -404,8 +427,9 @@ impl Port for SessionManager {
             return refuse(call, not_found("session"));
         };
         let (reply, answer) = oneshot::channel();
-        if let Err(mpsc::error::SendError((call, _))) = mail.send((call, reply)) {
-            return refuse(call, internal("the session stopped"));
+        let sent = mail.send(Mail::Call(Box::new(call), reply));
+        if let Err(mpsc::error::SendError(Mail::Call(call, _))) = sent {
+            return refuse(*call, internal("the session stopped"));
         }
         let stopped = || Err(internal("the session stopped before it replied"));
         Box::pin(answer.map(move |outcome| outcome.unwrap_or_else(|_| stopped())))

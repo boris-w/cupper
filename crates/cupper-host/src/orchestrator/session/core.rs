@@ -131,6 +131,15 @@ impl SessionCore {
         self.coalescer.set_stops_commands(stops_commands);
     }
 
+    pub fn ids(&self) -> &IdGen {
+        &self.ids
+    }
+
+    /// Messages wait for the project trust rescan before their turns.
+    pub fn require_trust_checks(&mut self) {
+        self.machine.require_checks();
+    }
+
     /// The running turn, from `turn.started` until it completes.
     pub fn turn_id(&self) -> Option<&TurnId> {
         self.machine.turn_id()
@@ -311,9 +320,16 @@ impl SessionCore {
                 }
                 tier_guard::Action::Timer(request) => out.push(timer(request, Key::Revert)),
                 tier_guard::Action::Unconfirmed(reason) => {
-                    let gate = reason.as_ref().map(|_| PauseReason::ConfigUnconfirmed);
-                    self.machine(turn::Input::Gate(gate), now, out);
-                    if reason.is_some() {
+                    let (pause, shut) = (PauseReason::ConfigUnconfirmed, reason.is_some());
+                    self.machine(
+                        turn::Input::Gate {
+                            reason: pause,
+                            shut,
+                        },
+                        now,
+                        out,
+                    );
+                    if shut {
                         let notice = notice(&self.ids, now, NoticeCode::ConfigUnconfirmed);
                         out.extend(notice.map(Action::Event));
                     }

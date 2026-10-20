@@ -34,7 +34,7 @@ pub(super) struct Prepared {
 
 /// What [`prepare`] needs, taken from the actor when the call arrives.
 #[derive(Debug, Clone)]
-pub(super) struct Context {
+pub(crate) struct Context {
     pub git: Option<GitTool>,
     /// Every project and session workspace (design 5.2.10).
     pub writable: Vec<PathBuf>,
@@ -47,10 +47,7 @@ pub(super) async fn prepare(path: PathBuf, cx: Context) -> Result<Prepared, RpcE
         .ok()
         .filter(|path| path.is_dir())
         .ok_or_else(|| RpcError::app(ErrorCode::NotFound, "no such directory"))?;
-    let git = match (&cx.git, work_tree(&path)) {
-        (Some(tool), Some(tree)) => Some(locate(tool, &tree, &cx).await?),
-        _ => None,
-    };
+    let git = git_of(&path, &cx).await?;
     let (dir, root) = (path.clone(), git.as_ref().map(|(root, _)| root.clone()));
     let scan = tokio::task::spawn_blocking(move || trust::scan(&dir, root.as_deref()))
         .await
@@ -60,6 +57,18 @@ pub(super) async fn prepare(path: PathBuf, cx: Context) -> Result<Prepared, RpcE
             RpcError::app(ErrorCode::Unavailable, message).with_reason(ErrorReason::ScanFailed)
         })?;
     Ok(Prepared { path, git, scan })
+}
+
+/// The root and common dir of the git work tree `path` (a realpath) is in;
+/// `None` outside git or without a git to run.
+pub(crate) async fn git_of(
+    path: &Path,
+    cx: &Context,
+) -> Result<Option<(PathBuf, String)>, RpcError> {
+    match (&cx.git, work_tree(path)) {
+        (Some(tool), Some(tree)) => Ok(Some(locate(tool, &tree, cx).await?)),
+        _ => Ok(None),
+    }
 }
 
 /// The nearest directory at or above `path` with a `.git`, as git finds it.
