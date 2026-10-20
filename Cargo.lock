@@ -322,6 +322,7 @@ version = "0.0.0"
 dependencies = [
  "agent-client-protocol",
  "agent-client-protocol-derive",
+ "base64",
  "cupper-cli",
  "cupper-protocol",
  "cupper-sys",

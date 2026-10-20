@@ -74,6 +74,11 @@ impl CliLocator {
         }
     }
 
+    /// Where agents can write: what a config dir must stay out of too.
+    pub fn boundaries(&self) -> &Boundaries {
+        &self.boundaries
+    }
+
     /// The trusted entries of the login shell's `PATH`, as realpaths: where
     /// `git` and `git-lfs` come from, and git's own `PATH` (design 5.2.10).
     pub fn trusted_path(&self) -> &[PathBuf] {

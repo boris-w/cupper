@@ -1,4 +1,4 @@
-//! Session actors (design 5.2.6): one [`SessionActor`](actor) per session
+//! Session actors (design 5.2.6): one `SessionActor` per session
 //! runs its pure cores ([`core`]) on the session's mailbox, its agent's
 //! events, the clock and the store; the [`SessionManager`] starts them and
 //! serves the gateway's session port.
