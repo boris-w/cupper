@@ -189,6 +189,8 @@ impl Host {
             ids: ids.clone(),
             blobs,
             quiescence: quiescence.clone(),
+            durations: durations.clone(),
+            rss: test_rss(&payload),
         };
         let claude = AgentRuntime::start(deps);
         // The audit records go into the `audit` table from T059 on.
@@ -363,6 +365,17 @@ async fn claude_launch(
     #[cfg(not(feature = "test-harness"))]
     let _ = payload;
     launch::production(clock, durations, data_dir, host, login, &found.locator).await
+}
+
+/// `test_config.rss_samples` of Claude (design 5.9.9).
+fn test_rss(payload: &Payload) -> Option<u64> {
+    #[cfg(feature = "test-harness")]
+    return payload.test_config.rss_samples.claude;
+    #[cfg(not(feature = "test-harness"))]
+    {
+        let _ = payload;
+        None
+    }
 }
 
 /// The clock, the durations and the login shell's environment of

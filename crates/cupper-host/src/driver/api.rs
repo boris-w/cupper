@@ -213,6 +213,8 @@ pub enum DriverEvent {
     AdapterExited {
         instance: AdapterInstanceId,
         status: ExitStatus,
+        /// The latest stderr, redacted, for the `error` item's details (MS-5).
+        stderr: String,
     },
 }
 
@@ -314,6 +316,9 @@ pub enum AgentErrorClass {
     CliMissing,
     /// The runtime failed its check, or the adapter did not start or connect.
     RuntimeFailed,
+    /// Five failures within five minutes; it starts again once cleared
+    /// (design 5.6.8).
+    Crashed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -341,6 +346,7 @@ impl AgentErrorClass {
             Self::Other => FailureCode::Other,
             Self::CliMissing => FailureCode::CliMissing,
             Self::RuntimeFailed => FailureCode::RuntimeFailed,
+            Self::Crashed => FailureCode::AdapterCrashed,
         }
     }
 }

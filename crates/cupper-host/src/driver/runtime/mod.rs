@@ -13,10 +13,18 @@
 //!   broker's `Cancelled` then lets the responder go.
 //! - **An instance ends** once its process has exited and its connection
 //!   has closed, so nothing it wrote is lost: every session hears
-//!   `AdapterExited`, and the next attach starts another. On the exit the
-//!   rest of its process group is killed, which lets the pipes close.
-//!   Backing off between restarts, descendants in groups of their own, the
-//!   order of closing (5.6.8) and resource sampling are T008's.
+//!   `AdapterExited` with the latest stderr. An instance that ends unasked
+//!   is a failure: what is left of its process group and of the groups
+//!   sampling found is killed, and the connection gets 2 s more. The next
+//!   start waits out the backoff ([`lifecycle::Restarts`]); attaches that
+//!   wait start it when the backoff is over, and five failures within five
+//!   minutes make the agent `crashed`.
+//! - **A stop** follows 5.6.8: `session/close` for every session, stdin
+//!   closed, 3 s each; then SIGTERM to the adapter's group and those of all
+//!   its descendants, found before any signal, and SIGKILL 2 s later.
+//! - **Every 30 s** it samples the processes ([`lifecycle::sample`]): their
+//!   memory for [`AgentRuntime::resources`], and the descendants' groups,
+//!   kept in the `adapters` row for the cleanup after a crash of the host.
 //! - Steering (T140), `SetConfig` (T044) and probing (T009) are not served
 //!   yet; their commands are dropped.
 
@@ -33,6 +41,7 @@ use std::mem;
 use std::path::PathBuf;
 use std::process::ExitStatus;
 use std::sync::Arc;
+use std::time::Duration;
 
 use agent_client_protocol::schema::v1::{
     CancelNotification, CloseSessionRequest, CreateElicitationResponse, ElicitationMode,
@@ -44,21 +53,24 @@ use agent_client_protocol::{Error, RequestCancellation, Responder};
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use serde_json::json;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 
 use self::launch::{Context, Instance, Launch};
-use super::acp::FromAgent;
+use self::lifecycle::{Resources, Restarts};
+use super::acp::{AcpConnection, FromAgent};
 use super::api::{
     AgentError, AgentErrorClass, AgentErrorForm, AgentPort, AgentSessionId, AskAnswer, AskId,
     AskRequest, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent, ProjectConfigPolicy,
 };
 use super::claude::{self, ClaudeSession, capabilities};
 use crate::clock::IdGen;
+use crate::durations::{ADAPTER_CLOSE_WAIT, ADAPTER_TERM_WAIT, Durations, RESOURCE_SAMPLE};
+use crate::pure::{Alarm, TimerRequest, TimerTable};
 use crate::quiescence::{ActorKind, Participant, Quiescence};
 use crate::store::BlobStore;
 use crate::supervisor::{Activity, Part};
 use cupper_protocol::ids::AdapterInstanceId;
-use cupper_sys::Signal;
+use cupper_sys::{ProcessGroup, Signal};
 
 /// The runtimes in the quiescence barrier.
 pub const AGENT_RUNTIME: ActorKind = ActorKind::new("agent_runtime");
@@ -72,12 +84,16 @@ pub struct RuntimeDeps {
     /// Images and long text of prompts.
     pub blobs: BlobStore,
     pub quiescence: Quiescence,
+    pub durations: Durations,
+    /// `test_config.rss_samples`: the memory samples report.
+    pub rss: Option<u64>,
 }
 
 /// The runtime of one agent. Clones share it.
 #[derive(Debug, Clone)]
 pub struct AgentRuntime {
     mail: mpsc::UnboundedSender<Mail>,
+    resources: watch::Receiver<Option<Resources>>,
 }
 
 #[derive(Debug)]
@@ -85,7 +101,8 @@ enum Mail {
     Attach(Box<Pending>),
     Command(DriverCommand),
     Withdrawn(AskId),
-    Stop(oneshot::Sender<()>, bool),
+    Stop(oneshot::Sender<()>),
+    ClearCrashed,
 }
 
 /// An attach on its way.
@@ -111,6 +128,8 @@ enum Wire {
     /// `session/set_config_option` while attaching.
     Configured(String, Result<Vec<SessionConfigOption>, Error>),
     Prompted(String, super::api::PromptTag, Result<PromptResponse, Error>),
+    /// A stop's `session/close` was answered.
+    SessionClosed,
 }
 
 impl From<FromAgent> for Wire {
@@ -133,6 +152,28 @@ struct Opening {
     reply: oneshot::Sender<Result<AttachInfo, AgentError>>,
     todo: Vec<(String, String)>,
     options: Vec<SessionConfigOption>,
+}
+
+/// What the actor's timer is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Due {
+    /// The backoff is over: start an instance for the waiting attaches.
+    Start,
+    Sample,
+    /// A stop: the sessions had their time to close.
+    Stdin,
+    /// A stop: the adapter had its time to exit after its stdin closed.
+    Term,
+    /// SIGKILL what is left, and stop waiting for the connection.
+    Kill,
+}
+
+/// A stop on its way: the groups to signal, and the sessions to close.
+#[derive(Debug)]
+struct Stopping {
+    done: oneshot::Sender<()>,
+    groups: Vec<ProcessGroup>,
+    closing: usize,
 }
 
 /// A request the session has not answered.
@@ -159,9 +200,29 @@ struct Actor {
     /// With the session asked and, to drop, the end of the withdrawal watch.
     asks: HashMap<AskId, (String, Asked, oneshot::Sender<()>)>,
     last_ask: u64,
-    /// A stop waiting for the instance's end, and whether it is forced.
-    stopping: Option<(oneshot::Sender<()>, bool)>,
+    stopping: Option<Stopping>,
+    timers: TimerTable<Due>,
+    alarm: Alarm,
+    restarts: Restarts,
+    /// The descendants' groups sampling found, still alive.
+    recorded: Vec<ProcessGroup>,
+    resources: watch::Sender<Option<Resources>>,
     _participant: Participant,
+}
+
+/// The instance, its connection while its stdin is open, and its wire.
+fn link<'a>(
+    instance: &'a Option<Instance>,
+    wire: &'a Option<(mpsc::UnboundedSender<Wire>, mpsc::UnboundedReceiver<Wire>)>,
+) -> Option<(
+    &'a Instance,
+    &'a AcpConnection,
+    &'a mpsc::UnboundedSender<Wire>,
+)> {
+    let (Some(instance), Some((wire, _))) = (instance, wire) else {
+        return None;
+    };
+    Some((instance, instance.conn.as_ref()?, wire))
 }
 
 fn error(class: AgentErrorClass, message: impl ToString) -> AgentError {
@@ -178,6 +239,11 @@ impl AgentRuntime {
     pub fn start(deps: RuntimeDeps) -> Self {
         let (mail, inbox) = mpsc::unbounded_channel();
         let participant = deps.quiescence.enter(AGENT_RUNTIME);
+        let (resources, sampled) = watch::channel(None);
+        let (alarm, restarts) = (
+            Alarm::new(deps.cx.clock.clone()),
+            Restarts::new(&deps.durations),
+        );
         let actor = Actor {
             deps,
             mail: mail.downgrade(),
@@ -191,10 +257,26 @@ impl AgentRuntime {
             asks: HashMap::new(),
             last_ask: 0,
             stopping: None,
+            timers: TimerTable::new(),
+            alarm,
+            restarts,
+            recorded: Vec::new(),
+            resources,
             _participant: participant,
         };
         tokio::spawn(actor.run(inbox));
-        Self { mail }
+        let resources = sampled;
+        Self { mail, resources }
+    }
+
+    /// The latest sample of the adapter's processes; `None` while none runs.
+    pub fn resources(&self) -> watch::Receiver<Option<Resources>> {
+        self.resources.clone()
+    }
+
+    /// Forgets the failures, so that a `crashed` agent starts again.
+    pub fn clear_crashed(&self) {
+        let _ = self.mail.send(Mail::ClearCrashed);
     }
 }
 
@@ -231,11 +313,11 @@ impl Part for AgentRuntime {
         Activity::default()
     }
 
-    /// Terminates the adapter's process group (kills it when `force`d), then
-    /// waits for its end (the full order of 5.6.8 is T008's).
-    fn stop(&self, force: bool) -> BoxFuture<'static, ()> {
+    /// Closes the adapter in the order of 5.6.8, forced or not: at most
+    /// 3 + 3 + 2 s and the time SIGKILL takes.
+    fn stop(&self, _force: bool) -> BoxFuture<'static, ()> {
         let (done, stopped) = oneshot::channel();
-        let _ = self.mail.send(Mail::Stop(done, force));
+        let _ = self.mail.send(Mail::Stop(done));
         Box::pin(stopped.map(drop))
     }
 }
@@ -256,8 +338,107 @@ impl Actor {
                     None => break,
                 },
                 Some(wire) = wire => self.wire(wire),
+                () = self.alarm.rung() => self.due(),
+            }
+            self.alarm.follow(&self.timers);
+        }
+    }
+
+    fn now(&self) -> crate::clock::MonoTime {
+        self.deps.cx.clock.now_mono()
+    }
+
+    fn set(&mut self, key: Due, after: Duration) {
+        self.set_at(key, self.now() + after);
+    }
+
+    fn set_at(&mut self, key: Due, at: crate::clock::MonoTime) {
+        self.timers.apply(TimerRequest::Set { key, at });
+    }
+
+    fn due(&mut self) {
+        while let Some(due) = self.timers.pop_due(self.now()) {
+            match due {
+                Due::Start => self.ensure_started(),
+                Due::Sample => self.sample(),
+                Due::Stdin => self.close_stdin(),
+                Due::Term => {
+                    let (Some(instance), Some(stopping)) = (&self.instance, &mut self.stopping)
+                    else {
+                        continue;
+                    };
+                    let groups =
+                        lifecycle::union(instance.group.with_descendants(), &self.recorded);
+                    stopping.groups = lifecycle::union(groups, &stopping.groups);
+                    lifecycle::signal(&stopping.groups, Signal::Term);
+                    self.set(Due::Kill, self.deps.durations.get(ADAPTER_TERM_WAIT));
+                }
+                Due::Kill => {
+                    if let Some(instance) = &self.instance {
+                        let stopped = self.stopping.as_ref().map(|s| s.groups.as_slice());
+                        let groups = lifecycle::union(vec![instance.group], &self.recorded);
+                        let groups = lifecycle::union(groups, stopped.unwrap_or_default());
+                        lifecycle::signal(&groups, Signal::Kill);
+                    }
+                    self.closed = true;
+                    self.end();
+                }
             }
         }
+    }
+
+    /// Samples the instance's processes, and samples again in 30 s.
+    fn sample(&mut self) {
+        let Some(instance) = &self.instance else {
+            return;
+        };
+        let cli = (self.deps.launch.cli.as_ref()).and_then(|(cli, _)| fs::canonicalize(cli).ok());
+        let (resources, groups) = lifecycle::sample(&instance.group, cli.as_deref(), self.deps.rss);
+        let groups = lifecycle::union(groups, &self.recorded);
+        self.recorded = groups.into_iter().filter(ProcessGroup::is_alive).collect();
+        launch::record_groups(&self.deps.cx.writer, &instance.id, &self.recorded);
+        let sessions = self.sessions.len();
+        if resources.claude_processes > sessions {
+            tracing::warn!(
+                ?resources,
+                sessions,
+                "claude processes beyond sessions (Q43)"
+            );
+        }
+        self.resources.send_replace(Some(resources));
+        self.set(Due::Sample, self.deps.durations.get(RESOURCE_SAMPLE));
+    }
+
+    /// A stop's first step: `session/close` for every session.
+    fn begin_stop(&mut self) {
+        let Some((_, conn, wire)) = link(&self.instance, &self.wire) else {
+            return;
+        };
+        let Some(stopping) = &mut self.stopping else {
+            return;
+        };
+        for session in self.sessions.keys() {
+            let wire = wire.clone();
+            let request = CloseSessionRequest::new(session.clone());
+            let sent = conn.request(request, move |_| drop(wire.send(Wire::SessionClosed)));
+            stopping.closing += usize::from(sent.is_ok());
+        }
+        match stopping.closing {
+            0 => self.close_stdin(),
+            _ => self.set(Due::Stdin, self.deps.durations.get(ADAPTER_CLOSE_WAIT)),
+        }
+    }
+
+    /// A stop's second step: the adapter's stdin closes.
+    fn close_stdin(&mut self) {
+        let Some(instance) = &mut self.instance else {
+            return;
+        };
+        if instance.conn.take().is_none() {
+            return;
+        }
+        self.timers.apply(TimerRequest::Cancel(Due::Stdin));
+        self.set(Due::Term, self.deps.durations.get(ADAPTER_CLOSE_WAIT));
     }
 
     async fn mail(&mut self, mail: Mail) {
@@ -270,21 +451,47 @@ impl Actor {
                     self.to_session(session, DriverEvent::AskWithdrawn(ask));
                 }
             }
-            Mail::Stop(done, force) => {
+            Mail::Stop(done) => {
+                // Attaches still waiting hear that the adapter went away.
+                self.waiting.clear();
+                self.timers.apply(TimerRequest::Cancel(Due::Start));
                 if self.wire.is_none() {
                     let _ = done.send(());
                     return;
                 }
-                self.stopping = Some((done, force));
-                self.terminate();
+                // Before any signal, while the adapter still runs (5.6.8).
+                let found = self.instance.as_ref().map(|i| i.group.with_descendants());
+                let groups = lifecycle::union(found.unwrap_or_default(), &self.recorded);
+                self.stopping = Some(Stopping {
+                    done,
+                    groups,
+                    closing: 0,
+                });
+                self.begin_stop();
+            }
+            Mail::ClearCrashed => {
+                self.restarts.clear();
+                self.ensure_started();
             }
         }
     }
 
-    /// Starts an instance unless one runs or is starting.
+    /// Starts an instance for the waiting attaches unless one runs or is
+    /// starting, or the backoff is not over: then when it is.
     fn ensure_started(&mut self) {
-        if self.instance.is_some() || self.wire.is_some() {
+        let busy = self.instance.is_some() || self.wire.is_some() || self.stopping.is_some();
+        if busy || self.waiting.is_empty() {
             return;
+        }
+        let Some(at) = self.restarts.next_start() else {
+            let crashed = error(AgentErrorClass::Crashed, "5 failures within 5 minutes");
+            for pending in mem::take(&mut self.waiting) {
+                let _ = pending.reply.send(Err(crashed.clone()));
+            }
+            return;
+        };
+        if at > self.now() {
+            return self.set_at(Due::Start, at);
         }
         let (wire, rx) = mpsc::unbounded_channel();
         (self.wire, self.exit, self.closed) = (Some((wire.clone(), rx)), None, false);
@@ -309,8 +516,9 @@ impl Actor {
         match started {
             Ok(instance) => {
                 self.instance = Some(instance);
+                self.set(Due::Sample, self.deps.durations.get(RESOURCE_SAMPLE));
                 if self.stopping.is_some() {
-                    return self.terminate();
+                    return self.begin_stop();
                 }
                 for pending in mem::take(&mut self.waiting) {
                     self.attach(pending);
@@ -318,11 +526,12 @@ impl Actor {
             }
             Err(err) => {
                 self.wire = None;
+                self.restarts.failed(self.now());
                 for pending in mem::take(&mut self.waiting) {
                     let _ = pending.reply.send(Err(err.clone()));
                 }
-                if let Some((done, _)) = self.stopping.take() {
-                    let _ = done.send(());
+                if let Some(stopping) = self.stopping.take() {
+                    let _ = stopping.done.send(());
                 }
             }
         }
@@ -332,6 +541,10 @@ impl Actor {
         let (Some(instance), Some((wire, _))) = (&self.instance, &self.wire) else {
             self.waiting.push(pending);
             return self.ensure_started();
+        };
+        // Closing: the attach hears that the adapter went away.
+        let Some(conn) = &instance.conn else {
+            return;
         };
         // The agent gets the real path (K13).
         let cwd = fs::canonicalize(&pending.attach.cwd).unwrap_or(pending.attach.cwd);
@@ -343,7 +556,7 @@ impl Actor {
         });
         let wire = wire.clone();
         let sent = match pending.attach.target.clone() {
-            AttachTarget::New => instance.conn.request(
+            AttachTarget::New => conn.request(
                 NewSessionRequest::new(cwd).meta(meta),
                 move |result: Result<_, Error>| {
                     let result = result.map(|r| {
@@ -355,7 +568,7 @@ impl Actor {
                     let _ = wire.send(Wire::Opened(Box::new(pending), result));
                 },
             ),
-            AttachTarget::Resume(AgentSessionId(id)) => instance.conn.request(
+            AttachTarget::Resume(AgentSessionId(id)) => conn.request(
                 ResumeSessionRequest::new(id.clone(), cwd).meta(meta),
                 move |result: Result<_, Error>| {
                     let result = result.map(|r| (id, r.config_options.unwrap_or_default()));
@@ -371,11 +584,22 @@ impl Actor {
         match wire {
             Wire::Started(started) => self.started(*started),
             Wire::Exited(status) => {
-                if let Some(instance) = &self.instance {
-                    let _ = instance.group.signal(Signal::Kill);
+                if let Some(instance) = self.instance.as_ref().filter(|_| self.stopping.is_none()) {
+                    let groups = lifecycle::union(vec![instance.group], &self.recorded);
+                    lifecycle::signal(&groups, Signal::Kill);
+                    self.set(Due::Kill, self.deps.durations.get(ADAPTER_TERM_WAIT));
                 }
                 self.exit = Some(status);
                 self.end();
+            }
+            Wire::SessionClosed => {
+                let Some(stopping) = &mut self.stopping else {
+                    return;
+                };
+                stopping.closing = stopping.closing.saturating_sub(1);
+                if stopping.closing == 0 {
+                    self.close_stdin();
+                }
             }
             Wire::Agent(message) => self.incoming(*message),
             Wire::Opened(pending, result) => match result {
@@ -454,7 +678,7 @@ impl Actor {
 
     /// Applies the next option of an opening session, or answers its attach.
     fn configure(&mut self, session: String) {
-        let (Some(instance), Some((wire, _))) = (&self.instance, &self.wire) else {
+        let Some((instance, conn, wire)) = link(&self.instance, &self.wire) else {
             return;
         };
         let Some(opening) = self.opening.get_mut(&session) else {
@@ -464,12 +688,10 @@ impl Actor {
             let wire = wire.clone();
             let value = SessionConfigOptionValue::value_id(value);
             let request = SetSessionConfigOptionRequest::new(session.clone(), option, value);
-            let sent = instance
-                .conn
-                .request(request, move |result: Result<_, Error>| {
-                    let result = result.map(|r| r.config_options);
-                    let _ = wire.send(Wire::Configured(session, result));
-                });
+            let sent = conn.request(request, move |result: Result<_, Error>| {
+                let result = result.map(|r| r.config_options);
+                let _ = wire.send(Wire::Configured(session, result));
+            });
             drop(sent);
             return;
         }
@@ -489,7 +711,7 @@ impl Actor {
     }
 
     async fn command(&mut self, command: DriverCommand) {
-        let (Some(instance), Some((wire, _))) = (&self.instance, &self.wire) else {
+        let Some((_, conn, wire)) = link(&self.instance, &self.wire) else {
             return;
         };
         match command {
@@ -512,18 +734,18 @@ impl Actor {
                 };
                 let wire = wire.clone();
                 let request = PromptRequest::new(id.clone(), blocks);
-                let sent = instance.conn.request(request, move |result| {
+                let sent = conn.request(request, move |result| {
                     let _ = wire.send(Wire::Prompted(id, tag, result));
                 });
                 drop(sent);
             }
             DriverCommand::Cancel { session } => {
-                drop(instance.conn.notify(CancelNotification::new(session.0)));
+                drop(conn.notify(CancelNotification::new(session.0)));
             }
             DriverCommand::Close { session } => {
                 let AgentSessionId(id) = session;
                 self.sessions.remove(&id);
-                let sent = instance.conn.request(CloseSessionRequest::new(id), drop);
+                let sent = conn.request(CloseSessionRequest::new(id), drop);
                 drop(sent);
             }
             DriverCommand::Answer { ask, answer } => self.answer(ask, answer),
@@ -639,33 +861,37 @@ impl Actor {
         }
     }
 
-    /// Terminates the instance's process group for a stop.
-    fn terminate(&self) {
-        let (Some(instance), Some((_, force))) = (&self.instance, &self.stopping) else {
-            return;
-        };
-        let signal = if *force { Signal::Kill } else { Signal::Term };
-        let _ = instance.group.signal(signal);
-    }
-
     /// Ends the instance once it has exited and its connection has closed.
     fn end(&mut self) {
         let (Some(status), true) = (self.exit, self.closed) else {
             return;
         };
-        let Some(Instance { id: instance, .. }) = self.instance.take() else {
+        let Some(Instance { id, tail, .. }) = self.instance.take() else {
             return;
         };
         self.wire = None;
         self.asks.clear();
         // Their attaches hear that the adapter went away.
         self.opening.clear();
-        self.broadcast(DriverEvent::AdapterExited { instance, status });
+        for due in [Due::Sample, Due::Stdin, Due::Term, Due::Kill] {
+            self.timers.apply(TimerRequest::Cancel(due));
+        }
+        (self.recorded, self.exit) = (Vec::new(), None);
+        self.resources.send_replace(None);
+        let (instance, stderr) = (id, tail.map(|tail| tail.text()).unwrap_or_default());
+        let exited = DriverEvent::AdapterExited {
+            instance,
+            status,
+            stderr,
+        };
+        self.broadcast(exited);
         self.sessions.clear();
-        if let Some((done, _)) = self.stopping.take() {
-            let _ = done.send(());
-        } else if !self.waiting.is_empty() {
-            self.ensure_started();
+        match self.stopping.take() {
+            Some(stopping) => drop(stopping.done.send(())),
+            None => {
+                self.restarts.failed(self.now());
+                self.ensure_started();
+            }
         }
     }
 }

@@ -323,6 +323,7 @@ impl World {
                 In::Agent(DriverEvent::AdapterExited {
                     instance,
                     status: ExitStatus::from_raw(9),
+                    stderr: String::new(),
                 })
             }
             Op::Advance(_) => return None,

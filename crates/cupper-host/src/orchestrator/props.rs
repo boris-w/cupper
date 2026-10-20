@@ -216,6 +216,7 @@ impl World {
                 Input::Driver(DriverEvent::AdapterExited {
                     instance: AdapterInstanceId::from_uuid(self.instance - 1),
                     status: ExitStatus::from_raw(9),
+                    stderr: String::new(),
                 })
             }
             Op::Advance(ms) => {
