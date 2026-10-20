@@ -37,17 +37,22 @@ pub fn sign(path: &Path, signing: &Signing) -> Result<String> {
 /// The cdhash (40 hex digits) of the code at `path`; for a bundle, of its
 /// main executable.
 pub fn cdhash(path: &Path) -> Result<String> {
-    let details = codesign(
-        Command::new("codesign")
-            .arg("--display")
-            .arg("--verbose=3")
-            .arg(path),
-    )?;
-    details
+    details(path)?
         .lines()
         .find_map(|line| line.strip_prefix("CDHash="))
         .map(str::to_owned)
         .with_context(|| format!("codesign printed no CDHash for {}", path.display()))
+}
+
+/// What `codesign --display` reports about the code at `path`, one
+/// `Key=value` per line (`Identifier=`, `CodeDirectory ... flags=`, `CDHash=`).
+pub fn details(path: &Path) -> Result<String> {
+    codesign(
+        Command::new("codesign")
+            .arg("--display")
+            .arg("--verbose=3")
+            .arg(path),
+    )
 }
 
 /// Runs codesign and returns what it printed on stderr, where it reports.
