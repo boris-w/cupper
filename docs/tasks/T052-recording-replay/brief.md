@@ -85,3 +85,19 @@ SP-1 留下了 48 份真实录制（`spikes/SP-1-adapter-behavior/recordings/`�
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径，也不要写任何扫描命中的内容。其他物料（`notes.md`、转换脚本）由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 2,400 行（第 1–4 项约 1,520，第 5–6 项约 875），在写代码之前停下汇报。
+
+**裁定：拆分（计划 v1.3.12）。**
+- **T052 收窄为第 1–4 项**：格式库、SP-1 转换、脱敏与扫描。规模改为 L，上限约 1,600 行，硬停止线 1,700。验收标准里与回放和 persona 比对相关的条目移出，UNIT-replay 移到 T067。
+- **新增 T067**（依赖 T052）：假 agent 回放模式与 persona 比对，UNIT-replay。T051 留下的两条交接改归 T067。T067 不在关键路径上，由编排者另行派发。
+
+执行者提出的 6 项取舍全部认可：
+1. 格式 v1 的细节：`instance` 从 0 开始，与 `--segment` 编号一致；每段以 `instance_started` 开头，它也只能出现在段首；段内 `seq` 严格递增、`t` 相对段首且不减；头行出现不认识的键就报错；负载与 `dir` 一一对应。
+2. SP-1 的映射：每个进程的 `header` note 改成该段的 `instance_started`（版本进文件头行，日期和客户端能力留在 note 里）；`exit` 改成 `instance_exited`；其余 note 改成 `{event: <原 note>, ...data}`；`seq` 保留原值，`t` 换算成段内时间。
+3. 目录：`claude-agent-acp/0.91.0/2.1.296/`、`codex-acp/2.2.2/0.160.1/`（适配器自带的 codex）、`codex-acp/2.2.2/0.159.2/`（本机 codex）；头行的 `adapter` 是 `claude-agent-acp` 或 `codex-acp`，`cli` 是 `claude` 或 `codex`。
+4. 扫描放在 TS 的 `tools/sanitize`（`scan`、`words` 两个命令，脱敏后的重新扫描用同一份代码）；xtask 只负责找到主仓库的 `.private/sensitive-words.txt` 并调用。清单不存在时跳过并提示；摘要的作业条目加 `skipped` 字段，`xtask` 的摘要字段白名单相应加一项。
+5. 回放的宽松比对档不实现（归 T067，没有使用方就不写）。
+6. persona 比对改为从 `testdata/recordings/` 读录制（归 T067）。

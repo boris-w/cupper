@@ -98,6 +98,12 @@ durations! {
     /// How often the ledger drops the commands past their retention (design
     /// 5.4.5).
     LEDGER_SWEEP = "ledger_sweep", Duration::from_secs(60 * 60);
+    /// How long the login shell may take to print its environment (design
+    /// 5.6.6, Q18).
+    LOGIN_SHELL = "login_shell", Duration::from_secs(5);
+    /// How long `--version` of a CLI, git or git-lfs, and `xcode-select -p`,
+    /// may take (design 5.6.6, 5.2.10).
+    VERSION_PROBE = "version_probe", Duration::from_secs(5);
     /// The registry's own tests: a short coalescing window.
     #[cfg(test)]
     TEST_TICK = "test_tick", Duration::from_millis(40);
