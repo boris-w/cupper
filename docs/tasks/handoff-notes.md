@@ -284,6 +284,17 @@
 | T064 | 录制导出（`diag/recording_export`，test-harness、dev-auth 构建）：`blob/get` 有执行者（T029）之前，直接按 `blobs/sha256/<前两位>/<hash>` 读数据目录里的文件；头行的 `scenario` 先填会话 ID、`usage` 先填 `gold-b`、`replay`，入库时按剧本改写；跑 `tools/sanitize` 时，用例临时根目录的链接路径和真实路径都要作为 `--base` 传入；导出受 `max_blob_bytes` 限制；导出的 blob 没有被引用，过了宽限期会被当作孤儿清掉，要及时取走。按会话导出时没有 `sessionId` 的帧都保留，每个宿主只跑一个会话就不受影响 | T116 |
 | T063 | 缺陷（T055 起）：`AdapterLog` 打开失败时 launch 不读适配器的 stderr、直接关掉管道，适配器再写 stderr 会收到 SIGPIPE，stderr 原始帧也没有了。修法：没有日志时也起一个只写原始帧的读取任务（T116 的 `notes.md`） | T116 |
 | 需要等原始帧落盘的用例 | 原始帧不持有静止屏障的 `Hold`；IT-recording-export 轮询 `raw.db` 等 note 齐了再导出（T116 的 `notes.md`）。`instance_exited` 在进程退出时写，它的 `seq` 可能排在最后几行 stdout 之前 | T116 |
+| T125 | 改标题和归档要通知索引：给 `orchestrator::session::Note` 加标题变体（标题、来源）；归档时状态核心删掉这一项，并写 `session.removed{archived}`（启动时的对账已经会补）。agent 起标题的任务同样走标题变体 | T100 |
+| T150 | 系统通知接在 `IndexActor::step` 处理 `Action::Intent` 的地方，或者读索引流里的 `notification.intent`。意图的原因：进入 `needs_action`（待处理数从 0 变成大于 0）、回合 `completed`、回合 `failed`；`cancelled`、`interrupted` 不写；前台的 `desktop_ui` 在看这个会话时、或 100 ms 内请求已经答完时丢掉 | T100 |
+| T089 | 恢复会话时，会话 actor 的 `Pending` 等通知会照常进入索引的状态核心；启动时核心已经从 `sessions` 行补入了这些会话。另有两件：① `StreamWriter::append` 遇到空的 `bodies` 直接返回，`with` 里的行写入不执行（文档里没写），给它补文档，并在 `bodies` 为空、`with` 非空时报错或照常执行行写入；② `session/get` 按行和会话视图自己算状态，规则与索引一致但实现两份，恢复时留意两边一致 | T100 |
+| T046 | CLI 上报在场可以用 `Client::notify::<ClientPresence>`；索引不采信 CLI 的在场（只采信前台的 `desktop_ui`） | T100 |
+| T036 | `AgentsUpdated.git` 现在为空：`GitTool` 不知道 git 和 git-lfs 的版本。设置页要显示时，把 T094 的 git 版本检测结果接进来 | T100 |
+| T068 | 缺陷（T109 起）：`orchestrator/session/actor.rs` 的 `rescan` 用 `tokio::spawn` 另起任务，没有持有静止屏障的 `Hold`；任务里有数据库读取、git 子进程和 `spawn_blocking`，违反 T047 的规则（另起的 task 要持有 `Hold` 直到交回结果）。进程级信任用例里 `test/clock_advance` 可能在重扫完成前就返回。按 1.2 的上限就地修 | T100 合并时发现 |
+| T080 | ui-core 的路由是一个小状态路由，形状 `Route = {page:"new", projectId?} \| {page:"session", sessionId}`，`RouterProvider` 持有、`useRouter()` 给出 `{route, navigate}`，没有 URL；布局状态在 `layout/store.ts`，偏好键 `layout.sidebarOpen`、`layout.sidebarWidth`、`layout.sidePanelOpen`、`layout.sidePanelRatio`。接管状态时：连续快速按手柄键，主进程回传的旧 prefs 值会让宽度短暂跳回，按序号丢弃过期回传。`ui-core` 禁止 import `electron`、`node:*` 的 ESLint 规则还没加 | T084 |
+| T081、T086、T083 | ui-core 的插槽：`sidebarHeader`、`sidebarList`、`sidebarFooter`（T081）；`newSessionComposer`、`sessionComposer`（T086、T083）。默认的侧边栏头部是"Cupper"加宿主状态点，T081 替换。token 写法：颜色是 `light-dark()`，`data-theme` 固定主题；Tailwind `@theme static`，只有 `tokens.css` 定义过的 token 能生成工具类；用户状态（宽度等）只经 `style={{...}}` 写入 | T084 |
+| T152 | 侧边面板开合的 spring 动画（0.5 s，bounce 0.1）没有做 | T084 |
+| T153 | 顶栏的"打开"和"⋯"目前是占位按钮（T128 换成工具栏按钮并能挂菜单），菜单内容归本任务 | T084 |
+| T106 | 侧边面板的默认宽度按 ui-spec 2.4 的公式 `max(320, min(窗口高×1.6, 主区宽−500), min(640, 主区宽−352))`，默认窗口下得 640，主区只剩 352；公式在 ui-spec 里标为【推测】，请核对 | T084 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

@@ -3,8 +3,8 @@
 //! login state. A semantic code becomes the field it is about: no CLI found
 //! leaves `cli` out, a CLI the manifest's range does not cover is in
 //! `cli.compat`, a runtime that fails its check is `adapter.runtime: failed`,
-//! and `not_logged_in` is `auth.state: logged_out`. The index shows it
-//! (T034, T100); until then nothing hears it.
+//! and `not_logged_in` is `auth.state: logged_out`. The index shows it in
+//! `agents.updated` (T100).
 
 use std::fmt;
 
@@ -21,14 +21,6 @@ use crate::driver::api::AgentErrorClass;
 /// Where the index hears of the agents (T100).
 pub trait AgentNotes: Send + Sync + fmt::Debug {
     fn agent(&self, status: AgentStatus);
-}
-
-/// The index until T034: it hears nothing.
-#[derive(Debug)]
-pub struct NoAgentNotes;
-
-impl AgentNotes for NoAgentNotes {
-    fn agent(&self, _: AgentStatus) {}
 }
 
 /// Whether the adapter runs.

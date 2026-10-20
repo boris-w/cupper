@@ -1,11 +1,16 @@
-//! The index actor on a real `host.db`: the reconciliation at start and the
-//! checkpoint of the orderly exit. IT-project-add-trust runs projects and
-//! trust through the host.
+//! The index actor on a real `host.db`: the reconciliation at start, the
+//! checkpoint of the orderly exit, and the notification intents.
+//! IT-project-add-trust runs projects and trust through the host.
 
 use std::time::Duration;
 
-use cupper_protocol::ids::{ProjectId, SessionId};
-use cupper_protocol::index::{SessionStatus, TrustState};
+use cupper_protocol::annotations::TimestampMs;
+use cupper_protocol::domain::{AgentKind, ClientKind, FailureCode, PrincipalKind};
+use cupper_protocol::ids::{ProjectId, RequestId, SessionId};
+use cupper_protocol::index::{PendingKind, SessionStatus, TitleSource, TrustState, WorkspaceKind};
+use cupper_protocol::methods::handshake::{ClientIdentity, Principal};
+use cupper_protocol::rpc::Scope;
+use cupper_protocol::session::TurnStatus;
 
 use super::*;
 use crate::clock::ManualClock;
@@ -55,6 +60,7 @@ impl Fx {
         let deps = IndexDeps {
             streams: self.streams(),
             readers: self.readers.clone(),
+            db: self.db.clone(),
             ids: Arc::new(IdGen::seeded(Arc::clone(&clock), 1)),
             clock,
             durations: Durations::default(),
@@ -72,6 +78,13 @@ impl Fx {
             StreamView::Index(view) => (view.clone(), head),
             StreamView::Session(_) => unreachable!(),
         })
+    }
+
+    /// Lets what was sent settle, and the gathered changes go out.
+    async fn flush(&self) {
+        self.quiescence.settled().await;
+        self.clock.advance(status::COALESCE);
+        self.quiescence.settled().await;
     }
 
     async fn sql(&self, query: &'static str) -> Vec<String> {
@@ -157,6 +170,115 @@ async fn index_start_reconciles_with_the_tables_and_checkpoints_on_stop() {
         .await;
     assert_eq!(at, [head.to_string()]);
     drop(index);
+}
+
+fn summary(session: &SessionId) -> SessionSummary {
+    SessionSummary {
+        session_id: session.clone(),
+        project_id: ProjectId::from_uuid(9),
+        agent: AgentKind::Claude,
+        title: "Fix the build".into(),
+        title_source: TitleSource::Prompt,
+        workspace_kind: WorkspaceKind::Local,
+        branch: None,
+        status: SessionStatus::Idle,
+        unread: false,
+        pending_interactions: 0,
+        pending_kind: None,
+        last_activity_at: TimestampMs(1),
+        error_code: None,
+        read_only: false,
+    }
+}
+
+/// `client/presence` from connection `conn`, as the gateway delivers it.
+async fn presence(index: &IndexHandle, conn: u64, kind: PrincipalKind, seen: (bool, &SessionId)) {
+    let call = Call {
+        conn: ConnId::from_index(conn),
+        principal: Principal {
+            id: "pr_test".parse().unwrap(),
+            kind,
+            role: None,
+            scopes: vec![Scope::Read],
+        },
+        client: ClientIdentity {
+            kind: ClientKind::Desktop,
+            name: "Cupper".into(),
+            version: "0.0.0".into(),
+        },
+        method: ClientPresence::NAME,
+        params: json!({"foreground": seen.0, "session_id": seen.1}),
+        ticket: None,
+    };
+    index.deliver(call).await.unwrap();
+}
+
+fn ended(status: TurnStatus) -> Note {
+    let error = (status == TurnStatus::Failed).then_some(FailureCode::ProcessExited);
+    Note::TurnEnded {
+        seq: 3,
+        status,
+        error,
+    }
+}
+
+fn pending(count: u32) -> Note {
+    let oldest = (count > 0).then(|| (PendingKind::Approval, RequestId::from_uuid(7)));
+    Note::Pending { count, oldest }
+}
+
+#[tokio::test]
+async fn unit_index_intent_only_when_no_desktop_ui_in_front_watches() {
+    let fx = Fx::new("index-intent");
+    let index = fx.start().await;
+    let [watched, claimed, alone] = [1, 2, 3].map(SessionId::from_uuid);
+    for session in [&watched, &claimed, &alone] {
+        index.created(summary(session));
+    }
+    // The desktop UI shows `watched`; a CLI says it shows `claimed`.
+    presence(&index, 1, PrincipalKind::DesktopUi, (true, &watched)).await;
+    presence(&index, 2, PrincipalKind::Cli, (true, &claimed)).await;
+    for session in [&watched, &claimed] {
+        index.note(
+            session,
+            5,
+            vec![Note::TurnStarted, ended(TurnStatus::Completed)],
+        );
+        index.note(session, 6, vec![pending(1)]);
+    }
+    // Answered within the 100 ms; a cancelled turn calls for nothing.
+    index.note(&alone, 5, vec![pending(1)]);
+    index.note(&alone, 6, vec![pending(0), ended(TurnStatus::Cancelled)]);
+    fx.flush().await;
+    // The desktop UI goes to the background, comes back, and closes.
+    presence(&index, 1, PrincipalKind::DesktopUi, (false, &watched)).await;
+    index.note(&watched, 7, vec![ended(TurnStatus::Failed)]);
+    fx.flush().await;
+    presence(&index, 1, PrincipalKind::DesktopUi, (true, &watched)).await;
+    index.closed(&ConnId::from_index(1));
+    index.note(&watched, 8, vec![pending(0), ended(TurnStatus::Completed)]);
+    fx.flush().await;
+
+    let intents = fx
+        .sql(
+            "SELECT json_extract(json, '$.data.session_id') || ' ' ||
+                    json_extract(json, '$.data.reason') || ' ' ||
+                    coalesce(json_extract(json, '$.data.request_id'), '-')
+             FROM events WHERE stream = 'index' AND type = 'notification.intent' ORDER BY seq",
+        )
+        .await;
+    let request = RequestId::from_uuid(7);
+    let expected = [
+        format!("{claimed} turn_completed -"),
+        format!("{claimed} needs_action {request}"),
+        format!("{watched} error -"),
+        format!("{watched} turn_completed -"),
+    ];
+    assert_eq!(intents, expected);
+    let (view, _) = fx.view().await;
+    let status = |id| view.sessions[id].status.clone();
+    assert_eq!(status(&claimed), SessionStatus::NeedsAction);
+    assert_eq!(status(&alone), SessionStatus::Unread);
 }
 
 /// IT-orch-trust-gating's other half: a session's rescan reaches the index,

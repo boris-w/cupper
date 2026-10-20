@@ -12,7 +12,7 @@ use cupper_protocol::capabilities::{SessionCapabilities, SlashCommand};
 use cupper_protocol::domain::{AgentKind, PrincipalKind, PromptContent};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{AdapterInstanceId, Digest, ProjectId, SessionId, TurnId};
-use cupper_protocol::index::PendingKind;
+use cupper_protocol::index::SessionSummary;
 use cupper_protocol::limits::{MAX_SAFE_INTEGER, V1};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::rpc::Scope;
@@ -23,7 +23,7 @@ use futures::future::BoxFuture;
 use serde_json::{Value, json};
 use tokio::sync::{Notify, mpsc, oneshot};
 
-use super::{IndexNotes, SessionDeps, SessionManager};
+use super::{IndexNotes, Note, SessionDeps, SessionManager};
 use crate::clock::{Clock, IdGen, ManualClock};
 use crate::driver::api::{
     AgentError, AgentPort, AgentSessionId, Attach, AttachInfo, AttachTarget, DriverCommand,
@@ -162,8 +162,14 @@ pub(super) fn data(bodies: &[EventBody], tag: &str) -> Vec<Value> {
 pub(super) struct Index(pub Mutex<Vec<u32>>, pub Mutex<Vec<Digest>>);
 
 impl IndexNotes for Index {
-    fn pending(&self, _: &SessionId, count: u32, _: Option<PendingKind>) {
-        self.0.lock().unwrap().push(count);
+    fn created(&self, _: SessionSummary) {}
+
+    fn note(&self, _: &SessionId, _: u64, notes: Vec<Note>) {
+        for note in notes {
+            if let Note::Pending { count, .. } = note {
+                self.0.lock().unwrap().push(count);
+            }
+        }
     }
 
     fn rescanned(&self, _: &ProjectId, scan: Scan) {

@@ -1,0 +1,173 @@
+/*
+ * The design tokens of design 5.7.10, shared by the main document and the
+ * review document (design 5.7.7). Tailwind's default theme is left out, so a
+ * utility only resolves to a value defined here.
+ *
+ * Every colour is a `light-dark()` pair, so each value is written once: the
+ * theme follows the system through `color-scheme`, and `data-theme` on the
+ * root pins it. Dark values marked 〔推算〕 in the design wait for T106.
+ * Nothing here takes a value from outside: no agent string reaches a token.
+ */
+
+@theme static {
+  --layout-titlebar-h: 44px;
+  --layout-traffic-lights-w: 80px;
+  --layout-toolbar-h: 46px;
+  --layout-pane-header-h: 40px;
+  --layout-sidebar-w: 288px;
+  --layout-row-h: 30px;
+  --layout-row-radius: 10px;
+  --layout-row-px: 8px;
+  --layout-thread-max-w: 768px;
+  --layout-thread-gutter: 16px;
+  --layout-wide-block-max-w: 896px;
+  --layout-item-gap: 16px;
+  --layout-item-gap-grouped: 4px;
+  --layout-composer-bottom: 16px;
+  --layout-composer-adjacent-max-w: 790px;
+  --layout-side-panel-min-w: 320px;
+  --layout-chat-min-w: 352px;
+  --layout-breakpoint-sidebar: 768px;
+  --layout-home-composer-anchor: 42vh;
+  --layout-toast-top: 40px;
+
+  --color-surface: light-dark(#ffffff, #181818);
+  --color-surface-sidebar: light-dark(#f6f6f6, #141414);
+  --color-surface-code: light-dark(#ffffff, #282828);
+  --color-surface-panel: light-dark(#ffffff, #232323);
+  --color-surface-elevated: light-dark(#ffffff, #2d2d2d);
+  --color-surface-composer: light-dark(#ffffff, #2d2d2d);
+  --color-fg: light-dark(#1a1c1f, #dfdfdf);
+  --color-fg-secondary: light-dark(rgb(26 28 31 / 65%), rgb(255 255 255 / 65%));
+  --color-fg-tertiary: light-dark(rgb(26 28 31 / 49.5%), rgb(255 255 255 / 49.8%));
+  --color-icon: light-dark(#1a1c1f, rgb(255 255 255 / 90%));
+  --color-icon-secondary: light-dark(rgb(26 28 31 / 69.5%), rgb(255 255 255 / 71%));
+  --color-icon-tertiary: light-dark(rgb(26 28 31 / 49.5%), rgb(255 255 255 / 51%));
+  --color-border: light-dark(rgb(26 28 31 / 7.8%), rgb(255 255 255 / 8.4%));
+  --color-border-subtle: light-dark(rgb(26 28 31 / 4.9%), rgb(255 255 255 / 4.2%));
+  --color-border-strong: light-dark(rgb(26 28 31 / 11.7%), rgb(255 255 255 / 15.6%));
+  --color-ring: light-dark(#339cff, rgb(131 195 255 / 76%));
+  --color-accent: light-dark(#339cff, #83c3ff);
+  --color-accent-soft: light-dark(#e5f2ff, #0d273f);
+  --color-btn-secondary: light-dark(rgb(26 28 31 / 4.9%), rgb(255 255 255 / 5.2%));
+  --color-hover: light-dark(rgb(26 28 31 / 5.3%), rgb(255 255 255 / 7.8%));
+  --color-active: light-dark(rgb(26 28 31 / 19.6%), rgb(255 255 255 / 10%));
+  --color-btn-primary: light-dark(#1a1c1f, #dfdfdf);
+  --color-btn-primary-fg: light-dark(#ffffff, #2d2d2d);
+  --color-user-bubble: light-dark(rgb(26 28 31 / 5%), #222222);
+  --color-composer-bar: light-dark(#f6f6f6, #282828);
+  --color-scrim: light-dark(rgb(0 0 0 / 9.8%), rgb(255 255 255 / 10.4%));
+  --color-backdrop: light-dark(rgb(0 0 0 / 30%), rgb(0 0 0 / 50%));
+  --color-tooltip: light-dark(#1a1c1f, #2d2d2d);
+  --color-tooltip-fg: light-dark(#ffffff, #dfdfdf);
+  --color-diff-add: light-dark(#00a240, #40c977);
+  --color-diff-del: light-dark(#ba2623, #fa423e);
+  --color-diff-mod: light-dark(#923b0f, #ff8549);
+  --color-diff-add-bg: light-dark(rgb(0 162 64 / 15%), rgb(64 201 119 / 23%));
+  --color-diff-del-bg: light-dark(rgb(186 38 35 / 15%), rgb(250 66 62 / 23%));
+  --color-danger: light-dark(#e02e2a, #ff6764);
+  --color-warning: light-dark(#e25507, #ff8549);
+  --color-success: light-dark(#00a240, #40c977);
+  --color-caution: light-dark(#ffc300, #ffd240);
+  --color-danger-soft: light-dark(#ffd9d9, #4d100e);
+  --color-warning-soft: light-dark(#ffe7d9, #4a2206);
+  --color-status-connected: var(--color-success);
+  --color-status-disconnected: var(--color-fg-tertiary);
+  --color-status-error: var(--color-danger);
+  --color-code-keyword: light-dark(#ab4f7a, #f8a6c8);
+  --color-code-string: light-dark(#3a843f, #83d197);
+  --color-code-literal: light-dark(#ac4f23, #f1a275);
+  --color-code-variable: light-dark(#643cae, #b897f4);
+  --color-code-attribute: light-dark(#b8802b, #f9dc78);
+  --color-code-name: light-dark(#1f4e94, #63a8f8);
+  --color-code-comment: light-dark(#4f4f4f, #b9b9b9);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --default-font-family: var(--font-sans);
+  --default-mono-font-family: var(--font-mono);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --font-weight-label: 510;
+  --font-weight-semibold: 600;
+
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 18.6px;
+  --text-base: 14px;
+  --text-base--line-height: 21px;
+  --text-chat: 14px;
+  --text-chat--line-height: 1.625;
+  --text-chat-sm: 13px;
+  --text-code: 12px;
+  --text-lg: 16px;
+  --text-lg--line-height: 24.9px;
+  --text-heading-sm: 18px;
+  --text-heading-md: 18px;
+  --text-heading-lg: 24px;
+  --text-heading-app: 28px;
+
+  --spacing: 4px;
+
+  --radius-xs: 5px;
+  --radius-sm: 7.5px;
+  --radius-md: 10px;
+  --radius-lg: 12.5px;
+  --radius-xl: 15px;
+  --radius-2xl: 20px;
+  --radius-row: 10px;
+  --radius-composer: 22px;
+  --radius-bubble: 22px;
+  --radius-full: 9999px;
+
+  /* Dark mode swaps the composer's drop shadows for a thin inner light. */
+  --shadow-composer:
+    0 0 0 1px light-dark(rgb(0 0 0 / 4%), transparent),
+    0 2px 8px light-dark(rgb(0 0 0 / 4%), transparent),
+    0 4px 80px 8px light-dark(rgb(0 0 0 / 2.4%), transparent),
+    inset 0 0 1px light-dark(transparent, rgb(255 255 255 / 20%));
+  --shadow-prominent:
+    0 0 0 0.5px var(--color-border-strong), 0 3px 7.5px rgb(0 0 0 / 4%), 0 0 20px rgb(0 0 0 / 5%);
+  --shadow-card: 0 4px 16px rgb(0 0 0 / 5%);
+  --shadow-menu: 0 0 0 0.5px var(--color-border), 0 8px 16px -4px rgb(0 0 0 / 12%);
+  --shadow-pill: 0 0 0 0.5px var(--color-border), 0 8px 16px -4px rgb(0 0 0 / 12%);
+
+  --duration-fast: 150ms;
+  --duration-moderate: 200ms;
+  --duration-relaxed: 300ms;
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-enter: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-exit: cubic-bezier(0.8, 0, 0.4, 1);
+  --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+:root {
+  color-scheme: light dark;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+@layer base {
+  /* Chromium 139+ draws the enlarged radii as superellipses, as Codex does. */
+  @supports (corner-shape: superellipse(1.5)) {
+    *,
+    ::before,
+    ::after {
+      corner-shape: superellipse(1.5);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0s !important;
+      transition-duration: 0s !important;
+    }
+  }
+}
