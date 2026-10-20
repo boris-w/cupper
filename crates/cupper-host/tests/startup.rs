@@ -51,9 +51,31 @@ fn build_info_prints_the_features_of_the_binary() {
     );
 }
 
+/// IT-runtime-install: outside a bundle, none of the manifest's files is
+/// there; the runtime directory is only read.
+#[test]
+fn it_runtime_install_self_test_outside_a_bundle_exits_1() {
+    let data_dir = concat!(env!("CARGO_TARGET_TMPDIR"), "/cupper-host-self-test");
+    let out = run(&mut host(&["--self-test", "--data-dir", data_dir]));
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(stdout.lines().count(), 1, "{stdout}");
+    let report: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(report["ok"], false);
+    let problems = report["problems"].as_array().unwrap();
+    assert_eq!(problems.len() as u64, report["files"].as_u64().unwrap());
+    assert!(
+        problems.iter().all(|p| p["problem"] == "missing"),
+        "{report}"
+    );
+    let runtime = serde_json::json!({"esbuild-wasm": "missing", "node": "missing"});
+    assert_eq!(report["runtime"], runtime);
+    assert!(!std::path::Path::new(data_dir).exists());
+}
+
 #[test]
 fn unknown_argument_exits_1() {
-    let out = run(&mut host(&["--self-test"]));
+    let out = run(&mut host(&["--self-tests"]));
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert!(String::from_utf8_lossy(&out.stderr).contains("usage: cupper-host"));
 }

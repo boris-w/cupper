@@ -2,12 +2,12 @@
 //!
 //! The host never reads the manifest in the app bundle while it runs: its
 //! trust comes from the host binary's signature. This module parses the
-//! fields the host uses; the runtime installer (T056) adds its own here.
+//! fields the host uses.
 
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 const TEXT: &str = include_str!("../../../runtime/manifest.json");
 
@@ -26,6 +26,7 @@ pub struct Manifest {
     pub cli: Cli,
     pub env: EnvClasses,
     pub node: Pinned,
+    pub esbuild_wasm: Pinned,
     pub claude_agent_acp: Pinned,
     /// The runtime's files by their path in the app bundle.
     pub files: BTreeMap<String, FileHash>,
@@ -43,7 +44,7 @@ pub struct Pinned {
 }
 
 /// What a runtime file must hash to before it runs (ADR-08).
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileHash {
     /// Lowercase hex.
     pub sha256: String,
@@ -112,6 +113,11 @@ mod tests {
         }
         assert!(manifest.env.allow.iter().any(|p| p == "PATH"));
         assert!(manifest.env.deny.iter().any(|p| p == "CUPPER_*"));
+        let node = &manifest.files["Helpers/node"];
+        assert_eq!(node.cdhash.as_ref().map(String::len), Some(40));
+        for hash in manifest.files.values() {
+            assert_eq!(hash.sha256.len(), 64, "{hash:?}");
+        }
     }
 
     #[test]
