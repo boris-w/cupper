@@ -97,3 +97,32 @@
 - T166 的组件放在 `rows/` 下，各自 `registerRow`；接进行列表时，由 `rows/index.ts` 统一 import 一次。
 
 **样式约束**（T136 的规则）：行组件不写 CSS 自定义属性，agent 的字符串只作为文本节点或经清洗的 Markdown 渲染。
+
+## 逐模块统计与停下（2026-10-20）
+
+| 模块 | 新增 | 收窄后的草估 |
+|---|---|---|
+| 行的形状与注册表（`rows/stream.ts`，提交 4d98720） | 100 | 30 |
+| 拍平成行（`rows/flatten.ts`） | 149 | 150 |
+| `history/page` 辅助（host-client） | 29 | 30 |
+| 行列表与滚动（`stream/StreamList.tsx`、`scroll.ts`、`actions.ts`） | 199 | 200 |
+| T082 的行（`rows/basic.tsx`、`rows/index.ts`） | 133 | 125 |
+| 文案、依赖、会话页 | 20 | 20 |
+| **实现** | **630** | 约 555 |
+| UNIT-stream-rows（`rows/flatten.test.ts`） | 127 | 70 |
+| UNIT-stream-anchor（`stream/stream.test.tsx`） | 131 | 100 |
+| **合计** | **888** | 约 725 |
+
+实现写完时统计为 630，按测试的草估推算约 775，没有超过硬停止线，于是继续写测试。测试实际 258 行，比草估多 88：
+- 拍平的夹具要造一个完整的视图；
+- jsdom 里给虚拟列表打桩；
+- prettier 把期望的数组展开成每项一行。
+
+合计 888，超过 850 的硬停止线。功能和用例都已完成，本地测试、tsc、ESLint、prettier、字体子集检查都通过，还没有跑 `cargo xtask ci pr`。按守则停在这里汇报。
+
+能压的地方（不减覆盖），约 60–70 行：
+- 拍平测试的期望改成 `[key, kind]` 对的一张表，约 15 行；
+- 组件测试的夹具压紧，约 20 行；
+- `StreamList` 里的历史分页状态和 `flatten.ts` 的取字段写法压紧，约 30 行。
+
+压完约 820。
