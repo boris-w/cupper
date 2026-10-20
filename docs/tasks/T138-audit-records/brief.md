@@ -1,7 +1,7 @@
 # T138 审计落盘与正式格式
 
 - 派发日期：2026-10-20
-- 执行者：子 agent（Rust 工程师）
+- 执行者：子 agent（Rust 工程师）。T037、T035、T096、T034、T047、T100 及两个修复任务的执行者接手
 - 分支：`feat/T138-audit-records`
 - 依赖：T037（已合并）。与 T059 并行；T099 依赖本任务
 
@@ -70,7 +70,7 @@ T059 开工前拆成两份（计划 v1.3.31，见 `docs/tasks/T059-host-supervis
 
 ## 工作方式
 
-在编排者指定的 worktree 里，从最新的 main 开新分支：`git checkout -b feat/T138-audit-records main`。
+在原来的 T037 worktree 里，从最新的 main 开新分支：`git checkout -b feat/T138-audit-records main`。T008 修复 1 的分支已经合并，不要再往它上面提交。
 
 ## 汇报要求
 
