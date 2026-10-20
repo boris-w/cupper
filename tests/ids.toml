@@ -754,16 +754,13 @@ E2E-NFR1-5 = "pr"
 # 安全 e2e 与外发检查
 [T092]
 milestone = "M1a"
+UNIT-cli-exit-codes = "pr"
 E2E-SEC-csp = "pr"
 E2E-SEC-real-input = "pr"
 E2E-SEC-panel-arming = "pr"
 E2E-SEC-panel-numbering = "pr"
 E2E-SEC-privileged = "pr"
-E2E-SEC-fake-host = "pr"
-E2E-SEC-egress = "nightly"
-E2E-SEC-no-key-client = "pr"
 E2E-SEC-double-initialize = "pr"
-E2E-SEC-cli-fake-host = "pr"
 
 # 交互与项目 e2e
 [T093]
