@@ -152,6 +152,8 @@ enum Purpose {
 /// What a rescan found.
 struct Rescan {
     trusted: bool,
+    /// The project was trusted and is `stale` now: the index records it.
+    stale: bool,
     /// Why the rescan failed; it then counts as untrusted.
     failure: Option<String>,
     scan: Option<Scan>,
@@ -664,7 +666,7 @@ impl SessionActor {
     /// `project_config_changed`, with a notice; the index records a project
     /// that became `stale`. A trusted project again reopens it.
     async fn trust(&mut self, purpose: Purpose, found: Rescan) {
-        if let Some(scan) = found.scan.clone().filter(|_| !found.trusted) {
+        if let Some(scan) = found.scan.clone().filter(|_| found.stale) {
             self.parts.index.rescanned(&self.parts.project, scan);
         }
         self.load_wanted |= found.trusted && !self.ignore_for_good;
@@ -963,6 +965,7 @@ fn pending(view: &SessionView) -> (usize, Option<PendingKind>) {
 async fn rescan(readers: Readers, project: ProjectId, cwd: PathBuf, mut cx: ScanContext) -> Rescan {
     let fail = |code: &str| Rescan {
         trusted: false,
+        stale: false,
         failure: Some(code.into()),
         scan: None,
     };
@@ -999,13 +1002,11 @@ async fn rescan(readers: Readers, project: ProjectId, cwd: PathBuf, mut cx: Scan
         Err(_) => return fail("scan_failed"),
     };
     let digest = digest.and_then(|digest| digest.parse().ok());
-    let state = trust::state_after(
-        &TrustState::from(state.as_str()),
-        digest.as_ref(),
-        &scan.digest,
-    );
+    let before = TrustState::from(state.as_str());
+    let state = trust::state_after(&before, digest.as_ref(), &scan.digest);
     Rescan {
         trusted: state == TrustState::Trusted,
+        stale: before == TrustState::Trusted && state == TrustState::Stale,
         failure: None,
         scan: Some(scan),
     }
