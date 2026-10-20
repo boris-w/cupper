@@ -23,14 +23,19 @@ pub fn embedded() -> &'static Manifest {
 /// The fields the host uses. Fields the host does not use are skipped.
 #[derive(Debug, Deserialize)]
 pub struct Manifest {
-    pub node: Pinned,
-    pub esbuild_wasm: Pinned,
     pub cli: Cli,
     pub env: EnvClasses,
-    /// Every bundled file that is run or loaded, by its path under
-    /// `CupperHost.app/Contents` (design 5.10.3).
+    pub node: Pinned,
+    pub esbuild_wasm: Pinned,
+    pub claude_agent_acp: Pinned,
+    /// The runtime's files by their path in the app bundle.
     pub files: BTreeMap<String, FileHash>,
 }
+
+/// The node of the runtime, as the manifest names it in `files`.
+pub const NODE: &str = "Helpers/node";
+/// claude-agent-acp's bundle, likewise.
+pub const CLAUDE_BUNDLE: &str = "Resources/runtime/bundle-claude-acp.mjs";
 
 /// A pinned component's version.
 #[derive(Debug, Deserialize)]
@@ -38,10 +43,12 @@ pub struct Pinned {
     pub version: String,
 }
 
-/// Lowercase hex. A Mach-O also has the cdhash its signature gives it.
+/// What a runtime file must hash to before it runs (ADR-08).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileHash {
+    /// Lowercase hex.
     pub sha256: String,
+    /// The code directory hash of a signed executable, lowercase hex.
     #[serde(default)]
     pub cdhash: Option<String>,
 }

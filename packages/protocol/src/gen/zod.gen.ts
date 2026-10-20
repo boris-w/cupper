@@ -2475,6 +2475,7 @@ export const zToolCall = z.object({
  */
 export const zTrustScan = z.object({
   findings: z.array(zFinding),
+  findings_omitted: z.int().gte(0).lte(4294967295).nullish(),
   state: zTrustState,
   trust_digest: zDigest,
 });
@@ -2491,7 +2492,9 @@ export const zTrustedFileChange = z.object({
 
 export const zProjectTrustInfoResult = z.object({
   diff_from_trusted: z.array(zTrustedFileChange).nullish(),
+  diff_omitted: z.int().gte(0).lte(4294967295).nullish(),
   findings: z.array(zFinding),
+  findings_omitted: z.int().gte(0).lte(4294967295).nullish(),
   state: zTrustState,
   trust_digest: zDigest,
 });

@@ -407,3 +407,24 @@ fn crash_child() {
     fx.append(&mut writer, turn_end);
     unreachable!("the failpoint exits");
 }
+
+#[test]
+fn store_streams_checkpoint_on_demand_stands_at_the_head() {
+    let fx = Fixture::new("checkpoint-now");
+    let streams = fx.streams(Retention::DESIGN);
+    let mut writer = fx.open(&streams, &StreamId::Index).writer().unwrap();
+    let at = || fx.sql::<Option<u64>>("SELECT max(at_seq) FROM checkpoints WHERE stream = 'index'");
+    fx.runtime.block_on(writer.checkpoint()).unwrap();
+    assert_eq!(at(), None, "nothing to checkpoint at seq 0");
+    fx.append(&mut writer, vec![project(1), project(2)]);
+    fx.runtime.block_on(writer.checkpoint()).unwrap();
+    assert_eq!(at(), Some(2));
+    drop(writer);
+    // A new registry loads the checkpoint, not the events.
+    let again = fx.open(&fx.streams(Retention::DESIGN), &StreamId::Index);
+    let projects = again.read(|view, head| match view {
+        StreamView::Index(index) => (index.projects.len(), head),
+        StreamView::Session(_) => unreachable!(),
+    });
+    assert_eq!(projects, (2, 2));
+}

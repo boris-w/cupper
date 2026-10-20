@@ -9,6 +9,7 @@ pub mod exit;
 pub mod failpoint;
 pub mod gateway;
 pub mod git;
+pub mod index;
 pub mod ledger;
 pub mod manifest;
 pub mod orchestrator;

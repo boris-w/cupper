@@ -62,3 +62,18 @@ App 带着一份运行时（Node、codex-acp、esbuild-wasm、claude-agent-acp �
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 1,360–1,630 行，贴线，在写代码之前停下汇报，建议按任务书举的拆法拆分。
+
+**裁定：拆分（计划 v1.3.20）。**
+- **T056 收窄为"运行时目录：复制、原子提交与 `--self-test`"**：`manifest.rs` 加字段、组件状态机与驱动、从包内复制（边读边算 sha-256，Node 另核对 cdhash）、`<数据目录>/runtime/<组件>/<版本>/`、staging、`.installed.json`、原子提交、坏了挪开重装、旧版本回收、`--self-test`。验收 IT-runtime-install 中不需要下载的部分。上限约 1,000 行，硬停止线 1,100。T064 只依赖这部分。
+- **新增 T115"按锁文件下载与本机打包"**（依赖 T056）：`reqwest`、锁文件、注入的 registry、下载与 SRI、解包路径检查、退避重试、本机打包与哈希核对；新增编号 IT-runtime-download。T066 改为也依赖 T115。`tests/ids.toml` 已在 main 上改好。
+
+其余三点：
+1. **HTTP 客户端**（归 T115）：`reqwest` 加 rustls，加密实现用 `ring`，根证书用系统的（`rustls-native-certs`），不用 `aws-lc-rs` 和 `webpki-roots`；以 `cargo deny` 对 ADR-11 白名单通过为准，不过就停下汇报。
+2. **User-Agent 以设计 5.2.12 为准**：`cupper-runtime-installer/<版本>`。本任务书写成 `cupper-research` 是编排者的笔误（那是调研任务用的），产品名加版本不含个人信息。
+3. **`--self-test`**：退出码只反映"随包组件与内嵌清单一致"（设计 5.10.7 发布流水线要的语义，构建时还没有已安装的运行时）；已安装运行时的状态作为一个字段写进那行 JSON，不影响退出码。
+
+"复制中包被替换"用边读边算 sha-256 发现、不在产品代码里加测试钩子：认可。registry 的注入点用已有的 `test_config.runtime.registry_url`：认可。

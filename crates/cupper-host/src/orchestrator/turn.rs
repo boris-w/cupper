@@ -119,6 +119,10 @@ pub enum Input {
     /// queued message; a message sent while idle still starts its turn.
     HoldQueue(bool),
     Expired(TurnTimer),
+    /// The host's forced exit (design 5.2.13): the running turn completes
+    /// `interrupted` at once, its requests expire (`host_restarted`), and no
+    /// queued message starts.
+    HostExit,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -698,6 +702,8 @@ impl TurnMachine {
         };
         let asks = if end.error_code == Some(FailureCode::AdapterExited) {
             ResolutionReason::AdapterExited
+        } else if end.status == TurnStatus::Interrupted {
+            ResolutionReason::HostRestarted
         } else if matches!(turn.phase, Phase::Cancelling(_))
             || outcome.pause == Some(PauseReason::TurnCancelled)
         {
@@ -710,7 +716,8 @@ impl TurnMachine {
             end: end.clone(),
             asks,
         });
-        if matches!(turn.phase, Phase::Prompting(_) | Phase::Cancelling(_)) {
+        let interrupted = end.status == TurnStatus::Interrupted;
+        if matches!(turn.phase, Phase::Prompting(_) | Phase::Cancelling(_)) && !interrupted {
             out.push(Action::Snapshot {
                 turn_id: turn.id.clone(),
                 phase: SnapshotPhase::End,
@@ -793,6 +800,12 @@ impl Core for TurnMachine {
             }
             Input::HoldQueue(hold) => self.hold = hold,
             Input::Expired(timer) => self.expired(timer, now, &mut out),
+            Input::HostExit => {
+                self.hold = true;
+                let interrupted = Some(PauseReason::TurnInterrupted);
+                let outcome = Outcome::new(TurnStatus::Interrupted, interrupted);
+                self.end(outcome, now, &mut out);
+            }
         }
         self.advance(now, &mut out);
         out
@@ -923,5 +936,25 @@ mod tests {
         assert!(m.input(done(1, StopReason::Cancelled)).is_empty());
         m.input(snapshot(&started(&next), SnapshotPhase::Start));
         assert_eq!(kinds(&m.input(attached(1))), ["prompt"]);
+    }
+
+    #[test]
+    fn turn_machine_interrupts_the_running_turn_as_the_host_exits() {
+        let mut m = machine();
+        let turn = started(&m.input(send("a", SendMode::Queue)));
+        m.input(attached(1));
+        m.input(snapshot(&turn, SnapshotPhase::Start));
+        m.input(send("b", SendMode::Queue));
+        let exit = m.input(Input::HostExit);
+        assert_eq!(kinds(&exit), ["settle", "complete", "queue.updated"]);
+        let Action::Settle { end, asks } = &exit[0] else {
+            panic!("{exit:?}")
+        };
+        let ended = (&end.status, asks);
+        assert_eq!(
+            ended,
+            (&TurnStatus::Interrupted, &ResolutionReason::HostRestarted)
+        );
+        assert!(m.input(Input::HostExit).is_empty());
     }
 }

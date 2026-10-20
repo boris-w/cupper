@@ -48,7 +48,7 @@ impl ConfigDir {
     }
 
     /// A config dir from `test_config`, unchecked (design 5.6.6).
-    #[cfg(feature = "test-harness")]
+    #[cfg(any(test, feature = "test-harness"))]
     pub fn from_test_config(value: String) -> Self {
         Self(value)
     }

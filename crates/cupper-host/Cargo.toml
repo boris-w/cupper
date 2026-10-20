@@ -20,6 +20,8 @@ test-harness = []
 agent-client-protocol = { version = "=3.3.0", features = ["unstable_end_turn_token_usage", "unstable_plan_operations"] }
 # The SDK only asks for ^3.3.0 of its derive macros; keep them on the same release.
 agent-client-protocol-derive = "=3.3.0"
+# Images in prompts go to the agent in base64 (ACP `image`).
+base64.workspace = true
 cupper-protocol = { path = "../cupper-protocol" }
 cupper-sys = { path = "../cupper-sys" }
 futures = { version = "0.3.34", default-features = false, features = ["std"] }

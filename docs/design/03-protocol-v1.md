@@ -140,9 +140,9 @@
 
 | 方法 | 类型 | 参数要点 | 结果要点 | 可能的错误 | 幂等 | scope | 里程碑 |
 |---|---|---|---|---|---|---|---|
-| `project/add` | 请求 | `{command_id, path}` | `{project_id, trust: {state, findings, trust_digest}}`（同一路径重复添加返回已有的 ID；扫描范围里没有文件时直接为 `trusted`，否则为 `untrusted`） | `not_found`（路径不存在） | 命令 | write | M1a |
+| `project/add` | 请求 | `{command_id, path}` | `{project_id, trust: {state, findings, findings_omitted?, trust_digest}}`（同一路径重复添加返回已有的 ID；扫描范围里没有文件时直接为 `trusted`，否则为 `untrusted`） | `not_found`（路径不存在） | 命令 | write | M1a |
 | `project/trust` | 请求 | `{command_id, project_id, trust_digest}` | `{trust_state}` | `conflict/digest_mismatch`（确认之后项目配置又变了）、`unavailable/scan_failed` | 命令 | privileged（只能经原生确认，[5.2.6](02-host.md#项目信任)） | M1a |
-| `project/trust_info` | 请求 | `{project_id}` | `{state, findings, trust_digest, diff_from_trusted?}`：重新扫描，供主进程弹原生确认框 | `not_found` | 天然 | read | M1a |
+| `project/trust_info` | 请求 | `{project_id}` | `{state, findings, findings_omitted?, trust_digest, diff_from_trusted?, diff_omitted?}`：重新扫描，供主进程弹原生确认框 | `not_found` | 天然 | read | M1a |
 | `project/remove` | 请求 | `{command_id, project_id}` | `{}`（项目下的会话一并归档） | `conflict`（有运行中的回合） | 命令 | write | M1b |
 | `agents/capabilities` | 请求 | `{agent}` | 该 agent 最近一次的能力描述（[5.3.7](#537-会话能力描述)）及其采集时间 | `unavailable`（CLI 或运行时不可用，带 `reason`） | 天然 | read | M1a |
 | `agents/refresh` | 请求 | `{agent}` | `{status}`：重新发现 CLI、检查版本；能力缓存为空时做一次探测 | `unavailable` | 天然 | write | M1a |
@@ -582,6 +582,7 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 5.3.4 没写死的取值：
 - `findings` 条目：`{kind, path, target?, outside_workspace, detail}`。`kind` 是开放枚举：`hook`、`env`、`api_key_helper`、`status_line`、`mcp_server`、`skill`、`agent`、`command`、`codex_config`、`unparsed`（解析不了的文件，`detail` 写原因；它的完整内容照样计入摘要，T096）。
 - `project/trust_info.diff_from_trusted`：按文件列出 `{path, change}`，`change` 复用 `DiffChange`（`add`、`update`、`delete`）。为此 T035 在信任时另存每个文件的哈希清单，按 P-4 写进 `0001` 的 `projects` 表。
+- 帧上限（T034 的裁定）：结果里的 findings 和差异合计不超过 48,000 字节。单条 `detail` 先按字符边界截到 2,000 字节，末尾加 `…`，再按顺序装入，装不下就停；`findings_omitted`、`diff_omitted` 给出没装下的条数，确认框据此写"另有 N 项未列出"。摘要仍覆盖全部内容。
 - `fallback_reason`（插话退回排队的原因，5.2.6）：`unsupported`、`turn_mismatch`、`not_prompting`、`prompt_required`、`timeout`、`agent_error`。
 - `session/archive.blockers`：ADR-10 的 7 条规则各一个取值；T013 的 `worktree/check` 复用同一个枚举。
 - `host/status.clients`：`ClientInfo` 的列表（与 `clients.updated` 相同），不只是个数。
