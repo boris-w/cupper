@@ -50,3 +50,26 @@
 | **T075b 退出确认与重启宿主** | `cupper-sys` 与扩展的 `processImage`、`fileCdhash`；`lifecycle.ts`；`restart.ts`；对应的语义码和接线 | UNIT-launcher 的其余部分（关机跳过确认；路径不符、cdhash 不符时不发信号），或者另起一个编号，例如 UNIT-host-restart | 实现草估约 275，乘 1.3 约 360；测试约 180；合计约 **540** |
 
 T075a 按 1.7 倍算仍会贴线。如果要再留余量，可以把"dev、e2e 打包配置加上扩展和宿主"连同真实拉起的集成用例挪进 T075b（约 140 行）。这样 T075a 约 760 行，T075b 约 680 行。代价是 T075a 只能用 Node 集成用例验证拉起，App 本身要到 T075b 才能真正拉起宿主。
+
+## 收窄后的估计（补充裁定之后）
+
+T075 只做"拉起宿主与 control 连接"，lifecycle 和"重启宿主"归 T007。e2e 启动载荷按设计 5.9.9 的约定：读 `CUPPER_E2E_DIR` 下的 `harness_key` 和 `test_config.json`。
+
+| 模块 | 内容 | 草估 |
+|---|---|---|
+| `host/native.ts` | 加载 `cupper_native.node`，`buildInfo()` 与 flavor 核对 | 45 |
+| `host/socket-port.ts` | `net.Socket` 上的 `HostPort` | 35 |
+| `host/connection.ts` | `connectHost` 到握手的胶水；拒绝码和握手失败并入 `failed.reason`；失败时 `close()`；只有发布构建拒绝 `weak_auth`；超时加套接字关闭时 abort | 90 |
+| `host/launcher.ts` | 先连；没人监听才拉起；`HostKey` 和载荷只留内存、重拉时原样再传；每 10 ms 重连、500 ms 总预算（时钟可注入）；退出码 3 继续连、4–6 并入 `failed.reason`；更新空窗不拉起 | 140 |
+| `host/control.ts` | `HostClient` 挂在 control 连接上，断开后重连（宿主没了就重拉） | 60 |
+| `host/index.ts` 与 `main/index.ts` | App 内的路径（`Helpers/CupperHost.app`、`Resources/native/`）、环境变量白名单（5.6.6 的固定白名单）、e2e 载荷文件、启动时接线、状态写 `main.log` | 80 |
+| 打包配置 | dev、e2e 的 electron-builder：扩展放 `Resources/native/`（asar 外），宿主放 `Helpers/` 并 `signIgnore`；`build:dev`、`build:e2e` 先编扩展和 `host-bundle`；依赖与 tsconfig 引用 | 30 |
+| **实现小计** | | **480**，乘 1.3 约 **625**（乘 1.7 约 815） |
+
+| 测试 | 内容 | 草估 |
+|---|---|---|
+| UNIT-launcher（假扩展、假时钟、mock 宿主） | 载荷只在内存、重拉时原样再传且复用同一个 `HostKey`；500 ms 预算；退出码 3–6；发布构建拒绝 `weak_auth`，其他构建接受 | 220 |
+| 真实拉起的集成用例 | 用真实的 `dev-auth` 扩展和 `cargo xtask host-bundle --kind e2e --debug` 的产物，拉起、握手、`ping`、再结束宿主；单独的脚本，不进 `pnpm test` | 80 |
+| **测试小计** | | **300** |
+
+**合计约 925 行**（实现乘 1.7 时约 1,115）。每完成一个模块统计一次；推算超过约 1,000 行就停下汇报。
