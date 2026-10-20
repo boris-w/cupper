@@ -65,3 +65,43 @@ a 仍然超出 850。要压到线以内，可以再把"检查点作废时重发"
 - 依赖：b、c 都要在 a 之后（重发和重开发生在载入时，空闲退出后的再投递靠按需载入）。b 与 c 之间相互独立，可以并行。
 - T062、T069 至少要 a；T069 的"故障点与第一条消息不丢"还要 b。
 - 另一种：不拆，上限提到约 1,400。
+
+## 裁定后（计划 v1.3.38）
+
+范围收窄为载入与恢复，上限约 900 行，硬停止线 980。检查点作废时重发、准备阶段崩溃重开归 T169；空闲退出、超长输出归 T175。
+
+### 设定者的恢复
+
+库里只有 `mode_set_by` 的 ID 和 `full_access_confirmed_at`。按 ID 找回握手时的 principal：
+
+| `mode_set_by` | 找回为 | 上限 |
+|---|---|---|
+| `pr_desktop`，有 `full_access_confirmed_at` | 桌面 control 角色 | `full_access` |
+| `pr_desktop`，没有 | 桌面 window 角色 | `elevated` |
+| `pr_cli` | CLI（只有 `read`） | `normal` |
+| `pr_test`（只在测试构建里存在） | 测试 harness | `full_access` |
+| 其他、空 | 来源不明：按远程设备算 | `normal` |
+
+- 桌面两个角色共用一个 ID。两者的结论只在"档位是 `full_access` 且已确认"时不同（control 不需要确认，window 是 `tier_above_setter`）。完全访问只有 control 能确认，所以有确认记录时按 control 算。这之后若由 window 改了设定者、agent 又自己把档位提上去，崩溃前就已经是 `config_unconfirmed`；这个状态写在 `session.configured.confirmation_required` 里，载入时照原样恢复，不会因为按 control 算而丢掉。
+- **"由创建者设定"与"来源不明"两种假设的差别**：
+  - 由创建者设定：创建时的策略检查已经通过，等于把会话当前的档位当作设定者可设的档位。不会出现 `tier_above_setter`；`full_access` 没有确认记录时仍是 `full_access_unconfirmed`。
+  - 来源不明：上限按 `normal` 算。档位是 `elevated` 或 `full_access` 时都是 `tier_above_setter`。
+  - 两者只在档位高于 `normal` 时结论不同。按裁定取"需要确认"，即 ID 找不到时按"来源不明"处理。
+- 载入时守卫用库里最后的权限模式立即检查一次。所以恢复出的设定者更保守、结论变成需要确认时，在载入时就进入 `config_unconfirmed`，不必等第一次连接。
+
+### 信任闸门与 `ignore_for_good`
+
+- `ignore_for_good` 存在 `sessions.project_config_ignored`。
+- 计划 P-4 规定 T160 之前表结构只改 `0001`，所以列加在 `0001` 里，没有另写 `0002`。裁定写的是"迁移 `0002`"，这一点在汇报里说明。
+- "想加载项目配置"按以下规则重新得出：`session.configured.project_config` 是 `loaded`，或者队列因 `project_config_changed` 暂停，并且没有选过"不加载项目配置继续"。之后由第一次重扫按原规则更新。
+- 闸门的原因按以下规则恢复：
+  - `config_unconfirmed`：来自 `session.configured.confirmation_required`；
+  - `project_config_changed`：来自队列的暂停原因。队列为空时这个原因不留痕；下一条消息的检查会重新得出。
+
+### 补写与队列
+
+- 补写以会话流的视图为准：
+  - 视图里最后一个没有 `turn.completed` 的回合，补写 `turn.completed{interrupted}`，`ended_at` 用启动清理写进 `turns` 行的时间；
+  - 视图里仍待处理的请求，补写 `interaction.resolved{expired, host_restarted}`，写在 `turn.completed` 之前。
+- 回合里没结束的条目不补写，不在本任务范围内（见汇报）。
+- 载入后没有回合在运行。队列里有消息、又没有暂停时，一律以 `turn_interrupted` 暂停，等用户继续，不在重启后自己开始回合。
