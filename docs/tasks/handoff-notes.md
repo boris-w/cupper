@@ -391,6 +391,8 @@
 | T064 | 首批 B 层录制用的一次性生成程序在 `docs/tasks/T065-gold-b-runner/generate.rs`（物料，不编译），用法在同目录 `notes.md`；可重复的生成器由 `xtask compat --fake` 接手（计划 v1.3.47）。录制放在 `testdata/recordings/cupper-fake-agent/0.0.0/fake/`，金样例在 `testdata/golden/gold-b/` 的同一路径；更新金样例用 `UPDATE_GOLDEN=1` | T065 |
 | 下一个动会话 actor 的任务 | 附加时 `session.capabilities` 连写两条（第一条命令列表为空，第二条来自 `available_commands_update`），附加的应答与第一条更新在 actor 里走两个通道、写进流的先后取决于时机。只影响事件顺序与条数；是否合并成一条由那个任务决定（T062、T065 都碰到） | T065 |
 | 拿原始帧比对的任务 | 宿主发给 agent 的 JSON-RPC id 是 UUID，比对时不能按字面比，要像 T067 的回放那样重映射；B 层的同步依赖 SDK 3.3.0 的按序分发（`gold_b_fake_sdk_answers_an_unknown_request_after_what_came_before`），升级 SDK 时这条用例会先失败 | T065 |
+| 所有任务（执行者） | **每次提交后跑一次 `cargo xtask size`**（T185）：统计本分支自己的增删（排除 lock、生成物、`docs/`、`testdata/`、截图基线、二进制，合进来的 main 不算），对照任务书的停止线报告余量，到 90% 或越线时以 `!!` 标出；推算或实际越线就停下汇报。新文件要先 `git add` 才计入。工具读当前 checkout 里的任务书，编排者在 main 上的裁定要等 main 合进分支后才读得到 | T185 |
+| 编排者写任务书 | 任务书的"规模"一节用模板里固定格式的一行：`- 停止线：<n>；硬停止线：<n>`（`cargo xtask size` 优先认它）；裁定改上限时直接改这一行，并在通知执行者时写明新数 | T185 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
