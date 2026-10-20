@@ -9,4 +9,5 @@ pub mod client;
 #[cfg(feature = "test-harness")]
 pub mod harness;
 pub mod mirror;
+pub mod run;
 pub mod verify;
