@@ -1,8 +1,7 @@
 //! What a Claude session can do (design 5.6.7, 5.3.7): from the `initialize`
 //! response, the session's config options and its slash commands. Options
-//! map to cupper's by category (design 5.6.5); until the tier table (T095),
-//! every permission mode counts as `full_access`, as values missing from that
-//! table do.
+//! map to cupper's by category, and permission modes to approval tiers
+//! (design 5.6.5).
 
 use agent_client_protocol::schema::v1::{
     AvailableCommand, AvailableCommandInput, InitializeResponse, SessionConfigKind,
@@ -89,8 +88,8 @@ pub fn config_options(options: &[SessionConfigOption]) -> Vec<ConfigOption> {
             Some(Category::ThoughtLevel) => ConfigOptionId::ReasoningEffort,
             _ => ConfigOptionId::from(agent_option_id.as_str()),
         };
-        let risk = match id {
-            ConfigOptionId::PermissionMode => Tier::FullAccess,
+        let risk = |value: &str| match id {
+            ConfigOptionId::PermissionMode => tier(value),
             _ => Tier::Normal,
         };
         let choices = match &select.options {
@@ -105,7 +104,7 @@ pub fn config_options(options: &[SessionConfigOption]) -> Vec<ConfigOption> {
                 value: choice.value.to_string(),
                 name: choice.name.clone(),
                 description: choice.description.clone(),
-                risk: risk.clone(),
+                risk: risk(&choice.value.to_string()),
             })
             .collect();
         Some(ConfigOption {
@@ -116,6 +115,22 @@ pub fn config_options(options: &[SessionConfigOption]) -> Vec<ConfigOption> {
         })
     };
     options.iter().filter_map(option).collect()
+}
+
+/// Claude's permission modes by approval tier (design 5.6.5).
+pub const TIERS: &[(&str, Tier)] = &[
+    ("default", Tier::Normal),
+    ("plan", Tier::Normal),
+    ("acceptEdits", Tier::Elevated),
+    ("auto", Tier::Elevated),
+    ("bypassPermissions", Tier::FullAccess),
+];
+
+/// The tier of a permission mode; one the table does not have counts as
+/// `full_access` until the table knows it.
+pub fn tier(mode: &str) -> Tier {
+    let row = TIERS.iter().find(|(known, _)| *known == mode);
+    row.map_or(Tier::FullAccess, |(_, tier)| tier.clone())
 }
 
 /// `current_mode_update`: sets the permission mode; false when there is none
@@ -190,14 +205,12 @@ mod tests {
         use ConfigOptionId as Id;
         assert_eq!(ids, [Id::PermissionMode, Id::Model, Id::ReasoningEffort]);
         assert_eq!(caps.config[0].current, "default");
-        // Every permission mode is full access until the tier table (T095).
         let risks = |o: &ConfigOption| o.values.iter().map(|v| v.risk.clone()).collect::<Vec<_>>();
-        assert!(
-            risks(&caps.config[0])
-                .iter()
-                .all(|r| *r == Tier::FullAccess)
-        );
-        assert!(risks(&caps.config[1]).iter().all(|r| *r == Tier::Normal));
+        use Tier::*;
+        let modes = [Normal, Elevated, Normal, Elevated, FullAccess];
+        assert_eq!(risks(&caps.config[0]), modes, "{:?}", caps.config[0].values);
+        assert!(risks(&caps.config[1]).iter().all(|r| *r == Normal));
+        assert_eq!(tier("someNewMode"), FullAccess);
 
         let mut config = caps.config;
         assert!(set_mode(&mut config, "plan") && !set_mode(&mut config, "plan"));

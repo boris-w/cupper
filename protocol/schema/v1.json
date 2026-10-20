@@ -3055,7 +3055,8 @@
             "skill",
             "agent",
             "command",
-            "codex_config"
+            "codex_config",
+            "unparsed"
           ],
           "type": "string"
         },
@@ -3063,7 +3064,7 @@
           "type": "string"
         }
       ],
-      "description": "Open enum: unknown values must be accepted. Known: hook env api_key_helper status_line mcp_server skill agent command codex_config "
+      "description": "Open enum: unknown values must be accepted. Known: hook env api_key_helper status_line mcp_server skill agent command codex_config unparsed "
     },
     "GitApplyParams": {
       "description": "The parameters of `git/stage`, `git/unstage` and `git/revert`.",

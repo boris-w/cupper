@@ -74,6 +74,9 @@ open_enum! {
         Command => "command",
         /// A setting or hook in `.codex/`.
         CodexConfig => "codex_config",
+        /// A file that could not be parsed; `detail` says why. Its whole
+        /// content still counts in the digest.
+        Unparsed => "unparsed",
     }
 }
 
