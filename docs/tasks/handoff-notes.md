@@ -359,6 +359,8 @@
 | T144 | 新建会话页（T085）在 `packages/ui-core/src/newsession/NewSessionPage.tsx`：agent 下拉现在只列 Claude，可用状态取自索引视图的 `AgentStatus`（不是 `agents/capabilities`，后者只有缓存的能力描述），原因码由导出的纯函数 `unavailable(status)` 推出（`cli_missing`、`not_logged_in`、`runtime_failed`，其余算 `unavailable`）；选中的 agent 和工作区经 `Composer` 的 `create` 属性传给 `useSend`（`composer/send.ts` 的 `NewSession`、`DEFAULT_NEW_SESSION`）。M1a 在 agent 不可用时仍允许发送、由宿主按语义码报错；按 AG-4"不支持的功能不出现"，是否直接禁止发送由本任务一并定 | T085 |
 | T093 | E2E-new-session-agent-claude：新建会话页的标题里项目名就是选择器，菜单末尾是"添加项目"（走 `privileged({kind: "add_project"})`，主进程弹 `showOpenDialog`，替换见 T167）；动作条有"Claude ⌄"和"本地"；没有项目时 `data-send-state` 为 `disabled` | T085 |
 | ui-core 里写组件测试、用 MockHost 回放索引的任务 | 只对 `index` 流回放索引的 ops：否则新建的会话流也会收到这些 ops，视图报错后反复重新订阅，vitest 会耗尽内存（T085 的 `newsession/new-session.test.tsx`） | T085 |
+| 读 blob 的界面任务（T145 等） | host-client 的 `getBlob(ref)`（`client.ts`，挨着 `putBlob`）按 `offset` 收集分片，缺口、片数、总长、哈希任一不符就报错；`state/blob.ts` 的 `useBlobText(blob)` 给出 `idle`、`loading`、`loaded`、`failed` 和 `load()`，以计数器保证只有最近一次下载生效、卸载后丢弃结果。协议没有取消 `blob/get` 的方法，大输出要按范围读（`blob/get` 的 offset、length）时另行设计 | T168 |
+| T093、T092 | 请求面板的截断内容（T168）：命令、详情是 blob 时显示在 `ContentBox` 里，收起时显示预览、展开才下载；每个 blob 都展开且载入完成（哈希核对通过）后允许类选项才放开，收起任一个或下载失败回到只能拒绝；提示为"已截断：展开看到全文后才能允许"。用户气泡里的 `text_blob` 显示"长文本（N KB）"，点"显示更多"才下载 | T168 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

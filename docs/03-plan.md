@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.39
+- 版本：v1.3.40
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -312,7 +312,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T085 | ui-core VI：新建会话页（M1a） | feat | 5.7.4（新建会话页） | T081、T086 | 做：新建会话页（设计 5.7.4：大标题与项目选择器、输入框锚在视口高度的 42% 处、输入框下方的动作条：agent 选择（M1a 只有 Claude）、工作区（M1a 只有本地））；复用 T086 的输入框（`mode="new"`） | 新增 UI-new-session | S | 否 | T.ui |
 | T086 | ui-core VII：输入框与排队消息（M1a） | feat | 5.7.4（输入框、排队消息）、5.7.7、5.7.10 | T080、T084、T118、T128 | 做：输入框（设计 5.7.4 的外形与底栏、发送按钮三态、附件条、Esc 的处理顺序与"两次 Esc 停止"；运行中发送：M1a 没有 Steer，一律排队；输入法；队列暂停时发送的确认；底栏左右两组插槽和弹出层挂载点）；排队消息的预览、暂停与"继续"；`data-send-state` 等 DOM 标记。不做：插话、排队消息的编辑（T140、T149）；请求面板（T083）；超过帧预算的长文本（T164，v1.3.33） | UNIT-composer-ime；新增 UNIT-composer-esc（两次 Esc 与 Esc 的处理顺序）、UI-composer（发送按钮三态、附件条、排队消息） | M | 否 | T.ui |
 | **T090** | e2e 基础设施 | test | 5.9.4（环境）、5.9.9 | T007、T019、T029、T046、T077、T134、T081 | 做：Playwright `_electron` 夹具（e2e 构建、每用例临时根目录、临时仓库、假 agent、CLI 以 `--harness-key-fd` 接入）；原生确认框的替换与记录；`tools/e2e` 包与 `pnpm test:e2e`；其余辅助函数拆给 T167（v1.3.36）；`@smoke` 标签与 PR、每晚套件的对应；Playwright workers 固定为 2；`xtask ci e2e`（e2e 的 App 和 `CupperHost.app` 由当前提交构建，摘要记下产物哈希） | E2E-single-instance、E2E-quit-confirm | M | 否 | D.main、C |
-| **T091** | NFR-1 验收套件 | test | 5.9.4（NFR-1） | T082、T166、T083、T165、T086、T090、T167 | 做：严格按 5.9.4 写五个用例，含 CLI 提权走原生确认、"可以操作"后两端同时回答、三种断开、两次带屏障的 `kill -9`；只新增用例文件 | E2E-NFR1-1、E2E-NFR1-2、E2E-NFR1-3、E2E-NFR1-4、E2E-NFR1-5 | M | 否 | D.main、H.cli |
+| **T091** | NFR-1 验收套件 | test | 5.9.4（NFR-1） | T082、T166、T083、T165、T086、T089、T090、T167 | 做：严格按 5.9.4 写五个用例，含 CLI 提权走原生确认、"可以操作"后两端同时回答、三种断开、两次带屏障的 `kill -9`；只新增用例文件 | E2E-NFR1-1、E2E-NFR1-2、E2E-NFR1-3、E2E-NFR1-4、E2E-NFR1-5 | M | 否 | D.main、H.cli |
 | **T092** | 安全 e2e 与外发检查 | test | 5.9.4（安全）、Q27 | T083、T086、T090、T167 | 做：e2e 构建上的安全用例；验证 `nettop` 采样整个 App 进程树的可行性（Q27），不可行就换方法并上报；只新增用例文件 | E2E-SEC-csp、E2E-SEC-real-input（含数字键证据）、新增 E2E-SEC-panel-arming（打字中或有草稿时不自动获得焦点、打字键撤销、第一下 ⌘Enter 不提交、"请再按一次"只在冷却期、待命期、点击、连续请求、弹出菜单遮挡）、E2E-SEC-panel-numbering（特权和效果未知的选项占编号；按效果未知选项的编号无效，按特权选项的编号走原生确认；`digit` 不符被拒）、E2E-SEC-privileged、E2E-SEC-fake-host、E2E-SEC-egress；新增 E2E-SEC-no-key-client（没有密钥的客户端不能以 desktop_ui 接入，最多得到只读的 cli 身份；出示 `auth: dev_key` 但证明错误或缺失时得到 `unauthenticated` 并被断开，不降级成只读）、E2E-SEC-double-initialize（window 连接上的第二次 `initialize` 在主进程被拦下）、E2E-SEC-cli-fake-host（假宿主占住套接字时 CLI 拒绝连接） | M | 否 | D.main |
 | **T093** | 交互与项目 e2e | test | 5.9.4、5.12.4 | T083、T165、T085、T090、T167、T137 | 做：请求面板的键盘与点击（Enter、Esc、数字键、方向键，"跳过""关闭"的映射，"拒绝并附一条消息"）、提问面板、持久选项的原生确认、添加项目与信任、新建 Claude 会话；只新增用例文件 | E2E-approve-enter-esc、E2E-question-panel、E2E-persistent-option-native、E2E-project-add-trust、E2E-new-session-agent-claude；新增 E2E-reject-with-message（拒绝成功后才发送；CLI 先批准时文字留在输入框并提示"已在别处处理"；M1a 走排队） | M | 否 | D.main、T.ui |
 | T095 | Claude 选项对照表与档位表 | feat | 5.6.4、5.6.5、5.3.6、Q7 | T053 | 做：按工具区分 `allow-with-updates` 的选项对照表与前缀风险（Q7：判断不出按持久）、模式到档位的映射表、"取值都在表里"的检查，换下 T053 的按 kind 兜底并重新生成受影响的金样例（s04、s04b、s05 等）。不做：Codex（T110） | GOLD-A-option-map-claude、UNIT-option-map-claude（v1.3.14 由 T053 移来） | M | 否 | H.drv |
@@ -1770,7 +1770,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T165 ui-core V-b：拒绝并附消息、请求记录行与多请求
 - [x] T166 ui-core IV-b：消息流 II：消息行与 Markdown
 - [ ] T167 e2e 辅助函数
-- [ ] T168 请求面板与用户气泡的全文
+- [x] T168 请求面板与用户气泡的全文
 - [ ] T169 会话 actor I-d：崩溃后的重建与会话层的特权审计
 - [ ] T175 会话 actor I-e：空闲退出与超长输出
 
@@ -1889,3 +1889,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.37 | 2026-10-20 | T165 做完 RP-12、请求记录行和多请求（347 行），"展开看全文"放不下（加上约 490 行，超过约 450 的停止线）：新增 T168（host-client 的 `getBlob`、请求面板截断内容的全文与允许类选项的放开、用户气泡长文本块的全文，新增 UNIT-blob-fulltext），依赖 T164、T165；T099 改为也依赖它。在它合并之前，标了 `content_truncated` 的请求只能拒绝 |
 | v1.3.38 | 2026-10-20 | T089 开工前按守则第 8 条拆分（估计约 1,320 行）：T089 收窄为载入与恢复（按需载入、各核心恢复、`ignore_for_good` 持久化、`Ended` 与读表、补写、两项零碎，约 800 行，上限约 900）；新增 T169（检查点作废时重发、准备阶段崩溃后重开，约 200 行，新增 IT-orch-rebuild）、T175（actor 空闲退出与超长输出，约 360 行，新增 IT-orch-actor-idle、IT-orch-long-output），都依赖 T089，彼此独立；T069 改为也依赖 T169，T099 改为也依赖 T175 |
 | v1.3.39 | 2026-10-20 | T163 评审：网关看不到会话事实，会话层要 privileged 的操作（切到 `full_access`、选写入权限规则的特权选项）还没有 `privileged.executed`。并进 T169（同在会话 actor，约 60 行，新增 UNIT-audit-session-privileged），T169 改为也依赖 T163 |
+| v1.3.40 | 2026-10-20 | T091 补依赖 T089：E2E-NFR1-5 要求宿主被 `kill -9` 后旧会话可以继续、回合标"已中断"、请求标"已失效"，靠的是 T089 的按需载入、恢复与补写；T091 先做 NFR1-1 至 NFR1-4，NFR1-5 按约定的行为先写，T089 合并后由编排者把 main 合进来再跑通。另记：T167 在真实 App 上查出两处阻塞性产品缺陷（T076 的 preload HostPort 过不了 `contextBridge`；T080 的 `Frames` 以错误的 `this` 调用 `requestAnimationFrame`），经编排者同意在 T167 分支上单独修复，`@smoke` 改为从渲染进程一侧断言看到数据 |

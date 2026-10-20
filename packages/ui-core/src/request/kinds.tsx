@@ -213,31 +213,6 @@ export function OptionsKind(
   );
 }
 
-/** The command in a "终端" box, collapsed to a few lines until expanded. */
-export function Terminal({ command }: { command: string }) {
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="mx-4 mb-2 overflow-hidden rounded-lg border border-border bg-surface-code text-code">
-      <div className="flex items-center justify-between px-3 py-1 text-xs text-fg-tertiary">
-        {t("request:terminal")}
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          className="rounded-md px-1 hover:bg-hover"
-        >
-          {t(open ? "request:collapse" : "request:expand")}
-        </button>
-      </div>
-      <pre
-        className={`overflow-x-auto px-3 pb-2 font-mono whitespace-pre-wrap ${open ? "" : "max-h-24 overflow-y-hidden"}`}
-      >
-        {command}
-      </pre>
-    </div>
-  );
-}
-
 const valueLabel = (value: AnswerValue | undefined) =>
   Array.isArray(value) ? value : value === undefined ? [] : [String(value)];
 
