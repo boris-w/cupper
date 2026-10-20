@@ -35,6 +35,8 @@ function fakeHost(keyed: boolean) {
     dials: [] as unknown[],
     exits: [] as Promise<{ code?: number }>[],
     payloads: 0,
+    /** What happens when virtual time reaches a point. */
+    at: [] as [number, () => void][],
   };
   class HostKey {
     readonly fake = true;
@@ -70,7 +72,15 @@ function fakeHost(keyed: boolean) {
       state.payloads += 1;
       return { harness_key: "a".repeat(64), test_config: {} };
     },
-    clock: { now: () => state.time, sleep: (ms) => Promise.resolve(void (state.time += ms)) },
+    clock: {
+      now: () => state.time,
+      sleep: (ms) => {
+        state.time += ms;
+        state.at.filter(([time]) => time <= state.time).forEach(([, event]) => event());
+        state.at = state.at.filter(([time]) => time > state.time);
+        return Promise.resolve();
+      },
+    },
     open: (conn) => Promise.resolve({ conn } as Connected),
   });
   return { state, launcher };
@@ -120,14 +130,34 @@ describe("UNIT-launcher", () => {
     expect(state.payloads).toBe(0);
   });
 
-  test("connecting is tried every 10 ms for 500 ms after the start", async () => {
+  test("connecting is tried every 10 ms, up to 10 s while the host we started runs", async () => {
     const { state, launcher } = fakeHost(true);
     expect(await failure(launcher.open(OPTIONS))).toBe("host_unreachable");
-    expect(state.time).toBe(500);
-    expect(state.dials).toHaveLength(1 + 50);
+    expect(state.time).toBe(10_000);
+    expect(state.dials).toHaveLength(1 + 1000);
     launcher.installing = true;
     expect(await failure(launcher.open(OPTIONS))).toBe("updating");
     expect(state.spawns).toHaveLength(1);
+  });
+
+  test("a host slow to start is waited for; one that exits meanwhile gives its reason", async () => {
+    const slow = fakeHost(true);
+    slow.state.at.push([2000, () => (slow.state.listening = true)]);
+    expect(await failure(slow.launcher.open(OPTIONS))).toBe("connected");
+    expect(slow.state.time).toBe(2000);
+
+    const failing = fakeHost(true);
+    let exit: (value: { code?: number }) => void = () => undefined;
+    failing.state.exits.push(new Promise((resolve) => (exit = resolve)));
+    failing.state.at.push([3000, () => exit({ code: 5 })]);
+    expect(await failure(failing.launcher.open(OPTIONS))).toBe("data_dir_unusable");
+    expect(failing.state.time).toBe(3000);
+
+    // Another host holds the lock: it should be listening, so 500 ms are enough.
+    const other = fakeHost(true);
+    other.state.exits.push(Promise.resolve({ code: 3 }));
+    expect(await failure(other.launcher.open(OPTIONS))).toBe("host_unreachable");
+    expect(other.state.time).toBe(500);
   });
 
   test("exit codes 4 to 6 give their reasons; with 3 another host is connected to", async () => {

@@ -4,7 +4,7 @@
 
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -143,6 +143,19 @@ describe("UNIT-native", () => {
     expect(conn.closeReason).toBe("local");
     process.kill(host.pid, "SIGTERM");
     expect(await host.exit).toEqual({ signal: 15 });
+  });
+
+  test("names the program and cdhash a pid runs", async () => {
+    const { host } = await startFixture(new native.HostKey());
+    const image = native.processImage(host.pid);
+    expect(image).toEqual({ path: realpathSync(FIXTURE), cdhash: native.fileCdhash(FIXTURE) });
+    expect(image?.cdhash).toMatch(/^[0-9a-f]{40}$/);
+    process.kill(host.pid, "SIGTERM");
+    await host.exit;
+    expect(native.processImage(host.pid)).toBeNull();
+    expect(() => native.fileCdhash(join(tempDir(), "none"))).toThrow(
+      expect.objectContaining({ code: "invalid_argument" }),
+    );
   });
 
   test("a wrong or missing host_proof disconnects", async () => {
