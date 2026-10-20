@@ -8,6 +8,8 @@ pub mod core;
 #[cfg(test)]
 mod gating_tests;
 #[cfg(test)]
+mod idle_tests;
+#[cfg(test)]
 mod interaction_tests;
 mod load;
 mod manager;

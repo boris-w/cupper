@@ -89,6 +89,8 @@ impl SessionPort for Stub {
         };
         Box::pin(future::ready(Ok(facts)))
     }
+
+    fn wake(&self, _: &SessionId) {}
 }
 
 impl IndexPort for Stub {

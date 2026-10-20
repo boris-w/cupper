@@ -69,6 +69,9 @@ durations! {
     /// How long a new turn waits for its start snapshot before it sends the
     /// prompt anyway (design 5.2.6).
     TURN_PREPARE = "turn_prepare", Duration::from_secs(3);
+    /// How long a session actor stays in memory with nothing going on
+    /// (design 5.2.3).
+    SESSION_IDLE = "session_idle", Duration::from_secs(600);
     /// After an interrupt, how long the host waits for the prompt to return
     /// before it ends the turn as `host_timeout` (design 5.2.6, 5.3.9).
     INTERRUPT_FALLBACK = "interrupt_fallback", Duration::from_millis(V1.interrupt_fallback_ms);
