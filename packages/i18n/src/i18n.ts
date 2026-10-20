@@ -8,6 +8,7 @@ import command from "./locales/zh-CN/command.json" with { type: "json" };
 import composer from "./locales/zh-CN/composer.json" with { type: "json" };
 import host from "./locales/zh-CN/host.json" with { type: "json" };
 import privileged from "./locales/zh-CN/privileged.json" with { type: "json" };
+import request from "./locales/zh-CN/request.json" with { type: "json" };
 import shell from "./locales/zh-CN/shell.json" with { type: "json" };
 import sidebar from "./locales/zh-CN/sidebar.json" with { type: "json" };
 import stream from "./locales/zh-CN/stream.json" with { type: "json" };
@@ -16,7 +17,7 @@ import update from "./locales/zh-CN/update.json" with { type: "json" };
 export const DEFAULT_LOCALE = "zh-CN";
 
 const resources = {
-  "zh-CN": { command, composer, host, privileged, shell, sidebar, stream, update },
+  "zh-CN": { command, composer, host, privileged, request, shell, sidebar, stream, update },
 };
 
 export type Namespace = keyof (typeof resources)["zh-CN"];

@@ -335,6 +335,15 @@
 | T092 | 加固评估：网关的上传缓冲按哈希建条目，刚发第一片就超限或乱序的哈希会留下空条目，直到 `blob/put` 或断开；是否加"每连接未决上传数"的上限 | T029 |
 | T090、T091、T092 | CLI（T046）：退出码 0 成功、1 宿主拒绝或本地错误、2 用法、3 宿主没在运行或已退出、4 宿主校验失败，`elevate` 另有 10（`granted: []`）、11（超时）、12（限频）、13（血缘）；`--json` 输出 JSON Lines，错误为 `{"error": {code, reason?, …}}`；`--json` 下 `elevate` 被拒时输出两行（原始回复加 `{"error": {"code": "denied"}}`）；`repl` 在同一条连接上执行，`--json` 下每条命令以 `{"repl": {"exit": n}}` 结束；一次性的写命令没有提权必被拒，连续写用 `repl`。手动时钟下索引按 100 ms 合并写出，要先 `test/clock_advance` 超过 100 ms 才看得到新会话。`elevate` 的非批准路径与人读格式、`sessions --watch`、`answer` 的类型转换还没有用例 | T046 |
 | T092（或补单元测试的任务） | `cupper-cli` 的 `exit_code()` 映射（`elevate` 的 10–13）没有单元测试，补上 | T046 |
+| 运行期间重新安装运行时的任务（M1b 起） | 安装器只在宿主启动时运行（T129），`in_use` 为空、没有运行期间的重启入口；要在运行期间重新安装时，需要把运行中适配器的版本传进 `in_use`，并加一个重新触发的入口。安装器只在 App 包里运行（`BundleDir::is_app()`），开发和测试用的 `target/debug/cupper-host` 不启动它；进程级用例经只在 test-harness 构建里生效的 `test_config.runtime.manifest` 注入测试清单 | T129 |
+| 作者（MAN-keyboard） | 请求面板（T083）另加的实体键盘确认项：Enter 批准、Esc 拒绝（有特权选项时 Esc 不弹原生确认框）、数字键选择并提交（特权选项的编号弹原生确认框，效果未知选项的编号没反应）、输入法选词时按 Enter 不发送也不提交；建议一并看：打字时来请求面板不抢焦点，切回应用 1 秒内按 Enter 提示"请再按一次"。清单在 `docs/tasks/T083-ui-request-panel/notes.md`，与 T077 的那份一起执行 | T083 |
+| e2e（T091–T093）、T167 | 请求面板的 DOM 标记（T083）：`data-request-panel`、`data-request-kind`、`data-ready`（待命 500 ms 结束后）、`data-activation`（`auto` 或 `manual`）；有待处理的请求时 `ComposerArea` 按创建顺序取第一个显示面板 | T083 |
+| T166、T165、T146 | 消息流的行（T082）：形状以 `packages/ui-core/src/rows/stream.ts` 为准（`notes.md` 有对照表），每种行都有 `kind`、`key` 和要显示的数据，行组件是 `row` 的纯函数；登记用 `registerRow(kind, Component)`（属性 `{ row: RowOf<"kind"> }`，每种只能登记一次），并在 `rows/index.ts` 加 import；没有登记的 kind 显示占位。待 T166 登记：`agent_message`、`thought`、`tool`、`activity_group`、`notice`、`error`；T165：`request`（在它登记之前，待处理的请求条目在流里显示为占位，UI-request-panel 的基线里就是这样）；T146：`plan`、`late_tool_output`。消息流在 `app/pages.tsx` 的 `SessionPage` 里横幅之下、输入框之上，每行外层已有行间距 | T082 |
+| T091（或 T090 之后的 e2e） | 消息流"插入历史后视口不跳"只在 `ScrollKeeper` 的单元测试里验证过（jsdom 没有布局），要在真实环境里确认一次 | T082 |
+| 第一个在界面里读 blob 的任务 | 用户气泡里的长文本块现在只显示"长文本"，要等 host-client 的 `getBlob` | T082 |
+| T163 | ① 有序退出时 `conn.closed{host_exiting}` 只进了 host.log、没进表（`Host::exit` 先停写线程再 `close_all`），加 `host.exiting` 时一并改成先关连接、排空审计写入、再停写线程；② `admit` 里的 `verify(ui_requirement)` 也在异步线程上同步调用 Security 框架，未正式签名的大程序或第一次调用会慢，检查一遍，必要时移到 `spawn_blocking`（T138 修 IT-idle-exit 时查出同类问题：`signing_identity()` 一次约 600 ms，卡住了宿主的定时器）；③ `project/add` 新路径扫描失败时还没有项目 ID，没有审计 | T138 |
+| 读 `config.unconfirmed` 审计或事件的代码 | T044 的 `ConfigUnconfirmed` 现在是 `{reason, config: ConfigState}`（T138） | T138 |
+| 在宿主的连接路径或异步线程上做系统调用的任务 | 不要在 tokio 工作线程上同步调用可能慢的系统 API（Security 框架的签名查询、读大文件等），用 `spawn_blocking`；否则会卡住宿主的定时器（监护、合并窗口都受影响），T138 的 IT-idle-exit 就是这样失败的 | T138 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

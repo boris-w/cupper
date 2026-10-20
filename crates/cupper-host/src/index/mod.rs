@@ -30,13 +30,14 @@ use std::mem;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock, Weak};
 
+use cupper_protocol::domain::AgentKind;
 use cupper_protocol::envelope::Cause;
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{ConnId, IntentId, ProjectId, SessionId};
 use cupper_protocol::index::{
     AgentStatus, AgentsUpdated, ClientsUpdated, GitTools, HostUpdated, NotificationIntent,
-    SessionSummary,
+    RuntimeFailure, RuntimeState, SessionSummary, TrustState,
 };
 use cupper_protocol::methods::handshake::{ClientPresence, ClientPresenceParams};
 use cupper_protocol::methods::project::{
@@ -60,7 +61,9 @@ use crate::clock::{Clock, IdGen};
 use crate::driver::runtime::status::AgentNotes;
 use crate::durations::Durations;
 use crate::elevation::{Ask, ElevationTimer, Requesters};
-use crate::gateway::{AuditRecord, Call, Gateway, IndexPort, Opened, Port, Reply};
+use crate::gateway::{
+    AuditEvent, AuditRecord, Call, Gateway, IndexPort, Opened, Port, Reply, TrustChange,
+};
 use crate::git::GitTool;
 use crate::ledger::{Outcome, Ticket};
 use crate::orchestrator::session::{IndexNotes, Note};
@@ -124,6 +127,8 @@ enum Mail {
     Agent(Box<AgentStatus>),
     /// The self-check found the code on disk changed.
     PendingUpgrade,
+    /// The runtime installer's state of Claude's adapter runtime.
+    Runtime(RuntimeState, Option<RuntimeFailure>),
     Checkpoint(oneshot::Sender<()>),
     /// `test/seed` wrote sessions: reconcile with the tables again.
     #[cfg(feature = "test-harness")]
@@ -176,6 +181,7 @@ impl IndexHandle {
             mail: mail.clone(),
             gateway: Arc::clone(&gateway),
             deps,
+            runtime: None,
         };
         tokio::spawn(actor.run(inbox, participant));
         Ok(Self { mail, gateway })
@@ -188,6 +194,12 @@ impl IndexHandle {
         let (done, reconciled) = oneshot::channel();
         let _ = self.mail.send(Mail::Reconcile(done));
         let _ = reconciled.await;
+    }
+
+    /// `agents.updated` shows the runtime installer's state for Claude's
+    /// adapter, whatever its runtime reports (design 5.2.12).
+    pub fn runtime(&self, state: RuntimeState, failure: Option<RuntimeFailure>) {
+        let _ = self.mail.send(Mail::Runtime(state, failure));
     }
 
     /// `host.updated` says an upgrade waits (design 5.2.13).
@@ -272,6 +284,8 @@ struct IndexActor {
     mail: mpsc::UnboundedSender<Mail>,
     gateway: Arc<OnceLock<Weak<Gateway>>>,
     deps: IndexDeps,
+    /// What the runtime installer last said of Claude's adapter runtime.
+    runtime: Option<(RuntimeState, Option<RuntimeFailure>)>,
 }
 
 impl IndexActor {
@@ -305,7 +319,17 @@ impl IndexActor {
                     } = *done;
                     let outcome = match prepared {
                         Ok(prepared) => self.decide(call, prepared).await,
-                        Err(err) => refuse(call.ticket, err),
+                        Err(err) => {
+                            let failed = err.data.as_ref().and_then(|d| d.reason.as_ref());
+                            let project = parse::<ProjectId>(&call.params["project_id"]);
+                            if let (Some(ErrorReason::ScanFailed), Ok(project)) = (failed, project)
+                            {
+                                let error = err.message.clone();
+                                let change = TrustChange::ScanFailed { error };
+                                self.audit_trust(Some(call.conn.clone()), project, change);
+                            }
+                            refuse(call.ticket, err)
+                        }
                     };
                     let _ = reply.send(outcome);
                 }
@@ -329,6 +353,19 @@ impl IndexActor {
                 }
                 Mail::Rescanned(project, scan) => self.rescanned(project, scan).await,
                 Mail::Agent(status) => self.agent(*status).await,
+                Mail::Runtime(state, failure) => {
+                    self.runtime = Some((state, failure));
+                    let claude = |view: &IndexView| {
+                        let agents = view.agents.as_ref()?.agents.iter();
+                        agents
+                            .clone()
+                            .find(|a| a.agent == AgentKind::Claude)
+                            .cloned()
+                    };
+                    if let Some(status) = read(&self.handle, claude) {
+                        self.agent(status).await;
+                    }
+                }
                 Mail::PendingUpgrade => {
                     self.deps.host.pending_upgrade = true;
                     self.append(EventBody::HostUpdated(self.deps.host.clone()))
@@ -412,18 +449,23 @@ impl IndexActor {
     async fn decide(&mut self, mut call: Call, prepared: Prepared) -> Outcome {
         let now = self.deps.clock.now_wall_ms();
         let Prepared { path, git, scan } = prepared;
-        match call.method {
+        let (project, write, result, change) = match call.method {
             ProjectAdd::NAME => {
                 let existing = self.tables.projects.values().find(|p| p.path == path);
-                let (project, write) = match existing {
+                let (project, write, change) = match existing {
                     Some(project) => {
                         let trust = project.trust.rescanned(&scan);
                         let changed = trust != project.trust;
+                        let change = stale(&project.trust, &trust, &scan);
                         let project = Project {
                             trust,
                             ..project.clone()
                         };
-                        (project, changed.then_some(projects::update as Write))
+                        (
+                            project,
+                            changed.then_some(projects::update as Write),
+                            change,
+                        )
                     }
                     None => {
                         let position = self.tables.projects.values().map(|p| p.position + 1).max();
@@ -437,11 +479,11 @@ impl IndexActor {
                             position: position.unwrap_or(0),
                             trust: Trust::added(&scan, now),
                         };
-                        (project, Some(projects::insert as Write))
+                        (project, Some(projects::insert as Write), None)
                     }
                 };
                 let result = projects::add_result(&project, &scan);
-                self.save(&mut call, project, write, result).await
+                (project, write, result, change)
             }
             ProjectTrust::NAME => {
                 let params = match parse::<ProjectTrustParams>(&call.params) {
@@ -449,6 +491,11 @@ impl IndexActor {
                     Err(err) => return refuse(call.ticket, err),
                 };
                 let by = call.principal.id.clone();
+                let digest = scan.digest.clone();
+                let change = TrustChange::Trusted {
+                    by: by.clone(),
+                    digest,
+                };
                 let Some(project) = self.tables.projects.get(&params.project_id) else {
                     return refuse(
                         call.ticket,
@@ -468,8 +515,12 @@ impl IndexActor {
                     trust,
                     ..project.clone()
                 };
-                self.save(&mut call, project, Some(projects::update), result)
-                    .await
+                (
+                    project,
+                    Some(projects::update as Write),
+                    result,
+                    Some(change),
+                )
             }
             _ => {
                 let project = match self.project_of(&call) {
@@ -479,16 +530,27 @@ impl IndexActor {
                 let trust = project.trust.rescanned(&scan);
                 let result = projects::info_result(&project, &trust, &scan);
                 let changed = trust != project.trust;
+                let change = stale(&project.trust, &trust, &scan);
                 let project = Project { trust, ..project };
-                self.save(
-                    &mut call,
-                    project,
-                    changed.then_some(projects::update as Write),
-                    result,
-                )
-                .await
+                let write = changed.then_some(projects::update as Write);
+                (project, write, result, change)
             }
+        };
+        let id = project.id.clone();
+        let outcome = self.save(&mut call, project, write, result).await;
+        if let (Ok(_), Some(change)) = (&outcome, change) {
+            self.audit_trust(Some(call.conn.clone()), id, change);
         }
+        outcome
+    }
+
+    /// `project.trust.*` (design 5.8.6), from `conn`'s call or a session's
+    /// rescan.
+    fn audit_trust(&self, conn: Option<ConnId>, project_id: ProjectId, change: TrustChange) {
+        let event = AuditEvent::ProjectTrust { project_id, change };
+        let at_ms = self.deps.clock.now_wall_ms();
+        // Nobody listening is the receiver's choice.
+        let _ = self.deps.audit.send(AuditRecord { at_ms, conn, event });
     }
 
     /// Records `project`: its row through `write`, with `project.upserted`,
@@ -624,7 +686,11 @@ impl IndexActor {
     }
 
     /// One agent's status into `agents.updated`.
-    async fn agent(&mut self, status: AgentStatus) {
+    async fn agent(&mut self, mut status: AgentStatus) {
+        if let (AgentKind::Claude, Some((state, failure))) = (&status.agent, &self.runtime) {
+            status.adapter.runtime = state.clone();
+            status.adapter.failure = failure.clone();
+        }
         let agents = read(&self.handle, |view| view.agents.clone());
         let mut agents = agents.unwrap_or_else(|| AgentsUpdated {
             agents: Vec::new(),
@@ -651,6 +717,7 @@ impl IndexActor {
         if trust == project.trust {
             return;
         }
+        let change = stale(&project.trust, &trust, &scan);
         let project = Project {
             trust,
             ..project.clone()
@@ -663,7 +730,10 @@ impl IndexActor {
         };
         // Lost, it is found again by the next rescan.
         if self.writer.append(batch).await.is_ok() {
-            self.tables.projects.insert(id, project);
+            self.tables.projects.insert(id.clone(), project);
+            if let Some(change) = change {
+                self.audit_trust(None, id, change);
+            }
         }
     }
 
@@ -686,6 +756,14 @@ fn timer<K>(request: TimerRequest<K>, timer: fn(K) -> Timer) -> TimerRequest<Tim
         },
         TimerRequest::Cancel(key) => TimerRequest::Cancel(timer(key)),
     }
+}
+
+/// `project.trust.stale` when a rescan took a trusted project to `stale`.
+fn stale(before: &Trust, after: &Trust, scan: &Scan) -> Option<TrustChange> {
+    let to_stale = before.state == TrustState::Trusted && after.state == TrustState::Stale;
+    to_stale.then(|| TrustChange::Stale {
+        digest: scan.digest.clone(),
+    })
 }
 
 /// A row write of [`projects`].

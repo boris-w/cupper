@@ -263,6 +263,16 @@ async fn it_runtime_download_unreachable_failing_or_slow_registry_is_network() {
     assert_eq!(fetched, Err(Reason::Network));
 }
 
+#[tokio::test]
+async fn it_runtime_download_a_tarball_over_the_limit_is_a_network_failure() {
+    let registry = Registry::start().await;
+    let big = vec![0; npm::MAX_TARBALL + 1];
+    let lock = lockfile(&[("node_modules/a", "big.tgz", &sri(&big), None)]);
+    registry.route("/big.tgz", Reply::Body(big));
+    let (_dir, fetched) = fetch(&registry, &lock, &ManualClock::new()).await;
+    assert_eq!(fetched, Err(Reason::Network));
+}
+
 #[test]
 fn lockfile_packages_come_from_the_registry_given() {
     let lock = lockfile(&[
