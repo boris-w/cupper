@@ -11,8 +11,9 @@ import { useBlobText } from "../state/blob";
 
 /**
  * A box of agent content, collapsed to a few lines until expanded; a blob
- * downloads on expanding. `onSeen` hears whether the full text is on screen
- * now: expanded and loaded (security #6); collapsing takes it back.
+ * downloads on expanding. Expanded, it scrolls within a cap so the options
+ * stay in view. `onSeen` hears whether the full text is there now: expanded
+ * and loaded, not scrolled to the end (security #6); collapsing takes it back.
  */
 export function ContentBox(props: {
   label: string;
@@ -42,7 +43,7 @@ export function ContentBox(props: {
         </button>
       </div>
       <pre
-        className={`overflow-x-auto px-3 pb-2 font-mono whitespace-pre-wrap ${open && loaded ? "" : "max-h-24 overflow-y-hidden"}`}
+        className={`overflow-x-auto px-3 pb-2 font-mono whitespace-pre-wrap ${open && loaded ? "max-h-60 overflow-y-auto" : "max-h-24 overflow-y-hidden"}`}
       >
         {escapeInvisible(inline ?? full.text ?? preview ?? "")}
       </pre>

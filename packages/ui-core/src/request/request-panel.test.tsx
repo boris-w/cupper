@@ -451,7 +451,8 @@ describe("UNIT-blob-fulltext: the request panel", () => {
     expect(run.methods()).not.toContain("blob/get");
     fireEvent.click(screen.getByRole("button", { name: "展开" }));
     await until(() => !allowOff());
-    expect(screen.getByText("rm -rf build\\u{202E}")).toBeTruthy();
+    // Shown in a box that scrolls; allowing needs no scrolling to its end.
+    expect(screen.getByText("rm -rf build\\u{202E}").className).toContain("overflow-y-auto");
     expect(screen.queryByText(/已截断/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "收起" }));
     expect(allowOff()).toBe(true);
