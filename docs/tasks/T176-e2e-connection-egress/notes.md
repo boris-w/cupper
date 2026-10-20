@@ -82,3 +82,7 @@
 ### 连跑
 
 10 次 `cargo xtask ci e2e`（持机器锁，两段），每次 39 项全过，127–134 s；每次跑完本 worktree 没有残留进程，`$TMPDIR/cupper-e2e/` 为空。
+
+### `ci pr --record`
+
+第一次跑 rust 作业有一项失败：T093 的 `ci::lock::tests::unit_ci_lock_command_passes_its_exit_code_and_is_told_it_holds_the_lock`（"the lock outlived its command"）。它用自己的临时锁文件，和本任务的改动无关；本机单独重跑 11 次都通过，那次运行里 xtask 的测试花了 12 s（平时 3 s）。猜测是负载下别的测试 fork 出的子进程在 exec 之前短暂持有锁文件的描述符。没有改它，在汇报里提出。重跑全部通过，摘要已提交。
