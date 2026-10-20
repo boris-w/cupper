@@ -200,6 +200,11 @@ impl ClaudeSession {
         DriverEvent::ConfigChanged(self.config.clone())
     }
 
+    /// The session's options as last known.
+    pub fn config(&self) -> &[ConfigOption] {
+        &self.config
+    }
+
     /// The plan of a confirmation that carries none: the last `plan_update`.
     pub fn last_plan(&self) -> Option<&str> {
         self.plan.as_deref()

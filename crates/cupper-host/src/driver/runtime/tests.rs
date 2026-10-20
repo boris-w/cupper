@@ -1,7 +1,8 @@
 //! `AgentRuntime` with the fake agent (design 5.6.1, 5.6.6, 5.6.8, 5.8.5):
-//! IT-process-hygiene, IT-K13-echo-cwd, IT-K26-client-info, IT-K21-reap-group
-//! and IT-adapter-restart. The runtime's timers run on `ManualClock`, which
-//! [`Fixture::tick`] moves to the deadlines the runtime sets.
+//! IT-process-hygiene, IT-K13-echo-cwd, IT-K26-client-info, IT-K21-reap-group,
+//! IT-adapter-restart, and IT-orch-gating's `SetConfig`. The runtime's timers
+//! run on `ManualClock`, which [`Fixture::tick`] moves to the deadlines the
+//! runtime sets.
 
 use std::collections::BTreeMap;
 use std::pin::pin;
@@ -200,6 +201,27 @@ async fn it_k26_client_info_names_cupper_only() {
     let client: serde_json::Value =
         serde_json::from_str(rest.split_once(" env=").unwrap().0).unwrap();
     assert_eq!(client["name"], "cupper");
+    f.stop().await;
+}
+
+/// T044's mode set back, on the agent: the session hears all the options.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_orch_gating_set_config_comes_back_as_all_options() {
+    let f = Fixture::new("set-config", &[], None, None);
+    let (session, mut heard) = f.attach().await.unwrap();
+    let (option, value) = ("permission_mode".to_owned(), "plan".to_owned());
+    f.runtime.send(DriverCommand::SetConfig {
+        session,
+        option,
+        value,
+    });
+    let options = loop {
+        if let Some(DriverEvent::ConfigChanged(options)) = heard.recv().await {
+            break options;
+        }
+    };
+    let mode = options.iter().find(|o| o.id.as_str() == "permission_mode");
+    assert_eq!((mode.unwrap().current.as_str(), options.len()), ("plan", 3));
     f.stop().await;
 }
 

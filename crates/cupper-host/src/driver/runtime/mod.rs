@@ -25,8 +25,8 @@
 //! - **Every 30 s** it samples the processes ([`lifecycle::sample`]): their
 //!   memory for [`AgentRuntime::resources`], and the descendants' groups,
 //!   kept in the `adapters` row for the cleanup after a crash of the host.
-//! - Steering (T140), `SetConfig` (T044) and probing (T009) are not served
-//!   yet; their commands are dropped.
+//! - Steering (T140) and probing (T009) are not served yet; their commands
+//!   are dropped.
 
 pub mod content;
 pub mod launch;
@@ -125,7 +125,7 @@ enum Wire {
         Box<Pending>,
         Result<(String, Vec<SessionConfigOption>), Error>,
     ),
-    /// `session/set_config_option` while attaching.
+    /// `session/set_config_option`, while attaching or for `SetConfig`.
     Configured(String, Result<Vec<SessionConfigOption>, Error>),
     Prompted(String, super::api::PromptTag, Result<PromptResponse, Error>),
     /// A stop's `session/close` was answered.
@@ -610,6 +610,11 @@ impl Actor {
             },
             Wire::Configured(session, result) => {
                 let Some(opening) = self.opening.get_mut(&session) else {
+                    // `SetConfig`: the session hears all the options. A
+                    // refusal leaves them as they were.
+                    if let (Some(route), Ok(options)) = (self.sessions.get_mut(&session), result) {
+                        let _ = route.events.send(route.claude.set_config(&options));
+                    }
                     return;
                 };
                 match result {
@@ -749,10 +754,31 @@ impl Actor {
                 drop(sent);
             }
             DriverCommand::Answer { ask, answer } => self.answer(ask, answer),
-            DriverCommand::Attach(_)
-            | DriverCommand::Steer { .. }
-            | DriverCommand::SetConfig { .. }
-            | DriverCommand::Probe => {}
+            DriverCommand::SetConfig {
+                session,
+                option,
+                value,
+            } => {
+                let AgentSessionId(id) = session;
+                let Some(route) = self.sessions.get(&id) else {
+                    return;
+                };
+                // cupper's ID of the option, as the agent names it.
+                let named = route
+                    .claude
+                    .config()
+                    .iter()
+                    .find(|o| o.id.as_str() == option);
+                let option = named.map_or(option, |o| o.agent_option_id.clone());
+                let (wire, value) = (wire.clone(), SessionConfigOptionValue::value_id(value));
+                let request = SetSessionConfigOptionRequest::new(id.clone(), option, value);
+                let sent = conn.request(request, move |result: Result<_, Error>| {
+                    let result = result.map(|r| r.config_options);
+                    let _ = wire.send(Wire::Configured(id, result));
+                });
+                drop(sent);
+            }
+            DriverCommand::Attach(_) | DriverCommand::Steer { .. } | DriverCommand::Probe => {}
         }
     }
 

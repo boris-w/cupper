@@ -36,7 +36,8 @@ pub trait AgentPort: Send + Sync + fmt::Debug {
         events: mpsc::UnboundedSender<DriverEvent>,
     ) -> BoxFuture<'static, Result<AttachInfo, AgentError>>;
 
-    /// A command without a reply: `Prompt`, `Cancel`, `Close` or `Answer`.
+    /// A command without a reply: `Prompt`, `Cancel`, `Close`, `Answer`, or
+    /// `SetConfig`, whose result comes as `ConfigChanged`.
     fn send(&self, command: DriverCommand);
 }
 
@@ -80,8 +81,9 @@ pub enum DriverCommand {
     },
     /// `session/cancel`.
     Cancel { session: AgentSessionId },
-    /// Request, replied with `Result<Vec<ConfigOption>, AgentError>`, the
-    /// latest options: `session/set_config_option`.
+    /// `session/set_config_option` of `option`, cupper's ID of it (design
+    /// 5.6.5); the session hears all the options as
+    /// [`DriverEvent::ConfigChanged`], or nothing if the agent refused.
     SetConfig {
         session: AgentSessionId,
         option: String,
