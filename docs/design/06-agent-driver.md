@@ -142,7 +142,7 @@ ACP 的 `configOptions` 按 `category` 映射到 cupper 的配置项，具体取
 2. 登录 shell 的 PATH 里的 `claude`、`codex`，只在可信条目里找：绝对路径，并且不在任何项目、工作区、worktree 根目录或临时目录下（规则同 git，[5.2.10](02-host.md#5210-git-与-worktree-服务)），避免执行 agent 放在工作区里的同名程序；
 3. 常见位置：Homebrew（`/opt/homebrew/bin`）、原生安装器（`~/.local/bin`）、npm 全局目录、nvm 当前版本的 bin 目录。
 
-**解析成原生二进制**：先 `realpath`。是 Mach-O 就直接用；是 `#!/usr/bin/env node` 的 npm shim，按该 agent 的包布局找到包内的平台二进制（ADR-08：不能直接传 shim，GUI 环境里没有 node）；只找到 JS 入口、没有原生二进制的，状态为 `unsupported_install`，提示安装原生版本。各种安装方式的目录布局做成数据驱动的解析器，用目录树样例做单元测试（实际布局在实现时核实，待定问题 Q19）。
+**解析成原生二进制**：先 `realpath`。是 Mach-O 就直接用；否则按该 agent 的安装布局表认出它是哪种安装、落在哪个包的哪个入口位置，再找包内的平台二进制（ADR-08：不能把 shim 或 JS 入口直接交给适配器，GUI 环境里没有 node）。npm 安装不能按 shebang 认（T054 核实，2026-10-20）：Claude 2.1.120 起入口是 `bin/claude.exe`，postinstall 把平台包 `@anthropic-ai/claude-code-darwin-arm64` 里的 `claude` 硬链接或复制过来，正常安装后 realpath 就是 Mach-O；postinstall 没跑时（`--ignore-scripts`、pnpm 10）入口是不带 shebang 的占位文件，平台二进制在嵌套的 `node_modules/@anthropic-ai/claude-code-darwin-arm64/claude` 或同一 scope 下的兄弟目录里；2.1.100 及以前的入口是纯 JS 的 `cli.js`，包里 `vendor/` 下的 Mach-O 是 `rg` 等工具而不是 Claude，只认表里列出的位置。只找到 JS 入口、没有原生二进制的，状态为 `unsupported_install`，提示安装原生版本；pnpm 全局安装生成的 `#!/bin/sh` 脚本在 M1a 同样判为 `unsupported_install`。各种安装方式的目录布局做成数据驱动的解析器，用目录树样例做单元测试（待定问题 Q19）。
 
 **版本检查**：运行 `<binary> --version`（超时 5 秒，环境变量白名单），取第一个语义化版本号，与锁定的适配器附带的"已验证范围"比较：
 

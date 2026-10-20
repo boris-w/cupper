@@ -332,8 +332,12 @@ UNIT-fake-scripts = "pr"
 [T052]
 milestone = "M1a"
 UNIT-rec-format = "pr"
-UNIT-replay = "pr"
 UNIT-sensitive-list = "pr"
+
+# 假 agent 回放模式与 persona 比对（计划 v1.3.12 由 T052 拆出）
+[T067]
+milestone = "M1a"
+UNIT-replay = "pr"
 
 # Claude 提取层、选项对照表与 A 层金样例
 [T053]
@@ -357,9 +361,14 @@ UNIT-capabilities-plan = "pr"
 [T054]
 milestone = "M1a"
 UNIT-cli-resolver-claude = "pr"
-UNIT-version-classify = "pr"
 UNIT-realpath = "pr"
 UNIT-env-rules = "pr"
+
+# 登录 shell 环境与版本检测（计划 v1.3.13 由 T054 拆出）
+[T094]
+milestone = "M1a"
+UNIT-version-classify = "pr"
+UNIT-login-shell = "pr"
 
 # 驱动层 II：AgentRuntime 与 Claude 接入
 [T055]
