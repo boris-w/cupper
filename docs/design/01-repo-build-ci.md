@@ -74,7 +74,7 @@ cupper/
 | `cupper-host` | Rust lib + bin | protocol、sys、agent-client-protocol `=3.3.0`、tokio、rusqlite（bundled）、reqwest（rustls）、tar、flate2、nucleo-matcher、ignore、tracing | 模块见 [5.2](02-host.md)。特性：`dev-auth`（开发和 e2e 构建用的一次性密钥认证）、`test-harness`（测试 principal、测试方法、注入点和故障点，发布构建永不开启）。`--build-info` 输出启用了哪些特性，发布流水线据此断言 |
 | `cupper-cli` | Rust lib + bin | protocol、sys、tokio、clap | 库部分（连接、请求关联、`Mirror`）供宿主集成测试复用。特性 `test-harness` 才有 `--harness-key-fd`；`--build-info` 同宿主 |
 | `cupper-fake-agent` | Rust bin | agent-client-protocol | 两种模式见 [5.9](09-testing.md) |
-| `cupper-desktop-native` | Rust cdylib（napi-rs） | sys、napi | 产物 `cupper_native.node`，放在 asar 外（`asarUnpack`），由 electron-builder 一并签名 |
+| `cupper-desktop-native` | Rust cdylib（napi-rs） | sys、napi | 产物 `cupper_native.node`，经 electron-builder 的 `extraResources` 放在 asar 外的 `Resources/native/`（T075），由 electron-builder 一并签名 |
 | `xtask` | Rust bin | — | 只在开发和 CI 使用，不承担 schema 导出。以后依赖 `cupper-cli` 等 macOS 专用的 crate 时，这部分用 `cfg(target_os = "macos")` 隔离，保证 `ts`、`license`、`testdata-scan` 这类放在 ubuntu 上的作业仍能编译 xtask；做不到就把这些作业改到 macOS 上跑（T001 审阅意见 2） |
 | `@cupper/protocol` | TS | zod | 生成物入库；CI 检查与 schema 一致 |
 | `@cupper/host-client` | TS | protocol | 渲染进程使用；视图 reducer 与 Rust 视图用同一批金样例交叉验证 |
@@ -137,7 +137,7 @@ cupper/
 | `license` | ubuntu | 每个 PR | `cargo deny check`；`tools/license-gate` 第一层：对每个进入 App 的 JS 入口（main、preload、两个渲染入口、runtime 脚本），按 pnpm 锁文件和打包器的 metafile 求出生产依赖的完整闭包，闭包里出现 `@anthropic-ai/claude-agent-sdk` 或 `@anthropic-ai/claude-code` 就失败；runtime 组件的许可证文本齐全。负面测试：故意引入这个依赖的样例工程，门禁必须失败（安全 #11） | 是 |
 | `testdata-scan` | ubuntu | 每个 PR | 对 `testdata/` 做通用模式的个人信息扫描（[5.9.3](09-testing.md#593-录制与金样例)）；校验兼容报告符合 schema，并从报告重新生成"已验证 CLI 范围"与清单比对；`tools/trace-ids check` 检查文档里引用的用例编号都登记在 `tests/ids.toml` 里（里程碑、产出任务、套件、状态），待完成清单由 `trace-ids status` 自动推导（T002）（[5.9.10](09-testing.md#5910-测试编号与人工验证清单)） | 是 |
 | `e2e` | `macos-15` | 每个 PR（冒烟子集，按改动路径过滤）；每晚（全集） | `pnpm build:e2e`；`pnpm test:e2e` | 是 |
-| `release-config` | `macos-15` | 每晚 | 发布配置、不签名的构建：`@electron/fuses read` 逐项断言、Info.plist 里有 `ElectronAsarIntegrity`、`asarUnpack` 只有 `cupper_native.node`、asar 文件清单、带未知命令行开关启动应立即退出、产物里扫描测试钩子的标记串、宿主和 CLI 的 `--build-info` 不含 `dev-auth` 和 `test-harness`、许可证门禁第二层（[5.10.7](10-release.md#5107-发布流水线)）；`cargo xtask runtime-pack --verify` | 否（失败开 issue） |
+| `release-config` | `macos-15` | 每晚 | 发布配置、不签名的构建：`@electron/fuses read` 逐项断言、Info.plist 里有 `ElectronAsarIntegrity`、`asarUnpack` 为空（原生扩展只经 `extraResources` 放在 `Resources/native/`）、asar 文件清单、带未知命令行开关启动应立即退出、产物里扫描测试钩子的标记串、宿主和 CLI 的 `--build-info` 不含 `dev-auth` 和 `test-harness`、许可证门禁第二层（[5.10.7](10-release.md#5107-发布流水线)）；`cargo xtask runtime-pack --verify` | 否（失败开 issue） |
 | `differential` | `macos-15` | 每晚（`nightly` 组合作业） | TS 与 Rust 视图的差分测试（UNIT-views-differential，5.9.1 测试 #16）：Rust 的 proptest 生成随机事件流，各按三种方式 fold，写出用例文件，TS 读同一文件比较视图 JSON（T072） |
 | `security-macos14` | `macos-14` | 每晚；改动 `cupper-sys` 的 PR 按路径过滤直接跑 | `cupper-sys` 的对端校验测试：`LOCAL_PEERTOKEN` 的"最后一次 I/O 进程"语义、exec 后 pidversion 变化被拒、fork 出的进程共用 fd 被拒、`SCM_RIGHTS` 传来的 fd 被 `recv_closing_fds` 关闭（v1.8：普通读取会装入 fd，T021 实测）、csops、错误码。macOS 15 由 `rust` 作业覆盖 | 按路径过滤的 PR 上：是；每晚：开 issue。发布前最近一次必须通过（Q24） |
 | `compat-framework` | `macos-15` | 每晚；改动 `xtask` 兼容套件的 PR | `cargo xtask compat --fake`：用假 agent 跑兼容套件的框架和报告生成 | 是（PR 上） |

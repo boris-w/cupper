@@ -2,9 +2,14 @@
 //! and process group (design 5.6.8, 5.8.4).
 
 use std::collections::{HashSet, VecDeque};
+use std::ffi::OsString;
+use std::os::unix::ffi::OsStringExt;
+use std::path::PathBuf;
 use std::{mem, ptr};
 
 use libc::c_char;
+
+use crate::{Error, Result};
 
 /// When a process started, in microseconds since the Unix epoch. A pid plus its
 /// start time names one process: a recycled pid comes with a later start time.
@@ -194,6 +199,20 @@ pub fn process_info(pid: i32) -> Option<ProcessInfo> {
         start,
         name: c_chars(&info.pbsi_comm),
     })
+}
+
+/// The full path of the executable `pid` runs (`proc_pidpath`), with links
+/// resolved.
+pub fn pid_path(pid: i32) -> Result<PathBuf> {
+    let mut buf = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
+    // SAFETY: `buf` has the writable bytes its length says; the kernel writes
+    // at most that many and returns how many.
+    let len = unsafe { libc::proc_pidpath(pid, buf.as_mut_ptr().cast(), buf.len() as u32) };
+    if len <= 0 {
+        return Err(Error::last_os("proc_pidpath"));
+    }
+    buf.truncate(len as usize);
+    Ok(PathBuf::from(OsString::from_vec(buf)))
 }
 
 fn c_chars(buf: &[c_char]) -> String {

@@ -84,3 +84,17 @@
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 2,400 行，在写代码之前停下汇报，建议拆成三份。
+
+**裁定：采用方案一（计划 v1.3.18）。**
+- **T055 收窄为运行时核心与宿主组装**：actor、拉起、驱动命令、事件与交互请求、退出广播、宿主组装（`SessionManager` 实现 `Part`，`stop(force)` 让 actor 把运行中的回合记为 `interrupted`）、`tap` 的文档链接、假 agent 的路径约定。验收 IT-process-hygiene、IT-K13-echo-cwd、IT-K26-client-info，以及宿主经网关用假 agent 跑通一个回合。上限约 1,500 行，硬停止线 1,600；推算贴线也先停下。
+- **新增 T008（适配器的生命周期）**：重启退避与 `crashed`、关闭顺序与后代进程组、资源采样（含 Q43 计数）、假 agent 的 `setsid` 孙进程；IT-K21-reap-group、IT-adapter-restart 移过去。
+- **新增 T009（能力与状态）**：能力缓存与探测目录、`CommandsChanged` 去重、`agents/capabilities`、`agents/refresh`、`AgentStatus`；UNIT-commands-dedup 移过去。
+- T008、T009 都只依赖 T055，可以并行；T063 改为也依赖两者，T068 改为也依赖 T009。`tests/ids.toml` 已在 main 上改好。
+
+**拉起前核对的范围**：本任务只做按内嵌清单的核对函数（用造的文件测），以及"注入"和"运行时目录"两种拉起分支；真正的运行时目录由 T056 接上；用例一律走 `test_config.agents` 注入的假 agent。认可。
+
+**假 agent 的路径**：测试辅助按 `CARGO_TARGET_DIR`（缺省为工作区的 `target/`）和当前 profile 推出路径，不存在时提示先构建，测试里不调用 cargo；`xtask ci` 的 rust 作业跑测试之前先构建它。认可，写进 `notes.md`，后面的任务照用。

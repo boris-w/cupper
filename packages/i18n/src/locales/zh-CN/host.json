@@ -1,0 +1,10 @@
+{
+  "quit_title": "要退出 Cupper 吗？",
+  "quit_detail": "有 {{turns}} 个回合正在运行，{{requests}} 个请求等待处理。退出会中断它们。",
+  "quit": "退出",
+  "cancel": "取消",
+  "restart_title": "需要重启会话宿主",
+  "restart_detail": "正在运行的会话宿主由之前的 Cupper 启动，无法验证。重启宿主会中断正在运行的回合。",
+  "restart": "重启宿主",
+  "restart_refused": "host.lock 里记录的进程不是本版本的会话宿主，没有向它发送信号。"
+}

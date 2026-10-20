@@ -26,7 +26,7 @@ Cupper.app/Contents/
 │               └── locks/claude-agent-acp-0.91.0.package-lock.json   只是元数据
 ├── Resources/
 │   ├── app.asar                界面代码（asar 完整性校验）
-│   ├── app.asar.unpacked/…/cupper_native.node
+│   ├── native/cupper_native.node   原生扩展，放在 asar 外（electron-builder 的 extraResources，T075）
 │   └── THIRD_PARTY_NOTICES.txt
 └── Library/LaunchAgents/       M2 的后台常驻（ADR-01），M1 没有
 ```
@@ -133,7 +133,7 @@ Cupper.app/Contents/
 5. `pnpm build` 后运行 electron-builder（`electron-builder.release.yml`）：Vite 产物进 asar → `extraFiles` 放入宿主和 CLI → 烧录 fuses → 签名 → 公证 → staple → 生成 DMG 和 zip → 生成 `latest-mac.yml` 和 blockmap。
 6. **产物检查**（测试 #14、安全 #11、#12）：
    - 签名、`spctl`、entitlements 白名单、Info.plist 不含用途说明；
-   - `@electron/fuses read` 逐项断言；Info.plist 里有 `ElectronAsarIntegrity`；`asarUnpack` 只有 `cupper_native.node`；asar 文件清单与预期一致；
+   - `@electron/fuses read` 逐项断言；Info.plist 里有 `ElectronAsarIntegrity`；`asarUnpack` 为空（原生扩展只经 `extraResources` 放在 `Resources/native/`）；asar 文件清单与预期一致；
    - `cupper-host --build-info` 和 `cupper --build-info` 不含 `dev-auth`、`test-harness`；发布版 CLI 没有 `--harness-key-fd`；
    - 产物里扫描测试钩子的标记串（`__cupperTest`、e2e 专用的主进程钩子），命中就失败；
    - **许可证门禁第二层**：对最终的 `.app`、zip、DMG 按内容指纹扫描（`@anthropic-ai/claude-agent-sdk` 发布文件的哈希和特征串、Claude Code 的 Mach-O 签名 identifier）；`locks/` 下的锁文件按哈希放进允许清单；

@@ -316,6 +316,12 @@ impl Coalescer {
         self.open_turn().text = Some((open, role, message_id));
     }
 
+    /// The item of the tool call the agent calls `tool_call_id`.
+    pub fn item_of(&self, tool_call_id: &str) -> Option<ItemId> {
+        let tool = self.tools.get(tool_call_id)?;
+        Some(tool.of.item_id.clone())
+    }
+
     /// A tool call starts, or changes by `patch`, `output` and `status`. A
     /// start of a known call only renames it; an update of an unknown one
     /// starts it.

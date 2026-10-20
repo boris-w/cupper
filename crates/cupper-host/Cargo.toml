@@ -35,6 +35,9 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true
 thiserror = "2.0.21"
+# Exact: the `.codex/` TOML of the trust findings (T096); parsing only, with
+# the spans that give each value's source text.
+toml_edit = { version = "=0.25.17", default-features = false, features = ["parse"] }
 # `host.log` (design 5.11.1); the ACP SDK already depends on this release.
 tracing = { version = "=0.1.44", default-features = false, features = ["std"] }
 # `macros`: the session actor's `select!`; `rt-multi-thread`: the host's

@@ -19,7 +19,7 @@ sequenceDiagram
   alt 连接失败（宿主没有运行）
     M->>H: 经原生扩展 cupper-sys::spawn 加 SETSID 拉起 CupperHost.app，stdin 写入启动载荷后关闭
     H->>H: 读启动载荷，flock、迁移（先备份）、判定 data_epoch、崩溃恢复、加载索引流、绑定套接字
-    loop 每 10 ms 重试，总预算 500 ms
+    loop 每 10 ms 重试，总预算 500 ms（自己拉起的宿主还活着时，继续等它监听或退出，最长 10 s）
       M->>H: 连接
     end
   end

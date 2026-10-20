@@ -580,7 +580,7 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 - 命令方法的参数直接带 `command_id`，不用 `flatten`。
 
 5.3.4 没写死的取值：
-- `findings` 条目：`{kind, path, target?, outside_workspace, detail}`。`kind` 是开放枚举：`hook`、`env`、`api_key_helper`、`status_line`、`mcp_server`、`skill`、`agent`、`command`、`codex_config`。
+- `findings` 条目：`{kind, path, target?, outside_workspace, detail}`。`kind` 是开放枚举：`hook`、`env`、`api_key_helper`、`status_line`、`mcp_server`、`skill`、`agent`、`command`、`codex_config`、`unparsed`（解析不了的文件，`detail` 写原因；它的完整内容照样计入摘要，T096）。
 - `project/trust_info.diff_from_trusted`：按文件列出 `{path, change}`，`change` 复用 `DiffChange`（`add`、`update`、`delete`）。为此 T035 在信任时另存每个文件的哈希清单，按 P-4 写进 `0001` 的 `projects` 表。
 - `fallback_reason`（插话退回排队的原因，5.2.6）：`unsupported`、`turn_mismatch`、`not_prompting`、`prompt_required`、`timeout`、`agent_error`。
 - `session/archive.blockers`：ADR-10 的 7 条规则各一个取值；T013 的 `worktree/check` 复用同一个枚举。
