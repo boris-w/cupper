@@ -37,6 +37,12 @@ pub struct TestConfig {
     /// Resident memory, in bytes, to report for each agent's adapter process
     /// group instead of sampling it (K20, design 5.6.8).
     pub rss_samples: PerAgent<u64>,
+    /// Claude's adapters played inside the host's process instead of started
+    /// (the B-layer golden runner, design 5.9.3). Only a host started in a
+    /// test's own process can have it; no payload carries it.
+    #[cfg(feature = "test-harness")]
+    #[serde(skip)]
+    pub in_process: Option<crate::driver::runtime::launch::InProcess>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]

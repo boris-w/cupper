@@ -119,6 +119,16 @@ flowchart LR
 - 金样例一行一个事件，键排好序，方便评审。
 - 更新金样例用 `UPDATE_GOLDEN=1`，变化在 PR 里人工评审；CI 里设置了 `UPDATE_GOLDEN` 直接判失败。
 - **严格模式**：CI 中"类型已知但数据残缺"的事件直接判失败（ADR-04 修订第 4 条）。
+- **B 层的实现细则**（T065，2026-10-20）：
+  - 信封：去掉 `seq`、`from`，保留 `v`；`ts` 与其他 `x-time` 字段一样处理；`cause.command_id` 按 `x-id` 处理。
+  - `x-id`：每个前缀各自按出现顺序编号，换成 `<前缀>_<n>`；没有 1–4 个小写字母前缀的值（UUID 形式的 `command_id`、blob 哈希）记作 `id_<n>`；同一个值总是换成同一个占位。摘要类型 `Digest` 标了 `x-id`，摘要也走这条。
+  - `x-time`：任何非空的值换成 `"<time>"`（时间戳与时长一视同仁），`null` 保持 `null`。`x-path`：按出现顺序换成 `<path_<n>>`，同一个值同一个占位。
+  - delta 折叠进同一条目、同一 `field` 的第一条，保留第一条的信封。
+  - 联合类型选分支：标签常量可以写在分支本身（`$ref` 旁边）或 `$ref` 的目标定义里；没有标签时取第一个不是 `null` 的分支。
+  - 金样例与录制同路径，放在 `testdata/golden/gold-b/` 下；不符时报 ``<文件>: event <n>: `<字段路径>` is <实际值>, the golden has <期望值>``。
+  - 回放流程：同一 `t` 的帧也逐帧处理；每写一帧先同步一次（发一个宿主不认识的请求、等 `method not found` 回来、再推进 0 ms 等静止屏障，依赖 SDK 的按序分发）；宿主到了录制里的时间点还没发出下一帧时，测试扮演用户，命令从录制推出，只有 `session/create`、`session/send`、`interaction/respond`、`session/interrupt` 四种。
+  - 进程内 agent 的入口只在 test-harness 构建里有，进程内实例没有进程组，运行时不对它发任何信号。
+  - 假 agent 经宿主产出的录制放在 `testdata/recordings/cupper-fake-agent/0.0.0/fake/`；`pnpm test:golden`（A、B 两层）是 `xtask ci` 的 `rust` 作业里的 `golden` 步骤。
 
 **脱敏**：由 SP-1 的 `sanitize.ts` 迁移到 `tools/sanitize`，规则不变（路径、用户名、主机名、邮箱、密钥、账号字段、用户自己的 skill 名和 MCP），写完后重新扫描，命中就失败。另外每个 PR 对 `testdata/` 做一次通用模式的扫描：`/Users/` 后跟非占位符的路径、邮箱、token 样式、`/var/folders`，命中就失败（测试建议 #25；只靠运行环境里的用户名查不出维护者的用户名）。
 

@@ -1,8 +1,8 @@
 //! `rust`: formatting, clippy with warnings denied, the iOS build of
 //! `cupper-protocol` and the workspace tests (design 5.1.6), plus the other
 //! feature sets of the host and the native extension, the host's shuttle
-//! tests and the native extension's Node tests. A later task adds the golden
-//! tests.
+//! tests, the golden tests (`pnpm test:golden`, A and B layers) and the
+//! native extension's Node tests.
 
 use anyhow::Result;
 
@@ -103,13 +103,47 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     let mut install = ctx.command("pnpm");
     install.args(["install", "--frozen-lockfile"]);
     ctx.check("pnpm-install", &mut install)?;
+    ctx.libtest("golden", &mut golden(ctx))?;
     let mut native = ctx.command("pnpm");
     native.args(["--dir", "crates/cupper-desktop-native", "run", "test"]);
     ctx.vitest("test-native", &mut native)
 }
 
+/// The goldens of both layers (design 5.9.3), as `pnpm test:golden` runs
+/// them for a developer.
+fn golden(ctx: &JobCtx) -> std::process::Command {
+    let mut golden = ctx.command("pnpm");
+    golden.args(["run", "test:golden"]);
+    golden
+}
+
 fn with_features(cmd: &mut std::process::Command, features: &[&str]) {
     if !features.is_empty() {
         cmd.args(["--features", &features.join(",")]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+
+    /// The `golden` step runs the root package's `test:golden`, which runs
+    /// the host's GOLD-A and GOLD-B tests: their names start with `gold_`.
+    #[test]
+    fn gold_b_fake_runs_in_the_rust_job() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let ctx = JobCtx::new(&root, &root, "rust");
+        let step = golden(&ctx);
+        let args: Vec<_> = step.get_args().filter_map(|a| a.to_str()).collect();
+        assert_eq!(step.get_program(), "pnpm");
+        assert_eq!(args, ["run", "test:golden"]);
+        let package = std::fs::read_to_string(root.join("package.json")).unwrap();
+        let package: serde_json::Value = serde_json::from_str(&package).unwrap();
+        let script = "cargo test -p cupper-host --features test-harness --locked gold_";
+        assert_eq!(package["scripts"]["test:golden"], script);
+        let source = include_str!("rust.rs");
+        assert!(source.contains("ctx.libtest(\"golden\", &mut golden(ctx))?;"));
     }
 }
