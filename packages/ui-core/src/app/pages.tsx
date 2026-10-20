@@ -1,5 +1,6 @@
 import { createContext, use, type ReactNode } from "react";
 
+import { SessionBanners } from "../session/SessionBanners";
 import { useRouter } from "./router";
 
 /** The places later tasks fill: the sidebar's parts (T081) and the composers (T086, T083). */
@@ -24,10 +25,11 @@ export function NewSessionPage() {
 }
 
 /** A session: banners and the message stream above, the composer at the bottom. */
-export function SessionPage() {
+export function SessionPage({ sessionId }: { sessionId: string }) {
   const { sessionComposer } = use(SlotsContext);
   return (
     <div className="mx-auto flex h-full w-full max-w-(--layout-thread-max-w) flex-col px-(--layout-thread-gutter)">
+      <SessionBanners sessionId={sessionId} />
       <div className="min-h-0 flex-1" />
       <div className="shrink-0 pb-(--layout-composer-bottom)">{sessionComposer}</div>
     </div>
@@ -37,5 +39,9 @@ export function SessionPage() {
 /** The main area's page; each session gets fresh component state. */
 export function Page() {
   const { route } = useRouter();
-  return route.page === "session" ? <SessionPage key={route.sessionId} /> : <NewSessionPage />;
+  return route.page === "session" ? (
+    <SessionPage key={route.sessionId} sessionId={route.sessionId} />
+  ) : (
+    <NewSessionPage />
+  );
 }

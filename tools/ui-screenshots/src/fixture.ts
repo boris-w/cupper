@@ -9,8 +9,8 @@ export interface PageFixture {
   info: Partial<ShellInfo>;
   /** The mock host's answers (`protocol/fixtures/methods.json` by default). */
   methods: MethodFixture[];
-  /** The index stream's content, as snapshot ops: projects, sessions, elevations, the host. */
-  index: EventBody[];
+  /** Each stream's content as snapshot ops, by stream name (`index`, `session/<id>`); others are empty. */
+  streams: Record<string, EventBody[]>;
 }
 
 declare global {

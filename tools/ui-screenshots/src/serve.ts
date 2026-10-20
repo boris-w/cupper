@@ -50,7 +50,7 @@ export async function open(page: Page, fixture: Partial<PageFixture> = {}): Prom
         );
       });
     },
-    { info: {}, methods: METHODS, index: [], ...fixture },
+    { info: {}, methods: METHODS, streams: {}, ...fixture },
   );
   await page.goto(`${ORIGIN}/`);
   await page.waitForFunction(() => window.cupperHost?.connections.some((conn) => conn.initialized));

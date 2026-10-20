@@ -56,7 +56,7 @@ const select = (page: Page) =>
 
 for (const theme of ["light", "dark"] as const) {
   test(`UI-sidebar ${theme}`, async ({ page }) => {
-    await open(page, { info: { theme }, index: INDEX });
+    await open(page, { info: { theme }, streams: { index: INDEX } });
     await select(page);
     await expect(page.getByRole("button", { name: /补上单元测试/ })).toHaveAttribute(
       "aria-current",
@@ -70,7 +70,7 @@ test("UI-sidebar narrow: the floating sidebar shows the same content, expanded",
   page,
 }) => {
   await page.setViewportSize({ width: 700, height: 820 });
-  await open(page, { index: INDEX });
+  await open(page, { streams: { index: INDEX } });
   await page.getByRole("button", { name: "切换侧边栏" }).click();
   await page.getByRole("button", { name: "展开显示" }).click();
   await expect(page.getByRole("button", { name: /读书笔记/ })).toBeVisible();
@@ -79,7 +79,7 @@ test("UI-sidebar narrow: the floating sidebar shows the same content, expanded",
 });
 
 test("UI-banners: elevation, the outcome toasts and the reconnecting state", async ({ page }) => {
-  await open(page, { index: INDEX });
+  await open(page, { streams: { index: INDEX } });
   await page.evaluate(() =>
     window.cupperShell.setPrivilegedResult({ status: "cooldown", retry_after_ms: 30_000 }),
   );
@@ -99,3 +99,23 @@ test("UI-banners: elevation, the outcome toasts and the reconnecting state", asy
   await page.mouse.move(650, 780);
   await expect(page).toHaveScreenshot("banners.png");
 });
+
+const CONFIGURED = {
+  type: "session.configured",
+  data: {
+    ...{ agent: "claude", config: {}, project_config: "ignored", read_only: false },
+    workspace: { kind: "local", path: "/work/notes" },
+    confirmation_required: { config_digest: "d", reason: "full_access_unconfirmed" },
+  },
+} as EventBody;
+
+for (const theme of ["light", "dark"] as const) {
+  test(`UI-session-banners ${theme}`, async ({ page }) => {
+    await open(page, { info: { theme }, streams: { index: INDEX, "session/s_7": [CONFIGURED] } });
+    await page.evaluate(() => window.cupperShell.navigate({ kind: "session", session_id: "s_7" }));
+    await expect(page.getByRole("button", { name: "信任此项目" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "确认" })).toBeVisible();
+    await page.mouse.move(650, 780);
+    await expect(page).toHaveScreenshot(`session-banners-${theme}.png`);
+  });
+}

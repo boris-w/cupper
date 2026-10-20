@@ -1,3 +1,10 @@
 {
-  "unsupported_row": "此版本不支持显示这项内容"
+  "unsupported_row": "此版本不支持显示这项内容",
+  "untrusted": "项目未信任：项目里的 agent 配置没有加载，Claude 只用你的用户级配置，Codex 会话不能运行。",
+  "stale": "项目配置有变化：重新信任之前，项目里的 agent 配置不会加载。",
+  "trust": "信任此项目",
+  "unconfirmed_full_access_unconfirmed": "会话处于完全访问，但没有经过确认。",
+  "unconfirmed_tier_above_setter": "会话的权限档位高于设定它的一方有权设定的档位。",
+  "unconfirmed_other": "会话的权限配置需要确认（{{reason}}）。",
+  "confirm": "确认"
 }
