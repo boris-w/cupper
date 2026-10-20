@@ -674,7 +674,13 @@ async fn it_audit_retention_records_land_and_last_90_days() {
     let events = "SELECT event || ' ' || coalesce(principal, '-') FROM audit ORDER BY id";
     let opened = ["conn.accepted -", "conn.initialized pr_test"];
     let closed = ["conn.closed pr_test"];
-    let first = [&["host.started -"][..], &opened, &opened, &closed].concat();
+    // A `dev-auth` host says it runs with weak authentication.
+    let weak = ["host.weak_auth -"];
+    let started = [
+        &["host.started -"][..],
+        &weak[..usize::from(cfg!(feature = "dev-auth"))],
+    ];
+    let first = [&started.concat()[..], &opened, &opened, &closed].concat();
     until(&data_dir, "host.db", events, &first).await;
     let log = std::fs::read_to_string(data_dir.join("logs/host.log")).unwrap();
     let logged: Vec<_> = (log.lines())
@@ -683,7 +689,7 @@ async fn it_audit_retention_records_land_and_last_90_days() {
         .map(|line| line["fields"]["event"].as_str().unwrap().to_owned())
         .collect();
     let first_events: Vec<_> = first.iter().map(|e| e.split(' ').next().unwrap()).collect();
-    assert_eq!(&logged[..6], first_events);
+    assert_eq!(&logged[..first.len()], first_events);
 
     // Two records from about 90 days ago, one just past the limit: the
     // manual clock decides which `test/run_maintenance` drops.
