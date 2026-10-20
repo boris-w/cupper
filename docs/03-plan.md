@@ -1721,7 +1721,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T083 ui-core V：请求面板与请求记录行
 - [x] T084 ui-core II：token、三栏外框与页面骨架
 - [ ] T085 ui-core VI：新建会话页（M1a）
-- [ ] T086 ui-core VII：输入框与排队消息（M1a）
+- [x] T086 ui-core VII：输入框与排队消息（M1a）
 - [ ] T090 e2e 基础设施
 - [ ] T091 NFR-1 验收套件
 - [ ] T092 安全 e2e 与外发检查

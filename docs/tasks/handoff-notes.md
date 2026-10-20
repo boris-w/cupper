@@ -326,6 +326,10 @@
 | T090、T091 | 待升级退出时，中断回合的命令回复与退出赛跑，可能来不及发出；命令结果在账本里，重连后用同一个 `command_id` 重试能拿到，不要断言一定收到这条回复。空闲退出要等完全空闲 10 分钟（`supervisor_idle`，可经 `test_config.durations` 缩短），暂停中的排队消息不算活动 | T059 |
 | T163 | `host.*` 的产生点：启动在 `Host::start`，退出在 `Host::run` 交出 `Exit` 的地方（空闲、孤立、待升级各有取值，host.log 已有一行 `orderly exit`），进入待升级在 `supervisor/watch` 的自检路径 | T059 |
 | T055 等复用者 | 启动时的残留清理 `supervisor/reap.rs` 的 `reap()`：TERM → 按 `Clock` 每 50 ms 看一次 → 2 s 后 KILL，只发给仍是记录中那个的组；可以直接复用 | T059 |
+| T164 | 长文本的接入点（T086）：`packages/ui-core/src/composer/send.ts` 的 `useSend().send(text, attachments)` 是唯一组装内容块的地方（新建会话的 `session/create.message` 与会话里的 `session/send.content` 都经过它）；预算取握手结果的 `limits.max_frame_bytes`（`useHost().handshake`），按整条请求 JSON 的 UTF-8 长度判断并给外壳留余量；组装完内容块之后、`client.command(...)` 之前上传并换成 `{type: "text_blob", blob: {hash, media_type, size}}`；上传失败走现有的失败路径（草稿放回、toast）。组件测试沿用 `composer/composer.test.tsx` 的 `setup()`，MockHost 收到的分片在 `conn.frames` | T086 |
+| T083 | 请求面板替换输入框的位置：`composer/QueueList.tsx` 的 `ComposerArea` 里按有没有待处理的请求选择请求面板或 `Composer`，排队消息保持在两者上方；草稿和附件在 `useUi()` 里，切回来原样还在。Esc、Enter 的判定在 `composer/keys.ts`（纯函数） | T086 |
+| T140、T141、T142、T145、T149 | 输入框的扩展点（T086）：底栏的项目放进 `composer/extensions/` 作为新文件（默认导出 `side`、`order`、`Component`）；浮层挂到 `OverlayContext.container`，打开时用 `setClose` 登记关闭函数；附件条已能显示 `image`、`file_ref`、`review_comment`，附件条的截图留给其中第一个能产生附件的任务。插话（`mode: steer`）、"已转为排队"的提示归 T140 | T086 |
+| e2e（T090–T093） | 输入框的 DOM 标记：`data-composer`、`data-send-state`（`disabled`、`send`、`stop`）、`data-esc-armed` | T086 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
