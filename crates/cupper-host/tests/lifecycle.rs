@@ -5,7 +5,7 @@
 //! the index. IT-project-add-trust adds and
 //! trusts a project in a git repository built here; IT-clock-advance and
 //! IT-seed drive the test interface; IT-self-check and IT-idle-exit the
-//! supervisor's watch. The tests talk to the host as the CLI's
+//! supervisor's watch; IT-runtime-startup the runtime installer. The tests talk to the host as the CLI's
 //! `harness` client.
 
 use std::io::Write;
@@ -1362,4 +1362,147 @@ async fn it_self_check_a_changed_executable_makes_the_host_wait_for_an_upgrade()
         }
     }
     assert_eq!(exit_code(&mut host).await, 0);
+}
+
+/// Stands in for node running the bundling script (as in IT-runtime-download):
+/// it copies the entry to the bundle.
+const NODE: &str = "#!/bin/sh\n[ -f \"$2\" ] || exit 9\n/bin/cat \"$3/$4\" > \"$3/$5\"\n";
+const ENTRY: &[u8] = b"export const adapter = 1;";
+
+/// A host in `CupperHost.app` made in `dir`, with a fake node, esbuild-wasm
+/// and the bundling inputs, the manifest that pins them, and a registry
+/// serving the one package of the lockfile; started once `prepare` ran.
+async fn bundled_host(dir: &TempDir, prepare: impl FnOnce(&Path)) -> (PathBuf, Running) {
+    use base64::Engine as _;
+    use sha2::{Digest as _, Sha256, Sha512};
+    let contents = dir.path().join("CupperHost.app/Contents");
+    let (exe, data_dir) = (contents.join("MacOS/cupper-host"), dir.path().join("data"));
+    std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+    std::fs::copy(HOST, &exe).unwrap();
+    let mut tarball = tar::Builder::new(flate2::write::GzEncoder::new(
+        Vec::new(),
+        Default::default(),
+    ));
+    let mut header = tar::Header::new_gnu();
+    header.set_size(ENTRY.len() as u64);
+    header.set_mode(0o644);
+    tarball
+        .append_data(&mut header, "package/index.js", ENTRY)
+        .unwrap();
+    let tarball = tarball.into_inner().unwrap().finish().unwrap();
+    let sri = base64::engine::general_purpose::STANDARD.encode(Sha512::digest(&tarball));
+    let lock = json!({"lockfileVersion": 3, "packages": {"": {"name": "root"},
+        "node_modules/a": {"resolved": "https://registry.npmjs.org/a/-/a-1.0.0.tgz",
+            "integrity": format!("sha512-{sri}")}}});
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(include_str!("../../../runtime/manifest.json")).unwrap();
+    let files = [
+        ("Helpers/node", NODE.as_bytes().to_vec(), 0o755),
+        (
+            "Resources/runtime/esbuild-wasm-0.1.0/lib/main.js",
+            b"main".to_vec(),
+            0o644,
+        ),
+        (
+            "Resources/runtime/locks/claude.json",
+            lock.to_string().into_bytes(),
+            0o644,
+        ),
+        (
+            "Resources/runtime/bundle-claude-acp.mjs",
+            b"// bundles".to_vec(),
+            0o644,
+        ),
+    ];
+    manifest["files"] = json!({});
+    for (path, bytes, mode) in files {
+        let path_on_disk = contents.join(path);
+        std::fs::create_dir_all(path_on_disk.parent().unwrap()).unwrap();
+        std::fs::write(&path_on_disk, &bytes).unwrap();
+        let permissions = std::os::unix::fs::PermissionsExt::from_mode(mode);
+        std::fs::set_permissions(&path_on_disk, permissions).unwrap();
+        manifest["files"][path] = json!({"sha256": format!("{:x}", Sha256::digest(&bytes))});
+    }
+    manifest["node"]["version"] = json!("1.0.0");
+    manifest["esbuild_wasm"]["version"] = json!("0.1.0");
+    manifest["claude_agent_acp"] = json!({"version": "0.9.0", "lockfile": "locks/claude.json",
+        "entry": "node_modules/a/index.js", "bundle_sha256": format!("{:x}", Sha256::digest(ENTRY))});
+    let manifest_path = dir.path().join("manifest.json");
+    std::fs::write(&manifest_path, manifest.to_string()).unwrap();
+    prepare(&contents);
+
+    let registry = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/", registry.local_addr().unwrap());
+    tokio::spawn(async move {
+        use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+        while let Ok((mut stream, _)) = registry.accept().await {
+            let mut head = [0; 4096];
+            let _ = stream.read(&mut head).await;
+            let reply = format!(
+                "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                tarball.len()
+            );
+            let _ = stream
+                .write_all(&[reply.as_bytes(), &tarball].concat())
+                .await;
+        }
+    });
+    let runtime = json!({"registry_url": url, "manifest": manifest_path});
+    let host = spawn_from(
+        &exe,
+        &data_dir,
+        json!({"login_env": {}, "runtime": runtime}),
+    );
+    (data_dir, Running(host))
+}
+
+/// The latest `agents.updated`'s `adapter.<field>` of Claude, as text.
+const ADAPTER_FIELD: &str =
+    "SELECT coalesce(json_extract(json, '$.data.agents[0].adapter.' || ?), '-')
+    FROM events WHERE stream = 'index' AND type = 'agents.updated' ORDER BY seq DESC LIMIT 1";
+
+fn adapter(data_dir: &Path, field: &str) -> Vec<String> {
+    let conn = open_reader(&data_dir.join("host.db")).unwrap();
+    let mut query = conn.prepare(ADAPTER_FIELD).unwrap();
+    let rows = query.query_map([field], |row| row.get(0)).unwrap();
+    rows.collect::<Result<_, _>>().unwrap_or_default()
+}
+
+/// IT-runtime-startup: a host in a bundle installs its runtime from the
+/// registry, and the index shows it ready; with a bundled file changed it
+/// waits for an upgrade instead, and having nothing to finish, exits.
+#[tokio::test]
+async fn it_runtime_startup_installs_from_the_registry_or_waits_for_an_upgrade() {
+    let dir = TempDir::new("runtime");
+    let (data_dir, mut host) = bundled_host(&dir, |_| ()).await;
+    drop(connect(&data_dir).await);
+    let clock = SystemClock::new();
+    let give_up = clock.now_mono() + PATIENCE;
+    while adapter(&data_dir, "runtime") != ["ready"] {
+        assert!(
+            clock.now_mono() < give_up,
+            "{:?}",
+            adapter(&data_dir, "runtime")
+        );
+        wait(&clock).await;
+    }
+    let installed = data_dir.join("runtime/claude-agent-acp/0.9.0/adapter.mjs");
+    assert_eq!(std::fs::read(installed).unwrap(), ENTRY);
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
+
+    let dir = TempDir::new("runtime-changed");
+    let changed = |contents: &Path| {
+        std::fs::write(
+            contents.join("Resources/runtime/esbuild-wasm-0.1.0/lib/main.js"),
+            "x",
+        )
+        .unwrap()
+    };
+    let (data_dir, mut host) = bundled_host(&dir, changed).await;
+    assert_eq!(exit_code(&mut host.0).await, 0);
+    let upgrade = "SELECT CAST(json_extract(json, '$.data.pending_upgrade') AS TEXT) FROM events
+               WHERE stream = 'index' AND type = 'host.updated' ORDER BY seq DESC LIMIT 1";
+    assert_eq!(column(&data_dir, upgrade), ["1"]);
+    assert_eq!(adapter(&data_dir, "failure"), ["bundle_changed"]);
 }

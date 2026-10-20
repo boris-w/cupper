@@ -93,6 +93,9 @@ pub struct RuntimeConfig {
     /// The npm registry to download from instead of `registry.npmjs.org`, so
     /// installer tests run offline against a local fixture.
     pub registry_url: Option<String>,
+    /// A manifest to plan the runtime from instead of the one compiled in,
+    /// for a bundle a test makes.
+    pub manifest: Option<PathBuf>,
 }
 
 fn absolute_path<'de, D: Deserializer<'de>>(deserializer: D) -> Result<PathBuf, D::Error> {

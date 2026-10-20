@@ -30,13 +30,14 @@ use std::mem;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock, Weak};
 
+use cupper_protocol::domain::AgentKind;
 use cupper_protocol::envelope::Cause;
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{ConnId, IntentId, ProjectId, SessionId};
 use cupper_protocol::index::{
     AgentStatus, AgentsUpdated, ClientsUpdated, GitTools, HostUpdated, NotificationIntent,
-    SessionSummary, TrustState,
+    RuntimeFailure, RuntimeState, SessionSummary, TrustState,
 };
 use cupper_protocol::methods::handshake::{ClientPresence, ClientPresenceParams};
 use cupper_protocol::methods::project::{
@@ -126,6 +127,8 @@ enum Mail {
     Agent(Box<AgentStatus>),
     /// The self-check found the code on disk changed.
     PendingUpgrade,
+    /// The runtime installer's state of Claude's adapter runtime.
+    Runtime(RuntimeState, Option<RuntimeFailure>),
     Checkpoint(oneshot::Sender<()>),
     /// `test/seed` wrote sessions: reconcile with the tables again.
     #[cfg(feature = "test-harness")]
@@ -178,6 +181,7 @@ impl IndexHandle {
             mail: mail.clone(),
             gateway: Arc::clone(&gateway),
             deps,
+            runtime: None,
         };
         tokio::spawn(actor.run(inbox, participant));
         Ok(Self { mail, gateway })
@@ -190,6 +194,12 @@ impl IndexHandle {
         let (done, reconciled) = oneshot::channel();
         let _ = self.mail.send(Mail::Reconcile(done));
         let _ = reconciled.await;
+    }
+
+    /// `agents.updated` shows the runtime installer's state for Claude's
+    /// adapter, whatever its runtime reports (design 5.2.12).
+    pub fn runtime(&self, state: RuntimeState, failure: Option<RuntimeFailure>) {
+        let _ = self.mail.send(Mail::Runtime(state, failure));
     }
 
     /// `host.updated` says an upgrade waits (design 5.2.13).
@@ -274,6 +284,8 @@ struct IndexActor {
     mail: mpsc::UnboundedSender<Mail>,
     gateway: Arc<OnceLock<Weak<Gateway>>>,
     deps: IndexDeps,
+    /// What the runtime installer last said of Claude's adapter runtime.
+    runtime: Option<(RuntimeState, Option<RuntimeFailure>)>,
 }
 
 impl IndexActor {
@@ -341,6 +353,19 @@ impl IndexActor {
                 }
                 Mail::Rescanned(project, scan) => self.rescanned(project, scan).await,
                 Mail::Agent(status) => self.agent(*status).await,
+                Mail::Runtime(state, failure) => {
+                    self.runtime = Some((state, failure));
+                    let claude = |view: &IndexView| {
+                        let agents = view.agents.as_ref()?.agents.iter();
+                        agents
+                            .clone()
+                            .find(|a| a.agent == AgentKind::Claude)
+                            .cloned()
+                    };
+                    if let Some(status) = read(&self.handle, claude) {
+                        self.agent(status).await;
+                    }
+                }
                 Mail::PendingUpgrade => {
                     self.deps.host.pending_upgrade = true;
                     self.append(EventBody::HostUpdated(self.deps.host.clone()))
@@ -661,7 +686,11 @@ impl IndexActor {
     }
 
     /// One agent's status into `agents.updated`.
-    async fn agent(&mut self, status: AgentStatus) {
+    async fn agent(&mut self, mut status: AgentStatus) {
+        if let (AgentKind::Claude, Some((state, failure))) = (&status.agent, &self.runtime) {
+            status.adapter.runtime = state.clone();
+            status.adapter.failure = failure.clone();
+        }
         let agents = read(&self.handle, |view| view.agents.clone());
         let mut agents = agents.unwrap_or_else(|| AgentsUpdated {
             agents: Vec::new(),

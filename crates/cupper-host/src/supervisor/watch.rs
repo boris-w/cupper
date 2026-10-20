@@ -15,7 +15,7 @@
 //! parent every `supervisor_observe` and carries the decisions out.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -261,6 +261,8 @@ pub struct WatchDeps {
     pub exits: mpsc::UnboundedSender<Exit>,
     /// `dev-auth`: the parent at startup; the host is orphaned once it changes.
     pub parent: Option<u32>,
+    /// Set while the runtime installer installs.
+    pub installing: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -327,8 +329,7 @@ impl Watcher {
         self.step(Input::Observed(Observed {
             clients: gateway.map_or(0, |gateway| gateway.clients().len()),
             activity: self.deps.parts.iter().map(|part| part.activity()).sum(),
-            // The runtime installer (T129) reports its work here.
-            installer_busy: false,
+            installer_busy: self.deps.installing.load(Ordering::Relaxed),
         }));
         let at = self.deps.clock.now_mono() + self.deps.durations.get(SUPERVISOR_OBSERVE);
         self.timers.apply(TimerRequest::Set {
