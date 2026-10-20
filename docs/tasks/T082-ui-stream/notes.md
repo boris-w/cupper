@@ -60,3 +60,40 @@
 先后关系：
 - T082b 的各种行登记进 T082a 建的注册表实例，所以 T082a 先做；
 - 两份的接口就是 `Row` 的形状（`kind` 加上该行的数据）和注册表实例。
+
+## 裁定后（2026-10-20）
+
+编排者裁定：采用两分法，两份并行（计划 v1.3.35）。本任务收窄为行列表与锚点，上限约 750，硬停止线 850；消息行与 Markdown 归 T166。
+
+## 给 T166 的约定：行的形状与注册表（`packages/ui-core/src/rows/stream.ts`）
+
+**以代码为准**，下面是摘要。
+
+- **行**是联合类型 `StreamRow`，每种行都有 `kind` 和 `key`，`key` 在列表里唯一且稳定。
+- **行带着它要显示的数据**，内容取自视图最近一次刷新时的状态，所以行组件是 `row` 的纯函数，不需要自己订阅视图。
+- 流式增长时，拍平每帧至多重做一次，可见的行随之重画。
+
+| `kind` | 数据 | 谁登记 |
+|---|---|---|
+| `history` | `state: "more" \| "loading" \| "failed"`（顶部"加载更早的历史"） | T082 |
+| `turn_header` | `turnId`、`turnNo`、`status`（`running` 或 `TurnStatus`）、`startedAt`、`durationMs?` | T082 |
+| `user_message` | `itemId`、`content: PromptBlock[]`、`steered`、`replyTo?` | T082 |
+| `agent_message` | `itemId`、`text`、`streaming` | **T166** |
+| `thought` | `itemId`、`text`、`running`、`durationMs?` | **T166** |
+| `tool` | `ToolData`：`itemId`、`call: ToolCall`、`output`（已流出的输出）、`running`、`end?: ItemEnd` | **T166** |
+| `activity_group` | `groupId`、`tools: ToolData[]`、`running`：同一 `group_id` 连续两个及以上的工具调用合成一行，展开状态由行组件自己保存 | **T166** |
+| `notice` | `itemId`、`notice: Notice` | **T166** |
+| `error` | `itemId`、`error: ErrorItem` | **T166** |
+| `plan` | `itemId`、`plan: Plan` | T146 |
+| `late_tool_output` | `itemId`、`output: LateToolOutput`、`text` | T146 |
+| `request` | `requestId` | T165 |
+| `unknown` | `type`、`body?`（不认识的条目种类，或视图 `unknown` 列表里的事件） | T082 |
+
+**注册表**：
+- 共用实例是 `streamRows`（T128 的 `RowRegistry<StreamRow>`）。
+- 登记用 `registerRow(kind, Component)`：`Component` 的属性是 `{ row: RowOf<kind> }`，每种 `kind` 只能登记一次，在模块加载时调用。
+- 没有登记的 `kind` 显示 T128 的占位。
+- 行列表用 `RowView` 按 `kind` 取组件。
+- T166 的组件放在 `rows/` 下，各自 `registerRow`；接进行列表时，由 `rows/index.ts` 统一 import 一次。
+
+**样式约束**（T136 的规则）：行组件不写 CSS 自定义属性，agent 的字符串只作为文本节点或经清洗的 Markdown 渲染。
