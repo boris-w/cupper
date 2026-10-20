@@ -47,7 +47,7 @@ function Queue({ queue, resume }: { queue: QueueUpdated | null | undefined; resu
         </div>
       )}
       {queue.entries.map((entry) => (
-        <div key={entry.queue_id} className={row}>
+        <div key={entry.queue_id} data-queue-id={entry.queue_id} className={row}>
           <span className="min-w-0 flex-1 truncate">{entry.preview.split("\n", 1)[0]}</span>
           {(
             [

@@ -52,6 +52,8 @@ pub struct Routes {
     notifications: HashMap<&'static str, Entry>,
     ledger: Option<Ledger>,
     index: Option<Arc<dyn IndexPort>>,
+    /// Woken by subscriptions to session streams.
+    pub(super) sessions: Option<Arc<dyn SessionPort>>,
     /// Where the gateway's tasks take part in the barrier.
     quiescence: Quiescence,
 }
@@ -94,6 +96,7 @@ impl Default for Routes {
             notifications: HashMap::new(),
             ledger: None,
             index: None,
+            sessions: None,
             quiescence: Quiescence::new(),
         };
         routes.watched_by(&Quiescence::new());
@@ -165,7 +168,8 @@ impl Routes {
         self.add::<SessionCapabilities>(to());
         self.add::<InteractionRespond>(to());
         self.add::<InteractionGet>(to());
-        self.insert::<PolicyDescribe>(Target::Describe(port));
+        self.insert::<PolicyDescribe>(Target::Describe(Arc::clone(&port)));
+        self.sessions = Some(port);
     }
 
     /// The index port (T034) serves the project methods of M1a and

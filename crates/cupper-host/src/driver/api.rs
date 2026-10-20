@@ -318,6 +318,9 @@ pub enum AgentErrorClass {
     /// Five failures within five minutes; it starts again once cleared
     /// (design 5.6.8).
     Crashed,
+    /// The adapter's connection closed under the request: the adapter
+    /// exited, and its requests expire with it (SEC-10).
+    AdapterExited,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -346,6 +349,7 @@ impl AgentErrorClass {
             Self::CliMissing => FailureCode::CliMissing,
             Self::RuntimeFailed => FailureCode::RuntimeFailed,
             Self::Crashed => FailureCode::AdapterCrashed,
+            Self::AdapterExited => FailureCode::AdapterExited,
         }
     }
 }

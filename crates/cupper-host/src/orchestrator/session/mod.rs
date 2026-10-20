@@ -8,9 +8,13 @@ pub mod core;
 #[cfg(test)]
 mod gating_tests;
 #[cfg(test)]
+mod idle_tests;
+#[cfg(test)]
 mod interaction_tests;
 mod load;
 mod manager;
+#[cfg(test)]
+mod rebuild_tests;
 #[cfg(test)]
 mod recovery_tests;
 mod rows;
@@ -25,12 +29,17 @@ use cupper_protocol::capabilities::{ConfigOption, ConfigOptionId, SessionCapabil
 use cupper_protocol::domain::FailureCode;
 use cupper_protocol::domain::Tier;
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
-use cupper_protocol::ids::{ProjectId, RequestId, SessionId};
+use cupper_protocol::ids::{ConnId, PrincipalId, ProjectId, RequestId, SessionId};
 use cupper_protocol::index::{PendingKind, SessionSummary};
+use cupper_protocol::methods::interaction::InteractionRespond;
+use cupper_protocol::methods::session::SessionCreate;
+use cupper_protocol::rpc::Method;
 use cupper_protocol::session::TurnStatus;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
+use crate::gateway::{AuditEvent, AuditRecord};
+use crate::policy::{self, Confirmable, Facts};
 use crate::trust::Scan;
 
 pub use manager::{SESSION, SessionDeps, SessionManager};
@@ -92,6 +101,33 @@ fn mode_tier(options: &[ConfigOption]) -> Option<(String, Tier)> {
         .find(|o| o.id == ConfigOptionId::PermissionMode)?;
     let tier = risk(options, &option.current).unwrap_or(Tier::FullAccess);
     Some((option.current.clone(), tier))
+}
+
+/// `privileged.executed` for a session's command the policy let through
+/// (design 5.8.6, T163's format; T169): the action and details
+/// `policy/describe` gives with the session's facts. A command that needs no
+/// confirmation in its form is not privileged and records nothing.
+fn privileged(
+    command: Confirmable,
+    facts: &Facts,
+    principal: &PrincipalId,
+    conn: &ConnId,
+    at_ms: u64,
+) -> Option<AuditRecord> {
+    let method = match command {
+        Confirmable::Create(_) => SessionCreate::NAME,
+        Confirmable::Respond(_) => InteractionRespond::NAME,
+        _ => return None,
+    };
+    let described = policy::describe(&command, facts).ok()?;
+    let event = AuditEvent::Privileged {
+        method,
+        principal: principal.clone(),
+        action: Some(described.action),
+        details: serde_json::json!(described.details),
+    };
+    let conn = Some(conn.clone());
+    Some(AuditRecord { at_ms, conn, event })
 }
 
 /// `params` as `T`; the gateway checked them against the method already.

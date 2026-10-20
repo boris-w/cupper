@@ -1,9 +1,10 @@
 //! What each persona looks like on the wire, after the SP-1 recordings of
-//! claude-agent-acp 0.91.0 and codex-acp 2.2.2 (`spikes/SP-1-adapter-behavior/
-//! recordings/`; the scenario is named on each item). The static parts live in
-//! `personas/<persona>.json`; this module loads them and builds the shapes
-//! that carry ids, paths or text. Content that depends on the recording
-//! machine is replaced: the model list is cut down, account details are
+//! claude-agent-acp 0.91.0 and codex-acp 2.2.2 (`testdata/recordings/`; the
+//! scenario is named on each item, and `tests/persona.rs` compares the
+//! shapes with them). The static parts live in `personas/<persona>.json`;
+//! this module loads them and builds the shapes that carry ids, paths or
+//! text. Content that depends on the recording machine is replaced: the
+//! model list and the commands are cut down, account details are
 //! placeholders.
 
 use std::path::Path;
@@ -281,104 +282,4 @@ pub fn app_server_killed() -> Error {
         of memory. The agent starts it again on the next request.";
     Error::new(1001, message)
         .data(json!({"exitCode": null, "signal": "SIGKILL", "restartable": true}))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // Expected values read from the SP-1 recordings with the jq commands in
-    // the T051 notes (s01, s04, s04b, s05).
-
-    fn ids<'a>(list: &'a Value, key: &str) -> Vec<&'a str> {
-        list.as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|o| o[key].as_str())
-            .collect()
-    }
-
-    fn option_ids(p: Persona, kind: &str) -> Vec<&'static str> {
-        let options = &data(p)["permissionOptions"][kind];
-        ids(options, "optionId")
-    }
-
-    #[test]
-    fn unit_fake_scripts_persona_claude_matches_sp1() {
-        let init = initialize(Claude);
-        assert_eq!(init["_meta"]["steering"]["supported"], true);
-        assert_eq!(
-            init["agentCapabilities"]["_meta"]["claudeCode"]["promptQueueing"],
-            true
-        );
-        assert_eq!(
-            init["agentCapabilities"]["mcpCapabilities"],
-            json!({"http": true, "sse": true})
-        );
-        let config = Value::from(config_options(Claude));
-        assert_eq!(ids(&config, "id"), ["mode", "model", "effort"]);
-        assert_eq!(ids(&config, "category"), ["mode", "model", "thought_level"]);
-        let modes = [
-            "default",
-            "acceptEdits",
-            "plan",
-            "auto",
-            "bypassPermissions",
-        ];
-        assert_eq!(ids(&config[0]["options"], "value"), modes);
-        assert_eq!(config[0]["currentValue"], "default");
-        assert_eq!(
-            option_ids(Claude, "execute"),
-            ["allow-once", "allow-with-updates", "reject"]
-        );
-        assert_eq!(
-            option_ids(Claude, "edit"),
-            ["allow-once", "allow-with-updates", "reject"]
-        );
-        let plan = [
-            "exit-plan-default",
-            "exit-plan-clear-auto",
-            "exit-plan-auto",
-            "exit-plan-bypass",
-            "reject",
-        ];
-        assert_eq!(ids(&data(Claude)["planOptions"], "optionId"), plan);
-        assert!(rejects(Claude, "reject") && !rejects(Claude, "allow-once"));
-    }
-
-    #[test]
-    fn unit_fake_scripts_persona_codex_matches_sp1() {
-        let init = initialize(Codex);
-        assert_eq!(init["_meta"]["steering"]["supported"], true);
-        assert!(
-            init["agentCapabilities"]["_meta"]
-                .get("claudeCode")
-                .is_none()
-        );
-        assert!(init["agentCapabilities"]["sessionCapabilities"]["subagents"].is_object());
-        let config = Value::from(config_options(Codex));
-        assert_eq!(
-            ids(&config, "id"),
-            ["mode", "collaboration_mode", "model", "reasoning_effort"]
-        );
-        assert_eq!(
-            ids(&config, "category"),
-            ["mode", "collaboration_mode", "model", "thought_level"]
-        );
-        let modes = ["read-only", "workspace-write", "agent", "agent-full-access"];
-        assert_eq!(ids(&config[0]["options"], "value"), modes);
-        assert_eq!(config[0]["currentValue"], "agent");
-        let execute = ["allow_once", "accept_execpolicy_amendment", "cancel"];
-        assert_eq!(option_ids(Codex, "execute"), execute);
-        assert_eq!(
-            option_ids(Codex, "edit"),
-            ["allow_once", "allow_for_session", "cancel"]
-        );
-        assert_eq!(
-            ids(&data(Codex)["planOptions"], "optionId"),
-            ["implement_plan", "revise_plan"]
-        );
-        assert!(rejects(Codex, "cancel") && !rejects(Codex, "allow_once"));
-        assert!(session_result(Codex, None, &[])["models"]["availableModels"].is_array());
-    }
 }

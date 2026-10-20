@@ -29,7 +29,7 @@ async fn it_orch_recovery_a_restart_ends_what_ran_and_the_session_goes_on() {
     let mut queued = send(&id, "s-1", "rather this");
     queued["reply_to"] = asked[0]["request_id"].clone();
     f.ok("session/send", queued).await;
-    f.restart();
+    f.restart().await;
 
     // The first call loads the session: the pending request expires, then
     // the turn completes `interrupted`, and the queue waits for the user.
@@ -102,7 +102,7 @@ async fn it_orch_recovery_interaction_get_reads_a_request_the_view_let_go() {
     }
     f.emit(done(PromptTag(turns), StopReason::EndTurn));
     f.events(&id, "turn.completed", turns as usize).await;
-    f.restart();
+    f.restart().await;
 
     let get = json!({"session_id": id, "request_id": asked[0]["request_id"]});
     let got = f.ok("interaction/get", get).await;
@@ -130,7 +130,7 @@ async fn it_orch_recovery_the_setter_comes_back_by_its_id() {
         f.emit(done(tag, StopReason::EndTurn));
         f.events(&id, "turn.completed", 1).await;
         f.exec("UPDATE sessions SET mode_set_by = ?1", setter.into());
-        f.restart();
+        f.restart().await;
 
         // Calls at once load one actor: a second would find the stream's
         // writer taken.
@@ -158,7 +158,7 @@ async fn it_orch_recovery_going_on_without_the_project_config_outlives_a_restart
     f.events(&id, "turn.completed", 1).await;
     f.manager.ignore_project_config(&id).await.unwrap();
     assert!(matches!(f.command().await, DriverCommand::Close { .. }));
-    f.restart();
+    f.restart().await;
 
     // The project is trusted, and its configuration still stays out.
     f.ok("session/send", send(&id, "s-1", "next")).await;

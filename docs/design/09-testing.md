@@ -58,6 +58,7 @@
 | `echo_env` | 回显收到的 cwd 和 `clientInfo`（K13、K26），以及环境变量名单（进程卫生） |
 | `spawn <程序> [参数...]` | 在自己的会话和进程组里拉起任意程序，不等它结束；IT-elevate 用它拉起提权探针（5.8.4） |
 | `stderr <文本>` | 往 stderr 写一行，供原始帧和录制里的 stderr 帧（5.9.3） |
+| `permission_options <ACP 选项 JSON>` | 发一个权限请求，选项由剧本给出；`kind` 写成没人认识的值时宿主按 5.3.6 当作效果未知（T092 的 E2E-SEC-panel-numbering） |
 | `spawn_group_child [程序]` | 在新的进程组里拉起子进程（缺省 `/bin/sleep`），子进程继承 stdout，并回显它的 pid；用来模拟 Claude 自成会话的工具命令（K21，5.6.8） |
 | `auth_none` | 推 `_auth/status_update {kind: none}`，prompt 返回 `-32000` |
 
