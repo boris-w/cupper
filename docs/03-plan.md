@@ -1533,7 +1533,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T002 用例编号登记与 trace-ids
 - [x] T003 技术验证：Q8（Claude）、Q9、SP-4b #7 与版本复核
 - [x] T004 xtask runtime-pack 与运行时清单
-- [ ] T005 xtask host-bundle
+- [x] T005 xtask host-bundle
 - [ ] T006 许可证门禁第一层
 - [x] T010 协议基础：分帧、信封、ID、错误码、规范 JSON 与注解
 - [x] T011 协议事件目录 I：事件基础、领域类型与索引流
