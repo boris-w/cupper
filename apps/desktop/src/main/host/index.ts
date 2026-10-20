@@ -12,31 +12,13 @@ import { ControlConnection } from "./control";
 import { HostLauncher } from "./launcher";
 import { loadNative } from "./native";
 
-/** The host gets the fixed allowlist of design 5.6.6 from the app's environment. */
-const ENV_ALLOW = [
-  "PATH",
-  "HOME",
-  "USER",
-  "LOGNAME",
-  "SHELL",
-  "TMPDIR",
-  "LANG",
-  "LC_*",
-  "TERM",
-  "HTTP_PROXY",
-  "HTTPS_PROXY",
-  "ALL_PROXY",
-  "NO_PROXY",
-  "http_proxy",
-  "https_proxy",
-  "all_proxy",
-  "no_proxy",
-  "SSH_AUTH_SOCK",
-];
-
+/**
+ * The host gets the fixed allowlist of design 5.6.6 from the app's
+ * environment: `env.allow` of the runtime manifest, built in.
+ */
 export function hostEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   const allowed = (name: string) =>
-    ENV_ALLOW.some((entry) =>
+    __CUPPER_HOST_ENV_ALLOW__.some((entry) =>
       entry.endsWith("*") ? name.startsWith(entry.slice(0, -1)) : name === entry,
     );
   return Object.fromEntries(

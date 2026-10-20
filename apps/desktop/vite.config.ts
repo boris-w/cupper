@@ -2,8 +2,11 @@
 // the main process, the preload and the renderer's main document. Every
 // runtime dependency is bundled, so the app declares no `dependencies`.
 //
-// `vite build --mode <flavor>` picks the build flavor (design 5.7.9).
+// `vite build --mode <flavor>` picks the build flavor (design 5.7.9). The
+// host's environment allowlist comes from the runtime manifest at build time,
+// so that the app and the host never keep two copies of it (design 5.6.6).
 
+import { readFileSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { resolve } from "node:path";
 
@@ -19,13 +22,24 @@ const FLAVORS: Record<Flavor, true> = { release: true, local: true, e2e: true, d
 
 const at = (path: string) => resolve(import.meta.dirname, path);
 
+/** `env.allow` of `runtime/manifest.json`, as the `define` the main process reads. */
+export function hostEnvAllow(): string {
+  const manifest = JSON.parse(readFileSync(at("../../runtime/manifest.json"), "utf8")) as {
+    env: { allow: string[] };
+  };
+  return JSON.stringify(manifest.env.allow);
+}
+
 export default defineConfig(({ mode }) => {
   if (!Object.hasOwn(FLAVORS, mode)) {
     const flavors = Object.keys(FLAVORS).join(", ");
     throw new Error(`--mode must be a build flavor (${flavors}), not "${mode}"`);
   }
   return {
-    define: { __CUPPER_FLAVOR__: JSON.stringify(mode) },
+    define: {
+      __CUPPER_FLAVOR__: JSON.stringify(mode),
+      __CUPPER_HOST_ENV_ALLOW__: hostEnvAllow(),
+    },
     // Build every environment below with one `vite build`.
     builder: {},
     environments: {
