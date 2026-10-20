@@ -37,3 +37,16 @@
 ### 附件条的截图
 
 M1a 没有产生附件的入口（图片、`@`、审查评论都在 M1b），截图页又拿不到 `useUi()` 的 store。UI-composer 里的"附件条"要么给截图页一个预置附件的办法（例如 `App` 接受初始的 UI 状态，和已有的 `initialRoute` 同类），要么只在 Vitest 里覆盖、截图留给第一个产生附件的 M1b 任务。倾向后者，请定。
+
+## 进度（T029 合并之前）
+
+不依赖 T029 的部分已完成并提交，改动约 715 行（实现约 507，测试约 208）。长文本那一项（`HostClient` 的 blob 上传、`text_blob` 路径、UNIT-composer-long-text）估约 110 行，推算合计约 825。
+
+- **输入框**（`composer/Composer.tsx`）：附件条、文字区（`field-sizing: content`，40 到 25dvh）、底栏和发送按钮三态（`data-send-state`：`disabled`、`send`、`stop`）。占位按 agent 和运行状态；新建会话页没有项目时写"先添加一个项目"，发送不可用。草稿和附件按会话存在 `useUi()`，新建会话页的键是 `new`。
+- **按键**（`composer/keys.ts`，纯函数）：`sends(event, sendKey)` 与 `escapeAction(state)`。偏好键 `composer.sendKey`（`enter` 或 `mod_enter`），经 `prefs.onChange` 跟随设置页（T036）的改动。
+- **发送**（`composer/send.ts`）：会话里 `session/send`（`mode: queue`）；新建会话页 `session/create`（agent `claude`，本地工作区，项目取路由里的 `projectId`，没有就取第一个项目），成功后导航到新会话。发送时先清空草稿和附件，失败时如果这期间没再输入就放回去，并 toast 失败码。停止是 `session/interrupt`，继续是 `session/queue_resume`。"运行中"按索引里的 `status`：`running` 或 `needs_action`。
+- **排队消息**（`composer/QueueList.tsx`）：会话视图的 `queue`，每条显示预览的第一行和图片数、评论数；暂停时显示原因和"继续"。`ComposerArea` 是会话页插槽的默认值：排队消息在上，输入框在下。T083 在 `ComposerArea` 里按是否有待处理的请求选择请求面板或输入框，草稿和附件都在 store 里，切回来原样。
+- **扩展点**（`composer/extensions.ts`）：`import.meta.glob` 收 `composer/extensions/*.tsx` 的默认导出（`side`、`order`、`Component`），放进底栏左右两组；弹出层挂载点和 `OverlayContext`（`container`、`setClose`），打开的浮层登记自己的关闭函数，Esc 先调它。
+- **测试**：UNIT-composer-ime（判定函数，和组件里输入法选词的 Enter 不发送、之后的 Enter 发送）、UNIT-composer-esc（处理顺序，运行中两次 Esc 发 `session/interrupt`，别的键和失焦解除，空闲时 Esc 无动作，焦点在外面时 Esc 移回输入框）、附件条（显示、删除、随消息发出）。组件测试用 MockHost 连一个真的 `HostClient`，经导出的 `HostContext` 放进组件树，用真的 `StateProvider` 订阅索引。
+- **截图**：UI-composer（暂停的队列加待发送的草稿，两种主题；运行中的停止态）。其余基线（UI-shell、UI-sidebar、UI-banners、UI-session-banners）因为每页都多了输入框，只在主区有变化，重新生成后看过。UI-csp-zero 为 0。
+- 没做：队列暂停时再发新消息的"发送消息？"确认框（设计里 M1 有，任务书没列）；附件条的截图（见上文"附件条的截图"，等裁定）。
