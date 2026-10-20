@@ -63,3 +63,35 @@ T044 = 档位、越权、闸门、`confirm_config` 与接线 + 崩溃与晚到�
 | **合计** | | **约 570，乘 1.3 约 740** | **约 400** |
 
 合计约 **1,140 行**，在上限之内。每完成一个模块统计一次。
+
+## 实际行数（逐模块）
+
+`git diff --numstat`，不含本文件。
+
+| 完成的模块（提交） | 新增 / 删除 | 其中测试 | 估计（实现 + 测试） |
+|---|---|---|---|
+| `TurnMachine` 的闸门、K6、重启提示，无回合的 notice（`feat(host): the turn machine's gate ...`） | 168 / 6 | 18（两个性质模型放行无回合的 notice） | 140 |
+| `TierGuard`、`SessionCore` 与 actor 接线、`confirm_config`、`facts`、行字段、审计（`feat(host): check the session's tier ...`） | 558 / 29 | 3 | 430 |
+| attach 的配置先于档位核对（`fix(host)`） | 13 / 14 | — | — |
+| IT-orch-gating（`test(host)`） | 315 / 6 | 315 | 400 |
+| 只换别的选项时不重复核对（`fix(host)`） | 5 / 0 | — | — |
+
+**合计 1,059 行**：实现约 720，测试约 340。在约 1,500 的上限之内。
+
+## 实现时的取舍
+
+1. **闸门放在 `TurnMachine` 里**（`Input::Gate`）：闸门关着时，新消息一律排队并把队列暂停为闸门的原因；空闲时也不开回合；处于 Preparing 的回合不发 prompt（attach 照做）；`queue_resume` 不解除闸门造成的暂停；闸门打开时只恢复因它而暂停的队列。`Queue::pause` 对空队列不起作用，所以排进第一条消息之后再暂停一次，会多写一条 `queue.updated`。T109 的 `project_config_changed` 直接用这个闸门。
+2. **attach 时发现越权，第一个回合停在 Preparing 不发 prompt**，确认后才发；用户也可以中断它。这样不需要"回合已开始又要收尾"。
+3. **越权的判定**：`full_access` 而没有原生确认的记录（优先），或者高于设定者按 5.8.2 能设定的档位。回合中由 agent 自己改到越权档位：先 `SetConfig` 改回、`Clock` 等 2 s（`config_revert` 登记进 `durations.rs`）；agent 改回了，回合照常跑完；超时，或在等待期间再次报告越权档位，就走中断流程。两种情况之后都进入 `config_unconfirmed`（设计第 3 步）。回合外的越权直接进入 `config_unconfirmed`。
+4. **合法来源**：用户选中的选项带 `tier_after`/`mode_after` 时（策略已按 5.8.2 放行），选它的 principal 成为设定者，之后 agent 报告的、不超过该档位的模式视为合法。`session/set_config`（M1b）按裁定走同一个入口（`tier_guard::Input::Set`）。经原生确认进入 `full_access`（新建时要求 `full_access`、选中 `full_access` 的选项、`confirm_config`）记下 `full_access_confirmed_at`。
+5. **`confirm_config`**：`config_digest` 是 `session.configured.config` 的 JCS 摘要，与 `confirmation_required.config_digest` 相同；不相符返回 `conflict/digest_mismatch`。确认后确认者成为设定者，实际档位成为已接受的档位，闸门打开。会话不在 `config_unconfirmed` 时确认是空操作，回 `{}`。
+6. **`ConfigChanged` 改写 `session.configured.config`**（以前没有处理）；只有别的选项变了、权限模式没变时不重复核对。
+7. **审计**：新增 `AuditEvent::ConfigUnconfirmed`；会话自己发起的审计没有连接，`AuditRecord.conn` 改为 `Option<ConnId>`（网关原有的记录都是 `Some`）。
+8. **崩溃**：适配器退出、`process_exited`（CLI 崩溃）、`restartable`（K7）都写 `agent_restarted`；K6 只在这个 prompt 还没有任何 `Update` 时重发一次，重发时写 `session_resumed`，再丢一次会话就按失败结束。这些 notice 不属于任何回合（`turn_id` 为空），视图把它放进正在运行或最后一个回合（5.3.3）；两个性质模型原先断言"条目都属于某个回合"，改为放行 notice。
+9. **晚到输出**：`Coalescer` 和 judge 已经实现，本任务只在 IT 里核对整条路径（中断后的 `may_still_run`、自发回合里的 `late_tool_output` 指回原条目）。
+
+## 交接
+
+- **T055**：`TierGuard` 的改回经 `AgentPort::send(DriverCommand::SetConfig{..})` 发出，结果要作为 `DriverEvent::ConfigChanged`（带全部选项）回到会话；`AgentPort::send` 的文档目前只列了 `Prompt`、`Cancel`、`Close`、`Answer`，接线时请一并补上。
+- **T109**：闸门用 `turn::Input::Gate(Some(PauseReason::ProjectConfigChanged))` 关、`Gate(None)` 开；同一时刻只有一个原因，两种原因同时出现时需要把闸门改成原因的集合。
+- **T089**（从库恢复）：设定者只在内存里（`TierGuard` 的 `setter` 是完整的 `Principal`），库里只有 `mode_set_by` 的 ID；恢复会话时需要按 ID 找回 principal 的类型和 scope，或者把恢复的会话视为由创建者设定。
