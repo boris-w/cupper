@@ -23,3 +23,11 @@
     -webkit-font-smoothing: antialiased;
   }
 }
+
+/* The title bar moves the window; controls on it opt out. */
+@utility app-drag {
+  -webkit-app-region: drag;
+}
+@utility app-no-drag {
+  -webkit-app-region: no-drag;
+}

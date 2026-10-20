@@ -92,6 +92,10 @@ export class LayoutStore {
     }
   }
 
+  toggleSidePanel(): void {
+    this.set("sidePanelOpen", !this.#state.prefs.sidePanelOpen);
+  }
+
   close(): void {
     this.#off();
     this.#listeners.clear();
