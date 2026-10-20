@@ -17,6 +17,8 @@ use cupper_protocol::interaction::{
 };
 use cupper_protocol::methods::Empty;
 use cupper_protocol::methods::admin::AuthElevate;
+#[cfg(feature = "test-harness")]
+use cupper_protocol::methods::admin::TestClockAdvance;
 use cupper_protocol::methods::handshake::HostStatus;
 use cupper_protocol::methods::interaction::InteractionRespond;
 use cupper_protocol::methods::project::ProjectAdd;
@@ -246,6 +248,11 @@ impl Cli {
                 });
             }
             Command::Pending(session) => self.pending(session).await?,
+            #[cfg(feature = "test-harness")]
+            Command::ClockAdvance(ms) => {
+                self.call::<TestClockAdvance>(json!({"ms": ms})).await?;
+                out.emit(json!({"advanced_ms": ms}), || format!("advanced {ms} ms"));
+            }
             Command::Respond {
                 session,
                 request,

@@ -13,7 +13,11 @@
   "terminal": "终端",
   "expand": "展开",
   "collapse": "收起",
-  "truncated": "已截断：内容没有完整显示，只能拒绝",
+  "detail": "详情",
+  "loading": "正在载入全文…",
+  "load_failed": "全文没有载入",
+  "retry": "重试",
+  "truncated": "已截断：展开看到全文后才能允许",
   "persistent": "会写入 agent 的权限规则",
   "ends_turn": "拒绝将结束本回合",
   "unknown_effect": "效果未知",
@@ -27,5 +31,14 @@
   "custom": "在此输入",
   "yes": "是",
   "no": "否",
-  "failed": "回答没有发出（{{code}}）"
+  "failed": "回答没有发出（{{code}}）",
+  "elsewhere": "已在别处处理",
+  "count": "{{position}} / {{total}}",
+  "message": "否，并告诉 {{agent}} 应该怎么做",
+  "click_submit": "点击提交",
+  "record_pending": "等待处理",
+  "record_approved": "已批准：{{title}}",
+  "record_rejected": "已拒绝",
+  "record_asked": "已询问 {{count}} 个问题",
+  "record_unanswered": "未回答"
 }

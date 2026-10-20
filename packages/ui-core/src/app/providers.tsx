@@ -57,10 +57,17 @@ export const HostContext = createContext<HostValue | null>(null);
 const VALIDATION = import.meta.env.PROD ? "non_delta" : "all";
 
 /** Opens this window's data connection once and follows its state. */
-export function HostProvider({ children }: { children: ReactNode }) {
+export function HostProvider({
+  children,
+  onClient,
+}: {
+  children: ReactNode;
+  onClient?: (client: HostClient) => void;
+}) {
   const { api } = useShell();
   // Production builds check every event but `item.delta` (design 5.7.6).
   const [client] = useState(() => new HostClient({ validation: VALIDATION }));
+  useEffect(() => onClient?.(client), [client, onClient]);
   const [value, setValue] = useState<HostValue>({
     client,
     state: client.state,

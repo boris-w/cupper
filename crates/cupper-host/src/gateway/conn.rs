@@ -37,7 +37,7 @@ use crate::quiescence::Participant;
 pub(super) async fn run(live: Live, stream: UnixStream, id: ConnId) {
     let (gw, participant): (&Gateway, &Participant) = (&live.0, &live.1);
     let opened = gw.clock.now_mono();
-    let Some((pinned, verdict)) = admit(gw, &stream, &id) else {
+    let Some((pinned, verdict)) = admit(gw, &stream, &id).await else {
         return;
     };
     let (reader, writer) = stream.into_split();
@@ -95,7 +95,7 @@ pub(super) async fn run(live: Live, stream: UnixStream, id: ConnId) {
 /// Admission (design 5.2.4 steps 1–2): a peer of this user, its token pinned
 /// for the connection's life, and the verdict on its signature. A refused
 /// peer is closed without a word.
-fn admit(gw: &Gateway, stream: &UnixStream, id: &ConnId) -> Option<(AuditToken, Verdict)> {
+async fn admit(gw: &Gateway, stream: &UnixStream, id: &ConnId) -> Option<(AuditToken, Verdict)> {
     let pinned = cupper_sys::peer_uid(stream)
         .map_err(Rejection::Unidentified)
         .and_then(|uid| match uid == cupper_sys::current_uid() {
@@ -110,12 +110,18 @@ fn admit(gw: &Gateway, stream: &UnixStream, id: &ConnId) -> Option<(AuditToken, 
             return None;
         }
     };
-    // Any failure to verify counts as "not the UI" (design 5.8.1).
+    // Any failure to verify counts as "not the UI" (design 5.8.1). The check
+    // runs off the async threads, which a slow one would stall (T138); the
+    // connection waits for its verdict all the same.
     let verdict = match gw.config.ui_requirement {
-        Some(requirement) => pinned.verify(requirement).map_or_else(
-            |refusal| Verdict::Other(Some(refusal)),
-            |()| Verdict::DesktopUi,
-        ),
+        Some(requirement) => {
+            let checked = tokio::task::spawn_blocking(move || pinned.verify(requirement));
+            match checked.await {
+                Ok(Ok(())) => Verdict::DesktopUi,
+                Ok(Err(refusal)) => Verdict::Other(Some(refusal)),
+                Err(_) => Verdict::Other(None),
+            }
+        }
         None => Verdict::Other(None),
     };
     let (pid, pid_version) = (pinned.pid(), pinned.pid_version());

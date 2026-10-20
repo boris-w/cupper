@@ -100,3 +100,51 @@ for (const [name, request] of [
     await expect(page).toHaveScreenshot(`request-${name}.png`);
   });
 }
+
+const resolve = (request_id: string, outcome?: object, status = "resolved") =>
+  ({
+    type: "interaction.resolved",
+    data: { request_id, status, ...(outcome ? { outcome } : {}) },
+  }) as EventBody;
+const asked = (event: EventBody, request_id: string) =>
+  ({ ...event, data: { ...(event.data as object), request_id, turn_id: "t_1" } }) as EventBody;
+const REPLY = {
+  type: "item.started",
+  data: {
+    ...{ item_id: "i_1", turn_id: "t_1", started_at: 2, kind: "user_message", steered: false },
+    ...{ content: [{ type: "text", text: "先别跑测试，看一下配置" }], reply_to: "r_2" },
+  },
+};
+
+/** One turn with an approval, a rejection and its follow-up, an answered question and an expired plan. */
+const RECORDS = [
+  // 72 s before the screenshots' fixed clock (2026-01-01 09:00 +08:00).
+  {
+    type: "turn.started",
+    data: { turn_id: "t_1", turn_no: 1, origin: "user", started_at: 1767229128000 },
+  },
+  asked(PERMISSION, "r_1"),
+  resolve("r_1", { type: "selected", option_id: "o1" }),
+  asked(PERMISSION, "r_2"),
+  resolve("r_2", { type: "selected", option_id: "o3" }),
+  REPLY,
+  asked(QUESTION, "r_3"),
+  resolve("r_3", { type: "answer", values: { db: "sqlite" } }),
+  asked(PLAN, "r_4"),
+  resolve("r_4", undefined, "expired"),
+] as EventBody[];
+
+for (const theme of ["light", "dark"] as const) {
+  test(`UI-request-records ${theme}: the records, and a panel with two waiting`, async ({
+    page,
+  }) => {
+    const waiting = [asked(PERMISSION, "r_5"), asked(PLAN, "r_6")];
+    await open(page, { info: { theme }, streams: { "session/s_1": [...RECORDS, ...waiting] } });
+    await page.evaluate(() => window.cupperShell.navigate({ kind: "session", session_id: "s_1" }));
+    await expect(page.locator("[data-request-count]")).toHaveText("1 / 2");
+    await expect(page.getByText("附于对「Run the test suite」的拒绝")).toBeVisible();
+    await expect(page.locator("[data-request-panel]")).toHaveAttribute("data-ready", "true");
+    await page.mouse.move(650, 780);
+    await expect(page).toHaveScreenshot(`request-records-${theme}.png`);
+  });
+}

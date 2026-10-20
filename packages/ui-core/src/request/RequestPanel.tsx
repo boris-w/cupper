@@ -15,11 +15,13 @@ import {
 
 import { escapeInvisible } from "@cupper/i18n";
 
-import { useT } from "../app/providers";
+import { useHost, useT } from "../app/providers";
+import { useToasts } from "../feedback/toaster";
 import { usePrivileged } from "../feedback/privileged";
 import { useUi } from "../state/provider";
-import { BUTTON, OptionsKind, QuestionKind, Terminal, text, type KindProps } from "./kinds";
-import { handled, panelKey, skipOutcome, type PanelKey } from "./logic";
+import { ContentBox } from "./fulltext";
+import { BUTTON, OptionsKind, QuestionKind, text, type KindProps } from "./kinds";
+import { handled, panelKey, skipOutcome, type Handled, type PanelKey } from "./logic";
 import { useRespond } from "./respond";
 
 /** RP-1: the panel takes no key or click for this long, counted again from each key. */
@@ -43,6 +45,9 @@ export function RequestPanel(props: {
   agent: string;
   activity: MutableRefObject<ComposerActivity>;
   onAnswered: (requestId: string) => void;
+  /** Its place among the pending requests, for "1 / 3". */
+  position: number;
+  total: number;
 }) {
   const { sessionId, requested } = props;
   const request = requested.request;
@@ -94,6 +99,8 @@ export function RequestPanel(props: {
     // Decided once, when the panel appears.
   }, []);
 
+  const { client } = useHost();
+  const { show } = useToasts();
   const answer = (outcome: InteractionOutcome) =>
     void respond(requested, outcome).then((how) => {
       if (how === "sent") props.onAnswered(requested.request_id);
@@ -112,7 +119,44 @@ export function RequestPanel(props: {
       ? { type: "dismissed" as const }
       : skipOutcome(request);
   const click = (fn: () => void) => () => downWhileReady.current && fn();
-  const kind: KindProps = { requested, answer, confirm, click, keys, listRef: list };
+  // RP-12: the rejection first; the follow-up only once it went, queued and
+  // tied to the request. Otherwise the text goes back to the composer, after
+  // a draft already there with a blank line between.
+  const keepInComposer = (message: string) => {
+    const draft = ui.getState().drafts[sessionId];
+    ui.getState().setDraft(sessionId, draft ? `${draft}\n\n${message}` : message);
+  };
+  const rejectWithMessage = async (message: string, reject: InteractionOutcome) => {
+    const how = await respond(requested, reject);
+    if (how === "sent") {
+      props.onAnswered(requested.request_id);
+      const content = [{ type: "text", text: message }];
+      const params = {
+        session_id: sessionId,
+        mode: "queue",
+        content,
+        reply_to: requested.request_id,
+      };
+      await client.command("session/send", params).catch(() => {
+        keepInComposer(message);
+        show({ id: "follow-up", text: t("composer:send_failed", { code: "follow_up" }) });
+      });
+    } else if (how === "elsewhere") {
+      keepInComposer(message);
+    } else if (how !== "failed") {
+      setHint(how === "again" ? "again" : "manual");
+      if (how === "revoke") revoke();
+    }
+  };
+  const kind: KindProps = {
+    requested,
+    agent: props.agent,
+    answer,
+    confirm,
+    click,
+    keys,
+    listRef: list,
+  };
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (!ready) {
@@ -174,6 +218,11 @@ export function RequestPanel(props: {
     >
       <div className="flex items-start gap-2 px-4 pt-3 pb-2">
         <p className="min-w-0 flex-1 text-chat font-medium">{title}</p>
+        {props.total > 1 && (
+          <span data-request-count="" className="pt-0.5 text-sm text-fg-tertiary">
+            {t("request:count", { position: props.position, total: props.total })}
+          </span>
+        )}
         <button
           type="button"
           onClick={click(() => answer(close))}
@@ -185,7 +234,10 @@ export function RequestPanel(props: {
           </span>
         </button>
       </div>
-      <Body {...kind} />
+      <Body
+        {...kind}
+        rejectWithMessage={(message, reject) => void rejectWithMessage(message, reject)}
+      />
       {hint && (
         <p role="status" className="px-4 pb-3 text-sm text-fg-tertiary">
           {t(
@@ -202,7 +254,9 @@ export function RequestPanel(props: {
 }
 
 /** The kind's content, options and buttons; a kind this build does not handle only closes. */
-function Body(props: KindProps) {
+function Body(
+  props: KindProps & { rejectWithMessage: (text: string, reject: InteractionOutcome) => void },
+) {
   const t = useT();
   const { request } = props.requested;
   if (!handled(request)) {
@@ -210,33 +264,8 @@ function Body(props: KindProps) {
     return null;
   }
   switch (request.type) {
-    case "permission": {
-      const command = text(request.tool.command);
-      const detail = text(request.detail);
-      return (
-        <OptionsKind
-          {...props}
-          options={request.options}
-          truncated={request.content_truncated}
-          skip={skipOutcome(request)}
-        >
-          {request.title && (
-            <p className="px-4 pb-2 text-sm text-fg-secondary">{escapeInvisible(request.title)}</p>
-          )}
-          {command !== undefined && <Terminal command={command} />}
-          {request.tool.paths.length > 0 && (
-            <ul className="px-4 pb-2 font-mono text-code">
-              {request.tool.paths.map((path) => (
-                <li key={path}>{escapeInvisible(path)}</li>
-              ))}
-            </ul>
-          )}
-          {detail && (
-            <p className="px-4 pb-2 text-sm whitespace-pre-wrap text-fg-secondary">{detail}</p>
-          )}
-        </OptionsKind>
-      );
-    }
+    case "permission":
+      return <PermissionBody {...props} request={request} />;
     case "plan_confirm":
       return (
         <OptionsKind
@@ -244,6 +273,7 @@ function Body(props: KindProps) {
           options={request.options}
           truncated={false}
           skip={skipOutcome(request)}
+          rejectWithMessage={undefined}
         >
           <p className="mx-4 mb-2 max-h-60 overflow-y-auto text-sm whitespace-pre-wrap">
             {text(request.plan)}
@@ -262,4 +292,65 @@ function Body(props: KindProps) {
       props.keys.current = () => undefined;
       return null;
   }
+}
+
+/**
+ * A permission: its title, command, paths and details. Truncated content
+ * keeps the allowing options off until every blob in it is expanded and
+ * loaded (security #6); collapsing one or a failed download takes them back.
+ */
+function PermissionBody(
+  props: Parameters<typeof Body>[0] & { request: Extract<Handled, { type: "permission" }> },
+) {
+  const t = useT();
+  const { request } = props;
+  const reject = skipOutcome(request);
+  const [seen, setSeen] = useState({ command: false, detail: false });
+  const seeCommand = useCallback(
+    (now: boolean) => setSeen((was) => ({ ...was, command: now })),
+    [],
+  );
+  const seeDetail = useCallback((now: boolean) => setSeen((was) => ({ ...was, detail: now })), []);
+  const { command, paths } = request.tool;
+  const blobs = { command: command?.type === "blob", detail: request.detail?.type === "blob" };
+  const whole =
+    (blobs.command || blobs.detail) &&
+    (!blobs.command || seen.command) &&
+    (!blobs.detail || seen.detail);
+  return (
+    <OptionsKind
+      {...props}
+      options={request.options}
+      truncated={request.content_truncated && !whole}
+      skip={reject}
+      rejectWithMessage={
+        reject.type === "selected"
+          ? (message) => props.rejectWithMessage(message, reject)
+          : undefined
+      }
+    >
+      {request.title && (
+        <p className="px-4 pb-2 text-sm text-fg-secondary">{escapeInvisible(request.title)}</p>
+      )}
+      {command && (
+        <ContentBox label={t("request:terminal")} content={command} onSeen={seeCommand} />
+      )}
+      {paths.length > 0 && (
+        <ul className="px-4 pb-2 font-mono text-code">
+          {paths.map((path) => (
+            <li key={path}>{escapeInvisible(path)}</li>
+          ))}
+        </ul>
+      )}
+      {request.detail?.type === "blob" ? (
+        <ContentBox label={t("request:detail")} content={request.detail} onSeen={seeDetail} />
+      ) : (
+        text(request.detail) && (
+          <p className="px-4 pb-2 text-sm whitespace-pre-wrap text-fg-secondary">
+            {text(request.detail)}
+          </p>
+        )
+      )}
+    </OptionsKind>
+  );
 }

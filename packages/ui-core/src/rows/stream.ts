@@ -16,6 +16,7 @@ import type {
   Notice,
   Plan,
   PromptBlock,
+  RequestView,
   ToolCall,
   TurnStatus,
 } from "@cupper/protocol";
@@ -55,6 +56,8 @@ export type StreamRow =
       content: PromptBlock[];
       steered: boolean;
       replyTo?: string;
+      /** What the rejected request asked, in the agent's words (T165). */
+      replyTitle?: string;
     }
   /** `text` grows while `streaming`. */
   | { kind: "agent_message"; key: string; itemId: string; text: string; streaming: boolean }
@@ -81,7 +84,7 @@ export type StreamRow =
       text: string;
     }
   /** An interaction request's place in the stream (T165). */
-  | { kind: "request"; key: string; requestId: string }
+  | { kind: "request"; key: string; requestId: string; request?: RequestView }
   /** An item of a kind, or an event of a type, this build does not know. */
   | { kind: "unknown"; key: string; type: string; body?: EventBody };
 

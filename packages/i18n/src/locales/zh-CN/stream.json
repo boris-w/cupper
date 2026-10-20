@@ -73,7 +73,11 @@
   "show_less": "收起",
   "copy": "复制",
   "comments": "{{count}} 条评论",
-  "text_blob": "长文本",
+  "text_blob_size": "长文本（{{kb, number}} KB）",
+  "text_blob_loading": "正在载入…",
+  "text_blob_retry": "没有载入，点此重试",
   "image": "图片",
-  "to_bottom": "回到底部"
+  "to_bottom": "回到底部",
+  "reply_to": "附于对「{{title}}」的拒绝",
+  "reply_to_other": "附于一次拒绝"
 }

@@ -18,5 +18,15 @@
   "queue_paused_other": "队列已暂停",
   "resume": "继续",
   "paused_send": "队列已暂停。发出这条消息，并让队列继续吗？",
-  "cancel": "取消"
+  "cancel": "取消",
+  "heading_before": "你想在",
+  "heading_after": "中构建什么？",
+  "heading_none": "我们要构建什么？",
+  "pick_project": "选择项目",
+  "pick_agent": "选择 agent",
+  "workspace_local": "本地",
+  "agent_cli_missing": "没有找到 CLI",
+  "agent_not_logged_in": "没有登录",
+  "agent_runtime_failed": "运行时安装失败",
+  "agent_unavailable": "不可用"
 }
