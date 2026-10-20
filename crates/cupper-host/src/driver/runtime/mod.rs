@@ -22,6 +22,8 @@
 
 pub mod content;
 pub mod launch;
+#[cfg(test)]
+mod tests;
 
 use std::collections::HashMap;
 use std::fs;

@@ -15,5 +15,5 @@ pub mod session;
 #[cfg(test)]
 mod session_props;
 #[cfg(test)]
-mod testkit;
+pub(crate) mod testkit;
 pub mod turn;

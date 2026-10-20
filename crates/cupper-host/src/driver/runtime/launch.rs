@@ -134,6 +134,19 @@ pub fn injected(
     }
 }
 
+/// The fake agent of this build: `target/<profile>/cupper-fake-agent`, beside
+/// the `deps/` of the test binary that asks. Tests do not build it; `cargo
+/// xtask ci` does before it runs them.
+#[cfg(any(test, feature = "test-harness"))]
+pub fn fake_agent() -> PathBuf {
+    let exe = std::env::current_exe().expect("the test binary");
+    let profile = exe.parent().and_then(Path::parent).unwrap();
+    let agent = profile.join("cupper-fake-agent");
+    let hint = "run `cargo build -p cupper-fake-agent` first";
+    assert!(agent.exists(), "{} is missing: {hint}", agent.display());
+    agent
+}
+
 /// The launch of Claude's adapter from the runtime in `data_dir`: the CLI
 /// found where agents cannot write (`roots`: every project), its version
 /// classified against the manifest's range (design 5.6.6).
