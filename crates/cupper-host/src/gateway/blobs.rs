@@ -21,8 +21,15 @@ use super::outbox::Outbox;
 use crate::ledger::Outcome;
 use crate::store::blobs::{BlobError, BlobStore};
 
+/// Blobs a connection may have chunks of at once. Each holds an entry until
+/// `blob/put` or the end of the connection, bytes or not (an upload that
+/// ended past a limit or at a gap, a zero-length chunk); without a cap a
+/// client with `write` grows the host by some 250 bytes a 46-byte frame (T176).
+const MAX_PENDING_UPLOADS: usize = 64;
+
 /// The chunks a connection sent and has not put yet: each blob within
-/// `max_blob_bytes`, all of them within `max_pending_upload_bytes`.
+/// `max_blob_bytes`, all of them within `max_pending_upload_bytes`, at most
+/// [`MAX_PENDING_UPLOADS`] blobs; a chunk of one more blob is dropped.
 #[derive(Debug)]
 pub(super) struct Uploads {
     blobs: HashMap<[u8; 32], Upload>,
@@ -65,6 +72,9 @@ impl Uploads {
             bytes,
             limits: (one, all),
         } = self;
+        if blobs.len() >= MAX_PENDING_UPLOADS && !blobs.contains_key(&header.hash) {
+            return;
+        }
         let upload = blobs.entry(header.hash).or_default();
         let held = match upload {
             Upload::Empty => 0,
@@ -239,5 +249,31 @@ mod tests {
         );
         assert_eq!(uploads.take(&hash(5)), Upload::Bytes(vec![0; 7]));
         assert_eq!(uploads.bytes, 0);
+    }
+
+    #[test]
+    fn uploads_hold_at_most_max_pending_blobs_even_without_bytes() {
+        let mut uploads = Uploads::default();
+        let header = |n: usize, offset: u64| BlobChunkHeader {
+            hash: [u8::try_from(n).unwrap(); 32],
+            offset,
+            last: false,
+        };
+        let hash = |n: usize| BlobHash::from_sha256(&[u8::try_from(n).unwrap(); 32]);
+        // A gap at the first chunk, or no bytes: entries all the same.
+        for n in 0..MAX_PENDING_UPLOADS {
+            uploads.chunk(&header(n, n as u64 % 2), &[]);
+        }
+        let more = MAX_PENDING_UPLOADS;
+        uploads.chunk(&header(more, 0), b"x");
+        assert_eq!(
+            uploads.take(&hash(more)),
+            Upload::Empty,
+            "one blob more is dropped"
+        );
+        assert_eq!(uploads.take(&hash(1)), Upload::OutOfOrder);
+        uploads.chunk(&header(more, 0), b"x");
+        assert_eq!(uploads.take(&hash(more)), Upload::Bytes(b"x".to_vec()));
+        assert_eq!(uploads.take(&hash(0)), Upload::Bytes(Vec::new()));
     }
 }
