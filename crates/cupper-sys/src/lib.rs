@@ -23,7 +23,8 @@ mod system;
 mod testutil;
 
 pub use codesign::{
-    Cdhash, CodeStatus, Requirement, SigningIdentity, file_cdhash, own_cdhash, pid_cdhash,
+    Cdhash, CodeStatus, Requirement, SigningIdentity, file_cdhash, own_cdhash,
+    own_signing_identity, pid_cdhash,
 };
 pub use env::Env;
 pub use exit::ExitWatch;
