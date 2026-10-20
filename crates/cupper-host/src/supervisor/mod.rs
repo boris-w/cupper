@@ -16,13 +16,14 @@ mod recover;
 mod seed;
 pub mod watch;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::fmt;
 use std::future::poll_fn;
 use std::path::{Path, PathBuf};
 use std::pin::pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::Poll;
 
 use cupper_protocol::domain::AgentKind;
@@ -54,9 +55,11 @@ use crate::gateway::{Gateway, GatewayConfig, Routes};
 use crate::git::GitTool;
 use crate::index::{INDEX, IndexDeps, IndexError, IndexHandle};
 use crate::ledger::{Ledger, LedgerError, SWEEPER};
+use crate::manifest;
 use crate::orchestrator::session::{SessionDeps, SessionManager};
 use crate::quiescence::Quiescence;
 use crate::requester::ProcessRequesters;
+use crate::runtime::{self, BundleDir, ComponentPlan, Installer, Reason, Status, Statuses, npm};
 use crate::startup::payload::Payload;
 use crate::startup::{DataDirError, prepare_data_dir};
 use crate::store::epoch::{self, BootSessionError};
@@ -257,6 +260,39 @@ impl Host {
             audit: records.clone(),
         })
         .await?;
+        quiescence.register(runtime::INSTALLER);
+        let installing = Arc::new(AtomicBool::new(false));
+        if let Some(bundle) = BundleDir::of_this_host().ok().filter(BundleDir::is_app) {
+            let (plans, registry) = installer_inputs(&payload);
+            let installer = Installer {
+                plans,
+                bundle: Arc::new(bundle),
+                dir: runtime::runtime_dir(&data_dir),
+                // No adapter runs yet.
+                in_use: BTreeSet::new(),
+                registry,
+                proxy: found.login.vars.get("HTTPS_PROXY").cloned(),
+                durations: durations.clone(),
+            };
+            let participant = quiescence.enter(runtime::INSTALLER);
+            let (clock, index) = (clock.clone(), index.clone());
+            let (watch, installing) = (watch.clone(), Arc::clone(&installing));
+            tokio::spawn(async move {
+                let publish = |statuses: &Statuses| {
+                    let busy = statuses.values().any(|s| *s == Status::Installing);
+                    installing.store(busy, Ordering::Relaxed);
+                    if statuses
+                        .values()
+                        .any(|s| *s == Status::Failed(Reason::BundleChanged))
+                    {
+                        watch.bundle_changed();
+                    }
+                    let (state, failure) = runtime::adapter_state(statuses);
+                    index.runtime(state, failure);
+                };
+                participant.idle(installer.run(&*clock, publish)).await;
+            });
+        }
         let launch = finder.launch_found(&found).await;
         let redactor = Redactor::for_this_machine();
         let log = AdapterLog::open(&log_dir(&data_dir), "claude", clock.clone(), redactor);
@@ -376,6 +412,7 @@ impl Host {
             admission,
             exits: to_supervisor,
             parent: cfg!(feature = "dev-auth").then(std::os::unix::process::parent_id),
+            installing,
         });
         let terminate = signal(SignalKind::terminate())?;
         let (listener, socket) = lock.bind()?;
@@ -570,6 +607,29 @@ impl Finder {
         }
         let (dir, locator) = (&self.data_dir, &found.locator);
         launch::production(clock, durations, dir, host, login, locator).await
+    }
+}
+
+/// The runtime's plans and registry: the embedded manifest's and npm's, or
+/// `test_config.runtime`'s (design 5.9.9).
+fn installer_inputs(payload: &Payload) -> (Vec<ComponentPlan>, String) {
+    let embedded = || runtime::plans(manifest::embedded());
+    #[cfg(feature = "test-harness")]
+    {
+        let config = &payload.test_config.runtime;
+        let read = |path: &PathBuf| serde_json::from_slice(&std::fs::read(path).ok()?).ok();
+        let plans = config.manifest.as_ref().and_then(read);
+        let plans = plans.map(|manifest| runtime::plans(&manifest));
+        let registry = config.registry_url.clone();
+        (
+            plans.unwrap_or_else(embedded),
+            registry.unwrap_or_else(|| npm::REGISTRY.to_owned()),
+        )
+    }
+    #[cfg(not(feature = "test-harness"))]
+    {
+        let _ = payload;
+        (embedded(), npm::REGISTRY.to_owned())
     }
 }
 
