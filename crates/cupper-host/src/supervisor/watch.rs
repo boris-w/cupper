@@ -26,7 +26,7 @@ use tokio::sync::mpsc;
 use super::{Activity, Exit, Part};
 use crate::clock::{Clock, MonoTime, Now};
 use crate::durations::{Durations, SUPERVISOR_IDLE, SUPERVISOR_OBSERVE};
-use crate::gateway::Gateway;
+use crate::gateway::{AuditEvent, AuditRecord, Gateway, HostEvent};
 use crate::index::IndexHandle;
 use crate::pure::{Alarm, Core, TimerRequest, TimerTable};
 use crate::quiescence::{ActorKind, Participant, Quiescence};
@@ -263,6 +263,8 @@ pub struct WatchDeps {
     pub parent: Option<u32>,
     /// Set while the runtime installer installs.
     pub installing: Arc<AtomicBool>,
+    /// For `host.pending_upgrade`.
+    pub audit: mpsc::UnboundedSender<AuditRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -353,6 +355,9 @@ impl Watcher {
                     self.deps.admission.close(closed);
                     if closed == Closed::PendingUpgrade {
                         self.deps.index.pending_upgrade();
+                        let event = AuditEvent::Host(HostEvent::PendingUpgrade);
+                        let (at_ms, conn) = (self.deps.clock.now_wall_ms(), None);
+                        let _ = self.deps.audit.send(AuditRecord { at_ms, conn, event });
                     }
                 }
                 Action::Exit(exit) => {

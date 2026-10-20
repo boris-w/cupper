@@ -44,7 +44,7 @@ use tokio::sync::{mpsc, watch};
 
 use self::audit::Auditor;
 pub use self::audit::{
-    AuditEvent, AuditRecord, CloseReason, ConfigState, ElevationStep, Formal, Rejection,
+    AuditEvent, AuditRecord, CloseReason, ConfigState, ElevationStep, Formal, HostEvent, Rejection,
     TrustChange,
 };
 pub use self::dispatch::{Call, Granted, IndexPort, Opened, Port, Reply, SessionPort};

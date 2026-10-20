@@ -5,7 +5,7 @@
 //! `stream.subscribed` goes to `host.log` only. Records hold no secrets: no
 //! tokens, keys or login-shell environment reach them (design 5.8.5).
 
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::gateway::{AuditEvent, AuditRecord};
 use crate::quiescence::{ActorKind, Participant};
@@ -14,50 +14,82 @@ use crate::store::{Durability, Writer};
 /// The audit writer's kind in the quiescence barrier.
 pub const AUDIT: ActorKind = ActorKind::new("audit");
 
-/// Writes `records` until every sender is gone.
+/// Asks the audit writer to store what came before; the orderly exit does,
+/// before the store writer stops.
+#[derive(Debug)]
+pub struct Drain(pub mpsc::UnboundedSender<oneshot::Sender<()>>);
+
+impl Drain {
+    /// Returns once every record sent before the call is stored.
+    pub async fn wait(&self) {
+        let (done, stored) = oneshot::channel();
+        if self.0.send(done).is_ok() {
+            let _ = stored.await;
+        }
+    }
+}
+
+/// Writes `records` until every sender is gone, answering `drains` once
+/// none is waiting.
 pub async fn write(
     mut records: mpsc::UnboundedReceiver<AuditRecord>,
+    mut drains: mpsc::UnboundedReceiver<oneshot::Sender<()>>,
     writer: Writer,
     participant: Participant,
 ) {
-    while let Some(mut record) = participant.idle(records.recv()).await {
-        if let AuditEvent::Accepted { .. } = record.event {
-            let read = tokio::task::spawn_blocking(move || {
-                record.event.read_peer();
-                record
-            });
-            let Ok(read) = read.await else {
-                continue;
-            };
-            record = read;
-        }
-        let formal = record.event.formal();
-        let conn = record.conn.map(|conn| conn.to_string());
-        let principal = formal.principal.map(|principal| principal.to_string());
-        let peer = formal.peer.map(|peer| peer.to_string());
-        let detail = formal.detail.to_string();
-        tracing::info!(
-            event = %formal.event,
-            conn = conn.as_deref(),
-            principal = principal.as_deref(),
-            peer = peer.as_deref(),
-            detail = %detail,
-            "audit"
-        );
-        if !record.event.kept() {
-            continue;
-        }
-        let row = (record.at_ms, formal.event, conn, principal, peer, detail);
-        let written = writer.submit(Durability::Normal, move |db| {
-            db.execute(
-                "INSERT INTO audit (ts, event, conn_id, principal, peer_json, detail_json)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                rusqlite::params![row.0, row.1, row.2, row.3, row.4, row.5],
-            )
+    loop {
+        let next = participant.idle(async {
+            tokio::select! {
+                biased;
+                record = records.recv() => Ok(record),
+                Some(done) = drains.recv() => Err(done),
+            }
         });
-        if let Err(err) = written.await {
-            tracing::warn!(%err, "an audit record was not stored");
+        match next.await {
+            Ok(Some(record)) => store(record, &writer).await,
+            Ok(None) => break,
+            Err(done) => drop(done.send(())),
         }
+    }
+}
+
+async fn store(mut record: AuditRecord, writer: &Writer) {
+    if let AuditEvent::Accepted { .. } = record.event {
+        let read = tokio::task::spawn_blocking(move || {
+            record.event.read_peer();
+            record
+        });
+        let Ok(read) = read.await else {
+            return;
+        };
+        record = read;
+    }
+    let formal = record.event.formal();
+    let conn = record.conn.map(|conn| conn.to_string());
+    let principal = formal.principal.map(|principal| principal.to_string());
+    let peer = formal.peer.map(|peer| peer.to_string());
+    let detail = formal.detail.to_string();
+    tracing::info!(
+        event = %formal.event,
+        conn = conn.as_deref(),
+        principal = principal.as_deref(),
+        peer = peer.as_deref(),
+        detail = %detail,
+        "audit"
+    );
+    if !record.event.kept() {
+        return;
+    }
+    let row = (record.at_ms, formal.event, conn, principal, peer, detail);
+    let written = writer.submit(Durability::Normal, move |db| {
+        db.execute(
+            "INSERT INTO audit (ts, event, conn_id, principal, peer_json, detail_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![row.0, row.1, row.2, row.3, row.4, row.5],
+        )
+    });
+    if let Err(err) = written.await {
+        tracing::warn!(%err, "an audit record was not stored");
     }
 }
 
@@ -68,7 +100,7 @@ mod tests {
 
     use super::*;
     use crate::clock::ManualClock;
-    use crate::gateway::{AuditEvent, ConfigState};
+    use crate::gateway::{AuditEvent, ConfigState, HostEvent};
     use crate::quiescence::Quiescence;
     use crate::store::testutil::{TempDir, host_writer, query};
 
@@ -79,7 +111,8 @@ mod tests {
         let quiescence = Quiescence::new();
         quiescence.register(AUDIT);
         let (records, audit) = mpsc::unbounded_channel();
-        let written = tokio::spawn(write(audit, writer, quiescence.enter(AUDIT)));
+        let (_drain, drains) = mpsc::unbounded_channel();
+        let written = tokio::spawn(write(audit, drains, writer, quiescence.enter(AUDIT)));
         let config = ConfigState {
             session_id: SessionId::from_uuid(1),
             mode: None,
@@ -96,5 +129,31 @@ mod tests {
                    FROM audit";
         let rows: Vec<String> = query(&dir.host_db(), sql, |row| row.get(0));
         assert_eq!(rows, ["1000 config.unconfirmed - pr_cli"]);
+    }
+
+    /// The orderly exit's drain: what was sent before it is stored by then,
+    /// with the senders still alive.
+    #[tokio::test]
+    async fn unit_audit_producers_a_drain_returns_once_what_came_before_is_stored() {
+        let (dir, clock) = (TempDir::new("drain"), ManualClock::new());
+        let (writer, _thread) = host_writer(&dir, &clock);
+        let quiescence = Quiescence::new();
+        quiescence.register(AUDIT);
+        let (records, audit) = mpsc::unbounded_channel();
+        let (drain, drains) = mpsc::unbounded_channel();
+        tokio::spawn(write(audit, drains, writer, quiescence.enter(AUDIT)));
+        for n in 0..3 {
+            let event = AuditEvent::Host(HostEvent::PendingUpgrade);
+            records
+                .send(AuditRecord {
+                    at_ms: n,
+                    conn: None,
+                    event,
+                })
+                .unwrap();
+        }
+        Drain(drain).wait().await;
+        let rows: Vec<u64> = query(&dir.host_db(), "SELECT ts FROM audit", |row| row.get(0));
+        assert_eq!(rows, [0, 1, 2]);
     }
 }

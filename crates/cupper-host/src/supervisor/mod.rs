@@ -52,7 +52,7 @@ use crate::driver::runtime::{AGENT_RUNTIME, AgentRuntime, RuntimeDeps};
 use crate::durations::Durations;
 use crate::exit::HostExit;
 use crate::gateway::listen::{HostLock, ListenError};
-use crate::gateway::{Gateway, GatewayConfig, Routes};
+use crate::gateway::{AuditEvent, AuditRecord, Gateway, GatewayConfig, HostEvent, Routes};
 use crate::git::GitTool;
 use crate::index::{INDEX, IndexDeps, IndexError, IndexHandle};
 use crate::ledger::{Ledger, LedgerError, SWEEPER};
@@ -143,6 +143,9 @@ pub struct Host {
     serving: JoinHandle<()>,
     /// Retention (T027) and the ledger's sweeper (T032).
     sweeps: [JoinHandle<()>; 2],
+    /// The audit's way in, and its drain for the exit.
+    audit: mpsc::UnboundedSender<AuditRecord>,
+    drain: audit::Drain,
     exits: mpsc::UnboundedReceiver<Exit>,
     terminate: Signal,
     socket: PathBuf,
@@ -232,14 +235,21 @@ impl Host {
         // launch both take this result.
         let found = finder.discover(project_roots(&reader)?).await;
         let git = git_tool(&found, &data_dir)?;
-        // The audit records of the gateway, the sessions and the index.
+        // The audit records of the gateway, the sessions, the index and the
+        // host itself.
         let (records, audit) = mpsc::unbounded_channel();
+        let (drain, drains) = mpsc::unbounded_channel();
         quiescence.register(audit::AUDIT);
-        tokio::spawn(audit::write(
-            audit,
-            writer.clone(),
-            quiescence.enter(audit::AUDIT),
-        ));
+        let participant = quiescence.enter(audit::AUDIT);
+        tokio::spawn(audit::write(audit, drains, writer.clone(), participant));
+        let version = env!("CARGO_PKG_VERSION").to_owned();
+        let weak = cfg!(feature = "dev-auth").then_some(HostEvent::WeakAuth);
+        for event in [Some(HostEvent::Started { version }), weak]
+            .into_iter()
+            .flatten()
+        {
+            record(&records, &*clock, event);
+        }
         // Step 7: the index stream, before the socket.
         quiescence.register(INDEX);
         let index = IndexHandle::start(IndexDeps {
@@ -403,6 +413,7 @@ impl Host {
             #[cfg(feature = "test-harness")]
             harness_key: payload.harness_key,
         };
+        let audit = records.clone();
         let gateway = Gateway::new(config, clock.clone(), durations.clone(), routes, records);
         control.serve_for(&gateway);
         index.serve_for(&gateway);
@@ -420,6 +431,7 @@ impl Host {
             exits: to_supervisor,
             parent: cfg!(feature = "dev-auth").then(std::os::unix::process::parent_id),
             installing,
+            audit: audit.clone(),
         });
         let terminate = signal(SignalKind::terminate())?;
         let (listener, socket) = lock.bind()?;
@@ -433,6 +445,8 @@ impl Host {
             gateway,
             serving,
             sweeps: [maintenance, sweeper],
+            audit,
+            drain: audit::Drain(drain),
             exits,
             terminate,
             socket,
@@ -463,7 +477,9 @@ impl Host {
         self.exit(exit).await
     }
 
-    /// The orderly exit (design 5.2.13).
+    /// The orderly exit (design 5.2.13). The connections close and the
+    /// audit is stored before the store writer stops, so `conn.closed` and
+    /// `host.exiting` reach the `audit` table.
     async fn exit(self, exit: Exit) -> HostExit {
         self.serving.abort();
         let reason = shutdown_reason(exit);
@@ -477,6 +493,12 @@ impl Host {
             exit,
             Exit::Requested { force: true } | Exit::Terminated | Exit::WriterDied
         );
+        let reason = exit.code().to_owned();
+        record(
+            &self.audit,
+            &*self.clock,
+            HostEvent::Exiting { reason, force },
+        );
         for part in self.parts.iter() {
             part.stop(force).await;
         }
@@ -484,6 +506,8 @@ impl Host {
             sweep.abort();
             let _ = sweep.await;
         }
+        self.gateway.close_all().await;
+        self.drain.wait().await;
         // The last write before the writer stops: the next start reads a
         // clean exit (design 5.2.8).
         let mut code = HostExit::Ok;
@@ -505,10 +529,30 @@ impl Host {
         if !matches!(stopped.await, Ok(true)) {
             code = HostExit::Error;
         }
-        self.gateway.close_all().await;
         let _ = std::fs::remove_file(&self.socket);
         code
     }
+}
+
+impl Exit {
+    /// The exit's code in `host.exiting`.
+    fn code(self) -> &'static str {
+        match self {
+            Self::Requested { .. } => "requested",
+            Self::Terminated => "terminated",
+            Self::WriterDied => "writer_died",
+            Self::Idle => "idle",
+            Self::Orphaned => "orphaned",
+            Self::Upgrade => "upgrade",
+        }
+    }
+}
+
+/// Sends `event` into the audit (design 5.8.6).
+fn record(audit: &mpsc::UnboundedSender<AuditRecord>, clock: &dyn Clock, event: HostEvent) {
+    let (at_ms, conn, event) = (clock.now_wall_ms(), None, AuditEvent::Host(event));
+    // Nobody listening is the receiver's choice.
+    let _ = audit.send(AuditRecord { at_ms, conn, event });
 }
 
 /// `host/shutdown`'s reason: SIGTERM, the orphaned state and a dead writer
