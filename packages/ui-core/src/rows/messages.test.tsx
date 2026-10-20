@@ -172,7 +172,7 @@ describe("UNIT-blob-fulltext: a long text in the user's bubble", () => {
         <RowView registry={streamRows} row={row} />
       </HostContext>,
     );
-    expect(screen.getByText("长文本 · 30 KB")).toBeTruthy();
+    expect(screen.getByText("长文本（30 KB）")).toBeTruthy();
     expect(host.requests.map((request) => request.method)).not.toContain("blob/get");
     await userEvent.click(screen.getByRole("button", { name: "显示更多" }));
     await waitFor(() => expect(container.textContent).toContain("第一行\n第一行"));
