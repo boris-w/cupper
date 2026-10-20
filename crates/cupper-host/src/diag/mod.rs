@@ -5,3 +5,4 @@ pub mod full;
 pub mod log;
 pub mod redact;
 pub mod rotate;
+pub mod stderr;
