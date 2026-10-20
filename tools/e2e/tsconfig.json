@@ -3,6 +3,7 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "dist/tsc",
+    "lib": ["es2024", "dom"],
     "types": ["node"]
   },
   "include": ["src", "*.config.ts"],

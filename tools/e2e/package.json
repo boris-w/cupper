@@ -6,7 +6,7 @@
   "description": "The e2e suite: Playwright drives the e2e build of the app, its real host, the fake agent and the CLI (design 5.9.4).",
   "type": "module",
   "scripts": {
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test --grep-invert @focus; rest=$?; playwright test --grep @focus --workers 1 && exit $rest"
   },
   "devDependencies": {
     "@cupper/i18n": "workspace:*",
