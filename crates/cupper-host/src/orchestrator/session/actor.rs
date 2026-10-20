@@ -561,21 +561,8 @@ impl SessionActor {
     /// An attach came back: its capabilities and configuration go into the
     /// stream when they changed, the agent's session into the row.
     async fn attach_done(&mut self, result: Result<AttachInfo, AgentError>) {
-        // The tier is checked before the turn may send its prompt.
-        let mode = result
-            .as_ref()
-            .ok()
-            .and_then(|info| mode_tier(&info.capabilities.config));
-        if let Some((mode, tier)) = mode {
-            let during_turn = false;
-            let mode = tier_guard::Input::Mode {
-                mode,
-                tier,
-                during_turn,
-            };
-            self.input(Input::Tier(mode), None, Step::default()).await;
-        }
         let mut step = Step::default();
+        let mut mode = None;
         if let Ok(info) = &result {
             let caps = &info.capabilities;
             self.parts
@@ -595,6 +582,18 @@ impl SessionActor {
                 step.events.push(EventBody::SessionConfigured(configured));
             }
             step.agent_session = Some(info.session.0.clone());
+            mode = mode_tier(&caps.config);
+        }
+        // The tier is checked before the turn may send its prompt.
+        if let Some((mode, tier)) = mode {
+            let during_turn = false;
+            let mode = tier_guard::Input::Mode {
+                mode,
+                tier,
+                during_turn,
+            };
+            self.input(Input::Tier(mode), None, mem::take(&mut step))
+                .await;
         }
         let input = Input::Machine(turn::Input::Attached(result));
         self.input(input, None, step).await;
