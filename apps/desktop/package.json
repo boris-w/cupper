@@ -12,7 +12,10 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@cupper/desktop-native": "workspace:*",
+    "@cupper/host-client": "workspace:*",
     "@cupper/i18n": "workspace:*",
+    "@cupper/protocol": "workspace:*",
     "@cupper/shell-api": "workspace:*",
     "@types/node": "24.19.1",
     "electron": "44.9.0",

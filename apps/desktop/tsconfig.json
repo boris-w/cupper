@@ -6,5 +6,11 @@
     "types": ["node"]
   },
   "include": ["src", "vite.config.ts", "vitest.config.ts"],
-  "references": [{ "path": "../../packages/i18n" }, { "path": "../../packages/shell-api" }]
+  "references": [
+    { "path": "../../crates/cupper-desktop-native" },
+    { "path": "../../packages/host-client" },
+    { "path": "../../packages/i18n" },
+    { "path": "../../packages/protocol" },
+    { "path": "../../packages/shell-api" }
+  ]
 }
