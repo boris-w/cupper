@@ -4,13 +4,14 @@
 // composer's place and give it back as it was.
 
 import type { PromptBlock } from "@cupper/protocol";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { useStore } from "zustand";
 
 import { useT } from "../app/providers";
 import { useRouter } from "../app/router";
 import { Alert } from "../components/Alert";
 import { ArrowUpIcon, CloseIcon, StopIcon } from "../components/icons";
+import type { ComposerActivity } from "../request/RequestPanel";
 import { useUi } from "../state/provider";
 import { EXTENSIONS, OverlayContext } from "./extensions";
 import { escapeAction, SEND_KEY_PREF, sends } from "./keys";
@@ -60,7 +61,13 @@ function Attachments(props: { blocks: readonly PromptBlock[]; remove: (index: nu
 }
 
 /** The composer of a session, or of the new session page when `sessionId` is absent. */
-export function Composer({ sessionId, paused = false }: { sessionId?: string; paused?: boolean }) {
+export function Composer(props: {
+  sessionId?: string;
+  paused?: boolean;
+  /** Where the composer reports focus and typing, for the request panel that may replace it (RP-3). */
+  activity?: MutableRefObject<ComposerActivity>;
+}) {
+  const { sessionId, paused = false, activity } = props;
   const t = useT();
   const ui = useUi();
   const { route } = useRouter();
@@ -170,8 +177,13 @@ export function Composer({ sessionId, paused = false }: { sessionId?: string; pa
           placeholder={placeholder}
           aria-label={placeholder}
           onChange={(event) => ui.getState().setDraft(key, event.target.value)}
-          onBlur={() => setArmed(false)}
+          onFocus={() => activity && (activity.current.focused = true)}
+          onBlur={() => {
+            setArmed(false);
+            if (activity) activity.current.focused = false;
+          }}
           onKeyDown={(event) => {
+            if (activity) activity.current.typedAt = Date.now();
             if (event.key !== "Escape") {
               setArmed(false);
               if (sends(event.nativeEvent, sendKey)) {
