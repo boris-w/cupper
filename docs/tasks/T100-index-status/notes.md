@@ -42,6 +42,28 @@
 
 在约 1,100 的上限之内，不贴线，开工。每完成一个模块用 `git diff --numstat` 统计一次，记在下面。
 
+## 统计（`git diff --numstat`，只算 `crates/`）
+
+| 时点 | 增 | 删 | 净增 |
+|---|---|---|---|
+| 实现完成（纯核心、会话侧接线、索引 actor、`rows.rs`、组装） | 672 | 109 | 563 |
+| 加上 UNIT-index-status、UNIT-index-intent、IT 与 `Client::notify` | 1,078 | 119 | 959 |
+| 自查后定稿 | 1,084 | 123 | 961 |
+
+定稿里实现约 563 行（估计 585），测试约 398 行（估计 340，多在 UNIT-index-status 的四个用例）。
+
+## 过程记录
+
+- `IndexNotes` 原来只有 `pending`。改成 `created(summary)` 和 `note(session, at, Vec<Note>)` 两个方法：创建单独一个方法，`Note` 里就不必有一个"已有会话收到也不该出现"的变体。
+- `Note` 由会话 actor 在提交成功后从本批事件里摘出（`turn.started`、`turn.completed`、`workspace.ready`、`session.configured`），请求有变时再加一条 `Pending`（数量、最早一个的类别和 ID）。条目的流式输出不产生通知。
+- "出错"的判定和 T043 的 `session/get` 一致：最近结束的回合失败且未读；之后有回合以任何状态结束都不再算出错。
+- 状态核心按 5.2.16 的 `Core` 写，一个定时器 `Flush`；`CoreDriver` 驱动 UNIT-index-status。启动和 `test/seed` 后从 `sessions` 行补入核心（`Status::load`），和视图里已有的摘要不同才写；视图里的 `error_code` 沿用（行里没有失败码）。
+- 已读写库不经事件：`StreamWriter::append` 遇到空批次直接返回，`with` 不会执行，所以 `IndexDeps` 加了写线程句柄。
+- 有序退出时，索引写检查点之前先把攒着的变化写出，免得最后 100 ms 内的摘要和意图丢失。
+- 索引 actor 的等待点仍是一个：`Participant::idle` 里同时等邮箱和 `Alarm`；没有新开脱离的 task。
+- `NoAgentNotes` 换掉后只剩运行时的测试在用，挪成测试里的本地桩。
+- IT 要发 `client/presence`，CLI 的客户端没有发通知的方法，加了 `Client::notify`（10 行）。
+
 ## 自行决定的几处（汇报里列出，请编排者确认）
 
 1. **`sessions.last_read_seq` 由索引写。** 5.2.3 的表把 `sessions` 行归会话 actor，但已读是索引的输入（同一张表），而且已读要对没有加载的会话也生效，会话 actor 不一定在。会话 actor 从不写这一列（只在 `session/get` 里读），所以按列分写者：这一列只有 `IndexActor` 写，语句带 `last_read_seq < ?` 守住只前移。
