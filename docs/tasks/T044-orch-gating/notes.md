@@ -49,3 +49,17 @@ c 只碰 `TurnMachine` 的失败路径和 notice，与 a 的冲突最小，可�
 3. **`projects` 表的唯一写者是 T034 的 `IndexActor`**（未合并）。会话 actor 重扫发现 `stale` 时，状态改写要经 `IndexNotes` 加一个通知（例如 `trust_rescanned(project, scan 摘要)`）交给 T034，还是本任务先在会话 actor 里只读、不改项目状态（只暂停本会话、写 notice），改写留给 T034？
 4. **发 prompt 之前发现 `stale` 时，已经开始的回合怎么结束**（`turn.started` 已写，处于 Preparing）：标 `failed`（新的失败码 `project_config_changed`？协议的 `FailureCode` 里没有），还是标 `cancelled` 并把这条消息放回队首？设计没有写。
 5. **可写根目录的来源**：仓库档的 `run` 需要"全部项目和工作区根目录"。M1a 只有本地模式，是否就用 `projects` 表里全部未删除项目的路径？
+
+## 收窄后的计划（编排者裁定后，计划 v1.3.19）
+
+T044 = 档位、越权、闸门、`confirm_config` 与接线 + 崩溃与晚到输出；信任门控归 T109。上限约 1,500，硬停止线 1,600。
+
+| 模块 | 内容 | 实现 | 测试 |
+|---|---|---|---|
+| `TurnMachine` | 闸门 `Input::Gate`（暂停期间新消息排队、空闲也不开回合、Preparing 不发 prompt、`queue_resume` 不解除）；`agent_session()`；K6：prompt 没有任何更新就收到 "Session not found" 时 resume 并重发一次，写 `session_resumed`；适配器退出、`process_exited`、`restartable` 写 `agent_restarted` | 140 | — |
+| `TierGuard`（纯核心）与 `SessionCore` 接线 | 设定者与原生确认；Attach、`ConfigChanged` 时核对（`full_access` 未确认、高于设定者的上限）；回合中越权：`SetConfig` 改回、`Clock` 等 2 s，失败、超时或再次越权就中断，然后进入 `config_unconfirmed`；选项改档位时登记合法来源（`set_config` 的口子预留）；`confirm_config` 解除 | 230 | — |
+| `SessionActor` 等接线 | `ConfigChanged` 改写 `session.configured.config`；`confirmation_required` 与 notice、审计（`AuditRecord.conn` 改为 `Option`，会话自己发起的没有连接）、`mode_set_by`、`full_access_confirmed_at` 两个行字段；`session/confirm_config`（`config_digest` 核对）、`Routes::sessions` 登记、删允许表那一行；`facts` 给 `set_config` 补 `mode_tier` | 200 | — |
+| IT-orch-gating | 档位与 `config_unconfirmed`、`confirm_config`、闸门；越权改回与中断；退出、K6、K7；晚到输出 | — | 400 |
+| **合计** | | **约 570，乘 1.3 约 740** | **约 400** |
+
+合计约 **1,140 行**，在上限之内。每完成一个模块统计一次。
