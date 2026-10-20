@@ -3,15 +3,12 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { MAIN_DOCUMENT_CSP } from "@cupper/shell-api";
 import type { Session, WebContents } from "electron";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { Flavor } from "../shared/flavor";
-import {
-  APP_SCHEME_PRIVILEGES,
-  MAIN_DOCUMENT_CSP,
-  appProtocolHandler,
-} from "./security/app-protocol";
+import { APP_SCHEME_PRIVILEGES, appProtocolHandler } from "./security/app-protocol";
 import { hardenWebContents } from "./security/navigation";
 import { restrictPermissions } from "./security/permissions";
 import { enforceSwitchAllowlist } from "./security/switches";

@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { resolve } from "node:path";
 
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 import type { Flavor } from "./src/shared/flavor.ts";
@@ -40,6 +41,8 @@ export default defineConfig(({ mode }) => {
       __CUPPER_FLAVOR__: JSON.stringify(mode),
       __CUPPER_HOST_ENV_ALLOW__: hostEnvAllow(),
     },
+    // The renderer's styles: Tailwind over the tokens of `@cupper/ui-core`.
+    plugins: [tailwindcss()],
     // Build every environment below with one `vite build`.
     builder: {},
     environments: {

@@ -8,9 +8,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use cupper_protocol::error::RpcError;
-use cupper_protocol::ids::{ConnId, PrincipalId, RequestId, SessionId};
+use cupper_protocol::ids::{ConnId, ElevationId, PrincipalId, RequestId, SessionId};
+use cupper_protocol::index::ElevationDecision;
 use cupper_protocol::interaction::InteractionOutcome;
 use cupper_protocol::methods::handshake::{ClientIdentity, Principal};
+use cupper_protocol::rpc::Scope;
 use cupper_protocol::session::ConfirmationReason;
 use cupper_protocol::sync::{ResyncReason, StreamId, SubscribeMode};
 use cupper_sys::{Refusal, RefusalKind};
@@ -81,6 +83,23 @@ pub enum AuditEvent {
         /// The permission mode the agent reported.
         mode: Option<String>,
     },
+    /// `elevation.*`: a step of a CLI's request for scopes on this
+    /// connection, with the scopes asked for, or those granted (design 5.8.6).
+    Elevation {
+        step: ElevationStep,
+        scopes: Vec<Scope>,
+    },
+}
+
+/// What became of an elevation request (design 5.8.4).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ElevationStep {
+    Requested(ElevationId),
+    /// Granted, denied or expired.
+    Resolved(ElevationId, ElevationDecision),
+    /// Refused without a dialog, with the lineage signals that matched.
+    Lineage(Vec<String>),
+    RateLimited,
 }
 
 /// One connection's way into the audit channel.

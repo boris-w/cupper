@@ -1,9 +1,9 @@
 # T128 ui-core II-c：基础组件与行类型注册表
 
 - 派发日期：2026-10-20
-- 执行者：子 agent（前端工程师）
+- 执行者：子 agent（前端工程师）。T084、T118 的执行者接手
 - 分支：`feat/T128-ui-components`
-- 依赖：T084（合并中）。T081、T082、T083、T086 依赖本任务；与 T118（截图设施）并行
+- 依赖：T084（已合并）。T081、T082、T083、T086 依赖本任务；与 T118（截图设施）并行
 
 ## 背景
 
@@ -59,7 +59,7 @@ T084 开工前拆成三份（计划 v1.3.22）：
 
 ## 工作方式
 
-T084 合并之后，在编排者指定的 worktree 里从最新的 main 开新分支：`git checkout -b feat/T128-ui-components main`。
+T084、T118 已合并。在原来的 T052 worktree 里从最新的 main 开新分支：`git checkout -b feat/T128-ui-components main`。T118 的分支已合并，不要再往它上面提交。截图用例的加法见 `tools/ui-screenshots` 的 notes；本任务的验收不要求截图用例，审阅截图照常附上。
 
 ## 汇报要求
 

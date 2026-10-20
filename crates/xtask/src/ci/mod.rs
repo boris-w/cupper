@@ -124,7 +124,7 @@ fn run(args: &[String], cwd: &Path) -> Result<bool> {
     let watch = Stopwatch::start();
     let reports: Vec<JobReport> = selected
         .iter()
-        .map(|job| run_job(job, &root, &log_dir))
+        .map(|job| run_job(job, target, &root, &log_dir))
         .collect();
     let duration_ms = watch.elapsed_ms();
     print_reports(&reports);
@@ -161,7 +161,7 @@ fn refuse_golden_update(update_golden: Option<OsString>) -> Result<()> {
     Ok(())
 }
 
-fn run_job(job: &Job, root: &Path, log_dir: &Path) -> JobReport {
+fn run_job(job: &Job, target: &str, root: &Path, log_dir: &Path) -> JobReport {
     let mut report = JobReport {
         name: job.name,
         outcome: Outcome::NotImplemented,
@@ -179,6 +179,7 @@ fn run_job(job: &Job, root: &Path, log_dir: &Path) -> JobReport {
     eprintln!("{}", job.name);
     let watch = Stopwatch::start();
     let mut ctx = JobCtx::new(root, log_dir, job.name);
+    ctx.target = target;
     let result = machine_lock(job).and_then(|_lock| run(&mut ctx));
     if let Err(err) = &result {
         eprintln!("  {err:#}");

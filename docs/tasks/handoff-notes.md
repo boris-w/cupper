@@ -290,6 +290,26 @@
 | T046 | CLI 上报在场可以用 `Client::notify::<ClientPresence>`；索引不采信 CLI 的在场（只采信前台的 `desktop_ui`） | T100 |
 | T036 | `AgentsUpdated.git` 现在为空：`GitTool` 不知道 git 和 git-lfs 的版本。设置页要显示时，把 T094 的 git 版本检测结果接进来 | T100 |
 | T068 | 缺陷（T109 起）：`orchestrator/session/actor.rs` 的 `rescan` 用 `tokio::spawn` 另起任务，没有持有静止屏障的 `Hold`；任务里有数据库读取、git 子进程和 `spawn_blocking`，违反 T047 的规则（另起的 task 要持有 `Hold` 直到交回结果）。进程级信任用例里 `test/clock_advance` 可能在重扫完成前就返回。按 1.2 的上限就地修 | T100 合并时发现 |
+| T080 | ui-core 的路由是一个小状态路由，形状 `Route = {page:"new", projectId?} \| {page:"session", sessionId}`，`RouterProvider` 持有、`useRouter()` 给出 `{route, navigate}`，没有 URL；布局状态在 `layout/store.ts`，偏好键 `layout.sidebarOpen`、`layout.sidebarWidth`、`layout.sidePanelOpen`、`layout.sidePanelRatio`。接管状态时：连续快速按手柄键，主进程回传的旧 prefs 值会让宽度短暂跳回，按序号丢弃过期回传。`ui-core` 禁止 import `electron`、`node:*` 的 ESLint 规则还没加 | T084 |
+| T081、T086、T083 | ui-core 的插槽：`sidebarHeader`、`sidebarList`、`sidebarFooter`（T081）；`newSessionComposer`、`sessionComposer`（T086、T083）。默认的侧边栏头部是"Cupper"加宿主状态点，T081 替换。token 写法：颜色是 `light-dark()`，`data-theme` 固定主题；Tailwind `@theme static`，只有 `tokens.css` 定义过的 token 能生成工具类；用户状态（宽度等）只经 `style={{...}}` 写入 | T084 |
+| T152 | 侧边面板开合的 spring 动画（0.5 s，bounce 0.1）没有做 | T084 |
+| T153 | 顶栏的"打开"和"⋯"目前是占位按钮（T128 换成工具栏按钮并能挂菜单），菜单内容归本任务 | T084 |
+| T106 | 侧边面板的默认宽度按 ui-spec 2.4 的公式 `max(320, min(窗口高×1.6, 主区宽−500), min(640, 主区宽−352))`，默认窗口下得 640，主区只剩 352；公式在 ui-spec 里标为【推测】，请核对 | T084 |
+| T134 | 取真实输入证据用 `guardOf(event.sender)?.take()`（`apps/desktop/src/main/input/`）；证据的 `key` 为 `escape` 时由本任务拒绝，Esc 不能触发特权操作。窗口桥只对幂等方式为 `command` 的方法消耗输入，读请求和通知不消耗 | T077 |
+| T078 | 窗口桥为了认出宿主的回应（`command_id` 重发表），入方向每个字节在主进程里多一次复制（`FrameDecoder` 的拼接），JSON 只在重发表非空时解析；测量主进程事件循环延迟时一并评估 | T077 |
+| T090、T092 | Q26 已在 Electron 44.9.0 上复测（设计 13 的 Q26 已关闭）：Playwright 的键盘输入不触发 `before-input-event`，不会被记成真实输入；e2e 的按键要经 `webContents.sendInputEvent` 发出；`page.click()` 产生同一按钮的 `mouseDown`、`mouseUp`。复测脚本在 `docs/tasks/T077-desktop-input-privileged/q26/` | T077 |
+| 作者（MAN-keyboard） | 实体键盘确认四项：Enter 批准、Esc 拒绝、数字键选择并提交、输入法选词时不触发。清单在 `docs/tasks/T077-desktop-input-privileged/notes.md`；涉及请求面板的部分要等 T083 做出面板。执行后按 `tests/ids.toml` 末尾的格式登记证据 | T077 |
+| T081、T082、T083、T086 等界面任务 | 截图用例照 `tools/ui-screenshots` 的 notes"后续界面任务怎样加用例"：spec 标题以编号开头；`open(page, fixture)` 打开（夹具可设 `info` 与 mock 宿主的 `methods`，页面上有 `window.cupperShell`、`window.cupperHost`）；`pnpm ui:baseline` 生成基线，看图后连同 `meta.json` 一起提交；新文案出现字体子集外的字时 `fonts.test.ts` 报错，按 notes 重做子集。主文档的 CSP 现在在 `@cupper/shell-api` 的 `csp.ts` | T118 |
+| T090 | 截图回归用 Playwright 自带的 Chromium（156），App 的 Electron 44 是 Chromium 152；如果以后要求截图引擎与 App 一致，改用 `_electron` 驱动 | T118 |
+| T133 | 实现 `elevation::Requesters`（`examine(AuditToken) -> Examined`：`Clear(VerifiedRequester)` 或 `Descendant { signals }`），在 supervisor 里把 `Arc::new(FailClosed)` 换掉；`examine` 收到的是连接的固定令牌；`signals` 原样进审计。另加第二道防线：网关 `Granted::widen` 只靠索引的定时器撤销，自身不核对 `expires_at`，给网关一个 `Clock`，在 `widen` 里也按 `expires_at` 判断（索引 actor 卡住时授权不会超过 15 分钟） | T038 |
+| T134、T090 | `auth/elevation_respond`：不认识的 `decision` 按拒绝，`scopes` 只取申请范围之内的；`auth/elevation_get` 对已不在未决的申请回 `not_found`；授权到期时间在 `clients.updated` 的 `elevated.expires_at`；`auth/elevate` 被拒回 `granted: []`、过期回 `timeout`、限频回 `rate_limited` 带 `retry_after_ms` | T038 |
+| T059 | `conn.accepted` 审计记录里的对端可执行文件路径、签名 identifier、Team ID 还没填（`gateway/audit.rs` 开头的注释仍写"归 T038"，改掉）；T133 在 `cupper-sys` 加了按审计令牌取签名身份的函数，可以直接用。另有边界情况：`elevation.requested` 写入失败时，之后的 `elevation.resolved` 在视图里找不到申请 | T038 |
+| T036 | 特权操作 `settings` 现在返回 `failed`（`unsupported`）：`settings/update` 接上后，照 `set_config` 的结构补上：`policy/describe`（`security_setting`）→ 原生确认框 → `settings/update`（`apps/desktop/src/main/privileged/actions.ts`） | T134 |
+| T135 | 提权框加"申请方不是本 App 自带的命令行工具"：在 `apps/desktop/src/main/privileged/dialogs.ts` 的 `elevationBox` 里按 `VerifiedRequester.bundled_cli` 加一行醒目提示，文案放 `privileged` 命名空间；信任项目、新建会话的确认框要显示项目路径（`project/trust_info`、`policy/describe` 的 `details` 现在都只有 `project_id`） | T134 |
+| 所有写中文文案的任务 | 截图夹具的中文字体是 GB2312 符号区加一级汉字的子集，T118 的 `fonts.test.ts` 检查全部 locale 文件；`⚠` 这类符号不在子集里，会让检查失败（T134 合并时遇到，改成了"【注意】"）。需要子集外的字时按 `tools/ui-screenshots` 的 notes 重做子集 | T134 合并 |
+| T082、T083 | 行类型注册表在 `packages/ui-core/src/rows/registry.tsx`：`RowRegistry<R extends {kind: string}>` 的 `register`、`resolve`，`<RowView registry row>` 按 kind 画出组件；同一个 kind 注册两次抛错；不认识的 kind 只显示一句占位（不渲染行里的数据）。可以各建一个实例或共用一个，在模块加载时注册 | T128 |
+| T153 | 顶栏"打开"和"⋯"已是挂着空菜单的工具栏按钮（`<Menu trigger={<ToolbarButton …/>}>`），菜单项归本任务 | T128 |
+| T106、T152 | 待核对：侧边面板被自动收起时，开关仍显示为按下（跟随用户意图）；开关滑块用 `--color-surface-elevated`，暗色下偏深；tooltip 阴影在 ui-spec 3.6 有、5.7.10 没有 token | T128 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
