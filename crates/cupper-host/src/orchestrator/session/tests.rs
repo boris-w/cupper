@@ -377,6 +377,14 @@ impl Fixture {
         serde_json::from_value(created["session_id"].clone()).unwrap()
     }
 
+    /// The bytes `blob/get` sends of blob `hash`.
+    pub async fn blob(&self, hash: &Value) -> Vec<u8> {
+        let mut peer = Peer::new(harness());
+        let params = json!({"hash": hash});
+        peer.call(&self.routes, "blob/get", params).await.unwrap();
+        peer.blob
+    }
+
     /// Subscribes to session `id`'s stream, and lets the subscription go.
     pub fn subscribe(&self, id: &SessionId) {
         let stream = json!({"stream": StreamId::Session(id.clone())});
