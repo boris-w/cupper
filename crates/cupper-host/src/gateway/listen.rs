@@ -127,7 +127,7 @@ fn private_dir(dir: &Path) -> Result<(), ListenError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gateway::testkit::TempDir;
+    use crate::gateway::testkit::{TempDir, alone};
 
     fn mode(path: &Path) -> u32 {
         fs::symlink_metadata(path).unwrap().mode() & 0o777
@@ -135,6 +135,11 @@ mod tests {
 
     #[test]
     fn host_lock_is_held_once_and_names_its_holder() {
+        // Taking the lock again right after letting go fails while a
+        // process another test starts holds a copy of its fd.
+        if !alone("gateway::listen::tests::host_lock_is_held_once_and_names_its_holder") {
+            return;
+        }
         let dir = TempDir::new("lock");
         let lock = HostLock::acquire(dir.path()).unwrap();
         let pid = fs::read_to_string(dir.path().join("host.lock")).unwrap();
