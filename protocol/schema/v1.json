@@ -9901,7 +9901,8 @@
           "conflict/digest_mismatch",
           "conflict/too_early",
           "expired",
-          "forbidden"
+          "forbidden",
+          "not_found"
         ],
         "x-idempotent": "command",
         "x-milestone": "M1a",
