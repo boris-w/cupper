@@ -78,3 +78,62 @@
 
 - 测试辅助按 `CARGO_TARGET_DIR`（缺省为工作区的 `target/`）和当前 profile 推出 `target/<profile>/cupper-fake-agent`；文件不存在时提示先 `cargo build -p cupper-fake-agent`，不在测试里调用 cargo。
 - `xtask ci` 的 rust 作业在跑测试之前，先构建一次 `cupper-fake-agent`。
+
+## 收窄之后（裁定：方案一）
+
+### 实际规模
+
+按 `git diff --numstat`（相对估计提交 5de77db，不含 `Cargo.lock`）：新增 1,590 行、删除 35 行。实现约 1,360，测试约 230。上限约 1,500，硬线 1,600。
+
+| 模块 | 文件 | 新增 |
+|---|---|---|
+| 拉起、核对、内容与回答的转换 | `driver/runtime/launch.rs`（含核对函数的单测 26 行、`fake_agent` 13 行）、`content.rs`，`manifest.rs`、`api.rs` 的两个错误类 | 约 520 |
+| `AgentRuntime` actor | `driver/runtime/mod.rs` | 670 |
+| 宿主退出时的会话 | `turn.rs` 的 `HostExit`，`session/actor.rs`、`manager.rs` 的停止信道与 `Part` | 约 70（另有测试 36） |
+| 宿主组装与发现 | `supervisor/mod.rs`、`locate/mod.rs` 的 `boundaries()` | 约 127 |
+| 测试 | `runtime/tests.rs`、`tests/lifecycle.rs`、xtask 构建假 agent | 约 156 |
+
+超出约 1,500 的主要原因：`mod.rs` 比草估（350 + 150 + 220 的一部分）多，实例结束的顺序处理（见下）和请求撤回的路由占了不少；协调要求把发现链拆成独立函数，又多了约 20 行。
+
+### 做法与取舍
+
+- **一个实例一条线**：回复、更新、`Started`、`Exited` 都经同一个按实例的信道送进 actor，`Started` 一定在 `Exited` 之前；连接的 `Closed` 也在这条线上。**实例在"进程已退出"且"连接已关闭"两者都到之后才结束**，这样适配器最后写出的更新不会丢。进程退出时，再给它的进程组发一次 SIGKILL，让组里残留的进程放开管道。
+- 退出状态先写进 `adapters` 表（等写线程提交），再广播 `AdapterExited`。
+- `$/cancel_request` 撤回的请求只发给提出它的会话（`AskWithdrawn`）；会话答 `Cancelled` 之后，`Responder` 才回给 agent。
+- cwd 在 `session/new`、`session/resume` 之前统一 `canonicalize`（K13），不依赖调用方。
+- 选项在 attach 时逐个 `set_config_option`，只设与当前值不同的。
+- `Part::stop(force)`：会话先停，强制时运行中的回合立即 `interrupted`（不等结束快照），请求 `expired`（`host_restarted`），队列以 `turn_interrupted` 暂停、不再出队；运行时随后给适配器进程组发 SIGTERM（强制时 SIGKILL），等实例结束。没有超时，5.6.8 的完整顺序是 T008 的。
+- **发现链**：`supervisor::discover(login_env, clock, durations, reader) -> Discovery { host, login, locator }`。`host` 是宿主自己的环境，`login` 是登录 shell 的环境（`test_config.login_env` 可以覆盖），`locator` 是建在登录 PATH 可信条目上的 `CliLocator`（边界是所有未移除项目的路径加系统临时目录）。`launch::production(..., host, login, &locator)` 复用它。T034 的 `GitTool` 可以从同一个 `locator`（`tool("git")`、`trusted_path()`）取。
+- 登录 shell 按设计 5.6.6 在宿主启动时跑一次（5 秒超时），会推迟套接字开始监听的时间。IT-lifecycle 的宿主一律传空的 `login_env`，测试不会跑用户的登录 shell，也不会跑真实的 `claude --version`。
+
+### 假 agent 的路径（已落实）
+
+- `launch::fake_agent()`（`test` 或 `test-harness`）：从测试二进制所在的 `target/<profile>/deps/` 往上一级，取 `target/<profile>/cupper-fake-agent`；文件不在就失败并提示先 `cargo build -p cupper-fake-agent`。测试里不调用 cargo。
+- `xtask ci` 的 rust 作业在 `cargo test` 之前加了一步 `fake-agent`（`cargo build -p cupper-fake-agent --locked`）。
+
+### 交接
+
+- **T008**：
+  - 重启目前没有退避：实例结束后，下一次 attach 立即拉起新实例；
+  - `stop` 没有限时；
+  - 只给适配器自己的进程组发信号。如果一个 `setsid` 的孙进程拿着适配器的 stdout，连接就一直不 `Closed`，实例就一直不结束。所以枚举后代的进程组、逐组发信号这一步要在实例结束之前完成。
+- **T009**：
+  - attach 返回的能力里，命令列表是空的；
+  - `AuthStatus` 被忽略；`Probe` 命令被丢弃；
+  - `agent_capabilities` 表还没有写入。
+- **T044**：`SetConfig` 命令被丢弃（attach 时的选项已经设置）。
+- **T140**：`Steer` 被丢弃。
+- **T056**：生产路径要用到的两个文件，都要按内嵌清单 `files` 核对：
+  - `<数据目录>/runtime/node`，对应清单里的 `Helpers/node`；
+  - `<数据目录>/runtime/bundle-claude-acp.mjs`，对应 `Resources/runtime/bundle-claude-acp.mjs`。
+  
+  实际目录布局由 T056 定，届时改 `launch::production` 里的两个路径即可。
+- **T034**：发现链见上。现在的边界只有项目路径；工作区和 worktree 的根目录要等它们出现后再加。
+- 第二种 agent 接进来时，需要一个自己的 `ActorKind`，因为 `AGENT_RUNTIME` 只能登记一次。
+
+### 范围外的发现
+
+- `driver/tap/mod.rs` 指向 `diag::redact` 的文档链接已经能解析（`diag::redact` 是公开的）。`RUSTDOCFLAGS=-D warnings cargo doc` 失败另有两处，都是指向私有项的链接，这次一并改了，各改一行：
+  - `driver/probe/login_shell.rs` 的 `KEPT`（T094）；
+  - `orchestrator/session/mod.rs` 的 `actor`（T043）。
+- `orchestrator::testkit` 改为 `pub(crate)`，供运行时的测试使用。
