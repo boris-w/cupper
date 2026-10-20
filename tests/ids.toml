@@ -421,6 +421,11 @@ UNIT-commands-dedup = "pr"
 milestone = "M1a"
 IT-runtime-install = "pr"
 
+# 运行时安装器 II：按锁文件下载与本机打包（计划 v1.3.20 由 T056 拆出）
+[T115]
+milestone = "M1a"
+IT-runtime-download = "pr"
+
 # （条件）Q8 后备：同一种 agent 的 prompt 全局串行（K1 已通过，不触发）
 [T057]
 milestone = "M1a"
