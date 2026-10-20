@@ -352,10 +352,14 @@ GOLD-A-claude-s07b = "pr"
 GOLD-A-claude-s09 = "pr"
 GOLD-A-unknown-enums = "pr"
 GOLD-A-tool-fields-claude = "pr"
-GOLD-A-option-map-claude = "pr"
-UNIT-option-map-claude = "pr"
 UNIT-capabilities = "pr"
 UNIT-capabilities-plan = "pr"
+
+# Claude 选项对照表与档位表（计划 v1.3.14 由 T053 拆出）
+[T095]
+milestone = "M1a"
+GOLD-A-option-map-claude = "pr"
+UNIT-option-map-claude = "pr"
 
 # CLI 发现、登录 shell 环境与可信 PATH
 [T054]

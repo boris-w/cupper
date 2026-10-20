@@ -72,3 +72,15 @@
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 1,690 行（按 T052 的偏差可能到 1,800–1,900），在写代码之前停下汇报，并建议拆成两部分。
+
+**裁定：拆分（计划 v1.3.14），但能力提取留在本任务。** T055 的能力缓存要用能力提取，留在这里，T055 就只依赖本任务；本任务在剩余关键路径上，拆分是为了缩短它的实际工期。
+- **T053 收窄为**：`driver/api.rs` 的改动（`Ask` 的 `tool_call_id`、`ToolStart` 的 `cwd`、`ToolUpdate` 的命令和路径、金样例用的 `Serialize`）、合并器（应用新字段，结束时按 `missing_required(true)` 降为 `partial`）、Claude 提取层、交互请求的分类与构造（选项先按 5.3.6 的"按 kind 兜底"和"kind 未知"两行，结果保守）、配置项按 category 透传、**能力提取**、A 层运行器与"每份录制都有金样例"、xtask 的 `UPDATE_GOLDEN` 检查。验收 GOLD-A-claude-*（含其余 Claude 录制，由你追加编号）、GOLD-A-tool-fields-claude、GOLD-A-unknown-enums、UNIT-capabilities、UNIT-capabilities-plan。上限约 1,400 行，硬停止线 1,500。
+- **新增 T095**（依赖 T053）：按工具区分的选项对照表与前缀风险（Q7）、档位表、"取值都在表里"的检查（GOLD-A-option-map-claude、UNIT-option-map-claude），换下按 kind 兜底并重新生成 s04、s04b、s05 等受影响的金样例。T044 改为也依赖 T095。`tests/ids.toml` 已在 main 上改好。
+
+执行者核对出的几点（SDK 能解析全部 11 种更新、命令参数流式补全、工具调用不带 cwd 要取会话工作目录、合并器要多记必填字段的状态）都按其估计纳入。compaction 照常处理，宿主不声明 `session.compaction` 时适配器是否照推，留给兼容剧本（T064、T066）核对。
+
+**交接（T088，已合并）**：`DriverEvent::Ask` 带上 `toolCallId` 之后，在 `SessionCore::write_held` 里填上 `item_id`。这一步属于本任务对 `api.rs` 的改动，请一并做。
