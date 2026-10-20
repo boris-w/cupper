@@ -4,6 +4,7 @@
 //! trust comes from the host binary's signature. This module parses the
 //! fields the host uses; the runtime installer (T056) adds its own here.
 
+use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
 use serde::Deserialize;
@@ -24,6 +25,31 @@ pub fn embedded() -> &'static Manifest {
 pub struct Manifest {
     pub cli: Cli,
     pub env: EnvClasses,
+    pub node: Pinned,
+    pub claude_agent_acp: Pinned,
+    /// The runtime's files by their path in the app bundle.
+    pub files: BTreeMap<String, FileHash>,
+}
+
+/// The node of the runtime, as the manifest names it in `files`.
+pub const NODE: &str = "Helpers/node";
+/// claude-agent-acp's bundle, likewise.
+pub const CLAUDE_BUNDLE: &str = "Resources/runtime/bundle-claude-acp.mjs";
+
+/// A pinned component's version.
+#[derive(Debug, Deserialize)]
+pub struct Pinned {
+    pub version: String,
+}
+
+/// What a runtime file must hash to before it runs (ADR-08).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct FileHash {
+    /// Lowercase hex.
+    pub sha256: String,
+    /// The code directory hash of a signed executable, lowercase hex.
+    #[serde(default)]
+    pub cdhash: Option<String>,
 }
 
 /// The CLI versions the pinned adapters were verified with (design 5.6.6).

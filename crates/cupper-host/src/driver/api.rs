@@ -310,6 +310,10 @@ pub enum AgentErrorClass {
     ModelUnsupported,
     QuotaExhausted,
     Other,
+    /// No CLI was found (design 5.6.6).
+    CliMissing,
+    /// The runtime failed its check, or the adapter did not start or connect.
+    RuntimeFailed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -335,6 +339,8 @@ impl AgentErrorClass {
             Self::ModelUnsupported => FailureCode::ModelUnsupported,
             Self::QuotaExhausted => FailureCode::QuotaExhausted,
             Self::Other => FailureCode::Other,
+            Self::CliMissing => FailureCode::CliMissing,
+            Self::RuntimeFailed => FailureCode::RuntimeFailed,
         }
     }
 }
