@@ -50,7 +50,7 @@ pub use attach::{ProjectConfig, attach};
 pub use describe::{Confirmable, DescribeError, Facts, describe};
 pub use input::{MIN_ANSWER_DELAY, Pending, git_revert, requires, respond};
 pub use method::{method, set_config, settings_update};
-pub use tier::{ceiling, option_tier, tier_change};
+pub use tier::{ceiling, option_tier, rank as tier_rank, tier_change};
 
 /// Why the policy refuses, as a semantic code (design 5.3.8).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

@@ -11,6 +11,7 @@ use cupper_protocol::error::RpcError;
 use cupper_protocol::ids::{ConnId, PrincipalId, RequestId, SessionId};
 use cupper_protocol::interaction::InteractionOutcome;
 use cupper_protocol::methods::handshake::{ClientIdentity, Principal};
+use cupper_protocol::session::ConfirmationReason;
 use cupper_protocol::sync::{ResyncReason, StreamId, SubscribeMode};
 use cupper_sys::{Refusal, RefusalKind};
 use tokio::sync::mpsc;
@@ -22,7 +23,8 @@ use crate::clock::Clock;
 pub struct AuditRecord {
     /// Milliseconds since the Unix epoch.
     pub at_ms: u64,
-    pub conn: ConnId,
+    /// `None` for what a session records of its own (`config_unconfirmed`).
+    pub conn: Option<ConnId>,
     pub event: AuditEvent,
 }
 
@@ -70,6 +72,15 @@ pub enum AuditEvent {
         outcome: InteractionOutcome,
         principal: PrincipalId,
     },
+    /// `session.config_unconfirmed`: a session's tier is above what its
+    /// setter may set, or `full_access` without a native confirmation
+    /// (design 5.2.6).
+    ConfigUnconfirmed {
+        session_id: SessionId,
+        reason: ConfirmationReason,
+        /// The permission mode the agent reported.
+        mode: Option<String>,
+    },
 }
 
 /// One connection's way into the audit channel.
@@ -95,7 +106,7 @@ impl Auditor {
 
     pub fn record(&self, event: AuditEvent) {
         let at_ms = self.clock.now_wall_ms();
-        let conn = self.conn.clone();
+        let conn = Some(self.conn.clone());
         // Nobody listening is the receiver's choice.
         let _ = self.records.send(AuditRecord { at_ms, conn, event });
     }

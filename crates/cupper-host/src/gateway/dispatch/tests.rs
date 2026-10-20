@@ -348,7 +348,6 @@ const ALLOWED: &[(&str, Why)] = {
         ("host/prepare_upgrade", Until("T183")),
         ("project/remove", Later(M1b)),
         ("session/archive", Later(M1b)),
-        ("session/confirm_config", Until("T044")),
         ("session/list_archived", Later(M1b)),
         ("session/queue_edit", Later(M1b)),
         ("session/rename", Later(M1b)),
