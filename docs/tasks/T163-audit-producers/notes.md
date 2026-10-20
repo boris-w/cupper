@@ -46,3 +46,43 @@
 - 这时还没有项目，也就没有信任状态在变化；
 - 失败已经作为 `project/add` 的错误回给了调用者；
 - 5.8.6 的 `project.trust.*` 记的是项目信任的变化，按路径另记一笔，还要为脱敏后的路径单独定格式，不值得。
+
+## 统计（`git diff --numstat`，只算 `crates/`）
+
+| 提交 | 增 | 删 |
+|---|---|---|
+| `host.*` 与有序退出的审计（含三类新事件的正式格式） | 303 | 56 |
+| `git.unsafe_repo_config` | 60 | 0 |
+| `privileged.executed` | 90 | 6 |
+| `admit` 的 `verify` 移进 `spawn_blocking` | 13 | 7 |
+| **合计** | **466** | **69** |
+
+净增 397 行，贴着约 400 的线。估计是 300，多出来的主要在三处：
+- 写入 task 改成能排空之后，原来的循环体挪进了 `store()`，增删各 40 行左右，算是搬动；
+- 三类新事件的正式格式比估计长；
+- `privileged()` 的判定。
+
+写到这里功能已经齐了，没有继续加东西。
+
+## 过程记录
+
+- **有序退出**：`Host::exit` 的顺序改为：
+  1. 发 `host.exiting`（`Exit` 的代码与是否强制）；
+  2. 停各部分；
+  3. `close_all`（从最后挪到这里）；
+  4. 排空审计写入：写入 task 带 `biased` 先取记录，排空请求只在没有待写记录时才回复；
+  5. 写 `last_clean_exit_at`、停写线程。
+  - 退出码、`orderly exit` 日志、`host/shutdown` 都没变；IT-host-exit、IT-idle-exit、IT-self-check 照常通过。
+- **`host.*`**：
+  - `host.started` 带版本；`host.weak_auth` 只在 `dev-auth` 构建发出（与 `host.updated.weak_auth` 同一个判断）；
+  - `host.pending_upgrade` 在监护执行 `Close(PendingUpgrade)` 时发出，自检和安装器的 `BundleChanged` 都走这里；
+  - `host.exiting` 在 `Host::exit` 开头发出。
+- **`git.unsafe_repo_config`**：发在 `index::projects::locate`。`project/add`、`trust`、`trust_info` 和会话重扫都经过这里，`ScanContext` 加了审计发送端。
+  - 原因与工作区内的文件或键由新加的 `GitError::refusal()` 给出：`writable`、`unresolved`、`origin`、`unnullable`、`malformed`、`required_filter`。
+  - 命令类别目前只有 `rev_parse`：仓库档别的调用（worktree 等）还没有经过审计的入口，以后接进来时照这里做。
+- **`privileged.executed`**：网关在应答成功之后发出。
+  - 范围：scope 为 `privileged` 的方法，只读的 `policy/describe`、`auth/elevation_get` 除外；以及 `settings/update` 带安全相关键的调用。
+  - action 和 details 用 `Confirmable::parse` 加 `describe(Facts::default())`，只取不需要会话事实的那些；`host/exit force` 一类要看运行中回合数的，action 记为空。
+  - 会话层要 privileged 的操作（切到 `full_access`、选 privileged 选项）由会话 actor 判定，网关看不到，这次没有记，交接。
+- **`admit` 的 `verify`**：移进 `spawn_blocking`，原处 `await` 结论，结论出来之前连接不往下走；检查本身出错按"不是 UI"处理。
+- **另一处同步调用 Security 框架的地方**：`Gateway::serve` 在接受连接的循环里同步调用 `SelfCheck::check`（T059），它走 `file_cdhash`。我没有改，在汇报里提出。
