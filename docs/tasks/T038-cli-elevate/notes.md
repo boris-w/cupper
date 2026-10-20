@@ -85,3 +85,20 @@ pub struct FailClosed;
 - 网关的 `Opened` 多带两项：连接的固定令牌（`token: AuditToken`）和一个共享格子（`granted: Arc<Granted>`）。`Dispatch` 与 `IndexActor` 拿的是同一个格子。
 - **每次调用在受理时读这个格子**：`Dispatch::admit` 和交给执行者的 `Call.principal` 都是"原 scope 加上格子里的 scope"。撤销之后受理的调用按撤销后的 scope 判定；已经受理、正在执行的调用照常完成。
 - `clients.updated` 的 `elevated` 也从这个格子取。
+
+## 进度与停下的原因（第一个模块之后）
+
+| 完成的模块（提交） | 新增 / 删除 | 其中测试 | 估计（实现 + 测试） |
+|---|---|---|---|
+| 提权纯核心、`Requesters` 接口与 `FailClosed`、四个时长（`feat(host): the elevation core ...`） | 490 / 0 | 152 | 260 + 120 |
+
+核心比估计多约 110 行，主要是 rustfmt 展开的结构体字面量和动作枚举。按剩下的部分逐项细估：
+
+| 剩下的模块 | 内容 | 估计 |
+|---|---|---|
+| 网关 | 共享的已授 scope 格子；`Opened` 带令牌和格子；`Dispatch` 受理时合并 scope（`admit`、`begin`、`call`）；`Clients::info` 的 `elevated`；测试用 `Peer` 能指定连接号和格子 | 90 |
+| 审计事件 | `AuditEvent::Elevation`（申请、批准、拒绝、过期、因血缘被拒、被限频、撤销） | 20 |
+| `IndexActor` 接线 | `IndexDeps` 加 `requesters`、审计发送端；邮箱加 `Opened`、`Closed`、`Examined`；定时器（`Alarm`、`TimerTable`）；三个方法；把核心的动作落成回复、事件、审计、格子与 `clients.updated`；`Routes::index` 登记；`supervisor` 接线 | 200 |
+| IT-elevation-grant | 进程内：索引、路由、两个 CLI `Peer` 与一个 control `Peer`，真实的固定令牌（socketpair 取自己的令牌），测试用 `Requesters`；授予后能写、另一条连接不能；断开与 15 分钟撤销；`ManualClock` | 200 |
+
+**推算约 1,000 行**，超过约 900 的上限、碰到 1,000 的硬停止线，按裁定停下汇报。
