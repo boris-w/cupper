@@ -1,0 +1,25 @@
+/* The main document's styles: Tailwind's preflight and utilities over the tokens. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "./tokens.css";
+
+/* The app's renderer is the Vite root, so the classes in ui-core are listed here. */
+@source "..";
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    overflow: hidden;
+    background: var(--color-surface);
+    color: var(--color-fg);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    font-weight: var(--font-weight-normal);
+    -webkit-font-smoothing: antialiased;
+  }
+}
