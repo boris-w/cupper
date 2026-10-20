@@ -2496,6 +2496,7 @@ export const zProjectTrustInfoResult = z.object({
   diff_omitted: z.int().gte(0).lte(4294967295).nullish(),
   findings: z.array(zFinding),
   findings_omitted: z.int().gte(0).lte(4294967295).nullish(),
+  path: zWirePath,
   state: zTrustState,
   trust_digest: zDigest,
 });

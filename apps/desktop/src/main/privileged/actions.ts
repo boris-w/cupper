@@ -13,7 +13,6 @@ import type {
   ProjectTrustInfoResult,
   SessionCreateResult,
   SessionGetResult,
-  TrustScan,
 } from "@cupper/protocol";
 import type { PrivilegedAction, PrivilegedResult } from "@cupper/shell-api";
 import type { MessageBoxOptions } from "electron";
@@ -50,8 +49,11 @@ async function described(cx: Cx, method: string, params: Record<string, unknown>
     method,
     params: command,
   });
-  const mode = typeof description.details.mode === "string" ? description.details.mode : undefined;
-  return { command, mode };
+  const text = (key: string) => {
+    const value = description.details[key];
+    return typeof value === "string" ? value : undefined;
+  };
+  return { command, mode: text("mode"), projectPath: text("project_path") };
 }
 
 async function title(cx: Cx, sessionId: string): Promise<string> {
@@ -146,9 +148,9 @@ async function confirmConfig(cx: Cx, sessionId: string): Promise<PrivilegedResul
 }
 
 async function createSession(cx: Cx, params: Record<string, unknown>): Promise<PrivilegedResult> {
-  const { command, mode } = await described(cx, "session/create", params);
+  const { command, mode, projectPath } = await described(cx, "session/create", params);
   const agent = typeof params.agent === "string" ? params.agent : "";
-  if (!(await asked(cx, box.createSessionBox(cx.t, agent, mode ?? ""))).yes) {
+  if (!(await asked(cx, box.createSessionBox(cx.t, agent, mode ?? "", projectPath))).yes) {
     return CANCELLED;
   }
   const created = await cx.host.command<SessionCreateResult>("session/create", command);
@@ -160,18 +162,17 @@ const digestChanged = (error: unknown) =>
   error.error.data?.code === "conflict" &&
   error.error.data.reason === "digest_mismatch";
 
-type Scan = Pick<TrustScan, "findings" | "findings_omitted" | "trust_digest">;
-
 /**
- * Asks to trust the project's configuration as `scan` lists it, and trusts
- * it; when it changed in the meantime, asks again about what it is now.
+ * Asks to trust the project's configuration as the host scans it now, the
+ * project named by the directory the host has for it, and trusts it; when it
+ * changed in the meantime, asks again about what it is then.
  */
-async function trust(cx: Cx, projectId: string, path?: string, scan?: Scan): Promise<boolean> {
+async function trust(cx: Cx, projectId: string): Promise<boolean> {
   const info = () =>
     cx.host.request<ProjectTrustInfoResult>("project/trust_info", { project_id: projectId });
-  let current = scan ?? (await info());
   for (let again = false; ; again = true) {
-    if (!(await asked(cx, box.trustBox(cx.t, path, current, again))).yes) {
+    const current = await info();
+    if (!(await asked(cx, box.trustBox(cx.t, current.path, current, again))).yes) {
       return false;
     }
     try {
@@ -182,7 +183,6 @@ async function trust(cx: Cx, projectId: string, path?: string, scan?: Scan): Pro
       if (!digestChanged(error)) {
         throw error;
       }
-      current = await info();
     }
   }
 }
@@ -197,7 +197,7 @@ async function addProject(cx: Cx): Promise<PrivilegedResult> {
     path,
   });
   // Nothing in the scan: the host trusted it on its own (`auto_empty`).
-  const trusted = scan.state === "trusted" || (await trust(cx, project_id, path, scan));
+  const trusted = scan.state === "trusted" || (await trust(cx, project_id));
   return { status: "confirmed", result: { project_id, trusted } };
 }
 

@@ -6120,6 +6120,10 @@
             "null"
           ]
         },
+        "path": {
+          "$ref": "#/$defs/WirePath",
+          "description": "The project's directory, as the host resolved it when it was added:\nthe native confirmation names the project by it."
+        },
         "state": {
           "$ref": "#/$defs/TrustState"
         },
@@ -6128,6 +6132,7 @@
         }
       },
       "required": [
+        "path",
         "state",
         "findings",
         "trust_digest"
