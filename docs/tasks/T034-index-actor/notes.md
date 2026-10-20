@@ -91,3 +91,24 @@
 3. **启动时按表对账，而不是只在"检查点作废、日志又已裁剪"时重发。** 每次启动都把视图和 `projects`、`sessions` 两张表比一遍，有差异就补发事件。这样不用判断日志是否完整。代价是启动时多一次查询，会话数在千级以内，可以接受。
 4. **`IndexNotes` 的扩充要改会话 actor**（T043、T088 的代码）。按方案 A，这部分归 T034b；我理解这是在范围之内的接线，请确认。
 5. **`host.updated.last_exit_abnormal`**：由启动时 epoch 判定的 `LastExit` 得出，需要 `Host::start` 把它传给 `IndexActor`。改动在 T037 的组装代码里，只有几行。
+
+## 拆分之后（计划 v1.3.19）
+
+编排者采用方案 A：本任务收窄为骨架与端口、`Part` 与检查点、启动第 7 步与对账、项目与信任（含帧上限）、`clients`、`host`、宿主组装与发现链；状态计算、已读与在场、通知意图、`agents` 归 T100。5 项待裁定都已认可。其中发现链写成独立函数，返回登录环境、`CliLocator` 和 `GitTool`，T055 复用。上限约 1,500 行，硬停止线 1,600。
+
+### 收窄后的估计（按模块，测试单列）
+
+| 模块 | 估计 |
+|---|---|
+| 协议：`findings_omitted`、`diff_omitted`（`pnpm gen`） | 10 |
+| `StreamWriter::checkpoint`（含测试） | 55 |
+| 发现链 `driver::discover`（登录环境 → `CliLocator` → `GitTool`） | 70 |
+| `index/mod.rs`：`IndexActor` 与句柄（`Port`、`IndexPort`、`IndexNotes`、`Part`）、消息、启动 | 200 |
+| `index/projects.rs`：add、trust、trust_info（慢操作在 task 里，写库与事件回到 actor） | 250 |
+| `index/budget.rs`：48,000 字节的预算（含单元测试 40） | 100 |
+| `index/reconcile.rs`：按表对账 | 100 |
+| `Routes`：`index` 只登记项目方法，已读与在场另起 `presence`（T100 调用） | 15 |
+| 宿主组装（发现链、启动第 7 步、第三个 `Part`、`last_exit_abnormal`） | 50 |
+| IT-project-add-trust | 250 |
+| 对账与检查点的用例 | 100 |
+| **合计** | **约 1,200** |
