@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { HostClient } from "@cupper/host-client";
-import { MockHost } from "@cupper/host-client/mock";
+import { decodeBlobChunk, FRAME_BLOB, HostClient } from "@cupper/host-client";
+import { hostError, MockHost } from "@cupper/host-client/mock";
 import type { Handshake } from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
@@ -72,7 +72,7 @@ async function setup(status = "idle", session: object[] = []) {
   const area = screen.getByRole("textbox");
   const requests = (method: string) =>
     mock.requests.filter((request) => request.method === method).map((request) => request.params);
-  return { ui, area, requests };
+  return { ui, area, requests, mock, conn };
 }
 
 const type = (area: HTMLElement, text: string) =>
@@ -191,5 +191,47 @@ describe("sending while the queue is paused", () => {
     expect(requests("session/queue_resume")).toEqual([
       expect.objectContaining({ session_id: "s_1" }),
     ]);
+  });
+});
+
+describe("UNIT-composer-long-text", () => {
+  // 90,000 bytes of UTF-8: past one frame's 64,000.
+  const long = "长".repeat(30_000);
+
+  test("text past the frame budget goes up as a blob and out as a text_blob", async () => {
+    const { area, requests, mock, conn } = await setup();
+    mock.handle("blob/put", () => ({ result: {} }));
+    type(area, long);
+    fireEvent.keyDown(area, { key: "Enter" });
+    await waitFor(() => expect(requests("session/send")).toHaveLength(1));
+    const [put] = requests("blob/put") as { hash: string }[];
+    expect(put).toEqual({ hash: expect.any(String), size: 90_000, media_type: "text/plain" });
+    const chunks = conn.frames
+      .filter((f) => f.type === FRAME_BLOB)
+      .map((f) => decodeBlobChunk(f.payload));
+    expect(chunks.map((c) => [c.hash, c.last])).toEqual([
+      [put?.hash, false],
+      [put?.hash, true],
+    ]);
+    expect(requests("session/send")).toEqual([
+      expect.objectContaining({ content: [{ type: "text_blob", blob: put }] }),
+    ]);
+    // What fits goes as text, with no upload.
+    type(area, "短的");
+    await act(async () => void fireEvent.keyDown(area, { key: "Enter" }));
+    expect(requests("session/send")[1]).toMatchObject({
+      content: [{ type: "text", text: "短的" }],
+    });
+    expect(requests("blob/put")).toHaveLength(1);
+  });
+
+  test("an upload that fails puts the draft back and says why", async () => {
+    const { area, requests, mock, ui } = await setup();
+    mock.handle("blob/put", () => hostError("too_large"));
+    type(area, long);
+    fireEvent.keyDown(area, { key: "Enter" });
+    await waitFor(() => expect(screen.getByText("消息没有发出（too_large）")).toBeTruthy());
+    expect(requests("session/send")).toEqual([]);
+    expect(ui.getState().drafts.s_1).toBe(long);
   });
 });
