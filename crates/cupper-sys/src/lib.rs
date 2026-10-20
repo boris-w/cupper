@@ -33,7 +33,7 @@ pub use peer::{
 };
 pub use proc::{
     ProcessInfo, StartTime, UniqueIds, descendants, parent_chain, pid_path, process_info,
-    unique_ids,
+    resident_size, unique_ids,
 };
 pub use runloop::{RunLoop, RunLoopStop};
 pub use spawn::{Child, Command, Stdio, spawn};

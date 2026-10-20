@@ -31,6 +31,7 @@ use tokio::net::unix::OwnedWriteHalf;
 use super::outbox::{Item, Outbox};
 use super::wire;
 use crate::clock::Clock;
+use crate::quiescence::Participant;
 use crate::store::Readers;
 use crate::store::log;
 use crate::store::streams::Published;
@@ -42,12 +43,14 @@ pub(super) async fn write_loop(
     mut writer: OwnedWriteHalf,
     outbox: Arc<Outbox>,
     clock: Arc<dyn Clock>,
+    participant: Participant,
 ) {
-    while let Some(mut items) = outbox.drain().await {
+    while let Some(mut items) = participant.idle(outbox.drain()).await {
         let coalesce = outbox.coalesce();
         let live = items.iter().any(|item| matches!(item, Item::Live { .. }));
         if live && !coalesce.window.is_zero() {
-            clock.timer_at(clock.now_mono() + coalesce.window).await;
+            let window = clock.timer_at(clock.now_mono() + coalesce.window);
+            participant.idle(window).await;
             items.extend(outbox.take());
         }
         let mut send = Send {

@@ -117,6 +117,8 @@ struct World {
     /// By item: its turn, whether it ended, whether it is a tool call.
     items: HashMap<ItemId, (TurnId, bool, bool)>,
     abandoned: HashSet<ItemId>,
+    /// Notices without a turn (`agent_restarted`, ...).
+    loose: HashSet<ItemId>,
     late: HashSet<(ItemId, TurnId)>,
     queue: (usize, bool),
     // The dequeue guard.
@@ -137,7 +139,8 @@ impl World {
         let clock = ManualClock::new();
         let ids = Arc::new(IdGen::seeded(Arc::new(clock.clone()), 1));
         let durations = Durations::default();
-        let session = SessionCore::new(SessionId::from_uuid(1), ids, &durations, false);
+        let setter = (crate::policy::testkit::column("UI control"), false);
+        let session = SessionCore::new(SessionId::from_uuid(1), ids, &durations, false, setter);
         Self {
             prop,
             d: CoreDriver::with_clock(session, clock),
@@ -158,6 +161,7 @@ impl World {
             completed: HashSet::new(),
             items: HashMap::new(),
             abandoned: HashSet::new(),
+            loose: HashSet::new(),
             late: HashSet::new(),
             queue: (0, false),
             advancing: false,
@@ -323,6 +327,7 @@ impl World {
                 In::Agent(DriverEvent::AdapterExited {
                     instance,
                     status: ExitStatus::from_raw(9),
+                    stderr: String::new(),
                 })
             }
             Op::Advance(_) => return None,
@@ -411,7 +416,7 @@ impl World {
                 self.running.clear();
             }
             Out::Event(body) => self.event(at, body),
-            Out::Machine(_) | Out::Driver(_) | Out::Answer(_) | Out::Timer(_) => {}
+            Out::Machine(_) | Out::Driver(_) | Out::Answer(_) | Out::Timer(_) | Out::Tier(_) => {}
         }
     }
 
@@ -466,6 +471,14 @@ impl World {
                     self.guard = silent.then_some(at);
                 }
             }
+            EventBody::ItemStarted(started) if started.turn_id.is_none() => {
+                assert!(
+                    matches!(started.item, Item::Notice(_)),
+                    "only notices go without a turn"
+                );
+                self.loose.insert(started.item_id);
+            }
+            EventBody::ItemCompleted(item) if self.loose.contains(&item.item_id) => {}
             EventBody::ItemStarted(started) => {
                 let turn = started.turn_id.expect("items go into a turn");
                 let running = self.current.as_ref().is_some_and(|(t, ..)| *t == turn);

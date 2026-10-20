@@ -264,6 +264,21 @@
 | 修复锁用例的偶发失败（待派） | `gateway::listen::tests::host_lock_is_held_once_and_names_its_holder` 偶发失败：释放 `host.lock` 后立刻再拿，报"已被占用"。应是 T021 查明的窗口（别的测试线程 `posix_spawn` 时 fd 表被短暂复制）。改成单独进程隔离（`cupper-sys` 的 `testutil::alone` 那样），或释放后在短时限内重试 | T034 |
 | T059（宿主启动接线） | 运行时安装器的后台校验：`Installer::new(runtime::plans(manifest::embedded()), Box::new(BundleDir::of_this_host()?), runtime::runtime_dir(&data_dir), in_use)`，放进 `spawn_blocking(move || installer.run(|s| tx.send_replace(s.clone())))`，状态写进索引流的 `agents`；要在宿主的 cdhash 自检之后才开始；`Failed(BundleChanged)` 时转入待升级；`in_use` 启动时为空 | T056 |
 | T111 | codex-acp 的文件在 `runtime::plan::split` 里加 | T056 |
+| T109 | 闸门用 `turn::Input::Gate(Some(PauseReason::ProjectConfigChanged))` 关、`Gate(None)` 开；闸门同一时刻只有一个原因，`config_unconfirmed` 和 `project_config_changed` 可能同时出现，要改成原因的集合 | T044 |
+| T089 | 设定者的完整 `Principal` 只在内存里，库里只有 `mode_set_by` 的 ID；恢复会话时按 ID 找回 principal 的类型和 scope，或者把恢复的会话一律视为由创建者设定 | T044 |
+| T059 | `AuditRecord.conn` 改成了 `Option<ConnId>`：会话自己发起的审计（例如 `config.unconfirmed`）没有连接；落盘时处理 `None` | T044 |
+| T008、驱动层的后续任务 | 越权改回经 `AgentPort::send(DriverCommand::SetConfig{..})` 发出，结果要以带全部选项的 `DriverEvent::ConfigChanged` 回到会话；`AgentPort::send` 的文档目前只列了 Prompt、Cancel、Close、Answer，补上 `SetConfig`，并确认 `AgentRuntime` 不再丢弃它（T055 交接时还在丢弃） | T044 |
+| T100 | `AgentNotes::agent(AgentStatus)` 是索引接 `agents` 状态的入口；宿主组装时现在传 `NoAgentNotes`，换成索引的实现（`IndexHandle` 实现它） | T009 |
+| 以后需要刷新 git 的任务 | `agents/refresh` 重新发现 CLI，但不刷新索引手里的 `GitTool`（启动时由 `git_tool` 从同一次发现得出）；用户装了或换了 git 之后要重启宿主才生效 | T009 合并 |
+| 新增 actor 或后台 task 的任务（T059、T100、T116 等） | 静止屏障（T047）：新的 actor 种类要在 `Host::start` 里登记，否则 IT-clock-advance 的种类枚举用例会失败；等待点包进 `Participant::idle(fut)`；脱离发起方的 task 持有 `Hold`，把结果交出去之后再释放。等待外部 I/O（适配器输出、子进程）不在屏障范围内 | T047 |
+| T117 | `test/seed` 要求先有一个项目；seed 返回时索引快照里已经有这些会话 | T047 |
+| T111 | `agents/restart` 调 `AgentRuntime::clear_crashed()`；Codex 的回收（超过 2 GiB，或 30 分钟没有回合）用 `AgentRuntime::resources()`（`watch` 接收端） | T008 |
+| T059 | 宿主启动时的残留清理读 `adapters.groups`（`[[pgid, start_us], …]`，T008 加的列）以及适配器自己的进程组 | T008 |
+| 会话侧显示错误详情的任务（MS-5） | `DriverEvent::AdapterExited` 已带 `stderr`（每个实例最后 64 KB），还没有写进 `error` 条目的详情 | T008 |
+| M1b 的信任确认界面（加"不加载项目配置继续"的协议方法） | 协议方法直接调宿主内部入口 `SessionManager::ignore_project_config(&SessionId)`：会话空闲时关闭 agent 会话，下一个回合以 `Ignore` resume，并去掉 `project_config_changed` 这个闸门原因。界面区分两种 notice：`notice{project_config_changed}` 没有 `params.reason` 表示项目配置的内容变了；有 `reason` 表示重扫失败（`workspace_missing`、`project_missing`、仓库档错误的 reason、`ScanError::code()`），按不可信处理 | T109 |
+| T089 | 从库恢复会话时：信任闸门的原因和"想加载项目配置"的标志只在内存里，可以从 `session.configured.project_config` 和恢复后的第一次重扫重新得出；"不加载项目配置继续"的选择（`ignore_for_good`）需要持久化，例如加一个会话行字段，否则重启后会话可能重新加载项目配置 | T109 |
+| T089、T061 | `actor.rs` 的 `rescan` 里 `std::fs::canonicalize` 在 tokio 任务里同步执行；这里再加文件操作时一起挪进 `spawn_blocking` | T109 |
+| T068 | IT-orch-trust-gating 只在进程内覆盖信任门控；进程级用例可以照它的 6 个场景（发 prompt 前变化、回合中变化后"继续"、未信任以 `Ignore` 运行、工作区消失、两个闸门原因的两种顺序、git 根目录的 `.claude/`）。会话夹具的项目是临时目录里真实存在的 `app/`；测试构建里有 `GitTool::with_test_env` | T109 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

@@ -199,7 +199,8 @@ CREATE TABLE adapters (
   cli_version     TEXT,
   started_at      INTEGER NOT NULL,
   ended_at        INTEGER,
-  exit_status     TEXT
+  exit_status     TEXT,
+  groups          TEXT                       -- 资源采样记下的后代进程组：[[pgid, start_us], …]（5.6.8）
 );
 CREATE INDEX adapters_live ON adapters(agent) WHERE ended_at IS NULL;
 

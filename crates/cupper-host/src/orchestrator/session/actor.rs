@@ -18,26 +18,33 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use cupper_protocol::annotations::TimestampMs;
+use cupper_protocol::canonical;
 use cupper_protocol::capabilities::{ConfigOptionId, SessionCapabilities as Capabilities};
 use cupper_protocol::domain::{PrincipalKind, ResolvedBy, Tier};
 use cupper_protocol::envelope::Cause;
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::{CommandId, PrincipalId, QueueId, SessionId, TurnId};
-use cupper_protocol::index::{PendingKind, SessionStatus, SessionSummary};
+use cupper_protocol::ids::{CommandId, PrincipalId, ProjectId, QueueId, SessionId, TurnId};
+use cupper_protocol::ids::{Digest, RequestId};
+use cupper_protocol::index::{PendingKind, SessionStatus, SessionSummary, TrustState};
+use cupper_protocol::interaction::InteractionOutcome;
 use cupper_protocol::interaction::InteractionRequest;
+use cupper_protocol::item::{NoticeCode, NoticeParams};
+use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::methods::interaction::{
     InteractionGet, InteractionGetParams, InteractionGetResult, InteractionRespond,
     InteractionRespondParams,
 };
 use cupper_protocol::methods::session::{
-    self as methods, Disposition as Wire, FallbackReason, SessionCapabilities, SessionGet,
-    SessionGetResult, SessionInterrupt, SessionInterruptParams, SessionInterruptResult,
-    SessionQueueResume, SessionSend, SessionSendParams, SessionSendResult,
+    self as methods, Disposition as Wire, FallbackReason, SessionCapabilities,
+    SessionConfirmConfig, SessionConfirmConfigParams, SessionGet, SessionGetResult,
+    SessionInterrupt, SessionInterruptParams, SessionInterruptResult, SessionQueueResume,
+    SessionSend, SessionSendParams, SessionSendResult,
 };
 use cupper_protocol::rpc::Method;
 use cupper_protocol::session::{
-    SessionConfigured, SnapshotPhase, SnapshotRecorded, SnapshotStatus, TurnStatus,
+    ConfirmationReason, ConfirmationRequired, PauseReason, ProjectConfig, SessionConfigured,
+    SnapshotPhase, SnapshotRecorded, SnapshotStatus, TurnStatus,
 };
 use cupper_protocol::view::SessionView;
 use rusqlite::OptionalExtension;
@@ -46,25 +53,47 @@ use tokio::sync::{mpsc, oneshot};
 
 use super::core::{Action, Input, Key, SessionCore};
 use super::rows::Rows;
-use super::{IndexNotes, internal, not_found, parse, tier_of};
+use super::{IndexNotes, internal, mode_tier, not_found, parse, tier_of};
 use crate::clock::Clock;
 use crate::driver::api::{
     AgentError, AgentPort, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent,
     ProjectConfigPolicy,
 };
+use crate::durations::Durations;
 use crate::gateway::{AuditEvent, AuditRecord, Call};
+use crate::git::GitTool;
+use crate::index::{ScanContext, git_of};
 use crate::ledger::{Outcome, Ticket};
 use crate::orchestrator::interaction::{self, Respond};
+use crate::orchestrator::notice_with;
+use crate::orchestrator::tier_guard;
 use crate::orchestrator::turn::{self, Disposition, SendMode, SendRequest, SteerFallback};
+use crate::policy;
 use crate::pure::{Alarm, Core, TimerTable};
 use crate::quiescence::Participant;
 use crate::store::streams::{Batch, StreamHandle, StreamView, StreamWriter};
 use crate::store::{Durability, Readers, Writer};
+use crate::trust::{self, Scan};
 
 /// A call and where its reply goes.
-pub(super) type Mail = (Call, oneshot::Sender<Outcome>);
+pub(super) enum Mail {
+    Call(Box<Call>, oneshot::Sender<Outcome>),
+    /// Leave the project's configuration out from now on (design 5.2.6:
+    /// "不加载项目配置继续"); the host's own entry until M1b's method.
+    IgnoreProjectConfig(oneshot::Sender<()>),
+}
 /// The host's exit, whether forced, and the reply once the session took it.
 pub(super) type Stop = (bool, oneshot::Sender<()>);
+
+/// What woke the actor.
+enum Next {
+    Mail(Option<Mail>),
+    Agent(DriverEvent),
+    Attached(Result<AttachInfo, AgentError>),
+    Rescanned(Purpose, Rescan),
+    Stop(Stop),
+    Alarm,
+}
 
 /// What the actor starts with: its session's stream, its agent, and what an
 /// attach adds to the turn machine's target (design 5.2.6).
@@ -93,6 +122,10 @@ pub(super) struct Parts {
     pub pending: Arc<AtomicU32>,
     pub audit: mpsc::UnboundedSender<AuditRecord>,
     pub index: Arc<dyn IndexNotes>,
+    pub project: ProjectId,
+    /// Finds the git root of the trust range (`Discovery::git`).
+    pub git: Option<GitTool>,
+    pub durations: Durations,
 }
 
 pub(super) struct SessionActor {
@@ -104,6 +137,36 @@ pub(super) struct SessionActor {
     inbox: mpsc::UnboundedReceiver<Mail>,
     events: mpsc::UnboundedSender<DriverEvent>,
     attached: mpsc::UnboundedSender<Result<AttachInfo, AgentError>>,
+    rescanned: mpsc::UnboundedSender<(Purpose, Rescan)>,
+    /// The session would load the project's configuration while trusted.
+    load_wanted: bool,
+    /// The gate is shut for `project_config_changed`.
+    project_gate: bool,
+    /// "不加载项目配置继续": the project's configuration stays out.
+    ignore_for_good: bool,
+    /// A `session/send` whose reply waits for the check before its turn.
+    deferred: Option<Command>,
+}
+
+/// Why the project's trust range is rescanned (design 5.2.6).
+enum Purpose {
+    /// Before a message turns into a turn.
+    Check,
+    Attach(AttachTarget),
+    TurnEnd,
+    /// While the gate is shut for `project_config_changed`: the project may
+    /// be trusted again.
+    Reopen,
+}
+
+/// What a rescan found.
+struct Rescan {
+    trusted: bool,
+    /// The project was trusted and is `stale` now: the index records it.
+    stale: bool,
+    /// Why the rescan failed; it then counts as untrusted.
+    failure: Option<String>,
+    scan: Option<Scan>,
 }
 
 /// A command on its way: its ledger ticket, its reply, and what the audit
@@ -113,12 +176,16 @@ struct Command {
     cause: Option<Cause>,
     reply: oneshot::Sender<Outcome>,
     audit: Option<AuditRecord>,
+    /// `session/send`: its reply may come with a later step.
+    deferrable: bool,
 }
 
 /// The reply a step gives a command.
 enum Reply {
     Turn(turn::Reply),
     Interaction(interaction::Reply),
+    /// `{}`.
+    Done,
 }
 
 /// What a step asks of the actor besides its events.
@@ -129,7 +196,12 @@ struct Step {
     agent_session: Option<String>,
     driver: Vec<DriverCommand>,
     attach: Vec<AttachTarget>,
+    /// The machine asked for the check before a turn.
+    check: bool,
     reply: Option<Reply>,
+    /// Who set the tier now, and whether full access was just confirmed.
+    set_by: Option<(PrincipalId, bool)>,
+    audit: Vec<AuditRecord>,
 }
 
 impl SessionActor {
@@ -140,11 +212,13 @@ impl SessionActor {
         inbox: mpsc::UnboundedReceiver<Mail>,
         mut stops: mpsc::UnboundedReceiver<Stop>,
         first: SendRequest,
-        _participant: Participant,
+        participant: Participant,
     ) {
         let (events, mut agent) = mpsc::unbounded_channel();
         let (attached, mut attaches) = mpsc::unbounded_channel();
+        let (rescanned, mut rescans) = mpsc::unbounded_channel();
         let alarm = Alarm::new(Arc::clone(&parts.clock));
+        let load_wanted = parts.project_config == ProjectConfigPolicy::Load;
         let mut actor = Self {
             parts,
             timers: TimerTable::new(),
@@ -153,28 +227,45 @@ impl SessionActor {
             inbox,
             events,
             attached,
+            rescanned,
+            load_wanted,
+            project_gate: false,
+            ignore_for_good: false,
+            deferred: None,
         };
         let first = Input::Machine(turn::Input::Send(first));
         actor.input(first, None, Step::default()).await;
-        // A branch's handler runs once the other branches are dropped.
+        // Idle until a branch brings work, which runs once the others are
+        // dropped.
         loop {
-            tokio::select! {
-                mail = actor.inbox.recv() => match mail {
-                    Some((call, reply)) => actor.call(call, reply).await,
-                    None => break,
-                },
-                Some(event) = agent.recv() => {
-                    actor.input(Input::Agent(event), None, Step::default()).await
+            let next = participant.idle(async {
+                tokio::select! {
+                    mail = actor.inbox.recv() => Next::Mail(mail),
+                    Some(event) = agent.recv() => Next::Agent(event),
+                    Some(result) = attaches.recv() => Next::Attached(result),
+                    Some((purpose, found)) = rescans.recv() => Next::Rescanned(purpose, found),
+                    Some(stop) = stops.recv() => Next::Stop(stop),
+                    () = actor.alarm.rung() => Next::Alarm,
                 }
-                Some(result) = attaches.recv() => actor.attach_done(result).await,
-                Some((force, done)) = stops.recv() => {
+            });
+            match next.await {
+                Next::Mail(Some(Mail::Call(call, reply))) => actor.call(*call, reply).await,
+                Next::Mail(Some(Mail::IgnoreProjectConfig(done))) => {
+                    actor.ignore_project_config().await;
+                    let _ = done.send(());
+                }
+                Next::Mail(None) => break,
+                Next::Agent(event) => actor.agent(event).await,
+                Next::Attached(result) => actor.attach_done(result).await,
+                Next::Rescanned(purpose, found) => actor.trust(purpose, found).await,
+                Next::Stop((force, done)) => {
                     if force {
                         let exit = Input::Machine(turn::Input::HostExit);
                         actor.input(exit, None, Step::default()).await;
                     }
                     let _ = done.send(());
                 }
-                () = actor.alarm.rung() => actor.expired().await,
+                Next::Alarm => actor.expired().await,
             }
         }
     }
@@ -182,6 +273,9 @@ impl SessionActor {
     async fn call(&mut self, call: Call, reply: oneshot::Sender<Outcome>) {
         let (principal, params) = (call.principal, call.params);
         let mut audit = None;
+        let mut step = Step::default();
+        // An option that moves the tier makes its chooser the setter.
+        let mut chosen = None;
         let input = match call.method {
             SessionSend::NAME => parse(&params).and_then(|p| self.send(p, &principal.id)),
             SessionInterrupt::NAME => parse::<SessionInterruptParams>(&params).map(|p| {
@@ -189,6 +283,10 @@ impl SessionActor {
                 Input::Machine(turn::Input::Interrupt { expected_turn })
             }),
             SessionQueueResume::NAME => Ok(Input::Machine(turn::Input::QueueResume)),
+            SessionConfirmConfig::NAME => {
+                step.reply = Some(Reply::Done);
+                parse(&params).and_then(|p| self.confirm(p, &principal))
+            }
             InteractionRespond::NAME => parse::<InteractionRespondParams>(&params).map(|params| {
                 if matches!(
                     principal.kind,
@@ -200,7 +298,7 @@ impl SessionActor {
                         outcome: params.outcome.clone(),
                         principal: principal.id.clone(),
                     };
-                    let (at_ms, conn) = (self.parts.clock.now_wall_ms(), call.conn.clone());
+                    let (at_ms, conn) = (self.parts.clock.now_wall_ms(), Some(call.conn.clone()));
                     audit = Some(AuditRecord { at_ms, conn, event });
                 }
                 let resolved_by = ResolvedBy {
@@ -210,6 +308,9 @@ impl SessionActor {
                 };
                 let tier = self.tier();
                 let principal = principal.clone();
+                chosen = self
+                    .option_tier(&params)
+                    .map(|tier| (params.request_id.clone(), tier));
                 Input::Respond(Box::new(Respond {
                     principal,
                     resolved_by,
@@ -236,7 +337,7 @@ impl SessionActor {
             .ok()
             .map(|command_id| Cause {
                 command_id,
-                principal: principal.id,
+                principal: principal.id.clone(),
             });
         let input = match input {
             Ok(input) => input,
@@ -249,13 +350,62 @@ impl SessionActor {
             }
         };
         let ticket = call.ticket;
+        let deferrable = call.method == SessionSend::NAME;
+        let reopen = matches!(call.method, SessionSend::NAME | SessionQueueResume::NAME);
         let command = Command {
             ticket,
             cause,
             reply,
             audit,
+            deferrable,
         };
-        self.input(input, Some(command), Step::default()).await;
+        self.input(input, Some(command), step).await;
+        if reopen && self.project_gate {
+            self.rescan(Purpose::Reopen);
+        }
+        if let Some((request, tier)) = chosen
+            && self.resolved_by(&request).as_ref() == Some(&principal.id)
+        {
+            let set = tier_guard::Input::Set {
+                by: principal,
+                tier,
+            };
+            self.input(Input::Tier(set), None, Step::default()).await;
+        }
+    }
+
+    /// `session/confirm_config`: the configuration the confirmation saw is
+    /// still the session's.
+    fn confirm(&self, p: SessionConfirmConfigParams, by: &Principal) -> Result<Input, RpcError> {
+        if p.config_digest != config_digest(&self.parts.configured) {
+            let err = RpcError::app(ErrorCode::Conflict, "the configuration changed meanwhile");
+            return Err(err.with_reason(ErrorReason::DigestMismatch));
+        }
+        Ok(Input::Tier(tier_guard::Input::Confirmed { by: by.clone() }))
+    }
+
+    /// The tier the option chosen in `params` puts the session in, if any.
+    fn option_tier(&self, params: &InteractionRespondParams) -> Option<Tier> {
+        let InteractionOutcome::Selected(selected) = &params.outcome else {
+            return None;
+        };
+        self.view(|view| {
+            let request = &view.requests.get(&params.request_id)?.requested.request;
+            let options = match request {
+                InteractionRequest::Permission(p) => &p.options,
+                InteractionRequest::PlanConfirm(p) => &p.options,
+                _ => return None,
+            };
+            let option = options.iter().find(|o| o.option_id == selected.option_id)?;
+            policy::option_tier(&option.effect)
+        })
+    }
+
+    fn resolved_by(&self, request: &RequestId) -> Option<PrincipalId> {
+        self.view(|view| {
+            let resolved = view.requests.get(request)?.resolved.as_ref()?;
+            Some(resolved.resolved_by.as_ref()?.principal_id.clone())
+        })
     }
 
     /// `session/send`; `reply_to` must name a request of this session that
@@ -312,6 +462,7 @@ impl SessionActor {
                     Action::Driver(command) => step.driver.push(command),
                     Action::Answer(reply) => step.reply = Some(Reply::Interaction(reply)),
                     Action::Machine(turn::Action::Attach(target)) => step.attach.push(target),
+                    Action::Machine(turn::Action::Check) => step.check = true,
                     Action::Machine(turn::Action::Snapshot { turn_id, phase }) => {
                         inputs.push_back(skipped(turn_id, phase))
                     }
@@ -320,6 +471,13 @@ impl SessionActor {
                     }
                     // The core keeps the machine's other actions.
                     Action::Machine(_) => {}
+                    Action::Tier(tier_guard::Action::Unconfirmed(reason)) => {
+                        self.unconfirmed(reason, &mut step)
+                    }
+                    Action::Tier(tier_guard::Action::SetBy { by, confirmed }) => {
+                        step.set_by = Some((by, confirmed))
+                    }
+                    Action::Tier(_) => {}
                 }
             }
             self.commit(mem::take(&mut step), command.take()).await;
@@ -337,16 +495,32 @@ impl SessionActor {
             agent_session,
             driver,
             attach,
+            check,
             reply,
+            set_by,
+            audit: records,
         } = step;
         let mut answer = None;
         let mut audit = None;
         let mut completion = None;
         let mut cause = None;
+        // A send's reply comes with the step that decides its turn.
+        let command = match (command, &reply) {
+            (Some(command), None) if command.deferrable => {
+                self.deferred = Some(command);
+                None
+            }
+            (None, Some(Reply::Turn(turn::Reply::Send(_)))) => self.deferred.take(),
+            (command, _) => command,
+        };
+        let turn_ended = events
+            .iter()
+            .any(|b| matches!(b, EventBody::TurnCompleted(_)));
         if let Some(command) = command {
             let outcome = match reply {
                 Some(Reply::Turn(reply)) => self.outcome(reply, command.cause.as_ref()),
                 Some(Reply::Interaction(reply)) => reply.map(|r| json!(r)).map_err(RpcError::from),
+                Some(Reply::Done) => Ok(json!({})),
                 None => Err(internal("the command had no reply")),
             };
             audit = command.audit.filter(|_| outcome.is_ok());
@@ -367,6 +541,9 @@ impl SessionActor {
         let mut changes = Rows::of(id, first_seq, at, &events, commands, instance);
         if let Some(agent_session) = agent_session {
             changes.agent_session(&self.parts.id, at, agent_session);
+        }
+        if let Some((by, confirmed)) = set_by {
+            changes.set_by(&self.parts.id, at, &by, confirmed);
         }
         self.forget_dequeued(&events);
         let asks = events.iter().any(|b| {
@@ -416,7 +593,7 @@ impl SessionActor {
         if committed.is_err() {
             return;
         }
-        if let Some(record) = audit {
+        for record in audit.into_iter().chain(records) {
             // Nobody listening is the receiver's choice.
             let _ = self.parts.audit.send(record);
         }
@@ -430,7 +607,13 @@ impl SessionActor {
             self.parts.agent.send(command);
         }
         for target in attach {
-            self.attach(target);
+            self.rescan(Purpose::Attach(target));
+        }
+        if turn_ended {
+            self.rescan(Purpose::TurnEnd);
+        }
+        if check {
+            self.rescan(Purpose::Check);
         }
     }
 
@@ -479,6 +662,96 @@ impl SessionActor {
         }
     }
 
+    /// Rescans the project's trust range in a task of its own (design
+    /// 5.2.6); the result comes back to [`trust`](Self::trust).
+    fn rescan(&self, purpose: Purpose) {
+        let (readers, project) = (self.parts.readers.clone(), self.parts.project.clone());
+        let (cwd, back) = (self.parts.cwd.clone(), self.rescanned.clone());
+        let cx = ScanContext {
+            git: self.parts.git.clone(),
+            writable: Vec::new(),
+            clock: Arc::clone(&self.parts.clock),
+            durations: self.parts.durations.clone(),
+        };
+        tokio::spawn(async move {
+            let found = rescan(readers, project, cwd, cx).await;
+            // The actor may have stopped.
+            let _ = back.send((purpose, found));
+        });
+    }
+
+    /// A rescan came back. A session that would load the project's
+    /// configuration, whose project is no longer trusted, shuts the gate for
+    /// `project_config_changed`, with a notice; the index records a project
+    /// that became `stale`. A trusted project again reopens it.
+    async fn trust(&mut self, purpose: Purpose, found: Rescan) {
+        if let Some(scan) = found.scan.clone().filter(|_| found.stale) {
+            self.parts.index.rescanned(&self.parts.project, scan);
+        }
+        self.load_wanted |= found.trusted && !self.ignore_for_good;
+        let blocked = self.load_wanted && !found.trusted;
+        let mut step = Step::default();
+        if blocked && !self.project_gate {
+            let params = NoticeParams {
+                reason: found.failure.clone(),
+                ..NoticeParams::default()
+            };
+            let code = NoticeCode::ProjectConfigChanged;
+            let (ids, now) = (self.parts.core.ids(), self.parts.clock.now());
+            step.events.extend(notice_with(ids, now, code, params));
+        }
+        let changed = blocked != self.project_gate;
+        self.project_gate = blocked;
+        let (reason, shut) = (PauseReason::ProjectConfigChanged, blocked);
+        let gate = Input::Machine(turn::Input::Gate { reason, shut });
+        match purpose {
+            Purpose::Check => {
+                let checked = Input::Machine(turn::Input::Checked(!blocked));
+                self.input(checked, None, step).await;
+            }
+            Purpose::Attach(target) => {
+                let policy = match found.trusted && self.load_wanted {
+                    true => ProjectConfigPolicy::Load,
+                    false => ProjectConfigPolicy::Ignore,
+                };
+                if policy != self.parts.project_config {
+                    self.parts.project_config = policy;
+                    self.parts.configured.project_config = project_config(policy);
+                    let configured = self.parts.configured.clone();
+                    step.events.push(EventBody::SessionConfigured(configured));
+                }
+                match changed {
+                    true => self.input(gate, None, step).await,
+                    false => self.commit(step, None).await,
+                }
+                self.attach(target);
+            }
+            Purpose::TurnEnd | Purpose::Reopen if changed => self.input(gate, None, step).await,
+            Purpose::TurnEnd | Purpose::Reopen => self.commit(step, None).await,
+        }
+    }
+
+    /// "不加载项目配置继续" (design 5.2.6): from now on the session leaves the
+    /// project's configuration out; the idle agent session is closed, so the
+    /// next turn resumes it with `settingSources: ["user"]`.
+    async fn ignore_project_config(&mut self) {
+        (self.load_wanted, self.ignore_for_good) = (false, true);
+        self.parts.project_config = ProjectConfigPolicy::Ignore;
+        let mut step = Step::default();
+        if self.parts.configured.project_config != ProjectConfig::Ignored {
+            self.parts.configured.project_config = ProjectConfig::Ignored;
+            let configured = self.parts.configured.clone();
+            step.events.push(EventBody::SessionConfigured(configured));
+        }
+        self.input(Input::Machine(turn::Input::Detach), None, step)
+            .await;
+        if mem::take(&mut self.project_gate) {
+            let (reason, shut) = (PauseReason::ProjectConfigChanged, false);
+            let gate = Input::Machine(turn::Input::Gate { reason, shut });
+            self.input(gate, None, Step::default()).await;
+        }
+    }
+
     fn attach(&self, target: AttachTarget) {
         let attach = Attach {
             target,
@@ -498,6 +771,7 @@ impl SessionActor {
     /// stream when they changed, the agent's session into the row.
     async fn attach_done(&mut self, result: Result<AttachInfo, AgentError>) {
         let mut step = Step::default();
+        let mut mode = None;
         if let Ok(info) = &result {
             let caps = &info.capabilities;
             self.parts
@@ -517,9 +791,96 @@ impl SessionActor {
                 step.events.push(EventBody::SessionConfigured(configured));
             }
             step.agent_session = Some(info.session.0.clone());
+            mode = mode_tier(&caps.config);
+        }
+        // The tier is checked before the turn may send its prompt.
+        if let Some((mode, tier)) = mode {
+            let during_turn = false;
+            let mode = tier_guard::Input::Mode {
+                mode,
+                tier,
+                during_turn,
+            };
+            self.input(Input::Tier(mode), None, mem::take(&mut step))
+                .await;
         }
         let input = Input::Machine(turn::Input::Attached(result));
         self.input(input, None, step).await;
+    }
+
+    /// A command list the session's capabilities do not have yet goes into
+    /// the stream with them (design 5.6.2).
+    fn commands_changed(&self, event: &DriverEvent) -> Step {
+        let mut step = Step::default();
+        if let DriverEvent::CommandsChanged(commands) = event
+            && let Some(mut caps) = self.written_capabilities()
+            && caps.commands != *commands
+        {
+            caps.commands.clone_from(commands);
+            step.events.push(EventBody::SessionCapabilities(caps));
+        }
+        step
+    }
+
+    /// An event of the agent. A change of its options rewrites the
+    /// configuration, and the guard checks the permission mode.
+    async fn agent(&mut self, event: DriverEvent) {
+        let DriverEvent::ConfigChanged(options) = event else {
+            let step = self.commands_changed(&event);
+            return self.input(Input::Agent(event), None, step).await;
+        };
+        let mut step = Step::default();
+        let config = options
+            .iter()
+            .map(|o| (o.id.to_string(), o.current.clone()));
+        let config: BTreeMap<String, String> = config.collect();
+        if config != self.parts.configured.config {
+            self.parts.configured.config = config;
+            let configured = self.parts.configured.clone();
+            step.events.push(EventBody::SessionConfigured(configured));
+        }
+        match mode_tier(&options) {
+            Some((mode, tier)) => {
+                let during_turn = true;
+                let mode = tier_guard::Input::Mode {
+                    mode,
+                    tier,
+                    during_turn,
+                };
+                self.input(Input::Tier(mode), None, step).await
+            }
+            None => self.commit(step, None).await,
+        }
+    }
+
+    /// The session enters `config_unconfirmed`, or leaves it: the
+    /// configuration says so, and the audit records the entry.
+    fn unconfirmed(&mut self, reason: Option<ConfirmationReason>, step: &mut Step) {
+        let required = reason.clone().map(|reason| ConfirmationRequired {
+            reason,
+            config_digest: config_digest(&self.parts.configured),
+        });
+        self.parts.configured.confirmation_required = required;
+        let configured = self.parts.configured.clone();
+        step.events.push(EventBody::SessionConfigured(configured));
+        if let Some(reason) = reason {
+            let mode = self
+                .parts
+                .configured
+                .config
+                .get(ConfigOptionId::PermissionMode.as_str());
+            let event = AuditEvent::ConfigUnconfirmed {
+                session_id: self.parts.id.clone(),
+                reason,
+                mode: mode.cloned(),
+            };
+            let at_ms = self.parts.clock.now_wall_ms();
+            step.audit.push(AuditRecord {
+                at_ms,
+                conn: None,
+                event,
+            });
+        }
     }
 
     /// Feeds each timer due now to the core, one step each: a step may
@@ -629,6 +990,72 @@ fn pending(view: &SessionView) -> (usize, Option<PendingKind>) {
         _ => PendingKind::Approval,
     });
     (pending.len(), kind)
+}
+
+/// The rescan of the project's trust range, which fails closed: a project
+/// row, a workspace, a git root or a scan that cannot be had counts as
+/// untrusted, with the reason. Configuration may not come from any
+/// project's directory (the repo tier, design 5.2.10).
+async fn rescan(readers: Readers, project: ProjectId, cwd: PathBuf, mut cx: ScanContext) -> Rescan {
+    let fail = |code: &str| Rescan {
+        trusted: false,
+        stale: false,
+        failure: Some(code.into()),
+        scan: None,
+    };
+    let row = readers.read(move |conn| {
+        let trust = conn
+            .query_row(
+                "SELECT trust_state, trust_digest FROM projects WHERE project_id = ?1",
+                [project.to_string()],
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)),
+            )
+            .optional()?;
+        let mut select = conn.prepare("SELECT path FROM projects WHERE removed_at IS NULL")?;
+        let roots = select.query_map([], |r| r.get::<_, String>(0))?;
+        Ok((trust, roots.collect::<rusqlite::Result<Vec<String>>>()?))
+    });
+    let Ok((Some((state, digest)), roots)) = row.await else {
+        return fail("project_missing");
+    };
+    cx.writable = roots.into_iter().map(PathBuf::from).collect();
+    let Some(path) = std::fs::canonicalize(&cwd).ok().filter(|p| p.is_dir()) else {
+        return fail("workspace_missing");
+    };
+    let root = match git_of(&path, &cx).await {
+        Ok(git) => git.map(|(root, _)| root),
+        Err(err) => {
+            let reason = err.data.as_ref().and_then(|data| data.reason.as_ref());
+            return fail(reason.map_or("git_error", |reason| reason.as_str()));
+        }
+    };
+    let scan = tokio::task::spawn_blocking(move || trust::scan(&path, root.as_deref())).await;
+    let scan = match scan {
+        Ok(Ok(scan)) => scan,
+        Ok(Err(err)) => return fail(err.code()),
+        Err(_) => return fail("scan_failed"),
+    };
+    let digest = digest.and_then(|digest| digest.parse().ok());
+    let before = TrustState::from(state.as_str());
+    let state = trust::state_after(&before, digest.as_ref(), &scan.digest);
+    Rescan {
+        trusted: state == TrustState::Trusted,
+        stale: before == TrustState::Trusted && state == TrustState::Stale,
+        failure: None,
+        scan: Some(scan),
+    }
+}
+
+fn project_config(policy: ProjectConfigPolicy) -> ProjectConfig {
+    match policy {
+        ProjectConfigPolicy::Load => ProjectConfig::Loaded,
+        ProjectConfigPolicy::Ignore => ProjectConfig::Ignored,
+    }
+}
+
+/// What `session/confirm_config` echoes back: the digest of the options.
+fn config_digest(configured: &SessionConfigured) -> Digest {
+    canonical::digest(&configured.config).expect("a map of strings has a canonical form")
 }
 
 /// The snapshot port until T061: every snapshot is `skipped`, without a

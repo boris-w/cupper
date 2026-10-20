@@ -1,22 +1,182 @@
-//! IT-process-hygiene, IT-K13-echo-cwd, IT-K26-client-info: `AgentRuntime`
-//! with the fake agent (design 5.6.1, 5.6.6, 5.8.5).
+//! `AgentRuntime` with the fake agent (design 5.6.1, 5.6.6, 5.6.8, 5.8.5):
+//! IT-process-hygiene, IT-K13-echo-cwd, IT-K26-client-info, IT-K21-reap-group,
+//! IT-adapter-restart, and IT-orch-gating's `SetConfig`. The runtime's timers
+//! run on `ManualClock`, which [`Fixture::tick`] moves to the deadlines the
+//! runtime sets.
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::pin::pin;
 use std::sync::Arc;
 
 use super::*;
-use crate::clock::{Clock, ManualClock};
+use crate::clock::{Clock, ManualClock, MonoTime};
 use crate::driver::api::{NormUpdate, PromptTag};
 use crate::driver::probe::login_shell::{Failure, LoginEnv};
 use crate::orchestrator::testkit::text;
-use crate::store::testutil::{TempDir, host_writer, query, raw_db};
-use crate::store::{RAW_WRITER, RawWriter};
-use cupper_sys::ProcessInfo;
+use crate::store::testutil::{TempDir, host_writer, query, raw_db, raw_rows};
+use crate::store::{Durability, RAW_WRITER, RawWriter, RawWriterThread, WriterThread};
+use cupper_sys::{ProcessInfo, process_info};
 
-/// Runs `script` as the first prompt of a new session in `cwd`, then stops
-/// the runtime; what the agent said, and its process as it ran.
-async fn run(dir: &TempDir, cwd: &Path, script: &str) -> (String, ProcessInfo) {
+type Events = mpsc::UnboundedReceiver<DriverEvent>;
+
+struct Fixture {
+    dir: TempDir,
+    clock: ManualClock,
+    runtime: AgentRuntime,
+    raw: Option<RawWriterThread>,
+    _writer: WriterThread,
+}
+
+impl Fixture {
+    /// The fake agent with `args`; `cli` is the CLI whose processes count as
+    /// `claude`.
+    fn new(name: &str, args: &[&str], cli: Option<&str>, rss: Option<u64>) -> Self {
+        let (dir, clock) = (TempDir::new(name), ManualClock::new());
+        let (writer, _writer) = host_writer(&dir, &clock);
+        let quiescence = Quiescence::new();
+        quiescence.register(RAW_WRITER);
+        quiescence.register(AGENT_RUNTIME);
+        let (raw, raw_thread) = RawWriter::spawn(raw_db(&dir), &quiescence).unwrap();
+        let shared: Arc<dyn Clock> = Arc::new(clock.clone());
+        let var = |(k, v): (&str, &str)| (k.to_owned(), v.to_owned());
+        let host = BTreeMap::from([("HOME", "/h"), ("SECRET", "x"), ("TERM", "dumb")].map(var));
+        let login = LoginEnv::fallback(Failure::ShellMissing);
+        let args = args.iter().map(|arg| (*arg).to_owned()).collect();
+        let mut launch = launch::injected(launch::fake_agent(), args, &host, &login);
+        launch.cli = cli.map(|cli| launch::Cli {
+            path: cli.into(),
+            version: String::new(),
+            install: cupper_protocol::index::CliInstall::Native,
+        });
+        let blobs = BlobStore::new(dir.path(), writer.clone(), Arc::clone(&shared));
+        let (raw, log) = (raw.sink(), None);
+        let cx = Context {
+            clock: Arc::clone(&shared),
+            writer,
+            raw,
+            log,
+        };
+        let (ids, durations) = (Arc::new(IdGen::seeded(shared, 1)), Durations::default());
+        let runtime = AgentRuntime::start(RuntimeDeps {
+            launch,
+            cx,
+            ids,
+            blobs,
+            quiescence,
+            probe_dir: dir.path().join("probe"),
+            durations,
+            notes: Arc::new(status::NoAgentNotes),
+            rss,
+        });
+        let raw = Some(raw_thread);
+        Self {
+            dir,
+            clock,
+            runtime,
+            raw,
+            _writer,
+        }
+    }
+
+    /// Runs `future`, moving the clock to each deadline the runtime sets
+    /// meanwhile up to `secs` from now; later ones, such as the next sample,
+    /// stay ahead.
+    async fn tick<T>(&self, secs: u64, future: impl Future<Output = T>) -> T {
+        let (mut future, limit) = (
+            pin!(future),
+            self.clock.now_mono() + Duration::from_secs(secs),
+        );
+        loop {
+            tokio::select! {
+                out = &mut future => return out,
+                () = tokio::task::yield_now() => {
+                    if let Some(at) = self.clock.next_deadline().filter(|at| *at <= limit) {
+                        self.clock.advance_to(at);
+                    }
+                }
+            }
+        }
+    }
+
+    /// A new session in the fixture's directory, and its events.
+    async fn attach(&self) -> Result<(AgentSessionId, Events), AgentError> {
+        let (events, heard) = mpsc::unbounded_channel();
+        let (target, cwd) = (AttachTarget::New, self.dir.path().to_owned());
+        let (config, project_config) = (BTreeMap::new(), ProjectConfigPolicy::Load);
+        let attach = Attach {
+            target,
+            cwd,
+            config,
+            project_config,
+        };
+        let info = self.tick(8, self.runtime.attach(attach, events)).await?;
+        Ok((info.session, heard))
+    }
+
+    /// Runs `script` as a prompt in `session`; what the agent said.
+    async fn say(&self, session: &mut (AgentSessionId, Events), script: &str) -> String {
+        let heard = self.prompt(session, script);
+        let mut said = String::new();
+        loop {
+            match heard.recv().await.unwrap() {
+                DriverEvent::Update(NormUpdate::AgentText { text, .. }) => said.push_str(&text),
+                DriverEvent::PromptDone { .. } => break said,
+                DriverEvent::PromptFailed { error, .. } => panic!("{error:?}"),
+                _ => {}
+            }
+        }
+    }
+
+    /// The adapter exits; once its sessions heard it.
+    async fn crash(&self, session: &mut (AgentSessionId, Events)) {
+        let heard = self.prompt(session, "exit 1");
+        while !matches!(heard.recv().await, Some(DriverEvent::AdapterExited { .. })) {}
+    }
+
+    fn prompt<'a>(
+        &self,
+        (session, heard): &'a mut (AgentSessionId, Events),
+        script: &str,
+    ) -> &'a mut Events {
+        let (session, tag, content) = (session.clone(), PromptTag(1), text(script));
+        self.runtime.send(DriverCommand::Prompt {
+            session,
+            tag,
+            content,
+        });
+        heard
+    }
+
+    /// The latest adapter process, while it runs.
+    fn adapter(&self) -> ProcessInfo {
+        let sql = "SELECT pid FROM adapters ORDER BY started_at DESC, rowid DESC";
+        let pid: Vec<i32> = query(&self.dir.host_db(), sql, |row| row.get(0));
+        process_info(pid[0]).unwrap()
+    }
+
+    fn column(&self, sql: &str) -> Vec<String> {
+        query(&self.dir.host_db(), sql, |row| row.get(0))
+    }
+
+    /// Stops the runtime; how long that took on the clock: 3 s for the
+    /// sessions to close if they did not, 3 s after stdin closed, 2 s after
+    /// SIGTERM at most.
+    async fn stop(&self) -> Duration {
+        let start = self.clock.now_mono();
+        self.tick(8, self.runtime.stop(false)).await;
+        self.clock.now_mono().saturating_duration_since(start)
+    }
+}
+
+/// The pid an agent said as `pid=<pid>`, and that process.
+fn said_pid(said: &str) -> ProcessInfo {
+    let pid = said.rsplit("pid=").next().unwrap().parse().unwrap();
+    process_info(pid).unwrap()
+}
+
+/// A runtime of the fake agent, on `dir`'s stores; probes in `dir/probe`.
+fn runtime(dir: &TempDir) -> AgentRuntime {
     let clock = ManualClock::new();
     let (writer, _writer) = host_writer(dir, &clock);
     let quiescence = Quiescence::new();
@@ -37,14 +197,25 @@ async fn run(dir: &TempDir, cwd: &Path, script: &str) -> (String, ProcessInfo) {
         log,
     };
     let ids = Arc::new(IdGen::seeded(clock, 1));
-    let runtime = AgentRuntime::start(RuntimeDeps {
+    AgentRuntime::start(RuntimeDeps {
         launch,
         cx,
         ids,
         blobs,
         quiescence,
-    });
-    let (events, mut heard) = mpsc::unbounded_channel();
+        probe_dir: dir.path().join("probe"),
+        durations: Durations::default(),
+        notes: Arc::new(status::NoAgentNotes),
+        rss: None,
+    })
+}
+
+/// A new session in `cwd`, and what it hears.
+async fn attach(
+    runtime: &AgentRuntime,
+    cwd: &Path,
+) -> (AttachInfo, mpsc::UnboundedReceiver<DriverEvent>) {
+    let (events, heard) = mpsc::unbounded_channel();
     let (target, cwd, config) = (AttachTarget::New, cwd.to_owned(), BTreeMap::new());
     let project_config = ProjectConfigPolicy::Load;
     let attach = Attach {
@@ -53,57 +224,298 @@ async fn run(dir: &TempDir, cwd: &Path, script: &str) -> (String, ProcessInfo) {
         config,
         project_config,
     };
-    let session = runtime.attach(attach, events).await.unwrap().session;
-    let (tag, content) = (PromptTag(1), text(script));
+    (runtime.attach(attach, events).await.unwrap(), heard)
+}
+
+/// Runs `script` as prompt `tag`; what the session heard until it was done.
+async fn prompt(
+    runtime: &AgentRuntime,
+    session: &AgentSessionId,
+    (tag, script): (u64, &str),
+    heard: &mut mpsc::UnboundedReceiver<DriverEvent>,
+) -> Vec<DriverEvent> {
+    let (session, tag, content) = (session.clone(), PromptTag(tag), text(script));
     runtime.send(DriverCommand::Prompt {
         session,
         tag,
         content,
     });
-    let mut said = String::new();
+    let mut events = Vec::new();
     loop {
         match heard.recv().await.unwrap() {
-            DriverEvent::Update(NormUpdate::AgentText { text, .. }) => said.push_str(&text),
-            DriverEvent::PromptDone { .. } => break,
+            DriverEvent::PromptDone { .. } => return events,
             DriverEvent::PromptFailed { error, .. } => panic!("{error:?}"),
-            _ => {}
+            event => events.push(event),
         }
     }
-    let pid = query(&dir.host_db(), "SELECT pid FROM adapters", |row| row.get(0));
-    let process = cupper_sys::process_info(pid[0]).unwrap();
-    runtime.stop(true).await;
-    (said, process)
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn it_process_hygiene_no_inherited_fds_allowed_env_own_session() {
-    let dir = TempDir::new("hygiene");
-    let (said, process) = run(&dir, dir.path(), "probe").await;
+    let f = Fixture::new("hygiene", &[], None, None);
+    let said = f.say(&mut f.attach().await.unwrap(), "probe").await;
     assert_eq!(said, "fds=0,1,2 env=CLAUDE_CODE_EXECUTABLE,HOME,PATH,TERM");
     // The leader of a session and a process group of its own.
+    let process = f.adapter();
     assert_eq!([process.sid, process.pgid], [process.pid; 2]);
-    let sql = "SELECT exit_status FROM adapters WHERE ended_at IS NOT NULL";
-    let ended: Vec<String> = query(&dir.host_db(), sql, |row| row.get(0));
-    assert_eq!(ended, ["signal: 9 (SIGKILL)"]);
+    f.stop().await;
+    let ended = f.column("SELECT instance_id FROM adapters WHERE ended_at IS NOT NULL");
+    assert_eq!(ended.len(), 1);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn it_k13_echo_cwd_the_agent_gets_the_real_path() {
-    let dir = TempDir::new("k13");
-    let real = fs::canonicalize(dir.path()).unwrap();
+    let f = Fixture::new("k13", &[], None, None);
+    let real = fs::canonicalize(f.dir.path()).unwrap();
     // `TMPDIR` is under `/var`, a link to `/private/var`.
-    assert_ne!(real, dir.path());
-    let (said, _) = run(&dir, dir.path(), "echo_env").await;
+    assert_ne!(real, f.dir.path());
+    let said = f.say(&mut f.attach().await.unwrap(), "echo_env").await;
     let cwd = format!("cwd={} ", real.display());
     assert!(said.starts_with(&cwd), "{said}");
+    f.stop().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn it_k26_client_info_names_cupper_only() {
-    let dir = TempDir::new("k26");
-    let (said, _) = run(&dir, dir.path(), "echo_env").await;
+    let f = Fixture::new("k26", &[], None, None);
+    let said = f.say(&mut f.attach().await.unwrap(), "echo_env").await;
     let (_, rest) = said.split_once(" clientInfo=").unwrap();
     let client: serde_json::Value =
         serde_json::from_str(rest.split_once(" env=").unwrap().0).unwrap();
     assert_eq!(client["name"], "cupper");
+    f.stop().await;
+}
+
+/// T044's mode set back, on the agent: the session hears all the options.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_orch_gating_set_config_comes_back_as_all_options() {
+    let f = Fixture::new("set-config", &[], None, None);
+    let (session, mut heard) = f.attach().await.unwrap();
+    let (option, value) = ("permission_mode".to_owned(), "plan".to_owned());
+    f.runtime.send(DriverCommand::SetConfig {
+        session,
+        option,
+        value,
+    });
+    let options = loop {
+        if let Some(DriverEvent::ConfigChanged(options)) = heard.recv().await {
+            break options;
+        }
+    };
+    let mode = options.iter().find(|o| o.id.as_str() == "permission_mode");
+    assert_eq!((mode.unwrap().current.as_str(), options.len()), ("plan", 3));
+    f.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn it_k21_reap_group_a_stop_reaps_descendants_in_groups_of_their_own() {
+    let f = Fixture::new("k21-stop", &[], None, None);
+    let mut session = f.attach().await.unwrap();
+    let said = f.say(&mut session, "spawn_child; spawn_group_child").await;
+    let (adapter, child) = (f.adapter(), said_pid(&said));
+    assert_eq!(child.pgid, child.pid);
+    // The adapter exits once its stdin closes; the child holds its stdout
+    // until the SIGTERM of the third step.
+    assert!(f.stop().await >= Duration::from_secs(3));
+    assert_eq!(
+        [process_info(adapter.pid), process_info(child.pid)],
+        [None, None]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn it_k21_reap_group_the_closing_order_ends_with_sigkill() {
+    let mut f = Fixture::new("k21-order", &["--fault", "linger"], None, None);
+    f.attach().await.unwrap();
+    let adapter = f.adapter();
+    // Stdin closed: 3 s; SIGTERM ignored: 2 s; SIGKILL.
+    let took = f.stop().await;
+    assert!((5..=8).contains(&took.as_secs()), "{took:?}");
+    assert_eq!(process_info(adapter.pid), None);
+    let ended = f.column("SELECT exit_status FROM adapters");
+    assert_eq!(ended, ["signal: 9 (SIGKILL)"]);
+    f.raw.take().unwrap().stop().unwrap();
+    let frames: Vec<_> = raw_rows(&f.dir).into_iter().map(|row| row.frame).collect();
+    assert!(
+        frames
+            .iter()
+            .any(|frame| frame.contains(r#""method":"session/close""#))
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn it_k21_reap_group_sampling_finds_the_groups_a_crash_leaves() {
+    let f = Fixture::new("k21-sample", &[], Some("/bin/sleep"), Some(1 << 30));
+    let mut session = f.attach().await.unwrap();
+    let child = said_pid(&f.say(&mut session, "spawn_group_child").await);
+    // The first sample, 30 s after the start.
+    let mut resources = f.runtime.resources();
+    let sampled = (*f
+        .tick(30, resources.wait_for(Option::is_some))
+        .await
+        .unwrap())
+    .unwrap();
+    // The child runs `/bin/sleep`, the CLI here.
+    assert_eq!((sampled.rss_bytes, sampled.claude_processes), (1 << 30, 1));
+    // The adapter dies; the group it left is killed, as sampling found it.
+    f.crash(&mut session).await;
+    assert_eq!(process_info(child.pid), None);
+    let groups = f.column("SELECT groups FROM adapters");
+    assert_eq!(
+        groups,
+        [format!("[[{},{}]]", child.pid, child.start.as_micros())]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn it_adapter_restart_backs_off_then_crashed() {
+    let since = |f: &Fixture, start: MonoTime| f.clock.now_mono().saturating_duration_since(start);
+    // Restarts wait 1 s, then 2 s.
+    let f = Fixture::new("restart", &[], None, None);
+    let mut session = f.attach().await.unwrap();
+    for wait in [1, 2] {
+        f.crash(&mut session).await;
+        let start = f.clock.now_mono();
+        session = f.attach().await.unwrap();
+        assert_eq!(since(&f, start), Duration::from_secs(wait));
+        assert_eq!(f.say(&mut session, "say up").await, "up");
+    }
+    f.stop().await;
+
+    // Five failed starts within 5 minutes: `crashed`, until cleared.
+    let f = Fixture::new("crashed", &["--fault", "exit_on_start"], None, None);
+    let start = f.clock.now_mono();
+    for _ in 0..5 {
+        let failed = f.attach().await.unwrap_err();
+        assert_eq!(failed.class, AgentErrorClass::RuntimeFailed);
+    }
+    assert_eq!(since(&f, start), Duration::from_secs(1 + 2 + 4 + 8));
+    assert_eq!(
+        f.attach().await.unwrap_err().class,
+        AgentErrorClass::Crashed
+    );
+    f.runtime.clear_crashed();
+    assert_eq!(
+        f.attach().await.unwrap_err().class,
+        AgentErrorClass::RuntimeFailed
+    );
+}
+
+/// The fake agent's command list comes once to the session, after the
+/// attach or with it; each turn's start repeats it without an event. A
+/// different list comes, and so does the old one when it returns; the
+/// capability cache follows.
+#[tokio::test(flavor = "multi_thread")]
+async fn unit_commands_dedup_the_same_list_is_not_sent_again() {
+    let dir = TempDir::new("dedup");
+    // A row of another adapter version, which the runtime drops as it starts.
+    let (writer, thread) = host_writer(&dir, &ManualClock::new());
+    let stale = |conn: &rusqlite::Connection| {
+        let sql = "INSERT INTO agent_capabilities (agent, adapter_version, captured_at, json)
+                   VALUES ('claude', 'old', 0, '{}')";
+        conn.execute(sql, []).map(drop)
+    };
+    writer.submit(Durability::Normal, stale).await.unwrap();
+    drop((writer, thread));
+    let runtime = runtime(&dir);
+    let (info, mut heard) = attach(&runtime, dir.path()).await;
+    let changed = |events: Vec<DriverEvent>| -> Vec<usize> {
+        let lists = events.into_iter().filter_map(|event| match event {
+            DriverEvent::CommandsChanged(commands) => Some(commands.len()),
+            _ => None,
+        });
+        lists.collect()
+    };
+    let persona = 5;
+    let first = changed(prompt(&runtime, &info.session, (1, "say a"), &mut heard).await);
+    let attached = info.capabilities.commands.len();
+    assert!(
+        (attached, first.as_slice()) == (persona, &[])
+            || (attached, first.as_slice()) == (0, &[persona]),
+        "{attached} {first:?}"
+    );
+    assert_eq!(
+        changed(prompt(&runtime, &info.session, (2, "say b"), &mut heard).await),
+        [] as [usize; 0]
+    );
+    let other = r#"raw {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"${session}","update":{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"x","description":"y"}]}}}"#;
+    assert_eq!(
+        changed(prompt(&runtime, &info.session, (3, other), &mut heard).await),
+        [1]
+    );
+    assert_eq!(
+        changed(prompt(&runtime, &info.session, (4, "say c"), &mut heard).await),
+        [persona]
+    );
+    runtime.stop(true).await;
+    let rows: Vec<(String, String)> = query(
+        &dir.host_db(),
+        "SELECT adapter_version, json FROM agent_capabilities",
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    );
+    let [(version, json)] = &rows[..] else {
+        panic!("{rows:?}")
+    };
+    let cached: SessionCapabilities = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        (version, cached.commands.len()),
+        (&cached.versions.adapter, persona)
+    );
+}
+
+/// A probe empties its directory (0700), opens a session there, reads its
+/// options and command list, and fills the cache; `agents/capabilities`
+/// reads it, and `agents/refresh` relaunches and reports the agent.
+#[tokio::test(flavor = "multi_thread")]
+async fn agents_probe_cache_and_refresh() {
+    use std::os::unix::fs::PermissionsExt;
+
+    use self::agents::Agents;
+    use crate::store::Readers;
+    use cupper_protocol::index::{AgentState, AuthState, RuntimeState};
+
+    let dir = TempDir::new("probe");
+    let probe = dir.path().join("probe");
+    fs::create_dir_all(&probe).unwrap();
+    fs::write(probe.join("left-over"), "x").unwrap();
+    let runtime = runtime(&dir);
+    let (writer, _thread) = host_writer(&dir, &ManualClock::new());
+    let readers = Readers::open(&dir.host_db()).unwrap();
+    let find: agents::Find = Arc::new(|| {
+        let login = LoginEnv::fallback(Failure::ShellMissing);
+        let launch = launch::injected(launch::fake_agent(), Vec::new(), &BTreeMap::new(), &login);
+        Box::pin(async move { launch })
+    });
+    let agents = Agents::new(runtime.clone(), readers, writer, find);
+    let claude = AgentKind::Claude;
+    assert_eq!(agents.capabilities(&claude).await.unwrap().cached, None);
+    let codex = agents.capabilities(&AgentKind::Codex).await.unwrap_err();
+    assert_eq!(
+        codex.app_code(),
+        Some(&cupper_protocol::error::ErrorCode::Unavailable)
+    );
+
+    let refreshed = agents.refresh(&claude).await.unwrap().status;
+    assert_eq!(fs::read_dir(&probe).unwrap().count(), 0);
+    assert_eq!(
+        fs::metadata(&probe).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
+    let cached = agents.capabilities(&claude).await.unwrap().cached.unwrap();
+    assert_eq!(cached.capabilities.commands.len(), 5);
+    assert!(cached.capabilities.turn.steer.supported);
+    assert_eq!(
+        (
+            refreshed.state,
+            refreshed.auth.state,
+            refreshed.adapter.runtime
+        ),
+        (
+            AgentState::Running,
+            AuthState::LoggedIn,
+            RuntimeState::Ready
+        )
+    );
+    assert!(refreshed.cli.is_none());
+    runtime.stop(true).await;
 }

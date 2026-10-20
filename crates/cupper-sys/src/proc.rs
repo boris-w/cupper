@@ -201,6 +201,23 @@ pub fn process_info(pid: i32) -> Option<ProcessInfo> {
     })
 }
 
+/// The resident memory of `pid` in bytes (`PROC_PIDTASKINFO`); `None` when
+/// it does not exist, has exited, or cannot be read.
+pub fn resident_size(pid: i32) -> Option<u64> {
+    if pid <= 0 {
+        return None;
+    }
+    // SAFETY: the struct holds only integers, for which all-zero bytes are a
+    // valid value.
+    let mut info: libc::proc_taskinfo = unsafe { mem::zeroed() };
+    let size = mem::size_of::<libc::proc_taskinfo>() as libc::c_int;
+    // SAFETY: the buffer is one struct of `size` bytes and the kernel writes
+    // at most `size` bytes into it.
+    let written =
+        unsafe { libc::proc_pidinfo(pid, libc::PROC_PIDTASKINFO, 0, (&raw mut info).cast(), size) };
+    (written == size).then_some(info.pti_resident_size)
+}
+
 /// The full path of the executable `pid` runs (`proc_pidpath`), with links
 /// resolved.
 pub fn pid_path(pid: i32) -> Result<PathBuf> {
@@ -341,6 +358,12 @@ mod tests {
         assert!(!me.name.is_empty());
         let again = process_info(me.pid).unwrap();
         assert_eq!(again.start, me.start);
+    }
+
+    #[test]
+    fn resident_size_of_this_process_and_of_none() {
+        assert!(resident_size(std::process::id() as i32).unwrap() > 0);
+        assert_eq!(resident_size(i32::MAX), None);
     }
 
     #[test]

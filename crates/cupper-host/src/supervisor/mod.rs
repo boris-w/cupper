@@ -8,7 +8,11 @@
 //! adapters and the audit table are T059's.
 
 pub mod control;
+#[cfg(feature = "test-harness")]
+mod harness;
 mod recover;
+#[cfg(feature = "test-harness")]
+mod seed;
 
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
@@ -28,6 +32,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use self::control::Control;
+#[cfg(feature = "test-harness")]
+use crate::clock::ManualClock;
 use crate::clock::{Clock, IdGen, SystemClock};
 use crate::diag::full::Redactor;
 use crate::diag::log::log_dir;
@@ -35,7 +41,9 @@ use crate::diag::stderr::AdapterLog;
 use crate::driver::locate::CliLocator;
 use crate::driver::locate::trust::{Boundaries, system_temp_dirs};
 use crate::driver::probe::login_shell::LoginEnv;
+use crate::driver::runtime::agents::{Agents, Find};
 use crate::driver::runtime::launch::{self, Launch};
+use crate::driver::runtime::status::NoAgentNotes;
 use crate::driver::runtime::{AGENT_RUNTIME, AgentRuntime, RuntimeDeps};
 use crate::durations::Durations;
 use crate::exit::HostExit;
@@ -43,7 +51,7 @@ use crate::gateway::listen::{HostLock, ListenError};
 use crate::gateway::{Gateway, GatewayConfig, Routes};
 use crate::git::GitTool;
 use crate::index::{INDEX, IndexDeps, IndexError, IndexHandle};
-use crate::ledger::{Ledger, LedgerError};
+use crate::ledger::{Ledger, LedgerError, SWEEPER};
 use crate::orchestrator::session::{SessionDeps, SessionManager};
 use crate::quiescence::Quiescence;
 use crate::startup::payload::Payload;
@@ -114,6 +122,9 @@ pub struct Host {
     exits: mpsc::UnboundedReceiver<Exit>,
     terminate: Signal,
     socket: PathBuf,
+    /// The barrier's registry, for the test that every kind is in it.
+    #[cfg(all(test, feature = "test-harness"))]
+    quiescence: Quiescence,
     /// Released last, as the host exits.
     _lock: HostLock,
 }
@@ -125,7 +136,8 @@ impl Host {
         let Start {
             data_dir, payload, ..
         } = start;
-        let (clock, durations, login_env) = injected(&payload);
+        let injected = injected(&payload);
+        let (clock, durations) = (injected.clock.clone(), injected.durations.clone());
         prepare_data_dir(&data_dir)?;
         let lock = HostLock::acquire(&data_dir)?;
         let host_db = data_dir.join("host.db");
@@ -155,23 +167,41 @@ impl Host {
         );
         let blobs = BlobStore::new(&data_dir, writer.clone(), clock.clone());
         let backups = data_dir.join("backups");
-        let maintenance = retention::Maintenance::new(
-            writer.clone(),
-            raw,
-            blobs.clone(),
-            backups,
-            clock.clone(),
-            durations.clone(),
-        );
+        let maintain = || {
+            let (raw, blobs, backups) = (raw.clone(), blobs.clone(), backups.clone());
+            retention::Maintenance::new(
+                writer.clone(),
+                raw,
+                blobs,
+                backups,
+                clock.clone(),
+                durations.clone(),
+            )
+        };
+        let maintenance = maintain();
         // The ledger reads beside the writer, which took the write connection.
         let reader = open_reader(&host_db).map_err(StartError::Open)?;
         let ledger = Ledger::load(&reader, writer.clone(), clock.clone(), &durations)?;
-        let sweeper = tokio::spawn(ledger.clone().sweeper());
+        quiescence.register(SWEEPER);
+        let sweeper = tokio::spawn(ledger.clone().sweeper(quiescence.enter(SWEEPER)));
         let maintenance = maintenance.spawn(&quiescence);
 
         // Claude's runtime and the sessions on it, in the order they stop.
         let ids = Arc::new(IdGen::new(clock.clone()));
-        let found = discover(login_env, &*clock, &durations, &reader, &data_dir).await?;
+        let login_env = injected.login_env.clone();
+        let finder = Finder {
+            clock: clock.clone(),
+            durations: durations.clone(),
+            data_dir: data_dir.clone(),
+            login_env,
+            #[cfg(feature = "test-harness")]
+            agent: (payload.test_config.agents.claude.as_ref())
+                .map(|agent| (agent.program.clone(), agent.args.clone())),
+        };
+        // Discovery runs the login shell once; the index's git and Claude's
+        // launch both take this result.
+        let found = finder.discover(project_roots(&reader)?).await;
+        let git = git_tool(&found, &data_dir)?;
         // Step 7: the index stream, before the socket.
         quiescence.register(INDEX);
         let index = IndexHandle::start(IndexDeps {
@@ -180,7 +210,7 @@ impl Host {
             clock: clock.clone(),
             ids: ids.clone(),
             durations: durations.clone(),
-            git: found.git.clone(),
+            git: git.clone(),
             quiescence: quiescence.clone(),
             host: HostUpdated {
                 version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -192,7 +222,7 @@ impl Host {
             },
         })
         .await?;
-        let launch = claude_launch(&payload, &*clock, &durations, &data_dir, &found).await;
+        let launch = finder.launch_found(&found).await;
         let redactor = Redactor::for_this_machine();
         let log = AdapterLog::open(&log_dir(&data_dir), "claude", clock.clone(), redactor);
         let cx = launch::Context {
@@ -206,23 +236,39 @@ impl Host {
             launch,
             cx,
             ids: ids.clone(),
-            blobs,
+            blobs: blobs.clone(),
             quiescence: quiescence.clone(),
+            probe_dir: data_dir.join("probe").join("claude"),
+            durations: durations.clone(),
+            notes: Arc::new(NoAgentNotes),
+            rss: test_rss(&payload),
         };
         let claude = AgentRuntime::start(deps);
+        let find: Find = {
+            let (finder, readers) = (finder.clone(), readers.clone());
+            Arc::new(move || {
+                let (finder, readers) = (finder.clone(), readers.clone());
+                Box::pin(async move {
+                    let roots = readers.read(project_roots).await.unwrap_or_default();
+                    finder.launch(roots).await
+                })
+            })
+        };
+        let agents = Agents::new(claude.clone(), readers.clone(), writer.clone(), find);
         // The audit records go into the `audit` table from T059 on.
         let (records, _audit) = mpsc::unbounded_channel();
         let sessions = SessionManager::new(SessionDeps {
-            streams,
+            streams: streams.clone(),
             writer: writer.clone(),
-            readers,
+            readers: readers.clone(),
             clock: clock.clone(),
-            ids,
+            ids: ids.clone(),
             durations: durations.clone(),
             agents: HashMap::from([(AgentKind::Claude, Arc::new(claude.clone()) as _)]),
             quiescence: quiescence.clone(),
             audit: records.clone(),
             index: Arc::new(index.clone()),
+            git,
         });
         let parts: Arc<[Arc<dyn Part>]> = Arc::new([
             Arc::new(sessions.clone()),
@@ -231,9 +277,26 @@ impl Host {
         ]);
         let (to_supervisor, exits) = mpsc::unbounded_channel();
         let control = Arc::new(Control::new(to_supervisor, Arc::clone(&parts)));
-        let mut routes = Routes::new(ledger);
+        let mut routes = Routes::new(ledger.clone());
+        routes.watched_by(&quiescence);
         control.route(&mut routes);
+        #[cfg(feature = "test-harness")]
+        Arc::new(harness::Harness {
+            clock: injected.manual.clone(),
+            quiescence: quiescence.clone(),
+            maintenance: Arc::new(maintain()),
+            ledger,
+            seeder: seed::Seeder {
+                streams,
+                readers,
+                ids,
+                clock: clock.clone(),
+                index: index.clone(),
+            },
+        })
+        .route(&mut routes);
         routes.sessions(Arc::new(sessions));
+        Arc::new(agents).route(&mut routes);
         routes.index(Arc::new(index.clone()));
         let config = GatewayConfig {
             host_id: run.host_id,
@@ -266,6 +329,8 @@ impl Host {
             exits,
             terminate,
             socket,
+            #[cfg(all(test, feature = "test-harness"))]
+            quiescence,
             _lock: lock,
         })
     }
@@ -342,83 +407,142 @@ struct Discovery {
     host: BTreeMap<String, String>,
     login: LoginEnv,
     locator: CliLocator,
-    /// `None` when no trusted `PATH` entry has a git.
-    git: Option<GitTool>,
 }
 
 async fn discover(
     login_env: Option<BTreeMap<String, String>>,
     clock: &dyn Clock,
     durations: &Durations,
-    reader: &rusqlite::Connection,
-    data_dir: &Path,
-) -> Result<Discovery, StartError> {
+    roots: Vec<PathBuf>,
+) -> Discovery {
     let host = std::env::vars_os()
         .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)));
     let host: BTreeMap<String, String> = host.collect();
     let login = launch::login_env(clock, durations, &host, login_env).await;
-    let mut projects = reader.prepare("SELECT path FROM projects WHERE removed_at IS NULL")?;
-    let roots = projects.query_map([], |row| Ok(PathBuf::from(row.get::<_, String>(0)?)))?;
     let tmp = host.get("TMPDIR").map(String::as_str);
-    let roots: Vec<PathBuf> = roots.collect::<Result<_, _>>()?;
     let boundaries = Boundaries::new(roots, system_temp_dirs(tmp));
     let path = login.vars.get("PATH").map_or("", String::as_str);
     let home = PathBuf::from(host.get("HOME").cloned().unwrap_or_default());
-    let locator = CliLocator::new(boundaries, path, home.clone());
-    let git = match locator.tool("git") {
-        Some(git) => {
-            let (lfs, trusted) = (locator.tool("git-lfs"), locator.trusted_path());
-            let ssh = login.vars.get("SSH_AUTH_SOCK").map(OsString::from);
-            Some(GitTool::new(git, lfs, trusted, Some(home), ssh, data_dir)?)
-        }
-        None => None,
-    };
-    Ok(Discovery {
+    let locator = CliLocator::new(boundaries, path, home);
+    Discovery {
         host,
         login,
         locator,
-        git,
-    })
+    }
 }
 
-/// How Claude's adapters start: the program of `test_config.agents`, else
-/// the runtime with the CLI discovered.
-async fn claude_launch(
-    payload: &Payload,
-    clock: &dyn Clock,
-    durations: &Durations,
-    data_dir: &Path,
-    found: &Discovery,
-) -> Launch {
-    let (host, login) = (&found.host, &found.login);
+/// The git tool (T034), from the same locator: `None` when no trusted `PATH`
+/// entry has a git.
+fn git_tool(found: &Discovery, data_dir: &Path) -> Result<Option<GitTool>, StartError> {
+    let locator = &found.locator;
+    let Some(git) = locator.tool("git") else {
+        return Ok(None);
+    };
+    let (lfs, trusted) = (locator.tool("git-lfs"), locator.trusted_path());
+    let home = PathBuf::from(found.host.get("HOME").cloned().unwrap_or_default());
+    let ssh = found.login.vars.get("SSH_AUTH_SOCK").map(OsString::from);
+    Ok(Some(GitTool::new(
+        git,
+        lfs,
+        trusted,
+        Some(home),
+        ssh,
+        data_dir,
+    )?))
+}
+
+/// The projects' paths, the boundaries of trusted `PATH` entries.
+fn project_roots(reader: &rusqlite::Connection) -> rusqlite::Result<Vec<PathBuf>> {
+    let mut projects = reader.prepare("SELECT path FROM projects WHERE removed_at IS NULL")?;
+    let roots = projects.query_map([], |row| Ok(PathBuf::from(row.get::<_, String>(0)?)))?;
+    roots.collect()
+}
+
+/// How Claude's adapters start, found at startup and again on
+/// `agents/refresh`: the program of `test_config.agents`, else the runtime
+/// with the CLI discovered.
+#[derive(Debug, Clone)]
+struct Finder {
+    clock: Arc<dyn Clock>,
+    durations: Durations,
+    data_dir: PathBuf,
+    login_env: Option<BTreeMap<String, String>>,
     #[cfg(feature = "test-harness")]
-    if let Some(agent) = &payload.test_config.agents.claude {
-        let (program, args) = (agent.program.clone(), agent.args.clone());
-        return launch::injected(program, args, host, login);
+    agent: Option<(PathBuf, Vec<String>)>,
+}
+
+impl Finder {
+    async fn discover(&self, roots: Vec<PathBuf>) -> Discovery {
+        discover(self.login_env.clone(), &*self.clock, &self.durations, roots).await
     }
+
+    /// Discovers again, then finds the launch: what `agents/refresh` does.
+    async fn launch(&self, roots: Vec<PathBuf>) -> Launch {
+        let found = self.discover(roots).await;
+        self.launch_found(&found).await
+    }
+
+    async fn launch_found(&self, found: &Discovery) -> Launch {
+        let (clock, durations) = (&*self.clock, &self.durations);
+        let (host, login) = (&found.host, &found.login);
+        #[cfg(feature = "test-harness")]
+        if let Some((program, args)) = &self.agent {
+            return launch::injected(program.clone(), args.clone(), host, login);
+        }
+        let (dir, locator) = (&self.data_dir, &found.locator);
+        launch::production(clock, durations, dir, host, login, locator).await
+    }
+}
+
+/// `test_config.rss_samples` of Claude (design 5.9.9).
+fn test_rss(payload: &Payload) -> Option<u64> {
+    #[cfg(feature = "test-harness")]
+    return payload.test_config.rss_samples.claude;
     #[cfg(not(feature = "test-harness"))]
-    let _ = payload;
-    launch::production(clock, durations, data_dir, host, login, &found.locator).await
+    {
+        let _ = payload;
+        None
+    }
 }
 
 /// The clock, the durations and the login shell's environment of
 /// `test_config` (design 5.9.9), or of production.
-fn injected(payload: &Payload) -> (Arc<dyn Clock>, Durations, Option<BTreeMap<String, String>>) {
+fn injected(payload: &Payload) -> Injected {
     #[cfg(feature = "test-harness")]
     {
         use crate::startup::test_config::ClockKind;
-        let clock: Arc<dyn Clock> = match payload.test_config.clock {
-            ClockKind::System => Arc::new(SystemClock::new()),
-            ClockKind::Manual => Arc::new(crate::clock::ManualClock::new()),
+        let manual = (payload.test_config.clock == ClockKind::Manual).then(ManualClock::new);
+        let clock: Arc<dyn Clock> = match &manual {
+            Some(manual) => Arc::new(manual.clone()),
+            None => Arc::new(SystemClock::new()),
         };
-        let login_env = payload.test_config.login_env.clone();
-        (clock, payload.test_config.durations.clone(), login_env)
+        Injected {
+            clock,
+            durations: payload.test_config.durations.clone(),
+            login_env: payload.test_config.login_env.clone(),
+            manual,
+        }
     }
     #[cfg(not(feature = "test-harness"))]
     {
         let _ = payload;
-        (Arc::new(SystemClock::new()), Durations::default(), None)
+        Injected {
+            clock: Arc::new(SystemClock::new()),
+            durations: Durations::default(),
+            login_env: None,
+        }
     }
+}
+
+/// What `test_config` (design 5.9.9) sets, or production.
+struct Injected {
+    clock: Arc<dyn Clock>,
+    durations: Durations,
+    /// Stands in for the login shell.
+    login_env: Option<BTreeMap<String, String>>,
+    /// The clock `test/clock_advance` moves, when the host runs on one.
+    #[cfg(feature = "test-harness")]
+    manual: Option<ManualClock>,
 }
 
 /// Why the host could not start, with its exit code (design 5.2.13).
@@ -461,5 +585,60 @@ impl StartError {
             | Self::Index(_) => HostExit::DataDirUnusable,
             Self::Boot(_) | Self::Io(_) => HostExit::Error,
         }
+    }
+}
+
+#[cfg(all(test, feature = "test-harness"))]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::*;
+    use crate::gateway::testkit::TempDir;
+
+    /// The kinds of actor the source declares (`ActorKind::new("<name>")`).
+    fn declared() -> BTreeSet<String> {
+        let mut names = BTreeSet::new();
+        let mut dirs = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("src")];
+        while let Some(dir) = dirs.pop() {
+            for path in std::fs::read_dir(dir)
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+            {
+                if path.is_dir() {
+                    dirs.push(path);
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap_or_default();
+                for (_, rest) in text
+                    .match_indices("ActorKind::new(\"")
+                    .map(|(at, _)| text.split_at(at + 16))
+                {
+                    let name = rest.split('"').next().unwrap();
+                    if name.bytes().all(|b| b.is_ascii_lowercase() || b == b'_') {
+                        names.insert(name.to_owned());
+                    }
+                }
+            }
+        }
+        names
+    }
+
+    /// A kind of actor the host does not register would escape the barrier.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn it_clock_advance_the_host_registers_every_kind_of_actor() {
+        let dir = TempDir::new("kinds");
+        let mut payload = Payload::default();
+        let path = BTreeMap::from([("PATH".to_owned(), "/usr/bin:/bin".to_owned())]);
+        payload.test_config.login_env = Some(path);
+        let start = Start {
+            data_dir: dir.path().join("data"),
+            payload,
+            #[cfg(feature = "dev-auth")]
+            launcher: 0,
+        };
+        let host = Host::start(start).await.unwrap();
+        let kinds = host.quiescence.kinds();
+        let registered: BTreeSet<String> = kinds.iter().map(|k| k.name().to_owned()).collect();
+        assert_eq!(registered, declared());
     }
 }

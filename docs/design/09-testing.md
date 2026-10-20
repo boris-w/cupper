@@ -33,7 +33,7 @@
 |---|---|
 | `persona` | `claude` 或 `codex`：`initialize` 返回的能力（steering、promptQueueing、image 等）、`session/new` 返回的 configOptions 和默认模式、随后的 `available_commands_update`，以及权限请求的选项 ID，都按 SP-1 录制里的真实形态给出，选项映射、#556 的"拒绝即结束回合"、Claude 用 `$/cancel_request` 撤回审批、Codex 不撤回审批都测得到 |
 | 登录状态 | 已登录；Claude 形态未登录（`session/new` 成功，`session/prompt` 返回 `-32000`）；Codex 形态未登录（`session/new` 就报错） |
-| 故障注入 | 启动即退出、`initialize` 超时、`set_config_option` 报错等 |
+| 故障注入 | 启动即退出、`initialize` 超时、`set_config_option` 报错、不理 SIGTERM 且 stdin 关闭后不退出（`linger`，关闭顺序 5.6.8）等 |
 | 进程分段 | 回放多实例录制时，告诉假 agent 从第几段开始（见下文） |
 
 **2. 剧本命令**（prompt 文本就是剧本）：沿用 SP-4a 的 `say`、`think`、`flood`、`big`、`tool`、`tool_done`、`permission`、`question`、`sleep`、`wait_cancel`、`whoami`、`probe`、`spawn_child`、`exit`，M1 补充：
@@ -56,6 +56,7 @@
 | `upstream_retry <n>` | 推 `_meta.codex.error` 且 `willRetry`（K18） |
 | `thread_status <state>` | 推 Codex 的 `threadStatus` |
 | `echo_env` | 回显收到的 cwd 和 `clientInfo`（K13、K26），以及环境变量名单（进程卫生） |
+| `spawn_group_child [程序]` | 在新的进程组里拉起子进程（缺省 `/bin/sleep`），子进程继承 stdout，并回显它的 pid；用来模拟 Claude 自成会话的工具命令（K21，5.6.8） |
 | `auth_none` | 推 `_auth/status_update {kind: none}`，prompt 返回 `-32000` |
 
 **3. 原始行通道**：`raw <json>` 原样写一行 ACP 消息，不经过 SDK 的类型层。未知枚举值（K19）、原样的 `_meta`、`$/cancel_request`、`_auth/status_update` 都靠它发。回放模式整体走原始行通道。

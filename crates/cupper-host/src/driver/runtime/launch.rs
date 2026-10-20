@@ -11,6 +11,7 @@ use std::sync::Arc;
 use agent_client_protocol::schema::v1::InitializeResponse;
 use cupper_protocol::capabilities::{CliCompat, Versions};
 use cupper_protocol::ids::AdapterInstanceId;
+use cupper_protocol::index::{CliInstall, ConfigDirState};
 use cupper_sys::{Command, Env, ProcessGroup, Signal, Stdio};
 use tokio::net::unix::pipe;
 use tokio::sync::mpsc;
@@ -47,10 +48,20 @@ pub struct Launch {
     pub program: Program,
     pub env: Env,
     pub versions: Versions,
-    /// The native CLI and its version, for the `adapters` row.
-    pub cli: Option<(PathBuf, String)>,
+    /// The native CLI, for the `adapters` row and the agent's status.
+    pub cli: Option<Cli>,
+    /// The login shell's configuration directory, and whether it was passed on.
+    pub config_dir: ConfigDirState,
     /// Why no adapter can start: no CLI was found.
     pub unavailable: Option<AgentErrorClass>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Cli {
+    pub path: PathBuf,
+    /// Empty when `--version` could not be read.
+    pub version: String,
+    pub install: CliInstall,
 }
 
 /// The login shell's environment (design 5.6.6): `test_config.login_env`
@@ -88,6 +99,10 @@ pub fn injected(
     login: &LoginEnv,
 ) -> Launch {
     let config_dir = login.vars.get("CLAUDE_CONFIG_DIR").cloned();
+    let dir_state = match config_dir {
+        Some(_) => ConfigDirState::Ok,
+        None => ConfigDirState::Default,
+    };
     let config_dir = config_dir.map(env_rules::ConfigDir::from_test_config);
     let claude = env_rules::CLAUDE;
     let (env, _) = adapter_env(
@@ -105,6 +120,7 @@ pub fn injected(
         env,
         versions,
         cli,
+        config_dir: dir_state,
         unavailable,
     }
 }
@@ -139,6 +155,7 @@ pub async fn production(
         env: Env::new(),
         versions: versions(String::new(), CliCompat::Unsupported),
         cli: None,
+        config_dir: ConfigDirState::Default,
         unavailable: Some(AgentErrorClass::CliMissing),
     };
     let Ok(found) = locator.locate(&resolve::CLAUDE, None) else {
@@ -146,7 +163,13 @@ pub async fn production(
     };
     let config_dir = login.vars.get("CLAUDE_CONFIG_DIR");
     let (uid, boundaries) = (cupper_sys::current_uid(), locator.boundaries());
-    let config_dir = config_dir.and_then(|dir| check_config_dir(dir, uid, boundaries).ok());
+    let config_dir = config_dir.map(|dir| check_config_dir(dir, uid, boundaries).ok());
+    launch.config_dir = match &config_dir {
+        None => ConfigDirState::Default,
+        Some(Some(_)) => ConfigDirState::Ok,
+        Some(None) => ConfigDirState::Rejected,
+    };
+    let config_dir = config_dir.flatten();
     let claude = env_rules::CLAUDE;
     let binary = &found.binary;
     (launch.env, _) = adapter_env(claude, host, &login.vars, binary, config_dir.as_ref(), &[]);
@@ -167,7 +190,13 @@ pub async fn production(
     let cli_version = found_version.map(|v| format!("{}.{}.{}", v.major, v.minor, v.patch));
     let cli_version = cli_version.unwrap_or_default();
     launch.versions = versions(cli_version.clone(), compat);
-    (launch.cli, launch.unavailable) = (Some((found.binary, cli_version)), None);
+    let (path, install) = (found.binary, found.install);
+    let cli = Cli {
+        path,
+        version: cli_version,
+        install,
+    };
+    (launch.cli, launch.unavailable) = (Some(cli), None);
     launch
 }
 
@@ -193,8 +222,8 @@ pub struct Context {
 #[derive(Debug)]
 pub struct Instance {
     pub id: AdapterInstanceId,
-    /// Dropping it closes the adapter's stdin.
-    pub conn: AcpConnection,
+    /// Dropping it closes the adapter's stdin, as a stop does.
+    pub conn: Option<AcpConnection>,
     pub init: InitializeResponse,
     pub group: ProcessGroup,
     /// Its latest stderr, for the details of an `error` item.
@@ -273,7 +302,7 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
     match opened {
         Ok((conn, init)) => Ok(Instance {
             id,
-            conn,
+            conn: Some(conn),
             init,
             group,
             tail,
@@ -290,7 +319,9 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
 async fn record(cx: &Context, id: &AdapterInstanceId, group: &ProcessGroup, launch: &Launch) {
     let manifest = manifest::embedded();
     let cli = launch.cli.clone();
-    let (cli_path, cli_version) = cli.map(|(p, v)| (p.display().to_string(), v)).unzip();
+    let (cli_path, cli_version) = cli
+        .map(|c| (c.path.display().to_string(), c.version))
+        .unzip();
     let row = (
         id.to_string(),
         group.pgid,
@@ -321,6 +352,20 @@ async fn record(cx: &Context, id: &AdapterInstanceId, group: &ProcessGroup, laun
     });
     // Without the row the host only loses the cleanup of a crash.
     let _ = write.await;
+}
+
+/// The groups of the instance's descendants in its `adapters` row, for the
+/// cleanup after a crash of the host (design 5.2.13).
+pub fn record_groups(writer: &Writer, id: &AdapterInstanceId, groups: &[ProcessGroup]) {
+    let groups: Vec<_> = groups
+        .iter()
+        .map(|g| (g.pgid, g.start.as_micros()))
+        .collect();
+    let (id, groups) = (id.to_string(), serde_json::json!(groups).to_string());
+    drop(writer.submit(Durability::Normal, move |conn| {
+        let sql = "UPDATE adapters SET groups = ?2 WHERE instance_id = ?1";
+        conn.execute(sql, (id, groups)).map(drop)
+    }));
 }
 
 /// The instance's end in its `adapters` row.

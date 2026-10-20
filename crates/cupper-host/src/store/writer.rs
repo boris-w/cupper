@@ -36,7 +36,7 @@ use tokio::sync::oneshot;
 
 use super::connection::{Durability, set_durability};
 use crate::durations::{Durations, STORE_BATCH_LINGER};
-use crate::quiescence::{ActorKind, Participant, Quiescence};
+use crate::quiescence::{ActorKind, Hold, Participant, Quiescence};
 use crate::startup::payload::Payload;
 
 /// The most operations one batch commits.
@@ -118,6 +118,8 @@ impl<T> Future for Receipt<T> {
 #[derive(Debug, Clone)]
 pub struct Writer {
     queue: mpsc::Sender<Message>,
+    /// A submitted operation holds the barrier until its receipt is answered.
+    quiescence: Quiescence,
 }
 
 impl Writer {
@@ -148,6 +150,7 @@ impl Writer {
             })?;
         let writer = Self {
             queue: queue.clone(),
+            quiescence: quiescence.clone(),
         };
         let thread = WriterThread {
             queue,
@@ -165,9 +168,10 @@ impl Writer {
         F: FnOnce(&Connection) -> rusqlite::Result<T> + Send + 'static,
     {
         let (reply, receipt) = oneshot::channel();
+        let hold = self.quiescence.hold();
         let job = Job {
             durability,
-            op: Box::new(Submitted { op, reply }),
+            op: Box::new(Submitted { op, reply, hold }),
         };
         // If the thread has stopped, the job comes back and is dropped with
         // its reply, and the receipt reads `Stopped`.
@@ -230,6 +234,8 @@ struct Ran {
 struct Submitted<F, T> {
     op: F,
     reply: oneshot::Sender<Result<T, WriteError>>,
+    /// Let go once the receipt is answered.
+    hold: Hold,
 }
 
 impl<F, T> Operation for Submitted<F, T>
@@ -238,7 +244,7 @@ where
     F: FnOnce(&Connection) -> rusqlite::Result<T> + Send + 'static,
 {
     fn run(self: Box<Self>, conn: &Connection) -> Ran {
-        let Self { op, reply } = *self;
+        let Self { op, reply, hold } = *self;
         let result = op(conn);
         Ran {
             succeeded: result.is_ok(),
@@ -249,6 +255,7 @@ where
                 };
                 // The submitter may no longer be waiting.
                 let _ = reply.send(answer);
+                drop(hold);
             }),
         }
     }
@@ -269,8 +276,8 @@ struct Batcher {
 
 impl Batcher {
     fn run(mut self, inbox: &Receiver<Message>, participant: Participant) {
-        let _participant = participant;
-        while let Ok(Message::Job(first)) = inbox.recv() {
+        // Idle while it waits for work; each operation holds the barrier.
+        while let Ok(Message::Job(first)) = participant.idle_blocking(|| inbox.recv()) {
             let mut batch = vec![first];
             let stop = self.collect(inbox, &mut batch);
             self.flush(batch);
@@ -534,6 +541,7 @@ mod tests {
             op: Box::new(Submitted {
                 op: |_: &Connection| Ok(()),
                 reply: oneshot::channel().0,
+                hold: Quiescence::new().hold(),
             }),
         };
         let batcher = Batcher {

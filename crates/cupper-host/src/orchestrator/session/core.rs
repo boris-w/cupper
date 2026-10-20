@@ -16,13 +16,20 @@
 //!   opens next. Each resolution goes to the judge (`Resolved`).
 //! - The machine's `CancelAsks` and `Settle` go to the broker, so a turn's
 //!   requests are resolved before its `turn.completed` (design 5.3.11).
+//! - The tier guard hears of the permission mode; its interrupt and gate go
+//!   to the machine, its revert to the agent, and `config_unconfirmed` comes
+//!   with a notice.
 
 use std::mem;
 use std::sync::Arc;
 
+use cupper_protocol::capabilities::ConfigOptionId;
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{AdapterInstanceId, RequestId, SessionId, TurnId};
 use cupper_protocol::interaction::InteractionStatus;
+use cupper_protocol::item::NoticeCode;
+use cupper_protocol::methods::handshake::Principal;
+use cupper_protocol::session::PauseReason;
 
 use crate::clock::{IdGen, Now};
 use crate::driver::api::{AskAnswer, AskId, AskRequest, DriverCommand, DriverEvent};
@@ -30,6 +37,8 @@ use crate::durations::Durations;
 use crate::orchestrator::autonomous::{self, AutonomousJudge, JudgeTimer};
 use crate::orchestrator::coalescer::{self, Coalescer, FlushTimer};
 use crate::orchestrator::interaction::{self, InteractionBroker};
+use crate::orchestrator::notice;
+use crate::orchestrator::tier_guard::{self, RevertTimer, TierGuard};
 use crate::orchestrator::turn::{self, TurnMachine, TurnSignal, TurnTimer};
 use crate::pure::{Core, TimerRequest};
 
@@ -39,6 +48,8 @@ pub struct SessionCore {
     judge: AutonomousJudge,
     coalescer: Coalescer,
     broker: InteractionBroker,
+    guard: TierGuard,
+    ids: Arc<IdGen>,
     /// The turn requests go into: from `turn.started` until its Settle.
     open: Option<TurnId>,
     /// Requests that came while no turn was open, for the next one.
@@ -54,6 +65,9 @@ pub enum Input {
     Agent(DriverEvent),
     /// `interaction/respond`.
     Respond(Box<interaction::Respond>),
+    /// The tier guard's; a mode change counts as `during_turn` only while a
+    /// turn runs.
+    Tier(tier_guard::Input),
     Expired(Key),
 }
 
@@ -62,6 +76,7 @@ pub enum Key {
     Turn(TurnTimer),
     Judge(JudgeTimer),
     Flush(FlushTimer),
+    Revert(RevertTimer),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -74,6 +89,8 @@ pub enum Action {
     Machine(turn::Action),
     /// The reply to [`Input::Respond`].
     Answer(interaction::Reply),
+    /// The guard's `Unconfirmed` and `SetBy`, which the actor records.
+    Tier(tier_guard::Action),
     Timer(TimerRequest<Key>),
 }
 
@@ -87,13 +104,18 @@ fn timer<K>(request: TimerRequest<K>, key: impl Fn(K) -> Key) -> Action {
 impl SessionCore {
     /// `stops_commands`: the agent's `interrupt_stops_commands`, as far as
     /// known; see [`set_stops_commands`](Self::set_stops_commands).
+    /// `setter` set the session's tier; `confirmed` when it is a confirmed
+    /// `full_access`.
     pub fn new(
         session: SessionId,
         ids: Arc<IdGen>,
         durations: &Durations,
         stops_commands: bool,
+        (setter, confirmed): (Principal, bool),
     ) -> Self {
         Self {
+            guard: TierGuard::new(durations, setter, confirmed),
+            ids: Arc::clone(&ids),
             machine: TurnMachine::new(Arc::clone(&ids), durations),
             judge: AutonomousJudge::new(durations),
             coalescer: Coalescer::new(Arc::clone(&ids), durations, stops_commands),
@@ -107,6 +129,15 @@ impl SessionCore {
     /// The agent's capabilities came in with an attach.
     pub fn set_stops_commands(&mut self, stops_commands: bool) {
         self.coalescer.set_stops_commands(stops_commands);
+    }
+
+    pub fn ids(&self) -> &IdGen {
+        &self.ids
+    }
+
+    /// Messages wait for the project trust rescan before their turns.
+    pub fn require_trust_checks(&mut self) {
+        self.machine.require_checks();
     }
 
     /// The running turn, from `turn.started` until it completes.
@@ -267,6 +298,48 @@ impl SessionCore {
         }
     }
 
+    /// Steps the guard and carries out what the session's cores do for it.
+    fn tier(&mut self, input: tier_guard::Input, now: Now, out: &mut Vec<Action>) {
+        for action in self.guard.step(input, now) {
+            match action {
+                tier_guard::Action::Revert(value) => {
+                    let Some(session) = self.machine.agent_session().cloned() else {
+                        continue;
+                    };
+                    let option = ConfigOptionId::PermissionMode.to_string();
+                    let command = DriverCommand::SetConfig {
+                        session,
+                        option,
+                        value,
+                    };
+                    out.push(Action::Driver(command));
+                }
+                tier_guard::Action::Interrupt => {
+                    let expected_turn = None;
+                    self.machine(turn::Input::Interrupt { expected_turn }, now, out)
+                }
+                tier_guard::Action::Timer(request) => out.push(timer(request, Key::Revert)),
+                tier_guard::Action::Unconfirmed(reason) => {
+                    let (pause, shut) = (PauseReason::ConfigUnconfirmed, reason.is_some());
+                    self.machine(
+                        turn::Input::Gate {
+                            reason: pause,
+                            shut,
+                        },
+                        now,
+                        out,
+                    );
+                    if shut {
+                        let notice = notice(&self.ids, now, NoticeCode::ConfigUnconfirmed);
+                        out.extend(notice.map(Action::Event));
+                    }
+                    out.push(Action::Tier(tier_guard::Action::Unconfirmed(reason)));
+                }
+                action @ tier_guard::Action::SetBy { .. } => out.push(Action::Tier(action)),
+            }
+        }
+    }
+
     fn coalesce(&mut self, input: coalescer::Input, now: Now, out: &mut Vec<Action>) {
         for action in self.coalescer.step(input, now) {
             out.push(match action {
@@ -322,6 +395,23 @@ impl Core for SessionCore {
             }
             Input::Respond(respond) => {
                 self.resolve(interaction::Input::Respond(respond), now, &mut out)
+            }
+            Input::Tier(tier_guard::Input::Mode {
+                mode,
+                tier,
+                during_turn,
+            }) => {
+                let during_turn = during_turn && self.machine.turn_id().is_some();
+                let mode = tier_guard::Input::Mode {
+                    mode,
+                    tier,
+                    during_turn,
+                };
+                self.tier(mode, now, &mut out)
+            }
+            Input::Tier(input) => self.tier(input, now, &mut out),
+            Input::Expired(Key::Revert(key)) => {
+                self.tier(tier_guard::Input::Expired(key), now, &mut out)
             }
             Input::Expired(Key::Turn(key)) => {
                 self.machine(turn::Input::Expired(key), now, &mut out)
