@@ -242,6 +242,9 @@
 | T034 | T096 已合并：`project/add`、`project/trust_info` 把 `scan.findings()` 填进 `TrustScan.findings`（之前的"先回空列表"不再需要）。`.codex` 按叶子配置项列，文件多时 findings 很多，与 `detail` 不截断一起由本任务的帧上限处理覆盖 | T096 |
 | T077 | preload 的 `requestPrivileged` 在 T076 里先返回 `{status: "failed"}`，由本任务接上；windowBridge 照常放行 `interaction/respond`、`git/revert`，真实输入检查由本任务加 | T076 |
 | 更新器、深链接的任务 | preload 的 `updates`、`onNavigate` 在 T076 里只注册了监听，主进程还没有发送方，由这些任务接上 | T076 |
+| T034、T044 | 仓库档调用写成 `tool.repo_tier(仓库).run(clock, durations, 全部项目和工作区根目录, GitCmd::repo(op).args(..))`；取 git 根目录用 `RepoOp::RevParse` 加 `--show-toplevel`；错误经 `GitError::code()`、`reason()` 转成协议错误；`notice()` 和 `Done::notice` 由调用方写进会话流，路径是绝对的 realpath，写进会话流时是否改成相对仓库的路径由调用方定 | T098 |
+| `git/status` 等频繁走仓库档的任务 | 指纹每次要遍历整个工作区找 `.gitattributes`（合成仓库 5,000 个目录约 70 ms，带大 `node_modules` 的仓库到一秒级）。上线前缓存 `.gitattributes` 清单（按目录 mtime 失效），或只扫 index 里出现的目录 | T098 |
+| 以后整理 git 模块时 | T097 的 `overrides.global` 里也带 `--no-pager` 和两个无条件的 `-c`，与 T060 档位固定的参数重复；无害（档位固定的仍排在最后），去重时在 `overrides` 里拿掉这三项 | T098 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
