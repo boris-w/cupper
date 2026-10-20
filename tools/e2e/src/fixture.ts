@@ -52,7 +52,9 @@ export class Cupper {
     writeFileSync(key, `${randomBytes(32).toString("hex")}\n`, { mode: 0o600 });
     const config = {
       agents: { claude: { program: BUILT.fakeAgent } },
-      login_env: {},
+      // The system's directories only, never the user's PATH: the host finds
+      // `/usr/bin/git` there, so projects are git repositories (T054).
+      login_env: { PATH: "/usr/bin:/bin:/usr/sbin:/sbin" },
       notifier: "record",
       ...testConfig,
     };
@@ -81,7 +83,7 @@ export class Cupper {
     if (this.#main.pid === undefined) {
       throw new Error("the app did not start");
     }
-    this.#record(tree(this.#main.pid));
+    this.track(tree(this.#main.pid));
     this.#dialogs = await Dialogs.install(this.app);
     this.#window = await this.app.firstWindow();
   }
@@ -104,7 +106,7 @@ export class Cupper {
     if (typeof status.pid !== "number") {
       throw new Error("the host gives no pid: not a test-harness build");
     }
-    this.#record(tree(status.pid));
+    this.track(tree(status.pid));
     return status;
   }
 
@@ -123,11 +125,8 @@ export class Cupper {
     await this.cli.dispose();
     const table = processes();
     const app = this.#main;
-    const host = this.#host(table);
-    this.#record([
-      ...(app?.pid !== undefined ? tree(app.pid, table) : []),
-      ...(host ? tree(host.pid, table) : []),
-    ]);
+    const host = this.host(table);
+    this.track(this.processes(table));
     if (app && app.exitCode === null && app.signalCode === null) {
       await this.quitWithoutAsking().catch(() => problems.push("the app did not quit"));
     }
@@ -152,8 +151,15 @@ export class Cupper {
     }
   }
 
+  /** The app's processes and the host's, as they run now: the host is not the app's child. */
+  processes(table = processes()): Proc[] {
+    const host = this.host(table);
+    const app = this.#main?.pid;
+    return [...(app === undefined ? [] : tree(app, table)), ...(host ? tree(host.pid, table) : [])];
+  }
+
   /** The host in `host.lock`, if it is this test's: it runs with our data directory. */
-  #host(table: Proc[]): Proc | undefined {
+  host(table = processes()): Proc | undefined {
     let pid: number;
     try {
       pid = Number(readFileSync(join(this.dataDir, "host.lock"), "utf8").trim());
@@ -165,7 +171,8 @@ export class Cupper {
     );
   }
 
-  #record(procs: Proc[]) {
+  /** Adds processes the test started to those that must be gone at the end. */
+  track(procs: Proc[]) {
     const known = (proc: Proc) =>
       this.#procs.some((p) => p.pid === proc.pid && p.started === proc.started);
     this.#procs.push(...procs.filter((proc) => !known(proc)));
