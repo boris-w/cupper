@@ -3,7 +3,7 @@
 // defaults Chromium writes for the e2e app outside the test's root (T074).
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -18,8 +18,9 @@ export default async function setup() {
         "(or `cargo build -p cupper-fake-agent` and `pnpm build:e2e`)",
     );
   }
-  const roots = existsSync(ROOTS) ? readdirSync(ROOTS).map((name) => join(ROOTS, name)) : [];
-  await sweep(roots);
+  const names = existsSync(ROOTS) ? readdirSync(ROOTS) : [];
+  // As the processes name them: `$TMPDIR` is a link.
+  await sweep(names.map((name) => realpathSync(join(ROOTS, name))));
   return removeDefaults;
 }
 

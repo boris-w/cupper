@@ -216,7 +216,8 @@ async function attachLogs(info: TestInfo, root: string) {
 
 /**
  * Removes the roots of tests whose worker was killed, and the processes
- * those tests left: the ones they recorded and any that names the root.
+ * those tests left: the ones they recorded, any that names the root, and
+ * the processes below them.
  */
 export async function sweep(roots: string[]): Promise<void> {
   const table = processes();
@@ -231,7 +232,8 @@ export async function sweep(roots: string[]): Promise<void> {
     if (alive(read(OWNER), table).length > 0) {
       continue;
     }
-    const left = [...alive(read(PROCS), table), ...table.filter((p) => p.args.includes(root))];
+    const found = [...alive(read(PROCS), table), ...table.filter((p) => p.args.includes(root))];
+    const left = found.flatMap((proc) => tree(proc.pid, table));
     signal(left, "SIGTERM");
     signal(await gone(left, 10_000), "SIGKILL");
     rmSync(root, { recursive: true, force: true });
