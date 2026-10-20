@@ -528,6 +528,11 @@ UNIT-main-hardening = "pr"
 milestone = "M1a"
 UNIT-launcher = "pr"
 
+# 桌面主进程 II-b：退出确认与重启宿主（计划 v1.3.17 由 T075 拆出）
+[T007]
+milestone = "M1a"
+UNIT-host-restart = "pr"
+
 # 桌面主进程 III：windowBridge 与 preload
 [T076]
 milestone = "M1a"

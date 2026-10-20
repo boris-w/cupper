@@ -68,3 +68,12 @@
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 1,460–1,760 行，在写代码之前停下汇报，并查出任务书没写、但不做就跑不起来的三处：原生扩展缺按 pid 取可执行文件路径和 cdhash 的接口；App 里还没打包原生扩展和宿主；主进程缺基于 `net.Socket` 的 `HostPort`。
+
+**裁定：按执行者的建议拆分（计划 v1.3.17）。**
+- **T075 收窄为"拉起宿主与 control 连接"**：加载扩展并用 `buildInfo()` 核对 flavor；**dev、e2e 构建的打包配置**（`cupper_native.node` 放 asar 外，`target/host-bundle/<kind>/CupperHost.app` 放进 `Contents/Helpers/`）；`SocketPort`（主进程的 `HostPort`）；`hostLauncher`；`hostConnection`；`controlClient`；`CUPPER_E2E_DIR`；启动时的接线。验收 UNIT-launcher 的拉起部分，加一条用 e2e 宿主产物真实拉起并握手的集成用例。规模改为 L，上限约 1,000 行，硬停止线 1,100；推算贴线也先停下。打包配置留在本任务，因为要让 App 本身真正拉起宿主；自用构建和发布构建的打包配置仍归 T160、T180。
+- **新增 T007"退出确认与重启宿主"**（依赖本任务）：`cupper-sys` 的 `proc_pidpath` 与按 pid 取 cdhash、扩展的 `processImage(pid)`、`fileCdhash(path)` 与 TS 声明；`lifecycle`；"无法验证宿主"与"重启宿主"。新增编号 UNIT-host-restart（`tests/ids.toml` 已在 main 上改好）。T090 改为也依赖 T007。
+- **e2e 启动载荷的约定**（已写进设计 5.9.9）：测试夹具在 `CUPPER_E2E_DIR` 下写 `harness_key`（64 位小写十六进制加换行，权限 0600）和 `test_config.json`（宿主 `test_config` 的 JSON）；e2e 版主进程拉起宿主时读这两个文件，连同自己生成的 `dev_key` 组装成启动载荷。用例里由测试自己写这两个文件。
