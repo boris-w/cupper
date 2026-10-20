@@ -43,7 +43,6 @@ use crate::driver::locate::trust::{Boundaries, system_temp_dirs};
 use crate::driver::probe::login_shell::LoginEnv;
 use crate::driver::runtime::agents::{Agents, Find};
 use crate::driver::runtime::launch::{self, Launch};
-use crate::driver::runtime::status::NoAgentNotes;
 use crate::driver::runtime::{AGENT_RUNTIME, AgentRuntime, RuntimeDeps};
 use crate::durations::Durations;
 use crate::exit::HostExit;
@@ -241,7 +240,7 @@ impl Host {
             quiescence: quiescence.clone(),
             probe_dir: data_dir.join("probe").join("claude"),
             durations: durations.clone(),
-            notes: Arc::new(NoAgentNotes),
+            notes: Arc::new(index.clone()),
         };
         let claude = AgentRuntime::start(deps);
         let find: Find = {

@@ -12,7 +12,16 @@ use crate::driver::probe::login_shell::{Failure, LoginEnv};
 use crate::orchestrator::testkit::text;
 use crate::store::testutil::{TempDir, host_writer, query, raw_db};
 use crate::store::{Durability, RAW_WRITER, RawWriter};
+use cupper_protocol::index::AgentStatus;
 use cupper_sys::ProcessInfo;
+
+/// An index that hears nothing.
+#[derive(Debug)]
+struct Deaf;
+
+impl AgentNotes for Deaf {
+    fn agent(&self, _: AgentStatus) {}
+}
 
 /// A runtime of the fake agent, on `dir`'s stores; probes in `dir/probe`.
 fn runtime(dir: &TempDir) -> AgentRuntime {
@@ -44,7 +53,7 @@ fn runtime(dir: &TempDir) -> AgentRuntime {
         quiescence,
         probe_dir: dir.path().join("probe"),
         durations: Durations::default(),
-        notes: Arc::new(status::NoAgentNotes),
+        notes: Arc::new(Deaf),
     })
 }
 

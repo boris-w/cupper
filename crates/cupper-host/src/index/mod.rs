@@ -15,6 +15,7 @@
 //!   [`status`] core's, fed by the sessions' [`IndexNotes`], `session/mark_read`
 //!   and `client/presence`. `sessions.last_read_seq` is the one column of
 //!   `sessions` the index writes; the session actors never do.
+//! - `agents.updated` merges what each agent runtime reports ([`AgentNotes`]).
 
 mod budget;
 mod projects;
@@ -29,7 +30,10 @@ use cupper_protocol::envelope::Cause;
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{ConnId, IntentId, ProjectId, SessionId};
-use cupper_protocol::index::{ClientsUpdated, HostUpdated, NotificationIntent, SessionSummary};
+use cupper_protocol::index::{
+    AgentStatus, AgentsUpdated, ClientsUpdated, GitTools, HostUpdated, NotificationIntent,
+    SessionSummary,
+};
 use cupper_protocol::methods::handshake::{ClientPresence, ClientPresenceParams};
 use cupper_protocol::methods::project::{
     ProjectAdd, ProjectAddParams, ProjectTrust, ProjectTrustParams,
@@ -48,6 +52,7 @@ use self::projects::{Context, Prepared};
 use self::rows::{Project, Tables};
 use self::status::{Action, Flush, Input, Status};
 use crate::clock::{Clock, IdGen};
+use crate::driver::runtime::status::AgentNotes;
 use crate::durations::Durations;
 use crate::gateway::{Call, Gateway, IndexPort, Opened, Port, Reply};
 use crate::git::GitTool;
@@ -102,6 +107,7 @@ enum Mail {
     Prepared(Box<Done>),
     Clients,
     Status(Input),
+    Agent(Box<AgentStatus>),
     Checkpoint(oneshot::Sender<()>),
     /// `test/seed` wrote sessions: reconcile with the tables again.
     #[cfg(feature = "test-harness")]
@@ -201,6 +207,12 @@ impl IndexNotes for IndexHandle {
     }
 }
 
+impl AgentNotes for IndexHandle {
+    fn agent(&self, status: AgentStatus) {
+        let _ = self.mail.send(Mail::Agent(Box::new(status)));
+    }
+}
+
 impl Part for IndexHandle {
     fn activity(&self) -> Activity {
         Activity::default()
@@ -269,6 +281,7 @@ impl IndexActor {
                 Mail::Status(input) => {
                     let _ = self.step(input).await;
                 }
+                Mail::Agent(status) => self.agent(*status).await,
                 #[cfg(feature = "test-harness")]
                 Mail::Reconcile(done) => {
                     if let Ok(mut tables) = self.deps.readers.read(rows::read).await {
@@ -542,6 +555,24 @@ impl IndexActor {
             let _ = self.writer.append(batch).await;
         }
         stored
+    }
+
+    /// One agent's status into `agents.updated`.
+    async fn agent(&mut self, status: AgentStatus) {
+        let agents = read(&self.handle, |view| view.agents.clone());
+        let mut agents = agents.unwrap_or_else(|| AgentsUpdated {
+            agents: Vec::new(),
+            git: GitTools {
+                version: None,
+                lfs: None,
+            },
+        });
+        match agents.agents.iter_mut().find(|a| a.agent == status.agent) {
+            Some(known) if *known == status => return,
+            Some(known) => *known = status,
+            None => agents.agents.push(status),
+        }
+        self.append(EventBody::AgentsUpdated(agents)).await;
     }
 
     async fn append(&mut self, body: EventBody) {
