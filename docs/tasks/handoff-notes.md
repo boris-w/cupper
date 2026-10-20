@@ -307,6 +307,9 @@
 | T036 | 特权操作 `settings` 现在返回 `failed`（`unsupported`）：`settings/update` 接上后，照 `set_config` 的结构补上：`policy/describe`（`security_setting`）→ 原生确认框 → `settings/update`（`apps/desktop/src/main/privileged/actions.ts`） | T134 |
 | T135 | 提权框加"申请方不是本 App 自带的命令行工具"：在 `apps/desktop/src/main/privileged/dialogs.ts` 的 `elevationBox` 里按 `VerifiedRequester.bundled_cli` 加一行醒目提示，文案放 `privileged` 命名空间；信任项目、新建会话的确认框要显示项目路径（`project/trust_info`、`policy/describe` 的 `details` 现在都只有 `project_id`） | T134 |
 | 所有写中文文案的任务 | 截图夹具的中文字体是 GB2312 符号区加一级汉字的子集，T118 的 `fonts.test.ts` 检查全部 locale 文件；`⚠` 这类符号不在子集里，会让检查失败（T134 合并时遇到，改成了"【注意】"）。需要子集外的字时按 `tools/ui-screenshots` 的 notes 重做子集 | T134 合并 |
+| T082、T083 | 行类型注册表在 `packages/ui-core/src/rows/registry.tsx`：`RowRegistry<R extends {kind: string}>` 的 `register`、`resolve`，`<RowView registry row>` 按 kind 画出组件；同一个 kind 注册两次抛错；不认识的 kind 只显示一句占位（不渲染行里的数据）。可以各建一个实例或共用一个，在模块加载时注册 | T128 |
+| T153 | 顶栏"打开"和"⋯"已是挂着空菜单的工具栏按钮（`<Menu trigger={<ToolbarButton …/>}>`），菜单项归本任务 | T128 |
+| T106、T152 | 待核对：侧边面板被自动收起时，开关仍显示为按下（跟随用户意图）；开关滑块用 `--color-surface-elevated`，暗色下偏深；tooltip 阴影在 ui-spec 3.6 有、5.7.10 没有 token | T128 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
