@@ -8,13 +8,15 @@
 //! supervisor's watch; IT-runtime-startup the runtime installer. The tests talk to the host as the CLI's
 //! `harness` client.
 
+mod common;
+
 use std::io::Write;
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
-use cupper_cli::client::{self, Client, ClientAuth, ClientError, Incoming, Options};
+use cupper_cli::client::{self, ClientAuth, ClientError, Incoming, Options};
 use cupper_cli::harness::HarnessKey;
 use cupper_cli::verify::HostCheck;
 use cupper_host::clock::{Clock, SystemClock};
@@ -23,7 +25,7 @@ use cupper_host::driver::runtime::launch;
 use cupper_host::gateway::listen::HostLock;
 use cupper_host::gateway::testkit::{KEY, TempDir};
 use cupper_host::store::meta::{self, MetaKey};
-use cupper_host::store::{Database, MIGRATIONS, migrate, open_reader, open_writer};
+use cupper_host::store::open_reader;
 use cupper_protocol::error::ErrorReason;
 use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::methods::Empty;
@@ -34,112 +36,16 @@ use cupper_protocol::methods::handshake::{
     ClientPresence, ClientPresenceParams, HostExit, HostExitParams, HostStatus,
 };
 use cupper_protocol::methods::session::{
-    SessionCreate, SessionInterrupt, SessionMarkRead, SessionMarkReadParams, SessionSend,
+    SessionCreate, SessionInterrupt, SessionMarkRead, SessionMarkReadParams,
 };
 use cupper_protocol::methods::stream::StreamSubscribe;
 use cupper_protocol::proof;
 use cupper_protocol::recording::{Body, INSTANCE_EXITED, INSTANCE_STARTED, Recording};
 use cupper_protocol::transport::socket_path;
 use rusqlite::Connection;
-use serde_json::json;
+use serde_json::{Value, json};
 
-const HOST: &str = env!("CARGO_BIN_EXE_cupper-host");
-/// How long the host may take to come up or to exit.
-const PATIENCE: Duration = Duration::from_secs(30);
-
-/// Starts the host on `data_dir` with [`KEY`] as `harness_key`, no login shell.
-fn spawn(data_dir: &Path) -> Child {
-    spawn_with(data_dir, json!({"login_env": {}}))
-}
-
-fn spawn_with(data_dir: &Path, test_config: serde_json::Value) -> Child {
-    spawn_from(Path::new(HOST), data_dir, test_config)
-}
-
-fn spawn_from(program: &Path, data_dir: &Path, test_config: serde_json::Value) -> Child {
-    let mut child = Command::new(program)
-        .arg("--data-dir")
-        .arg(data_dir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("start the host");
-    let payload = json!({"harness_key": proof::to_hex(&KEY), "test_config": test_config});
-    writeln!(child.stdin.take().unwrap(), "{payload}").unwrap();
-    child
-}
-
-async fn wait(clock: &SystemClock) {
-    clock
-        .timer_at(clock.now_mono() + Duration::from_millis(20))
-        .await;
-}
-
-/// The `harness` client, once the host listens.
-async fn connect(data_dir: &Path) -> client::Client {
-    let socket = socket_path(data_dir, &cupper_sys::user_temp_dir().unwrap());
-    let clock = SystemClock::new();
-    let give_up = clock.now_mono() + PATIENCE;
-    loop {
-        let options = Options {
-            auth: ClientAuth::Harness(HarnessKey::new(KEY)),
-            ..Options::default()
-        };
-        match client::Client::connect(&socket, &HostCheck::Harness, options).await {
-            Ok(client) => return client,
-            Err(err) => assert!(clock.now_mono() < give_up, "cannot connect: {err}"),
-        }
-        wait(&clock).await;
-    }
-}
-
-/// The host's exit code, once it exits.
-async fn exit_code(child: &mut Child) -> i32 {
-    let clock = SystemClock::new();
-    let give_up = clock.now_mono() + PATIENCE;
-    loop {
-        if let Some(status) = child.try_wait().unwrap() {
-            return status.code().expect("an exit, not a signal");
-        }
-        assert!(clock.now_mono() < give_up, "the host did not exit");
-        wait(&clock).await;
-    }
-}
-
-fn terminate(child: &Child) {
-    let status = Command::new("/bin/kill")
-        .args(["-TERM", &child.id().to_string()])
-        .status()
-        .unwrap();
-    assert!(status.success());
-}
-
-/// A data directory holding `host.db` as this host creates it.
-fn migrated(dir: &TempDir) -> (PathBuf, Connection) {
-    let data_dir = dir.path().join("data");
-    std::fs::create_dir(&data_dir).unwrap();
-    let mut conn = open_writer(&data_dir.join("host.db"), Database::Host).unwrap();
-    migrate(
-        &mut conn,
-        MIGRATIONS,
-        &data_dir.join("backups"),
-        &SystemClock::new(),
-    )
-    .unwrap();
-    (data_dir, conn)
-}
-
-fn column(data_dir: &Path, sql: &str) -> Vec<String> {
-    query(&data_dir.join("host.db"), sql)
-}
-
-fn query(db: &Path, sql: &str) -> Vec<String> {
-    let conn = open_reader(db).unwrap();
-    let mut query = conn.prepare(sql).unwrap();
-    let rows = query.query_map([], |row| row.get(0)).unwrap();
-    rows.collect::<Result<_, _>>().unwrap()
-}
+use common::*;
 
 fn meta_ms(data_dir: &Path, key: MetaKey) -> u64 {
     let conn = open_reader(&data_dir.join("host.db")).unwrap();
@@ -317,65 +223,6 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
     }
 }
 
-/// A host with the fake agent on a trusted project in `dir`, more of
-/// `test_config` in `config`; its data directory and the harness client.
-async fn fake_agent_host(dir: &TempDir, config: serde_json::Value) -> (PathBuf, Child, Client) {
-    fake_agent_host_from(Path::new(HOST), dir, config).await
-}
-
-async fn fake_agent_host_from(
-    host: &Path,
-    dir: &TempDir,
-    config: serde_json::Value,
-) -> (PathBuf, Child, Client) {
-    let (data_dir, conn) = migrated(dir);
-    let sql = "INSERT INTO projects (project_id, path, name, position, added_at, trust_state)
-               VALUES (?1, ?2, 'p', 0, 1, 'trusted')";
-    let path = dir.path().to_str().unwrap();
-    conn.execute(sql, [&ProjectId::from_uuid(1).to_string(), path])
-        .unwrap();
-    let program = launch::fake_agent();
-    let mut test_config = json!({"agents": {"claude": {"program": program}}, "login_env": {}});
-    test_config
-        .as_object_mut()
-        .unwrap()
-        .extend(config.as_object().unwrap().clone());
-    let host = spawn_from(host, &data_dir, test_config);
-    let client = connect(&data_dir).await;
-    (data_dir, host, client)
-}
-
-/// `session/create` with the message `text`; the session.
-async fn create(client: &Client, text: &str) -> SessionId {
-    let params = json!({"command_id": client::command_id(), "agent": "claude",
-        "project_id": ProjectId::from_uuid(1), "workspace": {"kind": "local"},
-        "message": [{"type": "text", "text": text}]});
-    let params = serde_json::from_value(params).unwrap();
-    client
-        .request::<SessionCreate>(params)
-        .await
-        .unwrap()
-        .session_id
-}
-
-/// `session/send` of the message `text`.
-async fn send(client: &Client, session: &SessionId, text: &str) {
-    let params = json!({"command_id": client::command_id(), "session_id": session,
-        "mode": "queue", "content": [{"type": "text", "text": text}]});
-    let params = serde_json::from_value(params).unwrap();
-    client.request::<SessionSend>(params).await.unwrap();
-}
-
-/// Waits until `sql` reads `expected` in `db` of `data_dir`.
-async fn until(data_dir: &Path, db: &str, sql: &str, expected: &[&str]) {
-    let clock = SystemClock::new();
-    let give_up = clock.now_mono() + PATIENCE;
-    while query(&data_dir.join(db), sql) != expected {
-        assert!(clock.now_mono() < give_up, "{sql}: not {expected:?}");
-        wait(&clock).await;
-    }
-}
-
 #[tokio::test]
 async fn it_lifecycle_runs_a_turn_with_the_fake_agent() {
     let dir = TempDir::new("turn");
@@ -405,6 +252,66 @@ async fn it_lifecycle_runs_a_turn_with_the_fake_agent() {
     assert_eq!(statuses.last().map(String::as_str), Some("unread"));
     assert_eq!(index("reason", "notification.intent"), ["turn_completed"]);
     assert!(!index("agents", "agents.updated").is_empty());
+}
+
+/// UNIT-replay end to end: SP-1's Claude turn `s02b-plan`, played by the
+/// fake agent, runs to its end on a real host. The SP-1 client is not the
+/// host (design 5.9.2), so its own requests give way to the host's:
+/// `initialize` takes the host's parameters, and the two
+/// `set_config_option` of SP-1's safety policy go with their responses.
+/// Every other frame plays as recorded and must match.
+#[tokio::test]
+async fn unit_replay_a_host_runs_an_sp1_claude_turn() {
+    let dir = TempDir::new("replay");
+    let sp1 = "../../testdata/recordings/claude-agent-acp/0.91.0/2.1.296/s02b-plan.jsonl";
+    let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(sp1));
+    let mut recording = Recording::parse(&text.unwrap()).unwrap();
+    let config = |m: &Value| m["method"] == "session/set_config_option";
+    let sends = recording
+        .frames
+        .iter()
+        .filter_map(|frame| match &frame.body {
+            Body::Send(m) => Some(m),
+            _ => None,
+        });
+    let ids: Vec<Value> = sends
+        .filter(|m| config(m))
+        .map(|m| m["id"].clone())
+        .collect();
+    recording.frames.retain(|frame| match &frame.body {
+        Body::Send(m) => !config(m),
+        Body::Recv(m) => m.get("method").is_some() || !ids.contains(&m["id"]),
+        _ => true,
+    });
+    let client = json!({"name": "cupper", "version": env!("CARGO_PKG_VERSION")});
+    let capabilities = json!({"fs": {"readTextFile": false, "writeTextFile": false},
+        "terminal": false, "auth": {"terminal": false}, "elicitation": {"form": {}}, "plan": {}});
+    let mut prompt = String::new();
+    for frame in &mut recording.frames {
+        match &mut frame.body {
+            Body::Send(m) if m["method"] == "initialize" => {
+                m["params"] = json!({"protocolVersion": 1, "clientCapabilities": capabilities,
+                    "clientInfo": client});
+            }
+            Body::Send(m) if m["method"] == "session/prompt" => {
+                prompt = m["params"]["prompt"][0]["text"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned();
+            }
+            _ => {}
+        }
+    }
+    let path = dir.path().join("s02b-plan.jsonl");
+    std::fs::write(&path, recording.to_jsonl()).unwrap();
+    let agent = json!({"program": launch::fake_agent(), "args": ["--replay", path]});
+    let (data_dir, mut host, client) =
+        fake_agent_host(&dir, json!({"agents": {"claude": agent}})).await;
+    create(&client, &prompt).await;
+    let turns = "SELECT status FROM turns";
+    until(&data_dir, "host.db", turns, &["completed"]).await;
+    terminate(&host);
+    assert_eq!(exit_code(&mut host).await, 0);
 }
 
 /// A recording of two instances: the first writes to stderr and exits, the
@@ -648,16 +555,6 @@ async fn add_project(client: &client::Client, dir: &Path) {
     client.request::<ProjectAdd>(params).await.unwrap();
 }
 
-/// A host a test started: killed when the test ends, passed or failed.
-struct Running(Child);
-
-impl Drop for Running {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
-
 /// IT-audit-retention: what the gateway records lands in the `audit` table,
 /// in its formal shape, and in `host.log`; `test/run_maintenance` keeps 90
 /// days of it, on the manual clock.
@@ -724,13 +621,6 @@ async fn it_audit_retention_records_land_and_last_90_days() {
                WHERE event IN ('host.exiting', 'conn.closed') ORDER BY id";
     let reasons = ["peer_closed", "terminated", "host_exiting"];
     assert_eq!(query(&data_dir.join("host.db"), why), reasons);
-}
-
-async fn advance(client: &client::Client, ms: u64) {
-    use cupper_protocol::annotations::DurationMs;
-    use cupper_protocol::methods::admin::{TestClockAdvance, TestClockAdvanceParams};
-    let params = TestClockAdvanceParams { ms: DurationMs(ms) };
-    client.request::<TestClockAdvance>(params).await.unwrap();
 }
 
 /// On a manual clock, `test/clock_advance` returns once what the timers set
