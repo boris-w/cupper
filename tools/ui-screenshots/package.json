@@ -1,0 +1,23 @@
+{
+  "name": "@cupper/ui-screenshots",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "The UI's screenshot regression: ui-core on the browser ShellAPI and the mock host, under the main document's CSP, with fixed fonts.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:ui": "playwright test",
+    "ui:baseline": "CUPPER_UI_BASELINE=1 playwright test --update-snapshots=changed"
+  },
+  "devDependencies": {
+    "@cupper/host-client": "workspace:*",
+    "@cupper/shell-api": "workspace:*",
+    "@cupper/ui-core": "workspace:*",
+    "@playwright/test": "1.64.1",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "24.19.1",
+    "vite": "8.3.3",
+    "vitest": "5.0.3"
+  }
+}

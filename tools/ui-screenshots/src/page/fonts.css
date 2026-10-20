@@ -1,0 +1,18 @@
+/*
+ * The screenshots' fixed fonts (plan 1.8): open fonts from the fixtures stand
+ * in for the system's, so that a baseline does not depend on the machine.
+ * Inter has the Latin glyphs; the subset of Noto Sans SC has the rest.
+ */
+@font-face {
+  font-family: "Fixture Inter";
+  src: url("../../fonts/inter-latin-wght.woff2") format("woff2");
+  font-weight: 100 900;
+}
+@font-face {
+  font-family: "Fixture Noto Sans SC";
+  src: url("../../fonts/noto-sans-sc-subset.woff2") format("woff2");
+  font-weight: 100 900;
+}
+:root {
+  --font-sans: "Fixture Inter", "Fixture Noto Sans SC";
+}
