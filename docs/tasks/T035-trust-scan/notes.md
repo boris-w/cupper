@@ -102,3 +102,52 @@
 | `0001` 与 5.4.2 的清单列、`lib.rs` | 5 | 5 |
 | 测试（夹具、范围、链接、上限、摘要、状态与差异） | 310 | 310 |
 | **合计** | **715** | **约 995** |
+
+### 实际行数
+
+按提交统计（`git diff --numstat`）。
+
+| 提交 | 内容 | 增 | 估计（乘 1.7 后） |
+|---|---|---|---|
+| `feat(host): projects keep the per-file list …` | `0001` 与 5.4.2 各加一列 `trust_manifest` | 2 | 5 |
+| `feat(host): trust scan …` | `mod.rs`、`walk.rs`、`digest.rs`、`lib.rs`；测试：范围、链接、上限、摘要 | 537（测试 202） | 545 + 230 |
+| `feat(host): trust states …` | `state.rs`；测试：状态与差异 | 188（测试 73） | 135 + 70 |
+| **合计** | | **725**（实现约 450，测试约 275） | 995 |
+
+实现约 450 行，与草估的 435 相当，没有到 1.7 倍：几个文件都是平铺的同步代码，没有字段多的结构体字面量。
+
+### 实现要点
+
+- **入口**：`trust::scan(workspace, git_root) -> Result<Scan, ScanError>`，同步的阻塞 I/O，调用方放进阻塞线程池。`Scan.files` 按相对路径排好序，每项带：相对路径、目标 realpath、`linked`、`outside_workspace`、逐文件哈希和完整内容（内容留给 T096 解析 findings）。
+- **范围**：工作区和 git 根目录都先取 realpath，根目录不是工作区或其上级时失败。从工作区逐级向上，到根目录为止，每级看 `.claude`、`.mcp.json`、`.codex` 三个名字。不存在就跳过；存在的不论是文件、目录还是链接，都按同一规则处理。
+- **链接**：
+  - 每个条目先用 `symlink_metadata` 判断是不是链接，再 `canonicalize` 取 realpath：`NotFound` 记为悬空，`ELOOP`（macOS 为 62）记为成环；
+  - 目标是目录时，若它的 realpath 已经在遍历栈上，就是成环；
+  - 目标既不是普通文件也不是目录（套接字、FIFO、设备），扫描失败，不会去读它，所以不会卡在 FIFO 上。
+- **上限**：先按元数据累计；读文件时最多读到剩余额度加 1 字节，防止文件在两次查看之间变大。
+- **`outside_workspace`**（裁定第 3 条）：路径上经过了链接，并且目标的 realpath 不在工作区的 realpath 之下。
+- **状态**：`Trust { state, trusted: Option<Trusted { digest, manifest, at_ms, by }> }`，几个函数都是纯的：
+  - `added`：扫描范围里没有文件就 `auto_empty`，否则 `untrusted`；
+  - `rescanned`：`trusted` 的摘要变了就转 `stale`，转了之后不会自动回 `trusted`；
+  - `confirmed`：用户确认的摘要与这次扫描不一致时返回 `DigestMismatch`；
+  - `diff_from_trusted`：只在 `stale` 时给出差异。
+
+## 给其他任务的接入点
+
+- **T096（findings）**：
+  - 遍历 `Scan.files`，按 `path` 判断文件种类，从 `content` 解析；
+  - `Finding.path` 用 `ScannedFile.path`；`target` 在 `linked` 时取 `ScannedFile.target`；`outside_workspace` 直接取；
+  - findings 可以挂在 `Scan` 上，也可以另给一个 `findings(&Scan)` 函数，两种都不影响摘要。
+- **T034（`project/add`、`project/trust`、`project/trust_info`）**：
+  - 扫描放进阻塞线程池；`ScanError` 对应 `unavailable/scan_failed`，`ScanError::code()` 给确认框说明原因；
+  - 添加：`Trust::added(&scan, now)`；信任：`Trust::confirmed(&rescan, &params.trust_digest, principal, now)`，`DigestMismatch` 对应 `conflict/digest_mismatch`；
+  - 写库：`trust_state`、`trust_digest`、`trust_manifest`（`Manifest::to_json`）、`trusted_at`、`trusted_by`（`TrustedBy::as_str`）；读回清单用 `Manifest::from_json`；
+  - `trust_info.diff_from_trusted` 用 `Trust::diff_from_trusted(&rescan)`；
+  - findings 先回空列表，等 T096。
+- **T044（门控）**：
+  - 每次 Attach、每次 prompt 之前、每个回合结束时调用 `scan`，用 `Trust::rescanned` 得到新状态；从 `trusted` 转为 `stale` 时，暂停队列；
+  - git 根目录由 T060 取得后传入，不是 git 仓库时传 `None`。
+
+## 范围外的发现
+
+- **目录链接组成的 DAG 可能让扫描很慢**：上限只数文件（裁定第 5 条）。如果一个项目里的目录链接互相指向，且不构成环（例如每层两个链接都指向下一层，共 30 层），遍历次数会按指数增长；这些目录里没有文件时，文件上限拦不住。只有用户添加了这样一个恶意项目才会发生，后果是占住一个阻塞线程。是否另加一个目录访问次数的上限，请编排者定。
