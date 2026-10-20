@@ -51,3 +51,62 @@
 2. **孤立时拒绝新会话和新回合的 `reason`**：协议里没有对应取值。打算回 `unavailable`，不带 `reason`；或者新增一个取值（要动协议与生成物）。
 3. **"每次拉起子进程之前"的自检**：打算只挂在适配器拉起上（会执行包内运行时的唯一一类子进程），git 和登录 shell 探测不挂。
 4. **待升级时 `host.updated.pending_upgrade`**：任务书只要求 `host/status`。索引流里的 `host.updated` 要不要同时更新（由索引 actor 写）？不加的话约少 20 行。
+
+## 裁定后的范围（计划 v1.3.31）
+
+T059 = 监护核心与 actor、`Exit` 新取值与 `reason`、会话闸门与排队消息数、父进程监视、自检、给 T129 的待升级入口、清理残留、`routes.streams`。审计整块归 T138。上限约 1,300，硬停止线 1,400。四件事：IT-idle-exit 按退出码、`last_clean_exit_at`、host.log 验；孤立时回 `unavailable` 不带 `reason`，host.log 记原因；自检挂在新连接和适配器拉起之前；`host.updated.pending_upgrade` 一起更新。
+
+## 实现记录
+
+### 监护核心（`supervisor/watch.rs` 的 `WatchCore`，UNIT-orphan-policy）
+
+- 输入：`Observed { clients, activity, installer_busy }`、`Orphaned`、`BundleChanged`、`Expired(Idle)`；输出：`Close(Orphaned | PendingUpgrade)`、`Exit(Idle | Orphaned | Upgrade)`、定时器。
+- 规则：
+  - 待升级：没有运行中的回合、待处理的交互和会运行的排队消息时立即退出，不看连接；
+  - 孤立：没有运行中的回合时退出，不看连接和待处理请求（运行中的回合才有待处理请求）；
+  - 空闲：没有连接、没有上述三样、安装器空闲时开始计时，任一活动取消，计满 `supervisor_idle`（10 分钟）退出。
+  - 优先级：待升级先于孤立先于空闲。待升级要等待处理的请求，孤立不等，所以"孤立 + 待升级 + 有待处理请求、没有回合"时按孤立退出。
+  - 第一次观察之前不做退出判定；退出之后不再有任何动作。
+- 排队消息只算会运行的：队列暂停时（等用户恢复）记为 0。否则一条被中断后暂停的排队消息会让空闲退出和待升级退出永远等下去。消息在库里，退出不会丢。
+
+### 监护 actor 与宿主接线
+
+- 新的 actor 种类 `supervisor`，在 `Watching::start` 里登记；一个闹钟、一张定时器表（`Observe` 与核心的 `Idle`），等待点包在 `Participant::idle` 里。每 `supervisor_observe`（1 s）看一次：各 `Part` 的活动之和（`Activity` 实现了 `Sum`，`host/status` 也用它）、`Gateway::clients()` 的个数，`dev-auth` 构建再比较 `parent_id()` 与启动时的父进程。
+- 两阶段：`Watch::new()` 在 `Host::start` 前段给出句柄（自检与 T129 用），网关建好后 `Watching::start` 才启动 actor；之前发来的消息排在信箱里。
+- 动作：`Close` 写进共享的 `Admission`（会话管理器对 `session/create`、`session/send` 回 `unavailable`；待升级带 `pending_upgrade`），记 host.log，待升级时让索引写 `host.updated{pending_upgrade: true}`；`Exit` 经已有的 `exits` 通道交给 `Host::run`。
+- `Host::exit`：`host/shutdown` 的 `reason` 由 `shutdown_reason` 按 `Exit` 取（空闲 `idle`、待升级 `upgrade`，其余 `user_quit`）；host.log 记一行 `orderly exit`（`exit`、`reason` 字段）。监护的三种退出都只在没有运行中的回合时发生，不强制。
+- `host/status.pending_upgrade` 取 `Admission`。
+- 会话：句柄与 actor 多一个 `queued` 原子量，每步之后写入；`Activity` 多 `queued_messages`。
+
+### 自检
+
+- `SelfCheck`：启动时记下 `current_exe()` 和 `own_cdhash()`（后者失败就没有自检）；`check()` 比较 `file_cdhash(exe)`，读不到或不同就 `Watch::bundle_changed()`。
+- 调用点：`Gateway::serve` 每次 accept 之后（`Gateway::check_self_with` 设一次），`driver::runtime::launch::start` 在 `cupper_sys::spawn` 之前（`launch::Context.self_check`）。
+- **T129 接在哪里**：安装器在 `Host::start` 里 `let (watch, watching) = Watch::new();` 之后启动，拿 `watch` 的克隆，`Failed(BundleChanged)` 时调 `watch.bundle_changed()`；安装器忙闲由它补进 `Observed.installer_busy`（观察处现在固定为 `false`，注释写明）。
+
+### 清理残留（`supervisor/reap.rs`）
+
+- `previous_run`：读 `ended_at` 为空的 `adapters` 行，取各行的 `(pgid, start_us)` 和 `groups` 里的后代进程组，去重；`reap` 之后把这些行标为 `ended_at = 现在`、`exit_status = 'reaped'`。排在 `ledger` 之后、`maintenance.spawn` 之前。
+- `reap(groups, clock, term_wait, poll)`：对仍是记录中那个的组发 SIGTERM，按 `Clock` 每 `poll` 看一次，到 `term_wait` 后对剩下的发 SIGKILL。两个时长 `reap_term_wait`（2 s）、`reap_poll`（50 ms）。T055 可以直接复用。
+- 用例并进 IT-lifecycle 的启动用例（计划里清理残留本来属于 IT-lifecycle）：测试自己用 `setsid` 拉起两个进程组，一个当适配器、一个当忽略 SIGTERM 的后代，写进 `adapters` 行；宿主启动后前者死于 SIGTERM、后者死于 SIGKILL，行标为 `reaped`。
+
+### 流订阅
+
+`Host::start` 里调用 `routes.streams(streams, readers)`；IT-idle-exit 里订阅一次索引流。
+
+### 用例与发现
+
+- IT-idle-exit：缩短 `supervisor_idle`、`supervisor_observe`；连着时 900 ms 不退出；断开后退出码 0、`last_clean_exit_at` 已写、host.log 恰有一行以 `idle` 为原因的 `orderly exit`。
+- IT-self-check：宿主从测试自己复制出的可执行文件运行；假 agent 的 `wait_cancel` 让回合一直运行；删掉复制件后新连接触发待升级；`session/create` 被拒（`pending_upgrade`），`host/status` 与索引流的 `host.updated` 都报待升级；中断回合后客户端收到 `host/shutdown{reason: upgrade}`，退出码 0。中断的回复与它引起的退出赛跑，用例不要求收到。
+- 本机跑进程级用例前要先构建 `cupper-fake-agent` 和 `cupper-cli` 的 `cupper-elevate-probe`（`cargo test -p cupper-host` 不会构建它们）；旧的二进制会让无关的用例失败，失败的进程级用例会留下宿主进程。开发中这样留下的宿主（都在本 worktree 的 target 或测试临时目录里）已经逐个确认后用 SIGTERM 结束。
+
+### 行数（不含 notes）
+
+| 部分 | 新增 / 删除 | 估计 |
+|---|---|---|
+| 监护核心 | 约 200 / 0 | 195 |
+| 监护 actor、宿主接线、会话闸门与排队数、索引、网关与拉起钩子、自检 | 约 330 / 33 | 370 |
+| 清理残留（含时长与启动调用） | 约 75 / 0 | 130 |
+| UNIT-orphan-policy | 193 / 0 | 155 |
+| 进程级用例（IT-idle-exit、IT-self-check、启动用例里的清理） | 约 135 / 6 | 335 |
+| **合计** | **933 / 33** | 约 1,230 |
