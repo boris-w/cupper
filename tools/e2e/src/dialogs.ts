@@ -16,13 +16,12 @@ export interface MessageBox {
   defaultId?: number;
   cancelId?: number;
   checkboxLabel?: string;
-  answered: boolean;
 }
 
 type Answer = (response: number, checkboxChecked: boolean) => void;
 
 interface Stand {
-  calls: Omit<MessageBox, "index" | "answered">[];
+  calls: Omit<MessageBox, "index">[];
   answers: (Answer | null)[];
 }
 
@@ -33,26 +32,18 @@ export class Dialogs {
     this.#app = app;
   }
 
-  /** Replaces `showMessageBox` and `showMessageBoxSync`; the latter answers `cancelId` at once. */
+  /** Replaces `showMessageBox`, the only message box the app shows. */
   static async install(app: ElectronApplication): Promise<Dialogs> {
     await app.evaluate(({ dialog }) => {
       const stand: Stand = { calls: [], answers: [] };
       Object.assign(globalThis, { __e2eDialogs: stand });
-      const record = (args: unknown[]) => {
+      dialog.showMessageBox = (...args: unknown[]) => {
         const options = args.at(-1) as Electron.MessageBoxOptions;
         const { type, message, detail, buttons, defaultId, cancelId, checkboxLabel } = options;
         stand.calls.push({ type, message, detail, buttons, defaultId, cancelId, checkboxLabel });
-        return options;
-      };
-      dialog.showMessageBox = (...args: unknown[]) => {
-        record(args);
         return new Promise((resolve) =>
           stand.answers.push((response, checkboxChecked) => resolve({ response, checkboxChecked })),
         );
-      };
-      dialog.showMessageBoxSync = (...args: unknown[]) => {
-        stand.answers.push(null);
-        return record(args).cancelId ?? 0;
       };
     });
     return new Dialogs(app);
@@ -61,11 +52,7 @@ export class Dialogs {
   async calls(): Promise<MessageBox[]> {
     return this.#app.evaluate(() => {
       const stand = (globalThis as unknown as { __e2eDialogs: Stand }).__e2eDialogs;
-      return stand.calls.map((call, index) => ({
-        ...call,
-        index,
-        answered: stand.answers[index] === null,
-      }));
+      return stand.calls.map((call, index) => ({ ...call, index }));
     });
   }
 
