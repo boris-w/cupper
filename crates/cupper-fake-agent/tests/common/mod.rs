@@ -159,7 +159,7 @@ impl Fake {
         self.write(json!({"jsonrpc": "2.0", "method": "session/cancel", "params": params}));
     }
 
-    fn write(&mut self, message: Value) {
+    pub fn write(&mut self, message: Value) {
         writeln!(self.stdin, "{message}").unwrap();
         self.stdin.flush().unwrap();
     }

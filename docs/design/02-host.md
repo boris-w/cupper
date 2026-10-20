@@ -519,6 +519,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 - **启动清理只写库，不追加事件**：上次运行留下的运行中回合标为 `interrupted`，待处理的交互标为 `expired`（`host_restarted`），`sessions.state` 从 `running` 改为 `interrupted`。会话流里对应的 `turn.completed`、`interaction.resolved` 事件，由会话 actor（T043）在载入会话时补写，以守住"每条流只有一个写者"。
 - **载入时的补写与队列**（T089，2026-10-20）：会话 actor 载入会话时以会话视图为准，先补写待处理请求的 `interaction.resolved{expired, host_restarted}`，再补写运行中回合的 `turn.completed{interrupted}`，随行和索引通知同一事务提交；队列里有消息又没暂停的，一律以 `turn_interrupted` 暂停，重启后在用户操作之前不自己开始回合。被中断回合里没结束的条目由 T169 补写 `item.completed`。
+- **订阅也触发载入**（T091 发现，T175 实现）：客户端订阅一个会话流时，会话不在内存就按需载入，让载入时的补写马上进流；不等这个会话收到下一条命令。载入失败不影响订阅本身。会话流的读取不经 actor，所以订阅者不算 actor 的活动，不阻止空闲退出。
 - **数据目录**：
   - 已存在、属主是当前用户、但权限不是 0700：直接收紧，不报错；
   - 属主不对，或者不是目录：以退出码 5 退出。
