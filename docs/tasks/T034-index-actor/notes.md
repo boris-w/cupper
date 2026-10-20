@@ -112,3 +112,46 @@
 | IT-project-add-trust | 250 |
 | 对账与检查点的用例 | 100 |
 | **合计** | **约 1,200** |
+
+### 协调：发现链用 T055 的
+
+T055 已经写好 `supervisor::discover`，我自己写的那份发现链已经 revert（`2349bc7`）。`GitTool` 从同一个 `CliLocator` 取（`tool("git")`、`tool("git-lfs")`、`trusted_path()`），作为 `Discovery::git` 字段。编排者在我开始接组装之前把 main 合进了本分支（`ea1354e`）。
+
+### 实际行数
+
+按提交统计（`git diff --numstat`，只算 `crates/`，不含生成物）。
+
+| 提交 | 内容 | 增 | 删 |
+|---|---|---|---|
+| `feat(protocol): counts of trust findings …` | `findings_omitted`、`diff_omitted`（生成物另有 schema 27、TS 16） | 10 | 0 |
+| `feat(host): a stream writer checkpoints on demand` | `StreamWriter::checkpoint` 和用例 | 39 | 0 |
+| 自己的发现链及其 revert | 写了以后不用了，增删相抵 | 130 | 130 |
+| `refactor(host): route read marks and presence …` | `Routes::presence` | 10 | 5 |
+| `feat(host): the index actor, projects and trust` | `index/` 各模块和它的用例 | 1,244 | 0 |
+| `feat(host): the index in the host's assembly` | 组装、`Discovery::git`、`last_exit_abnormal`，去掉 `NoIndex` | 65 | 27 |
+| `test(host): IT-project-add-trust …` | IT 94 行；删掉与它重叠的 in-crate 项目流程用例（裁定） | 98 | 122 |
+| **净增** | | | **约 1,312** |
+
+### 实现要点
+
+- **`IndexHandle`**：一个句柄同时实现 `Port`、`IndexPort`、`IndexNotes`、`Part`，后面是唯一的 `IndexActor`。actor 持有索引流的 `StreamWriter`、`projects` 的内存镜像和所有会话工作区（作为仓库档的 `writable`）。
+  - 慢操作在另起的 task 里做，做完以 `Mail::Prepared` 回送 actor：取 realpath；往上找 `.git`，再经仓库档跑 `rev-parse --path-format=absolute --show-toplevel --git-common-dir`；在阻塞线程池里扫描。
+  - actor 拿到结果后再决定，把行、`project.upserted` 和命令结果写进同一个事务。
+  - 没有 git，或者往上找不到 `.git` 时，`is_git = false`，扫描范围只有项目目录本身（裁定第 2 条）。仓库档的其他错误按 `GitError::code()`、`reason()` 直接返回。
+- **启动对账**：每次启动都做。
+  - 项目：和表不一致的就重发 `upserted`，表里没有的发 `removed`；
+  - 会话：视图里缺的，按行补出摘要（状态取自行，`running`/`error`/`unread`/`idle`），已归档的发 `removed`；视图里已有的摘要不覆盖，那是实时状态，归 T100；
+  - `host.updated` 有变化才写。
+- **帧上限**：预算 48,000 字节。先装差异，再装 findings；`detail` 截到 2,000 字节，末尾加 `…`；`trust_info` 的结果另带 `findings_omitted`。
+- **`clients.updated`**：在 `opened`、`closed` 时按 `Gateway::clients()` 写，内容相同就不写。`Gateway` 的 `Weak` 在网关建好之后再设（`serve_for`），和 `Control` 的做法一样。
+- **`IndexNotes::pending`**：只把待处理的个数和类别写进已有的会话摘要，状态由 T100 计算。
+- **`Part::stop`**：写索引流的检查点。
+
+## 给其他任务的接入点
+
+- **T100**：
+  - 在 `Host::start` 里调用 `routes.presence(Arc::new(index.clone()))`，登记 `session/mark_read`、`client/presence`；同时删掉 UNIT-unsupported-set 里对应的行（如果它们因此要加进允许表的话）；
+  - 状态计算接在 `IndexActor::pending` 旁边；对账里按行补出的摘要只是起点。
+- **T055 及以后用 git 的任务**：`Discovery::git`。
+- **T059**：`host.updated` 的 `pending_upgrade` 改由自检给出（`supervisor/mod.rs` 里组 `HostUpdated` 的地方）。
+- **T047**：`INDEX` 已登记进静止屏障；`IndexHandle` 是第三个 `Part`。
