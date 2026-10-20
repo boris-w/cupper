@@ -1,11 +1,13 @@
-//! Probing the machine by running programs once (design 5.6.6): so far the
-//! login shell's environment. Finding the programs and the rules for their
-//! environment are T054's `driver::locate`; the two meet only through plain
-//! values (paths, variable names, version strings), wired together by the
-//! agent runtime.
+//! Probing the machine by running programs once (design 5.6.6, 5.2.10): the
+//! login shell's environment, a CLI's `--version`, git and git-lfs. Finding
+//! the programs and the rules for their environment are T054's
+//! `driver::locate`; the two meet only through plain values (paths, variable
+//! names, version strings), wired together by the agent runtime.
 
+pub mod git;
 pub mod login_shell;
 pub mod run;
+pub mod version;
 
 #[cfg(test)]
 pub(crate) mod testkit {
