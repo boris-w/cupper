@@ -24,11 +24,12 @@ use cupper_protocol::domain::{PrincipalKind, ResolvedBy, Tier};
 use cupper_protocol::envelope::Cause;
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::{CommandId, PrincipalId, QueueId, SessionId, TurnId};
+use cupper_protocol::ids::{CommandId, PrincipalId, ProjectId, QueueId, SessionId, TurnId};
 use cupper_protocol::ids::{Digest, RequestId};
-use cupper_protocol::index::{PendingKind, SessionStatus, SessionSummary};
+use cupper_protocol::index::{PendingKind, SessionStatus, SessionSummary, TrustState};
 use cupper_protocol::interaction::InteractionOutcome;
 use cupper_protocol::interaction::InteractionRequest;
+use cupper_protocol::item::{NoticeCode, NoticeParams};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::methods::interaction::{
     InteractionGet, InteractionGetParams, InteractionGetResult, InteractionRespond,
@@ -42,8 +43,8 @@ use cupper_protocol::methods::session::{
 };
 use cupper_protocol::rpc::Method;
 use cupper_protocol::session::{
-    ConfirmationReason, ConfirmationRequired, SessionConfigured, SnapshotPhase, SnapshotRecorded,
-    SnapshotStatus, TurnStatus,
+    ConfirmationReason, ConfirmationRequired, PauseReason, ProjectConfig, SessionConfigured,
+    SnapshotPhase, SnapshotRecorded, SnapshotStatus, TurnStatus,
 };
 use cupper_protocol::view::SessionView;
 use rusqlite::OptionalExtension;
@@ -58,9 +59,13 @@ use crate::driver::api::{
     AgentError, AgentPort, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent,
     ProjectConfigPolicy,
 };
+use crate::durations::Durations;
 use crate::gateway::{AuditEvent, AuditRecord, Call};
+use crate::git::GitTool;
+use crate::index::{ScanContext, git_of};
 use crate::ledger::{Outcome, Ticket};
 use crate::orchestrator::interaction::{self, Respond};
+use crate::orchestrator::notice_with;
 use crate::orchestrator::tier_guard;
 use crate::orchestrator::turn::{self, Disposition, SendMode, SendRequest, SteerFallback};
 use crate::policy;
@@ -68,9 +73,15 @@ use crate::pure::{Alarm, Core, TimerTable};
 use crate::quiescence::Participant;
 use crate::store::streams::{Batch, StreamHandle, StreamView, StreamWriter};
 use crate::store::{Durability, Readers, Writer};
+use crate::trust::{self, Scan};
 
 /// A call and where its reply goes.
-pub(super) type Mail = (Call, oneshot::Sender<Outcome>);
+pub(super) enum Mail {
+    Call(Box<Call>, oneshot::Sender<Outcome>),
+    /// Leave the project's configuration out from now on (design 5.2.6:
+    /// "不加载项目配置继续"); the host's own entry until M1b's method.
+    IgnoreProjectConfig(oneshot::Sender<()>),
+}
 /// The host's exit, whether forced, and the reply once the session took it.
 pub(super) type Stop = (bool, oneshot::Sender<()>);
 
@@ -101,6 +112,10 @@ pub(super) struct Parts {
     pub pending: Arc<AtomicU32>,
     pub audit: mpsc::UnboundedSender<AuditRecord>,
     pub index: Arc<dyn IndexNotes>,
+    pub project: ProjectId,
+    /// Finds the git root of the trust range (`Discovery::git`).
+    pub git: Option<GitTool>,
+    pub durations: Durations,
 }
 
 pub(super) struct SessionActor {
@@ -112,6 +127,34 @@ pub(super) struct SessionActor {
     inbox: mpsc::UnboundedReceiver<Mail>,
     events: mpsc::UnboundedSender<DriverEvent>,
     attached: mpsc::UnboundedSender<Result<AttachInfo, AgentError>>,
+    rescanned: mpsc::UnboundedSender<(Purpose, Rescan)>,
+    /// The session would load the project's configuration while trusted.
+    load_wanted: bool,
+    /// The gate is shut for `project_config_changed`.
+    project_gate: bool,
+    /// "不加载项目配置继续": the project's configuration stays out.
+    ignore_for_good: bool,
+    /// A `session/send` whose reply waits for the check before its turn.
+    deferred: Option<Command>,
+}
+
+/// Why the project's trust range is rescanned (design 5.2.6).
+enum Purpose {
+    /// Before a message turns into a turn.
+    Check,
+    Attach(AttachTarget),
+    TurnEnd,
+    /// While the gate is shut for `project_config_changed`: the project may
+    /// be trusted again.
+    Reopen,
+}
+
+/// What a rescan found.
+struct Rescan {
+    trusted: bool,
+    /// Why the rescan failed; it then counts as untrusted.
+    failure: Option<String>,
+    scan: Option<Scan>,
 }
 
 /// A command on its way: its ledger ticket, its reply, and what the audit
@@ -121,6 +164,8 @@ struct Command {
     cause: Option<Cause>,
     reply: oneshot::Sender<Outcome>,
     audit: Option<AuditRecord>,
+    /// `session/send`: its reply may come with a later step.
+    deferrable: bool,
 }
 
 /// The reply a step gives a command.
@@ -139,6 +184,8 @@ struct Step {
     agent_session: Option<String>,
     driver: Vec<DriverCommand>,
     attach: Vec<AttachTarget>,
+    /// The machine asked for the check before a turn.
+    check: bool,
     reply: Option<Reply>,
     /// Who set the tier now, and whether full access was just confirmed.
     set_by: Option<(PrincipalId, bool)>,
@@ -157,7 +204,9 @@ impl SessionActor {
     ) {
         let (events, mut agent) = mpsc::unbounded_channel();
         let (attached, mut attaches) = mpsc::unbounded_channel();
+        let (rescanned, mut rescans) = mpsc::unbounded_channel();
         let alarm = Alarm::new(Arc::clone(&parts.clock));
+        let load_wanted = parts.project_config == ProjectConfigPolicy::Load;
         let mut actor = Self {
             parts,
             timers: TimerTable::new(),
@@ -166,6 +215,11 @@ impl SessionActor {
             inbox,
             events,
             attached,
+            rescanned,
+            load_wanted,
+            project_gate: false,
+            ignore_for_good: false,
+            deferred: None,
         };
         let first = Input::Machine(turn::Input::Send(first));
         actor.input(first, None, Step::default()).await;
@@ -173,11 +227,16 @@ impl SessionActor {
         loop {
             tokio::select! {
                 mail = actor.inbox.recv() => match mail {
-                    Some((call, reply)) => actor.call(call, reply).await,
+                    Some(Mail::Call(call, reply)) => actor.call(*call, reply).await,
+                    Some(Mail::IgnoreProjectConfig(done)) => {
+                        actor.ignore_project_config().await;
+                        let _ = done.send(());
+                    }
                     None => break,
                 },
                 Some(event) = agent.recv() => actor.agent(event).await,
                 Some(result) = attaches.recv() => actor.attach_done(result).await,
+                Some((purpose, found)) = rescans.recv() => actor.trust(purpose, found).await,
                 Some((force, done)) = stops.recv() => {
                     if force {
                         let exit = Input::Machine(turn::Input::HostExit);
@@ -270,13 +329,19 @@ impl SessionActor {
             }
         };
         let ticket = call.ticket;
+        let deferrable = call.method == SessionSend::NAME;
+        let reopen = matches!(call.method, SessionSend::NAME | SessionQueueResume::NAME);
         let command = Command {
             ticket,
             cause,
             reply,
             audit,
+            deferrable,
         };
         self.input(input, Some(command), step).await;
+        if reopen && self.project_gate {
+            self.rescan(Purpose::Reopen);
+        }
         if let Some((request, tier)) = chosen
             && self.resolved_by(&request).as_ref() == Some(&principal.id)
         {
@@ -376,6 +441,7 @@ impl SessionActor {
                     Action::Driver(command) => step.driver.push(command),
                     Action::Answer(reply) => step.reply = Some(Reply::Interaction(reply)),
                     Action::Machine(turn::Action::Attach(target)) => step.attach.push(target),
+                    Action::Machine(turn::Action::Check) => step.check = true,
                     Action::Machine(turn::Action::Snapshot { turn_id, phase }) => {
                         inputs.push_back(skipped(turn_id, phase))
                     }
@@ -408,6 +474,7 @@ impl SessionActor {
             agent_session,
             driver,
             attach,
+            check,
             reply,
             set_by,
             audit: records,
@@ -416,6 +483,18 @@ impl SessionActor {
         let mut audit = None;
         let mut completion = None;
         let mut cause = None;
+        // A send's reply comes with the step that decides its turn.
+        let command = match (command, &reply) {
+            (Some(command), None) if command.deferrable => {
+                self.deferred = Some(command);
+                None
+            }
+            (None, Some(Reply::Turn(turn::Reply::Send(_)))) => self.deferred.take(),
+            (command, _) => command,
+        };
+        let turn_ended = events
+            .iter()
+            .any(|b| matches!(b, EventBody::TurnCompleted(_)));
         if let Some(command) = command {
             let outcome = match reply {
                 Some(Reply::Turn(reply)) => self.outcome(reply, command.cause.as_ref()),
@@ -507,7 +586,13 @@ impl SessionActor {
             self.parts.agent.send(command);
         }
         for target in attach {
-            self.attach(target);
+            self.rescan(Purpose::Attach(target));
+        }
+        if turn_ended {
+            self.rescan(Purpose::TurnEnd);
+        }
+        if check {
+            self.rescan(Purpose::Check);
         }
     }
 
@@ -553,6 +638,96 @@ impl SessionActor {
                 let queued: Vec<&QueueId> = update.entries.iter().map(|e| &e.queue_id).collect();
                 self.commands.retain(|id, _| queued.contains(&id));
             }
+        }
+    }
+
+    /// Rescans the project's trust range in a task of its own (design
+    /// 5.2.6); the result comes back to [`trust`](Self::trust).
+    fn rescan(&self, purpose: Purpose) {
+        let (readers, project) = (self.parts.readers.clone(), self.parts.project.clone());
+        let (cwd, back) = (self.parts.cwd.clone(), self.rescanned.clone());
+        let cx = ScanContext {
+            git: self.parts.git.clone(),
+            writable: Vec::new(),
+            clock: Arc::clone(&self.parts.clock),
+            durations: self.parts.durations.clone(),
+        };
+        tokio::spawn(async move {
+            let found = rescan(readers, project, cwd, cx).await;
+            // The actor may have stopped.
+            let _ = back.send((purpose, found));
+        });
+    }
+
+    /// A rescan came back. A session that would load the project's
+    /// configuration, whose project is no longer trusted, shuts the gate for
+    /// `project_config_changed`, with a notice; the index records a project
+    /// that became `stale`. A trusted project again reopens it.
+    async fn trust(&mut self, purpose: Purpose, found: Rescan) {
+        if let Some(scan) = found.scan.clone().filter(|_| !found.trusted) {
+            self.parts.index.rescanned(&self.parts.project, scan);
+        }
+        self.load_wanted |= found.trusted && !self.ignore_for_good;
+        let blocked = self.load_wanted && !found.trusted;
+        let mut step = Step::default();
+        if blocked && !self.project_gate {
+            let params = NoticeParams {
+                reason: found.failure.clone(),
+                ..NoticeParams::default()
+            };
+            let code = NoticeCode::ProjectConfigChanged;
+            let (ids, now) = (self.parts.core.ids(), self.parts.clock.now());
+            step.events.extend(notice_with(ids, now, code, params));
+        }
+        let changed = blocked != self.project_gate;
+        self.project_gate = blocked;
+        let (reason, shut) = (PauseReason::ProjectConfigChanged, blocked);
+        let gate = Input::Machine(turn::Input::Gate { reason, shut });
+        match purpose {
+            Purpose::Check => {
+                let checked = Input::Machine(turn::Input::Checked(!blocked));
+                self.input(checked, None, step).await;
+            }
+            Purpose::Attach(target) => {
+                let policy = match found.trusted && self.load_wanted {
+                    true => ProjectConfigPolicy::Load,
+                    false => ProjectConfigPolicy::Ignore,
+                };
+                if policy != self.parts.project_config {
+                    self.parts.project_config = policy;
+                    self.parts.configured.project_config = project_config(policy);
+                    let configured = self.parts.configured.clone();
+                    step.events.push(EventBody::SessionConfigured(configured));
+                }
+                match changed {
+                    true => self.input(gate, None, step).await,
+                    false => self.commit(step, None).await,
+                }
+                self.attach(target);
+            }
+            Purpose::TurnEnd | Purpose::Reopen if changed => self.input(gate, None, step).await,
+            Purpose::TurnEnd | Purpose::Reopen => self.commit(step, None).await,
+        }
+    }
+
+    /// "不加载项目配置继续" (design 5.2.6): from now on the session leaves the
+    /// project's configuration out; the idle agent session is closed, so the
+    /// next turn resumes it with `settingSources: ["user"]`.
+    async fn ignore_project_config(&mut self) {
+        (self.load_wanted, self.ignore_for_good) = (false, true);
+        self.parts.project_config = ProjectConfigPolicy::Ignore;
+        let mut step = Step::default();
+        if self.parts.configured.project_config != ProjectConfig::Ignored {
+            self.parts.configured.project_config = ProjectConfig::Ignored;
+            let configured = self.parts.configured.clone();
+            step.events.push(EventBody::SessionConfigured(configured));
+        }
+        self.input(Input::Machine(turn::Input::Detach), None, step)
+            .await;
+        if mem::take(&mut self.project_gate) {
+            let (reason, shut) = (PauseReason::ProjectConfigChanged, false);
+            let gate = Input::Machine(turn::Input::Gate { reason, shut });
+            self.input(gate, None, Step::default()).await;
         }
     }
 
@@ -779,6 +954,68 @@ fn pending(view: &SessionView) -> (usize, Option<PendingKind>) {
         _ => PendingKind::Approval,
     });
     (pending.len(), kind)
+}
+
+/// The rescan of the project's trust range, which fails closed: a project
+/// row, a workspace, a git root or a scan that cannot be had counts as
+/// untrusted, with the reason. Configuration may not come from any
+/// project's directory (the repo tier, design 5.2.10).
+async fn rescan(readers: Readers, project: ProjectId, cwd: PathBuf, mut cx: ScanContext) -> Rescan {
+    let fail = |code: &str| Rescan {
+        trusted: false,
+        failure: Some(code.into()),
+        scan: None,
+    };
+    let row = readers.read(move |conn| {
+        let trust = conn
+            .query_row(
+                "SELECT trust_state, trust_digest FROM projects WHERE project_id = ?1",
+                [project.to_string()],
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)),
+            )
+            .optional()?;
+        let mut select = conn.prepare("SELECT path FROM projects WHERE removed_at IS NULL")?;
+        let roots = select.query_map([], |r| r.get::<_, String>(0))?;
+        Ok((trust, roots.collect::<rusqlite::Result<Vec<String>>>()?))
+    });
+    let Ok((Some((state, digest)), roots)) = row.await else {
+        return fail("project_missing");
+    };
+    cx.writable = roots.into_iter().map(PathBuf::from).collect();
+    let Some(path) = std::fs::canonicalize(&cwd).ok().filter(|p| p.is_dir()) else {
+        return fail("workspace_missing");
+    };
+    let root = match git_of(&path, &cx).await {
+        Ok(git) => git.map(|(root, _)| root),
+        Err(err) => {
+            let reason = err.data.as_ref().and_then(|data| data.reason.as_ref());
+            return fail(reason.map_or("git_error", |reason| reason.as_str()));
+        }
+    };
+    let scan = tokio::task::spawn_blocking(move || trust::scan(&path, root.as_deref())).await;
+    let scan = match scan {
+        Ok(Ok(scan)) => scan,
+        Ok(Err(err)) => return fail(err.code()),
+        Err(_) => return fail("scan_failed"),
+    };
+    let digest = digest.and_then(|digest| digest.parse().ok());
+    let state = trust::state_after(
+        &TrustState::from(state.as_str()),
+        digest.as_ref(),
+        &scan.digest,
+    );
+    Rescan {
+        trusted: state == TrustState::Trusted,
+        failure: None,
+        scan: Some(scan),
+    }
+}
+
+fn project_config(policy: ProjectConfigPolicy) -> ProjectConfig {
+    match policy {
+        ProjectConfigPolicy::Load => ProjectConfig::Loaded,
+        ProjectConfigPolicy::Ignore => ProjectConfig::Ignored,
+    }
 }
 
 /// What `session/confirm_config` echoes back: the digest of the options.

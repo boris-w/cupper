@@ -19,7 +19,9 @@ use std::fmt;
 use cupper_protocol::capabilities::{ConfigOption, ConfigOptionId, SessionCapabilities};
 use cupper_protocol::domain::Tier;
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
-use cupper_protocol::ids::SessionId;
+use cupper_protocol::ids::{ProjectId, SessionId};
+
+use crate::trust::Scan;
 use cupper_protocol::index::PendingKind;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -31,6 +33,10 @@ pub trait IndexNotes: Send + Sync + fmt::Debug {
     /// The session's pending requests changed (design 5.2.7, step 4): how
     /// many there are, and the class of the oldest.
     fn pending(&self, session: &SessionId, count: u32, oldest: Option<PendingKind>);
+
+    /// A session rescanned its project's trust range (design 5.2.6); the
+    /// index records a trusted project that became `stale`.
+    fn rescanned(&self, project: &ProjectId, scan: Scan);
 }
 
 /// The tier of permission mode `mode` by the agent's mapping.

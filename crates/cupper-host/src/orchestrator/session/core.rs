@@ -131,6 +131,15 @@ impl SessionCore {
         self.coalescer.set_stops_commands(stops_commands);
     }
 
+    pub fn ids(&self) -> &IdGen {
+        &self.ids
+    }
+
+    /// Messages wait for the project trust rescan before their turns.
+    pub fn require_trust_checks(&mut self) {
+        self.machine.require_checks();
+    }
+
     /// The running turn, from `turn.started` until it completes.
     pub fn turn_id(&self) -> Option<&TurnId> {
         self.machine.turn_id()

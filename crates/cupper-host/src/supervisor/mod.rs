@@ -223,6 +223,7 @@ impl Host {
             quiescence: quiescence.clone(),
             audit: records.clone(),
             index: Arc::new(index.clone()),
+            git: found.git.clone(),
         });
         let parts: Arc<[Arc<dyn Part>]> = Arc::new([
             Arc::new(sessions.clone()),

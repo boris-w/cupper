@@ -38,7 +38,7 @@ use std::path::{Path, PathBuf};
 use cupper_protocol::ids::Digest;
 
 pub use self::digest::Manifest;
-pub use self::state::{DigestMismatch, Trust, Trusted, TrustedBy};
+pub use self::state::{DigestMismatch, Trust, Trusted, TrustedBy, state_after};
 pub use self::walk::{MAX_BYTES, MAX_ENTRIES, MAX_FILES, ScanError};
 
 /// The project configuration in a scan's range, as of the scan.
