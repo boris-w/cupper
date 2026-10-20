@@ -1,5 +1,7 @@
 import { createContext, use, type ReactNode } from "react";
 
+import { Composer } from "../composer/Composer";
+import { ComposerArea } from "../composer/QueueList";
 import { SessionBanners } from "../session/SessionBanners";
 import { useRouter } from "./router";
 
@@ -19,7 +21,7 @@ export function NewSessionPage() {
   const { newSessionComposer } = use(SlotsContext);
   return (
     <div className="mx-auto w-full max-w-(--layout-thread-max-w) px-(--layout-thread-gutter) pt-[calc(var(--layout-home-composer-anchor)-var(--layout-titlebar-h))]">
-      {newSessionComposer}
+      {newSessionComposer ?? <Composer />}
     </div>
   );
 }
@@ -31,7 +33,9 @@ export function SessionPage({ sessionId }: { sessionId: string }) {
     <div className="mx-auto flex h-full w-full max-w-(--layout-thread-max-w) flex-col px-(--layout-thread-gutter)">
       <SessionBanners sessionId={sessionId} />
       <div className="min-h-0 flex-1" />
-      <div className="shrink-0 pb-(--layout-composer-bottom)">{sessionComposer}</div>
+      <div className="shrink-0 pb-(--layout-composer-bottom)">
+        {sessionComposer ?? <ComposerArea sessionId={sessionId} />}
+      </div>
     </div>
   );
 }

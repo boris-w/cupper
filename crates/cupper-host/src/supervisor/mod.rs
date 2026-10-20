@@ -354,6 +354,7 @@ impl Host {
         ));
         let mut routes = Routes::new(ledger.clone());
         routes.watched_by(&quiescence);
+        // `stream/subscribe`, `stream/unsubscribe` and `history/page`.
         routes.streams(streams.clone(), readers.clone());
         control.route(&mut routes);
         #[cfg(feature = "test-harness")]
@@ -377,6 +378,7 @@ impl Host {
             blobs: blobs.clone(),
         })
         .route(&mut routes);
+        routes.blobs(blobs.clone());
         routes.sessions(Arc::new(sessions));
         Arc::new(agents).route(&mut routes);
         routes.index(Arc::new(index.clone()));

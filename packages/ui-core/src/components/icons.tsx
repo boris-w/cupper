@@ -87,3 +87,25 @@ export function Spinner({ className = "" }: { className?: string }) {
     </svg>
   );
 }
+
+export function ArrowUpIcon() {
+  return (
+    <svg
+      {...svg}
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M8 13V3.5M4 7.5l4-4 4 4" />
+    </svg>
+  );
+}
+
+export function StopIcon() {
+  return (
+    <svg {...svg} fill="currentColor">
+      <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" />
+    </svg>
+  );
+}

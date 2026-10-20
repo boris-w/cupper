@@ -47,7 +47,12 @@ const KEY_AUTHS: &[&str] = &[
 ];
 /// The optional features this host supports; each comes with the task that
 /// implements it.
-const HOST_FEATURES: &[Feature] = &[Feature::StreamCoalesce, Feature::HistoryPage];
+const HOST_FEATURES: &[Feature] = &[
+    Feature::StreamCoalesce,
+    Feature::HistoryPage,
+    Feature::BlobGet,
+    Feature::BlobPut,
+];
 
 /// What `initialize` settled for the connection's lifetime.
 #[derive(Debug, Clone, PartialEq)]

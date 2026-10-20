@@ -835,6 +835,368 @@ async fn it_elevate_lineage_waits_limits_expiry_grant_and_close() {
     assert_eq!(exit_code(&mut host).await, 0);
 }
 
+/// The e2e build of `cupper`, beside the fake agent.
+fn cupper() -> PathBuf {
+    launch::fake_agent().with_file_name("cupper")
+}
+
+/// `cupper --data-dir <data_dir> --json <args>`: its exit code and lines.
+fn cupper_once(data_dir: &Path, args: &[&str], stdin: &str) -> (i32, Vec<serde_json::Value>) {
+    let mut child = Command::new(cupper())
+        .arg("--data-dir")
+        .arg(data_dir)
+        .arg("--json")
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(stdin.as_bytes())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    let text = String::from_utf8(output.stdout).unwrap();
+    let lines = text
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    (output.status.code().unwrap(), lines)
+}
+
+/// A child of the case, terminated and waited for when dropped: a failed
+/// case leaves no process behind.
+struct Reaped(Child);
+
+impl Drop for Reaped {
+    fn drop(&mut self) {
+        if let Ok(None) = self.0.try_wait() {
+            terminate(&self.0);
+            let _ = self.0.wait();
+        }
+    }
+}
+
+/// `cupper repl`, fed one command at a time.
+struct Repl {
+    child: Reaped,
+    lines: tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>,
+}
+
+impl Repl {
+    fn start(data_dir: &Path) -> Self {
+        let mut child = Command::new(cupper())
+            .arg("--data-dir")
+            .arg(data_dir)
+            .args(["--json", "repl"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let (tx, lines) = tokio::sync::mpsc::unbounded_channel();
+        let stdout = std::io::BufReader::new(child.stdout.take().unwrap());
+        std::thread::spawn(move || {
+            use std::io::BufRead;
+            for line in stdout.lines().map_while(Result::ok) {
+                let _ = tx.send(serde_json::from_str(&line).unwrap());
+            }
+        });
+        let child = Reaped(child);
+        Self { child, lines }
+    }
+
+    fn send(&mut self, line: &str) {
+        let stdin = self.child.0.stdin.as_mut().unwrap();
+        writeln!(stdin, "{line}").unwrap();
+    }
+
+    /// What `line` printed, and its exit code.
+    async fn run(&mut self, line: &str) -> (Vec<serde_json::Value>, u64) {
+        self.send(line);
+        self.output().await
+    }
+
+    async fn output(&mut self) -> (Vec<serde_json::Value>, u64) {
+        let mut lines = Vec::new();
+        loop {
+            let line = self.lines.recv().await.expect("repl output");
+            match line["repl"]["exit"].as_u64() {
+                Some(exit) => return (lines, exit),
+                None => lines.push(line),
+            }
+        }
+    }
+}
+
+/// IT-cli-commands: `cupper --json` on a real host with the fake agent, on
+/// the manual clock, which nothing advances. Reading needs nothing; writing
+/// needs `elevate`, granted here on the harness connection as the dialog
+/// would, then holds for the `repl`'s connection.
+#[tokio::test]
+async fn it_cli_commands_read_elevate_write_and_answer() {
+    let dir = TempDir::new("cli");
+    let (data_dir, host, client) = fake_agent_host(&dir, json!({"clock": "manual"})).await;
+    let mut host = Reaped(host);
+    let session = create(&client, "say hi").await;
+    let turns = "SELECT status FROM turns ORDER BY turn_no";
+    until(&data_dir, "host.db", turns, &["completed"]).await;
+    let s = session.to_string();
+
+    let (code, status) = cupper_once(&data_dir, &["status"], "");
+    assert_eq!((code, status[0]["version"].is_string()), (0, true));
+    let key = proof::to_hex(&KEY) + "\n";
+    let harness = cupper_once(&data_dir, &["--harness-key-fd", "0", "status"], &key);
+    assert_eq!(harness.0, 0);
+    // The index writes what changed after 100 ms, on this clock too.
+    let advance = serde_json::from_value(json!({"ms": 1_000})).unwrap();
+    client.request::<TestClockAdvance>(advance).await.unwrap();
+    let (code, sessions) = cupper_once(&data_dir, &["sessions"], "");
+    assert_eq!(
+        (code, &sessions[0]["session_id"]),
+        (0, &json!(s)),
+        "{sessions:?}"
+    );
+    assert_eq!(cupper_once(&data_dir, &["history", &s], "").0, 0);
+    // Writing as the read-only `cli` principal.
+    let (code, refused) = cupper_once(&data_dir, &["send", &s, "hello"], "");
+    let error = &refused[0]["error"];
+    assert_eq!(
+        (code, &error["code"], &error["reason"]),
+        (1, &json!("forbidden"), &json!("scope"))
+    );
+
+    let mut watch = Command::new(cupper());
+    watch
+        .arg("--data-dir")
+        .arg(&data_dir)
+        .args(["--json", "watch", &s]);
+    let mut watch = Reaped(watch.stdout(Stdio::piped()).spawn().unwrap());
+    let mut repl = Repl::start(&data_dir);
+    repl.send("elevate --scopes write,approve");
+    let requested = "SELECT json_extract(json, '$.data.elevation_id') FROM events
+        WHERE stream = 'index' AND type = 'elevation.requested'";
+    let clock = SystemClock::new();
+    let elevation_id = loop {
+        if let Some(id) = query(&data_dir.join("host.db"), requested).pop() {
+            break id;
+        }
+        wait(&clock).await;
+    };
+    let grant = json!({"command_id": client::command_id(), "elevation_id": elevation_id,
+        "decision": "grant", "scopes": ["write", "approve"]});
+    client
+        .request::<AuthElevationRespond>(serde_json::from_value(grant).unwrap())
+        .await
+        .unwrap();
+    let (granted, code) = repl.output().await;
+    assert_eq!(
+        (code, &granted[0]["granted"]),
+        (0, &json!(["write", "approve"]))
+    );
+
+    // A permission approved, another rejected, a question answered.
+    for (script, answer) in [
+        ("permission p1 execute", "approve"),
+        ("permission p2 execute", "reject"),
+        ("question colour?", "answer"),
+    ] {
+        let (sent, code) = repl.run(&format!("send {s} \"{script}\"")).await;
+        assert_eq!(
+            (code, &sent[0]["disposition"]),
+            (0, &json!("started")),
+            "{script}"
+        );
+        let asked = loop {
+            let (lines, _) = repl.run(&format!("pending {s}")).await;
+            if let Some(asked) = lines.into_iter().next() {
+                break asked;
+            }
+        };
+        let request = asked["request_id"].as_str().unwrap().to_owned();
+        let line = match answer {
+            "answer" => {
+                let field = &asked["request"]["fields"][0]["field_id"];
+                format!(
+                    "answer {s} {request} --field {}=blue",
+                    field.as_str().unwrap()
+                )
+            }
+            verb => format!("{verb} {s} {request}"),
+        };
+        let (answered, code) = repl.run(&line).await;
+        assert_eq!(
+            (code, &answered[0]["request_id"]),
+            (0, &json!(request)),
+            "{line}"
+        );
+        // The agent says what it got.
+        let said = match &answered[0]["outcome"]["option_id"] {
+            serde_json::Value::String(option) => format!("permission:{option}"),
+            _ => "answer:blue".to_owned(),
+        };
+        let says = format!(
+            "SELECT 'said' FROM events WHERE stream = 'session/{s}'
+            AND json LIKE '%{said}%' LIMIT 1"
+        );
+        until(&data_dir, "host.db", &says, &["said"]).await;
+    }
+
+    // A new session, a message waited for, and an interrupt.
+    let project = dir.path().display().to_string();
+    let (created, code) = repl
+        .run(&format!(
+            "new --agent claude --project {project} \"say new\""
+        ))
+        .await;
+    let other = created[0]["session_id"].as_str().unwrap().to_owned();
+    assert_eq!(code, 0);
+    let (waited, code) = repl
+        .run(&format!("send {other} \"say again\" --wait"))
+        .await;
+    assert_eq!((code, &waited[1]["status"]), (0, &json!("completed")));
+    repl.send(&format!("send {s} wait_cancel"));
+    repl.output().await;
+    let (interrupted, code) = repl.run(&format!("interrupt {s}")).await;
+    assert_eq!((code, interrupted[0]["turn_id"].is_string()), (0, true));
+    repl.send("exit");
+    assert_eq!(repl.child.0.wait().unwrap().code(), Some(0));
+
+    // `watch` saw the turns of the first session.
+    terminate(&watch.0);
+    let mut seen = String::new();
+    std::io::Read::read_to_string(&mut watch.0.stdout.take().unwrap(), &mut seen).unwrap();
+    assert!(seen.contains("\"turn.started\"") && seen.contains("\"turn.completed\""));
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
+}
+
+/// The harness client asking for the blob features, once the host listens.
+async fn connect_for_blobs(data_dir: &Path) -> client::Client {
+    use cupper_protocol::methods::handshake::Feature;
+    let socket = socket_path(data_dir, &cupper_sys::user_temp_dir().unwrap());
+    let options = Options {
+        auth: ClientAuth::Harness(HarnessKey::new(KEY)),
+        features: vec![Feature::BlobGet, Feature::BlobPut],
+        ..Options::default()
+    };
+    let client = client::Client::connect(&socket, &HostCheck::Harness, options).await;
+    let client = client.expect("the host listens");
+    assert!(client.initialized().features.contains(&Feature::BlobPut));
+    client
+}
+
+/// Sends `data` as the chunks of `hash`, up to `upto` of them.
+async fn send_chunks(client: &client::Client, hash: [u8; 32], data: &[u8], upto: usize) {
+    use cupper_protocol::frame::BlobChunkHeader;
+    let pieces: Vec<&[u8]> = data.chunks(BlobChunkHeader::MAX_DATA).collect();
+    for (n, piece) in pieces.iter().enumerate().take(upto) {
+        let offset = (n * BlobChunkHeader::MAX_DATA) as u64;
+        let header = BlobChunkHeader {
+            hash,
+            offset,
+            last: n + 1 == pieces.len(),
+        };
+        client.send_blob_chunk(&header, piece).await.unwrap();
+    }
+}
+
+/// IT-gw-blob: a blob of three chunks put and got through the gateway of a
+/// real host, whole and by range; a size or hash that does not match, a size
+/// past the limit and an unknown hash refused; an upload cut off by a
+/// disconnect leaves nothing behind.
+#[tokio::test]
+async fn it_gw_blob_put_and_get_through_the_gateway() {
+    use cupper_protocol::error::ErrorCode;
+    use cupper_protocol::ids::BlobHash;
+    use cupper_protocol::methods::stream::{BlobGet, BlobGetParams, BlobPut, BlobPutParams};
+    use sha2::{Digest as _, Sha256};
+
+    let dir = TempDir::new("blobs");
+    let data_dir = dir.path().join("data");
+    let mut host = spawn_with(&data_dir, json!({}));
+    drop(connect(&data_dir).await);
+    let data: Vec<u8> = (0..150_000u32).map(|n| (n % 251) as u8).collect();
+    let raw: [u8; 32] = Sha256::digest(&data).into();
+    let hash = BlobHash::from_sha256(&raw);
+    let put = |hash: &BlobHash, size: u64| BlobPutParams {
+        hash: hash.clone(),
+        size,
+        media_type: "application/octet-stream".into(),
+    };
+    let code = |err: client::ClientError| match err {
+        client::ClientError::Rpc(err) => err.data.map(|data| data.code),
+        other => panic!("{other}"),
+    };
+
+    // Cut off halfway: the next connection puts the same blob as if new.
+    let cut = connect_for_blobs(&data_dir).await;
+    send_chunks(&cut, raw, &data, 2).await;
+    drop(cut);
+    let mut client = connect_for_blobs(&data_dir).await;
+    send_chunks(&client, raw, &data, 3).await;
+    let stored = client
+        .request::<BlobPut>(put(&hash, 150_000))
+        .await
+        .unwrap();
+    assert_eq!(stored.hash, hash);
+
+    for (offset, length, want) in [
+        (None, None, &data[..]),
+        (Some(70_000), Some(10), &data[70_000..70_010]),
+    ] {
+        let params = BlobGetParams {
+            hash: hash.clone(),
+            offset,
+            length,
+        };
+        let got = client.request::<BlobGet>(params).await.unwrap();
+        let mut bytes = Vec::new();
+        for _ in 0..got.chunks {
+            let Some(Incoming::Blob { header, data }) = client.next().await else {
+                panic!("a chunk comes ahead of the response");
+            };
+            assert_eq!(
+                (header.hash, header.offset),
+                (raw, got.offset + bytes.len() as u64)
+            );
+            bytes.extend_from_slice(&data);
+        }
+        assert_eq!((got.size, bytes.as_slice()), (150_000, want));
+    }
+
+    // The same bytes under a size or a hash of something else.
+    send_chunks(&client, raw, &data, 3).await;
+    let err = client
+        .request::<BlobPut>(put(&hash, 149_999))
+        .await
+        .unwrap_err();
+    assert_eq!(code(err), Some(ErrorCode::Conflict));
+    let other = BlobHash::from_sha256(&[7; 32]);
+    send_chunks(&client, [7; 32], &data, 3).await;
+    let err = client
+        .request::<BlobPut>(put(&other, 150_000))
+        .await
+        .unwrap_err();
+    assert_eq!(code(err), Some(ErrorCode::Conflict));
+    let err = client
+        .request::<BlobPut>(put(&other, 33 << 20))
+        .await
+        .unwrap_err();
+    assert_eq!(code(err), Some(ErrorCode::TooLarge));
+    let params = BlobGetParams {
+        hash: other,
+        offset: None,
+        length: None,
+    };
+    let err = client.request::<BlobGet>(params).await.unwrap_err();
+    assert_eq!(code(err), Some(ErrorCode::NotFound));
+
+    terminate(&host);
+    assert_eq!(exit_code(&mut host).await, 0);
+}
+
 /// IT-idle-exit: a connection keeps the host up; with nobody connected it
 /// exits in order once `supervisor_idle` has passed. The stream methods are
 /// served on the way.

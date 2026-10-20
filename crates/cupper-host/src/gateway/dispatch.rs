@@ -16,6 +16,7 @@ use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
+use cupper_protocol::frame::BlobChunkHeader;
 use cupper_protocol::ids::{CommandId, ConnId};
 use cupper_protocol::index::Elevation;
 use cupper_protocol::limits::V1;
@@ -23,7 +24,9 @@ use cupper_protocol::methods::admin::SettingsUpdate;
 use cupper_protocol::methods::git::GitRevert;
 use cupper_protocol::methods::handshake::{ClientIdentity, Principal};
 use cupper_protocol::methods::session::SessionSetConfig;
-use cupper_protocol::methods::stream::{StreamSubscribeParams, StreamUnsubscribeParams};
+use cupper_protocol::methods::stream::{
+    BlobPut, BlobPutParams, StreamSubscribeParams, StreamUnsubscribeParams,
+};
 use cupper_protocol::rpc::{Idempotency, Method, RpcId};
 use cupper_sys::AuditToken;
 use futures::future::BoxFuture;
@@ -32,6 +35,7 @@ use serde_json::{Value, json};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use super::audit::Auditor;
+use super::blobs::{self, Uploads};
 use super::outbox::Outbox;
 use super::routes::{Entry, Routes, Target};
 use super::subscribe::Subscriptions;
@@ -145,6 +149,7 @@ pub(super) struct Dispatch {
     outbox: Arc<Outbox>,
     inflight: Arc<Semaphore>,
     subscriptions: Subscriptions,
+    uploads: Mutex<Uploads>,
 }
 
 /// How a request is answered.
@@ -179,6 +184,22 @@ impl Dispatch {
             outbox,
             inflight,
             subscriptions,
+            uploads: Mutex::default(),
+        }
+    }
+
+    /// A `0x02` chunk: into the uploads, from a principal that may put blobs
+    /// (design 5.3.1). One that does not parse, or may not, is dropped.
+    pub(super) fn chunk(&self, payload: &[u8]) {
+        let principal = self
+            .granted
+            .widen(&self.principal, self.clock.now_wall_ms());
+        if let (Ok(()), Ok((header, data))) = (
+            policy::method(&principal, BlobPut::NAME, BlobPut::SCOPE.as_ref()),
+            BlobChunkHeader::decode(payload),
+        ) {
+            let mut uploads = self.uploads.lock().unwrap_or_else(PoisonError::into_inner);
+            uploads.chunk(&header, data);
         }
     }
 
@@ -228,8 +249,7 @@ impl Dispatch {
     }
 
     fn answer(&self, routes: &Routes, id: &RpcId, method: &str, params: Value) -> Answer {
-        let entry = routes.request_entry(method);
-        let Some((name, entry)) = entry.filter(|(_, entry)| entry.target.serves()) else {
+        let Some((name, entry)) = routes.request_entry(method) else {
             return Answer::Now(Err(unsupported(method)));
         };
         let (params, principal) = (
@@ -272,7 +292,16 @@ impl Dispatch {
                 self.subscriptions.unsubscribe(id, params.stream, place);
                 return Answer::Queued;
             }
-            Target::Blobs => unreachable!("not served yet"),
+            Target::Blobs(store) if name == BlobPut::NAME => {
+                let params: BlobPutParams = typed(&params).expect("validated");
+                let mut uploads = self.uploads.lock().unwrap_or_else(PoisonError::into_inner);
+                let upload = uploads.take(&params.hash);
+                Box::pin(blobs::put(store.clone(), params, upload))
+            }
+            Target::Blobs(store) => {
+                let params = typed(&params).expect("validated");
+                Box::pin(blobs::get(store.clone(), Arc::clone(&self.outbox), params))
+            }
         };
         Answer::Later(reply, place)
     }

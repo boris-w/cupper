@@ -257,6 +257,12 @@ UNIT-audit-producers = "pr"
 milestone = "M1a"
 UNIT-composer-long-text = "pr"
 
+# ui-core V-b：拒绝并附消息、请求记录行与多请求（计划 v1.3.34 由 T083 拆出）
+[T165]
+milestone = "M1a"
+UNIT-request-followup = "pr"
+UI-request-records = "pr"
+
 # CLI 提权（宿主侧）
 [T038]
 milestone = "M1a"
@@ -341,6 +347,7 @@ UNIT-mirror = "pr"
 [T046]
 milestone = "M1a"
 IT-cli-commands = "pr"
+UNIT-cli-args = "pr"
 
 # test-harness 测试接口、录制导出与宿主性能
 [T047]
