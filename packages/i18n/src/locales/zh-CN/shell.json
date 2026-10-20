@@ -1,0 +1,20 @@
+{
+  "product": "Cupper",
+  "sidebar": "侧边栏",
+  "toggle_sidebar": "切换侧边栏",
+  "resize_sidebar": "调整侧边栏宽度",
+  "side_panel": "侧边面板",
+  "toggle_side_panel": "切换侧边面板",
+  "resize_side_panel": "调整内容面板宽度",
+  "tab_changes": "变更",
+  "open": "打开",
+  "session_menu": "会话菜单",
+  "weak_auth": "弱认证",
+  "weak_auth_detail": "会话宿主以降级的本地认证运行",
+  "host_connecting": "正在连接会话宿主",
+  "host_handshaking": "正在连接会话宿主",
+  "host_ready": "已连接会话宿主",
+  "host_reconnecting": "正在重新连接会话宿主",
+  "host_failed": "无法连接会话宿主",
+  "host_closed": "已断开会话宿主"
+}
