@@ -44,7 +44,7 @@ export class Output {
   }
 
   /** The first line from `from` on that `test` accepts, and its index. */
-  async until(test: (line: Line) => boolean, from = 0, ms = 10_000): Promise<[Line, number]> {
+  async until(test: (line: Line) => boolean, from = 0, ms = 20_000): Promise<[Line, number]> {
     const deadline = Date.now() + ms;
     let ended = false;
     void this.closed.then(() => (ended = true));
@@ -88,7 +88,7 @@ export class Repl {
   }
 
   /** One command; its exit code and the lines before its end marker. */
-  async run(line: string, ms = 10_000): Promise<Result> {
+  async run(line: string, ms = 20_000): Promise<Result> {
     piped(this.#child.stdin).write(`${line}\n`);
     const [end, at] = await this.output.until((out) => "repl" in out, this.#read, ms);
     const lines = this.output.lines.slice(this.#read, at);

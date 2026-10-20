@@ -416,7 +416,12 @@ impl World {
                 self.running.clear();
             }
             Out::Event(body) => self.event(at, body),
-            Out::Machine(_) | Out::Driver(_) | Out::Answer(_) | Out::Timer(_) | Out::Tier(_) => {}
+            Out::Machine(_)
+            | Out::Driver(_)
+            | Out::Answer(_)
+            | Out::Timer(_)
+            | Out::Tier(_)
+            | Out::Spill(_) => {}
         }
     }
 

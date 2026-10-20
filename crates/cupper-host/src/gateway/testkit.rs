@@ -268,6 +268,8 @@ pub(crate) struct Peer {
     pub(crate) clock: crate::clock::ManualClock,
     outbox: Arc<super::outbox::Outbox>,
     replies: Vec<Value>,
+    /// The chunks of `blob/get`, joined.
+    pub(crate) blob: Vec<u8>,
     next_id: i64,
     /// What the connection recorded.
     pub(crate) audit: UnboundedReceiver<AuditRecord>,
@@ -328,6 +330,7 @@ impl Peer {
             clock,
             outbox,
             replies: Vec::new(),
+            blob: Vec::new(),
             next_id: 0,
             audit: records,
         }
@@ -400,8 +403,14 @@ impl Peer {
                 panic!("only replies are queued: {item:?}");
             };
             decoder.push(&frame);
-            let payload = decoder.next_frame().unwrap().unwrap().payload;
-            self.replies.push(serde_json::from_slice(&payload).unwrap());
+            let frame = decoder.next_frame().unwrap().unwrap();
+            if frame.frame_type == FrameType::BlobChunk {
+                let (_, data) = frame::BlobChunkHeader::decode(&frame.payload).unwrap();
+                self.blob.extend_from_slice(data);
+                continue;
+            }
+            self.replies
+                .push(serde_json::from_slice(&frame.payload).unwrap());
         }
     }
 }

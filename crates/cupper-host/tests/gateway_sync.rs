@@ -16,7 +16,7 @@ use cupper_cli::harness::HarnessKey;
 use cupper_cli::mirror::{self, Mirror};
 use cupper_host::clock::{Clock, SystemClock};
 use cupper_host::gateway::testkit::{self, KEY, TempDir, initialize_params, key_auth};
-use cupper_protocol::domain::BlobRef;
+use cupper_protocol::domain::{BlobContent, BlobRef, Content};
 use cupper_protocol::event::Strictness;
 use cupper_protocol::frame::BlobChunkHeader;
 use cupper_protocol::ids::{BlobHash, CommandId, SessionId};
@@ -194,6 +194,10 @@ async fn it_gw_sync_two_clients_see_the_same_stream() {
     same(a.view(), b.view());
     assert_eq!(a.index.view().sessions, b.index.view().sessions);
     assert!(said_in(a.view(), 2).ends_with("done"));
+    // The tool's 40,000 characters are over the inline limit: a blob.
+    let output = tool_output(a.view());
+    assert_eq!((output.blob.size, output.preview.len()), (40_000, 4_000));
+    assert_eq!(a.fetch(&output.blob.hash).await, vec![b'a'; 40_000]);
 
     let mut late = Peer::new(connect(&data_dir).await, &session).await;
     late.until(|p| p.session.is_live()).await;
@@ -222,6 +226,18 @@ async fn it_gw_sync_two_clients_see_the_same_stream() {
     assert_eq!(message.unwrap(), content);
     let hash = typed(blob["hash"].clone());
     assert_eq!(b.fetch(&hash).await, text.as_bytes());
+}
+
+/// Where the tool call's output went.
+fn tool_output(view: &SessionView) -> BlobContent {
+    let output = view.items.values().find_map(|i| match &i.item.item {
+        Item::ToolCall(call) => call.output.clone(),
+        _ => None,
+    });
+    match output {
+        Some(Content::Blob(blob)) => blob,
+        other => panic!("not a blob: {other:?}"),
+    }
 }
 
 /// The session's status in the index mirror.
@@ -613,7 +629,8 @@ async fn it_gw_sync_command_retries_are_idempotent() {
 
 /// IT-gw-sync, SP-4a test 7: whatever the agent sends, frames stay within
 /// the limit: a 3 MB message comes as deltas, a 100,000-character title is
-/// cut, and a snapshot of it all comes in pages. The client refuses to send
+/// cut, a 500 kB tool output is a blob, and a snapshot of it all comes in
+/// pages: the subscriber then and a later one stay subscribed (T177). The client refuses to send
 /// a frame over the limit.
 #[tokio::test(flavor = "multi_thread")]
 async fn it_gw_sync_frames_stay_within_limit() {
@@ -630,7 +647,7 @@ async fn it_gw_sync_frames_stay_within_limit() {
         "{refused:?}"
     );
 
-    let script = "big 3000000; long_tool t1 100000; tool_done t1 40000; say end";
+    let script = "big 3000000; long_tool t1 100000; tool_done t1 500000; say end";
     send(&a.client, &session, script).await;
     assert_eq!(a.ended(2).await, TurnStatus::Completed);
     assert_eq!(said_in(a.view(), 2).len(), 3_000_000 + 3);
@@ -639,6 +656,8 @@ async fn it_gw_sync_frames_stay_within_limit() {
         _ => None,
     });
     assert!(tool.unwrap().chars().count() <= MAX_LABEL_CHARS + 1);
+    assert_eq!(tool_output(a.view()).blob.size, 500_000);
+    assert_eq!(a.subscribed.len(), 1, "never reset");
 
     // The frame decoder of each client refuses frames over the limit, and
     // the connection closes then; the mirrors here got everything.
