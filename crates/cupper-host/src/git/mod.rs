@@ -9,6 +9,7 @@
 //! `<data dir>/git/`, with a fixed environment; nothing is looked up on PATH.
 
 mod cmd;
+mod repo;
 pub mod rules;
 pub mod run;
 pub mod stamp;
@@ -22,6 +23,7 @@ use std::path::{Path, PathBuf};
 use cupper_sys::{Command, Env};
 
 pub use cmd::{GitCmd, Repo, RepoOp, Snapshot, SnapshotOp};
+pub use repo::{Done, GitError, RepoNotice};
 use run::{Output, RunError};
 
 use crate::clock::Clock;
@@ -37,6 +39,9 @@ pub struct GitTool {
     ssh_auth_sock: Option<OsString>,
     /// `<data dir>/git/`, git's working directory.
     dir: PathBuf,
+    /// Tests keep git off the machine's system configuration.
+    #[cfg(test)]
+    test_env: Vec<(&'static str, OsString)>,
 }
 
 impl GitTool {
@@ -64,6 +69,8 @@ impl GitTool {
             home,
             ssh_auth_sock,
             dir,
+            #[cfg(test)]
+            test_env: Vec::new(),
         })
     }
 
@@ -107,6 +114,10 @@ impl GitTool {
         }
         if let Some(sock) = &self.ssh_auth_sock {
             set("SSH_AUTH_SOCK", sock);
+        }
+        #[cfg(test)]
+        for (name, value) in &self.test_env {
+            set(name, value);
         }
         env
     }
