@@ -386,6 +386,8 @@
 | e2e（T176 及以后） | T092 加的辅助：`tools/e2e/src/security.ts` 的共用步骤；`__cupperTest.command(method, params)`（只在 e2e 构建，经窗口的 client 与主进程的检查发命令）；假 agent 的剧本 `permission_options <ACP 选项 JSON>`（`kind` 写成没人认识的值即为效果未知）。夹具启动 App 时加了 `--disable-backgrounding-occluded-windows`、`--disable-renderer-backgrounding`、`--disable-background-timer-throttling`，被遮挡的窗口不再降频；期望的等待放宽到 20 s、用例上限 90 s。激活请求面板用"把焦点移到选项列表上"，Tab 可能落进"告诉 agent"输入框 | T092 |
 | T145 等显示工具输出的界面任务 | 超长工具输出（T177）：转义后超过 `max_inline_bytes`（16,000）就停发 delta、`output_state` 转 `truncated`，`item.updated` 每秒至多一次更新 `output_tail`（最后 4,000 字符）和 `output_bytes`；结束时 `complete`，输出是 blob 引用加尾部预览，用 host-client 的 `getBlob` 取全文；回合结束时仍在运行的是 `abandoned`、带尾部、没有 blob。全文在宿主内存里封顶 32 MiB，`output_bytes` 记实际收到的字节数 | T177 |
 | T069 | 会话 actor 在同一步里 await 写 blob（T177），写完之前不处理别的输入，32 MiB 的输出在慢盘上可能阻塞会话百毫秒级；故障测试里出问题的话，可改成后台写、挂起 `item.completed`。性质测试 `session_props` 不交回 `Spill`，生成长输出时要在测试驱动里补上 | T177 |
+| e2e（T178 及以后） | T176 的测试工具：`tools/e2e/src/raw.ts` 的原始协议客户端（自己分帧、自己给 `auth`，能发 `0x02` 分片）与假宿主（占住 `<数据目录>/run/host.sock`，先发 `host/hello`，`host_proof` 是随机值，记下对方发来的一切）；E2E-SEC-egress 的做法是 `sampleNetwork` 加正对照（假 agent 拉起 `nc -u -w 20 192.0.2.1 9`，`connect` 不发包）。e2e 构建的 CLI 不带密钥时只按 `peer` 弱校验，会连上假宿主 | T176 |
+| 网关的上传 | 每条连接最多 64 个未决 blob（`gateway/blobs.rs`，T176），零长度分片和乱序、超限留下的空条目都算在内，第 65 个的分片丢弃、它的 `blob/put` 以"分片加起来不等于大小"失败；只有带 `write` 的连接能上传 | T176 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
