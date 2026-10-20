@@ -32,3 +32,20 @@
 合计约 **670 行**（新增），停止线约 850，硬停止线 950。每完成一个模块用 `git diff --numstat` 统计一次，记在下面。
 
 ## 按模块统计
+
+每个模块提交后用 `git diff --numstat` 统计（不含 notes 和 `Cargo.lock`）：
+
+| 模块 | 提交 | 新增 | 删除 | 估计 | 累计新增 |
+|---|---|---|---|---|---|
+| 回放核心与入口（含比对规则的单测 113 行） | `feat(fake-agent): replay …` | 410 | 8 | 340 | 410 |
+| 进程级用例 | `test(fake-agent): replay over the stdio pipes` | 176 | 1 | 150 | 586 |
+| persona 自动比对 | `test(fake-agent): compare the personas …` | 115 | 105 | 110 | 701 |
+| 宿主端到端 | `test(host): replay an SP-1 Claude turn …` | 61 | 1 | 70 | 762 |
+
+合计新增 762、删除 115，停止线约 850 以内。回放核心超出估计最多：rustfmt 把错误类型和结构体字段拆成多行；写完核心后把文件读取挪到 `main`、把差异并进错误类型，压掉了约 37 行。
+
+## 过程记录
+
+- 端到端第一次跑没过，回放的报错写进了宿主的原始帧：``frame 3: `params.clientCapabilities.auth` is {"terminal":false}, the recording has nothing``。宿主的 `initialize` 比我照代码写的多一项 `auth.terminal: false`（SDK 的默认值），补上后通过。宿主的请求 id 是 UUID 字符串，id 重映射不受影响。
+- persona 比对：把 Claude persona 的一个选项 ID 临时改错，用例失败，确认不是空比对；另加一条断言，保证三种工具类型（`edit`、`execute`、`switch_mode`）都比到了。
+- Claude 录制里的命令有 54 条（录制机器上装了插件和 skill），persona 只取 5 条内置命令；比对规则是 persona 的每条都按原样出现在录制里、顺序一致。模型的当前值取决于录制账号，不比。
