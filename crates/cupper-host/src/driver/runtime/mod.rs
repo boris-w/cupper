@@ -243,7 +243,7 @@ struct Actor {
     /// What the capability cache holds.
     cached: Option<SessionCapabilities>,
     auth: AuthStatus,
-    _participant: Participant,
+    participant: Participant,
 }
 
 fn digest(commands: &[SlashCommand]) -> [u8; 32] {
@@ -316,7 +316,7 @@ impl AgentRuntime {
                 kind: None,
                 plan: None,
             },
-            _participant: participant,
+            participant,
         };
         tokio::spawn(actor.run(inbox));
         let resources = sampled;
@@ -403,6 +403,13 @@ impl Part for AgentRuntime {
     }
 }
 
+/// What ends the runtime's wait.
+enum Next {
+    Mail(Option<Mail>),
+    Wire(Wire),
+    Due,
+}
+
 impl Actor {
     async fn run(mut self, mut inbox: mpsc::UnboundedReceiver<Mail>) {
         loop {
@@ -412,14 +419,21 @@ impl Actor {
                     None => future::pending().await,
                 }
             };
-            // A branch's handler runs once the other branch is dropped.
-            tokio::select! {
-                mail = inbox.recv() => match mail {
-                    Some(mail) => self.mail(mail).await,
-                    None => break,
-                },
-                Some(wire) = wire => self.wire(wire),
-                () = self.alarm.rung() => self.due(),
+            // Idle until mail, the wire or the alarm brings work; it runs after
+            // all three are dropped.
+            let alarm = self.alarm.rung();
+            let next = self.participant.idle(async {
+                tokio::select! {
+                    mail = inbox.recv() => Next::Mail(mail),
+                    Some(wire) = wire => Next::Wire(wire),
+                    () = alarm => Next::Due,
+                }
+            });
+            match next.await {
+                Next::Mail(Some(mail)) => self.mail(mail).await,
+                Next::Mail(None) => break,
+                Next::Wire(wire) => self.wire(wire),
+                Next::Due => self.due(),
             }
             self.alarm.follow(&self.timers);
         }

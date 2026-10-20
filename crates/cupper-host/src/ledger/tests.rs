@@ -316,7 +316,10 @@ fn unit_ledger_commands_expire_after_48_hours_by_clock() {
     assert_eq!(fx.rows(), [row("pr_desktop", "early", "done")]);
 
     // The sweeper sweeps at once, then every hour.
-    fx.runtime.spawn(ledger.clone().sweeper());
+    let quiescence = Quiescence::new();
+    quiescence.register(super::SWEEPER);
+    fx.runtime
+        .spawn(ledger.clone().sweeper(quiescence.enter(super::SWEEPER)));
     fx.swept(fx.clock.now_mono());
     drop(ticket(begin(&ledger, "early", &params)));
     assert!(fx.rows().is_empty());

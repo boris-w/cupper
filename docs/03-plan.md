@@ -1632,7 +1632,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T049 cupper-cli I-b：Mirror 与客户端同步状态机
 - [x] T045 cupper-cli I：客户端库与 Mirror
 - [ ] T046 cupper-cli II：命令行
-- [ ] T047 test-harness 测试接口与静止屏障
+- [x] T047 test-harness 测试接口与静止屏障
 - [x] T050 驱动层 I：传输、线路分接与 ACP 连接
 - [x] T051 假 agent：剧本模式与 persona
 - [x] T052 录制格式、SP-1 录制转换与敏感信息扫描

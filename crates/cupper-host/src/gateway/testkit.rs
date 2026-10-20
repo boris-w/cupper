@@ -260,8 +260,15 @@ impl Peer {
             name,
             version,
         };
-        let dispatch =
-            super::dispatch::Dispatch::new(conn, principal, client, Arc::clone(&outbox), auditor);
+        let subscriptions = Routes::default().quiescence().enter(super::SUBSCRIPTIONS);
+        let dispatch = super::dispatch::Dispatch::new(
+            conn,
+            principal,
+            client,
+            Arc::clone(&outbox),
+            auditor,
+            subscriptions,
+        );
         Self {
             dispatch,
             outbox,
