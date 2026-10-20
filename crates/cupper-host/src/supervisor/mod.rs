@@ -7,6 +7,7 @@
 //! Idle exit, the orphaned state, the self-check, the cleanup of leftover
 //! adapters and the audit table are T059's.
 
+mod audit;
 pub mod control;
 #[cfg(feature = "test-harness")]
 mod harness;
@@ -202,8 +203,14 @@ impl Host {
         // launch both take this result.
         let found = finder.discover(project_roots(&reader)?).await;
         let git = git_tool(&found, &data_dir)?;
-        // The audit records go into the `audit` table from T059 on.
-        let (records, _audit) = mpsc::unbounded_channel();
+        // The audit records of the gateway, the sessions and the index.
+        let (records, audit) = mpsc::unbounded_channel();
+        quiescence.register(audit::AUDIT);
+        tokio::spawn(audit::write(
+            audit,
+            writer.clone(),
+            quiescence.enter(audit::AUDIT),
+        ));
         // Step 7: the index stream, before the socket.
         quiescence.register(INDEX);
         let index = IndexHandle::start(IndexDeps {

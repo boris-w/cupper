@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use cupper_protocol::capabilities::ConfigOptionId;
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::{AdapterInstanceId, RequestId, SessionId, TurnId};
+use cupper_protocol::ids::{AdapterInstanceId, PrincipalId, RequestId, SessionId, TurnId};
 use cupper_protocol::interaction::InteractionStatus;
 use cupper_protocol::item::NoticeCode;
 use cupper_protocol::methods::handshake::Principal;
@@ -141,6 +141,11 @@ impl SessionCore {
     }
 
     /// The running turn, from `turn.started` until it completes.
+    /// Who set the session's tier.
+    pub fn setter(&self) -> &PrincipalId {
+        self.guard.setter()
+    }
+
     pub fn turn_id(&self) -> Option<&TurnId> {
         self.machine.turn_id()
     }

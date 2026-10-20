@@ -119,12 +119,19 @@ fn admit(gw: &Gateway, stream: &UnixStream, id: &ConnId) -> Option<(AuditToken, 
         None => Verdict::Other(None),
     };
     let (pid, pid_version) = (pinned.pid(), pinned.pid_version());
+    // Who signed what the peer runs, for the audit (design 5.8.6).
+    let path = cupper_sys::pid_path(pid).ok();
+    let signed = pinned.signing_identity().ok().flatten();
+    let (identifier, team_id) = signed.map_or((None, None), |s| (Some(s.identifier), s.team_id));
     gw.audit(
         id,
         AuditEvent::Accepted {
             pid,
             pid_version,
             verdict,
+            path: path.map(|path| path.to_string_lossy().into_owned()),
+            identifier,
+            team_id,
         },
     );
     Some((pinned, verdict))
