@@ -46,3 +46,34 @@
 4. **重新信任之后谁打开闸门**：`project/trust` 在 `IndexActor` 里，会话不知道。建议闸门因 `project_config_changed` 关着时，`session/send` 和 `session/queue_resume` 各触发一次重扫，结果是 `trusted` 就去掉这个原因。不需要 `IndexActor` 反过来通知会话。
 
 按这几条的建议做，估计约 780–840 行。如果要留出余量，可以把"不加载项目配置继续"的内部入口（约 60 行连用例）和 git 根目录的真实 git 用例（约 40 行）另拆一个小任务。
+
+## 实际行数（逐模块）
+
+`git diff --numstat`，不含本文件和生成物（`packages/protocol/src/gen/`、`protocol/schema/v1.json`，共 13 行）。
+
+| 完成的模块（提交） | 新增 / 删除 | 其中测试 | 估计（实现 + 测试） |
+|---|---|---|---|
+| 闸门的原因集合、开回合前的检查、`Detach`（`feat(host): the gate takes several reasons ...`） | 158 / 45 | 1 | 136 |
+| `NoticeParams.reason`（`feat(protocol)`） | 4 / 0 | — | — |
+| 三个时机的重扫、判定、索引通知、内部入口、`SessionDeps.git`、夹具改用真实目录（`feat(host): rescan the project's trust ...`） | 383 / 41 | 36 | 330 + 20 |
+| IT-orch-trust-gating 与索引一半（`test(host)`） | 267 / 1 | 258 | 265 |
+| 只在项目变为 `stale` 时通知索引（`fix(host)`） | 17 / 0 | — | — |
+
+**合计 829 行**（另有生成物 13 行）：实现约 535，测试约 295。在约 950 的上限之内。
+
+## 实现时的取舍
+
+1. **检查只在会话里打开**：`TurnMachine::require_checks()` 由 `SessionCore::require_trust_checks()` 打开，会话管理器给每个会话都打开；回合状态机自己的单元测试和两个性质模型不打开，保持原样（它们不涉及信任）。检查的行为由 IT-orch-trust-gating 覆盖。
+2. **空闲发送挂起**（裁定 1 (b)）：消息放在 `TurnMachine` 的"待开始"位置，回复也挂起；actor 把这条 `session/send` 的命令留到检查结束那一步再回复（`Command.deferrable`）。挂起期间再来的消息照常进队列、立即回复 `queued`。
+3. **判定的状态**：`load_wanted` 表示"只要项目可信就加载项目配置"：新建时随策略；之后任何一次重扫发现可信都会打开它（未信任时新建的会话，在项目被信任后的下一次 attach 改为加载）；"不加载项目配置继续"永久关掉它。`load_wanted` 而项目不可信（`stale`、未信任或重扫失败）时关闸门、写一次 notice；可信时开闸门。Attach 按"可信且 `load_wanted`"选 `Load`，否则 `Ignore`，策略变了就改写 `session.configured.project_config`。
+4. **重扫失败按不可信处理**（裁定 2）：项目行不见了、工作区不见了（`workspace_missing`）、仓库档失败（错误的 reason，如 `unsafe_repo_config`）、扫描失败（`ScanError::code()`）都给出语义码，写在 notice 的 `params.reason` 里。为此 `NoticeParams` 加了 `reason` 字段（协议改动，生成物已重生成）。
+5. **改表交给索引**：会话只读 `projects` 的 `trust_state`、`trust_digest` 和全部项目路径；扫描结果从"信任"变成 `stale` 时，经 `IndexNotes::rescanned(project, scan)` 交 `IndexActor`，它用 `Trust::rescanned` 改行并写 `project.upserted`（没有命令的写入）。判定规则抽成 `trust::state_after`，`Trust::rescanned` 也用它，没有两份。
+6. **复用索引的扫描**：`index::projects::git_of`（从 `prepare` 里拆出）和 `ScanContext` 改为 `pub(crate)`，会话的重扫和 `project/add` 走同一段"git 根目录 + 阻塞线程池里扫描"的代码。可写根目录取全部未删除项目的路径（裁定 5）。
+7. **触发点**：检查由 `TurnMachine` 的 `Action::Check` 触发；Attach 前由 actor 的 attach 任务先重扫；回合结束看本步事件里有没有 `turn.completed`；闸门因 `project_config_changed` 关着时，`session/send`、`session/queue_resume` 各触发一次（裁定 4）。
+8. **"不加载项目配置继续"**：`SessionManager::ignore_project_config(&SessionId)`，邮箱改成枚举（`Mail::Call` 装箱，免得枚举过大）；会话空闲时关闭 agent 会话（`TurnMachine::Input::Detach`），下一个回合带 `Ignore` resume。
+9. **夹具**：项目目录改为临时目录里真实的 `app/`（IT-orch-lifecycle 里断言 `/work/app` 的两处改为 `f.project()`）；`Index` 多记一份重扫的摘要；`GitTool::with_test_env` 只在测试构建里存在，用例以此让 git 不读本机的系统配置。
+
+## 交接
+
+- **M1b 的确认界面任务**：给"不加载项目配置继续"加协议方法时，直接调用 `SessionManager::ignore_project_config`；`notice{project_config_changed}.params.reason` 说明是重扫失败还是内容变化（没有 `reason` 即内容变化）。
+- **T089**（从库恢复）：`load_wanted`、闸门的原因和"继续"的选择都只在内存里；恢复会话时可以从 `session.configured.project_config` 和最后一次重扫重新得出，"继续"的选择需要另记（例如一个会话行字段）。
