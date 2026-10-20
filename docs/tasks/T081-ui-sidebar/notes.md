@@ -47,3 +47,52 @@
 ## 不依赖 T080 的部分（裁定后先做）
 
 组件全部按 props 写；Toaster、`usePrivileged` 只依赖 ShellAPI；交互用例用 jsdom 和 browser-mock 的 `setPrivilegedResult`。等 T080 合并、main 合进本分支后，再接 store、加截图页夹具和 UI-sidebar、UI-banners。
+
+## 裁定（计划 v1.3.29）
+
+采用拆分：会话页的"未信任""配置待确认"警告框归新的 T137。本任务：侧边栏、提权横幅、添加项目、重连状态、Toaster、`usePrivileged` 的反馈；验收 UI-sidebar、UI-banners（不含会话页警告框）、UNIT-ui-sidebar。上限约 900，硬停止线 1,000。T080 合并后由编排者把 main 合进本分支（f7d906b）。
+
+## 实现记录
+
+### 反馈（`feedback/`）
+
+- **Toaster**：`ToasterProvider` 在 `App` 里包住 `HostProvider`；顶部居中，距顶 `--layout-toast-top`，最宽 `--layout-composer-adjacent-max-w`，最多 3 条（新的挤掉最旧的），间距 8；同 id 的 toast 替换旧的；普通 toast 4 秒后消失，`sticky` 的留到关闭或被替换；每条有关闭按钮。设计里的"向右滑动关闭"没有做。
+- **`usePrivileged`**：经 `ShellAPI.requestPrivileged` 执行，按返回值给反馈：`confirmed`、`cancelled` 不打扰（前者的结果经流显示，后者是用户自己取消的）；`busy`、`cooldown`（向上取整的秒数）、`user_activation_required`、`failed`（主进程给的语义码 `error.code`）各一条 toast，id 是 `privileged:<kind>`。调用本身失败时按 `failed`（`unexpected`）处理。
+- **重连状态**：`ConnectionToast` 在连接 `reconnecting` 或 `failed` 时挂一条 sticky 的 toast，回到 `ready` 后收起；头部状态点同时变成蓝色转圈或红点。
+
+### 侧边栏（`sidebar/`）
+
+- `parts.tsx` 是按 props 画的部分，`index.tsx` 是外框插槽的默认值，从 `useStreams().index` 读：头部订阅 `host`，列表订阅整个视图（`view`，索引流的事件不多），底部订阅 `elevations`。
+- **头部**：产品名加状态点（绿、灰、红，连接中为蓝色转圈），tooltip 写状态、宿主版本和待安装的升级。
+- **列表**：
+  - "新会话"一行（在新建会话页时为选中色）；
+  - "项目"小标题和"添加项目"（`add_project`）；
+  - 项目按 `position` 排序；`trust_state` 不是 `trusted`（含 `stale`）时标"未信任"；悬停或获得焦点时出现"+"（在该项目新建会话）和一个空菜单（菜单项归 T153）；
+  - 每个项目先显示 5 条会话（按 `last_activity_at` 倒序），其余"展开显示""收起"；
+  - 会话行 30 高，标题与项目名对齐；行首：运行中转圈、出错图标（tooltip 和无障碍名称是按 `error_code` 映射的原因，未知码为"会话出错"）、未读蓝点；`needs_action` 时行尾按 `pending_kind` 写"等待批准"或"需要用户输入"（未知的 kind 按"需要用户输入"）；悬停 tooltip 写 agent 名；当前会话 `aria-current="page"`。
+- **提权横幅**：底部卡片，最早的一条申请加"另有 n 条申请"，"查看"走 `elevation`。
+- 会话标题、项目名、客户端名都只作为文本节点渲染。转圈用新 token `--animate-spin`（1.25 s 一圈），减少动态效果时停下。
+
+### 截图
+
+- 截图页的夹具加了 `index`：mock 宿主对每个订阅都回 `mode: snapshot`，随后发一页 `stream/snapshot`；`index` 流的 op 来自夹具，其他流为空。
+- UI-sidebar：亮色、暗色（选中一条会话），窄窗口浮层（展开后）；UI-banners：提权横幅、两条反馈 toast（cooldown 30 秒、busy）和重连 toast 叠在顶部、头部转圈。重连状态的做法：让 mock 宿主不再回 `initialize`，再断开当前连接。
+- UI-shell 的四张基线变了：侧边栏多了"新会话"一行和"项目"小标题（夹具没有数据），其余不变。重新生成后看过。
+- **发现（范围外）**：Playwright 默认的逐像素阈值（0.2）比较宽，悬停底色（正文 5.3%）这类细微差异不会让比对失败。截图前把指针移开，基线也按无悬停状态重新生成。是否把阈值调严，交给 T118 的后续或 T152 决定。
+
+### 审阅截图
+
+`screenshots/`：截图页加载同样的夹具，把 `--font-sans` 换回系统字体（SF Pro、苹方）后截取，1280 × 820：侧边栏亮色、暗色、窄窗口浮层、横幅与 toast。按 F2，没有查看本机 Codex App 包。
+
+### 行数（不含 notes、lock、截图基线）
+
+| 模块 | 估计 | 实际 |
+|---|---|---|
+| 图标与 token | 40 | 66 |
+| 文案 | 45 | 50 |
+| Toaster、重连、特权反馈（含 `App`、外框接线） | 140 | 189 |
+| 侧边栏（头部、列表、会话行、提权横幅、默认插槽） | 255 | 284 |
+| 截图页夹具与依赖 | 20 | 17 |
+| UI-sidebar、UI-banners | 100 | 101 |
+| UNIT-ui-sidebar | 140 | 167 |
+| 合计 | 745 | **874** |
