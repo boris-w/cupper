@@ -32,9 +32,10 @@
 | `feat(host): put the client on calls; audit answers …` | `Call.client`；`AuditEvent::InteractionResponded`；`Gateway::new` 接收审计 channel | 48 | 14 |
 | `feat(host): wire the interaction broker into the session` | `core.rs` 176、`actor.rs` 152、`rows.rs` 48、`manager.rs` 47、`mod.rs` 32、性质测试 87、夹具 46 等 | 594 | 178 |
 | `test(host): IT-orch-interaction` | `interaction_tests.rs` | 240 | 0 |
-| 合计 | | **884** | 194 |
+| `test(protocol): expect not_found …` | 协议目录测试里 `interaction/respond` 的错误码表（第一次 CI 抓到漏改） | 2 | 1 |
+| 合计 | | **886** | 195 |
 
-估计约 860 行，实际 884 行。
+估计约 860 行，实际 886 行。
 
 ## 实现要点
 
