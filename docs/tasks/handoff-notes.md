@@ -268,6 +268,8 @@
 | T089 | 设定者的完整 `Principal` 只在内存里，库里只有 `mode_set_by` 的 ID；恢复会话时按 ID 找回 principal 的类型和 scope，或者把恢复的会话一律视为由创建者设定 | T044 |
 | T059 | `AuditRecord.conn` 改成了 `Option<ConnId>`：会话自己发起的审计（例如 `config.unconfirmed`）没有连接；落盘时处理 `None` | T044 |
 | T008、驱动层的后续任务 | 越权改回经 `AgentPort::send(DriverCommand::SetConfig{..})` 发出，结果要以带全部选项的 `DriverEvent::ConfigChanged` 回到会话；`AgentPort::send` 的文档目前只列了 Prompt、Cancel、Close、Answer，补上 `SetConfig`，并确认 `AgentRuntime` 不再丢弃它（T055 交接时还在丢弃） | T044 |
+| T100 | `AgentNotes::agent(AgentStatus)` 是索引接 `agents` 状态的入口；宿主组装时现在传 `NoAgentNotes`，换成索引的实现（`IndexHandle` 实现它） | T009 |
+| 以后需要刷新 git 的任务 | `agents/refresh` 重新发现 CLI，但不刷新索引手里的 `GitTool`（启动时由 `git_tool` 从同一次发现得出）；用户装了或换了 git 之后要重启宿主才生效 | T009 合并 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
