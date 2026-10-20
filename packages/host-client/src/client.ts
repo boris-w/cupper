@@ -4,7 +4,7 @@
 // renderer through `ShellAPI.host` (`connectShell`), the main process over its
 // sockets (T075). Stream sync (`subscribe`) builds on `call`, `onNotification` and `onState`.
 
-import { zRpcError, type RpcError } from "@cupper/protocol";
+import { zRpcError, type BlobRef, type RpcError } from "@cupper/protocol";
 import type {
   ConnectionFailure,
   ConnectionState,
@@ -19,6 +19,7 @@ import {
   FRAME_JSON,
   FrameDecoder,
   FrameError,
+  MAX_BLOB_CHUNK_BYTES,
   type BlobChunk,
 } from "./frame";
 import { Listeners } from "./listeners";
@@ -242,6 +243,28 @@ export class HostClient {
         command: true,
       }),
     );
+  }
+
+  /**
+   * Puts `bytes` as a blob (design 5.3.4): their sha-256 by Web Crypto, the
+   * bytes as `0x02` chunks of at most a frame, then `blob/put`. Rejects as
+   * `request` does: `too_large` and `conflict` come as an `RpcFailure`.
+   */
+  async putBlob(bytes: Uint8Array<ArrayBuffer>, mediaType: string): Promise<BlobRef> {
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+    const hash = Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+    const port = this.#port;
+    if (port === undefined) {
+      throw new ConnectionLost("no connection to put the blob on");
+    }
+    // An empty blob still sends one chunk, marked last.
+    for (let offset = 0; offset === 0 || offset < bytes.length; offset += MAX_BLOB_CHUNK_BYTES) {
+      const piece = bytes.slice(offset, offset + MAX_BLOB_CHUNK_BYTES);
+      port.sendBlob(hash, offset, offset + MAX_BLOB_CHUNK_BYTES >= bytes.length, piece.buffer);
+    }
+    const blob = { hash, size: bytes.length, media_type: mediaType };
+    await this.request("blob/put", blob);
+    return blob;
   }
 
   #subscribe(sync: StreamSync, params: object): void {
