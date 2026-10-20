@@ -22,7 +22,6 @@ use crate::diag::stderr::{AdapterLog, Tail};
 use crate::driver::acp::{AcpConnection, FromAgent};
 use crate::driver::api::{AgentError, AgentErrorClass, AgentErrorForm};
 use crate::driver::locate::env_rules::{self, adapter_env, check_config_dir};
-use crate::driver::locate::trust::{Boundaries, system_temp_dirs};
 use crate::driver::locate::{CliLocator, resolve};
 use crate::driver::probe::login_shell::{self, Failure, LoginEnv};
 use crate::driver::probe::version::{self, VerifiedRange, VersionClass};
@@ -148,15 +147,15 @@ pub fn fake_agent() -> PathBuf {
 }
 
 /// The launch of Claude's adapter from the runtime in `data_dir`: the CLI
-/// found where agents cannot write (`roots`: every project), its version
-/// classified against the manifest's range (design 5.6.6).
+/// that `locator` finds, its version classified against the manifest's range
+/// (design 5.6.6).
 pub async fn production(
     clock: &dyn Clock,
     durations: &Durations,
     data_dir: &Path,
-    roots: Vec<PathBuf>,
     host: &BTreeMap<String, String>,
     login: &LoginEnv,
+    locator: &CliLocator,
 ) -> Launch {
     let runtime = data_dir.join("runtime");
     let node = runtime.join("node");
@@ -168,17 +167,12 @@ pub async fn production(
         cli: None,
         unavailable: Some(AgentErrorClass::CliMissing),
     };
-    let tmp = host.get("TMPDIR").map(String::as_str);
-    let boundaries = Boundaries::new(roots, system_temp_dirs(tmp));
-    let path = login.vars.get("PATH").map_or("", String::as_str);
-    let home = PathBuf::from(host.get("HOME").cloned().unwrap_or_default());
-    let locator = CliLocator::new(boundaries.clone(), path, home);
     let Ok(found) = locator.locate(&resolve::CLAUDE, None) else {
         return launch;
     };
     let config_dir = login.vars.get("CLAUDE_CONFIG_DIR");
-    let uid = cupper_sys::current_uid();
-    let config_dir = config_dir.and_then(|dir| check_config_dir(dir, uid, &boundaries).ok());
+    let (uid, boundaries) = (cupper_sys::current_uid(), locator.boundaries());
+    let config_dir = config_dir.and_then(|dir| check_config_dir(dir, uid, boundaries).ok());
     let claude = env_rules::CLAUDE;
     let binary = &found.binary;
     (launch.env, _) = adapter_env(claude, host, &login.vars, binary, config_dir.as_ref(), &[]);
