@@ -184,9 +184,18 @@ importers:
 
   apps/desktop:
     devDependencies:
+      '@cupper/desktop-native':
+        specifier: workspace:*
+        version: link:../../crates/cupper-desktop-native
+      '@cupper/host-client':
+        specifier: workspace:*
+        version: link:../../packages/host-client
       '@cupper/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@cupper/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@cupper/shell-api':
         specifier: workspace:*
         version: link:../../packages/shell-api
