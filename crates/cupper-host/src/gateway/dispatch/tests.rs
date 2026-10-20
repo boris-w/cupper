@@ -14,6 +14,7 @@ use cupper_protocol::ids::{ConnId, SessionId};
 use cupper_protocol::methods::admin::SettingsUpdate;
 use cupper_protocol::methods::catalog::catalog;
 use cupper_protocol::methods::git::GitRevert;
+use cupper_protocol::methods::project::{AgentsCapabilities, AgentsRefresh};
 use cupper_protocol::methods::session::SessionSetConfig;
 use cupper_protocol::rpc::{Milestone, Scope};
 use cupper_protocol::schema::generator;
@@ -146,6 +147,7 @@ impl Fixture {
             &durations,
             sessions,
             index,
+            &Quiescence::new(),
         );
         let mut routes = started.unwrap().0;
         let readers = Readers::open(&host_db).unwrap();
@@ -154,6 +156,18 @@ impl Fixture {
         routes.streams(streams, readers);
         let (supervisor, _) = tokio::sync::mpsc::unbounded_channel();
         Arc::new(Control::new(supervisor, Arc::new([]))).route(&mut routes);
+        // The host's agents port (T009), stood in for by the sessions' stub.
+        let agents = || Arc::clone(&self.sessions) as Arc<dyn Port>;
+        routes.add::<AgentsCapabilities>(agents());
+        routes.add::<AgentsRefresh>(agents());
+        // As the host's test interface (T047) in `test-harness` builds.
+        if cfg!(feature = "test-harness") {
+            use cupper_protocol::methods::admin::{TestClockAdvance, TestRunMaintenance, TestSeed};
+            let port = || Arc::clone(&self.index) as Arc<dyn Port>;
+            routes.add::<TestClockAdvance>(port());
+            routes.add::<TestRunMaintenance>(port());
+            routes.add::<TestSeed>(port());
+        }
         routes
     }
 }
@@ -318,14 +332,14 @@ enum Why {
     Later(Milestone),
     /// The task that brings its executor.
     Until(&'static str),
+    /// Served only in the builds of its `x-builds`, which this one is not.
+    Builds,
 }
 
 const ALLOWED: &[(&str, Why)] = {
     use Milestone::{M1b, M2, M3};
-    use Why::{Later, Until};
+    use Why::{Builds, Later, Until};
     &[
-        ("agents/capabilities", Until("T055")),
-        ("agents/refresh", Until("T055")),
         ("agents/restart", Later(M1b)),
         ("auth/elevate", Until("T038")),
         ("auth/elevation_get", Until("T038")),
@@ -334,7 +348,7 @@ const ALLOWED: &[(&str, Why)] = {
         ("blob/put", Until("T029")),
         ("diag/export", Later(M2)),
         // Builds `test-harness` and `dev-auth` only.
-        ("diag/recording_export", Until("T047")),
+        ("diag/recording_export", Until("T116")),
         ("files/search", Later(M1b)),
         ("git/branches", Later(M1b)),
         ("git/commit", Later(M1b)),
@@ -357,9 +371,9 @@ const ALLOWED: &[(&str, Why)] = {
         ("settings/update", Until("T036")),
         ("stream/ack", Later(M3)),
         // Build `test-harness` only.
-        ("test/clock_advance", Until("T047")),
-        ("test/run_maintenance", Until("T047")),
-        ("test/seed", Until("T047")),
+        ("test/clock_advance", Builds),
+        ("test/run_maintenance", Builds),
+        ("test/seed", Builds),
         ("workspace/open", Later(M1b)),
         ("worktree/check", Later(M1b)),
     ]
@@ -407,7 +421,11 @@ async fn unit_unsupported_set_is_what_the_milestones_allow() {
         }
     }
     unsupported.sort_unstable();
-    let allowed: Vec<&str> = ALLOWED.iter().map(|(name, _)| *name).collect();
+    let harness = cfg!(feature = "test-harness");
+    let allowed = ALLOWED
+        .iter()
+        .filter(|(_, why)| !(harness && *why == Why::Builds));
+    let allowed: Vec<&str> = allowed.map(|(name, _)| *name).collect();
     assert_eq!(unsupported, allowed);
 
     // Each reason holds: the milestone is the method's, and an executor
@@ -420,17 +438,19 @@ async fn unit_unsupported_set_is_what_the_milestones_allow() {
         let milestone = milestones[name];
         match why {
             Why::Later(later) => assert_eq!(milestone, later.as_str(), "{name}"),
-            Why::Until(_) => assert!(["M1a", "M1b"].contains(&milestone), "{name}"),
+            Why::Until(_) | Why::Builds => {
+                assert!(["M1a", "M1b"].contains(&milestone), "{name}")
+            }
         }
     }
 }
 
 #[tokio::test]
 async fn unit_unsupported_set_gated_methods_only_in_their_builds() {
-    use cupper_protocol::methods::admin::{DiagRecordingExport, TestClockAdvance};
+    use cupper_protocol::methods::admin::DiagRecordingExport;
+    // `test/clock_advance` as the fixture routes it, like the host.
     let fixture = Fixture::new();
     let mut routes = fixture.start();
-    routes.add::<TestClockAdvance>(Arc::clone(&fixture.index) as Arc<dyn Port>);
     routes.add::<DiagRecordingExport>(Arc::clone(&fixture.index) as Arc<dyn Port>);
     let harness_build = cfg!(feature = "test-harness");
     let cases = [

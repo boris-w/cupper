@@ -36,7 +36,8 @@ pub trait AgentPort: Send + Sync + fmt::Debug {
         events: mpsc::UnboundedSender<DriverEvent>,
     ) -> BoxFuture<'static, Result<AttachInfo, AgentError>>;
 
-    /// A command without a reply: `Prompt`, `Cancel`, `Close` or `Answer`.
+    /// A command without a reply: `Prompt`, `Cancel`, `Close`, `Answer`, or
+    /// `SetConfig`, whose result comes as `ConfigChanged`.
     fn send(&self, command: DriverCommand);
 }
 
@@ -80,8 +81,9 @@ pub enum DriverCommand {
     },
     /// `session/cancel`.
     Cancel { session: AgentSessionId },
-    /// Request, replied with `Result<Vec<ConfigOption>, AgentError>`, the
-    /// latest options: `session/set_config_option`.
+    /// `session/set_config_option` of `option`, cupper's ID of it (design
+    /// 5.6.5); the session hears all the options as
+    /// [`DriverEvent::ConfigChanged`], or nothing if the agent refused.
     SetConfig {
         session: AgentSessionId,
         option: String,
@@ -92,9 +94,6 @@ pub enum DriverCommand {
     /// Answers an agent request; every ask gets one, unless its adapter
     /// instance exited first. `AskAnswer::Cancelled` is ACP's `Cancelled`.
     Answer { ask: AskId, answer: AskAnswer },
-    /// Request, replied with `Result<SessionCapabilities, AgentError>`, while
-    /// the capability cache is empty (design 5.6.7).
-    Probe,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,6 +212,8 @@ pub enum DriverEvent {
     AdapterExited {
         instance: AdapterInstanceId,
         status: ExitStatus,
+        /// The latest stderr, redacted, for the `error` item's details (MS-5).
+        stderr: String,
     },
 }
 
@@ -314,6 +315,9 @@ pub enum AgentErrorClass {
     CliMissing,
     /// The runtime failed its check, or the adapter did not start or connect.
     RuntimeFailed,
+    /// Five failures within five minutes; it starts again once cleared
+    /// (design 5.6.8).
+    Crashed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -341,6 +345,7 @@ impl AgentErrorClass {
             Self::Other => FailureCode::Other,
             Self::CliMissing => FailureCode::CliMissing,
             Self::RuntimeFailed => FailureCode::RuntimeFailed,
+            Self::Crashed => FailureCode::AdapterCrashed,
         }
     }
 }

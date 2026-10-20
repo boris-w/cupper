@@ -95,6 +95,9 @@ enum Mail {
     Pending(SessionId, u32, Option<PendingKind>),
     Rescanned(ProjectId, Scan),
     Checkpoint(oneshot::Sender<()>),
+    /// `test/seed` wrote sessions: reconcile with the tables again.
+    #[cfg(feature = "test-harness")]
+    Reconcile(oneshot::Sender<()>),
 }
 
 #[derive(Debug)]
@@ -131,6 +134,15 @@ impl IndexHandle {
         };
         tokio::spawn(actor.run(inbox, participant));
         Ok(Self { mail, gateway })
+    }
+
+    /// Reconciles with the tables again, after `test/seed` (rulings before
+    /// T047).
+    #[cfg(feature = "test-harness")]
+    pub async fn reconcile(&self) {
+        let (done, reconciled) = oneshot::channel();
+        let _ = self.mail.send(Mail::Reconcile(done));
+        let _ = reconciled.await;
     }
 
     /// The gateway whose clients `clients.updated` lists; set once it exists.
@@ -199,8 +211,7 @@ struct IndexActor {
 
 impl IndexActor {
     async fn run(mut self, mut inbox: mpsc::UnboundedReceiver<Mail>, participant: Participant) {
-        let _participant = participant;
-        while let Some(mail) = inbox.recv().await {
+        while let Some(mail) = participant.idle(inbox.recv()).await {
             match mail {
                 Mail::Call(call, reply) => self.call(*call, reply),
                 Mail::Prepared(done) => {
@@ -218,6 +229,27 @@ impl IndexActor {
                 Mail::Clients => self.clients().await,
                 Mail::Pending(session, count, oldest) => self.pending(session, count, oldest).await,
                 Mail::Rescanned(project, scan) => self.rescanned(project, scan).await,
+                #[cfg(feature = "test-harness")]
+                Mail::Reconcile(done) => {
+                    if let Ok(tables) = self.deps.readers.read(rows::read).await {
+                        let host = &self.deps.host;
+                        let bodies =
+                            read(&self.handle, |view| rows::reconcile(view, &tables, host));
+                        if self
+                            .writer
+                            .append(Batch {
+                                bodies,
+                                ..Batch::default()
+                            })
+                            .await
+                            .is_ok()
+                        {
+                            self.tables.sessions = tables.sessions;
+                            self.tables.workspaces = tables.workspaces;
+                        }
+                    }
+                    let _ = done.send(());
+                }
                 Mail::Checkpoint(done) => {
                     // A failed checkpoint costs the next start a longer load.
                     let _ = self.writer.checkpoint().await;
@@ -256,7 +288,7 @@ impl IndexActor {
             clock: Arc::clone(&self.deps.clock),
             durations: self.deps.durations.clone(),
         };
-        let mail = self.mail.clone();
+        let (mail, hold) = (self.mail.clone(), self.deps.quiescence.hold());
         tokio::spawn(async move {
             let prepared = projects::prepare(path, cx).await;
             let done = Done {
@@ -265,6 +297,8 @@ impl IndexActor {
                 prepared,
             };
             let _ = mail.send(Mail::Prepared(Box::new(done)));
+            // Let go once the actor has its work.
+            drop(hold);
         });
     }
 

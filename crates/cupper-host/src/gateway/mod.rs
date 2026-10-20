@@ -48,6 +48,7 @@ pub use self::handshake::Session;
 pub use self::routes::Routes;
 use crate::clock::Clock;
 use crate::durations::{Durations, GATEWAY_ACCEPT_BACKOFF};
+use crate::quiescence::{ActorKind, Participant};
 #[cfg(any(feature = "dev-auth", feature = "test-harness"))]
 use crate::startup::payload::SecretKey;
 
@@ -182,12 +183,22 @@ impl Gateway {
 }
 
 /// A running connection task, counted in `Gateway::live`.
-struct Live(Arc<Gateway>);
+/// The kinds of the gateway's tasks in the quiescence barrier.
+pub const CONN: ActorKind = ActorKind::new("gateway_conn");
+pub const SEND: ActorKind = ActorKind::new("gateway_send");
+pub const REPLY: ActorKind = ActorKind::new("gateway_reply");
+pub const SUBSCRIPTIONS: ActorKind = ActorKind::new("gateway_subscriptions");
+pub const KINDS: [ActorKind; 4] = [CONN, SEND, REPLY, SUBSCRIPTIONS];
+
+/// A running connection task, counted in `Gateway::live`; it waits on its
+/// peer as an idle participant.
+struct Live(Arc<Gateway>, Participant);
 
 impl Live {
     fn enter(gateway: Arc<Gateway>) -> Self {
         gateway.live.send_modify(|live| *live += 1);
-        Self(gateway)
+        let participant = gateway.routes.quiescence().enter(CONN);
+        Self(gateway, participant)
     }
 }
 

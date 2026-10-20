@@ -85,6 +85,16 @@ pub(super) enum Mail {
 /// The host's exit, whether forced, and the reply once the session took it.
 pub(super) type Stop = (bool, oneshot::Sender<()>);
 
+/// What woke the actor.
+enum Next {
+    Mail(Option<Mail>),
+    Agent(DriverEvent),
+    Attached(Result<AttachInfo, AgentError>),
+    Rescanned(Purpose, Rescan),
+    Stop(Stop),
+    Alarm,
+}
+
 /// What the actor starts with: its session's stream, its agent, and what an
 /// attach adds to the turn machine's target (design 5.2.6).
 pub(super) struct Parts {
@@ -202,7 +212,7 @@ impl SessionActor {
         inbox: mpsc::UnboundedReceiver<Mail>,
         mut stops: mpsc::UnboundedReceiver<Stop>,
         first: SendRequest,
-        _participant: Participant,
+        participant: Participant,
     ) {
         let (events, mut agent) = mpsc::unbounded_channel();
         let (attached, mut attaches) = mpsc::unbounded_channel();
@@ -225,28 +235,37 @@ impl SessionActor {
         };
         let first = Input::Machine(turn::Input::Send(first));
         actor.input(first, None, Step::default()).await;
-        // A branch's handler runs once the other branches are dropped.
+        // Idle until a branch brings work, which runs once the others are
+        // dropped.
         loop {
-            tokio::select! {
-                mail = actor.inbox.recv() => match mail {
-                    Some(Mail::Call(call, reply)) => actor.call(*call, reply).await,
-                    Some(Mail::IgnoreProjectConfig(done)) => {
-                        actor.ignore_project_config().await;
-                        let _ = done.send(());
-                    }
-                    None => break,
-                },
-                Some(event) = agent.recv() => actor.agent(event).await,
-                Some(result) = attaches.recv() => actor.attach_done(result).await,
-                Some((purpose, found)) = rescans.recv() => actor.trust(purpose, found).await,
-                Some((force, done)) = stops.recv() => {
+            let next = participant.idle(async {
+                tokio::select! {
+                    mail = actor.inbox.recv() => Next::Mail(mail),
+                    Some(event) = agent.recv() => Next::Agent(event),
+                    Some(result) = attaches.recv() => Next::Attached(result),
+                    Some((purpose, found)) = rescans.recv() => Next::Rescanned(purpose, found),
+                    Some(stop) = stops.recv() => Next::Stop(stop),
+                    () = actor.alarm.rung() => Next::Alarm,
+                }
+            });
+            match next.await {
+                Next::Mail(Some(Mail::Call(call, reply))) => actor.call(*call, reply).await,
+                Next::Mail(Some(Mail::IgnoreProjectConfig(done))) => {
+                    actor.ignore_project_config().await;
+                    let _ = done.send(());
+                }
+                Next::Mail(None) => break,
+                Next::Agent(event) => actor.agent(event).await,
+                Next::Attached(result) => actor.attach_done(result).await,
+                Next::Rescanned(purpose, found) => actor.trust(purpose, found).await,
+                Next::Stop((force, done)) => {
                     if force {
                         let exit = Input::Machine(turn::Input::HostExit);
                         actor.input(exit, None, Step::default()).await;
                     }
                     let _ = done.send(());
                 }
-                () = actor.alarm.rung() => actor.expired().await,
+                Next::Alarm => actor.expired().await,
             }
         }
     }
@@ -789,11 +808,26 @@ impl SessionActor {
         self.input(input, None, step).await;
     }
 
+    /// A command list the session's capabilities do not have yet goes into
+    /// the stream with them (design 5.6.2).
+    fn commands_changed(&self, event: &DriverEvent) -> Step {
+        let mut step = Step::default();
+        if let DriverEvent::CommandsChanged(commands) = event
+            && let Some(mut caps) = self.written_capabilities()
+            && caps.commands != *commands
+        {
+            caps.commands.clone_from(commands);
+            step.events.push(EventBody::SessionCapabilities(caps));
+        }
+        step
+    }
+
     /// An event of the agent. A change of its options rewrites the
     /// configuration, and the guard checks the permission mode.
     async fn agent(&mut self, event: DriverEvent) {
         let DriverEvent::ConfigChanged(options) = event else {
-            return self.input(Input::Agent(event), None, Step::default()).await;
+            let step = self.commands_changed(&event);
+            return self.input(Input::Agent(event), None, step).await;
         };
         let mut step = Step::default();
         let config = options
