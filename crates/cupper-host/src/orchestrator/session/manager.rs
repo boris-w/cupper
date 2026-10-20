@@ -14,6 +14,7 @@ use cupper_protocol::error::{ErrorCode, RpcError};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::SessionId;
 use cupper_protocol::index::{TrustState, WorkspaceKind};
+use cupper_protocol::interaction::{InteractionOutcome, InteractionRequest};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::methods::session::{
     SessionCreate, SessionCreateParams, SessionCreateResult, WorkspaceSpec,
@@ -32,17 +33,17 @@ use tokio::sync::{mpsc, oneshot};
 use super::actor::{Mail, Parts, SessionActor};
 use super::core::SessionCore;
 use super::rows::Rows;
-use super::{internal, not_found, parse};
+use super::{IndexNotes, internal, not_found, parse, tier_of};
 use crate::clock::{Clock, IdGen};
 use crate::driver::api::{AgentPort, ProjectConfigPolicy};
 use crate::durations::Durations;
-use crate::gateway::{Call, Port, Reply, SessionPort};
+use crate::gateway::{AuditRecord, Call, Port, Reply, SessionPort};
 use crate::ledger::Outcome;
 use crate::orchestrator::queue::preview;
 use crate::orchestrator::turn::{SendMode, SendRequest};
 use crate::policy::{self, Confirmable, Facts};
 use crate::quiescence::{ActorKind, Quiescence};
-use crate::store::streams::{Batch, Streams};
+use crate::store::streams::{Batch, StreamView, Streams};
 use crate::store::{Durability, Readers, Writer};
 
 /// The session actors in the quiescence barrier.
@@ -60,6 +61,9 @@ pub struct SessionDeps {
     /// The runtime of each agent the host can run.
     pub agents: HashMap<AgentKind, Arc<dyn AgentPort>>,
     pub quiescence: Quiescence,
+    /// The host's audit channel, the gateway's too.
+    pub audit: mpsc::UnboundedSender<AuditRecord>,
+    pub index: Arc<dyn IndexNotes>,
 }
 
 /// The session manager. Clones share it; the host has one.
@@ -191,7 +195,7 @@ impl SessionManager {
             })),
         };
         writer.append(batch).await.map_err(internal)?;
-        let core = SessionCore::new(Arc::clone(&deps.ids), &deps.durations, false);
+        let core = SessionCore::new(id.clone(), Arc::clone(&deps.ids), &deps.durations, false);
         let (mail, inbox) = mpsc::unbounded_channel();
         let running = Arc::new(AtomicBool::new(false));
         let parts = Parts {
@@ -209,6 +213,8 @@ impl SessionManager {
             configured,
             cached,
             running: Arc::clone(&running),
+            audit: deps.audit.clone(),
+            index: Arc::clone(&deps.index),
         };
         let first = SendRequest {
             content: params.message,
@@ -319,16 +325,6 @@ async fn cached(
     Ok(json.and_then(|json| serde_json::from_str(&json).ok()))
 }
 
-/// The tier of permission mode `mode` by the agent's mapping.
-fn tier_of(capabilities: Option<&SessionCapabilities>, mode: &str) -> Option<Tier> {
-    let options = capabilities?.config.iter();
-    let option = options
-        .into_iter()
-        .find(|o| o.id == ConfigOptionId::PermissionMode)?;
-    let value = option.values.iter().find(|v| v.value == mode)?;
-    Some(value.risk.clone())
-}
-
 /// Refuses `call` with `err`.
 fn refuse(call: Call, err: RpcError) -> Reply {
     if let Some(ticket) = call.ticket {
@@ -363,27 +359,43 @@ impl Port for SessionManager {
 
 impl SessionPort for SessionManager {
     fn facts(&self, command: &Confirmable) -> BoxFuture<'static, Result<Facts, RpcError>> {
-        let running_turns = self.running_turns();
-        let Confirmable::Create(params) = command else {
-            return Box::pin(future::ready(Ok(Facts {
-                running_turns,
-                ..Facts::default()
-            })));
+        let mut facts = Facts {
+            running_turns: self.running_turns(),
+            ..Facts::default()
         };
-        let readers = self.shared.deps.readers.clone();
-        let agent = params.agent.clone();
-        let mode = params
-            .config
-            .as_ref()
-            .and_then(|c| c.permission_mode.clone());
-        Box::pin(async move {
-            let cached = cached(&readers, &agent).await?;
-            let mode_tier = mode.and_then(|mode| tier_of(cached.as_ref(), &mode));
-            Ok(Facts {
-                mode_tier,
-                running_turns,
-                ..Facts::default()
-            })
-        })
+        let deps = self.shared.deps.clone();
+        match command.clone() {
+            Confirmable::Create(params) => Box::pin(async move {
+                let cached = cached(&deps.readers, &params.agent).await?;
+                let mode = params.config.and_then(|c| c.permission_mode);
+                facts.mode_tier = mode.and_then(|mode| tier_of(cached.as_ref(), &mode));
+                Ok(facts)
+            }),
+            // The chosen option, as the session's pending request has it.
+            Confirmable::Respond(params) if self.sessions().contains_key(&params.session_id) => {
+                Box::pin(async move {
+                    let stream = StreamId::Session(params.session_id.clone());
+                    let handle = deps.streams.open(&stream).await.map_err(internal)?;
+                    let InteractionOutcome::Selected(selected) = &params.outcome else {
+                        return Ok(facts);
+                    };
+                    facts.option = handle.read(|view, _| {
+                        let StreamView::Session(view) = view else {
+                            return None;
+                        };
+                        let request = &view.requests.get(&params.request_id)?.requested;
+                        let options = match &request.request {
+                            InteractionRequest::Permission(p) => &p.options,
+                            InteractionRequest::PlanConfirm(p) => &p.options,
+                            _ => return None,
+                        };
+                        let mut options = options.iter();
+                        options.find(|o| o.option_id == selected.option_id).cloned()
+                    });
+                    Ok(facts)
+                })
+            }
+            _ => Box::pin(future::ready(Ok(facts))),
+        }
     }
 }

@@ -181,7 +181,7 @@
 
 | 方法 | 类型 | 参数要点 | 结果要点 | 可能的错误 | 幂等 | scope | 里程碑 |
 |---|---|---|---|---|---|---|---|
-| `interaction/respond` | 请求 | `{command_id, session_id, request_id, request_digest, outcome, input?}`；`input: {kind: click\|key\|native_confirm, key?: enter\|space\|escape\|cmd_enter\|digit, digit?}` 由桌面主进程写入（`digit` 是 v1.4 为请求面板的数字键新增的，取 1–9，宿主核对它与所选选项的序号相符），来自 window 角色时必须有，缺了就拒绝（[5.7.8](07-desktop.md#578-安全加固的落点)），其他 principal 的这个参数被忽略 | `{request_id}` | `conflict/already_resolved`（带 `resolved_by`）、`conflict/digest_mismatch`、`conflict/too_early`、`expired`、`forbidden`（含 `user_activation_required`） | 命令 | approve；选项 `requires: privileged` 时 privileged；带 `mode_after` 的选项另按档位规则 | M1a |
+| `interaction/respond` | 请求 | `{command_id, session_id, request_id, request_digest, outcome, input?}`；`input: {kind: click\|key\|native_confirm, key?: enter\|space\|escape\|cmd_enter\|digit, digit?}` 由桌面主进程写入（`digit` 是 v1.4 为请求面板的数字键新增的，取 1–9，宿主核对它与所选选项的序号相符），来自 window 角色时必须有，缺了就拒绝（[5.7.8](07-desktop.md#578-安全加固的落点)），其他 principal 的这个参数被忽略 | `{request_id}` | `conflict/already_resolved`（带 `resolved_by`）、`conflict/digest_mismatch`、`conflict/too_early`、`expired`、`forbidden`（含 `user_activation_required`）、`not_found`（会话里没有这个请求） | 命令 | approve；选项 `requires: privileged` 时 privileged；带 `mode_after` 的选项另按档位规则 | M1a |
 | `interaction/get` | 请求 | `{session_id, request_id}` | 完整的交互请求和当前状态（供主进程弹原生确认框） | `not_found` | 天然 | read | M1a |
 
 ### Git、工作区与文件（M1b）
