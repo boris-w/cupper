@@ -55,6 +55,24 @@ test(
 );
 
 test(
+  "E2E-SEC-fake-host: a fake host on the socket before the app starts gets no command either",
+  { tag: "@smoke" },
+  async ({ cupper }) => {
+    const fake = await new FakeHost().listen(cupper.dataDir);
+    try {
+      // The dialog comes while the app starts; the stand-in records it (T178).
+      await cupper.launch();
+      const dialog = await cupper.dialogs.next();
+      expect(dialog.message).toBe((await texts(cupper))("host:restart_title"));
+      await cupper.dialogs.answer(dialog.index, 1);
+      onlyProofs(fake, cupper, "dev_key");
+    } finally {
+      await fake.close();
+    }
+  },
+);
+
+test(
   "E2E-SEC-cli-fake-host: the CLI refuses a fake host with exit code 4",
   { tag: "@smoke" },
   async ({ cupper }) => {
