@@ -125,9 +125,8 @@ export function RequestPanel(props: {
     const draft = ui.getState().drafts[sessionId];
     ui.getState().setDraft(sessionId, draft ? `${draft}\n\n${message}` : message);
   };
-  const rejectWithMessage = async (message: string) => {
-    const outcome = skipOutcome(request as never);
-    const how = await respond(requested, outcome);
+  const rejectWithMessage = async (message: string, reject: InteractionOutcome) => {
+    const how = await respond(requested, reject);
     if (how === "sent") {
       props.onAnswered(requested.request_id);
       const content = [{ type: "text", text: message }];
@@ -234,7 +233,10 @@ export function RequestPanel(props: {
           </span>
         </button>
       </div>
-      <Body {...kind} rejectWithMessage={(message) => void rejectWithMessage(message)} />
+      <Body
+        {...kind}
+        rejectWithMessage={(message, reject) => void rejectWithMessage(message, reject)}
+      />
       {hint && (
         <p role="status" className="px-4 pb-3 text-sm text-fg-tertiary">
           {t(
@@ -251,7 +253,9 @@ export function RequestPanel(props: {
 }
 
 /** The kind's content, options and buttons; a kind this build does not handle only closes. */
-function Body(props: KindProps & { rejectWithMessage: (text: string) => void }) {
+function Body(
+  props: KindProps & { rejectWithMessage: (text: string, reject: InteractionOutcome) => void },
+) {
   const t = useT();
   const { request } = props.requested;
   if (!handled(request)) {
@@ -262,14 +266,15 @@ function Body(props: KindProps & { rejectWithMessage: (text: string) => void }) 
     case "permission": {
       const command = text(request.tool.command);
       const detail = text(request.detail);
+      const reject = skipOutcome(request);
       return (
         <OptionsKind
           {...props}
           options={request.options}
           truncated={request.content_truncated}
-          skip={skipOutcome(request)}
+          skip={reject}
           rejectWithMessage={
-            skipOutcome(request).type === "selected" ? props.rejectWithMessage : undefined
+            reject.type === "selected" ? (text) => props.rejectWithMessage(text, reject) : undefined
           }
         >
           {request.title && (
