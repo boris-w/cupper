@@ -1,0 +1,3 @@
+{"segment":0}
+{"capabilities":{"agent":"claude","commands":[],"config":[],"extraction":{"diff":"fragment","exit_code":true,"output_streaming":false,"plan":"markdown_only","run_state":"inferred","thinking":true},"interactions":{"plan_confirm":true,"question_forms":true,"reject_ends_turn":false},"prompt":{"file_ref":true,"image":true,"max_image_bytes":10485760},"session":{"fork":false,"load_history":true,"resume":true},"turn":{"interrupt":true,"interrupt_stops_commands":true,"queue":true,"steer":{"side_effects":true,"supported":true}},"versions":{"adapter":"0.91.0","cli":"2.1.296","cli_compat":"verified"}}}
+{"auth":{"kind":"account","plan":"max"}}

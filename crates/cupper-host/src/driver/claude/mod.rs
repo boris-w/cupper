@@ -23,6 +23,8 @@
 
 pub mod ask;
 pub mod capabilities;
+#[cfg(test)]
+mod gold_a;
 
 use std::path::{Path, PathBuf};
 
