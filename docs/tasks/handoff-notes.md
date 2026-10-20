@@ -350,6 +350,9 @@
 | T167、T093 | 添加项目时主进程调 `dialog.showOpenDialog`（`apps/desktop/src/main/shell.ts`），T090 没有替换。替换与记录放进 T167 的辅助，T093 只写用例 | T090 |
 | e2e（T091–T093、T167） | 夹具在 `tools/e2e/src/fixture.ts`：每个用例一个临时根目录（`CUPPER_E2E_DIR` 布局）、临时 git 仓库（固定作者）、假 agent 默认配成 `agents.claude`，可用 `test.use({ testConfig })` 覆盖；`connected()` 等窗口连上并记下宿主 pid；结束时按关机路径退出 App，不弹退出确认。进程按 pid 加启动时间识别（`procs.ts`），只发信号给本用例记下的进程。E2E 编号在 `ids.toml` 里标 `nightly` 的只在 `ci e2e`、`ci nightly` 跑，`ci pr` 只跑 `@smoke` | T090 |
 | 清理 worktree 的磁盘 | `ci e2e` 有意保留 `apps/desktop/dist/pack/e2e`（约 470 MB）、`target/runtime-pack`（约 190 MB）、`target/host-bundle`（约 3.7 GB），清 `target/` 时一并清掉 | T090 |
+| T168 | "展开看全文"的接入点（T165）：`request/RequestPanel.tsx` 的 `Body` 把 `content_truncated` 作为 `truncated` 传给 `OptionsKind`；`request/logic.ts` 的 `isEnabled(option, truncated)` 决定允许类选项能否选；`request/kinds.tsx` 的 `Terminal` 已有"展开 / 收起"，`blob` 类内容的 `text()` 现在返回 `undefined`、不显示 | T165 |
+| T146 | 请求记录行（`request/RequestRow.tsx`，登记为 `request`）的文字由纯函数 `record()` 决定：等待处理、已拒绝、已批准：{标题}、已询问 n 个问题、未回答。"已询问 n 个问题"按设计可以展开看回答，这次只写了数目 | T165 |
+| T093 | E2E-reject-with-message（T165）：自由输入行只在权限请求有不持久的拒绝选项时出现，编号是"选项数 + 1"，按这个数字只聚焦、不提交；1 秒内打过字时按 Enter 只提示"点击提交"、不发请求；拒绝收到 `already_resolved`、`expired` 时 `respond` 返回 `elsewhere`，不发跟进，附言接在输入框原有草稿之后（空一行），toast"已在别处处理"；多个待处理请求时标题行有 `data-request-count` | T165 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
