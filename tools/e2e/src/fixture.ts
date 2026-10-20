@@ -78,7 +78,7 @@ export class Cupper {
     return required(this.#dialogs);
   }
 
-  /** Starts the app, replaces its native dialogs, and waits for its window. */
+  /** Starts the app, takes over its native dialogs' stand-ins, and waits for its window. */
   async launch(): Promise<void> {
     const env = { ...process.env, CUPPER_E2E_DIR: this.root };
     // Two apps at once, and other windows of the machine, cover each other:
@@ -95,7 +95,7 @@ export class Cupper {
       throw new Error("the app did not start");
     }
     this.track(tree(this.#main.pid));
-    this.#dialogs = await Dialogs.install(this.app);
+    this.#dialogs = await Dialogs.attach(this.app);
     this.#window = await this.app.firstWindow();
   }
 

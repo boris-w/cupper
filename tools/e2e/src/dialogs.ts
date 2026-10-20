@@ -1,8 +1,7 @@
-// The native dialogs, replaced in the main process (design 5.9.9): the main
-// process reads `dialog.showMessageBox` and the rest when it calls them, so
-// the stand-ins set here take every call. Each call is recorded and waits
-// until the test answers it (the synchronous message box answers `cancelId`
-// at once); no native dialog ever shows or takes the focus.
+// The native dialogs, as the e2e build's main process records them from its
+// start (design 5.9.9, `apps/desktop/src/main/e2e-dialogs.ts`): each call
+// waits until the test answers it here (the synchronous message box answers
+// `cancelId` at once); no native dialog ever shows or takes the focus.
 
 import { expect } from "@playwright/test";
 import type { ElectronApplication } from "@playwright/test";
@@ -35,33 +34,11 @@ export class Dialogs {
     this.#app = app;
   }
 
-  static async install(app: ElectronApplication): Promise<Dialogs> {
-    await app.evaluate(({ dialog }) => {
-      const stand: Stand = { calls: [], answers: [] };
-      Object.assign(globalThis, { __e2eDialogs: stand });
-      const message = (kind: NativeDialog["kind"], args: unknown[]) => {
-        const options = args.at(-1) as Electron.MessageBoxOptions;
-        const { type, message, detail, buttons, defaultId, cancelId, checkboxLabel } = options;
-        const call = { kind, type, message, detail, buttons, defaultId, cancelId, checkboxLabel };
-        stand.calls.push(call);
-        return options;
-      };
-      const waiting = <T>() =>
-        new Promise<T>((resolve) => stand.answers.push((value) => resolve(value as T)));
-      dialog.showMessageBox = (...args: unknown[]) => {
-        message("message", args);
-        return waiting();
-      };
-      dialog.showMessageBoxSync = (...args: unknown[]) => {
-        stand.answers.push(null);
-        return message("message_sync", args).cancelId ?? 0;
-      };
-      dialog.showOpenDialog = (...args: unknown[]) => {
-        const { properties } = args.at(-1) as Electron.OpenDialogOptions;
-        stand.calls.push({ kind: "open", properties });
-        return waiting();
-      };
-    });
+  /** The stand-ins that the e2e build's main process installed first thing (T178). */
+  static async attach(app: ElectronApplication): Promise<Dialogs> {
+    if (!(await app.evaluate(() => "__e2eDialogs" in globalThis))) {
+      throw new Error("the app has no dialog stand-ins: not an e2e build");
+    }
     return new Dialogs(app);
   }
 
