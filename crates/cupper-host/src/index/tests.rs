@@ -352,6 +352,7 @@ impl Requesters for Clear {
             parent_chain: Vec::new(),
             has_tty: true,
             origin_unverifiable: false,
+            bundled_cli: false,
         };
         Box::pin(futures::future::ready(Examined::Clear(verified)))
     }

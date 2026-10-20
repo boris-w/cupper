@@ -23,7 +23,9 @@ use cupper_host::store::meta::{self, MetaKey};
 use cupper_host::store::{Database, MIGRATIONS, migrate, open_reader, open_writer};
 use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::methods::Empty;
-use cupper_protocol::methods::admin::DiagRecordingExport;
+use cupper_protocol::methods::admin::{
+    AuthElevationGet, AuthElevationRespond, DiagRecordingExport, TestClockAdvance,
+};
 use cupper_protocol::methods::handshake::{
     ClientPresence, ClientPresenceParams, HostExit, HostExitParams, HostStatus,
 };
@@ -285,9 +287,9 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
     }
 }
 
-/// A host with the fake agent on a trusted project in `dir`, `durations`
-/// overridden; its data directory and the harness client.
-async fn fake_agent_host(dir: &TempDir, durations: serde_json::Value) -> (PathBuf, Child, Client) {
+/// A host with the fake agent on a trusted project in `dir`, more of
+/// `test_config` in `config`; its data directory and the harness client.
+async fn fake_agent_host(dir: &TempDir, config: serde_json::Value) -> (PathBuf, Child, Client) {
     let (data_dir, conn) = migrated(dir);
     let sql = "INSERT INTO projects (project_id, path, name, position, added_at, trust_state)
                VALUES (?1, ?2, 'p', 0, 1, 'trusted')";
@@ -295,8 +297,11 @@ async fn fake_agent_host(dir: &TempDir, durations: serde_json::Value) -> (PathBu
     conn.execute(sql, [&ProjectId::from_uuid(1).to_string(), path])
         .unwrap();
     let program = launch::fake_agent();
-    let test_config = json!({"agents": {"claude": {"program": program}}, "login_env": {},
-        "durations": durations});
+    let mut test_config = json!({"agents": {"claude": {"program": program}}, "login_env": {}});
+    test_config
+        .as_object_mut()
+        .unwrap()
+        .extend(config.as_object().unwrap().clone());
     let host = spawn_with(&data_dir, test_config);
     let client = connect(&data_dir).await;
     (data_dir, host, client)
@@ -313,6 +318,14 @@ async fn create(client: &Client, text: &str) -> SessionId {
         .await
         .unwrap()
         .session_id
+}
+
+/// `session/send` of the message `text`.
+async fn send(client: &Client, session: &SessionId, text: &str) {
+    let params = json!({"command_id": client::command_id(), "session_id": session,
+        "mode": "queue", "content": [{"type": "text", "text": text}]});
+    let params = serde_json::from_value(params).unwrap();
+    client.request::<SessionSend>(params).await.unwrap();
 }
 
 /// Waits until `sql` reads `expected` in `db` of `data_dir`.
@@ -363,7 +376,7 @@ async fn it_lifecycle_runs_a_turn_with_the_fake_agent() {
 async fn it_recording_export_two_instances_read_back_and_sanitize() {
     let dir = TempDir::new("recording");
     let (data_dir, mut host, client) =
-        fake_agent_host(&dir, json!({"adapter_backoff_ms": 1})).await;
+        fake_agent_host(&dir, json!({"durations": {"adapter_backoff_ms": 1}})).await;
     let session = create(&client, "say hi; stderr oops").await;
     let turns = "SELECT status FROM turns ORDER BY turn_no";
     until(&data_dir, "host.db", turns, &["completed"]).await;
@@ -371,12 +384,7 @@ async fn it_recording_export_two_instances_read_back_and_sanitize() {
         ("exit 0", &["completed", "failed"][..]),
         ("say again", &["completed", "failed", "completed"]),
     ] {
-        let params = json!({"command_id": client::command_id(), "session_id": session,
-            "mode": "queue", "content": [{"type": "text", "text": text}]});
-        client
-            .request::<SessionSend>(serde_json::from_value(params).unwrap())
-            .await
-            .unwrap();
+        send(&client, &session, text).await;
         until(&data_dir, "host.db", turns, statuses).await;
     }
     // Raw frames hold no barrier: wait for the notes to land.
@@ -659,6 +667,126 @@ async fn it_seed_writes_sessions_the_normal_way() {
     assert!(ops > 4_000, "{ops}");
     let listed = "SELECT CAST(count(*) AS TEXT) FROM events WHERE stream = 'index' AND type = 'session.upserted'";
     assert_eq!(count(listed), ["3"]);
+    terminate(&host);
+    assert_eq!(exit_code(&mut host).await, 0);
+}
+
+/// The lines an elevation probe wrote to `out`, once there are `n`.
+async fn answers(out: &Path, n: usize) -> Vec<serde_json::Value> {
+    let clock = SystemClock::new();
+    let give_up = clock.now_mono() + PATIENCE;
+    loop {
+        let text = std::fs::read_to_string(out).unwrap_or_default();
+        let lines: Vec<_> = text
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        if lines.len() >= n {
+            return lines;
+        }
+        assert!(clock.now_mono() < give_up, "{}: {lines:?}", out.display());
+        wait(&clock).await;
+    }
+}
+
+/// IT-elevate on a real host with the fake agent, on the manual clock: the
+/// adapter's descendants are refused; a request from elsewhere waits, a
+/// second one is rate limited, and two minutes on the first has expired;
+/// one granted can write; one whose connection closes ends with it.
+#[tokio::test]
+async fn it_elevate_lineage_waits_limits_expiry_grant_and_close() {
+    let dir = TempDir::new("elevate");
+    let (data_dir, mut host, client) = fake_agent_host(&dir, json!({"clock": "manual"})).await;
+    let probe = launch::fake_agent().with_file_name("cupper-elevate-probe");
+    let out = |name: &str| dir.path().join(name);
+    let args = |name: &str| {
+        let (data, out) = (data_dir.display(), out(name));
+        format!(
+            "{} --data-dir {data} --out {}",
+            probe.display(),
+            out.display()
+        )
+    };
+    // A tool command in a session of its own, then an MCP server or hook.
+    let session = create(&client, &format!("spawn {} --setsid", args("tool"))).await;
+    send(&client, &session, &format!("spawn {}", args("mcp"))).await;
+    for name in ["tool", "mcp"] {
+        let refused = &answers(&out(name), 1).await[0]["elevate"]["error"]["data"];
+        assert_eq!(
+            (&refused["code"], &refused["reason"]),
+            (&json!("forbidden"), &json!("lineage"))
+        );
+    }
+
+    let start = |name: &str| {
+        let args = args(name);
+        Command::new(&probe)
+            .args(args.split(' ').skip(1))
+            .spawn()
+            .unwrap()
+    };
+    let events = |kind| {
+        format!(
+            "SELECT json_extract(json, '$.data.elevation_id') FROM events
+        WHERE stream = 'index' AND type = 'elevation.{kind}' ORDER BY seq"
+        )
+    };
+    let requested = || query(&data_dir.join("host.db"), &events("requested"));
+    let until_requested = |n| async move {
+        let clock = SystemClock::new();
+        while requested().len() < n {
+            wait(&clock).await;
+        }
+        requested().pop().unwrap()
+    };
+    let code = |answer: &serde_json::Value| answer["elevate"]["error"]["data"]["code"].clone();
+    let mut first = start("first");
+    until_requested(1).await;
+    let mut second = start("second");
+    assert_eq!(code(&answers(&out("second"), 1).await[0]), "rate_limited");
+    let advance = json!({"ms": 120_000});
+    client
+        .request::<TestClockAdvance>(serde_json::from_value(advance).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(code(&answers(&out("first"), 1).await[0]), "timeout");
+
+    let mut third = start("third");
+    let elevation_id = until_requested(2).await;
+    let get = serde_json::from_value(json!({"elevation_id": elevation_id})).unwrap();
+    let verified = client
+        .request::<AuthElevationGet>(get)
+        .await
+        .unwrap()
+        .verified;
+    let probe_path = std::fs::canonicalize(&probe).unwrap();
+    assert_eq!((verified.pid, verified.bundled_cli), (third.id(), false));
+    assert_eq!(verified.executable.0, probe_path.display().to_string());
+    let respond = json!({"command_id": client::command_id(), "elevation_id": elevation_id,
+        "decision": "grant", "scopes": ["write"]});
+    let respond = serde_json::from_value(respond).unwrap();
+    client
+        .request::<AuthElevationRespond>(respond)
+        .await
+        .unwrap();
+    let granted = answers(&out("third"), 2).await;
+    assert_eq!(granted[0]["elevate"]["ok"]["granted"], json!(["write"]));
+    assert_eq!(granted[1]["write"]["error"]["data"]["code"], "not_found");
+
+    let mut fourth = start("fourth");
+    until_requested(3).await;
+    terminate(&fourth);
+    // Each request resolved, the last as its connection closed.
+    let ids = requested();
+    let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
+    until(&data_dir, "host.db", &events("resolved"), &ids).await;
+    let decisions = "SELECT json_extract(json, '$.data.decision') FROM events
+        WHERE stream = 'index' AND type = 'elevation.resolved' ORDER BY seq";
+    let decided = query(&data_dir.join("host.db"), decisions);
+    assert_eq!(decided, ["expired", "granted", "expired"]);
+    for probe in [&mut first, &mut second, &mut third, &mut fourth] {
+        probe.wait().unwrap();
+    }
     terminate(&host);
     assert_eq!(exit_code(&mut host).await, 0);
 }

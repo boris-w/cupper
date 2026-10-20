@@ -2,8 +2,9 @@
 //!
 //! - [`Requesters`] examines the process behind the asking connection: an
 //!   adapter's descendant, or one that cannot be ruled out, is refused
-//!   (`forbidden`, `lineage`) without a dialog. T133 implements it; until
-//!   then [`FailClosed`] refuses everyone.
+//!   (`forbidden`, `lineage`) without a dialog. The host's is
+//!   [`ProcessRequesters`](crate::requester::ProcessRequesters);
+//!   [`FailClosed`] refuses everyone.
 //! - [`ElevationCore`], pure: one request pending at a time; two denials
 //!   within 10 minutes silence requests for 10 minutes (`rate_limited`); a
 //!   request without a decision expires after 2 minutes; a grant holds for
@@ -41,8 +42,8 @@ pub enum Examined {
     Descendant { signals: Vec<String> },
 }
 
-/// Until T133: every requester counts as a possible descendant, so nothing
-/// reaches the dialog without the lineage check.
+/// Every requester counts as a possible descendant: what the index's own
+/// cases run on, where nothing may be examined.
 #[derive(Debug)]
 pub struct FailClosed;
 
