@@ -3,7 +3,7 @@
 // launcher starts the host again if it is gone. The window bridge (T076) makes
 // the window connections; quitting checks (T007) ask `host/status` here.
 
-import { HostClient } from "@cupper/host-client";
+import { HostClient, type ClientState } from "@cupper/host-client";
 
 import type { MainLog } from "../log";
 import { HostFailure, type ConnectOptions } from "./connection";
@@ -40,6 +40,25 @@ export class ControlConnection {
       void this.connect();
     });
     this.client.attach(port, handshake, rest);
+  }
+
+  /** Resolves once the connection is ready; rejects with the reason when it failed or closed. */
+  ready(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const settle = (state: ClientState) => {
+        if (state.status === "ready") {
+          resolve();
+        } else if (state.status === "failed" || state.status === "closed") {
+          reject(new HostFailure(state.status === "failed" ? state.reason : "closed"));
+        } else {
+          return false;
+        }
+        return true;
+      };
+      if (!settle(this.client.state)) {
+        const off = this.client.onState((state) => void (settle(state) && off()));
+      }
+    });
   }
 
   close(): void {

@@ -1,8 +1,8 @@
 // The main process (design 5.7.2): the app, its window, the hardening
 // baseline (design 5.7.8), the control connection to the host, started
 // before the app is ready (design 5.5.1), the quit check (NFR-8) and, in
-// keyed builds, restarting a host it cannot verify (design 5.8.1). The window
-// bridge (T076) builds on this.
+// keyed builds, restarting a host it cannot verify (design 5.8.1), and each
+// window document's data connection through its window bridge (design 5.7.1).
 
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -12,7 +12,9 @@ import {
   app,
   autoUpdater,
   BrowserWindow,
+  ipcMain,
   Menu,
+  MessageChannelMain,
   powerMonitor,
   protocol,
   session,
@@ -20,13 +22,15 @@ import {
 } from "electron";
 
 import { isReleaseLike } from "../shared/flavor";
-import { COMMAND_CHANNEL } from "../shared/ipc";
-import { startControl } from "./host";
+import { COMMAND_CHANNEL, HOST_OPEN } from "../shared/ipc";
+import { WindowBridges } from "./bridge/bridges";
+import { startHost } from "./host";
 import { confirmQuit, confirmRestart, tellRestartRefused, type Translate } from "./host/dialogs";
 import { QuitGuard, type QuitHost } from "./host/lifecycle";
 import { MainLog } from "./log";
 import { menuTemplate } from "./menu";
 import { appDirs, e2eDirs, type AppDirs } from "./paths";
+import { Prefs } from "./prefs";
 import {
   APP_SCHEME,
   APP_SCHEME_PRIVILEGES,
@@ -36,6 +40,7 @@ import {
 import { hardenWebContents } from "./security/navigation";
 import { restrictPermissions } from "./security/permissions";
 import { enforceSwitchAllowlist } from "./security/switches";
+import { followFocus, serveShell } from "./shell";
 import { MAIN_DOCUMENT_URL, mainWindowOptions } from "./window";
 
 const flavor = __CUPPER_FLAVOR__;
@@ -55,7 +60,7 @@ protocol.registerSchemesAsPrivileged([APP_SCHEME_PRIVILEGES]);
 app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
-let host: ReturnType<typeof startControl> | undefined;
+let host: ReturnType<typeof startHost> | undefined;
 let i18n: ReturnType<typeof createI18n> | undefined;
 const t: Translate = (key, values) => (i18n ??= createI18n()).t(key, values);
 const quit = new QuitGuard(quitHost, (status) => confirmQuit(t, status));
@@ -101,7 +106,7 @@ function start() {
   try {
     const e2eRoot = __CUPPER_FLAVOR__ === "e2e" ? process.env.CUPPER_E2E_DIR : undefined;
     const version = app.getVersion();
-    host = startControl({ flavor, dataDir: dirs.data, version, e2eRoot, log });
+    host = startHost({ flavor, dataDir: dirs.data, version, e2eRoot, log });
     host.control.client.onState((state) => {
       const unverified =
         state.status === "failed" && ["unauthenticated", "host_unverified"].includes(state.reason);
@@ -116,8 +121,10 @@ function start() {
   void app.whenReady().then(ready);
 }
 
-function ready() {
+async function ready() {
   restrictPermissions(session.defaultSession);
+  const prefs = await Prefs.open(join(dirs.userData, "prefs.json"));
+  serveShell({ flavor, prefs, openExternal });
   const renderer = join(import.meta.dirname, "../renderer");
   protocol.handle(
     APP_SCHEME,
@@ -133,7 +140,38 @@ function ready() {
     devTools: flavor === "dev",
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  if (host) {
+    serveWindows(host);
+  }
   showMainWindow();
+}
+
+/** Each window document's data connection, through its windowBridge (design 5.7.1). */
+function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
+  const bridges = new WindowBridges({
+    connect: openWindow,
+    controlReady: () => control.ready(),
+    schedule: (task, ms) => void setTimeout(task, ms),
+    channel: () => {
+      const { port1, port2 } = new MessageChannelMain();
+      const bridge = {
+        post: (message: unknown) => port1.postMessage(message),
+        onMessage: (cb: (message: unknown) => void) => {
+          port1.on("message", (event) => cb(event.data));
+          port1.start();
+        },
+        close: () => port1.close(),
+      };
+      return { bridge, window: port2 };
+    },
+  });
+  ipcMain.handle(HOST_OPEN, (event) => bridges.open(event.sender, event.senderFrame));
+  if (__CUPPER_FLAVOR__ === "e2e") {
+    // For the e2e tests' `electronApp.evaluate`: a window loses its
+    // connection without a reload (E2E-NFR1-4).
+    const disconnectWindow = (webContentsId: number) => bridges.disconnect(webContentsId);
+    Object.assign(globalThis, { __cupperE2E: { disconnectWindow } });
+  }
 }
 
 function showMainWindow() {
@@ -151,6 +189,7 @@ function showMainWindow() {
   const window = new BrowserWindow(mainWindowOptions(flavor, preload));
   mainWindow = window;
   window.once("ready-to-show", () => window.show());
+  followFocus(window);
   window.on("closed", () => {
     mainWindow = null;
   });

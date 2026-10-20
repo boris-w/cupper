@@ -6,12 +6,19 @@
 import { readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import type { Feature } from "@cupper/protocol";
+
 import type { Flavor } from "../../shared/flavor";
+import type { DataConnection } from "../bridge/window-bridge";
 import type { MainLog } from "../log";
 import { ControlConnection } from "./control";
 import { HostLauncher } from "./launcher";
 import { loadNative } from "./native";
 import { stopLockedHost } from "./restart";
+
+/** What a window's connection asks for (design 5.3.2). */
+const WINDOW_FEATURES: Feature[] = ["stream.coalesce", "blob.get", "blob.put", "history.page"];
+const TIMEOUT_MS = 5000;
 
 /**
  * The host gets the fixed allowlist of design 5.6.6 from the app's
@@ -54,10 +61,11 @@ export interface RestartDialogs {
 
 /**
  * Loads the extension and starts the control connection, the host with it if
- * needed. `restart` stops the host in `host.lock` if it is this build's, then
- * connects again (design 5.8.1).
+ * needed; `openWindow` makes the windows' data connections with the same
+ * launcher (design 5.7.1). `restart` stops the host in `host.lock` if it is
+ * this build's, then connects again (design 5.8.1).
  */
-export function startControl({ flavor, dataDir, version, e2eRoot, log }: HostSetup) {
+export function startHost({ flavor, dataDir, version, e2eRoot, log }: HostSetup) {
   const contents = join(dirname(process.execPath), "..");
   const native = loadNative(join(process.resourcesPath, "native", "cupper_native.node"), flavor);
   const program = join(contents, "Helpers", "CupperHost.app", "Contents", "MacOS", "cupper-host");
@@ -68,10 +76,32 @@ export function startControl({ flavor, dataDir, version, e2eRoot, log }: HostSet
     env: hostEnv(process.env),
     ...(e2eRoot === undefined ? {} : { payload: () => e2ePayload(e2eRoot) }),
   });
-  const options = { role: "control" as const, features: [], flavor, version, timeoutMs: 5000 };
+  const options = {
+    role: "control" as const,
+    features: [],
+    flavor,
+    version,
+    timeoutMs: TIMEOUT_MS,
+  };
   const control = new ControlConnection(launcher, options, log);
   control.client.onState((state) => log.info("host connection", { ...state }));
   void control.connect();
+  const openWindow = async (): Promise<DataConnection> => {
+    const window = { role: "window" as const, features: WINDOW_FEATURES, flavor, version };
+    const { port, handshake, rest, socket } = await launcher.open({
+      ...window,
+      timeoutMs: TIMEOUT_MS,
+    });
+    const onClose = (cb: () => void) => void socket.once("close", cb);
+    return {
+      port,
+      handshake,
+      rest,
+      pause: () => socket.pause(),
+      resume: () => socket.resume(),
+      onClose,
+    };
+  };
   const restart = async (dialogs: RestartDialogs) => {
     if (!(await dialogs.confirm())) {
       return;
@@ -97,5 +127,5 @@ export function startControl({ flavor, dataDir, version, e2eRoot, log }: HostSet
     }
     await control.connect();
   };
-  return { control, restart };
+  return { control, openWindow, restart };
 }
