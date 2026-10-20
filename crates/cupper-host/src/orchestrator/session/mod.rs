@@ -5,6 +5,8 @@
 
 mod actor;
 pub mod core;
+#[cfg(test)]
+mod interaction_tests;
 mod manager;
 mod rows;
 #[cfg(test)]
