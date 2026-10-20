@@ -155,3 +155,11 @@ T055 已经写好 `supervisor::discover`，我自己写的那份发现链已经 
 - **T055 及以后用 git 的任务**：`Discovery::git`。
 - **T059**：`host.updated` 的 `pending_upgrade` 改由自检给出（`supervisor/mod.rs` 里组 `HostUpdated` 的地方）。
 - **T047**：`INDEX` 已登记进静止屏障；`IndexHandle` 是第三个 `Part`。
+
+## 范围外：T037 的锁用例偶发失败
+
+第一次跑 `cargo xtask ci pr` 时，`gateway::listen::tests::host_lock_is_held_once_and_names_its_holder`（T037 写的）失败了一次：释放 `host.lock` 之后立刻再拿，报"已被占用"。
+
+原因应该就是 T021 交接里说的那个窗口：别的测试线程正在 `posix_spawn` 时，内核会短暂复制整张 fd 表，锁文件的 fd 被多持有片刻。T055 合并以后，crate 内拉子进程的用例多了，这个窗口更容易碰上。
+
+按守则没有顺手修，重跑后全部通过。建议另开小任务：这个用例改用 `cupper-sys` 的 `testutil::alone` 那种单独进程隔离（`cupper-host` 里需要一个等价的辅助），或者释放后在一个短时限内重试再判断。
