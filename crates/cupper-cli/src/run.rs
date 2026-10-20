@@ -473,7 +473,9 @@ impl Cli {
         Ok(())
     }
 
-    /// Answers a pending request with what `outcome` makes of it.
+    /// Answers a request with what `outcome` makes of it. One that another
+    /// client answered first still goes to the host, whose
+    /// `conflict/already_resolved` says so (design 5.3.6).
     async fn respond(
         &mut self,
         session: SessionId,
@@ -481,8 +483,8 @@ impl Cli {
         outcome: impl FnOnce(&InteractionRequested) -> Result<Value, Failure>,
     ) -> Result<(), Failure> {
         let view = self.session(&session).await?;
-        let found = view.requests.get(&request).filter(|r| r.is_pending());
-        let asked = found.ok_or_else(|| Failure::Other(format!("no pending request {request}")))?;
+        let found = view.requests.get(&request);
+        let asked = found.ok_or_else(|| Failure::Other(format!("no request {request}")))?;
         let outcome = outcome(&asked.requested)?;
         let respond = json!({"command_id": command_id(), "session_id": session, "request_id": request,
             "request_digest": asked.requested.digest, "outcome": outcome});
