@@ -57,3 +57,16 @@ M1a 没有产生附件的入口（图片、`@`、审查评论都在 M1b），截
 - 做法：队列暂停时按发送，输入框上方先出一个警告框（T128 的 `Alert`）："发送"发出消息、成功后 `session/queue_resume`；"取消"或 Esc 收起并保留草稿。Esc 的处理顺序里它算作浮层。输入框经 `ComposerArea` 得到队列是否暂停（`ComposerArea` 读会话视图，排队消息改为按 props 画）。
 - 用例：先取消（不发送、草稿还在），再发送（一条 `session/send`，随后一条 `session/queue_resume`）。
 - 规模：这一项约 76 行，现在合计 **791 行**。长文本估约 110 行，合计推算约 900，贴线，按裁定停下。
+
+## 裁定（计划 v1.3.33）与给 T164 的接入点
+
+长文本拆给 T164（依赖 T029），UNIT-composer-long-text 随之移过去。本任务不判断帧预算，也不上传 blob。T164 的接入点：
+
+- **在哪里判断"超过帧预算"**：`packages/ui-core/src/composer/send.ts` 的 `useSend().send(text, attachments)`。它在发出请求之前组装 `content`（`text` 块在前，附件在后），这里是唯一组装内容块的地方；新建会话页（`session/create` 的 `message`）和会话里（`session/send` 的 `content`）都经过它。预算可取握手结果的 `limits.max_frame_bytes`（`useHost().handshake`），按整条请求 JSON 的 UTF-8 长度判断，留出 JSON-RPC 外壳的余量。
+- **在哪里换成 `text_blob`**：同一处，组装 `content` 之后、`client.command(...)` 之前：把超预算的 `text` 块先上传（`HostClient` 新增的上传方法：sha-256、经端口 `sendBlob` 发 `0x02` 分片、再 `blob/put {hash, size, media_type: "text/plain; charset=utf-8"}`），换成 `{type: "text_blob", blob: {hash, media_type, size}}`。上传失败时走现有的失败路径：草稿放回、toast 失败码。
+- **按钮与草稿不用改**：发送按钮的状态只看草稿和附件；`send` 已经在开始时清空草稿、失败时放回。
+- **测试**：`composer/composer.test.tsx` 的 `setup()` 用 MockHost 和真的 `HostClient`，`requests(method)` 能取到 `blob/put` 与 `session/send` 的参数；MockHost 收到的 `0x02` 分片在 `conn.frames` 里。
+
+## 审阅截图
+
+`screenshots/`：截图页换回系统字体后截取，1280 × 820：暂停的队列加待发送的草稿（亮色、暗色），运行中的停止态。按 F2，没有查看本机 Codex App 包。
