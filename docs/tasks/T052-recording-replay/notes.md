@@ -68,3 +68,37 @@
 ### 合计
 
 约 **2,400 行**，超出约 1,500 行的上限约 60%。按 brief 和守则第 8 条，开工前停下来汇报，建议按 brief 的拆法分成两部分：第一部分（第 1–4 项，约 1,520 行，T053 只依赖它）先做先合并；第二部分（第 5、6 项，约 875 行）随后。
+
+## 编排者裁定（2026-10-20）
+
+拆分：T052 只做第 1–4 项，上限约 1,600 行，硬停止线 1,700；回放模式和 persona 比对归 T067。上面的 6 项取舍全部认可。
+
+## SP-1 转换的运行方式
+
+在仓库根目录运行，`<临时目录>` 用任意空目录：
+
+```sh
+node docs/tasks/T052-recording-replay/convert-sp1.ts spikes/SP-1-adapter-behavior/recordings <临时目录>
+node tools/sanitize/src/main.ts sanitize --in <临时目录> --out testdata/recordings
+diff -r <临时目录> testdata/recordings      # 脱敏没有改动任何一行
+node tools/sanitize/src/main.ts scan testdata 'docs/tasks/*/ci/*.json'
+cargo test -p cupper-protocol --test recordings
+```
+
+- 转换得到 48 份：`claude-agent-acp/0.91.0/2.1.296/` 18 份，`codex-acp/2.2.2/0.160.1/` 16 份，`codex-acp/2.2.2/0.159.2/` 14 份。
+- 头行的 `scenario` 取文件名。SP-1 保留了两次补跑（`claude/s07x-sleep-backgrounded`、`codex-bundled/s10x-model-unsupported`），它们的 SP-1 头里写的还是被补跑的场景名。
+- `tools/sanitize` 的重新扫描通过（`clean: 48 files`），输出与转换结果逐字节相同：SP-1 的录制已经脱敏过，这次没有发现漏网的内容，规则没有改。
+- 通用扫描覆盖 `testdata/` 和 72 份入库的 CI 摘要，共 120 个文件，没有命中。本机还没有敏感词清单，这一项在 CI 里会显示为跳过。
+- 用格式库读全部 48 份：都能读；`s01` 每份 2 段、`s09` 每份 3 段、其余 1 段，每段都有一个 `instance_exited`。
+
+## 进度统计
+
+不含 `pnpm-lock.yaml`、转换后的录制和本笔记。
+
+| 提交 | 内容 | 行数 | 累计 |
+|---|---|---|---|
+| 1 | 格式库 `recording.rs`（实现约 335，测试约 108） | +443 | 443 |
+| 2 | `tools/sanitize`（实现 524，测试 250） | +774 | 1,217 |
+| 3 | 转换脚本 102、读全部录制的测试 58 | +160 | 1,377 |
+
+格式库的实现比估计多约 75 行（错误类型和分段校验），测试少约 60 行（错误用例改成一张表）；`tools/sanitize` 与估计持平。剩下 xtask 一项估约 160 行，预计合计约 1,540 行。
