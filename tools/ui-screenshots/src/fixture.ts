@@ -1,4 +1,5 @@
 import type { MethodFixture, MockHost } from "@cupper/host-client/mock";
+import type { EventBody } from "@cupper/protocol";
 import type { BrowserShellControls } from "@cupper/shell-api/browser-mock";
 import type { ShellInfo } from "@cupper/shell-api";
 
@@ -8,6 +9,8 @@ export interface PageFixture {
   info: Partial<ShellInfo>;
   /** The mock host's answers (`protocol/fixtures/methods.json` by default). */
   methods: MethodFixture[];
+  /** Each stream's content as snapshot ops, by stream name (`index`, `session/<id>`); others are empty. */
+  streams: Record<string, EventBody[]>;
 }
 
 declare global {

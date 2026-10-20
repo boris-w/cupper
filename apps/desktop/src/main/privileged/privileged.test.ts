@@ -6,6 +6,7 @@ import type { MessageBoxOptions } from "electron";
 import { describe, expect, test } from "vitest";
 
 import { fixtures, mockConnect } from "../bridge/testing";
+import { PATH_CHARS, shownPath } from "./dialogs";
 import { controlHost, COOLDOWN_RESET_MS, Privileged, type PrivilegedUi } from "./index";
 
 const ENTER: InputEvidence = { kind: "key", key: "enter" };
@@ -269,7 +270,8 @@ describe("UNIT-privileged", () => {
     expect(shown[0]?.detail).toContain(t("finding_outside", { target: "/work/dotfiles/mcp.json" }));
     expect(shown[1]?.detail).toContain(t("trust_again"));
     expect(sent("project/trust")).toHaveLength(2);
-    expect(sent("project/trust_info")).toHaveLength(1);
+    // Each dialog shows the host's scan of the moment.
+    expect(sent("project/trust_info")).toHaveLength(2);
 
     ui.picked = null;
     expect(await ask({ kind: "add_project" })).toEqual({ status: "cancelled" });
@@ -289,5 +291,74 @@ describe("UNIT-privileged", () => {
     ]) {
       expect(await ask(action)).toEqual({ status: "failed", error: { code: "invalid_params" } });
     }
+  });
+});
+
+describe("UNIT-privileged-paths", () => {
+  const fixture = (method: string) =>
+    structuredClone(fixtures.find((f) => f.method === method)?.result) as Record<string, unknown>;
+
+  test("trusting a project names it by the directory the host has, escaped", async () => {
+    const { host, ask, shown } = await setup();
+    host.handle("project/trust_info", () => ({
+      result: { ...fixture("project/trust_info"), path: `/work/app${invisible}x` },
+    }));
+    host.handle("project/add", () => ({
+      result: { project_id: "p_1", trust: fixture("project/trust_info") },
+    }));
+    expect(await ask({ kind: "trust_project", project_id: "p_1" })).toEqual({
+      status: "cancelled",
+    });
+    // add_project too, whatever directory the window's picker said.
+    expect((await ask({ kind: "add_project" })).status).toBe("confirmed");
+    for (const options of shown) {
+      expect(options.detail).toContain(t("project_path", { path: "/work/app\\u{202E}x" }));
+    }
+    expect(shown).toHaveLength(2);
+  });
+
+  test("creating a session names the project by the path the host describes", async () => {
+    const { host, ask, shown } = await setup();
+    const details = {
+      agent: "claude",
+      project_id: "p_1",
+      project_path: "/work/app",
+      mode: "bypassPermissions",
+    };
+    host.handle("policy/describe", () => ({ result: { action: "full_access", details } }));
+    const params = {
+      agent: "claude",
+      project_id: "p_1",
+      message: [],
+      workspace: { kind: "local" },
+    };
+    expect(await ask({ kind: "create_session", params })).toEqual({ status: "cancelled" });
+    expect(shown[0]?.detail).toContain(t("project_path", { path: "/work/app" }));
+  });
+
+  test("a long path keeps its start and its last whole components", () => {
+    const deep = `/Volumes/Work/${"nested-directory/".repeat(12)}the-project`;
+    const cut = shownPath(deep);
+    expect(cut.startsWith(deep.slice(0, 30))).toBe(true);
+    expect(cut).toContain("…/");
+    expect(cut.endsWith("/nested-directory/the-project")).toBe(true);
+    expect([...cut].length).toBeLessThanOrEqual(PATH_CHARS);
+    expect(shownPath("/work/app")).toBe("/work/app");
+    expect(shownPath(`/work/${invisible}app`)).toBe("/work/\\u{202E}app");
+  });
+
+  test("an elevation from a CLI that is not the app's own says so first", async () => {
+    const { host, ask, shown, clock } = await setup();
+    for (const bundled_cli of [false, true]) {
+      host.handle("auth/elevation_get", () => {
+        const got = fixture("auth/elevation_get") as { verified: Record<string, unknown> };
+        got.verified.bundled_cli = bundled_cli;
+        return { result: got };
+      });
+      await ask({ kind: "elevation", elevation_id: `e_${bundled_cli}` });
+      clock.now += 2_000;
+    }
+    expect(shown[0]?.detail?.startsWith(t("elevation_not_bundled"))).toBe(true);
+    expect(shown[1]?.detail).not.toContain(t("elevation_not_bundled"));
   });
 });

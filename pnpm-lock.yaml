@@ -354,6 +354,9 @@ importers:
       '@types/react-dom':
         specifier: 19.3.0
         version: 19.3.0(@types/react@19.3.0)
+      eslint:
+        specifier: 10.12.0
+        version: 10.12.0(jiti@2.7.0)(supports-color@7.2.0)
       jsdom:
         specifier: 30.1.3
         version: 30.1.3(@noble/hashes@1.8.0)
@@ -411,6 +414,9 @@ importers:
       '@cupper/host-client':
         specifier: workspace:*
         version: link:../../packages/host-client
+      '@cupper/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@cupper/shell-api':
         specifier: workspace:*
         version: link:../../packages/shell-api

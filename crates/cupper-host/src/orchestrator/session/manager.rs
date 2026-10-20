@@ -488,6 +488,18 @@ impl SessionPort for SessionManager {
                 let cached = cached(&deps.readers, &params.agent).await?;
                 let mode = params.config.and_then(|c| c.permission_mode);
                 facts.mode_tier = mode.and_then(|mode| tier_of(cached.as_ref(), &mode));
+                // The project as the native confirmation names it (T135).
+                let index = deps
+                    .streams
+                    .open(&StreamId::Index)
+                    .await
+                    .map_err(internal)?;
+                facts.project_path = index.read(|view, _| match view {
+                    StreamView::Index(view) => {
+                        Some(view.projects.get(&params.project_id)?.path.clone())
+                    }
+                    StreamView::Session(_) => None,
+                });
                 Ok(facts)
             }),
             // The chosen option, as the session's pending request has it.

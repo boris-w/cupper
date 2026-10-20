@@ -599,6 +599,12 @@ async fn it_project_add_trust_through_the_gateway() {
     let info = ProjectTrustInfoParams { project_id };
     let info = client.request::<ProjectTrustInfo>(info).await.unwrap();
     assert_eq!(info.state, TrustState::Stale);
+    let resolved = std::fs::canonicalize(&app).unwrap();
+    assert_eq!(
+        info.path.0,
+        resolved.to_str().unwrap(),
+        "the directory the host resolved"
+    );
     let diff = info.diff_from_trusted.unwrap();
     assert!(
         diff.iter()

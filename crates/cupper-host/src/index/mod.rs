@@ -477,7 +477,7 @@ impl IndexActor {
                     Err(err) => return Err(err),
                 };
                 let trust = project.trust.rescanned(&scan);
-                let result = projects::info_result(&trust, &scan);
+                let result = projects::info_result(&project, &trust, &scan);
                 let changed = trust != project.trust;
                 let project = Project { trust, ..project };
                 self.save(

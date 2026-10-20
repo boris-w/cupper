@@ -313,6 +313,15 @@
 | T090、T092 | CLI 提权的 e2e 可以照用 IT-elevate 的做法：探针 `cupper-elevate-probe`（`cupper-cli` 下，需要 `test-harness` 特性，参数 `--data-dir`、`--out`、`--setsid`，按 JSON 行写下每一步结果）；假 agent 的 `spawn <program> [args...]` 在自己的会话和进程组里拉起程序；未决和结束的申请可以从 `host.db` 里索引流的 `elevation.*` 事件轮询 | T133 |
 | 写"拿锁、放开、再拿"或依赖 fd 不被复制的用例 | 同一测试进程里别的线程拉起子进程时，子进程 exec 之前持有本进程 fd 的副本，`flock` 随副本留着（带 `O_CLOEXEC` 也一样）。这类用例放进单独的测试进程：`cupper-host` 用 `gateway::testkit::alone`（环境变量 `HOST_TEST_ALONE`），`cupper-sys` 用 `testutil::alone` | T037 修复 1 |
 | T081、T082、T083、T086、T137 | 状态层（T080，`packages/ui-core/src/state/`）：会话页用 `useStreams().session(id)` 拿 store，索引用 `useStreams().index`；条目用 `useEntry(view, key)`（索引的键如 `sessions`、`projects`、`elevations`、`session:<id>`、`project:<id>`、`host`、`clients`）；草稿、附件、滚动位置用 `useUi()`；查询键约定全局 `[method, …]`、会话 `["session", id, method, …]`，需要失效时在 `staleKeys` 里加一条；示例查询 `useArchivedSessions()` | T080 |
+| 第一个用 `new Worker` 的任务（审查文档、Shiki 等） | Worker 的脚本 URL 必须经 `ui-core/src/security/policies.ts` 的 `workerScriptUrl(url)` 取（只放行 `app://cupper/assets/` 下的同源脚本）；不能另建 Trusted Types 策略 | T136 |
+| 所有界面任务（及评审） | ESLint 安全、样式、import、文案规则已生效（T136）。JSX 文案和 `aria-label`、`title`、`alt`、`placeholder`、`label` 等属性的字面量走 `t()`，只放行不含文字字母的文本和产品名、agent 名；其他例外要带理由的行内禁用注释。静态检查拦不下的写法（`style` 的值、拼进 `className` 的 agent 文本、别处取到的 `<style>`、`window` 的别名、自定义组件用别的属性名接收文案）列在 `docs/tasks/T136-ui-security-rules/notes.md`，评审照它看 | T136 |
+| 界面任务的截图用例 | 截图页的索引流夹具（T081）：mock 宿主对每个订阅回 snapshot 模式，再发一页 `stream/snapshot`，索引流的 op 来自夹具、其他流为空；会话流的夹具照此加 | T081 |
+| T152 | 截图比对用 Playwright 默认的逐像素阈值 0.2，悬停底色（正文色 5.3%）这类细微差异比不出来；要不要调严，随视觉修正一并决定 | T081 |
+| T153 | 侧边栏项目行悬停时的"+"旁有一个空菜单、会话行还没有菜单按钮和右键菜单，菜单项归本任务（`ui-core/src/sidebar/`） | T081 |
+| 界面任务的截图用例 | 截图页的夹具 `streams`（T137，由 T081 的 `index` 推广）：按流名给 snapshot 的 op，例如 `index`、`session/s_7`；同一份夹具要被多个用例共用时放在同一个 spec 文件里（从别的 spec 文件 import 会让 Playwright 重复注册测试） | T137 |
+| T106、T152 | 待核对的文案：会话页"未信任"警告框的说明在 1280 宽时折成两行；`stale` 的项目在侧边栏同样标"未信任"，要不要单独起名（例如"需重新信任"） | T137 |
+| T063 | ① `tests/lifecycle.rs` 的进程级用例在 `terminate(&host)` 之前失败时，拉起的 `cupper-host` 连同假 agent 一直运行（`std::process::Child` 在 drop 时不结束子进程），本机曾积下十几个 ppid 为 1 的宿主；宿主进程也用 drop 守卫结束，做法参照 T008 修复 1 的 `Groups` 守卫（按组号加启动时间记录、drop 时只杀仍是原组的、记录写临时目录以便测试进程被杀后下次清理）。② 本地单独跑 IT-elevate 要先 `cargo build -p cupper-cli --features test-harness --bin cupper-elevate-probe`（CI 会自动做），探针缺失时让用例直接报出原因 | T008 修复 1 |
+| 拉起孙进程的进程级用例 | 照 T008 修复 1：孙进程出现之后、停止之前建 `Groups` 守卫，用 `gone()`（最多 5 s）断言进程消失，靠 drop 兜底；检查残留的命令在 `docs/tasks/T008-adapter-lifecycle/notes-fix1.md` | T008 修复 1 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
