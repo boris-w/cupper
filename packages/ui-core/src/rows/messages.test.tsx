@@ -7,16 +7,20 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { I18nProvider, ShellProvider } from "../app/providers";
 import { ansiSpans, AnsiText } from "./ansi";
+import "./index";
 import { Markdown } from "./markdown";
-import { ErrorRow, Thought } from "./messages";
-import { ActivityGroup, ToolRow, type Tool } from "./tools";
+import { RowView } from "./registry";
+import { streamRows, type StreamRow, type ToolData } from "./stream";
 
 afterEach(cleanup);
 
 function show(node: ReactNode) {
   const openExternal = vi.fn();
   const view = render(
-    <ShellProvider api={{ openExternal } as never} info={{ locale: "zh-CN" } as never}>
+    <ShellProvider
+      api={{ openExternal, window: { onFocusChange: () => () => undefined } } as never}
+      info={{ locale: "zh-CN" } as never}
+    >
       <I18nProvider locale="zh-CN">{node}</I18nProvider>
     </ShellProvider>,
   );
@@ -88,29 +92,38 @@ describe("UNIT-md-injection", () => {
   });
 
   test("tool, thought and error rows show agent text as text, invisible characters escaped", async () => {
-    const tool = (fields: Partial<ToolCall>, output = ""): Tool => ({
+    const tool = (fields: Partial<ToolCall>, output = ""): ToolData => ({
       itemId: "i_1",
       call: call(fields),
       output,
       running: false,
     });
-    const command = "echo hi‮<img src=x onerror=1>";
+    const command = "echo hi\u202E<img src=x onerror=1>";
     const run = tool({ tool_kind: "execute", command, exit_code: 1 }, `${ESC}[31mfail`);
+    const rows: StreamRow[] = [
+      { kind: "tool", key: "1", ...run },
+      { kind: "tool", key: "2", ...tool({ tool_kind: "read", paths: ["a.rs"] }), running: true },
+      { kind: "tool", key: "3", ...tool({ tool_kind: "edit", paths: ["a.rs", "b.rs"] }) },
+      { kind: "tool", key: "4", ...tool({ tool_kind: "mcp", title: "lookup" }) },
+      {
+        ...{ kind: "activity_group", key: "5", groupId: "g_1", running: false },
+        tools: [run, tool({ tool_kind: "execute" }), tool({ tool_kind: "read" })],
+      },
+      {
+        kind: "thought",
+        key: "6",
+        itemId: "i_2",
+        text: "plan\u200B",
+        running: false,
+        durationMs: 65_000,
+      },
+      {
+        ...{ kind: "error", key: "7", itemId: "i_3" },
+        error: { code: "quota_exhausted", guidance: "none", retryable: false, raw: "<b>x</b>" },
+      },
+    ];
     const { container } = show(
-      <>
-        <ToolRow tool={run} />
-        <ToolRow tool={{ ...tool({ tool_kind: "read", paths: ["a.rs"] }), running: true }} />
-        <ToolRow tool={tool({ tool_kind: "edit", paths: ["a.rs", "b.rs"] })} />
-        <ToolRow tool={tool({ tool_kind: "mcp", title: "lookup" })} />
-        <ActivityGroup
-          tools={[run, tool({ tool_kind: "execute" }), tool({ tool_kind: "read" })]}
-          running={false}
-        />
-        <Thought text={"plan​"} running={false} durationMs={65_000} />
-        <ErrorRow
-          error={{ code: "quota_exhausted", guidance: "none", retryable: false, raw: "<b>x</b>" }}
-        />
-      </>,
+      rows.map((row) => <RowView key={row.key} registry={streamRows} row={row} />),
     );
     const lines = [...container.querySelectorAll("button")].map((b) => b.textContent);
     expect(lines).toEqual([

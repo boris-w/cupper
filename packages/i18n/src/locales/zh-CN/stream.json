@@ -37,8 +37,6 @@
   "output_more": "输出较长，这里只显示最后一部分",
   "thinking": "正在思考",
   "thought": "已思考 {{duration}}",
-  "seconds": "{{count}} 秒",
-  "minutes": "{{minutes}} 分 {{seconds}} 秒",
   "notice_agent_restarted": "agent 已重新启动。",
   "notice_session_resumed": "已恢复 agent 的会话。",
   "notice_compaction": "agent 压缩了上下文。",

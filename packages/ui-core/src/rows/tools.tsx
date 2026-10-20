@@ -4,23 +4,14 @@
 // row with one `group_id` fold into one summary line. Agent text (paths,
 // commands, titles, output) is text only, its invisible characters escaped.
 
-import type { ItemEnd, ToolCall } from "@cupper/protocol";
+import type { ToolCall } from "@cupper/protocol";
 import { escapeInvisible } from "@cupper/i18n";
 import { useState } from "react";
 
 import { useT, type Translate } from "../app/providers";
 import { ChevronDownIcon, ToolIcon } from "../components/icons";
 import { AnsiText } from "./ansi";
-
-/** A tool call as its row shows it (T082's `ToolData`). */
-export interface Tool {
-  itemId: string;
-  call: ToolCall;
-  /** The output streamed so far. */
-  output: string;
-  running: boolean;
-  end?: ItemEnd;
-}
+import { registerRow, type RowOf, type ToolData } from "./stream";
 
 const KINDS = ["read", "edit", "delete", "move", "search", "execute", "fetch", "switch_mode"];
 const kindOf = (call: ToolCall) => (KINDS.includes(call.tool_kind) ? call.tool_kind : "other");
@@ -58,12 +49,12 @@ export function groupText(t: Translate, calls: ToolCall[]): string {
 }
 
 /** The output so far, else what the call carries inline. */
-function outputOf({ output, call }: Tool): string {
+function outputOf({ output, call }: ToolData): string {
   const inline = call.output?.type === "text" ? (call.output as { text: string }).text : "";
   return output || inline || (call.output_tail ?? "");
 }
 
-export function ToolRow({ tool }: { tool: Tool }) {
+function ToolLine({ tool }: { tool: ToolData }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const output = outputOf(tool);
@@ -75,7 +66,7 @@ export function ToolRow({ tool }: { tool: Tool }) {
         disabled={!expandable}
         aria-expanded={expandable ? open : undefined}
         onClick={() => setOpen(!open)}
-        className="flex w-full min-w-0 items-center gap-2 text-left text-fg-tertiary"
+        className="flex w-full min-w-0 items-center gap-2 text-left text-fg-tertiary/80"
       >
         <span className="shrink-0 text-icon-tertiary">
           <ToolIcon kind={kindOf(tool.call)} />
@@ -93,7 +84,7 @@ export function ToolRow({ tool }: { tool: Tool }) {
 }
 
 /** A command's output (design 5.7.4): a 13 title bar, then the monospace body. */
-function OutputBlock({ tool, output }: { tool: Tool; output: string }) {
+function OutputBlock({ tool, output }: { tool: ToolData; output: string }) {
   const t = useT();
   const { command, exit_code: code, output_state: state } = tool.call;
   return (
@@ -111,7 +102,7 @@ function OutputBlock({ tool, output }: { tool: Tool; output: string }) {
 }
 
 /** Calls of one activity group: one summary line, the list on demand (at most 224, faded). */
-export function ActivityGroup({ tools, running }: { tools: Tool[]; running: boolean }) {
+function ActivityGroupRow({ row: { tools, running } }: { row: RowOf<"activity_group"> }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   return (
@@ -120,7 +111,7 @@ export function ActivityGroup({ tools, running }: { tools: Tool[]; running: bool
         type="button"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="flex min-w-0 items-center gap-1 text-left text-fg-tertiary"
+        className="flex min-w-0 items-center gap-1 text-left text-fg-tertiary/80"
       >
         <span className={`truncate ${running ? "shimmer" : ""}`}>
           {groupText(
@@ -135,10 +126,13 @@ export function ActivityGroup({ tools, running }: { tools: Tool[]; running: bool
       {open && (
         <div className="fade-y mt-1 max-h-56 space-y-1 overflow-y-auto py-1">
           {tools.map((tool) => (
-            <ToolRow key={tool.itemId} tool={tool} />
+            <ToolLine key={tool.itemId} tool={tool} />
           ))}
         </div>
       )}
     </div>
   );
 }
+
+registerRow("tool", ({ row }) => <ToolLine tool={row} />);
+registerRow("activity_group", ActivityGroupRow);

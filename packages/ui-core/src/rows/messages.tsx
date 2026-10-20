@@ -1,29 +1,24 @@
-// The stream's other rows (design 5.7.4): thinking (MS-2), and notices and
-// errors in the warning box (MS-5), their text from the semantic codes. The
-// assistant's answer is `Markdown`; recovery steps are T143's.
+// The stream's other rows (design 5.7.4): the assistant's answer in
+// Markdown, thinking (MS-2), and notices and errors in the warning box
+// (MS-5), their text from the semantic codes. Recovery steps are T143's.
 
-import type { ErrorItem, Notice } from "@cupper/protocol";
 import { escapeInvisible } from "@cupper/i18n";
 import { useState } from "react";
 
-import { useT, type Translate } from "../app/providers";
+import { useT } from "../app/providers";
 import { Alert } from "../components/Alert";
-
-/** "12 秒", "1 分 5 秒". */
-export function duration(t: Translate, ms: number): string {
-  const s = Math.max(1, Math.round(ms / 1000));
-  return s < 60
-    ? t("stream:seconds", { count: s })
-    : t("stream:minutes", { minutes: Math.floor(s / 60), seconds: s % 60 });
-}
+import { useDuration } from "./basic";
+import { Markdown } from "./markdown";
+import { registerRow, type RowOf } from "./stream";
 
 /** "正在思考" with a shimmer; then "已思考 {时长}", which opens on the thought. */
-export function Thought(props: { text: string; running: boolean; durationMs?: number }) {
+function ThoughtRow({ row: props }: { row: RowOf<"thought"> }) {
   const t = useT();
+  const duration = useDuration();
   const [open, setOpen] = useState(false);
   const label = props.running
     ? t("stream:thinking")
-    : t("stream:thought", { duration: duration(t, props.durationMs ?? 0) });
+    : t("stream:thought", { duration: duration(props.durationMs ?? 0) });
   const expandable = !props.running && props.text !== "";
   return (
     <div className="text-chat-sm text-fg-tertiary">
@@ -53,9 +48,9 @@ const NOTICES = [
   "config_unconfirmed",
 ];
 
-export function NoticeRow({ notice }: { notice: Notice }) {
+function NoticeRow({ row }: { row: RowOf<"notice"> }) {
   const t = useT();
-  const { code, params } = notice;
+  const { code, params } = row.notice;
   const key = NOTICES.includes(code) ? `stream:notice_${code}` : "stream:notice_other";
   return <Alert>{t(key, { code, attempt: params.attempt, max: params.max })}</Alert>;
 }
@@ -76,7 +71,7 @@ const ERRORS = [
 ];
 
 /** An error, and the agent's own text under it. */
-export function ErrorRow({ error }: { error: ErrorItem }) {
+function ErrorRow({ row: { error } }: { row: RowOf<"error"> }) {
   const t = useT();
   const key = ERRORS.includes(error.code) ? `stream:error_${error.code}` : "stream:error_other";
   return (
@@ -88,3 +83,8 @@ export function ErrorRow({ error }: { error: ErrorItem }) {
     </Alert>
   );
 }
+
+registerRow("agent_message", ({ row }) => <Markdown text={row.text} streaming={row.streaming} />);
+registerRow("thought", ThoughtRow);
+registerRow("notice", NoticeRow);
+registerRow("error", ErrorRow);

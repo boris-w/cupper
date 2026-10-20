@@ -43,6 +43,9 @@
 .md li {
   padding-left: 5.25px;
 }
+.md strong {
+  font-weight: var(--font-weight-semibold);
+}
 .md li::marker {
   font-weight: var(--font-weight-semibold);
 }

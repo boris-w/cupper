@@ -67,8 +67,15 @@ function Link({ href, children }: { href?: string; children?: ReactNode }) {
 
 const components: Components = {
   a: ({ href, children }) => <Link href={href}>{children}</Link>,
+  // streamdown draws these as spans with utility classes this app lacks.
+  strong: ({ children }) => <strong>{children}</strong>,
   // Plain blocks: highlighting and code block controls are T143's.
   pre: ({ children }) => <pre>{children}</pre>,
+  table: ({ children }) => (
+    <div className="overflow-x-auto">
+      <table>{children}</table>
+    </div>
+  ),
   code: ({ children }) => <code>{children}</code>,
   // Shown as a link to the picture: an agent's image never loads.
   img: ({ src, alt }) => <Link href={typeof src === "string" ? src : undefined}>{alt || src}</Link>,
