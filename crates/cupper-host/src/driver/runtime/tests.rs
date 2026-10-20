@@ -14,7 +14,7 @@ use crate::store::testutil::{TempDir, host_writer, query, raw_db};
 use crate::store::{Durability, RAW_WRITER, RawWriter};
 use cupper_sys::ProcessInfo;
 
-/// A runtime of the fake agent, on `dir`'s stores.
+/// A runtime of the fake agent, on `dir`'s stores; probes in `dir/probe`.
 fn runtime(dir: &TempDir) -> AgentRuntime {
     let clock = ManualClock::new();
     let (writer, _writer) = host_writer(dir, &clock);
@@ -42,6 +42,9 @@ fn runtime(dir: &TempDir) -> AgentRuntime {
         ids,
         blobs,
         quiescence,
+        probe_dir: dir.path().join("probe"),
+        durations: Durations::default(),
+        notes: Arc::new(status::NoAgentNotes),
     })
 }
 
@@ -196,4 +199,61 @@ async fn unit_commands_dedup_the_same_list_is_not_sent_again() {
         (version, cached.commands.len()),
         (&cached.versions.adapter, persona)
     );
+}
+
+/// A probe empties its directory (0700), opens a session there, reads its
+/// options and command list, and fills the cache; `agents/capabilities`
+/// reads it, and `agents/refresh` relaunches and reports the agent.
+#[tokio::test(flavor = "multi_thread")]
+async fn agents_probe_cache_and_refresh() {
+    use std::os::unix::fs::PermissionsExt;
+
+    use self::agents::Agents;
+    use crate::store::Readers;
+    use cupper_protocol::index::{AgentState, AuthState, RuntimeState};
+
+    let dir = TempDir::new("probe");
+    let probe = dir.path().join("probe");
+    fs::create_dir_all(&probe).unwrap();
+    fs::write(probe.join("left-over"), "x").unwrap();
+    let runtime = runtime(&dir);
+    let (writer, _thread) = host_writer(&dir, &ManualClock::new());
+    let readers = Readers::open(&dir.host_db()).unwrap();
+    let find: agents::Find = Arc::new(|| {
+        let login = LoginEnv::fallback(Failure::ShellMissing);
+        let launch = launch::injected(launch::fake_agent(), Vec::new(), &BTreeMap::new(), &login);
+        Box::pin(async move { launch })
+    });
+    let agents = Agents::new(runtime.clone(), readers, writer, find);
+    let claude = AgentKind::Claude;
+    assert_eq!(agents.capabilities(&claude).await.unwrap().cached, None);
+    let codex = agents.capabilities(&AgentKind::Codex).await.unwrap_err();
+    assert_eq!(
+        codex.app_code(),
+        Some(&cupper_protocol::error::ErrorCode::Unavailable)
+    );
+
+    let refreshed = agents.refresh(&claude).await.unwrap().status;
+    assert_eq!(fs::read_dir(&probe).unwrap().count(), 0);
+    assert_eq!(
+        fs::metadata(&probe).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
+    let cached = agents.capabilities(&claude).await.unwrap().cached.unwrap();
+    assert_eq!(cached.capabilities.commands.len(), 5);
+    assert!(cached.capabilities.turn.steer.supported);
+    assert_eq!(
+        (
+            refreshed.state,
+            refreshed.auth.state,
+            refreshed.adapter.runtime
+        ),
+        (
+            AgentState::Running,
+            AuthState::LoggedIn,
+            RuntimeState::Ready
+        )
+    );
+    assert!(refreshed.cli.is_none());
+    runtime.stop(true).await;
 }

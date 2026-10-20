@@ -4,10 +4,13 @@
 //! commands before the first message. A row of another adapter or CLI
 //! version is stale: the runtime deletes it as it starts.
 
+use cupper_protocol::annotations::TimestampMs;
 use cupper_protocol::capabilities::{SessionCapabilities, Versions};
 use cupper_protocol::domain::AgentKind;
+use cupper_protocol::methods::project::CachedCapabilities;
+use rusqlite::OptionalExtension;
 
-use crate::store::{Durability, Receipt, Writer};
+use crate::store::{Durability, ReadError, Readers, Receipt, Writer};
 
 /// Stores `caps` as the agent's cached capabilities, read at `at`.
 pub fn write(
@@ -42,4 +45,28 @@ pub fn invalidate(writer: &Writer, agent: &AgentKind, versions: &Versions) -> Re
         )
         .map(drop)
     })
+}
+
+/// The agent's cached capabilities, and when they were read; none while the
+/// cache is empty.
+pub async fn read(
+    readers: &Readers,
+    agent: &AgentKind,
+) -> Result<Option<CachedCapabilities>, ReadError> {
+    let agent = agent.to_string();
+    let row = readers.read(move |conn| {
+        let sql = "SELECT json, captured_at FROM agent_capabilities WHERE agent = ?1";
+        conn.query_row(sql, [agent], |row| {
+            Ok((row.get::<_, String>(0)?, row.get(1)?))
+        })
+        .optional()
+    });
+    Ok(row.await?.and_then(|(json, at)| {
+        let capabilities = serde_json::from_str(&json).ok()?;
+        let captured_at = TimestampMs(at);
+        Some(CachedCapabilities {
+            capabilities,
+            captured_at,
+        })
+    }))
 }
