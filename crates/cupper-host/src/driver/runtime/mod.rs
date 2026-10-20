@@ -21,7 +21,9 @@
 //!   minutes make the agent `crashed`.
 //! - **A stop** follows 5.6.8: `session/close` for every session, stdin
 //!   closed, 3 s each; then SIGTERM to the adapter's group and those of all
-//!   its descendants, found before any signal, and SIGKILL 2 s later.
+//!   its descendants, found before any signal, and SIGKILL 2 s later. An
+//!   adapter that exits on its own once its stdin closes brings SIGTERM
+//!   forward, and the stop ends only when those groups are gone or killed.
 //! - **Every 30 s** it samples the processes ([`lifecycle::sample`]): their
 //!   memory for [`AgentRuntime::resources`] and the agent's status, and the
 //!   descendants' groups, kept in the `adapters` row for the cleanup after a
@@ -199,12 +201,15 @@ enum Due {
     Kill,
 }
 
-/// A stop on its way: the groups to signal, and the sessions to close.
+/// A stop on its way: the groups to signal, and the sessions to close. It
+/// ends once the adapter has exited and the groups are gone or killed.
 #[derive(Debug)]
 struct Stopping {
     done: oneshot::Sender<()>,
     groups: Vec<ProcessGroup>,
     closing: usize,
+    /// SIGTERM went out.
+    signalled: bool,
 }
 
 /// A request the session has not answered.
@@ -457,22 +462,12 @@ impl Actor {
                 Due::Start => self.ensure_started(),
                 Due::Sample => self.sample(),
                 Due::Stdin => self.close_stdin(),
-                Due::Term => {
-                    let (Some(instance), Some(stopping)) = (&self.instance, &mut self.stopping)
-                    else {
-                        continue;
-                    };
-                    let groups =
-                        lifecycle::union(instance.group.with_descendants(), &self.recorded);
-                    stopping.groups = lifecycle::union(groups, &stopping.groups);
-                    lifecycle::signal(&stopping.groups, Signal::Term);
-                    self.set(Due::Kill, self.deps.durations.get(ADAPTER_TERM_WAIT));
-                }
+                Due::Term => self.term(),
                 Due::Kill => {
                     if let Some(instance) = &self.instance {
-                        let stopped = self.stopping.as_ref().map(|s| s.groups.as_slice());
+                        let stopped = self.stopping.as_mut().map(|s| mem::take(&mut s.groups));
                         let groups = lifecycle::union(vec![instance.group], &self.recorded);
-                        let groups = lifecycle::union(groups, stopped.unwrap_or_default());
+                        let groups = lifecycle::union(groups, &stopped.unwrap_or_default());
                         lifecycle::signal(&groups, Signal::Kill);
                     }
                     self.closed = true;
@@ -480,6 +475,24 @@ impl Actor {
                 }
             }
         }
+    }
+
+    /// A stop's SIGTERM, to the groups found when it began and to those of
+    /// the adapter's tree now; SIGKILL follows (5.6.8). An adapter that
+    /// exited on its own after its stdin closed brings it forward: its
+    /// descendants outlive it.
+    fn term(&mut self) {
+        let (Some(instance), Some(stopping)) = (&self.instance, &mut self.stopping) else {
+            return;
+        };
+        let groups = lifecycle::union(instance.group.with_descendants(), &self.recorded);
+        stopping.groups = lifecycle::union(groups, &stopping.groups);
+        stopping.signalled = true;
+        lifecycle::signal(&stopping.groups, Signal::Term);
+        for due in [Due::Stdin, Due::Term] {
+            self.timers.apply(TimerRequest::Cancel(due));
+        }
+        self.set(Due::Kill, self.deps.durations.get(ADAPTER_TERM_WAIT));
     }
 
     /// Samples the instance's processes, and samples again in 30 s.
@@ -562,6 +575,7 @@ impl Actor {
                     done,
                     groups,
                     closing: 0,
+                    signalled: false,
                 });
                 self.begin_stop();
             }
@@ -769,6 +783,8 @@ impl Actor {
                     let groups = lifecycle::union(vec![instance.group], &self.recorded);
                     lifecycle::signal(&groups, Signal::Kill);
                     self.set(Due::Kill, self.deps.durations.get(ADAPTER_TERM_WAIT));
+                } else if self.stopping.as_ref().is_some_and(|s| !s.signalled) {
+                    self.term();
                 }
                 self.exit = Some(status);
                 self.end();
@@ -1116,6 +1132,11 @@ impl Actor {
         let (Some(status), true) = (self.exit, self.closed) else {
             return;
         };
+        // A stop waits for SIGKILL while a group it signalled lives on.
+        let stopping = self.stopping.as_ref().map(|s| s.groups.as_slice());
+        if stopping.is_some_and(|groups| groups.iter().any(ProcessGroup::is_alive)) {
+            return;
+        }
         let Some(Instance { id, tail, .. }) = self.instance.take() else {
             return;
         };

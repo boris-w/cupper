@@ -405,6 +405,19 @@ async fn it_k21_reap_group_a_stop_reaps_descendants_in_groups_of_their_own() {
     assert!(tree.gone().await);
 }
 
+/// Here the adapter leaves before any signal: the clock stops short of
+/// SIGTERM's turn, 3 s after stdin closed. The groups found when the stop
+/// began get the signals all the same.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_k21_reap_group_an_adapter_that_leaves_first_still_loses_its_descendants() {
+    let f = Fixture::new("k21-left", &[], None, None);
+    let mut session = f.attach().await.unwrap();
+    f.say(&mut session, "spawn_child; spawn_group_child").await;
+    let tree = Groups::of(&f.adapter());
+    f.tick(2, f.runtime.stop(false)).await;
+    assert!(tree.gone().await);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn it_k21_reap_group_the_closing_order_ends_with_sigkill() {
     let mut f = Fixture::new("k21-order", &["--fault", "linger"], None, None);
