@@ -382,6 +382,7 @@
 | T069 | 孤立修法（T062）后仍有微秒级窗口：关闭新回合之前已受理、会话 actor 还没置上 `running` 的回合可能被漏看，彻底消除要在受理时计数（接口层面）；`lifecycle.rs` 的 `it_gw_blob_put_and_get_through_the_gateway` 在机器高负载时失败过一次（SIGTERM 后 30 s 宿主没退出），没复现；一次附加有时连写两条 `session.capabilities`，同一回合的事件数因此不固定，不要断言精确个数 | T062 |
 | T117 | 假 agent 的 `flood_mixed` 每个条目约 3.5 ms、线性增长（2,000 条要 7 s，SP-4a 的 `flood_mixed 6000 200` 要 20 s 以上），与每块长度无关；是否达标请在宿主性能测量里判断 | T062 |
 | 宿主的进程级用例 | `tests/gateway_sync.rs`（T062）加入共用夹具：宿主可按自定载荷和 `Command` 拉起，客户端可按指定选项连接，假 agent 的数据目录与 `test_config` 分两步以便重启；停读的客户端要用 testkit 的原始套接字（CLI 库的读任务总在读）；宿主不是测试子进程时，守卫先按 pid 和启动时间核对再发 SIGTERM，用 `ExitWatch` 等退出 | T062 |
+| 所有跑 e2e 的任务 | **e2e 一律经持锁入口跑**（T093）：整套用 `pnpm test:e2e`（两段，可跟 `-- <spec>`），单个 spec 或用例用 `pnpm --filter @cupper/e2e run test:e2e:one <spec> -g <名称>`（不加 `--`）；别的写法套一层 `cargo xtask lock -- <命令>`。**不要直接运行 `playwright test`**：几个 e2e App 同时开着会互相抢焦点、遮挡窗口，`@focus` 用例偶发失败。持锁运行的命令带 `CUPPER_MACHINE_LOCK=held`，嵌套不再等锁。运行期间 `caffeinate -d` 防止显示器睡眠；**屏幕已锁或显示器已睡时 globalSetup 直接报错**（`@focus` 用例需要可见、能拿到焦点的窗口），解锁后重跑 | T093 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
