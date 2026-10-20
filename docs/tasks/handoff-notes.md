@@ -377,6 +377,7 @@
 | T146（消息流的后续） | 插入更早的历史后视口偶有残余偏差：约每 10 次有 1 次下移 26 px，原因是视口按估计行高（44 px）放回、新插入行的实测高度不同、差额没补。T091 已修掉整页跳动（锚点改为控件之后屏幕上的第一行），用例只断言移动小于 40 px。建议等新行测量完再恢复，或测量后按差额补一次（`virtualizer.scrollToOffset` 试过无效） | T091 |
 | T063 | 假 agent 不对外暴露收到的是 `session/resume` 还是 `session/new`，E2E-NFR1-5 只能确认下一条消息在新宿主上跑完。K 清单要直接断言 resume 时，给假 agent 加一个可观察的记录 | T091 |
 | e2e（T092、T093） | 视图导出：界面的 `__cupperTest.views()` 按流给出 `{seq, complete, view}`；CLI 的 `cupper view index|<会话>`（test-harness 构建）每批事件后输出 `{stream, seq, resubscribed, view}`；`tools/e2e/src/nfr1.ts` 有"等两端到达宿主最后的 seq 再取视图"的辅助。`HostProvider` 在创建 client 时就调 `onClient`。T167 夹具 `processes()` 的注释说宿主不是 App 的子进程，实际是 Electron 主进程直接拉起的，T092 顺手改正 | T091 |
+| T177、T069 | 会话 actor 的空闲退出（T175）：六条同时满足才算空闲（没有运行中回合、待处理交互、会出队的排队消息、核心计时器、在途重扫或连接、等信任检查的 `send` 回复），订阅者不算；时长 `session_idle` 600 s，可经 `test_config.durations` 缩短。到时 actor 关闭 agent 会话、放下全部部件（含流写者）、交回收件箱，管理器 `forget` 后把收件箱里的调用经按需载入重新投递。订阅会话流时经 `SessionPort::wake` 触发载入。测试里等在途工作结束用 `SessionManager::settled`（只在测试里编译）。T177 的接入点：`Parts`、`SessionDeps` 还没有 blob 存储；合并器的计时器键只有 `FlushTimer`，要扩成枚举 | T175 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
