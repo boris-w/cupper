@@ -24,6 +24,12 @@ test-harness = ["dep:getrandom"]
 name = "cupper"
 path = "src/main.rs"
 
+# IT-elevate's probe (design 5.8.4); test builds only, never in a release.
+[[bin]]
+name = "cupper-elevate-probe"
+path = "src/bin/elevate_probe.rs"
+required-features = ["test-harness"]
+
 [dependencies]
 cupper-protocol = { path = "../cupper-protocol" }
 cupper-sys = { path = "../cupper-sys" }
