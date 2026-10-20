@@ -283,7 +283,10 @@ impl AuditEvent {
                     CloseReason::ReadFailed(kind) => detail["error"] = json!(code(kind)),
                     CloseReason::TokenUnreadable(kind) => detail["error"] = json!(code(kind)),
                     CloseReason::FdPassed { fds } => detail["fds"] = json!(fds),
-                    CloseReason::HandshakeFailed(err) => detail["error"] = json!(err),
+                    // The code, not the message, which may quote the params.
+                    CloseReason::HandshakeFailed(err) => {
+                        detail["error"] = json!({"code": err.code, "data": err.data});
+                    }
                     _ => {}
                 }
                 ("conn.closed", principal.as_ref(), detail)
