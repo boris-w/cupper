@@ -116,3 +116,43 @@
 - `requester/mod.rs` +88 −22，含判定的表驱动用例。
 
 剩下：接口接线约 15 行，最少场景的 IT-elevate 约 150–180 行。**推算合计约 850–880 行**，略超约 850 的上限，在 950 的硬线以内。
+
+## T038 合并之后（main 合进本分支：87f8938）
+
+### 接口与网关
+
+- **接口**：`impl elevation::Requesters for ProcessRequesters`，`Ok` 对应 `Clear`，`Err(signals)` 对应 `Descendant`。
+  - supervisor 用宿主自己的可执行文件和 `own_signing_identity()` 构造它，替换 `FailClosed`。
+  - `FailClosed` 留给索引自己的用例，文档已改。
+  - T038 用例里造的 `VerifiedRequester` 补了 `bundled_cli`：合并本身没有冲突，但不补编译不过。
+- **网关的第二道防线**（T038 评审交给本任务）：`Granted::widen` 也按 `expires_at` 判断，时钟取连接的 `Auditor` 里的那个，`Dispatch::new` 的参数没有增加。
+  - 索引 actor 卡住时，授权也不会超过 15 分钟。
+  - 用例 `it_elevate_a_grant_ends_at_its_time_in_the_gateway_too`：到期前能调用 write 类方法，推进时钟到期后得到 `forbidden`（`scope`）。
+
+### IT-elevate
+
+用例 `it_elevate_lineage_waits_limits_expiry_grant_and_close`：真实宿主加假 agent，手动时钟，场景都只取最少的用例。
+
+| 场景 | 做法 | 断言 |
+|---|---|---|
+| 两类后代被拒 | 假 agent 用 `spawn` 拉起探针：加 `--setsid` 的是工具命令；不加的留在适配器的进程组，相当于 MCP 或 hooks | 都是 `forbidden`（`lineage`） |
+| 未决与限频 | 由用例自己拉起的探针申请 | 第一个进入未决，第二个 `rate_limited` |
+| 过期 | `test/clock_advance` 推进 120 s | 第一个收到 `timeout` |
+| 批准与写权限 | 第三个探针申请，用例读 `auth/elevation_get`、再 `grant` 写权限 | 核实信息里 pid、可执行文件正确，`bundled_cli` 为 false；探针随后调用 write 类方法得到 `not_found`，说明 scope 已生效 |
+| 断开即失效 | 第四个探针申请后，用例 SIGTERM 它（自己拉起的进程） | 这个申请随之结束，为 `expired` |
+
+- 未决和结束的申请都从 `host.db` 索引流的 `elevation.requested` 和 `elevation.resolved` 事件里轮询得到。
+- 连跑 10 次全绿，每次 2–4 s；跑完没有残留的探针、假 agent 或宿主进程。
+
+### 实际规模
+
+不含 `Cargo.lock`、生成物、schema、fixtures 和文档，新增 915 行：合并前 681，合并后 234。超过约 850 的上限，在 950 的硬线以内，符合裁定。
+
+合并后的 234 行：
+
+| 部分 | 新增 |
+|---|---|
+| 接口与 supervisor | 约 25 |
+| 网关的到期判断及其用例 | 约 65 |
+| T038 用例的字段 | 2 |
+| IT-elevate 与共用函数 | 141 |
