@@ -74,6 +74,14 @@ impl GitTool {
         })
     }
 
+    /// Adds `name=value` to git's environment, for tests that keep git off
+    /// the machine's own configuration.
+    #[cfg(test)]
+    pub(crate) fn with_test_env(mut self, name: &'static str, value: &str) -> Self {
+        self.test_env.push((name, value.into()));
+        self
+    }
+
     /// git-lfs, for the standard LFS filters (T097).
     pub fn git_lfs(&self) -> Option<&Path> {
         self.git_lfs.as_deref()

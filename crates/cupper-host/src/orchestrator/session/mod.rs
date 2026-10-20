@@ -13,6 +13,8 @@ mod manager;
 mod rows;
 #[cfg(test)]
 pub(super) mod tests;
+#[cfg(test)]
+mod trust_tests;
 
 use std::fmt;
 

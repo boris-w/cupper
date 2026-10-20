@@ -347,6 +347,12 @@ impl Fixture {
         std::fs::canonicalize(self.dir.path().join("app")).unwrap()
     }
 
+    /// Runs `sql` with `param` on `host.db` while no session writes.
+    pub fn exec(&self, sql: &str, param: String) {
+        let conn = rusqlite::Connection::open(self.dir.host_db()).unwrap();
+        conn.execute(sql, [param]).unwrap();
+    }
+
     /// One text column of `sql`'s rows.
     pub fn rows(&self, sql: &str) -> Vec<String> {
         query(&self.dir.host_db(), sql, |row| row.get(0))
