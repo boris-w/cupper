@@ -138,3 +138,9 @@
 2. 运行 `cargo build -p cupper-fake-agent`，再运行 `cargo test -p cupper-host --features test-harness --test gen_gold_b -- --ignored`；
 3. 它在系统时钟上起宿主进程和 claude 形态的假 agent，跑三个剧本（普通回合，含思考和工具；审批后继续；回答出现后中断），经 `diag/recording_export` 导出；改写头行（`scenario`、`usage: [gold-b]`、`adapter: cupper-fake-agent`、`adapter_version: 0.0.0`、`cli_version: fake`），把项目路径（链接路径和真实路径）换成 `/work/project`，写到 `testdata/recordings/cupper-fake-agent/0.0.0/fake/`；
 4. 删掉复制的文件和测试目标，`UPDATE_GOLDEN=1` 跑 `--test gold_b` 写金样例，评审，用 `tools/sanitize scan testdata` 扫一遍（结果：clean）。
+
+## 第二次裁定后（计划 v1.3.48，规模 L，上限约 1,150，硬停止线 1,200）
+
+- 根目录 `package.json` 加 `test:golden`：`cargo test -p cupper-host --features test-harness --locked gold_`，A、B 两层一起跑（A 层 18 个剧本加其他 `gold_a_*`，B 层 9 个，另有进程内实例与 SDK 顺序两条用例）。
+- `xtask` 的 `rust` 作业在 `pnpm-install` 之后加 `golden` 步骤，运行 `pnpm run test:golden`，按 libtest 记录每个用例；单元测试 `gold_b_fake_runs_in_the_rust_job` 核对步骤的命令、`package.json` 里的脚本，以及 `run` 里调用了这一步。
+- 统计（只算 `crates/`）：`xtask/src/ci/jobs/rust.rs` 增 36 删 2；`package.json` 增 1（不在 `crates/` 里）。合计增 1,180、删 29，**净增 1,151**，加上 `package.json` 为 1,152，在硬停止线 1,200 之内。
