@@ -54,3 +54,18 @@ T056 合并之后，在原来的 T004 worktree 里从最新的 main 开新分支
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 840–990 行，超过约 800 的线，停下汇报，建议拆成"按锁文件下载"和"claude-agent-acp 组件与本机打包"两份。
+
+**裁定：不拆，上限放宽到约 1,000 行，硬停止线 1,100。** 两份是先后依赖的，拆开不能并行，只多一轮派发和合并。按执行者提的顺序分步提交：先下载（`manifest.rs` 字段、`npm.rs`、依赖、对应用例），再组件与本机打包（计划的两种来源、核心实现 `Core`、异步驱动、打包与产物核对、第 5 项衔接）。每完成一个模块统计一次；推算超过 1,000 行就停下。
+
+**执行者查出的 T055 的错误，并进第 5 项一起改**：`launch::production` 现在让 Node 跑 `bundle-claude-acp.mjs`（这是打包脚本，不是适配器），核对的也是打包脚本的哈希。改为拉起 `runtime/claude-agent-acp/<版本>/` 下的打包产物，按清单的 `claude_agent_acp.bundle_sha256` 核对，删掉 `manifest::CLAUDE_BUNDLE`。T056 的 `ComponentPlan` 相应改成"版本目录里有什么、各自的哈希"加"从哪来"两部分。
+
+其余几点全部认可：
+- HTTP 客户端：`reqwest = { version = "=0.12.28", default-features = false, features = ["rustls-tls-native-roots"] }`（`ring`、`rustls-native-certs`，依赖树里没有 `aws-lc-rs`、`webpki-roots`、`openssl`，`cargo deny` 通过）；代理只按登录 shell 的 `HTTPS_PROXY` 显式设置，关掉 reqwest 读本进程环境变量的代理，也不读 macOS 的系统代理。
+- 越界的 tarball（通过了 SRI、但含越界路径）算 `hash_mismatch`（内容不可接受），不重试。
+- 重试按组件整体进行，每次重下全部包，不做按包重试或缓存。
+- 时长都进注册表：`runtime_retry` 从 2 秒起翻倍（2、4、8 秒）；每个包的下载限时 `runtime_download` 60 秒，用 `Clock` 的定时器与下载并行等待，不用 reqwest 自带的超时（那是 tokio 计时，绕过 `Clock`）；打包限时 `runtime_bundle` 120 秒；下载并发 8 个。
+- 本机打包复用 `driver::probe::run::run`。
