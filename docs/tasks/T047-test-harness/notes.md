@@ -95,3 +95,18 @@
 5. **`test/seed` 与索引的关系。** 灌入的会话要出现在索引里。
    - 建议给 `IndexHandle` 加一个只在 test-harness 构建里存在的入口，按 `sessions` 行重新对账（复用 T034 的 `reconcile`）。
    - 否则只能重启宿主才看得见这些会话。
+
+## 拆分之后（计划 v1.3.21）
+
+编排者采用方案 A：本任务只做静止屏障、各参与者接线、`test/clock_advance`、`test/run_maintenance`、`test/seed`、`host/status.pid` 和注入点核对。录制导出归 T116，性能与趋势归 T117。5 项待裁定全部认可。上限约 1,500 行，硬停止线 1,600；推算超线时把 seed 拆出去。
+
+### 收窄后的估计
+
+| 模块 | 估计 |
+|---|---|
+| `quiescence.rs`：忙闲计数、`Participant::idle` 的唤醒器、`Hold`（脱离发起方的工作和写线程的在途作业）、`settled()`，含单元测试 | 230 |
+| 参与者接线：写线程、原始帧写线程、Maintenance、账本清理、网关（连接、回复 task、通知、发送循环、订阅表）、索引、会话 actor、`AgentRuntime` | 200 |
+| `Host` 留下 `Quiescence` 和 `ManualClock`；`test/*` 端口；`test/clock_advance`；`test/run_maintenance`；`Routes` 的账本访问 | 180 |
+| `test/seed`；索引按表重新对账的 test-harness 入口 | 260 |
+| IT-clock-advance（含枚举用例）、IT-seed | 230 |
+| **合计** | **约 1,100** |
