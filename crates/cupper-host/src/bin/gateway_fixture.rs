@@ -75,7 +75,8 @@ fn main() -> ExitCode {
         harness_key: payload.harness_key,
     };
     let durations = payload.test_config.durations;
-    let (gateway, mut audit) = Gateway::new(config, clock, durations, Routes::default());
+    let (records, mut audit) = tokio::sync::mpsc::unbounded_channel();
+    let gateway = Gateway::new(config, clock, durations, Routes::default(), records);
     println!("{}", serde_json::json!({"socket": socket}));
     runtime.block_on(async move {
         tokio::spawn(gateway.serve(listener));
