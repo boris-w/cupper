@@ -1,7 +1,7 @@
 // The main process's side of the ShellAPI (design 5.7.3) besides the data
 // connection: the static facts, the preferences, links, the directory picker,
-// and the appearance the windows follow; the focus comes with the input guard. Only a window's main
-// document is answered.
+// the privileged actions, and the appearance the windows follow; the focus
+// comes with the input guard. Only a window's main document is answered.
 
 import { isExternalUrl, type ShellInfo } from "@cupper/shell-api";
 import {
@@ -20,11 +20,14 @@ import {
   PICK_DIRECTORY,
   PREFS_CHANGED,
   PREFS_SET,
+  PRIVILEGED,
   SHELL_INIT,
   THEME_CHANGED,
 } from "../shared/ipc";
 import { isMainDocument } from "./bridge/bridges";
+import { guardOf } from "./input";
 import type { Prefs } from "./prefs";
+import type { Privileged, PrivilegedUi } from "./privileged";
 
 /** Where the review document loads from (M1b, design 5.7.5). */
 const REVIEW_DOCUMENT_URL = "app://cupper-review/index.html";
@@ -55,8 +58,10 @@ export function serveShell(options: {
   flavor: Flavor;
   prefs: Prefs;
   openExternal: (url: string) => void;
+  /** Without a host connection, there is none. */
+  privileged?: Privileged;
 }): void {
-  const { flavor, prefs, openExternal } = options;
+  const { flavor, prefs, openExternal, privileged } = options;
   ipcMain.handle(
     SHELL_INIT,
     checked((): ShellInfo => ({
@@ -82,18 +87,42 @@ export function serveShell(options: {
   });
   ipcMain.handle(
     PICK_DIRECTORY,
-    checked(async (event) => {
-      const window = BrowserWindow.fromWebContents(event.sender);
-      const properties: ("openDirectory" | "createDirectory")[] = [
-        "openDirectory",
-        "createDirectory",
-      ];
-      // Taken at the call, so that e2e tests can stand in for it (design 5.7.2).
-      const picked = window
-        ? await dialog.showOpenDialog(window, { properties })
-        : await dialog.showOpenDialog({ properties });
-      return picked.canceled ? null : (picked.filePaths[0] ?? null);
+    checked((event) => pickDirectory(BrowserWindow.fromWebContents(event.sender))),
+  );
+  ipcMain.handle(
+    PRIVILEGED,
+    checked(async (event, action: unknown) => {
+      // The input goes, whatever happens to the request (design 5.7.8, rule 4).
+      const input = guardOf(event.sender)?.take();
+      if (privileged === undefined) {
+        return { status: "failed", error: { code: "host_unreachable" } };
+      }
+      return privileged.request(
+        input,
+        action,
+        nativeUi(BrowserWindow.fromWebContents(event.sender)),
+      );
     }),
   );
   nativeTheme.on("updated", () => broadcast(THEME_CHANGED, theme()));
+}
+
+/**
+ * The native dialogs on `window`. They are read from `dialog` when called,
+ * so that e2e tests can stand in for them (design 5.7.2).
+ */
+function nativeUi(window: BrowserWindow | null): PrivilegedUi {
+  return {
+    confirm: (options) =>
+      window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options),
+    pickDirectory: () => pickDirectory(window),
+  };
+}
+
+async function pickDirectory(window: BrowserWindow | null): Promise<string | null> {
+  const properties: ("openDirectory" | "createDirectory")[] = ["openDirectory", "createDirectory"];
+  const picked = window
+    ? await dialog.showOpenDialog(window, { properties })
+    : await dialog.showOpenDialog({ properties });
+  return picked.canceled ? null : (picked.filePaths[0] ?? null);
 }
