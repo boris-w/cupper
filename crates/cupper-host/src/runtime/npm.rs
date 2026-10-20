@@ -39,11 +39,12 @@ pub struct Package {
 }
 
 /// The packages an install without optional and dev dependencies downloads,
-/// from `registry` (ending in `/`) in place of [`REGISTRY`]. A lockfile with
+/// from `registry` in place of [`REGISTRY`]. A lockfile with
 /// any other source or an unsafe install path is not accepted.
 pub fn packages(lockfile: &[u8], registry: &str) -> Result<Vec<Package>, Reason> {
     let lock: Value = serde_json::from_slice(lockfile).map_err(|_| Reason::HashMismatch)?;
     let entries = lock["packages"].as_object().ok_or(Reason::HashMismatch)?;
+    let registry = registry.trim_end_matches('/');
     let mut packages = Vec::new();
     for (key, entry) in entries {
         let skipped = ["optional", "dev", "devOptional", "link"];
@@ -65,7 +66,7 @@ pub fn packages(lockfile: &[u8], registry: &str) -> Result<Vec<Package>, Reason>
         }
         packages.push(Package {
             key: key.clone(),
-            url: format!("{registry}{path}"),
+            url: format!("{registry}/{path}"),
             integrity: integrity.to_owned(),
         });
     }

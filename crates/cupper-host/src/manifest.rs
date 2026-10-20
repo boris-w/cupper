@@ -34,8 +34,6 @@ pub struct Manifest {
 
 /// The node of the runtime, as the manifest names it in `files`.
 pub const NODE: &str = "Helpers/node";
-/// claude-agent-acp's bundle, likewise.
-pub const CLAUDE_BUNDLE: &str = "Resources/runtime/bundle-claude-acp.mjs";
 
 /// A pinned component's version.
 #[derive(Debug, Deserialize)]
