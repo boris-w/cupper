@@ -51,19 +51,7 @@ pub(super) fn begin_run(
     meta::set(&tx, MetaKey::LastStartAt, &now_ms.to_string())?;
     meta::set(&tx, MetaKey::BootSessionUuid, &boot.to_string())?;
     meta::set(&tx, MetaKey::DataEpoch, &epoch.to_string())?;
-    tx.execute(
-        "UPDATE turns SET status = 'interrupted', ended_at = ?1 WHERE status = 'running'",
-        [now_ms],
-    )?;
-    tx.execute(
-        "UPDATE interactions SET status = 'expired', reason = 'host_restarted', resolved_at = ?1
-         WHERE status = 'pending'",
-        [now_ms],
-    )?;
-    tx.execute(
-        "UPDATE sessions SET state = 'interrupted', updated_at = ?1 WHERE state = 'running'",
-        [now_ms],
-    )?;
+    end_previous_run(&tx, now_ms)?;
     tx.commit()?;
     let abnormal = last_exit == LastExit::Unclean;
     Ok(Run {
@@ -71,4 +59,23 @@ pub(super) fn begin_run(
         epoch,
         abnormal,
     })
+}
+
+/// Ends in the rows what the previous run left running; the session actors
+/// write the events when they load the sessions (T089).
+pub(crate) fn end_previous_run(conn: &Connection, now_ms: u64) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE turns SET status = 'interrupted', ended_at = ?1 WHERE status = 'running'",
+        [now_ms],
+    )?;
+    conn.execute(
+        "UPDATE interactions SET status = 'expired', reason = 'host_restarted', resolved_at = ?1
+         WHERE status = 'pending'",
+        [now_ms],
+    )?;
+    conn.execute(
+        "UPDATE sessions SET state = 'interrupted', updated_at = ?1 WHERE state = 'running'",
+        [now_ms],
+    )?;
+    Ok(())
 }

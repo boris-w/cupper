@@ -27,8 +27,7 @@ use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{CommandId, PrincipalId, ProjectId, QueueId, SessionId, TurnId};
 use cupper_protocol::ids::{Digest, RequestId};
 use cupper_protocol::index::{PendingKind, SessionStatus, SessionSummary, TrustState};
-use cupper_protocol::interaction::InteractionOutcome;
-use cupper_protocol::interaction::InteractionRequest;
+use cupper_protocol::interaction::{InteractionOutcome, InteractionRequest};
 use cupper_protocol::item::{NoticeCode, NoticeParams};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::methods::interaction::{
@@ -52,6 +51,7 @@ use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 
 use super::core::{Action, Input, Key, SessionCore};
+use super::load::request as stored;
 use super::rows::Rows;
 use super::{IndexNotes, Note, internal, mode_tier, not_found, parse, tier_of};
 use crate::clock::Clock;
@@ -80,7 +80,7 @@ pub(super) enum Mail {
     Call(Box<Call>, oneshot::Sender<Outcome>),
     /// Leave the project's configuration out from now on (design 5.2.6:
     /// "不加载项目配置继续"); the host's own entry until M1b's method.
-    IgnoreProjectConfig(oneshot::Sender<()>),
+    IgnoreProjectConfig(oneshot::Sender<Result<(), RpcError>>),
 }
 /// The host's exit, whether forced, and the reply once the session took it.
 pub(super) type Stop = (bool, oneshot::Sender<()>);
@@ -126,6 +126,19 @@ pub(super) struct Parts {
     /// Finds the git root of the trust range (`Discovery::git`).
     pub git: Option<GitTool>,
     pub durations: Durations,
+}
+
+/// What the actor starts with besides its parts: its first input, and what
+/// the actor had of a session loaded from the store (T089).
+pub(super) struct Start {
+    /// The first message of a new session, or [`Input::Restored`].
+    pub first: Input,
+    /// The command that queued each message.
+    pub commands: HashMap<QueueId, CommandId>,
+    /// The gate was shut for `project_config_changed`.
+    pub project_gate: bool,
+    /// "不加载项目配置继续" was chosen.
+    pub ignore_for_good: bool,
 }
 
 pub(super) struct SessionActor {
@@ -209,35 +222,40 @@ struct Step {
 }
 
 impl SessionActor {
-    /// Runs the session, starting with its first message, until the mailbox
+    /// Runs the session, starting with its first input, until the mailbox
     /// closes; it counts in the quiescence barrier meanwhile.
     pub(super) async fn run(
         parts: Parts,
         inbox: mpsc::UnboundedReceiver<Mail>,
         mut stops: mpsc::UnboundedReceiver<Stop>,
-        first: SendRequest,
+        start: Start,
         participant: Participant,
     ) {
         let (events, mut agent) = mpsc::unbounded_channel();
         let (attached, mut attaches) = mpsc::unbounded_channel();
         let (rescanned, mut rescans) = mpsc::unbounded_channel();
         let alarm = Alarm::new(Arc::clone(&parts.clock));
-        let load_wanted = parts.project_config == ProjectConfigPolicy::Load;
+        let Start {
+            first,
+            commands,
+            project_gate,
+            ignore_for_good,
+        } = start;
+        let load_wanted = parts.project_config == ProjectConfigPolicy::Load || project_gate;
         let mut actor = Self {
             parts,
             timers: TimerTable::new(),
             alarm,
-            commands: HashMap::new(),
+            commands,
             inbox,
             events,
             attached,
             rescanned,
-            load_wanted,
-            project_gate: false,
-            ignore_for_good: false,
+            load_wanted: load_wanted && !ignore_for_good,
+            project_gate,
+            ignore_for_good,
             deferred: None,
         };
-        let first = Input::Machine(turn::Input::Send(first));
         actor.input(first, None, Step::default()).await;
         // Idle until a branch brings work, which runs once the others are
         // dropped.
@@ -256,7 +274,7 @@ impl SessionActor {
                 Next::Mail(Some(Mail::Call(call, reply))) => actor.call(*call, reply).await,
                 Next::Mail(Some(Mail::IgnoreProjectConfig(done))) => {
                     actor.ignore_project_config().await;
-                    let _ = done.send(());
+                    let _ = done.send(Ok(()));
                 }
                 Next::Mail(None) => break,
                 Next::Agent(event) => actor.agent(event).await,
@@ -332,7 +350,11 @@ impl SessionActor {
                 return;
             }
             InteractionGet::NAME => {
-                let _ = reply.send(parse(&params).and_then(|p| self.interaction(p)));
+                let found = match parse(&params) {
+                    Ok(params) => self.interaction(params).await,
+                    Err(err) => Err(err),
+                };
+                let _ = reply.send(found);
                 return;
             }
             method => Err(RpcError::app(ErrorCode::Unsupported, method)),
@@ -439,11 +461,20 @@ impl SessionActor {
         tier_of(self.capabilities().as_ref(), mode)
     }
 
-    /// `interaction/get`, for a request in the session's view: the pending
-    /// ones and those of the latest turns.
-    fn interaction(&self, p: InteractionGetParams) -> Outcome {
+    /// `interaction/get`: a request in the session's view (the pending ones
+    /// and those of the latest turns), else one of the `interactions` table.
+    async fn interaction(&self, p: InteractionGetParams) -> Outcome {
         let found = self.view(|view| view.requests.get(&p.request_id).cloned());
-        let request = found.ok_or_else(|| not_found("request"))?;
+        let request = match found {
+            Some(request) => request,
+            None => {
+                let (session, request) = (self.parts.id.to_string(), p.request_id.to_string());
+                let row = (self.parts.readers).read(move |conn| stored(conn, &session, &request));
+                row.await
+                    .map_err(internal)?
+                    .ok_or_else(|| not_found("request"))?
+            }
+        };
         let resolved = request.resolved.as_ref();
         Ok(json!(InteractionGetResult {
             status: request.status().clone(),

@@ -36,6 +36,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use self::control::Control;
+#[cfg(test)]
+pub(crate) use self::recover::end_previous_run;
 use self::watch::{Admission, SelfCheck, Watch, WatchDeps};
 #[cfg(feature = "test-harness")]
 use crate::clock::ManualClock;
