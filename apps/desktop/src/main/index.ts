@@ -36,7 +36,8 @@ import { APP_SCHEME, APP_SCHEME_PRIVILEGES, appProtocolHandler } from "./securit
 import { hardenWebContents } from "./security/navigation";
 import { restrictPermissions } from "./security/permissions";
 import { enforceSwitchAllowlist } from "./security/switches";
-import { followFocus, serveShell } from "./shell";
+import { guardOf, watchInput } from "./input";
+import { serveShell } from "./shell";
 import { MAIN_DOCUMENT_URL, mainWindowOptions } from "./window";
 
 const flavor = __CUPPER_FLAVOR__;
@@ -146,6 +147,7 @@ async function ready() {
 function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
   const bridges = new WindowBridges({
     connect: openWindow,
+    guard: guardOf,
     controlReady: () => control.ready(),
     schedule: (task, ms) => void setTimeout(task, ms),
     channel: () => {
@@ -185,7 +187,7 @@ function showMainWindow() {
   const window = new BrowserWindow(mainWindowOptions(flavor, preload));
   mainWindow = window;
   window.once("ready-to-show", () => window.show());
-  followFocus(window);
+  watchInput(window, () => Date.now());
   window.on("closed", () => {
     mainWindow = null;
   });

@@ -53,6 +53,7 @@ export function wired(host: MockHost, deps: Partial<BridgeDeps> = {}) {
     const bridge = new WindowBridge(mainEnd(port1), {
       connect: () => mockConnect(host),
       controlReady: async () => undefined,
+      input: { take: () => undefined },
       schedule: (task) => void setTimeout(task, 0),
       ...deps,
     });

@@ -8,12 +8,15 @@ import type { Handshake } from "@cupper/shell-api";
 import type { MessagePortMain, WebContents, WebFrameMain } from "electron";
 
 import { HOST_PORT } from "../../shared/ipc";
+import type { InputGuard } from "../input";
 import { MAIN_DOCUMENT_URL } from "../window";
 import { WindowBridge, type BridgeDeps, type WindowPort } from "./window-bridge";
 
 const MAIN_DOCUMENT = new URL(MAIN_DOCUMENT_URL);
 
-export interface BridgesDeps extends BridgeDeps {
+export interface BridgesDeps extends Omit<BridgeDeps, "input"> {
+  /** The window's input guard; a window without one opens no connection. */
+  guard(contents: WebContents): InputGuard | undefined;
   /** A new channel: the bridge's end, and the end that goes to the window. */
   channel(): { bridge: WindowPort; window: MessagePortMain };
 }
@@ -33,11 +36,15 @@ export class WindowBridges {
     if (frame === null || frame !== contents.mainFrame || !isMainDocument(frame.url)) {
       throw new Error("only the main document opens a data connection");
     }
+    const input = this.#deps.guard(contents);
+    if (input === undefined) {
+      throw new Error("the window has no input guard");
+    }
     const id = contents.id;
     this.close(id);
     this.#bind(contents);
     const { bridge: end, window } = this.#deps.channel();
-    const bridge = new WindowBridge(end, this.#deps);
+    const bridge = new WindowBridge(end, { ...this.#deps, input });
     this.#bridges.set(id, bridge);
     try {
       const handshake = await bridge.open();
