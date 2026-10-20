@@ -448,7 +448,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 - **工作目录**：git 子进程的工作目录设为 cupper 自己的目录（`<数据目录>/git/`），目标仓库经 `-C <路径>`（仓库档、用户档）或 `GIT_DIR`、`GIT_WORK_TREE`（快照档）指定。
 - 所有 git 子进程都经 `cupper-sys::spawn` 拉起（[5.8.5](08-security.md#585-进程卫生)）。
 - 超时：只读命令 30 s；快照 60 s；`worktree add` 10 分钟（输出进度事件）；`push` 5 分钟。
-- 启动时检测 git 版本（暂定最低 2.39）和 git-lfs，结果放进索引流的 `agents` 状态里一起显示。
+- 启动时检测 git 版本（暂定最低 2.39）和 git-lfs，结果放进索引流的 `agents` 状态里一起显示。解析出的 git 是 `/usr/bin/git` 时，它可能只是 xcode-select 的占位程序，没装命令行工具时一运行就弹安装对话框：先用 `xcode-select -p` 确认开发者目录存在、且其下的 `usr/bin/git` 存在，才运行它；否则判为 git 缺失并提示安装命令行工具，绝不运行占位程序（T054 发现，2026-10-20）。
 
 **并发**：会修改用户 index 或 worktree 的操作（stage、unstage、revert、commit、worktree add/remove）按仓库拿 `RepoLock`。快照档的每次调用使用自己的临时 index，不拿锁，可以与其他会话的快照并行；`config` 的重新生成写临时文件后改名。
 

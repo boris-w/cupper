@@ -86,3 +86,19 @@ GUI 进程自己的 PATH 里没有 Homebrew、nvm 等目录（SP-2），所以�
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径和用户名。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 1,620 行，在写代码之前停下汇报，并建议按"拉起进程"和"文件系统与规则"拆成互不依赖的两半。
+
+**裁定：按执行者的建议拆分（计划 v1.3.13）。**
+- **T054 收窄为"可信 PATH、CLI 解析与环境变量规则"**：内嵌清单模块（含 xtask `Manifest` 结构体和 `cli` 范围数据）、可信 PATH、数据驱动的解析器与 `CliLocator`（含 git、git-lfs 的绝对路径）、配置目录校验、适配器环境变量规则。验收 UNIT-realpath、UNIT-cli-resolver-claude、UNIT-env-rules。规模改为 L，上限约 1,100 行，硬停止线 1,200。
+- **新增 T094"登录 shell 环境与版本检测"**：带 `Clock` 超时的拉起辅助、登录 shell 取环境、`--version` 与四种分类、git 版本与 git-lfs 检测。UNIT-version-classify 移过去，新增 UNIT-login-shell（`tests/ids.toml` 已在 main 上改好）。由另一位执行者并行做。
+- 两半之间只交接普通类型（变量名清单、版本号字符串、PATH 字符串、`BTreeMap<String, String>`），接线归 T055。T054 需要的已验证范围以版本号字符串的形式交给 T094 的分类函数使用。
+
+**对执行者发现的裁定**（已写进设计）：
+1. **npm 安装按布局表认，不按 shebang 认**：5.6.6"解析成原生二进制"已按你核实的结果改写（2.1.120 起的 `bin/claude.exe`、postinstall 没跑时的占位文件与平台包位置、2.1.100 及以前的纯 JS `cli.js` 判为 `unsupported_install`，只认表里列出的位置）。
+2. **pnpm 全局安装的 `#!/bin/sh` 脚本**：M1a 判为 `unsupported_install`，不解析脚本内容。
+3. **`/usr/bin/git` 的 xcode-select 占位程序**：5.2.10 已补上处理方式：先用 `xcode-select -p` 确认开发者目录存在、且其下的 `usr/bin/git` 存在，才运行；否则判为 git 缺失并提示安装命令行工具，绝不运行占位程序。解析路径时（T054）把"是否为占位程序"作为结果的一部分给出，运行版本检测的 T094 据此决定是否运行。
+4. 原生安装器的布局本机没有、核实不了：按官方文档和 registry 元数据写进布局表，在 `notes.md` 里标"未在本机核实"。
+5. codex 的布局变化记在 `notes.md` 里供 T111 参考即可。
