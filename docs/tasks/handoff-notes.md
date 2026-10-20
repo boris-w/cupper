@@ -225,6 +225,9 @@
 | T059 | T028 已合并：审计记录除了写 `audit` 表，还要按 5.8.6 同时写 host.log（`tracing` 事件，字段按 `diag` 的约定）；T059 任务书里"T028 合并之前先只写表"的过渡写法不再需要 | T028 |
 | T055 | 每种 agent 开一个 `diag::stderr::AdapterLog`（`AdapterLog::open(目录, agent, clock, redactor)`），每个实例调用一次 `read(instance_id, 管道)`；每个实例在内存里保留最后 64 KB（整行、已脱敏），可直接放进 `error` 条目的错误详情。实例 ID 作为行前缀，不受长串规则约束 | T028 |
 | 以后在宿主里加日志的任务 | 宿主自己的 ID 和哈希作为字段记录（字段名带 `id`、`hash`、`digest`、`blob`），不要拼进消息正文，否则 40 字符以上的会被当成长串替换；prompt、正文、命令输出、文件内容一律经 `diag::Content`（`info` 级别只记种类和长度） | T028 |
+| T095 | `driver/claude/ask.rs` 的 `option()` 是换成按工具区分的对照表的位置；换表后 s04、s04b、s05 等的金样例用 `UPDATE_GOLDEN=1` 重新生成并评审。`capabilities.rs` 里 `permission_mode` 每个取值都标 `full_access` 是档位表之前的过渡写法。`SessionCore` 对 `DriverEvent::Ask` 的匹配用 `..` 暂时忽略了 `tool_call_id`（T053 合并时），填 `item_id` 由本任务接上（已写入 brief） | T053、T088 |
+| T055 | 接 T053 的提取层：每个会话建 `ClaudeSession::new(cwd, config)`；`AskId`、`PromptTag` 由运行时分配；`CommandsChanged` 按 5.6.2 去重（金样例里每次 `available_commands_update` 都是完整列表）；`capabilities()` 要从 CLI 定位那边拿到 `Versions`（已写入 brief） | T053 |
+| T064、T066 | 宿主不声明 `session.compaction` 时适配器还推不推 `compaction_update`，录制回答不了（SP-1 的客户端声明了它），用兼容剧本核对；提取层照常处理这类更新 | T053 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

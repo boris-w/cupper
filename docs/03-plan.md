@@ -1603,7 +1603,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T050 驱动层 I：传输、线路分接与 ACP 连接
 - [x] T051 假 agent：剧本模式与 persona
 - [x] T052 录制格式、SP-1 录制转换与敏感信息扫描
-- [ ] T053 Claude 提取层、能力提取与 A 层金样例
+- [x] T053 Claude 提取层、能力提取与 A 层金样例
 - [x] T054 CLI 发现：可信 PATH、CLI 解析与环境变量规则
 - [ ] T055 驱动层 II：AgentRuntime 与 Claude 接入
 - [ ] T056 运行时安装器
