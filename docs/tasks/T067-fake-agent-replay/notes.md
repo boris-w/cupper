@@ -49,3 +49,6 @@
 - 端到端第一次跑没过，回放的报错写进了宿主的原始帧：``frame 3: `params.clientCapabilities.auth` is {"terminal":false}, the recording has nothing``。宿主的 `initialize` 比我照代码写的多一项 `auth.terminal: false`（SDK 的默认值），补上后通过。宿主的请求 id 是 UUID 字符串，id 重映射不受影响。
 - persona 比对：把 Claude persona 的一个选项 ID 临时改错，用例失败，确认不是空比对；另加一条断言，保证三种工具类型（`edit`、`execute`、`switch_mode`）都比到了。
 - Claude 录制里的命令有 54 条（录制机器上装了插件和 skill），persona 只取 5 条内置命令；比对规则是 persona 的每条都按原样出现在录制里、顺序一致。模型的当前值取决于录制账号，不比。
+- 第一次跑 `ci pr --record`，rust 作业里宿主的 `it_process_hygiene_no_inherited_fds_allowed_env_own_session` 失败：假 agent 报告继承了 fd 3–8。原因是我在 `main` 里把运行时提前到两种模式之前统一构建，运行时自己的描述符被 `record_inherited_fds` 当成了继承来的。改回先记录、再构建运行时（另起一个 fix 提交，+5 −4），重跑全部通过。
+
+分支最终合计新增 760、删除 112（不含 notes、`Cargo.lock`、CI 摘要）。
