@@ -11,7 +11,7 @@ use super::Denial;
 
 /// The order of a tier one would move to: one this version does not know
 /// counts as `full_access`, like a mode the mapping lacks (design 5.6.5).
-pub(super) fn rank(tier: &Tier) -> u8 {
+pub fn rank(tier: &Tier) -> u8 {
     match tier {
         Tier::Normal => 0,
         Tier::Elevated => 1,

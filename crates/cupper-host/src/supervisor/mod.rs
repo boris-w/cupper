@@ -41,7 +41,9 @@ use crate::diag::stderr::AdapterLog;
 use crate::driver::locate::CliLocator;
 use crate::driver::locate::trust::{Boundaries, system_temp_dirs};
 use crate::driver::probe::login_shell::LoginEnv;
+use crate::driver::runtime::agents::{Agents, Find};
 use crate::driver::runtime::launch::{self, Launch};
+use crate::driver::runtime::status::NoAgentNotes;
 use crate::driver::runtime::{AGENT_RUNTIME, AgentRuntime, RuntimeDeps};
 use crate::durations::Durations;
 use crate::exit::HostExit;
@@ -187,7 +189,19 @@ impl Host {
         // Claude's runtime and the sessions on it, in the order they stop.
         let ids = Arc::new(IdGen::new(clock.clone()));
         let login_env = injected.login_env.clone();
-        let found = discover(login_env, &*clock, &durations, &reader, &data_dir).await?;
+        let finder = Finder {
+            clock: clock.clone(),
+            durations: durations.clone(),
+            data_dir: data_dir.clone(),
+            login_env,
+            #[cfg(feature = "test-harness")]
+            agent: (payload.test_config.agents.claude.as_ref())
+                .map(|agent| (agent.program.clone(), agent.args.clone())),
+        };
+        // Discovery runs the login shell once; the index's git and Claude's
+        // launch both take this result.
+        let found = finder.discover(project_roots(&reader)?).await;
+        let git = git_tool(&found, &data_dir)?;
         // Step 7: the index stream, before the socket.
         quiescence.register(INDEX);
         let index = IndexHandle::start(IndexDeps {
@@ -196,7 +210,7 @@ impl Host {
             clock: clock.clone(),
             ids: ids.clone(),
             durations: durations.clone(),
-            git: found.git.clone(),
+            git,
             quiescence: quiescence.clone(),
             host: HostUpdated {
                 version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -208,7 +222,7 @@ impl Host {
             },
         })
         .await?;
-        let launch = claude_launch(&payload, &*clock, &durations, &data_dir, &found).await;
+        let launch = finder.launch_found(&found).await;
         let redactor = Redactor::for_this_machine();
         let log = AdapterLog::open(&log_dir(&data_dir), "claude", clock.clone(), redactor);
         let cx = launch::Context {
@@ -224,8 +238,22 @@ impl Host {
             ids: ids.clone(),
             blobs: blobs.clone(),
             quiescence: quiescence.clone(),
+            probe_dir: data_dir.join("probe").join("claude"),
+            durations: durations.clone(),
+            notes: Arc::new(NoAgentNotes),
         };
         let claude = AgentRuntime::start(deps);
+        let find: Find = {
+            let (finder, readers) = (finder.clone(), readers.clone());
+            Arc::new(move || {
+                let (finder, readers) = (finder.clone(), readers.clone());
+                Box::pin(async move {
+                    let roots = readers.read(project_roots).await.unwrap_or_default();
+                    finder.launch(roots).await
+                })
+            })
+        };
+        let agents = Agents::new(claude.clone(), readers.clone(), writer.clone(), find);
         // The audit records go into the `audit` table from T059 on.
         let (records, _audit) = mpsc::unbounded_channel();
         let sessions = SessionManager::new(SessionDeps {
@@ -266,6 +294,7 @@ impl Host {
         })
         .route(&mut routes);
         routes.sessions(Arc::new(sessions));
+        Arc::new(agents).route(&mut routes);
         routes.index(Arc::new(index.clone()));
         let config = GatewayConfig {
             host_id: run.host_id,
@@ -376,63 +405,91 @@ struct Discovery {
     host: BTreeMap<String, String>,
     login: LoginEnv,
     locator: CliLocator,
-    /// `None` when no trusted `PATH` entry has a git.
-    git: Option<GitTool>,
 }
 
 async fn discover(
     login_env: Option<BTreeMap<String, String>>,
     clock: &dyn Clock,
     durations: &Durations,
-    reader: &rusqlite::Connection,
-    data_dir: &Path,
-) -> Result<Discovery, StartError> {
+    roots: Vec<PathBuf>,
+) -> Discovery {
     let host = std::env::vars_os()
         .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)));
     let host: BTreeMap<String, String> = host.collect();
     let login = launch::login_env(clock, durations, &host, login_env).await;
-    let mut projects = reader.prepare("SELECT path FROM projects WHERE removed_at IS NULL")?;
-    let roots = projects.query_map([], |row| Ok(PathBuf::from(row.get::<_, String>(0)?)))?;
     let tmp = host.get("TMPDIR").map(String::as_str);
-    let roots: Vec<PathBuf> = roots.collect::<Result<_, _>>()?;
     let boundaries = Boundaries::new(roots, system_temp_dirs(tmp));
     let path = login.vars.get("PATH").map_or("", String::as_str);
     let home = PathBuf::from(host.get("HOME").cloned().unwrap_or_default());
-    let locator = CliLocator::new(boundaries, path, home.clone());
-    let git = match locator.tool("git") {
-        Some(git) => {
-            let (lfs, trusted) = (locator.tool("git-lfs"), locator.trusted_path());
-            let ssh = login.vars.get("SSH_AUTH_SOCK").map(OsString::from);
-            Some(GitTool::new(git, lfs, trusted, Some(home), ssh, data_dir)?)
-        }
-        None => None,
-    };
-    Ok(Discovery {
+    let locator = CliLocator::new(boundaries, path, home);
+    Discovery {
         host,
         login,
         locator,
-        git,
-    })
+    }
 }
 
-/// How Claude's adapters start: the program of `test_config.agents`, else
-/// the runtime with the CLI discovered.
-async fn claude_launch(
-    payload: &Payload,
-    clock: &dyn Clock,
-    durations: &Durations,
-    data_dir: &Path,
-    found: &Discovery,
-) -> Launch {
-    let (host, login) = (&found.host, &found.login);
+/// The git tool (T034), from the same locator: `None` when no trusted `PATH`
+/// entry has a git.
+fn git_tool(found: &Discovery, data_dir: &Path) -> Result<Option<GitTool>, StartError> {
+    let locator = &found.locator;
+    let Some(git) = locator.tool("git") else {
+        return Ok(None);
+    };
+    let (lfs, trusted) = (locator.tool("git-lfs"), locator.trusted_path());
+    let home = PathBuf::from(found.host.get("HOME").cloned().unwrap_or_default());
+    let ssh = found.login.vars.get("SSH_AUTH_SOCK").map(OsString::from);
+    Ok(Some(GitTool::new(
+        git,
+        lfs,
+        trusted,
+        Some(home),
+        ssh,
+        data_dir,
+    )?))
+}
+
+/// The projects' paths, the boundaries of trusted `PATH` entries.
+fn project_roots(reader: &rusqlite::Connection) -> rusqlite::Result<Vec<PathBuf>> {
+    let mut projects = reader.prepare("SELECT path FROM projects WHERE removed_at IS NULL")?;
+    let roots = projects.query_map([], |row| Ok(PathBuf::from(row.get::<_, String>(0)?)))?;
+    roots.collect()
+}
+
+/// How Claude's adapters start, found at startup and again on
+/// `agents/refresh`: the program of `test_config.agents`, else the runtime
+/// with the CLI discovered.
+#[derive(Debug, Clone)]
+struct Finder {
+    clock: Arc<dyn Clock>,
+    durations: Durations,
+    data_dir: PathBuf,
+    login_env: Option<BTreeMap<String, String>>,
     #[cfg(feature = "test-harness")]
-    if let Some(agent) = &payload.test_config.agents.claude {
-        let (program, args) = (agent.program.clone(), agent.args.clone());
-        return launch::injected(program, args, host, login);
+    agent: Option<(PathBuf, Vec<String>)>,
+}
+
+impl Finder {
+    async fn discover(&self, roots: Vec<PathBuf>) -> Discovery {
+        discover(self.login_env.clone(), &*self.clock, &self.durations, roots).await
     }
-    #[cfg(not(feature = "test-harness"))]
-    let _ = payload;
-    launch::production(clock, durations, data_dir, host, login, &found.locator).await
+
+    /// Discovers again, then finds the launch: what `agents/refresh` does.
+    async fn launch(&self, roots: Vec<PathBuf>) -> Launch {
+        let found = self.discover(roots).await;
+        self.launch_found(&found).await
+    }
+
+    async fn launch_found(&self, found: &Discovery) -> Launch {
+        let (clock, durations) = (&*self.clock, &self.durations);
+        let (host, login) = (&found.host, &found.login);
+        #[cfg(feature = "test-harness")]
+        if let Some((program, args)) = &self.agent {
+            return launch::injected(program.clone(), args.clone(), host, login);
+        }
+        let (dir, locator) = (&self.data_dir, &found.locator);
+        launch::production(clock, durations, dir, host, login, locator).await
+    }
 }
 
 /// The clock, the durations and the login shell's environment of

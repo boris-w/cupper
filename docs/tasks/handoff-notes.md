@@ -45,7 +45,7 @@
 | T025 | 宿主 ID 用 `HostId::from_uuid(new_host_uuid().as_u128())` | T023（已写入 brief） |
 | T030 | 密钥取 `payload.dev_key`、`payload.harness_key` 的 `SecretKey::expose()`；`dev_key` 只接受拉起宿主的进程（5.8.1，`p_puniqueid`，见 T021） | T023（已写入 brief） |
 | T045、T075 | 启动载荷是一行 JSON 加换行，写完立即关闭 stdin；两种密钥都是 64 位十六进制；出现未知的键时宿主以退出码 1 退出。CLI 的 `--harness-key-fd` 用同样的密钥格式 | T023（已写入 T045 的 brief） |
-| T056 | `--self-test` 还没加，现在会被当作未知参数，以退出码 1 退出 | T023 |
+| T056 | `--self-test` 还没加，现在会被当作未知参数，以退出码 1 退出 | T023（已由 T056 实现） |
 | T161 | `--build-info` 输出一行 JSON：`{"debug_assertions","features","name","version"}` | T023 |
 | 新增定时器或故障点的任务 | 定时器的时长登记到 `crates/cupper-host/src/durations.rs`（`DurationKey` 加入 `ALL`）；故障点用 `failpoint!(NAME)`，名字登记到 `failpoint.rs` 的 `ALL`，格式为 `<模块>.<位置>`；故障点的用例断言退出码为 99 | T023 |
 | T030、T045、T073 | 读 cupper 套接字一律用 `cupper_sys::recv_closing_fds`：普通读取会装入 `SCM_RIGHTS` 传来的 fd。网关的用法是 `stream.try_io(Interest::READABLE, \|\| recv_closing_fds(&stream, buf))`，`closed_fds > 0` 时断开连接并记审计（设计 5.8.5 v1.8） | T021（已写入 T030 的 brief）（已写入 T045 的 brief） |
@@ -262,6 +262,14 @@
 | T059 | `HostUpdated.pending_upgrade` 改为取自检的结果 | T034 |
 | 用 git 的任务（T061、T109 等） | git 从 `Discovery::git`（`Option<GitTool>`）取；找不到 git 时为 `None` | T034 |
 | 修复锁用例的偶发失败（待派） | `gateway::listen::tests::host_lock_is_held_once_and_names_its_holder` 偶发失败：释放 `host.lock` 后立刻再拿，报"已被占用"。应是 T021 查明的窗口（别的测试线程 `posix_spawn` 时 fd 表被短暂复制）。改成单独进程隔离（`cupper-sys` 的 `testutil::alone` 那样），或释放后在短时限内重试 | T034 |
+| T059（宿主启动接线） | 运行时安装器的后台校验：`Installer::new(runtime::plans(manifest::embedded()), Box::new(BundleDir::of_this_host()?), runtime::runtime_dir(&data_dir), in_use)`，放进 `spawn_blocking(move || installer.run(|s| tx.send_replace(s.clone())))`，状态写进索引流的 `agents`；要在宿主的 cdhash 自检之后才开始；`Failed(BundleChanged)` 时转入待升级；`in_use` 启动时为空 | T056 |
+| T111 | codex-acp 的文件在 `runtime::plan::split` 里加 | T056 |
+| T109 | 闸门用 `turn::Input::Gate(Some(PauseReason::ProjectConfigChanged))` 关、`Gate(None)` 开；闸门同一时刻只有一个原因，`config_unconfirmed` 和 `project_config_changed` 可能同时出现，要改成原因的集合 | T044 |
+| T089 | 设定者的完整 `Principal` 只在内存里，库里只有 `mode_set_by` 的 ID；恢复会话时按 ID 找回 principal 的类型和 scope，或者把恢复的会话一律视为由创建者设定 | T044 |
+| T059 | `AuditRecord.conn` 改成了 `Option<ConnId>`：会话自己发起的审计（例如 `config.unconfirmed`）没有连接；落盘时处理 `None` | T044 |
+| T008、驱动层的后续任务 | 越权改回经 `AgentPort::send(DriverCommand::SetConfig{..})` 发出，结果要以带全部选项的 `DriverEvent::ConfigChanged` 回到会话；`AgentPort::send` 的文档目前只列了 Prompt、Cancel、Close、Answer，补上 `SetConfig`，并确认 `AgentRuntime` 不再丢弃它（T055 交接时还在丢弃） | T044 |
+| T100 | `AgentNotes::agent(AgentStatus)` 是索引接 `agents` 状态的入口；宿主组装时现在传 `NoAgentNotes`，换成索引的实现（`IndexHandle` 实现它） | T009 |
+| 以后需要刷新 git 的任务 | `agents/refresh` 重新发现 CLI，但不刷新索引手里的 `GitTool`（启动时由 `git_tool` 从同一次发现得出）；用户装了或换了 git 之后要重启宿主才生效 | T009 合并 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

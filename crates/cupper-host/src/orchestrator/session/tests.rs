@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use cupper_protocol::capabilities::SessionCapabilities;
+use cupper_protocol::capabilities::{SessionCapabilities, SlashCommand};
 use cupper_protocol::domain::{AgentKind, PrincipalKind, PromptContent};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{AdapterInstanceId, ProjectId, SessionId, TurnId};
@@ -252,11 +252,17 @@ impl Fixture {
 
     /// Answers the next attach with the agent's session `agent-1`.
     pub async fn attach(&mut self) -> Attach {
+        self.attach_with(caps()).await
+    }
+
+    /// Answers the next attach with the agent's session `agent-1`, whose
+    /// capabilities are `capabilities`.
+    pub async fn attach_with(&mut self, capabilities: SessionCapabilities) -> Attach {
         let Some(Seen::Attach(attach, events, reply)) = self.seen.recv().await else {
             panic!("an attach")
         };
         let session = AgentSessionId("agent-1".into());
-        let (instance, capabilities) = (AdapterInstanceId::from_uuid(1), caps());
+        let instance = AdapterInstanceId::from_uuid(1);
         reply
             .send(Ok(AttachInfo {
                 session,
@@ -280,6 +286,11 @@ impl Fixture {
             DriverCommand::Prompt { tag, content, .. } => (tag, content),
             other => panic!("{other:?}"),
         }
+    }
+
+    /// Nothing more went to the agent so far.
+    pub fn quiet(&mut self) -> bool {
+        self.seen.try_recv().is_err()
     }
 
     pub fn emit(&self, event: DriverEvent) {
@@ -510,4 +521,34 @@ async fn it_orch_lifecycle_create_checks_workspace_agent_project_and_tier() {
     f.call(cli, "session/create", auto).await.unwrap();
     let config = f.attach().await.config;
     assert_eq!(config, [("permission_mode".into(), "auto".into())].into());
+}
+
+/// The stream's `session.capabilities` follows the agent's command list, and
+/// only when it changed (design 5.6.2).
+#[tokio::test]
+async fn unit_commands_dedup_session_capabilities_only_when_the_list_changes() {
+    let mut f = Fixture::new("commands").await;
+    let session = f.started().await;
+    let list = |name: &str| {
+        let command = SlashCommand {
+            name: name.into(),
+            description: "d".into(),
+            input_hint: None,
+        };
+        DriverEvent::CommandsChanged(vec![command])
+    };
+    for event in [
+        list("a"),
+        list("a"),
+        list("b"),
+        DriverEvent::CommandsChanged(Vec::new()),
+    ] {
+        f.emit(event);
+    }
+    let bodies = f.events(&session, "session.capabilities", 4).await;
+    let commands: Vec<Value> = (data(&bodies, "session.capabilities").iter())
+        .map(|caps| caps["commands"].clone())
+        .collect();
+    let named = |name: &str| json!([{"name": name, "description": "d"}]);
+    assert_eq!(commands, [json!([]), named("a"), named("b"), json!([])]);
 }

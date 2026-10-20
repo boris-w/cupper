@@ -170,7 +170,7 @@ impl Gateway {
 
     fn audit(&self, conn: &ConnId, event: AuditEvent) {
         let at_ms = self.clock.now_wall_ms();
-        let conn = conn.clone();
+        let conn = Some(conn.clone());
         // Nobody listening is the receiver's choice.
         let _ = self.audit.send(AuditRecord { at_ms, conn, event });
     }

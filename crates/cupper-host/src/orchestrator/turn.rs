@@ -17,6 +17,12 @@
 //!   or failed pauses the queue, except a cancel the agent made by itself
 //!   (Codex #556, K2). A message sent while idle starts a turn at once and
 //!   ends such a pause; an empty queue is never paused.
+//! - While the session's gate is shut (`config_unconfirmed`, and T109's
+//!   `project_config_changed`), every message is queued, a preparing turn
+//!   does not send its prompt, and only reopening the gate resumes the queue.
+//! - A prompt that fails with "Session not found" before any update is sent
+//!   once more after a resume (K6); an exited adapter or CLI leaves an
+//!   `agent_restarted` notice (K7).
 
 use std::mem;
 use std::sync::Arc;
@@ -27,7 +33,9 @@ use cupper_protocol::domain::{FailureCode, PromptContent};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{AdapterInstanceId, ItemId, PrincipalId, QueueId, RequestId, TurnId};
 use cupper_protocol::interaction::ResolutionReason;
-use cupper_protocol::item::{Item, ItemCompleted, ItemPatch, ItemStarted, ItemStatus, UserMessage};
+use cupper_protocol::item::{
+    Item, ItemCompleted, ItemPatch, ItemStarted, ItemStatus, NoticeCode, UserMessage,
+};
 use cupper_protocol::session::{
     PauseReason, QueueEntry, SnapshotPhase, SnapshotReason, SnapshotRecorded, SnapshotStatus,
     StopReason, TurnOrigin, TurnStarted, TurnStatus, TurnUsage,
@@ -37,9 +45,11 @@ use thiserror::Error;
 use super::queue::{QueueCore, QueueEditError, QueueFull, QueueOp, preview};
 use crate::clock::{IdGen, Now};
 use crate::driver::api::{
-    AgentError, AgentSessionId, AttachInfo, AttachTarget, DriverCommand, DriverEvent, PromptTag,
+    AgentError, AgentErrorClass, AgentSessionId, AttachInfo, AttachTarget, DriverCommand,
+    DriverEvent, PromptTag,
 };
 use crate::durations::{Durations, INTERRUPT_FALLBACK, TURN_PREPARE};
+use crate::orchestrator::notice;
 use crate::pure::{Core, TimerRequest};
 
 #[derive(Debug)]
@@ -57,6 +67,8 @@ pub struct TurnMachine {
     queue: QueueCore,
     /// Set by the autonomous judge's [`Input::HoldQueue`].
     hold: bool,
+    /// Set by [`Input::Gate`].
+    gate: Option<PauseReason>,
 }
 
 #[derive(Debug)]
@@ -75,6 +87,10 @@ struct Turn {
     id: TurnId,
     started: Now,
     phase: Phase,
+    /// The prompt in flight, until an update comes (K6).
+    resend: Option<PromptContent>,
+    /// The prompt was sent again once already.
+    resent: bool,
 }
 
 #[derive(Debug)]
@@ -118,6 +134,8 @@ pub enum Input {
     /// The judge's dequeue guard: while held, an idle session takes no
     /// queued message; a message sent while idle still starts its turn.
     HoldQueue(bool),
+    /// Shuts the session's gate for a reason, or reopens it.
+    Gate(Option<PauseReason>),
     Expired(TurnTimer),
     /// The host's forced exit (design 5.2.13): the running turn completes
     /// `interrupted` at once, its requests expire (`host_restarted`), and no
@@ -310,6 +328,7 @@ impl TurnMachine {
             turn: None,
             queue: QueueCore::default(),
             hold: false,
+            gate: None,
         }
     }
 
@@ -318,9 +337,27 @@ impl TurnMachine {
         self.turn.as_ref().map(|turn| &turn.id)
     }
 
+    /// The attached agent session.
+    pub fn agent_session(&self) -> Option<&AgentSessionId> {
+        match &self.link {
+            Link::Attached { session, .. } => Some(session),
+            _ => None,
+        }
+    }
+
+    fn gate(&mut self, gate: Option<PauseReason>, out: &mut Vec<Action>) {
+        let update = match (&gate, self.gate.take()) {
+            (Some(reason), _) => self.queue.pause(reason.clone()),
+            (None, Some(was)) if self.queue.paused() == Some(&was) => self.queue.resume(),
+            (None, _) => None,
+        };
+        out.extend(update.map(|u| Action::Event(EventBody::QueueUpdated(u))));
+        self.gate = gate;
+    }
+
     fn send(&mut self, send: SendRequest, now: Now, out: &mut Vec<Action>) {
         let fallback = (send.mode == SendMode::Steer).then_some(SteerFallback::Unsupported);
-        if self.turn.is_none() {
+        if self.turn.is_none() && self.gate.is_none() {
             // A new message ends a pause the last turn left (design 5.2.6).
             if let Some(update) = self.queue.resume() {
                 out.push(Action::Event(EventBody::QueueUpdated(update)));
@@ -350,6 +387,11 @@ impl TurnMachine {
         };
         let sent = self.queue.push(entry).map(|update| {
             out.push(Action::Event(EventBody::QueueUpdated(update)));
+            let paused = self
+                .gate
+                .clone()
+                .and_then(|reason| self.queue.pause(reason));
+            out.extend(paused.map(|u| Action::Event(EventBody::QueueUpdated(u))));
             Sent {
                 disposition: Disposition::Queued,
                 turn_id: None,
@@ -420,6 +462,8 @@ impl TurnMachine {
             id: id.clone(),
             started: now,
             phase,
+            resend: None,
+            resent: false,
         });
         id
     }
@@ -431,6 +475,7 @@ impl TurnMachine {
     fn advance(&mut self, now: Now, out: &mut Vec<Action>) {
         if self.turn.is_none()
             && !self.hold
+            && self.gate.is_none()
             && let Some((entry, update)) = self.queue.pop()
         {
             out.push(Action::Event(EventBody::QueueUpdated(update)));
@@ -471,16 +516,19 @@ impl TurnMachine {
                 self.inflight = None;
                 self.link = Link::Attaching(Some(session));
             }
-            Link::Attached { session, .. } if *snapshot_done => {
+            Link::Attached { session, .. } if *snapshot_done && self.gate.is_none() => {
                 self.last_tag += 1;
                 let tag = PromptTag(self.last_tag);
+                let content = mem::take(content);
+                let resend = content.clone();
                 out.push(Action::Driver(DriverCommand::Prompt {
                     session: session.clone(),
                     tag,
-                    content: mem::take(content),
+                    content,
                 }));
                 self.inflight = Some(tag);
                 if let Some(turn) = &mut self.turn {
+                    turn.resend = (!turn.resent).then_some(resend);
                     turn.phase = Phase::Prompting(tag);
                 }
             }
@@ -592,6 +640,17 @@ impl TurnMachine {
             return;
         }
         self.inflight = None;
+        if let Err(error) = &result
+            && self.resume_and_resend(tag, error, now, out)
+        {
+            return;
+        }
+        let restarted = result.as_ref().err().is_some_and(|e| {
+            matches!(
+                e.class,
+                AgentErrorClass::ProcessExited | AgentErrorClass::Restartable
+            )
+        });
         let phase = self.turn.as_ref().map(|turn| &turn.phase);
         let outcome = match (phase, result) {
             (Some(Phase::Prompting(t)), Ok((stop_reason, usage))) if *t == tag => {
@@ -619,6 +678,39 @@ impl TurnMachine {
             _ => return,
         };
         self.end(outcome, now, out);
+        if restarted {
+            out.extend(notice(&self.ids, now, NoticeCode::AgentRestarted).map(Action::Event));
+        }
+    }
+
+    /// K6: the agent lost its session (its CLI crashed) before the prompt
+    /// brought anything. Resumes the session and sends the prompt once more.
+    fn resume_and_resend(
+        &mut self,
+        tag: PromptTag,
+        error: &AgentError,
+        now: Now,
+        out: &mut Vec<Action>,
+    ) -> bool {
+        let (Some(turn), Link::Attached { session, .. }) = (&mut self.turn, &self.link) else {
+            return false;
+        };
+        let prompting = matches!(turn.phase, Phase::Prompting(t) if t == tag);
+        if error.class != AgentErrorClass::SessionNotFound || !prompting {
+            return false;
+        }
+        let Some(content) = turn.resend.take() else {
+            return false;
+        };
+        turn.resent = true;
+        let snapshot_done = true;
+        turn.phase = Phase::Preparing {
+            content,
+            snapshot_done,
+        };
+        self.link = Link::Detached(Some(session.clone()));
+        out.extend(notice(&self.ids, now, NoticeCode::SessionResumed).map(Action::Event));
+        true
     }
 
     fn adapter_exited(&mut self, instance: AdapterInstanceId, now: Now, out: &mut Vec<Action>) {
@@ -641,6 +733,7 @@ impl TurnMachine {
         {
             self.end(Outcome::failed(FailureCode::AdapterExited), now, out);
         }
+        out.extend(notice(&self.ids, now, NoticeCode::AgentRestarted).map(Action::Event));
     }
 
     fn expired(&mut self, timer: TurnTimer, now: Now, out: &mut Vec<Action>) {
@@ -750,8 +843,10 @@ impl Core for TurnMachine {
         match input {
             Input::Send(send) => self.send(send, now, &mut out),
             Input::Interrupt { expected_turn } => self.interrupt(expected_turn, now, &mut out),
+            // A shut gate keeps the queue paused.
             Input::QueueResume => {
-                if let Some(update) = self.queue.resume() {
+                let resumed = self.gate.is_none().then(|| self.queue.resume()).flatten();
+                if let Some(update) = resumed {
                     out.push(Action::Event(EventBody::QueueUpdated(update)));
                 }
                 out.push(Action::Reply(Reply::QueueResume));
@@ -783,6 +878,12 @@ impl Core for TurnMachine {
             Input::Driver(DriverEvent::AdapterExited { instance, .. }) => {
                 self.adapter_exited(instance, now, &mut out)
             }
+            // Output came: the prompt is not sent again (K6).
+            Input::Driver(DriverEvent::Update(_)) => {
+                if let Some(turn) = &mut self.turn {
+                    turn.resend = None;
+                }
+            }
             Input::Driver(_) => {}
             Input::AutonomousStarted => {
                 if self.turn.is_none() {
@@ -799,6 +900,7 @@ impl Core for TurnMachine {
                 }
             }
             Input::HoldQueue(hold) => self.hold = hold,
+            Input::Gate(gate) => self.gate(gate, &mut out),
             Input::Expired(timer) => self.expired(timer, now, &mut out),
             Input::HostExit => {
                 self.hold = true;

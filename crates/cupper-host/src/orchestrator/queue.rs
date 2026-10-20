@@ -85,6 +85,11 @@ impl QueueCore {
         Some(self.updated())
     }
 
+    /// Why the queue is paused, if it is.
+    pub fn paused(&self) -> Option<&PauseReason> {
+        self.paused.as_ref()
+    }
+
     pub fn resume(&mut self) -> Option<QueueUpdated> {
         self.paused.take()?;
         Some(self.updated())
