@@ -318,6 +318,7 @@ impl Host {
         ));
         let mut routes = Routes::new(ledger.clone());
         routes.watched_by(&quiescence);
+        // `stream/subscribe`, `stream/unsubscribe` and `history/page`.
         routes.streams(streams.clone(), readers.clone());
         control.route(&mut routes);
         #[cfg(feature = "test-harness")]
