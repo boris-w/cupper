@@ -1,8 +1,9 @@
 //! IT-lifecycle: the host as a process (design 5.2.13). What the previous run
 //! left running ends at startup, `host/exit` and SIGTERM exit in order, and
 //! a host that cannot start exits with the code of the startup contract, and
-//! a session runs a turn with the fake agent. The test talks to the host as
-//! the CLI's `harness` client.
+//! a session runs a turn with the fake agent. IT-project-add-trust adds and
+//! trusts a project in a git repository built here. The tests talk to the
+//! host as the CLI's `harness` client.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -304,4 +305,95 @@ async fn it_lifecycle_startup_failures_exit_3_to_6() {
     .unwrap();
     drop(conn);
     assert_eq!(exit_code(&mut spawn(&data_dir)).await, 6);
+}
+
+/// A workspace two levels below its git root, with configuration at both:
+/// added, scanned up to the root, trusted, changed into `stale`, and, with
+/// 1,500 agents, a result that still fits one frame.
+#[tokio::test]
+async fn it_project_add_trust_through_the_gateway() {
+    use cupper_protocol::annotations::WirePath;
+    use cupper_protocol::index::TrustState;
+    use cupper_protocol::methods::project::{
+        ProjectAdd, ProjectAddParams, ProjectTrust, ProjectTrustInfo, ProjectTrustInfoParams,
+        ProjectTrustParams,
+    };
+
+    let dir = TempDir::new("projects");
+    let (repo, app) = (dir.path().join("repo"), dir.path().join("repo/apps/web"));
+    std::fs::create_dir_all(app.join(".claude/agents")).unwrap();
+    let git = Command::new("/usr/bin/git")
+        .args(["init", "-q"])
+        .arg(&repo)
+        .status();
+    assert!(git.unwrap().success());
+    let hooks =
+        r#"{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "acme-done"}]}]}}"#;
+    std::fs::create_dir_all(repo.join(".claude")).unwrap();
+    std::fs::write(repo.join(".claude/settings.json"), hooks).unwrap();
+    std::fs::write(
+        app.join(".mcp.json"),
+        r#"{"mcpServers": {"acme": {"url": "https://acme.invalid"}}}"#,
+    )
+    .unwrap();
+    let data_dir = dir.path().join("data");
+    let mut host = spawn_with(&data_dir, json!({"login_env": {"PATH": "/usr/bin:/bin"}}));
+    let client = connect(&data_dir).await;
+
+    let path = WirePath(app.to_str().unwrap().into());
+    let add = ProjectAddParams {
+        command_id: client::command_id(),
+        path,
+    };
+    let added = client.request::<ProjectAdd>(add).await.unwrap();
+    assert_eq!(added.trust.state, TrustState::Untrusted);
+    let found: Vec<_> = added
+        .trust
+        .findings
+        .iter()
+        .map(|f| (f.path.0.as_str(), f.detail.as_str()))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            ("../../.claude/settings.json", "Stop: acme-done"),
+            (".mcp.json", "acme: https://acme.invalid")
+        ]
+    );
+    let project_id = added.project_id;
+    let trust = ProjectTrustParams {
+        command_id: client::command_id(),
+        project_id: project_id.clone(),
+        trust_digest: added.trust.trust_digest,
+    };
+    let trusted = client.request::<ProjectTrust>(trust).await.unwrap();
+    assert_eq!(trusted.trust_state, TrustState::Trusted);
+
+    for n in 0..1_500 {
+        std::fs::write(
+            app.join(format!(".claude/agents/acme-agent-{n:04}.md")),
+            "---",
+        )
+        .unwrap();
+    }
+    let info = ProjectTrustInfoParams { project_id };
+    let info = client.request::<ProjectTrustInfo>(info).await.unwrap();
+    assert_eq!(info.state, TrustState::Stale);
+    let diff = info.diff_from_trusted.unwrap();
+    assert!(
+        diff.iter()
+            .all(|change| change.path.0.starts_with(".claude/agents/"))
+    );
+    assert_eq!(diff.len() + info.diff_omitted.unwrap() as usize, 1_500);
+    assert_eq!(
+        info.findings.len() + info.findings_omitted.unwrap() as usize,
+        1_502
+    );
+    let states = column(
+        &data_dir,
+        "SELECT trust_state || ' ' || (git_common_dir IS NOT NULL) FROM projects",
+    );
+    assert_eq!(states, ["stale 1"]);
+    terminate(&host);
+    assert_eq!(exit_code(&mut host).await, 0);
 }

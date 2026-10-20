@@ -1,19 +1,14 @@
-//! The index actor on a real `host.db`, with no git: projects and trust
-//! through the port, the reconciliation at start, and the checkpoint of the
-//! orderly exit. IT-project-add-trust runs the same through the host.
+//! The index actor on a real `host.db`: the reconciliation at start and the
+//! checkpoint of the orderly exit. IT-project-add-trust runs projects and
+//! trust through the host.
 
-use std::fs;
 use std::time::Duration;
 
-use cupper_protocol::domain::{ClientKind, PrincipalKind};
-use cupper_protocol::ids::{CommandId, ProjectId, SessionId};
+use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::index::{SessionStatus, TrustState};
-use cupper_protocol::methods::handshake::{ClientIdentity, Principal};
-use serde_json::{Value, json};
 
 use super::*;
 use crate::clock::ManualClock;
-use crate::ledger::{Begin, Ledger};
 use crate::store::streams::StreamsConfig;
 use crate::store::testutil::TempDir;
 use crate::store::{Database, MIGRATIONS, WRITER, Writer, WriterConfig, migrate, open_writer};
@@ -23,7 +18,6 @@ struct Fx {
     clock: ManualClock,
     db: Writer,
     readers: Readers,
-    ledger: Ledger,
     quiescence: Quiescence,
 }
 
@@ -40,15 +34,11 @@ impl Fx {
         };
         let (db, _) = Writer::spawn(conn, config, &quiescence).unwrap();
         let readers = Readers::open(&dir.host_db()).unwrap();
-        let reader = crate::store::open_reader(&dir.host_db()).unwrap();
-        let shared: Arc<dyn Clock> = Arc::new(clock.clone());
-        let ledger = Ledger::load(&reader, db.clone(), shared, &Durations::default()).unwrap();
         Self {
             dir,
             clock,
             db,
             readers,
-            ledger,
             quiescence,
         }
     }
@@ -73,41 +63,6 @@ impl Fx {
             host: host(),
         };
         IndexHandle::start(deps).await.unwrap()
-    }
-
-    async fn call(&self, index: &IndexHandle, method: &'static str, params: Value) -> Outcome {
-        let principal = Principal {
-            id: "pr_test".parse().unwrap(),
-            kind: PrincipalKind::TestHarness,
-            role: None,
-            scopes: Vec::new(),
-        };
-        let ticket = params.get("command_id").map(|id| {
-            let id: CommandId = serde_json::from_value(id.clone()).unwrap();
-            match self
-                .ledger
-                .begin(&principal.id, &id, method, &params)
-                .unwrap()
-            {
-                Begin::Run(ticket) => ticket,
-                Begin::Repeat(_) => panic!("a new command"),
-            }
-        });
-        let conn = ConnId::from_index(1);
-        let client = ClientIdentity {
-            kind: ClientKind::Cli,
-            name: "acme-test".into(),
-            version: "0".into(),
-        };
-        let call = Call {
-            conn,
-            principal,
-            client,
-            method,
-            params,
-            ticket,
-        };
-        index.deliver(call).await
     }
 
     /// The index view, as a new registry loads it from the log.
@@ -137,77 +92,6 @@ fn host() -> HostUpdated {
         power_assertion: false,
         last_exit_abnormal: true,
     }
-}
-
-#[tokio::test]
-async fn index_projects_add_trust_and_turn_stale() {
-    let fx = Fx::new("index-projects");
-    let index = fx.start().await;
-    let app = fx.dir.path().join("work/app");
-    fs::create_dir_all(app.join(".claude")).unwrap();
-    fs::write(
-        app.join(".claude/settings.json"),
-        r#"{"env": {"ACME": "1"}}"#,
-    )
-    .unwrap();
-    let path = app.to_str().unwrap();
-
-    let added = fx
-        .call(
-            &index,
-            "project/add",
-            json!({"command_id": "c-1", "path": path}),
-        )
-        .await;
-    let added = added.unwrap();
-    assert_eq!(added["trust"]["state"], "untrusted");
-    assert_eq!(added["trust"]["findings"][0]["detail"], "ACME=1");
-    let (project, digest) = (
-        added["project_id"].clone(),
-        added["trust"]["trust_digest"].clone(),
-    );
-    let again = fx
-        .call(
-            &index,
-            "project/add",
-            json!({"command_id": "c-2", "path": path}),
-        )
-        .await;
-    assert_eq!(again.unwrap()["project_id"], project);
-
-    let wrong = json!({"command_id": "c-3", "project_id": project, "trust_digest": format!("d_{}", "0".repeat(64))});
-    let err = fx.call(&index, "project/trust", wrong).await.unwrap_err();
-    assert_eq!(err.reason(), Some(&ErrorReason::DigestMismatch));
-    let right = json!({"command_id": "c-4", "project_id": project, "trust_digest": digest});
-    let trusted = fx.call(&index, "project/trust", right).await.unwrap();
-    assert_eq!(trusted, json!({"trust_state": "trusted"}));
-
-    fs::write(app.join(".claude/settings.json"), "{}").unwrap();
-    let info = fx
-        .call(&index, "project/trust_info", json!({"project_id": project}))
-        .await;
-    let info = info.unwrap();
-    assert_eq!(info["state"], "stale");
-    let diff = json!([{"path": ".claude/settings.json", "change": "update"}]);
-    assert_eq!(info["diff_from_trusted"], diff);
-
-    fs::create_dir_all(fx.dir.path().join("work/empty")).unwrap();
-    let empty = json!({"command_id": "c-5", "path": fx.dir.path().join("work/empty")});
-    let empty = fx.call(&index, "project/add", empty).await.unwrap();
-    assert_eq!(empty["trust"]["state"], "trusted");
-    let missing = json!({"command_id": "c-6", "path": fx.dir.path().join("work/none")});
-    let err = fx.call(&index, "project/add", missing).await.unwrap_err();
-    assert_eq!(err.app_code(), Some(&ErrorCode::NotFound));
-
-    let states = fx.sql("SELECT trust_state || ' ' || coalesce(trusted_by, '-') FROM projects ORDER BY position").await;
-    assert_eq!(states, ["stale pr_test", "trusted auto_empty"]);
-    let (view, _) = fx.view().await;
-    let shown: Vec<_> = view
-        .projects
-        .values()
-        .map(|p| p.trust_state.clone())
-        .collect();
-    assert_eq!(shown, [TrustState::Stale, TrustState::Trusted]);
 }
 
 #[tokio::test]
