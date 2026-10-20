@@ -95,7 +95,11 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
   const loadEarlier = () => {
     const element = scroller.current;
     const top = element?.scrollTop ?? 0;
-    const first = virtualizer.getVirtualItems().find((item) => item.end > top);
+    // The first row on screen that stays put: not the history control itself,
+    // which is at the top before the page and after it.
+    const first = virtualizer
+      .getVirtualItems()
+      .find((item) => item.end > top && rows[item.index]?.kind !== "history");
     if (first) {
       keeper.hold(String(first.key), first.index, first.start, top);
     }

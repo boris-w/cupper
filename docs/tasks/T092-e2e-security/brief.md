@@ -76,3 +76,24 @@ T091 合并之后，在原来的 T043 worktree 里从最新的 main 开新分支
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 920 行（用例 ×1.1、其余代码 ×1.15），在写代码前停下，建议按"窗口内"与"连接层"拆两份。
+
+**裁定：方案一（计划 v1.3.44）。**
+- **T092 收窄为窗口内的安全**，约 520 行，上限约 600、硬停止线 680：
+  - E2E-SEC-csp、real-input、panel-arming、panel-numbering、privileged、double-initialize；
+  - `exit_code()` 单元测试；
+  - 夹具注释。
+- **新增 T176（连接层与外发）**：
+  - 原始协议客户端与假宿主脚本；
+  - E2E-SEC-fake-host、cli-fake-host、no-key-client、egress 与 Q27；
+  - 上传缓冲的评估。
+  
+  T176 依赖 T090、T167，与 T092 并行，另派执行者。
+
+**三点确认**：
+1. **假 agent 加一个能自定义权限选项的剧本**（约 25 行）：认可。它是测试替身，不算用例文件。
+2. **`__cupperTest` 在 e2e 分支加 `command(method, params)`**：认可，不要经 React fiber 取 client。`flavors.test.ts` 照样检查它不进非 e2e 构建。
+3. **CSP 两种口径都做**：注入的脚本不执行、名为 `default` 的 Trusted Types 策略创建失败，再加上违规为 0。认可。
