@@ -7,13 +7,14 @@
 //! `host/hello`, then exactly one `initialize` (`handshake`), then requests
 //! and client notifications, which [`dispatch`] hands to the executors in
 //! [`Routes`]. The gateway serves subscriptions (`subscribe`, sent by the
-//! writer in `send`) and history pages (`history`) itself; blobs are T029's.
+//! writer in `send`), history pages (`history`) and blobs (`blobs`) itself.
 //!
 //! On the way out (design 5.2.13) the host stops [`Gateway::serve`], sends
 //! [`Gateway::broadcast`] `host/shutdown`, and at last ends every connection
 //! with [`Gateway::close_all`].
 
 mod audit;
+mod blobs;
 mod clients;
 mod conn;
 mod describe;
