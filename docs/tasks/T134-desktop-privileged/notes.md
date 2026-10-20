@@ -56,3 +56,32 @@
 | UNIT-privileged | `busy`；冷却逐次加长与重新计数；Esc；没有真实输入；七种 action 的确认框参数、默认按钮与发出的命令（替换确认框函数记录参数，mock 宿主）；`add_project` 三条分支；提权框的勾选项与 `scopes`；`settings` 返回 `failed` | 300 |
 
 **合计约 940 行（乘 1.1）到 1,055 行（乘 1.3）**，贴着约 1,000 行的线。按任务书，开工前停下汇报，没有写代码。
+
+## 裁定后（2026-10-20）
+
+编排者裁定：`confirm_config` 用 (a)；上限放宽到约 1,100 行，硬停止线 1,200。
+
+### 实现中定下的几点
+
+- **`add_project` 拒绝信任**：
+  - 项目已经加上了，所以返回 `confirmed`，`result` 为 `{project_id, trusted: false}`，不计冷却；
+  - 选择目录时取消，返回 `cancelled`，计冷却。
+- **`trust_project` 拒绝信任**：返回 `cancelled`，计冷却。
+- **提权框拒绝**：向宿主发 `decision: "deny"`，否则申请要等到 2 分钟过期；返回 `cancelled`，计冷却。
+- **提权框的 `scopes`**：从申请的范围里取，只有勾选时才含 approve。
+- **会话流取不到时**：`confirm_config` 订阅会话流失败或 5 秒内没到 `live`，返回 `failed`（`unavailable`），不弹框。
+- **失败的形式**：
+  - 宿主的错误按语义码返回 `{code, reason?}`；
+  - 连接断了返回 `connection_lost`；
+  - 渲染进程给的 action 字段不对，返回 `invalid_params`；
+  - 不需要原生确认的命令，宿主的 `policy/describe` 回 invalid params，原样返回。
+- **真实输入**：IPC 处理一进来就先 `take()`，不管后面是否 `busy` 或冷却，按第 4 条，输入都算用掉了。
+- **确认框挂在发起请求的窗口上**（sheet）；`dialog.showMessageBox`、`dialog.showOpenDialog` 都在调用时才取。`ShellAPI.pickDirectory` 与 `add_project` 共用同一个函数。
+
+### 实际规模
+
+| 提交 | 内容 | 新增 / 删除 |
+|---|---|---|
+| b2920be | `privileged` 文案与注册 | 51 / 2 |
+| 3ad1417 | 框架、各 action、确认框、取会话流、IPC 与 preload；UNIT-privileged | 882 / 18 |
+| **合计** | 实现约 640（草估 580），测试约 295（草估 300） | **933 / 20** |
