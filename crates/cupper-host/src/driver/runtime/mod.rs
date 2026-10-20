@@ -17,9 +17,15 @@
 //!   rest of its process group is killed, which lets the pipes close.
 //!   Backing off between restarts, descendants in groups of their own, the
 //!   order of closing (5.6.8) and resource sampling are T008's.
+//! - **Command lists** (design 5.6.2): Claude pushes its whole list when a
+//!   session opens and at every turn's start. An attach answers with the
+//!   agent's latest list without waiting for the session's own; after that a
+//!   session hears `CommandsChanged` only when its list differs from the one
+//!   it has. Attaches and changed lists refresh the capability cache.
 //! - Steering (T140), `SetConfig` (T044) and probing (T009) are not served
 //!   yet; their commands are dropped.
 
+pub mod cache;
 pub mod content;
 pub mod launch;
 #[cfg(test)]
@@ -44,6 +50,10 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
+
+use cupper_protocol::capabilities::{SessionCapabilities, SlashCommand};
+use cupper_protocol::domain::AgentKind;
+use sha2::{Digest, Sha256};
 
 use self::launch::{Context, Instance, Launch};
 use super::acp::FromAgent;
@@ -124,6 +134,8 @@ struct Route {
     events: mpsc::UnboundedSender<DriverEvent>,
     claude: ClaudeSession,
     cwd: PathBuf,
+    /// The digest of the command list the session has, once it attached.
+    commands: Option<[u8; 32]>,
 }
 
 /// An attach applying its configuration, option by option.
@@ -160,7 +172,16 @@ struct Actor {
     last_ask: u64,
     /// A stop waiting for the instance's end, and whether it is forced.
     stopping: Option<(oneshot::Sender<()>, bool)>,
+    /// The agent's latest command list, from any session.
+    commands: Vec<SlashCommand>,
+    /// What the capability cache holds.
+    cached: Option<SessionCapabilities>,
     _participant: Participant,
+}
+
+fn digest(commands: &[SlashCommand]) -> [u8; 32] {
+    let json = serde_json::to_vec(commands).expect("commands serialize");
+    Sha256::digest(json).into()
 }
 
 fn error(class: AgentErrorClass, message: impl ToString) -> AgentError {
@@ -177,6 +198,12 @@ impl AgentRuntime {
     pub fn start(deps: RuntimeDeps) -> Self {
         let (mail, inbox) = mpsc::unbounded_channel();
         let participant = deps.quiescence.enter(AGENT_RUNTIME);
+        let versions = &deps.launch.versions;
+        drop(cache::invalidate(
+            &deps.cx.writer,
+            &AgentKind::Claude,
+            versions,
+        ));
         let actor = Actor {
             deps,
             mail: mail.downgrade(),
@@ -190,6 +217,8 @@ impl AgentRuntime {
             asks: HashMap::new(),
             last_ask: 0,
             stopping: None,
+            commands: Vec::new(),
+            cached: None,
             _participant: participant,
         };
         tokio::spawn(actor.run(inbox));
@@ -439,6 +468,7 @@ impl Actor {
                 events,
                 claude,
                 cwd,
+                commands: None,
             },
         );
         let reply = pending.reply;
@@ -474,17 +504,50 @@ impl Actor {
         }
         let opening = self.opening.remove(&session).expect("just found");
         let config = capabilities::config_options(&opening.options);
+        let commands = self.commands.clone();
         if let Some(route) = self.sessions.get_mut(&session) {
             route.claude.set_config(&opening.options);
+            route.commands = Some(digest(&commands));
         }
         let versions = self.deps.launch.versions.clone();
-        let caps = capabilities::capabilities(&instance.init, versions, config, Vec::new());
+        let caps = capabilities::capabilities(&instance.init, versions, config, commands);
         let info = AttachInfo {
             session: AgentSessionId(session),
             instance: instance.id.clone(),
-            capabilities: caps,
+            capabilities: caps.clone(),
         };
         let _ = opening.reply.send(Ok(info));
+        self.cache(caps);
+    }
+
+    /// Refreshes the capability cache.
+    fn cache(&mut self, caps: SessionCapabilities) {
+        let at = self.deps.cx.clock.now_wall_ms();
+        drop(cache::write(&self.deps.cx.writer, &caps.agent, at, &caps));
+        self.cached = Some(caps);
+    }
+
+    /// A session's command list: the agent's latest, and the session's if it
+    /// has attached and has another; the cache's when it differs.
+    fn commands(&mut self, session: &str, commands: Vec<SlashCommand>) {
+        let sum = digest(&commands);
+        let opening = self.opening.contains_key(session);
+        if let Some(route) = self.sessions.get_mut(session)
+            && !opening
+            && route.commands != Some(sum)
+        {
+            route.commands = Some(sum);
+            let _ = route
+                .events
+                .send(DriverEvent::CommandsChanged(commands.clone()));
+        }
+        if let Some(mut caps) = self.cached.clone()
+            && caps.commands != commands
+        {
+            caps.commands.clone_from(&commands);
+            self.cache(caps);
+        }
+        self.commands = commands;
     }
 
     async fn command(&mut self, command: DriverCommand) {
@@ -552,7 +615,10 @@ impl Actor {
                     return;
                 };
                 for event in route.claude.update(&notification.update) {
-                    let _ = route.events.send(event);
+                    match event {
+                        DriverEvent::CommandsChanged(commands) => self.commands(&session, commands),
+                        event => self.to_session(&session, event),
+                    }
                 }
             }
             FromAgent::Permission(request, responder) => {

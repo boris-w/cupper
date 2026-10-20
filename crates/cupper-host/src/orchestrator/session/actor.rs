@@ -164,7 +164,8 @@ impl SessionActor {
                     None => break,
                 },
                 Some(event) = agent.recv() => {
-                    actor.input(Input::Agent(event), None, Step::default()).await
+                    let step = actor.commands_changed(&event);
+                    actor.input(Input::Agent(event), None, step).await
                 }
                 Some(result) = attaches.recv() => actor.attach_done(result).await,
                 Some((force, done)) = stops.recv() => {
@@ -520,6 +521,20 @@ impl SessionActor {
         }
         let input = Input::Machine(turn::Input::Attached(result));
         self.input(input, None, step).await;
+    }
+
+    /// A command list the session's capabilities do not have yet goes into
+    /// the stream with them (design 5.6.2).
+    fn commands_changed(&self, event: &DriverEvent) -> Step {
+        let mut step = Step::default();
+        if let DriverEvent::CommandsChanged(commands) = event
+            && let Some(mut caps) = self.written_capabilities()
+            && caps.commands != *commands
+        {
+            caps.commands.clone_from(commands);
+            step.events.push(EventBody::SessionCapabilities(caps));
+        }
+        step
     }
 
     /// Feeds each timer due now to the core, one step each: a step may
