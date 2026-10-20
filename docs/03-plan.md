@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.45
+- 版本：v1.3.46
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -1899,3 +1899,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.43 | 2026-10-20 | T091 发现：宿主重启后，窗口重新订阅会话流不会触发载入，被杀的回合在界面上一直显示运行中、请求面板也还在，直到这个会话收到下一条命令。"订阅会话流时按需载入"并进 T175（同属 actor 的生命周期，约 40 行）；设计 5.2.13 补这条规则 |
 | v1.3.44 | 2026-10-20 | T092 开工前按守则第 8 条拆分（估计约 920 行）：T092 收窄为窗口内的安全（CSP、真实输入、面板待命、面板编号、特权操作、二次 `initialize`、`exit_code()` 单元测试，约 520 行）；新增 T176（原始协议客户端与假宿主、fake-host、cli-fake-host、no-key-client、egress 与 Q27、上传缓冲的评估，约 400 行），依赖 T090、T167，与 T092 并行；T099 改为也依赖 T176 |
 | v1.3.45 | 2026-10-20 | T175 写完空闲退出与订阅时载入（新增 242 行）后，推算加上超长输出约 452 行，超过约 430 的停止线；执行者逐模块统计，在动手写超长输出之前停下。超长输出拆给新增的 T177（约 210 行，IT-orch-long-output 由 T175 移来），依赖 T175，同一个执行者接着做；T099 改为也依赖 T177 |
+| v1.3.46 | 2026-10-20 | T177 写完合并器与 actor（新增 238 行，估 140，合并器经 rustfmt 展开后多出一倍），推算加上用例约 363 行，超过停止线约 300 与硬停止线 340，执行者在写用例之前停下。用例（含 T062 发现的"500 kB 输出后会话仍能订阅"）是本任务的价值所在，拆出约 50 行不值得：编排者裁定不拆，上限提到约 380、硬停止线 400，仍为 S |
