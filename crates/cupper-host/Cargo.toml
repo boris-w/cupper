@@ -57,6 +57,8 @@ uuid = { version = "1.28.0", default-features = false, features = ["std"] }
 cupper-cli = { path = "../cupper-cli", features = ["test-harness"] }
 # `send_with_fds`: a peer that passes fds (IT-pinned-token).
 cupper-sys = { path = "../cupper-sys", features = ["test-util"] }
+# GOLD-B plays the adapter by the replay's matching rules (T067).
+cupper-fake-agent = { path = "../cupper-fake-agent" }
 proptest.workspace = true
 # Exact: PROP-stream-seq runs the streams under its scheduler, built with
 # `--cfg shuttle` (design 5.9.8; `store::streams::sync`).
@@ -80,6 +82,11 @@ required-features = ["test-harness"]
 # IT-gw-sync and the other T062 cases run the host with a `harness_key`.
 [[test]]
 name = "gateway_sync"
+required-features = ["test-harness"]
+
+# GOLD-B runs the host in the test's own process, with a `harness_key`.
+[[test]]
+name = "gold_b"
 required-features = ["test-harness"]
 
 # The gateway alone, for process-level tests (T039, T073).

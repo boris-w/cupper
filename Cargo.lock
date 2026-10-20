@@ -343,6 +343,7 @@ dependencies = [
  "agent-client-protocol-derive",
  "base64 0.23.1",
  "cupper-cli",
+ "cupper-fake-agent",
  "cupper-protocol",
  "cupper-sys",
  "flate2",
