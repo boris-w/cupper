@@ -30,10 +30,13 @@ use agent_client_protocol::schema::v1::{
     SessionConfigOption, SessionNotification,
 };
 use cupper_protocol::capabilities::{CliCompat, Versions};
+use cupper_protocol::item::ToolKind;
 use cupper_protocol::recording::{Body, Recording, Usage};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
+use super::capabilities::TIERS;
+use super::options::{self, Scene};
 use super::{ClaudeSession, agent_error, ask, capabilities, prompt_done};
 use crate::driver::acp::AuthStatusUpdate;
 use crate::driver::api::{AskId, AskRequest, DriverEvent, PromptTag};
@@ -475,4 +478,85 @@ fn gold_a_unknown_enums_are_judged_by_their_originals() {
         )
     );
     assert_eq!(done["event"]["prompt_done"]["stop_reason"], "paused");
+}
+
+/// The values of `recording` that the tables do not have (design 5.9.5):
+/// options by scene, tool kinds and permission modes.
+fn not_in_tables(recording: &Recording) -> Vec<String> {
+    let mut missing = Vec::new();
+    for frame in &recording.frames {
+        let Body::Recv(msg) = &frame.body else {
+            continue;
+        };
+        let mut msg = msg.clone();
+        k19::rewrite(&mut msg);
+        let (params, update) = (&msg["params"], &msg["params"]["update"]);
+        if msg["method"] == "session/request_permission"
+            && let Some(request) = parse::<RequestPermissionRequest>(params)
+        {
+            let scene = Scene::of(&request);
+            let unlisted = request
+                .options
+                .iter()
+                .filter(|o| !options::listed(scene, o));
+            missing.extend(unlisted.map(|o| format!("option {} in {scene:?}", o.option_id)));
+        }
+        for kind in [&update["kind"], &params["toolCall"]["kind"]].map(Value::as_str) {
+            if let Some(ToolKind::Unknown(kind)) = kind.map(ToolKind::from) {
+                missing.push(format!("tool kind {kind}"));
+            }
+        }
+        let options = msg["result"]["configOptions"].as_array();
+        let modes = (options
+            .or(update["configOptions"].as_array())
+            .into_iter()
+            .flatten())
+        .filter(|option| option["category"] == "mode")
+        .flat_map(|option| {
+            let values = option["options"].as_array().into_iter().flatten();
+            let grouped = values
+                .clone()
+                .flat_map(|v| v["options"].as_array().into_iter().flatten());
+            values
+                .chain(grouped)
+                .map(|v| &v["value"])
+                .chain([&option["currentValue"]])
+        })
+        .chain([&update["currentModeId"]]);
+        for mode in modes.filter_map(Value::as_str) {
+            if !TIERS.iter().any(|(known, _)| *known == mode) {
+                missing.push(format!("permission mode {mode}"));
+            }
+        }
+    }
+    missing.sort();
+    missing.dedup();
+    missing
+}
+
+#[test]
+fn gold_a_option_map_claude_has_every_recorded_value() {
+    for (name, recording) in recordings(None) {
+        assert_eq!(not_in_tables(&recording), Vec::<String>::new(), "{name:?}");
+    }
+}
+
+#[test]
+fn gold_a_option_map_claude_flags_values_outside_the_tables() {
+    let text = r#"{"format":"cupper-rec","v":1,"source":"host","adapter":"claude-agent-acp","adapter_version":"0.91.0","cli":"claude","cli_version":"2.1.296","scenario":"new-values","usage":["gold-a"]}
+{"seq":1,"t":0,"instance":0,"dir":"note","note":{"event":"instance_started"}}
+{"seq":2,"t":0,"instance":0,"dir":"recv","msg":{"jsonrpc":"2.0","id":1,"result":{"sessionId":"s","configOptions":[{"id":"mode","name":"Mode","category":"mode","type":"select","currentValue":"default","options":[{"value":"default","name":"Default"},{"value":"dontAsk","name":"Don't ask"}]}]}}}
+{"seq":3,"t":0,"instance":0,"dir":"recv","msg":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"current_mode_update","currentModeId":"yolo"}}}}
+{"seq":4,"t":0,"instance":0,"dir":"recv","msg":{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"t","title":"x","kind":"teleport"}}}}
+{"seq":5,"t":0,"instance":0,"dir":"recv","msg":{"jsonrpc":"2.0","id":7,"method":"session/request_permission","params":{"sessionId":"s","toolCall":{"toolCallId":"t","name":"Bash"},"options":[{"optionId":"allow-once","name":"Yes","kind":"allow_once"},{"optionId":"allow-everywhere","name":"Always","kind":"allow_always"}]}}}"#;
+    let recording = Recording::parse(text).expect("a recording");
+    assert_eq!(
+        not_in_tables(&recording),
+        [
+            "option allow-everywhere in Command",
+            "permission mode dontAsk",
+            "permission mode yolo",
+            "tool kind teleport"
+        ]
+    );
 }
