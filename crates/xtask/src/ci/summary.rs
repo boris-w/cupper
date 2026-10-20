@@ -109,8 +109,12 @@ pub fn build(run: &Run) -> Value {
         "duration_ms": run.duration_ms,
         "jobs": jobs,
         "results": results(run),
-        // e2e builds record their app bundle hashes here (T090).
-        "artifacts": [],
+        "artifacts": run
+            .reports
+            .iter()
+            .flat_map(|report| &report.artifacts)
+            .map(|artifact| json!({"name": artifact.name, "sha256": artifact.sha256}))
+            .collect::<Vec<_>>(),
     })
 }
 
@@ -232,7 +236,7 @@ fn contains_word(hay: &str, needle: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ci::ctx::TestCase;
+    use crate::ci::ctx::{Artifact, TestCase};
     use crate::testutil::TempDir;
 
     const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -256,15 +260,30 @@ mod tests {
                     case("ci::tests::helper", true),
                 ],
                 skipped: vec!["sensitive-words".to_owned()],
+                artifacts: Vec::new(),
             },
             JobReport {
-                name: "e2e",
+                name: "perf",
                 outcome: Outcome::NotImplemented,
                 passed: 0,
                 failed: 0,
                 duration_ms: 0,
                 cases: Vec::new(),
                 skipped: Vec::new(),
+                artifacts: Vec::new(),
+            },
+            JobReport {
+                name: "e2e",
+                outcome: Outcome::Pass,
+                passed: 1,
+                failed: 0,
+                duration_ms: 9000,
+                cases: Vec::new(),
+                skipped: Vec::new(),
+                artifacts: vec![Artifact {
+                    name: "Cupper E2E.app".to_owned(),
+                    sha256: "ab".repeat(32),
+                }],
             },
         ];
         build(&Run {
@@ -292,12 +311,17 @@ mod tests {
         );
         assert_eq!(summary["jobs"][1]["result"], "not_implemented");
         assert_eq!(summary["jobs"][0]["skipped"], json!(["sensitive-words"]));
+        assert_eq!(
+            summary["artifacts"],
+            json!([{"name": "Cupper E2E.app", "sha256": "ab".repeat(32)}])
+        );
 
         for (object, extra) in [
             ("", "hostname"),
             ("/toolchain", "rustup_home"),
             ("/jobs/0", "log"),
             ("/results/0", "author"),
+            ("/artifacts/0", "path"),
         ] {
             let mut bad = summary.clone();
             let map = bad.pointer_mut(object).and_then(Value::as_object_mut);

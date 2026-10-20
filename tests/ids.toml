@@ -270,6 +270,11 @@ UNIT-md-injection = "pr"
 UI-stream-markdown = "pr"
 UI-stream-tools = "pr"
 
+# 请求面板与用户气泡的全文（计划 v1.3.37 由 T165 拆出）
+[T168]
+milestone = "M1a"
+UNIT-blob-fulltext = "pr"
+
 # CLI 提权（宿主侧）
 [T038]
 milestone = "M1a"
@@ -723,6 +728,7 @@ UI-composer = "pr"
 milestone = "M1a"
 E2E-single-instance = "nightly"
 E2E-quit-confirm = "nightly"
+UNIT-ci-e2e = "pr"
 
 # NFR-1 验收套件
 [T091]

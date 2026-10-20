@@ -60,7 +60,7 @@ use crate::driver::api::{
     ProjectConfigPolicy,
 };
 use crate::durations::Durations;
-use crate::gateway::{AuditEvent, AuditRecord, Call};
+use crate::gateway::{AuditEvent, AuditRecord, Call, ConfigState, TrustChange};
 use crate::git::GitTool;
 use crate::index::{ScanContext, git_of};
 use crate::ledger::{Outcome, Ticket};
@@ -168,6 +168,8 @@ struct Rescan {
     stale: bool,
     /// Why the rescan failed; it then counts as untrusted.
     failure: Option<String>,
+    /// The scan itself failed: `project.trust.scan_failed`.
+    scan_failed: bool,
     scan: Option<Scan>,
 }
 
@@ -696,6 +698,20 @@ impl SessionActor {
         if let Some(scan) = found.scan.clone().filter(|_| found.stale) {
             self.parts.index.rescanned(&self.parts.project, scan);
         }
+        if let Some(error) = found.failure.clone().filter(|_| found.scan_failed) {
+            let (project_id, change) = (
+                self.parts.project.clone(),
+                TrustChange::ScanFailed { error },
+            );
+            let event = AuditEvent::ProjectTrust { project_id, change };
+            let at_ms = self.parts.clock.now_wall_ms();
+            // Nobody listening is the receiver's choice.
+            let _ = self.parts.audit.send(AuditRecord {
+                at_ms,
+                conn: None,
+                event,
+            });
+        }
         self.load_wanted |= found.trusted && !self.ignore_for_good;
         let blocked = self.load_wanted && !found.trusted;
         let mut step = Step::default();
@@ -862,33 +878,39 @@ impl SessionActor {
     }
 
     /// The session enters `config_unconfirmed`, or leaves it: the
-    /// configuration says so, and the audit records the entry.
+    /// configuration says so, and the audit records which, with the actual
+    /// tier and its setter (the one this step set, when it did).
     fn unconfirmed(&mut self, reason: Option<ConfirmationReason>, step: &mut Step) {
         let required = reason.clone().map(|reason| ConfirmationRequired {
             reason,
             config_digest: config_digest(&self.parts.configured),
         });
-        self.parts.configured.confirmation_required = required;
+        let left = mem::replace(&mut self.parts.configured.confirmation_required, required);
         let configured = self.parts.configured.clone();
         step.events.push(EventBody::SessionConfigured(configured));
-        if let Some(reason) = reason {
-            let mode = self
-                .parts
-                .configured
-                .config
-                .get(ConfigOptionId::PermissionMode.as_str());
-            let event = AuditEvent::ConfigUnconfirmed {
-                session_id: self.parts.id.clone(),
-                reason,
-                mode: mode.cloned(),
-            };
-            let at_ms = self.parts.clock.now_wall_ms();
-            step.audit.push(AuditRecord {
-                at_ms,
-                conn: None,
-                event,
-            });
-        }
+        let set_by = step.set_by.as_ref().map(|(by, _)| by);
+        let config = ConfigState {
+            session_id: self.parts.id.clone(),
+            mode: (self.parts.configured.config)
+                .get(ConfigOptionId::PermissionMode.as_str())
+                .cloned(),
+            tier: self.tier(),
+            set_by: set_by.unwrap_or(self.parts.core.setter()).clone(),
+        };
+        let event = match (reason, left) {
+            (Some(reason), _) => AuditEvent::ConfigUnconfirmed { reason, config },
+            (None, Some(left)) => AuditEvent::ConfigConfirmed {
+                reason: left.reason,
+                config,
+            },
+            (None, None) => return,
+        };
+        let at_ms = self.parts.clock.now_wall_ms();
+        step.audit.push(AuditRecord {
+            at_ms,
+            conn: None,
+            event,
+        });
     }
 
     /// Feeds each timer due now to the core, one step each: a step may
@@ -1030,7 +1052,12 @@ async fn rescan(readers: Readers, project: ProjectId, cwd: PathBuf, mut cx: Scan
         trusted: false,
         stale: false,
         failure: Some(code.into()),
+        scan_failed: false,
         scan: None,
+    };
+    let scan_failed = |code: &str| Rescan {
+        scan_failed: true,
+        ..fail(code)
     };
     let row = readers.read(move |conn| {
         let trust = conn
@@ -1061,8 +1088,8 @@ async fn rescan(readers: Readers, project: ProjectId, cwd: PathBuf, mut cx: Scan
     let scan = tokio::task::spawn_blocking(move || trust::scan(&path, root.as_deref())).await;
     let scan = match scan {
         Ok(Ok(scan)) => scan,
-        Ok(Err(err)) => return fail(err.code()),
-        Err(_) => return fail("scan_failed"),
+        Ok(Err(err)) => return scan_failed(err.code()),
+        Err(_) => return scan_failed("scan_failed"),
     };
     let digest = digest.and_then(|digest| digest.parse().ok());
     let before = TrustState::from(state.as_str());
@@ -1071,6 +1098,7 @@ async fn rescan(readers: Readers, project: ProjectId, cwd: PathBuf, mut cx: Scan
         trusted: state == TrustState::Trusted,
         stale: before == TrustState::Trusted && state == TrustState::Stale,
         failure: None,
+        scan_failed: false,
         scan: Some(scan),
     }
 }
