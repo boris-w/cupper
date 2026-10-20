@@ -1,17 +1,18 @@
-//! Structured redaction of raw frames (design 5.11.2): account fields and
-//! credentials in known formats, nothing else. Raw frames must stay usable for
-//! recomputing history, so the log redaction's long-string rule does not apply
-//! and every other byte of a line is kept.
+//! Structured redaction (design 5.11.2), the tier for raw frames: account
+//! fields and credentials in known formats, nothing else. Raw frames must stay
+//! usable for recomputing history, so the long-string rule of the full tier
+//! ([`super::full`]) does not apply and every other byte of a line is kept.
+//! The credential rules live here once; the full tier calls them too.
 
 use std::borrow::Cow;
 
 use serde_json::{Map, Value, json};
 
 /// The extension notification that carries the login state (K16).
-pub(crate) const AUTH_STATUS_METHOD: &str = "_auth/status_update";
+pub const AUTH_STATUS_METHOD: &str = "_auth/status_update";
 
 /// Replaces the secret part of a credential.
-const REDACTED: &str = "<redacted>";
+pub const REDACTED: &str = "<redacted>";
 
 /// Prefixes of common API keys and tokens; what follows them is the secret.
 const KEY_PREFIXES: &[&str] = &[
@@ -34,7 +35,7 @@ const MIN_KEY_LEN: usize = 16;
 /// A redacted copy of an `_auth/status_update` notification that keeps only
 /// the login kind and the plan name (`kind`, `label`, `account.plan`); `None`
 /// for any other message.
-pub(crate) fn account_fields(msg: &Value) -> Option<Value> {
+pub fn account_fields(msg: &Value) -> Option<Value> {
     if msg.get("method")?.as_str()? != AUTH_STATUS_METHOD {
         return None;
     }
@@ -55,7 +56,7 @@ pub(crate) fn account_fields(msg: &Value) -> Option<Value> {
 
 /// `text` with every credential in a known format masked: API keys by
 /// prefix, JWTs, `Bearer` tokens, and the userinfo and query of URLs.
-pub(crate) fn credentials(text: &str) -> Cow<'_, str> {
+pub fn credentials(text: &str) -> Cow<'_, str> {
     let bytes = text.as_bytes();
     let mut out = String::new();
     let mut copied = 0;
