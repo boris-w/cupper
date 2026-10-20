@@ -126,9 +126,11 @@ async fn write(to: &mut (impl AsyncWrite + Unpin), line: &str) -> io::Result<()>
     to.flush().await
 }
 
-/// What the host's messages stand for, learned as they match.
-#[derive(Default)]
-struct Mapping {
+/// What the host's messages stand for, learned as they match. The B-layer
+/// golden runner, which plays the adapter inside the host's process, uses
+/// it too (T065).
+#[derive(Debug, Default)]
+pub struct Mapping {
     /// The host's id of each recorded request, by the recorded id's JSON.
     ids: HashMap<String, Value>,
     /// Recorded path and the host's, longest recorded first.
@@ -148,7 +150,7 @@ impl Diff {
 
 impl Mapping {
     /// Whether the host's message matches the recorded one.
-    fn check(&mut self, expected: &Value, actual: &Value) -> Result<(), Diff> {
+    pub fn check(&mut self, expected: &Value, actual: &Value) -> Result<(), Diff> {
         let (mut expected, mut actual) = (expected.clone(), actual.clone());
         let ids = match (expected.as_object_mut(), actual.as_object_mut()) {
             (Some(e), Some(a)) => (e.remove("id"), a.remove("id")),
@@ -217,7 +219,7 @@ impl Mapping {
 
     /// A recorded frame as it goes to the host: its paths and the id of a
     /// response are the host's.
-    fn outgoing(&self, seq: u64, message: &Value) -> Result<Value, ReplayError> {
+    pub fn outgoing(&self, seq: u64, message: &Value) -> Result<Value, ReplayError> {
         let mut message = self.host_paths(message.clone());
         if message.get("method").is_none()
             && let Some(id) = message.get_mut("id")
