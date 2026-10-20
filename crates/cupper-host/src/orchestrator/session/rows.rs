@@ -226,6 +226,11 @@ impl Rows {
         self.session(session, at, "project_config_ignored = 1", Vec::new());
     }
 
+    /// The first message left the machine's hold for a turn or the queue.
+    pub(super) fn first_taken(&mut self, session: &SessionId, at: u64) {
+        self.session(session, at, "initial_prompt_json = NULL", Vec::new());
+    }
+
     /// The agent's session to resume, from an attach.
     pub(super) fn agent_session(&mut self, session: &SessionId, at: u64, id: String) {
         self.session(session, at, "agent_session_id = ?3", vec![Value::Text(id)]);

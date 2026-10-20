@@ -287,8 +287,9 @@ impl Fixture {
     /// The host stops without its orderly exit and starts again: the
     /// sessions' actors stop with their mailboxes, the startup cleanup ends
     /// in the rows what ran (design 5.2.13), and the sessions load from the
-    /// store when calls come for them.
-    pub fn restart(&mut self) {
+    /// store when calls come for them, or at once for a first message that
+    /// never started a turn.
+    pub async fn restart(&mut self) {
         let run = Self::run(&self.dir, &self.clock, &self.writer, self.git.clone());
         (
             self.routes,
@@ -301,6 +302,7 @@ impl Fixture {
         self.events = None;
         let conn = rusqlite::Connection::open(self.dir.host_db()).unwrap();
         end_previous_run(&conn, self.clock.now_wall_ms()).unwrap();
+        self.manager.reopen().await;
     }
 
     pub async fn call(&self, by: Principal, method: &str, params: Value) -> Result<Value, Value> {
