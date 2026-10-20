@@ -142,7 +142,7 @@
 |---|---|---|---|---|---|---|---|
 | `project/add` | 请求 | `{command_id, path}` | `{project_id, trust: {state, findings, findings_omitted?, trust_digest}}`（同一路径重复添加返回已有的 ID；扫描范围里没有文件时直接为 `trusted`，否则为 `untrusted`） | `not_found`（路径不存在） | 命令 | write | M1a |
 | `project/trust` | 请求 | `{command_id, project_id, trust_digest}` | `{trust_state}` | `conflict/digest_mismatch`（确认之后项目配置又变了）、`unavailable/scan_failed` | 命令 | privileged（只能经原生确认，[5.2.6](02-host.md#项目信任)） | M1a |
-| `project/trust_info` | 请求 | `{project_id}` | `{state, findings, findings_omitted?, trust_digest, diff_from_trusted?, diff_omitted?}`：重新扫描，供主进程弹原生确认框 | `not_found` | 天然 | read | M1a |
+| `project/trust_info` | 请求 | `{project_id}` | `{path, state, findings, findings_omitted?, trust_digest, diff_from_trusted?, diff_omitted?}`：重新扫描，供主进程弹原生确认框；`path` 是添加项目时解析出的目录（T135），确认框据此显示是哪个项目 | `not_found` | 天然 | read | M1a |
 | `project/remove` | 请求 | `{command_id, project_id}` | `{}`（项目下的会话一并归档） | `conflict`（有运行中的回合） | 命令 | write | M1b |
 | `agents/capabilities` | 请求 | `{agent}` | 该 agent 最近一次的能力描述（[5.3.7](#537-会话能力描述)）及其采集时间 | `unavailable`（CLI 或运行时不可用，带 `reason`） | 天然 | read | M1a |
 | `agents/refresh` | 请求 | `{agent}` | `{status}`：重新发现 CLI、检查版本；能力缓存为空时做一次探测 | `unavailable` | 天然 | write | M1a |
@@ -711,7 +711,7 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
   - `trust_project`：`{project_id, trust_digest}`；
   - `confirm_config`：`{session_id, config_digest}`；
   - `full_access`：
-    - 来自 `session/create`：`{agent, project_id, mode}`；
+    - 来自 `session/create`：`{agent, project_id, project_path, mode}`（`project_path` 由 T135 加，宿主不认识该项目时为 `null`）；
     - 来自 `session/set_config`：`{session_id, mode}`；
     - 来自 `interaction/respond`：与 `privileged_option` 相同，另加 `mode`；
   - `privileged_option`：`{session_id, request_id, option_id, kind, effect}`；
