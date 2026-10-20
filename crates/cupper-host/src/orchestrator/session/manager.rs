@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use cupper_protocol::annotations::WirePath;
@@ -30,7 +30,7 @@ use rusqlite::OptionalExtension;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 
-use super::actor::{Mail, Parts, SessionActor};
+use super::actor::{Mail, Parts, SessionActor, Stop};
 use super::core::SessionCore;
 use super::rows::Rows;
 use super::{IndexNotes, internal, not_found, parse, tier_of};
@@ -45,6 +45,7 @@ use crate::policy::{self, Confirmable, Facts};
 use crate::quiescence::{ActorKind, Quiescence};
 use crate::store::streams::{Batch, StreamView, Streams};
 use crate::store::{Durability, Readers, Writer};
+use crate::supervisor::{Activity, Part};
 
 /// The session actors in the quiescence barrier.
 pub const SESSION: ActorKind = ActorKind::new("session");
@@ -82,7 +83,9 @@ struct Shared {
 #[derive(Debug)]
 struct Handle {
     mail: mpsc::UnboundedSender<Mail>,
+    stop: mpsc::UnboundedSender<Stop>,
     running: Arc<AtomicBool>,
+    pending: Arc<AtomicU32>,
 }
 
 impl SessionManager {
@@ -208,7 +211,9 @@ impl SessionManager {
             setter,
         );
         let (mail, inbox) = mpsc::unbounded_channel();
+        let (stop, stops) = mpsc::unbounded_channel();
         let running = Arc::new(AtomicBool::new(false));
+        let pending = Arc::new(AtomicU32::new(0));
         let parts = Parts {
             id: id.clone(),
             core,
@@ -224,6 +229,7 @@ impl SessionManager {
             configured,
             cached,
             running: Arc::clone(&running),
+            pending: Arc::clone(&pending),
             audit: deps.audit.clone(),
             index: Arc::clone(&deps.index),
         };
@@ -234,8 +240,14 @@ impl SessionManager {
             reply_to: None,
         };
         let participant = deps.quiescence.enter(SESSION);
-        tokio::spawn(SessionActor::run(parts, inbox, first, participant));
-        self.sessions().insert(id, Handle { mail, running });
+        tokio::spawn(SessionActor::run(parts, inbox, stops, first, participant));
+        let handle = Handle {
+            mail,
+            stop,
+            running,
+            pending,
+        };
+        self.sessions().insert(id, handle);
         if let Some(completion) = completion {
             completion.committed();
         }
@@ -348,6 +360,32 @@ fn refuse(call: Call, err: RpcError) -> Reply {
         ticket.reject(err.clone());
     }
     Box::pin(future::ready(Err(err)))
+}
+
+impl Part for SessionManager {
+    fn activity(&self) -> Activity {
+        let pending = self
+            .sessions()
+            .values()
+            .map(|h| h.pending.load(Ordering::Relaxed))
+            .sum();
+        Activity {
+            running_turns: self.running_turns(),
+            pending_interactions: pending,
+        }
+    }
+
+    /// Every session takes the exit; when `force`d, their running turns
+    /// complete `interrupted` (design 5.2.13).
+    fn stop(&self, force: bool) -> BoxFuture<'static, ()> {
+        let sessions = self.sessions();
+        let stopped = sessions.values().map(|handle| {
+            let (done, stopped) = oneshot::channel();
+            let _ = handle.stop.send((force, done));
+            stopped
+        });
+        Box::pin(future::join_all(stopped.collect::<Vec<_>>()).map(drop))
+    }
 }
 
 impl Port for SessionManager {

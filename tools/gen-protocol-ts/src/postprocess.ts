@@ -16,6 +16,9 @@
  *   of passing as unknown; the event then degrades as a whole.
  * - `events.gen.ts`: the known event types as literals, and a guard that
  *   narrows an event to them only when its data matches its type.
+ * - `methods.gen.ts`: the method catalog of `x-methods`, each request's and
+ *   client notification's scope and idempotency (design 5.3.4), for the
+ *   desktop's command allowlist (design 5.7.8).
  *
  * Each rewrite checks that it applied wherever the schema says it should, so
  * a hey-api upgrade that changes its output fails here instead of quietly.
@@ -37,6 +40,7 @@ export interface Schema {
   title: string;
   "x-protocol-version": number;
   $defs: Record<string, Node>;
+  "x-methods": Record<"requests" | "client_notifications", Record<string, Node>>;
 }
 
 /** The first line of every generated file. */
@@ -123,7 +127,12 @@ export function postprocess(
     );
     zod = zod.replace(statement, refined);
   }
-  return { "types.gen.ts": types, "zod.gen.ts": zod, "events.gen.ts": eventsModule(defs) };
+  return {
+    "types.gen.ts": types,
+    "zod.gen.ts": zod,
+    "events.gen.ts": eventsModule(defs),
+    "methods.gen.ts": methodsModule(schema["x-methods"]),
+  };
 }
 
 /** Replaces the single match of `pattern`; fails on none or several. */
@@ -264,5 +273,39 @@ export function isKnownEvent<T extends { type: string; data?: unknown }>(
 ): event is Extract<T, { type: KnownEventType }> {
   return isKnownEventType(event.type) && DATA[event.type].safeParse(event.data).success;
 }
+`;
+}
+
+/** `x-methods` as data: name to scope and idempotency, sorted by name. */
+function methodsModule(methods: Schema["x-methods"]): string {
+  const catalog = (kind: "requests" | "client_notifications") =>
+    Object.entries(methods[kind])
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, method]) => {
+        const { "x-scope": scope, "x-idempotent": idempotent } = method;
+        if (typeof scope !== "string" || typeof idempotent !== "string") {
+          throw new Error(`${name} needs x-scope and x-idempotent`);
+        }
+        return `  ${JSON.stringify(name)}: { scope: ${JSON.stringify(scope)}, idempotent: ${JSON.stringify(idempotent)} },`;
+      })
+      .join("\n");
+  return `${HEADER}
+
+/** What a method needs and what calling it again does (design 5.3.4). */
+export interface MethodInfo {
+  /** \`none\`: no principal needs a scope for it, such as \`initialize\`. */
+  scope: string;
+  idempotent: string;
+}
+
+/** Every request a client may send. */
+export const METHODS: Readonly<Record<string, MethodInfo>> = {
+${catalog("requests")}
+};
+
+/** Every notification a client may send. */
+export const CLIENT_NOTIFICATIONS: Readonly<Record<string, MethodInfo>> = {
+${catalog("client_notifications")}
+};
 `;
 }

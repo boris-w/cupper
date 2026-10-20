@@ -8,5 +8,6 @@ pub mod api;
 pub mod claude;
 pub mod locate;
 pub mod probe;
+pub mod runtime;
 pub mod tap;
 pub mod transport;

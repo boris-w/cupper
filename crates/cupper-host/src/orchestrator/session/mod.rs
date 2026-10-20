@@ -1,4 +1,4 @@
-//! Session actors (design 5.2.6): one [`SessionActor`](actor) per session
+//! Session actors (design 5.2.6): one `SessionActor` per session
 //! runs its pure cores ([`core`]) on the session's mailbox, its agent's
 //! events, the clock and the store; the [`SessionManager`] starts them and
 //! serves the gateway's session port.
@@ -26,19 +26,11 @@ use serde_json::Value;
 
 pub use manager::{SESSION, SessionDeps, SessionManager};
 
-/// What the index (T034's `IndexActor`) hears from the sessions.
+/// What the index (`crate::index::IndexHandle`) hears from the sessions.
 pub trait IndexNotes: Send + Sync + fmt::Debug {
     /// The session's pending requests changed (design 5.2.7, step 4): how
     /// many there are, and the class of the oldest.
     fn pending(&self, session: &SessionId, count: u32, oldest: Option<PendingKind>);
-}
-
-/// The index until T034: it hears nothing.
-#[derive(Debug)]
-pub struct NoIndex;
-
-impl IndexNotes for NoIndex {
-    fn pending(&self, _: &SessionId, _: u32, _: Option<PendingKind>) {}
 }
 
 /// The tier of permission mode `mode` by the agent's mapping.

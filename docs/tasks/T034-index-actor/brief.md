@@ -57,3 +57,19 @@ T026、T033、T037、T088、T035、T096，以及 T098 的仓库档调用方式�
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计约 1,820–2,675 行，在写代码之前停下汇报，建议按任务书的例子拆分。
+
+**裁定：采用方案 A（计划 v1.3.19）。**
+- **T034 收窄为**：索引 actor 骨架与端口、`Part` 与检查点（含 `StreamWriter::checkpoint`）、启动第 7 步与对账、项目与信任（含帧上限的处理）、`clients`、`host`（含 `last_exit_abnormal`）、宿主组装与发现链。`IndexNotes` 先只接 `pending`。验收 IT-project-add-trust，以及对账与检查点的用例。上限约 1,500 行，硬停止线 1,600；推算贴线也先停下。
+- **新增 T100**（依赖 T034）：状态计算与 100 ms 合并、`IndexNotes` 扩充与会话 actor 的接线、已读与在场、通知意图、`agents` 的接口；UNIT-index-status、UNIT-index-intent 移过去。T046、T062 改为也依赖 T100。`tests/ids.toml` 已在 main 上改好。
+- **T047 仍只依赖 T034**：启动对账按 `sessions` 表补出会话摘要，PERF-index-snapshot 用得上；如果 T047 开工时发现还缺状态计算，由它停下汇报。
+
+执行者的 5 项待裁定：
+1. **帧上限**：认可执行者的方案。findings 和差异合计不超过 48,000 字节；单条 `detail` 先按字符边界截到 2,000 字节，末尾加 `…`；按顺序装入，装不下就停；协议附加可选字段 `TrustScan.findings_omitted?: u32`、`ProjectTrustInfoResult.diff_omitted?: u32`，跑 `pnpm gen`；摘要仍覆盖全部内容。不改成分页。
+2. **`GitTool` 的来源**：由本任务在 `Host::start` 里接上"登录 shell → `CliLocator` → git 路径"的发现链（test-harness 构建用 `test_config.login_env`）。**写成一个独立的函数，返回登录环境、`CliLocator` 和 `GitTool`**，T055 复用同一份结果，不另起一套；编排者已同步告知 T055 的执行者。git 不可用时 `project/add` 照常添加，`is_git = false`，扫描范围只是项目目录：认可。
+3. **启动时每次都按表对账**：认可。
+4. **`IndexNotes` 扩充改会话 actor**：归 T100，算它范围内的接线。
+5. **`host.updated.last_exit_abnormal`**：认可，在 T037 的组装代码里把 `LastExit` 传给 `IndexActor`。

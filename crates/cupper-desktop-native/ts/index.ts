@@ -94,10 +94,20 @@ export interface HostKey {
   readonly [hostKey]: true;
 }
 
+/** What a process runs: its executable, links resolved, and its cdhash. */
+export interface ProcessImage {
+  path: string;
+  cdhash: string;
+}
+
 interface NativeBase {
   buildInfo(): BuildInfo;
   /** Where the host of `dataDir` listens (design 5.2.13). */
   socketPath(dataDir: string): string;
+  /** Null when `pid` names no process of this user. */
+  processImage(pid: number): ProcessImage | null;
+  /** The cdhash of the signed code at `path`, a bundle or an executable. */
+  fileCdhash(path: string): string;
 }
 
 /** A release build: no startup payload; the host must satisfy the requirement. */

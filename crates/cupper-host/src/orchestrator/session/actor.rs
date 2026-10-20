@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::mem;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use cupper_protocol::annotations::TimestampMs;
 use cupper_protocol::canonical;
@@ -71,6 +71,8 @@ use crate::store::{Durability, Readers, Writer};
 
 /// A call and where its reply goes.
 pub(super) type Mail = (Call, oneshot::Sender<Outcome>);
+/// The host's exit, whether forced, and the reply once the session took it.
+pub(super) type Stop = (bool, oneshot::Sender<()>);
 
 /// What the actor starts with: its session's stream, its agent, and what an
 /// attach adds to the turn machine's target (design 5.2.6).
@@ -95,6 +97,8 @@ pub(super) struct Parts {
     pub cached: Option<Capabilities>,
     /// Set while a turn runs, for `running_turns`.
     pub running: Arc<AtomicBool>,
+    /// The pending requests, for `pending_interactions`.
+    pub pending: Arc<AtomicU32>,
     pub audit: mpsc::UnboundedSender<AuditRecord>,
     pub index: Arc<dyn IndexNotes>,
 }
@@ -147,6 +151,7 @@ impl SessionActor {
     pub(super) async fn run(
         parts: Parts,
         inbox: mpsc::UnboundedReceiver<Mail>,
+        mut stops: mpsc::UnboundedReceiver<Stop>,
         first: SendRequest,
         _participant: Participant,
     ) {
@@ -173,6 +178,13 @@ impl SessionActor {
                 },
                 Some(event) = agent.recv() => actor.agent(event).await,
                 Some(result) = attaches.recv() => actor.attach_done(result).await,
+                Some((force, done)) = stops.recv() => {
+                    if force {
+                        let exit = Input::Machine(turn::Input::HostExit);
+                        actor.input(exit, None, Step::default()).await;
+                    }
+                    let _ = done.send(());
+                }
                 () = actor.alarm.rung() => actor.expired().await,
             }
         }
@@ -488,6 +500,7 @@ impl SessionActor {
         if asks {
             let (count, oldest) = self.view(pending);
             let count = u32::try_from(count).unwrap_or(u32::MAX);
+            self.parts.pending.store(count, Ordering::Relaxed);
             self.parts.index.pending(&self.parts.id, count, oldest);
         }
         for command in driver {

@@ -89,8 +89,8 @@ impl fmt::Debug for LoginEnv {
 }
 
 /// Runs `shell -l -i -c <script>` with `base` as its environment and keeps
-/// [`KEPT`] and the names matching `wanted` (a name, or a prefix ending in
-/// `*` such as `LC_*`).
+/// `PATH`, the proxies and the like, and the names matching `wanted` (a
+/// name, or a prefix ending in `*` such as `LC_*`).
 pub async fn read(
     clock: &dyn Clock,
     durations: &Durations,

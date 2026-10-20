@@ -37,6 +37,7 @@ use crate::quiescence::Quiescence;
 use crate::store::streams::{Published, Push, Sink, Streams, StreamsConfig};
 use crate::store::testutil::{TempDir, host_writer, query};
 use crate::store::{Durability, Readers, WriterThread, log, open_reader};
+use crate::supervisor::{Activity, Part};
 
 type Attached = oneshot::Sender<Result<AttachInfo, AgentError>>;
 
@@ -172,6 +173,7 @@ pub(super) struct Fixture {
     events: Option<mpsc::UnboundedSender<DriverEvent>>,
     pub audit: mpsc::UnboundedReceiver<AuditRecord>,
     pub index: Arc<Index>,
+    pub manager: SessionManager,
     _writer: WriterThread,
 }
 
@@ -218,7 +220,8 @@ impl Fixture {
         };
         let conn = open_reader(&dir.host_db()).unwrap();
         let mut routes = Routes::new(Ledger::load(&conn, writer, shared, &durations).unwrap());
-        routes.sessions(Arc::new(SessionManager::new(deps)));
+        let manager = SessionManager::new(deps);
+        routes.sessions(Arc::new(manager.clone()));
         let (events, _writer) = (None, thread);
         Self {
             dir,
@@ -229,6 +232,7 @@ impl Fixture {
             events,
             audit,
             index,
+            manager,
             _writer,
         }
     }
@@ -453,6 +457,20 @@ async fn it_orch_lifecycle_interrupt_ends_the_turn_and_pauses_the_queue() {
         }
         assert_eq!(f.prompt().await.1, text("next"));
     }
+}
+
+#[tokio::test]
+async fn it_orch_lifecycle_forced_exit_interrupts_the_running_turn() {
+    let mut f = Fixture::new("host-exit").await;
+    let session = f.started().await;
+    f.ok("session/send", send(&session, "s-1", "next")).await;
+    assert_eq!(f.manager.activity().running_turns, 1);
+    f.manager.stop(true).await;
+    let bodies = f.events(&session, "turn.completed", 1).await;
+    assert_eq!(data(&bodies, "turn.completed")[0]["status"], "interrupted");
+    let queue = data(&bodies, "queue.updated").pop().unwrap();
+    assert_eq!(queue["paused"]["reason"], "turn_interrupted");
+    assert_eq!(f.manager.activity(), Activity::default());
 }
 
 #[tokio::test]

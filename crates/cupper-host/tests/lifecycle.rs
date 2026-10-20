@@ -1,7 +1,9 @@
 //! IT-lifecycle: the host as a process (design 5.2.13). What the previous run
 //! left running ends at startup, `host/exit` and SIGTERM exit in order, and
-//! a host that cannot start exits with the code of the startup contract. The
-//! test talks to the host as the CLI's `harness` client.
+//! a host that cannot start exits with the code of the startup contract, and
+//! a session runs a turn with the fake agent. IT-project-add-trust adds and
+//! trusts a project in a git repository built here. The tests talk to the
+//! host as the CLI's `harness` client.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -12,12 +14,15 @@ use cupper_cli::client::{self, ClientAuth, Incoming, Options};
 use cupper_cli::harness::HarnessKey;
 use cupper_cli::verify::HostCheck;
 use cupper_host::clock::{Clock, SystemClock};
+use cupper_host::driver::runtime::launch;
 use cupper_host::gateway::listen::HostLock;
 use cupper_host::gateway::testkit::{KEY, TempDir};
 use cupper_host::store::meta::{self, MetaKey};
 use cupper_host::store::{Database, MIGRATIONS, migrate, open_reader, open_writer};
+use cupper_protocol::ids::ProjectId;
 use cupper_protocol::methods::Empty;
 use cupper_protocol::methods::handshake::{HostExit, HostExitParams, HostStatus};
+use cupper_protocol::methods::session::SessionCreate;
 use cupper_protocol::proof;
 use cupper_protocol::transport::socket_path;
 use rusqlite::Connection;
@@ -27,8 +32,12 @@ const HOST: &str = env!("CARGO_BIN_EXE_cupper-host");
 /// How long the host may take to come up or to exit.
 const PATIENCE: Duration = Duration::from_secs(30);
 
-/// Starts the host on `data_dir` with [`KEY`] as `harness_key`.
+/// Starts the host on `data_dir` with [`KEY`] as `harness_key`, no login shell.
 fn spawn(data_dir: &Path) -> Child {
+    spawn_with(data_dir, json!({"login_env": {}}))
+}
+
+fn spawn_with(data_dir: &Path, test_config: serde_json::Value) -> Child {
     let mut child = Command::new(HOST)
         .arg("--data-dir")
         .arg(data_dir)
@@ -37,7 +46,7 @@ fn spawn(data_dir: &Path) -> Child {
         .stderr(Stdio::null())
         .spawn()
         .expect("start the host");
-    let payload = json!({"harness_key": proof::to_hex(&KEY)});
+    let payload = json!({"harness_key": proof::to_hex(&KEY), "test_config": test_config});
     writeln!(child.stdin.take().unwrap(), "{payload}").unwrap();
     child
 }
@@ -224,6 +233,37 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
 }
 
 #[tokio::test]
+async fn it_lifecycle_runs_a_turn_with_the_fake_agent() {
+    let dir = TempDir::new("turn");
+    let (data_dir, conn) = migrated(&dir);
+    let project = ProjectId::from_uuid(1).to_string();
+    let sql = "INSERT INTO projects (project_id, path, name, position, added_at, trust_state)
+               VALUES (?1, ?2, 'p', 0, 1, 'trusted')";
+    let path = dir.path().to_str().unwrap();
+    conn.execute(sql, [&project, path]).unwrap();
+    let program = launch::fake_agent();
+    let test_config = json!({"agents": {"claude": {"program": program}}, "login_env": {}});
+    let mut host = spawn_with(&data_dir, test_config);
+    let client = connect(&data_dir).await;
+    let params = json!({"command_id": client::command_id(), "agent": "claude",
+        "project_id": project, "workspace": {"kind": "local"},
+        "message": [{"type": "text", "text": "say hello"}]});
+    let params = serde_json::from_value(params).unwrap();
+    client.request::<SessionCreate>(params).await.unwrap();
+    let (clock, rows) = (SystemClock::new(), |sql| column(&data_dir, sql));
+    let give_up = clock.now_mono() + PATIENCE;
+    while rows("SELECT status FROM turns") != ["completed"] {
+        assert!(clock.now_mono() < give_up, "the turn did not complete");
+        wait(&clock).await;
+    }
+    terminate(&host);
+    assert_eq!(exit_code(&mut host).await, 0);
+    // The adapter stopped with the host.
+    let ended = rows("SELECT instance_id FROM adapters WHERE ended_at IS NOT NULL");
+    assert_eq!(ended.len(), 1);
+}
+
+#[tokio::test]
 async fn it_lifecycle_startup_failures_exit_3_to_6() {
     // 3: another host holds the lock.
     let dir = TempDir::new("running");
@@ -265,4 +305,95 @@ async fn it_lifecycle_startup_failures_exit_3_to_6() {
     .unwrap();
     drop(conn);
     assert_eq!(exit_code(&mut spawn(&data_dir)).await, 6);
+}
+
+/// A workspace two levels below its git root, with configuration at both:
+/// added, scanned up to the root, trusted, changed into `stale`, and, with
+/// 1,500 agents, a result that still fits one frame.
+#[tokio::test]
+async fn it_project_add_trust_through_the_gateway() {
+    use cupper_protocol::annotations::WirePath;
+    use cupper_protocol::index::TrustState;
+    use cupper_protocol::methods::project::{
+        ProjectAdd, ProjectAddParams, ProjectTrust, ProjectTrustInfo, ProjectTrustInfoParams,
+        ProjectTrustParams,
+    };
+
+    let dir = TempDir::new("projects");
+    let (repo, app) = (dir.path().join("repo"), dir.path().join("repo/apps/web"));
+    std::fs::create_dir_all(app.join(".claude/agents")).unwrap();
+    let git = Command::new("/usr/bin/git")
+        .args(["init", "-q"])
+        .arg(&repo)
+        .status();
+    assert!(git.unwrap().success());
+    let hooks =
+        r#"{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "acme-done"}]}]}}"#;
+    std::fs::create_dir_all(repo.join(".claude")).unwrap();
+    std::fs::write(repo.join(".claude/settings.json"), hooks).unwrap();
+    std::fs::write(
+        app.join(".mcp.json"),
+        r#"{"mcpServers": {"acme": {"url": "https://acme.invalid"}}}"#,
+    )
+    .unwrap();
+    let data_dir = dir.path().join("data");
+    let mut host = spawn_with(&data_dir, json!({"login_env": {"PATH": "/usr/bin:/bin"}}));
+    let client = connect(&data_dir).await;
+
+    let path = WirePath(app.to_str().unwrap().into());
+    let add = ProjectAddParams {
+        command_id: client::command_id(),
+        path,
+    };
+    let added = client.request::<ProjectAdd>(add).await.unwrap();
+    assert_eq!(added.trust.state, TrustState::Untrusted);
+    let found: Vec<_> = added
+        .trust
+        .findings
+        .iter()
+        .map(|f| (f.path.0.as_str(), f.detail.as_str()))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            ("../../.claude/settings.json", "Stop: acme-done"),
+            (".mcp.json", "acme: https://acme.invalid")
+        ]
+    );
+    let project_id = added.project_id;
+    let trust = ProjectTrustParams {
+        command_id: client::command_id(),
+        project_id: project_id.clone(),
+        trust_digest: added.trust.trust_digest,
+    };
+    let trusted = client.request::<ProjectTrust>(trust).await.unwrap();
+    assert_eq!(trusted.trust_state, TrustState::Trusted);
+
+    for n in 0..1_500 {
+        std::fs::write(
+            app.join(format!(".claude/agents/acme-agent-{n:04}.md")),
+            "---",
+        )
+        .unwrap();
+    }
+    let info = ProjectTrustInfoParams { project_id };
+    let info = client.request::<ProjectTrustInfo>(info).await.unwrap();
+    assert_eq!(info.state, TrustState::Stale);
+    let diff = info.diff_from_trusted.unwrap();
+    assert!(
+        diff.iter()
+            .all(|change| change.path.0.starts_with(".claude/agents/"))
+    );
+    assert_eq!(diff.len() + info.diff_omitted.unwrap() as usize, 1_500);
+    assert_eq!(
+        info.findings.len() + info.findings_omitted.unwrap() as usize,
+        1_502
+    );
+    let states = column(
+        &data_dir,
+        "SELECT trust_state || ' ' || (git_common_dir IS NOT NULL) FROM projects",
+    );
+    assert_eq!(states, ["stale 1"]);
+    terminate(&host);
+    assert_eq!(exit_code(&mut host).await, 0);
 }
