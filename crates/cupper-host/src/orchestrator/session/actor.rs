@@ -62,7 +62,7 @@ use crate::driver::api::{
 use crate::durations::Durations;
 use crate::gateway::{AuditEvent, AuditRecord, Call, ConfigState, TrustChange};
 use crate::git::GitTool;
-use crate::index::{ScanContext, git_of};
+use crate::index::{ScanContext, git_of, status_of};
 use crate::ledger::{Outcome, Ticket};
 use crate::orchestrator::interaction::{self, Respond};
 use crate::orchestrator::notice_with;
@@ -972,18 +972,9 @@ impl SessionActor {
             let failed = last.filter(|t| t.status == TurnStatus::Failed);
             (pending(view), failed.and_then(|t| t.error_code.clone()))
         });
-        let unread = ended > read;
-        let status = if pending.0 > 0 {
-            SessionStatus::NeedsAction
-        } else if self.parts.core.turn_id().is_some() {
-            SessionStatus::Running
-        } else if unread && last_failed.is_some() {
-            SessionStatus::Error
-        } else if unread {
-            SessionStatus::Unread
-        } else {
-            SessionStatus::Idle
-        };
+        let (unread, running) = (ended > read, self.parts.core.turn_id().is_some());
+        let count = u32::try_from(pending.0).unwrap_or(u32::MAX);
+        let status = status_of(count, running, unread, last_failed.is_some());
         let configured = &self.parts.configured;
         let summary = SessionSummary {
             session_id: self.parts.id.clone(),
@@ -996,7 +987,7 @@ impl SessionActor {
             error_code: last_failed.filter(|_| status == SessionStatus::Error),
             status,
             unread,
-            pending_interactions: u32::try_from(pending.0).unwrap_or(u32::MAX),
+            pending_interactions: count,
             pending_kind: pending.1.map(|(kind, _)| kind),
             last_activity_at: TimestampMs(active),
             read_only,

@@ -163,17 +163,7 @@ impl Entry {
 
     fn summary(&self) -> SessionSummary {
         let unread = self.ended > self.read;
-        let status = if self.pending > 0 {
-            SessionStatus::NeedsAction
-        } else if self.running {
-            SessionStatus::Running
-        } else if unread && self.failed {
-            SessionStatus::Error
-        } else if unread {
-            SessionStatus::Unread
-        } else {
-            SessionStatus::Idle
-        };
+        let status = status_of(self.pending, self.running, unread, self.failed);
         SessionSummary {
             error_code: self.code.clone().filter(|_| status == SessionStatus::Error),
             status,
@@ -182,6 +172,23 @@ impl Entry {
             pending_kind: self.oldest.as_ref().map(|(kind, _)| kind.clone()),
             ..self.base.clone()
         }
+    }
+}
+
+/// A session's status from its pending requests, whether a turn runs,
+/// whether a turn ended after the read mark, and whether the last turn that
+/// ended failed; `session/get` computes it the same way.
+pub(crate) fn status_of(pending: u32, running: bool, unread: bool, failed: bool) -> SessionStatus {
+    if pending > 0 {
+        SessionStatus::NeedsAction
+    } else if running {
+        SessionStatus::Running
+    } else if unread && failed {
+        SessionStatus::Error
+    } else if unread {
+        SessionStatus::Unread
+    } else {
+        SessionStatus::Idle
     }
 }
 
