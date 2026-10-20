@@ -1635,7 +1635,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T072 host-client II：视图 reducer 与交叉验证
 - [x] T073 cupper-desktop-native
 - [x] T074 桌面主进程 I：应用骨架、构建与加固基线
-- [ ] T075 桌面主进程 II：拉起宿主与 control 连接
+- [x] T075 桌面主进程 II：拉起宿主与 control 连接
 - [ ] T076 桌面主进程 III：windowBridge 与 preload
 - [ ] T077 桌面主进程 IV：真实输入、特权操作与 Q26
 - [ ] T078 测量闸门：主进程转发
