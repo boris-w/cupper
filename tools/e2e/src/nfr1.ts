@@ -53,6 +53,16 @@ export async function session(cupper: Cupper, script: string): Promise<string> {
   return `session/${String(session_id)}`;
 }
 
+/** A session on screen whose first turn is over; its stream. */
+export async function onScreen(cupper: Cupper, script: string): Promise<string> {
+  await cupper.launch();
+  await cupper.connected();
+  const stream = await session(cupper, script);
+  await untilEvent(cupper, stream, (event) => event.type === "turn.completed");
+  await openSession(cupper, script);
+  return stream;
+}
+
 /** The session's id, from its stream. */
 export const id = (stream: string) => stream.replace("session/", "");
 

@@ -2,8 +2,8 @@
 // preload puts on the main world's global object (design 5.1.2, 5.7.3). In
 // e2e builds only, `window.__cupperTest` reads the host client's sync
 // counters and state, and the views of the streams the window follows with
-// the seq each reached (design 5.9.9, E2E-NFR1-1); other builds do not
-// contain it.
+// the seq each reached (design 5.9.9, E2E-NFR1-1), and sends a command as the
+// window (E2E-SEC); other builds do not contain it.
 
 import "@cupper/ui-core/styles.css";
 
@@ -50,7 +50,19 @@ const onClient =
               return [stream, { seq: at, complete: view?.complete, view: view?.toJSON() }];
             }),
           );
-        const test = { counters: () => client.counters, state: () => client.state, views };
+        // A command as the window would send it, through the main process's
+        // checks: its result, or the error the bridge or the host gave.
+        const command = (method: string, params: Record<string, unknown>) =>
+          client.command(method, params).then(
+            (result) => ({ result }),
+            (error: unknown) => ({ error: (error as { error?: unknown }).error ?? String(error) }),
+          );
+        const test = {
+          counters: () => client.counters,
+          state: () => client.state,
+          views,
+          command,
+        };
         Object.assign(globalThis, { __cupperTest: test });
       }
     : undefined;

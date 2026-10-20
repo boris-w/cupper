@@ -758,6 +758,7 @@ E2E-NFR1-5 = "pr"
 # 安全 e2e I：窗口内（计划 v1.3.44 拆出 T176）
 [T092]
 milestone = "M1a"
+UNIT-cli-exit-codes = "pr"
 E2E-SEC-csp = "pr"
 E2E-SEC-real-input = "pr"
 E2E-SEC-panel-arming = "pr"
