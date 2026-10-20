@@ -19,25 +19,33 @@
 //! - The tier guard hears of the permission mode; its interrupt and gate go
 //!   to the machine, its revert to the agent, and `config_unconfirmed` comes
 //!   with a notice.
+//! - A session loaded from the store starts with [`Input::Restored`]: each
+//!   core takes its part, and what the previous run left open in the stream
+//!   is written (design 5.2.13).
 
 use std::mem;
 use std::sync::Arc;
 
+use cupper_protocol::annotations::{DurationMs, TimestampMs};
 use cupper_protocol::capabilities::ConfigOptionId;
+use cupper_protocol::domain::Tier;
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{AdapterInstanceId, PrincipalId, RequestId, SessionId, TurnId};
-use cupper_protocol::interaction::InteractionStatus;
+use cupper_protocol::interaction::{InteractionResolved, InteractionStatus, ResolutionReason};
 use cupper_protocol::item::NoticeCode;
 use cupper_protocol::methods::handshake::Principal;
-use cupper_protocol::session::PauseReason;
+use cupper_protocol::session::{ConfirmationReason, PauseReason, TurnCompleted, TurnStatus};
 
 use crate::clock::{IdGen, Now};
-use crate::driver::api::{AskAnswer, AskId, AskRequest, DriverCommand, DriverEvent};
+use crate::driver::api::{
+    AgentSessionId, AskAnswer, AskId, AskRequest, DriverCommand, DriverEvent,
+};
 use crate::durations::Durations;
 use crate::orchestrator::autonomous::{self, AutonomousJudge, JudgeTimer};
 use crate::orchestrator::coalescer::{self, Coalescer, FlushTimer};
 use crate::orchestrator::interaction::{self, InteractionBroker};
 use crate::orchestrator::notice;
+use crate::orchestrator::queue::QueueCore;
 use crate::orchestrator::tier_guard::{self, RevertTimer, TierGuard};
 use crate::orchestrator::turn::{self, TurnMachine, TurnSignal, TurnTimer};
 use crate::pure::{Core, TimerRequest};
@@ -69,6 +77,29 @@ pub enum Input {
     /// turn runs.
     Tier(tier_guard::Input),
     Expired(Key),
+    /// The session was loaded from the store; its first input.
+    Restored(Box<Restored>),
+}
+
+/// A session as the store has it, and what the previous run left open in
+/// its stream (T089).
+#[derive(Debug, Clone)]
+pub struct Restored {
+    pub agent_session: Option<AgentSessionId>,
+    pub last_turn_no: u32,
+    pub queue: QueueCore,
+    /// The reasons the gate was shut for, as far as the store tells.
+    pub gate: Vec<PauseReason>,
+    /// The last permission mode, with its tier.
+    pub mode: Option<(String, Tier)>,
+    pub unconfirmed: Option<ConfirmationReason>,
+    /// The requests that ended, for the broker.
+    pub ended: Vec<InteractionResolved>,
+    /// The requests the stream still has pending: the host's exit ended them.
+    pub expired: Vec<RequestId>,
+    /// The turn the stream still has running: its ID, its start, and its end
+    /// as the startup cleanup recorded it.
+    pub interrupted: Option<(TurnId, TimestampMs, TimestampMs)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -308,9 +339,50 @@ impl SessionCore {
         }
     }
 
-    /// Steps the guard and carries out what the session's cores do for it.
+    /// Each core takes its part of a loaded session; then the requests the
+    /// previous run left pending expire and its running turn completes
+    /// `interrupted`, in the stream's order (design 5.2.13).
+    fn restore(&mut self, restored: Restored, now: Now, out: &mut Vec<Action>) {
+        self.broker(interaction::Input::Ended(restored.ended), now, out);
+        for request_id in restored.expired {
+            let resolved = InteractionResolved {
+                request_id,
+                status: InteractionStatus::Expired,
+                outcome: None,
+                resolved_by: None,
+                reason: Some(ResolutionReason::HostRestarted),
+            };
+            out.push(Action::Event(EventBody::InteractionResolved(resolved)));
+        }
+        if let Some((turn_id, started, ended_at)) = restored.interrupted {
+            let completed = TurnCompleted {
+                turn_id,
+                status: TurnStatus::Interrupted,
+                stop_reason: None,
+                ended_at,
+                duration_ms: DurationMs(ended_at.0.saturating_sub(started.0)),
+                usage: None,
+                error_code: None,
+                final_item_ids: Vec::new(),
+            };
+            out.push(Action::Event(EventBody::TurnCompleted(completed)));
+        }
+        let (session, turn_no) = (restored.agent_session, restored.last_turn_no);
+        let paused = (self.machine).restore(session, turn_no, restored.queue, restored.gate);
+        out.extend(paused.map(|update| Action::Event(EventBody::QueueUpdated(update))));
+        let guarded = self.guard.restore(restored.mode, restored.unconfirmed);
+        self.guarded(guarded, now, out);
+    }
+
+    /// Steps the guard.
     fn tier(&mut self, input: tier_guard::Input, now: Now, out: &mut Vec<Action>) {
-        for action in self.guard.step(input, now) {
+        let actions = self.guard.step(input, now);
+        self.guarded(actions, now, out);
+    }
+
+    /// Carries out what the session's cores do for the guard.
+    fn guarded(&mut self, actions: Vec<tier_guard::Action>, now: Now, out: &mut Vec<Action>) {
+        for action in actions {
             match action {
                 tier_guard::Action::Revert(value) => {
                     let Some(session) = self.machine.agent_session().cloned() else {
@@ -432,6 +504,7 @@ impl Core for SessionCore {
             Input::Expired(Key::Flush(key)) => {
                 self.coalesce(coalescer::Input::Expired(key), now, &mut out)
             }
+            Input::Restored(restored) => self.restore(*restored, now, &mut out),
         }
         out
     }
