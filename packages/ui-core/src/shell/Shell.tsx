@@ -11,6 +11,7 @@ import { ChevronDownIcon, MoreIcon, PaneIcon } from "../components/icons";
 import { Menu } from "../components/Menu";
 import { ToolbarButton } from "../components/ToolbarButton";
 import { ConnectionToast } from "../feedback/ConnectionToast";
+import { SidebarFooter, SidebarHeader, SidebarList } from "../sidebar";
 import { computeLayout, ratioOf, type Layout, type Viewport } from "../layout/layout";
 import type { LayoutStore } from "../layout/store";
 import { Splitter } from "./Splitter";
@@ -173,8 +174,8 @@ function Sidebar({ layout, store }: { layout: Layout; store: LayoutStore }) {
       <div className="flex h-8 shrink-0 items-center px-4">
         {slots.sidebarHeader ?? <SidebarHeader />}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">{slots.sidebarList}</div>
-      <div className="shrink-0">{slots.sidebarFooter}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto">{slots.sidebarList ?? <SidebarList />}</div>
+      <div className="shrink-0">{slots.sidebarFooter ?? <SidebarFooter />}</div>
       <Splitter
         label={t("shell:resize_sidebar")}
         edge="right"
@@ -183,31 +184,5 @@ function Sidebar({ layout, store }: { layout: Layout; store: LayoutStore }) {
         onResize={(width, done) => store.set("sidebarWidth", width, done)}
       />
     </aside>
-  );
-}
-
-const STATUS_DOT = {
-  connecting: "bg-accent",
-  handshaking: "bg-accent",
-  reconnecting: "bg-accent",
-  ready: "bg-status-connected",
-  failed: "bg-status-error",
-  closed: "bg-status-disconnected",
-} as const;
-
-/** The product name and the host's status dot (design 5.7.4); T081 may replace it. */
-function SidebarHeader() {
-  const t = useT();
-  const { state } = useHost();
-  return (
-    <div className="flex items-center gap-2 text-base font-medium">
-      {t("shell:product")}
-      <span
-        role="img"
-        aria-label={t(`shell:host_${state.status}`)}
-        title={t(`shell:host_${state.status}`)}
-        className={`size-2 rounded-full ${STATUS_DOT[state.status]}`}
-      />
-    </div>
   );
 }
