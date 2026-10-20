@@ -247,6 +247,29 @@ milestone = "M1a"
 UNIT-audit-format = "pr"
 IT-audit-retention = "pr"
 
+# 审计产生者补全（计划 v1.3.32）
+[T163]
+milestone = "M1a"
+UNIT-audit-producers = "pr"
+
+# 输入框的长文本（计划 v1.3.33 由 T086 拆出）
+[T164]
+milestone = "M1a"
+UNIT-composer-long-text = "pr"
+
+# ui-core V-b：拒绝并附消息、请求记录行与多请求（计划 v1.3.34 由 T083 拆出）
+[T165]
+milestone = "M1a"
+UNIT-request-followup = "pr"
+UI-request-records = "pr"
+
+# ui-core IV-b：消息流 II：消息行与 Markdown（计划 v1.3.35 由 T082 拆出）
+[T166]
+milestone = "M1a"
+UNIT-md-injection = "pr"
+UI-stream-markdown = "pr"
+UI-stream-tools = "pr"
+
 # CLI 提权（宿主侧）
 [T038]
 milestone = "M1a"
@@ -331,6 +354,7 @@ UNIT-mirror = "pr"
 [T046]
 milestone = "M1a"
 IT-cli-commands = "pr"
+UNIT-cli-args = "pr"
 
 # test-harness 测试接口、录制导出与宿主性能
 [T047]
@@ -639,10 +663,8 @@ UNIT-ui-session-banners = "pr"
 # ui-core IV：消息流
 [T082]
 milestone = "M1a"
-UNIT-md-injection = "pr"
-UI-stream-markdown = "pr"
-UI-stream-tools = "pr"
 UNIT-stream-anchor = "pr"
+UNIT-stream-rows = "pr"
 
 # ui-core V：请求面板与请求记录行
 [T083]
@@ -693,7 +715,6 @@ UI-new-session = "pr"
 [T086]
 milestone = "M1a"
 UNIT-composer-ime = "pr"
-UNIT-composer-long-text = "pr"
 UNIT-composer-esc = "pr"
 UI-composer = "pr"
 

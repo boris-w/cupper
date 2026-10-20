@@ -1,0 +1,22 @@
+{
+  "placeholder": "和 {{agent}} 一起工作",
+  "placeholder_new": "描述你要做的事",
+  "placeholder_running": "处理中…",
+  "send": "发送",
+  "stop": "停止",
+  "esc_hint": "再按一次 Esc 停止",
+  "no_project": "先添加一个项目",
+  "send_failed": "消息没有发出（{{code}}）",
+  "remove": "移除",
+  "attachment_image": "图片",
+  "attachment_comment": "评论：{{path}} 第 {{line}} 行",
+  "attachment_other": "附件",
+  "queue_images": "{{count}} 张图片",
+  "queue_comments": "{{count}} 条评论",
+  "queue_paused_turn_interrupted": "队列已暂停，因为你中断了回合",
+  "queue_paused_turn_failed": "队列已暂停，因为回合失败了",
+  "queue_paused_other": "队列已暂停",
+  "resume": "继续",
+  "paused_send": "队列已暂停。发出这条消息，并让队列继续吗？",
+  "cancel": "取消"
+}

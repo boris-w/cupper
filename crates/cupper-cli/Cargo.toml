@@ -39,7 +39,8 @@ serde_json.workspace = true
 thiserror.workspace = true
 # `time` is unused, but without it clippy's `disallowed-methods` entries for
 # tokio's timers do not resolve when this crate is linted on its own.
-tokio = { version = "1.53.3", features = ["io-util", "net", "rt", "sync", "time"] }
+# `io-std`: `repl` reads its commands from stdin.
+tokio = { version = "1.53.3", features = ["io-std", "io-util", "net", "rt", "sync", "time"] }
 uuid = { version = "1.28.0", default-features = false, features = ["std", "v7"] }
 
 [dev-dependencies]

@@ -242,6 +242,7 @@ impl Fixture {
             audit: records,
             index: Arc::clone(&index) as Arc<dyn IndexNotes>,
             git,
+            admission: Arc::default(),
         };
         let conn = open_reader(&dir.host_db()).unwrap();
         let mut routes = Routes::new(Ledger::load(&conn, writer, shared, &durations).unwrap());

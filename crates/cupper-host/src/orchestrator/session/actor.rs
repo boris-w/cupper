@@ -120,6 +120,8 @@ pub(super) struct Parts {
     pub running: Arc<AtomicBool>,
     /// The pending requests, for `pending_interactions`.
     pub pending: Arc<AtomicU32>,
+    /// The queued messages, for the supervisor's idle exit.
+    pub queued: Arc<AtomicU32>,
     pub audit: mpsc::UnboundedSender<AuditRecord>,
     pub index: Arc<dyn IndexNotes>,
     pub project: ProjectId,
@@ -486,6 +488,8 @@ impl SessionActor {
         }
         let running = self.parts.core.turn_id().is_some();
         self.parts.running.store(running, Ordering::Relaxed);
+        let queued = self.parts.core.queued();
+        self.parts.queued.store(queued, Ordering::Relaxed);
         self.alarm.follow(&self.timers);
     }
 

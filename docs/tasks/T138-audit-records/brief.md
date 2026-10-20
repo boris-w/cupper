@@ -75,3 +75,19 @@ T059 开工前拆成两份（计划 v1.3.31，见 `docs/tasks/T059-host-supervis
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-20，编排者）
+
+执行者开工前估计 650–725 行（按实测比 560–755），贴线，在写代码之前停下。
+
+**裁定：方案 A（计划 v1.3.32）。**
+- **本任务做第 1–4 项**：
+  - 审计写入 task（写 `audit` 表和 host.log）；
+  - 全部现有事件的正式格式；
+  - `conn.accepted` 补对端信息；
+  - `config.confirmed` 与 `project.trust.*` 的产生者；
+  - UNIT-audit-format、IT-audit-retention 和产生点的用例。
+  - 上限约 700 行，硬停止线 780；推算贴线也先停下。
+- **90 天清理已有**（`Cleanup::Audit`）：不改 `retention.rs`，只在 IT-audit-retention 里验证。
+- **`host.*`、`git.unsafe_repo_config`、`privileged.executed` 都还没有产生者**，交给新增的 T163（依赖 T059 和本任务）。本任务只为已有产生者的事件做映射；给这三类留好正式格式的位置即可，不必先加 `AuditEvent` 变体。
+- **`elevation.requested` 写入失败的边界情况**：审计在索引写批次之前单独发出，审计表里仍有记录，不用另记一笔。认可。
