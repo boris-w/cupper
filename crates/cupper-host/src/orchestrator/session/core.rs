@@ -8,22 +8,28 @@
 //!   once, and to the judge after the machine's step; the judge's `Start`,
 //!   `End` and `Hold` go back to the machine as inputs.
 //! - The coalescer writes `turn.completed`, with the final answer.
-//! - A request from the agent goes to the judge ([`Input::Asked`]) and to the
-//!   coalescer (`Interject`) before it is written; each resolution follows as
-//!   [`Input::Resolved`]. The requests of a turn resolve at its Settle. T088
-//!   routes the agent's requests here through the interaction broker.
+//! - A request from the agent goes to the judge (`Asked`), which opens a turn
+//!   for it when none runs, then to the coalescer (`Interject`: the buffered
+//!   text goes first and the activity group ends), and then the interaction
+//!   broker writes it into the open turn (design 5.2.7). A request that comes
+//!   while the running turn's end is decided waits for the turn the judge
+//!   opens next. Each resolution goes to the judge (`Resolved`).
+//! - The machine's `CancelAsks` and `Settle` go to the broker, so a turn's
+//!   requests are resolved before its `turn.completed` (design 5.3.11).
 
 use std::mem;
 use std::sync::Arc;
 
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::TurnId;
+use cupper_protocol::ids::{AdapterInstanceId, RequestId, SessionId, TurnId};
+use cupper_protocol::interaction::InteractionStatus;
 
 use crate::clock::{IdGen, Now};
-use crate::driver::api::DriverEvent;
+use crate::driver::api::{AskAnswer, AskId, AskRequest, DriverCommand, DriverEvent};
 use crate::durations::Durations;
 use crate::orchestrator::autonomous::{self, AutonomousJudge, JudgeTimer};
 use crate::orchestrator::coalescer::{self, Coalescer, FlushTimer};
+use crate::orchestrator::interaction::{self, InteractionBroker};
 use crate::orchestrator::turn::{self, TurnMachine, TurnSignal, TurnTimer};
 use crate::pure::{Core, TimerRequest};
 
@@ -32,18 +38,22 @@ pub struct SessionCore {
     machine: TurnMachine,
     judge: AutonomousJudge,
     coalescer: Coalescer,
-    /// Requests not yet resolved.
-    asks: usize,
+    broker: InteractionBroker,
+    /// The turn requests go into: from `turn.started` until its Settle.
+    open: Option<TurnId>,
+    /// Requests that came while no turn was open, for the next one.
+    held: Vec<(AskId, AskRequest, AdapterInstanceId)>,
+    /// The adapter instance of the last attach.
+    instance: Option<AdapterInstanceId>,
 }
 
 #[derive(Debug, Clone)]
 pub enum Input {
     Machine(turn::Input),
+    /// Every driver event, requests and their withdrawals included.
     Agent(DriverEvent),
-    /// A request from the agent, before it is written.
-    Asked,
-    /// A request was resolved.
-    Resolved,
+    /// `interaction/respond`.
+    Respond(Box<interaction::Respond>),
     Expired(Key),
 }
 
@@ -58,8 +68,12 @@ pub enum Key {
 pub enum Action {
     /// Append to the session stream.
     Event(EventBody),
-    /// The turn machine's other actions; never `Event`, `Timer` or `Complete`.
+    Driver(DriverCommand),
+    /// The turn machine's other actions: `Attach`, `Snapshot`, `Reply`, and
+    /// `Settle`, which the core has carried out already.
     Machine(turn::Action),
+    /// The reply to [`Input::Respond`].
+    Answer(interaction::Reply),
     Timer(TimerRequest<Key>),
 }
 
@@ -73,12 +87,20 @@ fn timer<K>(request: TimerRequest<K>, key: impl Fn(K) -> Key) -> Action {
 impl SessionCore {
     /// `stops_commands`: the agent's `interrupt_stops_commands`, as far as
     /// known; see [`set_stops_commands`](Self::set_stops_commands).
-    pub fn new(ids: Arc<IdGen>, durations: &Durations, stops_commands: bool) -> Self {
+    pub fn new(
+        session: SessionId,
+        ids: Arc<IdGen>,
+        durations: &Durations,
+        stops_commands: bool,
+    ) -> Self {
         Self {
             machine: TurnMachine::new(Arc::clone(&ids), durations),
             judge: AutonomousJudge::new(durations),
-            coalescer: Coalescer::new(ids, durations, stops_commands),
-            asks: 0,
+            coalescer: Coalescer::new(Arc::clone(&ids), durations, stops_commands),
+            broker: InteractionBroker::new(session, ids),
+            open: None,
+            held: Vec::new(),
+            instance: None,
         }
     }
 
@@ -92,31 +114,133 @@ impl SessionCore {
         self.machine.turn_id()
     }
 
+    /// The adapter instance of the last attach.
+    pub fn instance(&self) -> Option<&AdapterInstanceId> {
+        self.instance.as_ref()
+    }
+
+    /// Request `id` of this session was answered (`session/send`'s
+    /// `reply_to`, design 5.3.4).
+    pub fn answered(&self, id: &RequestId) -> bool {
+        let ended = self.broker.ended(id);
+        ended.is_some_and(|ended| ended.status == InteractionStatus::Resolved)
+    }
+
     /// A turn's signals go to the coalescer at once, and to the judge after
     /// the machine's step; the judge's actions go back to the machine.
     fn machine(&mut self, input: turn::Input, now: Now, out: &mut Vec<Action>) {
+        if let turn::Input::Attached(Ok(info)) = &input {
+            self.instance = Some(info.instance.clone());
+        }
         let mut judge = Vec::new();
         for action in self.machine.step(input, now) {
             let signal = TurnSignal::of(&action);
+            let mut settle = None;
             match action {
                 turn::Action::Event(body) => out.push(Action::Event(body)),
                 turn::Action::Timer(request) => out.push(timer(request, Key::Turn)),
+                turn::Action::Driver(command) => out.push(Action::Driver(command)),
                 // The coalescer writes `turn.completed`.
                 turn::Action::Complete(_) => {}
+                turn::Action::CancelAsks(turn_id) => {
+                    let resolved = self.broker(interaction::Input::CancelAsks(turn_id), now, out);
+                    judge.extend((0..resolved).map(|_| autonomous::Input::Resolved));
+                }
+                // Passed on as well: what the session's tests see of a Settle.
+                turn::Action::Settle { end, asks } => {
+                    settle = Some((end.turn_id.clone(), asks.clone()));
+                    out.push(Action::Machine(turn::Action::Settle { end, asks }));
+                }
                 action => out.push(Action::Machine(action)),
             }
-            if let Some(signal) = signal {
-                self.coalesce(coalescer::Input::Turn(signal.clone()), now, out);
-                if let TurnSignal::Settled { .. } = signal {
-                    judge.extend(
-                        (0..mem::take(&mut self.asks)).map(|_| autonomous::Input::Resolved),
-                    );
-                }
-                judge.push(autonomous::Input::Turn(signal));
+            let Some(signal) = signal else { continue };
+            self.coalesce(coalescer::Input::Turn(signal.clone()), now, out);
+            match &signal {
+                TurnSignal::Started { turn_id, .. } => self.open = Some(turn_id.clone()),
+                TurnSignal::Settled { .. } => self.open = None,
+                TurnSignal::Completed(_) => {}
             }
+            // The turn's open items end, then its requests, then
+            // `turn.completed`.
+            if let Some((turn_id, asks)) = settle {
+                let resolved = self.broker(interaction::Input::Settle { turn_id, asks }, now, out);
+                judge.extend((0..resolved).map(|_| autonomous::Input::Resolved));
+            }
+            judge.push(autonomous::Input::Turn(signal));
         }
         for input in judge {
             self.judge(input, now, out);
+        }
+        self.write_held(now, out);
+    }
+
+    /// A request from the agent: the judge first, so that a turn is open
+    /// for it. Without an attached instance it cannot be answered later.
+    fn ask(&mut self, ask: AskId, request: AskRequest, now: Now, out: &mut Vec<Action>) {
+        let Some(instance) = self.instance.clone() else {
+            let answer = AskAnswer::Cancelled;
+            return out.push(Action::Driver(DriverCommand::Answer { ask, answer }));
+        };
+        self.judge(autonomous::Input::Asked, now, out);
+        self.held.push((ask, request, instance));
+        self.write_held(now, out);
+    }
+
+    /// Writes the held requests into the open turn, if there is one.
+    fn write_held(&mut self, now: Now, out: &mut Vec<Action>) {
+        let Some(turn_id) = self.open.clone() else {
+            return;
+        };
+        for (ask, request, instance) in mem::take(&mut self.held) {
+            self.coalesce(coalescer::Input::Interject, now, out);
+            let (turn_id, item_id) = (turn_id.clone(), None);
+            let ask = interaction::Ask {
+                ask,
+                instance,
+                turn_id,
+                item_id,
+                request,
+            };
+            self.resolve(interaction::Input::Ask(Box::new(ask)), now, out);
+        }
+    }
+
+    /// Steps the broker; the judge hears of each request it resolves.
+    fn resolve(&mut self, input: interaction::Input, now: Now, out: &mut Vec<Action>) {
+        for _ in 0..self.broker(input, now, out) {
+            self.judge(autonomous::Input::Resolved, now, out);
+        }
+    }
+
+    /// Steps the broker; returns how many requests it resolved.
+    fn broker(&mut self, input: interaction::Input, now: Now, out: &mut Vec<Action>) -> usize {
+        let mut resolved = 0;
+        for action in self.broker.step(input, now) {
+            out.push(match action {
+                interaction::Action::Event(body) => {
+                    resolved += usize::from(matches!(body, EventBody::InteractionResolved(_)));
+                    Action::Event(body)
+                }
+                interaction::Action::Driver(command) => Action::Driver(command),
+                interaction::Action::Reply(reply) => Action::Answer(reply),
+            });
+        }
+        resolved
+    }
+
+    /// Requests the agent took back, or that its exit ended, before they
+    /// were written: the judge stops waiting for them.
+    fn drop_held(
+        &mut self,
+        gone: impl Fn(&AskId, &AdapterInstanceId) -> bool,
+        now: Now,
+        out: &mut Vec<Action>,
+    ) {
+        let dropped = self
+            .held
+            .extract_if(.., |(ask, _, instance)| gone(ask, instance));
+        for _ in dropped.collect::<Vec<_>>() {
+            self.judge(autonomous::Input::Resolved, now, out);
         }
     }
 
@@ -153,24 +277,41 @@ impl Core for SessionCore {
         let mut out = Vec::new();
         match input {
             Input::Machine(input) => self.machine(input, now, &mut out),
+            Input::Agent(DriverEvent::Ask { ask, request, .. }) => {
+                self.ask(ask, request, now, &mut out)
+            }
+            Input::Agent(DriverEvent::AskWithdrawn(ask)) => {
+                if self.held.iter().any(|(held, ..)| *held == ask) {
+                    self.drop_held(|held, _| *held == ask, now, &mut out);
+                    let answer = AskAnswer::Cancelled;
+                    out.push(Action::Driver(DriverCommand::Answer { ask, answer }));
+                } else {
+                    self.resolve(interaction::Input::Withdrawn(ask), now, &mut out);
+                }
+            }
             // The judge first, so that a turn is open for the coalescer.
             Input::Agent(event) => {
                 self.judge(autonomous::Input::Driver(event.clone()), now, &mut out);
                 self.machine(turn::Input::Driver(event.clone()), now, &mut out);
-                if let DriverEvent::Update(update) = event {
-                    self.coalesce(coalescer::Input::Update(update), now, &mut out);
+                match event {
+                    DriverEvent::Update(update) => {
+                        self.coalesce(coalescer::Input::Update(update), now, &mut out)
+                    }
+                    // Its requests end `expired`; nothing goes to it.
+                    DriverEvent::AdapterExited { instance, .. } => {
+                        if self.instance.as_ref() == Some(&instance) {
+                            self.instance = None;
+                        }
+                        self.drop_held(|_, held| *held == instance, now, &mut out);
+                        let exited = interaction::Input::AdapterExited(instance);
+                        self.resolve(exited, now, &mut out);
+                    }
+                    _ => {}
                 }
             }
-            Input::Asked => {
-                self.asks += 1;
-                self.judge(autonomous::Input::Asked, now, &mut out);
-                self.coalesce(coalescer::Input::Interject, now, &mut out);
+            Input::Respond(respond) => {
+                self.resolve(interaction::Input::Respond(respond), now, &mut out)
             }
-            Input::Resolved if self.asks > 0 => {
-                self.asks -= 1;
-                self.judge(autonomous::Input::Resolved, now, &mut out);
-            }
-            Input::Resolved => {}
             Input::Expired(Key::Turn(key)) => {
                 self.machine(turn::Input::Expired(key), now, &mut out)
             }

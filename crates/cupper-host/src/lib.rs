@@ -2,12 +2,14 @@
 //! declares them (plan 1.5).
 
 pub mod clock;
+pub mod diag;
 pub mod driver;
 pub mod durations;
 pub mod exit;
 pub mod failpoint;
 pub mod gateway;
 pub mod ledger;
+pub mod manifest;
 pub mod orchestrator;
 pub mod policy;
 pub mod pure;

@@ -1,0 +1,582 @@
+{
+  "artifacts": [],
+  "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+  "duration_ms": 201550,
+  "jobs": [
+    {
+      "duration_ms": 174593,
+      "failed": 0,
+      "name": "rust",
+      "passed": 1265,
+      "result": "pass",
+      "skipped": []
+    },
+    {
+      "duration_ms": 18828,
+      "failed": 0,
+      "name": "protocol",
+      "passed": 185,
+      "result": "pass",
+      "skipped": []
+    },
+    {
+      "duration_ms": 6537,
+      "failed": 0,
+      "name": "ts",
+      "passed": 323,
+      "result": "pass",
+      "skipped": []
+    },
+    {
+      "duration_ms": 1316,
+      "failed": 0,
+      "name": "license",
+      "passed": 1,
+      "result": "pass",
+      "skipped": []
+    },
+    {
+      "duration_ms": 274,
+      "failed": 0,
+      "name": "testdata-scan",
+      "passed": 3,
+      "result": "pass",
+      "skipped": [
+        "sensitive-words"
+      ]
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "ui",
+      "passed": 0,
+      "result": "not_implemented",
+      "skipped": []
+    },
+    {
+      "duration_ms": 0,
+      "failed": 0,
+      "name": "e2e",
+      "passed": 0,
+      "result": "not_implemented",
+      "skipped": []
+    }
+  ],
+  "machine": "MacBook Pro (Apple M5 Pro)",
+  "os": "macOS 26.4",
+  "results": [
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "IT-command-order",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "IT-devkey-launcher-only",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "IT-devkey-orphan-start",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "IT-gw-subscribe",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "IT-handshake",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "IT-host-bundle-layout",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "IT-lifecycle",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "IT-migrations",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "IT-orch-interaction",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "IT-orch-lifecycle",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "IT-pinned-token",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "IT-sys-peer-current",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "PROP-autonomous-dequeue-guard",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "PROP-coalescer",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "PROP-interaction",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "PROP-interrupt-10s",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "PROP-prompt-inflight-no-end",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "PROP-queue-fifo",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "PROP-stream-replay",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "PROP-stream-seq",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "PROP-turn-single-prompt",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "PROP-turn-snapshot-immutable",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "PROP-view-coalesce",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-acp-detach",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-acp-unhandled",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-blobstore",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-ci-lock",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-ci-summary",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-cli-client",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-cli-host-verify",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-cli-resolver-claude",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-clock-manual",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-digest-jcs",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-env-rules",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-epoch-decision",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-failpoint",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-fake-scripts",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-final-items",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-grouping",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-hc-conn",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-hc-sync",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-hostport-contract-mock",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-i18n-escape",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-idgen",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-ledger",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-login-shell",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-main-hardening",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-mirror",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-native",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-policy-matrix",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-proof-binding",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-proto-base",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-proto-events-index",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-proto-events-session",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-proto-fixtures",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-proto-methods-core-session",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-proto-methods-core-stream",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-proto-methods-ext",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-question-mapping",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-queue-core",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-quiescence-registry",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-raw-queue",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-realpath",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-rec-format",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-release-features",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-retention",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-runtime-pack-envscan",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-sensitive-list",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-shell-mock",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-startup-payload",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-sys-reap-group",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-sys-spawn",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-sys-uniqueid",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-tap",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-tier-rules",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-trace-ids",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-transport-memory",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-ts-fixtures",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-unsupported-set",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-version-classify",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-view-late-by-ref",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-view-window",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-views-parity",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "14a96a68ae78f260ba54b87c06a7132e3382ebca",
+      "id": "UNIT-writer-savepoint",
+      "result": "pass",
+      "suite": "pr"
+    }
+  ],
+  "target": "pr",
+  "toolchain": {
+    "cargo": "1.96.0",
+    "cargo_deny": "0.20.2",
+    "node": "24.19.0",
+    "pnpm": "12.14.0",
+    "rustc": "1.96.0"
+  },
+  "version": 1
+}

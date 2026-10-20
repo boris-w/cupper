@@ -212,6 +212,19 @@
 | 接日志的任务（T028 及以后） | `LoginEnv.vars` 的值（登录 shell 取到的环境）不能写进 host.log 或诊断包；`Debug` 已经只打印变量名，不要另外手动打印这些值 | T094 |
 | T053、T067 | 录制格式库在 `cupper-protocol::recording`：读文件后用 `Recording::parse(&str)`，分段用 `segments()`（按 `instance` 切分，从 0 起，与假 agent 的 `--segment` 编号一致）；判断 note 事件用 `Body::event()`，常量 `INSTANCE_STARTED`、`INSTANCE_EXITED`。SP-1 的 48 份录制在 `testdata/recordings/claude-agent-acp/0.91.0/2.1.296/`（18 份）、`codex-acp/2.2.2/0.160.1/`（16 份）、`codex-acp/2.2.2/0.159.2/`（14 份），`usage` 只有 `gold-a`，头行的 `scenario` 取文件名 | T052 |
 | T047 | `diag/recording_export` 逐行写出用 `Header::to_line`、`Frame::to_line`（`cupper-protocol::recording`），导出前过 `tools/sanitize` | T052 |
+| T055 | 接 T054 的 `driver/locate`：`Boundaries::new(各项目和工作区根目录加 worktree 根目录, system_temp_dirs($TMPDIR))`；`CliLocator::new(boundaries, 登录 shell 的 PATH, 家目录).locate(&resolve::CLAUDE, cli_path)`；`check_config_dir(值, cupper_sys::current_uid(), &boundaries)`；`adapter_env(env_rules::CLAUDE, 宿主环境, 登录 shell 的变量表, binary, config_dir, 放行名单)`；已验证范围从 `manifest::embedded().cli.claude` 取，交给 T094 的分类函数；git、git-lfs 的绝对路径来自 `CliLocator::tool`，交给 T094 的检测函数 | T054 |
+| T060 | git 子进程的 PATH 直接用 `CliLocator::trusted_path()`；git 的绝对路径用 `CliLocator::tool("git")` | T054 |
+| T111 | Codex 的安装布局加一个 `resolve::Layout`；`env_rules::CODEX` 的变量名已有。本机 codex 的 npm 布局已经和 SP-2 记录的不同（原生二进制在平台包 `codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex`），见 `docs/tasks/T054-cli-discovery/notes.md` | T054 |
+| T066 | T054 有两处有意保守的取舍要用真实环境确认：常见位置的 `~/.npm-global/bin` 来自 npm 文档，不是实测；nvm 只看默认的 `~/.nvm`，不读 `NVM_DIR`。原生安装器的布局也没在本机核实 | T054 |
+| T055 | `SessionDeps` 多了 `audit` 和 `index`：`audit` 用交给 `Gateway::new` 的同一个发送端（`supervisor` 里的 `records`）；`index` 在 T034 之前用 `NoIndex` | T088 |
+| T034 | 实现 `IndexNotes`（会话在请求写出或解决之后报告待处理的个数和最早一个的类别），换掉 `NoIndex` | T088 |
+| T059 | 落盘新的审计记录 `InteractionResponded`，记为 `interaction.responded`。T088 之后 `Gateway::new` 接收宿主建好的审计发送端（`supervisor` 里的 `records`），网关和会话共用；T059 把它的接收端接到写线程 | T088 |
+| T089 | 宿主重启后用 `interactions.request_json`（整个 `interaction.requested`）和状态，经 `Input::Ended` 把已结束的请求交给交互代理；`interaction/get` 对淘汰出视图的请求可以改从表里读 | T088 |
+| T053 | `DriverEvent::Ask` 带上 `toolCallId` 之后，在 `SessionCore::write_held` 里填上 `item_id`（T088 已合并；T053 的分支开得早，做不了的话合并时由编排者处理或交给 T095） | T088 |
+| T034 | 信任扫描的 findings 由 T096 解析；T096 合并之前 `project/add`、`project/trust` 的 findings 先留空列表。findings 的 `detail` 原样输出不截断，文件多时 `project/add` 的结果可能超过 64,000 字节的帧上限，要在本任务里处理（例如分页或只给摘要） | T035 |
+| T059 | T028 已合并：审计记录除了写 `audit` 表，还要按 5.8.6 同时写 host.log（`tracing` 事件，字段按 `diag` 的约定）；T059 任务书里"T028 合并之前先只写表"的过渡写法不再需要 | T028 |
+| T055 | 每种 agent 开一个 `diag::stderr::AdapterLog`（`AdapterLog::open(目录, agent, clock, redactor)`），每个实例调用一次 `read(instance_id, 管道)`；每个实例在内存里保留最后 64 KB（整行、已脱敏），可直接放进 `error` 条目的错误详情。实例 ID 作为行前缀，不受长串规则约束 | T028 |
+| 以后在宿主里加日志的任务 | 宿主自己的 ID 和哈希作为字段记录（字段名带 `id`、`hash`、`digest`、`blob`），不要拼进消息正文，否则 40 字符以上的会被当成长串替换；prompt、正文、命令输出、文件内容一律经 `diag::Content`（`info` 级别只记种类和长度） | T028 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

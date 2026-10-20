@@ -259,7 +259,7 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
   | **findings** | 从上述文件里解析出的 hooks、`env`、`apiKeyHelper`、`statusLine`、MCP 服务器、skills、agents、commands，以及 `.codex/` 里的配置项和 hooks；只用于在原生确认框里展示 |
   | **工作区外的目标** | 链接目标在工作区之外的，确认框里醒目标出"此配置来自工作区之外：<路径>"，并逐项列出目标里的 findings。不禁止信任：把项目配置链接到用户自己的 dotfiles 是常见做法；目标内容已经计入摘要，之后每次发送 prompt 前都会重新扫描，目标一被改写就转为 `stale`，并不会因为在工作区外而失去保护 |
 
-  文件超过 2,000 个或合计超过 16 MB（含链接目标）时扫描失败，项目保持未信任，确认框说明原因。
+  文件超过 2,000 个或合计超过 16 MB（含链接目标）时扫描失败，项目保持未信任，确认框说明原因。另有一个实现上的防护：遍历时访问的目录项总数（文件和目录都算，经目录链接重复进入的也算）超过 20,000 时同样失败（`too_many_entries`），防止目录链接组成不成环的分叉结构时遍历次数按指数增长（T035 发现，2026-10-20）。
 - **状态**：`untrusted`（默认）→ 用户在原生确认框里信任 → `trusted`（记下摘要）；之后重新扫描时摘要变了 → `stale`，按未信任处理，直到再次确认。扫描范围里一个文件都没有的项目，添加时直接记为 `trusted`（`trusted_by: auto_empty`），不弹确认框；以后出现了这些文件，摘要变化，照样转为 `stale`。流程见 [5.5.10](05-flows.md#5510-添加项目与信任)。
 - **重新扫描的时机**（范围和规则同上）：添加项目时；每次 Attach（新建或 resume）之前；**每次发送 prompt 之前**（安全确认 ②：用户在两个回合之间切换分支后，下一个回合会带着新的项目配置运行）；每个回合结束时。
 - **未信任或 `stale` 时**：
@@ -402,15 +402,15 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 1. **每次**调用前执行 `git config --list --show-origin --includes -z`，得到有效配置和每个键的来源文件。
 2. 任何一个配置来源位于工作区内，或位于其他 agent 可写的位置（任一会话的工作区、任一项目目录）时，不执行这次调用，返回 `git_error`（`reason: unsafe_repo_config`），并在会话流里写 `notice{code: unsafe_repo_config}`。**仓库自己的 git 目录除外**：本地模式下 `.git/config`、worktree 的 `config.worktree` 本来就在项目目录里，这部分由第 3、4 条的覆盖和第 6 条的指纹兜底（两个 agent 的沙箱也都保护 `.git`）；例外只限这几个文件，`include.path` 指向 git 目录之外的工作区文件时，仍按本条拒绝。`core.hooksPath` 指向工作区的情况也不受此限，因为它总被无条件覆盖。
 3. 无条件覆盖：`-c core.fsmonitor=false -c core.hooksPath=<数据目录>/git/empty-hooks`；加 `--no-pager`（并设 `GIT_PAGER=cat`）；生成补丁的命令一律加 `--no-ext-diff --no-textconv`。
-4. 可执行类键：`filter.*.clean`、`filter.*.smudge`、`filter.*.process`、`diff.*.command`、`diff.*.textconv`、`merge.*.driver`、`core.sshCommand`、`core.pager`、`core.editor`、`core.askPass`、`core.gitProxy`、`sequence.editor`、`gpg.program`、`gpg.*.program`、`credential.helper`、`credential.*.helper`、`uploadpack.packObjectsHook`、`remote.*.receivepack`、`remote.*.uploadpack`。取值不在白名单里的（白名单只有 git-lfs 的标准取值），一律用 `-c <键>=` 置空。实验确认：置空的过滤器按原样处理内容、不执行程序。
-5. 覆盖后 git 报错（例如过滤器设了 `required=true`，置空后 git 会直接报错退出）：这次调用失败，返回 `git_error`（`reason: unsafe_repo_config`），**不去掉覆盖重试**。
+4. 可执行类键：`filter.*.clean`、`filter.*.smudge`、`filter.*.process`、`diff.*.command`、`diff.*.textconv`、`merge.*.driver`、`core.sshCommand`、`core.pager`、`core.editor`、`core.askPass`、`core.gitProxy`、`sequence.editor`、`gpg.program`、`gpg.*.program`、`credential.helper`、`credential.*.helper`、`uploadpack.packObjectsHook`、`remote.*.receivepack`、`remote.*.uploadpack`，以及 T060 补充的 `diff.external`、`core.alternateRefsCommand`、`gpg.ssh.defaultKeyCommand`、`submodule.*.update`、`pager.*`。取值不在白名单里的（白名单只有 git-lfs 的标准取值），一律用 `-c <键>=` 置空。实验确认：置空的过滤器按原样处理内容、不执行程序。`alias.*` 不在清单里：git 不让别名覆盖内置命令，宿主只用内置命令。**子段里带 `=` 的可执行类键置空不掉**（git 在第一个 `=` 处切分 `-c` 的参数，`-c 'filter.a=b.clean='` 实际给 `filter.a` 赋了值；T060 用 git 2.50 实测），出现这种键时直接拒绝，返回 `unsafe_repo_config`。
+5. 覆盖后 git 报错：这次调用失败，**不去掉覆盖重试**。被置空的过滤器设了 `required=true`（置空后 git 会直接报错退出）时返回 `git_error`（`reason: unsafe_repo_config`）；其余失败按普通的 git 失败返回，因为几乎每次调用都会置空一些键（例如 Apple 的 git 自带的系统配置 `credential.helper=osxkeychain`），不能一概归因于覆盖。
 6. 调用结束后再算一次指纹（下文）。指纹变了：只读命令丢弃结果、返回 `git_error`（`reason: repo_config_changed`）；写操作已经发生，结果照常返回；两种情况都写 `notice{code: repo_config_changed}`。
 
 实验还发现，`write-tree` 这类看似不碰工作区的命令也会因为 racy 检测去读文件、运行 clean 过滤器，也会触发 fsmonitor 和 `post-index-change` hook。所以仓库档的防护对**每一次**调用都适用，包括辅助命令。
 
 **仓库可执行配置指纹**
 
-- 内容：仓库的 `config` 及其 include 的文件、worktree 的 `config.worktree`、`hooks/` 和 `core.hooksPath` 指向的目录下的文件（名称和哈希）、`info/attributes`、工作区里的全部 `.gitattributes`。
+- 内容：有效配置的全部来源文件（仓库的 `config` 及其 include 的文件、worktree 的 `config.worktree`，也包括全局和系统配置：从扁平的配置列表里分不清哪些 include 属于仓库配置，而全局配置被改写同样会改变可执行配置；`.git/config`、`config.worktree` 不存在时也记下，之后新建了能被发现。T097 实现时的裁定，2026-10-20）、`hooks/` 和 `core.hooksPath` 指向的目录下的文件（名称和哈希）、`info/attributes`、工作区里的全部 `.gitattributes`。
 - 计算时机：回合开始和结束时（随快照），以及每次仓库档调用的前后。
 - 回合前后不同时，在回合里写 `notice{code: repo_config_changed, params: {paths}}`；审查面板顶部醒目提示；用户档的确认文案带上这一条。
 
@@ -444,7 +444,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 - `GitCmd` 构造器：每类命令一组固定参数，统一 `-z`；只读命令加 `--no-optional-locks`；固定加 `-c core.quotepath=false`。
 - **程序的路径**（安全核对 2）：宿主启动时（以及 `agents/refresh` 时）把 `git` 和 `git-lfs` 解析成绝对路径，之后只用这两个绝对路径，不在每次调用时按 PATH 查找。解析时只看登录 shell 的 PATH 里的**可信条目**：是绝对路径，并且不在任何项目、工作区、worktree 根目录下，也不在临时目录（`$TMPDIR`、`/tmp`、`/private/var/folders`）下。解析结果和来源目录写进索引流的 `agents` 状态。
-- **环境**：git 子进程的 PATH 只保留上述可信条目（git 自己再拉起的 `ssh`、`gpg` 等也只能从这些目录里找到）；`LC_ALL=C`，便于解析报错；`GIT_TERMINAL_PROMPT=0`；继承 `SSH_AUTH_SOCK`。
+- **环境**：git 子进程的 PATH 只保留上述可信条目（git 自己再拉起的 `ssh`、`gpg` 等也只能从这些目录里找到）；`LC_ALL=C`，便于解析报错；`GIT_TERMINAL_PROMPT=0`；继承 `SSH_AUTH_SOCK`。仓库档和用户档还带 `HOME`，让 git 读到用户的全局配置（`core.autocrlf`、`user.name` 等）：全局配置和其他来源一样过第 2 条的来源检查和第 4 条的置空，所以读它是安全的（T060 发现）。快照档用自己的白名单配置，是否带 `HOME` 由 T061 定。
 - **工作目录**：git 子进程的工作目录设为 cupper 自己的目录（`<数据目录>/git/`），目标仓库经 `-C <路径>`（仓库档、用户档）或 `GIT_DIR`、`GIT_WORK_TREE`（快照档）指定。
 - 所有 git 子进程都经 `cupper-sys::spawn` 拉起（[5.8.5](08-security.md#585-进程卫生)）。
 - 超时：只读命令 30 s；快照 60 s；`worktree add` 10 分钟（输出进度事件）；`push` 5 分钟。

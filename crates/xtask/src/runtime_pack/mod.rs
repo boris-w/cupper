@@ -242,6 +242,8 @@ mod tests {
           "codex_acp": { "version": "1", "url": "u", "integrity": "i" },
           "esbuild_wasm": { "version": "1", "url": "u", "integrity": "i" },
           "claude_agent_acp": { "version": "1", "lockfile": "l", "entry": "e", "bundle_sha256": "b" },
+          "cli": { "claude": { "verified": { "min": "1.0.0", "max": "1.0.0" } },
+                   "codex": { "verified": { "min": "1.0.0", "max": "1.0.0" } } },
           "env": { "allow": [], "deny": [], "harmless": [], "reads": {} },
           "files": { "Helpers/node": { "sha256": "n", "cdhash": "c" } }
         }"#;

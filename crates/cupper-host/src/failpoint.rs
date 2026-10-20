@@ -180,6 +180,8 @@ mod harness {
     }
 
     fn fire(point: Failpoint) -> ! {
+        tracing::error!(failpoint = point.name(), "a failpoint fired");
+        // In-process tests run without the log.
         eprintln!("cupper-host: failpoint `{}` fired", point.name());
         std::process::exit(HostExit::Failpoint.code().into())
     }
