@@ -71,7 +71,8 @@ export interface ShellAPI {
 
 export interface ShellInfo {
   shell: "electron" | "browser";
-  flavor: "release" | "e2e" | "dev";
+  /** `local`: a build of the release configuration for the maintainer's own use (design 5.7.9). */
+  flavor: "release" | "local" | "e2e" | "dev";
   appVersion: string;
   /** BCP 47 tag: the system's preferred language unless the settings override it. */
   locale: string;

@@ -2,11 +2,33 @@
 // is bundled into one CommonJS file and may only require `electron`. The
 // ShellAPI goes to the main world as `window.shell`; the renderer gets no
 // Electron object, and reaches the host only through the windowBridge's port.
+// Privileged actions come with real input (T077); navigation and the updater's
+// state come once their senders exist.
 
-import { SHELL_GLOBAL, type Handshake } from "@cupper/shell-api";
+import {
+  SHELL_GLOBAL,
+  type Handshake,
+  type ShellAPI,
+  type ShellInfo,
+  type Unsubscribe,
+} from "@cupper/shell-api";
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
-import { HOST_OPEN, HOST_PORT, type ToWindow } from "../shared/ipc";
+import {
+  COMMAND_CHANNEL,
+  FOCUS_CHANGED,
+  HOST_OPEN,
+  HOST_PORT,
+  NAVIGATE,
+  OPEN_EXTERNAL,
+  PICK_DIRECTORY,
+  PREFS_CHANGED,
+  PREFS_SET,
+  SHELL_INIT,
+  THEME_CHANGED,
+  UPDATE_STATE,
+  type ToWindow,
+} from "../shared/ipc";
 import { bridgeHost, type BridgePort } from "./host";
 
 /**
@@ -43,4 +65,28 @@ async function openHost() {
   }
 }
 
-contextBridge.exposeInMainWorld(SHELL_GLOBAL, { host: bridgeHost(openHost) });
+/** Calls `cb` with what the main process sends on `channel`, until unsubscribed. */
+function on<Args extends unknown[]>(channel: string, cb: (...args: Args) => void): Unsubscribe {
+  const listener = (_event: IpcRendererEvent, ...args: unknown[]) => cb(...(args as Args));
+  ipcRenderer.on(channel, listener);
+  return () => void ipcRenderer.removeListener(channel, listener);
+}
+
+const shell: ShellAPI = {
+  init: () => ipcRenderer.invoke(SHELL_INIT) as Promise<ShellInfo>,
+  host: bridgeHost(openHost),
+  requestPrivileged: () => Promise.resolve({ status: "failed", error: "unsupported" }),
+  onCommand: (cb) => on(COMMAND_CHANNEL, cb),
+  onNavigate: (cb) => on(NAVIGATE, cb),
+  openExternal: (url) => ipcRenderer.send(OPEN_EXTERNAL, url),
+  pickDirectory: () => ipcRenderer.invoke(PICK_DIRECTORY) as Promise<string | null>,
+  system: { onThemeChange: (cb) => on(THEME_CHANGED, cb) },
+  window: { onFocusChange: (cb) => on(FOCUS_CHANGED, cb) },
+  prefs: {
+    set: async (key, value) => void (await ipcRenderer.invoke(PREFS_SET, key, value)),
+    onChange: (cb) => on(PREFS_CHANGED, cb),
+  },
+  updates: { onState: (cb) => on(UPDATE_STATE, cb), installNow: () => undefined },
+};
+
+contextBridge.exposeInMainWorld(SHELL_GLOBAL, shell);

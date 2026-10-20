@@ -81,7 +81,7 @@ export class WindowBridges {
 }
 
 /** `app://cupper/…`; a custom scheme's URL has no origin to compare. */
-function isMainDocument(url: string): boolean {
+export function isMainDocument(url: string): boolean {
   try {
     const { protocol, host } = new URL(url);
     return protocol === MAIN_DOCUMENT.protocol && host === MAIN_DOCUMENT.host;

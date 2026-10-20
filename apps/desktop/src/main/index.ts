@@ -25,6 +25,7 @@ import { startHost } from "./host";
 import { MainLog } from "./log";
 import { menuTemplate } from "./menu";
 import { appDirs, e2eDirs, type AppDirs } from "./paths";
+import { Prefs } from "./prefs";
 import {
   APP_SCHEME,
   APP_SCHEME_PRIVILEGES,
@@ -34,6 +35,7 @@ import {
 import { hardenWebContents } from "./security/navigation";
 import { restrictPermissions } from "./security/permissions";
 import { enforceSwitchAllowlist } from "./security/switches";
+import { followFocus, serveShell } from "./shell";
 import { MAIN_DOCUMENT_URL, mainWindowOptions } from "./window";
 
 const flavor = __CUPPER_FLAVOR__;
@@ -96,8 +98,10 @@ function start() {
   void app.whenReady().then(ready);
 }
 
-function ready() {
+async function ready() {
   restrictPermissions(session.defaultSession);
+  const prefs = await Prefs.open(join(dirs.userData, "prefs.json"));
+  serveShell({ flavor, prefs, openExternal });
   const renderer = join(import.meta.dirname, "../renderer");
   protocol.handle(
     APP_SCHEME,
@@ -159,6 +163,7 @@ function showMainWindow() {
   const window = new BrowserWindow(mainWindowOptions(flavor, preload));
   mainWindow = window;
   window.once("ready-to-show", () => window.show());
+  followFocus(window);
   window.on("closed", () => {
     mainWindow = null;
   });
