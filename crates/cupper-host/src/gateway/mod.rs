@@ -141,8 +141,9 @@ impl Gateway {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
+                    // Before the connection is admitted.
                     if let Some(check) = self.self_check.get() {
-                        check.check();
+                        check.check().await;
                     }
                     let index = self.connections.fetch_add(1, Ordering::Relaxed) + 1;
                     let live = Live::enter(Arc::clone(&self));

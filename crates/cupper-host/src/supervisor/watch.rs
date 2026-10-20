@@ -242,9 +242,14 @@ impl SelfCheck {
         Some(Self { exe, own, watch })
     }
 
-    /// On each new connection and before an adapter starts.
-    pub fn check(&self) {
-        if cupper_sys::file_cdhash(&self.exe).ok() != Some(self.own) {
+    /// On each new connection and before an adapter starts. Reading the
+    /// code on disk can take long, so it runs off the async threads (T138);
+    /// a check that cannot finish counts as a changed executable.
+    pub async fn check(&self) {
+        let (exe, own) = (self.exe.clone(), self.own);
+        let same =
+            tokio::task::spawn_blocking(move || cupper_sys::file_cdhash(&exe).ok() == Some(own));
+        if !same.await.unwrap_or(false) {
             self.watch.bundle_changed();
         }
     }
