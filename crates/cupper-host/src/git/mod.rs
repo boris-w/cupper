@@ -9,7 +9,9 @@
 //! `<data dir>/git/`, with a fixed environment; nothing is looked up on PATH.
 
 mod cmd;
+pub mod rules;
 pub mod run;
+pub mod stamp;
 
 use std::ffi::{OsStr, OsString};
 use std::fs::DirBuilder;
