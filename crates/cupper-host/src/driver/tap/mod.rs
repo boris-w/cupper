@@ -2,7 +2,7 @@
 //! ACP SDK passes through it, in both directions. It does two things:
 //!
 //! 1. numbers each line within the instance and queues it as a raw frame after
-//!    structured redaction ([`redact`]);
+//!    structured redaction ([`crate::diag::redact`]);
 //! 2. rewrites values of the SDK's closed enums that the SDK cannot parse
 //!    ([`k19`]); the raw frame keeps what the agent sent.
 //!
@@ -14,7 +14,6 @@
 //! ACP read path (design 5.2.3).
 
 pub mod k19;
-mod redact;
 
 use std::io;
 use std::pin::Pin;
@@ -29,6 +28,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, BufReader};
 
 use super::transport::AcpTransport;
 use crate::clock::Clock;
+use crate::diag::redact;
 use crate::store::{Dir, RawFrame, RawSink};
 
 /// The tap of one adapter instance.

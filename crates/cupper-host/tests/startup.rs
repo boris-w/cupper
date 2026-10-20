@@ -126,5 +126,11 @@ async fn unit_release_features_host_does_not_read_stdin() {
     let out = child.wait_with_output().expect("wait for cupper-host");
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert!(out.stderr.is_empty(), "{out:?}");
+    // A data directory outside Application Support keeps its own logs (T028).
+    let log = std::fs::read_to_string(data_dir.join("logs/host.log")).expect("host.log");
+    assert!(
+        log.contains("the host started") && log.contains("the host exits"),
+        "{log}"
+    );
     std::fs::remove_dir_all(&data_dir).unwrap();
 }
