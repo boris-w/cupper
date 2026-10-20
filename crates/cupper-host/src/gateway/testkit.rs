@@ -235,6 +235,8 @@ pub(crate) struct Peer {
     pub(super) dispatch: super::dispatch::Dispatch,
     /// The connection as the index hears of it; its token is this process's.
     pub(crate) opened: super::Opened,
+    /// The connection's clock, for when a grant ends.
+    pub(crate) clock: crate::clock::ManualClock,
     outbox: Arc<super::outbox::Outbox>,
     replies: Vec<Value>,
     next_id: i64,
@@ -255,9 +257,9 @@ impl Peer {
             cupper_protocol::limits::V1.max_queue_bytes as usize,
         ));
         let conn = cupper_protocol::ids::ConnId::from_index(index);
-        let clock = Arc::new(crate::clock::ManualClock::new());
+        let clock = crate::clock::ManualClock::new();
         let audit = tokio::sync::mpsc::unbounded_channel().0;
-        let auditor = super::audit::Auditor::new(conn.clone(), audit, clock);
+        let auditor = super::audit::Auditor::new(conn.clone(), audit, Arc::new(clock.clone()));
         use cupper_protocol::domain::{ClientKind, PrincipalKind};
         let kind = match principal.kind {
             PrincipalKind::Cli => ClientKind::Cli,
@@ -292,6 +294,7 @@ impl Peer {
         Self {
             dispatch,
             opened,
+            clock,
             outbox,
             replies: Vec::new(),
             next_id: 0,
