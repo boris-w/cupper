@@ -294,17 +294,18 @@ impl AuditToken {
 /// own executable, it tells whether an upgrade has replaced the code on disk
 /// (SP-4b; the host's self-check, design 5.2.13).
 pub fn own_cdhash() -> Result<Cdhash> {
+    // SAFETY: getpid has no preconditions and cannot fail.
+    pid_cdhash(unsafe { libc::getpid() })
+}
+
+/// The cdhash the process `pid` runs with. Unlike a check through an audit
+/// token, the pid may have been reused since it was learned: compare the
+/// executable too ([`pid_path`](crate::pid_path)) before acting on it.
+pub fn pid_cdhash(pid: i32) -> Result<Cdhash> {
     let mut hash = [0u8; 20];
-    // SAFETY: getpid has no preconditions; the buffer has the 20 writable
-    // bytes CS_OPS_CDHASH writes.
-    let rc = unsafe {
-        csops(
-            libc::getpid(),
-            CS_OPS_CDHASH,
-            hash.as_mut_ptr().cast(),
-            hash.len(),
-        )
-    };
+    // SAFETY: csops takes a plain pid; the buffer has the 20 writable bytes
+    // CS_OPS_CDHASH writes.
+    let rc = unsafe { csops(pid, CS_OPS_CDHASH, hash.as_mut_ptr().cast(), hash.len()) };
     if rc != 0 {
         return Err(Error::last_os("csops(CS_OPS_CDHASH)"));
     }
@@ -380,6 +381,19 @@ mod tests {
 
     /// A probe signed as `signing`, running on a socket whose other end is
     /// returned, with the probe's token.
+    #[test]
+    fn a_process_by_pid_names_its_executable_and_cdhash() {
+        let _fds = fd_lock();
+        let dir = TempDir::new();
+        let probe = running(&dir, "by-pid", HARDENED);
+        let pid = probe.child.0.id() as i32;
+        let path = probe.path.canonicalize().unwrap();
+        assert_eq!(crate::pid_path(pid).unwrap(), path);
+        assert_eq!(pid_cdhash(pid).unwrap(), file_cdhash(&path).unwrap());
+        assert!(crate::pid_path(i32::MAX).is_err());
+        assert!(pid_cdhash(i32::MAX).is_err());
+    }
+
     struct Running {
         ours: UnixStream,
         child: StdChild,

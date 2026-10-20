@@ -206,9 +206,13 @@ IT-gw-blob = "pr"
 # 索引 actor 与关注度
 [T034]
 milestone = "M1a"
+IT-project-add-trust = "pr"
+
+# 索引 II：状态计算、已读、在场与通知意图（计划 v1.3.19 由 T034 拆出）
+[T100]
+milestone = "M1a"
 UNIT-index-status = "pr"
 UNIT-index-intent = "pr"
-IT-project-add-trust = "pr"
 
 # 项目信任扫描
 [T035]
@@ -293,6 +297,11 @@ IT-orch-recovery = "pr"
 [T044]
 milestone = "M1a"
 IT-orch-gating = "pr"
+
+# 会话 actor II-b：信任门控（计划 v1.3.19 由 T044 拆出）
+[T109]
+milestone = "M1a"
+IT-orch-trust-gating = "pr"
 
 # cupper-cli I：客户端库、连接与宿主校验
 [T045]
@@ -411,6 +420,11 @@ UNIT-commands-dedup = "pr"
 [T056]
 milestone = "M1a"
 IT-runtime-install = "pr"
+
+# 运行时安装器 II：按锁文件下载与本机打包（计划 v1.3.20 由 T056 拆出）
+[T115]
+milestone = "M1a"
+IT-runtime-download = "pr"
 
 # （条件）Q8 后备：同一种 agent 的 prompt 全局串行（K1 已通过，不触发）
 [T057]

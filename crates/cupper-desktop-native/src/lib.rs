@@ -75,6 +75,33 @@ pub fn socket_path(data_dir: String) -> napi::Result<String, Code> {
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// The executable a process runs and its cdhash: what tells the host of this
+/// build from anything else at a pid (restarting the host, design 5.8.1).
+#[napi(object)]
+pub struct ProcessImage {
+    pub path: String,
+    pub cdhash: String,
+}
+
+/// `None` when `pid` names no process of this user.
+#[napi]
+pub fn process_image(pid: i32) -> Option<ProcessImage> {
+    let path = cupper_sys::pid_path(pid).ok()?;
+    let cdhash = cupper_sys::pid_cdhash(pid).ok()?;
+    Some(ProcessImage {
+        path: path.to_string_lossy().into_owned(),
+        cdhash: cdhash.to_string(),
+    })
+}
+
+/// The cdhash of the signed code at `path`, a bundle or an executable.
+#[napi]
+pub fn file_cdhash(path: String) -> napi::Result<String, Code> {
+    let cdhash =
+        cupper_sys::file_cdhash(path.as_ref()).map_err(|err| fail("invalid_argument", err))?;
+    Ok(cdhash.to_string())
+}
+
 /// How to start the host (design 5.7.2, 5.8.5).
 #[napi(object)]
 pub struct HostCommand {

@@ -52,6 +52,10 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         .args(["--target", "aarch64-apple-ios-sim"]);
     ctx.check("ios-sim", &mut ios)?;
 
+    // The host's tests run the fake agent from `target/debug` (T055).
+    let mut fake_agent = ctx.cargo();
+    fake_agent.args(["build", "-p", "cupper-fake-agent", "--locked"]);
+    ctx.check("fake-agent", &mut fake_agent)?;
     let mut test = ctx.cargo();
     test.args([
         "test",

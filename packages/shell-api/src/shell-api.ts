@@ -13,6 +13,9 @@ import type {
   SettingsPatch,
 } from "@cupper/protocol";
 
+/** The ShellAPI's name in the main world: the preload exposes it as `window.shell`. */
+export const SHELL_GLOBAL = "shell";
+
 /** Cancels a subscription. Calling it again does nothing. */
 export type Unsubscribe = () => void;
 
@@ -68,7 +71,8 @@ export interface ShellAPI {
 
 export interface ShellInfo {
   shell: "electron" | "browser";
-  flavor: "release" | "e2e" | "dev";
+  /** `local`: a build of the release configuration for the maintainer's own use (design 5.7.9). */
+  flavor: "release" | "local" | "e2e" | "dev";
   appVersion: string;
   /** BCP 47 tag: the system's preferred language unless the settings override it. */
   locale: string;

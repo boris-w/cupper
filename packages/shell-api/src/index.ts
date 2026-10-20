@@ -17,6 +17,7 @@ export type {
   Unsubscribe,
   UpdateState,
 } from "./shell-api";
+export { SHELL_GLOBAL } from "./shell-api";
 export { commandHandler, type CommandHandlers } from "./commands";
 export { isExternalUrl } from "./links";
 export { isKnownTarget } from "./navigation";

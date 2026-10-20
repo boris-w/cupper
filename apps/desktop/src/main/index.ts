@@ -1,21 +1,36 @@
 // The main process (design 5.7.2): the app, its window, the hardening
-// baseline (design 5.7.8) and the control connection to the host, started
-// before the app is ready (design 5.5.1). The window bridge (T076) builds on
-// this.
+// baseline (design 5.7.8), the control connection to the host, started
+// before the app is ready (design 5.5.1), the quit check (NFR-8) and, in
+// keyed builds, restarting a host it cannot verify (design 5.8.1), and each
+// window document's data connection through its window bridge (design 5.7.1).
 
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { createI18n } from "@cupper/i18n";
-import { app, BrowserWindow, Menu, protocol, session, shell } from "electron";
+import {
+  app,
+  autoUpdater,
+  BrowserWindow,
+  ipcMain,
+  Menu,
+  MessageChannelMain,
+  powerMonitor,
+  protocol,
+  session,
+  shell,
+} from "electron";
 
 import { isReleaseLike } from "../shared/flavor";
-import { COMMAND_CHANNEL } from "../shared/ipc";
-import { startControl } from "./host";
-import type { ControlConnection } from "./host/control";
+import { COMMAND_CHANNEL, HOST_OPEN } from "../shared/ipc";
+import { WindowBridges } from "./bridge/bridges";
+import { startHost } from "./host";
+import { confirmQuit, confirmRestart, tellRestartRefused, type Translate } from "./host/dialogs";
+import { QuitGuard, type QuitHost } from "./host/lifecycle";
 import { MainLog } from "./log";
 import { menuTemplate } from "./menu";
 import { appDirs, e2eDirs, type AppDirs } from "./paths";
+import { Prefs } from "./prefs";
 import {
   APP_SCHEME,
   APP_SCHEME_PRIVILEGES,
@@ -25,6 +40,7 @@ import {
 import { hardenWebContents } from "./security/navigation";
 import { restrictPermissions } from "./security/permissions";
 import { enforceSwitchAllowlist } from "./security/switches";
+import { followFocus, serveShell } from "./shell";
 import { MAIN_DOCUMENT_URL, mainWindowOptions } from "./window";
 
 const flavor = __CUPPER_FLAVOR__;
@@ -44,7 +60,10 @@ protocol.registerSchemesAsPrivileged([APP_SCHEME_PRIVILEGES]);
 app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
-let control: ControlConnection | undefined;
+let host: ReturnType<typeof startHost> | undefined;
+let i18n: ReturnType<typeof createI18n> | undefined;
+const t: Translate = (key, values) => (i18n ??= createI18n()).t(key, values);
+const quit = new QuitGuard(quitHost, (status) => confirmQuit(t, status));
 
 if (app.requestSingleInstanceLock()) {
   start();
@@ -76,32 +95,83 @@ function start() {
   app.on("activate", showMainWindow);
   // Closing the last window leaves the app running, as on macOS (design 5.7.1).
   app.on("window-all-closed", () => undefined);
-  app.on("will-quit", () => control?.close());
+  // Before `will-quit`: running turns and waiting requests are asked about.
+  app.on("before-quit", (event) => {
+    if (!quit.settled) {
+      event.preventDefault();
+      void quit.decide().then((decision) => decision === "quit" && app.quit());
+    }
+  });
+  app.on("will-quit", () => host?.control.close());
   try {
     const e2eRoot = __CUPPER_FLAVOR__ === "e2e" ? process.env.CUPPER_E2E_DIR : undefined;
     const version = app.getVersion();
-    control = startControl({ flavor, dataDir: dirs.data, version, e2eRoot, log });
+    host = startHost({ flavor, dataDir: dirs.data, version, e2eRoot, log });
+    host.control.client.onState((state) => {
+      const unverified =
+        state.status === "failed" && ["unauthenticated", "host_unverified"].includes(state.reason);
+      if (unverified && flavor !== "release") {
+        const dialogs = { confirm: () => confirmRestart(t), refused: () => tellRestartRefused(t) };
+        void app.whenReady().then(() => host?.restart(dialogs));
+      }
+    });
   } catch (error) {
     log.error("cannot start the host connection", { error: String(error) });
   }
   void app.whenReady().then(ready);
 }
 
-function ready() {
+async function ready() {
   restrictPermissions(session.defaultSession);
+  const prefs = await Prefs.open(join(dirs.userData, "prefs.json"));
+  serveShell({ flavor, prefs, openExternal });
   const renderer = join(import.meta.dirname, "../renderer");
   protocol.handle(
     APP_SCHEME,
     appProtocolHandler({ cupper: { root: renderer, csp: MAIN_DOCUMENT_CSP } }),
   );
-  const i18n = createI18n(app.getPreferredSystemLanguages()[0]);
+  // Shutdown, logout and installing an update quit without asking (design 5.7.1).
+  powerMonitor.on("shutdown", () => quit.skip());
+  autoUpdater.on("before-quit-for-update", () => quit.skip());
+  const text = (i18n = createI18n(app.getPreferredSystemLanguages()[0]));
   const template = menuTemplate({
-    label: (id, n) => i18n.t(id, { ns: "command", n }),
+    label: (id, n) => text.t(id, { ns: "command", n }),
     onCommand: (cmd) => BrowserWindow.getFocusedWindow()?.webContents.send(COMMAND_CHANNEL, cmd),
     devTools: flavor === "dev",
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  if (host) {
+    serveWindows(host);
+  }
   showMainWindow();
+}
+
+/** Each window document's data connection, through its windowBridge (design 5.7.1). */
+function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
+  const bridges = new WindowBridges({
+    connect: openWindow,
+    controlReady: () => control.ready(),
+    schedule: (task, ms) => void setTimeout(task, ms),
+    channel: () => {
+      const { port1, port2 } = new MessageChannelMain();
+      const bridge = {
+        post: (message: unknown) => port1.postMessage(message),
+        onMessage: (cb: (message: unknown) => void) => {
+          port1.on("message", (event) => cb(event.data));
+          port1.start();
+        },
+        close: () => port1.close(),
+      };
+      return { bridge, window: port2 };
+    },
+  });
+  ipcMain.handle(HOST_OPEN, (event) => bridges.open(event.sender, event.senderFrame));
+  if (__CUPPER_FLAVOR__ === "e2e") {
+    // For the e2e tests' `electronApp.evaluate`: a window loses its
+    // connection without a reload (E2E-NFR1-4).
+    const disconnectWindow = (webContentsId: number) => bridges.disconnect(webContentsId);
+    Object.assign(globalThis, { __cupperE2E: { disconnectWindow } });
+  }
 }
 
 function showMainWindow() {
@@ -119,6 +189,7 @@ function showMainWindow() {
   const window = new BrowserWindow(mainWindowOptions(flavor, preload));
   mainWindow = window;
   window.once("ready-to-show", () => window.show());
+  followFocus(window);
   window.on("closed", () => {
     mainWindow = null;
   });
@@ -129,6 +200,22 @@ function showMainWindow() {
     log.error("renderer gone", { reason: details.reason, exitCode: details.exitCode });
   });
   void window.loadURL(MAIN_DOCUMENT_URL);
+}
+
+/** `host/status` and `host/exit` on the control connection, each given a few seconds. */
+function quitHost(): QuitHost | undefined {
+  const client = host?.control.client;
+  const within = <T>(ms: number, call: Promise<T>) =>
+    Promise.race([
+      call,
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+    ]);
+  return (
+    client && {
+      status: () => within(2000, client.request("host/status")),
+      exit: (force) => within(3000, client.command("host/exit", { force })),
+    }
+  );
 }
 
 function openExternal(url: string) {

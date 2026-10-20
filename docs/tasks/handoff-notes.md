@@ -245,6 +245,19 @@
 | T034、T044 | 仓库档调用写成 `tool.repo_tier(仓库).run(clock, durations, 全部项目和工作区根目录, GitCmd::repo(op).args(..))`；取 git 根目录用 `RepoOp::RevParse` 加 `--show-toplevel`；错误经 `GitError::code()`、`reason()` 转成协议错误；`notice()` 和 `Done::notice` 由调用方写进会话流，路径是绝对的 realpath，写进会话流时是否改成相对仓库的路径由调用方定 | T098 |
 | `git/status` 等频繁走仓库档的任务 | 指纹每次要遍历整个工作区找 `.gitattributes`（合成仓库 5,000 个目录约 70 ms，带大 `node_modules` 的仓库到一秒级）。上线前缓存 `.gitattributes` 清单（按目录 mtime 失效），或只扫 index 里出现的目录 | T098 |
 | 以后整理 git 模块时 | T097 的 `overrides.global` 里也带 `--no-pager` 和两个无条件的 `-c`，与 T060 档位固定的参数重复；无害（档位固定的仍排在最后），去重时在 `overrides` 里拿掉这三项 | T098 |
+| T090 | E2E-quit-confirm：真实地弹出退出确认，需要一个运行中的回合或待处理的请求（例如用假 agent），再在主进程里替换 `dialog.showMessageBox`；关机路径可以经 `powerMonitor` 的 `shutdown` 事件触发。空闲时退出 App 不发 `host/exit`，宿主按空闲规则自行退出（编排者确认） | T007 |
+| 更新流程的任务 | `before-quit-for-update` 现在只挂好了跳过退出确认的钩子；实现更新流程时确认它确实经 Electron 的 `autoUpdater` 发出这个事件 | T007 |
+| 做"需要重启宿主"页面的界面任务 | 重启宿主的确认目前由主进程直接弹原生框；界面做页面时改为经 ShellAPI 触发 `startControl` 返回的 `restart` | T007 |
+| T077 | 真实输入检查加在 `apps/desktop/src/main/bridge/window-bridge.ts` 的 `#send` 里，白名单检查之后、转发之前；`interaction/respond`、`git/revert` 现在照常放行。preload 的 `requestPrivileged` 现在返回 `{status: "failed", error: "unsupported"}` | T076 |
+| T078 | 预测量脚本可以直接改成真实环境的测量：`docs/tasks/T076-desktop-window-bridge/premeasure.test.ts`，一次性的 vitest 配置在同一目录；e2e 断连钩子是 `__cupperE2E.disconnectWindow(webContentsId)`；预测量的数字和局限见该任务的 `notes.md` | T076 |
+| T160 | 自用构建跑不起来：`vite build --mode local` 被 vite 拒绝（"local" 与 `.env.local` 的后缀冲突）。换模式名，或改由别的方式传入 flavor | T076 |
+| 深链接、通知点击、更新器的任务 | preload 的 `onNavigate` 在 `shell:navigate` 通道上收，`updates.onState` 在 `updates:state` 通道上收，`installNow` 待接；主进程目前没有发送方 | T076 |
+| T034 | 发现链已由 T055 写成 `supervisor::discover(login_env, clock, durations, reader) -> rusqlite::Result<Discovery>`，返回 `Discovery { host, login, locator }`；`GitTool` 从同一个 `locator` 取（`tool("git")`、`trusted_path()`），作为 `Discovery` 的新字段加进去，不另起一套。`CliLocator` 有 `boundaries()`，边界目前只有项目路径 | T055 |
+| T044 | `AgentRuntime` 现在丢弃 `SetConfig` 命令；越权改回时要用它，接上 | T055 |
+| T056 | `launch::production` 现在从 `<数据目录>/runtime/node`（对应清单 `files` 的 `Helpers/node`）和 `<数据目录>/runtime/bundle-claude-acp.mjs`（对应 `Resources/runtime/bundle-claude-acp.mjs`）拉起；运行时目录的布局定下后改这两个路径 | T055 |
+| T140 | `AgentRuntime` 现在丢弃 `Steer` 命令 | T055 |
+| T036 | 设置里的 `agents.env_passthrough` 还没接，`adapter_env` 拿到的放行名单是空的 | T055 |
+| T110（第二种 agent） | 第二种 agent 接进来时需要一个自己的 `ActorKind` | T055 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
