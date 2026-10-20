@@ -310,6 +310,16 @@ impl Client {
         Ok(serde_json::from_value(result)?)
     }
 
+    /// Sends a client notification; it has no reply.
+    pub async fn notify<N: Notification>(&self, params: N::Params) -> Result<(), ClientError> {
+        let bytes = frame::encode_json(&rpc::notification::<N>(params))?;
+        if let Some(reason) = self.close_reason() {
+            return Err(ClientError::Closed(Some(reason)));
+        }
+        self.writer.lock().await.write_all(&bytes).await?;
+        Ok(())
+    }
+
     /// Sends `stream/subscribe`; the response comes from [`Client::next`]
     /// as [`Incoming::Subscribed`].
     pub async fn subscribe(&self, params: StreamSubscribeParams) -> Result<(), ClientError> {
