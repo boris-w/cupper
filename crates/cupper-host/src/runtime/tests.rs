@@ -139,8 +139,8 @@ fn histories(node: &[Status], esbuild: &[Status]) -> Histories {
     ])
 }
 
-const INSTALLED: &[Status] = &[Status::Missing, Status::Installing, Status::Ready];
-const BUNDLE_CHANGED: &[Status] = &[
+pub(super) const INSTALLED: &[Status] = &[Status::Missing, Status::Installing, Status::Ready];
+pub(super) const BUNDLE_CHANGED: &[Status] = &[
     Status::Missing,
     Status::Installing,
     Status::Failed(Reason::BundleChanged),
