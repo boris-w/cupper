@@ -4,12 +4,13 @@
 //!
 //! The orderly exit comes on `host/exit` ([`control`]), on SIGTERM, when
 //! the store writer has died (T024 review: the host cannot run without it),
-//! and from the [`watch`]: idle, orphaned, or once an upgrade waits. The
-//! cleanup of leftover adapters is T059's.
+//! and from the [`watch`]: idle, orphaned, or once an upgrade waits. Before
+//! retention starts, [`reap`] ends the adapters a previous run left.
 
 pub mod control;
 #[cfg(feature = "test-harness")]
 mod harness;
+mod reap;
 mod recover;
 #[cfg(feature = "test-harness")]
 mod seed;
@@ -203,6 +204,7 @@ impl Host {
         let ledger = Ledger::load(&reader, writer.clone(), clock.clone(), &durations)?;
         quiescence.register(SWEEPER);
         let sweeper = tokio::spawn(ledger.clone().sweeper(quiescence.enter(SWEEPER)));
+        reap::previous_run(&reader, &writer, &*clock, &durations).await?;
         let maintenance = maintenance.spawn(&quiescence);
         // The runtime installer (T129) starts after the self-check is set up,
         // and reports `Failed(BundleChanged)` through `Watch::bundle_changed`.

@@ -9,6 +9,7 @@
 //! `harness` client.
 
 use std::io::Write;
+use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
@@ -166,9 +167,27 @@ async fn it_lifecycle_startup_ends_what_the_last_run_left_running() {
                   ('r_2', 's_1', 'permission', 'd', 'pending', 'a_1', '{}', 3);",
     )
     .unwrap();
+    // And an adapter, in a session of its own, with a descendant's group
+    // that ignores SIGTERM: this test's children, nobody else's.
+    let start = |script: &str| {
+        let mut command = cupper_sys::Command::new("/bin/sh");
+        command.args(["-c", script]).new_session();
+        cupper_sys::spawn(&command).unwrap()
+    };
+    let mut adapter = start("exec /bin/sleep 60");
+    let mut tool = start("trap '' TERM; /bin/sleep 60; :");
+    let groups = json!([[tool.pid(), tool.start().as_micros()]]).to_string();
+    conn.execute(
+        "INSERT INTO adapters (instance_id, agent, pid, pgid, start_us, adapter_version,
+             node_version, started_at, groups)
+           VALUES ('a_1', 'claude', ?1, ?1, ?2, '1', '1', 1, ?3)",
+        (adapter.pid(), adapter.start().as_micros(), groups),
+    )
+    .unwrap();
     drop(conn);
 
-    let mut host = spawn(&data_dir);
+    let config = json!({"login_env": {}, "durations": {"reap_term_wait_ms": 200}});
+    let mut host = spawn_with(&data_dir, config);
     let client = connect(&data_dir).await;
     assert_eq!(client.initialized().principal.id.as_str(), "pr_test");
     let rows = |sql| column(&data_dir, sql);
@@ -188,6 +207,9 @@ async fn it_lifecycle_startup_ends_what_the_last_run_left_running() {
         rows("SELECT session_id || ' ' || state FROM sessions ORDER BY session_id"),
         ["s_1 interrupted", "s_2 idle"]
     );
+    let signals = [adapter.wait().unwrap(), tool.wait().unwrap()].map(|s| s.signal());
+    assert_eq!(signals, [Some(15), Some(9)], "SIGTERM, then SIGKILL");
+    assert_eq!(rows("SELECT exit_status FROM adapters"), ["reaped"]);
     terminate(&host);
     assert_eq!(exit_code(&mut host).await, 0);
 }
