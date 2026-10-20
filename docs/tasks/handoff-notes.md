@@ -373,6 +373,10 @@
 | T065、T064 | 假 agent 的回放（T067）：`--replay <录制>` 按 `--segment`/`--segment-file` 选段，不经 SDK、逐行读写 stdio；与下一个 `send` 帧比对（id 重映射、`cwd`/`path` 占位、`_meta` 忽略、其余精确），通过后按序发出 `recv` 帧，时间压到 1/100，比对失败以 71 退出并写出帧号和字段路径。段末的 `instance_exited` 按压缩后的时间退出，不区分退出是否因客户端先关了 stdin；宿主驱动的录制里如果退出是宿主关 stdin 造成的，回放可能比宿主更早退出，届时要在录制里标出"由客户端关闭"，回放据此等 stdin 关闭。路径字段只认 `cwd`、`path`；B 层只用宿主自己驱动的录制（设计 5.9.2） | T067 |
 | T141 | `session/set_config` 的特权审计（T169 留下）：在判定通过处调用 `orchestrator/session/mod.rs` 的 `privileged()`，传入 `Confirmable::SetConfig` 和会话事实；`privileged()` 现在只为 `create`、`respond` 取了方法名，补一个分支即可 | T169 |
 | T069、T091 | 崩溃后的重建（T169）：检查点作废、日志被修剪时，载入补写缺失的 `session.configured`、`session.capabilities`（只在连接过 agent 时，来自能力缓存）、`queue.updated`；准备阶段崩溃的会话在宿主启动时由 `SessionManager::reopen` 主动载入并重开第一个回合；被中断回合里没结束的条目先补写 `item.completed`（工具调用 `abandoned`，执行类命令按 agent 的中断是否停命令标 `may_still_run`）。日志被修剪掉的待处理请求不补写 `interaction.resolved`（表里已是 `expired`） | T169 |
+| T175 之后改 NFR1-5 的任务（或 T175 自己） | E2E-NFR1-5（T091）现在先发下一条消息、再断言补写的 `interrupted`、`expired` 和界面显示，因为新宿主只在会话收到第一条命令时载入。T175 让订阅也触发载入之后，可以加一条"只订阅、不发命令也能看到补写"的断言 | T091 |
+| T146（消息流的后续） | 插入更早的历史后视口偶有残余偏差：约每 10 次有 1 次下移 26 px，原因是视口按估计行高（44 px）放回、新插入行的实测高度不同、差额没补。T091 已修掉整页跳动（锚点改为控件之后屏幕上的第一行），用例只断言移动小于 40 px。建议等新行测量完再恢复，或测量后按差额补一次（`virtualizer.scrollToOffset` 试过无效） | T091 |
+| T063 | 假 agent 不对外暴露收到的是 `session/resume` 还是 `session/new`，E2E-NFR1-5 只能确认下一条消息在新宿主上跑完。K 清单要直接断言 resume 时，给假 agent 加一个可观察的记录 | T091 |
+| e2e（T092、T093） | 视图导出：界面的 `__cupperTest.views()` 按流给出 `{seq, complete, view}`；CLI 的 `cupper view index|<会话>`（test-harness 构建）每批事件后输出 `{stream, seq, resubscribed, view}`；`tools/e2e/src/nfr1.ts` 有"等两端到达宿主最后的 seq 再取视图"的辅助。`HostProvider` 在创建 client 时就调 `onClient`。T167 夹具 `processes()` 的注释说宿主不是 App 的子进程，实际是 Electron 主进程直接拉起的，T092 顺手改正 | T091 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
