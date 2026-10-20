@@ -1,7 +1,7 @@
 import { HostClient, type Validation } from "@cupper/host-client";
 import { hostError, MockHost, type MockConnection } from "@cupper/host-client/mock";
 import type { Handshake, ShellAPI } from "@cupper/shell-api";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { LayoutStore, PREF_KEYS } from "../layout/store";
 import { Frames } from "./stream";
@@ -212,3 +212,21 @@ describe("UNIT-ui-store", () => {
 function noPrefs(): ShellAPI["prefs"] {
   return { set: () => Promise.resolve(), onChange: () => () => undefined };
 }
+
+test("Frames calls requestAnimationFrame as the browser requires, with the window as this", () => {
+  const queued: (() => void)[] = [];
+  vi.stubGlobal("requestAnimationFrame", function (this: unknown, cb: () => void) {
+    if (this !== undefined && this !== globalThis) {
+      throw new TypeError("Illegal invocation");
+    }
+    queued.push(cb);
+  });
+  try {
+    const flush = vi.fn();
+    new Frames().mark({ versions: { flush } } as unknown as Parameters<Frames["mark"]>[0]);
+    queued.forEach((cb) => cb());
+    expect(flush).toHaveBeenCalledOnce();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

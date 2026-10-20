@@ -13,7 +13,11 @@ export class Frames {
   readonly #dirty = new Set<View>();
   #pending = false;
 
-  constructor(private readonly frame: (cb: () => void) => void = requestAnimationFrame) {}
+  // Called as a plain function: the browser's throws `Illegal invocation` when
+  // its `this` is not the window.
+  constructor(
+    private readonly frame: (cb: () => void) => void = (cb) => requestAnimationFrame(cb),
+  ) {}
 
   mark(view: View): void {
     this.#dirty.add(view);

@@ -38,7 +38,8 @@ use crate::orchestrator::testkit::text;
 use crate::quiescence::Quiescence;
 use crate::store::streams::{Published, Push, Sink, Streams, StreamsConfig};
 use crate::store::testutil::{TempDir, host_writer, query};
-use crate::store::{Durability, Readers, WriterThread, log, open_reader};
+use crate::store::{Durability, Readers, Writer, WriterThread, log, open_reader};
+use crate::supervisor::end_previous_run;
 use crate::supervisor::{Activity, Part};
 use crate::trust::Scan;
 
@@ -188,8 +189,21 @@ pub(super) struct Fixture {
     pub audit: mpsc::UnboundedReceiver<AuditRecord>,
     pub index: Arc<Index>,
     pub manager: SessionManager,
+    writer: Writer,
+    git: Option<GitTool>,
     _writer: WriterThread,
 }
+
+/// What a host run has of its own: the gateway's routes, the streams, what
+/// the agent is asked, the audit, the index and the sessions.
+type Run = (
+    Routes,
+    Streams,
+    mpsc::UnboundedReceiver<Seen>,
+    mpsc::UnboundedReceiver<AuditRecord>,
+    Arc<Index>,
+    SessionManager,
+);
 
 impl Fixture {
     /// The host's sessions on a fresh `host.db` with a trusted project in
@@ -222,6 +236,25 @@ impl Fixture {
             )
         };
         writer.submit(Durability::Normal, seed).await.unwrap();
+        let (routes, streams, seen, audit, index, manager) =
+            Self::run(&dir, &clock, &writer, git.clone());
+        Self {
+            dir,
+            clock,
+            routes,
+            streams,
+            seen,
+            events: None,
+            audit,
+            index,
+            manager,
+            writer,
+            git,
+            _writer: thread,
+        }
+    }
+
+    fn run(dir: &TempDir, clock: &ManualClock, writer: &Writer, git: Option<GitTool>) -> Run {
         let shared: Arc<dyn Clock> = Arc::new(clock.clone());
         let readers = Readers::open(&dir.host_db()).unwrap();
         let durations = Durations::default();
@@ -232,7 +265,6 @@ impl Fixture {
         let ((records, audit), index) = (mpsc::unbounded_channel(), Arc::new(Index::default()));
         let deps = SessionDeps {
             streams: streams.clone(),
-            writer: writer.clone(),
             readers,
             clock: Arc::clone(&shared),
             ids: Arc::new(IdGen::seeded(Arc::clone(&shared), 1)),
@@ -245,22 +277,30 @@ impl Fixture {
             admission: Arc::default(),
         };
         let conn = open_reader(&dir.host_db()).unwrap();
-        let mut routes = Routes::new(Ledger::load(&conn, writer, shared, &durations).unwrap());
+        let ledger = Ledger::load(&conn, writer.clone(), shared, &durations).unwrap();
+        let mut routes = Routes::new(ledger);
         let manager = SessionManager::new(deps);
         routes.sessions(Arc::new(manager.clone()));
-        let (events, _writer) = (None, thread);
-        Self {
-            dir,
-            clock,
-            routes,
-            streams,
-            seen,
-            events,
-            audit,
-            index,
-            manager,
-            _writer,
-        }
+        (routes, streams, seen, audit, index, manager)
+    }
+
+    /// The host stops without its orderly exit and starts again: the
+    /// sessions' actors stop with their mailboxes, the startup cleanup ends
+    /// in the rows what ran (design 5.2.13), and the sessions load from the
+    /// store when calls come for them.
+    pub fn restart(&mut self) {
+        let run = Self::run(&self.dir, &self.clock, &self.writer, self.git.clone());
+        (
+            self.routes,
+            self.streams,
+            self.seen,
+            self.audit,
+            self.index,
+            self.manager,
+        ) = run;
+        self.events = None;
+        let conn = rusqlite::Connection::open(self.dir.host_db()).unwrap();
+        end_previous_run(&conn, self.clock.now_wall_ms()).unwrap();
     }
 
     pub async fn call(&self, by: Principal, method: &str, params: Value) -> Result<Value, Value> {
