@@ -21,3 +21,29 @@
 | 合计 | | 103 | 110 |
 
 合计约 **215 行**，上限约 300。
+
+## 实现记录
+
+- **警告框**（`packages/ui-core/src/session/SessionBanners.tsx`）：
+  - `UntrustedBanner`：项目不是 `trusted` 时出现；`untrusted` 与 `stale` 各一句说明（5.2.6：项目配置没有加载，Claude 只用用户级配置，Codex 会话不能运行；`stale` 是配置变了、需要重新信任）；"信任此项目"走 `trust_project`。
+  - `ConfirmBanner`：`confirmation_required` 存在时出现，按 `reason` 取说明（`full_access_unconfirmed`、`tier_above_setter`，其余原因写"需要确认（原因码）"）；"确认"走 `confirm_config`。没有本地状态：确认之后警告框留着，直到会话流里的 `configured` 不再带 `confirmation_required`。
+  - `SessionBanners` 从索引流取会话的项目（订阅整个索引视图），从 `useStreams().session(id)` 取会话视图（订阅 `session` 键）。会话页现在接收 `sessionId`，警告框放在会话列顶部，左对齐，组内间距 4。
+  - 按钮用次级按钮底（`--color-btn-secondary`）；反馈走 `usePrivileged`。
+- **两处修正**：
+  - 提权横幅只写通用文案"命令行工具申请权限"（5.8.4），不显示申请方自述的 `client_name`；核实过的信息只在原生确认框里出现。
+  - 项目行的"未信任"放到行尾，和会话行的标签右对齐；悬停按钮改为浮在行尾（`absolute`），悬停、获得焦点或菜单打开时盖住并隐去标签。
+- **截图页夹具**：`index` 推广成 `streams`（按流名给 snapshot 的 op，例如 `index`、`session/s_7`），T081 的用例改用 `streams: { index }`。
+- **基线**：新增 `session-banners-light.png`、`session-banners-dark.png`；`sidebar-light.png`、`sidebar-dark.png`、`sidebar-narrow.png`、`banners.png` 因两处修正而变（横幅文案、"未信任"的位置），重新生成后逐张看过；UI-shell 不变。
+- **审阅截图**：`screenshots/`，截图页换回系统字体后截取，1280 × 820：两种主题的会话页警告框，以及修正后的侧边栏。按 F2，没有查看本机 Codex App 包。
+
+### 行数（不含 notes、lock、截图基线）
+
+| 模块 | 估计 | 实际 |
+|---|---|---|
+| 文案 | 12 | 9 |
+| 警告框（含会话页接线） | 75 | 97 |
+| 两处修正 | 8 | 8 |
+| 截图页夹具 | 8 | 6 |
+| UI-session-banners | 40 | 23 |
+| UNIT-ui-session-banners | 70 | 71 |
+| 合计 | 215 | **214** |
