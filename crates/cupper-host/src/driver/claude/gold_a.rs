@@ -471,7 +471,7 @@ fn gold_a_unknown_enums_are_judged_by_their_originals() {
         (
             &json!("allow_forever"),
             &json!("privileged"),
-            &json!({"persistent": true, "scope": "unknown"})
+            &json!({"persistent": true, "rule": {"prefix_risk": "unknown"}, "scope": "unknown"})
         )
     );
     assert_eq!(done["event"]["prompt_done"]["stop_reason"], "paused");
