@@ -16,9 +16,10 @@ export const COOLDOWN_MS = 1000;
  * How an answer went: `sent`; `again` when it lacked real input within the
  * cooldown after the window came forward, the one case for "请再按一次";
  * `revoke` when it lacked real input otherwise (say, right after typing), so
- * the panel leaves keyboard activation (RP-3); `failed` otherwise.
+ * the panel leaves keyboard activation (RP-3); `elsewhere` when another
+ * client answered first or the request expired; `failed` otherwise.
  */
-export type Answered = "sent" | "again" | "revoke" | "failed";
+export type Answered = "sent" | "again" | "revoke" | "elsewhere" | "failed";
 
 export function useRespond(sessionId: string) {
   const { client } = useHost();
@@ -41,11 +42,12 @@ export function useRespond(sessionId: string) {
         if (reason === "user_activation_required") {
           return Date.now() - focusedAt.current < COOLDOWN_MS ? "again" : "revoke";
         }
-        show({
-          id: "respond",
-          text: t("request:failed", { code: reason ?? code ?? "unexpected" }),
-        });
-        return "failed";
+        const elsewhere = reason === "already_resolved" || code === "expired";
+        const text = elsewhere
+          ? t("request:elsewhere")
+          : t("request:failed", { code: reason ?? code ?? "unexpected" });
+        show({ id: "respond", text });
+        return elsewhere ? "elsewhere" : "failed";
       }
     },
     [client, sessionId, show, t, focusedAt],
