@@ -295,6 +295,10 @@
 | T152 | 侧边面板开合的 spring 动画（0.5 s，bounce 0.1）没有做 | T084 |
 | T153 | 顶栏的"打开"和"⋯"目前是占位按钮（T128 换成工具栏按钮并能挂菜单），菜单内容归本任务 | T084 |
 | T106 | 侧边面板的默认宽度按 ui-spec 2.4 的公式 `max(320, min(窗口高×1.6, 主区宽−500), min(640, 主区宽−352))`，默认窗口下得 640，主区只剩 352；公式在 ui-spec 里标为【推测】，请核对 | T084 |
+| T134 | 取真实输入证据用 `guardOf(event.sender)?.take()`（`apps/desktop/src/main/input/`）；证据的 `key` 为 `escape` 时由本任务拒绝，Esc 不能触发特权操作。窗口桥只对幂等方式为 `command` 的方法消耗输入，读请求和通知不消耗 | T077 |
+| T078 | 窗口桥为了认出宿主的回应（`command_id` 重发表），入方向每个字节在主进程里多一次复制（`FrameDecoder` 的拼接），JSON 只在重发表非空时解析；测量主进程事件循环延迟时一并评估 | T077 |
+| T090、T092 | Q26 已在 Electron 44.9.0 上复测（设计 13 的 Q26 已关闭）：Playwright 的键盘输入不触发 `before-input-event`，不会被记成真实输入；e2e 的按键要经 `webContents.sendInputEvent` 发出；`page.click()` 产生同一按钮的 `mouseDown`、`mouseUp`。复测脚本在 `docs/tasks/T077-desktop-input-privileged/q26/` | T077 |
+| 作者（MAN-keyboard） | 实体键盘确认四项：Enter 批准、Esc 拒绝、数字键选择并提交、输入法选词时不触发。清单在 `docs/tasks/T077-desktop-input-privileged/notes.md`；涉及请求面板的部分要等 T083 做出面板。执行后按 `tests/ids.toml` 末尾的格式登记证据 | T077 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
