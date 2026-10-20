@@ -6,14 +6,16 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use cupper_protocol::annotations::WirePath;
+use cupper_protocol::annotations::{TimestampMs, WirePath};
 use cupper_protocol::capabilities::{ConfigOptionId, SessionCapabilities};
 use cupper_protocol::domain::{AgentKind, Tier};
 use cupper_protocol::envelope::Cause;
 use cupper_protocol::error::{ErrorCode, RpcError};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::SessionId;
-use cupper_protocol::index::{TrustState, WorkspaceKind};
+use cupper_protocol::index::{
+    SessionStatus, SessionSummary, TitleSource, TrustState, WorkspaceKind,
+};
 use cupper_protocol::interaction::{InteractionOutcome, InteractionRequest};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::methods::session::{
@@ -161,6 +163,7 @@ impl SessionManager {
             },
             confirmation_required: None,
         };
+        let (at, title) = (deps.clock.now_wall_ms(), preview(&params.message));
         let mut row = Rows::created(
             [
                 id.to_string(),
@@ -169,13 +172,13 @@ impl SessionManager {
                 path.clone(),
                 json!(configured.config).to_string(),
                 json!(params.message).to_string(),
-                preview(&params.message),
+                title.clone(),
                 principal.id.to_string(),
             ],
-            deps.clock.now_wall_ms(),
+            at,
         );
         if confirmed {
-            row.set_by(&id, deps.clock.now_wall_ms(), &principal.id, true);
+            row.set_by(&id, at, &principal.id, true);
         }
         let result = json!(SessionCreateResult {
             session_id: id.clone()
@@ -202,6 +205,27 @@ impl SessionManager {
             })),
         };
         writer.append(batch).await.map_err(internal)?;
+        let summary = SessionSummary {
+            session_id: id.clone(),
+            project_id: params.project_id.clone(),
+            agent: params.agent.clone(),
+            title_source: if title.is_empty() {
+                TitleSource::None
+            } else {
+                TitleSource::Prompt
+            },
+            title,
+            workspace_kind: WorkspaceKind::Local,
+            branch: None,
+            status: SessionStatus::Idle,
+            unread: false,
+            pending_interactions: 0,
+            pending_kind: None,
+            last_activity_at: TimestampMs(at),
+            error_code: None,
+            read_only: false,
+        };
+        deps.index.created(summary);
         let setter = (principal.clone(), confirmed);
         let core = SessionCore::new(
             id.clone(),

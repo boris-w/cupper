@@ -207,6 +207,7 @@ impl Host {
         let index = IndexHandle::start(IndexDeps {
             streams: streams.clone(),
             readers: readers.clone(),
+            db: writer.clone(),
             clock: clock.clone(),
             ids: ids.clone(),
             durations: durations.clone(),
@@ -296,6 +297,7 @@ impl Host {
         routes.sessions(Arc::new(sessions));
         Arc::new(agents).route(&mut routes);
         routes.index(Arc::new(index.clone()));
+        routes.presence(Arc::new(index.clone()));
         let config = GatewayConfig {
             host_id: run.host_id,
             data_epoch: run.epoch,

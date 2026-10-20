@@ -17,20 +17,47 @@ pub(super) mod tests;
 use std::fmt;
 
 use cupper_protocol::capabilities::{ConfigOption, ConfigOptionId, SessionCapabilities};
+use cupper_protocol::domain::FailureCode;
 use cupper_protocol::domain::Tier;
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
-use cupper_protocol::ids::SessionId;
-use cupper_protocol::index::PendingKind;
+use cupper_protocol::ids::{RequestId, SessionId};
+use cupper_protocol::index::{PendingKind, SessionSummary};
+use cupper_protocol::session::TurnStatus;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 pub use manager::{SESSION, SessionDeps, SessionManager};
 
-/// What the index (`crate::index::IndexHandle`) hears from the sessions.
+/// What the index (`crate::index::IndexHandle`) hears from the sessions:
+/// what a committed step changed, for the status (design 5.2.9).
 pub trait IndexNotes: Send + Sync + fmt::Debug {
-    /// The session's pending requests changed (design 5.2.7, step 4): how
-    /// many there are, and the class of the oldest.
-    fn pending(&self, session: &SessionId, count: u32, oldest: Option<PendingKind>);
+    /// A new session, before its first turn.
+    fn created(&self, summary: SessionSummary);
+    /// `notes` were committed at `at` (wall ms), the session's latest
+    /// activity.
+    fn note(&self, session: &SessionId, at: u64, notes: Vec<Note>);
+}
+
+/// One change of a session the index computes its status from.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Note {
+    TurnStarted,
+    /// A turn ended with the event at `seq`.
+    TurnEnded {
+        seq: u64,
+        status: TurnStatus,
+        error: Option<FailureCode>,
+    },
+    /// The pending requests (design 5.2.7, step 4): how many, and the
+    /// oldest one's class and ID.
+    Pending {
+        count: u32,
+        oldest: Option<(PendingKind, RequestId)>,
+    },
+    /// `workspace.ready`'s branch.
+    Branch(Option<String>),
+    /// `session.configured`'s `read_only`.
+    ReadOnly(bool),
 }
 
 /// The tier of permission mode `mode` by the agent's mapping.
