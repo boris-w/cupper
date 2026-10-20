@@ -8,6 +8,7 @@ pub mod durations;
 pub mod exit;
 pub mod failpoint;
 pub mod gateway;
+pub mod git;
 pub mod ledger;
 pub mod manifest;
 pub mod orchestrator;
