@@ -15,6 +15,7 @@ CREATE TABLE projects (
   removed_at     INTEGER,
   trust_state    TEXT NOT NULL DEFAULT 'untrusted',  -- untrusted | trusted | stale
   trust_digest   TEXT,
+  trust_manifest TEXT,                     -- JSON {relative path: sha-256 hex}, keys sorted: the trusted files
   trusted_at     INTEGER,
   trusted_by     TEXT                      -- pr_desktop | pr_test | auto_empty
 );
