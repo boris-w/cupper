@@ -248,6 +248,10 @@
 | T090 | E2E-quit-confirm：真实地弹出退出确认，需要一个运行中的回合或待处理的请求（例如用假 agent），再在主进程里替换 `dialog.showMessageBox`；关机路径可以经 `powerMonitor` 的 `shutdown` 事件触发。空闲时退出 App 不发 `host/exit`，宿主按空闲规则自行退出（编排者确认） | T007 |
 | 更新流程的任务 | `before-quit-for-update` 现在只挂好了跳过退出确认的钩子；实现更新流程时确认它确实经 Electron 的 `autoUpdater` 发出这个事件 | T007 |
 | 做"需要重启宿主"页面的界面任务 | 重启宿主的确认目前由主进程直接弹原生框；界面做页面时改为经 ShellAPI 触发 `startControl` 返回的 `restart` | T007 |
+| T077 | 真实输入检查加在 `apps/desktop/src/main/bridge/window-bridge.ts` 的 `#send` 里，白名单检查之后、转发之前；`interaction/respond`、`git/revert` 现在照常放行。preload 的 `requestPrivileged` 现在返回 `{status: "failed", error: "unsupported"}` | T076 |
+| T078 | 预测量脚本可以直接改成真实环境的测量：`docs/tasks/T076-desktop-window-bridge/premeasure.test.ts`，一次性的 vitest 配置在同一目录；e2e 断连钩子是 `__cupperE2E.disconnectWindow(webContentsId)`；预测量的数字和局限见该任务的 `notes.md` | T076 |
+| T160 | 自用构建跑不起来：`vite build --mode local` 被 vite 拒绝（"local" 与 `.env.local` 的后缀冲突）。换模式名，或改由别的方式传入 flavor | T076 |
+| 深链接、通知点击、更新器的任务 | preload 的 `onNavigate` 在 `shell:navigate` 通道上收，`updates.onState` 在 `updates:state` 通道上收，`installNow` 待接；主进程目前没有发送方 | T076 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
