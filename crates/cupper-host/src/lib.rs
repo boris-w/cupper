@@ -5,6 +5,7 @@ pub mod clock;
 pub mod diag;
 pub mod driver;
 pub mod durations;
+pub mod elevation;
 pub mod exit;
 pub mod failpoint;
 pub mod gateway;

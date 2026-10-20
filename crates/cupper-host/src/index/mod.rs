@@ -10,14 +10,18 @@
 //! - Projects and trust are in `projects`; the slow part of each call runs in
 //!   a task of its own and comes back to the actor as a message (rule 5).
 //! - `clients.updated` lists [`Gateway::clients`] on every connection opened
-//!   or closed.
+//!   or closed, and on every elevation granted or ended.
 //! - Session status, read marks, presence and notification intents are the
 //!   [`status`] core's, fed by the sessions' [`IndexNotes`], `session/mark_read`
 //!   and `client/presence`. `sessions.last_read_seq` is the one column of
 //!   `sessions` the index writes; the session actors never do.
 //! - `agents.updated` merges what each agent runtime reports ([`AgentNotes`]).
+//! - Elevation (design 5.8.4) is in [`elevations`].
+//! - The status core's timers and elevation's share one table and one alarm:
+//!   the actor waits in one place (design 5.2.16).
 
 mod budget;
+mod elevations;
 mod projects;
 mod rows;
 mod status;
@@ -48,17 +52,19 @@ use serde::de::DeserializeOwned;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 
+use self::elevations::{Asking, Elevations};
 use self::projects::{Context, Prepared};
 use self::rows::{Project, Tables};
 use self::status::{Action, Flush, Input, Status};
 use crate::clock::{Clock, IdGen};
 use crate::driver::runtime::status::AgentNotes;
 use crate::durations::Durations;
-use crate::gateway::{Call, Gateway, IndexPort, Opened, Port, Reply};
+use crate::elevation::{Ask, ElevationTimer, Requesters};
+use crate::gateway::{AuditRecord, Call, Gateway, IndexPort, Opened, Port, Reply};
 use crate::git::GitTool;
 use crate::ledger::{Outcome, Ticket};
 use crate::orchestrator::session::{IndexNotes, Note};
-use crate::pure::{Alarm, Core, TimerTable};
+use crate::pure::{Alarm, Core, TimerRequest, TimerTable};
 use crate::quiescence::{ActorKind, Participant, Quiescence};
 use crate::store::streams::{Batch, StreamError, StreamHandle, StreamView, StreamWriter, Streams};
 use crate::store::{Durability, ReadError, Readers, Writer};
@@ -85,6 +91,10 @@ pub struct IndexDeps {
     pub quiescence: Quiescence,
     /// `host.updated` of this run.
     pub host: HostUpdated,
+    /// What examines a CLI that asks for elevation.
+    pub requesters: Arc<dyn Requesters>,
+    /// The host's audit channel (design 5.8.6).
+    pub audit: mpsc::UnboundedSender<AuditRecord>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -106,7 +116,9 @@ pub struct IndexHandle {
 enum Mail {
     Call(Box<Call>, oneshot::Sender<Outcome>),
     Prepared(Box<Done>),
-    Clients,
+    Opened(Box<Opened>),
+    Closed(ConnId),
+    Examined(Box<(Ask, Asking)>),
     Status(Input),
     Rescanned(ProjectId, Scan),
     Agent(Box<AgentStatus>),
@@ -114,6 +126,15 @@ enum Mail {
     /// `test/seed` wrote sessions: reconcile with the tables again.
     #[cfg(feature = "test-harness")]
     Reconcile(oneshot::Sender<()>),
+    /// The alarm rang; nobody sends it.
+    Rung,
+}
+
+/// A timer of the status core or of elevation, in the actor's one table.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum Timer {
+    Status(Flush),
+    Elevation(ElevationTimer),
 }
 
 #[derive(Debug)]
@@ -131,7 +152,8 @@ impl IndexHandle {
         let mut writer = handle.writer()?;
         let mut tables = deps.readers.read(rows::read).await?;
         let mut status = Status::default();
-        let bodies = reconciled(&handle, &mut tables, &mut status, &deps.host);
+        let mut bodies = reconciled(&handle, &mut tables, &mut status, &deps.host);
+        bodies.extend(read(&handle, elevations::left_over));
         writer
             .append(Batch {
                 bodies,
@@ -148,6 +170,7 @@ impl IndexHandle {
             status,
             timers: TimerTable::new(),
             alarm: Alarm::new(Arc::clone(&deps.clock)),
+            elevations: Elevations::new(&deps.durations),
             mail: mail.clone(),
             gateway: Arc::clone(&gateway),
             deps,
@@ -186,13 +209,12 @@ impl Port for IndexHandle {
 }
 
 impl IndexPort for IndexHandle {
-    fn opened(&self, _: Opened) {
-        let _ = self.mail.send(Mail::Clients);
+    fn opened(&self, client: Opened) {
+        let _ = self.mail.send(Mail::Opened(Box::new(client)));
     }
 
     fn closed(&self, conn: &ConnId) {
-        let _ = self.mail.send(Mail::Status(Input::Closed(conn.clone())));
-        let _ = self.mail.send(Mail::Clients);
+        let _ = self.mail.send(Mail::Closed(conn.clone()));
     }
 }
 
@@ -236,7 +258,8 @@ struct IndexActor {
     writer: StreamWriter,
     tables: Tables,
     status: Status,
-    timers: TimerTable<Flush>,
+    elevations: Elevations,
+    timers: TimerTable<Timer>,
     alarm: Alarm,
     /// For the tasks it starts to answer.
     mail: mpsc::UnboundedSender<Mail>,
@@ -250,7 +273,7 @@ impl IndexActor {
             let next = participant.idle(async {
                 tokio::select! {
                     mail = inbox.recv() => mail,
-                    () = self.alarm.rung() => Some(Mail::Status(Input::Flush)),
+                    () = self.alarm.rung() => Some(Mail::Rung),
                 }
             });
             let Some(mail) = next.await else {
@@ -261,6 +284,10 @@ impl IndexActor {
                     if [SessionMarkRead::NAME, ClientPresence::NAME].contains(&call.method) =>
                 {
                     let _ = reply.send(self.attend(*call).await);
+                }
+                // Elevation's three methods.
+                Mail::Call(call, reply) if call.method.starts_with("auth/") => {
+                    self.elevation_call(*call, reply).await
                 }
                 Mail::Call(call, reply) => self.call(*call, reply),
                 Mail::Prepared(done) => {
@@ -275,14 +302,20 @@ impl IndexActor {
                     };
                     let _ = reply.send(outcome);
                 }
-                Mail::Clients => self.clients().await,
-                // The alarm rang.
-                Mail::Status(Input::Flush) => {
-                    let now = self.deps.clock.now_mono();
-                    while let Some(key) = self.timers.pop_due(now) {
-                        let _ = self.step(Status::timer_expired(key)).await;
-                    }
+                Mail::Opened(opened) => {
+                    self.opened(*opened);
+                    self.clients().await
                 }
+                Mail::Closed(conn) => {
+                    let _ = self.step(Input::Closed(conn.clone())).await;
+                    self.closed(conn).await;
+                    self.clients().await
+                }
+                Mail::Examined(asked) => {
+                    let (ask, asking) = *asked;
+                    self.examined(ask, asking).await
+                }
+                Mail::Rung => self.rung().await,
                 // Only a read mark fails, and `attend` is the one to answer.
                 Mail::Status(input) => {
                     let _ = self.step(input).await;
@@ -548,7 +581,7 @@ impl IndexActor {
                     stored =
                         written.map_err(|err| RpcError::app(ErrorCode::Internal, err.to_string()));
                 }
-                Action::Timer(request) => self.timers.apply(request),
+                Action::Timer(request) => self.timers.apply(timer(request, Timer::Status)),
             }
         }
         self.alarm.follow(&self.timers);
@@ -562,6 +595,20 @@ impl IndexActor {
             let _ = self.writer.append(batch).await;
         }
         stored
+    }
+
+    /// Hands each timer due now to its core.
+    async fn rung(&mut self) {
+        let now = self.deps.clock.now_mono();
+        while let Some(key) = self.timers.pop_due(now) {
+            match key {
+                Timer::Status(key) => {
+                    let _ = self.step(Status::timer_expired(key)).await;
+                }
+                Timer::Elevation(key) => self.expired(key).await,
+            }
+        }
+        self.alarm.follow(&self.timers);
     }
 
     /// One agent's status into `agents.updated`.
@@ -615,6 +662,17 @@ impl IndexActor {
         };
         // A lost update is written again by the next change; T028 logs it.
         let _ = self.writer.append(batch).await;
+    }
+}
+
+/// A core's timer request, for the actor's table.
+fn timer<K>(request: TimerRequest<K>, timer: fn(K) -> Timer) -> TimerRequest<Timer> {
+    match request {
+        TimerRequest::Set { key, at } => TimerRequest::Set {
+            key: timer(key),
+            at,
+        },
+        TimerRequest::Cancel(key) => TimerRequest::Cancel(timer(key)),
     }
 }
 

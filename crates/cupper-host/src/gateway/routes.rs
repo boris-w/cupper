@@ -15,7 +15,9 @@ use std::sync::Arc;
 
 use cupper_protocol::error::RpcError;
 use cupper_protocol::ids::ConnId;
-use cupper_protocol::methods::admin::PolicyDescribe;
+use cupper_protocol::methods::admin::{
+    AuthElevate, AuthElevationGet, AuthElevationRespond, PolicyDescribe,
+};
 use cupper_protocol::methods::handshake::{ClientPresence, Ping};
 use cupper_protocol::methods::interaction::{InteractionGet, InteractionRespond};
 use cupper_protocol::methods::project::{ProjectAdd, ProjectTrust, ProjectTrustInfo};
@@ -176,13 +178,16 @@ impl Routes {
         self.insert::<PolicyDescribe>(Target::Describe(port));
     }
 
-    /// The index port (T034) serves the project methods of M1a, and hears
-    /// of every connection that opens and closes.
+    /// The index port (T034) serves the project methods of M1a and
+    /// elevation (T038), and hears of every connection that opens and closes.
     pub fn index(&mut self, port: Arc<dyn IndexPort>) {
         let to = || Arc::clone(&port) as Arc<dyn Port>;
         self.add::<ProjectAdd>(to());
         self.add::<ProjectTrust>(to());
         self.add::<ProjectTrustInfo>(to());
+        self.add::<AuthElevate>(to());
+        self.add::<AuthElevationGet>(to());
+        self.add::<AuthElevationRespond>(to());
         self.index = Some(port);
     }
 
