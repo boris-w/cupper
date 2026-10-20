@@ -22,6 +22,7 @@
 //! ordinary setting, a denial, no running turns) is
 //! [`DescribeError::NotConfirmable`].
 
+use cupper_protocol::annotations::WirePath;
 use cupper_protocol::capabilities::ConfigOptionId;
 use cupper_protocol::domain::Tier;
 use cupper_protocol::error::{INVALID_PARAMS, RpcError};
@@ -94,6 +95,9 @@ pub struct Facts {
     pub mode_tier: Option<Tier>,
     /// `interaction/respond`: the chosen option, as the pending request has it.
     pub option: Option<InteractionOption>,
+    /// `session/create`: the project's directory, from the index; `None` for
+    /// a project the host does not know.
+    pub project_path: Option<WirePath>,
     /// `host/exit`, `host/prepare_upgrade`.
     pub running_turns: u32,
 }
@@ -143,6 +147,7 @@ pub fn describe(
             let details = [
                 ("agent", json!(p.agent)),
                 ("project_id", json!(p.project_id)),
+                ("project_path", json!(facts.project_path)),
             ];
             (A::FullAccess, with_mode(map(details), mode))
         }
@@ -266,6 +271,7 @@ mod tests {
         Facts {
             mode_tier,
             running_turns,
+            project_path: Some(WirePath("/w/app".into())),
             ..Facts::default()
         }
     }
@@ -295,7 +301,7 @@ mod tests {
                     "config": {"permission_mode": "bypassPermissions"}}),
                 &full,
                 json!({"action": "full_access", "details": {"agent": "claude",
-                    "project_id": "p_1", "mode": "bypassPermissions"}}),
+                    "project_id": "p_1", "project_path": "/w/app", "mode": "bypassPermissions"}}),
             ),
             (
                 "session/set_config",

@@ -17,9 +17,28 @@ import type { Translate } from "../host/dialogs";
 
 /** The requester's own words, at most this long (design 5.8.4). */
 const SELF_REPORTED_CHARS = 200;
+/** A path past this many characters keeps its start and its end (T135). */
+export const PATH_CHARS = 120;
+const PATH_HEAD = 30;
 
 const shown = (text: string) => escapeInvisible(text);
 const clipped = (text: string) => shown([...text].slice(0, SELF_REPORTED_CHARS).join(""));
+/**
+ * A path, its invisible characters escaped. A long one keeps its first
+ * characters and its last whole components around an ellipsis: the volume or
+ * home it is under, and the directory itself.
+ */
+export function shownPath(path: string): string {
+  const chars = [...path];
+  if (chars.length <= PATH_CHARS) {
+    return shown(path);
+  }
+  const tail = chars.slice(PATH_HEAD + 1 - PATH_CHARS).join("");
+  const component = tail.indexOf("/");
+  const end = component > 0 ? tail.slice(component) : tail;
+  return `${shown(chars.slice(0, PATH_HEAD).join(""))}…${shown(end)}`;
+}
+
 const lines = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join("\n");
 
 /** Button 0 confirms; button 1, the default and Esc, does not. */
@@ -79,9 +98,10 @@ export function setConfigBox(t: Translate, title: string, mode: string) {
   return box(t, t("set_config_title"), detail, ["confirm", "cancel"]);
 }
 
-export function createSessionBox(t: Translate, agent: string, mode: string) {
+export function createSessionBox(t: Translate, agent: string, mode: string, path?: string) {
   const detail = lines(
     t("create_session_detail", { agent: shown(agent) }),
+    path !== undefined && t("project_path", { path: shownPath(path) }),
     t("full_access", { mode: shown(mode) }),
   );
   return box(t, t("create_session_title"), detail, ["confirm", "cancel"]);
@@ -108,14 +128,14 @@ function finding(t: Translate, f: Finding): string {
 /** The findings one by one, links out of the workspace marked; "Do not trust" is the default. */
 export function trustBox(
   t: Translate,
-  path: string | undefined,
+  path: string,
   scan: Pick<TrustScan, "findings" | "findings_omitted">,
   again: boolean,
 ) {
   const omitted = scan.findings_omitted ?? 0;
   const detail = lines(
     again && t("trust_again"),
-    path !== undefined && shown(path),
+    t("project_path", { path: shownPath(path) }),
     t("trust_detail"),
     ...scan.findings.map((f) => finding(t, f)),
     omitted > 0 && t("findings_omitted", { count: omitted }),
@@ -128,6 +148,7 @@ export function elevationBox(t: Translate, request: AuthElevationGetResult) {
   const { verified, self_reported: said, scopes } = request;
   const chain = verified.parent_chain.map((p) => `${shown(p.executable)} (${p.pid})`).join(" ← ");
   const detail = lines(
+    !verified.bundled_cli && t("elevation_not_bundled"),
     t("elevation_verified"),
     t("elevation_executable", { path: shown(verified.executable) }),
     verified.signing == null
