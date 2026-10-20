@@ -298,7 +298,7 @@ impl SessionActor {
                 if cfg!(any(test, feature = "test-harness")) {
                     panic!("{bug}");
                 }
-                eprintln!("cupper-host: {bug}");
+                tracing::error!("{bug}");
             }
             appended.map(drop).map_err(|e| e.to_string())
         };
