@@ -18,6 +18,8 @@
     "@cupper/i18n": "workspace:*",
     "@cupper/protocol": "workspace:*",
     "@cupper/shell-api": "workspace:*",
+    "@cupper/ui-core": "workspace:*",
+    "@tailwindcss/vite": "4.3.3",
     "@types/node": "24.19.1",
     "electron": "44.9.0",
     "electron-builder": "26.17.0",

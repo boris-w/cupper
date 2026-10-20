@@ -7,9 +7,9 @@
 //! result (design 5.2.3, rule 3); only then does the reply go out, and the
 //! step's driver commands and attaches. An attach runs in a task of its own
 //! and comes back as an input; so does a snapshot, which is `skipped` until
-//! T061 brings git snapshots (plan 1.3). The index hears of the requests as
-//! they appear and resolve; the audit channel of answers from the CLI and the
-//! test harness (design 5.8.6).
+//! T061 brings git snapshots (plan 1.3). The index hears of each committed
+//! step's turns, requests, branch and read-only state; the audit channel of
+//! answers from the CLI and the test harness (design 5.8.6).
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::mem;
@@ -53,7 +53,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use super::core::{Action, Input, Key, SessionCore};
 use super::rows::Rows;
-use super::{IndexNotes, internal, mode_tier, not_found, parse, tier_of};
+use super::{IndexNotes, Note, internal, mode_tier, not_found, parse, tier_of};
 use crate::clock::Clock;
 use crate::driver::api::{
     AgentError, AgentPort, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent,
@@ -552,6 +552,7 @@ impl SessionActor {
                 EventBody::InteractionRequested(_) | EventBody::InteractionResolved(_)
             )
         });
+        let mut notes = notes(first_seq, &events);
         let idle = changes.is_empty() && completion.is_none();
         let record = completion.as_ref().map(|c| c.row());
         let with = move |conn: &rusqlite::Connection| {
@@ -601,7 +602,10 @@ impl SessionActor {
             let (count, oldest) = self.view(pending);
             let count = u32::try_from(count).unwrap_or(u32::MAX);
             self.parts.pending.store(count, Ordering::Relaxed);
-            self.parts.index.pending(&self.parts.id, count, oldest);
+            notes.push(Note::Pending { count, oldest });
+        }
+        if !notes.is_empty() {
+            self.parts.index.note(&self.parts.id, at, notes);
         }
         for command in driver {
             self.parts.agent.send(command);
@@ -968,7 +972,7 @@ impl SessionActor {
             status,
             unread,
             pending_interactions: u32::try_from(pending.0).unwrap_or(u32::MAX),
-            pending_kind: pending.1,
+            pending_kind: pending.1.map(|(kind, _)| kind),
             last_activity_at: TimestampMs(active),
             read_only,
         };
@@ -981,15 +985,36 @@ impl SessionActor {
     }
 }
 
-/// The session's pending requests, and the class of the oldest.
-fn pending(view: &SessionView) -> (usize, Option<PendingKind>) {
+/// The session's pending requests, and the class and ID of the oldest.
+fn pending(view: &SessionView) -> (usize, Option<(PendingKind, RequestId)>) {
     let mut pending: Vec<_> = view.requests.values().filter(|r| r.is_pending()).collect();
     pending.sort_by_key(|r| r.requested.created_at.0);
-    let kind = pending.first().map(|r| match r.requested.request {
-        InteractionRequest::Question(_) | InteractionRequest::AuthUrl(_) => PendingKind::Input,
-        _ => PendingKind::Approval,
+    let oldest = pending.first().map(|r| {
+        let kind = match r.requested.request {
+            InteractionRequest::Question(_) | InteractionRequest::AuthUrl(_) => PendingKind::Input,
+            _ => PendingKind::Approval,
+        };
+        (kind, r.requested.request_id.clone())
     });
-    (pending.len(), kind)
+    (pending.len(), oldest)
+}
+
+/// What the index hears of `bodies`, committed from seq `first_seq` on.
+fn notes(first_seq: u64, bodies: &[EventBody]) -> Vec<Note> {
+    let notes = (first_seq..)
+        .zip(bodies)
+        .filter_map(|(seq, body)| match body {
+            EventBody::TurnStarted(_) => Some(Note::TurnStarted),
+            EventBody::TurnCompleted(t) => Some(Note::TurnEnded {
+                seq,
+                status: t.status.clone(),
+                error: t.error_code.clone(),
+            }),
+            EventBody::WorkspaceReady(ready) => Some(Note::Branch(ready.branch.clone())),
+            EventBody::SessionConfigured(c) => Some(Note::ReadOnly(c.read_only)),
+            _ => None,
+        });
+    notes.collect()
 }
 
 /// The rescan of the project's trust range, which fails closed: a project

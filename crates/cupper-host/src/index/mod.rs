@@ -11,48 +11,63 @@
 //!   a task of its own and comes back to the actor as a message (rule 5).
 //! - `clients.updated` lists [`Gateway::clients`] on every connection opened
 //!   or closed, and on every elevation granted or ended.
+//! - Session status, read marks, presence and notification intents are the
+//!   [`status`] core's, fed by the sessions' [`IndexNotes`], `session/mark_read`
+//!   and `client/presence`. `sessions.last_read_seq` is the one column of
+//!   `sessions` the index writes; the session actors never do.
+//! - `agents.updated` merges what each agent runtime reports ([`AgentNotes`]).
 //! - Elevation (design 5.8.4) is in [`elevations`].
-//! - Session status, read marks, presence, notification intents and agents
-//!   are T100's; [`IndexNotes`] so far takes the pending requests into the
-//!   summary.
+//! - The status core's timers and elevation's share one table and one alarm:
+//!   the actor waits in one place (design 5.2.16).
 
 mod budget;
 mod elevations;
 mod projects;
 mod rows;
+mod status;
 
+use std::mem;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock, Weak};
 
 use cupper_protocol::envelope::Cause;
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::{ConnId, ProjectId, SessionId};
-use cupper_protocol::index::{ClientsUpdated, HostUpdated, PendingKind};
+use cupper_protocol::ids::{ConnId, IntentId, ProjectId, SessionId};
+use cupper_protocol::index::{
+    AgentStatus, AgentsUpdated, ClientsUpdated, GitTools, HostUpdated, NotificationIntent,
+    SessionSummary,
+};
+use cupper_protocol::methods::handshake::{ClientPresence, ClientPresenceParams};
 use cupper_protocol::methods::project::{
     ProjectAdd, ProjectAddParams, ProjectTrust, ProjectTrustParams,
 };
-use cupper_protocol::rpc::Method;
+use cupper_protocol::methods::session::{SessionMarkRead, SessionMarkReadParams};
+use cupper_protocol::rpc::{Method, Notification};
 use cupper_protocol::sync::StreamId;
 use cupper_protocol::view::IndexView;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
+use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 
 use self::elevations::{Asking, Elevations};
 use self::projects::{Context, Prepared};
 use self::rows::{Project, Tables};
+use self::status::{Action, Flush, Input, Status};
 use crate::clock::{Clock, IdGen};
+use crate::driver::runtime::status::AgentNotes;
 use crate::durations::Durations;
-use crate::elevation::{Ask, Requesters};
+use crate::elevation::{Ask, ElevationTimer, Requesters};
 use crate::gateway::{AuditRecord, Call, Gateway, IndexPort, Opened, Port, Reply};
 use crate::git::GitTool;
 use crate::ledger::{Outcome, Ticket};
-use crate::orchestrator::session::IndexNotes;
+use crate::orchestrator::session::{IndexNotes, Note};
+use crate::pure::{Alarm, Core, TimerRequest, TimerTable};
 use crate::quiescence::{ActorKind, Participant, Quiescence};
 use crate::store::streams::{Batch, StreamError, StreamHandle, StreamView, StreamWriter, Streams};
-use crate::store::{Durability, ReadError, Readers};
+use crate::store::{Durability, ReadError, Readers, Writer};
 use crate::supervisor::{Activity, Part};
 use crate::trust::{Scan, Trust};
 
@@ -65,6 +80,8 @@ pub const INDEX: ActorKind = ActorKind::new("index");
 pub struct IndexDeps {
     pub streams: Streams,
     pub readers: Readers,
+    /// For `sessions.last_read_seq`, written without events.
+    pub db: Writer,
     pub clock: Arc<dyn Clock>,
     pub ids: Arc<IdGen>,
     pub durations: Durations,
@@ -102,12 +119,22 @@ enum Mail {
     Opened(Box<Opened>),
     Closed(ConnId),
     Examined(Box<(Ask, Asking)>),
-    Pending(SessionId, u32, Option<PendingKind>),
+    Status(Input),
     Rescanned(ProjectId, Scan),
+    Agent(Box<AgentStatus>),
     Checkpoint(oneshot::Sender<()>),
     /// `test/seed` wrote sessions: reconcile with the tables again.
     #[cfg(feature = "test-harness")]
     Reconcile(oneshot::Sender<()>),
+    /// The alarm rang; nobody sends it.
+    Rung,
+}
+
+/// A timer of the status core or of elevation, in the actor's one table.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum Timer {
+    Status(Flush),
+    Elevation(ElevationTimer),
 }
 
 #[derive(Debug)]
@@ -123,8 +150,10 @@ impl IndexHandle {
     pub async fn start(deps: IndexDeps) -> Result<Self, IndexError> {
         let handle = deps.streams.open(&StreamId::Index).await?;
         let mut writer = handle.writer()?;
-        let tables = deps.readers.read(rows::read).await?;
-        let bodies = read(&handle, |view| rows::reconcile(view, &tables, &deps.host));
+        let mut tables = deps.readers.read(rows::read).await?;
+        let mut status = Status::default();
+        let mut bodies = reconciled(&handle, &mut tables, &mut status, &deps.host);
+        bodies.extend(read(&handle, elevations::left_over));
         writer
             .append(Batch {
                 bodies,
@@ -138,7 +167,10 @@ impl IndexHandle {
             handle,
             writer,
             tables,
-            elevations: Elevations::new(&deps.durations, Arc::clone(&deps.clock)),
+            status,
+            timers: TimerTable::new(),
+            alarm: Alarm::new(Arc::clone(&deps.clock)),
+            elevations: Elevations::new(&deps.durations),
             mail: mail.clone(),
             gateway: Arc::clone(&gateway),
             deps,
@@ -187,14 +219,25 @@ impl IndexPort for IndexHandle {
 }
 
 impl IndexNotes for IndexHandle {
-    fn pending(&self, session: &SessionId, count: u32, oldest: Option<PendingKind>) {
+    fn created(&self, summary: SessionSummary) {
         let _ = self
             .mail
-            .send(Mail::Pending(session.clone(), count, oldest));
+            .send(Mail::Status(Input::Created(Box::new(summary))));
+    }
+
+    fn note(&self, session: &SessionId, at: u64, notes: Vec<Note>) {
+        let input = Input::Notes(session.clone(), at, notes);
+        let _ = self.mail.send(Mail::Status(input));
     }
 
     fn rescanned(&self, project: &ProjectId, scan: Scan) {
         let _ = self.mail.send(Mail::Rescanned(project.clone(), scan));
+    }
+}
+
+impl AgentNotes for IndexHandle {
+    fn agent(&self, status: AgentStatus) {
+        let _ = self.mail.send(Mail::Agent(Box::new(status)));
     }
 }
 
@@ -214,7 +257,10 @@ struct IndexActor {
     handle: StreamHandle,
     writer: StreamWriter,
     tables: Tables,
+    status: Status,
     elevations: Elevations,
+    timers: TimerTable<Timer>,
+    alarm: Alarm,
     /// For the tasks it starts to answer.
     mail: mpsc::UnboundedSender<Mail>,
     gateway: Arc<OnceLock<Weak<Gateway>>>,
@@ -226,19 +272,19 @@ impl IndexActor {
         loop {
             let next = participant.idle(async {
                 tokio::select! {
-                    mail = inbox.recv() => Some(mail),
-                    () = self.elevations.alarm.rung() => None,
+                    mail = inbox.recv() => mail,
+                    () = self.alarm.rung() => Some(Mail::Rung),
                 }
             });
-            let mail = match next.await {
-                Some(Some(mail)) => mail,
-                Some(None) => break,
-                None => {
-                    self.rung().await;
-                    continue;
-                }
+            let Some(mail) = next.await else {
+                break;
             };
             match mail {
+                Mail::Call(call, reply)
+                    if [SessionMarkRead::NAME, ClientPresence::NAME].contains(&call.method) =>
+                {
+                    let _ = reply.send(self.attend(*call).await);
+                }
                 // Elevation's three methods.
                 Mail::Call(call, reply) if call.method.starts_with("auth/") => {
                     self.elevation_call(*call, reply).await
@@ -261,6 +307,7 @@ impl IndexActor {
                     self.clients().await
                 }
                 Mail::Closed(conn) => {
+                    let _ = self.step(Input::Closed(conn.clone())).await;
                     self.closed(conn).await;
                     self.clients().await
                 }
@@ -268,30 +315,31 @@ impl IndexActor {
                     let (ask, asking) = *asked;
                     self.examined(ask, asking).await
                 }
-                Mail::Pending(session, count, oldest) => self.pending(session, count, oldest).await,
+                Mail::Rung => self.rung().await,
+                // Only a read mark fails, and `attend` is the one to answer.
+                Mail::Status(input) => {
+                    let _ = self.step(input).await;
+                }
                 Mail::Rescanned(project, scan) => self.rescanned(project, scan).await,
+                Mail::Agent(status) => self.agent(*status).await,
                 #[cfg(feature = "test-harness")]
                 Mail::Reconcile(done) => {
-                    if let Ok(tables) = self.deps.readers.read(rows::read).await {
-                        let host = &self.deps.host;
-                        let bodies =
-                            read(&self.handle, |view| rows::reconcile(view, &tables, host));
-                        if self
-                            .writer
-                            .append(Batch {
-                                bodies,
-                                ..Batch::default()
-                            })
-                            .await
-                            .is_ok()
-                        {
-                            self.tables.sessions = tables.sessions;
+                    if let Ok(mut tables) = self.deps.readers.read(rows::read).await {
+                        let (status, host) = (&mut self.status, &self.deps.host);
+                        let bodies = reconciled(&self.handle, &mut tables, status, host);
+                        let batch = Batch {
+                            bodies,
+                            ..Batch::default()
+                        };
+                        if self.writer.append(batch).await.is_ok() {
                             self.tables.workspaces = tables.workspaces;
                         }
                     }
                     let _ = done.send(());
                 }
                 Mail::Checkpoint(done) => {
+                    // What gathered goes out first.
+                    let _ = self.step(Input::Flush).await;
                     // A failed checkpoint costs the next start a longer load.
                     let _ = self.writer.checkpoint().await;
                     let _ = done.send(());
@@ -485,18 +533,100 @@ impl IndexActor {
         }
     }
 
-    /// The session's pending requests go into its summary; its status is
-    /// T100's.
-    async fn pending(&mut self, session: SessionId, count: u32, oldest: Option<PendingKind>) {
-        let summary = read(&self.handle, |view| view.sessions.get(&session).cloned());
-        let Some(mut summary) = summary else {
-            return;
+    /// `session/mark_read` and `client/presence`.
+    async fn attend(&mut self, call: Call) -> Outcome {
+        let input = if call.method == SessionMarkRead::NAME {
+            let params = parse::<SessionMarkReadParams>(&call.params)?;
+            Input::MarkRead(params.session_id, params.up_to_seq)
+        } else {
+            let params = parse::<ClientPresenceParams>(&call.params)?;
+            Input::Presence {
+                conn: call.conn,
+                kind: call.principal.kind,
+                foreground: params.foreground,
+                session: params.session_id,
+            }
         };
-        if (summary.pending_interactions, &summary.pending_kind) != (count, &oldest) {
-            summary.pending_interactions = count;
-            summary.pending_kind = oldest;
-            self.append(EventBody::SessionUpserted(summary)).await;
+        self.step(input).await?;
+        Ok(json!({}))
+    }
+
+    /// Steps the status core and carries out what it decides: the summaries
+    /// and intents go out in one batch, after the read mark is stored.
+    async fn step(&mut self, input: Input) -> Result<(), RpcError> {
+        let actions = self.status.step(input, self.deps.clock.now());
+        let (mut bodies, mut stored) = (Vec::new(), Ok(()));
+        for action in actions {
+            match action {
+                Action::Upsert(summary) => bodies.push(EventBody::SessionUpserted(*summary)),
+                Action::Intent(intent) => {
+                    let id = self.deps.ids.new_id().as_u128();
+                    bodies.push(EventBody::NotificationIntent(NotificationIntent {
+                        intent_id: IntentId::from_uuid(id),
+                        session_id: intent.session,
+                        reason: intent.reason,
+                        request_id: intent.request,
+                    }));
+                }
+                Action::Read(session, seq) => {
+                    let session = session.to_string();
+                    let stored_at = self.deps.db.submit(Durability::Normal, move |conn| {
+                        conn.execute(
+                            "UPDATE sessions SET last_read_seq = ?2
+                             WHERE session_id = ?1 AND last_read_seq < ?2",
+                            rusqlite::params![session, seq],
+                        )
+                    });
+                    let written = stored_at.await.map(drop);
+                    stored =
+                        written.map_err(|err| RpcError::app(ErrorCode::Internal, err.to_string()));
+                }
+                Action::Timer(request) => self.timers.apply(timer(request, Timer::Status)),
+            }
         }
+        self.alarm.follow(&self.timers);
+        if !bodies.is_empty() {
+            let batch = Batch {
+                bodies,
+                ..Batch::default()
+            };
+            // A lost summary is written again by the next start's
+            // reconciliation; T028 logs it.
+            let _ = self.writer.append(batch).await;
+        }
+        stored
+    }
+
+    /// Hands each timer due now to its core.
+    async fn rung(&mut self) {
+        let now = self.deps.clock.now_mono();
+        while let Some(key) = self.timers.pop_due(now) {
+            match key {
+                Timer::Status(key) => {
+                    let _ = self.step(Status::timer_expired(key)).await;
+                }
+                Timer::Elevation(key) => self.expired(key).await,
+            }
+        }
+        self.alarm.follow(&self.timers);
+    }
+
+    /// One agent's status into `agents.updated`.
+    async fn agent(&mut self, status: AgentStatus) {
+        let agents = read(&self.handle, |view| view.agents.clone());
+        let mut agents = agents.unwrap_or_else(|| AgentsUpdated {
+            agents: Vec::new(),
+            git: GitTools {
+                version: None,
+                lfs: None,
+            },
+        });
+        match agents.agents.iter_mut().find(|a| a.agent == status.agent) {
+            Some(known) if *known == status => return,
+            Some(known) => *known = status,
+            None => agents.agents.push(status),
+        }
+        self.append(EventBody::AgentsUpdated(agents)).await;
     }
 
     /// A session rescanned its project (design 5.2.6): a trusted project
@@ -535,8 +665,35 @@ impl IndexActor {
     }
 }
 
+/// A core's timer request, for the actor's table.
+fn timer<K>(request: TimerRequest<K>, timer: fn(K) -> Timer) -> TimerRequest<Timer> {
+    match request {
+        TimerRequest::Set { key, at } => TimerRequest::Set {
+            key: timer(key),
+            at,
+        },
+        TimerRequest::Cancel(key) => TimerRequest::Cancel(timer(key)),
+    }
+}
+
 /// A row write of [`projects`].
 type Write = fn(&Project, &rusqlite::Connection) -> rusqlite::Result<()>;
+
+/// The events that bring the index stream to `tables`, the sessions' rows
+/// going through `status`.
+fn reconciled(
+    handle: &StreamHandle,
+    tables: &mut Tables,
+    status: &mut Status,
+    host: &HostUpdated,
+) -> Vec<EventBody> {
+    read(handle, |view| {
+        let mut bodies = rows::reconcile(view, tables, host);
+        let sessions = status.load(mem::take(&mut tables.sessions), &view.sessions);
+        bodies.extend(sessions.into_iter().map(EventBody::SessionUpserted));
+        bodies
+    })
+}
 
 fn read<T>(handle: &StreamHandle, read: impl FnOnce(&IndexView) -> T) -> T {
     handle.read(|view, _| match view {

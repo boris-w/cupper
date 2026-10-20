@@ -11,46 +11,50 @@ use sha2::{Digest as _, Sha256};
 
 use super::plan::split;
 use super::*;
-use crate::manifest::{self, FileHash};
+use crate::clock::ManualClock;
+use crate::manifest::FileHash;
 use crate::store::testutil::TempDir;
 
-const ESBUILD: &str = "Resources/runtime/esbuild-wasm-0.1.0";
+pub(super) const ESBUILD: &str = "Resources/runtime/esbuild-wasm-0.1.0";
 
-struct Fixture {
-    tmp: TempDir,
-    files: BTreeMap<String, FileHash>,
+pub(super) struct Fixture {
+    pub tmp: TempDir,
+    pub files: BTreeMap<String, FileHash>,
+    /// Where claude-agent-acp's packages come from, and its plan.
+    pub registry: String,
+    pub claude: Option<ComponentPlan>,
 }
 
 impl Fixture {
-    fn new(name: &str) -> Self {
-        let tmp = TempDir::new(name);
+    pub fn new(name: &str) -> Self {
         let mut fixture = Self {
-            tmp,
+            tmp: TempDir::new(name),
             files: BTreeMap::new(),
+            registry: npm::REGISTRY.to_owned(),
+            claude: None,
         };
-        let node = fs::read("/usr/bin/true").unwrap();
-        let files: [(&str, &[u8]); 4] = [
-            ("Helpers/node", &node),
-            ("Resources/runtime/node-LICENSE", b"licence"),
-            ("Resources/runtime/esbuild-wasm-0.1.0/package.json", b"{}"),
-            ("Resources/runtime/esbuild-wasm-0.1.0/lib/main.js", b"main"),
-        ];
-        for (path, bytes) in files {
-            fixture.write(path, bytes);
-            let (sha256, cdhash) = (format!("{:x}", Sha256::digest(bytes)), None);
-            fixture
-                .files
-                .insert(path.to_owned(), FileHash { sha256, cdhash });
-        }
+        fixture.add("Helpers/node", &fs::read("/usr/bin/true").unwrap(), 0o755);
+        fixture.add("Resources/runtime/node-LICENSE", b"licence", 0o644);
+        fixture.add(&format!("{ESBUILD}/package.json"), b"{}", 0o644);
+        fixture.add(&format!("{ESBUILD}/lib/main.js"), b"main", 0o644);
         fixture.write("Resources/runtime/bundle-claude-acp.mjs", b"for T115");
         let node = fixture.contents().join("Helpers/node");
-        fs::set_permissions(&node, fs::Permissions::from_mode(0o755)).unwrap();
         let cdhash = cupper_sys::file_cdhash(&node).unwrap().to_string();
         fixture.files.get_mut("Helpers/node").unwrap().cdhash = Some(cdhash);
         fixture
     }
 
-    fn contents(&self) -> PathBuf {
+    /// Writes a bundled file and lists it with its sha-256.
+    pub fn add(&mut self, path: &str, bytes: &[u8], mode: u32) {
+        self.write(path, bytes);
+        let permissions = fs::Permissions::from_mode(mode);
+        fs::set_permissions(self.contents().join(path), permissions).unwrap();
+        let (sha256, cdhash) = (format!("{:x}", Sha256::digest(bytes)), None);
+        self.files
+            .insert(path.to_owned(), FileHash { sha256, cdhash });
+    }
+
+    pub fn contents(&self) -> PathBuf {
         self.tmp.path().join("Cupper.app/Contents")
     }
 
@@ -60,37 +64,63 @@ impl Fixture {
         fs::write(path, bytes).unwrap();
     }
 
-    fn runtime(&self) -> PathBuf {
+    pub fn runtime(&self) -> PathBuf {
         self.tmp.path().join("data/runtime")
     }
 
     fn plans(&self) -> Vec<ComponentPlan> {
-        split("1.0.0", "0.1.0", &self.files)
+        let mut plans = split("1.0.0", "0.1.0", &self.files);
+        plans.extend(self.claude.clone());
+        plans
     }
 
-    /// Runs an installer; each component's statuses in order, from
-    /// `Missing`.
-    fn run_with(&self, bundle: Box<dyn Bundle>, in_use: &[(Component, &str)]) -> Histories {
+    pub fn installer(&self, bundle: Arc<dyn Bundle>, in_use: &[(Component, &str)]) -> Installer {
         let in_use = in_use.iter().map(|(c, v)| (*c, (*v).to_owned()));
-        let installer = Installer::new(self.plans(), bundle, self.runtime(), in_use.collect());
-        let mut histories = histories(&[Status::Missing], &[Status::Missing]);
-        installer.run(|statuses| {
-            for (component, status) in statuses {
-                let history = histories.get_mut(component).unwrap();
-                if history.last() != Some(status) {
-                    history.push(*status);
+        Installer {
+            plans: self.plans(),
+            bundle,
+            dir: self.runtime(),
+            in_use: in_use.collect(),
+            registry: self.registry.clone(),
+            proxy: None,
+            durations: Durations::default(),
+        }
+    }
+
+    /// Runs `installer` on `clock`; each component's statuses in order, from
+    /// `Missing`.
+    pub async fn run_on(installer: &Installer, clock: &dyn Clock) -> Histories {
+        let plans = installer.plans.iter();
+        let mut histories: Histories = plans
+            .map(|p| (p.component, vec![Status::Missing]))
+            .collect();
+        installer
+            .run(clock, |statuses| {
+                for (component, status) in statuses {
+                    let history = histories.get_mut(component).unwrap();
+                    if history.last() != Some(status) {
+                        history.push(*status);
+                    }
                 }
-            }
-        });
+            })
+            .await;
         histories
     }
 
+    fn run_with(&self, bundle: Arc<dyn Bundle>, in_use: &[(Component, &str)]) -> Histories {
+        let installer = self.installer(bundle, in_use);
+        let clock = ManualClock::new();
+        let mut runtime = tokio::runtime::Builder::new_current_thread();
+        let run = Self::run_on(&installer, &clock);
+        runtime.enable_all().build().unwrap().block_on(run)
+    }
+
     fn run(&self) -> Histories {
-        self.run_with(Box::new(BundleDir(self.contents())), &[])
+        self.run_with(Arc::new(BundleDir(self.contents())), &[])
     }
 
     /// The names in a component's directory.
-    fn listing(&self, component: Component) -> Vec<String> {
+    pub fn listing(&self, component: Component) -> Vec<String> {
         let dir = fs::read_dir(self.runtime().join(component.name())).unwrap();
         let mut names: Vec<_> = dir
             .map(|e| e.unwrap().file_name().into_string().unwrap())
@@ -100,7 +130,7 @@ impl Fixture {
     }
 }
 
-type Histories = BTreeMap<Component, Vec<Status>>;
+pub(super) type Histories = BTreeMap<Component, Vec<Status>>;
 
 fn histories(node: &[Status], esbuild: &[Status]) -> Histories {
     BTreeMap::from([
@@ -109,8 +139,8 @@ fn histories(node: &[Status], esbuild: &[Status]) -> Histories {
     ])
 }
 
-const INSTALLED: &[Status] = &[Status::Missing, Status::Installing, Status::Ready];
-const BUNDLE_CHANGED: &[Status] = &[
+pub(super) const INSTALLED: &[Status] = &[Status::Missing, Status::Installing, Status::Ready];
+pub(super) const BUNDLE_CHANGED: &[Status] = &[
     Status::Missing,
     Status::Installing,
     Status::Failed(Reason::BundleChanged),
@@ -219,7 +249,7 @@ fn it_runtime_install_bundle_replaced_during_the_copy_fails_as_bundle_changed() 
         next,
         opened: AtomicUsize::new(0),
     };
-    let ran = fixture.run_with(Box::new(bundle), &[]);
+    let ran = fixture.run_with(Arc::new(bundle), &[]);
     assert_eq!(ran, histories(BUNDLE_CHANGED, BUNDLE_CHANGED));
     assert!(fixture.listing(Component::Node).is_empty());
 }
@@ -240,7 +270,7 @@ fn it_runtime_install_recycles_the_versions_nothing_uses() {
         fs::create_dir_all(fixture.runtime().join(old).join("lib")).unwrap();
     }
     let in_use = [(Component::Node, "0.8.0")];
-    fixture.run_with(Box::new(BundleDir(fixture.contents())), &in_use);
+    fixture.run_with(Arc::new(BundleDir(fixture.contents())), &in_use);
     assert_eq!(fixture.listing(Component::Node), ["0.8.0", "1.0.0"]);
     assert_eq!(fixture.listing(Component::EsbuildWasm), ["0.1.0"]);
 }
@@ -283,23 +313,31 @@ fn it_runtime_install_self_test_checks_the_bundle_and_reports_the_runtime() {
 }
 
 #[test]
-fn plans_of_the_embedded_manifest_cover_node_and_esbuild_wasm() {
+fn plans_of_the_embedded_manifest_cover_each_component() {
     let manifest = manifest::embedded();
     let plans = plans(manifest);
     let node = &plans[0];
     assert_eq!(node.version, manifest.node.version);
     assert_eq!(node.files.keys().collect::<Vec<_>>(), ["LICENSE", "node"]);
-    assert!(node.files["node"].hash.cdhash.is_some());
+    assert!(node.files["node"].cdhash.is_some());
     let esbuild = &plans[1];
     assert_eq!(esbuild.version, manifest.esbuild_wasm.version);
-    assert!(esbuild.files.contains_key("esbuild.wasm"));
     assert!(esbuild.files.contains_key("lib/main.js"));
-    // The rest belongs to T111 and T115.
-    let rest = manifest.files.keys().filter(|path| {
-        ["codex-acp-", "locks/", "bundle-claude-acp.mjs"]
-            .iter()
-            .any(|p| path.starts_with(&format!("Resources/runtime/{p}")))
-    });
-    let planned = plans.iter().map(|plan| plan.files.len()).sum::<usize>();
-    assert_eq!(planned + rest.count(), manifest.files.len());
+    let claude = &plans[2];
+    let bundle = &claude.files[ADAPTER];
+    assert_eq!(bundle.sha256, manifest.claude_agent_acp.bundle_sha256);
+    let Source::Npm(npm) = &claude.source else {
+        panic!("{claude:?}")
+    };
+    // Every other file is the input of a bundle, or codex-acp's (T111).
+    let inputs = [&npm.lockfile.0, &npm.script.0];
+    let rest = manifest
+        .files
+        .keys()
+        .filter(|path| inputs.contains(path) || path.starts_with("Resources/runtime/codex-acp-"));
+    let copied = plans[..2]
+        .iter()
+        .map(|plan| plan.files.len())
+        .sum::<usize>();
+    assert_eq!(copied + rest.count(), manifest.files.len());
 }

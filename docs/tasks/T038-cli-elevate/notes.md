@@ -131,3 +131,12 @@ pub struct FailClosed;
 ### IT-elevation-grant（进程内）
 
 真实的 `host.db`、索引流与账本，`ManualClock`；两条 CLI 连接和一条 control 连接都是网关测试用的 `Peer`（直接驱动 `Dispatch`），`Peer::open`、`Peer::close` 像读循环那样把连接登记到网关的客户端表并通知索引；固定令牌取本进程自己的（socketpair）；`Requesters` 用测试实现，一律判"不是后代"。覆盖：未授权时 `project/add` 被拒（`forbidden`/`scope`）；申请后另一条连接的申请被限频（`retry_after_ms` 为 120,000）；`elevation_get` 给出核实信息和截到 200 字的自述；批准时勾选了未申请的 `approve` 也只授予 `write`，CLI 收到 `granted` 和 `expires_at`；这条连接的 `project/add` 成功、另一条仍被拒；`clients.updated` 里这条连接的 `elevated`；15 分钟后撤销；再次授予后断开即撤销；审计记录的顺序与内容。拒绝、2 分钟过期和静默的判定在 UNIT-elevation-core 里。
+
+## 与 main 合并（T100 进来之后）
+
+编排者把 main 合进本分支时，`index/mod.rs`、`index/rows.rs`、`index/tests.rs` 冲突。T100 已经给 `IndexActor` 加了一个 `Alarm` 和一个 `TimerTable`（状态核心 `Status` 的 100 ms 合并定时器 `Flush`），而静止屏障要求一个 actor 只有一个等待点。
+
+- **定时器的合并做法**：一张表、一个闹钟。`IndexActor.timers` 改为 `TimerTable<Timer>`，`Timer` 是 `Status(Flush)` 或 `Elevation(ElevationTimer)`；两个核心的 `TimerRequest` 经 `timer(request, Timer::…)` 包一层后进同一张表，`Alarm` 跟随这张表最早的到期时间。闹钟响时（`Mail::Rung`，没有人发送，只是等待点的另一个分支）`rung()` 依次取出到期的 key，`Status` 的交给 `step(Status::timer_expired(..))`，提权的交给 `expired(..)`，最后重新跟随这张表。没有选"两张表、闹钟取两者最早"的做法，因为那要给 `Alarm` 加一个不按表跟随的接口，而且每次步进后都要记得同时看两张表；一张表时 `Alarm::follow` 原样可用。`Elevations` 因此不再有自己的表和闹钟。
+- **`Mail`**：保留 main 的 `Status(Input)`、`Rescanned`、`Agent`；`Clients` 换成本分支的 `Opened`、`Closed`、`Examined`；原来借 `Mail::Status(Input::Flush)` 表示"闹钟响了"，改成单独的 `Mail::Rung`（`Flush` 本身仍可直接交给状态核心，比如检查点前）。`IndexPort::closed` 只发一条 `Mail::Closed`，处理时先把 `Input::Closed` 交给状态核心（在场），再撤销提权，最后刷新 `clients.updated`。
+- **遗留的未决申请**：原来写在 `rows::reconcile` 里。T100 之后 `test/seed` 的对账也走这里，而那时申请可能还活着，记成过期会让索引视图与核心不一致（之后的 `elevation.resolved` 在视图里找不到申请）。所以 `rows.rs` 取 main 的版本不动，改由 `IndexHandle::start` 在启动对账之后追加 `elevations::left_over` 的结果，只在启动时做。
+- **测试**：`index/tests.rs` 两边的用例都保留，导入合并去重；启动对账用例里的"遗留申请记为过期"断言仍在。

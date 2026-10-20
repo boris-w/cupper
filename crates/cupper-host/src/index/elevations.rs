@@ -1,11 +1,10 @@
 //! Elevation in the index actor (design 5.8.4): `auth/elevate`, whose reply
 //! waits for the user's decision; `auth/elevation_get` and
 //! `auth/elevation_respond` from the control connection; the timers of
-//! [`ElevationCore`]; the granted scopes each connection reads at admission
+//! [`ElevationCore`], in the actor's table; the granted scopes each connection reads at admission
 //! ([`Granted`](crate::gateway::Granted)), which `clients.updated` lists.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use cupper_protocol::annotations::{DurationMs, TimestampMs};
 use cupper_protocol::envelope::Cause;
@@ -18,11 +17,11 @@ use cupper_protocol::methods::admin::{
     AuthElevationRespondParams, ElevationAnswer, SelfReported,
 };
 use cupper_protocol::rpc::{Method, Scope};
+use cupper_protocol::view::IndexView;
 use serde_json::{Value, json};
 use tokio::sync::oneshot;
 
-use super::{IndexActor, Mail, parse, refuse};
-use crate::clock::Clock;
+use super::{IndexActor, Mail, Timer, parse, refuse, timer};
 use crate::durations::Durations;
 use crate::elevation::{
     Action, Ask, ElevationCore, ElevationTimer, Input, NotPending, Outcome as Decided, Refusal,
@@ -30,15 +29,13 @@ use crate::elevation::{
 };
 use crate::gateway::{AuditEvent, AuditRecord, Call, ElevationStep, Opened};
 use crate::ledger::Outcome;
-use crate::pure::{Alarm, Core, TimerTable};
+use crate::pure::Core;
 use crate::store::Durability;
 use crate::store::streams::{Batch, StreamError};
 
 #[derive(Debug)]
 pub(super) struct Elevations {
     core: ElevationCore,
-    timers: TimerTable<ElevationTimer>,
-    pub(super) alarm: Alarm,
     /// The initialized connections.
     conns: HashMap<ConnId, Opened>,
     /// The `auth/elevate` replies that wait for the user, and what they
@@ -52,11 +49,9 @@ pub(super) type Asking = (oneshot::Sender<Outcome>, Vec<Scope>);
 type Command = (Call, oneshot::Sender<Outcome>);
 
 impl Elevations {
-    pub(super) fn new(durations: &Durations, clock: Arc<dyn Clock>) -> Self {
+    pub(super) fn new(durations: &Durations) -> Self {
         Self {
             core: ElevationCore::new(durations),
-            timers: TimerTable::new(),
-            alarm: Alarm::new(clock),
             conns: HashMap::new(),
             waiting: HashMap::new(),
         }
@@ -148,13 +143,8 @@ impl IndexActor {
         Ok(json!(pending.ok_or_else(gone)?.detail))
     }
 
-    /// Feeds each elevation timer due now to the core.
-    pub(super) async fn rung(&mut self) {
-        let now = self.deps.clock.now_mono();
-        while let Some(key) = self.elevations.timers.pop_due(now) {
-            self.elevation(Input::Expired(key), None, None).await;
-        }
-        self.elevations.alarm.follow(&self.elevations.timers);
+    pub(super) async fn expired(&mut self, key: ElevationTimer) {
+        self.elevation(Input::Expired(key), None, None).await;
     }
 
     /// Steps the core with `input`, `asking` being the ask's reply. Its
@@ -167,7 +157,7 @@ impl IndexActor {
         let e = &mut self.elevations;
         for action in e.core.step(input, now) {
             match action {
-                Action::Timer(request) => e.timers.apply(request),
+                Action::Timer(request) => self.timers.apply(timer(request, Timer::Elevation)),
                 Action::Refused { conn, refusal } => {
                     let (step, err) = refused(refusal);
                     if let Some((reply, scopes)) = asking.take() {
@@ -223,7 +213,7 @@ impl IndexActor {
                 Action::Responded(result) => answer = result,
             }
         }
-        e.alarm.follow(&e.timers);
+        self.alarm.follow(&self.timers);
         for (conn, step, scopes) in audits {
             let (event, conn) = (AuditEvent::Elevation { step, scopes }, Some(conn));
             // Nobody listening is the receiver's choice.
@@ -279,6 +269,18 @@ impl IndexActor {
             self.clients().await;
         }
     }
+}
+
+/// At start: the requests the last run left pending ended with their
+/// connections. Not on `test/seed`'s reconciliation, while requests live.
+pub(super) fn left_over(view: &IndexView) -> Vec<EventBody> {
+    let ids = view.elevations.keys().cloned();
+    let expired = |elevation_id| ElevationResolved {
+        elevation_id,
+        decision: ElevationDecision::Expired,
+    };
+    ids.map(|id| EventBody::ElevationResolved(expired(id)))
+        .collect()
 }
 
 /// `auth/elevate`'s params: a CLI asks for `write`, `approve` or both.

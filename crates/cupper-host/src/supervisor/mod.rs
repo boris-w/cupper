@@ -43,7 +43,6 @@ use crate::driver::locate::trust::{Boundaries, system_temp_dirs};
 use crate::driver::probe::login_shell::LoginEnv;
 use crate::driver::runtime::agents::{Agents, Find};
 use crate::driver::runtime::launch::{self, Launch};
-use crate::driver::runtime::status::NoAgentNotes;
 use crate::driver::runtime::{AGENT_RUNTIME, AgentRuntime, RuntimeDeps};
 use crate::durations::Durations;
 use crate::elevation::FailClosed;
@@ -210,6 +209,7 @@ impl Host {
         let index = IndexHandle::start(IndexDeps {
             streams: streams.clone(),
             readers: readers.clone(),
+            db: writer.clone(),
             clock: clock.clone(),
             ids: ids.clone(),
             durations: durations.clone(),
@@ -246,7 +246,7 @@ impl Host {
             quiescence: quiescence.clone(),
             probe_dir: data_dir.join("probe").join("claude"),
             durations: durations.clone(),
-            notes: Arc::new(NoAgentNotes),
+            notes: Arc::new(index.clone()),
             rss: test_rss(&payload),
         };
         let claude = AgentRuntime::start(deps);
@@ -299,9 +299,16 @@ impl Host {
             },
         })
         .route(&mut routes);
+        #[cfg(any(feature = "test-harness", feature = "dev-auth"))]
+        Arc::new(crate::diag::recording_export::RecordingExport {
+            data_dir: data_dir.clone(),
+            blobs: blobs.clone(),
+        })
+        .route(&mut routes);
         routes.sessions(Arc::new(sessions));
         Arc::new(agents).route(&mut routes);
         routes.index(Arc::new(index.clone()));
+        routes.presence(Arc::new(index.clone()));
         let config = GatewayConfig {
             host_id: run.host_id,
             data_epoch: run.epoch,

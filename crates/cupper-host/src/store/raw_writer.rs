@@ -59,14 +59,28 @@ pub enum Dir {
     Recv,
     /// A line the adapter wrote that is not JSON; the SDK never sees it.
     RecvNonjson,
+    /// A line of the adapter's stderr.
+    Stderr,
+    /// The runtime's note, such as an instance's start (design 5.9.3).
+    Note,
 }
 
 impl Dir {
+    pub const ALL: [Dir; 5] = [
+        Dir::Send,
+        Dir::Recv,
+        Dir::RecvNonjson,
+        Dir::Stderr,
+        Dir::Note,
+    ];
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Send => "send",
             Self::Recv => "recv",
             Self::RecvNonjson => "recv_nonjson",
+            Self::Stderr => "stderr",
+            Self::Note => "note",
         }
     }
 }

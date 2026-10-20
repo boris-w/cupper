@@ -4,7 +4,7 @@
 //! its stderr in the adapter log and its `adapters` row.
 
 use std::collections::BTreeMap;
-use std::fs;
+use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 use std::sync::Arc;
@@ -13,8 +13,9 @@ use agent_client_protocol::schema::v1::InitializeResponse;
 use cupper_protocol::capabilities::{CliCompat, Versions};
 use cupper_protocol::ids::AdapterInstanceId;
 use cupper_protocol::index::{CliInstall, ConfigDirState};
+use cupper_protocol::recording::{INSTANCE_EXITED, INSTANCE_STARTED};
 use cupper_sys::{Command, Env, ProcessGroup, Signal, Stdio};
-use sha2::{Digest, Sha256};
+use serde_json::json;
 use tokio::net::unix::pipe;
 use tokio::sync::mpsc;
 
@@ -29,7 +30,8 @@ use crate::driver::probe::version::{self, VerifiedRange, VersionClass};
 use crate::driver::tap::Tap;
 use crate::driver::transport::StdioTransport;
 use crate::durations::Durations;
-use crate::manifest::{self, FileHash};
+use crate::manifest;
+use crate::runtime::{self, Installed};
 use crate::store::{Durability, RawSink, Receipt, Writer};
 
 /// What the adapter runs.
@@ -38,9 +40,9 @@ pub enum Program {
     /// `test_config.agents`: without the runtime or CLI discovery (design
     /// 5.9.9).
     Injected { program: PathBuf, args: Vec<String> },
-    /// The runtime installer's node running the adapter's bundle (T056),
-    /// both checked against the embedded manifest before each start.
-    Runtime { node: PathBuf, bundle: PathBuf },
+    /// The runtime installer's node running the adapter's bundle, both
+    /// checked before each start (ADR-08).
+    Runtime { node: Installed, bundle: Installed },
 }
 
 /// How the agent's adapters start.
@@ -63,29 +65,6 @@ pub struct Cli {
     /// Empty when `--version` could not be read.
     pub version: String,
     pub install: CliInstall,
-}
-
-/// A runtime file that does not hash to what the manifest says.
-#[derive(Debug, thiserror::Error)]
-#[error("{0} does not match the manifest")]
-pub struct Mismatch(PathBuf);
-
-/// Checks `path` against `expected`: its sha-256 and, when given, its cdhash.
-pub fn verify(path: &Path, expected: &FileHash) -> Result<(), Mismatch> {
-    let mismatch = || Mismatch(path.to_owned());
-    let content = fs::read(path).map_err(|_| mismatch())?;
-    let sha256: String = Sha256::digest(content)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect();
-    let cdhash = || cupper_sys::file_cdhash(path).ok().map(|c| c.to_string());
-    let signed = expected
-        .cdhash
-        .as_ref()
-        .is_none_or(|want| cdhash().as_ref() == Some(want));
-    (sha256 == expected.sha256 && signed)
-        .then_some(())
-        .ok_or_else(mismatch)
 }
 
 /// The login shell's environment (design 5.6.6): `test_config.login_env`
@@ -173,9 +152,7 @@ pub async fn production(
     login: &LoginEnv,
     locator: &CliLocator,
 ) -> Launch {
-    let runtime = data_dir.join("runtime");
-    let node = runtime.join("node");
-    let bundle = runtime.join("bundle-claude-acp.mjs");
+    let (node, bundle) = runtime::claude_adapter(&runtime::runtime_dir(data_dir));
     let mut launch = Launch {
         program: Program::Runtime { node, bundle },
         env: Env::new(),
@@ -286,13 +263,13 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
             command
         }
         Program::Runtime { node, bundle } => {
-            let files = &manifest::embedded().files;
-            let check =
-                |path, name| verify(path, &files[name]).map_err(|e| failed(RuntimeFailed, e));
-            check(node, manifest::NODE)?;
-            check(bundle, manifest::CLAUDE_BUNDLE)?;
-            let mut command = Command::new(node);
-            command.arg(bundle);
+            for file in [node, bundle] {
+                let path = file.path.display();
+                let check = runtime::verify(&file.path, &file.hash);
+                check.map_err(|problem| failed(RuntimeFailed, format!("{path}: {problem}")))?;
+            }
+            let mut command = Command::new(&node.path);
+            command.arg(&bundle.path);
             command
         }
     };
@@ -303,9 +280,15 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
     let mut child = cupper_sys::spawn(&command).map_err(|e| failed(RuntimeFailed, e))?;
     let group = child.group();
     record(cx, &id, &group, launch).await;
+    // The instance's raw frames begin and end with its notes (design 5.9.3).
+    let tap = Tap::new(id.to_string(), Arc::clone(&cx.clock), cx.raw.clone());
+    let recorder = tap.recorder();
+    recorder.note(&json!({"event": INSTANCE_STARTED}));
     let pipes = (child.stdin.take(), child.stdout.take(), child.stderr.take());
     tokio::task::spawn_blocking(move || {
         if let Ok(status) = child.wait() {
+            let (code, signal) = (status.code(), status.signal());
+            recorder.note(&json!({"event": INSTANCE_EXITED, "code": code, "signal": signal}));
             exited(status);
         }
     });
@@ -313,16 +296,17 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
         unreachable!("all three are pipes")
     };
     let tail = match (&cx.log, pipe::Receiver::from_owned_fd(stderr)) {
-        (Some(log), Ok(stderr)) => Some(log.read(id.to_string(), stderr).0),
+        (Some(log), Ok(stderr)) => {
+            let recorder = tap.recorder();
+            let each = move |line: &str| recorder.stderr(line);
+            Some(log.read(id.to_string(), stderr, each).0)
+        }
         _ => None,
     };
     let opened = match StdioTransport::new(stdin, stdout) {
-        Ok(transport) => {
-            let tap = Tap::new(id.to_string(), Arc::clone(&cx.clock), cx.raw.clone());
-            AcpConnection::open(transport, tap, mailbox)
-                .await
-                .map_err(|e| e.to_string())
-        }
+        Ok(transport) => AcpConnection::open(transport, tap, mailbox)
+            .await
+            .map_err(|e| e.to_string()),
         Err(err) => Err(err.to_string()),
     };
     match opened {
@@ -401,31 +385,4 @@ pub fn ended(writer: &Writer, at: u64, id: &AdapterInstanceId, status: ExitStatu
         let sql = "UPDATE adapters SET ended_at = ?2, exit_status = ?3 WHERE instance_id = ?1";
         conn.execute(sql, (id, at, status)).map(drop)
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::store::testutil::TempDir;
-
-    #[test]
-    fn verify_checks_a_runtime_file_against_its_manifest_entry() {
-        let dir = TempDir::new("runtime-verify");
-        let node = dir.path().join("node");
-        fs::write(&node, b"node").unwrap();
-        // sha-256 of "node".
-        let sha256 = "545ea538461003efdc8c81c244531b003f6f26cfccf6c0073b3239fdedf49446";
-        let entry = |sha256: &str, cdhash: Option<&str>| FileHash {
-            sha256: sha256.to_owned(),
-            cdhash: cdhash.map(str::to_owned),
-        };
-        assert!(verify(&node, &entry(sha256, None)).is_ok());
-        assert!(verify(&node, &entry(&sha256.replace('5', "6"), None)).is_err());
-        // Unsigned: no cdhash to match.
-        assert!(verify(&node, &entry(sha256, Some("00"))).is_err());
-        assert!(verify(&dir.path().join("missing"), &entry(sha256, None)).is_err());
-        // The embedded manifest names both files the runtime checks.
-        let files = &manifest::embedded().files;
-        assert!(files.contains_key(manifest::NODE) && files.contains_key(manifest::CLAUDE_BUNDLE));
-    }
 }

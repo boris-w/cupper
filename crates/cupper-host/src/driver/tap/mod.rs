@@ -2,7 +2,9 @@
 //! ACP SDK passes through it, in both directions. It does two things:
 //!
 //! 1. numbers each line within the instance and queues it as a raw frame after
-//!    structured redaction ([`crate::diag::redact`]);
+//!    structured redaction ([`crate::diag::redact`]); its [`Recorder`] does
+//!    the same for the instance's stderr and the runtime's notes (design
+//!    5.9.3);
 //! 2. rewrites values of the SDK's closed enums that the SDK cannot parse
 //!    ([`k19`]); the raw frame keeps what the agent sent.
 //!
@@ -34,6 +36,12 @@ use crate::store::{Dir, RawFrame, RawSink};
 /// The tap of one adapter instance.
 #[derive(Debug)]
 pub struct Tap {
+    recorder: Arc<Recorder>,
+}
+
+/// Numbers the raw frames of one adapter instance and queues them.
+#[derive(Debug)]
+pub struct Recorder {
     instance: Arc<str>,
     clock: Arc<dyn Clock>,
     raw: RawSink,
@@ -42,12 +50,20 @@ pub struct Tap {
 
 impl Tap {
     pub fn new(instance: impl Into<Arc<str>>, clock: Arc<dyn Clock>, raw: RawSink) -> Self {
-        Self {
-            instance: instance.into(),
+        let instance = instance.into();
+        let last_seq = AtomicU64::new(0);
+        let recorder = Arc::new(Recorder {
+            instance,
             clock,
             raw,
-            last_seq: AtomicU64::new(0),
-        }
+            last_seq,
+        });
+        Self { recorder }
+    }
+
+    /// What records the instance's other frames, numbered with its lines.
+    pub fn recorder(&self) -> Arc<Recorder> {
+        Arc::clone(&self.recorder)
     }
 
     /// The transport as the SDK's line component, with this tap on every line.
@@ -73,15 +89,15 @@ impl Tap {
     /// anything. Lines that are not JSON are only recorded.
     fn inbound(&self, line: String) -> Option<String> {
         if !line.trim_start().starts_with(['{', '[']) {
-            self.record(Dir::RecvNonjson, &line);
+            self.recorder.record(Dir::RecvNonjson, &line);
             return None;
         }
         let msg = (line.contains(redact::AUTH_STATUS_METHOD) || k19::may_apply(&line))
             .then(|| serde_json::from_str::<Value>(&line).ok())
             .flatten();
         match msg.as_ref().and_then(redact::account_fields) {
-            Some(redacted) => self.record(Dir::Recv, &redacted.to_string()),
-            None => self.record(Dir::Recv, &line),
+            Some(redacted) => self.recorder.record(Dir::Recv, &redacted.to_string()),
+            None => self.recorder.record(Dir::Recv, &line),
         }
         if let Some(mut msg) = msg
             && k19::rewrite(&mut msg)
@@ -93,7 +109,19 @@ impl Tap {
 
     /// Records a line the SDK is about to write.
     fn outbound(&self, line: &str) {
-        self.record(Dir::Send, line);
+        self.recorder.record(Dir::Send, line);
+    }
+}
+
+impl Recorder {
+    /// A line the adapter wrote to stderr.
+    pub fn stderr(&self, line: &str) {
+        self.record(Dir::Stderr, line);
+    }
+
+    /// The runtime's note (design 5.9.3): `event` and what goes with it.
+    pub fn note(&self, note: &Value) {
+        self.record(Dir::Note, &note.to_string());
     }
 
     fn record(&self, dir: Dir, line: &str) {
