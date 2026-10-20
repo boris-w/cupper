@@ -751,7 +751,7 @@ E2E-NFR1-3 = "pr"
 E2E-NFR1-4 = "pr"
 E2E-NFR1-5 = "pr"
 
-# 安全 e2e 与外发检查
+# 安全 e2e I：窗口内（计划 v1.3.44 拆出 T176）
 [T092]
 milestone = "M1a"
 E2E-SEC-csp = "pr"
@@ -759,10 +759,14 @@ E2E-SEC-real-input = "pr"
 E2E-SEC-panel-arming = "pr"
 E2E-SEC-panel-numbering = "pr"
 E2E-SEC-privileged = "pr"
+E2E-SEC-double-initialize = "pr"
+
+# 安全 e2e II：连接层与外发（计划 v1.3.44 由 T092 拆出）
+[T176]
+milestone = "M1a"
 E2E-SEC-fake-host = "pr"
 E2E-SEC-egress = "nightly"
 E2E-SEC-no-key-client = "pr"
-E2E-SEC-double-initialize = "pr"
 E2E-SEC-cli-fake-host = "pr"
 
 # 交互与项目 e2e
