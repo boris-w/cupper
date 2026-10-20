@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
 use cupper_protocol::frame::BlobChunkHeader;
-use cupper_protocol::ids::{CommandId, ConnId};
+use cupper_protocol::ids::{CommandId, ConnId, SessionId};
 use cupper_protocol::index::Elevation;
 use cupper_protocol::limits::V1;
 use cupper_protocol::methods::admin::{
@@ -30,6 +30,7 @@ use cupper_protocol::methods::stream::{
     BlobPut, BlobPutParams, StreamSubscribeParams, StreamUnsubscribeParams,
 };
 use cupper_protocol::rpc::{Idempotency, Method, RpcId, Scope};
+use cupper_protocol::sync::StreamId;
 use cupper_sys::AuditToken;
 use futures::FutureExt;
 use futures::future::BoxFuture;
@@ -82,6 +83,10 @@ pub trait SessionPort: Port {
     /// The facts describing `command` reads (design 5.3.11, rulings before
     /// T033): `mode_tier`, `option` and `running_turns`.
     fn facts(&self, command: &Confirmable) -> BoxFuture<'static, Result<Facts, RpcError>>;
+    /// A client subscribes to session `id`'s stream: a session not in
+    /// memory loads, so that what its load writes reaches the subscriber
+    /// (design 5.2.13).
+    fn wake(&self, id: &SessionId);
 }
 
 /// The index's side (T034): projects, read marks and presence, and the
@@ -304,6 +309,11 @@ impl Dispatch {
             Target::History(source) => Box::pin(history::page(source.clone(), params)),
             Target::Subscribe(source) => {
                 let params: StreamSubscribeParams = typed(&params).expect("validated");
+                if let (StreamId::Session(session), Some(sessions)) =
+                    (&params.stream, &routes.sessions)
+                {
+                    sessions.wake(session);
+                }
                 let id = id.clone();
                 self.subscriptions.subscribe(id, source, params, place);
                 return Answer::Queued;

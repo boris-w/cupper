@@ -27,7 +27,7 @@ use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{CommandId, PrincipalId, ProjectId, QueueId, SessionId, TurnId};
 use cupper_protocol::ids::{Digest, RequestId};
 use cupper_protocol::index::{PendingKind, SessionStatus, SessionSummary, TrustState};
-use cupper_protocol::interaction::{InteractionOutcome, InteractionRequest};
+use cupper_protocol::interaction::{InteractionOption, InteractionOutcome, InteractionRequest};
 use cupper_protocol::item::{NoticeCode, NoticeParams};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::methods::interaction::{
@@ -53,13 +53,13 @@ use tokio::sync::{mpsc, oneshot};
 use super::core::{Action, Input, Key, SessionCore};
 use super::load::request as stored;
 use super::rows::Rows;
-use super::{IndexNotes, Note, internal, mode_tier, not_found, parse, tier_of};
+use super::{IndexNotes, Note, internal, mode_tier, not_found, parse, privileged, tier_of};
 use crate::clock::Clock;
 use crate::driver::api::{
     AgentError, AgentPort, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent,
     ProjectConfigPolicy,
 };
-use crate::durations::Durations;
+use crate::durations::{Durations, SESSION_IDLE};
 use crate::gateway::{AuditEvent, AuditRecord, Call, ConfigState, TrustChange};
 use crate::git::GitTool;
 use crate::index::{ScanContext, git_of, status_of};
@@ -68,8 +68,8 @@ use crate::orchestrator::interaction::{self, Respond};
 use crate::orchestrator::notice_with;
 use crate::orchestrator::tier_guard;
 use crate::orchestrator::turn::{self, Disposition, SendMode, SendRequest, SteerFallback};
-use crate::policy;
-use crate::pure::{Alarm, Core, TimerTable};
+use crate::policy::{self, Confirmable, Facts};
+use crate::pure::{Alarm, Core, TimerRequest, TimerTable};
 use crate::quiescence::{Participant, Quiescence};
 use crate::store::streams::{Batch, StreamHandle, StreamView, StreamWriter};
 use crate::store::{Durability, Readers};
@@ -93,7 +93,12 @@ enum Next {
     Rescanned(Purpose, Rescan),
     Stop(Stop),
     Alarm,
+    Idle,
 }
+
+/// The actor's own timer: it leaves memory once idle this long.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct IdleTimer;
 
 /// What the actor starts with: its session's stream, its agent, and what an
 /// attach adds to the turn machine's target (design 5.2.6).
@@ -141,12 +146,17 @@ pub(super) struct Start {
     pub project_gate: bool,
     /// "不加载项目配置继续" was chosen.
     pub ignore_for_good: bool,
+    /// The row still holds the first message, which has not started a turn.
+    pub initial: bool,
 }
 
 pub(super) struct SessionActor {
     parts: Parts,
     timers: TimerTable<Key>,
     alarm: Alarm,
+    idle: (TimerTable<IdleTimer>, Alarm),
+    /// Rescans and attaches under way.
+    outstanding: u32,
     /// The command that queued each message, for its `queue_entries` row.
     commands: HashMap<QueueId, CommandId>,
     inbox: mpsc::UnboundedReceiver<Mail>,
@@ -164,6 +174,9 @@ pub(super) struct SessionActor {
     /// The host exits: the adapter is stopped next, which is no crash to
     /// tell the user about (`agent_restarted`, K7).
     stopping: bool,
+    /// The row holds the first message until it leaves the machine's hold
+    /// for a turn or the queue (design 5.2.6).
+    initial: bool,
 }
 
 /// Why the project's trust range is rescanned (design 5.2.6).
@@ -195,7 +208,7 @@ struct Command {
     ticket: Option<Ticket>,
     cause: Option<Cause>,
     reply: oneshot::Sender<Outcome>,
-    audit: Option<AuditRecord>,
+    audit: Vec<AuditRecord>,
     /// `session/send`: its reply may come with a later step.
     deferrable: bool,
 }
@@ -228,29 +241,36 @@ struct Step {
 
 impl SessionActor {
     /// Runs the session, starting with its first input, until the mailbox
-    /// closes; it counts in the quiescence barrier meanwhile.
+    /// closes, or until it was idle for `session_idle` (design 5.2.3): then
+    /// it closes its agent session and hands back its mailbox, whose calls
+    /// go to the session's next actor. It counts in the quiescence barrier
+    /// meanwhile.
     pub(super) async fn run(
         parts: Parts,
         inbox: mpsc::UnboundedReceiver<Mail>,
         mut stops: mpsc::UnboundedReceiver<Stop>,
         start: Start,
         participant: Participant,
-    ) {
+    ) -> Option<mpsc::UnboundedReceiver<Mail>> {
         let (events, mut agent) = mpsc::unbounded_channel();
         let (attached, mut attaches) = mpsc::unbounded_channel();
         let (rescanned, mut rescans) = mpsc::unbounded_channel();
         let alarm = Alarm::new(Arc::clone(&parts.clock));
+        let idle = (TimerTable::new(), Alarm::new(Arc::clone(&parts.clock)));
         let Start {
             first,
             commands,
             project_gate,
             ignore_for_good,
+            initial,
         } = start;
         let load_wanted = parts.project_config == ProjectConfigPolicy::Load || project_gate;
         let mut actor = Self {
             parts,
             timers: TimerTable::new(),
             alarm,
+            idle,
+            outstanding: 0,
             commands,
             inbox,
             events,
@@ -261,11 +281,13 @@ impl SessionActor {
             ignore_for_good,
             deferred: None,
             stopping: false,
+            initial,
         };
         actor.input(first, None, Step::default()).await;
         // Idle until a branch brings work, which runs once the others are
         // dropped.
         loop {
+            actor.follow_idle();
             let next = participant.idle(async {
                 tokio::select! {
                     mail = actor.inbox.recv() => Next::Mail(mail),
@@ -274,6 +296,7 @@ impl SessionActor {
                     Some((purpose, found)) = rescans.recv() => Next::Rescanned(purpose, found),
                     Some(stop) = stops.recv() => Next::Stop(stop),
                     () = actor.alarm.rung() => Next::Alarm,
+                    () = actor.idle.1.rung() => Next::Idle,
                 }
             });
             match next.await {
@@ -282,7 +305,7 @@ impl SessionActor {
                     actor.ignore_project_config().await;
                     let _ = done.send(Ok(()));
                 }
-                Next::Mail(None) => break,
+                Next::Mail(None) => return None,
                 Next::Agent(event) => actor.agent(event).await,
                 Next::Attached(result) => actor.attach_done(result).await,
                 Next::Rescanned(purpose, found) => actor.trust(purpose, found).await,
@@ -295,13 +318,47 @@ impl SessionActor {
                     let _ = done.send(());
                 }
                 Next::Alarm => actor.expired().await,
+                Next::Idle if actor.is_idle() => {
+                    let detach = Input::Machine(turn::Input::Detach);
+                    actor.input(detach, None, Step::default()).await;
+                    return Some(actor.inbox);
+                }
+                Next::Idle => {}
             }
         }
     }
 
+    /// Times the idle exit from now while nothing goes on; anything going on
+    /// cancels it.
+    fn follow_idle(&mut self) {
+        let request = match self.is_idle() {
+            true => {
+                let at = self.parts.clock.now_mono() + self.parts.durations.get(SESSION_IDLE);
+                TimerRequest::Set { key: IdleTimer, at }
+            }
+            false => TimerRequest::Cancel(IdleTimer),
+        };
+        self.idle.0.apply(request);
+        self.idle.1.follow(&self.idle.0);
+    }
+
+    /// No turn runs, no request waits, no queued message will run (a paused
+    /// queue waits for the user), no timer of the cores is set and nothing
+    /// is under way. Subscribers do not count: they read the stream, not the
+    /// actor.
+    fn is_idle(&self) -> bool {
+        let pending = self.parts.pending.load(Ordering::Relaxed);
+        self.parts.core.turn_id().is_none()
+            && pending == 0
+            && self.parts.core.queued() == 0
+            && self.timers.is_empty()
+            && self.outstanding == 0
+            && self.deferred.is_none()
+    }
+
     async fn call(&mut self, call: Call, reply: oneshot::Sender<Outcome>) {
         let (principal, params) = (call.principal, call.params);
-        let mut audit = None;
+        let mut audit = Vec::new();
         let mut step = Step::default();
         // An option that moves the tier makes its chooser the setter.
         let mut chosen = None;
@@ -328,8 +385,16 @@ impl SessionActor {
                         principal: principal.id.clone(),
                     };
                     let (at_ms, conn) = (self.parts.clock.now_wall_ms(), Some(call.conn.clone()));
-                    audit = Some(AuditRecord { at_ms, conn, event });
+                    audit.push(AuditRecord { at_ms, conn, event });
                 }
+                let option = self.option(&params);
+                let facts = Facts {
+                    option: option.clone(),
+                    ..Facts::default()
+                };
+                let command = Confirmable::Respond(params.clone());
+                let at = self.parts.clock.now_wall_ms();
+                audit.extend(privileged(command, &facts, &principal.id, &call.conn, at));
                 let resolved_by = ResolvedBy {
                     principal_id: principal.id.clone(),
                     client_kind: call.client.kind,
@@ -337,8 +402,7 @@ impl SessionActor {
                 };
                 let tier = self.tier();
                 let principal = principal.clone();
-                chosen = self
-                    .option_tier(&params)
+                chosen = (option.and_then(|o| policy::option_tier(&o.effect)))
                     .map(|tier| (params.request_id.clone(), tier));
                 Input::Respond(Box::new(Respond {
                     principal,
@@ -417,8 +481,8 @@ impl SessionActor {
         Ok(Input::Tier(tier_guard::Input::Confirmed { by: by.clone() }))
     }
 
-    /// The tier the option chosen in `params` puts the session in, if any.
-    fn option_tier(&self, params: &InteractionRespondParams) -> Option<Tier> {
+    /// The option chosen in `params`, as the pending request has it.
+    fn option(&self, params: &InteractionRespondParams) -> Option<InteractionOption> {
         let InteractionOutcome::Selected(selected) = &params.outcome else {
             return None;
         };
@@ -429,8 +493,10 @@ impl SessionActor {
                 InteractionRequest::PlanConfirm(p) => &p.options,
                 _ => return None,
             };
-            let option = options.iter().find(|o| o.option_id == selected.option_id)?;
-            policy::option_tier(&option.effect)
+            options
+                .iter()
+                .find(|o| o.option_id == selected.option_id)
+                .cloned()
         })
     }
 
@@ -546,7 +612,7 @@ impl SessionActor {
             audit: records,
         } = step;
         let mut answer = None;
-        let mut audit = None;
+        let mut audit = Vec::new();
         let mut completion = None;
         let mut cause = None;
         // A send's reply comes with the step that decides its turn.
@@ -568,7 +634,9 @@ impl SessionActor {
                 Some(Reply::Done) => Ok(json!({})),
                 None => Err(internal("the command had no reply")),
             };
-            audit = command.audit.filter(|_| outcome.is_ok());
+            if outcome.is_ok() {
+                audit = command.audit;
+            }
             match (&outcome, command.ticket) {
                 (Ok(result), Some(ticket)) => {
                     completion = Some(ticket.complete(Ok(result.clone())))
@@ -592,6 +660,12 @@ impl SessionActor {
         }
         if ignored {
             changes.ignored(&self.parts.id, at);
+        }
+        // Queued, not run: the queue has it now, and a load must not run it
+        // again.
+        if self.initial && !self.parts.core.holding() {
+            self.initial = false;
+            changes.first_taken(&self.parts.id, at);
         }
         self.forget_dequeued(&events);
         let asks = events.iter().any(|b| {
@@ -708,7 +782,8 @@ impl SessionActor {
 
     /// Rescans the project's trust range in a task of its own (design
     /// 5.2.6); the result comes back to [`trust`](Self::trust).
-    fn rescan(&self, purpose: Purpose) {
+    fn rescan(&mut self, purpose: Purpose) {
+        self.outstanding += 1;
         let (readers, project) = (self.parts.readers.clone(), self.parts.project.clone());
         let (cwd, back) = (self.parts.cwd.clone(), self.rescanned.clone());
         let cx = ScanContext {
@@ -733,6 +808,7 @@ impl SessionActor {
     /// `project_config_changed`, with a notice; the index records a project
     /// that became `stale`. A trusted project again reopens it.
     async fn trust(&mut self, purpose: Purpose, found: Rescan) {
+        self.outstanding -= 1;
         if let Some(scan) = found.scan.clone().filter(|_| found.stale) {
             self.parts.index.rescanned(&self.parts.project, scan);
         }
@@ -817,7 +893,8 @@ impl SessionActor {
         }
     }
 
-    fn attach(&self, target: AttachTarget) {
+    fn attach(&mut self, target: AttachTarget) {
+        self.outstanding += 1;
         let attach = Attach {
             target,
             cwd: self.parts.cwd.clone(),
@@ -835,6 +912,7 @@ impl SessionActor {
     /// An attach came back: its capabilities and configuration go into the
     /// stream when they changed, the agent's session into the row.
     async fn attach_done(&mut self, result: Result<AttachInfo, AgentError>) {
+        self.outstanding -= 1;
         let mut step = Step::default();
         let mut mode = None;
         if let Ok(info) = &result {

@@ -1,0 +1,1197 @@
+{
+  "artifacts": [
+    {
+      "name": "Cupper E2E.app",
+      "sha256": "b8971fdfc430156cdd8e1cb1df524eb631a80af19d93431a0e7d995b15e157aa"
+    },
+    {
+      "name": "CupperHost.app",
+      "sha256": "309fe68bdd8f4c29087f291ba512355899808ccea9d87fd61bec83eab416a0f0"
+    },
+    {
+      "name": "cupper",
+      "sha256": "03b7e846940bb07c32307afbaa51f5f301c1c01e978247fb9a5a8780bf38a239"
+    }
+  ],
+  "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+  "duration_ms": 317049,
+  "jobs": [
+    {
+      "duration_ms": 224550,
+      "failed": 0,
+      "name": "rust",
+      "passed": 1928,
+      "result": "pass",
+      "skipped": []
+    },
+    {
+      "duration_ms": 3309,
+      "failed": 0,
+      "name": "protocol",
+      "passed": 185,
+      "result": "pass",
+      "skipped": []
+    },
+    {
+      "duration_ms": 12557,
+      "failed": 0,
+      "name": "ts",
+      "passed": 471,
+      "result": "pass",
+      "skipped": []
+    },
+    {
+      "duration_ms": 2247,
+      "failed": 0,
+      "name": "license",
+      "passed": 1,
+      "result": "pass",
+      "skipped": []
+    },
+    {
+      "duration_ms": 479,
+      "failed": 0,
+      "name": "testdata-scan",
+      "passed": 3,
+      "result": "pass",
+      "skipped": [
+        "sensitive-words"
+      ]
+    },
+    {
+      "duration_ms": 39,
+      "failed": 0,
+      "name": "ui",
+      "passed": 0,
+      "result": "pass",
+      "skipped": [
+        "test-ui"
+      ]
+    },
+    {
+      "duration_ms": 73866,
+      "failed": 0,
+      "name": "e2e",
+      "passed": 4,
+      "result": "pass",
+      "skipped": []
+    }
+  ],
+  "machine": "MacBook Pro (Apple M5 Pro)",
+  "os": "macOS 26.4",
+  "results": [
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s01",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s02",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s02b",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s02c",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s02d",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s03",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s04",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s04b",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s05",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s06",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s07",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s07b",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s07x",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s08",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s09",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s10",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s11",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-claude-s12",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-option-map-claude",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-tool-fields-claude",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "GOLD-A-unknown-enums",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-K13-echo-cwd",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-K21-reap-group",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-K26-client-info",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-adapter-restart",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-audit-retention",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-cli-commands",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-clock-advance",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-command-order",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-config-unconfirmed",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-devkey-launcher-only",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-devkey-orphan-start",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-elevate",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-elevation-grant",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-form",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-git-repo-tier-malicious",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-gw-blob",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-gw-subscribe",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-handshake",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-host-bundle-layout",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-idle-exit",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-interaction-expire",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-lifecycle",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-migrations",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-orch-gating",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-orch-interaction",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-orch-lifecycle",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-orch-recovery",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-orch-trust-gating",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-pinned-token",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-plan-confirm",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-process-hygiene",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-project-add-trust",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-recording-export",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-runtime-download",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-runtime-install",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-runtime-startup",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-seed",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-self-check",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-sys-peer-current",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-trust-rescan-before-prompt",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-trust-settingsources",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "IT-trust-stale",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "PROP-autonomous-dequeue-guard",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "PROP-coalescer",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "PROP-interaction",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "PROP-interrupt-10s",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "PROP-prompt-inflight-no-end",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "PROP-queue-fifo",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "PROP-stream-replay",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "PROP-stream-seq",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "PROP-turn-single-prompt",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "PROP-turn-snapshot-immutable",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "PROP-view-coalesce",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UI-new-session",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-acp-detach",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-acp-unhandled",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-audit-format",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-audit-producers",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-blob-fulltext",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-blobstore",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-bridge-flow",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-bridge-lifecycle",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-bridge-whitelist",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-capabilities",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-capabilities-plan",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ci-e2e",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ci-lock",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ci-summary",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-cli-args",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-cli-client",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-cli-host-verify",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-cli-resolver-claude",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-clock-manual",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-commands-dedup",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-composer-esc",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-composer-ime",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-composer-long-text",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-digest-jcs",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-elevation-core",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-env-rules",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-epoch-decision",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-failpoint",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-fake-scripts",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-final-items",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-git-cmd",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-git-fingerprint",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-git-repo-rules",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-grouping",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-hc-conn",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-hc-sync",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-host-restart",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-hostport-contract-bridge",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-hostport-contract-mock",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-i18n-escape",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-idgen",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-index-intent",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-index-status",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-input-guard",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-launcher",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ledger",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-lineage-signals",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-login-shell",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-main-hardening",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-md-injection",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-mirror",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-native",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-option-map-claude",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-orphan-policy",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-policy-matrix",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-privileged",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-privileged-paths",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-proof-binding",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-proto-base",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-proto-events-index",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-proto-events-session",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-proto-fixtures",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-proto-methods-core-session",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-proto-methods-core-stream",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-proto-methods-ext",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-question-mapping",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-queue-core",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-quiescence-registry",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-raw-queue",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-realpath",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-rec-format",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-redact-auth-status",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-redaction",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-release-features",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-replay",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-request-followup",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-request-panel",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-retention",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-runtime-pack-envscan",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-sensitive-list",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-shell-mock",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-startup-payload",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-stream-anchor",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-stream-rows",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-sys-reap-group",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-sys-spawn",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-sys-uniqueid",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-tap",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-tier-rules",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-trace-ids",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-transport-memory",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-trust-findings",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-trust-scan",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ts-fixtures",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ui-baseline-meta",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ui-components",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ui-lint-rules",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ui-query",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ui-row-registry",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ui-session-banners",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ui-shell-resize",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ui-sidebar",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-ui-store",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-unsupported-set",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-version-classify",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-view-late-by-ref",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-view-window",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-views-parity",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "d7ce79a41dc899dc539a99bd7594efd260b66e52",
+      "id": "UNIT-writer-savepoint",
+      "result": "pass",
+      "suite": "pr"
+    }
+  ],
+  "target": "pr",
+  "toolchain": {
+    "cargo": "1.96.0",
+    "cargo_deny": "0.20.2",
+    "node": "24.19.0",
+    "pnpm": "12.14.0",
+    "rustc": "1.96.0"
+  },
+  "version": 1
+}

@@ -43,7 +43,7 @@ use cupper_protocol::proof;
 use cupper_protocol::recording::{Body, INSTANCE_EXITED, INSTANCE_STARTED, Recording};
 use cupper_protocol::transport::socket_path;
 use rusqlite::Connection;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use common::*;
 
@@ -252,6 +252,66 @@ async fn it_lifecycle_runs_a_turn_with_the_fake_agent() {
     assert_eq!(statuses.last().map(String::as_str), Some("unread"));
     assert_eq!(index("reason", "notification.intent"), ["turn_completed"]);
     assert!(!index("agents", "agents.updated").is_empty());
+}
+
+/// UNIT-replay end to end: SP-1's Claude turn `s02b-plan`, played by the
+/// fake agent, runs to its end on a real host. The SP-1 client is not the
+/// host (design 5.9.2), so its own requests give way to the host's:
+/// `initialize` takes the host's parameters, and the two
+/// `set_config_option` of SP-1's safety policy go with their responses.
+/// Every other frame plays as recorded and must match.
+#[tokio::test]
+async fn unit_replay_a_host_runs_an_sp1_claude_turn() {
+    let dir = TempDir::new("replay");
+    let sp1 = "../../testdata/recordings/claude-agent-acp/0.91.0/2.1.296/s02b-plan.jsonl";
+    let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(sp1));
+    let mut recording = Recording::parse(&text.unwrap()).unwrap();
+    let config = |m: &Value| m["method"] == "session/set_config_option";
+    let sends = recording
+        .frames
+        .iter()
+        .filter_map(|frame| match &frame.body {
+            Body::Send(m) => Some(m),
+            _ => None,
+        });
+    let ids: Vec<Value> = sends
+        .filter(|m| config(m))
+        .map(|m| m["id"].clone())
+        .collect();
+    recording.frames.retain(|frame| match &frame.body {
+        Body::Send(m) => !config(m),
+        Body::Recv(m) => m.get("method").is_some() || !ids.contains(&m["id"]),
+        _ => true,
+    });
+    let client = json!({"name": "cupper", "version": env!("CARGO_PKG_VERSION")});
+    let capabilities = json!({"fs": {"readTextFile": false, "writeTextFile": false},
+        "terminal": false, "auth": {"terminal": false}, "elicitation": {"form": {}}, "plan": {}});
+    let mut prompt = String::new();
+    for frame in &mut recording.frames {
+        match &mut frame.body {
+            Body::Send(m) if m["method"] == "initialize" => {
+                m["params"] = json!({"protocolVersion": 1, "clientCapabilities": capabilities,
+                    "clientInfo": client});
+            }
+            Body::Send(m) if m["method"] == "session/prompt" => {
+                prompt = m["params"]["prompt"][0]["text"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned();
+            }
+            _ => {}
+        }
+    }
+    let path = dir.path().join("s02b-plan.jsonl");
+    std::fs::write(&path, recording.to_jsonl()).unwrap();
+    let agent = json!({"program": launch::fake_agent(), "args": ["--replay", path]});
+    let (data_dir, mut host, client) =
+        fake_agent_host(&dir, json!({"agents": {"claude": agent}})).await;
+    create(&client, &prompt).await;
+    let turns = "SELECT status FROM turns";
+    until(&data_dir, "host.db", turns, &["completed"]).await;
+    terminate(&host);
+    assert_eq!(exit_code(&mut host).await, 0);
 }
 
 /// A recording of two instances: the first writes to stderr and exits, the

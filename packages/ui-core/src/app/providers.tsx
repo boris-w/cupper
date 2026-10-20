@@ -66,8 +66,12 @@ export function HostProvider({
 }) {
   const { api } = useShell();
   // Production builds check every event but `item.delta` (design 5.7.6).
-  const [client] = useState(() => new HostClient({ validation: VALIDATION }));
-  useEffect(() => onClient?.(client), [client, onClient]);
+  // `onClient` hears of the client before anything below subscribes with it.
+  const [client] = useState(() => {
+    const created = new HostClient({ validation: VALIDATION });
+    onClient?.(created);
+    return created;
+  });
   const [value, setValue] = useState<HostValue>({
     client,
     state: client.state,

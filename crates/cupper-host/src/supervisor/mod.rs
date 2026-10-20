@@ -359,6 +359,7 @@ impl Host {
             git,
             admission: Arc::clone(&admission),
         });
+        sessions.reopen().await;
         let parts: Arc<[Arc<dyn Part>]> = Arc::new([
             Arc::new(sessions.clone()),
             Arc::new(claude),

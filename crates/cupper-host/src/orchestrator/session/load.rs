@@ -1,7 +1,8 @@
 //! A session loaded from the store when a call comes for it after a
 //! restart (design 5.2.6, 5.2.13; T089): its row, queue, last turn and ended
 //! requests, and its stream's view, made into the actor's parts and the
-//! core's [`Restored`].
+//! core's [`Restored`]. What a view rebuilt from turn snapshots lacks is
+//! written again from the rows and the agent's cache (design 5.2.8; T169).
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -9,16 +10,21 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use cupper_protocol::annotations::TimestampMs;
+use cupper_protocol::annotations::{TimestampMs, WirePath};
 use cupper_protocol::capabilities::{ConfigOption, ConfigOptionId};
 use cupper_protocol::domain::{AgentKind, ClientRole, PrincipalKind};
 use cupper_protocol::error::{ErrorCode, RpcError};
+use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{CommandId, PrincipalId, QueueId, SessionId};
 use cupper_protocol::interaction::InteractionResolved;
+use cupper_protocol::item::{Item, ToolKind};
 use cupper_protocol::methods::handshake::Principal;
-use cupper_protocol::session::{PauseReason, ProjectConfig, QueueEntry};
+use cupper_protocol::session::{
+    PauseReason, ProjectConfig, QueueEntry, QueuePause, QueueUpdated, SessionConfigured,
+    SessionWorkspace,
+};
 use cupper_protocol::sync::StreamId;
-use cupper_protocol::view::RequestView;
+use cupper_protocol::view::{Entry, RequestView};
 use rusqlite::types::Type;
 use rusqlite::{Connection, OptionalExtension, Row};
 use serde::de::DeserializeOwned;
@@ -30,6 +36,7 @@ use super::{SessionDeps, internal, mode_tier, not_found};
 use crate::driver::api::{AgentSessionId, ProjectConfigPolicy};
 use crate::gateway::principal_of;
 use crate::orchestrator::queue::{QueueCore, preview};
+use crate::orchestrator::turn::{SendMode, SendRequest};
 use crate::store::streams::StreamView;
 
 /// What the store has of a session besides its stream.
@@ -44,6 +51,12 @@ struct Stored {
     queue_version: u64,
     queue_paused: Option<String>,
     ignored: bool,
+    /// The workspace's kind, branch and base, and whether it is read-only.
+    workspace: (String, Option<String>, Option<String>, bool),
+    /// The project is trusted now.
+    trusted: bool,
+    /// The first message, until it starts a turn or is queued.
+    first: Option<String>,
     /// Each queued message, and the command that queued it.
     queue: Vec<(QueueEntry, Option<CommandId>)>,
     /// The last turn's number, and its end as the startup cleanup recorded it.
@@ -68,21 +81,47 @@ pub(super) async fn load(
     let cached = cached(&deps.readers, &kind).await?;
     let stream = (deps.streams.open(&StreamId::Session(id.clone())).await).map_err(internal)?;
     let writer = stream.writer().map_err(internal)?;
-    // The view's configuration, capabilities, running turn and pending
-    // requests; a stream rebuilt without them is T169's.
-    let view = stream.read(|view, _| match view {
-        StreamView::Session(view) => Some((
-            view.configured.clone()?,
-            view.capabilities.clone(),
-            view.running_turn().map(|t| t.started.clone()),
-            (view.requests.values().filter(|r| r.is_pending()))
-                .map(|r| r.requested.request_id.clone())
-                .collect(),
-        )),
-        StreamView::Index(_) => None,
-    });
-    let (configured, capabilities, running_turn, expired) =
-        view.ok_or_else(|| internal("the session's stream has no configuration"))?;
+    // The view's configuration, capabilities and queue; its running turn
+    // with the items that did not end, each with its start and, for a tool
+    // call, whether it ran a command; and its pending requests.
+    let (configured, capabilities, queue_seen, running_turn, open, expired) =
+        stream.read(|view, _| {
+            let StreamView::Session(view) = view else {
+                unreachable!("a session's stream")
+            };
+            let running = view.running_turn();
+            let items = running.into_iter().flat_map(|t| &t.entries);
+            let items = items.filter_map(|entry| match entry {
+                Entry::Item(id) => view.items.get(id).filter(|item| item.end.is_none()),
+                Entry::Request(_) => None,
+            });
+            let open: Vec<_> = (items.map(|i| &i.item))
+                .map(|i| (i.item_id.clone(), i.started_at, command_of(&i.item)))
+                .collect();
+            let pending = view.requests.values().filter(|r| r.is_pending());
+            (
+                view.configured.clone(),
+                view.capabilities.clone(),
+                view.queue.is_some(),
+                running.map(|t| t.started.clone()),
+                open,
+                pending.map(|r| r.requested.request_id.clone()).collect(),
+            )
+        });
+    // A view rebuilt from turn snapshots lacks what only the view had
+    // (design 5.2.8): it is written again from the rows and the cache.
+    let mut missing = Vec::new();
+    let configured = match configured {
+        Some(configured) => configured,
+        None => {
+            let configured = rebuilt(&stored)?;
+            missing.push(EventBody::SessionConfigured(configured.clone()));
+            configured
+        }
+    };
+    if let (None, Some(_), Some(caps)) = (&capabilities, &stored.agent_session, &cached) {
+        missing.push(EventBody::SessionCapabilities(caps.clone()));
+    }
 
     let paused = stored.queue_paused.as_deref().map(PauseReason::from);
     let project_gate = paused == Some(PauseReason::ProjectConfigChanged);
@@ -109,6 +148,32 @@ pub(super) async fn load(
     let commands = (entries.iter().zip(commands))
         .filter_map(|(entry, command)| Some((entry.queue_id.clone(), command?)))
         .collect::<HashMap<QueueId, CommandId>>();
+    if !queue_seen && stored.queue_version > 0 {
+        let (version, entries) = (stored.queue_version, entries.clone());
+        let paused = paused.clone().map(|reason| QueuePause { reason });
+        let queue = QueueUpdated {
+            version,
+            paused,
+            entries,
+        };
+        missing.push(EventBody::QueueUpdated(queue));
+    }
+    // Ended as the host ends a turn's open items (the coalescer): tool calls
+    // `abandoned`, a command maybe still running unless interrupts stop them.
+    let stops = (caps.as_ref()).is_some_and(|c| c.turn.interrupt_stops_commands);
+    let open = (open.into_iter())
+        .map(|(item, started, command)| (item, started, command.map(|c| c && !stops)))
+        .collect();
+    let setter = setter(stored.set_by.as_deref(), stored.confirmed);
+    // The first message, when the host stopped before it started a turn.
+    let first = (stored.first.as_deref()).filter(|_| stored.last_turn.is_none());
+    let first = (first.map(serde_json::from_str).transpose()).map_err(internal)?;
+    let first = first.map(|content| SendRequest {
+        content,
+        mode: SendMode::Queue,
+        by: setter.id.clone(),
+        reply_to: None,
+    });
     let restored = Restored {
         agent_session: stored.agent_session.map(AgentSessionId),
         last_turn_no,
@@ -119,12 +184,13 @@ pub(super) async fn load(
         ended: stored.ended,
         expired,
         interrupted: running_turn.map(|t| (t.turn_id, t.started_at, ended_at)),
+        missing,
+        open,
+        first,
     };
+    let initial = restored.first.is_some();
 
-    let setter = (
-        setter(stored.set_by.as_deref(), stored.confirmed),
-        stored.confirmed,
-    );
+    let setter = (setter, stored.confirmed);
     let (ids, durations) = (Arc::clone(&deps.ids), &deps.durations);
     let mut core = SessionCore::new(id.clone(), ids, durations, false, setter);
     core.require_trust_checks();
@@ -159,6 +225,7 @@ pub(super) async fn load(
         commands,
         project_gate,
         ignore_for_good: stored.ignored,
+        initial,
     };
     Ok((parts, start))
 }
@@ -191,11 +258,48 @@ fn setter(id: Option<&str>, confirmed: bool) -> Principal {
     })
 }
 
+/// `session.configured` as the row has it, for a view without one. Whether
+/// the project's configuration loads follows the project's trust now, and
+/// the guard's first check decides any confirmation again.
+fn rebuilt(stored: &Stored) -> Result<SessionConfigured, RpcError> {
+    let (kind, branch, base_ref, read_only) = stored.workspace.clone();
+    let workspace = SessionWorkspace {
+        kind: kind.as_str().into(),
+        path: WirePath(stored.path.clone()),
+        branch,
+        base_ref,
+    };
+    Ok(SessionConfigured {
+        agent: stored.agent.as_str().into(),
+        workspace,
+        config: serde_json::from_str(&stored.config).map_err(internal)?,
+        read_only,
+        project_config: match stored.trusted && !stored.ignored {
+            true => ProjectConfig::Loaded,
+            false => ProjectConfig::Ignored,
+        },
+        confirmation_required: None,
+    })
+}
+
+/// For a tool call or its late output, whether it ran a command; `None` for
+/// any other item.
+fn command_of(item: &Item) -> Option<bool> {
+    match item {
+        Item::ToolCall(call) => Some(call.tool_kind == ToolKind::Execute),
+        Item::LateToolOutput(late) => Some(late.of.command.is_some()),
+        _ => None,
+    }
+}
+
 fn read(conn: &Connection, session: &str) -> rusqlite::Result<Option<Stored>> {
     let row = conn.query_row(
         "SELECT project_id, agent, agent_session_id, workspace_path, config_json, mode_set_by,
              full_access_confirmed_at IS NOT NULL, queue_version, queue_paused,
-             project_config_ignored
+             project_config_ignored, workspace_kind, worktree_branch, base_ref, read_only,
+             (SELECT trust_state = 'trusted' FROM projects p
+              WHERE p.project_id = sessions.project_id),
+             initial_prompt_json
          FROM sessions WHERE session_id = ?1",
         [session],
         |r| {
@@ -210,6 +314,9 @@ fn read(conn: &Connection, session: &str) -> rusqlite::Result<Option<Stored>> {
                 queue_version: r.get(7)?,
                 queue_paused: r.get(8)?,
                 ignored: r.get(9)?,
+                workspace: (r.get(10)?, r.get(11)?, r.get(12)?, r.get(13)?),
+                trusted: r.get::<_, Option<bool>>(14)?.unwrap_or(false),
+                first: r.get(15)?,
                 queue: Vec::new(),
                 last_turn: None,
                 ended: Vec::new(),

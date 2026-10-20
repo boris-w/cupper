@@ -79,6 +79,10 @@ pub enum Command {
     /// Test builds: `test/clock_advance` by this many milliseconds (design 5.2.16).
     #[cfg(feature = "test-harness")]
     ClockAdvance(u64),
+    /// Test builds: follows `index` or a session and prints its whole view
+    /// after each batch, to compare with another client's (E2E-NFR1).
+    #[cfg(feature = "test-harness")]
+    View(Option<SessionId>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -180,6 +184,18 @@ pub fn command(words: &[String]) -> Result<Command, UsageError> {
                 .map_err(|_| usage(format!("`{ms}` is not milliseconds")))?;
             Command::ClockAdvance(ms)
         }
+        #[cfg(feature = "test-harness")]
+        "view"
+            if flags
+                .positional
+                .first()
+                .is_some_and(|stream| stream == "index") =>
+        {
+            flags.text(0)?;
+            Command::View(None)
+        }
+        #[cfg(feature = "test-harness")]
+        "view" => Command::View(Some(flags.id(0)?)),
         other => return Err(usage(format!("no command `{other}`"))),
     };
     flags.done(name)?;
@@ -316,6 +332,11 @@ mod tests {
         assert_eq!(advance, Command::ClockAdvance(150));
         assert!(command(&words("clock-advance soon")).is_err());
         assert!(command(&words("clock-advance")).is_err());
+        assert_eq!(command(&words("view index")).unwrap(), Command::View(None));
+        let session = SessionId::from_uuid(1);
+        let view = command(&words(&format!("view {session}"))).unwrap();
+        assert_eq!(view, Command::View(Some(session)));
+        assert!(command(&words("view sessions")).is_err());
     }
 
     #[test]

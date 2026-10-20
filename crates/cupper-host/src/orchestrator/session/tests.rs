@@ -265,7 +265,7 @@ impl Fixture {
         let ((records, audit), index) = (mpsc::unbounded_channel(), Arc::new(Index::default()));
         let deps = SessionDeps {
             streams: streams.clone(),
-            readers,
+            readers: readers.clone(),
             clock: Arc::clone(&shared),
             ids: Arc::new(IdGen::seeded(Arc::clone(&shared), 1)),
             durations: durations.clone(),
@@ -281,14 +281,16 @@ impl Fixture {
         let mut routes = Routes::new(ledger);
         let manager = SessionManager::new(deps);
         routes.sessions(Arc::new(manager.clone()));
+        routes.streams(streams.clone(), readers);
         (routes, streams, seen, audit, index, manager)
     }
 
     /// The host stops without its orderly exit and starts again: the
     /// sessions' actors stop with their mailboxes, the startup cleanup ends
     /// in the rows what ran (design 5.2.13), and the sessions load from the
-    /// store when calls come for them.
-    pub fn restart(&mut self) {
+    /// store when calls come for them, or at once for a first message that
+    /// never started a turn.
+    pub async fn restart(&mut self) {
         let run = Self::run(&self.dir, &self.clock, &self.writer, self.git.clone());
         (
             self.routes,
@@ -301,6 +303,7 @@ impl Fixture {
         self.events = None;
         let conn = rusqlite::Connection::open(self.dir.host_db()).unwrap();
         end_previous_run(&conn, self.clock.now_wall_ms()).unwrap();
+        self.manager.reopen().await;
     }
 
     pub async fn call(&self, by: Principal, method: &str, params: Value) -> Result<Value, Value> {
@@ -369,6 +372,12 @@ impl Fixture {
         self.attach().await;
         self.prompt().await;
         serde_json::from_value(created["session_id"].clone()).unwrap()
+    }
+
+    /// Subscribes to session `id`'s stream, and lets the subscription go.
+    pub fn subscribe(&self, id: &SessionId) {
+        let stream = json!({"stream": StreamId::Session(id.clone())});
+        Peer::new(harness()).send(&self.routes, "stream/subscribe", stream);
     }
 
     /// The session's events in the log, once there are `n` of type `tag`.

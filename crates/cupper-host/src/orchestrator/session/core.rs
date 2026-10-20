@@ -30,9 +30,9 @@ use cupper_protocol::annotations::{DurationMs, TimestampMs};
 use cupper_protocol::capabilities::ConfigOptionId;
 use cupper_protocol::domain::Tier;
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::{AdapterInstanceId, PrincipalId, RequestId, SessionId, TurnId};
+use cupper_protocol::ids::{AdapterInstanceId, ItemId, PrincipalId, RequestId, SessionId, TurnId};
 use cupper_protocol::interaction::{InteractionResolved, InteractionStatus, ResolutionReason};
-use cupper_protocol::item::NoticeCode;
+use cupper_protocol::item::{ItemCompleted, ItemPatch, ItemStatus, NoticeCode};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::session::{ConfirmationReason, PauseReason, TurnCompleted, TurnStatus};
 
@@ -47,7 +47,7 @@ use crate::orchestrator::interaction::{self, InteractionBroker};
 use crate::orchestrator::notice;
 use crate::orchestrator::queue::QueueCore;
 use crate::orchestrator::tier_guard::{self, RevertTimer, TierGuard};
-use crate::orchestrator::turn::{self, TurnMachine, TurnSignal, TurnTimer};
+use crate::orchestrator::turn::{self, SendRequest, TurnMachine, TurnSignal, TurnTimer};
 use crate::pure::{Core, TimerRequest};
 
 #[derive(Debug)]
@@ -100,6 +100,14 @@ pub struct Restored {
     /// The turn the stream still has running: its ID, its start, and its end
     /// as the startup cleanup recorded it.
     pub interrupted: Option<(TurnId, TimestampMs, TimestampMs)>,
+    /// What a view rebuilt from turn snapshots lacked, from the rows and the
+    /// cache (T169).
+    pub missing: Vec<EventBody>,
+    /// The running turn's items that did not end, with their start, and,
+    /// for a tool call, whether its command may still run.
+    pub open: Vec<(ItemId, TimestampMs, Option<bool>)>,
+    /// The first message, when the host stopped before it started a turn.
+    pub first: Option<SendRequest>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -179,6 +187,11 @@ impl SessionCore {
 
     pub fn turn_id(&self) -> Option<&TurnId> {
         self.machine.turn_id()
+    }
+
+    /// A message waits for its check before it turns into a turn.
+    pub fn holding(&self) -> bool {
+        self.machine.holding()
     }
 
     /// How many queued messages will run.
@@ -339,11 +352,30 @@ impl SessionCore {
         }
     }
 
-    /// Each core takes its part of a loaded session; then the requests the
-    /// previous run left pending expire and its running turn completes
-    /// `interrupted`, in the stream's order (design 5.2.13).
+    /// Each core takes its part of a loaded session. What the view lacked is
+    /// written again; then, in the stream's order (design 5.2.13), the items
+    /// the previous run left open end as a turn's end ends them, its pending
+    /// requests expire and its running turn completes `interrupted`. A first
+    /// message that never started a turn goes to the machine again.
     fn restore(&mut self, restored: Restored, now: Now, out: &mut Vec<Action>) {
         self.broker(interaction::Input::Ended(restored.ended), now, out);
+        out.extend(restored.missing.into_iter().map(Action::Event));
+        let ended_at = restored.interrupted.as_ref().map(|(.., at)| *at);
+        for (item_id, started, command) in restored.open {
+            let ended_at = ended_at.unwrap_or(started);
+            let completed = ItemCompleted {
+                item_id,
+                status: match command {
+                    Some(_) => ItemStatus::Abandoned,
+                    None => ItemStatus::Completed,
+                },
+                ended_at,
+                duration_ms: DurationMs(ended_at.0.saturating_sub(started.0)),
+                may_still_run: command.unwrap_or(false),
+                patch: ItemPatch::default(),
+            };
+            out.push(Action::Event(EventBody::ItemCompleted(completed)));
+        }
         for request_id in restored.expired {
             let resolved = InteractionResolved {
                 request_id,
@@ -372,6 +404,9 @@ impl SessionCore {
         out.extend(paused.map(|update| Action::Event(EventBody::QueueUpdated(update))));
         let guarded = self.guard.restore(restored.mode, restored.unconfirmed);
         self.guarded(guarded, now, out);
+        if let Some(first) = restored.first {
+            self.machine(turn::Input::Send(first), now, out);
+        }
     }
 
     /// Steps the guard.
