@@ -248,11 +248,17 @@ impl Fixture {
 
     /// Answers the next attach with the agent's session `agent-1`.
     pub async fn attach(&mut self) -> Attach {
+        self.attach_with(caps()).await
+    }
+
+    /// Answers the next attach with the agent's session `agent-1`, whose
+    /// capabilities are `capabilities`.
+    pub async fn attach_with(&mut self, capabilities: SessionCapabilities) -> Attach {
         let Some(Seen::Attach(attach, events, reply)) = self.seen.recv().await else {
             panic!("an attach")
         };
         let session = AgentSessionId("agent-1".into());
-        let (instance, capabilities) = (AdapterInstanceId::from_uuid(1), caps());
+        let instance = AdapterInstanceId::from_uuid(1);
         reply
             .send(Ok(AttachInfo {
                 session,
@@ -276,6 +282,11 @@ impl Fixture {
             DriverCommand::Prompt { tag, content, .. } => (tag, content),
             other => panic!("{other:?}"),
         }
+    }
+
+    /// Nothing more went to the agent so far.
+    pub fn quiet(&mut self) -> bool {
+        self.seen.try_recv().is_err()
     }
 
     pub fn emit(&self, event: DriverEvent) {
