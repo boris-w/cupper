@@ -406,6 +406,8 @@
 | T182 | `runtime/licenses/codex-acp-THIRD_PARTY_NOTICES.md`（T006 生成）还没进 runtime-pack 的暂存和 App，要在 THIRD_PARTY_NOTICES 生成时一并放进去；manifest 的 `files` 哈希会随之变化 | T006 |
 | 升级 codex-acp 的任务 | 先把新标签的 `package-lock.json` 放进 `runtime/locks/`，再运行 `node tools/license-gate/src/main.ts codex-notices`（要联网，下载各包 tarball 核对 integrity 后取 LICENSE），否则许可证门禁会因找不到锁文件或声明不全而失败 | T006 |
 | T131（及加渲染入口的任务） | 加第二个渲染入口时，在 `tools/license-gate/src/main.ts` 的 `ENTRIES` 里登记它的环境名；`apps/desktop/vite.config.ts` 的插件把每个环境的模块写到 `dist/metafile/<环境>.json` | T006 |
+| T121、T124（git 写操作与 worktree 的故障点） | 故障点夹具与断言库在 `crates/cupper-host/tests/crash_concurrency.rs`（T069）：完整性检查、每条流 seq 连续、实时事件是日志前缀、在途命令按原 `command_id` 重试符合账本语义、消息各恰好一次；按命中次数倍增扫描（第 1、2、4、8……次到达时以 99 退出）。新故障点在 `failpoint.rs` 登记后，加进扫描表即可 | T069 |
+| 会话 actor 的测试 | `actor::held`（只在单元测试里编译，按项目路径登记）能让某次重扫停住，用来把配置变化放进"回合已开始、附加前的重扫还没做"这类窗口（T069）；会话夹具的 `events`、`attach`、`command` 等待都有 30 s 超时，超时时报出在等什么 | T069 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
