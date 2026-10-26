@@ -388,8 +388,8 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
   - `extensions.objectFormat`（取值不是 sha1 时同时写 `core.repositoryFormatVersion=1`）。
 - **过滤器**：属性文件引用的 filter 和 diff 驱动在这份配置里都没有定义，git 按原样处理内容，不执行任何程序。
   - 例外只有 Git LFS：用户有效配置里的 `filter.lfs.*` 恰好是 git-lfs 的标准取值时，cupper 写入同样的取值，但程序一律写成宿主启动时解析出的 git-lfs **绝对路径**（见下文"调用约定"），不按 PATH 查找。这条路径未实测（待定问题 Q32）。
-  - 其他自定义过滤器（例如 git-crypt）不执行。**检测**：快照前在快照档执行 `check-attr -z --stdin filter`，覆盖全部属性来源：工作区的 `.gitattributes`、复制过来的 `info/attributes`、`core.attributesFile`；属性来源里没有任何 `filter=` 时跳过这一步。命中的路径标为 `filter_unsupported`：
-    - **快照里只存占位**：这些路径不经 `add -A` 写入，而是用 `update-index --cacheinfo` 放一个占位 blob，内容是"未保存（自定义过滤器 <名称>），sha-256 <工作区内容的哈希>"。快照对象库里不出现明文（M1 不回收快照对象），回合 diff 上这类文件只显示"已变化"；
+  - 其他自定义过滤器（例如 git-crypt）不执行。**检测**：快照前在快照档执行 `check-attr -z --stdin filter`，覆盖全部属性来源：工作区的 `.gitattributes`、复制过来的 `info/attributes`、`core.attributesFile`；配置里没有定义快照档不执行的过滤器（有 `clean` 或 `process`、且不是由宿主执行的 git-lfs）时跳过这一步，因为没有定义的过滤器用户自己的 git 也按原样处理（T061）。命中的路径标为 `filter_unsupported`：
+    - **快照里只存占位**：这些路径不经 `add -A` 写入，而是用 `update-index --cacheinfo` 放一个占位 blob，内容是固定的 ASCII 格式 `cupper: not stored, filter <名称> not run; sha-256 <工作区内容的哈希>`（宿主不产生界面文案，界面按这个格式识别；T061）。快照对象库里不出现明文（M1 不回收快照对象），回合 diff 上这类文件只显示"已变化"；
     - 在 `unstaged`、`staged` 范围里不提供 hunk 操作；
     - 仓库档执行 `git/stage` 之前，在用户仓库里对目标路径再用 `check-attr filter` 核对一次（这条命令不执行程序），发现白名单以外的过滤器就拒绝，返回 `git_error`（`reason: filter_unsupported`），避免把工作区的明文暂存进去（安全核对 3）。
 - **复制 index 时保留 mtime**（等价 `cp -p`）。实验发现：换成新的 mtime 后，同一秒内改过、大小又没变的文件会被当成未修改，快照里留下旧内容（git 的 racy 检测失效）。SP-5 的临时 index 方案同样受影响，这里一并改正。
@@ -476,6 +476,8 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 只属于界面的偏好（发送快捷键、主题覆盖、面板尺寸、语言覆盖）由桌面主进程存在 App 自己的 userData 里，不是会话数据，不经过宿主。
 
+- **设置变更的通知**（T036，2026-10-26）：M1a 不推送设置变更，其他窗口和 CLI 自己重新 `settings/get`；`cli_path`、`env_passthrough` 改了之后宿主重新发现 agent，经 `agents.updated` 体现。M1b 的设置页（T151）在索引流加 `settings.updated {settings}`（带全部设置，与 `settings/get` 的结果相同），索引视图加可选的 `settings`，后写的覆盖先写的，与 `host.updated` 同规则；这是附加式改动，冻结后允许。
+
 ## 5.2.12 运行时安装器
 
 按 ADR-08 实现，补充以下细化：
@@ -521,6 +523,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 - **启动清理只写库，不追加事件**：上次运行留下的运行中回合标为 `interrupted`，待处理的交互标为 `expired`（`host_restarted`），`sessions.state` 从 `running` 改为 `interrupted`。会话流里对应的 `turn.completed`、`interaction.resolved` 事件，由会话 actor（T043）在载入会话时补写，以守住"每条流只有一个写者"。
 - **载入时的补写与队列**（T089，2026-10-20）：会话 actor 载入会话时以会话视图为准，先补写待处理请求的 `interaction.resolved{expired, host_restarted}`，再补写运行中回合的 `turn.completed{interrupted}`，随行和索引通知同一事务提交；队列里有消息又没暂停的，一律以 `turn_interrupted` 暂停，重启后在用户操作之前不自己开始回合。被中断回合里没结束的条目由 T169 补写 `item.completed`。
 - **订阅也触发载入**（T091 发现，T175 实现）：客户端订阅一个会话流时，会话不在内存就按需载入，让载入时的补写马上进流；不等这个会话收到下一条命令。载入失败不影响订阅本身。会话流的读取不经 actor，所以订阅者不算 actor 的活动，不阻止空闲退出。
+- **信任在准备阶段恢复**（T069 实测，2026-10-26）：第一个回合已开始、附加前的重扫发现项目配置变了时，回合停在准备阶段、闸门关着、不发 prompt；信任恢复后经 `session/queue_resume` 发出，但这个回合仍跑在附加时"不加载项目配置"的 agent 会话上（`session.configured` 如实记 `ignored`）。没有安全问题（未信任的配置任何时候都不会被加载）。M1a 保持现状；闸门在准备阶段重新打开时要不要以加载方式重新附加，留给 T141 与档位、配置一并定。
 - **数据目录**：
   - 已存在、属主是当前用户、但权限不是 0700：直接收紧，不报错；
   - 属主不对，或者不是目录：以退出码 5 退出。

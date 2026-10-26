@@ -521,11 +521,12 @@ IT-git-racy = "pr"
 IT-git-filter-placeholder = "pr"
 IT-git-snapshot-malicious = "pr"
 
-# Git 服务 II-b：LFS 实测与快照的性能（计划 v1.3.51 由 T061 拆出）
+# Git 服务 II-b：LFS 实测、快照的性能与回合前后的配置指纹（计划 v1.3.51 由 T061 拆出，v1.3.53 加指纹）
 [T186]
 milestone = "M1a"
 IT-git-lfs-snapshot = "pr"
 PERF-snapshot = "nightly"
+IT-git-turn-fingerprint = "pr"
 
 # 宿主集成测试 I：网关同步、历史与通知意图
 [T062]
@@ -554,7 +555,16 @@ IT-plan-entries = "pr"
 [T064]
 milestone = "M1a"
 UNIT-compat-report = "pr"
+
+# 兼容套件 II：真实模式与剧本补全（计划 v1.3.55 由 T064 拆出）
+[T187]
+milestone = "M1a"
 UNIT-compat-guards = "pr"
+
+# 兼容套件 III：审阅与校验工具（计划 v1.3.55 由 T064 拆出）
+[T188]
+milestone = "M1a"
+UNIT-compat-tools = "pr"
 
 # B 层金样例运行器
 [T065]
