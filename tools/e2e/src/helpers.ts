@@ -194,3 +194,8 @@ export function sampleNetwork(cupper: Cupper): Flow[] {
   }
   return flows;
 }
+
+/** Those of `flows` whose far end is not this machine. */
+export function offMachine(flows: Flow[]): Flow[] {
+  return flows.filter((flow) => !/^(127\.|::1[.:]|\*[.:])/.test(flow.remote));
+}

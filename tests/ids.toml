@@ -520,6 +520,10 @@ IT-git-snapshot-parity = "pr"
 IT-git-racy = "pr"
 IT-git-filter-placeholder = "pr"
 IT-git-snapshot-malicious = "pr"
+
+# Git 服务 II-b：LFS 实测与快照的性能（计划 v1.3.51 由 T061 拆出）
+[T186]
+milestone = "M1a"
 IT-git-lfs-snapshot = "pr"
 PERF-snapshot = "nightly"
 
