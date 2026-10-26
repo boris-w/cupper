@@ -14,7 +14,9 @@ use crate::event::EventBody;
 use crate::limits::MAX_SAFE_INTEGER;
 use crate::methods::catalog::catalog;
 use crate::methods::handshake::PROTOCOL;
-use crate::rpc::{Build, ClientNotification, HostNotification, Method, MethodError, Scope};
+use crate::rpc::{
+    Build, ClientNotification, HostNotification, Idempotency, Method, MethodError, Replayed, Scope,
+};
 use crate::view::{IndexView, SessionView};
 
 /// The protocol as one JSON Schema document, which `export-schema` writes to
@@ -132,9 +134,14 @@ pub fn bound_integers(schema: &mut Schema) {
 /// request method, and `x-builds` when only some builds have it.
 pub fn method_entry<M: Method>(g: &mut SchemaGenerator) -> Value {
     let errors: Vec<String> = M::ERRORS.iter().map(MethodError::wire).collect();
+    let mut result = serde_json::to_value(subschema::<M::Result>(g)).expect("a schema is JSON");
+    // A repeat gets the first outcome again, `replayed: true` added (design 5.2.5).
+    if M::IDEMPOTENCY == Idempotency::Command {
+        result = json!({"allOf": [result, subschema::<Replayed>(g)]});
+    }
     let mut entry = json!({
         "params": subschema::<M::Params>(g),
-        "result": subschema::<M::Result>(g),
+        "result": result,
         X_SCOPE: scope_name(M::SCOPE.as_ref()),
         X_IDEMPOTENT: M::IDEMPOTENCY.as_str(),
         X_MILESTONE: M::MILESTONE.as_str(),
@@ -184,7 +191,7 @@ mod tests {
     use super::*;
     use crate::annotations::TimestampMs;
     use crate::error::{ErrorCode, ErrorReason};
-    use crate::rpc::{Idempotency, Milestone, Notification};
+    use crate::rpc::{Milestone, Notification};
     use crate::testutil::integers;
 
     #[derive(Serialize, Deserialize, JsonSchema)]
@@ -324,6 +331,10 @@ mod tests {
             (&json!("none"), &json!("none"))
         );
         assert_eq!(init[X_ERRORS], json!([]));
+        // A command's result may come back replayed (design 5.2.5); others do not.
+        let replayed = json!({"$ref": "#/$defs/Replayed"});
+        assert_eq!(send["result"]["allOf"][1], replayed);
+        assert_eq!(init["result"], json!({"type": "null"}));
         let presence = client_notification_entry::<Presence>(&mut g);
         assert_eq!(
             (&presence[X_SCOPE], &presence[X_IDEMPOTENT]),

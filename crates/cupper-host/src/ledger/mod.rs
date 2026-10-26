@@ -48,6 +48,7 @@ use std::time::Duration;
 use cupper_protocol::canonical::CanonicalError;
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::ids::{CommandId, Digest, PrincipalId};
+use cupper_protocol::rpc::REPLAYED;
 use rusqlite::Connection;
 use serde_json::Value;
 use tokio::sync::watch;
@@ -297,7 +298,7 @@ fn repeat(
 fn replayed(outcome: Outcome) -> Outcome {
     outcome.map(|mut result| {
         if let Value::Object(members) = &mut result {
-            members.insert("replayed".into(), Value::Bool(true));
+            members.insert(REPLAYED.into(), Value::Bool(true));
         }
         result
     })

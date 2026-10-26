@@ -1005,6 +1005,13 @@ export const zQueueTarget = z.object({
 export const zRemovalReason = z.union([z.enum(["archived"]), z.string()]);
 
 /**
+ * What a repeated command's result adds to the first run's (design 5.2.5).
+ */
+export const zReplayed = z.object({
+  replayed: z.literal(true).optional(),
+});
+
+/**
  * Interaction request: `r_` + UUIDv7.
  */
 export const zRequestId = z.string();

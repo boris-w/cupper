@@ -2496,6 +2496,16 @@ export type QueueUpdated = {
 export type RemovalReason = "archived" | (string & {});
 
 /**
+ * What a repeated command's result adds to the first run's (design 5.2.5).
+ */
+export type Replayed = {
+  /**
+   * Present when the ledger answered a repeat with the first outcome.
+   */
+  replayed?: true;
+};
+
+/**
  * Interaction request: `r_` + UUIDv7.
  */
 export type RequestId = string;

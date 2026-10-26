@@ -5873,6 +5873,16 @@
       ],
       "description": "Open enum: unknown values must be accepted. Known: archived "
     },
+    "Replayed": {
+      "description": "What a repeated command's result adds to the first run's (design 5.2.5).",
+      "properties": {
+        "replayed": {
+          "const": true,
+          "description": "Present when the ledger answered a repeat with the first outcome."
+        }
+      },
+      "type": "object"
+    },
     "RequestId": {
       "description": "Interaction request: `r_` + UUIDv7.",
       "type": "string",
@@ -8457,7 +8467,14 @@
           "$ref": "#/$defs/AgentsRestartParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [],
         "x-idempotent": "command",
@@ -8499,7 +8516,14 @@
           "$ref": "#/$defs/AuthElevationRespondParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "expired"
@@ -8542,7 +8566,14 @@
           "$ref": "#/$defs/DiagExportParams"
         },
         "result": {
-          "$ref": "#/$defs/DiagExportResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/DiagExportResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [],
         "x-idempotent": "command",
@@ -8594,7 +8625,14 @@
           "$ref": "#/$defs/GitCommitParams"
         },
         "result": {
-          "$ref": "#/$defs/GitCommitResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/GitCommitResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "git_error/hook_failed",
@@ -8639,7 +8677,14 @@
           "$ref": "#/$defs/GitPushParams"
         },
         "result": {
-          "$ref": "#/$defs/GitPushResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/GitPushResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "git_error/auth_failed",
@@ -8654,7 +8699,14 @@
           "$ref": "#/$defs/GitApplyParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/stale_diff",
@@ -8671,7 +8723,14 @@
           "$ref": "#/$defs/GitApplyParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/stale_diff",
@@ -8703,7 +8762,14 @@
           "$ref": "#/$defs/GitApplyParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/stale_diff",
@@ -8734,7 +8800,14 @@
           "$ref": "#/$defs/HostExitParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/turn_running"
@@ -8748,7 +8821,14 @@
           "$ref": "#/$defs/HostPrepareUpgradeParams"
         },
         "result": {
-          "$ref": "#/$defs/HostPrepareUpgradeResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/HostPrepareUpgradeResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "forbidden"
@@ -8804,7 +8884,14 @@
           "$ref": "#/$defs/InteractionRespondParams"
         },
         "result": {
-          "$ref": "#/$defs/InteractionRespondResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/InteractionRespondResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/already_resolved",
@@ -8847,7 +8934,14 @@
           "$ref": "#/$defs/ProjectAddParams"
         },
         "result": {
-          "$ref": "#/$defs/ProjectAddResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/ProjectAddResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "not_found"
@@ -8861,7 +8955,14 @@
           "$ref": "#/$defs/ProjectRemoveParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/turn_running"
@@ -8875,7 +8976,14 @@
           "$ref": "#/$defs/ProjectTrustParams"
         },
         "result": {
-          "$ref": "#/$defs/ProjectTrustResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/ProjectTrustResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/digest_mismatch",
@@ -8905,7 +9013,14 @@
           "$ref": "#/$defs/SessionArchiveParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionArchiveResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionArchiveResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/turn_running"
@@ -8933,7 +9048,14 @@
           "$ref": "#/$defs/SessionConfirmConfigParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/digest_mismatch"
@@ -8947,7 +9069,14 @@
           "$ref": "#/$defs/SessionCreateParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionCreateResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionCreateResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "not_found",
@@ -8978,7 +9107,14 @@
           "$ref": "#/$defs/SessionInterruptParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionInterruptResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionInterruptResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/turn_mismatch"
@@ -9016,7 +9152,14 @@
           "$ref": "#/$defs/SessionQueueEditParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionQueueEditResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionQueueEditResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/version_mismatch",
@@ -9033,7 +9176,14 @@
           "$ref": "#/$defs/SessionQueueResumeParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/config_unconfirmed",
@@ -9048,7 +9198,14 @@
           "$ref": "#/$defs/SessionRenameParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [],
         "x-idempotent": "command",
@@ -9060,7 +9217,14 @@
           "$ref": "#/$defs/SessionRestoreParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionRestoreResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionRestoreResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [],
         "x-idempotent": "command",
@@ -9072,7 +9236,14 @@
           "$ref": "#/$defs/SessionSendParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionSendResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionSendResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "not_found",
@@ -9089,7 +9260,14 @@
           "$ref": "#/$defs/SessionSetConfigParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionSetConfigResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionSetConfigResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "unsupported",
@@ -9117,7 +9295,14 @@
           "$ref": "#/$defs/SettingsUpdateParams"
         },
         "result": {
-          "$ref": "#/$defs/SettingsResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SettingsResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "forbidden"
