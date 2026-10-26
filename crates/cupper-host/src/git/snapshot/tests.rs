@@ -294,7 +294,9 @@ async fn perf_snapshot_ten_thousand_files() {
             runs.push(clock.now_mono().saturating_duration_since(start));
         }
         runs.sort();
-        eprintln!("PERF-snapshot, 10,000 files, {case}: median {:?}", runs[2]);
+        let metric = format!("snapshot_10k_{}", case.replace(' ', "_").replace(',', ""));
+        let ms: Vec<f64> = runs.iter().map(|run| run.as_secs_f64() * 1000.0).collect();
+        crate::perf::record(&metric, "ms", &ms);
         assert!(runs[2] < Duration::from_secs(2), "{case}: {runs:?}");
     }
 }
