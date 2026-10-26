@@ -13,7 +13,12 @@ export const STATUSES = ["active", "conditional", "na", "gap", "gap-confirmed"] 
 /** Components a manual check can be bound to: its evidence names their versions. */
 export const COMPONENTS = ["electron"] as const;
 const PRECISIONS = ["major", "exact"] as const;
-const FIELDS = ["suite", "milestone", "status", "reason", "parts", "versions", "max_age_days"];
+const FIELDS = [
+  ...["suite", "milestone", "status", "reason", "parts", "versions", "max_age_days"],
+  ...["scenario", "cli"],
+];
+/** The CLIs a compatibility report can be for. */
+export const CLIS = ["claude", "codex"] as const;
 
 export type Milestone = (typeof MILESTONES)[number];
 export type Suite = (typeof SUITES)[number];
@@ -35,6 +40,9 @@ export interface Entry {
   versions?: Record<string, Precision>;
   /** MAN only: evidence older than this many days is stale. */
   maxAgeDays?: number;
+  /** COMPAT only: the compatibility suite's scenario and the CLI that proves the ID. */
+  scenario?: string;
+  cli?: (typeof CLIS)[number];
 }
 
 export interface Evidence {
@@ -74,6 +82,13 @@ export function parseRegistry(text: string): { registry: Registry; problems: str
     } else {
       problems.push(`[${name}] is neither a task (Txxx), [unplanned], [not-ids] nor [[evidence]]`);
     }
+  }
+  const proven = new Map<string, string>();
+  for (const { id, cli, scenario } of registry.entries.values()) {
+    const by = `${cli} ${scenario}`;
+    const earlier = cli && proven.get(by);
+    if (earlier) problems.push(`${id}: ${earlier} is already proven by the ${by} scenario`);
+    if (cli) proven.set(by, id);
   }
   return { registry, problems };
 }
@@ -123,6 +138,13 @@ function readEntry(id: string, spec: unknown, at: string, problems: string[]): F
     fail(`unknown field \`${key}\``);
   }
   const { suite, milestone, status = "active", reason, parts, versions, max_age_days } = fields;
+  const { scenario, cli } = fields;
+  const compat = id.startsWith("COMPAT-");
+  if ((scenario !== undefined || cli !== undefined) && !compat) {
+    fail("scenario and cli: COMPAT IDs only");
+  } else if (compat && suite === "compat" && (typeof scenario !== "string" || !oneOf(CLIS, cli))) {
+    fail(`a COMPAT ID in the compat suite names its scenario and its cli (${CLIS.join(" | ")})`);
+  }
   const manual = id.startsWith("MAN-");
   if (milestone !== undefined && !oneOf(MILESTONES, milestone)) {
     fail(`milestone must be one of ${MILESTONES.join(", ")}`);
@@ -168,6 +190,8 @@ function readEntry(id: string, spec: unknown, at: string, problems: string[]): F
     reason: reason as string | undefined,
     versions: versions as Record<string, Precision> | undefined,
     maxAgeDays: max_age_days as number | undefined,
+    scenario: scenario as string | undefined,
+    cli: cli as Entry["cli"],
   };
 }
 

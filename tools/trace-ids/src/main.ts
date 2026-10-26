@@ -10,7 +10,7 @@ import { join, resolve } from "node:path";
 
 import { complete, evaluate, select, type State } from "./evaluate.ts";
 import { checkRegistry, MILESTONES, oneOf, parseRegistry, type Entry } from "./registry.ts";
-import { readJunit, readPlaywright, readSummary, type Result } from "./results.ts";
+import { readCompat, readJunit, readPlaywright, readSummary, type Result } from "./results.ts";
 
 const USAGE = `usage: trace-ids <command> [options]
 
@@ -25,7 +25,9 @@ commands:
 results, for status and verify (repeatable):
   --summary <file>             a summary written by \`xtask ci --record\`
   --junit <suite>=<file>       a cargo-nextest JUnit report of that suite
-  --playwright <suite>=<file>  a Playwright JSON report of that suite`;
+  --playwright <suite>=<file>  a Playwright JSON report of that suite
+  --compat <file>              a report of \`cargo xtask compat\` with a real CLI, for the
+                               COMPAT IDs of its CLI and scenarios (\`scenario\`, \`cli\`)`;
 
 const root = resolve(import.meta.dirname, "../../..");
 
@@ -33,6 +35,8 @@ class UsageError extends Error {}
 
 interface Options {
   results: Result[];
+  /** Compatibility scenarios with no COMPAT ID. */
+  unproven: string[];
   milestone?: (typeof MILESTONES)[number];
   task?: string;
 }
@@ -54,7 +58,7 @@ function main([command, ...args]: string[]): number {
     return 0;
   }
 
-  const options = parse(args, [...registry.entries.keys()]);
+  const options = parse(args, registry.entries);
   const versions = { electron: electron() };
   const { states, stray } = evaluate(registry, options.results, { today: today(), versions });
   const rows = (entries: Entry[], keep: (state: State) => boolean) =>
@@ -71,6 +75,7 @@ function main([command, ...args]: string[]): number {
       );
     }
     printStray(stray);
+    printUnproven(options.unproven);
     return 0;
   }
   if (!options.milestone && !options.task) {
@@ -80,14 +85,17 @@ function main([command, ...args]: string[]): number {
   const open = rows(selected, (state) => !complete(state));
   print("not done", open);
   printStray(stray);
+  printUnproven(options.unproven);
   const scope = [options.milestone, options.task].filter(Boolean).join(", ");
   console.log(`${scope}: ${open.length} of ${selected.length} IDs not done`);
   return open.length || stray.length ? 1 : 0;
 }
 
-function parse(args: string[], ids: string[]): Options {
-  const options: Options = { results: [] };
+function parse(args: string[], entries: Map<string, Entry>): Options {
+  const options: Options = { results: [], unproven: [] };
+  const ids = [...entries.keys()];
   const summaries: string[] = [];
+  const reports: string[] = [];
   const commits = new Set<string>();
   let raw = false;
   for (let i = 0; i < args.length; i += 2) {
@@ -101,6 +109,11 @@ function parse(args: string[], ids: string[]): Options {
       commits.add(summary.commit);
       summaries.push(value);
       options.results.push(...summary.results);
+    } else if (flag === "--compat") {
+      const compat = readCompat(readFileSync(value, "utf8"), value, entries.values());
+      reports.push(value);
+      options.results.push(...compat.results);
+      options.unproven.push(...compat.unproven);
     } else if ((flag === "--junit" || flag === "--playwright") && suite && file) {
       const reader = flag === "--junit" ? readJunit : readPlaywright;
       options.results.push(...reader(readFileSync(file, "utf8"), suite, ids, file));
@@ -113,8 +126,11 @@ function parse(args: string[], ids: string[]): Options {
       throw new UsageError(`bad option \`${flag} ${value}\``);
     }
   }
-  if (options.milestone && (raw || commits.size !== 1 || !summaries.every(committed))) {
-    throw new UsageError("--milestone reads committed summaries of a single commit only");
+  const unchanged = [...summaries, ...reports].every(committed);
+  if (options.milestone && (raw || commits.size !== 1 || !unchanged)) {
+    throw new UsageError(
+      "--milestone reads committed summaries of a single commit, and committed compatibility reports, only",
+    );
   }
   return options;
 }
@@ -142,6 +158,14 @@ function print(heading: string, rows: { entry: Entry; state: State }[]): void {
   for (const { entry, state } of rows) {
     const where = `${entry.milestone} ${entry.task ?? "-"}`.padEnd(12);
     console.log(`  ${entry.id.padEnd(width)}  ${where}${state.detail}`);
+  }
+}
+
+/** The scenarios of the compatibility reports that prove no ID: most of the basic ones. */
+function printUnproven(unproven: string[]): void {
+  if (unproven.length) {
+    console.log(`compatibility scenarios without a COMPAT ID (${unproven.length}), not judged`);
+    unproven.forEach((scenario) => console.log(`  ${scenario}`));
   }
 }
 
