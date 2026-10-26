@@ -19,6 +19,7 @@ use sha2::{Digest, Sha256};
 use super::perf;
 use crate::ci::ctx::{Artifact, JobCtx};
 use crate::ci::git;
+use crate::runtime_pack;
 
 /// What the e2e build and the suite are made of: a directory (ending in `/`),
 /// a file, or a prefix of crate directories.
@@ -40,8 +41,6 @@ pub const E2E_PATHS: &[&str] = &[
 ];
 
 const SUITE: &str = "tools/e2e";
-/// Built by `cargo xtask runtime-pack`, which `host-bundle` takes the runtime from.
-const RUNTIME: &str = "target/runtime-pack/Contents";
 const ARTIFACTS: &[(&str, &str)] = &[
     (
         "Cupper E2E.app",
@@ -67,7 +66,10 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     install.args(["install", "--frozen-lockfile"]);
     ctx.check("install", &mut install)?;
 
-    if !ctx.root.join(RUNTIME).is_dir() {
+    // `host-bundle` takes the runtime from the stage, whole or not at all.
+    if runtime_pack::staged(ctx.root)? {
+        ctx.skip("runtime-pack", "the stage matches runtime/manifest.json");
+    } else {
         // Public downloads only, pinned by `runtime/manifest.json`.
         let mut pack = ctx.cargo();
         pack.args(["xtask", "runtime-pack"]);
