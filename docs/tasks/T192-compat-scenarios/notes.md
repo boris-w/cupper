@@ -46,3 +46,38 @@
 | 测试 | 串话判定的单元测试；新剧本都过自我约束由现有用例覆盖 | 15 |
 
 **合计约 470 行**，在 620 以内，开工。每写完一个模块就跑一次 `cargo xtask size`。
+
+## 实际做法与发现
+
+- **规模**：剧本表类型和 10 个剧本 232 行；执行者写完后合计 541 行。新增的单元测试一条也没写。
+  - 原计划的"串话判定"单元测试没写，因为这个判定依赖执行者的状态。改为临时把假 agent 的回答换成别的会话的标记，确认会判失败。
+  - 新剧本都过自我约束，由已有的 UNIT-compat-guards 用例覆盖（它逐个检查全部剧本）。
+- **`host-restart`**：宿主重启后的 resume 走的是 `session/resume`，并不发 `session_resumed` 通知（这个通知只在 K6 的崩溃恢复里出现）。所以检查改成"宿主发了 `session/resume`"。
+- **`close-running`**：
+  - 假 agent 的 `spawn_group_child` 会持有它的标准输出，也就是宿主的管道，进程检查会判失败。
+  - 改用 `write_file` 写一个 shell 脚本，再用 `spawn` 运行：脚本把标准输入输出都重定向到 `/dev/null`，用 perl 的 `setpgrp` 让命令自成一个进程组（Claude 的命令也是这样），然后 exec 成 `sleep 300`。
+  - 收尾时这条命令还在适配器下面；宿主退出后它已经不在了。
+- **`untrusted-project`**：
+  - 宿主那一侧的检查两种模式都有意义：宿主录下的 `session/new` 里，`settingSources` 只有 `user`。
+  - hooks、`.mcp.json`、`apiKeyHelper`、`env` 用标记文件和 `env.txt` 来判断；假 agent 不读这些配置，所以这几项在假 agent 下必然成立。
+  - 临时把项目改成已信任，`settingSources` 这一项会判失败。
+- **`hooks-reload`、`config-scope`**：假 agent 下记 `real_only`。真实模式下按标记文件在不在记为 `observed`。
+- **真实模式的等待上限**改为 5 分钟，假 agent 仍是 30 秒。
+
+## 验证
+
+- `cargo xtask compat --fake`：21 个剧本中，
+  - 18 个通过；
+  - steer 记为不适用；
+  - hooks-reload、config-scope 记为 `real_only`。
+- `cargo xtask compat --real --dry-run`：列出了 21 个剧本的计划。
+- 临时破坏检查，确认会判失败，改动都没提交：
+  - 让每个会话都回同一个标记，`six-sessions` 判失败；
+  - 把项目改成已信任，`untrusted-project` 判失败。
+- 用 `--fake --write` 重新产出三份 B 层录制，结果都和入库的一样，金样例不变；`gold_b` 测试 9 个都通过。
+
+## 留给 T066 的观察点
+
+- `config-scope` 和 `untrusted-project` 开工前就放好了 `.claude/settings.json`。项目在库里直接记为已信任或未信任，没有信任时的扫描快照，宿主可能判为"配置已变"而暂停队列，到时剧本会以"不确定"结束。
+- `crash-resume`、`resume-procs` 在真实模式下是在两回合之间 SIGKILL 掉 `claude`，再发下一条，靠宿主的 K6 自动 resume 恢复。
+- `close-running` 在真实模式下，允许命令运行后等 3 秒就收尾，然后靠遗留进程检查判断。
