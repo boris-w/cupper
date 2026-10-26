@@ -64,3 +64,26 @@
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-26，编排者）
+
+执行者开工前估计：直接相加约 690 行，乘 1.2 约 830，超过硬停止线 600。执行者在写代码之前停下，建议拆成两份。
+
+**裁定：拆分（计划 v1.3.62）。**
+- **T188 收窄为 Rust 的部分**，约 345 行，UNIT-compat-tools 留下：报告校验、已验证范围的重算与 `--write`、`testdata-scan` 加这一步、compat-framework 进 `ci pr`。
+- **新增 T194（审阅工具）**，约 485 行，新增编号 UNIT-rec-shape-diff、UNIT-trace-ids-compat：`tools/rec-shape-diff`、`tools/trace-ids --compat` 以及 `tests/ids.toml` 里 COMPAT 编号的 `scenario`、`cli` 登记。T194 不依赖 T188，另行派发。
+- 验收标准里 `rec-shape-diff`、`trace-ids --compat` 两项移到 T194。
+
+**确认**：
+1. **命令**：`cargo xtask compat-reports [--write]`。不带参数时做三项检查，不一致就失败，并提示用 `--write` 重写；`--write` 只改清单的 `cli.*.verified`；`testdata-scan` 加一步 `compat-reports`。认可。
+2. **计入范围的条件**：真实模式；适配器版本等于清单里锁定的版本；所有剧本都通过，`fail` 或 `inconclusive` 让整份报告不计入；"不适用"按通过算，"观察"不阻止计入；CLI 版本必须是 `x.y.z`，否则判失败。认可，"适配器版本等于锁定版本"这一条加得对。
+3. **`--only` 部分运行的报告**：由 T187 处理，让真实模式的 `--write` 拒绝 `--only`，部分运行的报告不入库。已告诉 T187。
+4. **`ci pr` 的相关路径**：照执行者列的五项。假 agent 和宿主本身的改动不算，由每晚的 compat-framework 覆盖。认可。
+5. **ubuntu 编译检查**：可以执行 `rustup target add x86_64-unknown-linux-gnu`，再跑 `cargo check -p xtask --target x86_64-unknown-linux-gnu`，只做一次性核对，不写进 `rust-toolchain.toml`。如果构建脚本要交叉编译 C 代码而本机没有对应的编译器，就退回到只核对依赖清单，不要再装别的工具链。结果写进汇报。
+6. **"每个适配器版本一份"与清单只有一个范围**：留给 T066 定，记进交接。
+
+- 停止线：400；硬停止线：460
+
+**第二次裁定（2026-10-26）**：功能与用例完成后统计为 +550 −46，越过硬停止线 460。写完 `reports.rs`、开始写测试之前没有统计（守则第 8 条），记在评审里。裁定压缩测试：报告夹具改用 `json!`，与 `report.rs` 测试的写法一致，夹具在运行时仍经 `report::parse` 严格读入；合并重复的搭建步骤，覆盖不变。
+
+- 停止线：460；硬停止线：500
