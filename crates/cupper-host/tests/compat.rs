@@ -19,7 +19,7 @@ use cupper_host::clock::{Clock, SystemClock};
 use cupper_host::gateway::testkit::TempDir;
 use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::methods::admin::DiagRecordingExport;
-use cupper_protocol::methods::session::{SessionCreate, SessionInterrupt};
+use cupper_protocol::methods::session::{SessionCreate, SessionInterrupt, SessionSend};
 use cupper_protocol::recording::{Recording, Usage};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -29,6 +29,8 @@ use scenarios::{Check, SCENARIOS, Scenario, Step};
 
 /// What stands for the project's path in a recording.
 const WORK: &str = "/work/project";
+/// A 1×1 PNG, for the image scenario.
+const PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -157,6 +159,9 @@ async fn play(
     if let Some(why) = scenario.skip {
         return ended("not_applicable", why);
     }
+    if let (Some(why), None) = (scenario.real_only, &real) {
+        return ended("real_only", why);
+    }
     if let Some(refused) = scenario.refused("claude") {
         return ended("fail", &format!("refused: {refused}"));
     }
@@ -168,14 +173,22 @@ async fn play(
         "refused: not the user's own temporary directory"
     );
     for (path, text) in scenario.files {
+        std::fs::create_dir_all(repo.join(path).parent().unwrap()).unwrap();
         std::fs::write(repo.join(path), text).unwrap();
     }
+    let project = scenario.project.map_or(repo.clone(), |sub| repo.join(sub));
+    let trust = if scenario.untrusted {
+        "untrusted"
+    } else {
+        "trusted"
+    };
     let (data_dir, conn) = migrated(&dir);
     let sql = "INSERT INTO projects (project_id, path, name, position, added_at, trust_state)
-               VALUES (?1, ?2, 'p', 0, 1, 'trusted')";
+               VALUES (?1, ?2, 'p', 0, 1, ?3)";
     let row = [
         ProjectId::from_uuid(1).to_string(),
-        repo.display().to_string(),
+        project.display().to_string(),
+        trust.into(),
     ];
     conn.execute(sql, row).unwrap();
     let (program, config) = match &real {
@@ -190,16 +203,28 @@ async fn play(
         }
         None => (PathBuf::from(HOST), fake_agent_config(json!({}))),
     };
-    let mut host = Running(spawn_from(&program, &data_dir, config));
-    let client = connect(&data_dir).await;
+    let host = Running(spawn_from(&program, &data_dir, config.clone()));
+    let client = connect_blobs(&data_dir).await;
     let model = real.as_ref().map(|r| scenario.model.unwrap_or(&r.model));
     let session = create(&client, scenario, real.is_some(), model).await;
+    let patience = Duration::from_secs(if real.is_some() { 300 } else { 30 });
     let mut user = User {
         data_dir,
         session,
         client,
         asked: 0,
         loosens: scenario.loosens,
+        host,
+        repo: repo.clone(),
+        program,
+        config,
+        real: real.is_some(),
+        model: model.map(str::to_owned),
+        scenario,
+        patience,
+        sent: 1,
+        markers: Vec::new(),
+        counts: Vec::new(),
     };
     if let Err(waited) = user.normal_mode(scenario.mode).await {
         return ended("inconclusive", &waited);
@@ -208,19 +233,32 @@ async fn play(
         // The agent did not do what the scenario needs (design 5.9.5).
         return ended("inconclusive", &waited);
     }
-    let events = user.events();
-    let held = |c| json!({"check": Check::name(c), "passed": holds(c, &events, &repo)});
-    let mut checks: Vec<_> = scenario.checks.iter().map(held).collect();
-    let recording = user.export(scenario, &repo, &out, real.is_none()).await;
-    let procs = tree(host.0.id());
-    let held = holding(host.0.id(), &procs);
+    let recording = user.export(scenario, &project, &out, real.is_none()).await;
+    let host = user.host.0.id();
+    let procs = tree(host);
+    let below = procs.iter().any(|(_, ppid)| *ppid != host);
+    let text = std::fs::read_to_string(out.join(&recording)).unwrap();
     let check = |check: &str, passed: bool| json!({"check": check, "passed": passed});
+    let judge = |c: &Check| (c.name(), user.judge(c, &repo, &text, below));
+    let observe = |c: &&Check| matches!(c, Check::Observe(_));
+    let (observed, judged): (Vec<_>, Vec<_>) = scenario.checks.iter().partition(observe);
+    let mut checks: Vec<_> = judged
+        .into_iter()
+        .map(judge)
+        .map(|(c, p)| check(&c, p))
+        .collect();
+    let seen: Vec<_> = observed
+        .into_iter()
+        .map(judge)
+        .map(|(c, p)| format!("{c}: {p}"))
+        .collect();
+    let held = holding(host, &procs);
     checks.push(check(
         "no descendant of an adapter holds the host's pipes or sockets",
         held.is_empty(),
     ));
-    terminate(&host.0);
-    let code = exit_code(&mut host.0).await;
+    terminate(&user.host.0);
+    let code = exit_code(&mut user.host.0).await;
     let left = leftovers(&procs).await;
     checks.push(check("no process is left once the host exits", left == 0));
     let unmet = checks.iter().find(|check| check["passed"] == false);
@@ -234,8 +272,29 @@ async fn play(
     } else {
         Vec::new()
     };
-    json!({"outcome": if detail.is_some() { "fail" } else { "pass" }, "detail": detail,
+    // An observing scenario reports what it saw (Q28, Q34).
+    let (outcome, detail) = match detail {
+        Some(detail) => ("fail", Some(detail)),
+        None if !seen.is_empty() => ("observed", Some(seen.join("; "))),
+        None => ("pass", None),
+    };
+    json!({"outcome": outcome, "detail": detail,
         "checks": checks, "recording": recording, "cli_sessions": sessions})
+}
+
+/// The harness client, able to upload blobs (the image scenario).
+async fn connect_blobs(data_dir: &Path) -> Client {
+    use cupper_cli::client::{ClientAuth, Options};
+    use cupper_cli::harness::HarnessKey;
+    use cupper_host::gateway::testkit::KEY;
+    use cupper_protocol::methods::handshake::Feature;
+    let auth = ClientAuth::Harness(HarnessKey::new(KEY));
+    let options = Options {
+        auth,
+        features: vec![Feature::BlobPut],
+        ..Options::default()
+    };
+    connect_with(data_dir, options).await
 }
 
 /// `session/create` in the scenario's permission mode, always given.
@@ -266,6 +325,22 @@ struct User {
     asked: usize,
     /// The scenario may loosen the tier.
     loosens: bool,
+    host: Running,
+    repo: PathBuf,
+    /// How the host starts, for a restart.
+    program: PathBuf,
+    config: Value,
+    real: bool,
+    model: Option<String>,
+    scenario: &'static Scenario,
+    /// How long a wait lasts: real turns take longer.
+    patience: Duration,
+    /// The prompts sent so far.
+    sent: usize,
+    /// `Concurrent`'s markers, by the session that asked for them.
+    markers: Vec<(SessionId, String)>,
+    /// `Resumes`' counts of the host's processes, the first before them.
+    counts: Vec<usize>,
 }
 
 impl User {
@@ -336,6 +411,42 @@ impl User {
                         .timer_at(clock.now_mono() + Duration::from_millis(*ms))
                         .await;
                 }
+                Step::Send { real, fake } => self.send_next(real, fake).await?,
+                Step::Image { real, fake } => self.image(real, fake).await?,
+                Step::KillCli => self.kill_cli().await?,
+                Step::RestartHost => {
+                    self.settle().await?;
+                    terminate(&self.host.0);
+                    assert_eq!(exit_code(&mut self.host.0).await, 0, "the host stopped");
+                    let host = spawn_from(&self.program, &self.data_dir, self.config.clone());
+                    self.host = Running(host);
+                    self.client = connect_blobs(&self.data_dir).await;
+                }
+                Step::Resumes(times) => {
+                    self.settle().await?;
+                    self.counts.push(tree(self.host.0.id()).len());
+                    for _ in 0..*times {
+                        self.kill_cli().await?;
+                        self.send_next("Reply with the single word: again", "crash_cli")
+                            .await?;
+                        self.send_next("", "whoami").await?;
+                        self.settle().await?;
+                        self.counts.push(tree(self.host.0.id()).len());
+                    }
+                }
+                Step::Concurrent {
+                    sessions,
+                    prompts,
+                    rounds,
+                } => {
+                    self.concurrent(*sessions, *prompts, *rounds).await?;
+                }
+                Step::WriteFile(path, text) => {
+                    let path = self.repo.join(path);
+                    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                    std::fs::write(path, text).unwrap();
+                }
+                Step::Leave => {}
                 Step::Interrupt => {
                     let params =
                         json!({"command_id": client::command_id(), "session_id": self.session});
@@ -346,10 +457,174 @@ impl User {
                 }
             }
         }
-        self.wait("the end of the turn", |events| {
-            of(events, "turn.completed").next().map(drop)
-        })
-        .await
+        match steps.last() {
+            Some(Step::Leave) => Ok(()),
+            _ => self.settle().await,
+        }
+    }
+
+    /// Until every prompt sent has had its turn.
+    async fn settle(&self) -> Result<(), String> {
+        let sent = self.sent;
+        let ended = |events: &[Value]| (of(events, "turn.completed").count() >= sent).then_some(());
+        self.wait("the end of the turn", ended).await
+    }
+
+    /// The next prompt, once the turn before has ended; none when this
+    /// mode's text is empty.
+    async fn send_next(&mut self, real: &str, fake: &str) -> Result<(), String> {
+        self.settle().await?;
+        let text = if self.real { real } else { fake };
+        if !text.is_empty() {
+            send(&self.client, &self.session, text).await;
+            self.sent += 1;
+        }
+        Ok(())
+    }
+
+    /// Kills the real CLI below the adapter, after the turn; the fake
+    /// agent's script crashes it instead.
+    async fn kill_cli(&self) -> Result<(), String> {
+        self.settle().await?;
+        for (pid, _) in tree(self.host.0.id()).iter().filter(|_| self.real) {
+            let name = output("/bin/ps", &["-o", "comm=", "-p", &pid.to_string()]);
+            if String::from_utf8_lossy(&name.stdout)
+                .trim()
+                .ends_with("claude")
+            {
+                output("/bin/kill", &["-KILL", &pid.to_string()]);
+            }
+        }
+        Ok(())
+    }
+
+    /// Prompts with a 1×1 PNG, uploaded first.
+    async fn image(&mut self, real: &str, fake: &str) -> Result<(), String> {
+        use base64::Engine as _;
+        use cupper_protocol::frame::BlobChunkHeader;
+        use cupper_protocol::methods::stream::BlobPut;
+        use sha2::Digest as _;
+        self.settle().await?;
+        let png = base64::engine::general_purpose::STANDARD
+            .decode(PNG)
+            .unwrap();
+        let raw: [u8; 32] = sha2::Sha256::digest(&png).into();
+        let header = BlobChunkHeader {
+            hash: raw,
+            offset: 0,
+            last: true,
+        };
+        self.client.send_blob_chunk(&header, &png).await.unwrap();
+        let blob = json!({"hash": cupper_protocol::ids::BlobHash::from_sha256(&raw),
+            "size": png.len(), "media_type": "image/png"});
+        self.client
+            .request::<BlobPut>(typed(blob.clone()))
+            .await
+            .unwrap();
+        let text = if self.real { real } else { fake };
+        let content = json!([{"type": "text", "text": text}, {"type": "image", "blob": blob}]);
+        let params = json!({"command_id": client::command_id(), "session_id": self.session,
+            "mode": "queue", "content": content});
+        self.client
+            .request::<SessionSend>(typed(params))
+            .await
+            .unwrap();
+        self.sent += 1;
+        Ok(())
+    }
+
+    /// `sessions` sessions, this one among them, each sent `prompts` at
+    /// once, `rounds` times; every prompt asks for a marker of its own.
+    async fn concurrent(
+        &mut self,
+        sessions: usize,
+        prompts: usize,
+        rounds: usize,
+    ) -> Result<(), String> {
+        self.settle().await?;
+        let mut all = vec![self.session.clone()];
+        for _ in 1..sessions {
+            all.push(
+                create(
+                    &self.client,
+                    self.scenario,
+                    self.real,
+                    self.model.as_deref(),
+                )
+                .await,
+            );
+        }
+        let nonce = &client::command_id().to_string()[..8];
+        for round in 1..=rounds {
+            for (n, session) in all.iter().enumerate() {
+                for prompt in 1..=prompts {
+                    let marker = format!("cupper-{nonce}-{round}-{n}-{prompt}");
+                    let text = if self.real {
+                        format!("Reply with exactly this and nothing else: {marker}")
+                    } else {
+                        format!("say {marker}")
+                    };
+                    send(&self.client, session, &text).await;
+                    self.markers.push((session.clone(), marker));
+                }
+            }
+            let turns = 1 + round * prompts;
+            let done = || {
+                all.iter()
+                    .all(|s| of(&self.events_of(s), "turn.completed").count() >= turns)
+            };
+            self.until("every session's turns", || done().then_some(()))
+                .await?;
+        }
+        self.sent += rounds * prompts;
+        Ok(())
+    }
+
+    /// The checks this runner's state answers; the rest from the events.
+    fn judge(&self, check: &Check, repo: &Path, recording: &str, below: bool) -> bool {
+        let events = self.events();
+        let frames = || {
+            recording
+                .lines()
+                .filter_map(|line| line.parse::<Value>().ok())
+        };
+        let sent = |method: &'static str| {
+            frames().filter(move |f| f["dir"] == "send" && f["msg"]["method"] == method)
+        };
+        match check {
+            Check::Lacks(path, text) => !std::fs::read_to_string(repo.join(path))
+                .unwrap_or_default()
+                .contains(text),
+            Check::Notice(code) => {
+                of(&events, "item.started").any(|d| d["kind"] == "notice" && d["code"] == *code)
+            }
+            Check::NoCrossTalk => self.markers.iter().all(|(session, marker)| {
+                let said: String = of(&self.events_of(session), "item.delta")
+                    .filter_map(|d| d["text"].as_str())
+                    .collect();
+                let others = self.markers.iter().filter(|(s, _)| s != session);
+                said.contains(marker.as_str())
+                    && !others
+                        .clone()
+                        .any(|(_, other)| said.contains(other.as_str()))
+            }),
+            Check::Steady => self.counts.iter().all(|count| *count <= self.counts[0]),
+            Check::Running => below,
+            Check::UserSettings => sent("session/new").any(|f| {
+                f["msg"]["params"]["_meta"]["claudeCode"]["options"]["settingSources"]
+                    == json!(["user"])
+            }),
+            Check::ImageSent => sent("session/prompt").any(|f| {
+                let blocks = f["msg"]["params"]["prompt"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default();
+                blocks.iter().any(|block| block["type"] == "image")
+            }),
+            Check::Sent(method) => sent(method).next().is_some(),
+            Check::Observe(path) => repo.join(path).exists(),
+            _ => holds(check, &events, repo),
+        }
     }
 
     /// The next request no step has taken yet.
@@ -366,14 +641,18 @@ impl User {
 
     /// Until `find` finds it in the session's events.
     async fn wait<T>(&self, what: &str, find: impl Fn(&[Value]) -> Option<T>) -> Result<T, String> {
+        self.until(what, || find(&self.events())).await
+    }
+
+    async fn until<T>(&self, what: &str, find: impl Fn() -> Option<T>) -> Result<T, String> {
         let clock = SystemClock::new();
-        let give_up = clock.now_mono() + PATIENCE;
+        let give_up = clock.now_mono() + self.patience;
         loop {
-            if let Some(found) = find(&self.events()) {
+            if let Some(found) = find() {
                 return Ok(found);
             }
             if clock.now_mono() >= give_up {
-                return Err(format!("no {what} within {}s", PATIENCE.as_secs()));
+                return Err(format!("no {what} within {}s", self.patience.as_secs()));
             }
             wait(&clock).await;
         }
@@ -381,10 +660,13 @@ impl User {
 
     /// The session's events so far, as `{type, data}`.
     fn events(&self) -> Vec<Value> {
+        self.events_of(&self.session)
+    }
+
+    fn events_of(&self, session: &SessionId) -> Vec<Value> {
         let sql = format!(
             "SELECT json_object('type', type, 'data', json(json_extract(json, '$.data')))
-             FROM events WHERE stream = 'session/{}' ORDER BY seq",
-            self.session
+             FROM events WHERE stream = 'session/{session}' ORDER BY seq"
         );
         let rows = query(&self.data_dir.join("host.db"), &sql);
         rows.iter().map(|row| typed(row.parse().unwrap())).collect()
@@ -473,6 +755,7 @@ fn holds(check: &Check, events: &[Value], project: &Path) -> bool {
                 .is_some_and(|config| !config.is_empty())
         }),
         Check::NoFile(path) => !project.join(path).exists(),
+        _ => unreachable!("the runner's state answers {}", check.name()),
     }
 }
 

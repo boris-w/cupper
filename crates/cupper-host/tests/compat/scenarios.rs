@@ -19,6 +19,12 @@ pub struct Scenario {
     pub files: &'static [(&'static str, &'static str)],
     /// Why it cannot run on this version.
     pub skip: Option<&'static str>,
+    /// Why the fake agent cannot play it: it reads the CLI's configuration.
+    pub real_only: Option<&'static str>,
+    /// The project's directory in the repository, when not its root.
+    pub project: Option<&'static str>,
+    /// The project is added without trusting its configuration.
+    pub untrusted: bool,
     pub prompt: &'static str,
     pub script: &'static str,
     pub steps: &'static [Step],
@@ -60,6 +66,35 @@ pub enum Step {
     Answer(&'static str),
     Pause(u64),
     Interrupt,
+    /// Sends the next prompt once the turn before has ended.
+    Send {
+        real: &'static str,
+        fake: &'static str,
+    },
+    /// The same with an image uploaded first.
+    Image {
+        real: &'static str,
+        fake: &'static str,
+    },
+    /// Kills the real CLI (`claude`) under the adapter; the fake agent's
+    /// script crashes it instead.
+    KillCli,
+    /// Stops the host and starts it again on the same data.
+    RestartHost,
+    /// Kills the CLI and sends once more, this many times, counting the
+    /// host's processes each time (Q43).
+    Resumes(usize),
+    /// Sessions on the same adapter, each with prompts sent at once, in
+    /// rounds; each prompt asks for a marker of its own (Q8).
+    Concurrent {
+        sessions: usize,
+        prompts: usize,
+        rounds: usize,
+    },
+    /// Writes a file in the repository.
+    WriteFile(&'static str, &'static str),
+    /// Ends the scenario without waiting for the turn.
+    Leave,
 }
 
 pub enum Check {
@@ -77,6 +112,24 @@ pub enum Check {
     Capabilities,
     /// The agent left no file at this path in the project.
     NoFile(&'static str),
+    /// A file of the repository that does not hold this text.
+    Lacks(&'static str, &'static str),
+    /// A notice of this code.
+    Notice(&'static str),
+    /// Each session's answers hold its own markers and no other's.
+    NoCrossTalk,
+    /// The host's processes did not grow over the resumes.
+    Steady,
+    /// A command ran below the adapter when the scenario ended.
+    Running,
+    /// The host started the session with the user's settings only.
+    UserSettings,
+    /// The host passed the prompt's image on to the agent.
+    ImageSent,
+    /// The host sent the agent this method.
+    Sent(&'static str),
+    /// Whether this file of the repository exists, reported, not judged.
+    Observe(&'static str),
 }
 
 const DONE: Check = Check::Turn("completed");
@@ -209,7 +262,177 @@ pub const SCENARIOS: &[Scenario] = &[
         skip: Some("Steer comes with M1b: in M1a `session/send` in steer mode queues the message"),
         ..BASE
     },
+    Scenario {
+        id: "crash-resume",
+        title: "the CLI killed, then the session resumed",
+        mode: "default",
+        prompt: "Reply with the single word: one",
+        script: "say one",
+        steps: &[
+            Step::KillCli,
+            Step::Send {
+                real: "Reply with the single word: two",
+                fake: "crash_cli",
+            },
+            Step::Send {
+                real: "Reply with the single word: three",
+                fake: "whoami",
+            },
+        ],
+        checks: &[Check::Notice("session_resumed"), DONE],
+        ..BASE
+    },
+    Scenario {
+        id: "host-restart",
+        title: "the host restarted, then the session resumed",
+        mode: "default",
+        prompt: "Reply with the single word: one",
+        script: "say one",
+        steps: &[
+            Step::RestartHost,
+            Step::Send {
+                real: "Reply with the single word: two",
+                fake: "whoami",
+            },
+        ],
+        checks: &[Check::Sent("session/resume"), DONE],
+        ..BASE
+    },
+    Scenario {
+        id: "image",
+        title: "a prompt with an image",
+        mode: "default",
+        prompt: "Reply with the single word: ready",
+        script: "say ready",
+        steps: &[Step::Image {
+            real: "What colour is the attached image? Reply with one word.",
+            fake: "say seen",
+        }],
+        checks: &[Check::ImageSent, DONE],
+        ..BASE
+    },
+    Scenario {
+        id: "concurrent-two",
+        title: "two sessions prompting at once on one adapter (Q8)",
+        mode: "default",
+        prompt: "Reply with the single word: ready",
+        script: "say ready",
+        steps: &[Step::Concurrent {
+            sessions: 2,
+            prompts: 3,
+            rounds: 3,
+        }],
+        checks: &[Check::NoCrossTalk, DONE],
+        ..BASE
+    },
+    Scenario {
+        id: "six-sessions",
+        title: "six sessions at once on one adapter",
+        mode: "default",
+        prompt: "Reply with the single word: ready",
+        script: "say ready",
+        steps: &[Step::Concurrent {
+            sessions: 6,
+            prompts: 1,
+            rounds: 1,
+        }],
+        checks: &[Check::NoCrossTalk, DONE],
+        ..BASE
+    },
+    Scenario {
+        id: "close-running",
+        title: "the adapter closed while a command runs (K21)",
+        mode: "default",
+        prompt: "Run the shell command `sleep 300`.",
+        // A command in a process group of its own, as Claude's are.
+        script: "tool t1 execute Run sleep; permission t1; \
+            write_file run.sh exec /usr/bin/perl -e 'setpgrp(0,0), exec(\"/bin/sleep\", \"300\")' \
+            </dev/null >/dev/null 2>&1; spawn /bin/sh run.sh; wait_cancel",
+        steps: &[Step::Choose("allow_once"), Step::Pause(3000), Step::Leave],
+        checks: &[Check::Running],
+        ..BASE
+    },
+    Scenario {
+        id: "resume-procs",
+        title: "the same session resumed again and again (Q43)",
+        mode: "default",
+        prompt: "Reply with the single word: one",
+        script: "say one",
+        steps: &[Step::Resumes(5)],
+        checks: &[Check::Steady, DONE],
+        ..BASE
+    },
+    Scenario {
+        id: "untrusted-project",
+        title: "an untrusted project's configuration takes no effect",
+        mode: "default",
+        untrusted: true,
+        files: &[
+            (".claude/settings.json", UNTRUSTED_SETTINGS),
+            (
+                ".mcp.json",
+                r#"{"mcpServers": {"compat": {"command": "/usr/bin/touch", "args": ["mcp-ran"]}}}"#,
+            ),
+        ],
+        prompt: "Run the shell command `env > env.txt`.",
+        script: "tool t1 execute Run env; permission t1; say done",
+        steps: &[Step::Choose("allow_once")],
+        checks: &[
+            Check::UserSettings,
+            Check::NoFile("hook-ran"),
+            Check::NoFile("mcp-ran"),
+            Check::NoFile("helper-ran"),
+            Check::Lacks("env.txt", "CUPPER_COMPAT_ENV"),
+            DONE,
+        ],
+        ..BASE
+    },
+    Scenario {
+        id: "hooks-reload",
+        title: "hooks written in the middle of a turn (Q28)",
+        mode: "default",
+        real_only: Some("the fake agent reads no `.claude/settings.json`"),
+        prompt: "Run the shell command `echo one`, then the shell command `echo two`.",
+        steps: &[
+            Step::Choose("allow_once"),
+            Step::WriteFile(".claude/settings.json", RELOADED),
+            Step::Choose("allow_once"),
+        ],
+        checks: &[Check::Observe("hook-reloaded"), DONE],
+        ..BASE
+    },
+    Scenario {
+        id: "config-scope",
+        title: "configuration above the project and outside the git root (Q34)",
+        mode: "default",
+        real_only: Some("the fake agent reads no `.claude/settings.json`"),
+        project: Some("sub"),
+        files: &[
+            ("../.claude/settings.json", OUTSIDE),
+            (".claude/settings.json", ROOT),
+            ("sub/.keep", ""),
+        ],
+        prompt: "Reply with the single word: ready",
+        checks: &[
+            Check::Observe("root-ran"),
+            Check::Observe("outside-ran"),
+            DONE,
+        ],
+        ..BASE
+    },
 ];
+
+/// Hooks and settings that leave a marker file when they take effect; the
+/// hooks run in the project's directory.
+const UNTRUSTED_SETTINGS: &str = r#"{"env": {"CUPPER_COMPAT_ENV": "1"},
+    "apiKeyHelper": "touch helper-ran && echo key",
+    "hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "touch hook-ran"}]}]}}"#;
+const RELOADED: &str = r#"{"hooks": {"PreToolUse": [{"matcher": "Bash",
+    "hooks": [{"type": "command", "command": "touch hook-reloaded"}]}]}}"#;
+const ROOT: &str = r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
+    "command": "touch ../root-ran"}]}]}}"#;
+const OUTSIDE: &str = r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
+    "command": "touch ../outside-ran"}]}]}}"#;
 
 const BASE: Scenario = Scenario {
     id: "",
@@ -220,6 +443,9 @@ const BASE: Scenario = Scenario {
     model: None,
     files: &[],
     skip: None,
+    real_only: None,
+    project: None,
+    untrusted: false,
     prompt: "",
     script: "",
     steps: &[],
@@ -237,6 +463,15 @@ impl Check {
             Self::Request(kind, status) => format!("a {kind} request {status}"),
             Self::Capabilities => "the session's capabilities".into(),
             Self::NoFile(path) => format!("no file {path}"),
+            Self::Lacks(path, text) => format!("{path} without {text}"),
+            Self::Notice(code) => format!("a {code} notice"),
+            Self::NoCrossTalk => "each session holds only its own markers".into(),
+            Self::Steady => "no more processes after the resumes".into(),
+            Self::Running => "a command ran below the adapter".into(),
+            Self::UserSettings => "the session takes only the user's settings".into(),
+            Self::ImageSent => "the image went to the agent".into(),
+            Self::Sent(method) => format!("the host sent {method}"),
+            Self::Observe(path) => format!("{path} exists"),
         }
     }
 }
