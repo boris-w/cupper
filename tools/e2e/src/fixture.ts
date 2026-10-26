@@ -79,16 +79,19 @@ export class Cupper {
   }
 
   /** Starts the app, takes over its native dialogs' stand-ins, and waits for its window. */
-  async launch(): Promise<void> {
+  async launch({ throttled = false } = {}): Promise<void> {
     const env = { ...process.env, CUPPER_E2E_DIR: this.root };
     // Two apps at once, and other windows of the machine, cover each other:
     // Chromium would then hold back a covered window's timers and frames,
-    // and the panel's arming or the views' flush wait on them.
-    const args = [
-      "--disable-backgrounding-occluded-windows",
-      "--disable-renderer-backgrounding",
-      "--disable-background-timer-throttling",
-    ];
+    // and the panel's arming or the views' flush wait on them. `throttled`
+    // keeps Chromium's own behaviour, for measuring it (T078).
+    const args = throttled
+      ? []
+      : [
+          "--disable-backgrounding-occluded-windows",
+          "--disable-renderer-backgrounding",
+          "--disable-background-timer-throttling",
+        ];
     this.#app = await _electron.launch({ executablePath: BUILT.app, args, env });
     this.#main = this.#app.process();
     if (this.#main.pid === undefined) {

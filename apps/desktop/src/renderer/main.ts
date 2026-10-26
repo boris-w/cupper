@@ -3,13 +3,16 @@
 // e2e builds only, `window.__cupperTest` reads the host client's sync
 // counters and state, and the views of the streams the window follows with
 // the seq each reached (design 5.9.9, E2E-NFR1-1), and sends a command as the
-// window (E2E-SEC); other builds do not contain it.
+// window (E2E-SEC); `window.__cupperGate` serves the bridge gate (T078).
+// Other builds contain neither.
 
 import "@cupper/ui-core/styles.css";
 
 import type { HostClient, StreamSink } from "@cupper/host-client";
 import { SHELL_GLOBAL, type ShellAPI } from "@cupper/shell-api";
 import { mount } from "@cupper/ui-core";
+
+import { gateHooks } from "./gate";
 
 const shell = (globalThis as unknown as Record<string, ShellAPI | undefined>)[SHELL_GLOBAL];
 if (!shell) {
@@ -63,7 +66,7 @@ const onClient =
           views,
           command,
         };
-        Object.assign(globalThis, { __cupperTest: test });
+        Object.assign(globalThis, { __cupperTest: test, __cupperGate: gateHooks(client) });
       }
     : undefined;
 await mount(shell, undefined, onClient);
