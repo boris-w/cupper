@@ -52,3 +52,63 @@
 
 - b 依赖 a。LFS 的配置生成本身很短，留在 a 里（有单元测试），b 只负责用真的 git-lfs 实测和下载工具。
 - 另一种做法：不拆，停止线提到约 1,450。
+
+## 裁定后（计划 v1.3.51）
+
+范围收窄为快照档与回合快照。LFS 的实测、`cargo xtask git-lfs` 和 PERF-snapshot 归 T186。开工时定的四点都已获认可。
+
+### 实现时的取舍
+
+- **过滤器检测的条件**：设计写的是"属性来源里没有任何 `filter=` 时跳过"。实现改为看用户的有效配置：配置里定义了 `clean` 或 `process`、而快照档不执行的过滤器（git-lfs 由宿主执行时除外），才执行 `ls-files` 加 `check-attr`。理由：
+  - 配置里没有定义的过滤器，用户自己的 git 也按原样处理，快照与用户的 git 一致，明文本来就在用户自己的对象库里；
+  - 这样不必逐个找工作区里的 `.gitattributes`；
+  - `check-attr` 仍然覆盖全部属性来源（工作区、`info/attributes`、`core.attributesFile`、默认属性文件）。
+- **占位 blob 的内容**：用固定的 ASCII 格式 `cupper: not stored, filter <名称> not run; sha-256 <哈希>`，没有用设计里的中文例句。宿主不产生界面文案，界面可以按这个格式识别占位。
+- **`add -A` 没加进全部文件**（带 `--ignore-errors` 时退出码不为 0）：快照照常写出，状态记 `partial`。
+- **快照的状态**：
+  - 没有 git：`skipped`，不带原因；
+  - 工作区不是仓库：`skipped/not_a_repo`；
+  - git 失败或超时：`failed/git_failed`，详情写日志；
+  - 有排除或 `add` 不完整：`partial`。
+- **`mark_external()`**：快照档不改用户仓库（对象写进私有库，index 是临时复制的），所以不用。
+
+### Q32 快照档的逐键结果
+
+用仓库档的恶意配置样例（`git/repo/tests.rs` 的 `SETUP`）：每个程序被执行时都会留下标记文件。
+- 在 `evil`、`include`、`required`、`lfs` 四个仓库上各拍一次起始快照，改一个文件，再拍一次结束快照（带 `diff-tree --numstat`）。
+- 涉及的命令：`config --list`、两种 `ls-files -o`、`ls-files`、`check-attr`、`hash-object`、`update-index --index-info`、`add -A`、`write-tree`、`diff-tree`。
+- 跑完后没有任何标记。
+
+| 键或来源 | 快照档里 | 挡住它的 |
+|---|---|---|
+| `core.fsmonitor`、`hooks/` 与 `core.hooksPath` 下的 hooks（post-checkout、post-index-change、reference-transaction、pre-auto-gc、fsmonitor-watchman） | 没有执行 | 快照档的 `config` 没有这些键，GIT_DIR 里没有 `hooks/`；命令行另加 `-c core.fsmonitor=false -c core.hooksPath=<空目录>` |
+| `filter.*.clean`、`filter.*.smudge`、`filter.*.process`（含 `required=true` 的过滤器和 include 进来的定义） | 没有执行 | 配置里不定义这些过滤器；命中的文件写占位 blob，不经 `add` |
+| `diff.*.textconv`、`diff.*.command`、`diff.external` | 没有执行 | 不定义 diff 驱动；`diff-tree` 本身默认不用 textconv 和外部 diff，另加 `--no-ext-diff --no-textconv` |
+| `merge.*.driver`、`core.sshCommand`、`core.pager`、`core.editor`、`core.askPass`、`core.gitProxy`、`core.alternateRefsCommand`、`sequence.editor`、`gpg.program`、`gpg.ssh.program`、`gpg.ssh.defaultKeyCommand`、`credential.helper`、`credential.<url>.helper`、`uploadpack.packObjectsHook`、`remote.*.receivepack`、`remote.*.uploadpack`、`pager.log`、`submodule.*.update` | 没有执行 | 不在白名单里，快照档读不到；快照的命令也用不到它们 |
+| `include.path` 指向工作区里的文件 | 没有执行 | 读配置只为挑白名单键和过滤器名，include 进来的过滤器同样不定义 |
+| `info/attributes` 里的过滤器 | 没有执行 | 属性照常读取（复制了 `info/attributes`），引用的过滤器不定义，命中的文件写占位 |
+
+**防护是分层的**：
+- 单独把 GIT_DIR 换成用户自己的 `.git`，测试仍然通过：命令行覆盖、占位和 `--no-textconv` 也都挡得住。
+- 同时去掉占位，恶意用例和占位用例都会失败。
+- 所以恶意用例证明的是"这几层合在一起，什么都不执行"，不单独证明某一层。
+
+### 变异检查
+
+| 变异 | 结果 |
+|---|---|
+| 复制 index 时给新的 mtime | IT-git-racy 与 parity 失败 |
+| 不复制 `info/exclude` | parity 失败 |
+| 不写占位 | IT-git-filter-placeholder 失败（对象库里出现明文） |
+| 用户的 GIT_DIR 加上不写占位 | IT-git-snapshot-malicious 与 IT-git-filter-placeholder 失败 |
+| 只去掉"复制时设回 mtime"那一步 | 用例仍通过。macOS 上 `std::fs::copy` 本身就保留 mtime（`fcopyfile` 的 COPYFILE_STAT）；显式设回是为了不依赖这一点 |
+
+### 实际行数（`cargo xtask size`）
+
+| 提交 | 新增 |
+|---|---|
+| 快照档与回合接入（实现约 836，其中白名单配置的单元测试约 70；四个 IT 约 250） | 1,087 |
+| 会话层用例 | 42 |
+| **合计** | **1,129**（停止线 1,300 以内） |
+
+实现比估计多约 40%，主要在快照过程，rustfmt 展开较多；用例比估计少：恶意样例借用了仓库档的夹具。
