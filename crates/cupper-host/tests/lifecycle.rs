@@ -1259,8 +1259,9 @@ async fn it_self_check_a_changed_executable_makes_the_host_wait_for_an_upgrade()
 
     let params = json!({"command_id": client::command_id(), "session_id": session});
     let interrupt = client.request::<SessionInterrupt>(serde_json::from_value(params).unwrap());
-    // Its reply races the exit it brings about.
-    let _ = interrupt.await;
+    // Its reply goes out before the exit it brings about, and comes even
+    // when the client reads it after the host is gone (T196).
+    interrupt.await.unwrap();
     loop {
         match client.next().await {
             Some(Incoming::Other { method, params }) if method == "host/shutdown" => {
