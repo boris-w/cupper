@@ -54,3 +54,45 @@
 | **合计** | | 约 **655** |
 
 数据文件（上游锁文件、生成的声明）和 lock 文件不计入。在停止线 850 之内。
+
+## 做的过程中的取舍
+
+- **锁文件有两份文档**：pnpm 12 在 `pnpm-lock.yaml` 开头另写了一份包管理器自己的锁（`packageManagerDependencies`），所以解析时取最后一份文档。
+- **依赖路径**：
+  - 闭包从入口用到的工作区包开始，沿生产边扩展；打进包、但工作区没有经生产边引入的包，再以入口的根为父节点补进来。
+  - 这样路径能显示是哪个工作区包把依赖带进来的，例如 `apps/desktop → packages/ui-core → left-pad → @anthropic-ai/sdk`。
+  - 根包 `apps/desktop` 自己 devDependencies 里的包直接打进包时，路径显示为 `apps/desktop → @anthropic-ai/sdk`。
+- **虚拟模块**：`\0vite/modulepreload-polyfill.js`、`\0rolldown/runtime.js` 这类是打包器注入的辅助代码，不算任何包，原样写进 metafile。
+- **`bundle-claude-acp.mjs`**：门禁检查它的 `import` 只指向 `node:` 内置模块；esbuild-wasm 是运行时按路径加载的，本身在运行时组件里查许可证。
+- **codex-acp 的声明**：
+  - 上游锁文件放在 `runtime/locks/`，生成的声明放在 `runtime/licenses/`，两处都是 prettier 不处理的上游数据，也不计入规模。
+  - codex-acp 升版本时，先把新标签的 `package-lock.json` 复制进来，再运行 `node tools/license-gate/src/main.ts codex-notices`。
+  - 声明随 App 分发，要改 runtime-pack 的暂存清单，留给 T182 的 THIRD_PARTY_NOTICES。
+- **`cargo deny` 的网络失败**：
+  - 改为先单独 `cargo deny --locked fetch db`，最多试 3 次，再 `cargo deny --locked --offline check`。
+  - 重试之间不等待：xtask 的 clippy 规则禁止 `thread::sleep`，而拉取本身就要一两秒。
+  - 实测：
+    - 用不通的代理 `HTTPS_PROXY=http://127.0.0.1:9` 模拟断网，`fetch-db` 试 3 次后标为跳过，并写明"checking against the copy of an earlier fetch"，其余步骤通过。
+    - 把 `Cargo.lock` 临时退回 `rustls-webpki 0.103.15`，离线检查仍报 RUSTSEC-2026-0382、`advisories FAILED`，公告没有被吞掉。
+  - 没有任何缓存时作业失败。
+
+## 实际规模
+
+`cargo xtask size`：增 753、删 9。
+
+| 部分 | 增 | 删 |
+|---|---|---|
+| `tools/license-gate` 的实现 | 465 | |
+| `tools/license-gate` 的配置（`package.json`、`tsconfig`、vitest） | 40 | |
+| `tools/license-gate` 的测试（UNIT-license-gate-negative） | 103 | |
+| Vite 的 metafile 插件 | 29 | 4 |
+| `xtask`：license 作业、`JobCtx::attempt`、重试的单元测试 | 116 | 5 |
+
+实现比估计的多，主要在 `runtime.ts`（100 行，估 70）和 license 作业（116 行，估 60）。在停止线 850 之内。
+
+## 当前 main 上的结果
+
+`cargo xtask ci license`：`fetch-db`、`cargo-deny`、`install`、`metafile`、`license-gate` 五步都过。
+- 主进程打进 2 个 npm 包，preload 0 个，渲染进程 137 个，许可证都在白名单里，闭包里没有 Anthropic 的包。
+- 运行时组件的许可证文本齐全；codex-acp 的声明覆盖了 23 个内联包。
+- `lightningcss`、`argparse` 都不在任何入口的闭包里。
