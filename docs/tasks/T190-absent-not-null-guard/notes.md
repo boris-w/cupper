@@ -23,3 +23,133 @@
 停止线 200，硬停止线 240。
 
 ## 按提交统计
+
+| 提交 | `cargo xtask size` |
+|---|---|
+| 守卫（`tests/fixtures.rs`：类型表改成可传入检查函数、沿 schema 走、覆盖面） | +288 −14 |
+
+写完才统计，已超过原来的停止线（200/240）；编排者裁定按方案一接受，停止线改为 310、硬停止线 330（计划 v1.3.61）。补上两处覆盖面的修正后仍是 +288 −14。
+
+## 负面样例（不提交）
+
+去掉 `AuthElevateResult.expires_at` 的 `skip_serializing_if`：守卫失败，报 `auth/elevate result.expires_at: null on optional AuthElevateResult.expires_at`。改回后通过。
+
+## 覆盖面
+
+"带 `Option` 的属性"：用不带 `absent_not_null` 的生成器再导出一次定义（方法目录、`Event`、两个视图、`RpcError`），其中非必填且可为 `null` 的属性，共 **220** 个。样例里出现过（有值，或者是允许的 `null`）的算覆盖到：**135 个（61%）**。没覆盖到的 85 个，按定义：
+
+| 定义 | 没覆盖到 |
+|---|---|
+| `ItemUpdated` | 15 |
+| `ItemCompleted` | 15 |
+| `ToolCall` | 11 |
+| `SettingsPatch` | 10 |
+| `ErrorData` | 8 |
+| `LateToolOutput` | 5 |
+| `ProjectTrustInfoResult` | 2 |
+| `Plan` | 2 |
+| `NoticeParams` | 2 |
+| `ErrorItem` | 2 |
+| `TrustScan` | 1 |
+| `ToolRef` | 1 |
+| `ToolDiff` | 1 |
+| `SteerOutcome` | 1 |
+| `SlashCommand` | 1 |
+| `RpcError` | 1 |
+| `QueueMove` | 1 |
+| `QuestionField` | 1 |
+| `PlanEntry` | 1 |
+| `InteractionGetResult` | 1 |
+| `InitialConfig` | 1 |
+| `ConfigValue` | 1 |
+| `Choice` | 1 |
+
+逐个属性：
+
+- `Choice.description`
+- `ConfigValue.description`
+- `ErrorData.agent_code`
+- `ErrorData.agent_message`
+- `ErrorData.capability`
+- `ErrorData.reason`
+- `ErrorData.resolved_by`
+- `ErrorData.retry_after_ms`
+- `ErrorData.scope`
+- `ErrorData.supported`
+- `ErrorItem.agent_code`
+- `ErrorItem.raw`
+- `InitialConfig.reasoning_effort`
+- `InteractionGetResult.reason`
+- `ItemCompleted.command`
+- `ItemCompleted.cwd`
+- `ItemCompleted.diffs`
+- `ItemCompleted.entries`
+- `ItemCompleted.extraction`
+- `ItemCompleted.markdown`
+- `ItemCompleted.output_bytes`
+- `ItemCompleted.output_tail`
+- `ItemCompleted.parent_item_id`
+- `ItemCompleted.paths`
+- `ItemCompleted.query`
+- `ItemCompleted.signal`
+- `ItemCompleted.source`
+- `ItemCompleted.tool_kind`
+- `ItemCompleted.url`
+- `ItemUpdated.command`
+- `ItemUpdated.cwd`
+- `ItemUpdated.diffs`
+- `ItemUpdated.entries`
+- `ItemUpdated.exit_code`
+- `ItemUpdated.extraction`
+- `ItemUpdated.markdown`
+- `ItemUpdated.output`
+- `ItemUpdated.parent_item_id`
+- `ItemUpdated.paths`
+- `ItemUpdated.query`
+- `ItemUpdated.signal`
+- `ItemUpdated.source`
+- `ItemUpdated.tool_kind`
+- `ItemUpdated.url`
+- `LateToolOutput.exit_code`
+- `LateToolOutput.output`
+- `LateToolOutput.output_bytes`
+- `LateToolOutput.output_tail`
+- `LateToolOutput.signal`
+- `NoticeParams.paths`
+- `NoticeParams.reason`
+- `Plan.entries`
+- `Plan.markdown`
+- `PlanEntry.priority`
+- `ProjectTrustInfoResult.diff_omitted`
+- `ProjectTrustInfoResult.findings_omitted`
+- `QuestionField.choices`
+- `QueueMove.before_queue_id`
+- `RpcError.data`
+- `SettingsPatch.agents.codex.cli_path`
+- `SettingsPatch.agents.env_passthrough`
+- `SettingsPatch.apps.editor`
+- `SettingsPatch.apps.terminal`
+- `SettingsPatch.diagnostics.verbose`
+- `SettingsPatch.host.idle_exit_minutes`
+- `SettingsPatch.notifications.needs_action`
+- `SettingsPatch.notifications.turn_completed`
+- `SettingsPatch.sessions.default_agent`
+- `SettingsPatch.worktrees.root`
+- `SlashCommand.input_hint`
+- `SteerOutcome.turn_id`
+- `ToolCall.command`
+- `ToolCall.cwd`
+- `ToolCall.diffs`
+- `ToolCall.exit_code`
+- `ToolCall.output`
+- `ToolCall.output_bytes`
+- `ToolCall.output_tail`
+- `ToolCall.parent_item_id`
+- `ToolCall.query`
+- `ToolCall.signal`
+- `ToolCall.url`
+- `ToolDiff.hunks`
+- `ToolRef.command`
+- `TrustScan.findings_omitted`
+
+- 现有的生成方法补不上：视图的 proptest 生成器（`view/props.rs`）是库内的 `pub(super)`，集成测试拿不到；类型没有"默认值加所有可选字段都填满"的值。编排者裁定：没覆盖到的属性归新任务 T193（按 schema 生成"所有可选字段都填满"的实例），排在 M1b 第一次附加式改契约的 T151 之前，T190 不做。
