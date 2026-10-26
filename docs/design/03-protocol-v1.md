@@ -15,6 +15,7 @@
 | 时间 | UTC 毫秒整数；时长也用毫秒。界面要显示的时间（回合、条目的开始和结束）都写在事件的 `data` 里，不依赖信封上的 `ts`，因为快照和历史只下发事件体（桌面 #7） |
 | 整数 | 全部不超过 2^53−1，schema 里用上下界表示，不用 `format: int64`（ADR-04 修订） |
 | 文本流 | `item.delta` 只追加文本，不用偏移量；用 `field` 区分正文和命令输出 |
+| 可选字段 | 非必填属性只会缺省，不为 `null`：schema 里不带 `null`，宿主也不发 `null`（Rust 字段都带 `skip_serializing_if`）。值本身可以为 `null` 的，在它自己的类型里声明，如 `CliPath`（`null` 表示自动发现）。上行方向宽容，宿主把 `null` 读作缺省（T016） |
 | 开放类型 | 事件信封的 `type` 是普通字符串；枚举和带 `type` 标签的联合类型都是开放的，生成器产出 `Unknown` 兜底分支；读取方忽略不认识的字段 |
 | 大内容 | 转义后超过 16,000 字符的内联内容一律改成 blob 引用 `{type: "blob", blob: {hash, size, media_type}, preview}`，按需用 `blob/get` 拉取（ADR-06） |
 | 规范 JSON | 所有摘要（交互请求的 `digest`、账本的 `params_hash`、确认用的 `config_digest`）都对 RFC 8785（JCS）规范化后的 JSON 做 sha-256，保留完整的 256 位。Rust、TS 和 M3 的 Swift 都按 JCS 实现，金样例覆盖数字和 Unicode 转义（安全 #21） |
@@ -460,6 +461,8 @@ ConfigOption {
 - 新增方法、事件类型、枚举值、可选字段都不升主版本；新的交互请求类型必须带特性门控。
 - schema 注解：`x-scope`、`x-idempotent`（每个方法）；`x-mergeable`（可合并的事件）；`x-id`、`x-time`、`x-path`（字段的性质，金样例的规范化按注解进行，新加的字段自动纳入，[5.9.3](09-testing.md#593-录制与金样例)）。`IndexView`、`SessionView` 的序列化格式也导出进 schema，供 TS 与 Rust 视图对比（测试 #16）。
 - 生成链：Rust（serde + schemars）→ `protocol/schema/v1.json` → `tools/gen-protocol-ts`（hey-api 生成 TS 类型和 zod，非 strict）→ 后处理：已知事件类型的字面量列表和类型守卫、兜底成员用 `.loose()`、开放枚举写成 `(string & {})`（SP-4a 报告）。T015 实现时另补了四处，在转成 OpenAPI 或后处理时修正 hey-api 的行为：`$ref` 旁的关键字改写成 `allOf`（否则内部标签联合的成员丢失标签）；`true` 子 schema 改成 `{}`；接受其他字段的对象（如 `ErrorData`）加 `.loose()`；嵌套开放联合的兜底成员只接受联合不认识的标签，事件层的兜底接受一切并由 `isKnownEvent` 判定（与 Rust 的严格已知标签和 `Tolerant` 一致）。每处改写都检查命中，hey-api 升级后输出一变就失败。`v1.json` 是加了缩进的 JCS：键序、数值和字符串按 RFC 8785，只多空白，去掉空白即 JCS 原文。
+- **账本回放**：`command` 方法的结果在账本回放时多一个 `replayed: true`（[5.2.5](02-host.md#525-策略与命令账本)）。几个方法共用 `Empty` 这类结果类型，所以不在结果类型上加字段，而是在方法目录里把结果写成 `allOf: [<结果类型>, Replayed]`（T016）。
+- **冻结**：契约在 M1a 冻结（T016），之后只能附加，机制见 [5.12.5](12-milestones.md#5125-契约冻结清单)。
 - "类型已知但数据残缺"的事件：客户端降级成未知事件并记日志；CI 对金样例严格校验，不允许降级（ADR-04 修订）。
 - iOS 怎样使用协议由 ADR-15 决定；M1 只保证 `cupper-protocol` 能编译到 iOS 模拟器、金样例里有未知值的样例。
 

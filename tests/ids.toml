@@ -566,6 +566,11 @@ UNIT-compat-guards = "pr"
 milestone = "M1a"
 UNIT-compat-tools = "pr"
 
+# 可选字段不发 null 的守卫（计划 v1.3.58，T016 的遗留）
+[T190]
+milestone = "M1a"
+UNIT-proto-absent-not-null = "pr"
+
 # B 层金样例运行器
 [T065]
 milestone = "M1a"
