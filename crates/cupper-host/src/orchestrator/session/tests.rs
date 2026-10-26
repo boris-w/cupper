@@ -321,7 +321,9 @@ impl Fixture {
     }
 
     pub async fn call(&self, by: Principal, method: &str, params: Value) -> Result<Value, Value> {
-        Peer::new(by).call(&self.routes, method, params).await
+        let mut peer = Peer::new(by);
+        let reply = peer.call(&self.routes, method, params);
+        soon(&format!("a reply to {method}"), reply).await
     }
 
     /// The result of a request from the test harness, which holds every scope.

@@ -41,6 +41,8 @@ macOS 桌面 agent 客户端：复刻 Codex 桌面版的界面，经 ACP 驱动�
 - 一个任务一条分支、一个 worktree。分支名：`<type>/<任务ID>-<简短英文描述>`，例如 `feat/T03-login-api`；调研任务用 `research/R01-codex-ui-teardown` 这种形式；原型实测用 `spike/SP-5-git-snapshot` 这种形式。
 - 原型实测的代码放在 `spikes/<ID>-<slug>/`，只用于验证，不是产品代码，后续开发不直接依赖它。提交前要去掉个人信息（本机路径、用户名、账号、主机名等），因为仓库会开源。
 - 合并统一用 `git merge --no-ff`，让每个任务在历史里保留成一个完整的合并节点。合并后删除 worktree 和分支。
+- 远端 `origin` 是 GitHub 上的公开仓库 `boris-w/cupper`（2026-10-26 起，见 `docs/meetings/2026-10-26-github-remote/`）。只有编排者 push，子 agent 不 push。
+- 每个任务一个 PR：编排者推任务分支、开 PR，GitHub CI 通过后以合并提交合入 `main`（与 `--no-ff` 同形），再删掉远端分支。编排者直接提交到 `main` 的文档随后推送。T197 启用 Actions 之前，合并仍以本机 `cargo xtask ci pr --record` 为准。
 - 每个阶段闸门通过后打 annotated tag：`gate/prd`、`gate/design`、`gate/plan`、`release/vX.Y.Z`。
 
 ### 提交信息

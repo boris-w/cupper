@@ -6,7 +6,9 @@
 //! touch a path the app is built from (`E2E_PATHS`) or there is nothing to
 //! compare; `ci e2e` and `ci nightly` run every test. Either way those tagged
 //! `@focus` run last and one at a time: they need the window's focus, which
-//! another test's app takes when it starts.
+//! another test's app takes when it starts. Outside `ci pr`, PERF-bridge-gate
+//! hands its samples to `CUPPER_PERF_OUT`, and once every test passed they
+//! join the PERF history ([`perf::trend`]).
 
 use std::fs;
 use std::path::Path;
@@ -14,6 +16,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 
+use super::perf;
 use crate::ci::ctx::{Artifact, JobCtx};
 use crate::ci::git;
 
@@ -84,12 +87,17 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         });
     }
 
+    let samples = ctx.step_file("samples", "jsonl");
+    let _ = fs::remove_file(&samples);
     // The display stays awake while the suite runs: once it sleeps the
     // screen locks, and the app's windows can be neither seen nor focused.
     let mut suite = |step: &str, args: &[&str]| {
         let mut test = ctx.command("caffeinate");
         test.args(["-d", "pnpm", "--dir", SUITE, "exec", "playwright", "test"])
             .args(args);
+        if !smoke {
+            test.env("CUPPER_PERF_OUT", &samples);
+        }
         ctx.playwright(step, &mut test)
     };
     let (rest, focus): (&[&str], &str) = if smoke {
@@ -100,7 +108,11 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     };
     let rest = suite("test-e2e", rest);
     let focus = suite("test-e2e-focus", &["--grep", focus, "--workers", "1"]);
-    rest.and(focus)
+    rest.and(focus)?;
+    if smoke {
+        return Ok(());
+    }
+    perf::trend(ctx, &samples)
 }
 
 fn touches_e2e(path: &str) -> bool {

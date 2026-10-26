@@ -5,10 +5,12 @@
 // the index gets three new sessions every 200 ms, about 1 KB a frame. Judged with the window on
 // screen and covered: p99 under 5 ms, no stream reset. Six streams of 200
 // fragments a second follow as a stress report, not judged. Each test logs
-// its numbers as one `gate` line.
+// its numbers as one `gate` line; when `CUPPER_PERF_OUT` names a file (the
+// e2e job outside `ci pr`), a judged test that passed adds its p99 there as a
+// PERF sample, for the trend in `testdata/perf/history.jsonl`.
 
 import { createHash, randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, test, type Cupper } from "./fixture";
@@ -223,6 +225,11 @@ for (const covered of [false, true]) {
     expect(Object.keys(load).filter((stream) => /^g\d$/.test(stream))).toHaveLength(4);
     expect(reset, "no stream reset").toBe(0);
     expect(delay.p99, "the main process's event loop delay, p99 in ms").toBeLessThan(5);
+    const out = process.env.CUPPER_PERF_OUT;
+    if (out) {
+      const metric = `bridge_loop_delay_p99${covered ? "_covered" : ""}`;
+      appendFileSync(out, `${JSON.stringify({ metric, unit: "ms", samples: [delay.p99] })}\n`);
+    }
   });
 }
 

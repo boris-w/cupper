@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 
 use super::actor::held;
 use super::gating_tests::changed;
-use super::tests::{Fixture, create, data, done, on, send, tags};
+use super::tests::{Fixture, create, data, done, on, send, soon, tags};
 use crate::clock::ManualClock;
 use crate::driver::api::{
     AgentSessionId, AttachTarget, DriverCommand, ProjectConfigPolicy, PromptTag,
@@ -118,6 +118,36 @@ async fn it_orch_trust_gating_a_first_turn_in_preparation_goes_out_once_trusted(
     let configured = f.events(&session, "session.configured", 2).await;
     let configured = data(&configured, "session.configured");
     assert_eq!(configured.last().unwrap()["project_config"], "ignored");
+}
+
+/// Rescans can come back in another order than they started (T189): one
+/// that saw the project untrusted, back after a later one that saw it
+/// trusted again, must not shut the gate once more.
+#[tokio::test]
+async fn it_orch_trust_gating_an_older_rescan_coming_last_changes_nothing() {
+    let mut f = Fixture::new("trust-older").await;
+    trust_now(&f, None);
+    let session = f.started().await;
+    change(&f.project());
+    f.emit(done(PromptTag(1), StopReason::EndTurn));
+    notices(&f, &session, 2).await;
+    // The message queued while untrusted starts a rescan; its result waits.
+    let older = held::hold_reopen_result(&f.project());
+    f.ok("session/send", send(&session, "s-1", "next")).await;
+    soon("the rescan to see the project", older.scanned.notified()).await;
+    trust_now(&f, None);
+    f.ok("session/queue_resume", on(&session, "r-1")).await;
+    let (tag, content) = f.prompt().await;
+    assert_eq!(content, text("next"));
+    older.release.notify_one();
+    soon("the older result", older.sent.notified()).await;
+    f.emit(done(tag, StopReason::EndTurn));
+    // A rescan after it: once its message goes out, the older result was taken.
+    f.events(&session, "turn.completed", 2).await;
+    f.ok("session/send", send(&session, "s-2", "probe")).await;
+    assert_eq!(f.prompt().await.1, text("probe"));
+    let found = notices(&f, &session, 4).await;
+    assert_eq!(found, [("project_config_changed".into(), Value::Null)]);
 }
 
 #[tokio::test]

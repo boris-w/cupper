@@ -7,7 +7,7 @@ use crate::testutil::TempDir;
 const PINNED: [&str; 2] = ["0.91.0", "2.2.2"];
 
 /// A run of `cli` at `version` on the adapter at `adapter`, a scenario per
-/// outcome; a real one hashes a configuration file.
+/// outcome; a real one compares a configuration file.
 fn report(mode: &str, cli: &str, version: &str, adapter: &str, outcomes: &[&str]) -> Value {
     let scenario = |(i, outcome): (usize, &&str)| {
         json!({"id": format!("s{i}"), "title": "s",
@@ -15,13 +15,13 @@ fn report(mode: &str, cli: &str, version: &str, adapter: &str, outcomes: &[&str]
         "attempts": 1, "duration_ms": 100, "checks": [{"check": "x", "passed": *outcome == "pass"}],
         "gold_b": false, "recording": null})
     };
-    let (real, hash) = (mode != "fake", "ab".repeat(32));
-    let config = json!({"path": "~/.claude/settings.json", "before": hash, "after": hash});
+    let real = mode != "fake";
+    let config = json!({"name": "~/.claude/settings.json", "changed": false});
     json!({"v": 1, "commit": "0123456789abcdef0123456789abcdef01234567", "mode": mode,
         "agent": cli, "model": real.then_some("haiku"), "duration_ms": 1000,
         "adapter": {"name": "adapter", "version": adapter}, "cli": {"name": cli, "version": version},
         "scenarios": outcomes.iter().enumerate().map(scenario).collect::<Vec<_>>(),
-        "config_files": if real { vec![config] } else { vec![] }, "cli_sessions": []})
+        "config_files": if real { vec![config] } else { vec![] }, "cleanup": []})
 }
 
 fn real(cli: &str, version: &str, adapter: &str, outcomes: &[&str]) -> Value {
@@ -48,15 +48,21 @@ fn unit_compat_tools_range_is_the_baseline_widened_by_counted_reports() {
     assert_eq!(ranges(&[]), (baseline.to_vec(), vec![]));
     let [claude, codex] = PINNED;
     let reports = [
-        real("claude", "2.1.1000", claude, &["pass", "pass"]),
+        real(
+            "claude",
+            "2.1.1000",
+            claude,
+            &["pass", "not_applicable", "observed"],
+        ),
         report("isolated_config", "codex", "0.149.0", codex, &["pass"]),
         // Left out: a fake run, another adapter, a failed, an inconclusive
-        // and an empty run.
+        // and an empty run, and one in which no scenario passed.
         report("fake", "claude", "fake", claude, &["pass"]),
         real("claude", "2.1.2000", "0.90.0", &["pass"]),
         real("claude", "2.1.3000", claude, &["pass", "fail"]),
         real("claude", "2.1.4000", claude, &["inconclusive"]),
         real("codex", "0.1.0", codex, &[]),
+        real("codex", "0.1.0", codex, &["not_applicable", "observed"]),
     ];
     let wider = ["2.1.200-2.1.1000", "0.149.0-0.163.0"].map(String::from);
     assert_eq!(ranges(&reports), (wider.to_vec(), vec![]));
