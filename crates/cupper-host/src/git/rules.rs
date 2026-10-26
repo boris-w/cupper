@@ -234,7 +234,7 @@ fn names_program(section: &[u8], sub: Option<&[u8]>, name: &[u8]) -> bool {
 
 /// The arguments after the program in git-lfs's standard value for `key`,
 /// if `value` is that.
-fn lfs_arguments(key: &[u8], value: Option<&[u8]>) -> Option<&'static [u8]> {
+pub(super) fn lfs_arguments(key: &[u8], value: Option<&[u8]>) -> Option<&'static [u8]> {
     match (key, value?) {
         (b"filter.lfs.clean", b"git-lfs clean -- %f") => Some(b" clean -- %f"),
         (b"filter.lfs.smudge", b"git-lfs smudge -- %f") => Some(b" smudge -- %f"),
@@ -244,13 +244,13 @@ fn lfs_arguments(key: &[u8], value: Option<&[u8]>) -> Option<&'static [u8]> {
 }
 
 /// `path` single-quoted for the shell git runs filters with.
-fn quote(path: &Path) -> Vec<u8> {
+pub(super) fn quote(path: &Path) -> Vec<u8> {
     let parts: Vec<&[u8]> = path.as_os_str().as_bytes().split(|b| *b == b'\'').collect();
     [&b"'"[..], &parts.join(&b"'\\''"[..]), b"'"].concat()
 }
 
 /// git's boolean: a bare key, `true`, `yes`, `on` or a non-zero integer.
-fn truthy(value: Option<&[u8]>) -> bool {
+pub(super) fn truthy(value: Option<&[u8]>) -> bool {
     let Some(value) = value else {
         return true;
     };

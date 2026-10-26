@@ -27,7 +27,7 @@
 use std::ffi::OsString;
 use std::marker::PhantomData;
 
-use crate::durations::{DurationKey, GIT_COMMAND, GIT_WORKTREE_ADD};
+use crate::durations::{DurationKey, GIT_COMMAND, GIT_SNAPSHOT, GIT_WORKTREE_ADD};
 
 /// The repo tier: git runs in the user's repository, checked and overridden
 /// on every call (T097, T098).
@@ -67,11 +67,27 @@ pub enum RepoOp {
     WorktreeRepair,
 }
 
-/// The snapshot tier's commands; T061 adds the rest.
+/// The snapshot tier's commands (design 5.2.10).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SnapshotOp {
-    /// The files `@` references offer (design 5.2.11).
+    /// The files `@` references offer (design 5.2.11); what `check-attr`
+    /// looks at.
     LsFiles,
+    /// The untracked files, nested repositories as `dir/`.
+    Untracked,
+    /// The untracked files with wholly untracked directories as `dir/`.
+    UntrackedDirs,
+    /// `check-attr -z --stdin filter` of the paths given as input.
+    CheckAttr,
+    /// Stores the input as a blob, as it is.
+    HashObject,
+    /// `update-index -z --index-info` of the entries given as input.
+    IndexInfo,
+    /// `add -A` of the NUL-separated pathspecs given as input.
+    AddAll,
+    WriteTree,
+    /// Lines added and removed between two trees, no program run.
+    DiffStat,
 }
 
 /// A command's fixed words, with `-z` where the command has it.
@@ -121,19 +137,64 @@ impl RepoOp {
 
 impl SnapshotOp {
     fn spec(self) -> Spec {
-        let words = match self {
-            Self::LsFiles => &[
-                "ls-files",
-                "-z",
-                "--cached",
-                "--others",
-                "--exclude-standard",
-            ],
+        const OTHERS: &[&str] = &["ls-files", "-z", "--others", "--exclude-standard"];
+        let (words, read_only): (&'static [&'static str], bool) = match self {
+            Self::LsFiles => (
+                &[
+                    "ls-files",
+                    "-z",
+                    "--cached",
+                    "--others",
+                    "--exclude-standard",
+                ],
+                true,
+            ),
+            Self::Untracked => (OTHERS, true),
+            Self::UntrackedDirs => (
+                &[
+                    "ls-files",
+                    "-z",
+                    "--others",
+                    "--exclude-standard",
+                    "--directory",
+                ],
+                true,
+            ),
+            Self::CheckAttr => (&["check-attr", "-z", "--stdin", "filter"], true),
+            Self::HashObject => (&["hash-object", "-w", "--stdin", "--no-filters"], false),
+            Self::IndexInfo => (&["update-index", "-z", "--index-info"], false),
+            Self::AddAll => (
+                &[
+                    "add",
+                    "-A",
+                    "--ignore-errors",
+                    "--pathspec-from-file=-",
+                    "--pathspec-file-nul",
+                ],
+                false,
+            ),
+            Self::WriteTree => (&["write-tree"], false),
+            Self::DiffStat => (
+                &[
+                    "diff-tree",
+                    "-r",
+                    "-z",
+                    "--numstat",
+                    "--no-renames",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                ],
+                true,
+            ),
+        };
+        let timeout = match self {
+            Self::AddAll | Self::WriteTree => GIT_SNAPSHOT,
+            _ => GIT_COMMAND,
         };
         Spec {
             words,
-            read_only: true,
-            timeout: GIT_COMMAND,
+            read_only,
+            timeout,
         }
     }
 }

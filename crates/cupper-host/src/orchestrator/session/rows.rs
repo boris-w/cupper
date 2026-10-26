@@ -7,8 +7,8 @@ use std::fmt::Display;
 
 use cupper_protocol::domain::Content;
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::{AdapterInstanceId, CommandId, PrincipalId, QueueId, SessionId};
-use cupper_protocol::session::TurnStatus;
+use cupper_protocol::ids::{AdapterInstanceId, CommandId, PrincipalId, QueueId, SessionId, TurnId};
+use cupper_protocol::session::{SnapshotPhase, TurnStatus};
 use rusqlite::Connection;
 use rusqlite::types::Value;
 use serde::Serialize;
@@ -239,6 +239,22 @@ impl Rows {
     /// The first message left the machine's hold for a turn or the queue.
     pub(super) fn first_taken(&mut self, session: &SessionId, at: u64) {
         self.session(session, at, "initial_prompt_json = NULL", Vec::new());
+    }
+
+    /// The tree of a turn's snapshot, which the host keeps (design 5.2.10).
+    pub(super) fn tree(
+        &mut self,
+        session: &SessionId,
+        turn: &TurnId,
+        phase: &SnapshotPhase,
+        tree: String,
+    ) {
+        let column = match phase {
+            SnapshotPhase::End => "snapshot_end",
+            _ => "snapshot_start",
+        };
+        let sql = format!("UPDATE turns SET {column} = ?3 WHERE session_id = ?1 AND turn_id = ?2");
+        self.push(&sql, vec![text(session), text(turn), Value::Text(tree)]);
     }
 
     /// The agent's session to resume, from an attach.

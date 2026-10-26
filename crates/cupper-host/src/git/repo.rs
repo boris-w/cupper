@@ -203,4 +203,4 @@ fn failed(output: &Output, changed: Vec<PathBuf>) -> GitError {
 }
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;

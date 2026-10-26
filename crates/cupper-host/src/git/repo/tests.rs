@@ -63,16 +63,17 @@ cfg required filter.req.clean 'MARK required'; cfg required filter.req.required 
 cfg lfs filter.lfs.clean 'git-lfs clean -- %f'; cfg lfs filter.lfs.smudge 'git-lfs smudge -- %f'
 "#;
 
-struct Fixture {
+/// The snapshot tier's malicious case uses it too.
+pub(in crate::git) struct Fixture {
     dir: TempDir,
     git: PathBuf,
-    clock: ManualClock,
-    tool: GitTool,
+    pub(in crate::git) clock: ManualClock,
+    pub(in crate::git) tool: GitTool,
 }
 
 impl Fixture {
     /// The repositories of [`SETUP`], made with the git on the test's PATH.
-    async fn new() -> Self {
+    pub(in crate::git) async fn new() -> Self {
         let path = std::env::var_os("PATH").expect("PATH");
         let mut found = std::env::split_paths(&path).map(|dir| dir.join("git"));
         let git = found.find(|git| git.is_file()).expect("git on PATH");
@@ -102,7 +103,7 @@ impl Fixture {
         fixture
     }
 
-    fn path(&self, relative: &str) -> PathBuf {
+    pub(in crate::git) fn path(&self, relative: &str) -> PathBuf {
         self.dir.path().join(relative)
     }
 
@@ -115,7 +116,7 @@ impl Fixture {
             .await
     }
 
-    fn markers(&self, dir: &str) -> Vec<String> {
+    pub(in crate::git) fn markers(&self, dir: &str) -> Vec<String> {
         let entries = fs::read_dir(self.path(dir)).expect("markers");
         let names = entries.map(|e| e.expect("entry").file_name().to_string_lossy().into());
         let mut names: Vec<String> = names.collect();
@@ -125,7 +126,7 @@ impl Fixture {
 }
 
 /// The host's git setup, kept off the machine's system configuration.
-fn tool(root: &Path, git: &Path, lfs: Option<PathBuf>) -> GitTool {
+pub(in crate::git) fn tool(root: &Path, git: &Path, lfs: Option<PathBuf>) -> GitTool {
     let trusted: [PathBuf; 3] = [
         git.parent().expect("a dir").into(),
         "/usr/bin".into(),

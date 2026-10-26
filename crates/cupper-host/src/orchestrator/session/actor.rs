@@ -6,8 +6,9 @@
 //! with the rows they change and, for a command, the ledger's record of its
 //! result (design 5.2.3, rule 3); only then does the reply go out, and the
 //! step's driver commands and attaches. An attach runs in a task of its own
-//! and comes back as an input; so does a snapshot, which is `skipped` until
-//! T061 brings git snapshots (plan 1.3). The index hears of each committed
+//! and comes back as an input; so does a snapshot, which the snapshot tier
+//! takes in a task of its own (design 5.2.10), or `skipped` without a git.
+//! The index hears of each committed
 //! step's turns, requests, branch and read-only state; the audit channel of
 //! answers from the CLI and the test harness (design 5.8.6).
 
@@ -43,7 +44,7 @@ use cupper_protocol::methods::session::{
 use cupper_protocol::rpc::Method;
 use cupper_protocol::session::{
     ConfirmationReason, ConfirmationRequired, PauseReason, ProjectConfig, SessionConfigured,
-    SnapshotPhase, SnapshotRecorded, SnapshotStatus, TurnStatus,
+    SnapshotPhase, SnapshotReason, SnapshotRecorded, SnapshotStatus, TurnStatus,
 };
 use cupper_protocol::view::SessionView;
 use rusqlite::OptionalExtension;
@@ -62,6 +63,7 @@ use crate::driver::api::{
 use crate::durations::{Durations, SESSION_IDLE};
 use crate::gateway::{AuditEvent, AuditRecord, Call, ConfigState, TrustChange};
 use crate::git::GitTool;
+use crate::git::snapshot::{self, ShotError, Taken};
 use crate::index::{ScanContext, git_of, status_of};
 use crate::ledger::{Outcome, Ticket};
 use crate::orchestrator::interaction::{self, Respond};
@@ -91,6 +93,7 @@ enum Next {
     Agent(DriverEvent),
     Attached(Result<AttachInfo, AgentError>),
     Rescanned(Purpose, Rescan),
+    Snapshot(TurnId, SnapshotPhase, Result<Taken, ShotError>),
     Stop(Stop),
     Alarm,
     Idle,
@@ -165,6 +168,9 @@ pub(super) struct SessionActor {
     events: mpsc::UnboundedSender<DriverEvent>,
     attached: mpsc::UnboundedSender<Result<AttachInfo, AgentError>>,
     rescanned: mpsc::UnboundedSender<(Purpose, Rescan)>,
+    snapshots: mpsc::UnboundedSender<(TurnId, SnapshotPhase, Result<Taken, ShotError>)>,
+    /// The start tree of each turn, for its end's change.
+    trees: HashMap<TurnId, String>,
     /// The session would load the project's configuration while trusted.
     load_wanted: bool,
     /// The gate is shut for `project_config_changed`.
@@ -233,6 +239,10 @@ struct Step {
     attach: Vec<AttachTarget>,
     /// The machine asked for the check before a turn.
     check: bool,
+    /// The snapshots to take.
+    snapshots: Vec<(TurnId, SnapshotPhase)>,
+    /// The tree of a snapshot taken, for its turn's row.
+    tree: Option<(TurnId, SnapshotPhase, String)>,
     reply: Option<Reply>,
     /// Who set the tier now, and whether full access was just confirmed.
     set_by: Option<(PrincipalId, bool)>,
@@ -257,6 +267,7 @@ impl SessionActor {
         let (events, mut agent) = mpsc::unbounded_channel();
         let (attached, mut attaches) = mpsc::unbounded_channel();
         let (rescanned, mut rescans) = mpsc::unbounded_channel();
+        let (snapshots, mut shots) = mpsc::unbounded_channel();
         let alarm = Alarm::new(Arc::clone(&parts.clock));
         let idle = (TimerTable::new(), Alarm::new(Arc::clone(&parts.clock)));
         let Start {
@@ -278,6 +289,8 @@ impl SessionActor {
             events,
             attached,
             rescanned,
+            snapshots,
+            trees: HashMap::new(),
             load_wanted: load_wanted && !ignore_for_good,
             project_gate,
             ignore_for_good,
@@ -296,6 +309,7 @@ impl SessionActor {
                     Some(event) = agent.recv() => Next::Agent(event),
                     Some(result) = attaches.recv() => Next::Attached(result),
                     Some((purpose, found)) = rescans.recv() => Next::Rescanned(purpose, found),
+                    Some((turn, phase, taken)) = shots.recv() => Next::Snapshot(turn, phase, taken),
                     Some(stop) = stops.recv() => Next::Stop(stop),
                     () = actor.alarm.rung() => Next::Alarm,
                     () = actor.idle.1.rung() => Next::Idle,
@@ -311,6 +325,7 @@ impl SessionActor {
                 Next::Agent(event) => actor.agent(event).await,
                 Next::Attached(result) => actor.attach_done(result).await,
                 Next::Rescanned(purpose, found) => actor.trust(purpose, found).await,
+                Next::Snapshot(turn, phase, taken) => actor.snapshotted(turn, phase, taken).await,
                 Next::Stop((force, done)) => {
                     actor.stopping = true;
                     if force {
@@ -574,7 +589,10 @@ impl SessionActor {
                     Action::Machine(turn::Action::Attach(target)) => step.attach.push(target),
                     Action::Machine(turn::Action::Check) => step.check = true,
                     Action::Machine(turn::Action::Snapshot { turn_id, phase }) => {
-                        inputs.push_back(skipped(turn_id, phase))
+                        match self.parts.git {
+                            Some(_) => step.snapshots.push((turn_id, phase)),
+                            None => inputs.push_back(skipped(turn_id, phase)),
+                        }
                     }
                     Action::Machine(turn::Action::Reply(reply)) => {
                         step.reply = Some(Reply::Turn(reply))
@@ -615,6 +633,8 @@ impl SessionActor {
             driver,
             attach,
             check,
+            snapshots,
+            tree,
             reply,
             set_by,
             ignored,
@@ -669,6 +689,9 @@ impl SessionActor {
         }
         if ignored {
             changes.ignored(&self.parts.id, at);
+        }
+        if let Some((turn_id, phase, tree)) = tree {
+            changes.tree(&self.parts.id, &turn_id, &phase, tree);
         }
         // Queued, not run: the queue has it now, and a load must not run it
         // again.
@@ -742,6 +765,76 @@ impl SessionActor {
         if check {
             self.rescan(Purpose::Check);
         }
+        for (turn_id, phase) in snapshots {
+            self.snapshot(turn_id, phase);
+        }
+    }
+
+    /// Takes the snapshot in a task of its own, holding the quiescence
+    /// barrier; the end's is compared with its turn's start.
+    fn snapshot(&mut self, turn_id: TurnId, phase: SnapshotPhase) {
+        let Some(git) = self.parts.git.clone() else {
+            return;
+        };
+        self.outstanding += 1;
+        let start = (phase == SnapshotPhase::End)
+            .then(|| self.trees.get(&turn_id).cloned())
+            .flatten();
+        let (cwd, back) = (self.parts.cwd.clone(), self.snapshots.clone());
+        let (clock, durations) = (Arc::clone(&self.parts.clock), self.parts.durations.clone());
+        let hold = self.parts.quiescence.hold();
+        tokio::spawn(async move {
+            let taken = snapshot::take(&git, &cwd, start.as_deref(), &*clock, &durations).await;
+            // The actor may have stopped.
+            let _ = back.send((turn_id, phase, taken));
+            drop(hold);
+        });
+    }
+
+    /// A snapshot came back: `ok`, `partial` with what it left out, or why
+    /// there is none; its tree goes into its turn's row.
+    async fn snapshotted(
+        &mut self,
+        turn_id: TurnId,
+        phase: SnapshotPhase,
+        taken: Result<Taken, ShotError>,
+    ) {
+        self.outstanding -= 1;
+        let mut step = Step::default();
+        let (status, reason, excluded, stat) = match taken {
+            Ok(taken) => {
+                let whole = taken.excluded.is_empty() && !taken.partial;
+                let status = match whole {
+                    true => SnapshotStatus::Ok,
+                    false => SnapshotStatus::Partial,
+                };
+                match phase {
+                    SnapshotPhase::End => self.trees.remove(&turn_id),
+                    _ => self.trees.insert(turn_id.clone(), taken.tree.clone()),
+                };
+                step.tree = Some((turn_id.clone(), phase.clone(), taken.tree));
+                (status, None, taken.excluded, taken.stat)
+            }
+            Err(ShotError::NotARepo(_)) => {
+                let reason = Some(SnapshotReason::NotARepo);
+                (SnapshotStatus::Skipped, reason, Vec::new(), None)
+            }
+            Err(err) => {
+                tracing::warn!("session {}: no snapshot: {err}", self.parts.id);
+                let reason = Some(SnapshotReason::GitFailed);
+                (SnapshotStatus::Failed, reason, Vec::new(), None)
+            }
+        };
+        let recorded = SnapshotRecorded {
+            turn_id,
+            phase,
+            status,
+            reason,
+            excluded,
+            stat,
+        };
+        let input = Input::Machine(turn::Input::Snapshot(recorded));
+        self.input(input, None, step).await;
     }
 
     /// The reply to a command, as the wire has it.
@@ -1238,8 +1331,7 @@ fn config_digest(configured: &SessionConfigured) -> Digest {
     canonical::digest(&configured.config).expect("a map of strings has a canonical form")
 }
 
-/// The snapshot port until T061: every snapshot is `skipped`, without a
-/// reason (design 5.2.6, rulings before T043).
+/// A snapshot without a git: `skipped`, without a reason (design 5.2.6).
 fn skipped(turn_id: TurnId, phase: SnapshotPhase) -> Input {
     Input::Machine(turn::Input::Snapshot(SnapshotRecorded {
         turn_id,
