@@ -155,6 +155,23 @@
   - 两项都应列在 `done` 下，写着 "passed in nightly"。
   - 只给 nightly 的摘要时，UNIT-sys-uniqueid 会因为 "ran only in nightly" 列为 problem：它登记在 `pr`，要和 PR 的摘要一起读。
   - IT-sys-peer 要等 IT-sys-peer-current 在作者本机的 `pr` 运行里通过才算完成。
+- 结果（d5f4adc 上手动触发的 nightly，[运行 40323977621](https://github.com/boris-w/cupper/actions/runs/40323977621)）：
+  - [security-macos14 (macos-14)](https://github.com/boris-w/cupper/actions/runs/40323977621/job/121575785465)：`os` 为 macOS 14.8.9，结果记作 IT-sys-peer-macos14，suite 为 `nightly`，通过；
+  - [security-macos14 (macos-15)](https://github.com/boris-w/cupper/actions/runs/40323977621/job/121575785827)：`os` 为 macOS 15.7.9，结果记作 IT-sys-peer-macos15，suite 为 `nightly`，通过；
+  - 用这两份摘要（`security-macos14-d5f4adc3d3c6.json`）照上面的命令核对，trace-ids `status` 输出：
+
+    ```
+    done (2)
+      IT-sys-peer-macos14  M1a T021    passed in nightly
+      IT-sys-peer-macos15  M1a T021    passed in nightly
+    pending (414)
+      IT-sys-peer                           M1a T021    waiting for IT-sys-peer-current
+      IT-sys-peer-current                   M1a T021    no test ran
+    problem (1)
+      UNIT-sys-uniqueid  M1a T021    ran only in nightly, not in its suite pr
+    ```
+
+  - 本机（macOS 26.4）跑 `cargo xtask ci security-macos14 --in nightly --record …`，结果照旧记作 IT-sys-peer-current。
 
 ### 规模（第三轮，按模块）
 
