@@ -113,10 +113,11 @@ UNIT-sys-reap-group = "pr"
 # cupper-sys II：对端校验与代码签名
 [T021]
 milestone = "M1a"
-# 本机的 security-macos14 只记作这一项，不算 macOS 14 的覆盖
+# 对端校验的结果按摘要里的 os 归类：macOS 14、15（每晚的 runner）记作 -macos14、-macos15，
+# 其他 macOS（作者本机）记作 -current（T197）
 IT-sys-peer-current = "pr"
-IT-sys-peer-macos14 = { suite = "nightly", status = "gap", reason = "本机替代不了：macOS 14 上的对端校验，里程碑退出时由用户确认（计划 1.6、1.8）" }
-IT-sys-peer-macos15 = { suite = "pr", status = "gap", reason = "本机替代不了：macOS 15 上的对端校验，里程碑退出时由用户确认（计划 1.6、1.8）" }
+IT-sys-peer-macos14 = "nightly"
+IT-sys-peer-macos15 = "nightly"
 UNIT-sys-uniqueid = "pr"
 IT-sys-peer = { parts = ["IT-sys-peer-current", "IT-sys-peer-macos14", "IT-sys-peer-macos15"] }
 
