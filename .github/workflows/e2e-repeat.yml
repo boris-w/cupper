@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   repeat:
-    name: ${{ inputs.test }} × ${{ inputs.times }}
+    name: ${{ inputs.test }} × ${{ inputs.times }} (macos-15)
     runs-on: macos-15
     timeout-minutes: 150
     steps:

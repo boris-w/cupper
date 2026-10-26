@@ -13,29 +13,25 @@ permissions:
   contents: read
 
 jobs:
-  differential:
-    uses: ./.github/workflows/xtask.yml
-    with:
-      job: differential
-      runner: macos-15
-  security-macos14:
+  job:
+    name: ${{ matrix.job }} (${{ matrix.runner }})
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-14, macos-15]
-    uses: ./.github/workflows/xtask.yml
-    with:
-      job: security-macos14
-      runner: ${{ matrix.runner }}
-  e2e:
-    uses: ./.github/workflows/xtask.yml
-    with:
-      job: e2e
-      runner: macos-15
-      timeout: 120
-  compat-framework:
-    uses: ./.github/workflows/xtask.yml
-    with:
-      job: compat-framework
-      runner: macos-15
-      timeout: 60
+        include:
+          - { job: differential, runner: macos-15, timeout: 45 }
+          - { job: security-macos14, runner: macos-14, timeout: 45 }
+          - { job: security-macos14, runner: macos-15, timeout: 45 }
+          - { job: e2e, runner: macos-15, timeout: 120 }
+          - { job: compat-framework, runner: macos-15, timeout: 60 }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/xtask
+        with:
+          job: ${{ matrix.job }}
+          runner: ${{ matrix.runner }}

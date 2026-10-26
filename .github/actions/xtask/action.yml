@@ -1,0 +1,56 @@
+# One job of `cargo xtask ci` (design 5.1.6, T197), after the checkout with
+# its history: the setup, the job, and as artifacts its summary
+# (`--record`), its raw logs (7 days) and a failed run's Playwright results.
+name: xtask
+description: Runs one cargo xtask ci job and keeps what it leaves
+
+inputs:
+  job:
+    description: The xtask ci job
+    required: true
+  within:
+    description: The composite the job runs as one of (`--in`), or none
+    default: ""
+  runner:
+    description: The runner's label, which tells the artifacts apart
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup
+      with:
+        cache-key: ${{ inputs.job }}
+    - name: cargo-deny
+      if: inputs.job == 'license'
+      shell: bash
+      run: cargo install --locked cargo-deny@0.20.2
+    - name: cargo xtask ci ${{ inputs.job }}
+      shell: bash
+      env:
+        JOB: ${{ inputs.job }}
+        WITHIN: ${{ inputs.within }}
+      run: cargo xtask ci "$JOB" ${WITHIN:+--in "$WITHIN"} --record ci-summary
+    - if: always()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ inputs.job }}-${{ inputs.runner }}-summary
+        path: ci-summary/
+        if-no-files-found: ignore
+    - if: always()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ inputs.job }}-${{ inputs.runner }}-logs
+        path: .private/ci-logs/
+        include-hidden-files: true
+        retention-days: 7
+        if-no-files-found: ignore
+    - if: failure()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ inputs.job }}-${{ inputs.runner }}-playwright
+        path: |
+          tools/e2e/dist/test-results/
+          tools/ui-screenshots/dist/test-results/
+        retention-days: 7
+        if-no-files-found: ignore

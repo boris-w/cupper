@@ -10,7 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  baseline:
+  baselines:
+    name: baselines (macos-15)
     runs-on: macos-15
     timeout-minutes: 45
     steps:
