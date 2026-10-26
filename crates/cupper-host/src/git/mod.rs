@@ -1,7 +1,7 @@
 //! The git service (design 5.2.10, ADR-10). The host runs git as itself,
 //! outside every agent sandbox, while agents may have written the repository's
 //! config, so its calls fall in three tiers by where git runs, each a type:
-//! the snapshot tier on cupper's own GIT_DIR (T061), the repo tier in the
+//! the snapshot tier on cupper's own GIT_DIR ([`snapshot`]), the repo tier in the
 //! user's repository, checked and overridden on every call (T097, T098), and
 //! the user tier for the user's own commit and push (T123).
 //!
@@ -12,6 +12,7 @@ mod cmd;
 mod repo;
 pub mod rules;
 pub mod run;
+pub mod snapshot;
 pub mod stamp;
 
 use std::ffi::{OsStr, OsString};
@@ -46,8 +47,9 @@ pub struct GitTool {
 
 impl GitTool {
     /// `git` and `git_lfs` come from `CliLocator::tool`, `trusted_path` from
-    /// `CliLocator::trusted_path` (T054). Creates `<data_dir>/git/` and the
-    /// empty hooks directory in it, mode 0700.
+    /// `CliLocator::trusted_path` (T054). Creates `<data_dir>/git/`, the
+    /// empty hooks directory in it, mode 0700, and the empty global
+    /// configuration of the snapshot tier.
     pub fn new(
         git: PathBuf,
         git_lfs: Option<PathBuf>,
@@ -61,6 +63,7 @@ impl GitTool {
             .recursive(true)
             .mode(0o700)
             .create(dir.join("empty-hooks"))?;
+        std::fs::write(dir.join("empty-config"), "")?;
         let path = std::env::join_paths(trusted_path).map_err(io::Error::other)?;
         Ok(Self {
             git,
@@ -94,13 +97,8 @@ impl GitTool {
         }
     }
 
-    pub fn snapshot_tier(&self, git_dir: &Path, work_tree: &Path) -> SnapshotTier<'_> {
-        let (git_dir, work_tree) = (git_dir.into(), work_tree.into());
-        SnapshotTier {
-            tool: self,
-            git_dir,
-            work_tree,
-        }
+    pub fn snapshot_tier<'a>(&'a self, place: &'a snapshot::Place) -> SnapshotTier<'a> {
+        SnapshotTier { tool: self, place }
     }
 
     /// `PATH` of trusted entries only, `LC_ALL=C` for parsing messages, no
@@ -176,20 +174,31 @@ impl RepoTier<'_> {
     }
 }
 
-/// git on cupper's own GIT_DIR for a work tree. T061 completes its
-/// environment (index, object store, config).
+/// git on cupper's own GIT_DIR for a work tree: its index, cupper's object
+/// store over the repository's objects, the configuration cupper wrote, and
+/// an empty global one. `HOME` stays: git finds the default global ignore
+/// and attributes files there, and reads no other configuration with
+/// `GIT_CONFIG_GLOBAL` set (T061).
 #[derive(Debug)]
 pub struct SnapshotTier<'a> {
     tool: &'a GitTool,
-    git_dir: PathBuf,
-    work_tree: PathBuf,
+    place: &'a snapshot::Place,
 }
 
 impl SnapshotTier<'_> {
     pub fn prepare(&self, cmd: GitCmd<Snapshot>) -> Prepared {
-        let mut env = self.tool.env(false);
-        env.set("GIT_DIR", &self.git_dir).expect("a path");
-        env.set("GIT_WORK_TREE", &self.work_tree).expect("a path");
+        let (place, mut env) = (self.place, self.tool.env(true));
+        let mut set = |name, value: &OsStr| env.set(name, value).expect("fixed names, paths");
+        set("GIT_DIR", place.git_dir.as_os_str());
+        set("GIT_WORK_TREE", place.work_tree.as_os_str());
+        set("GIT_INDEX_FILE", place.index.as_os_str());
+        set("GIT_OBJECT_DIRECTORY", place.objects.as_os_str());
+        set("GIT_ALTERNATE_OBJECT_DIRECTORIES", &place.alternates);
+        set("GIT_CONFIG_NOSYSTEM", "1".as_ref());
+        set(
+            "GIT_CONFIG_GLOBAL",
+            self.tool.dir.join("empty-config").as_os_str(),
+        );
         self.tool.prepare(cmd, &[], env)
     }
 }
@@ -285,14 +294,28 @@ mod tests {
         );
         assert_eq!((args, stdin.as_str()), (want, "the patch"));
 
-        // The snapshot tier: its GIT_DIR and work tree, no HOME, no `-C`.
-        let tier = tool.snapshot_tier(Path::new("/data/git/ws"), Path::new("/work"));
+        // The snapshot tier: its GIT_DIR, work tree, index, objects and
+        // configuration, no `-C`.
+        let place = snapshot::Place {
+            work_tree: "/work".into(),
+            git_dir: "/ws".into(),
+            index: "/ws/index.1".into(),
+            objects: "/objects".into(),
+            alternates: "/work/.git/objects".into(),
+        };
+        let tier = tool.snapshot_tier(&place);
         tier.prepare(GitCmd::snapshot(SnapshotOp::LsFiles))
             .run(&clock, &durations)
             .await
             .expect("runs");
         let [env, args, ..] = recorded(dir.path());
-        let want = format!("GIT_DIR=/data/git/ws {base} GIT_WORK_TREE=/work LC_ALL=C {path}");
+        let want = format!(
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES=/work/.git/objects \
+             GIT_CONFIG_GLOBAL={}/git/empty-config GIT_CONFIG_NOSYSTEM=1 GIT_DIR=/ws \
+             GIT_INDEX_FILE=/ws/index.1 GIT_OBJECT_DIRECTORY=/objects {base} \
+             GIT_WORK_TREE=/work HOME=/home/user LC_ALL=C {path}",
+            data.display()
+        );
         assert_eq!(env, want);
         let want = format!(
             "--no-pager --no-optional-locks -c core.quotepath=false -c core.fsmonitor=false \
