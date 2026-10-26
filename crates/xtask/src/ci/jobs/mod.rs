@@ -68,6 +68,7 @@ pub const COMPOSITES: &[(&str, &[&str])] = &[
             "ts",
             "license",
             "testdata-scan",
+            "compat-framework",
             "ui",
             "e2e",
         ],
