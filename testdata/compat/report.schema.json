@@ -16,29 +16,21 @@
       ],
       "type": "object"
     },
-    "ConfigFile": {
+    "ConfigCheck": {
       "additionalProperties": false,
-      "description": "One file's SHA-256 before and after the run; none when it did not exist.",
+      "description": "One file or field of the real configuration: its name and whether the\nrun changed it, never its value.",
       "properties": {
-        "after": {
-          "type": [
-            "string",
-            "null"
-          ]
+        "changed": {
+          "type": "boolean"
         },
-        "before": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "path": {
-          "description": "Under the home directory, as `~/...`.",
+        "name": {
+          "description": "`~/<file>`, then the field for a file compared by field.",
           "type": "string"
         }
       },
       "required": [
-        "path"
+        "name",
+        "changed"
       ],
       "type": "object"
     },
@@ -90,6 +82,21 @@
           "const": "inconclusive",
           "description": "The agent did not do what the scenario needs.",
           "type": "string"
+        },
+        {
+          "const": "not_applicable",
+          "description": "The scenario cannot run on this version; the detail says why.",
+          "type": "string"
+        },
+        {
+          "const": "observed",
+          "description": "What the scenario saw, in the detail, judged by a person.",
+          "type": "string"
+        },
+        {
+          "const": "real_only",
+          "description": "Only the real CLI can play it; the fake agent skipped it.",
+          "type": "string"
         }
       ]
     },
@@ -131,7 +138,7 @@
           "$ref": "#/$defs/Outcome"
         },
         "recording": {
-          "description": "The recording, relative to the report.",
+          "description": "The recording: relative to the report in a run's output, to the\nrepository in a report under `testdata/`.",
           "type": [
             "string",
             "null"
@@ -162,24 +169,24 @@
     "agent": {
       "type": "string"
     },
-    "cli": {
-      "$ref": "#/$defs/Named"
-    },
-    "cli_sessions": {
-      "description": "The CLI's sessions the run left behind, to clean up.",
+    "cleanup": {
+      "description": "What the run left in the CLI's state, to clean up: its sessions and\nthe temporary repositories' project entries.",
       "items": {
         "type": "string"
       },
       "type": "array"
+    },
+    "cli": {
+      "$ref": "#/$defs/Named"
     },
     "commit": {
       "description": "The cupper commit that ran.",
       "type": "string"
     },
     "config_files": {
-      "description": "The real configuration files, hashed before and after the run.",
+      "description": "The real configuration, compared before and after the run.",
       "items": {
-        "$ref": "#/$defs/ConfigFile"
+        "$ref": "#/$defs/ConfigCheck"
       },
       "type": "array"
     },
@@ -221,7 +228,7 @@
     "duration_ms",
     "scenarios",
     "config_files",
-    "cli_sessions"
+    "cleanup"
   ],
   "title": "Report",
   "type": "object"
