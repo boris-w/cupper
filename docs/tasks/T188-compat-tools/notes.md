@@ -40,7 +40,8 @@
    - 假模式的报告直接报错：假 agent 证明不了 COMPAT 编号。
    - 没有登记的剧本（基本组的大部分）单独列一节提示，不判失败。
    - `--milestone` 允许同时给 `--compat`，前提是报告已提交且未改动。
-   - T187 还没加的 4 个剧本，名字暂按编号去掉前缀来写（untrusted-project、six-sessions、close-running、resume-procs）；T187 的 `id` 定下后，合并时以它为准改 `ids.toml`。
+   - 剧本编号已由编排者定下、不再改：T064 的 10 个，以及新增的 11 个（crash-resume、host-restart、image、steer、concurrent-two、six-sessions、close-running、resume-procs、untrusted-project、hooks-reload、config-scope；其中 10 个由 T192 补，计划 v1.3.60）。
+   - 6 个 COMPAT 编号的登记：thinking 对应 `COMPAT-claude-thinking`；six-sessions、close-running、resume-procs 对应 `COMPAT-claude-*`；untrusted-project 对应 `COMPAT-untrusted-project-claude`（cli claude）和 `-codex`（cli codex）。
 5. **compat-framework 进 `ci pr`**：
    - 相关路径：`crates/xtask/src/compat/`、`crates/xtask/src/ci/jobs/compat_framework.rs`、`crates/cupper-host/tests/compat.rs`、`crates/cupper-host/tests/compat/`、`testdata/compat/`。
    - 假 agent 和宿主本身的改动不算（每晚的 `compat-framework` 覆盖），否则几乎每个 PR 都要跑一遍。
