@@ -131,7 +131,11 @@ async fn it_k5_withdraw_by_the_agent_and_on_interrupt() {
     let dir = TempDir::new("k5");
     let (data_dir, _host, client, _) = host(&dir, &[], json!({})).await;
     // Withdrawn by the agent: `$/cancel_request` ends it (K5).
-    let session = create(&client, "withdraw_after 300; permission p1").await;
+    let session = create(
+        &client,
+        "withdraw_after 300; permission p1; sleep 300; say after",
+    )
+    .await;
     events(&data_dir, &session, "interaction.requested", 1).await;
     let resolved = events(&data_dir, &session, "interaction.resolved", 1).await;
     assert_eq!(resolved[0]["status"], "cancelled");

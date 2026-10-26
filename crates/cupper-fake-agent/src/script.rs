@@ -159,7 +159,8 @@ pub struct Script {
     /// The latest `plan_update`, shown by `plan_confirm`.
     plan: String,
     /// `withdraw_after <ms>`: the next request is withdrawn (K5) after this
-    /// long unless answered first, as Claude withdraws on a cancel.
+    /// long unless answered first, as Claude withdraws on a cancel; the
+    /// script then goes on.
     withdraw_after: Option<u64>,
 }
 
@@ -628,9 +629,10 @@ impl Script {
                 }
                 Ok(None)
             }
+            // Withdrawn without a cancel, the script goes on with no answer.
             () = real_sleep(after.unwrap_or_default()), if after.is_some() => {
                 withdraw.cancel()?;
-                Ok(None)
+                Ok(Some(Value::Null))
             }
         }
     }

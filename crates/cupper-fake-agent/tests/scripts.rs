@@ -229,11 +229,12 @@ fn unit_fake_scripts_cancel_withdraws_only_claudes_permission() {
 #[test]
 fn unit_fake_scripts_withdraw_after_a_while() {
     let mut fake = Fake::start(CLAUDE);
-    let prompt = fake.start_prompt("withdraw_after 50; permission p1");
+    let prompt = fake.start_prompt("withdraw_after 50; permission p1; say after");
     let asked = fake.wait_for("permission", request("session/request_permission"));
     let withdrawal = fake.wait_for("withdrawal", |m| m["method"] == "$/cancel_request");
     assert_eq!(withdrawal["params"]["requestId"], asked["id"]);
-    assert_eq!(stop(&fake.response(prompt)), "cancelled");
+    assert_eq!(stop(&fake.response(prompt)), "end_turn");
+    assert_eq!(fake.texts(), ["permission:cancelled", "after"]);
 }
 
 #[test]
