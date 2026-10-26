@@ -408,6 +408,8 @@
 | T131（及加渲染入口的任务） | 加第二个渲染入口时，在 `tools/license-gate/src/main.ts` 的 `ENTRIES` 里登记它的环境名；`apps/desktop/vite.config.ts` 的插件把每个环境的模块写到 `dist/metafile/<环境>.json` | T006 |
 | T121、T124（git 写操作与 worktree 的故障点） | 故障点夹具与断言库在 `crates/cupper-host/tests/crash_concurrency.rs`（T069）：完整性检查、每条流 seq 连续、实时事件是日志前缀、在途命令按原 `command_id` 重试符合账本语义、消息各恰好一次；按命中次数倍增扫描（第 1、2、4、8……次到达时以 99 退出）。新故障点在 `failpoint.rs` 登记后，加进扫描表即可 | T069 |
 | 会话 actor 的测试 | `actor::held`（只在单元测试里编译，按项目路径登记）能让某次重扫停住，用来把配置变化放进"回合已开始、附加前的重扫还没做"这类窗口（T069）；会话夹具的 `events`、`attach`、`command` 等待都有 30 s 超时，超时时报出在等什么 | T069 |
+| 读设置的宿主任务 | 设置（T036）在 `crates/cupper-host/src/settings.rs`：宿主内部经 `SettingsHandle::current()` 取；默认值是 `worktrees.root` 为 `~/.cupper/worktrees`、三个通知开关开、新会话默认 Claude、`host.idle_exit_minutes` 为 10、`diagnostics.verbose` 关、不额外放行环境变量、CLI 路径为空（自动发现）。`cli_path`、`env_passthrough` 变了会先重新发现 agent 再回复；其余键 M1a 不推送 | T036 |
+| T126 | `apps.terminal`、`apps.editor` 的内置应用清单仍没有设计（T013 的交接），T036 的默认值暂用 macOS 自带的 Terminal 和 TextEdit | T036 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
