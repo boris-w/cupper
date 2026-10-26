@@ -126,7 +126,7 @@ async fn unit_settings_update_writes_its_keys_and_finds_the_agents_again() {
         .call(&routes, "settings/get", json!({}))
         .await;
     assert_eq!(got.unwrap()["settings"], json!(settings.current()));
-    assert_eq!(settings.current().codex_cli_path, None);
+    assert_eq!(settings.current().codex_cli_path, CliPath(None));
 
     // The rows hold what changed, and a restart reads them back.
     let sql = "SELECT key || '=' || value FROM settings ORDER BY key";
