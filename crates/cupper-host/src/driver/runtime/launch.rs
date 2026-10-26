@@ -198,22 +198,8 @@ pub async fn production(
     let binary = &found.binary;
     (launch.env, _) = adapter_env(claude, host, &login.vars, binary, config_dir.as_ref(), &[]);
     let found_version = version::probe(clock, durations, binary, launch.env.clone()).await;
-    let range = &manifest::embedded().cli.claude;
-    let range = VerifiedRange {
-        min: &range.verified.min,
-        max: &range.verified.max,
-        unsupported_below: range.unsupported_below.as_deref(),
-    };
-    let class = found_version.and_then(|v| version::classify(v, &range).ok());
-    let compat = match class {
-        Some(VersionClass::Verified) => CliCompat::Verified,
-        Some(VersionClass::NewerUntested) => CliCompat::NewerUntested,
-        Some(VersionClass::OlderUntested) => CliCompat::OlderUntested,
-        _ => CliCompat::Unsupported,
-    };
-    let cli_version = found_version.map(|v| format!("{}.{}.{}", v.major, v.minor, v.patch));
-    let cli_version = cli_version.unwrap_or_default();
-    launch.versions = versions(cli_version.clone(), compat);
+    launch.versions = cli_versions(found_version);
+    let cli_version = launch.versions.cli.clone();
     let (path, install) = (found.binary, found.install);
     let cli = Cli {
         path,
@@ -222,6 +208,25 @@ pub async fn production(
     };
     (launch.cli, launch.unavailable) = (Some(cli), None);
     launch
+}
+
+/// The versions with Claude's CLI at `found`, against the range verified for
+/// the pinned adapter; `test_config.agents.claude.cli_version` plays one (K14).
+pub fn cli_versions(found: Option<version::Version>) -> Versions {
+    let range = &manifest::embedded().cli.claude;
+    let range = VerifiedRange {
+        min: &range.verified.min,
+        max: &range.verified.max,
+        unsupported_below: range.unsupported_below.as_deref(),
+    };
+    let compat = match found.and_then(|v| version::classify(v, &range).ok()) {
+        Some(VersionClass::Verified) => CliCompat::Verified,
+        Some(VersionClass::NewerUntested) => CliCompat::NewerUntested,
+        Some(VersionClass::OlderUntested) => CliCompat::OlderUntested,
+        _ => CliCompat::Unsupported,
+    };
+    let cli = found.map(|v| format!("{}.{}.{}", v.major, v.minor, v.patch));
+    versions(cli.unwrap_or_default(), compat)
 }
 
 fn versions(cli: String, cli_compat: CliCompat) -> Versions {

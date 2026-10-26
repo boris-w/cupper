@@ -230,8 +230,7 @@ impl Host {
             data_dir: data_dir.clone(),
             login_env,
             #[cfg(feature = "test-harness")]
-            agent: (payload.test_config.agents.claude.as_ref())
-                .map(|agent| (agent.program.clone(), agent.args.clone())),
+            agent: payload.test_config.agents.claude.clone(),
             #[cfg(feature = "test-harness")]
             in_process: payload.test_config.in_process.clone(),
         };
@@ -646,7 +645,7 @@ struct Finder {
     data_dir: PathBuf,
     login_env: Option<BTreeMap<String, String>>,
     #[cfg(feature = "test-harness")]
-    agent: Option<(PathBuf, Vec<String>)>,
+    agent: Option<crate::startup::test_config::AgentCommand>,
     #[cfg(feature = "test-harness")]
     in_process: Option<launch::InProcess>,
 }
@@ -672,8 +671,14 @@ impl Finder {
             return launch;
         }
         #[cfg(feature = "test-harness")]
-        if let Some((program, args)) = &self.agent {
-            return launch::injected(program.clone(), args.clone(), host, login);
+        if let Some(agent) = &self.agent {
+            let (program, args) = (agent.program.clone(), agent.args.clone());
+            let mut launch = launch::injected(program, args, host, login);
+            if let Some(version) = &agent.cli_version {
+                let found = crate::driver::probe::version::Version::find(version);
+                launch.versions = launch::cli_versions(found);
+            }
+            return launch;
         }
         let (dir, locator) = (&self.data_dir, &found.locator);
         launch::production(clock, durations, dir, host, login, locator).await
