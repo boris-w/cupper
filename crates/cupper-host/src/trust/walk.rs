@@ -71,6 +71,16 @@ pub(super) fn walk(
     workspace: &Path,
     git_root: Option<&Path>,
 ) -> Result<Vec<ScannedFile>, ScanError> {
+    walk_counting(workspace, git_root, &mut 0)
+}
+
+/// [`walk`], leaving in `entries` how many entries it visited, also when it
+/// failed: what the entry limit stops (T196).
+pub(super) fn walk_counting(
+    workspace: &Path,
+    git_root: Option<&Path>,
+    entries: &mut usize,
+) -> Result<Vec<ScannedFile>, ScanError> {
     let workspace = realpath(workspace)?;
     let root = match git_root {
         Some(root) => realpath(root)?,
@@ -87,16 +97,24 @@ pub(super) fn walk(
         ancestors: Vec::new(),
     };
     let (mut level, mut up) = (workspace.as_path(), String::new());
-    loop {
-        for name in NAMES {
-            walker.entry(&level.join(name), format!("{up}{name}"), false)?;
+    let walked = loop {
+        let names = NAMES
+            .iter()
+            .map(|name| (level.join(name), format!("{up}{name}")));
+        if let Err(err) = names
+            .into_iter()
+            .try_for_each(|(path, rel)| walker.entry(&path, rel, false))
+        {
+            break Err(err);
         }
         if level == root {
-            return Ok(walker.files);
+            break Ok(());
         }
         level = level.parent().expect("the root is above");
         up.push_str("../");
-    }
+    };
+    *entries = walker.entries;
+    walked.map(|()| walker.files)
 }
 
 struct Walker {

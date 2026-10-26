@@ -95,6 +95,30 @@ pub async fn connect_once(
     client::Client::connect(&socket, &HostCheck::Harness, options).await
 }
 
+/// Runs `exe`, a fresh copy of the host, once to its exit before a test times
+/// it. The first start of a new file waits for the system's scan of it: 12
+/// to 29 s for the host at a load of 35, against a 30 s `connect` (T196).
+pub async fn first_start(exe: &Path) {
+    let mut child = Command::new(exe)
+        .arg("--build-info")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let clock = SystemClock::new();
+    let give_up = clock.now_mono() + 4 * PATIENCE;
+    while child.try_wait().unwrap().is_none() {
+        if clock.now_mono() >= give_up {
+            // Not reaped yet, so the pid is still this child's.
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("{} took over {:?} to start", exe.display(), 4 * PATIENCE);
+        }
+        wait(&clock).await;
+    }
+}
+
 /// The host's exit code, once it exits.
 pub async fn exit_code(child: &mut Child) -> i32 {
     let clock = SystemClock::new();
