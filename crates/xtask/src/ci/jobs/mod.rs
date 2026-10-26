@@ -2,6 +2,7 @@
 //! A job registered with `run: None` is implemented by a later task, which adds
 //! its file and fills in `run`; the composites already list it.
 
+mod compat_framework;
 mod differential;
 mod e2e;
 mod license;
@@ -50,7 +51,7 @@ pub const JOBS: &[Job] = &[
     locked("e2e", Some(e2e::run)),
     locked("perf", None),
     job("security-macos14", Some(security::run)),
-    job("compat-framework", None),
+    job("compat-framework", Some(compat_framework::run)),
     job("release-config", None),
     job("codex-drift", None),
     job("release", None),
