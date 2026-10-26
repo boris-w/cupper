@@ -398,6 +398,8 @@
 | T066 | Q43 的真实观察：T063 用假 agent 五轮"崩溃、恢复"后宿主进程树大小不变，只证明宿主侧恢复不会多拉起进程；真实 `claude` 多次 resume 后会不会留下 CLI 进程（上游 #1011），要由兼容矩阵用真实 CLI 观察 | T063 |
 | T112 | K14 的改判（T063）：prompt 以未登录失败、CLI 有版本号且低于已验证范围时改判为 `cli_too_old`、登录状态不变；会话打开时的认证错误还没有改判（claude 形态的假 agent 打开时不报未登录），codex 形态的同类情形归本任务 | T063 |
 | 宿主的进程级用例 | 假 agent 的 `--calls <文件>` 记下每个收到的请求和 `session/cancel`（`{method, session, text}`），可直接断言 resume 与 new、prompt 重发次数；`withdraw_after <ms>` 一段时间后撤回下一个请求、剧本继续。`test_config.agents.<agent>.cli_version` 给注入的假 agent 指定版本，与探测到的版本走同一套分类 | T063 |
+| T120 及以后用 git 的任务 | 快照档（T061）：每个仓库一个私有对象库 `<数据目录>/git/<repo_key>/objects/`，每个工作区一个 GIT_DIR `<数据目录>/git/<repo_key>/ws/<ws_key>/`（key 是 realpath 的 sha-256 前 8 字节，0700，没有 `hooks/`），可供 `@` 文件列表、`git/status`、diff 复用；`SnapshotTier` 要传一个 `Place`，`snapshot::take` 里有构造它的 `prepare`。`turns.snapshot_start`、`snapshot_end` 存 tree id。私有对象库与 sharedindex 副本 M1 不回收。`core.excludesFile`、`core.attributesFile` 是相对路径时按快照档的工作目录解析，与用户在仓库里运行 git 时不同（少见，没处理） | T061 |
+| T186 | LFS 用例要把 `tool(…, lfs)` 指向 xtask 下载的 git-lfs；白名单配置里 LFS 取值的生成已有单元测试。超大未跟踪目录的判定是"文件数 × 目录数"的扫描，PERF-snapshot 可以一并量一下 | T061 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
