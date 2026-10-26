@@ -7,7 +7,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::mpsc::{Receiver, channel};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -18,6 +18,8 @@ pub struct Fake {
     child: Child,
     stdin: ChildStdin,
     lines: Receiver<String>,
+    /// The agent's stdout has closed: `poll` returns at once.
+    closed: bool,
     next_id: u64,
     /// Every line the agent wrote, verbatim.
     pub raw: Vec<String>,
@@ -65,6 +67,7 @@ impl Fake {
             child,
             stdin,
             lines,
+            closed: false,
             next_id: 0,
             raw,
             seen,
@@ -167,7 +170,14 @@ impl Fake {
     /// The next message, if one arrives in time. The agent's requests are
     /// answered from `answers`.
     pub fn poll(&mut self, timeout: Duration) -> Option<Value> {
-        let line = self.lines.recv_timeout(timeout).ok()?;
+        let line = match self.lines.recv_timeout(timeout) {
+            Ok(line) => line,
+            Err(RecvTimeoutError::Disconnected) => {
+                self.closed = true;
+                return None;
+            }
+            Err(RecvTimeoutError::Timeout) => return None,
+        };
         let message: Value = serde_json::from_str(&line).unwrap();
         if message.get("method").is_some()
             && message.get("id").is_some()
@@ -227,8 +237,13 @@ impl Fake {
             .collect()
     }
 
-    /// Waits for the agent to exit; its exit code and stderr.
+    /// Waits for the agent to exit, 10 s at most; its exit code and stderr.
     pub fn exit(&mut self) -> (Option<i32>, String) {
+        // The agent closes its stdout on its way out, and from then on `poll`
+        // returns at once: a channel nobody sends on paces the tries, or the
+        // 200 of them would pass in a few ms, before a loaded machine had the
+        // agent exit (T189).
+        let (_never, pace) = channel::<()>();
         for _ in 0..200 {
             if let Some(status) = self.child.try_wait().unwrap() {
                 let mut stderr = String::new();
@@ -240,7 +255,9 @@ impl Fake {
                     .unwrap();
                 return (status.code(), stderr);
             }
-            self.poll(Duration::from_millis(50));
+            if self.poll(Duration::from_millis(50)).is_none() && self.closed {
+                let _ = pace.recv_timeout(Duration::from_millis(50));
+            }
         }
         panic!("the agent did not exit");
     }
