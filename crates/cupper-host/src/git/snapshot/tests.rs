@@ -272,7 +272,8 @@ async fn it_git_lfs_snapshot_runs_the_hosts_git_lfs() {
 }
 
 /// PERF-snapshot: a synthetic repository of 10,000 files, snapshotted with
-/// no change and with 10 files changed; the median of five of each.
+/// no change and with 10 files changed; 30 samples of each (design 5.9.6),
+/// whose median is judged.
 #[tokio::test]
 #[ignore = "PERF-snapshot runs nightly"]
 async fn perf_snapshot_ten_thousand_files() {
@@ -283,7 +284,7 @@ async fn perf_snapshot_ten_thousand_files() {
     let clock = SystemClock::new();
     for (case, change) in [("no change", false), ("10 files changed", true)] {
         let mut runs = Vec::new();
-        for n in 0..5 {
+        for n in 0..30 {
             if change {
                 let edit =
                     format!("i=0; while [ $i -lt 10 ]; do echo {n} >> big/f$i; i=$((i+1)); done");
@@ -297,6 +298,6 @@ async fn perf_snapshot_ten_thousand_files() {
         let metric = format!("snapshot_10k_{}", case.replace(' ', "_").replace(',', ""));
         let ms: Vec<f64> = runs.iter().map(|run| run.as_secs_f64() * 1000.0).collect();
         crate::perf::record(&metric, "ms", &ms);
-        assert!(runs[2] < Duration::from_secs(2), "{case}: {runs:?}");
+        assert!(runs[15] < Duration::from_secs(2), "{case}: {runs:?}");
     }
 }
