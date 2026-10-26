@@ -388,8 +388,8 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
   - `extensions.objectFormat`（取值不是 sha1 时同时写 `core.repositoryFormatVersion=1`）。
 - **过滤器**：属性文件引用的 filter 和 diff 驱动在这份配置里都没有定义，git 按原样处理内容，不执行任何程序。
   - 例外只有 Git LFS：用户有效配置里的 `filter.lfs.*` 恰好是 git-lfs 的标准取值时，cupper 写入同样的取值，但程序一律写成宿主启动时解析出的 git-lfs **绝对路径**（见下文"调用约定"），不按 PATH 查找。这条路径未实测（待定问题 Q32）。
-  - 其他自定义过滤器（例如 git-crypt）不执行。**检测**：快照前在快照档执行 `check-attr -z --stdin filter`，覆盖全部属性来源：工作区的 `.gitattributes`、复制过来的 `info/attributes`、`core.attributesFile`；属性来源里没有任何 `filter=` 时跳过这一步。命中的路径标为 `filter_unsupported`：
-    - **快照里只存占位**：这些路径不经 `add -A` 写入，而是用 `update-index --cacheinfo` 放一个占位 blob，内容是"未保存（自定义过滤器 <名称>），sha-256 <工作区内容的哈希>"。快照对象库里不出现明文（M1 不回收快照对象），回合 diff 上这类文件只显示"已变化"；
+  - 其他自定义过滤器（例如 git-crypt）不执行。**检测**：快照前在快照档执行 `check-attr -z --stdin filter`，覆盖全部属性来源：工作区的 `.gitattributes`、复制过来的 `info/attributes`、`core.attributesFile`；配置里没有定义快照档不执行的过滤器（有 `clean` 或 `process`、且不是由宿主执行的 git-lfs）时跳过这一步，因为没有定义的过滤器用户自己的 git 也按原样处理（T061）。命中的路径标为 `filter_unsupported`：
+    - **快照里只存占位**：这些路径不经 `add -A` 写入，而是用 `update-index --cacheinfo` 放一个占位 blob，内容是固定的 ASCII 格式 `cupper: not stored, filter <名称> not run; sha-256 <工作区内容的哈希>`（宿主不产生界面文案，界面按这个格式识别；T061）。快照对象库里不出现明文（M1 不回收快照对象），回合 diff 上这类文件只显示"已变化"；
     - 在 `unstaged`、`staged` 范围里不提供 hunk 操作；
     - 仓库档执行 `git/stage` 之前，在用户仓库里对目标路径再用 `check-attr filter` 核对一次（这条命令不执行程序），发现白名单以外的过滤器就拒绝，返回 `git_error`（`reason: filter_unsupported`），避免把工作区的明文暂存进去（安全核对 3）。
 - **复制 index 时保留 mtime**（等价 `cp -p`）。实验发现：换成新的 mtime 后，同一秒内改过、大小又没变的文件会被当成未修改，快照里留下旧内容（git 的 racy 检测失效）。SP-5 的临时 index 方案同样受影响，这里一并改正。

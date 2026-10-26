@@ -70,7 +70,7 @@ use futures::future::{BoxFuture, Either, select};
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot, watch};
 
-use cupper_protocol::capabilities::{SessionCapabilities, SlashCommand};
+use cupper_protocol::capabilities::{CliCompat, SessionCapabilities, SlashCommand};
 use cupper_protocol::domain::AgentKind;
 use sha2::{Digest, Sha256};
 
@@ -844,7 +844,20 @@ impl Actor {
                         }
                     }
                     Err(err) => {
-                        let error = claude::agent_error(&err);
+                        let mut error = claude::agent_error(&err);
+                        // K14: a CLI older than the verified range says it
+                        // needs a login when it cannot read the config.
+                        let versions = &self.deps.launch.versions;
+                        let old = matches!(
+                            versions.cli_compat,
+                            CliCompat::OlderUntested | CliCompat::Unsupported
+                        );
+                        if error.class == AgentErrorClass::NotLoggedIn
+                            && old
+                            && !versions.cli.is_empty()
+                        {
+                            error.class = AgentErrorClass::CliTooOld;
+                        }
                         if error.class == AgentErrorClass::NotLoggedIn {
                             self.auth.state = AuthState::LoggedOut;
                             self.notify();

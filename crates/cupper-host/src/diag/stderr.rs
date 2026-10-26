@@ -25,9 +25,11 @@ const FILES: usize = 3;
 /// Longer lines are cut into pieces of this size.
 const MAX_LINE: usize = 16 * 1024;
 
-/// One agent's adapter log, which all its instances share.
+/// One agent's adapter log, which all its instances share. Without its
+/// file it still reads stderr, for the raw frames and the tail: an adapter
+/// whose stderr nobody reads dies of SIGPIPE.
 pub struct AdapterLog {
-    file: Mutex<Rotating>,
+    file: Option<Mutex<Rotating>>,
     clock: Arc<dyn Clock>,
     redactor: Redactor,
 }
@@ -66,10 +68,19 @@ impl AdapterLog {
     ) -> io::Result<Arc<Self>> {
         let file = Rotating::open(dir, &format!("adapter-{agent}.log"), MAX_BYTES, FILES)?;
         Ok(Arc::new(Self {
-            file: Mutex::new(file),
+            file: Some(Mutex::new(file)),
             clock,
             redactor,
         }))
+    }
+
+    /// The log when its file did not open: stderr is read all the same.
+    pub fn unwritten(clock: Arc<dyn Clock>, redactor: Redactor) -> Arc<Self> {
+        Arc::new(Self {
+            file: None,
+            clock,
+            redactor,
+        })
     }
 
     /// Reads `stderr` of `instance` until it closes; the tail fills as lines
@@ -93,7 +104,9 @@ impl AdapterLog {
                 let time = rfc3339(log.clock.now_wall_ms());
                 let entry = format!("{time} {instance} {text}");
                 // A log that cannot be written has nowhere to say so.
-                let _ = log.file.lock().map(|mut file| file.write_line(&entry));
+                if let Some(file) = &log.file {
+                    let _ = file.lock().map(|mut file| file.write_line(&entry));
+                }
                 filled.push(text);
             }
         });
@@ -170,6 +183,32 @@ mod tests {
             tail.text(),
             "starting in ~/proj\ntoken sk-<redacted>\nno newline at the end\n"
         );
+    }
+
+    #[tokio::test]
+    async fn unit_redaction_adapter_stderr_read_without_the_log_file() {
+        let redactor = Redactor::new(Some("/Users/jdoe-example"), None);
+        let log = AdapterLog::unwritten(Arc::new(ManualClock::new()), redactor);
+        let (mut write, read) = pipe::pipe().expect("a pipe");
+        let lines = Arc::new(Mutex::new(Vec::new()));
+        let seen = Arc::clone(&lines);
+        let each = move |line: &str| seen.lock().unwrap().push(line.to_owned());
+        let (tail, reading) = log.read("i_0199a1b2".into(), read, each);
+        // The reader takes it all: the writer never meets a closed pipe.
+        for _ in 0..1000 {
+            write
+                .write_all(b"in /Users/jdoe-example\n")
+                .await
+                .expect("written");
+        }
+        drop(write);
+        reading.await.expect("the reader ends");
+        assert_eq!(
+            lines.lock().unwrap().len(),
+            1000,
+            "every line for the raw frames"
+        );
+        assert!(tail.text().starts_with("in ~\n"), "the tail, redacted");
     }
 
     #[tokio::test]
