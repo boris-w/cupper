@@ -75,3 +75,55 @@
 4. **"与入库的一致"怎么判**：录制里有 `t`（毫秒）和 UUID 形式的请求 id，重跑不会逐字节相同。判据定为两条：去掉 `t` 并把 id 按出现顺序重编号后相同；`gold_b` 测试在不设 `UPDATE_GOLDEN` 时对新录制通过（金样例不变）。
 5. **M1a 还没有的功能**：Steer 是 M1b 的功能（`SendMode::Steer` 会回落到排队），图片输入要先上传 blob。这两个剧本在报告里按"不适用"记，带原因，还是要求断言回落行为？
 6. **已验证范围的起点**：报告还没有入库时（T066 之前），重算没有数据。准备把 ADR-08 的起始值作为"无报告时的基线"，有报告后取基线与通过的报告的并集。也可以改成"没有报告就跳过比对"。
+
+## 裁定之后（计划 v1.3.55）
+
+按方案一收窄为框架与 `--fake`，停止线 1150、硬停止线 1300。UNIT-compat-guards 移到 T187；审阅与校验工具（新增 UNIT-compat-tools）归 T188。六点确认都认可；Steer 和图片归 T187，已验证范围的基线归 T188。
+
+## 实际做法
+
+- **执行者**：cupper-host 的测试目标 `compat`（`tests/compat.rs` 和 `tests/compat/scenarios.rs`），要求 test-harness 特性。
+  - 和裁定的出入：执行者不是 `harness = false` 的目标，而是普通 libtest 目标里一个忽略的测试 `compat_driver`，从 `CUPPER_COMPAT_PLAN` 读计划。原因是 `cargo test --workspace` 会不带参数地运行 `harness = false` 的二进制，rust 作业的 `cargo test ... gold_` 还会把过滤词 `gold_` 当参数传给它。忽略的测试在这两种情况下都不运行，只有 xtask 用 `--ignored --exact compat_driver` 点名时才跑。
+  - 每个剧本单独起一个宿主、用一个临时目录，在 tokio 任务里跑，任务 panic 记为失败，后面的剧本照常跑。
+  - 步骤在等待时超时（30 秒）记为"不确定"，按计划的 `attempts` 重跑（`--fake` 只跑 1 次）。
+  - 结构断言都读宿主库里本会话的事件：回合状态、条目种类、工具种类、非零退出码、请求的最终状态、能力、项目里没有某个文件。
+  - 剧本表只有假 agent 的脚本。真实提示词、权限模式、准备文件都要到真实模式才用得上，留给 T187；现在写进去就是没人用的代码。
+- **编排**（`crates/xtask/src/compat/`）：`mod.rs` 负责参数和流程，`report.rs` 是报告类型、校验和 schema，`record.rs` 是 `--write` 的入库流程。
+  - 没有 `--fake` 时直接报错，说明真实 CLI 还不能驱动。
+  - 报告先序列化，再严格读回、过 `problems`，然后才写出。
+  - schema 只在测试里生成：`unit_compat_report_schema_file_is_current` 比对入库的 `testdata/compat/report.schema.json`，设了 `UPDATE_GOLDEN=1` 时改写它。
+  - 生成 schema 时把键排好序。工作区里有别的 crate 打开了 serde_json 的 `preserve_order`，不排序的话，`-p xtask` 单独构建和整个工作区构建得到的键顺序不同。两种构建都试过，都通过。
+- **`--write`**：
+  1. 只取三个 gold-b 剧本的录制。
+  2. 用 `tools/sanitize sanitize` 脱敏：`--base` 传各剧本临时根目录的链接路径和真实路径，`--terms` 传敏感词清单。脱敏后还有残留就失败。
+  3. 归一化后与入库的相同（去掉 `t`，id 按出现顺序重编号），就保留原文件，不重写。
+  4. 跑一遍 `UPDATE_GOLDEN=1` 的 `gold_b` 测试，再跑 `tools/sanitize scan testdata`。
+  - 敏感词清单默认取主工作区的 `.private/sensitive-words.txt`，也可以用 `--words` 指定；两处都没有时，在跑任何东西之前就报错。
+- **`ci compat-framework`**：先跑 `cargo test -p xtask -- compat::`，再用当前的 xtask 二进制跑 `compat --fake --out <日志目录下>`。
+
+## `--fake` 与 T065 首批录制的对照
+
+| 剧本 | 结果 |
+|---|---|
+| normal-turn | 与入库的相同（去掉 `t`、重编号 id 后），文件和金样例都没动 |
+| approval | 同上 |
+| cancel | 剧本改成"命令执行中取消"：先允许一条命令，1 秒后中断。录制和金样例都随之更新，新的金样例里工具调用以 `abandoned` 结束，回合 `cancelled`。另外把脚本临时换回 T065 的 `say working; wait_cancel` 跑了一次（没提交），结果与入库的相同 |
+
+- 更新后不设 `UPDATE_GOLDEN` 跑 `gold_b`：9 个都通过。
+- 再跑一次 `--write`：三份都是 unchanged，文件逐字节不变。
+- 本机主工作区没有敏感词清单。验证 `--write` 时用的是草稿目录里的一份临时清单，只有一个不会出现的词。真实录制入库前仍要维护者自己的清单（T066）。
+
+## 规模
+
+- 执行者第一版 554 行，经 rustfmt 展开后比估计多。收紧写法、删掉真实模式才用得上的字段后是 492 行。
+- xtask 部分写完时合计 1155 行，超过新的停止线 1150 共 5 行。改用 JSON 构造测试用的报告、简化提交哈希的检查等，降到 1124 行。
+- 最终新增 1124、删除 8（`cargo xtask size`；不含 `Cargo.lock`、`testdata/`、`docs/`）：cupper-host 492，xtask 632。
+
+## 留给后续任务的
+
+- **T187**：
+  - 每个剧本的真实提示词、权限模式（Claude `default`；`plan` 剧本以 `plan` 模式开始）、准备文件，以及自我约束。
+  - 给 `session/create` 加显式权限模式后，三份 B 层录制的 `config` 会变。到时用 `--fake --write` 重新产出，差异可以解释。
+  - `cancel` 剧本在真实 CLI 上靠"允许后等 1 秒再中断"，`sleep 60` 不输出，是否足够要实际跑一次才能确认。
+- **T188**：报告的读入用 `report::parse` 加 `report::problems`；schema 文件在 `testdata/compat/report.schema.json`。
+- **compat-framework 进 PR**：设计 5.1.6 写的是"改动 xtask 兼容套件的 PR"也要跑。本任务没把它加进 `ci pr`；要加的话照 e2e 的做法按路径判断，由编排者决定放进哪个任务。
