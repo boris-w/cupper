@@ -239,7 +239,7 @@ pub struct Context {
     pub clock: Arc<dyn Clock>,
     pub writer: Writer,
     pub raw: RawSink,
-    pub log: Option<Arc<AdapterLog>>,
+    pub log: Arc<AdapterLog>,
     /// Runs before each adapter starts (design 5.2.13).
     pub self_check: Option<SelfCheck>,
 }
@@ -330,13 +330,13 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
     let (Some(stdin), Some(stdout), Some(stderr)) = pipes else {
         unreachable!("all three are pipes")
     };
-    let tail = match (&cx.log, pipe::Receiver::from_owned_fd(stderr)) {
-        (Some(log), Ok(stderr)) => {
+    let tail = match pipe::Receiver::from_owned_fd(stderr) {
+        Ok(stderr) => {
             let recorder = tap.recorder();
             let each = move |line: &str| recorder.stderr(line);
-            Some(log.read(id.to_string(), stderr, each).0)
+            Some(cx.log.read(id.to_string(), stderr, each).0)
         }
-        _ => None,
+        Err(_) => None,
     };
     let opened = match StdioTransport::new(stdin, stdout) {
         Ok(transport) => AcpConnection::open(transport, tap, mailbox)

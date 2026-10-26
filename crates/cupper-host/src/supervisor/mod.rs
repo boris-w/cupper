@@ -316,12 +316,18 @@ impl Host {
         }
         let launch = finder.launch_found(&found).await;
         let redactor = Redactor::for_this_machine();
-        let log = AdapterLog::open(&log_dir(&data_dir), "claude", clock.clone(), redactor);
+        let log = AdapterLog::open(
+            &log_dir(&data_dir),
+            "claude",
+            clock.clone(),
+            redactor.clone(),
+        )
+        .unwrap_or_else(|_| AdapterLog::unwritten(clock.clone(), redactor));
         let cx = launch::Context {
             clock: clock.clone(),
             writer: writer.clone(),
             raw: raw_sink,
-            log: log.ok(),
+            log,
             self_check: self_check.clone(),
         };
         quiescence.register(AGENT_RUNTIME);
