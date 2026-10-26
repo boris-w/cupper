@@ -83,3 +83,35 @@
 直接相加约 287，乘 1.2 约 345。
 
 - 计入条件里，剧本的结果用穷尽的 `match` 判断。T187 加"不适用"一类的取值时，这里会编译不过，逼合并的人按裁定决定它算不算通过，不会悄悄落进某一边。
+
+## 实际行数（两个代码提交之后）
+
+`cargo xtask size`：**+550 −46**，超过停止线 400，也超过硬停止线 460。按守则停在这里，没有跑记录 CI。
+
+| 文件 | 内容 | 实际（新增行） | 估计 |
+|---|---|---|---|
+| `compat/reports.rs` | 子命令、三项检查、范围、`--write` | 203 | 140 |
+| `compat/reports/tests.rs` | UNIT-compat-tools 三个用例与夹具 | 209 | 85 |
+| `ci/jobs/compat_framework.rs` | 路径表、跳过、用例（含造分支的辅助函数） | 76 | 25 + 12 |
+| `compat/report.rs` | schema 生成挪出测试（搬移的 21 行也按新增算） | 24 | — |
+| `ci/git.rs`、`ui.rs`、`jobs/mod.rs`、`testdata_scan.rs`、`main.rs`、`manifest.rs`、`compat/mod.rs` | 共用的路径判断、接线、注释 | 38 | 25 |
+
+估计偏低的原因：
+- 测试夹具：真实模式的报告要带配置文件哈希、模型等字段，每个剧本的检查项和说明也要和结果一致。用结构体字面量写，rustfmt 每个字段占一行，约 45 行；
+- 三个用例各覆盖多种情况：计入与不计入的五类、两种错误、版本解析、不合格的报告不写清单、写后再查；
+- `compat-framework` 的用例要造一个从 main 分出的临时仓库；
+- 搬移的 schema 函数按新增行计。
+
+另外，我没有在写完 `reports.rs`、开始写测试之前统计一次行数，没照守则第 8 条做到每个模块后统计，否则能早一步发现。
+
+### 可选的处理
+
+1. 上限提到约 560（硬停止线 600），照现在的代码跑记录 CI。
+2. 压缩测试：夹具改用 `json!` 写（参照 `report.rs` 测试里的写法），用例合并重复的搭建步骤。估计可以压到约 450，覆盖不变，但夹具会失去类型检查。
+
+### 验证（已做）
+
+- xtask 全部测试通过（57 个）；clippy（本机与 `x86_64-unknown-linux-gnu`）无警告；fmt 通过。
+- `rustup target add x86_64-unknown-linux-gnu` 后，`cargo check -p xtask --all-targets --locked --target x86_64-unknown-linux-gnu` 通过。构建脚本不用交叉编译 C 代码，`rust-toolchain.toml` 没改。
+- 在本仓库上运行 `cargo xtask compat-reports`：通过（没有报告，清单等于基线）。
+- 变异检查：去掉"适配器版本等于锁定版本"、把 `inconclusive` 算作通过、有问题时仍写清单，各有一个用例失败。
