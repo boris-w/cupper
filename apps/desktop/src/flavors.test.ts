@@ -1,8 +1,10 @@
 // The test entry points exist in e2e builds only (design 5.9.9, 5.10.7):
-// `window.__cupperTest` and `__cupperGate` (T078), the main process's `__cupperE2E` (disconnecting a
-// window) and `__e2eDialogs` (the dialogs' stand-ins), and `CUPPER_E2E_DIR`. Built as every other flavor, the main
-// process, the preload and the renderer do not name them; built as e2e,
-// they do, so that the scan is known to see them.
+// `window.__cupperTest` and `__cupperGate` (T078), the main process's
+// `__cupperE2E` (disconnecting a window) and `__e2eDialogs` (the dialogs'
+// stand-ins), `CUPPER_E2E_DIR`, and `CUPPER_E2E_BACKGROUND` (a test's app out
+// of the foreground, T195). Built as every other flavor, the main process,
+// the preload and the renderer do not name them; built as e2e, they do, so
+// that the scan is known to see them.
 
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -19,6 +21,7 @@ const ENTRY_POINTS = [
   "__cupperE2E",
   "__e2eDialogs",
   "CUPPER_E2E_DIR",
+  "CUPPER_E2E_BACKGROUND",
 ];
 
 /** The entry points that a build of `flavor` names. */
