@@ -72,3 +72,17 @@ Git 自动调用分快照、仓库、用户三档（ADR-10）。T060 建了 `Git
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-26，编排者）
+
+执行者开工前按模块估计约 1,140 行，按最近几个任务的实际偏差乘 1.2，约 1,370，越过停止线 1,300，在写代码之前停下，给了拆分建议。
+
+**裁定：拆分（计划 v1.3.51）。**
+- **T061 收窄为快照档与回合快照**，约 1,190 行。范围是隔离与白名单配置（含 LFS 标准取值的生成与单元测试）、内容一致、排除、过滤器占位、快照过程、接入回合。用例是 IT-git-snapshot-parity、IT-git-racy、IT-git-filter-placeholder、IT-git-snapshot-malicious（含 Q32 逐键确认）。停止线不变。
+- **新增 T186（LFS 实测与快照的性能）**：`cargo xtask git-lfs` 与 CI 步骤、IT-git-lfs-snapshot、PERF-snapshot，依赖 T061。
+
+**开工时定的四点都认可**：
+1. 快照档带 `HOME`。`GIT_CONFIG_GLOBAL` 已指向 cupper 的空文件，git 不读 `~/.gitconfig` 和 XDG 配置，带 `HOME` 只为默认的全局忽略文件与属性文件。
+2. 超大未跟踪目录的阈值暂定"整个未跟踪目录里文件超过 10,000 个"，写进设计 5.2.10，由编排者补。
+3. 快照档不发 `git.unsafe_repo_config`：快照档不执行用户配置里的程序，没有拒绝这回事；读不出配置时快照记 `failed/git_failed`。
+4. git-lfs 从官方 GitHub release 下载锁定版本，请求头用项目占位 UA，这部分归 T186。
