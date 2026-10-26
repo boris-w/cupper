@@ -5,7 +5,7 @@
  * which suite it ran in, so the caller names it.
  */
 import { owner } from "./ids.ts";
-import { isTable } from "./registry.ts";
+import { isTable, type Entry } from "./registry.ts";
 
 export type Outcome = "pass" | "fail" | "skip";
 
@@ -38,6 +38,50 @@ export function readSummary(text: string, source: string): Summary {
     return { id, suite, outcome: outcome as Outcome, source };
   });
   return { commit: summary.commit, results };
+}
+
+export interface Compat {
+  results: Result[];
+  /** Scenarios no COMPAT ID is registered for, as `<cli> <scenario>: <outcome>`. */
+  unproven: string[];
+}
+
+/**
+ * The results of a compatibility report (`testdata/compat/report.schema.json`,
+ * design 5.9.5) for the COMPAT IDs registered with its CLI and scenarios.
+ * `pass` and `fail` count; any other outcome, `inconclusive` or one this
+ * version does not know, is a skip, which completes no ID. A fake agent's
+ * report proves nothing and is refused.
+ */
+export function readCompat(text: string, source: string, entries: Iterable<Entry>): Compat {
+  const report: unknown = JSON.parse(text);
+  const cli = isTable(report) && isTable(report.cli) ? report.cli.name : undefined;
+  if (!isTable(report) || report.v !== 1 || typeof cli !== "string") {
+    throw new Error(`${source}: not a compatibility report (v 1)`);
+  }
+  if (report.mode !== "real_config" && report.mode !== "isolated_config") {
+    const what = report.mode === "fake" ? "a fake agent's report" : `mode ${String(report.mode)}`;
+    throw new Error(`${source}: ${what} proves no COMPAT ID; only a real CLI's does`);
+  }
+  const ids = new Map([...entries].filter((e) => e.cli === cli).map((e) => [e.scenario, e.id]));
+  const compat: Compat = { results: [], unproven: [] };
+  for (const { id: scenario, outcome } of list(report.scenarios)) {
+    const [id, at] = [ids.get(String(scenario)), `${cli} ${String(scenario)}`];
+    if (id === undefined) {
+      compat.unproven.push(`${at}: ${String(outcome)}`);
+      continue;
+    }
+    const counted = outcome === "pass" || outcome === "fail" ? outcome : "skip";
+    const why = outcome === "inconclusive" ? "inconclusive, run it again" : String(outcome);
+    const detail = counted === "skip" ? ` (${why}: completes nothing)` : "";
+    compat.results.push({
+      id,
+      suite: "compat",
+      outcome: counted,
+      source: `${source}: ${at}${detail}`,
+    });
+  }
+  return compat;
 }
 
 /** Elements that mark a JUnit test case as failed: nextest adds `flakyFailure` when a retry passed. */
