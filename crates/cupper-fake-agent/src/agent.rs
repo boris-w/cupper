@@ -5,6 +5,7 @@
 //! rejects what a real adapter's SDK would.
 
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -158,6 +159,7 @@ fn request(
     cx: &ConnectionTo<Client>,
 ) -> Result<(), Error> {
     let (method, params) = req.into_parts();
+    record(state, &method, &params);
     match method.as_str() {
         "session/prompt" => return prompt(state, &params, responder, cx),
         "_session/steering" => return steering(state, &params, responder, cx),
@@ -385,6 +387,7 @@ fn notification(state: &State, n: &UntypedMessage) {
     if n.method() != "session/cancel" {
         return;
     }
+    record(state, n.method(), n.params());
     let id = n.params()["sessionId"].as_str().unwrap_or_default();
     if let Some((_, cancel)) = lock(state)
         .sessions
@@ -392,6 +395,23 @@ fn notification(state: &State, n: &UntypedMessage) {
         .and_then(|s| s.inflight.as_ref())
     {
         cancel.send_replace(true);
+    }
+}
+
+/// `--calls`: `{method, session, text}` of a request or `session/cancel`,
+/// `text` the prompt's first text block.
+fn record(state: &State, method: &str, params: &Value) {
+    let Some(path) = lock(state).config.calls.clone() else {
+        return;
+    };
+    let text = params["prompt"][0]["text"].as_str();
+    let line = json!({"method": method, "session": params["sessionId"], "text": text});
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path);
+    if let Ok(mut file) = file {
+        let _ = writeln!(file, "{line}");
     }
 }
 
