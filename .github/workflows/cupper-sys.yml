@@ -1,0 +1,30 @@
+# `cargo xtask ci security-macos14` (design 5.1.6, Q24) on macOS 14 for a PR
+# that changes cupper-sys; every night it runs on macOS 14 and 15 (nightly.yml).
+name: cupper-sys
+
+on:
+  pull_request:
+    paths:
+      - "crates/cupper-sys/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-macos14:
+    name: security-macos14 (macos-14)
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/xtask
+        with:
+          job: security-macos14
+          runner: macos-14
