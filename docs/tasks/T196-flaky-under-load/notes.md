@@ -64,6 +64,41 @@
   - `it_self_check_a_changed_executable_makes_the_host_wait_for_an_upgrade` 同样在宿主退出前后读 `host/shutdown`，也会碰上同一个客户端缺陷，已由客户端修复覆盖。它原来容忍 `session/interrupt` 的回复可能丢失（"Its reply races the exit"）；这个回复排在退出之前发出，修复后一定能读到，所以改为 `unwrap()`。
   - `it_clock_advance_returns_once_the_host_settled` 用的是 testkit 的原始客户端，不核对令牌，不受影响。
 
+## 第 3 处：`it_cli_commands_read_elevate_write_and_answer` 第三条 `send` 得到 `queued`
+
+- **复现**：负载约 43 时连跑 30 次，失败 4 次，报 `question colour?`：`left (0, "queued")`，`right (0, "started")`。
+- **先量**：临时加了打点（已撤掉，不提交）。用例看到 agent 回话（"said"）的那一刻，上一个回合常常还是 `running`；它在 0.9–52 ms 后才结束。
+- **根因：用例的缺陷，宿主没有问题**。
+  - 假 agent 先说出它拿到的结果，再回 `session/prompt` 的响应；宿主收到响应才结束回合。
+  - 用例只等到 agent 回话，就发下一条。负载高时，这一条落在上一个回合结束之前，按 `queue` 模式排队，这正是宿主该有的行为。
+- **修法**：每轮在等到回话之后，再等 `turns` 里没有 `running` 的回合，然后才发下一条。
+  - 回合的行和 `send` 的处置都由同一个会话 actor 写和判断（单写者），所以行一旦读到已结束，actor 处理下一条 `send` 时上一回合必定已经结束。
+  - 改动：`lifecycle.rs` 增 4。
+  - 后面的 `send {other} "say again" --wait` 不受影响：`--wait` 按回话里的 `turn_id` 或 `queue_id` 等，排队了也能等到。
+- **修后**：负载 41–68（中位数 54）下连跑 200 次全过，耗时最短 0.23 s、中位数 0.43 s、最长 6.29 s。
+
+## 第 4 处：fake-agent 的 `unit_replay_*` 报 "no response 1" 和 "the agent did not exit"
+
+- **T191 那次的现场**：三个用例同时失败，前两个是 `no response 1; seen: []`，第三个是 `the agent did not exit`，测试二进制总共用了 10.37 s。也就是三个 agent 在 10 s 里一个字都没写，正好是 `WAIT` 和 `exit` 各自 10 s 的上限。
+- **在最新 main 上先照原样连跑**（含 T189 的修复）：负载 41–58（中位数 49.6）下连跑 200 次，全过，每次 0.29–0.38 s。照原样复现不出来。
+- **找到条件：假 agent 的二进制刚链接好之后的第一次启动**。
+  - CI 里先构建、再跑测试，`replay.rs` 是第一个启动假 agent 的测试二进制（`persona.rs` 不启动它，`scripts.rs` 排在后面）。
+  - 每次先重新链接假 agent（`touch` 源文件后 `cargo build`），再跑 `replay.rs`：13 次里失败 4 次，失败的总耗时 10.52–11.04 s，三个用例的报错和 T191 那次一模一样。通过的 9 次也要 4.45–9.33 s，紧接着的第二次只要 0.31–0.96 s。
+  - 单独量启动：负载 36–45 下，刚链接好的假 agent 带一个让它立即退出的参数，第一次启动到退出用了 3.77–10.98 s（6 次），第二、三次只要 3–13 ms。
+  - `spawn` 本身 2–4 ms 就返回；子进程这段时间处于睡眠、CPU 为 0，同时系统的 XProtect 服务和一个 CoreServices 进程在忙。可见是系统在第一次执行新可执行文件时对它做扫描，扫描完才放行。把二进制复制一份再换回去，也会重新扫描（0.75–10.7 s）。
+- **根因：用例的等待把系统扫描新二进制的时间算成了 agent 的沉默**。T189 修的 `Fake::exit` 管不到这里：`wait_for` 的 10 s 和 `exit` 的 200×50 ms 都在扫描的耗时范围之内。
+- **修法**（只改测试客户端）：`Fake::spawn_with` 第一次被调用时，先用 `--fault exit_on_start` 把假 agent 跑一次，等它退出（最多 60 s，用 `Once` 保证同一测试二进制只跑一次），之后才开始计时。这个用例拉起的子进程到 60 s 仍不退出时，趁它还没被回收、pid 仍属于它，才对它 `kill`。改动：`tests/common/mod.rs` 增 30。
+- **修后**：每次都先把假 agent 复制一份换上（等于新链接，会重新扫描），再跑 `replay.rs`。负载 28.7–57.6（中位数 41.1）下连跑 200 次全过；总耗时最短 3.74 s、中位数 8.12 s、最长 17.21 s，其中 72 次超过 10 s，超出修前的等待上限。
+- **对照**：修前的测试二进制用同样的做法跑 30 次（负载 32.8–49.0），失败 6 次，报的正是 12 处 "no response 1; seen: []" 和 5 处 "the agent did not exit"。
+
+## 同类排查（第 3、4 处）
+
+- 宿主测试里别的 `started` 断言（`interaction_trust.rs`）等的是 agent 的输出本身，不是下一条 `send` 的处置，不受第 3 处影响。
+- `scripts.rs` 也经 `Fake::spawn_with` 启动假 agent，同样受益于第 4 处的修复。
+- 宿主的集成测试直接启动 `cupper-host`，以及经适配器启动假 agent，等待上限是 `PATIENCE` 30 s。这次见到的最长扫描约 17 s，暂时还在上限之内，本任务没有改。
+
 ## 范围外（未改）
 
 桌面端的原生扩展 `cupper-desktop-native` 的 `relay.rs` 有同样的写法：每次读后 `peer_token(&self.host) != Ok(self.pinned)`，宿主一退出就以 `TokenChanged` 结束，把这次读到的字节丢掉。桌面端在宿主退出时可能收不到 `host/shutdown` 或最后的回复，修法同上。这在桌面模块，本任务没有改，汇报里提出。
+
+宿主的 `VERSION_PROBE` 是 5 s（CLI、git 的 `--version`）。CLI 更新后的第一次执行也会被系统扫描；按这次在负载 40 左右量到的 4–17 s，机器忙时这一次探测可能超时。这只是推断：本任务不运行真实的 CLI，没有量过，留给编排者判断要不要跟进。
