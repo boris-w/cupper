@@ -250,6 +250,7 @@ impl SessionManager {
             })),
         };
         writer.append(batch).await.map_err(internal)?;
+        crate::failpoint!(SESSION_CREATED);
         let facts = Facts {
             mode_tier: Some(Tier::FullAccess),
             project_path: Some(WirePath(path.clone())),
