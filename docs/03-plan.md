@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.63
+- 版本：v1.3.65
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -157,6 +157,8 @@
 
 ### 1.8 本机 CI（U-P1：先不建远端）
 
+**v1.3.65 起有远端**：用户决定建 GitHub 公开仓库 `boris-w/cupper`，CI 放到 GitHub Actions 上跑，每个任务一个 PR，替换 U-P1（`docs/meetings/2026-10-26-github-remote/`）。T197 启用 Actions 之前，下表的本机做法照旧；之后 PR 以 GitHub CI 为准，本机只跑与改动相关的检查，下表各行由 T197 按远端改写。
+
 | 项 | 做法 |
 |---|---|
 | 统一入口 | `cargo xtask ci <作业>`，作业与 [5.1.6](design/01-repo-build-ci.md#516-ci-流水线) 一一对应（`rust`、`protocol`、`ts`、`ui`、`license`、`testdata-scan`、`e2e`、`security-macos14`、`compat-framework`），另有组合作业 `pr`（每个 PR 的全部作业）和 `nightly`（每晚的全部作业，含 e2e 全集、差分测试、性能趋势、`release-config`、`codex-drift`）。workflow 文件照写，只调用这个入口，等有了远端再启用 |
@@ -266,6 +268,8 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T190 | 可选字段不发 `null` 的守卫 | test | 5.3.1、5.3.10 | T016 | 做：守卫测试：序列化 `cupper-protocol` 的金样例与夹具后，断言 schema 里的非必填属性上没有 `null`（值本身可为 `null` 的具名定义如 `CliPath` 除外），漏写 `skip_serializing_if` 时失败（v1.3.58，T016 的遗留） | 新增 UNIT-proto-absent-not-null | S | 否 | P |
 | T191 | 性能趋势补全 | test | 5.9.6 | T117 | 做：PERF-snapshot 每种情况补到 30 个样本（现为 T186 的 5 个，p95 只能取最大值）；PERF-bridge-gate 的事件循环延迟 p99 写进历史：e2e 夜间跑 `gate.spec.ts` 时设 `CUPPER_PERF_OUT`，`perf` 作业里统计、追加、判定的代码抽成共用函数给 e2e 作业调用，绝对闸门 p99 < 5 ms 仍由用例自己断言（v1.3.59，T117 的遗留） | 不新增编号 | S | 知情：e2e 要开窗口 | H.xt、H.git、C |
 | T195 | 不需要焦点的 e2e 用例不抢焦点 | test | 5.9.4、1.8 | T093、T189 | 做：不带 `@focus` 的 e2e 用例启动的 App 不激活、不抢前台、不出现在 Dock（只在 e2e 构建里，由启动参数或环境变量打开，发布构建的行为不变）；用前台应用采样证明这一阶段前台从不是测试 App；`@focus` 用例照旧抢焦点；被遮挡窗口的降频参数与 `throttled` 测量照旧有效（v1.3.63，用户决定：e2e 跑的时候不要接管桌面） | 不新增编号 | S | 知情：要跑 e2e | D.main、C |
+| T196 | 高负载下的两处偶发失败 | fix | 5.9.1、1.8 | — | 做：`unit_trust_scan_forking_directory_links_hit_the_entry_limit`（墙钟上限 10 s，负载 16 时用了 23 s）与 `it_lifecycle_host_exit_and_sigterm_exit_in_order`（负载 27 时没等到 `host/shutdown`），在高负载下复现、查明根因并修复，不用重试；T099 要求同一提交上连续 20 次全绿（v1.3.64，T190 的 CI 撞上） | 不新增编号 | S | 否 | H.core |
+| T197 | 启用 GitHub Actions | ci | 5.1.6、1.8 | T001、T093、T189 | 做：`pr` 组合里的每个作业一个 workflow（`rust`、`protocol`、`ui`、`e2e`、`compat-framework` 在 `macos-15`，`ts`、`license`、`testdata-scan` 在 ubuntu），都只调用 `cargo xtask ci <作业>`；工具链、Node、pnpm 的安装与缓存（action 锁定到提交 SHA）；`ci nightly` 的定时运行；e2e 在 runner 上的 workers 数与 `@focus` 两阶段；摘要作为构件上传；`workflow_dispatch` 跑单个用例 N 次，用它补完 T189 的 E2E-SEC-real-input 50 次连跑；权限只读、只用 `pull_request` 触发；改写 1.8 各行。编排者在 T197 通过后打开 Actions、给 main 设保护规则（v1.3.65，用户决定建远端） | 不新增编号 | M | 否 | C |
 | **T044** | 会话 actor II：档位、越权、崩溃与晚到输出 | feat | 5.2.6（配置项、崩溃与恢复、晚到的工具输出） | T035、T043、T088、T095、T098 | 做：档位核对与 `config_unconfirmed`、回合中越权先改回再中断、发送闸门（暂停期间空闲时也不开回合）、`session/confirm_config`、`facts` 的 `mode_tier`（`session/set_config` 仍是 M1b，越权判断预留它作为合法来源）；适配器退出后 resume 与 `agent_restarted`、K6、K7；`late_tool_output` 与 `may_still_run` 的核对。不做：信任门控（v1.3.19 起归 T109）；进程级集成测试（T062、T063、T068） | 新增 IT-orch-gating（进程内） | L | 否 | H.orch |
 | T045 | cupper-cli I：客户端库、连接与宿主校验 | feat | 5.2.14、5.3.3 | T012、T014、T020 | 做：迁移 SP-4a 的 client：构建种类（特性 `dev-auth`、`self-use`、`test-harness`，都不开为发布）与 `--build-info`、套接字发现、按构建种类校验宿主（5.8.1：发布按签名要求；自用按编译期写入的宿主 cdhash，经审计令牌比对，之后每次读取比对令牌；开发按同目录宿主文件的 cdhash 弱校验并在输出里标"宿主未经签名校验"；e2e 由 T039 补上 `harness` 证明），发布构建拒绝 `weak_auth`；连接与握手（peer）、请求关联、`command_id`。不做：Mirror 与客户端同步状态机（v1.3.6 起归 T049）；子命令；cdhash 的写入（T005） | 新增 UNIT-cli-host-verify（四种构建的校验分支；cdhash 不符时拒绝连接）、UNIT-cli-client（握手与请求关联） | M | 否 | H.cli |
 | T049 | cupper-cli I-b：Mirror 与客户端同步状态机 | feat | 5.2.14、5.3.3 | T045 | 做：纯核心 `Mirror<V: View>`（只能经 `Mirror::index()`、`Mirror::session(id)` 构造）；`Waiting`、`Loading`、`Live` 三态；只有游标对得上的 `replay` 才保留视图和游标，其余（包括未知的 mode）一律丢弃；快照页核对 `at_seq`、`epoch` 和页序号；连续性缺口带游标重新订阅，`ViewError` 或信封解码失败不带游标重新订阅；`stream/reset` 保留游标；`Waiting` 时旧订阅的数据一律忽略。不做：子命令（T046） | 新增 UNIT-mirror | S | 否 | H.cli |
@@ -334,7 +338,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T097 | Git 服务 I-b：仓库档的规则与指纹 | feat | 5.2.10（仓库档：每次调用前读配置、仓库可执行配置指纹） | T022 | 做：纯函数：`git config --list --show-origin --includes -z` 输出的解析、配置来源检查（工作区内与其他 agent 可写的位置，git 目录除外、include 到工作区照样拒绝）、覆盖参数的计算（无条件覆盖、可执行类键置空、git-lfs 标准取值例外、子段带 `=` 的键拒绝）、仓库布局与可执行配置指纹。不做：执行（T098） | 新增 UNIT-git-repo-rules；UNIT-git-fingerprint（v1.3.16 由 T060 移来） | M | 否 | H.git |
 | T098 | Git 服务 I-c：仓库档的执行 | feat | 5.2.10（仓库档） | T060、T097 | 做：`RepoTier::run` 把 T060 的 `GitCmd` 与 T097 的规则接起来：调用前读配置并检查、覆盖、执行、不重试（被置空的 `required=true` 过滤器导致失败才判 `unsafe_repo_config`）、调用后比对指纹（只读命令丢结果）、`GitError` 与 notice 信号 | IT-git-repo-tier-malicious（v1.3.16 由 T060 移来） | S | 否 | H.git |
 | T094 | 登录 shell 环境与版本检测 | feat | 5.6.6（登录 shell、版本检查）、5.2.10（git 版本检测） | T020、T022 | 做：带 `Clock` 超时的拉起辅助、登录 shell 取环境（标记截取、解析、退回常见路径与语义码）、`--version` 与四种版本分类、git 版本（暂定最低 2.39）与 git-lfs 检测（`/usr/bin/git` 是 xcode-select 占位程序时不运行它）。不做：可信 PATH 与 CLI 解析（T054） | UNIT-version-classify（v1.3.13 由 T054 移来）；新增 UNIT-login-shell | M | 否 | H.drv |
-| **T099** | M1a 退出验收 | chore | 5.12.2（退出标准）；1.8 | T006、T016、T036、T061、T062、T063、T066、T067、T068、T069、T091、T092、T093、T117、T129、T136、T138、T163、T164、T168、T175、T176、T177、T186、T189、T190 | 做：在退出候选的同一个提交上：`xtask ci e2e --suite nfr1` 连跑 20 次，再跑 5 次降速变体，`xtask ci pr` 与 `xtask ci nightly` 各通过一次；核对 UNIT-unsupported-set、M1a 的待完成登记为空（按入库的逐编号结果清单复核）、契约已冻结；写记录（含本机替代不了的缺口：IT-sys-peer-macos14、IT-sys-peer-macos15，CI 负载下的稳定性）。不稳定用例的修复另开 fix 任务 | 运行记录（结构化摘要）存档；缺口经用户确认；M1a 同步会纪要 | M | 知情：运行期间不操作机器；是：确认缺口、参加同步会 | C |
+| **T099** | M1a 退出验收 | chore | 5.12.2（退出标准）；1.8 | T006、T016、T036、T061、T062、T063、T066、T067、T068、T069、T091、T092、T093、T117、T129、T136、T138、T163、T164、T168、T175、T176、T177、T186、T189、T190、T196、T197 | 做：在退出候选的同一个提交上：`xtask ci e2e --suite nfr1` 连跑 20 次，再跑 5 次降速变体，`xtask ci pr` 与 `xtask ci nightly` 各通过一次；核对 UNIT-unsupported-set、M1a 的待完成登记为空（按入库的逐编号结果清单复核）、契约已冻结；写记录（含本机替代不了的缺口：IT-sys-peer-macos14、IT-sys-peer-macos15，CI 负载下的稳定性）。不稳定用例的修复另开 fix 任务 | 运行记录（结构化摘要）存档；缺口经用户确认；M1a 同步会纪要 | M | 知情：运行期间不操作机器；是：确认缺口、参加同步会 | C |
 | T100 | 索引 II：状态计算、已读、在场与通知意图 | feat | 5.2.9 | T034 | 做：会话状态计算（含 v1.4 的 `pending_kind`）与 100 ms 合并的纯核心、`IndexNotes` 扩充与会话 actor 的接线（会话创建、回合开始与结束、标题、分支、归档、最近活动）、`session/mark_read`、只采信 desktop_ui 的在场、`notification.intent`、`agents` 的接口（T009 的 `AgentStatus`）。不做：系统通知；通知意图的进程级用例（T062） | UNIT-index-status（含 `pending_kind`）；新增 UNIT-index-intent（直接向 IndexActor 输入状态变化）（v1.3.19 由 T034 移来） | M | 否 | H.idx |
 
 **注**
@@ -1631,7 +1635,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | # | 问题 | 裁定 | 落点 |
 |---|---|---|---|
 | P-1 | 契约冻结的时机 | T016 排在测量闸门 T078 之后，并依赖 T081–T083（含拆出的 T085）；冻结前生成物一致性检查一直开着；5.12.5 的措辞由编排者改为"冻结时机见 `03-plan.md`" | 1.3、T016 |
-| P-2 | CI 的托管 | 用户定 U-P1"先不建远端"；本机执行，统一入口 `xtask ci` | 1.8、全部任务的验收、T099、T179 |
+| P-2 | CI 的托管 | 用户定 U-P1"先不建远端"；本机执行，统一入口 `xtask ci`。v1.3.65 改为 GitHub 公开仓库、Actions 托管，统一入口不变（`docs/meetings/2026-10-26-github-remote/`） | 1.8、全部任务的验收、T099、T179、T197 |
 | P-3 | 用例编号不规整 | 设计里的编号统一成完整写法（设计 v1.2 已改），trace-ids 只做精确匹配；截图回归用 `UI-` 前缀 | 1.6、T002；设计 5.6.9、5.9.4、5.9.10、5.10.7、5.12.2、5.12.3、5.12.4 |
 | P-4 | 首次发布前表结构怎样变 | T160 之前只改 `0001`；迁移框架允许测试注入脚本；T160 之后每次改表结构都附样例数据库和迁移用例 | T025、T160 的注 |
 | P-5 | 自用构建的种类 | 单独一套身份与数据目录（`dev.cupper.app.local`、`cupper-local/`、`cupper-local://`），`dev-auth` 开、`test-harness` 关，打包与 fuses 同发布，ad-hoc 签名并开启 hardened runtime，只加 `disable-library-validation`；设计 5.7.9 已加一列，5.12.3 已同步 | T160、T161；设计 5.7.9 |
@@ -1733,7 +1737,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T062 宿主集成测试 I：网关同步、历史与通知意图
 - [x] T063 宿主集成测试 II：驱动与回合（K 清单）
 - [x] T064 兼容套件框架
-- [ ] T187 兼容套件 II：真实模式与安全约束
+- [x] T187 兼容套件 II：真实模式与安全约束
 - [x] T188 兼容套件 III：报告校验与已验证范围
 - [ ] T192 兼容套件 IV：剧本补全
 - [ ] T194 兼容套件 V：审阅工具
@@ -1772,11 +1776,13 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T098 Git 服务 I-c：仓库档的执行
 - [x] T178 e2e 不联网，启动时就装好对话框替身
 - [x] T185 `cargo xtask size`：按任务书的停止线报告行数
-- [ ] T189 两处偶发失败
-- [ ] T190 可选字段不发 `null` 的守卫
+- [x] T189 两处偶发失败
+- [x] T190 可选字段不发 `null` 的守卫
 - [ ] T191 性能趋势补全
 - [ ] T193 守卫的样例补全
 - [ ] T195 不需要焦点的 e2e 用例不抢焦点
+- [ ] T196 高负载下的两处偶发失败
+- [ ] T197 启用 GitHub Actions
 - [ ] T099 M1a 退出验收
 - [x] T100 索引 II：状态计算、已读、在场与通知意图
 - [x] T109 会话 actor II-b：信任门控
@@ -1941,3 +1947,5 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.61 | 2026-10-26 | T190 写完才统计行数，+287，越过硬停止线 240（守则第 8 条要求每完成一个模块就统计）。守卫本身已完成、负面样例有效，裁定上限提到 310、硬停止线 330，不压缩。样例只覆盖到 211 个可选属性中的 134 个，其余由新增的 T193 按 schema 生成实例补上；T151 改为也依赖 T193 |
 | v1.3.62 | 2026-10-26 | T188 开工前按守则第 8 条拆分（直接相加约 690 行，乘 1.2 约 830，超过硬停止线 600）：T188 收窄为 Rust 的报告校验、已验证范围与 compat-framework 进 `ci pr`（约 345 行，UNIT-compat-tools 留下）；新增 T194，承接 TS 的 `rec-shape-diff` 与 `trace-ids --compat`（约 485 行，新增 UNIT-rec-shape-diff、UNIT-trace-ids-compat）。两者互不依赖；T066 改为也依赖 T194。另：v1.3.61 插入 T193 时把 T188 一行接到了同一行末尾，本次修正 |
 | v1.3.63 | 2026-10-26 | 用户决定派 T195：e2e 跑的时候每个用例的 App 都会激活、抢前台，用户没法同时用这台电脑。只有 `@focus` 用例真正需要焦点，其余的改为不激活。另：T187、T188 写完后越过硬停止线，T187 提高上限，T188 压缩测试，记在各自任务书的第二次裁定里 |
+| v1.3.64 | 2026-10-26 | T190 合并。新增 T196：T190 跑带记录的 CI 时，两处与它无关的宿主测试在高负载下失败（信任扫描的墙钟上限、宿主生命周期的 SIGTERM 顺序），单独重跑都通过；T099 改为也依赖 T196 |
+| v1.3.65 | 2026-10-26 | 用户决定建 GitHub 公开仓库、CI 上 GitHub、每个任务一个 PR，不重写历史（`docs/meetings/2026-10-26-github-remote/`），替换 U-P1。新增 T197 启用 Actions，T099 改为也依赖 T197，T099 的 20 次连跑与 T189 剩下的 50 次连跑都在 GitHub 的 macOS runner 上做。T187、T189 合并 |

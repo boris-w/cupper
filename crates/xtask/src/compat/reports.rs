@@ -166,18 +166,20 @@ fn verified(reports: &[(String, Report)], pinned: [&str; 2]) -> (Vec<VersionSpan
 }
 
 /// Whether a report widens its CLI's range: a real run of the pinned
-/// adapter, `adapter`, in which every scenario passed. One that failed or
-/// was inconclusive keeps the whole report out: the structure was not
-/// checked on that version, and it counts once a full run passes.
+/// adapter, `adapter`, in which a scenario passed and none failed. One that
+/// failed or was inconclusive keeps the whole report out: the structure was
+/// not checked on that version, and it counts once a full run passes. A
+/// scenario that does not apply, or that only records what it saw, does not
+/// keep it out; `real_only` never comes in a real run.
 fn counts(report: &Report, adapter: &str) -> bool {
-    let passed = |outcome| match outcome {
-        Outcome::Pass => true,
+    let fine = |outcome| match outcome {
+        Outcome::Pass | Outcome::NotApplicable | Outcome::Observed | Outcome::RealOnly => true,
         Outcome::Fail | Outcome::Inconclusive => false,
     };
     report.mode != Mode::Fake
         && report.adapter.version == adapter
-        && !report.scenarios.is_empty()
-        && report.scenarios.iter().all(|s| passed(s.outcome))
+        && report.scenarios.iter().any(|s| s.outcome == Outcome::Pass)
+        && report.scenarios.iter().all(|s| fine(s.outcome))
 }
 
 /// `x.y.z`, each a decimal number.

@@ -1,17 +1,52 @@
 //! The compat suite's scenarios (design 5.9.5): a prompt, what the user does
 //! after it, and structural checks on the host's events, never on the
-//! agent's words. The prompt is the fake agent's script.
+//! agent's words. The real CLI gets the prompt, the fake agent the script.
+//! `id`s never change: T188 and the COMPAT IDs name scenarios by them.
 
 pub struct Scenario {
     pub id: &'static str,
     pub title: &'static str,
     /// Its fake recording is a GOLD-B sample (`xtask compat --fake --write`).
     pub gold_b: bool,
-    /// The permission mode the session starts in, when not the agent's default.
-    pub mode: Option<&'static str>,
+    /// The permission mode the session starts in, always given.
+    pub mode: &'static str,
+    /// It may loosen the tier or pick a privileged option, in its temporary
+    /// repository only (the self-constraints, design 5.9.5).
+    pub loosens: bool,
+    /// The model a real run uses instead of the run's.
+    pub model: Option<&'static str>,
+    /// In the temporary repository before the session starts.
+    pub files: &'static [(&'static str, &'static str)],
+    /// Why it cannot run on this version.
+    pub skip: Option<&'static str>,
+    pub prompt: &'static str,
     pub script: &'static str,
     pub steps: &'static [Step],
     pub checks: &'static [Check],
+}
+
+/// The permission modes a session may start in without `loosens`.
+const MODES: &[(&str, &[&str])] = &[
+    ("claude", &["default", "plan"]),
+    ("codex", &["read-only", "workspace-write"]),
+];
+
+impl Scenario {
+    /// What in it the self-constraints refuse, for `agent`.
+    pub fn refused(&self, agent: &str) -> Option<String> {
+        let modes = MODES.iter().find(|(name, _)| *name == agent);
+        // A declared loosening still names its mode.
+        let allowed = modes.is_some_and(|(_, modes)| modes.contains(&self.mode));
+        if !allowed && (!self.loosens || self.mode.is_empty()) {
+            return Some(format!("{agent} in permission mode `{}`", self.mode));
+        }
+        self.steps.iter().find_map(|step| match step {
+            Step::Choose(kind) if !["allow_once", "reject_once"].contains(kind) => {
+                Some(format!("an option of kind {kind}"))
+            }
+            _ => None,
+        })
+    }
 }
 
 /// What the user does after `session/create`, in order.
@@ -50,6 +85,8 @@ pub const SCENARIOS: &[Scenario] = &[
     Scenario {
         id: "new-session",
         title: "a new session and its capabilities",
+        mode: "default",
+        prompt: "Reply with the single word: ready",
         script: "say ready",
         checks: &[Check::Capabilities, Check::Item("agent_message"), DONE],
         ..BASE
@@ -58,6 +95,9 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "normal-turn",
         title: "a turn with a thought and a tool call",
         gold_b: true,
+        mode: "default",
+        files: &[("notes.txt", "The compat suite reads this file.\n")],
+        prompt: "Read the file notes.txt and summarize it in one sentence.",
         script: "say hello; think pondering; tool t1 read Read notes; tool_done t1 20; say done",
         checks: &[Check::Tool("read"), Check::Item("agent_message"), DONE],
         ..BASE
@@ -65,6 +105,8 @@ pub const SCENARIOS: &[Scenario] = &[
     Scenario {
         id: "command-exit",
         title: "a command that exits with a non-zero code",
+        mode: "default",
+        prompt: "Run the shell command `ls no-such-file` and tell me its exit code.",
         script: "permission t1 execute; terminal t1 2 1; say done",
         steps: &[Step::Choose("allow_once")],
         checks: &[Check::Tool("execute"), Check::ExitCode, DONE],
@@ -74,6 +116,8 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "approval",
         title: "a command allowed once",
         gold_b: true,
+        mode: "default",
+        prompt: "Run the shell command `echo cupper` and tell me what it printed.",
         script: "tool t1 execute Run tests; permission t1; say finished",
         steps: &[Step::Choose("allow_once")],
         checks: &[Check::Request("permission", "resolved"), DONE],
@@ -82,6 +126,8 @@ pub const SCENARIOS: &[Scenario] = &[
     Scenario {
         id: "reject",
         title: "a command rejected once",
+        mode: "default",
+        prompt: "Run the shell command `touch rejected.txt`.",
         script: "tool t1 execute Run tests; permission t1; say finished",
         steps: &[Step::Choose("reject_once")],
         checks: &[
@@ -94,6 +140,9 @@ pub const SCENARIOS: &[Scenario] = &[
     Scenario {
         id: "question",
         title: "a structured question answered",
+        mode: "default",
+        prompt: "Use your tool for asking me questions to ask whether I prefer red or blue, \
+                 then tell me my answer.",
         script: "question colour?",
         steps: &[Step::Answer("blue")],
         checks: &[Check::Request("question", "resolved"), DONE],
@@ -102,7 +151,8 @@ pub const SCENARIOS: &[Scenario] = &[
     Scenario {
         id: "plan",
         title: "a plan, sent back to planning",
-        mode: Some("plan"),
+        mode: "plan",
+        prompt: "Plan how to add a file hello.txt that says hello. Do not change anything.",
         script: "plan_update # Plan\\n- one step; plan_confirm; say after",
         steps: &[Step::Choose("reject_once")],
         checks: &[
@@ -117,6 +167,8 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "cancel",
         title: "an interrupt while a command runs",
         gold_b: true,
+        mode: "default",
+        prompt: "Run the shell command `sleep 60`, then say done.",
         script: "tool t1 execute Run sleep; permission t1; wait_cancel",
         steps: &[
             Step::Choose("allow_once"),
@@ -129,6 +181,8 @@ pub const SCENARIOS: &[Scenario] = &[
     Scenario {
         id: "cancel-approval",
         title: "an interrupt while a request waits",
+        mode: "default",
+        prompt: "Run the shell command `echo cupper` and tell me what it printed.",
         script: "tool t1 execute Run tests; permission t1; say finished",
         steps: &[Step::Asked, Step::Interrupt],
         checks: &[
@@ -140,8 +194,19 @@ pub const SCENARIOS: &[Scenario] = &[
     Scenario {
         id: "thinking",
         title: "a thought stream",
+        mode: "default",
+        // COMPAT-claude-thinking: haiku does not think aloud.
+        model: Some("sonnet"),
+        prompt: "Think it through step by step, then tell me: what is 17 times 23?",
         script: "think pondering; say done",
         checks: &[Check::Item("thought"), DONE],
+        ..BASE
+    },
+    Scenario {
+        id: "steer",
+        title: "a message steered into the running turn",
+        mode: "default",
+        skip: Some("Steer comes with M1b: in M1a `session/send` in steer mode queues the message"),
         ..BASE
     },
 ];
@@ -150,7 +215,12 @@ const BASE: Scenario = Scenario {
     id: "",
     title: "",
     gold_b: false,
-    mode: None,
+    mode: "",
+    loosens: false,
+    model: None,
+    files: &[],
+    skip: None,
+    prompt: "",
     script: "",
     steps: &[],
     checks: &[],

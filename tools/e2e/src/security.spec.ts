@@ -84,8 +84,9 @@ test(
     const request = await permission(cupper, stream);
     await panelReady(cupper);
     const t = await texts(cupper);
-    // The click that opened the session is real input for a second: let it pass.
-    await cupper.window.waitForTimeout(1100);
+    // The window has had the focus for a second, past its cooldown, and the
+    // click that opened the session, real input for a second, has passed.
+    await focusWindow(cupper);
     // Playwright's own key reaches the page, but it is no real input: refused.
     await requestPanel(cupper).getByRole("listbox").focus();
     await expect(requestPanel(cupper)).toHaveAttribute("data-activation", "auto");

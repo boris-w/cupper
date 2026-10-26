@@ -421,6 +421,11 @@
 | T066 | 执行者是 cupper-host 的忽略测试 `compat_driver`，由 `cargo xtask compat` 用 `--ignored --exact compat_driver` 和 `CUPPER_COMPAT_PLAN` 拉起；`--write` 只写 gold-b 剧本，没有 `.private/sensitive-words.txt`（或 `--words`）时一开始就报错 | T064 |
 | T187（合并时） | T188 的 `compat/reports.rs` 里 `counts` 用穷尽的 `match` 判断剧本结果；新取值的裁定：`not_applicable` 按通过算，`observed`、`real_only` 不阻止计入 | T188 |
 | T066 | 已验证 CLI 范围由 `cargo xtask compat-reports --write` 从 `testdata/compat/reports/` 的报告生成，不手填；计入条件：真实模式、适配器版本等于锁定版本、至少一个剧本且全部通过。设计 5.10.3 说范围"每个适配器版本一份"，清单里每种 CLI 只有一个范围：适配器升级后基线怎么取由 T066 定 | T188 |
+| T193 | 守卫在 `cupper-protocol/tests/fixtures.rs` 的 `unit_proto_absent_not_null_samples_send_no_null_on_optional_fields`，沿 `schema::document()` 检查样例；覆盖面用不带 `absent_not_null` 的生成器再导出一次算出（220 个里 135 个），没覆盖到的 85 个逐个列在 `docs/tasks/T190-absent-not-null-guard/notes.md`。视图的 proptest 生成器是库内的 `pub(super)`，集成测试拿不到；部分 ID 有格式约束，生成的实例要合法 | T190 |
+| T197 | T189 剩下的 E2E-SEC-real-input 50 次连跑改在 GitHub 的 macOS runner 上做：一次调用 `test:e2e:one ... --repeat-each=50`，用同一份构建；本机那次 50 次里 45 次期间有用户输入，不算数。所有 `@focus` 用例都要求运行期间没人操作，runner 正好满足。`setup.ts` 会拒绝锁屏和睡眠的显示器，要确认 runner 的图形会话通过这项检查 | T189 |
+| T197 | e2e 的 workers 现固定为 2，是按作者机器定的；有远端后按 runner 的核数重新定，并在 CI 上重跑一轮 20 次（计划 T090 的注） | T090 |
+| T066 | 真实模式只经单元测试和 `--dry-run` 验证过，第一次实际运行时留意：e2e 宿主包在登录 shell 的环境下能否找到 `claude`；`--model` 在真实适配器上是否被接受；cancel 剧本"允许后等 1 秒再中断"是否可靠；`claude` 继承适配器的标准错误时 `lsof` 检查会判失败，先判断是适配器的问题还是要放宽规则；`~/.claude.json` 的字段摘要按值的 JSON 文本算，工作区开了 `preserve_order`，CLI 调换键序会误报"有变化"（只会误判失败） | T187 |
+| T192 | 剧本编号以 `docs/tasks/T187-compat-real-mode/notes.md` 为准；`Scenario` 类型、`loosens`、进程检查（`lsof -F`）、真实宿主的启动方式都在 T187 里 | T187（已写入 brief） |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

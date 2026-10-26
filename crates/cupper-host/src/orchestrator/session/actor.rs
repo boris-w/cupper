@@ -93,7 +93,7 @@ enum Next {
     Mail(Option<Mail>),
     Agent(DriverEvent),
     Attached(Result<AttachInfo, AgentError>),
-    Rescanned(Purpose, Rescan),
+    Rescanned(Purpose, u64, Rescan),
     Snapshot(TurnId, SnapshotPhase, Result<Taken, ShotError>),
     Stop(Stop),
     Alarm,
@@ -168,7 +168,12 @@ pub(super) struct SessionActor {
     inbox: mpsc::UnboundedReceiver<Mail>,
     events: mpsc::UnboundedSender<DriverEvent>,
     attached: mpsc::UnboundedSender<Result<AttachInfo, AgentError>>,
-    rescanned: mpsc::UnboundedSender<(Purpose, Rescan)>,
+    rescanned: mpsc::UnboundedSender<(Purpose, u64, Rescan)>,
+    /// The rescans started so far, and the latest started of those that came
+    /// back, with what it found: they run side by side, and one that started
+    /// before it and comes back after it is answered with its findings (T189).
+    rescans: u64,
+    newest: Option<(u64, Rescan)>,
     snapshots: mpsc::UnboundedSender<(TurnId, SnapshotPhase, Result<Taken, ShotError>)>,
     /// The start tree and fingerprint of each turn, for its end to compare.
     trees: HashMap<TurnId, (String, Fingerprint)>,
@@ -200,6 +205,7 @@ enum Purpose {
 }
 
 /// What a rescan found.
+#[derive(Clone)]
 struct Rescan {
     trusted: bool,
     /// The project was trusted and is `stale` now: the index records it.
@@ -290,6 +296,8 @@ impl SessionActor {
             events,
             attached,
             rescanned,
+            rescans: 0,
+            newest: None,
             snapshots,
             trees: HashMap::new(),
             load_wanted: load_wanted && !ignore_for_good,
@@ -309,7 +317,9 @@ impl SessionActor {
                     mail = actor.inbox.recv() => Next::Mail(mail),
                     Some(event) = agent.recv() => Next::Agent(event),
                     Some(result) = attaches.recv() => Next::Attached(result),
-                    Some((purpose, found)) = rescans.recv() => Next::Rescanned(purpose, found),
+                    Some((purpose, seq, found)) = rescans.recv() => {
+                        Next::Rescanned(purpose, seq, found)
+                    }
                     Some((turn, phase, taken)) = shots.recv() => Next::Snapshot(turn, phase, taken),
                     Some(stop) = stops.recv() => Next::Stop(stop),
                     () = actor.alarm.rung() => Next::Alarm,
@@ -325,7 +335,7 @@ impl SessionActor {
                 Next::Mail(None) => return None,
                 Next::Agent(event) => actor.agent(event).await,
                 Next::Attached(result) => actor.attach_done(result).await,
-                Next::Rescanned(purpose, found) => actor.trust(purpose, found).await,
+                Next::Rescanned(purpose, seq, found) => actor.trust(purpose, seq, found).await,
                 Next::Snapshot(turn, phase, taken) => actor.snapshotted(turn, phase, taken).await,
                 Next::Stop((force, done)) => {
                     actor.stopping = true;
@@ -904,6 +914,8 @@ impl SessionActor {
     /// 5.2.6); the result comes back to [`trust`](Self::trust).
     fn rescan(&mut self, purpose: Purpose) {
         self.outstanding += 1;
+        self.rescans += 1;
+        let seq = self.rescans;
         let (readers, project) = (self.parts.readers.clone(), self.parts.project.clone());
         let (cwd, back) = (self.parts.cwd.clone(), self.rescanned.clone());
         let cx = ScanContext {
@@ -919,9 +931,20 @@ impl SessionActor {
             if matches!(purpose, Purpose::Attach(_)) {
                 held::attach_rescan(&cwd).await;
             }
+            #[cfg(test)]
+            let held = matches!(purpose, Purpose::Reopen).then(|| held::reopen_result(&cwd));
             let found = rescan(readers, project, cwd, cx).await;
+            #[cfg(test)]
+            if let Some(Some(held)) = &held {
+                held.scanned.notify_one();
+                held.release.notified().await;
+            }
             // The actor may have stopped.
-            let _ = back.send((purpose, found));
+            let _ = back.send((purpose, seq, found));
+            #[cfg(test)]
+            if let Some(Some(held)) = held {
+                held.sent.notify_one();
+            }
             // Let go once the actor has the result.
             drop(hold);
         });
@@ -931,12 +954,28 @@ impl SessionActor {
     /// configuration, whose project is no longer trusted, shuts the gate for
     /// `project_config_changed`, with a notice; the index records a project
     /// that became `stale`. A trusted project again reopens it.
-    async fn trust(&mut self, purpose: Purpose, found: Rescan) {
+    async fn trust(&mut self, purpose: Purpose, seq: u64, found: Rescan) {
         self.outstanding -= 1;
-        if let Some(scan) = found.scan.clone().filter(|_| found.stale) {
+        // An older rescan saw the project before the newest one did: it takes
+        // the newest one's findings, and records nothing of its own.
+        let (found, older) = match self.newest.take() {
+            Some((newest, newer)) if seq < newest => {
+                self.newest = Some((newest, newer.clone()));
+                (newer, true)
+            }
+            _ => {
+                self.newest = Some((seq, found.clone()));
+                (found, false)
+            }
+        };
+        if let Some(scan) = found.scan.clone().filter(|_| found.stale && !older) {
             self.parts.index.rescanned(&self.parts.project, scan);
         }
-        if let Some(error) = found.failure.clone().filter(|_| found.scan_failed) {
+        if let Some(error) = found
+            .failure
+            .clone()
+            .filter(|_| found.scan_failed && !older)
+        {
             let (project_id, change) = (
                 self.parts.project.clone(),
                 TrustChange::ScanFailed { error },
@@ -1384,6 +1423,33 @@ pub(super) mod held {
         let mut held = HELD.lock().unwrap();
         let held = held.get_or_insert_with(HashMap::new);
         Arc::clone(held.entry(path.to_owned()).or_default())
+    }
+
+    /// A reopen rescan held once it has scanned, until `release`; `sent`
+    /// once its result is on its way to the actor.
+    #[derive(Default)]
+    pub struct Result {
+        pub scanned: Notify,
+        pub release: Notify,
+        pub sent: Notify,
+    }
+
+    static RESULTS: Mutex<Option<HashMap<PathBuf, Arc<Result>>>> = Mutex::new(None);
+
+    /// Holds the result of the next reopen rescan of the project at `path`
+    /// (a real path); later ones go on.
+    pub fn hold_reopen_result(path: &Path) -> Arc<Result> {
+        let mut held = RESULTS.lock().unwrap();
+        let held = held.get_or_insert_with(HashMap::new);
+        Arc::clone(held.entry(path.to_owned()).or_default())
+    }
+
+    pub(super) fn reopen_result(path: &Path) -> Option<Arc<Result>> {
+        RESULTS
+            .lock()
+            .unwrap()
+            .as_mut()
+            .and_then(|h| h.remove(path))
     }
 
     pub(super) async fn attach_rescan(path: &Path) {

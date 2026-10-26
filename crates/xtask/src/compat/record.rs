@@ -1,7 +1,9 @@
-//! `--write`: the GOLD-B scenarios' recordings into `testdata/` (design
-//! 5.9.3), once `tools/sanitize` has redacted them with the run's temporary
-//! roots and the local sensitive word list and found nothing left; then the
-//! goldens (`UPDATE_GOLDEN=1`) and the generic scan of `testdata/`. A
+//! `--write`: the recordings into `testdata/` (design 5.9.3), those of the
+//! GOLD-B scenarios for a fake run and all for a real one, once
+//! `tools/sanitize` has redacted them with the run's temporary roots and the
+//! local sensitive word list and found nothing left; a real run's report
+//! into [`REPORTS`]; then the goldens (`UPDATE_GOLDEN=1`) and the generic
+//! scan of `testdata/`. A
 //! recording that differs from the committed one only in its times and
 //! request IDs stays as it is, so a run that changed nothing changes no file.
 
@@ -12,8 +14,11 @@ use std::process::Command;
 use anyhow::{Context, Result, ensure};
 use serde_json::Value;
 
-use super::report::Report;
+use super::report::{Mode, Report};
 use crate::ci::jobs::testdata_scan::{WORD_LIST, word_list};
+
+/// Where real runs' reports go, one per adapter and CLI version.
+const REPORTS: &str = "testdata/compat/reports";
 
 /// `given`, or the main work tree's list; an error when there is none.
 pub fn words(root: &Path, given: Option<&Path>) -> Result<PathBuf> {
@@ -33,10 +38,15 @@ pub fn write(
     report: &Report,
     words: &Path,
 ) -> Result<()> {
-    let (staged, clean) = (out.join("gold-b"), out.join("sanitized"));
+    let (staged, clean) = (out.join("staged"), out.join("sanitized"));
     fs::create_dir_all(&staged)?;
-    let gold_b: Vec<_> = report.scenarios.iter().filter(|s| s.gold_b).collect();
-    for scenario in &gold_b {
+    let fake = report.mode == Mode::Fake;
+    let taken = report
+        .scenarios
+        .iter()
+        .filter(|s| s.recording.is_some() && (s.gold_b || !fake));
+    let taken: Vec<_> = taken.collect();
+    for scenario in &taken {
         let recording = scenario.recording.as_deref().context("a recording")?;
         fs::copy(
             out.join(recording),
@@ -64,7 +74,7 @@ pub fn write(
         adapter.name, adapter.version, cli.version
     );
     fs::create_dir_all(root.join(&dir))?;
-    for scenario in &gold_b {
+    for scenario in &taken {
         let name = format!("{}.jsonl", scenario.id);
         let new = fs::read_to_string(clean.join(&name))?;
         let target = root.join(&dir).join(&name);
@@ -75,6 +85,26 @@ pub fn write(
             fs::write(&target, new)?;
             println!("  {dir}/{name}: written");
         }
+    }
+    if !fake {
+        // Its recordings named where they now are; it passes the word list too.
+        let mut kept = report.clone();
+        for s in kept.scenarios.iter_mut().filter(|s| s.recording.is_some()) {
+            s.recording = Some(format!("{dir}/{}.jsonl", s.id));
+        }
+        let name = format!(
+            "{}-{}-{}-{}.json",
+            adapter.name, adapter.version, cli.name, cli.version
+        );
+        let path = root.join(REPORTS).join(&name);
+        fs::create_dir_all(root.join(REPORTS))?;
+        fs::write(&path, serde_json::to_string_pretty(&kept)? + "\n")?;
+        let mut scan = node(root, &["words", "--list"]);
+        run(
+            scan.arg(words).arg(&path),
+            "the report holds a sensitive word",
+        )?;
+        println!("  {REPORTS}/{name}: written");
     }
     let mut goldens = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
     goldens.current_dir(root).env("UPDATE_GOLDEN", "1");
