@@ -58,3 +58,8 @@
 - 演示（对 `released/v1-m1a.json` 的改动副本跑 `schema-compat`）：删 `SessionSummary.title`、`SessionCreateResult.session_id` 改可选、`SessionSendParams` 新增必填的 `token`，都以退出码 1 失败；`EventBody` 加 `settings.updated`、`IndexView` 加 `settings`、新增方法 `settings/watch`，退出码 0。
 - ShellAPI：`frozen.ts` 逐项试过：删成员、删嵌套成员、改参数类型、删联合分支、收窄分支都让类型检查失败；加成员、给联合加分支通过。最初用"今天的接口可赋给冻结的接口"判定，联合加分支会经 `init()` 的返回值传到 `ShellInfo`，被误判为破坏，所以改成逐成员核对"还在、旧的调用还能通过类型检查"，联合单独核对"旧分支都还在"。
 - 从冻结前的 schema（本分支开工时的 main）到现在，`schema-compat` 报 247 处破坏：都是本任务冻结前的三件改动（去掉 `null`、`CliPath`、结果包上 `allOf`），符合预期。
+
+## 合并 main 之后
+
+- 编排者把 main（含 T036 的设置）合进本分支。T036 的代码还在用旧的 `Option<WirePath>`，单独一个提交改成 `CliPath`：`settings.rs` 的默认值与绝对路径校验、它的单测、`launch.rs` 取 Claude 的 CLI 路径。`pnpm gen` 之后 `protocol/released/v1-m1a.json` 仍与导出的 schema 逐字节相同。
+- 第一次 `ci pr --record` 只有 ts 作业的 `test-shell-api` 失败："Cannot allocate memory (os error 12)"，pnpm 拉不起 vitest，是机器当时的资源问题（单独跑 14 项全过）；丢掉那份摘要后重跑全部通过，摘要已提交。
