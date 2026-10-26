@@ -41,7 +41,12 @@
 - **`--in pr`**：每个 workflow 只调用 `cargo xtask ci <作业> --in pr`。
   - 按路径跳过（ui、compat-framework）和 e2e 的冒烟子集都和本机的 `ci pr` 一样由 xtask 判断，workflow 不另写 `paths`。
   - 推送到 main 时，HEAD 就是 main，没有可比较的改动，xtask 不跳过任何作业；e2e 仍只跑冒烟子集，全集放在每晚。
-- **可复用的 workflow 加一个组合 action**：8 个 `pr` 作业的 workflow 每个十来行，共用 `xtask.yml`。`e2e-repeat`、`ui-baseline` 不经 xtask，但和它共用 `.github/actions/setup`。
+- **一个 `ci` workflow，检查名只出现一次**（编排者第 1 轮）：
+  - 第一版是每个作业一个 workflow、再调用可复用的 `xtask.yml`，检查名重复了三层，例如 `compat-framework / compat-framework / compat-framework (macos-15)`。
+  - 现在 `ci.yml` 是一个矩阵作业，检查名形如 `ci / rust (macos-15)`。
+  - 准备、运行和上传构件放进组合 action `.github/actions/xtask`，`nightly` 也用它，同样是一个矩阵作业。
+  - 改动 cupper-sys 的 PR 另有 `cupper-sys / security-macos14 (macos-14)`。
+  - `e2e-repeat`、`ui-baseline` 不经 xtask，但和它共用 `.github/actions/setup`。
 - **缓存**：
   - Swatinem/rust-cache 按作业名分键，只保留依赖的编译产物，减少占用仓库 10 GB 的缓存额度。
   - pnpm store 按锁文件分键。
@@ -64,3 +69,14 @@
 | 本机替代不了的项 | macOS 14、15 的对端校验是缺口 | 由每晚在 `macos-14`、`macos-15` 上运行的 security-macos14 覆盖；把 IT-sys-peer-macos14/15 从"缺口"改为由 CI 覆盖，还要编排者在 `tests/ids.toml` 里改状态，并约定证据记法（运行链接） |
 | M1a 退出 | 本机连跑 20 次、运行期间作者不操作机器 | 改在 runner 上运行（D6）：20 次连跑用 `e2e-repeat` 或 nightly 的 e2e 全集，"不操作机器"在 runner 上天然满足 |
 | 以后建远端时 | 首次在 CI 上再跑一轮 20 次…… | 删去，已经做完的几项写进"环境"与"验收记录"；R12 的几项（外部贡献者需批准、默认只读、不用自托管 runner）保留为一行"仓库设置" |
+
+## 第一轮推送（PR #1，ed8f842）
+
+- **通过**：rust（约 20 分钟）、protocol、ts、testdata-scan、ui（没有改到它依赖的路径，跳过）、e2e（冒烟子集，含 `@focus` 段，约 12 分钟）。
+  - runner 的图形会话通过了 `setup.ts` 对锁屏和睡眠显示器的检查。
+- **失败 1：compat-framework**：
+  - 摘要的个人信息检查把 runner 的用户名 `runner` 当成作者的名字，而步骤名 `test-runner` 里正好有这个词，于是拒写摘要，退出码 2。
+  - 修法：在 GitHub 托管的 runner 上（`RUNNER_ENVIRONMENT=github-hosted`），用户名和主机名都是每台机器临时生成的，名字清单为空；通用模式的检查照旧。
+- **失败 2：license**：
+  - 离线的 `cargo deny` 要读每个 crate 的清单，新机器上还没有下载，报 `failed to download`。
+  - 修法：检查前先 `cargo fetch --locked`。
