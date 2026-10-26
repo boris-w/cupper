@@ -175,6 +175,27 @@ async fn raw_connect(data_dir: &Path) -> testkit::Client {
     raw
 }
 
+/// The client's connection ended as a host's that exited does: the end of the
+/// stream, or a read refused because the host had exited (design 5.8.1).
+fn host_gone(client: &client::Client) -> bool {
+    match client.close_reason() {
+        Some(CloseReason::Eof) => true,
+        Some(CloseReason::Refused(refusal)) => refusal.kind == RefusalKind::PeerExited,
+        _ => false,
+    }
+}
+
+/// The first `host/shutdown` a raw connection reads, to its end.
+async fn raw_shutdown(raw: &mut testkit::Client) -> Value {
+    loop {
+        let message = raw.next().await.expect("host/shutdown");
+        if message["method"] == "host/shutdown" {
+            assert_eq!(raw.next().await, None);
+            return message["params"].clone();
+        }
+    }
+}
+
 /// How the test asks the host to exit.
 #[derive(Debug, Clone, Copy)]
 enum Trigger {
@@ -209,7 +230,12 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
                     command_id: client::command_id(),
                     force: false,
                 };
-                client.request::<HostExit>(params).await.unwrap();
+                // Its reply, like `host/shutdown`, is refused when the
+                // client reads it after the exit.
+                match client.request::<HostExit>(params).await {
+                    Ok(_) | Err(ClientError::Closed(_)) => {}
+                    Err(err) => panic!("{err}"),
+                }
             }
             Trigger::Sigterm => terminate(&host),
         }
@@ -229,22 +255,15 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
             );
             assert_eq!(client.next().await, None, "{trigger:?}");
         }
-        let gone = match client.close_reason() {
-            Some(CloseReason::Eof) => true,
-            Some(CloseReason::Refused(refusal)) => refusal.kind == RefusalKind::PeerExited,
-            _ => false,
-        };
-        assert!(gone, "{trigger:?}: {:?}", client.close_reason());
+        assert!(
+            host_gone(&client),
+            "{trigger:?}: {:?}",
+            client.close_reason()
+        );
         assert_eq!(exit_code(&mut host).await, 0, "{trigger:?}");
         // The host did send it: a connection that checks no token reads it
         // after the host has exited too.
-        let sent = raw.next().await.expect("host/shutdown");
-        assert_eq!(
-            (&sent["method"], &sent["params"]),
-            (&json!("host/shutdown"), &shutdown),
-            "{trigger:?}"
-        );
-        assert_eq!(raw.next().await, None, "{trigger:?}");
+        assert_eq!(raw_shutdown(&mut raw).await, shutdown, "{trigger:?}");
 
         let (start, clean) = (MetaKey::LastStartAt, MetaKey::LastCleanExitAt);
         assert!(
@@ -1257,6 +1276,7 @@ async fn it_self_check_a_changed_executable_makes_the_host_wait_for_an_upgrade()
     std::fs::copy(HOST, &exe).unwrap();
     let config = json!({"durations": {"supervisor_observe_ms": 20}});
     let (data_dir, mut host, mut client) = fake_agent_host_from(&exe, &dir, config).await;
+    let mut raw = raw_connect(&data_dir).await;
     let session = create(&client, "wait_cancel").await;
     until(
         &data_dir,
@@ -1294,17 +1314,18 @@ async fn it_self_check_a_changed_executable_makes_the_host_wait_for_an_upgrade()
     let interrupt = client.request::<SessionInterrupt>(serde_json::from_value(params).unwrap());
     // Its reply races the exit it brings about.
     let _ = interrupt.await;
-    loop {
-        match client.next().await {
-            Some(Incoming::Other { method, params }) if method == "host/shutdown" => {
-                assert_eq!(params["reason"], "upgrade");
-                break;
-            }
-            Some(_) => {}
-            None => panic!("no host/shutdown"),
+    // `host/shutdown` too: the client gets it only if it reads before the
+    // exit (design 5.8.1), and the raw connection after the exit too (T196).
+    while let Some(incoming) = client.next().await {
+        if let Incoming::Other { method, params } = incoming
+            && method == "host/shutdown"
+        {
+            assert_eq!(params["reason"], "upgrade");
         }
     }
+    assert!(host_gone(&client), "{:?}", client.close_reason());
     assert_eq!(exit_code(&mut host).await, 0);
+    assert_eq!(raw_shutdown(&mut raw).await["reason"], "upgrade");
 }
 
 /// Stands in for node running the bundling script (as in IT-runtime-download):
