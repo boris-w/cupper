@@ -24,7 +24,7 @@
 
 1. 编排者从 `docs/03-plan.md` 选出依赖已满足的任务，写好 `brief.md` 并提交到 `main`，再派给子 agent（互不依赖的任务可以并行）。
 2. 子 agent 在 `<type>/<任务ID>-<slug>` 分支的独立 worktree 中开发、自测、小步提交，最后把汇报全文作为回复返回；编排者把它存为 `report.md` 并提交。每次提交后跑一次 `cargo xtask size`：它按任务书的停止线报告本分支的增删，到了停止线的 90% 或越线时醒目标出；越线就停下汇报（守则第 8 条）。
-3. 编排者 review diff 并跑测试，意见写入 `review.md`；不通过就打回给同一个子 agent 修改，每轮都记录。远端是 GitHub 上的公开仓库（2026-10-26 起，替换 U-P1）：编排者推任务分支、开 PR，CI 在 GitHub Actions 上跑。T197 启用 Actions 之前，CI 仍由编排者在任务的干净 worktree 里运行 `cargo xtask ci <作业>`，结构化摘要存进任务目录，原始日志放在 `.private/`（细则见 `docs/03-plan.md` 1.8）。
+3. 编排者 review diff 并跑测试，意见写入 `review.md`；不通过就打回给同一个子 agent 修改，每轮都记录。远端是 GitHub 上的公开仓库（2026-10-26 起，替换 U-P1）：编排者推任务分支、开 PR，CI 在 GitHub Actions 上跑（T197 起），PR 的 8 个检查通过才能合并，卷宗里记 PR 和运行的链接。在那之前，CI 由编排者在任务的干净 worktree 里运行 `cargo xtask ci <作业>`，结构化摘要存进任务目录，原始日志放在 `.private/`（细则见 `docs/03-plan.md` 1.8）。
 4. 通过后以合并提交合入 `main`（PR 合并，或本机 `git merge --no-ff` 后推送），在 `docs/03-plan.md` 中把任务标记为完成，然后清理 worktree。子 agent 不 push。
 
 **契约冻结之后**（T016，2026-10-26）：协议与 ShellAPI 只能附加，包括加方法、可选字段、开放枚举的取值、开放联合的分支、新的事件种类、视图成员，由 `ci protocol` 的 `schema-compat`、`shell-api-m1a` 两步把关。破坏性改动按 ADR-04 升主版本，不在 v1 里改；任务书里要写明，派发前由编排者确认（[5.12.5](design/12-milestones.md#5125-契约冻结清单)）。
