@@ -433,6 +433,8 @@
 | T099 | 20 次连跑在 GitHub 的 macOS runner 上做（nightly 的 e2e 全集或 `e2e-repeat`）；PERF 闸门在作者机器上判，托管 runner 上 `@perf` 用例不跑；IT-sys-peer-macos14/15 由 nightly 的摘要推导（`trace-ids status --summary`） | T197 |
 | 改 CI 的任务 | 下载缓存的键由几个作业共用，只用 git-lfs 的作业会先存下一份不完整的；按作业分键可以省一次下载。`target/` 下非 cargo 目录会被 rust-cache 留下骨架，只凭"目录在"判断就绪的地方都要改成按内容判断 | T197 |
 | T066 | T192 补齐了 21 个剧本，实际运行时留意：`config-scope`、`untrusted-project` 开工前就放好了 `.claude/settings.json`，宿主可能判为配置已变而暂停队列，剧本以"不确定"结束；`crash-resume`、`resume-procs` 在两回合之间 SIGKILL 掉 `claude`，靠 K6 自动 resume；`close-running` 允许命令后等 3 秒收尾；真实模式的回合等待上限是 5 分钟。详见 `docs/tasks/T192-compat-scenarios/notes.md` | T192 |
+| T066 | 宿主的 `VERSION_PROBE` 只有 5 s；CLI 更新后第一次执行 `--version` 也要等 macOS 扫描新二进制，负载 35–50 下量到首次执行 4–29 s（用假 agent 和宿主副本量的，真实 CLI 没量过），机器忙时 CLI 发现可能超时。实际运行时量一次，需要的话放宽或先预热 | T196 |
+| T199 | 照 T196 的做法：先在高负载下复现、量出实际等待再修，不加重试。macOS 首次执行新二进制要扫描，计时前用 `first_start`（`tests/common`）先跑一次；负载的造法与 pid 回收见 `docs/tasks/T196-flaky-under-load/notes.md` | T196 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
