@@ -1,6 +1,6 @@
 // The test entry points exist in e2e builds only (design 5.9.9, 5.10.7):
 // `window.__cupperTest`, the main process's `__cupperE2E` (disconnecting a
-// window) and `CUPPER_E2E_DIR`. Built as every other flavor, the main
+// window) and `__e2eDialogs` (the dialogs' stand-ins), and `CUPPER_E2E_DIR`. Built as every other flavor, the main
 // process, the preload and the renderer do not name them; built as e2e,
 // they do, so that the scan is known to see them.
 
@@ -13,7 +13,7 @@ import { expect, it } from "vitest";
 
 import type { Flavor } from "./shared/flavor";
 
-const ENTRY_POINTS = ["__cupperTest", "__cupperE2E", "CUPPER_E2E_DIR"];
+const ENTRY_POINTS = ["__cupperTest", "__cupperE2E", "__e2eDialogs", "CUPPER_E2E_DIR"];
 
 /** The entry points that a build of `flavor` names. */
 async function entryPoints(flavor: Flavor): Promise<string[]> {
