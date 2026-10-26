@@ -178,7 +178,7 @@ pub fn adapter_env(
 }
 
 /// `^[A-Z][A-Z0-9_]*$`.
-fn is_variable_name(name: &str) -> bool {
+pub(crate) fn is_variable_name(name: &str) -> bool {
     let mut chars = name.chars();
     chars.next().is_some_and(|c| c.is_ascii_uppercase())
         && chars.all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')

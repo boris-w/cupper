@@ -29,6 +29,7 @@ use std::task::Poll;
 
 use cupper_protocol::domain::AgentKind;
 use cupper_protocol::index::HostUpdated;
+use cupper_protocol::methods::admin::{Settings, SettingsGet, SettingsUpdate};
 use cupper_protocol::methods::handshake::{HostShutdown, HostShutdownParams, ShutdownReason};
 use futures::future::BoxFuture;
 use tokio::signal::unix::{Signal, SignalKind, signal};
@@ -54,7 +55,7 @@ use crate::driver::runtime::{AGENT_RUNTIME, AgentRuntime, RuntimeDeps};
 use crate::durations::Durations;
 use crate::exit::HostExit;
 use crate::gateway::listen::{HostLock, ListenError};
-use crate::gateway::{AuditEvent, AuditRecord, Gateway, GatewayConfig, HostEvent, Routes};
+use crate::gateway::{AuditEvent, AuditRecord, Gateway, GatewayConfig, HostEvent, Port, Routes};
 use crate::git::GitTool;
 use crate::index::{INDEX, IndexDeps, IndexError, IndexHandle};
 use crate::ledger::{Ledger, LedgerError, SWEEPER};
@@ -63,6 +64,7 @@ use crate::orchestrator::session::{SessionDeps, SessionManager};
 use crate::quiescence::Quiescence;
 use crate::requester::ProcessRequesters;
 use crate::runtime::{self, BundleDir, ComponentPlan, Installer, Reason, Status, Statuses, npm};
+use crate::settings::{SettingsHandle, SettingsPort};
 use crate::startup::payload::Payload;
 use crate::startup::{DataDirError, prepare_data_dir};
 use crate::store::epoch::{self, BootSessionError};
@@ -238,6 +240,8 @@ impl Host {
         // launch both take this result.
         let found = finder.discover(project_roots(&reader)?).await;
         let git = git_tool(&found, &data_dir)?;
+        let home = PathBuf::from(found.host.get("HOME").cloned().unwrap_or_default());
+        let settings = SettingsHandle::load(&reader, writer.clone(), clock.clone(), &home)?;
         // The audit records of the gateway, the sessions, the index and the
         // host itself.
         let (records, audit) = mpsc::unbounded_channel();
@@ -313,7 +317,7 @@ impl Host {
                 participant.idle(installer.run(&*clock, publish)).await;
             });
         }
-        let launch = finder.launch_found(&found).await;
+        let launch = finder.launch_found(&found, &settings.current()).await;
         let redactor = Redactor::for_this_machine();
         let log = AdapterLog::open(
             &log_dir(&data_dir),
@@ -343,12 +347,13 @@ impl Host {
         };
         let claude = AgentRuntime::start(deps);
         let find: Find = {
-            let (finder, readers) = (finder.clone(), readers.clone());
+            let (finder, readers, settings) = (finder.clone(), readers.clone(), settings.clone());
             Arc::new(move || {
-                let (finder, readers) = (finder.clone(), readers.clone());
+                let (finder, readers, settings) =
+                    (finder.clone(), readers.clone(), settings.current());
                 Box::pin(async move {
                     let roots = readers.read(project_roots).await.unwrap_or_default();
-                    finder.launch(roots).await
+                    finder.launch(roots, &settings).await
                 })
             })
         };
@@ -407,7 +412,11 @@ impl Host {
         .route(&mut routes);
         routes.blobs(blobs.clone());
         routes.sessions(Arc::new(sessions));
-        Arc::new(agents).route(&mut routes);
+        let agents = Arc::new(agents);
+        agents.route(&mut routes);
+        let settings = Arc::new(SettingsPort::new(settings, Arc::clone(&agents))) as Arc<dyn Port>;
+        routes.add::<SettingsGet>(Arc::clone(&settings));
+        routes.add::<SettingsUpdate>(settings);
         routes.index(Arc::new(index.clone()));
         routes.presence(Arc::new(index.clone()));
         let config = GatewayConfig {
@@ -656,12 +665,12 @@ impl Finder {
     }
 
     /// Discovers again, then finds the launch: what `agents/refresh` does.
-    async fn launch(&self, roots: Vec<PathBuf>) -> Launch {
+    async fn launch(&self, roots: Vec<PathBuf>, settings: &Settings) -> Launch {
         let found = self.discover(roots).await;
-        self.launch_found(&found).await
+        self.launch_found(&found, settings).await
     }
 
-    async fn launch_found(&self, found: &Discovery) -> Launch {
+    async fn launch_found(&self, found: &Discovery, settings: &Settings) -> Launch {
         let (clock, durations) = (&*self.clock, &self.durations);
         let (host, login) = (&found.host, &found.login);
         #[cfg(feature = "test-harness")]
@@ -681,7 +690,7 @@ impl Finder {
             return launch;
         }
         let (dir, locator) = (&self.data_dir, &found.locator);
-        launch::production(clock, durations, dir, host, login, locator).await
+        launch::production(clock, durations, dir, (host, login), locator, settings).await
     }
 }
 
