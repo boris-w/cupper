@@ -9,7 +9,7 @@ import { join } from "node:path";
 
 import type { Cupper } from "./fixture";
 import { expect, test } from "./fixture";
-import { sampleNetwork, texts, type Flow } from "./helpers";
+import { offMachine, sampleNetwork, texts, type Flow } from "./helpers";
 import { signal, tree } from "./procs";
 import { dial, FakeHost, initialize, keyProof, socketPath, type Message } from "./raw";
 
@@ -44,6 +44,24 @@ test(
     try {
       signal(host ? [host] : [], "SIGKILL");
       // The fake cannot prove the key: the app offers to restart the host.
+      const dialog = await cupper.dialogs.next();
+      expect(dialog.message).toBe((await texts(cupper))("host:restart_title"));
+      await cupper.dialogs.answer(dialog.index, 1);
+      onlyProofs(fake, cupper, "dev_key");
+    } finally {
+      await fake.close();
+    }
+  },
+);
+
+test(
+  "E2E-SEC-fake-host: a fake host on the socket before the app starts gets no command either",
+  { tag: "@smoke" },
+  async ({ cupper }) => {
+    const fake = await new FakeHost().listen(cupper.dataDir);
+    try {
+      // The dialog comes while the app starts; the stand-in records it (T178).
+      await cupper.launch();
       const dialog = await cupper.dialogs.next();
       expect(dialog.message).toBe((await texts(cupper))("host:restart_title"));
       await cupper.dialogs.answer(dialog.index, 1);
@@ -145,8 +163,7 @@ test.describe(() => {
     const tree = cupper.processes().length;
     console.log(JSON.stringify({ q27: { took, tree, pids, caught } }));
     expect(caught, "nettop sees the control's flow").toBeDefined();
-    const loopback = /^(127\.|::1[.:]|\*[.:])/;
-    const off = flows.filter((f) => !loopback.test(f.remote) && !f.remote.startsWith("192.0.2.1"));
+    const off = offMachine(flows).filter((flow) => !flow.remote.startsWith("192.0.2.1"));
     expect(off).toEqual([]);
   });
 });
