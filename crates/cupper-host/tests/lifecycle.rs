@@ -198,6 +198,10 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
             }
             Trigger::Sigterm => terminate(&host),
         }
+        // The client's worst order: the host is gone before its reader runs
+        // (it runs on this test's one thread, blocked here), and the host's
+        // last frames still come, then the end (T196).
+        let exited = host.wait().unwrap();
         let Some(Incoming::Other { method, params }) = client.next().await else {
             panic!("{trigger:?}: no host/shutdown");
         };
@@ -211,7 +215,7 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
             None,
             "{trigger:?}: the connection ends"
         );
-        assert_eq!(exit_code(&mut host).await, 0, "{trigger:?}");
+        assert_eq!(exited.code(), Some(0), "{trigger:?}");
 
         let (start, clean) = (MetaKey::LastStartAt, MetaKey::LastCleanExitAt);
         assert!(
