@@ -1,7 +1,8 @@
 //! `security-macos14`: the peer verification tests of `cupper-sys` (design
-//! 5.1.6, Q24): IT-sys-peer-current and UNIT-sys-uniqueid. Run here, they run
-//! on the author's macOS, whose version the summary records (`os`); the
-//! results count as IT-sys-peer-current, never as macOS 14 (plan 1.6, 1.8).
+//! 5.1.6, Q24): IT-sys-peer-current and UNIT-sys-uniqueid. The summary
+//! records the macOS they ran on (`os`), and on macOS 14 or 15, the nightly
+//! runners', their results count for IT-sys-peer-macos14 or -macos15; on the
+//! author's macOS, for IT-sys-peer-current (plan 1.6, 1.8).
 
 use anyhow::{Result, bail};
 

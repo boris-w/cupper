@@ -17,8 +17,8 @@ use serde_json::Value;
 
 use crate::ci::git;
 use crate::codesign::{self, Signing};
-use crate::runtime_pack::hash_tree;
 use crate::runtime_pack::manifest::Manifest;
+use crate::runtime_pack::{hash_tree, mismatch};
 
 /// A build kind of design 5.7.9.
 pub struct Kind {
@@ -168,16 +168,8 @@ pub fn bundle(root: &Path, options: &Options) -> Result<Bundle> {
     }
     copy_tree(&options.runtime, &contents)?;
     let copied = hash_tree(&contents)?;
-    for (path, file) in &manifest.files {
-        if copied.get(path).map(|copy| &copy.sha256) != Some(&file.sha256) {
-            bail!("the runtime's `{path}` is missing or differs from the manifest");
-        }
-    }
-    if let Some(path) = copied
-        .keys()
-        .find(|path| !manifest.files.contains_key(*path))
-    {
-        bail!("the runtime has `{path}`, which the manifest does not list");
+    if let Some(why) = mismatch(&copied, &manifest.files) {
+        bail!("the runtime's {why}");
     }
     // ADR-11: no part of Anthropic's SDK, and no Claude Code, in the app.
     if let Some(path) = copied

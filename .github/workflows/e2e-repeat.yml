@@ -54,3 +54,9 @@ jobs:
             tools/e2e/dist/test-results/
           retention-days: 14
           if-no-files-found: ignore
+      - name: runtime-pack's stage out of the caches
+        if: always()
+        # Of target/runtime-pack only the downloads are cached (see setup).
+        run: >-
+          [ ! -d target/runtime-pack ] ||
+          find target/runtime-pack -mindepth 1 -maxdepth 1 ! -name downloads -exec rm -rf {} +

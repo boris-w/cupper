@@ -15,8 +15,10 @@ const major = (version: string) => version.split(".")[0];
 
 /**
  * Chromium has to match exactly: its rendering changes from one version to
- * the next. macOS only has to match in its major version; a minor update gets
- * a note, and the baselines are made again only if pixels differ.
+ * the next. Another macOS gets a note, and the pixels decide: with the fonts
+ * the fixture brings, the CI runner's macOS 15 and the author's macOS 26
+ * render all 33 baselines alike (T197). The baselines are the runner's,
+ * made again by the `ui-baseline` workflow when pixels differ.
  */
 export function compareMeta(baseline: BaselineMeta, current: BaselineMeta): MetaCheck {
   const notes: string[] = [];
@@ -25,13 +27,12 @@ export function compareMeta(baseline: BaselineMeta, current: BaselineMeta): Meta
     ok = false;
     notes.push(`Chromium ${current.chromium} is not the baselines' ${baseline.chromium}`);
   }
-  if (major(current.macos) !== major(baseline.macos)) {
-    ok = false;
-    notes.push(`macOS ${current.macos} is not the baselines' major version ${baseline.macos}`);
-  } else if (current.macos !== baseline.macos) {
+  if (current.macos !== baseline.macos) {
+    const which =
+      major(current.macos) === major(baseline.macos) ? "a minor version" : "its major version";
     notes.push(
-      `macOS ${current.macos} differs from the baselines' ${baseline.macos} in a minor version; ` +
-        "if pixels differ, make the baselines again with `pnpm ui:baseline`",
+      `macOS ${current.macos} differs from the baselines' ${baseline.macos} in ${which}; ` +
+        "if pixels differ, make the baselines again with the `ui-baseline` workflow",
     );
   }
   return { ok, notes };
