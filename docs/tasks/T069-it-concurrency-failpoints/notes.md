@@ -93,3 +93,13 @@ IT-NFR9-crash-under-load：agent 全速输出（`flood 200000 20`）时，每轮
 
 - `crash_concurrency` 测试目标（四个编号共 9 个测试）连跑 10 次全绿，每次约 58–62 s。跑完查过：本 worktree 的宿主、假 agent 和 `sandbox-exec` 都没有残留进程。
 - 准备阶段那条用例连跑 10 次全绿。
+
+## CI（合并提交 112d77f 上）
+
+1. 第一次：`e2e` 的 `test-e2e-focus` 里 E2E-SEC-real-input 失败。原因是等请求面板的"手动"提示超时，与本任务无关，本任务没有改桌面端代码。删掉摘要重跑。
+2. 第二次：`rust` 里 `cupper-fake-agent` 的 `unit_fake_scripts_faults_per_segment` 失败，"the agent did not exit"，即 `exit_on_start` 的假 agent 在 10 s 内没退出。当时机器负载约 9；这条用例单跑 20 次全过，本任务也没有改假 agent。删掉摘要重跑。
+3. 第三次全部通过，摘要随任务提交。
+
+## 准备阶段设计问题的裁定
+
+计划 v1.3.53，设计 5.2.6 新增一条：M1a 保持现状。准备阶段信任恢复后，这个回合仍按附加时的设定不加载项目配置；要不要以加载方式重新附加，留给 T141。
