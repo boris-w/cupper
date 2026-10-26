@@ -5,13 +5,14 @@
 //! own.
 
 use std::fs;
+use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
 use cupper_sys::Command;
 use sha2::{Digest, Sha256};
 
 use super::*;
-use crate::clock::ManualClock;
+use crate::clock::{ManualClock, SystemClock};
 use crate::driver::probe::testkit::script;
 use crate::git::repo::tests::{Fixture, tool};
 use crate::git::run::run;
@@ -40,13 +41,14 @@ struct Repos {
 }
 
 impl Repos {
-    /// The repositories `setup` makes, after [`PRELUDE`].
-    async fn new(name: &str, setup: &str) -> Self {
+    /// The repositories `setup` makes, after [`PRELUDE`]; the host's git-lfs
+    /// is `lfs`.
+    async fn new(name: &str, setup: &str, lfs: Option<PathBuf>) -> Self {
         let path = std::env::var_os("PATH").expect("PATH");
         let mut found = std::env::split_paths(&path).map(|dir| dir.join("git"));
         let git = found.find(|git| git.is_file()).expect("git on PATH");
         let dir = TempDir::new(name);
-        let tool = tool(dir.path(), &git, None);
+        let tool = tool(dir.path(), &git, lfs);
         let repos = Self {
             dir,
             clock: ManualClock::new(),
@@ -124,7 +126,7 @@ mk excl && cd excl && printf 'a\n' > a && git add a && git commit -qm init &&
 
 #[tokio::test]
 async fn it_git_snapshot_parity_trees_match_the_users_git_in_every_index_shape() {
-    let fx = Repos::new("snapshot-parity", SHAPES).await;
+    let fx = Repos::new("snapshot-parity", SHAPES, None).await;
     for repo in ["basic", "crlf", "split", "sparse", "untr", "linked", "sha"] {
         let taken = fx.take(repo, None).await;
         let reference = fx.sh(&format!("reference {repo}")).await;
@@ -161,7 +163,7 @@ async fn it_git_racy_a_file_changed_within_the_index_second_is_snapshotted() {
     let setup =
         "mk racy && cd racy && printf 'aaaa\\n' > a && touch -t 202001010000 a && git add a &&
         git commit -qm init && printf 'bbbb\\n' > a && touch -t 202001010000 a .git/index";
-    let fx = Repos::new("snapshot-racy", setup).await;
+    let fx = Repos::new("snapshot-racy", setup, None).await;
     let taken = fx.take("racy", None).await;
     let blob = fx.git("racy", &format!("rev-parse {}:a", taken.tree)).await;
     assert_eq!(
@@ -187,7 +189,7 @@ async fn it_git_filter_placeholder_a_filter_declared_only_in_info_attributes() {
     let setup = "mk crypt && cd crypt && printf 'a\\n' > a && git add a && git commit -qm init &&
         git config filter.crypt.clean 'MARK clean' && git config filter.crypt.smudge 'MARK smudge' &&
         printf 'secret.txt filter=crypt\\n' > .git/info/attributes && printf 'plaintext-secret\\n' > secret.txt";
-    let fx = Repos::new("snapshot-filter", setup).await;
+    let fx = Repos::new("snapshot-filter", setup, None).await;
     let taken = fx.take("crypt", None).await;
     let want = vec![("secret.txt".to_owned(), "filter_unsupported".to_owned())];
     assert_eq!(excluded(&taken), want);
@@ -236,4 +238,63 @@ async fn it_git_snapshot_malicious_no_program_of_the_repository_runs() {
         assert!(end.expect("a snapshot").stat.is_some(), "{repo}");
     }
     assert_eq!(fx.markers("markers"), Vec::<String>::new());
+}
+
+/// IT-git-lfs-snapshot (Q32): with the user's standard git-lfs filters, the
+/// snapshot tier runs the host's git-lfs by its absolute path, which its
+/// PATH lacks, and stores the pointer the user's git does.
+#[tokio::test]
+async fn it_git_lfs_snapshot_runs_the_hosts_git_lfs() {
+    let lfs = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/git-lfs/git-lfs");
+    let Ok(lfs) = lfs.canonicalize() else {
+        eprintln!("skipped: no git-lfs; `cargo xtask git-lfs` downloads the pinned one");
+        return;
+    };
+    let path = format!(
+        "export PATH='{}':$PATH",
+        lfs.parent().expect("a dir").display()
+    );
+    let setup = format!(
+        "{path}; mk lfs && cd lfs && git lfs install --local > /dev/null &&
+        printf '*.bin filter=lfs diff=lfs merge=lfs -text\\n' > .gitattributes &&
+        printf 'one\\n' > a.bin && git add -A && git commit -qm init && printf 'two\\n' > a.bin"
+    );
+    let fx = Repos::new("snapshot-lfs", &setup, Some(lfs)).await;
+    let taken = fx.take("lfs", None).await;
+    assert!(taken.excluded.is_empty() && !taken.partial);
+    assert_eq!(taken.tree, fx.sh(&format!("{path}; reference lfs")).await);
+    let pointer = format!("cat-file -p {}:a.bin", taken.tree);
+    let pointer = fx.git("lfs", &pointer).await;
+    assert!(
+        pointer.starts_with("version https://git-lfs.github.com/spec/v1"),
+        "{pointer}"
+    );
+}
+
+/// PERF-snapshot: a synthetic repository of 10,000 files, snapshotted with
+/// no change and with 10 files changed; the median of five of each.
+#[tokio::test]
+#[ignore = "PERF-snapshot runs nightly"]
+async fn perf_snapshot_ten_thousand_files() {
+    let setup =
+        "mk big && cd big && i=0 && while [ $i -lt 10000 ]; do echo $i > f$i; i=$((i+1)); done &&
+        git add -A && git commit -qm init";
+    let fx = Repos::new("snapshot-perf", setup, None).await;
+    let clock = SystemClock::new();
+    for (case, change) in [("no change", false), ("10 files changed", true)] {
+        let mut runs = Vec::new();
+        for n in 0..5 {
+            if change {
+                let edit =
+                    format!("i=0; while [ $i -lt 10 ]; do echo {n} >> big/f$i; i=$((i+1)); done");
+                fx.sh(&edit).await;
+            }
+            let start = clock.now_mono();
+            fx.take("big", None).await;
+            runs.push(clock.now_mono().saturating_duration_since(start));
+        }
+        runs.sort();
+        eprintln!("PERF-snapshot, 10,000 files, {case}: median {:?}", runs[2]);
+        assert!(runs[2] < Duration::from_secs(2), "{case}: {runs:?}");
+    }
 }
