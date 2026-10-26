@@ -35,3 +35,32 @@
 | **合计** | | 约 **400** |
 
 在停止线 600 之内。每写完一个模块跑一次 `cargo xtask size`。
+
+## 做的过程中的取舍
+
+- **`--in pr`**：每个 workflow 只调用 `cargo xtask ci <作业> --in pr`。
+  - 按路径跳过（ui、compat-framework）和 e2e 的冒烟子集都和本机的 `ci pr` 一样由 xtask 判断，workflow 不另写 `paths`。
+  - 推送到 main 时，HEAD 就是 main，没有可比较的改动，xtask 不跳过任何作业；e2e 仍只跑冒烟子集，全集放在每晚。
+- **可复用的 workflow 加一个组合 action**：8 个 `pr` 作业的 workflow 每个十来行，共用 `xtask.yml`。`e2e-repeat`、`ui-baseline` 不经 xtask，但和它共用 `.github/actions/setup`。
+- **缓存**：
+  - Swatinem/rust-cache 按作业名分键，只保留依赖的编译产物，减少占用仓库 10 GB 的缓存额度。
+  - pnpm store 按锁文件分键。
+  - runtime-pack 和 git-lfs 的下载按 `runtime/manifest.json` 和 `git_lfs.rs` 分键。`claude-agent-acp.isolated` 里有 Anthropic 的 SDK，不进任何缓存（ADR-11）。
+- **security-macos14**：去掉了每晚失败时开 issue 的那一步，因为它要 `issues: write`，而本任务要求权限全部只读。失败会在 Actions 页面和每晚的运行里看到；要不要恢复开 issue，由编排者定。
+- **e2e 的 workers**：取"核数减一，最多 2"。runner 是 3 核，得 2；作者的机器得的也是 2，本机行为不变。理由写在 `playwright.config.ts` 里。
+- **`workflow_dispatch` 的限制**：GitHub 只允许触发默认分支上已有的 workflow。`nightly`、`e2e-repeat`、`ui-baseline` 要在文件进了 main 之后，才能指定本分支手动触发。
+
+## 计划 1.8 的改写建议（交编排者）
+
+| 行 | 现在 | 建议 |
+|---|---|---|
+| 标题与引言 | 本机 CI（U-P1：先不建远端） | 改为"CI（GitHub Actions，本机可复现）"：PR 以 GitHub 上 `pr` 组合的各作业为准；本机的 `cargo xtask ci <作业>` 照旧可用，用于复现和合并前的自查 |
+| 统一入口 | workflow 照写，等有了远端再启用 | 每个作业一个 workflow，只调用 `cargo xtask ci <作业> --in pr`；跳过与子集由 xtask 判断，workflow 不写 `paths` |
+| 环境 | 干净 worktree、不共用 `CARGO_TARGET_DIR` | 加一句：runner 上每个作业一台全新机器，缓存只有 cargo 注册表与 target（rust-cache）、pnpm store 和下载 |
+| 机器级锁 | e2e 的 workers 固定为 2（T090） | 改为"核数减一，最多 2"（T197）；runner 上每个作业独占一台机器，锁只在本机起作用 |
+| 验收记录 | 入库的只有结构化摘要 | CI 上的摘要和原始日志作为构件（日志保留 7 天），不再提交进仓库；卷宗里记 PR 和运行的链接。本机跑的摘要仍可随任务提交 |
+| 每晚作业 | 编排者在 main 上跑 `xtask ci nightly --record docs/ci/nightly/` | 由 `nightly.yml` 定时运行（differential、security-macos14 在 macOS 14 和 15 上、e2e 全集、compat-framework）；`perf` 和它的历史仍在本机跑、由编排者提交 |
+| 截图基线 | 基线由专用脚本在本机生成 | 由 `ui-baseline.yml` 在 runner 上生成，产出为构件，经 PR 入库；本机的 macOS 大版本与基线不同时，本机的 `ui` 作业会因元数据不符而失败，见下文"遗留" |
+| 本机替代不了的项 | macOS 14、15 的对端校验是缺口 | 由每晚在 `macos-14`、`macos-15` 上运行的 security-macos14 覆盖；把 IT-sys-peer-macos14/15 从"缺口"改为由 CI 覆盖，还要编排者在 `tests/ids.toml` 里改状态，并约定证据记法（运行链接） |
+| M1a 退出 | 本机连跑 20 次、运行期间作者不操作机器 | 改在 runner 上运行（D6）：20 次连跑用 `e2e-repeat` 或 nightly 的 e2e 全集，"不操作机器"在 runner 上天然满足 |
+| 以后建远端时 | 首次在 CI 上再跑一轮 20 次…… | 删去，已经做完的几项写进"环境"与"验收记录"；R12 的几项（外部贡献者需批准、默认只读、不用自托管 runner）保留为一行"仓库设置" |
