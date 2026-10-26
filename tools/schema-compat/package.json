@@ -1,0 +1,16 @@
+{
+  "name": "@cupper/schema-compat",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "The direction-aware check of the exported protocol schema against a released one, and the integer bounds of the exported schema (design 5.12.5, 5.1.6).",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "vite": "8.3.3",
+    "vitest": "5.0.3"
+  }
+}

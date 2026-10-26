@@ -27,9 +27,14 @@ interface MethodCase {
   result?: unknown;
 }
 
+interface Ref {
+  $ref: string;
+}
+
 interface CatalogEntry {
-  params: { $ref: string };
-  result?: { $ref: string };
+  params: Ref;
+  /** A `command` method's is `allOf: [<result>, Replayed]` (design 5.2.5). */
+  result?: Ref | { allOf: Ref[] };
 }
 
 const read = (path: string): unknown =>
@@ -77,7 +82,12 @@ describe("UNIT-ts-fixtures", () => {
     }
     expect(schemaOf(entry.params.$ref).parse(params)).toEqual(params);
     if (entry.result !== undefined) {
-      expect(schemaOf(entry.result.$ref).parse(result)).toEqual(result);
+      const [first, ...more] = "allOf" in entry.result ? entry.result.allOf : [entry.result];
+      expect(first && schemaOf(first.$ref).parse(result)).toEqual(result);
+      for (const { $ref } of more) {
+        const replayed = { ...(result as object), replayed: true };
+        expect(schemaOf($ref).safeParse(replayed).success).toBe(true);
+      }
     }
   });
 

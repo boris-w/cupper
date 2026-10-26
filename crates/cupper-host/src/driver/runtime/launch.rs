@@ -184,7 +184,7 @@ pub async fn production(
         config_dir: ConfigDirState::Default,
         unavailable: Some(AgentErrorClass::CliMissing),
     };
-    let cli_path = settings.claude_cli_path.as_ref().map(|p| Path::new(&p.0));
+    let cli_path = settings.claude_cli_path.0.as_ref().map(|p| Path::new(&p.0));
     let Ok(found) = locator.locate(&resolve::CLAUDE, cli_path) else {
         return launch;
     };

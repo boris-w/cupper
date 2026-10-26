@@ -14,7 +14,9 @@ use crate::event::EventBody;
 use crate::limits::MAX_SAFE_INTEGER;
 use crate::methods::catalog::catalog;
 use crate::methods::handshake::PROTOCOL;
-use crate::rpc::{Build, ClientNotification, HostNotification, Method, MethodError, Scope};
+use crate::rpc::{
+    Build, ClientNotification, HostNotification, Idempotency, Method, MethodError, Replayed, Scope,
+};
 use crate::view::{IndexView, SessionView};
 
 /// The protocol as one JSON Schema document, which `export-schema` writes to
@@ -38,11 +40,55 @@ pub fn document() -> Value {
     })
 }
 
-/// Draft 2020-12, with every integer bounded by [`bound_integers`].
+/// Draft 2020-12, with every integer bounded by [`bound_integers`] and every
+/// optional field absent rather than `null` ([`absent_not_null`]).
 pub fn generator() -> SchemaGenerator {
     SchemaSettings::draft2020_12()
         .with_transform(RecursiveTransform(bound_integers))
+        .with_transform(RecursiveTransform(absent_not_null))
         .into_generator()
+}
+
+/// An optional field is left out, never `null` (T016): the `null` schemars
+/// adds to an `Option` property that is not required goes. A value that may
+/// be `null` says so in its own type, as `CliPath` does; that `null` is not
+/// the property's and stays. Rust still reads `null` as absent.
+pub fn absent_not_null(schema: &mut Schema) {
+    let Some(object) = schema.as_object_mut() else {
+        return;
+    };
+    let required = object.get("required").cloned().unwrap_or(Value::Null);
+    let required = required.as_array().map_or(&[][..], Vec::as_slice);
+    let Some(Value::Object(properties)) = object.get_mut("properties") else {
+        return;
+    };
+    for (name, property) in properties.iter_mut() {
+        if required.iter().any(|r| r == name.as_str()) {
+            continue;
+        }
+        let Some(property) = property.as_object_mut() else {
+            continue;
+        };
+        let null = |s: &Value| s.get("type").is_some_and(|t| t == "null");
+        if let Some(Value::Array(types)) = property.get_mut("type") {
+            types.retain(|t| t != "null");
+            if let [only] = types.as_slice() {
+                let only = only.clone();
+                property.insert("type".into(), only);
+            }
+        }
+        let Some(Value::Array(branches)) = property.get_mut("anyOf") else {
+            continue;
+        };
+        branches.retain(|branch| !null(branch));
+        if let [Value::Object(only)] = branches.as_slice() {
+            let only = only.clone();
+            property.remove("anyOf");
+            for (key, value) in only {
+                property.entry(key).or_insert(value);
+            }
+        }
+    }
 }
 
 /// Replaces an integer's `format` (`int64`, `uint32`, ...) with `minimum` and
@@ -88,9 +134,14 @@ pub fn bound_integers(schema: &mut Schema) {
 /// request method, and `x-builds` when only some builds have it.
 pub fn method_entry<M: Method>(g: &mut SchemaGenerator) -> Value {
     let errors: Vec<String> = M::ERRORS.iter().map(MethodError::wire).collect();
+    let mut result = serde_json::to_value(subschema::<M::Result>(g)).expect("a schema is JSON");
+    // A repeat gets the first outcome again, `replayed: true` added (design 5.2.5).
+    if M::IDEMPOTENCY == Idempotency::Command {
+        result = json!({"allOf": [result, subschema::<Replayed>(g)]});
+    }
     let mut entry = json!({
         "params": subschema::<M::Params>(g),
-        "result": subschema::<M::Result>(g),
+        "result": result,
         X_SCOPE: scope_name(M::SCOPE.as_ref()),
         X_IDEMPOTENT: M::IDEMPOTENCY.as_str(),
         X_MILESTONE: M::MILESTONE.as_str(),
@@ -140,7 +191,7 @@ mod tests {
     use super::*;
     use crate::annotations::TimestampMs;
     use crate::error::{ErrorCode, ErrorReason};
-    use crate::rpc::{Idempotency, Milestone, Notification};
+    use crate::rpc::{Milestone, Notification};
     use crate::testutil::integers;
 
     #[derive(Serialize, Deserialize, JsonSchema)]
@@ -184,6 +235,30 @@ mod tests {
             let (lo, hi) = bounds(schema);
             assert!(-safe <= lo && hi <= safe, "{schema}");
         }
+    }
+
+    #[test]
+    fn unit_proto_base_schema_optional_fields_are_absent_not_null() {
+        #[derive(Serialize, Deserialize, JsonSchema)]
+        struct Fields {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            left_out: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            path: Option<crate::annotations::WirePath>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            cli: Option<crate::methods::admin::CliPath>,
+        }
+        let mut g = generator();
+        g.subschema_for::<Fields>();
+        let defs = Value::Object(g.take_definitions(true));
+        let props = &defs["Fields"]["properties"];
+        assert_eq!(props["left_out"], json!({"type": "string"}));
+        assert_eq!(props["path"], json!({"$ref": "#/$defs/WirePath"}));
+        // A value that is null in its own type keeps it; the key's null goes.
+        assert_eq!(props["cli"], json!({"$ref": "#/$defs/CliPath"}));
+        assert!(defs["CliPath"]["anyOf"][1] == json!({"type": "null"}));
+        let absent: Fields = serde_json::from_value(json!({"left_out": null})).unwrap();
+        assert!(absent.left_out.is_none(), "Rust still reads null as absent");
     }
 
     struct SessionSend;
@@ -256,6 +331,10 @@ mod tests {
             (&json!("none"), &json!("none"))
         );
         assert_eq!(init[X_ERRORS], json!([]));
+        // A command's result may come back replayed (design 5.2.5); others do not.
+        let replayed = json!({"$ref": "#/$defs/Replayed"});
+        assert_eq!(send["result"]["allOf"][1], replayed);
+        assert_eq!(init["result"], json!({"type": "null"}));
         let presence = client_notification_entry::<Presence>(&mut g);
         assert_eq!(
             (&presence[X_SCOPE], &presence[X_IDEMPOTENT]),

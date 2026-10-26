@@ -43,6 +43,34 @@ pub enum Idempotency {
     None,
 }
 
+/// The member the host's ledger adds to a `command` method's result when it
+/// answers a repeat with the first run's outcome (design 5.2.5).
+pub const REPLAYED: &str = "replayed";
+
+/// `replayed: true` beside a replayed result: the schema of what
+/// [`REPLAYED`] adds, which the method catalog puts next to every `command`
+/// method's result.
+pub struct Replayed;
+
+impl JsonSchema for Replayed {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Replayed".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "type": "object",
+            "description": "What a repeated command's result adds to the first run's (design 5.2.5).",
+            "properties": {
+                REPLAYED: {
+                    "const": true,
+                    "description": "Present when the ledger answered a repeat with the first outcome.",
+                },
+            },
+        })
+    }
+}
+
 impl Idempotency {
     pub fn as_str(self) -> &'static str {
         match self {
