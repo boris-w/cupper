@@ -1,4 +1,4 @@
-//! Downloads for `runtime-pack`. Only the official release addresses, only
+//! Downloads for `runtime-pack` and `git-lfs`. Only the official release addresses, only
 //! https; curl reads no user configuration and sends the project placeholder
 //! as its User-Agent, nothing personal (subagent rule 7). Every file is
 //! checked against its pinned sha-256 or npm SRI before anything reads it, and
@@ -13,7 +13,11 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use sha2::{Digest, Sha256, Sha512};
 
-const OFFICIAL: &[&str] = &["https://nodejs.org/dist/", "https://registry.npmjs.org/"];
+const OFFICIAL: &[&str] = &[
+    "https://nodejs.org/dist/",
+    "https://registry.npmjs.org/",
+    "https://github.com/git-lfs/git-lfs/releases/download/",
+];
 
 /// What a downloaded file must hash to.
 #[derive(Debug, Clone, Copy)]

@@ -180,7 +180,7 @@ impl RepoTier<'_> {
 
 /// `core.hooksPath` from `~/` expanded as git does, so that the fingerprint
 /// covers that directory.
-fn expand_home(entries: &mut [Entry], home: Option<&Path>) {
+pub(super) fn expand_home(entries: &mut [Entry], home: Option<&Path>) {
     let Some(home) = home else {
         return;
     };

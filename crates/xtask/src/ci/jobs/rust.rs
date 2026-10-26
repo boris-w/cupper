@@ -56,6 +56,10 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     let mut fake_agent = ctx.cargo();
     fake_agent.args(["build", "-p", "cupper-fake-agent", "--locked"]);
     ctx.check("fake-agent", &mut fake_agent)?;
+    // IT-git-lfs-snapshot runs the pinned git-lfs (T186).
+    let mut git_lfs = ctx.cargo();
+    git_lfs.args(["xtask", "git-lfs"]);
+    ctx.check("git-lfs", &mut git_lfs)?;
     // And the e2e build of the CLI with IT-elevate's probe: IT-cli-commands
     // runs `cupper`, the fake agent starts the probe (T133, T046).
     let mut cli = ctx.cargo();
