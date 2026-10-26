@@ -317,6 +317,9 @@ impl Batcher {
         let mut queued = batch.into_iter();
         let mut ran = Vec::with_capacity(queued.len());
         let settled = self.commit(durability.unwrap_or_default(), &mut queued, &mut ran);
+        if settled.is_ok() {
+            crate::failpoint!(STORE_AFTER_COMMIT);
+        }
         if settled.is_err() && !self.conn.is_autocommit() {
             // If even this fails, the next `BEGIN` fails and reports it.
             let _ = self.conn.execute_batch("ROLLBACK");
@@ -360,6 +363,7 @@ impl Batcher {
             // back on an I/O error.
             self.conn.execute_batch(end)?;
         }
+        crate::failpoint!(STORE_BEFORE_COMMIT);
         Ok(self.conn.execute_batch("COMMIT")?)
     }
 }
