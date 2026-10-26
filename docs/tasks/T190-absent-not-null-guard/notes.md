@@ -153,3 +153,11 @@
 - `TrustScan.findings_omitted`
 
 - 现有的生成方法补不上：视图的 proptest 生成器（`view/props.rs`）是库内的 `pub(super)`，集成测试拿不到；类型没有"默认值加所有可选字段都填满"的值。编排者裁定：没覆盖到的属性归新任务 T193（按 schema 生成"所有可选字段都填满"的实例），排在 M1b 第一次附加式改契约的 T151 之前，T190 不做。
+
+## `ci pr --record`
+
+前两次各有一个与本任务无关的宿主测试在机器负载很高时失败（本任务只改了 `cupper-protocol` 的集成测试）：
+- `trust::tests::unit_trust_scan_forking_directory_links_hit_the_entry_limit`：用墙钟断言扫描在 10 s 内结束，那次用了 23.4 s（负载约 16）；
+- `it_lifecycle_host_exit_and_sigterm_exit_in_order`："Sigterm: no host/shutdown"（负载约 27）。
+
+两个单独重跑都通过。第三次等负载降到 10 以下再跑，全部通过，摘要已提交。`license` 作业那次跳过了 `fetch-db`（作业本身通过）。
