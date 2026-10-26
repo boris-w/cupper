@@ -1,0 +1,31 @@
+# The screenshot baselines, made on the runner the `ui` job compares on
+# (design 5.1.6: only a CI workflow makes them). The result is an artifact;
+# baselines reach the repository through a PR like any change (T197).
+name: ui-baseline
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: ui
+      - name: Make the baselines
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --dir tools/ui-screenshots exec playwright install chromium
+          pnpm ui:baseline
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ui-baselines
+          path: tools/ui-screenshots/baselines/
