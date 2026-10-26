@@ -481,6 +481,35 @@ fn unit_fake_scripts_hang_until_close_and_resume() {
 }
 
 #[test]
+fn unit_fake_scripts_calls_record_new_resume_close_and_prompts() {
+    let path = std::env::temp_dir().join(format!("cupper-fake-calls-{}", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let mut fake = Fake::start(&["--calls", path.to_str().unwrap()]);
+    fake.prompt("say one");
+    fake.call("session/close", json!({"sessionId": fake.session}));
+    fake.resume();
+    let calls = std::fs::read_to_string(&path).unwrap();
+    let _ = std::fs::remove_file(&path);
+    let calls: Vec<Value> = calls
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let methods: Vec<&str> = calls.iter().filter_map(|c| c["method"].as_str()).collect();
+    assert_eq!(
+        methods,
+        [
+            "initialize",
+            "session/new",
+            "session/prompt",
+            "session/close",
+            "session/resume"
+        ]
+    );
+    assert_eq!(calls[2]["text"], "say one");
+    assert_eq!(calls[4]["session"], json!(fake.session));
+}
+
+#[test]
 fn unit_fake_scripts_late_tool_after_cancel() {
     let mut fake = Fake::start(CODEX);
     let prompt = fake.start_prompt("late_tool t9 100");
