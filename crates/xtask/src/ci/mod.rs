@@ -288,7 +288,7 @@ mod tests {
     #[test]
     fn unimplemented_and_unknown_jobs_are_refused_up_front() {
         let repo = clean_repo("ci-refused");
-        let err = run(&args(&["compat-framework"]), repo.path()).expect_err("not implemented");
+        let err = run(&args(&["release-config"]), repo.path()).expect_err("not implemented");
         assert!(err.to_string().contains("not implemented"), "{err}");
         let err = run(&args(&["deploy"]), repo.path()).expect_err("unknown");
         assert!(err.to_string().contains("unknown job"), "{err}");
