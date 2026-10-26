@@ -165,7 +165,7 @@
 | T047 | `test/run_maintenance` 要用账本：给 `Routes` 加一个公开的账本访问函数（现在是 `pub(super)`）。账本清理任务、各连接等待回复的 task 还没有登记进静止屏障 | T033 |
 | T019、T029 | 接入点见 `docs/tasks/T033-gateway-dispatch/notes.md`"给 T019、T029 的接入点"：`stream/*`、`history/page` 登记为 `Target::Streams`，`blob/*` 为 `Target::Blobs`；订阅表和上传缓冲放进每条连接的 `Dispatch`，断开时自动清理；`HOST_FEATURES` 目前为空，由它们补上 | T033（已写入 T019 的 brief） |
 | 所有新增或调整用例编号的任务 | 编号登记在 `tests/ids.toml`（T002）：每个任务只在自己那一段里追加，写明里程碑、套件、状态；`xtask ci testdata-scan` 会把文档里出现但没登记的编号报出来。`node tools/trace-ids/src/main.ts status --summary <摘要>` 可以看哪些编号已完成、待完成 | T002 |
-| T064 | 给 `tools/trace-ids` 加读兼容报告的入口（`--compat <报告>`）；在那之前 COMPAT 编号一直是待完成 | T002 |
+| T188 | 给 `tools/trace-ids` 加读兼容报告的入口（`--compat <报告>`）；在那之前 COMPAT 编号一直是待完成（原交 T064，v1.3.55 拆给 T188） | T002（已写入 brief） |
 | T173 | MAN 证据的格式先定为 `tests/ids.toml` 里的 `[[evidence]]`（id、date、record、versions），可以在此基础上改 | T002 |
 | 改用 cargo-nextest 的任务 | 替换 `crates/xtask/src/ci/ctx.rs` 的 `parse_libtest`，并考虑在摘要里记"skip"；摘要格式不变时 trace-ids 不用改（它的 JUnit 读取是按格式手写的样例测试的，接上时用真实报告再核对一次） | T002 |
 | T053、T110 | "其余录制"的 GOLD-A 编号，由各自在 `tests/ids.toml` 里追加 | T002 |
@@ -203,7 +203,7 @@
 | T056 | 拉起 claude-agent-acp 的打包脚本时，`PATH` 只放随包 Node 所在的目录，其余环境变量清空：esbuild-wasm 按 `node` 这个名字从 PATH 拉起服务进程，否则会找不到或用到别的 node | T004 |
 | T006（license-gate） | codex-acp 内联依赖的许可证声明，按上游 v2.2.2 标签的 `package-lock.json` 生成；SP-2 的锁文件是按版本范围自己解析的，与上游实际内联的版本不同（例如 `@agentclientprotocol/sdk` 1.5.0 对 1.8.0），明细见 `docs/tasks/T004-runtime-pack/notes.md` | T004 |
 | T161、T180 | 5.10.7 第 2 步的 Node GPG 核对还是手工做的，自动化需要 `gpgv` 和锁定的 Node 发布公钥环。清单里 Node 的 sha-256 和 cdhash 是 ad-hoc 签名的值，Developer ID 签名后都会变：发布流水线要按发布身份重新生成并内嵌清单，设计里要写明每种构建内嵌哪一份 | T004 |
-| T064、T066 | 清单里还没有"已验证 CLI 范围"（5.10.3，由兼容报告生成）。T066 升级适配器时，重新评估静态扫描对 SDK 动态读取环境变量的覆盖（5.6.6 的已知局限） | T004 |
+| T188、T066 | 清单里还没有"已验证 CLI 范围"（5.10.3，由兼容报告生成）。T066 升级适配器时，重新评估静态扫描对 SDK 动态读取环境变量的覆盖（5.6.6 的已知局限） | T004 |
 | T110 | 出队保护放开之后，空闲时 Codex 报 thread active 不会挡住出队：`queue_resume` 或排队消息会把 prompt 发给 thread 仍在运行的 Codex 会话。这符合 5.2.6（threadStatus 只用于显示运行状态和界定自发回合）和 T058 的决定；Claude 再工作一定有输出，输出会开自发回合挡住出队，所以只有 Codex 有这个空隙。接入 Codex 时评估是否要让空闲时的 thread active 也挡住出队 | T058 修复第 1 轮 |
 | 组装 `Cupper.app` 的任务、T161 | 5.10.2 要求两个 Info.plist 都不含用途说明：`host-bundle` 只产出宿主的那一份（CLI 没有 Info.plist），`Cupper.app` 的那一份由 electron-builder 产出，要由组装它的任务断言，T161 的 `release-config` 每晚复核 | T005 |
 | T075、T180 | 宿主的 cdhash 随 Info.plist、运行时文件和二进制变化，自用构建的 CLI 必须与同一次 `cargo xtask host-bundle` 产出的 `CupperHost.app` 配套分发。Developer ID 签名之后 Node 和宿主都按发布身份重签，清单里 Node 的 sha-256 和 cdhash 要重算（另见 T004 的交接）。产物在 `target/host-bundle/<kind>/`，编译中间目录是 `target/host-bundle/build/`（每个 worktree 约 1.2 GB） | T005 |
@@ -227,7 +227,7 @@
 | 以后在宿主里加日志的任务 | 宿主自己的 ID 和哈希作为字段记录（字段名带 `id`、`hash`、`digest`、`blob`），不要拼进消息正文，否则 40 字符以上的会被当成长串替换；prompt、正文、命令输出、文件内容一律经 `diag::Content`（`info` 级别只记种类和长度） | T028 |
 | T095 | `driver/claude/ask.rs` 的 `option()` 是换成按工具区分的对照表的位置；换表后 s04、s04b、s05 等的金样例用 `UPDATE_GOLDEN=1` 重新生成并评审。`capabilities.rs` 里 `permission_mode` 每个取值都标 `full_access` 是档位表之前的过渡写法。`SessionCore` 对 `DriverEvent::Ask` 的匹配用 `..` 暂时忽略了 `tool_call_id`（T053 合并时），填 `item_id` 由本任务接上（已写入 brief） | T053、T088 |
 | T055 | 接 T053 的提取层：每个会话建 `ClaudeSession::new(cwd, config)`；`AskId`、`PromptTag` 由运行时分配；`CommandsChanged` 按 5.6.2 去重（金样例里每次 `available_commands_update` 都是完整列表）；`capabilities()` 要从 CLI 定位那边拿到 `Versions`（已写入 brief） | T053 |
-| T064、T066 | 宿主不声明 `session.compaction` 时适配器还推不推 `compaction_update`，录制回答不了（SP-1 的客户端声明了它），用兼容剧本核对；提取层照常处理这类更新 | T053 |
+| T066 | 宿主不声明 `session.compaction` 时适配器还推不推 `compaction_update`，录制回答不了（SP-1 的客户端声明了它），用兼容剧本核对；提取层照常处理这类更新 | T053 |
 | T098 | 带防护的 `RepoTier::run` 放在 `git/` 下：读配置用 `GitCmd::repo(RepoOp::ConfigList)`；T097 算出的覆盖经 `.config(键, 值)` 加进命令；运行用 `tier.prepare(cmd).run(clock, durations)`；指纹变化时按 `Prepared::read_only` 决定丢弃结果还是照常返回。T097 的接口：`parse(输出, 运行目录)` → `check_sources(&entries, &Bounds { git_dir, common_dir, writable })` → `overrides(&entries, &Setup { hooks, lfs, patch })`，`global` 放在子命令之前、`command` 放在子命令之后；覆盖后失败时只有 `required` 不为空才判 `unsafe_repo_config`；调用前后各取一次 `Fingerprint::take(&Layout::read(工作区)?, &entries)`，`changed` 就是 `repo_config_changed` 的 `paths`。`core.hooksPath` 以 `~/` 开头时 T097 没有展开（纯函数不读环境），需要的话由本任务传入展开后的路径 | T060、T097 |
 | T061 | 在 `SnapshotOp` 里加快照档命令，生成补丁的要带 `--no-ext-diff --no-textconv`；在 `SnapshotTier::prepare` 里补 `GIT_INDEX_FILE`、`GIT_OBJECT_DIRECTORY`、`GIT_ALTERNATE_OBJECT_DIRECTORIES`、`GIT_CONFIG_NOSYSTEM`、`GIT_CONFIG_GLOBAL`，并决定是否带 `HOME`；快照用 `GIT_SNAPSHOT` 超时 | T060 |
 | T123 | 用户档加一个 `User` 标记和 `UserTier`：不加 hooks 的覆盖，带 `HOME`；`push` 用 `GIT_PUSH` 超时 | T060 |
@@ -406,6 +406,19 @@
 | T182 | `runtime/licenses/codex-acp-THIRD_PARTY_NOTICES.md`（T006 生成）还没进 runtime-pack 的暂存和 App，要在 THIRD_PARTY_NOTICES 生成时一并放进去；manifest 的 `files` 哈希会随之变化 | T006 |
 | 升级 codex-acp 的任务 | 先把新标签的 `package-lock.json` 放进 `runtime/locks/`，再运行 `node tools/license-gate/src/main.ts codex-notices`（要联网，下载各包 tarball 核对 integrity 后取 LICENSE），否则许可证门禁会因找不到锁文件或声明不全而失败 | T006 |
 | T131（及加渲染入口的任务） | 加第二个渲染入口时，在 `tools/license-gate/src/main.ts` 的 `ENTRIES` 里登记它的环境名；`apps/desktop/vite.config.ts` 的插件把每个环境的模块写到 `dist/metafile/<环境>.json` | T006 |
+| T121、T124（git 写操作与 worktree 的故障点） | 故障点夹具与断言库在 `crates/cupper-host/tests/crash_concurrency.rs`（T069）：完整性检查、每条流 seq 连续、实时事件是日志前缀、在途命令按原 `command_id` 重试符合账本语义、消息各恰好一次；按命中次数倍增扫描（第 1、2、4、8……次到达时以 99 退出）。新故障点在 `failpoint.rs` 登记后，加进扫描表即可 | T069 |
+| 会话 actor 的测试 | `actor::held`（只在单元测试里编译，按项目路径登记）能让某次重扫停住，用来把配置变化放进"回合已开始、附加前的重扫还没做"这类窗口（T069）；会话夹具的 `events`、`attach`、`command` 等待都有 30 s 超时，超时时报出在等什么 | T069 |
+| 读设置的宿主任务 | 设置（T036）在 `crates/cupper-host/src/settings.rs`：宿主内部经 `SettingsHandle::current()` 取；默认值是 `worktrees.root` 为 `~/.cupper/worktrees`、三个通知开关开、新会话默认 Claude、`host.idle_exit_minutes` 为 10、`diagnostics.verbose` 关、不额外放行环境变量、CLI 路径为空（自动发现）。`cli_path`、`env_passthrough` 变了会先重新发现 agent 再回复；其余键 M1a 不推送 | T036 |
+| T126 | `apps.terminal`、`apps.editor` 的内置应用清单仍没有设计（T013 的交接），T036 的默认值暂用 macOS 自带的 Terminal 和 TextEdit | T036 |
+| 改协议或 ShellAPI 的任务（T151、T147 等） | 契约已冻结（T016），只能附加，`ci protocol` 的 `schema-compat`、`shell-api-m1a` 会判。新加的 `Option` 字段必须带 `skip_serializing_if = "Option::is_none"`，否则宿主发出 `null` 而 schema 不允许（T190 补守卫前没有检查）；值本身可以为 `null` 的做成具名定义，照 `CliPath`。改完跑 `pnpm gen`。`schema-compat` 不比较描述、数值界的放宽、`x-errors`、`x-milestone` | T016 |
+| T151 | `settings.updated` 事件与 `IndexView.settings` 在 `schema-compat` 下按附加通过（T016 用冻结副本演示过） | T016 |
+| T190 | 守卫的做法：序列化金样例与夹具后，断言 schema 里的非必填属性上没有 `null`；`CliPath` 这类值本身可为 `null` 的具名定义除外。导出时的变换是 `cupper-protocol/src/schema.rs` 的 `absent_not_null` | T016 |
+| T191 | PERF-snapshot 在 `git/snapshot/tests.rs`，每种情况现为 5 个样本；样本经 `cupper_host::perf::record` 写到 `CUPPER_PERF_OUT`。PERF-bridge-gate 进历史的做法写在 `docs/tasks/T117-host-perf/notes.md`：`gate.spec.ts` 也写 `CUPPER_PERF_OUT`，`ci/jobs/perf.rs` 的统计、追加、判定抽成共用函数给 e2e 作业调用 | T117 |
+| 要提高条目吞吐的任务（M1b 之后） | `flood_mixed` 经宿主约 2.6 ms 一个条目：会话 actor 把不能合并的事件逐个提交，约 0.87 ms 一个。提速的方向是同一步里攒批追加。现在达标，没有做（数字在 `docs/tasks/T117-host-perf/notes.md`） | T117 |
+| 改回合指纹的任务 | `Fingerprint::take` 遍历整个工作区找 `.gitattributes`，10 万文件约 43 ms，随被忽略的文件数线性增长，到百万级约 0.4 s 时再改成只看已跟踪和未忽略的 | T117 |
+| T187 | 真实提示词、权限模式（Claude `default`）、准备文件与自我约束都没写，留给 T187；报告的 `config_files`、`cli_sessions` 已占位，语义检查要求真实模式必须有配置哈希。`session/create` 带显式权限模式后三份 B 层录制的 `config` 会变，用 `--fake --write` 重新产出并说明差异。cancel 剧本在真实 CLI 上是"允许后等 1 秒再中断"，`sleep 60` 没有输出，可靠性要在 T066 实际跑时确认 | T064（已写入 brief） |
+| T188 | 读报告用 `report::parse` 加 `report::problems`；schema 在 `testdata/compat/report.schema.json`（键排好序）；`testdata_scan.rs` 的 `WORD_LIST`、`word_list` 已改成 `pub`。compat-framework 还没进 `ci pr`，照 ui 作业用 `git::changed_since_main` 按路径判断 | T064（已写入 brief） |
+| T066 | 执行者是 cupper-host 的忽略测试 `compat_driver`，由 `cargo xtask compat` 用 `--ignored --exact compat_driver` 和 `CUPPER_COMPAT_PLAN` 拉起；`--write` 只写 gold-b 剧本，没有 `.private/sensitive-words.txt`（或 `--words`）时一开始就报错 | T064 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

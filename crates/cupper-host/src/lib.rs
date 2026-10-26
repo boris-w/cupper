@@ -14,11 +14,14 @@ pub mod index;
 pub mod ledger;
 pub mod manifest;
 pub mod orchestrator;
+#[cfg(any(test, feature = "test-harness"))]
+pub mod perf;
 pub mod policy;
 pub mod pure;
 pub mod quiescence;
 pub mod requester;
 pub mod runtime;
+pub mod settings;
 pub mod startup;
 pub mod store;
 pub mod supervisor;

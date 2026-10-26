@@ -50,8 +50,8 @@ export const zAuthState = z.union([z.enum(["logged_in", "logged_out", "unchecked
  * Login state: the kind and the plan name only, never an email or organization.
  */
 export const zAuthStatus = z.object({
-  kind: z.string().nullish(),
-  plan: z.string().nullish(),
+  kind: z.string().optional(),
+  plan: z.string().optional(),
   state: zAuthState,
 });
 
@@ -67,8 +67,8 @@ export const zBlobHash = z.string();
 
 export const zBlobGetParams = z.object({
   hash: zBlobHash,
-  length: z.int().gte(0).lte(9007199254740991).nullish(),
-  offset: z.int().gte(0).lte(9007199254740991).nullish(),
+  length: z.int().gte(0).lte(9007199254740991).optional(),
+  offset: z.int().gte(0).lte(9007199254740991).optional(),
 });
 
 export const zBlobGetResult = z.object({
@@ -105,7 +105,7 @@ export const zBlobContent = z.object({
 });
 
 export const zChoice = z.object({
-  description: z.string().nullish(),
+  description: z.string().optional(),
   label: z.string(),
   value: z.string(),
 });
@@ -518,7 +518,7 @@ export const zFindingKind = z.union([
 ]);
 
 export const zGitBranchesResult = z.object({
-  current: z.string().nullish(),
+  current: z.string().optional(),
   local: z.array(z.string()),
   remote: z.array(z.string()),
 });
@@ -562,8 +562,8 @@ export const zGitPushResult = z.object({
  * The git tools found on the login shell's PATH.
  */
 export const zGitTools = z.object({
-  lfs: z.string().nullish(),
-  version: z.string().nullish(),
+  lfs: z.string().optional(),
+  version: z.string().optional(),
 });
 
 /**
@@ -592,10 +592,10 @@ export const zGuidance = z.union([
  * The uniform error item (ADR-06).
  */
 export const zErrorItem = z.object({
-  agent_code: z.string().nullish(),
+  agent_code: z.string().optional(),
   code: zFailureCode,
   guidance: zGuidance,
-  raw: z.string().nullish(),
+  raw: z.string().optional(),
   retryable: z.boolean(),
 });
 
@@ -604,7 +604,7 @@ export const zErrorItem = z.object({
  * `turn_no` from that op on, when the turn did not fit one page.
  */
 export const zHistoryCursor = z.object({
-  op_index: z.int().gte(0).lte(4294967295).nullish(),
+  op_index: z.int().gte(0).lte(4294967295).optional(),
   turn_no: z.int().gte(0).lte(4294967295),
 });
 
@@ -652,8 +652,8 @@ export const zHunkUnit = z.union([z.enum(["hunk", "mode", "whole_file"]), z.stri
 export const zDiffHunk = z.object({
   header: z.string(),
   hunk_id: zHunkId,
-  lines: z.array(z.string()).nullish(),
-  lines_blob: zBlobRef.nullish(),
+  lines: z.array(z.string()).optional(),
+  lines_blob: zBlobRef.optional(),
   unit: zHunkUnit,
 });
 
@@ -661,9 +661,9 @@ export const zDiffHunk = z.object({
  * Values as the capabilities list them for these option IDs.
  */
 export const zInitialConfig = z.object({
-  model: z.string().nullish(),
-  permission_mode: z.string().nullish(),
-  reasoning_effort: z.string().nullish(),
+  model: z.string().optional(),
+  permission_mode: z.string().optional(),
+  reasoning_effort: z.string().optional(),
 });
 
 /**
@@ -684,8 +684,8 @@ export const zInputKind = z.union([z.enum(["click", "key", "native_confirm"]), z
  * whatever the window sent (design 5.7.8).
  */
 export const zInputEvidence = z.object({
-  digit: z.int().gte(1).lte(9).nullish(),
-  key: zInputKey.nullish(),
+  digit: z.int().gte(1).lte(9).optional(),
+  key: zInputKey.optional(),
   kind: zInputKind,
 });
 
@@ -784,7 +784,7 @@ export const zMaintenanceTask = z.union([
 
 export const zNewWorktree = z.object({
   base_ref: z.string(),
-  branch_hint: z.string().nullish(),
+  branch_hint: z.string().optional(),
 });
 
 /**
@@ -865,7 +865,7 @@ export const zPlanPriority = z.union([z.enum(["high", "medium", "low"]), z.strin
 
 export const zPlanEntry = z.object({
   content: z.string(),
-  priority: zPlanPriority.nullish(),
+  priority: zPlanPriority.optional(),
   status: zPlanEntryStatus,
 });
 
@@ -897,10 +897,10 @@ export const zPrefixRisk = z.union([z.enum(["normal", "interpreter", "unknown"])
  * decides and its words are what counts (design 5.3.6).
  */
 export const zEffectRule = z.object({
-  location: z.string().nullish(),
-  prefix: z.string().nullish(),
+  location: z.string().optional(),
+  prefix: z.string().optional(),
   prefix_risk: zPrefixRisk,
-  text: z.string().nullish(),
+  text: z.string().optional(),
 });
 
 /**
@@ -968,7 +968,7 @@ export const zPromptCapabilities = z.object({
 
 export const zQuestionField = z.object({
   allow_custom: z.boolean(),
-  choices: z.array(zChoice).nullish(),
+  choices: z.array(zChoice).optional(),
   field_id: z.string(),
   label: z.string(),
   required: z.boolean(),
@@ -987,7 +987,7 @@ export const zQuestionRequest = z.object({
 export const zQueueId = z.string();
 
 export const zQueueMove = z.object({
-  before_queue_id: zQueueId.nullish(),
+  before_queue_id: zQueueId.optional(),
   queue_id: zQueueId,
 });
 
@@ -1003,6 +1003,13 @@ export const zQueueTarget = z.object({
  * Open enum: unknown values must be accepted. Known: archived
  */
 export const zRemovalReason = z.union([z.enum(["archived"]), z.string()]);
+
+/**
+ * What a repeated command's result adds to the first run's (design 5.2.5).
+ */
+export const zReplayed = z.object({
+  replayed: z.literal(true).optional(),
+});
 
 /**
  * Interaction request: `r_` + UUIDv7.
@@ -1096,7 +1103,7 @@ export const zRuntimeState = z.union([
 ]);
 
 export const zAdapterStatus = z.object({
-  failure: zRuntimeFailure.nullish(),
+  failure: zRuntimeFailure.optional(),
   runtime: zRuntimeState,
   version: z.string(),
 });
@@ -1110,7 +1117,7 @@ export const zScope = z.union([
 ]);
 
 export const zAuthElevateParams = z.object({
-  reason: z.string().nullish(),
+  reason: z.string().optional(),
   scopes: z.array(zScope),
 });
 
@@ -1127,14 +1134,14 @@ export const zAuthElevationRespondParams = z.object({
 export const zPrincipal = z.object({
   id: zPrincipalId,
   kind: zPrincipalKind,
-  role: zClientRole.nullish(),
+  role: zClientRole.optional(),
   scopes: z.array(zScope),
 });
 
 export const zInitializeResult = z.object({
   features: z.array(zFeature),
   host: zHostIdentity,
-  host_proof: z.string().nullish(),
+  host_proof: z.string().optional(),
   limits: zLimits,
   principal: zPrincipal,
   protocol: z.int().gte(0).lte(4294967295),
@@ -1147,7 +1154,7 @@ export const zSeedMix = z.union([z.enum(["sp1"]), z.string()]);
 
 export const zSeedProfile = z.object({
   items_per_turn: z.int().gte(0).lte(4294967295),
-  large_turn_items: z.int().gte(0).lte(4294967295).nullish(),
+  large_turn_items: z.int().gte(0).lte(4294967295).optional(),
   mix: zSeedMix,
   sessions: z.int().gte(0).lte(4294967295),
   turns: z.int().gte(0).lte(4294967295),
@@ -1162,7 +1169,7 @@ export const zSelected = z.object({
  */
 export const zSelfReported = z.object({
   client_name: z.string(),
-  reason: z.string().nullish(),
+  reason: z.string().optional(),
 });
 
 /**
@@ -1177,7 +1184,7 @@ export const zSessionId = z.string();
 
 export const zClientPresenceParams = z.object({
   foreground: z.boolean(),
-  session_id: zSessionId.nullish(),
+  session_id: zSessionId.optional(),
 });
 
 export const zDiagExportParams = z.object({
@@ -1193,10 +1200,10 @@ export const zDiagRecordingExportParams = z.object({
  * Exactly one of `session_id` (its workspace) and `project_id` (the project directory).
  */
 export const zFilesSearchParams = z.object({
-  limit: z.int().gte(0).lte(4294967295).nullish(),
-  project_id: zProjectId.nullish(),
+  limit: z.int().gte(0).lte(4294967295).optional(),
+  project_id: zProjectId.optional(),
   query: z.string(),
-  session_id: zSessionId.nullish(),
+  session_id: zSessionId.optional(),
 });
 
 export const zGitCommitParams = z.object({
@@ -1216,8 +1223,8 @@ export const zGitStatusParams = z.object({
 });
 
 export const zHistoryPageParams = z.object({
-  cursor: zHistoryCursor.nullish(),
-  max_bytes: z.int().gte(0).lte(4294967295).nullish(),
+  cursor: zHistoryCursor.optional(),
+  max_bytes: z.int().gte(0).lte(4294967295).optional(),
   session_id: zSessionId,
 });
 
@@ -1233,7 +1240,7 @@ export const zInteractionGetParams = z.object({
 export const zNotificationIntent = z.object({
   intent_id: zIntentId,
   reason: zIntentReason,
-  request_id: zRequestId.nullish(),
+  request_id: zRequestId.optional(),
   session_id: zSessionId,
 });
 
@@ -1331,7 +1338,7 @@ export const zHostShutdownParams = z.object({
 
 export const zSlashCommand = z.object({
   description: z.string(),
-  input_hint: z.string().nullish(),
+  input_hint: z.string().optional(),
   name: z.string(),
 });
 
@@ -1385,8 +1392,8 @@ export const zStreamResetParams = z.object({
 });
 
 export const zStreamSubscribeParams = z.object({
-  after_seq: z.int().gte(0).lte(9007199254740991).nullish(),
-  epoch: z.int().gte(0).lte(9007199254740991).nullish(),
+  after_seq: z.int().gte(0).lte(9007199254740991).optional(),
+  epoch: z.int().gte(0).lte(9007199254740991).optional(),
   stream: zStreamId,
 });
 
@@ -1404,7 +1411,7 @@ export const zStreamSubscribeResult = z.object({
   epoch: z.int().gte(0).lte(9007199254740991),
   head_seq: z.int().gte(0).lte(9007199254740991),
   mode: zSubscribeMode,
-  reason: zResyncReason.nullish(),
+  reason: zResyncReason.optional(),
   stream: zStreamId,
 });
 
@@ -1430,7 +1437,7 @@ export const zTextContent = z.object({
 export const zTier = z.union([z.enum(["normal", "elevated", "full_access"]), z.string()]);
 
 export const zConfigValue = z.object({
-  description: z.string().nullish(),
+  description: z.string().optional(),
   name: z.string(),
   risk: zTier,
   value: z.string(),
@@ -1450,12 +1457,12 @@ export const zConfigOption = z.object({
  * What choosing an option does, from the driver's option table (design 5.6.4).
  */
 export const zOptionEffect = z.object({
-  ends_turn: z.boolean().nullish(),
-  mode_after: z.string().nullish(),
+  ends_turn: z.boolean().optional(),
+  mode_after: z.string().optional(),
   persistent: z.boolean(),
-  rule: zEffectRule.nullish(),
+  rule: zEffectRule.optional(),
   scope: zEffectScope,
-  tier_after: zTier.nullish(),
+  tier_after: zTier.optional(),
 });
 
 /**
@@ -1483,7 +1490,7 @@ export const zArchivedCursor = z.object({
 });
 
 export const zAuthElevateResult = z.object({
-  expires_at: zTimestampMs.nullish(),
+  expires_at: zTimestampMs.optional(),
   granted: z.array(zScope),
 });
 
@@ -1497,9 +1504,9 @@ export const zClientInfo = z.object({
   client_name: z.string(),
   client_version: z.string(),
   conn_id: zConnId,
-  elevated: zElevation.nullish(),
+  elevated: zElevation.optional(),
   principal_kind: zPrincipalKind,
-  role: zClientRole.nullish(),
+  role: zClientRole.optional(),
   since: zTimestampMs,
 });
 
@@ -1524,7 +1531,7 @@ export const zHostStatusResult = z.object({
   clients: z.array(zClientInfo),
   pending_interactions: z.int().gte(0).lte(4294967295),
   pending_upgrade: z.boolean(),
-  pid: z.int().gte(0).lte(4294967295).nullish(),
+  pid: z.int().gte(0).lte(4294967295).optional(),
   running_turns: z.int().gte(0).lte(4294967295),
   version: z.string(),
 });
@@ -1540,7 +1547,7 @@ export const zItemEnd = z.object({
 });
 
 export const zSessionListArchivedParams = z.object({
-  cursor: zArchivedCursor.nullish(),
+  cursor: zArchivedCursor.optional(),
 });
 
 /**
@@ -1607,29 +1614,29 @@ export const zGitDiffParams = z.object({
 
 export const zSessionInterruptParams = z.object({
   command_id: zCommandId,
-  expected_turn_id: zTurnId.nullish(),
+  expected_turn_id: zTurnId.optional(),
   session_id: zSessionId,
 });
 
 export const zSessionInterruptResult = z.object({
-  turn_id: zTurnId.nullish(),
+  turn_id: zTurnId.optional(),
 });
 
 export const zSessionSendResult = z.object({
   disposition: zDisposition,
-  fallback_reason: zFallbackReason.nullish(),
-  queue_id: zQueueId.nullish(),
-  turn_id: zTurnId.nullish(),
+  fallback_reason: zFallbackReason.optional(),
+  queue_id: zQueueId.optional(),
+  turn_id: zTurnId.optional(),
 });
 
 export const zSteerOutcome = z.object({
   disposition: zDisposition,
-  fallback_reason: zFallbackReason.nullish(),
-  turn_id: zTurnId.nullish(),
+  fallback_reason: zFallbackReason.optional(),
+  turn_id: zTurnId.optional(),
 });
 
 export const zSessionQueueEditResult = z.object({
-  steer: zSteerOutcome.nullish(),
+  steer: zSteerOutcome.optional(),
   version: z.int().gte(0).lte(9007199254740991),
 });
 
@@ -1637,7 +1644,7 @@ export const zSessionQueueEditResult = z.object({
  * The original tool call, self-contained for when it is not loaded.
  */
 export const zToolRef = z.object({
-  command: z.string().nullish(),
+  command: z.string().optional(),
   item_id: zItemId,
   title: z.string(),
   turn_id: zTurnId,
@@ -1673,8 +1680,8 @@ export const zTurnStatus = z.union([
  * Tokens of one turn, as the agent reports them.
  */
 export const zTurnUsage = z.object({
-  cached: z.int().gte(0).lte(9007199254740991).nullish(),
-  cost: zCost.nullish(),
+  cached: z.int().gte(0).lte(9007199254740991).optional(),
+  cost: zCost.optional(),
   input: z.int().gte(0).lte(9007199254740991),
   output: z.int().gte(0).lte(9007199254740991),
 });
@@ -1685,16 +1692,16 @@ export const zTurnUsage = z.object({
 export const zTurnCompleted = z.object({
   duration_ms: zDurationMs,
   ended_at: zTimestampMs,
-  error_code: zFailureCode.nullish(),
+  error_code: zFailureCode.optional(),
   final_item_ids: z.array(zItemId),
   status: zTurnStatus,
-  stop_reason: zStopReason.nullish(),
+  stop_reason: zStopReason.optional(),
   turn_id: zTurnId,
-  usage: zTurnUsage.nullish(),
+  usage: zTurnUsage.optional(),
 });
 
 export const zUiNavigateParams = z.object({
-  request_id: zRequestId.nullish(),
+  request_id: zRequestId.optional(),
   session_id: zSessionId,
 });
 
@@ -1792,16 +1799,16 @@ export const zInteractionOutcome = z.union([
  * `interaction.resolved`.
  */
 export const zInteractionResolved = z.object({
-  outcome: zInteractionOutcome.nullish(),
-  reason: zResolutionReason.nullish(),
+  outcome: zInteractionOutcome.optional(),
+  reason: zResolutionReason.optional(),
   request_id: zRequestId,
-  resolved_by: zResolvedBy.nullish(),
+  resolved_by: zResolvedBy.optional(),
   status: zInteractionStatus,
 });
 
 export const zInteractionRespondParams = z.object({
   command_id: zCommandId,
-  input: zInputEvidence.nullish(),
+  input: zInputEvidence.optional(),
   outcome: zInteractionOutcome,
   request_digest: zDigest,
   request_id: zRequestId,
@@ -1814,21 +1821,21 @@ export const zInteractionRespondParams = z.object({
  * turn, never in an activity group. Its output streams like a tool call's.
  */
 export const zLateToolOutput = z.object({
-  exit_code: z.int().gte(-2147483648).lte(2147483647).nullish(),
-  output: zContent.nullish(),
-  output_bytes: z.int().gte(0).lte(9007199254740991).nullish(),
+  exit_code: z.int().gte(-2147483648).lte(2147483647).optional(),
+  output: zContent.optional(),
+  output_bytes: z.int().gte(0).lte(9007199254740991).optional(),
   output_state: zOutputState,
-  output_tail: z.string().nullish(),
+  output_tail: z.string().optional(),
   ref: zToolRef,
-  signal: z.string().nullish(),
+  signal: z.string().optional(),
 });
 
 /**
  * The agent's plan (MS-4): steps with their status, or Markdown only (Claude).
  */
 export const zPlan = z.object({
-  entries: z.array(zPlanEntry).nullish(),
-  markdown: zContent.nullish(),
+  entries: z.array(zPlanEntry).optional(),
+  markdown: zContent.optional(),
   source: zPlanSource,
 });
 
@@ -1863,7 +1870,7 @@ export const zHostPrepareUpgradeResult = z.object({
 export const zUsageUpdated = z.object({
   context_size: z.int().gte(0).lte(9007199254740991),
   context_used: z.int().gte(0).lte(9007199254740991),
-  cost: zCost.nullish(),
+  cost: zCost.optional(),
 });
 
 /**
@@ -1879,15 +1886,15 @@ export const zVersionRange = z.object({
  */
 export const zErrorData = z
   .object({
-    agent_code: z.string().nullish(),
-    agent_message: z.string().nullish(),
-    capability: z.string().nullish(),
+    agent_code: z.string().optional(),
+    agent_message: z.string().optional(),
+    capability: z.string().optional(),
     code: zErrorCode,
-    reason: zErrorReason.nullish(),
-    resolved_by: zResolvedBy.nullish(),
-    retry_after_ms: zDurationMs.nullish(),
-    scope: zScope.nullish(),
-    supported: zVersionRange.nullish(),
+    reason: zErrorReason.optional(),
+    resolved_by: zResolvedBy.optional(),
+    retry_after_ms: zDurationMs.optional(),
+    scope: zScope.optional(),
+    supported: zVersionRange.optional(),
   })
   .loose();
 
@@ -1900,11 +1907,11 @@ export const zHostHelloParams = z.object({
 export const zInitializeParams = z.object({
   auth: zAuth,
   client: zClientIdentity,
-  coalesce_ms: z.int().gte(0).lte(4294967295).nullish(),
+  coalesce_ms: z.int().gte(0).lte(4294967295).optional(),
   features: z.array(zFeature),
   nonce: z.string(),
   protocol: zVersionRange,
-  role: zClientRole.nullish(),
+  role: zClientRole.optional(),
 });
 
 /**
@@ -1912,7 +1919,7 @@ export const zInitializeParams = z.object({
  */
 export const zRpcError = z.object({
   code: z.int().gte(-9007199254740991).lte(9007199254740991),
-  data: zErrorData.nullish(),
+  data: zErrorData.optional(),
   message: z.string(),
 });
 
@@ -1940,7 +1947,7 @@ export const zCachedCapabilities = z.object({
 });
 
 export const zAgentsCapabilitiesResult = z.object({
-  cached: zCachedCapabilities.nullish(),
+  cached: zCachedCapabilities.optional(),
 });
 
 /**
@@ -1953,11 +1960,16 @@ export const zChainProcess = z.object({
   pid: z.int().gte(0).lte(4294967295),
 });
 
+/**
+ * A CLI's path, or `null`: the CLI is discovered (design 5.6.6).
+ */
+export const zCliPath = zWirePath.nullable();
+
 export const zCliStatus = z.object({
   compat: zCliCompat,
   install: zCliInstall,
   path: zWirePath,
-  version: z.string().nullish(),
+  version: z.string().optional(),
 });
 
 /**
@@ -1967,9 +1979,9 @@ export const zAgentStatus = z.object({
   adapter: zAdapterStatus,
   agent: zAgentKind,
   auth: zAuthStatus,
-  cli: zCliStatus.nullish(),
+  cli: zCliStatus.optional(),
   config_dir: zConfigDirState,
-  rss_bytes: z.int().gte(0).lte(9007199254740991).nullish(),
+  rss_bytes: z.int().gte(0).lte(9007199254740991).optional(),
   state: zAgentState,
 });
 
@@ -2021,7 +2033,7 @@ export const zFinding = z.object({
   kind: zFindingKind,
   outside_workspace: z.boolean(),
   path: zWirePath,
-  target: zWirePath.nullish(),
+  target: zWirePath.optional(),
 });
 
 export const zGitDiffFile = z.object({
@@ -2030,7 +2042,7 @@ export const zGitDiffFile = z.object({
   change: zDiffChange,
   deletions: z.int().gte(0).lte(4294967295),
   filter_unsupported: z.boolean().optional(),
-  old_path: zWirePath.nullish(),
+  old_path: zWirePath.optional(),
   path: zWirePath,
 });
 
@@ -2038,7 +2050,7 @@ export const zGitDiffResult = z.object({
   caveats: z.array(zDiffCaveat),
   diff_token: zDiffToken,
   files: z.array(zGitDiffFile),
-  snapshot: zDiffSnapshot.nullish(),
+  snapshot: zDiffSnapshot.optional(),
   stat: zDiffStat,
 });
 
@@ -2055,7 +2067,7 @@ export const zGitFileDiffResult = z.object({
 
 export const zGitStatusFile = z.object({
   index: zGitFileStatus,
-  old_path: zWirePath.nullish(),
+  old_path: zWirePath.optional(),
   path: zWirePath,
   worktree: zGitFileStatus,
 });
@@ -2063,10 +2075,10 @@ export const zGitStatusFile = z.object({
 export const zGitStatusResult = z.object({
   ahead: z.int().gte(0).lte(4294967295),
   behind: z.int().gte(0).lte(4294967295),
-  branch: z.string().nullish(),
+  branch: z.string().optional(),
   files: z.array(zGitStatusFile),
-  in_progress: zGitOperation.nullish(),
-  upstream: z.string().nullish(),
+  in_progress: zGitOperation.optional(),
+  upstream: z.string().optional(),
 });
 
 /**
@@ -2090,7 +2102,7 @@ export const zGitTarget = z.union([
 export const zGitApplyParams = z.object({
   command_id: zCommandId,
   diff_token: zDiffToken,
-  input: zInputEvidence.nullish(),
+  input: zInputEvidence.optional(),
   session_id: zSessionId,
   target: zGitTarget,
 });
@@ -2099,10 +2111,10 @@ export const zGitApplyParams = z.object({
  * Parameters of a [`Notice`]; which ones a code uses is documented on [`NoticeCode`].
  */
 export const zNoticeParams = z.object({
-  attempt: z.int().gte(0).lte(4294967295).nullish(),
-  max: z.int().gte(0).lte(4294967295).nullish(),
-  paths: z.array(zWirePath).nullish(),
-  reason: z.string().nullish(),
+  attempt: z.int().gte(0).lte(4294967295).optional(),
+  max: z.int().gte(0).lte(4294967295).optional(),
+  paths: z.array(zWirePath).optional(),
+  reason: z.string().optional(),
 });
 
 export const zNotice = z.object({
@@ -2111,8 +2123,8 @@ export const zNotice = z.object({
 });
 
 export const zPermissionTool = z.object({
-  command: zContent.nullish(),
-  item_id: zItemId.nullish(),
+  command: zContent.optional(),
+  item_id: zItemId.optional(),
   paths: z.array(zWirePath),
   tool_kind: zToolKind,
 });
@@ -2123,7 +2135,7 @@ export const zPermissionTool = z.object({
  */
 export const zPermissionRequest = z.object({
   content_truncated: z.boolean(),
-  detail: zContent.nullish(),
+  detail: zContent.optional(),
   options: z.array(zInteractionOption),
   title: z.string(),
   tool: zPermissionTool,
@@ -2167,17 +2179,17 @@ export const zInteractionRequested = z.object({
   actionable_by: z.array(zPrincipalKind),
   created_at: zTimestampMs,
   digest: zDigest,
-  item_id: zItemId.nullish(),
+  item_id: zItemId.optional(),
   request: zInteractionRequest,
   request_id: zRequestId,
-  turn_id: zTurnId.nullish(),
+  turn_id: zTurnId.optional(),
 });
 
 export const zInteractionGetResult = z.object({
-  outcome: zInteractionOutcome.nullish(),
-  reason: zResolutionReason.nullish(),
+  outcome: zInteractionOutcome.optional(),
+  reason: zResolutionReason.optional(),
   requested: zInteractionRequested,
-  resolved_by: zResolvedBy.nullish(),
+  resolved_by: zResolvedBy.optional(),
   status: zInteractionStatus,
 });
 
@@ -2201,7 +2213,7 @@ export const zProjectUpserted = z.object({
 
 export const zRequestView = z.object({
   requested: zInteractionRequested,
-  resolved: zInteractionResolved.nullish(),
+  resolved: zInteractionResolved.optional(),
 });
 
 export const zReviewComment = z.object({
@@ -2255,7 +2267,7 @@ export const zQueueEntry = z.object({
   created_by: zPrincipalId,
   preview: z.string(),
   queue_id: zQueueId,
-  reply_to: zRequestId.nullish(),
+  reply_to: zRequestId.optional(),
 });
 
 export const zQueueReplace = z.object({
@@ -2298,7 +2310,7 @@ export const zQueueOp = z.union([
  */
 export const zQueueUpdated = z.object({
   entries: z.array(zQueueEntry),
-  paused: zQueuePause.nullish(),
+  paused: zQueuePause.optional(),
   version: z.int().gte(0).lte(9007199254740991),
 });
 
@@ -2312,9 +2324,9 @@ export const zSessionQueueEditParams = z.object({
 export const zSessionSendParams = z.object({
   command_id: zCommandId,
   content: z.array(zPromptBlock),
-  expected_turn_id: zTurnId.nullish(),
+  expected_turn_id: zTurnId.optional(),
   mode: zSendMode,
-  reply_to: zRequestId.nullish(),
+  reply_to: zRequestId.optional(),
   session_id: zSessionId,
 });
 
@@ -2324,8 +2336,8 @@ export const zSessionSendParams = z.object({
  * or `diagnostics.verbose` takes `privileged` (design 5.2.5).
  */
 export const zSettings = z.object({
-  "agents.claude.cli_path": zWirePath.nullish(),
-  "agents.codex.cli_path": zWirePath.nullish(),
+  "agents.claude.cli_path": zCliPath,
+  "agents.codex.cli_path": zCliPath,
   "agents.env_passthrough": z.array(z.string()),
   "apps.editor": z.string(),
   "apps.terminal": z.string(),
@@ -2343,18 +2355,18 @@ export const zSettings = z.object({
  * key whose value may be `null`.
  */
 export const zSettingsPatch = z.object({
-  "agents.claude.cli_path": zWirePath.nullish(),
-  "agents.codex.cli_path": zWirePath.nullish(),
-  "agents.env_passthrough": z.array(z.string()).nullish(),
-  "apps.editor": z.string().nullish(),
-  "apps.terminal": z.string().nullish(),
-  "diagnostics.verbose": z.boolean().nullish(),
-  "host.idle_exit_minutes": z.int().gte(0).lte(4294967295).nullish(),
-  "notifications.error": z.boolean().nullish(),
-  "notifications.needs_action": z.boolean().nullish(),
-  "notifications.turn_completed": z.boolean().nullish(),
-  "sessions.default_agent": zAgentKind.nullish(),
-  "worktrees.root": zWirePath.nullish(),
+  "agents.claude.cli_path": zCliPath.optional(),
+  "agents.codex.cli_path": zCliPath.optional(),
+  "agents.env_passthrough": z.array(z.string()).optional(),
+  "apps.editor": z.string().optional(),
+  "apps.terminal": z.string().optional(),
+  "diagnostics.verbose": z.boolean().optional(),
+  "host.idle_exit_minutes": z.int().gte(0).lte(4294967295).optional(),
+  "notifications.error": z.boolean().optional(),
+  "notifications.needs_action": z.boolean().optional(),
+  "notifications.turn_completed": z.boolean().optional(),
+  "sessions.default_agent": zAgentKind.optional(),
+  "worktrees.root": zWirePath.optional(),
 });
 
 /**
@@ -2376,15 +2388,15 @@ export const zSettingsUpdateParams = z.object({
 export const zSnapshotRecorded = z.object({
   excluded: z.array(zExcludedPath),
   phase: zSnapshotPhase,
-  reason: zSnapshotReason.nullish(),
-  stat: zDiffStat.nullish(),
+  reason: zSnapshotReason.optional(),
+  stat: zDiffStat.optional(),
   status: zSnapshotStatus,
   turn_id: zTurnId,
 });
 
 export const zToolDiff = z.object({
   change: zDiffChange,
-  hunks: zContent.nullish(),
+  hunks: zContent.optional(),
   path: zWirePath,
   stat: zLineStat,
 });
@@ -2393,58 +2405,58 @@ export const zToolDiff = z.object({
  * `item.completed`, with the item's final fields.
  */
 export const zItemCompleted = z.object({
-  command: z.string().nullish(),
-  cwd: zWirePath.nullish(),
-  diffs: z.array(zToolDiff).nullish(),
+  command: z.string().optional(),
+  cwd: zWirePath.optional(),
+  diffs: z.array(zToolDiff).optional(),
   duration_ms: zDurationMs,
   ended_at: zTimestampMs,
-  entries: z.array(zPlanEntry).nullish(),
-  exit_code: z.int().gte(-2147483648).lte(2147483647).nullish(),
-  extraction: zExtraction.nullish(),
+  entries: z.array(zPlanEntry).optional(),
+  exit_code: z.int().gte(-2147483648).lte(2147483647).optional(),
+  extraction: zExtraction.optional(),
   item_id: zItemId,
-  markdown: zContent.nullish(),
+  markdown: zContent.optional(),
   may_still_run: z.boolean().optional(),
-  output: zContent.nullish(),
-  output_bytes: z.int().gte(0).lte(9007199254740991).nullish(),
-  output_state: zOutputState.nullish(),
-  output_tail: z.string().nullish(),
-  params: zNoticeParams.nullish(),
-  parent_item_id: zItemId.nullish(),
-  paths: z.array(zWirePath).nullish(),
-  query: z.string().nullish(),
-  signal: z.string().nullish(),
-  source: zPlanSource.nullish(),
+  output: zContent.optional(),
+  output_bytes: z.int().gte(0).lte(9007199254740991).optional(),
+  output_state: zOutputState.optional(),
+  output_tail: z.string().optional(),
+  params: zNoticeParams.optional(),
+  parent_item_id: zItemId.optional(),
+  paths: z.array(zWirePath).optional(),
+  query: z.string().optional(),
+  signal: z.string().optional(),
+  source: zPlanSource.optional(),
   status: zItemStatus,
-  title: z.string().nullish(),
-  tool_kind: zToolKind.nullish(),
-  url: z.string().nullish(),
+  title: z.string().optional(),
+  tool_kind: zToolKind.optional(),
+  url: z.string().optional(),
 });
 
 /**
  * `item.updated`: tool arguments filled in, output state, diffs and the like.
  */
 export const zItemUpdated = z.object({
-  command: z.string().nullish(),
-  cwd: zWirePath.nullish(),
-  diffs: z.array(zToolDiff).nullish(),
-  entries: z.array(zPlanEntry).nullish(),
-  exit_code: z.int().gte(-2147483648).lte(2147483647).nullish(),
-  extraction: zExtraction.nullish(),
+  command: z.string().optional(),
+  cwd: zWirePath.optional(),
+  diffs: z.array(zToolDiff).optional(),
+  entries: z.array(zPlanEntry).optional(),
+  exit_code: z.int().gte(-2147483648).lte(2147483647).optional(),
+  extraction: zExtraction.optional(),
   item_id: zItemId,
-  markdown: zContent.nullish(),
-  output: zContent.nullish(),
-  output_bytes: z.int().gte(0).lte(9007199254740991).nullish(),
-  output_state: zOutputState.nullish(),
-  output_tail: z.string().nullish(),
-  params: zNoticeParams.nullish(),
-  parent_item_id: zItemId.nullish(),
-  paths: z.array(zWirePath).nullish(),
-  query: z.string().nullish(),
-  signal: z.string().nullish(),
-  source: zPlanSource.nullish(),
-  title: z.string().nullish(),
-  tool_kind: zToolKind.nullish(),
-  url: z.string().nullish(),
+  markdown: zContent.optional(),
+  output: zContent.optional(),
+  output_bytes: z.int().gte(0).lte(9007199254740991).optional(),
+  output_state: zOutputState.optional(),
+  output_tail: z.string().optional(),
+  params: zNoticeParams.optional(),
+  parent_item_id: zItemId.optional(),
+  paths: z.array(zWirePath).optional(),
+  query: z.string().optional(),
+  signal: z.string().optional(),
+  source: zPlanSource.optional(),
+  title: z.string().optional(),
+  tool_kind: zToolKind.optional(),
+  url: z.string().optional(),
 });
 
 /**
@@ -2452,22 +2464,22 @@ export const zItemUpdated = z.object({
  * semantics and the client lays them out; see [`ToolCall::missing_required`].
  */
 export const zToolCall = z.object({
-  command: z.string().nullish(),
-  cwd: zWirePath.nullish(),
-  diffs: z.array(zToolDiff).nullish(),
-  exit_code: z.int().gte(-2147483648).lte(2147483647).nullish(),
+  command: z.string().optional(),
+  cwd: zWirePath.optional(),
+  diffs: z.array(zToolDiff).optional(),
+  exit_code: z.int().gte(-2147483648).lte(2147483647).optional(),
   extraction: zExtraction,
-  output: zContent.nullish(),
-  output_bytes: z.int().gte(0).lte(9007199254740991).nullish(),
+  output: zContent.optional(),
+  output_bytes: z.int().gte(0).lte(9007199254740991).optional(),
   output_state: zOutputState,
-  output_tail: z.string().nullish(),
-  parent_item_id: zItemId.nullish(),
+  output_tail: z.string().optional(),
+  parent_item_id: zItemId.optional(),
   paths: z.array(zWirePath),
-  query: z.string().nullish(),
-  signal: z.string().nullish(),
+  query: z.string().optional(),
+  signal: z.string().optional(),
   title: z.string(),
   tool_kind: zToolKind,
-  url: z.string().nullish(),
+  url: z.string().optional(),
 });
 
 /**
@@ -2476,7 +2488,7 @@ export const zToolCall = z.object({
  */
 export const zTrustScan = z.object({
   findings: z.array(zFinding),
-  findings_omitted: z.int().gte(0).lte(4294967295).nullish(),
+  findings_omitted: z.int().gte(0).lte(4294967295).optional(),
   state: zTrustState,
   trust_digest: zDigest,
 });
@@ -2492,17 +2504,17 @@ export const zTrustedFileChange = z.object({
 });
 
 export const zProjectTrustInfoResult = z.object({
-  diff_from_trusted: z.array(zTrustedFileChange).nullish(),
-  diff_omitted: z.int().gte(0).lte(4294967295).nullish(),
+  diff_from_trusted: z.array(zTrustedFileChange).optional(),
+  diff_omitted: z.int().gte(0).lte(4294967295).optional(),
   findings: z.array(zFinding),
-  findings_omitted: z.int().gte(0).lte(4294967295).nullish(),
+  findings_omitted: z.int().gte(0).lte(4294967295).optional(),
   path: zWirePath,
   state: zTrustState,
   trust_digest: zDigest,
 });
 
 export const zTurnView = z.object({
-  completed: zTurnCompleted.nullish(),
+  completed: zTurnCompleted.optional(),
   entries: z.array(zEntry),
   snapshots: z.array(zSnapshotRecorded),
   started: zTurnStarted,
@@ -2510,8 +2522,8 @@ export const zTurnView = z.object({
 
 export const zUserMessage = z.object({
   content: z.array(zPromptBlock),
-  queue_id: zQueueId.nullish(),
-  reply_to: zRequestId.nullish(),
+  queue_id: zQueueId.optional(),
+  reply_to: zRequestId.optional(),
   steered: z.boolean(),
 });
 
@@ -2569,15 +2581,15 @@ export const zItemStarted = z.intersection(
     ),
   ]),
   z.object({
-    group_id: zGroupId.nullish(),
+    group_id: zGroupId.optional(),
     item_id: zItemId,
     started_at: zTimestampMs,
-    turn_id: zTurnId.nullish(),
+    turn_id: zTurnId.optional(),
   }),
 );
 
 export const zItemView = z.object({
-  end: zItemEnd.nullish(),
+  end: zItemEnd.optional(),
   item: zItemStarted,
   output: z.string(),
   text: z.string(),
@@ -2593,7 +2605,7 @@ export const zVerifiedRequester = z.object({
   origin_unverifiable: z.boolean(),
   parent_chain: z.array(zChainProcess),
   pid: z.int().gte(0).lte(4294967295),
-  signing: z.string().nullish(),
+  signing: z.string().optional(),
 });
 
 export const zAuthElevationGetResult = z.object({
@@ -2607,7 +2619,7 @@ export const zAuthElevationGetResult = z.object({
  */
 export const zWorkspaceFailed = z.object({
   code: zErrorCode,
-  reason: zErrorReason.nullish(),
+  reason: zErrorReason.optional(),
 });
 
 /**
@@ -2620,11 +2632,11 @@ export const zWorkspaceKind = z.union([z.enum(["local", "worktree"]), z.string()
  */
 export const zSessionSummary = z.object({
   agent: zAgentKind,
-  branch: z.string().nullish(),
-  error_code: zFailureCode.nullish(),
+  branch: z.string().optional(),
+  error_code: zFailureCode.optional(),
   last_activity_at: zTimestampMs,
   pending_interactions: z.int().gte(0).lte(4294967295),
-  pending_kind: zPendingKind.nullish(),
+  pending_kind: zPendingKind.optional(),
   project_id: zProjectId,
   read_only: z.boolean(),
   session_id: zSessionId,
@@ -2641,22 +2653,22 @@ export const zArchivedSession = z.object({
 });
 
 export const zIndexView = z.object({
-  agents: zAgentsUpdated.nullish(),
-  clients: zClientsUpdated.nullish(),
+  agents: zAgentsUpdated.optional(),
+  clients: zClientsUpdated.optional(),
   elevations: z.record(z.string(), zElevationRequested),
-  host: zHostUpdated.nullish(),
+  host: zHostUpdated.optional(),
   projects: z.record(z.string(), zProjectUpserted),
   sessions: z.record(z.string(), zSessionSummary),
 });
 
 export const zSessionListArchivedResult = z.object({
-  next: zArchivedCursor.nullish(),
+  next: zArchivedCursor.optional(),
   sessions: z.array(zArchivedSession),
 });
 
 export const zSessionWorkspace = z.object({
-  base_ref: z.string().nullish(),
-  branch: z.string().nullish(),
+  base_ref: z.string().optional(),
+  branch: z.string().optional(),
   kind: zWorkspaceKind,
   path: zWirePath,
 });
@@ -2668,14 +2680,14 @@ export const zSessionWorkspace = z.object({
 export const zSessionConfigured = z.object({
   agent: zAgentKind,
   config: z.record(z.string(), z.string()),
-  confirmation_required: zConfirmationRequired.nullish(),
+  confirmation_required: zConfirmationRequired.optional(),
   project_config: zProjectConfig,
   read_only: z.boolean(),
   workspace: zSessionWorkspace,
 });
 
 export const zSessionGetResult = z.object({
-  archived_at: zTimestampMs.nullish(),
+  archived_at: zTimestampMs.optional(),
   summary: zSessionSummary,
   workspace: zSessionWorkspace,
 });
@@ -2698,14 +2710,14 @@ export const zWorkspacePhase = z.union([
  */
 export const zWorkspacePreparing = z.object({
   phase: zWorkspacePhase,
-  progress: z.int().gte(0).lte(255).nullish(),
+  progress: z.int().gte(0).lte(255).optional(),
 });
 
 /**
  * `workspace.ready`.
  */
 export const zWorkspaceReady = z.object({
-  branch: z.string().nullish(),
+  branch: z.string().optional(),
   path: zWirePath,
 });
 
@@ -2818,9 +2830,9 @@ export const zEvent = z.intersection(
     zUnknownEvent,
   ]),
   z.object({
-    cause: zCause.nullish(),
-    fallback: zFallback.nullish(),
-    from: z.int().gte(0).lte(9007199254740991).nullish(),
+    cause: zCause.optional(),
+    fallback: zFallback.optional(),
+    from: z.int().gte(0).lte(9007199254740991).optional(),
     seq: z.int().gte(0).lte(9007199254740991),
     ts: zTimestampMs,
     v: z.int().gte(0).lte(4294967295),
@@ -2940,7 +2952,7 @@ export const zEventBody = z.union([
 ]);
 
 export const zHistoryPageResult = z.object({
-  next: zHistoryCursor.nullish(),
+  next: zHistoryCursor.optional(),
   ops: z.array(zEventBody),
 });
 
@@ -2978,7 +2990,7 @@ export const zWorkspaceSpec = z.union([
 export const zSessionCreateParams = z.object({
   agent: zAgentKind,
   command_id: zCommandId,
-  config: zInitialConfig.nullish(),
+  config: zInitialConfig.optional(),
   message: z.array(zPromptBlock),
   project_id: zProjectId,
   workspace: zWorkspaceSpec,
@@ -3006,17 +3018,17 @@ export const zWorkspaceView = z.union([
 ]);
 
 export const zSessionView = z.object({
-  capabilities: zSessionCapabilities.nullish(),
-  configured: zSessionConfigured.nullish(),
+  capabilities: zSessionCapabilities.optional(),
+  configured: zSessionConfigured.optional(),
   detached: z.array(zRequestId),
   items: z.record(z.string(), zItemView),
   late_by_ref: z.record(z.string(), zItemId),
-  queue: zQueueUpdated.nullish(),
+  queue: zQueueUpdated.optional(),
   requests: z.record(z.string(), zRequestView),
   tail: z.array(zEntry),
   turns: z.array(zTurnView),
-  usage: zUsageUpdated.nullish(),
-  workspace: zWorkspaceView.nullish(),
+  usage: zUsageUpdated.optional(),
+  workspace: zWorkspaceView.optional(),
 });
 
 /**

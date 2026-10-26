@@ -3,7 +3,9 @@
 //! privileged command would do, diagnostics exports, and the test-harness
 //! methods.
 
-use schemars::{JsonSchema, SchemaGenerator};
+use std::borrow::Cow;
+
+use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
@@ -71,11 +73,29 @@ macro_rules! settings {
     };
 }
 
+/// An agent's CLI as the settings name it (design 5.6.6): a path, or `null`
+/// when the CLI is discovered. Always present in [`Settings`]; in a
+/// [`SettingsPatch`], `null` clears the path.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct CliPath(pub Option<WirePath>);
+
+impl JsonSchema for CliPath {
+    fn schema_name() -> Cow<'static, str> {
+        "CliPath".into()
+    }
+
+    fn json_schema(g: &mut SchemaGenerator) -> Schema {
+        let mut schema = g.subschema_for::<Option<WirePath>>();
+        let doc = "A CLI's path, or `null`: the CLI is discovered (design 5.6.6).";
+        schema.insert("description".into(), doc.into());
+        schema
+    }
+}
+
 settings! {
-    /// `null`: the CLI is discovered (design 5.6.6).
-    "agents.claude.cli_path" => claude_cli_path: Option<WirePath>,
-    /// `null`: the CLI is discovered.
-    "agents.codex.cli_path" => codex_cli_path: Option<WirePath>,
+    "agents.claude.cli_path" => claude_cli_path: CliPath,
+    "agents.codex.cli_path" => codex_cli_path: CliPath,
     /// Names of more environment variables the adapters get (design 5.6.6).
     "agents.env_passthrough" => env_passthrough: Vec<String>,
     "worktrees.root" => worktrees_root: WirePath,
@@ -458,12 +478,10 @@ pub(super) mod tests {
     fn unit_proto_methods_ext_settings_patch_sets_and_clears() {
         let patch = |raw| serde_json::from_value::<SettingsPatch>(raw);
         let set = patch(json!({"agents.codex.cli_path": "/usr/local/bin/codex"})).unwrap();
-        assert_eq!(
-            set.codex_cli_path,
-            Some(Some(WirePath("/usr/local/bin/codex".into())))
-        );
+        let codex = WirePath("/usr/local/bin/codex".into());
+        assert_eq!(set.codex_cli_path, Some(CliPath(Some(codex))));
         let cleared = patch(json!({"agents.codex.cli_path": null})).unwrap();
-        assert_eq!(cleared.codex_cli_path, Some(None));
+        assert_eq!(cleared.codex_cli_path, Some(CliPath(None)));
         assert_eq!(cleared.claude_cli_path, None);
         assert_eq!(patch(json!({})).unwrap(), SettingsPatch::default());
         // Only a key whose value may be `null` can be cleared.

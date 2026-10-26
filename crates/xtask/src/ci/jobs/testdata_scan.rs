@@ -3,7 +3,7 @@
 //! `tools/sanitize` scans `testdata/` and the committed CI summaries for
 //! personal data (5.9.3, plan 1.8): the generic patterns, then the
 //! maintainer's local sensitive word list when there is one. The compat
-//! report checks join with T064.
+//! report checks join with T188.
 
 use std::path::{Path, PathBuf};
 
@@ -15,7 +15,7 @@ use crate::ci::git;
 /// What the personal data scans cover.
 const SCOPE: &[&str] = &["testdata", "docs/tasks/*/ci/*.json"];
 /// Kept by the maintainer in the main work tree and never committed (plan section 6).
-const WORD_LIST: &str = ".private/sensitive-words.txt";
+pub const WORD_LIST: &str = ".private/sensitive-words.txt";
 
 pub fn run(ctx: &mut JobCtx) -> Result<()> {
     let mut install = ctx.command("pnpm");
@@ -55,7 +55,7 @@ fn words(ctx: &mut JobCtx, list: &Path) -> Result<()> {
 
 /// The word list of the main work tree, which a linked work tree such as an
 /// agent's finds through the repository's common git directory.
-fn word_list(root: &Path) -> Result<Option<PathBuf>> {
+pub fn word_list(root: &Path) -> Result<Option<PathBuf>> {
     let common = git::common_dir(root)?;
     let main = common.parent().unwrap_or(&common);
     let list = main.join(WORD_LIST);

@@ -53,3 +53,9 @@ M1a 的退出验收（T099）要求在同一个提交上**连续 20 次全绿**�
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充（2026-10-26，编排者）
+
+加第三处：T064 跑 `ci pr` 时，`test-host-release` 步骤（不带特性）里的 `orchestrator::session::trust_tests::it_orch_trust_gating_two_reasons_hold_until_both_go` 卡了 28 分钟。测试的 current-thread 运行时在等待、宿主的写者线程空闲，像是在等一个不会来的事件；单跑 40 次都通过。要分清用例时机还是闸门的两个原因在某种先后下真的放不开，并确认这条用例的等待有上限。上限相应放宽。
+
+- 停止线：280；硬停止线：320

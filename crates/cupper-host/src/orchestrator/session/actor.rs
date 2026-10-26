@@ -915,6 +915,10 @@ impl SessionActor {
         };
         let hold = self.parts.quiescence.hold();
         tokio::spawn(async move {
+            #[cfg(test)]
+            if matches!(purpose, Purpose::Attach(_)) {
+                held::attach_rescan(&cwd).await;
+            }
             let found = rescan(readers, project, cwd, cx).await;
             // The actor may have stopped.
             let _ = back.send((purpose, found));
@@ -1359,4 +1363,37 @@ fn skipped(turn_id: TurnId, phase: SnapshotPhase) -> Input {
         excluded: Vec::new(),
         stat: None,
     }))
+}
+
+/// Unit tests only: the rescan before an attach in a project waits here
+/// until its test lets it go, so that the project can change between the
+/// check that started a turn and that rescan (T069).
+#[cfg(test)]
+pub(super) mod held {
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::{Arc, Mutex};
+
+    use tokio::sync::Notify;
+
+    static HELD: Mutex<Option<HashMap<PathBuf, Arc<Notify>>>> = Mutex::new(None);
+
+    /// Holds the attach rescans of the project at `path` (a real path);
+    /// `notify_one` lets one go.
+    pub fn hold(path: &Path) -> Arc<Notify> {
+        let mut held = HELD.lock().unwrap();
+        let held = held.get_or_insert_with(HashMap::new);
+        Arc::clone(held.entry(path.to_owned()).or_default())
+    }
+
+    pub(super) async fn attach_rescan(path: &Path) {
+        let found = HELD
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|h| h.get(path).cloned());
+        if let Some(release) = found {
+            release.notified().await;
+        }
+    }
 }

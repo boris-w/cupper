@@ -3,14 +3,7 @@
     "AdapterStatus": {
       "properties": {
         "failure": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RuntimeFailure"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/RuntimeFailure"
         },
         "runtime": {
           "$ref": "#/$defs/RuntimeState"
@@ -71,14 +64,7 @@
           "$ref": "#/$defs/AuthStatus"
         },
         "cli": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/CliStatus"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/CliStatus",
           "description": "Absent when no CLI was found."
         },
         "config_dir": {
@@ -88,10 +74,7 @@
           "description": "Resident memory of the adapter's process group.",
           "maximum": 9007199254740991,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "state": {
           "$ref": "#/$defs/AgentState"
@@ -120,14 +103,7 @@
     "AgentsCapabilitiesResult": {
       "properties": {
         "cached": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/CachedCapabilities"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/CachedCapabilities",
           "description": "Absent while the cache is empty; `agents/refresh` fills it."
         }
       },
@@ -338,10 +314,7 @@
       "properties": {
         "reason": {
           "description": "Shown as unverified.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "scopes": {
           "description": "`write`, `approve` or both.",
@@ -359,14 +332,7 @@
     "AuthElevateResult": {
       "properties": {
         "expires_at": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TimestampMs"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/TimestampMs",
           "description": "Absent when nothing was granted. The grant also ends with the connection."
         },
         "granted": {
@@ -462,16 +428,10 @@
       "description": "Login state: the kind and the plan name only, never an email or organization.",
       "properties": {
         "kind": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "plan": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "state": {
           "$ref": "#/$defs/AuthState"
@@ -532,18 +492,12 @@
         "length": {
           "maximum": 9007199254740991,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "maximum": 9007199254740991,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         }
       },
       "required": [
@@ -700,10 +654,7 @@
     "Choice": {
       "properties": {
         "description": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "label": {
           "type": "string"
@@ -751,6 +702,17 @@
       ],
       "description": "Open enum: unknown values must be accepted. Known: native npm_shim unsupported_install "
     },
+    "CliPath": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WirePath"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "A CLI's path, or `null`: the CLI is discovered (design 5.6.6)."
+    },
     "CliStatus": {
       "properties": {
         "compat": {
@@ -764,10 +726,7 @@
           "description": "The resolved native binary."
         },
         "version": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
@@ -827,27 +786,13 @@
           "$ref": "#/$defs/ConnId"
         },
         "elevated": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Elevation"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Elevation"
         },
         "principal_kind": {
           "$ref": "#/$defs/PrincipalKind"
         },
         "role": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ClientRole"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ClientRole"
         },
         "since": {
           "$ref": "#/$defs/TimestampMs"
@@ -886,14 +831,7 @@
           "type": "boolean"
         },
         "session_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SessionId"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/SessionId"
         }
       },
       "required": [
@@ -1000,10 +938,7 @@
     "ConfigValue": {
       "properties": {
         "description": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -1252,20 +1187,10 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
         "lines_blob": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/BlobRef"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/BlobRef",
           "description": "Instead of `lines` when they exceed the inline limit."
         },
         "unit": {
@@ -1408,26 +1333,17 @@
       "properties": {
         "location": {
           "description": "Where the agent writes the rule.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "prefix": {
           "description": "The command prefix the rule allows.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "prefix_risk": {
           "$ref": "#/$defs/PrefixRisk"
         },
         "text": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
@@ -1623,79 +1539,35 @@
       "properties": {
         "agent_code": {
           "description": "`agent_error`: the agent's own code and message (truncated and redacted).",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "agent_message": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "capability": {
           "description": "`unsupported`: the missing capability.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "code": {
           "$ref": "#/$defs/ErrorCode"
         },
         "reason": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ErrorReason"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ErrorReason"
         },
         "resolved_by": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ResolvedBy"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/ResolvedBy",
           "description": "`conflict/already_resolved`: who resolved the request."
         },
         "retry_after_ms": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DurationMs"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/DurationMs",
           "description": "`rate_limited`: when to try again."
         },
         "scope": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Scope"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/Scope",
           "description": "`forbidden/scope`: the scope the caller lacks."
         },
         "supported": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/VersionRange"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/VersionRange",
           "description": "`version_unsupported`: the major versions the host supports."
         }
       },
@@ -1709,10 +1581,7 @@
       "properties": {
         "agent_code": {
           "description": "The agent's own error code.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "code": {
           "$ref": "#/$defs/FailureCode"
@@ -1722,10 +1591,7 @@
         },
         "raw": {
           "description": "The agent's error text, truncated and redacted.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "retryable": {
           "type": "boolean"
@@ -2228,33 +2094,16 @@
       "description": "The `type` and `data` of an event. A snapshot or a history page is a\nlist of these, applied the same way as live events (ADR-06).",
       "properties": {
         "cause": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Cause"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Cause"
         },
         "fallback": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Fallback"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Fallback"
         },
         "from": {
           "description": "Set on a range event made by send-time coalescing: it covers `from..=seq`.",
           "maximum": 9007199254740991,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "seq": {
           "description": "Position in its stream; contiguous in the host log.",
@@ -2956,33 +2805,16 @@
         "limit": {
           "maximum": 4294967295,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "project_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ProjectId"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ProjectId"
         },
         "query": {
           "type": "string"
         },
         "session_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SessionId"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/SessionId"
         }
       },
       "required": [
@@ -3024,14 +2856,7 @@
           "description": "The file it is in, relative to the project; the levels above it, up\nto the git root, start with `../`."
         },
         "target": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WirePath"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/WirePath",
           "description": "The realpath a symlink on `path` resolves to."
         }
       },
@@ -3077,14 +2902,7 @@
           "description": "The `git/diff` that `target` refers to."
         },
         "input": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/InputEvidence"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/InputEvidence",
           "description": "Evidence of real input (design 5.7.8); required for `git/revert`\nfrom the `window` role (design 5.2.5)."
         },
         "session_id": {
@@ -3117,10 +2935,7 @@
       "properties": {
         "current": {
           "description": "Absent on a detached HEAD.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "local": {
           "items": {
@@ -3198,14 +3013,7 @@
           "type": "boolean"
         },
         "old_path": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WirePath"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/WirePath",
           "description": "The source of a rename, whose `change` is `update`."
         },
         "path": {
@@ -3255,14 +3063,7 @@
           "type": "array"
         },
         "snapshot": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DiffSnapshot"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/DiffSnapshot",
           "description": "Turn ranges: what their snapshots left out."
         },
         "stat": {
@@ -3397,14 +3198,7 @@
           "description": "The index against HEAD."
         },
         "old_path": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WirePath"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/WirePath",
           "description": "The source of a rename or copy."
         },
         "path": {
@@ -3449,10 +3243,7 @@
         },
         "branch": {
           "description": "Absent on a detached HEAD.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "files": {
           "description": "Changed, staged, untracked and unmerged files; not ignored ones.",
@@ -3462,21 +3253,11 @@
           "type": "array"
         },
         "in_progress": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/GitOperation"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/GitOperation"
         },
         "upstream": {
           "description": "E.g. `origin/main`.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
@@ -3540,16 +3321,10 @@
       "properties": {
         "lfs": {
           "description": "The git-lfs version.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "version": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "type": "object"
@@ -3586,10 +3361,7 @@
         "op_index": {
           "maximum": 4294967295,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "turn_no": {
           "maximum": 4294967295,
@@ -3605,24 +3377,14 @@
     "HistoryPageParams": {
       "properties": {
         "cursor": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HistoryCursor"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/HistoryCursor",
           "description": "Absent: start before the oldest turn in the window."
         },
         "max_bytes": {
           "description": "At most `limits.max_history_page_bytes`.",
           "maximum": 4294967295,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "session_id": {
           "$ref": "#/$defs/SessionId"
@@ -3636,14 +3398,7 @@
     "HistoryPageResult": {
       "properties": {
         "next": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HistoryCursor"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/HistoryCursor",
           "description": "Absent at the first turn."
         },
         "ops": {
@@ -3796,10 +3551,7 @@
           "description": "`test-harness` builds only.",
           "maximum": 4294967295,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "running_turns": {
           "maximum": 4294967295,
@@ -3873,24 +3625,10 @@
     "IndexView": {
       "properties": {
         "agents": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AgentsUpdated"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/AgentsUpdated"
         },
         "clients": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ClientsUpdated"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ClientsUpdated"
         },
         "elevations": {
           "additionalProperties": {
@@ -3900,14 +3638,7 @@
           "type": "object"
         },
         "host": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HostUpdated"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/HostUpdated"
         },
         "projects": {
           "additionalProperties": {
@@ -3934,22 +3665,13 @@
       "description": "Values as the capabilities list them for these option IDs.",
       "properties": {
         "model": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "permission_mode": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "reasoning_effort": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "type": "object"
@@ -3966,10 +3688,7 @@
           "description": "The send-time coalescing window asked for; the host clamps it to\n`limits.max_coalesce_ms`.",
           "maximum": 4294967295,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "features": {
           "items": {
@@ -3986,14 +3705,7 @@
           "$ref": "#/$defs/VersionRange"
         },
         "role": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ClientRole"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/ClientRole",
           "description": "`desktop_ui` only; fixed for the connection (design 5.7.1)."
         }
       },
@@ -4019,10 +3731,7 @@
         },
         "host_proof": {
           "description": "Degraded authentication only: the host's proof, checked by the client.",
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": "string",
           "x-id": true
         },
         "limits": {
@@ -4054,20 +3763,10 @@
           "description": "`key: digit` only.",
           "maximum": 9,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "key": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/InputKey"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/InputKey",
           "description": "`kind: key` only."
         },
         "kind": {
@@ -4172,39 +3871,18 @@
     "InteractionGetResult": {
       "properties": {
         "outcome": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/InteractionOutcome"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/InteractionOutcome",
           "description": "Once no longer `pending`, as `interaction.resolved` carried them."
         },
         "reason": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ResolutionReason"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ResolutionReason"
         },
         "requested": {
           "$ref": "#/$defs/InteractionRequested",
           "description": "As `interaction.requested` carried it."
         },
         "resolved_by": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ResolvedBy"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ResolvedBy"
         },
         "status": {
           "$ref": "#/$defs/InteractionStatus"
@@ -4390,14 +4068,7 @@
           "description": "[`request_digest`], echoed by `interaction/respond`."
         },
         "item_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ItemId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/ItemId",
           "description": "The tool call the request is about."
         },
         "request": {
@@ -4407,14 +4078,7 @@
           "$ref": "#/$defs/RequestId"
         },
         "turn_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TurnId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/TurnId",
           "description": "Absent for a request outside any turn."
         }
       },
@@ -4431,37 +4095,16 @@
       "description": "`interaction.resolved`.",
       "properties": {
         "outcome": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/InteractionOutcome"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/InteractionOutcome"
         },
         "reason": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ResolutionReason"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ResolutionReason"
         },
         "request_id": {
           "$ref": "#/$defs/RequestId"
         },
         "resolved_by": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ResolvedBy"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ResolvedBy"
         },
         "status": {
           "$ref": "#/$defs/InteractionStatus"
@@ -4479,14 +4122,7 @@
           "$ref": "#/$defs/CommandId"
         },
         "input": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/InputEvidence"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/InputEvidence",
           "description": "Required from a `window` connection, ignored from other principals."
         },
         "outcome": {
@@ -4544,29 +4180,16 @@
       "description": "`item.completed`, with the item's final fields.",
       "properties": {
         "command": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "cwd": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WirePath"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/WirePath"
         },
         "diffs": {
           "items": {
             "$ref": "#/$defs/ToolDiff"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
         "duration_ms": {
           "$ref": "#/$defs/DurationMs",
@@ -4579,155 +4202,72 @@
           "items": {
             "$ref": "#/$defs/PlanEntry"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
         "exit_code": {
           "maximum": 2147483647,
           "minimum": -2147483648,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "extraction": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Extraction"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Extraction"
         },
         "item_id": {
           "$ref": "#/$defs/ItemId"
         },
         "markdown": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Content"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Content"
         },
         "may_still_run": {
           "description": "An `abandoned` command of an interrupted turn may still run\n(`interrupt_stops_commands` is false); present only when true.",
           "type": "boolean"
         },
         "output": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Content"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Content"
         },
         "output_bytes": {
           "maximum": 9007199254740991,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "output_state": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/OutputState"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/OutputState"
         },
         "output_tail": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "params": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/NoticeParams"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/NoticeParams"
         },
         "parent_item_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ItemId"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ItemId"
         },
         "paths": {
           "items": {
             "$ref": "#/$defs/WirePath"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
         "query": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "signal": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "source": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PlanSource"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/PlanSource"
         },
         "status": {
           "$ref": "#/$defs/ItemStatus"
         },
         "title": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "tool_kind": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ToolKind"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ToolKind"
         },
         "url": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
@@ -4902,14 +4442,7 @@
       "description": "`item.started`.",
       "properties": {
         "group_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/GroupId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/GroupId",
           "description": "The activity group: consecutive tool calls in a turn and the\nthoughts among them (design 5.3.5)."
         },
         "item_id": {
@@ -4919,14 +4452,7 @@
           "$ref": "#/$defs/TimestampMs"
         },
         "turn_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TurnId"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/TurnId"
         }
       },
       "required": [
@@ -4956,176 +4482,80 @@
       "description": "`item.updated`: tool arguments filled in, output state, diffs and the like.",
       "properties": {
         "command": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "cwd": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WirePath"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/WirePath"
         },
         "diffs": {
           "items": {
             "$ref": "#/$defs/ToolDiff"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
         "entries": {
           "items": {
             "$ref": "#/$defs/PlanEntry"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
         "exit_code": {
           "maximum": 2147483647,
           "minimum": -2147483648,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "extraction": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Extraction"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Extraction"
         },
         "item_id": {
           "$ref": "#/$defs/ItemId"
         },
         "markdown": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Content"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Content"
         },
         "output": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Content"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Content"
         },
         "output_bytes": {
           "maximum": 9007199254740991,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "output_state": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/OutputState"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/OutputState"
         },
         "output_tail": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "params": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/NoticeParams"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/NoticeParams"
         },
         "parent_item_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ItemId"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ItemId"
         },
         "paths": {
           "items": {
             "$ref": "#/$defs/WirePath"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
         "query": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "signal": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "source": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PlanSource"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/PlanSource"
         },
         "title": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "tool_kind": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ToolKind"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ToolKind"
         },
         "url": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
@@ -5136,14 +4566,7 @@
     "ItemView": {
       "properties": {
         "end": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ItemEnd"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ItemEnd"
         },
         "item": {
           "$ref": "#/$defs/ItemStarted",
@@ -5191,46 +4614,27 @@
         "exit_code": {
           "maximum": 2147483647,
           "minimum": -2147483648,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "output": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Content"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Content"
         },
         "output_bytes": {
           "maximum": 9007199254740991,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "output_state": {
           "$ref": "#/$defs/OutputState"
         },
         "output_tail": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "ref": {
           "$ref": "#/$defs/ToolRef"
         },
         "signal": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
@@ -5429,10 +4833,7 @@
         },
         "branch_hint": {
           "description": "A short name for the branch; the host makes it unique under `cupper/`.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
@@ -5483,34 +4884,22 @@
         "attempt": {
           "maximum": 4294967295,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "max": {
           "maximum": 4294967295,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "paths": {
           "items": {
             "$ref": "#/$defs/WirePath"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
         "reason": {
           "description": "`project_config_changed`: the scan's failure (`too_many_files`, ...),\nwhen the rescan failed rather than found a change.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "type": "object"
@@ -5525,14 +4914,7 @@
           "$ref": "#/$defs/IntentReason"
         },
         "request_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestId"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/RequestId"
         },
         "session_id": {
           "$ref": "#/$defs/SessionId"
@@ -5566,45 +4948,25 @@
       "properties": {
         "ends_turn": {
           "description": "Whether choosing it ends the whole turn; absent when not known.",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "mode_after": {
           "description": "The mode the session switches to.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "persistent": {
           "description": "Writes the agent's own permission rules or exec policy (AP-2).",
           "type": "boolean"
         },
         "rule": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/EffectRule"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/EffectRule",
           "description": "The rule a persistent option writes."
         },
         "scope": {
           "$ref": "#/$defs/EffectScope"
         },
         "tier_after": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Tier"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/Tier",
           "description": "The tier of `mode_after`."
         }
       },
@@ -5689,14 +5051,7 @@
           "type": "boolean"
         },
         "detail": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Content"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Content"
         },
         "options": {
           "items": {
@@ -5722,25 +5077,11 @@
     "PermissionTool": {
       "properties": {
         "command": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Content"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/Content",
           "description": "The full command: inline, or a blob beyond the inline limit."
         },
         "item_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ItemId"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ItemId"
         },
         "paths": {
           "items": {
@@ -5765,20 +5106,10 @@
           "items": {
             "$ref": "#/$defs/PlanEntry"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
         "markdown": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Content"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Content"
         },
         "source": {
           "$ref": "#/$defs/PlanSource"
@@ -5813,14 +5144,7 @@
           "type": "string"
         },
         "priority": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PlanPriority"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/PlanPriority"
         },
         "status": {
           "$ref": "#/$defs/PlanEntryStatus"
@@ -5951,14 +5275,7 @@
           "$ref": "#/$defs/PrincipalKind"
         },
         "role": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ClientRole"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ClientRole"
         },
         "scopes": {
           "items": {
@@ -6091,19 +5408,13 @@
           "items": {
             "$ref": "#/$defs/TrustedFileChange"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
         "diff_omitted": {
           "description": "Changes left out of `diff_from_trusted` for the frame's sake.",
           "maximum": 4294967295,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "findings": {
           "items": {
@@ -6115,10 +5426,7 @@
           "description": "As [`TrustScan::findings_omitted`].",
           "maximum": 4294967295,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "path": {
           "$ref": "#/$defs/WirePath",
@@ -6319,10 +5627,7 @@
           "items": {
             "$ref": "#/$defs/Choice"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
         "field_id": {
           "type": "string"
@@ -6391,14 +5696,7 @@
           "$ref": "#/$defs/QueueId"
         },
         "reply_to": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/RequestId",
           "description": "The rejected request this message is attached to (RP-12)."
         }
       },
@@ -6419,14 +5717,7 @@
     "QueueMove": {
       "properties": {
         "before_queue_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/QueueId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/QueueId",
           "description": "Absent: to the end."
         },
         "queue_id": {
@@ -6553,14 +5844,7 @@
           "type": "array"
         },
         "paused": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/QueuePause"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/QueuePause"
         },
         "version": {
           "description": "What `session/queue_edit` checks as `expected_version`.",
@@ -6589,6 +5873,16 @@
       ],
       "description": "Open enum: unknown values must be accepted. Known: archived "
     },
+    "Replayed": {
+      "description": "What a repeated command's result adds to the first run's (design 5.2.5).",
+      "properties": {
+        "replayed": {
+          "const": true,
+          "description": "Present when the ledger answered a repeat with the first outcome."
+        }
+      },
+      "type": "object"
+    },
     "RequestId": {
       "description": "Interaction request: `r_` + UUIDv7.",
       "type": "string",
@@ -6600,14 +5894,7 @@
           "$ref": "#/$defs/InteractionRequested"
         },
         "resolved": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/InteractionResolved"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/InteractionResolved"
         }
       },
       "required": [
@@ -6747,14 +6034,7 @@
           "type": "integer"
         },
         "data": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ErrorData"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/ErrorData",
           "description": "Boxed to keep `Result<_, RpcError>` small."
         },
         "message": {
@@ -6860,10 +6140,7 @@
           "description": "One more turn in the first session with this many items (SP-6: 2,000).",
           "maximum": 4294967295,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "mix": {
           "$ref": "#/$defs/SeedMix",
@@ -6907,10 +6184,7 @@
           "type": "string"
         },
         "reason": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
@@ -7046,14 +6320,7 @@
           "type": "object"
         },
         "confirmation_required": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ConfirmationRequired"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/ConfirmationRequired",
           "description": "Present while the queue waits for `session/confirm_config` (design 5.2.6)."
         },
         "project_config": {
@@ -7105,14 +6372,7 @@
           "$ref": "#/$defs/CommandId"
         },
         "config": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/InitialConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/InitialConfig",
           "description": "Over the agent's defaults; a looser tier follows the tier rules\n(design 5.8.2)."
         },
         "message": {
@@ -7162,14 +6422,7 @@
     "SessionGetResult": {
       "properties": {
         "archived_at": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TimestampMs"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/TimestampMs"
         },
         "summary": {
           "$ref": "#/$defs/SessionSummary"
@@ -7195,14 +6448,7 @@
           "$ref": "#/$defs/CommandId"
         },
         "expected_turn_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TurnId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/TurnId",
           "description": "The turn the client saw running."
         },
         "session_id": {
@@ -7218,14 +6464,7 @@
     "SessionInterruptResult": {
       "properties": {
         "turn_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TurnId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/TurnId",
           "description": "Absent when no turn ran."
         }
       },
@@ -7255,14 +6494,7 @@
     "SessionListArchivedParams": {
       "properties": {
         "cursor": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ArchivedCursor"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/ArchivedCursor",
           "description": "Absent: from the latest."
         }
       },
@@ -7271,14 +6503,7 @@
     "SessionListArchivedResult": {
       "properties": {
         "next": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ArchivedCursor"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/ArchivedCursor",
           "description": "Absent on the last page."
         },
         "sessions": {
@@ -7344,14 +6569,7 @@
     "SessionQueueEditResult": {
       "properties": {
         "steer": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SteerOutcome"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/SteerOutcome",
           "description": "What became of a `steer`."
         },
         "version": {
@@ -7454,14 +6672,7 @@
           "type": "array"
         },
         "expected_turn_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TurnId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/TurnId",
           "description": "`steer`: the turn the client saw running."
         },
         "mode": {
@@ -7469,14 +6680,7 @@
           "description": "What to do while a turn runs."
         },
         "reply_to": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/RequestId",
           "description": "\"Reject with a message\": the rejected request, resolved and in this\nsession; only shown with the message (RP-12, v1.5)."
         },
         "session_id": {
@@ -7497,36 +6701,15 @@
           "$ref": "#/$defs/Disposition"
         },
         "fallback_reason": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/FallbackReason"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/FallbackReason",
           "description": "Why a steer went to the queue."
         },
         "queue_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/QueueId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/QueueId",
           "description": "`queued`."
         },
         "turn_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TurnId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/TurnId",
           "description": "`started` or `steered`: the turn the message went into."
         }
       },
@@ -7599,20 +6782,10 @@
           "$ref": "#/$defs/AgentKind"
         },
         "branch": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "error_code": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/FailureCode"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/FailureCode"
         },
         "last_activity_at": {
           "$ref": "#/$defs/TimestampMs"
@@ -7624,14 +6797,7 @@
           "type": "integer"
         },
         "pending_kind": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PendingKind"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/PendingKind",
           "description": "The class of the oldest pending request, when there is one."
         },
         "project_id": {
@@ -7679,24 +6845,10 @@
     "SessionView": {
       "properties": {
         "capabilities": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SessionCapabilities"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/SessionCapabilities"
         },
         "configured": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SessionConfigured"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/SessionConfigured"
         },
         "detached": {
           "description": "Pending requests whose turn left the window; the turn's history page\nputs them back in place.",
@@ -7719,14 +6871,7 @@
           "type": "object"
         },
         "queue": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/QueueUpdated"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/QueueUpdated"
         },
         "requests": {
           "additionalProperties": {
@@ -7749,24 +6894,10 @@
           "type": "array"
         },
         "usage": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/UsageUpdated"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/UsageUpdated"
         },
         "workspace": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WorkspaceView"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/WorkspaceView"
         }
       },
       "required": [
@@ -7783,16 +6914,10 @@
       "properties": {
         "base_ref": {
           "description": "The ref a worktree was created from.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "branch": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "kind": {
           "$ref": "#/$defs/WorkspaceKind"
@@ -7811,26 +6936,10 @@
       "description": "The host's settings by their keys in design 5.2.11, every key\npresent. Changing `agents.*.cli_path`, `agents.env_passthrough`\nor `diagnostics.verbose` takes `privileged` (design 5.2.5).",
       "properties": {
         "agents.claude.cli_path": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WirePath"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "`null`: the CLI is discovered (design 5.6.6)."
+          "$ref": "#/$defs/CliPath"
         },
         "agents.codex.cli_path": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WirePath"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "`null`: the CLI is discovered."
+          "$ref": "#/$defs/CliPath"
         },
         "agents.env_passthrough": {
           "description": "Names of more environment variables the adapters get (design 5.6.6).",
@@ -7872,6 +6981,8 @@
         }
       },
       "required": [
+        "agents.claude.cli_path",
+        "agents.codex.cli_path",
         "agents.env_passthrough",
         "worktrees.root",
         "notifications.needs_action",
@@ -7889,97 +7000,45 @@
       "description": "The keys to change, each with its new value; `null` clears a\nkey whose value may be `null`.",
       "properties": {
         "agents.claude.cli_path": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WirePath"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/CliPath"
         },
         "agents.codex.cli_path": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WirePath"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/CliPath"
         },
         "agents.env_passthrough": {
           "items": {
             "type": "string"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
         "apps.editor": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "apps.terminal": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "diagnostics.verbose": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "host.idle_exit_minutes": {
           "maximum": 4294967295,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "notifications.error": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "notifications.needs_action": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "notifications.turn_completed": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "sessions.default_agent": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AgentKind"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/AgentKind"
         },
         "worktrees.root": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WirePath"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/WirePath"
         }
       },
       "type": "object"
@@ -8033,10 +7092,7 @@
           "type": "string"
         },
         "input_hint": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -8093,24 +7149,10 @@
           "$ref": "#/$defs/SnapshotPhase"
         },
         "reason": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SnapshotReason"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/SnapshotReason"
         },
         "stat": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DiffStat"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/DiffStat",
           "description": "`phase: end` only: the change against the start snapshot."
         },
         "status": {
@@ -8168,24 +7210,10 @@
           "description": "`steered`, or `queued` on a fallback."
         },
         "fallback_reason": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/FallbackReason"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/FallbackReason"
         },
         "turn_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TurnId"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/TurnId"
         }
       },
       "required": [
@@ -8314,19 +7342,13 @@
           "description": "The last seq the client applied.",
           "maximum": 9007199254740991,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "epoch": {
           "description": "The `data_epoch` the cursor belongs to.",
           "maximum": 9007199254740991,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "stream": {
           "$ref": "#/$defs/StreamId"
@@ -8359,14 +7381,7 @@
           "$ref": "#/$defs/SubscribeMode"
         },
         "reason": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ResyncReason"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/ResyncReason",
           "description": "Why a cursor did not replay."
         },
         "stream": {
@@ -8496,81 +7511,45 @@
       "description": "One tool call, upserted by the adapter's `toolCallId`. The host gives the\nsemantics and the client lays them out; see [`ToolCall::missing_required`].",
       "properties": {
         "command": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "cwd": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WirePath"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/WirePath"
         },
         "diffs": {
           "description": "The agent's snippets, for showing progress; git is the record of a turn's changes.",
           "items": {
             "$ref": "#/$defs/ToolDiff"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         },
         "exit_code": {
           "maximum": 2147483647,
           "minimum": -2147483648,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "extraction": {
           "$ref": "#/$defs/Extraction"
         },
         "output": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Content"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/Content",
           "description": "Inline up to the inline limit, a blob beyond it."
         },
         "output_bytes": {
           "description": "`truncated`: bytes received so far.",
           "maximum": 9007199254740991,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "output_state": {
           "$ref": "#/$defs/OutputState"
         },
         "output_tail": {
           "description": "`truncated`: the last 4,000 characters.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "parent_item_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ItemId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/ItemId",
           "description": "A subagent's tool call points at its parent item."
         },
         "paths": {
@@ -8581,16 +7560,10 @@
           "type": "array"
         },
         "query": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "signal": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "title": {
           "description": "The agent's title, truncated: the fallback when structured fields are missing.",
@@ -8600,10 +7573,7 @@
           "$ref": "#/$defs/ToolKind"
         },
         "url": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
@@ -8621,14 +7591,7 @@
           "$ref": "#/$defs/DiffChange"
         },
         "hunks": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Content"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Content"
         },
         "path": {
           "$ref": "#/$defs/WirePath"
@@ -8671,10 +7634,7 @@
       "description": "The original tool call, self-contained for when it is not loaded.",
       "properties": {
         "command": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "item_id": {
           "$ref": "#/$defs/ItemId"
@@ -8706,10 +7666,7 @@
           "description": "Findings left out to keep the result within its frame; the digest\ncovers them all (T034).",
           "maximum": 4294967295,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "state": {
           "$ref": "#/$defs/TrustState"
@@ -8794,14 +7751,7 @@
           "$ref": "#/$defs/TimestampMs"
         },
         "error_code": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/FailureCode"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/FailureCode"
         },
         "final_item_ids": {
           "description": "The final answer: the `agent_message` items after the last tool call\nor grouped thought, or all of them when there is none (design 5.3.5).",
@@ -8814,27 +7764,13 @@
           "$ref": "#/$defs/TurnStatus"
         },
         "stop_reason": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/StopReason"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/StopReason"
         },
         "turn_id": {
           "$ref": "#/$defs/TurnId"
         },
         "usage": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TurnUsage"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/TurnUsage"
         }
       },
       "required": [
@@ -8918,20 +7854,10 @@
         "cached": {
           "maximum": 9007199254740991,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "cost": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Cost"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Cost"
         },
         "input": {
           "maximum": 9007199254740991,
@@ -8953,14 +7879,7 @@
     "TurnView": {
       "properties": {
         "completed": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TurnCompleted"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/TurnCompleted"
         },
         "entries": {
           "description": "Items and requests in arrival order.",
@@ -8990,14 +7909,7 @@
     "UiNavigateParams": {
       "properties": {
         "request_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestId"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/RequestId"
         },
         "session_id": {
           "$ref": "#/$defs/SessionId"
@@ -9072,14 +7984,7 @@
           "type": "integer"
         },
         "cost": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Cost"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/Cost"
         }
       },
       "required": [
@@ -9098,25 +8003,11 @@
           "type": "array"
         },
         "queue_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/QueueId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/QueueId",
           "description": "The queued message this was."
         },
         "reply_to": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestId"
-            },
-            {
-              "type": "null"
-            }
-          ],
+          "$ref": "#/$defs/RequestId",
           "description": "The rejected request this message is attached to (RP-12)."
         },
         "steered": {
@@ -9161,10 +8052,7 @@
         },
         "signing": {
           "description": "The signing identity; absent when unsigned.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
@@ -9228,14 +8116,7 @@
           "$ref": "#/$defs/ErrorCode"
         },
         "reason": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ErrorReason"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ErrorReason"
         }
       },
       "required": [
@@ -9299,10 +8180,7 @@
           "description": "Percent done, 0 to 100.",
           "maximum": 255,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         }
       },
       "required": [
@@ -9314,10 +8192,7 @@
       "description": "`workspace.ready`.",
       "properties": {
         "branch": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "path": {
           "$ref": "#/$defs/WirePath"
@@ -9592,7 +8467,14 @@
           "$ref": "#/$defs/AgentsRestartParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [],
         "x-idempotent": "command",
@@ -9634,7 +8516,14 @@
           "$ref": "#/$defs/AuthElevationRespondParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "expired"
@@ -9677,7 +8566,14 @@
           "$ref": "#/$defs/DiagExportParams"
         },
         "result": {
-          "$ref": "#/$defs/DiagExportResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/DiagExportResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [],
         "x-idempotent": "command",
@@ -9729,7 +8625,14 @@
           "$ref": "#/$defs/GitCommitParams"
         },
         "result": {
-          "$ref": "#/$defs/GitCommitResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/GitCommitResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "git_error/hook_failed",
@@ -9774,7 +8677,14 @@
           "$ref": "#/$defs/GitPushParams"
         },
         "result": {
-          "$ref": "#/$defs/GitPushResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/GitPushResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "git_error/auth_failed",
@@ -9789,7 +8699,14 @@
           "$ref": "#/$defs/GitApplyParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/stale_diff",
@@ -9806,7 +8723,14 @@
           "$ref": "#/$defs/GitApplyParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/stale_diff",
@@ -9838,7 +8762,14 @@
           "$ref": "#/$defs/GitApplyParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/stale_diff",
@@ -9869,7 +8800,14 @@
           "$ref": "#/$defs/HostExitParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/turn_running"
@@ -9883,7 +8821,14 @@
           "$ref": "#/$defs/HostPrepareUpgradeParams"
         },
         "result": {
-          "$ref": "#/$defs/HostPrepareUpgradeResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/HostPrepareUpgradeResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "forbidden"
@@ -9939,7 +8884,14 @@
           "$ref": "#/$defs/InteractionRespondParams"
         },
         "result": {
-          "$ref": "#/$defs/InteractionRespondResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/InteractionRespondResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/already_resolved",
@@ -9982,7 +8934,14 @@
           "$ref": "#/$defs/ProjectAddParams"
         },
         "result": {
-          "$ref": "#/$defs/ProjectAddResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/ProjectAddResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "not_found"
@@ -9996,7 +8955,14 @@
           "$ref": "#/$defs/ProjectRemoveParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/turn_running"
@@ -10010,7 +8976,14 @@
           "$ref": "#/$defs/ProjectTrustParams"
         },
         "result": {
-          "$ref": "#/$defs/ProjectTrustResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/ProjectTrustResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/digest_mismatch",
@@ -10040,7 +9013,14 @@
           "$ref": "#/$defs/SessionArchiveParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionArchiveResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionArchiveResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/turn_running"
@@ -10068,7 +9048,14 @@
           "$ref": "#/$defs/SessionConfirmConfigParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/digest_mismatch"
@@ -10082,7 +9069,14 @@
           "$ref": "#/$defs/SessionCreateParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionCreateResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionCreateResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "not_found",
@@ -10113,7 +9107,14 @@
           "$ref": "#/$defs/SessionInterruptParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionInterruptResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionInterruptResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/turn_mismatch"
@@ -10151,7 +9152,14 @@
           "$ref": "#/$defs/SessionQueueEditParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionQueueEditResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionQueueEditResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/version_mismatch",
@@ -10168,7 +9176,14 @@
           "$ref": "#/$defs/SessionQueueResumeParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "conflict/config_unconfirmed",
@@ -10183,7 +9198,14 @@
           "$ref": "#/$defs/SessionRenameParams"
         },
         "result": {
-          "$ref": "#/$defs/Empty"
+          "allOf": [
+            {
+              "$ref": "#/$defs/Empty"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [],
         "x-idempotent": "command",
@@ -10195,7 +9217,14 @@
           "$ref": "#/$defs/SessionRestoreParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionRestoreResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionRestoreResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [],
         "x-idempotent": "command",
@@ -10207,7 +9236,14 @@
           "$ref": "#/$defs/SessionSendParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionSendResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionSendResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "not_found",
@@ -10224,7 +9260,14 @@
           "$ref": "#/$defs/SessionSetConfigParams"
         },
         "result": {
-          "$ref": "#/$defs/SessionSetConfigResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SessionSetConfigResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "unsupported",
@@ -10252,7 +9295,14 @@
           "$ref": "#/$defs/SettingsUpdateParams"
         },
         "result": {
-          "$ref": "#/$defs/SettingsResult"
+          "allOf": [
+            {
+              "$ref": "#/$defs/SettingsResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
         },
         "x-errors": [
           "forbidden"

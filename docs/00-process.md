@@ -27,6 +27,8 @@
 3. 编排者 review diff 并跑测试，意见写入 `review.md`；不通过就打回给同一个子 agent 修改，每轮都记录。仓库暂时没有远端（用户决定 U-P1），CI 由编排者在任务的干净 worktree 里运行 `cargo xtask ci <作业>`，结构化摘要存进任务目录，原始日志放在 `.private/`（细则见 `docs/03-plan.md` 1.8）。
 4. 通过后 `git merge --no-ff` 合入 `main`，在 `docs/03-plan.md` 中把任务标记为完成，然后清理 worktree。
 
+**契约冻结之后**（T016，2026-10-26）：协议与 ShellAPI 只能附加，包括加方法、可选字段、开放枚举的取值、开放联合的分支、新的事件种类、视图成员，由 `ci protocol` 的 `schema-compat`、`shell-api-m1a` 两步把关。破坏性改动按 ADR-04 升主版本，不在 v1 里改；任务书里要写明，派发前由编排者确认（[5.12.5](design/12-milestones.md#5125-契约冻结清单)）。
+
 ## 留痕体系
 
 所有工作都要留下记录并提交到 git，包括讨论、会议、派发、汇报、review 和调研物料。

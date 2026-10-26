@@ -13,6 +13,7 @@ use cupper_protocol::session::StopReason;
 use cupper_sys::{Command, Env};
 use serde_json::{Value, json};
 
+use super::actor::held;
 use super::gating_tests::changed;
 use super::tests::{Fixture, create, data, done, on, send, tags};
 use crate::clock::ManualClock;
@@ -91,6 +92,32 @@ async fn it_orch_trust_gating_a_change_before_a_prompt_holds_the_message() {
     trust_now(&f, None);
     f.ok("session/queue_resume", on(&session, "r-1")).await;
     assert_eq!(f.prompt().await.1, text("next"));
+}
+
+/// T068's leftover (T069): the first turn started, the check before it
+/// passed, and the project's configuration changes before the rescan ahead
+/// of its attach. The turn waits in its preparation with the gate shut, its
+/// agent attached without the project's configuration and no prompt sent;
+/// trusted again, the turn goes out, saying the configuration it runs with.
+#[tokio::test]
+async fn it_orch_trust_gating_a_first_turn_in_preparation_goes_out_once_trusted() {
+    let mut f = Fixture::new("trust-preparing").await;
+    trust_now(&f, None);
+    let release = held::hold(&f.project());
+    let session = created(&f).await;
+    f.events(&session, "turn.started", 1).await;
+    change(&f.project());
+    release.notify_one();
+    let found = notices(&f, &session, 2).await;
+    assert_eq!(found, [("project_config_changed".into(), Value::Null)]);
+    assert_eq!(f.attach().await.project_config, ProjectConfigPolicy::Ignore);
+    assert!(f.quiet(), "a prompt went out with the gate shut");
+    trust_now(&f, None);
+    f.ok("session/queue_resume", on(&session, "r-1")).await;
+    assert_eq!(f.prompt().await.1, text("hi"));
+    let configured = f.events(&session, "session.configured", 2).await;
+    let configured = data(&configured, "session.configured");
+    assert_eq!(configured.last().unwrap()["project_config"], "ignored");
 }
 
 #[tokio::test]

@@ -13,6 +13,7 @@ use agent_client_protocol::schema::v1::InitializeResponse;
 use cupper_protocol::capabilities::{CliCompat, Versions};
 use cupper_protocol::ids::AdapterInstanceId;
 use cupper_protocol::index::{CliInstall, ConfigDirState};
+use cupper_protocol::methods::admin::Settings;
 use cupper_protocol::recording::{INSTANCE_EXITED, INSTANCE_STARTED};
 use cupper_sys::{Command, Env, ProcessGroup, Signal, Stdio};
 use serde_json::json;
@@ -163,15 +164,16 @@ pub fn fake_agent() -> PathBuf {
 }
 
 /// The launch of Claude's adapter from the runtime in `data_dir`: the CLI
-/// that `locator` finds, its version classified against the manifest's range
+/// that `locator` finds, or the one `settings` name, its version classified
+/// against the manifest's range, the variables `settings` pass on to it
 /// (design 5.6.6).
 pub async fn production(
     clock: &dyn Clock,
     durations: &Durations,
     data_dir: &Path,
-    host: &BTreeMap<String, String>,
-    login: &LoginEnv,
+    (host, login): (&BTreeMap<String, String>, &LoginEnv),
     locator: &CliLocator,
+    settings: &Settings,
 ) -> Launch {
     let (node, bundle) = runtime::claude_adapter(&runtime::runtime_dir(data_dir));
     let mut launch = Launch {
@@ -182,7 +184,8 @@ pub async fn production(
         config_dir: ConfigDirState::Default,
         unavailable: Some(AgentErrorClass::CliMissing),
     };
-    let Ok(found) = locator.locate(&resolve::CLAUDE, None) else {
+    let cli_path = settings.claude_cli_path.0.as_ref().map(|p| Path::new(&p.0));
+    let Ok(found) = locator.locate(&resolve::CLAUDE, cli_path) else {
         return launch;
     };
     let config_dir = login.vars.get("CLAUDE_CONFIG_DIR");
@@ -196,7 +199,9 @@ pub async fn production(
     let config_dir = config_dir.flatten();
     let claude = env_rules::CLAUDE;
     let binary = &found.binary;
-    (launch.env, _) = adapter_env(claude, host, &login.vars, binary, config_dir.as_ref(), &[]);
+    let passthrough = &settings.env_passthrough;
+    let config_dir = config_dir.as_ref();
+    (launch.env, _) = adapter_env(claude, host, &login.vars, binary, config_dir, passthrough);
     let found_version = version::probe(clock, durations, binary, launch.env.clone()).await;
     launch.versions = cli_versions(found_version);
     let cli_version = launch.versions.cli.clone();
