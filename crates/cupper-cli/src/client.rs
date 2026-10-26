@@ -30,7 +30,7 @@ use cupper_protocol::methods::stream::{
 use cupper_protocol::proof::{self, Channel, Direction};
 use cupper_protocol::rpc::{self, Message, Method, Notification, RawMessage, RpcId};
 use cupper_protocol::sync::StreamId;
-use cupper_sys::{AuditToken, Refusal, RefusalKind, recv_closing_fds};
+use cupper_sys::{AuditToken, Refusal, recv_closing_fds};
 use serde_json::Value;
 use tokio::io::{AsyncWriteExt, Interest};
 use tokio::net::UnixStream;
@@ -430,10 +430,6 @@ async fn read_frames(
         }
         match still_pinned(host, socket) {
             Ok(()) => {}
-            // What a host sent before it exited, such as its `host/shutdown`,
-            // can still be waiting here; nobody else can have written it, and
-            // the end of the stream follows (T196).
-            Err(VerifyError::Refused(refusal)) if refusal.kind == RefusalKind::PeerExited => {}
             Err(VerifyError::Refused(refusal)) => return CloseReason::Refused(refusal),
             Err(_) => return CloseReason::TokenChanged,
         }

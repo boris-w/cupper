@@ -28,6 +28,7 @@ use cupper_protocol::rpc::{Method, Scope};
 #[cfg(feature = "test-harness")]
 use cupper_protocol::view::IndexView;
 use cupper_protocol::view::{SessionView, View};
+use cupper_sys::RefusalKind;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -55,9 +56,13 @@ pub enum Failure {
 
 impl From<ClientError> for Failure {
     fn from(err: ClientError) -> Self {
-        // A host that writes and exits: what it wrote is read, then the end
-        // of the stream (T196).
-        let gone = |reason: &Option<CloseReason>| matches!(reason, None | Some(CloseReason::Eof));
+        // A host that writes and closes is refused as gone before its data
+        // is read (T049): the same as the end of the stream.
+        let gone = |reason: &Option<CloseReason>| match reason {
+            None | Some(CloseReason::Eof) => true,
+            Some(CloseReason::Refused(refusal)) => refusal.kind == RefusalKind::PeerExited,
+            _ => false,
+        };
         match err {
             ClientError::Closed(reason) if gone(&reason) => Self::HostGone,
             ClientError::Io(err)
@@ -622,7 +627,6 @@ mod tests {
     use std::io;
 
     use cupper_protocol::error::{ErrorCode, ErrorReason, RpcError};
-    use cupper_sys::RefusalKind;
 
     use super::*;
 
@@ -662,6 +666,7 @@ mod tests {
         let gone = [
             ClientError::Closed(None),
             ClientError::Closed(Some(CloseReason::Eof)),
+            ClientError::Closed(Some(CloseReason::Refused(refusal(RefusalKind::PeerExited)))),
             ClientError::Io(io::Error::from(io::ErrorKind::NotFound)),
             ClientError::Io(io::Error::from(io::ErrorKind::ConnectionRefused)),
         ];
