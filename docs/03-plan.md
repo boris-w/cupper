@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.58
+- 版本：v1.3.59
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -165,7 +165,7 @@
 | 验收记录 | 入库的只有结构化摘要：提交、工具链版本、macOS 版本、机型泛称、各作业的通过数和失败数、耗时，以及逐编号的结果清单（编号、套件、结果、提交）和 e2e 产物哈希。原始日志放 `.private/`。摘要入库前过个人信息扫描（`xtask ci` 自带字段白名单检查，T052 之后再过 `testdata-scan`）（测试 #11） |
 | 每晚作业 | 每一波合并完、开始下一波之前，编排者在 main 上跑一次 `xtask ci nightly --record docs/ci/nightly/`，摘要随之提交 |
 | 截图基线 | 渲染因素固定（随夹具附带开源字体，固定视口、缩放、语言、时区、虚拟时钟，关闭动画，隐藏光标）；基线由专用脚本在本机生成，元数据记下 macOS 和 Chromium（Electron）版本。Chromium 版本严格比对，对不上就失败；macOS 只比对大版本，小版本变化只给提示，出现像素差异时才重新生成基线（T084，测试 #13） |
-| 性能趋势 | "历史中位数"取自入库的历史数值序列（脱敏后只含数值、版本和机型泛称），每次 `xtask ci nightly` 追加一条（T047） |
+| 性能趋势 | "历史中位数"取自入库的历史数值序列 `testdata/perf/history.jsonl`（只含日期、提交、版本、机型泛称和统计值），每次 `xtask ci nightly` 里的 `perf` 作业每个指标追加一行；某项 p50 超过同一指标、同一机型历史 p50 中位数的 1.5 倍判为退化（T047、T117）。编排者在 main 上跑完 `ci nightly` 后，历史与摘要一起提交 |
 | LFS | xtask 下载锁定版本的 git-lfs 到缓存目录，核对哈希后使用，本机也能跑（T061、T121，测试 #12） |
 | M1a 退出 | 在退出候选的同一个提交上：`xtask ci e2e --suite nfr1` 连续 20 次全绿（Playwright 并行度同 CI 设定，不允许重试、跳过或隔离，失败一次查明根因后清零），再跑 5 次降速变体（占用一半核心的负载进程或降低优先级）；`xtask ci pr` 与 `xtask ci nightly` 各通过一次。运行期间作者不操作机器（T099） |
 | 本机替代不了的项 | macOS 14、15 上的对端校验（本机的 `security-macos14` 跑在作者机器的系统上，只记作 `IT-sys-peer-current`）；CI 负载下的稳定性。在 T099、T179 的记录里列为缺口，由用户确认接受。本地 macOS 虚拟机（Virtualization.framework）是可选方案，记为风险 R7，不作为前置条件 |
@@ -264,6 +264,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T185 | `cargo xtask size`：按任务书的停止线报告行数 | chore | 1.2；守则第 8 条 | — | 做：统计任务分支自己的增删（排除 lock、生成物、文档与数据、合进来的 main），读任务书的停止线并报告余量或超出，`--json`；写进流程或任务书模板：每次提交后跑一次（v1.3.49，三个任务写完才统计、越线才发现） | 不新增编号 | S | 否 | C |
 | T189 | 两处偶发失败 | fix | 5.9.4、1.8 | — | 做：E2E-SEC-real-input（`test-e2e-focus` 段里等面板"手动"提示超时）与 `unit_fake_scripts_faults_per_segment`（`exit_on_start` 的假 agent 10 s 内没退出），在高负载下复现、查明根因并修复；T099 要求同一提交上连续 20 次全绿（v1.3.57，T069 的 CI 撞上） | 不新增编号 | S | 否 | C |
 | T190 | 可选字段不发 `null` 的守卫 | test | 5.3.1、5.3.10 | T016 | 做：守卫测试：序列化 `cupper-protocol` 的金样例与夹具后，断言 schema 里的非必填属性上没有 `null`（值本身可为 `null` 的具名定义如 `CliPath` 除外），漏写 `skip_serializing_if` 时失败（v1.3.58，T016 的遗留） | 新增 UNIT-proto-absent-not-null | S | 否 | P |
+| T191 | 性能趋势补全 | test | 5.9.6 | T117 | 做：PERF-snapshot 每种情况补到 30 个样本（现为 T186 的 5 个，p95 只能取最大值）；PERF-bridge-gate 的事件循环延迟 p99 写进历史：e2e 夜间跑 `gate.spec.ts` 时设 `CUPPER_PERF_OUT`，`perf` 作业里统计、追加、判定的代码抽成共用函数给 e2e 作业调用，绝对闸门 p99 < 5 ms 仍由用例自己断言（v1.3.59，T117 的遗留） | 不新增编号 | S | 知情：e2e 要开窗口 | H.xt、H.git、C |
 | **T044** | 会话 actor II：档位、越权、崩溃与晚到输出 | feat | 5.2.6（配置项、崩溃与恢复、晚到的工具输出） | T035、T043、T088、T095、T098 | 做：档位核对与 `config_unconfirmed`、回合中越权先改回再中断、发送闸门（暂停期间空闲时也不开回合）、`session/confirm_config`、`facts` 的 `mode_tier`（`session/set_config` 仍是 M1b，越权判断预留它作为合法来源）；适配器退出后 resume 与 `agent_restarted`、K6、K7；`late_tool_output` 与 `may_still_run` 的核对。不做：信任门控（v1.3.19 起归 T109）；进程级集成测试（T062、T063、T068） | 新增 IT-orch-gating（进程内） | L | 否 | H.orch |
 | T045 | cupper-cli I：客户端库、连接与宿主校验 | feat | 5.2.14、5.3.3 | T012、T014、T020 | 做：迁移 SP-4a 的 client：构建种类（特性 `dev-auth`、`self-use`、`test-harness`，都不开为发布）与 `--build-info`、套接字发现、按构建种类校验宿主（5.8.1：发布按签名要求；自用按编译期写入的宿主 cdhash，经审计令牌比对，之后每次读取比对令牌；开发按同目录宿主文件的 cdhash 弱校验并在输出里标"宿主未经签名校验"；e2e 由 T039 补上 `harness` 证明），发布构建拒绝 `weak_auth`；连接与握手（peer）、请求关联、`command_id`。不做：Mirror 与客户端同步状态机（v1.3.6 起归 T049）；子命令；cdhash 的写入（T005） | 新增 UNIT-cli-host-verify（四种构建的校验分支；cdhash 不符时拒绝连接）、UNIT-cli-client（握手与请求关联） | M | 否 | H.cli |
 | T049 | cupper-cli I-b：Mirror 与客户端同步状态机 | feat | 5.2.14、5.3.3 | T045 | 做：纯核心 `Mirror<V: View>`（只能经 `Mirror::index()`、`Mirror::session(id)` 构造）；`Waiting`、`Loading`、`Live` 三态；只有游标对得上的 `replay` 才保留视图和游标，其余（包括未知的 mode）一律丢弃；快照页核对 `at_seq`、`epoch` 和页序号；连续性缺口带游标重新订阅，`ViewError` 或信封解码失败不带游标重新订阅；`stream/reset` 保留游标；`Waiting` 时旧订阅的数据一律忽略。不做：子命令（T046） | 新增 UNIT-mirror | S | 否 | H.cli |
@@ -1767,12 +1768,13 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T185 `cargo xtask size`：按任务书的停止线报告行数
 - [ ] T189 两处偶发失败
 - [ ] T190 可选字段不发 `null` 的守卫
+- [ ] T191 性能趋势补全
 - [ ] T099 M1a 退出验收
 - [x] T100 索引 II：状态计算、已读、在场与通知意图
 - [x] T109 会话 actor II-b：信任门控
 - [x] T115 运行时安装器 II：按锁文件下载与本机打包
 - [x] T116 录制导出
-- [ ] T117 宿主性能测量与趋势
+- [x] T117 宿主性能测量与趋势
 - [x] T118 ui-core II-b：截图回归设施
 - [x] T128 ui-core II-c：基础组件与行类型注册表
 - [x] T129 运行时安装器 III：接进宿主启动
@@ -1926,3 +1928,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.56 | 2026-10-26 | T036 开工前估约 540 行（乘 1.2 约 650），超过停止线 400；另发现"设置变更通知界面"在契约里没有对应事件。编排者裁定：T036 收窄为宿主的设置（约 320 行）；M1a 不推送设置变更（M1a 没有设置页），`settings.updated` 事件与索引视图的 `settings` 由 T151 以附加方式加（冻结后允许）；桌面特权操作 `settings` 移到 T147，`AgentsUpdated.git` 移到 T151 |
 | v1.3.57 | 2026-10-26 | 新增 T189：T069 跑带记录的 CI 时撞上两处与它无关的偶发失败（E2E-SEC-real-input、`unit_fake_scripts_faults_per_segment`，本机负载约 9，重跑通过）。T099 要求同一提交上连续 20 次全绿、不允许重试，偶发失败要在那之前清掉；T099 改为也依赖 T189 |
 | v1.3.58 | 2026-10-26 | T016 合并，契约冻结：规则写进设计 5.3.1、5.3.10、5.12.5 和 `docs/00-process.md`。新增 T190："可选字段只缺省、不为 `null`"目前靠每个 `Option` 字段都写 `skip_serializing_if`，漏写时宿主会发出 `null`，zod 拒收，没有检查；加一个守卫测试。T099 改为也依赖 T190 |
+| v1.3.59 | 2026-10-26 | T117 合并：1.8 的"性能趋势"写明历史文件、退化规则和提交方式。新增 T191：PERF-snapshot 补到 30 个样本，PERF-bridge-gate 进历史。T191 不在 T099 的依赖里：T099 只要求夜间作业通过一次，两项只补趋势数据 |
