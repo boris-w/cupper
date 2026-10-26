@@ -115,3 +115,13 @@
 - `rustup target add x86_64-unknown-linux-gnu` 后，`cargo check -p xtask --all-targets --locked --target x86_64-unknown-linux-gnu` 通过。构建脚本不用交叉编译 C 代码，`rust-toolchain.toml` 没改。
 - 在本仓库上运行 `cargo xtask compat-reports`：通过（没有报告，清单等于基线）。
 - 变异检查：去掉"适配器版本等于锁定版本"、把 `inconclusive` 算作通过、有问题时仍写清单，各有一个用例失败。
+
+## 压缩之后（第二次裁定：方案二，停止线 460，硬停止线 500）
+
+`cargo xtask size`：**+452 −46**，在停止线 460 以内。
+
+- 报告夹具改用 `json!` 写，再经 `report::parse` 严格读入；真实模式的调用经 `real(...)` 写成一行，免得 rustfmt 把每个调用拆成七行。
+- 原来两个搭建工作区的用例合成一个。第一份合格的报告就把上限扩到 2.1.1000，所以"有坏报告时仍写清单"会改变清单、能被发现。压缩后头一次跑变异检查时这一条没被发现，是因为合格的报告落在基线之内；已改正。
+- `compat-framework` 的用例：路径表合成一张；造分支的步骤写成闭包，先提交宿主文件（两步都跳过），再提交 `testdata/compat/` 下的文件（不再跳过）。
+- `reports.rs`：去掉 rustfmt 展开的写法；"CLI 不认识"和"版本不是 x.y.z"合成一条提示（"`<名字> <版本>` is not claude or codex at x.y.z"）。
+- 变异检查重跑：去掉"适配器版本等于锁定版本"、把 `inconclusive` 算作通过、有问题时仍写清单，各有一个用例失败。
