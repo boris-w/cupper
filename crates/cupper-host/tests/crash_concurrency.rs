@@ -124,17 +124,25 @@ async fn ended(data_dir: &Path, host: &mut Running, n: usize) -> bool {
     }
 }
 
-/// Sends `method` with `params`, as JSON.
+/// Sends `method` with `params`, as JSON; a reply that takes longer than
+/// [`PATIENCE`] fails the test.
 async fn request(
     client: &Client,
     method: &str,
     params: Value,
 ) -> Result<Value, client::ClientError> {
-    match method {
-        ProjectAdd::NAME => client.request::<Raw<ProjectAdd>>(params).await,
-        SessionCreate::NAME => client.request::<Raw<SessionCreate>>(params).await,
-        SessionSend::NAME => client.request::<Raw<SessionSend>>(params).await,
-        other => panic!("not in the scenario: {other}"),
+    let reply = async {
+        match method {
+            ProjectAdd::NAME => client.request::<Raw<ProjectAdd>>(params).await,
+            SessionCreate::NAME => client.request::<Raw<SessionCreate>>(params).await,
+            SessionSend::NAME => client.request::<Raw<SessionSend>>(params).await,
+            other => panic!("not in the scenario: {other}"),
+        }
+    };
+    let clock = SystemClock::new();
+    tokio::select! {
+        reply = reply => reply,
+        () = clock.timer_at(clock.now_mono() + PATIENCE) => panic!("no reply to {method}"),
     }
 }
 
