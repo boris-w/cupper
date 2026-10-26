@@ -5,6 +5,7 @@
 mod differential;
 mod e2e;
 mod license;
+mod perf;
 mod protocol;
 mod rust;
 mod security;
@@ -48,7 +49,7 @@ pub const JOBS: &[Job] = &[
     job("testdata-scan", Some(testdata_scan::run)),
     job("differential", Some(differential::run)),
     locked("e2e", Some(e2e::run)),
-    locked("perf", None),
+    locked("perf", Some(perf::run)),
     job("security-macos14", Some(security::run)),
     job("compat-framework", None),
     job("release-config", None),
