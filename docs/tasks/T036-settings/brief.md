@@ -64,3 +64,18 @@
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-26，编排者）
+
+执行者开工前估约 540 行（乘 1.2 约 650），超过停止线 400；另发现"设置变更通知界面"在契约里没有对应事件。
+
+**裁定（计划 v1.3.56）**：
+- **T036 收窄为宿主的设置**，约 320 行，停止线不变。内容：
+  - 设置模块与读取接口；
+  - `settings/get`、`settings/update`；
+  - 登记进 `Routes`，从 UNIT-unsupported-set 删行；
+  - `cli_path`、`env_passthrough` 接进 agent 发现，改了就重新发现，经 `agents.updated` 体现；
+  - UNIT-settings，不含通知。
+- **M1a 不推送设置变更**：M1a 没有设置页。`settings.updated` 事件与索引视图的 `settings` 由 M1b 的 T151 以附加方式加，冻结后允许。设计 5.2.11 已记。
+- **桌面特权操作 `settings` 移到 T147**（设置页 II），**`AgentsUpdated.git` 移到 T151**（设置页 I）。
+- **`cli_path`**：等 T016 的 `CliPath` 合并、编排者把 main 合进分支后，改用新类型。
