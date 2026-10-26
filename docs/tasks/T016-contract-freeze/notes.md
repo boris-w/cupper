@@ -34,3 +34,27 @@
 停止线 850，硬停止线 950。
 
 ## 按模块统计
+
+编排者裁定（2026-10-26）：第 1–3 件按方案做，第 4 件不改；`tools/schema-compat` 要把新增事件种类、视图里新增的成员判为附加式。
+
+每次提交后跑 `cargo xtask size`（生成物与两个快照不计）：
+
+| 提交 | 新增 | 删除 | 累计 |
+|---|---|---|---|
+| `CliPath` | 28 | 10 | +28 |
+| 可选字段只缺省 | 69 | 1 | +97 |
+| `replayed` 的声明 | 57 | 7 | +154 |
+| `released/v1-m1a.json`（快照不计）、`xtask size` 不计两个快照 | 5 | 0 | +159 |
+| `tools/schema-compat` 与 UNIT-schema-compat | 452 | 0 | +611 |
+| ShellAPI 快照（不计）与 `frozen.ts` | 55 | 0 | +666 |
+| `xtask ci protocol` 的三步 | 23 | 6 | +689 |
+
+合计 +689 −24，停止线 850 以内。`schema-compat` 超出估计（估 435 行，实际 452），其余接近估计。
+
+## 过程记录
+
+- 事件目录是开放的：`EventBody` 和 `Event` 是 `anyOf`，最后一个分支是 `UnknownEvent`；开放联合以 `UnknownMember` 兜底，开放枚举以 `{type: string}` 兜底；schema 里没有一个闭合的枚举。`schema-compat` 据此把"有兜底的联合"当作开放的：加分支是附加式，所以新增事件种类通过。
+- 方向：参数、客户端通知是入方向；结果、宿主通知，以及导出的 `Event`、`EventBody`、`IndexView`、`SessionView`、`RpcError` 是出方向；两边都用到的定义两条规则都适用；没有被引用到的定义按两个方向算（取严）。
+- 演示（对 `released/v1-m1a.json` 的改动副本跑 `schema-compat`）：删 `SessionSummary.title`、`SessionCreateResult.session_id` 改可选、`SessionSendParams` 新增必填的 `token`，都以退出码 1 失败；`EventBody` 加 `settings.updated`、`IndexView` 加 `settings`、新增方法 `settings/watch`，退出码 0。
+- ShellAPI：`frozen.ts` 逐项试过：删成员、删嵌套成员、改参数类型、删联合分支、收窄分支都让类型检查失败；加成员、给联合加分支通过。最初用"今天的接口可赋给冻结的接口"判定，联合加分支会经 `init()` 的返回值传到 `ShellInfo`，被误判为破坏，所以改成逐成员核对"还在、旧的调用还能通过类型检查"，联合单独核对"旧分支都还在"。
+- 从冻结前的 schema（本分支开工时的 main）到现在，`schema-compat` 报 247 处破坏：都是本任务冻结前的三件改动（去掉 `null`、`CliPath`、结果包上 `allOf`），符合预期。
