@@ -220,3 +220,45 @@ async fn it_orch_trust_gating_the_git_root_bounds_the_range() {
     assert_eq!(found, [("project_config_changed".into(), Value::Null)]);
     assert!(f.quiet(), "the root's configuration is in the range");
 }
+
+/// IT-git-snapshot-parity at a turn: a git project's turn takes its start
+/// and end snapshots in the snapshot tier, and its row keeps both trees.
+#[tokio::test]
+async fn it_git_snapshot_parity_a_turn_takes_its_start_and_end_snapshots() {
+    let path = std::env::var_os("PATH").unwrap();
+    let mut found = std::env::split_paths(&path).map(|d| d.join("git"));
+    let git = found.find(|g| g.is_file()).unwrap();
+    let home = TempDir::new("snapshot-turn-home");
+    let trusted = [
+        git.parent().unwrap().into(),
+        "/usr/bin".into(),
+        "/bin".into(),
+    ];
+    let home_dir = Some(home.path().to_path_buf());
+    let tool = GitTool::new(git.clone(), None, &trusted, home_dir, None, home.path()).unwrap();
+    let tool = tool.with_test_env("GIT_CONFIG_NOSYSTEM", "1");
+    let mut f = Fixture::with_git("snapshot-turn", Some(tool)).await;
+    let mut env = Env::new();
+    env.set("HOME", home.path()).unwrap();
+    env.set("GIT_CONFIG_NOSYSTEM", "1").unwrap();
+    let mut init = Command::new(&git);
+    init.args(["init", "-q"]).current_dir(f.project()).env(env);
+    let clock = ManualClock::new();
+    let out = run(&clock, init, None, Duration::from_secs(30)).await;
+    assert!(out.unwrap().status.success());
+    fs::write(f.project().join("a.txt"), "a\n").unwrap();
+
+    let session = f.started().await;
+    fs::write(f.project().join("b.txt"), "b\n").unwrap();
+    f.emit(done(PromptTag(1), StopReason::EndTurn));
+    let bodies = f.events(&session, "turn.completed", 1).await;
+    let shots = data(&bodies, "snapshot.recorded");
+    let shown: Vec<_> = shots.iter().map(|s| (&s["phase"], &s["status"])).collect();
+    let (start, end, ok) = (json!("start"), json!("end"), json!("ok"));
+    assert_eq!(shown, [(&start, &ok), (&end, &ok)]);
+    let stat = json!({"files": 1, "added": 1, "removed": 0});
+    assert_eq!(shots[1]["stat"], stat);
+    let row = "SELECT (snapshot_start IS NOT NULL) || (snapshot_end IS NOT NULL) || ' ' || \
+        snapshot_status FROM turns";
+    assert_eq!(f.rows(row), ["11 ok"]);
+}

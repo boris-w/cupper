@@ -12,6 +12,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::*;
 use crate::clock::{Clock, ManualClock, MonoTime, SystemClock};
+use crate::diag::full::Redactor;
+use crate::diag::stderr::AdapterLog;
 use crate::driver::api::{NormUpdate, PromptTag};
 use crate::driver::probe::login_shell::{Failure, LoginEnv};
 use crate::orchestrator::testkit::text;
@@ -53,7 +55,8 @@ impl Fixture {
         let (raw, raw_thread) = RawWriter::spawn(raw_db(&dir), &quiescence).unwrap();
         let shared: Arc<dyn Clock> = Arc::new(clock.clone());
         let blobs = BlobStore::new(dir.path(), writer.clone(), Arc::clone(&shared));
-        let (raw, log) = (raw.sink(), None);
+        let log = AdapterLog::unwritten(Arc::clone(&shared), Redactor::default());
+        let raw = raw.sink();
         let cx = Context {
             clock: Arc::clone(&shared),
             writer,
@@ -284,7 +287,10 @@ fn runtime(dir: &TempDir) -> AgentRuntime {
     let host = BTreeMap::from([("HOME", "/h"), ("SECRET", "x"), ("TERM", "dumb")].map(var));
     let login = LoginEnv::fallback(Failure::ShellMissing);
     let launch = launch::injected(launch::fake_agent(), Vec::new(), &host, &login);
-    let (raw, log) = (raw.sink(), None);
+    let (raw, log) = (
+        raw.sink(),
+        AdapterLog::unwritten(Arc::clone(&clock), Redactor::default()),
+    );
     let blobs = BlobStore::new(dir.path(), writer.clone(), Arc::clone(&clock));
     let cx = Context {
         clock: Arc::clone(&clock),
@@ -394,7 +400,9 @@ async fn gold_b_fake_in_process_adapter_has_no_process_to_signal() {
     let quiescence = Quiescence::new();
     quiescence.register(RAW_WRITER);
     let (raw, _raw) = RawWriter::spawn(raw_db(&dir), &quiescence).unwrap();
-    let (clock, raw, log, self_check) = (Arc::new(clock), raw.sink(), None, None);
+    let clock: Arc<dyn Clock> = Arc::new(clock);
+    let log = AdapterLog::unwritten(Arc::clone(&clock), Redactor::default());
+    let (raw, self_check) = (raw.sink(), None);
     let cx = Context {
         clock,
         writer,

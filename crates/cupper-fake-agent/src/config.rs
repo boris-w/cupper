@@ -58,6 +58,9 @@ pub struct Config {
     pub replay: Option<PathBuf>,
     /// Faults active in this segment.
     faults: Vec<String>,
+    /// `--calls <file>`: every request and `session/cancel` it gets, one JSON
+    /// line each, for tests to tell `session/resume` from `session/new` (K1, K6).
+    pub calls: Option<PathBuf>,
 }
 
 impl Config {
@@ -68,6 +71,7 @@ impl Config {
             segment: 0,
             replay: None,
             faults: Vec::new(),
+            calls: None,
         };
         let mut faults = Vec::new();
         let mut segment_file = None;
@@ -85,6 +89,7 @@ impl Config {
                 ("--segment", n) => config.segment = n.parse().map_err(ConfigError::Segment)?,
                 ("--segment-file", _) => segment_file = Some(PathBuf::from(value)),
                 ("--replay", _) => config.replay = Some(PathBuf::from(value)),
+                ("--calls", _) => config.calls = Some(PathBuf::from(value)),
                 _ => return Err(ConfigError::Usage(format!("bad option `{flag} {value}`"))),
             }
         }

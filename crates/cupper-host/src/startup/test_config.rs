@@ -91,6 +91,10 @@ pub struct AgentCommand {
     pub program: PathBuf,
     #[serde(default)]
     pub args: Vec<String>,
+    /// The CLI version the program plays, as `<cli> --version` would print
+    /// it (K14); none by default.
+    #[serde(default)]
+    pub cli_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
