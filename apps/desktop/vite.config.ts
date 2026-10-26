@@ -6,12 +6,12 @@
 // host's environment allowlist comes from the runtime manifest at build time,
 // so that the app and the host never keep two copies of it (design 5.6.6).
 
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { builtinModules } from "node:module";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 
 import type { Flavor } from "./src/shared/flavor.ts";
 
@@ -31,6 +31,31 @@ export function hostEnvAllow(): string {
   return JSON.stringify(manifest.env.allow);
 }
 
+/**
+ * Writes the modules each environment's outputs hold, as paths relative to
+ * the repository, to `dist/metafile/<environment>.json`: the license gate
+ * reads them (T006, design 5.1.6). No package of the app takes that
+ * directory up.
+ */
+function metafile(): Plugin {
+  const repo = at("../..");
+  // A virtual module (`\0…`) is the bundler's own and has no path.
+  const shown = (id: string) => (id.startsWith("\0") ? id : relative(repo, id));
+  return {
+    name: "cupper-metafile",
+    generateBundle(_options, bundle) {
+      const outputs = Object.values(bundle).flatMap((output) =>
+        output.type === "chunk"
+          ? [{ file: output.fileName, modules: output.moduleIds.map(shown) }]
+          : [],
+      );
+      mkdirSync(at("dist/metafile"), { recursive: true });
+      const file = at(`dist/metafile/${this.environment.name}.json`);
+      writeFileSync(file, `${JSON.stringify(outputs, null, 2)}\n`);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   if (!Object.hasOwn(FLAVORS, mode)) {
     const flavors = Object.keys(FLAVORS).join(", ");
@@ -42,7 +67,7 @@ export default defineConfig(({ mode }) => {
       __CUPPER_HOST_ENV_ALLOW__: hostEnvAllow(),
     },
     // The renderer's styles: Tailwind over the tokens of `@cupper/ui-core`.
-    plugins: [tailwindcss()],
+    plugins: [tailwindcss(), metafile()],
     // Build every environment below with one `vite build`.
     builder: {},
     environments: {
