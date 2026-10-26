@@ -117,7 +117,7 @@
 
 - 执行者第一版 554 行，经 rustfmt 展开后比估计多。收紧写法、删掉真实模式才用得上的字段后是 492 行。
 - xtask 部分写完时合计 1155 行，超过新的停止线 1150 共 5 行。改用 JSON 构造测试用的报告、简化提交哈希的检查等，降到 1124 行。
-- 最终新增 1124、删除 8（`cargo xtask size`；不含 `Cargo.lock`、`testdata/`、`docs/`）：cupper-host 492，xtask 632。
+- 最终新增 1126、删除 8（`cargo xtask size`；不含 `Cargo.lock`、`testdata/`、`docs/`）：cupper-host 492，xtask 632，`.prettierignore` 2（让 prettier 跳过生成的 schema 文件，第一次跑 `ci pr` 时 ts 作业的 prettier 检查报了它）。
 
 ## 留给后续任务的
 
@@ -127,3 +127,10 @@
   - `cancel` 剧本在真实 CLI 上靠"允许后等 1 秒再中断"，`sleep 60` 不输出，是否足够要实际跑一次才能确认。
 - **T188**：报告的读入用 `report::parse` 加 `report::problems`；schema 文件在 `testdata/compat/report.schema.json`。
 - **compat-framework 进 PR**：设计 5.1.6 写的是"改动 xtask 兼容套件的 PR"也要跑。本任务没把它加进 `ci pr`；要加的话照 e2e 的做法按路径判断，由编排者决定放进哪个任务。
+
+## CI 里遇到的范围外问题
+
+第一次跑 `ci pr` 时，rust 作业的 `test-host-release` 步骤（不带特性的 `cargo test -p cupper-host`）卡在 `orchestrator::session::trust_tests::it_orch_trust_gating_two_reasons_hold_until_both_go`，28 分钟没有结束。
+- 卡住时取了一次栈：测试的 current-thread 运行时在等待，宿主的写者线程空闲。看起来是在等一个永远不会来的事件，而这个进程内的测试夹具等待时没有超时。
+- 用 SIGTERM 结束了本次运行拉起的这个测试进程，又单独跑了这个测试 40 次，都通过；后两次完整的 `ci pr` 里它也通过了。
+- 这是已有的偶发问题，不是本任务的改动引起的，这里没有修。
