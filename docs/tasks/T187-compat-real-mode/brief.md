@@ -82,3 +82,33 @@ T064 做了兼容套件的框架和 `--fake`：编排、"基本"组 10 个剧本
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-10-26，编排者）
+
+执行者开工前估计约 1,200 行（区间 1,050–1,300），超过硬停止线 950，在写代码之前停下，建议拆分。
+
+**裁定：方案一（计划 v1.3.60）。**
+- **T187 收窄为"真实模式与安全约束"**，约 660 行，UNIT-compat-guards 留下。内容：
+  - 自我约束、配置哈希（用临时目录代替 HOME）、`--real` 与 `--dry-run`、真实宿主的启动；
+  - 基本组 10 个剧本的真实提示词与准备文件；
+  - 报告的新结果取值与 schema、`cli_sessions`；
+  - 真实报告写进 `testdata/compat/reports/`，录制入库；
+  - `lsof` 断言与遗留进程检查；
+  - Steer 剧本记"不适用（M1b）"。
+- **新增 T192（剧本补全）**，约 540 行：其余 10 个剧本（`crash-resume`、`host-restart`、`image`、`concurrent-two`、`six-sessions`、`close-running`、`resume-procs`、`untrusted-project`、`hooks-reload`、`config-scope`），以及它们需要的步骤和执行者能力。T192 在 T187 合并后由你接着做。
+- 验收标准里"`--fake` 跑全部 21 个剧本"改为"跑基本组 10 个剧本和 Steer"。
+- **剧本编号**以 `notes.md` 里定下的 21 个为准，之后不改。
+
+**四点确认**：
+1. **真实模式用哪个宿主**：用 `cargo xtask host-bundle --kind e2e --debug` 产出的 `CupperHost.app`，执行者经 `spawn_from` 启动，环境取自登录 shell（这样 PATH 里才找得到 `claude`）。认可。宿主自己的环境过滤照常生效，不要为兼容套件放宽。
+2. **进入真实模式要显式写 `--real`**。只写 `--fake`、`--real` 之一才运行，两个都不写或都写，就报错并说明用法；`--dry-run` 两种模式都能用。这样多一道防误跑的保护，免得不小心消耗额度。
+3. **要算哈希的文件**照 T003 的 `spikes/T003-tech-validation/config-hash.ts`：
+   - `~/.claude/settings.json`、`~/.claude/settings.local.json`、`~/.codex/config.toml` 按整文件算；
+   - `~/.claude.json` 是 CLI 平时就会改写的状态文件，不按整文件算，只对和权限有关、会拉起程序的字段逐个算：顶层的 `mcpServers`、`bypassPermissionsModeAccepted`、名字像权限的键，以及每个项目的 `allowedTools`、`hasTrustDialogAccepted`、各类 MCP 服务器开关；
+   - 已有的值变了，判失败；新出现的项目条目只属于本次运行的临时仓库时，列进报告里需要清理的项（与 `cli_sessions` 放在一起），不判失败；其他新增，判失败；
+   - 报告里只写文件名、字段名和是否变化，不写值，也不写本机路径。凭据文件不算哈希。
+4. **Q8 检查"没有串话"要看文本**：每个 prompt 让 agent 原样回一个由执行者生成的标记，检查每个会话的回答里只有自己的标记。认可，这是"只断言结构"的唯一例外，标记由执行者生成、不含 agent 自己的话。Q8 归 T192。
+
+**规模**：
+
+- 停止线：720；硬停止线：800
