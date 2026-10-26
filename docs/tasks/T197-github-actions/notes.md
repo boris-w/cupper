@@ -80,3 +80,22 @@
 - **失败 2：license**：
   - 离线的 `cargo deny` 要读每个 crate 的清单，新机器上还没有下载，报 `failed to download`。
   - 修法：检查前先 `cargo fetch --locked`。
+
+## 第二轮：PR #1 通过并合并之后
+
+- **PR #1 的 8 个检查**（运行 40311848751）：全部通过。
+  - rust 24m17s，e2e 10m23s（冒烟子集：非 `@focus` 段 66 s，`@focus` 段 76 s），license 2m55s，其余都在 2 分钟以内。
+  - ui、compat-framework 因为没改到它们依赖的路径，由 xtask 跳过。
+- **E2E-SEC-real-input × 50**（e2e-repeat，main，运行 40315247047）：
+  - 50 次全部通过，一次持锁调用跑完；平均 6.6 s，最长 11.3 s，总共 6 分钟。
+  - 这补完了 T189 的连跑：本机那次 50 次里有 45 次期间有用户输入，不算数。
+- **ui-baseline**（运行 40315243016）：在 macos-15（15.7.9）上生成的 33 张图，和作者 macOS 26.4 上的逐字节相同，不同的只有 `meta.json`。
+  - 基线的元数据检查原来要求 macOS 大版本一致（T084），所以 runner 上一跑 ui 就会失败，本机再换成 runner 的元数据又会在作者机器上失败。
+  - 改为：Chromium 仍然必须一致；macOS 不同，不论大小版本，都只给提示，由像素决定。`meta.json` 记 runner 的 15.7.9。
+  - 本机的 `pnpm test:ui` 照旧 33 个全过，并提示 macOS 不同。
+- **nightly**（运行 40315239100）：
+  - differential、security-macos14（macos-14 和 macos-15 各一次）、compat-framework 都通过。
+  - e2e 全集失败 1 条：PERF-bridge-gate（"窗口在屏幕上"那条），主进程事件循环延迟的 p99 为 8.65 ms，闸门判的是 5 ms 以下。3 核的 runner 上另有一个 worker 同时在跑。
+  - runner 不是参考机型（和 `perf` 不上 CI 是同一个理由）。所以 PERF 用例打 `@perf`，托管 runner 上的 e2e 作业不跑它们，也不算 PERF 趋势，跳过的 `perf` 步骤写明原因；作者机器上照旧跑、照旧判。
+- **security-macos14 补上的缺口**：macos-14、macos-15 上各跑通一次，摘要在构件里（`security-macos14-macos-14-summary`、`security-macos14-macos-15-summary`）。
+  - `tests/ids.toml` 里 IT-sys-peer-macos14、IT-sys-peer-macos15 的状态还是"缺口"，要编排者改，并约定以运行链接为证据。
