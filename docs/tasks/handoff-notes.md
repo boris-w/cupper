@@ -403,6 +403,9 @@
 | 动桌面数据通路的任务 | 测量闸门（T078）：`PERF-bridge-gate`（`tools/e2e/src/gate.spec.ts`，每晚）在判定负载下断言主进程事件循环延迟 p99 < 5 ms 且没有流重置，当前约 1.6 ms；渲染进程钩子 `window.__cupperGate`（只在 e2e 构建）可按流计数、跟随窗口持有范围之外的流、经 `getBlob` 下载、以游标 0 订阅重放。夹具 `launch` 的 `throttled` 选项保留 Chromium 默认节流。Playwright 下页面不会进入隐藏状态，真正的隐藏需另写只经主进程 inspector 测量的脚本 | T078 |
 | T117 | PERF-snapshot（T186）是 `#[ignore]` 的每晚用例，`perf` 作业实现时用 `cargo test -p cupper-host --lib -- --ignored perf_snapshot` 跑，把打印的中位数写进历史数据；基准：1 万文件的合成仓库，热缓存下没有改动约 112 ms、改 10 个文件约 115 ms。回合指纹每次快照遍历整个工作区找 `.gitattributes`（含被忽略的大目录），10 万文件的仓库超预算时改为只看已跟踪和未忽略的 | T186 |
 | 跑 git 相关测试的任务 | 测试用的 git-lfs 由 `cargo xtask git-lfs` 下载（锁定 3.8.0，核对哈希），放在 `target/git-lfs/git-lfs`；CI 的 `rust` 作业先执行这一步。只跑 `cargo test` 时没有 git-lfs，LFS 用例跳过并提示 | T186 |
+| T182 | `runtime/licenses/codex-acp-THIRD_PARTY_NOTICES.md`（T006 生成）还没进 runtime-pack 的暂存和 App，要在 THIRD_PARTY_NOTICES 生成时一并放进去；manifest 的 `files` 哈希会随之变化 | T006 |
+| 升级 codex-acp 的任务 | 先把新标签的 `package-lock.json` 放进 `runtime/locks/`，再运行 `node tools/license-gate/src/main.ts codex-notices`（要联网，下载各包 tarball 核对 integrity 后取 LICENSE），否则许可证门禁会因找不到锁文件或声明不全而失败 | T006 |
+| T131（及加渲染入口的任务） | 加第二个渲染入口时，在 `tools/license-gate/src/main.ts` 的 `ENTRIES` 里登记它的环境名；`apps/desktop/vite.config.ts` 的插件把每个环境的模块写到 `dist/metafile/<环境>.json` | T006 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
