@@ -2,8 +2,9 @@
 //! registry `tests/ids.toml` against the plan and the design (5.9.10), and
 //! `tools/sanitize` scans `testdata/` and the committed CI summaries for
 //! personal data (5.9.3, plan 1.8): the generic patterns, then the
-//! maintainer's local sensitive word list when there is one. The compat
-//! report checks join with T188.
+//! maintainer's local sensitive word list when there is one. `xtask
+//! compat-reports` checks the committed compat reports and the verified CLI
+//! ranges they give (5.9.5).
 
 use std::path::{Path, PathBuf};
 
@@ -25,6 +26,10 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     let mut trace_ids = ctx.command("node");
     trace_ids.args(["tools/trace-ids/src/main.ts", "check"]);
     ctx.check("trace-ids", &mut trace_ids)?;
+
+    let mut reports = ctx.command(std::env::current_exe()?);
+    reports.arg("compat-reports");
+    ctx.check("compat-reports", &mut reports)?;
 
     let mut scan = ctx.command("node");
     scan.args(["tools/sanitize/src/main.ts", "scan"])
