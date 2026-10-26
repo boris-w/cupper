@@ -11,7 +11,7 @@
 
 mod claude;
 mod envscan;
-mod fetch;
+pub(crate) mod fetch;
 pub mod manifest;
 mod unpack;
 
