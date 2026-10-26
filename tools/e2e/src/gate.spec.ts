@@ -2,7 +2,7 @@
 // while it forwards the judging load to a real renderer. The window holds the
 // index and four sessions that stream, through the UI's own subscriptions,
 // and on top of that takes a 5 MB blob and a resync of some 5,000 events;
-// the index gets a new session every 200 ms. Judged with the window on
+// the index gets three new sessions every 200 ms, about 1 KB a frame. Judged with the window on
 // screen and covered: p99 under 5 ms, no stream reset. Six streams of 200
 // fragments a second follow as a stress report, not judged. Each test logs
 // its numbers as one `gate` line.
@@ -94,11 +94,17 @@ const stopClock = (cupper: Cupper) =>
     return { p50, p99, max, core: Math.round(core * 100) / 100 };
   });
 
-/** Covers the app's window with another one, until the renderer reports it hidden. */
+/**
+ * Covers the app's window with another one, and stops its animation frames.
+ * Under Playwright, Chromium keeps the page visible and its frames running
+ * even covered, minimized or hidden (T078), so the frames are stopped by
+ * hand: what a hidden page loses that the store cares about (design 5.7.1).
+ */
 async function cover(cupper: Cupper) {
-  await cupper.app.evaluate(({ BrowserWindow }) => {
-    const [app] = BrowserWindow.getAllWindows();
-    const bounds = app?.getBounds();
+  const bounds = await (
+    await cupper.app.browserWindow(cupper.window)
+  ).evaluate((w) => w.getBounds());
+  await cupper.app.evaluate(({ BrowserWindow }, bounds) => {
     const cover = new BrowserWindow({
       ...bounds,
       frame: false,
@@ -106,9 +112,23 @@ async function cover(cupper: Cupper) {
       focusable: false,
     });
     cover.showInactive();
+  }, bounds);
+  await cupper.window.evaluate(() => {
+    window.requestAnimationFrame = () => 0;
   });
-  await expect.poll(() => cupper.window.evaluate(() => document.visibilityState)).toBe("hidden");
 }
+
+/** The page's animation frames in one second. */
+const frameRate = (cupper: Cupper) =>
+  cupper.window.evaluate(
+    () =>
+      new Promise<number>((done) => {
+        let frames = 0;
+        const tick = () => void (frames++, requestAnimationFrame(tick));
+        requestAnimationFrame(tick);
+        setTimeout(() => done(frames), 1000);
+      }),
+  );
 
 /**
  * The run: `streams` sessions flooding `rate` fragments of 500 characters a
@@ -139,12 +159,13 @@ async function run(cupper: Cupper, { streams = 4, rate = 100, covered = false } 
     sessions.slice(0, -4),
   );
   if (covered) await cover(cupper);
+  const frames = await frameRate(cupper);
   const resets = await cupper.window.evaluate(() => window.__cupperGate.resets());
 
   await cupper.window.evaluate(() => window.__cupperGate.count());
   await startClock(cupper);
   const started = Date.now();
-  const index = setInterval(() => void seed(1, 0, 0), 200);
+  const index = setInterval(() => void seed(3, 0, 0), 200);
   await sleep(5000);
   const got = await cupper.window.evaluate((hash) => window.__cupperGate.getBlob(hash), blob);
   await sleep(10_000 - (Date.now() - started));
@@ -172,7 +193,19 @@ async function run(cupper: Cupper, { streams = 4, rate = 100, covered = false } 
     }),
   );
   const visibility = await cupper.window.evaluate(() => document.visibilityState);
-  const numbers = { streams, rate, visibility, seconds, delay, reset, blob: got, resync, load };
+  const numbers = {
+    streams,
+    rate,
+    covered,
+    visibility,
+    frames,
+    seconds,
+    delay,
+    reset,
+    blob: got,
+    resync,
+    load,
+  };
   console.log(`gate ${JSON.stringify(numbers)}`);
   return numbers;
 }
@@ -180,11 +213,11 @@ async function run(cupper: Cupper, { streams = 4, rate = 100, covered = false } 
 test.describe.configure({ mode: "serial", timeout: 180_000 });
 
 for (const covered of [false, true]) {
-  test(`PERF-bridge-gate: the judging load, the window ${covered ? "covered" : "on screen"}`, async ({
+  test(`PERF-bridge-gate: the judging load, the window ${covered ? "covered, its frames stopped" : "on screen"}`, async ({
     cupper,
   }) => {
-    const { delay, reset, blob, resync, load, visibility } = await run(cupper, { covered });
-    expect(visibility).toBe(covered ? "hidden" : "visible");
+    const { delay, reset, blob, resync, load, frames } = await run(cupper, { covered });
+    expect(frames > 0, "animation frames run unless stopped").toBe(!covered);
     expect(blob.bytes).toBe(5 * 1024 * 1024);
     expect(resync.events).toBeGreaterThanOrEqual(5000);
     expect(Object.keys(load).filter((stream) => /^g\d$/.test(stream))).toHaveLength(4);
