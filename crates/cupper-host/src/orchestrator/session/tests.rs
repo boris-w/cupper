@@ -84,6 +84,17 @@ impl Sink for Wake {
     fn reset(&self, _: &StreamId) {}
 }
 
+/// `fut`, or a failure naming `what` the test waited for after 30 s of real
+/// time: nothing of the fixture's waits longer.
+pub(super) async fn soon<T>(what: &str, fut: impl std::future::Future<Output = T>) -> T {
+    let clock = crate::clock::SystemClock::new();
+    let give_up = clock.timer_at(clock.now_mono() + Duration::from_secs(30));
+    tokio::select! {
+        out = fut => out,
+        () = give_up => panic!("still waiting for {what}"),
+    }
+}
+
 /// Claude's, with three permission modes; the host's cache has them too.
 pub(super) fn caps() -> SessionCapabilities {
     let mode = |value, risk| json!({"value": value, "name": value, "risk": risk});
@@ -330,7 +341,8 @@ impl Fixture {
     /// Answers the next attach with the agent's session `agent-1`, whose
     /// capabilities are `capabilities`.
     pub async fn attach_with(&mut self, capabilities: SessionCapabilities) -> Attach {
-        let Some(Seen::Attach(attach, events, reply)) = self.seen.recv().await else {
+        let Some(Seen::Attach(attach, events, reply)) = soon("an attach", self.seen.recv()).await
+        else {
             panic!("an attach")
         };
         let session = AgentSessionId("agent-1".into());
@@ -347,7 +359,7 @@ impl Fixture {
     }
 
     pub async fn command(&mut self) -> DriverCommand {
-        match self.seen.recv().await {
+        match soon("a command to the agent", self.seen.recv()).await {
             Some(Seen::Command(command)) => command,
             other => panic!("{other:?}"),
         }
@@ -402,10 +414,11 @@ impl Fixture {
             let mut bodies = Vec::new();
             let all = |e: cupper_protocol::envelope::Event<_>| bodies.push(e.body);
             log::read_events(&conn, &stream, 0, MAX_SAFE_INTEGER, all).unwrap();
-            if bodies.iter().filter(|b| b.tag() == tag).count() >= n {
+            let found = bodies.iter().filter(|b| b.tag() == tag).count();
+            if found >= n {
                 return bodies;
             }
-            wake.0.notified().await;
+            soon(&format!("{n} {tag}, {found} so far"), wake.0.notified()).await;
         }
     }
 
