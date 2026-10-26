@@ -555,7 +555,16 @@ IT-plan-entries = "pr"
 [T064]
 milestone = "M1a"
 UNIT-compat-report = "pr"
+
+# 兼容套件 II：真实模式与剧本补全（计划 v1.3.55 由 T064 拆出）
+[T187]
+milestone = "M1a"
 UNIT-compat-guards = "pr"
+
+# 兼容套件 III：审阅与校验工具（计划 v1.3.55 由 T064 拆出）
+[T188]
+milestone = "M1a"
+UNIT-compat-tools = "pr"
 
 # B 层金样例运行器
 [T065]
