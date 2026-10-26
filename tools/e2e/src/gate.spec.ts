@@ -7,7 +7,8 @@
 // fragments a second follow as a stress report, not judged. Each test logs
 // its numbers as one `gate` line; when `CUPPER_PERF_OUT` names a file (the
 // e2e job outside `ci pr`), a judged test that passed adds its p99 there as a
-// PERF sample, for the trend in `testdata/perf/history.jsonl`.
+// PERF sample, for the trend in `testdata/perf/history.jsonl`. Tagged `@perf`:
+// a GitHub-hosted runner is no reference machine and leaves them out (T197).
 
 import { createHash, randomBytes } from "node:crypto";
 import { appendFileSync, readFileSync } from "node:fs";
@@ -215,26 +216,32 @@ async function run(cupper: Cupper, { streams = 4, rate = 100, covered = false } 
 test.describe.configure({ mode: "serial", timeout: 180_000 });
 
 for (const covered of [false, true]) {
-  test(`PERF-bridge-gate: the judging load, the window ${covered ? "covered, its frames stopped" : "on screen"}`, async ({
-    cupper,
-  }) => {
-    const { delay, reset, blob, resync, load, frames } = await run(cupper, { covered });
-    expect(frames > 0, "animation frames run unless stopped").toBe(!covered);
-    expect(blob.bytes).toBe(5 * 1024 * 1024);
-    expect(resync.events).toBeGreaterThanOrEqual(5000);
-    expect(Object.keys(load).filter((stream) => /^g\d$/.test(stream))).toHaveLength(4);
-    expect(reset, "no stream reset").toBe(0);
-    expect(delay.p99, "the main process's event loop delay, p99 in ms").toBeLessThan(5);
-    const out = process.env.CUPPER_PERF_OUT;
-    if (out) {
-      const metric = `bridge_loop_delay_p99${covered ? "_covered" : ""}`;
-      appendFileSync(out, `${JSON.stringify({ metric, unit: "ms", samples: [delay.p99] })}\n`);
-    }
-  });
+  test(
+    `PERF-bridge-gate: the judging load, the window ${covered ? "covered, its frames stopped" : "on screen"}`,
+    {
+      tag: "@perf",
+    },
+    async ({ cupper }) => {
+      const { delay, reset, blob, resync, load, frames } = await run(cupper, { covered });
+      expect(frames > 0, "animation frames run unless stopped").toBe(!covered);
+      expect(blob.bytes).toBe(5 * 1024 * 1024);
+      expect(resync.events).toBeGreaterThanOrEqual(5000);
+      expect(Object.keys(load).filter((stream) => /^g\d$/.test(stream))).toHaveLength(4);
+      expect(reset, "no stream reset").toBe(0);
+      expect(delay.p99, "the main process's event loop delay, p99 in ms").toBeLessThan(5);
+      const out = process.env.CUPPER_PERF_OUT;
+      if (out) {
+        const metric = `bridge_loop_delay_p99${covered ? "_covered" : ""}`;
+        appendFileSync(out, `${JSON.stringify({ metric, unit: "ms", samples: [delay.p99] })}\n`);
+      }
+    },
+  );
 }
 
-test("PERF-bridge-gate: six streams of 200 fragments a second, a stress report", async ({
-  cupper,
-}) => {
-  await run(cupper, { streams: 6, rate: 200 });
-});
+test(
+  "PERF-bridge-gate: six streams of 200 fragments a second, a stress report",
+  { tag: "@perf" },
+  async ({ cupper }) => {
+    await run(cupper, { streams: 6, rate: 200 });
+  },
+);

@@ -100,9 +100,14 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         }
         ctx.playwright(step, &mut test)
     };
+    // A GitHub-hosted runner is no reference machine: the PERF tests and
+    // their trend are the author's machine's (T197).
+    let hosted = std::env::var("RUNNER_ENVIRONMENT").is_ok_and(|env| env == "github-hosted");
     let (rest, focus): (&[&str], &str) = if smoke {
         let both = "(?=.*@smoke)(?=.*@focus)";
         (&["--grep", "@smoke", "--grep-invert", "@focus"], both)
+    } else if hosted {
+        (&["--grep-invert", "@focus|@perf"], "@focus")
     } else {
         (&["--grep-invert", "@focus"], "@focus")
     };
@@ -110,6 +115,11 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     let focus = suite("test-e2e-focus", &["--grep", focus, "--workers", "1"]);
     rest.and(focus)?;
     if smoke {
+        return Ok(());
+    }
+    if hosted {
+        let reason = "a GitHub-hosted runner is no reference machine: PERF is the author's";
+        ctx.skip("perf", reason);
         return Ok(());
     }
     perf::trend(ctx, &samples)
