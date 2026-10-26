@@ -74,3 +74,30 @@ T064 已有 10 个：new-session、normal-turn、command-exit、approval、rejec
 2. **运行方式**：不带 `--fake` 就是真实模式（设计写的是维护者执行 `cargo xtask compat`），`--dry-run` 两种模式都能用。也可以改成必须显式写 `--real`，多一道防误跑的保护。
 3. **要算哈希的文件**：`~/.claude/settings.json`、`~/.claude/settings.local.json`、`~/.claude.json`、`~/.codex/config.toml`。只读不改，凭据文件不算。
 4. **Q8 的"没有串话"**：每个 prompt 让 agent 原样回一个标记，检查每个会话的回答里只有自己的标记。这一条要看文本，是结构断言之外唯一的例外。
+
+## 裁定之后（计划 v1.3.60）
+
+按方案一收窄，停止线 720、硬停止线 800。其余 10 个剧本归 T192。四点确认的结论：
+- 真实宿主用 e2e 种类的 `CupperHost.app`，环境取自登录 shell，宿主的环境过滤照常生效；
+- 必须显式写 `--real`；
+- 哈希照 T003 的 `config-hash.ts`，报告里只写名字和是否变化；
+- Q8 归 T192。
+
+### 收窄后的估计
+
+| 模块 | 内容 | 草估 |
+|---|---|---|
+| 执行者：剧本表 | 真实提示词（基本组 10 个加 Steer）、必填的权限模式、放宽声明、准备文件、"不适用"的理由；新增 `steer` 剧本 | 50 |
+| 执行者：自我约束 | 静态检查：权限模式在允许清单里，选项种类只有 `allow_once`、`reject_once`，放宽要有声明；运行时检查：所选选项不持久、不要求 privileged，会话的模式风险是 `normal`，临时仓库在本用户的临时目录下 | 55 |
+| 执行者：真实模式 | 计划里的 `real`（宿主路径、模型）；以登录 shell 环境启动 e2e 宿主；临时仓库 `git init`；适配器和 CLI 的版本取自导出的头行；`cli_sessions` 取自 `sessions.agent_session_id` | 45 |
+| 执行者：`--dry-run` | 只打印计划和约束检查的结果，不起宿主 | 20 |
+| 执行者：`lsof` 与遗留进程 | 列出宿主的后代；适配器以下的进程不持有宿主的管道和套接字；宿主退出后这些进程都不在了 | 70 |
+| xtask：参数与真实流程 | `--fake`/`--real` 恰好写一个，`--dry-run`、`--model`；构建 e2e 宿主包；运行前后的配置快照；汇总需要清理的项 | 75 |
+| xtask：配置快照与比较 | 照 T003：三个文件按整文件，`~/.claude.json` 按字段；本次临时仓库的新项目条目列进清理项，其他新增或改动判失败 | 90 |
+| xtask：报告 | 结果加 `not_applicable`、`observed`、`real_only`；`config_files` 只写名字和是否变化；`cli_sessions` 改为 `cleanup`；`problems` 跟着改 | 25 |
+| xtask：入库 | 真实模式写全部剧本的录制，报告写进 `testdata/compat/reports/` | 20 |
+| `ci compat-framework` | 加跑执行者的单元测试 | 3 |
+| | 实现小计 | 约 455，×1.1 ≈ 500 |
+| 测试 | UNIT-compat-guards：静态与运行时约束 50、配置快照与比较 45、`lsof` 输出解析 20；报告新取值 10 | 125，×1.1 ≈ 140 |
+
+**合计约 640 行**，在 720 以内，开工。
