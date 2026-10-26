@@ -277,6 +277,11 @@ export type CliCompat =
  */
 export type CliInstall = "native" | "npm_shim" | "unsupported_install" | (string & {});
 
+/**
+ * A CLI's path, or `null`: the CLI is discovered (design 5.6.6).
+ */
+export type CliPath = WirePath | null;
+
 export type CliStatus = {
   compat: CliCompat;
   install: CliInstall;
@@ -2976,14 +2981,8 @@ export type SessionWorkspace = {
  * or `diagnostics.verbose` takes `privileged` (design 5.2.5).
  */
 export type Settings = {
-  /**
-   * `null`: the CLI is discovered (design 5.6.6).
-   */
-  "agents.claude.cli_path"?: WirePath | null;
-  /**
-   * `null`: the CLI is discovered.
-   */
-  "agents.codex.cli_path"?: WirePath | null;
+  "agents.claude.cli_path": CliPath;
+  "agents.codex.cli_path": CliPath;
   /**
    * Names of more environment variables the adapters get (design 5.6.6).
    */
@@ -3010,8 +3009,8 @@ export type Settings = {
  * key whose value may be `null`.
  */
 export type SettingsPatch = {
-  "agents.claude.cli_path"?: WirePath | null;
-  "agents.codex.cli_path"?: WirePath | null;
+  "agents.claude.cli_path"?: CliPath | null;
+  "agents.codex.cli_path"?: CliPath | null;
   "agents.env_passthrough"?: Array<string> | null;
   "apps.editor"?: string | null;
   "apps.terminal"?: string | null;

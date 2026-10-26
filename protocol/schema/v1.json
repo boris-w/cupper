@@ -751,6 +751,17 @@
       ],
       "description": "Open enum: unknown values must be accepted. Known: native npm_shim unsupported_install "
     },
+    "CliPath": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WirePath"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "A CLI's path, or `null`: the CLI is discovered (design 5.6.6)."
+    },
     "CliStatus": {
       "properties": {
         "compat": {
@@ -7811,26 +7822,10 @@
       "description": "The host's settings by their keys in design 5.2.11, every key\npresent. Changing `agents.*.cli_path`, `agents.env_passthrough`\nor `diagnostics.verbose` takes `privileged` (design 5.2.5).",
       "properties": {
         "agents.claude.cli_path": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WirePath"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "`null`: the CLI is discovered (design 5.6.6)."
+          "$ref": "#/$defs/CliPath"
         },
         "agents.codex.cli_path": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WirePath"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "`null`: the CLI is discovered."
+          "$ref": "#/$defs/CliPath"
         },
         "agents.env_passthrough": {
           "description": "Names of more environment variables the adapters get (design 5.6.6).",
@@ -7872,6 +7867,8 @@
         }
       },
       "required": [
+        "agents.claude.cli_path",
+        "agents.codex.cli_path",
         "agents.env_passthrough",
         "worktrees.root",
         "notifications.needs_action",
@@ -7891,7 +7888,7 @@
         "agents.claude.cli_path": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WirePath"
+              "$ref": "#/$defs/CliPath"
             },
             {
               "type": "null"
@@ -7901,7 +7898,7 @@
         "agents.codex.cli_path": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WirePath"
+              "$ref": "#/$defs/CliPath"
             },
             {
               "type": "null"

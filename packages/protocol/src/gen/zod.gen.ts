@@ -1953,6 +1953,11 @@ export const zChainProcess = z.object({
   pid: z.int().gte(0).lte(4294967295),
 });
 
+/**
+ * A CLI's path, or `null`: the CLI is discovered (design 5.6.6).
+ */
+export const zCliPath = zWirePath.nullable();
+
 export const zCliStatus = z.object({
   compat: zCliCompat,
   install: zCliInstall,
@@ -2324,8 +2329,8 @@ export const zSessionSendParams = z.object({
  * or `diagnostics.verbose` takes `privileged` (design 5.2.5).
  */
 export const zSettings = z.object({
-  "agents.claude.cli_path": zWirePath.nullish(),
-  "agents.codex.cli_path": zWirePath.nullish(),
+  "agents.claude.cli_path": zCliPath,
+  "agents.codex.cli_path": zCliPath,
   "agents.env_passthrough": z.array(z.string()),
   "apps.editor": z.string(),
   "apps.terminal": z.string(),
@@ -2343,8 +2348,8 @@ export const zSettings = z.object({
  * key whose value may be `null`.
  */
 export const zSettingsPatch = z.object({
-  "agents.claude.cli_path": zWirePath.nullish(),
-  "agents.codex.cli_path": zWirePath.nullish(),
+  "agents.claude.cli_path": zCliPath.nullish(),
+  "agents.codex.cli_path": zCliPath.nullish(),
   "agents.env_passthrough": z.array(z.string()).nullish(),
   "apps.editor": z.string().nullish(),
   "apps.terminal": z.string().nullish(),
