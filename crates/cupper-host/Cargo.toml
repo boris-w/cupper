@@ -84,6 +84,11 @@ required-features = ["test-harness"]
 name = "gateway_sync"
 required-features = ["test-harness"]
 
+# The K list on the host process with the fake agent (T063).
+[[test]]
+name = "driver_k"
+required-features = ["test-harness"]
+
 # GOLD-B runs the host in the test's own process, with a `harness_key`.
 [[test]]
 name = "gold_b"
