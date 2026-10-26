@@ -88,7 +88,8 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     fs::create_dir_all(history_path.parent().expect("a directory"))?;
     fs::write(&history_path, previous + &added).context("write the PERF history")?;
     for line in &lines {
-        let (metric, unit) = (&line["metric"], &line["unit"]);
+        let text = |key: &str| line[key].as_str().unwrap_or_default().to_owned();
+        let (metric, unit) = (text("metric"), text("unit"));
         eprintln!(
             "  {metric:<30} p50 {} p95 {} max {} {unit}",
             line["p50"], line["p95"], line["max"]
