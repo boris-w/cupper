@@ -1,0 +1,40 @@
+{
+  "artifacts": [],
+  "commit": "3dd00ac79e24b86a873a4aba9feccd12de36ad78",
+  "duration_ms": 26198,
+  "jobs": [
+    {
+      "duration_ms": 26198,
+      "failed": 0,
+      "name": "compat-framework",
+      "passed": 13,
+      "result": "pass",
+      "skipped": []
+    }
+  ],
+  "machine": "MacBook Pro (Apple M5 Pro)",
+  "os": "macOS 26.4",
+  "results": [
+    {
+      "commit": "3dd00ac79e24b86a873a4aba9feccd12de36ad78",
+      "id": "UNIT-compat-guards",
+      "result": "pass",
+      "suite": "compat-framework"
+    },
+    {
+      "commit": "3dd00ac79e24b86a873a4aba9feccd12de36ad78",
+      "id": "UNIT-compat-report",
+      "result": "pass",
+      "suite": "compat-framework"
+    }
+  ],
+  "target": "compat-framework",
+  "toolchain": {
+    "cargo": "1.96.0",
+    "cargo_deny": "0.20.2",
+    "node": "24.19.0",
+    "pnpm": "12.14.0",
+    "rustc": "1.96.0"
+  },
+  "version": 1
+}

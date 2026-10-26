@@ -1,11 +1,15 @@
-//! `cargo xtask compat` (design 5.9.5): the compat scenarios through the host,
-//! so far with the fake agent playing the CLI. The runner, an ignored test of
-//! cupper-host (`tests/compat.rs`), plays them and writes what happened; this
-//! makes the report of it, and with `--write` takes the GOLD-B scenarios'
-//! recordings into `testdata/` ([`record`]).
+//! `cargo xtask compat` (design 5.9.5): the compat scenarios through the
+//! host, with the fake agent (`--fake`) or the real CLI (`--real`). The
+//! runner, an ignored test of cupper-host (`tests/compat.rs`), plays them and
+//! writes what happened; this makes the report of it, compares the real
+//! configuration before and after a real run ([`config`]), and with
+//! `--write` takes the recordings into `testdata/` ([`record`]).
+//! `cargo xtask compat-reports` checks the committed reports ([`reports`]).
 
+mod config;
 mod record;
 pub mod report;
+pub mod reports;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -19,17 +23,30 @@ use crate::ci::git;
 use crate::clock::Stopwatch;
 use report::{Mode, Named, Outcome, Report};
 
-pub const USAGE: &str = "usage: cargo xtask compat --fake [--only <scenario>]... [--out <dir>] [--write [--words <file>]]
+pub const USAGE: &str = "usage: cargo xtask compat (--fake | --real [--model <model>]) [--dry-run]
+         [--only <scenario>]... [--out <dir>] [--write [--words <file>]]
 
-  --fake    the fake agent plays the CLI: no quota (the real CLIs are not driven yet)
-  --only    a scenario to run; all by default
-  --out     where the report and the recordings go (target/compat, emptied first)
-  --write   take the GOLD-B scenarios' recordings into testdata/ and update their
-            goldens; needs the sensitive word list, .private/sensitive-words.txt
-            of the main work tree or --words";
+  --fake     the fake agent plays the CLI: no quota
+  --real     the real CLI, with the user's own configuration: uses quota;
+             the configuration is compared before and after
+  --model    the model of a real run (haiku)
+  --dry-run  the plan and the self-constraints' verdicts; nothing starts
+  --only     a scenario to run; all by default
+  --out      where the report and the recordings go (target/compat, emptied first)
+  --write    take the recordings (the GOLD-B ones of a fake run; all of a real
+             run, which must be whole, and its report) into testdata/ and update
+             the goldens; needs the sensitive word list,
+             .private/sensitive-words.txt of the main work tree or --words";
+
+/// Where `cargo xtask host-bundle --kind e2e` puts the host a real run uses.
+const HOST: &str = "target/host-bundle/e2e/CupperHost.app/Contents/MacOS/cupper-host";
+const RUNTIME: &str = "target/runtime-pack/Contents";
 
 #[derive(Debug, Default, PartialEq)]
 struct Options {
+    real: bool,
+    model: Option<String>,
+    dry_run: bool,
     only: Vec<String>,
     out: Option<PathBuf>,
     write: bool,
@@ -42,8 +59,10 @@ struct Options {
 struct Run {
     adapter: Named,
     cli: Named,
-    /// The temporary roots of the scenarios' projects, for `tools/sanitize`.
+    /// The temporary roots of the scenarios' projects.
     roots: Vec<PathBuf>,
+    /// The CLI's sessions the scenarios started.
+    cli_sessions: Vec<String>,
     scenarios: Vec<report::Scenario>,
 }
 
@@ -72,6 +91,9 @@ fn parse(args: &[String]) -> Result<Options> {
         };
         match arg.as_str() {
             "--fake" => fake = true,
+            "--real" => options.real = true,
+            "--model" => options.model = Some(value()?.clone()),
+            "--dry-run" => options.dry_run = true,
             "--only" => options.only.push(value()?.clone()),
             "--out" => options.out = Some(value()?.into()),
             "--write" => options.write = true,
@@ -79,15 +101,36 @@ fn parse(args: &[String]) -> Result<Options> {
             other => bail!("unexpected argument `{other}`"),
         }
     }
-    ensure!(fake, "`--fake` is needed: the real CLIs are not driven yet");
-    ensure!(
-        options.write || options.words.is_none(),
-        "`--words` goes with `--write`"
-    );
-    Ok(options)
+    // T188 counts a real report that passes everything toward the verified
+    // range; one of some scenarios would pass everything too.
+    let partial = options.real && options.write && !options.only.is_empty();
+    let refused = [
+        (
+            fake == options.real,
+            "one of `--fake` and `--real` is needed, not both",
+        ),
+        (
+            !options.real && options.model.is_some(),
+            "`--model` goes with `--real`",
+        ),
+        (
+            !options.write && options.words.is_some(),
+            "`--words` goes with `--write`",
+        ),
+        (options.write && options.dry_run, "a dry run writes nothing"),
+        (
+            partial,
+            "a real run that `--write` keeps plays every scenario: no `--only`",
+        ),
+    ];
+    match refused.iter().find(|(refused, _)| *refused) {
+        Some((_, why)) => bail!("{why}"),
+        None => Ok(options),
+    }
 }
 
-/// Whether every scenario passed.
+/// Whether every scenario passed, or did what it can, and the real
+/// configuration stayed as it was.
 fn run(root: &Path, options: &Options) -> Result<bool> {
     let out = options
         .out
@@ -107,15 +150,39 @@ fn run(root: &Path, options: &Options) -> Result<bool> {
         cargo.current_dir(root);
         cargo
     };
-    let built = cargo()
-        .args(["build", "-p", "cupper-fake-agent", "--locked"])
-        .status()?;
-    ensure!(built.success(), "the fake agent did not build");
+    let xtask = |args: &str| -> Result<()> {
+        let mut xtask = Command::new(std::env::current_exe()?);
+        let status = xtask.current_dir(root).args(args.split(' ')).status()?;
+        ensure!(status.success(), "`xtask {args}` failed");
+        Ok(())
+    };
+    let model = options.model.clone().unwrap_or_else(|| "haiku".into());
+    let real = json!({"host": root.join(HOST), "model": model});
+    let real = options.real.then_some(real);
+    // A dry run starts nothing, so it needs neither the host nor the fake agent.
+    match (options.dry_run, options.real) {
+        (true, _) => {}
+        (false, true) => {
+            if !root.join(RUNTIME).is_dir() {
+                xtask("runtime-pack")?;
+            }
+            xtask("host-bundle --kind e2e --debug")?;
+        }
+        (false, false) => {
+            let built = cargo()
+                .args(["build", "-p", "cupper-fake-agent", "--locked"])
+                .status()?;
+            ensure!(built.success(), "the fake agent did not build");
+        }
+    }
+    let home = PathBuf::from(std::env::var_os("HOME").context("HOME")?);
+    let before = (options.real && !options.dry_run).then(|| config::snapshot(&home));
+    let before = before.transpose()?;
     let plan = out.join("plan.json");
-    fs::write(
-        &plan,
-        json!({"only": options.only, "attempts": 1, "out": out}).to_string(),
-    )?;
+    let attempts = if options.real { 3 } else { 1 };
+    let plan_json = json!({"only": options.only, "attempts": attempts, "out": out,
+        "dry_run": options.dry_run, "real": real});
+    fs::write(&plan, plan_json.to_string())?;
     let mut runner = cargo();
     runner.args([
         "test",
@@ -138,21 +205,40 @@ fn run(root: &Path, options: &Options) -> Result<bool> {
         .env("CUPPER_COMPAT_PLAN", &plan)
         .status()?;
     ensure!(status.success(), "the runner failed");
+    if options.dry_run {
+        let hashed = options.real.then(config::names);
+        let hashed = hashed.unwrap_or_else(|| "none".into());
+        println!("configuration compared before and after: {hashed}");
+        return Ok(true);
+    }
 
     let run: Run = serde_json::from_str(&fs::read_to_string(out.join("run.json"))?)
         .context("read the runner's run.json")?;
+    let (config_files, mut cleanup) = match &before {
+        Some(before) => config::compare(before, &config::snapshot(&home)?, &run.roots),
+        None => (Vec::new(), Vec::new()),
+    };
+    cleanup.extend(
+        run.cli_sessions
+            .iter()
+            .map(|id| format!("the CLI's session {id}")),
+    );
     let report = Report {
         v: 1,
         commit: git::head(root)?,
-        mode: Mode::Fake,
+        mode: if options.real {
+            Mode::RealConfig
+        } else {
+            Mode::Fake
+        },
         agent: "claude".into(),
-        model: None,
+        model: options.real.then_some(model),
         adapter: run.adapter,
         cli: run.cli,
         duration_ms: watch.elapsed_ms(),
         scenarios: run.scenarios,
-        config_files: Vec::new(),
-        cli_sessions: Vec::new(),
+        config_files,
+        cleanup,
     };
     let text = serde_json::to_string_pretty(&report)? + "\n";
     let problems = report::problems(&report::parse(&text)?);
@@ -161,15 +247,24 @@ fn run(root: &Path, options: &Options) -> Result<bool> {
         "the report does not conform: {problems:?}"
     );
     let path = out.join("report.json");
-    fs::write(&path, text)?;
+    fs::write(&path, &text)?;
     for s in &report.scenarios {
         let detail = s.detail.as_deref().unwrap_or_default();
-        println!("  {:<16} {:<13} {detail}", s.id, format!("{:?}", s.outcome));
+        println!("  {:<16} {:<15} {detail}", s.id, format!("{:?}", s.outcome));
     }
+    for check in report.config_files.iter().filter(|check| check.changed) {
+        println!("  CHANGED by the run: {}", check.name);
+    }
+    report
+        .cleanup
+        .iter()
+        .for_each(|item| println!("  to clean up: {item}"));
     println!("report: {}", path.display());
-    let passed = report.scenarios.iter().all(|s| s.outcome == Outcome::Pass);
+    let failed = [Outcome::Fail, Outcome::Inconclusive];
+    let passed = !report.scenarios.iter().any(|s| failed.contains(&s.outcome))
+        && report.config_files.iter().all(|check| !check.changed);
     if let Some(words) = words {
-        ensure!(passed, "testdata/ left as it is: not every scenario passed");
+        ensure!(passed, "testdata/ left as it is: the run did not pass");
         record::write(root, &out, &run.roots, &report, &words)?;
     }
     Ok(passed)
@@ -184,12 +279,26 @@ mod tests {
     }
 
     #[test]
-    fn compat_runs_only_the_fake_agent_so_far() {
+    fn unit_compat_guards_a_real_run_is_asked_for_and_kept_whole() {
         let options = parse(&args("--fake --only cancel --only plan --write --words w")).unwrap();
         assert_eq!(options.only, ["cancel", "plan"]);
         assert_eq!((options.write, options.words), (true, Some("w".into())));
-        assert!(parse(&args("--only cancel")).is_err());
-        assert!(parse(&args("--fake --words w")).is_err());
-        assert!(parse(&args("--fake --only")).is_err());
+        let real = parse(&args("--real --model sonnet --dry-run --only plan")).unwrap();
+        assert_eq!(
+            (real.real, real.model, real.dry_run),
+            (true, Some("sonnet".into()), true)
+        );
+        assert!(parse(&args("--real --write")).is_ok());
+        for bad in [
+            "--only cancel",
+            "--fake --real",
+            "--fake --model haiku",
+            "--fake --words w",
+            "--fake --only",
+            "--fake --dry-run --write",
+            "--real --write --only plan",
+        ] {
+            assert!(parse(&args(bad)).is_err(), "{bad}");
+        }
     }
 }

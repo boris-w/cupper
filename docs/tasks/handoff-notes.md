@@ -419,6 +419,9 @@
 | T187 | 真实提示词、权限模式（Claude `default`）、准备文件与自我约束都没写，留给 T187；报告的 `config_files`、`cli_sessions` 已占位，语义检查要求真实模式必须有配置哈希。`session/create` 带显式权限模式后三份 B 层录制的 `config` 会变，用 `--fake --write` 重新产出并说明差异。cancel 剧本在真实 CLI 上是"允许后等 1 秒再中断"，`sleep 60` 没有输出，可靠性要在 T066 实际跑时确认 | T064（已写入 brief） |
 | T188 | 读报告用 `report::parse` 加 `report::problems`；schema 在 `testdata/compat/report.schema.json`（键排好序）；`testdata_scan.rs` 的 `WORD_LIST`、`word_list` 已改成 `pub`。compat-framework 还没进 `ci pr`，照 ui 作业用 `git::changed_since_main` 按路径判断 | T064（已写入 brief） |
 | T066 | 执行者是 cupper-host 的忽略测试 `compat_driver`，由 `cargo xtask compat` 用 `--ignored --exact compat_driver` 和 `CUPPER_COMPAT_PLAN` 拉起；`--write` 只写 gold-b 剧本，没有 `.private/sensitive-words.txt`（或 `--words`）时一开始就报错 | T064 |
+| T187（合并时） | T188 的 `compat/reports.rs` 里 `counts` 用穷尽的 `match` 判断剧本结果；新取值的裁定：`not_applicable` 按通过算，`observed`、`real_only` 不阻止计入 | T188 |
+| T066 | 已验证 CLI 范围由 `cargo xtask compat-reports --write` 从 `testdata/compat/reports/` 的报告生成，不手填；计入条件：真实模式、适配器版本等于锁定版本、至少一个剧本且全部通过。设计 5.10.3 说范围"每个适配器版本一份"，清单里每种 CLI 只有一个范围：适配器升级后基线怎么取由 T066 定 | T188 |
+| T193 | 守卫在 `cupper-protocol/tests/fixtures.rs` 的 `unit_proto_absent_not_null_samples_send_no_null_on_optional_fields`，沿 `schema::document()` 检查样例；覆盖面用不带 `absent_not_null` 的生成器再导出一次算出（220 个里 135 个），没覆盖到的 85 个逐个列在 `docs/tasks/T190-absent-not-null-guard/notes.md`。视图的 proptest 生成器是库内的 `pub(super)`，集成测试拿不到；部分 ID 有格式约束，生成的实例要合法 | T190 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
