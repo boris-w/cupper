@@ -410,6 +410,12 @@
 | 会话 actor 的测试 | `actor::held`（只在单元测试里编译，按项目路径登记）能让某次重扫停住，用来把配置变化放进"回合已开始、附加前的重扫还没做"这类窗口（T069）；会话夹具的 `events`、`attach`、`command` 等待都有 30 s 超时，超时时报出在等什么 | T069 |
 | 读设置的宿主任务 | 设置（T036）在 `crates/cupper-host/src/settings.rs`：宿主内部经 `SettingsHandle::current()` 取；默认值是 `worktrees.root` 为 `~/.cupper/worktrees`、三个通知开关开、新会话默认 Claude、`host.idle_exit_minutes` 为 10、`diagnostics.verbose` 关、不额外放行环境变量、CLI 路径为空（自动发现）。`cli_path`、`env_passthrough` 变了会先重新发现 agent 再回复；其余键 M1a 不推送 | T036 |
 | T126 | `apps.terminal`、`apps.editor` 的内置应用清单仍没有设计（T013 的交接），T036 的默认值暂用 macOS 自带的 Terminal 和 TextEdit | T036 |
+| 改协议或 ShellAPI 的任务（T151、T147 等） | 契约已冻结（T016），只能附加，`ci protocol` 的 `schema-compat`、`shell-api-m1a` 会判。新加的 `Option` 字段必须带 `skip_serializing_if = "Option::is_none"`，否则宿主发出 `null` 而 schema 不允许（T190 补守卫前没有检查）；值本身可以为 `null` 的做成具名定义，照 `CliPath`。改完跑 `pnpm gen`。`schema-compat` 不比较描述、数值界的放宽、`x-errors`、`x-milestone` | T016 |
+| T151 | `settings.updated` 事件与 `IndexView.settings` 在 `schema-compat` 下按附加通过（T016 用冻结副本演示过） | T016 |
+| T190 | 守卫的做法：序列化金样例与夹具后，断言 schema 里的非必填属性上没有 `null`；`CliPath` 这类值本身可为 `null` 的具名定义除外。导出时的变换是 `cupper-protocol/src/schema.rs` 的 `absent_not_null` | T016 |
+| T191 | PERF-snapshot 在 `git/snapshot/tests.rs`，每种情况现为 5 个样本；样本经 `cupper_host::perf::record` 写到 `CUPPER_PERF_OUT`。PERF-bridge-gate 进历史的做法写在 `docs/tasks/T117-host-perf/notes.md`：`gate.spec.ts` 也写 `CUPPER_PERF_OUT`，`ci/jobs/perf.rs` 的统计、追加、判定抽成共用函数给 e2e 作业调用 | T117 |
+| 要提高条目吞吐的任务（M1b 之后） | `flood_mixed` 经宿主约 2.6 ms 一个条目：会话 actor 把不能合并的事件逐个提交，约 0.87 ms 一个。提速的方向是同一步里攒批追加。现在达标，没有做（数字在 `docs/tasks/T117-host-perf/notes.md`） | T117 |
+| 改回合指纹的任务 | `Fingerprint::take` 遍历整个工作区找 `.gitattributes`，10 万文件约 43 ms，随被忽略的文件数线性增长，到百万级约 0.4 s 时再改成只看已跟踪和未忽略的 | T117 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

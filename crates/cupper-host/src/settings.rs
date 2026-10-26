@@ -15,7 +15,8 @@ use cupper_protocol::annotations::WirePath;
 use cupper_protocol::domain::AgentKind;
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
 use cupper_protocol::methods::admin::{
-    Settings, SettingsGet, SettingsPatch, SettingsResult, SettingsUpdate, SettingsUpdateParams,
+    CliPath, Settings, SettingsGet, SettingsPatch, SettingsResult, SettingsUpdate,
+    SettingsUpdateParams,
 };
 use cupper_protocol::rpc::Method;
 use futures::FutureExt;
@@ -36,8 +37,8 @@ use crate::store::{Durability, WriteError, Writer};
 /// logs. The apps are macOS's own until the built-in list exists (T013).
 pub fn defaults(home: &Path) -> Settings {
     Settings {
-        claude_cli_path: None,
-        codex_cli_path: None,
+        claude_cli_path: CliPath(None),
+        codex_cli_path: CliPath(None),
         env_passthrough: Vec::new(),
         worktrees_root: WirePath(home.join(".cupper/worktrees").display().to_string()),
         notify_needs_action: true,
@@ -93,7 +94,7 @@ pub fn apply(
     let cli_paths = [&next.claude_cli_path, &next.codex_cli_path];
     if let Some(path) = cli_paths
         .into_iter()
-        .flatten()
+        .filter_map(|cli| cli.0.as_ref())
         .find(|p| !Path::new(&p.0).is_absolute())
     {
         return Err(format!("{} is not an absolute path", path.0));
