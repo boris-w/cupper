@@ -426,6 +426,8 @@
 | T197 | e2e 的 workers 现固定为 2，是按作者机器定的；有远端后按 runner 的核数重新定，并在 CI 上重跑一轮 20 次（计划 T090 的注） | T090 |
 | T066 | 真实模式只经单元测试和 `--dry-run` 验证过，第一次实际运行时留意：e2e 宿主包在登录 shell 的环境下能否找到 `claude`；`--model` 在真实适配器上是否被接受；cancel 剧本"允许后等 1 秒再中断"是否可靠；`claude` 继承适配器的标准错误时 `lsof` 检查会判失败，先判断是适配器的问题还是要放宽规则；`~/.claude.json` 的字段摘要按值的 JSON 文本算，工作区开了 `preserve_order`，CLI 调换键序会误报"有变化"（只会误判失败） | T187 |
 | T192 | 剧本编号以 `docs/tasks/T187-compat-real-mode/notes.md` 为准；`Scenario` 类型、`loosens`、进程检查（`lsof -F`）、真实宿主的启动方式都在 T187 里 | T187（已写入 brief） |
+| T197、下一个改 e2e 调度的任务 | `ci e2e`、`ci nightly` 里 `gate.spec.ts` 和另一个 worker 的用例并行（`workers: 2`），PERF-bridge-gate 的 p99 会受旁边用例影响，趋势比单独跑时噪。重新定 workers 时考虑让它单独跑 | T191 |
+| 编排者（下次本机 `ci nightly`） | PERF-bridge-gate 的第一行历史由本机的 `ci nightly` 写入（GitHub 上的 e2e 不提交历史）；跑完连同摘要一起提交 | T191 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
