@@ -561,7 +561,7 @@ UNIT-compat-report = "pr"
 milestone = "M1a"
 UNIT-compat-guards = "pr"
 
-# 兼容套件 III：审阅与校验工具（计划 v1.3.55 由 T064 拆出）
+# 兼容套件 III：报告校验与已验证范围（计划 v1.3.55 由 T064 拆出，v1.3.62 再拆）
 [T188]
 milestone = "M1a"
 UNIT-compat-tools = "pr"
@@ -570,6 +570,12 @@ UNIT-compat-tools = "pr"
 [T190]
 milestone = "M1a"
 UNIT-proto-absent-not-null = "pr"
+
+# 兼容套件 V：审阅工具（计划 v1.3.62 由 T188 拆出）
+[T194]
+milestone = "M1a"
+UNIT-rec-shape-diff = "pr"
+UNIT-trace-ids-compat = "pr"
 
 # B 层金样例运行器
 [T065]
