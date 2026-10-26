@@ -75,16 +75,24 @@ pub async fn connect(data_dir: &Path) -> client::Client {
 }
 
 pub async fn connect_with(data_dir: &Path, options: Options) -> client::Client {
-    let socket = socket_path(data_dir, &cupper_sys::user_temp_dir().unwrap());
     let clock = SystemClock::new();
     let give_up = clock.now_mono() + PATIENCE;
     loop {
-        match client::Client::connect(&socket, &HostCheck::Harness, options.clone()).await {
+        match connect_once(data_dir, options.clone()).await {
             Ok(client) => return client,
             Err(err) => assert!(clock.now_mono() < give_up, "cannot connect: {err}"),
         }
         wait(&clock).await;
     }
+}
+
+/// One attempt at the client of `options`.
+pub async fn connect_once(
+    data_dir: &Path,
+    options: Options,
+) -> Result<client::Client, ClientError> {
+    let socket = socket_path(data_dir, &cupper_sys::user_temp_dir().unwrap());
+    client::Client::connect(&socket, &HostCheck::Harness, options).await
 }
 
 /// The host's exit code, once it exits.
@@ -287,4 +295,17 @@ pub fn refused<T: std::fmt::Debug>(answered: Result<T, ClientError>) -> (String,
         code,
         err.reason().map(ToString::to_string).unwrap_or_default(),
     )
+}
+
+/// `M` with its params and result as JSON, e.g. to see `replayed`.
+pub struct Raw<M>(std::marker::PhantomData<M>);
+
+impl<M: cupper_protocol::rpc::Method> cupper_protocol::rpc::Method for Raw<M> {
+    const NAME: &'static str = M::NAME;
+    const SCOPE: Option<cupper_protocol::rpc::Scope> = M::SCOPE;
+    const IDEMPOTENCY: cupper_protocol::rpc::Idempotency = M::IDEMPOTENCY;
+    const MILESTONE: cupper_protocol::rpc::Milestone = M::MILESTONE;
+    const ERRORS: &'static [cupper_protocol::rpc::MethodError] = M::ERRORS;
+    type Params = Value;
+    type Result = Value;
 }

@@ -95,6 +95,11 @@ impl<'a> JobCtx<'a> {
     }
 
     /// Records a step that does not run, and says why on the terminal.
+    /// Runs a step that may fail without the job failing: whether it passed.
+    pub fn attempt(&self, step: &str, cmd: &mut Command) -> Result<bool> {
+        Ok(self.exec(step, cmd)?.0)
+    }
+
     pub fn skip(&mut self, step: &str, reason: &str) {
         eprintln!("  {step:<12} skipped: {reason}");
         self.skipped.push(step.to_owned());
