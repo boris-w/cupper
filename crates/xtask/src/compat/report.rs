@@ -6,9 +6,13 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// The largest integer the protocol's JSON carries exactly.
 const MAX_SAFE: u64 = (1 << 53) - 1;
+
+/// The schema file, relative to the work tree.
+pub const SCHEMA: &str = "testdata/compat/report.schema.json";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -93,6 +97,25 @@ pub struct ConfigFile {
     pub after: Option<String>,
 }
 
+/// What [`SCHEMA`] holds: the schema of [`Report`], keys sorted, since
+/// serde_json keeps their order of insertion when another crate of the
+/// workspace turns on `preserve_order`.
+pub fn schema() -> String {
+    fn sorted(value: Value) -> Value {
+        match value {
+            Value::Object(map) => {
+                let mut entries: Vec<_> = map.into_iter().collect();
+                entries.sort_by(|a, b| a.0.cmp(&b.0));
+                Value::Object(entries.into_iter().map(|(k, v)| (k, sorted(v))).collect())
+            }
+            Value::Array(items) => Value::Array(items.into_iter().map(sorted).collect()),
+            other => other,
+        }
+    }
+    let schema = sorted(schemars::schema_for!(Report).to_value());
+    serde_json::to_string_pretty(&schema).expect("a schema serializes") + "\n"
+}
+
 /// A report read strictly from its JSON.
 pub fn parse(text: &str) -> serde_json::Result<Report> {
     serde_json::from_str(text)
@@ -142,29 +165,9 @@ pub fn problems(report: &Report) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::{Value, json};
+    use serde_json::json;
 
     use super::*;
-
-    const SCHEMA: &str = "testdata/compat/report.schema.json";
-
-    /// Keys sorted: serde_json keeps their order of insertion when another
-    /// crate of the workspace turns on `preserve_order`.
-    fn schema() -> String {
-        fn sorted(value: Value) -> Value {
-            match value {
-                Value::Object(map) => {
-                    let mut entries: Vec<_> = map.into_iter().collect();
-                    entries.sort_by(|a, b| a.0.cmp(&b.0));
-                    Value::Object(entries.into_iter().map(|(k, v)| (k, sorted(v))).collect())
-                }
-                Value::Array(items) => Value::Array(items.into_iter().map(sorted).collect()),
-                other => other,
-            }
-        }
-        let schema = sorted(schemars::schema_for!(Report).to_value());
-        serde_json::to_string_pretty(&schema).unwrap() + "\n"
-    }
 
     fn report() -> Report {
         let scenario = |id: &str, passed: bool| {

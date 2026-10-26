@@ -3,7 +3,8 @@
 //! environment variables (design 5.6.6). Written by `runtime-pack`: `files`,
 //! the hash of every file the host takes from the app bundle (paths relative
 //! to `CupperHost.app/Contents`, design 5.10.1), the claude-agent-acp bundle
-//! hash and the variables each adapter reads. Keys are in a fixed order (struct
+//! hash and the variables each adapter reads. Written by `compat-reports`: the
+//! verified CLI ranges (`cli.*.verified`). Keys are in a fixed order (struct
 //! fields, sorted maps), so the file does not depend on serde_json's map order.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -59,7 +60,8 @@ pub struct ClaudeAgentAcp {
 }
 
 /// The CLI versions the pinned adapters were verified with (design 5.6.6).
-/// Maintained by hand until compat reports write it (T064, T066).
+/// Written by `cargo xtask compat-reports --write` from the compat reports
+/// (design 5.9.5); `unsupported_below` is kept by hand.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Cli {

@@ -2,10 +2,12 @@
 //! so far with the fake agent playing the CLI. The runner, an ignored test of
 //! cupper-host (`tests/compat.rs`), plays them and writes what happened; this
 //! makes the report of it, and with `--write` takes the GOLD-B scenarios'
-//! recordings into `testdata/` ([`record`]).
+//! recordings into `testdata/` ([`record`]). `cargo xtask compat-reports`
+//! checks the committed reports ([`reports`]).
 
 mod record;
 pub mod report;
+pub mod reports;
 
 use std::fs;
 use std::path::{Path, PathBuf};
