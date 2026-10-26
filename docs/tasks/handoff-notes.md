@@ -393,6 +393,8 @@
 | 拿原始帧比对的任务 | 宿主发给 agent 的 JSON-RPC id 是 UUID，比对时不能按字面比，要像 T067 的回放那样重映射；B 层的同步依赖 SDK 3.3.0 的按序分发（`gold_b_fake_sdk_answers_an_unknown_request_after_what_came_before`），升级 SDK 时这条用例会先失败 | T065 |
 | 所有任务（执行者） | **每次提交后跑一次 `cargo xtask size`**（T185）：统计本分支自己的增删（排除 lock、生成物、`docs/`、`testdata/`、截图基线、二进制，合进来的 main 不算），对照任务书的停止线报告余量，到 90% 或越线时以 `!!` 标出；推算或实际越线就停下汇报。新文件要先 `git add` 才计入。工具读当前 checkout 里的任务书，编排者在 main 上的裁定要等 main 合进分支后才读得到 | T185 |
 | 编排者写任务书 | 任务书的"规模"一节用模板里固定格式的一行：`- 停止线：<n>；硬停止线：<n>`（`cargo xtask size` 优先认它）；裁定改上限时直接改这一行，并在通知执行者时写明新数 | T185 |
+| e2e（T078 及以后） | e2e 夹具默认把运行时安装指向 `http://127.0.0.1:9/`（T178），宿主不再连公网；夹具自检用 `helpers.ts` 的 `offMachine(sampleNetwork(...))` 断言没有非回环连接，要测安装本身的用例用 `testConfig` 覆盖。对话框替身由 e2e 构建的主进程在启动时装好（`apps/desktop/src/main/e2e-dialogs.ts`，`globalThis.__e2eDialogs`），`tools/e2e` 用 `Dialogs.attach` 读取与应答 | T178 |
+| 所有分支 | RUSTSEC 的新公告会让所有分支的 license 作业同时失败，日志是 "advisories FAILED"（不是拉取失败）。处理办法：在一条分支上单独提交依赖升级（只改 `Cargo.lock` 里那一个包）、随最先合并的任务进 main，再通知其他分支合 main。2026-10-26 的 RUSTSEC-2026-0382（`rustls-webpki` 升到 0.103.16）就是随 T178 进的 main | T178 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
