@@ -48,7 +48,7 @@ pub fn changed_since_main(root: &Path) -> Result<Option<Vec<String>>> {
     Ok(Some(names.lines().map(str::to_owned).collect()))
 }
 
-fn git(dir: &Path, args: &[&str]) -> Result<String> {
+pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String> {
     let output = Command::new("git")
         .arg("-C")
         .arg(dir)

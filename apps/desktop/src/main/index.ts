@@ -30,6 +30,7 @@ import { confirmQuit, confirmRestart, tellRestartRefused, type Translate } from 
 import { QuitGuard, type QuitHost } from "./host/lifecycle";
 import { MainLog } from "./log";
 import { menuTemplate } from "./menu";
+import { installDialogStandIns } from "./e2e-dialogs";
 import { appDirs, e2eDirs, type AppDirs } from "./paths";
 import { Prefs } from "./prefs";
 import { APP_SCHEME, APP_SCHEME_PRIVILEGES, appProtocolHandler } from "./security/app-protocol";
@@ -42,6 +43,11 @@ import { serveShell } from "./shell";
 import { MAIN_DOCUMENT_URL, mainWindowOptions } from "./window";
 
 const flavor = __CUPPER_FLAVOR__;
+
+// e2e builds: the dialogs' stand-ins come before any dialog can (T178).
+if (__CUPPER_FLAVOR__ === "e2e") {
+  installDialogStandIns();
+}
 
 // First of all, before Electron acts on any of them (design 5.7.8).
 if (isReleaseLike(flavor)) {
