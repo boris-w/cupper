@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.53
+- 版本：v1.3.54
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -152,7 +152,7 @@
 
 ### 1.7 条件任务与可以提前的任务
 
-- **条件任务**（名称前标"（条件）"）只在检查点不通过时派发：T057（K1 已通过，不触发）、T079、T119、T139、T158、T159；T162 在 Q35 *通过*时派发。依赖图里用虚线表示。
+- **条件任务**（名称前标"（条件）"）只在检查点不通过时派发：T057（K1 已通过，不触发）、T079（K2 已达标，不触发）、T119、T139、T158、T159；T162 在 Q35 *通过*时派发。依赖图里用虚线表示。
 - **可以提前的任务**（前置一栏标"可提前"）：T101、T102、T104、T105、T106（v1.1）、T110、T114。依赖满足后可以在 M1a 期间派发，但评审资源优先给 M1a 的关键链。其余 M1b 任务在 T099 之后派发。
 
 ### 1.8 本机 CI（U-P1：先不建远端）
@@ -298,7 +298,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T134 | 桌面主进程 V：特权操作与原生确认框 | feat | 5.7.8（原生确认框）、5.7.3（`PrivilegedAction`）、5.5（添加项目与信任）、5.8.4（提权确认框） | T077 | 做：`privileged` 框架（要求真实输入、Esc 不能触发、一次一个、逐次加长的冷却）、七种 action 各自经 control 连接取内容与发命令（`details` 键按 5.3.11 的 T031 裁定）、原生确认框（默认按钮取消或拒绝、agent 文本逐字显示并转义不可见字符；提权确认框醒目标出"申请方不是本 App 自带的命令行工具"）、`add_project` 流程（含 `digest_mismatch` 后重新确认）、文案、接上 preload 的 `requestPrivileged` | UNIT-privileged（v1.3.26 由 T077 移来） | L | 否 | D.main |
 | T135 | 原生确认框补项目路径与"自带 CLI"提示 | feat | 5.7.8（原生确认框）、5.8.4、5.2.6 | T133、T134 | 做：`project/trust_info` 的结果加项目路径、`policy/describe` 对 `session/create` 的 `details` 加项目路径（协议改动，重新生成）；信任项目、新建会话的确认框显示路径；提权确认框按 `VerifiedRequester.bundled_cli` 醒目标出"申请方不是本 App 自带的命令行工具"（T134 评审：被攻破的渲染进程可以请求信任另一个项目，确认框里必须看得出是哪个项目） | 新增 UNIT-privileged-paths | S | 否 | D.main |
 | T078 | 测量闸门：主进程转发 | test | 5.7.1（测量闸门）、5.9.6 | T047、T076、T080 | 做：按判定负载（索引流加 4 条会话流、5 MB blob、5,000 事件重同步）产生负载，数字经 T003 复核不变，命令列表的大帧已由 T055 去重、不计入；消费端是用 T080 store 的真实渲染进程（到达即应用、随即确认）；测主进程事件循环延迟 p99 与流重置，可见和遮挡各一次，另出 6 条流的压力报告；负载页面和钩子放测试专用目录，不碰 T077 的文件 | 判定报告（p99 < 5 ms 且无流重置；记下机型泛称、系统与 Electron 版本、负载参数，附 T076 的预测量）；新增 PERF-bridge-gate | M | 知情：在作者机器上弹窗口运行约 20 分钟 | D.main、H.core |
-| T079 | （条件）utilityProcess 宿主桥加委托票据 | feat | Q33、5.7.1、5.8.1 | T078 | 触发：K2 不达标。前提：编排者按注里的安全要求修订 5.7.1、5.8.1 与 ADR-03，交安全评审和用户确认。做：协议加 `auth/delegate` 与 `auth: ticket`、网关的票据认证、主进程取票据交给 utilityProcess、由它持有数据连接；出方向白名单和 `input` 证据仍由主进程写入 | 重测 PERF-bridge-gate 达标；新增 IT-ticket-auth（重放、过期、跨窗口兑换、非 helper 兑换、伪造 `input`） | L | 是：ADR-03 修订需要用户确认 | D.main、P、H.gw |
+| T079 | （条件）utilityProcess 宿主桥加委托票据（K2 已达标，不触发） | feat | Q33、5.7.1、5.8.1 | T078 | 不触发：K2 已达标（T078，2026-10-26：判定负载下主进程事件循环延迟 p99 1.54–1.65 ms，没有流重置）。原触发条件：K2 不达标。前提：编排者按注里的安全要求修订 5.7.1、5.8.1 与 ADR-03，交安全评审和用户确认。做：协议加 `auth/delegate` 与 `auth: ticket`、网关的票据认证、主进程取票据交给 utilityProcess、由它持有数据连接；出方向白名单和 `input` 证据仍由主进程写入 | 重测 PERF-bridge-gate 达标；新增 IT-ticket-auth（重放、过期、跨窗口兑换、非 helper 兑换、伪造 `input`） | L | 是：ADR-03 修订需要用户确认 | D.main、P、H.gw |
 | T080 | ui-core I：状态层 | feat | 5.7.6 | T072 | 做：`packages/ui-core` 的状态层：流 store（到达即应用、确认、按条目订阅、每帧一次 `versions.flush()`）、订阅策略（索引加 LRU 3、缓存未命中）、zustand 界面状态（接管 T084 的路由与布局 store、丢弃过期的 prefs 回传）；TanStack Query 的客户端、按事件失效与一个示例查询；host-client 的 `notify` 与校验模式（生产构建只校验非 delta 事件）。不做：外框与页面（T084）；`security/policies.ts`、ESLint 规则（T136，v1.3.28） | 新增 UNIT-ui-store、UNIT-ui-query | M | 否 | T.ui |
 | T136 | ui-core I-b：安全规则 | feat | 5.7.8（Trusted Types、样式与代码规则） | T084 | 做：`security/policies.ts`（只有 `cupper-worker` 一个策略，禁止 `default`）；ESLint 安全规则、`ui-core` 的 import 限制、文案规则（每条有会触发的负面样例），规则落地时已合并的界面代码要全部通过 | UNIT-ui-lint-rules（v1.3.28 由 T080 移来） | S | 否 | T.ui |
 | T137 | ui-core III-b：会话页警告框 | feat | 5.7.4、5.7.5（`<SessionBanners>`）、5.2.6 | T080、T081 | 做：会话页上方的"未信任""配置待确认"警告框（数据来自会话流 `session.configured` 的 `confirmation_required` 与项目的信任状态），"配置待确认"的确认走 `requestPrivileged({kind: 'confirm_config'})`，复用 T081 的 Toaster 与特权操作反馈；另修 T081 评审的两处：提权横幅不显示申请方自述的名字（改为通用文案）、"未信任"标签右对齐 | 新增 UI-session-banners、UNIT-ui-session-banners | S | 否 | T.ui |
@@ -336,7 +336,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 - **T005**：5.9.4 要求 e2e 构建"打包方式与发布构建相同"，需要组装 `CupperHost.app`；5.12.2 没有列它（P-8）。CLI 晚于宿主编译，才能把宿主的 cdhash 编进去（5.8.1）；CLI 与宿主是两个独立的 Mach-O，不存在 UI 与宿主之间那种互相依赖。
 - **T011、T017（L）**：事件目录原为一个任务（T011）。开工前的模块估算约 2,150 行，超出上限，按守则第 8 条停下汇报后拆成两个依次进行的任务（2026-10-19）：T011 是事件基础、领域类型与索引流（约 1,055 行），T017 是会话流、条目、ToolCall 与交互请求（约 1,100 行）。拆分计划见 `docs/tasks/T011-protocol-events/notes.md`。
 - **T012、T013**：T012 依赖 T017（用到交互请求的类型），T013 依赖 T011，彼此可以并行；按文件分开（例如 `methods/core.rs` 和 `methods/ext.rs`）。
-- **T016**：排在测量闸门之后（P-1）。K2 不达标时等 T079 合并后再做。
+- **T016**：排在测量闸门之后（P-1）。K2 不达标时等 T079 合并后再做。v1.3.54：K2 已达标，T016 不再等 T079。
 - **T021**：`PROC_PIDUNIQIDENTIFIERINFO` 的字段名凭评审者记忆，以实测为准；不可行时报告，T030 退回"pid 加进程启动时间"（5.8.1）。
 - **T022**：静止屏障的参与者登记在这里，屏障本身（`test/clock_advance`）在 T047。
 - **T025**：T160 之前只改 `0001`；测试注入一组迁移脚本，覆盖"两脚本之间崩溃不重跑"（P-4，测试 #19）。
@@ -1738,7 +1738,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T075 桌面主进程 II：拉起宿主与 control 连接
 - [x] T076 桌面主进程 III：windowBridge 与 preload
 - [x] T077 桌面主进程 IV：真实输入与 Q26
-- [ ] T078 测量闸门：主进程转发
+- [x] T078 测量闸门：主进程转发
 - [ ] T079 （条件）utilityProcess 宿主桥加委托票据
 - [x] T080 ui-core I：状态层
 - [x] T081 ui-core III：侧边栏、横幅与 toast
@@ -1913,3 +1913,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.51 | 2026-10-26 | T061 开工前按模块估计约 1,140 行，按最近几个任务的实际偏差乘 1.2 约 1,370，越过停止线 1,300：真实 git-lfs 实测、`xtask git-lfs` 与 CI 步骤、PERF-snapshot 拆给新增的 T186（约 180 行，IT-git-lfs-snapshot、PERF-snapshot 由 T061 移来），依赖 T061；T061 约 1,190，停止线不变；T099 改为也依赖 T186 |
 | v1.3.52 | 2026-10-26 | RustSec 新发布 RUSTSEC-2026-0382（`rustls-webpki 0.103.15` 可能接受经已不受信任的 emSign 中间证书的证书链，经 `reqwest`、`rustls` 进入 `cupper-host`），所有分支的 license 作业因此失败。编排者在 T178 分支上单独提交升到 0.103.16（只改 `Cargo.lock` 一个包），随 T178 进 main，其他分支合 main 后恢复 |
 | v1.3.53 | 2026-10-26 | T061 评审：设计 5.2.10 要求回合开始和结束时随快照计算仓库可执行配置指纹、前后不同写 `notice{repo_config_changed}`，但没有任务认领（T097 只做了纯函数，T098 只在仓库档调用前后比对）。并进 T186（同一执行者、约 80 行，新增 IT-git-turn-fingerprint）。T069 的发现：信任在准备阶段恢复时，这个回合仍按附加时的设定不加载项目配置，M1a 保持现状、写进设计 5.2.6，是否以加载方式重新附加留给 T141 |
+| v1.3.54 | 2026-10-26 | K2 测量闸门达标（T078）：判定负载下主进程事件循环延迟 p99 可见 1.60–1.63 ms、遮挡（盖住加停帧）1.54–1.65 ms，没有流重置；保留主进程转发，T079 不触发，T016 不再等它。遮挡用"盖住加停帧"模拟（Playwright 下页面不会进入隐藏状态），真正的隐藏状态待另写脚本测 |
