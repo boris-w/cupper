@@ -56,6 +56,7 @@
 |---|---|---|
 | e2e-repeat 40315681975 | 反向检查：`scratch/T195-negative`（主进程不认开关，App 进 Dock、`show()` 激活），smoke × 1 | 按预期失败：`the app took the foreground in 10 of 10 samples; it needs @focus; the app is in the Dock: "ApplicationType"="Foreground"`，记在 `fixture: the app starts the host, and the sidebar shows a project the CLI added @smoke` 名下 |
 | e2e-repeat 40315527229 | `PERF-bridge-gate: the judging load` × 1，`throttled: true`，后台模式 | "window on screen" 通过（`showInactive()` 的窗口在屏幕上，动画帧照常跑，降频的测量成立）；"window covered" 失败：`the app took the foreground in 85 of 93 samples; it needs @focus` |
+| e2e-repeat 40319605626 | 修好 `cover()` 后（b4c92d9）再跑 `PERF-bridge-gate: the judging load` × 1 | 两个用例都通过，前台检查也通过。on screen：frames 19，p99 4.76 ms；covered：frames 0，p99 4.99 ms；blob 5,242,880 B，resync 5001 个事件 |
 | ci 40315528900（PR #2） | 8 个检查 | license、protocol、testdata-scan、ui、rust、compat-framework 通过；ts、e2e 失败，都与 T195 无关，见下 |
 
 **gate 的测量本身都完成了**：两个用例的用例体都跑完并通过了断言，失败只出在夹具收尾时的前台检查上，不是 PERF 闸门过不了。日志里的数字：
