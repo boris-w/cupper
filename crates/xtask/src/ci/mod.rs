@@ -1,4 +1,5 @@
-//! `cargo xtask ci <job> [--record <dir>]`: the single CI entry point (plan 1.8).
+//! `cargo xtask ci <job> [--in <composite>] [--record <dir>]`: the single CI
+//! entry point (plan 1.8).
 //! Jobs run on the author's machine, only in a clean work tree; raw logs go to
 //! the git-ignored `.private/ci-logs/`, and `--record` writes the structured
 //! summary that may be committed.
@@ -27,9 +28,12 @@ pub fn usage() -> String {
     let jobs: Vec<&str> = jobs::JOBS.iter().map(|job| job.name).collect();
     let composites: Vec<&str> = jobs::COMPOSITES.iter().map(|(name, _)| *name).collect();
     format!(
-        "usage: cargo xtask ci <job> [--record <dir>]\n\njobs: {}\ncomposites: {}\n\n\
-         --record <dir>  write the run summary to <dir>/<job>-<commit>.json,\n\
-         \x20               e.g. docs/tasks/<ID>-<slug>/ci/",
+        "usage: cargo xtask ci <job> [--in <composite>] [--record <dir>]\n\njobs: {}\n\
+         composites: {}\n\n\
+         --in <composite>  run the job as one of the composite's, which skips and\n\
+         \x20                 narrows it as the composite does (`--in pr` on a PR's runner)\n\
+         --record <dir>    write the run summary to <dir>/<job>-<commit>.json,\n\
+         \x20                 e.g. docs/tasks/<ID>-<slug>/ci/",
         jobs.join(", "),
         composites.join(", ")
     )
@@ -80,15 +84,19 @@ struct JobReport {
 
 struct Options<'a> {
     target: &'a str,
+    /// The composite a single job runs as one of (`--in`).
+    within: Option<&'a str>,
     record: Option<PathBuf>,
 }
 
 fn parse(args: &[String]) -> Result<Options<'_>> {
     let mut target = None;
+    let mut within = None;
     let mut record = None;
     let mut rest = args.iter();
     while let Some(arg) = rest.next() {
         match arg.as_str() {
+            "--in" => within = Some(rest.next().context("`--in` needs a composite")?.as_str()),
             "--record" => {
                 let dir = rest.next().context("`--record` needs a directory")?;
                 record = Some(PathBuf::from(dir));
@@ -99,11 +107,19 @@ fn parse(args: &[String]) -> Result<Options<'_>> {
         }
     }
     let target = target.with_context(usage)?;
-    Ok(Options { target, record })
+    Ok(Options {
+        target,
+        within,
+        record,
+    })
 }
 
 fn run(args: &[String], cwd: &Path) -> Result<bool> {
-    let Options { target, record } = parse(args)?;
+    let Options {
+        target,
+        within,
+        record,
+    } = parse(args)?;
     refuse_golden_update(std::env::var_os("UPDATE_GOLDEN"))?;
     let selected =
         jobs::resolve(target).with_context(|| format!("unknown job `{target}`\n\n{}", usage()))?;
@@ -112,6 +128,11 @@ fn run(args: &[String], cwd: &Path) -> Result<bool> {
     {
         bail!("job `{}` is registered but not implemented yet", job.name);
     }
+    // What the jobs see as their target: the composite a job runs within.
+    let seen = match within {
+        Some(composite) => member_of(target, composite)?,
+        None => target,
+    };
 
     let root = git::toplevel(cwd)?;
     git::ensure_clean(&root)?;
@@ -125,7 +146,7 @@ fn run(args: &[String], cwd: &Path) -> Result<bool> {
     let watch = Stopwatch::start();
     let reports: Vec<JobReport> = selected
         .iter()
-        .map(|job| run_job(job, target, &root, &log_dir))
+        .map(|job| run_job(job, seen, &root, &log_dir))
         .collect();
     let duration_ms = watch.elapsed_ms();
     print_reports(&reports);
@@ -151,6 +172,18 @@ fn run(args: &[String], cwd: &Path) -> Result<bool> {
         eprintln!("summary written to {}", shown.display());
     }
     Ok(reports.iter().all(|report| report.outcome != Outcome::Fail))
+}
+
+/// `composite`, when `job` is one of its jobs: a job of `pr` runs on a PR's
+/// runner of its own, skipped and narrowed as `ci pr` would.
+fn member_of<'a>(job: &str, composite: &'a str) -> Result<&'a str> {
+    let Some((name, members)) = jobs::COMPOSITES.iter().find(|(name, _)| *name == composite) else {
+        bail!("`--in {composite}`: no such composite\n\n{}", usage());
+    };
+    if !members.contains(&job) {
+        bail!("`--in {name}`: `{job}` is not one of its jobs");
+    }
+    Ok(name)
 }
 
 /// Goldens change by hand and get reviewed in the PR; CI only compares
@@ -276,6 +309,19 @@ mod tests {
         assert!(parse(&args(&["pr", "rust"])).is_err());
         assert!(parse(&args(&["--verbose", "pr"])).is_err());
         assert!(parse(&args(&[])).is_err());
+    }
+
+    #[test]
+    fn a_job_runs_within_a_composite_it_is_one_of() {
+        let given = args(&["e2e", "--in", "pr", "--record", "out"]);
+        let parsed = parse(&given).expect("valid");
+        assert_eq!((parsed.target, parsed.within), ("e2e", Some("pr")));
+        assert!(parse(&args(&["e2e", "--in"])).is_err());
+        assert_eq!(member_of("e2e", "pr").expect("one of pr's"), "pr");
+        let err = member_of("perf", "pr").expect_err("not one of pr's");
+        assert!(err.to_string().contains("not one of its jobs"), "{err}");
+        let err = member_of("e2e", "weekly").expect_err("no such composite");
+        assert!(err.to_string().contains("no such composite"), "{err}");
     }
 
     #[test]

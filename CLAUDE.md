@@ -42,7 +42,7 @@ macOS 桌面 agent 客户端：复刻 Codex 桌面版的界面，经 ACP 驱动�
 - 原型实测的代码放在 `spikes/<ID>-<slug>/`，只用于验证，不是产品代码，后续开发不直接依赖它。提交前要去掉个人信息（本机路径、用户名、账号、主机名等），因为仓库会开源。
 - 合并统一用 `git merge --no-ff`，让每个任务在历史里保留成一个完整的合并节点。合并后删除 worktree 和分支。
 - 远端 `origin` 是 GitHub 上的公开仓库 `boris-w/cupper`（2026-10-26 起，见 `docs/meetings/2026-10-26-github-remote/`）。只有编排者 push，子 agent 不 push。
-- 每个任务一个 PR：编排者推任务分支、开 PR，GitHub CI 通过后以合并提交合入 `main`（与 `--no-ff` 同形），再删掉远端分支。编排者直接提交到 `main` 的文档随后推送。T197 启用 Actions 之前，合并仍以本机 `cargo xtask ci pr --record` 为准。
+- 每个任务一个 PR：编排者推任务分支、开 PR，GitHub CI 通过后以合并提交合入 `main`（与 `--no-ff` 同形），再删掉远端分支。编排者直接提交到 `main` 的文档随后推送。合并以 PR 上 GitHub CI 的 8 个检查（`ci / <作业> (<runner>)`）为准，main 的保护规则要求它们通过；本机只跑与改动相关的检查，不再提交本机 CI 的摘要（2026-10-26，T197 起）。
 - 每个阶段闸门通过后打 annotated tag：`gate/prd`、`gate/design`、`gate/plan`、`release/vX.Y.Z`。
 
 ### 提交信息
@@ -97,3 +97,4 @@ Co-Authored-By: ...
 6. 结束时按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回。不要自己创建 `report.md`，由编排者存档并提交。`notes.md`、资料摘录等其他物料仍由你在分支上提交。
 7. 调研或测试时，任何外发请求（HTTP 头如 User-Agent、查询参数、表单、提交到外部服务的内容）都不能包含用户的邮箱、姓名、账号等个人信息。API 要求填联系方式时，用项目占位信息，或者换一个不需要联系方式的来源。
 8. 每完成一个模块或一个提交，就统计一次改动行数（含测试，不含 lock 文件和生成物）。一旦预计会超出任务书写的规模上限，立即停下来汇报，由编排者决定是否拆分；不要做完了才发现超限。
+9. 要在 GitHub 上跑 CI 时，先在本机提交，再用 SendMessage 发给 `main`："请推送 `<分支>`，提交 `<sha>`"，由编排者推送并开 PR。`gh` 只用只读命令（`gh pr checks`、`gh run view --log-failed`、`gh run download` 等），不 push、不开或合并 PR、不改仓库设置。汇报里写上 PR 和运行的链接。
