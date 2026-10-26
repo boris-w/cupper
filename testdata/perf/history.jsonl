@@ -3,3 +3,8 @@
 {"commit":"29e08c07dcf4","date":"2026-10-26","machine":"MacBook Pro (Apple M5 Pro)","max":3.32,"metric":"index_snapshot","n":30,"p50":2.5,"p95":2.93,"unit":"ms","version":"0.0.0"}
 {"commit":"29e08c07dcf4","date":"2026-10-26","machine":"MacBook Pro (Apple M5 Pro)","max":162.3,"metric":"snapshot_10k_no_change","n":5,"p50":139.5,"p95":162.3,"unit":"ms","version":"0.0.0"}
 {"commit":"29e08c07dcf4","date":"2026-10-26","machine":"MacBook Pro (Apple M5 Pro)","max":428.32,"metric":"snapshot_10k_10_files_changed","n":5,"p50":265.55,"p95":428.32,"unit":"ms","version":"0.0.0"}
+{"commit":"c0a7edaaae16","date":"2026-10-26","machine":"MacBook Pro (Apple M5 Pro)","max":16.16,"metric":"host_cold_start","n":30,"p50":11.24,"p95":13.96,"unit":"ms","version":"0.0.0"}
+{"commit":"c0a7edaaae16","date":"2026-10-26","machine":"MacBook Pro (Apple M5 Pro)","max":40.95,"metric":"host_memory","n":30,"p50":40.95,"p95":40.95,"unit":"MiB","version":"0.0.0"}
+{"commit":"c0a7edaaae16","date":"2026-10-26","machine":"MacBook Pro (Apple M5 Pro)","max":1.47,"metric":"index_snapshot","n":30,"p50":1.16,"p95":1.32,"unit":"ms","version":"0.0.0"}
+{"commit":"c0a7edaaae16","date":"2026-10-26","machine":"MacBook Pro (Apple M5 Pro)","max":114.07,"metric":"snapshot_10k_no_change","n":30,"p50":83.35,"p95":100.84,"unit":"ms","version":"0.0.0"}
+{"commit":"c0a7edaaae16","date":"2026-10-26","machine":"MacBook Pro (Apple M5 Pro)","max":107.35,"metric":"snapshot_10k_10_files_changed","n":30,"p50":94.07,"p95":99.34,"unit":"ms","version":"0.0.0"}

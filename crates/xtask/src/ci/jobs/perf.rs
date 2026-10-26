@@ -1,16 +1,18 @@
 //! `perf` (nightly, under the machine lock; design 5.9.6): the host's PERF
 //! cases on a release build, one at a time, and PERF-snapshot (T186). Each
-//! test hands its samples to the file in `CUPPER_PERF_OUT`; the job works
+//! test hands its samples to the file in `CUPPER_PERF_OUT`; [`trend`] works
 //! out n, p50, p95 and the maximum of each metric, appends them to
 //! [`HISTORY`] and fails when a metric's p50 is over [`REGRESSION`] times the
 //! median p50 of its history on the same kind of machine. CI runners are
-//! not reference hardware, so only the trend counts here.
+//! not reference hardware, so only the trend counts here. The e2e job hands
+//! PERF-bridge-gate's samples to [`trend`] too.
 //!
 //! A history line holds the date, the commit, the version, the generic model
 //! name (`facts::machine`), the metric, its unit, n, p50, p95 and max: no
 //! machine name and no path.
 
 use std::fs;
+use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
@@ -63,30 +65,19 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         .args(["--", "--ignored", "perf_snapshot"])
         .env("CUPPER_PERF_OUT", &samples);
     ctx.libtest("perf-snapshot", &mut snapshot)?;
+    trend(ctx, &samples)
+}
 
-    let text = fs::read_to_string(&samples).context("the PERF tests wrote no samples")?;
-    let measured = text
-        .lines()
-        .map(Measured::parse)
-        .collect::<Result<Vec<_>>>()?;
-    let history_path = ctx.root.join(HISTORY);
-    let previous = fs::read_to_string(&history_path).unwrap_or_default();
-    let history: Vec<Value> = previous
-        .lines()
-        .map(serde_json::from_str)
-        .collect::<Result<_, _>>()
-        .context("read the PERF history")?;
+/// The samples the PERF tests wrote to `samples`, appended to [`HISTORY`] as
+/// lines of this run; fails when one of them regressed.
+pub fn trend(ctx: &mut JobCtx, samples: &Path) -> Result<()> {
     let run = Run {
         date: date(u64::try_from(clock::unix_ms() / 86_400_000).unwrap_or(0)),
         commit: git::head(ctx.root)?[..12].to_owned(),
         version: env!("CARGO_PKG_VERSION").to_owned(),
         machine: facts::machine(ctx.root),
     };
-    let lines: Vec<Value> = measured.iter().map(|m| m.line(&run)).collect();
-    let regressions = regressions(&history, &lines);
-    let added: String = lines.iter().map(|line| format!("{line}\n")).collect();
-    fs::create_dir_all(history_path.parent().expect("a directory"))?;
-    fs::write(&history_path, previous + &added).context("write the PERF history")?;
+    let (lines, regressions) = append(ctx.root, samples, &run)?;
     for line in &lines {
         let text = |key: &str| line[key].as_str().unwrap_or_default().to_owned();
         let (metric, unit) = (text("metric"), text("unit"));
@@ -101,6 +92,29 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     }
     ctx.failed += 1;
     bail!("regressed: {}", regressions.join("; "))
+}
+
+/// Appends the lines of `run` for the samples in `samples` to the history of
+/// the work tree at `root`: the lines, and the regressions among them.
+fn append(root: &Path, samples: &Path, run: &Run) -> Result<(Vec<Value>, Vec<String>)> {
+    let text = fs::read_to_string(samples).context("the PERF tests wrote no samples")?;
+    let measured = text
+        .lines()
+        .map(Measured::parse)
+        .collect::<Result<Vec<_>>>()?;
+    let history_path = root.join(HISTORY);
+    let previous = fs::read_to_string(&history_path).unwrap_or_default();
+    let history: Vec<Value> = previous
+        .lines()
+        .map(serde_json::from_str)
+        .collect::<Result<_, _>>()
+        .context("read the PERF history")?;
+    let lines: Vec<Value> = measured.iter().map(|m| m.line(run)).collect();
+    let regressions = regressions(&history, &lines);
+    let added: String = lines.iter().map(|line| format!("{line}\n")).collect();
+    fs::create_dir_all(history_path.parent().expect("a directory"))?;
+    fs::write(&history_path, previous + &added).context("write the PERF history")?;
+    Ok((lines, regressions))
 }
 
 /// One metric's samples, as a test recorded them.
@@ -204,6 +218,7 @@ fn date(days: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testutil::TempDir;
 
     fn run() -> Run {
         Run {
@@ -274,5 +289,28 @@ mod tests {
         let even = [past("m", ours, 10.0), past("m", ours, 20.0)];
         assert!(regressions(&even, &[now("m", 22.5)]).is_empty());
         assert_eq!(regressions(&even, &[now("m", 22.6)]).len(), 1);
+    }
+
+    /// What the e2e job hands over for PERF-bridge-gate: appended as this
+    /// run's line, and judged once the metric has a history.
+    #[test]
+    fn unit_ci_perf_trend_appends_the_run_and_judges_it() {
+        let dir = TempDir::new("perf-trend");
+        let (root, samples) = (dir.path(), dir.path().join("samples.jsonl"));
+        let sample = |p99: f64| {
+            let line = json!({"metric": "bridge_loop_delay_p99", "unit": "ms", "samples": [p99]});
+            fs::write(&samples, format!("{line}\n")).unwrap();
+        };
+        sample(2.0);
+        let (first, regressions) = append(root, &samples, &run()).unwrap();
+        assert!(regressions.is_empty(), "no history yet: {regressions:?}");
+        let history = || fs::read_to_string(root.join(HISTORY)).unwrap();
+        assert_eq!(history(), format!("{}\n", first[0]));
+        sample(3.5);
+        let (second, regressions) = append(root, &samples, &run()).unwrap();
+        assert_eq!(regressions, ["bridge_loop_delay_p99 p50 3.5 over 1.5 × 2"]);
+        assert_eq!(history(), format!("{}\n{}\n", first[0], second[0]));
+        fs::remove_file(&samples).unwrap();
+        assert!(append(root, &samples, &run()).is_err(), "no samples");
     }
 }
