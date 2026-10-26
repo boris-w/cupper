@@ -1,7 +1,8 @@
 // The bridge gate's hooks in the renderer (T078, design 5.7.1), e2e builds
 // only, as `window.__cupperGate`: what each stream brought once counting
-// starts, a blob through `getBlob`, and a resync of a whole session from its
-// first event, which the T080 store applies as it arrives. The client
+// starts, more streams than the window holds, a blob through `getBlob`, and
+// a resync of a whole session from its first event, which the T080 store
+// applies as it arrives. The client
 // acknowledges every chunk it took in, these included.
 
 import { SessionView, type HostClient } from "@cupper/host-client";
@@ -40,6 +41,9 @@ export function gateHooks(client: HostClient) {
   });
   return {
     count: () => void (tallies = new Map()),
+    /** Follows `stream` into a store of its own, beyond the sessions the window holds. */
+    follow: (stream: string) =>
+      void client.subscribe(stream, new StreamStore(stream, new SessionView(), new Frames())),
     tallies: () => Object.fromEntries(tallies ?? []),
     resets: () => client.counters.resets,
     async getBlob(hash: string) {
