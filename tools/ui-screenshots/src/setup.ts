@@ -1,5 +1,6 @@
 // Playwright's global setup: builds the screenshot page, then checks what the
-// baselines were made on, or records it for `pnpm ui:baseline`.
+// baselines were made on, or records it for `pnpm ui:baseline`, which the
+// `ui-baseline` workflow runs on the CI runner (T197).
 
 import { execFileSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
