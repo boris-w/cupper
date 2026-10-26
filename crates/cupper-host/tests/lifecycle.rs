@@ -1274,6 +1274,7 @@ async fn it_self_check_a_changed_executable_makes_the_host_wait_for_an_upgrade()
     let dir = TempDir::new("self-check");
     let exe = dir.path().join("cupper-host");
     std::fs::copy(HOST, &exe).unwrap();
+    first_start(&exe).await;
     let config = json!({"durations": {"supervisor_observe_ms": 20}});
     let (data_dir, mut host, mut client) = fake_agent_host_from(&exe, &dir, config).await;
     let mut raw = raw_connect(&data_dir).await;
@@ -1343,6 +1344,7 @@ async fn bundled_host(dir: &TempDir, prepare: impl FnOnce(&Path)) -> (PathBuf, R
     let (exe, data_dir) = (contents.join("MacOS/cupper-host"), dir.path().join("data"));
     std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
     std::fs::copy(HOST, &exe).unwrap();
+    first_start(&exe).await;
     let mut tarball = tar::Builder::new(flate2::write::GzEncoder::new(
         Vec::new(),
         Default::default(),
