@@ -141,6 +141,9 @@ impl StreamWriter {
             for snapshot in &snapshots {
                 snapshot.insert(conn)?;
             }
+            if !snapshots.is_empty() {
+                failpoint!(STORE_SNAPSHOT_WRITTEN);
+            }
             let mut pruned = None;
             if let Some(json) = json {
                 log::save_checkpoint(conn, &stream, last, &json, now)?;

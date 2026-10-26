@@ -88,6 +88,17 @@ mod harness {
         /// Between steps 2 and 3 of an append: the batch has committed, the
         /// stream has not applied or fanned it out (design 5.2.3).
         STORE_BEFORE_PUBLISH = "store.before_publish";
+        /// The writer's batch has run, its `COMMIT` has not: what the batch's
+        /// commands did is lost with it (design 5.2.3).
+        STORE_BEFORE_COMMIT = "store.before_commit";
+        /// The writer's batch has committed, no receipt has been answered.
+        STORE_AFTER_COMMIT = "store.after_commit";
+        /// Within the transaction of an append that ends a turn: its turn
+        /// snapshot is written, the stream's checkpoint is not (design 5.2.8).
+        STORE_SNAPSHOT_WRITTEN = "store.snapshot_written";
+        /// `session/create` has committed the session and its command, the
+        /// first turn has not started (design 5.9.8).
+        SESSION_CREATED = "session.created";
         /// The module's own tests.
         #[cfg(test)]
         TEST_PROBE = "test.probe";
