@@ -3,6 +3,7 @@
 mod ci;
 mod clock;
 mod codesign;
+mod compat;
 mod host_bundle;
 mod runtime_pack;
 mod size;
@@ -19,14 +20,16 @@ fn main() -> ExitCode {
         Some((task, rest)) if task == "host-bundle" => host_bundle::main(rest),
         Some((task, rest)) if task == "lock" => ci::lock::main(rest),
         Some((task, rest)) if task == "size" => size::main(rest),
+        Some((task, rest)) if task == "compat" => compat::main(rest),
         _ => {
             eprintln!(
-                "{}\n\n{}\n\n{}\n\n{}\n\n{}",
+                "{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n{}",
                 ci::usage(),
                 runtime_pack::USAGE,
                 host_bundle::USAGE,
                 ci::lock::USAGE,
-                size::USAGE
+                size::USAGE,
+                compat::USAGE
             );
             ExitCode::from(2)
         }

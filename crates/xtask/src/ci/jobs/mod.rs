@@ -8,7 +8,7 @@ mod license;
 mod protocol;
 mod rust;
 mod security;
-mod testdata_scan;
+pub mod testdata_scan;
 mod ts;
 mod ui;
 

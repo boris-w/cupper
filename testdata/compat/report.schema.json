@@ -1,0 +1,228 @@
+{
+  "$defs": {
+    "Check": {
+      "additionalProperties": false,
+      "properties": {
+        "check": {
+          "type": "string"
+        },
+        "passed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "check",
+        "passed"
+      ],
+      "type": "object"
+    },
+    "ConfigFile": {
+      "additionalProperties": false,
+      "description": "One file's SHA-256 before and after the run; none when it did not exist.",
+      "properties": {
+        "after": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "before": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "Under the home directory, as `~/...`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "Mode": {
+      "oneOf": [
+        {
+          "const": "fake",
+          "description": "The fake agent plays the CLI.",
+          "type": "string"
+        },
+        {
+          "const": "real_config",
+          "description": "The real CLI with the user's own configuration (U-R4).",
+          "type": "string"
+        },
+        {
+          "const": "isolated_config",
+          "description": "The real CLI with a configuration directory of its own (after Q30).",
+          "type": "string"
+        }
+      ]
+    },
+    "Named": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "Outcome": {
+      "oneOf": [
+        {
+          "enum": [
+            "pass",
+            "fail"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "inconclusive",
+          "description": "The agent did not do what the scenario needs.",
+          "type": "string"
+        }
+      ]
+    },
+    "Scenario": {
+      "additionalProperties": false,
+      "properties": {
+        "attempts": {
+          "description": "Plays, including retries while it was inconclusive.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/Check"
+          },
+          "type": "array"
+        },
+        "detail": {
+          "description": "Why it did not pass.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gold_b": {
+          "description": "Its recording is a GOLD-B sample.",
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/Outcome"
+        },
+        "recording": {
+          "description": "The recording, relative to the report.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "outcome",
+        "attempts",
+        "duration_ms",
+        "checks",
+        "gold_b"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adapter": {
+      "$ref": "#/$defs/Named"
+    },
+    "agent": {
+      "type": "string"
+    },
+    "cli": {
+      "$ref": "#/$defs/Named"
+    },
+    "cli_sessions": {
+      "description": "The CLI's sessions the run left behind, to clean up.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "commit": {
+      "description": "The cupper commit that ran.",
+      "type": "string"
+    },
+    "config_files": {
+      "description": "The real configuration files, hashed before and after the run.",
+      "items": {
+        "$ref": "#/$defs/ConfigFile"
+      },
+      "type": "array"
+    },
+    "duration_ms": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "mode": {
+      "$ref": "#/$defs/Mode"
+    },
+    "model": {
+      "description": "The model the scenarios ran on; none for the fake agent.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "scenarios": {
+      "items": {
+        "$ref": "#/$defs/Scenario"
+      },
+      "type": "array"
+    },
+    "v": {
+      "description": "The format's version: 1.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "v",
+    "commit",
+    "mode",
+    "agent",
+    "adapter",
+    "cli",
+    "duration_ms",
+    "scenarios",
+    "config_files",
+    "cli_sessions"
+  ],
+  "title": "Report",
+  "type": "object"
+}
