@@ -73,9 +73,47 @@
 - **等待的上限**：
   - main 上 T069 的 `soon()` 盖住了 `events`、`attach`、`command`，这条用例的 `notices`、`paused`、`f.prompt()` 都经过它们。
   - `f.ok()`（`call`）还没有上限：命令的回复不来时仍会无限等待。
-- **提议的修法**（待编排者决定，需要先把 main 合进本分支）：
-  1. 复查编号；一次复查的结果如果比已经应用的那次旧，只按较新那次的状态处理，不翻转闸门，也不重复发通知。
-  2. 回归用例：借 T069 的 `held` 钩子扣住第一次复查，等第二次的结果到了再放行，断言闸门保持打开、prompt 发出。
-  3. `call` 也套上 `soon("a reply to <method>")`。
+- **编排者的裁定**（main 已合进本分支）：先用回归用例证实竞态，再修产品。
 
-  预计 60–80 行，含用例。
+### 回归用例证实了竞态
+
+- **新用例**：`it_orch_trust_gating_an_older_rescan_coming_last_changes_nothing`。
+  - 在 T069 的 `held` 旁边加了一个只在测试里存在的钩子 `hold_reopen_result`：扣住某个项目下一次"重开"复查的结果，等它扫描完再放行。
+  - 用例的步骤：
+    1. 未信任时排队一条消息，它触发的复查在扫完（看到未信任）后被扣住。
+    2. `trust_now` 加 `queue_resume`，新的复查看到已信任，闸门打开，消息作为回合发出。
+    3. 放行旧结果，让它最后到达。
+    4. 下一个回合结束后，再发一条消息作为探测；它的 prompt 发出时，旧结果一定已经被处理了，因为复查结果走同一条先进先出的通道。
+  - 断言：整个过程只有 1 条 `project_config_changed` 通知。
+- **在没改产品的代码上**：连跑 20 次，20 次都失败。输出为：
+  ```
+  left: [("project_config_changed", Null), ("project_config_changed", Null)]
+  right: [("project_config_changed", Null)]
+  ```
+  后到的旧结果（未信任）把刚打开的闸门又关上了，还再发了一次通知。
+  - 如果这时首个回合还在准备阶段，"闸门关着时准备中的回合不发 prompt"，而之后不会再有复查来重开闸门，于是挂住。这就是 T064 那 28 分钟的机理。
+  - 原用例 `two_reasons_hold_until_both_go` 里，`session/send` 触发的那次复查与 `queue_resume` 触发的那次就是这样并行的。
+
+### 修法（产品，单独提交）
+
+- `SessionActor` 给复查编号，并记下回来的复查里最新开始的那次及其结果。
+- 比它旧的结果回来时，改用最新那次的结果：闸门不翻转，也不发通知；索引的 `stale` 和审计的 `scan_failed` 也不按旧结果记。
+- 各用途照常答复：Check 照常给出 `Checked`，Attach 照常 attach，只是依据换成较新的那次结果。
+- 规模：产品逻辑约 30 行；只在测试里存在的钩子约 40 行；新用例 30 行。
+
+### 修复后
+
+- 新用例和宿主整套 lib 测试（403 个）都通过。
+- 后台 4 份 xtask 整套测试、负载约 19–24 时，宿主整套 lib 测试连跑 40 次，0 失败。
+
+## 同类排查与等待的上限
+
+- **`Fake::quiet`**：和 `exit` 是同一种写法，通道断开后立刻返回"安静"。
+  - 现在 stdout 已关时直接失败，信息为"the agent's stdout closed: it exited, it is not quiet"。
+  - 它的 5 个调用方（`scripts.rs` 4 处、`replay.rs` 1 处）都要求 agent 活着，修改后都仍然通过。
+- **会话夹具的 `call`**（`ok`、`err` 都经过它）：也套上 T069 的 `soon`，回复 30 s 不来就失败，并报出 "a reply to <方法>"。
+  - 至此这条用例走到的等待（`events`、`attach`、`command`、`call`）都有上限，挂住时会报出在等什么。
+
+## E2E-SEC-real-input 的 50 次连跑
+
+待定时段：要在没有人用这台机器的时候跑，由编排者和用户约定时间。届时每次运行都采样 `HIDIdleTime`，有用户输入的那次单独标出。
