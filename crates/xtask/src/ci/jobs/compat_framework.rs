@@ -1,9 +1,10 @@
 //! `compat-framework` (design 5.1.6): the compat suite's framework, so that
 //! the code only the maintainer runs with the real CLIs does not rot. The
-//! unit tests of `xtask compat`, then `xtask compat --fake`; no real CLI runs.
-//! In `ci pr` it runs only when the commits since `main` touch the suite's
-//! own code (`COMPAT_PATHS`), or when there is nothing to compare; every
-//! night it always runs.
+//! unit tests of `xtask compat` and of the runner, `xtask compat --fake`, and
+//! the plan of a real run (`--real --dry-run`); no real CLI runs. In `ci pr`
+//! it runs only when the commits since `main` touch the suite's own code
+//! (`COMPAT_PATHS`), or when there is nothing to compare; every night it
+//! always runs.
 
 use anyhow::Result;
 
@@ -22,7 +23,7 @@ const COMPAT_PATHS: &[&str] = &[
     "testdata/compat/",
 ];
 
-const STEPS: [&str; 2] = ["test-compat", "compat-fake"];
+const STEPS: [&str; 4] = ["test-compat", "test-runner", "compat-plan", "compat-fake"];
 
 pub fn run(ctx: &mut JobCtx) -> Result<()> {
     if ctx.target == "pr" && git::untouched_since_main(ctx.root, COMPAT_PATHS)? {
@@ -34,10 +35,15 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     let mut unit = ctx.cargo();
     unit.args(["test", "-p", "xtask", "--locked", "--", "compat::"]);
     ctx.libtest(STEPS[0], &mut unit)?;
+    let mut runner = ctx.cargo();
+    runner.args("test -p cupper-host --features test-harness --locked --test compat".split(' '));
+    ctx.libtest(STEPS[1], &mut runner)?;
+    let mut plan = ctx.command(std::env::current_exe()?);
+    ctx.check(STEPS[2], plan.args(["compat", "--real", "--dry-run"]))?;
     let mut fake = ctx.command(std::env::current_exe()?);
-    let out = ctx.step_file(STEPS[1], "out");
+    let out = ctx.step_file(STEPS[3], "out");
     fake.args(["compat", "--fake", "--out"]).arg(out);
-    ctx.check(STEPS[1], &mut fake)
+    ctx.check(STEPS[3], &mut fake)
 }
 
 #[cfg(test)]
@@ -59,7 +65,7 @@ mod tests {
         for (path, ours) in paths {
             assert_eq!(git::touches(COMPAT_PATHS, path), ours, "{path}");
         }
-        // A branch off main that changes something else: both steps skipped.
+        // A branch off main that changes something else: every step skipped.
         let repo = clean_repo("compat-paths");
         let dir = repo.path();
         let commit = |path: &str| {

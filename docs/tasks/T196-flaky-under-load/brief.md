@@ -52,3 +52,13 @@ M1a 的退出验收（T099）要求在同一个提交上**连续 20 次全绿**�
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充（2026-10-26，编排者）
+
+T191 跑带记录的 CI 时（负载约 45）又碰上两处，一并纳入：
+3. **`it_cli_commands_read_elevate_write_and_answer`**（`tests/lifecycle.rs`）：第三条 `send` 得到 `queued`，断言期望 `started`。看起来是用例在上一个回合结束前就发了下一条；单独跑 5 次都通过，耗时 3.5–13.6 s。
+4. **fake-agent 的 `unit_replay_*`**：三个用例报 "no response 1" 和 "the agent did not exit"。T191 的分支开在 T189 合并之前；T189 修好的 `Fake::exit` 也覆盖 `replay.rs` 的五处，先在最新的 main 上确认是不是已经修好。没修好的照前两处处理。
+
+验收：第 3 处同样连跑 200 次无失败；第 4 处给出在最新 main 上的复现结论。
+
+- 停止线：260；硬停止线：300

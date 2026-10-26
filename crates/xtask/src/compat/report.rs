@@ -29,10 +29,11 @@ pub struct Report {
     pub cli: Named,
     pub duration_ms: u64,
     pub scenarios: Vec<Scenario>,
-    /// The real configuration files, hashed before and after the run.
-    pub config_files: Vec<ConfigFile>,
-    /// The CLI's sessions the run left behind, to clean up.
-    pub cli_sessions: Vec<String>,
+    /// The real configuration, compared before and after the run.
+    pub config_files: Vec<ConfigCheck>,
+    /// What the run left in the CLI's state, to clean up: its sessions and
+    /// the temporary repositories' project entries.
+    pub cleanup: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -67,7 +68,8 @@ pub struct Scenario {
     pub checks: Vec<Check>,
     /// Its recording is a GOLD-B sample.
     pub gold_b: bool,
-    /// The recording, relative to the report.
+    /// The recording: relative to the report in a run's output, to the
+    /// repository in a report under `testdata/`.
     pub recording: Option<String>,
 }
 
@@ -78,6 +80,12 @@ pub enum Outcome {
     Fail,
     /// The agent did not do what the scenario needs.
     Inconclusive,
+    /// The scenario cannot run on this version; the detail says why.
+    NotApplicable,
+    /// What the scenario saw, in the detail, judged by a person.
+    Observed,
+    /// Only the real CLI can play it; the fake agent skipped it.
+    RealOnly,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -87,14 +95,14 @@ pub struct Check {
     pub passed: bool,
 }
 
-/// One file's SHA-256 before and after the run; none when it did not exist.
+/// One file or field of the real configuration: its name and whether the
+/// run changed it, never its value.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct ConfigFile {
-    /// Under the home directory, as `~/...`.
-    pub path: String,
-    pub before: Option<String>,
-    pub after: Option<String>,
+pub struct ConfigCheck {
+    /// `~/<file>`, then the field for a file compared by field.
+    pub name: String,
+    pub changed: bool,
 }
 
 /// What [`SCHEMA`] holds: the schema of [`Report`], keys sorted, since
@@ -142,6 +150,14 @@ pub fn problems(report: &Report) -> Vec<String> {
     if !fake && report.config_files.is_empty() {
         fail("a real run hashes the configuration files".into());
     }
+    if !fake
+        && report
+            .scenarios
+            .iter()
+            .any(|s| s.outcome == Outcome::RealOnly)
+    {
+        fail("a real run plays every scenario".into());
+    }
     let mut ids = Vec::new();
     for s in &report.scenarios {
         let id = &s.id;
@@ -152,8 +168,11 @@ pub fn problems(report: &Report) -> Vec<String> {
         if s.attempts == 0 || s.duration_ms > MAX_SAFE {
             fail(format!("scenario {id}: attempts or duration out of range"));
         }
-        let passed = s.checks.iter().all(|check| check.passed);
-        if (s.outcome == Outcome::Pass) != (passed && s.detail.is_none()) {
+        // A pass has every check and no detail; anything else says why.
+        let passed = s.checks.iter().all(|check| check.passed) && s.detail.is_none();
+        if (s.outcome == Outcome::Pass && !passed)
+            || (s.outcome != Outcome::Pass && s.detail.is_none())
+        {
             fail(format!("scenario {id}: outcome and checks disagree"));
         }
     }
@@ -180,7 +199,7 @@ mod tests {
             "adapter": {"name": "cupper-fake-agent", "version": "0.0.0"},
             "cli": {"name": "claude", "version": "fake"},
             "scenarios": [scenario("approval", true), scenario("reject", false)],
-            "config_files": [], "cli_sessions": []});
+            "config_files": [], "cleanup": []});
         parse(&report.to_string()).unwrap()
     }
 
@@ -215,10 +234,17 @@ mod tests {
         assert_eq!(problems(&bad).len(), 7, "{:#?}", problems(&bad));
         let mut real = report();
         real.mode = Mode::RealConfig;
-        assert_eq!(
-            problems(&real),
-            ["a real run hashes the configuration files"]
-        );
+        real.scenarios[1].outcome = Outcome::RealOnly;
+        let real_problems = [
+            "a real run hashes the configuration files",
+            "a real run plays every scenario",
+        ];
+        assert_eq!(problems(&real), real_problems);
+        let mut skipped = report();
+        skipped.scenarios[1].outcome = Outcome::NotApplicable;
+        assert_eq!(problems(&skipped), Vec::<String>::new());
+        skipped.scenarios[1].detail = None;
+        assert_eq!(problems(&skipped).len(), 1, "a reason is needed");
     }
 
     /// `UPDATE_GOLDEN=1` writes the schema file instead.

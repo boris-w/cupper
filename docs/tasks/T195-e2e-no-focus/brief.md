@@ -1,7 +1,7 @@
 # T195 不需要焦点的 e2e 用例不抢焦点
 
 - 派发日期：2026-10-26
-- 执行者：子 agent（前端工程师）。T093、T189 的执行者接着做（机器锁、`@focus` 两阶段、焦点探针都是它做的）
+- 执行者：子 agent（工程师）。T016、T190、T194 的执行者接着做（原定 T093、T189 的执行者，它在做 T197）
 - 分支：`test/T195-e2e-no-focus`
 - 依赖：T093（已合并）、T189（改了 `focusWindow`，要先合并）
 
@@ -51,7 +51,7 @@
 
 ## 工作方式
 
-T189 合并之后，在原来的 T004 worktree 里从最新的 main 开新分支：`git checkout -b test/T195-e2e-no-focus main`。
+在原来的 T052 worktree 里从最新的 main 开新分支：`git checkout -b test/T195-e2e-no-focus main`。T197 正在改 `tools/e2e/playwright.config.ts`（workers 按核数）和 CI，尽量不动那个文件；要动时在汇报里说明。
 
 ## 汇报要求
 
