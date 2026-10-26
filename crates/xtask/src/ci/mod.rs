@@ -159,6 +159,7 @@ fn run(args: &[String], cwd: &Path) -> Result<bool> {
         let summary = summary::build(&summary::Run {
             commit: &commit,
             target,
+            suite: seen,
             toolchain: &facts::toolchain(&root),
             os: &facts::os(&root),
             machine: &machine,

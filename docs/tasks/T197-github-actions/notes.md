@@ -80,3 +80,105 @@
 - **失败 2：license**：
   - 离线的 `cargo deny` 要读每个 crate 的清单，新机器上还没有下载，报 `failed to download`。
   - 修法：检查前先 `cargo fetch --locked`。
+
+## 第二轮：PR #1 通过并合并之后
+
+- **PR #1 的 8 个检查**（运行 40311848751）：全部通过。
+  - rust 24m17s，e2e 10m23s（冒烟子集：非 `@focus` 段 66 s，`@focus` 段 76 s），license 2m55s，其余都在 2 分钟以内。
+  - ui、compat-framework 因为没改到它们依赖的路径，由 xtask 跳过。
+- **E2E-SEC-real-input × 50**（e2e-repeat，main，运行 40315247047）：
+  - 50 次全部通过，一次持锁调用跑完；平均 6.6 s，最长 11.3 s，总共 6 分钟。
+  - 这补完了 T189 的连跑：本机那次 50 次里有 45 次期间有用户输入，不算数。
+- **ui-baseline**（运行 40315243016）：在 macos-15（15.7.9）上生成的 33 张图，和作者 macOS 26.4 上的逐字节相同，不同的只有 `meta.json`。
+  - 基线的元数据检查原来要求 macOS 大版本一致（T084），所以 runner 上一跑 ui 就会失败，本机再换成 runner 的元数据又会在作者机器上失败。
+  - 改为：Chromium 仍然必须一致；macOS 不同，不论大小版本，都只给提示，由像素决定。`meta.json` 记 runner 的 15.7.9。
+  - 本机的 `pnpm test:ui` 照旧 33 个全过，并提示 macOS 不同。
+- **nightly**（运行 40315239100）：
+  - differential、security-macos14（macos-14 和 macos-15 各一次）、compat-framework 都通过。
+  - e2e 全集失败 1 条：PERF-bridge-gate（"窗口在屏幕上"那条），主进程事件循环延迟的 p99 为 8.65 ms，闸门判的是 5 ms 以下。3 核的 runner 上另有一个 worker 同时在跑。
+  - runner 不是参考机型（和 `perf` 不上 CI 是同一个理由）。所以 PERF 用例打 `@perf`，托管 runner 上的 e2e 作业不跑它们，也不算 PERF 趋势，跳过的 `perf` 步骤写明原因；作者机器上照旧跑、照旧判。
+- **security-macos14 补上的缺口**：macos-14、macos-15 上各跑通一次，摘要在构件里（`security-macos14-macos-14-summary`、`security-macos14-macos-15-summary`）。
+  - 当时 `tests/ids.toml` 里 IT-sys-peer-macos14、IT-sys-peer-macos15 的状态还是"缺口"；第三轮由本任务补上（见下）。
+
+## 第三轮：PR #4（ci/T197-baselines）
+
+### e2e 在 main 和各 PR 上都失败（急修，bad5736）
+
+- 现象：`ci / e2e` 在 host-bundle 一步失败，codesign 找不到 `target/runtime-pack/Contents/Helpers/node`（main 的运行 40315862546，以及 PR #2、#3）。
+- 根因：rust-cache 2.9.3 存缓存前清理 `target/`。它把里面不是 cargo profile 的目录（`runtime-pack`、`git-lfs` 等）当作嵌套的 target 目录递归处理，删掉文件，但保留目录。
+  - main 上 e2e 的缓存因此带着一个空的 `Contents/` 目录骨架。
+  - 之后的运行完全命中这份缓存，xtask 只看目录在不在，就跳过了 runtime-pack。
+  - 完全命中时 rust-cache 不重新保存，所以这份缓存一直是这样。
+- 修法一：新增 `runtime_pack::staged`。清单列出的每个文件都在、sha256 一致，并且没有多出来的文件，才算就绪。
+  - 这就是 host-bundle 原有的那项检查，现在两边共用 `mismatch`。
+  - `ci e2e` 和 `compat --real` 都改用它，本机的判断也一并修好。
+  - 本机的 stage 判为就绪，耗时 6.5 s。
+- 修法二：xtask 组合 action 和 e2e-repeat 在最后加一步（`if: always()`），删掉 `target/runtime-pack` 里除 `downloads` 以外的全部内容。
+  - 这样 stage 和 claude-agent-acp 的隔离目录都不会进任何缓存，连空目录也不会（ADR-11）。
+  - post 步骤倒序执行，`downloads` 由它自己的缓存先存（日志里已核对）。
+- 旧缓存不删：里面只有空目录，没有文件。
+- 结果（运行 40322065826，[e2e 作业](https://github.com/boris-w/cupper/actions/runs/40322065826/job/121569216689)）：
+  - 仍然完全命中旧缓存；
+  - stage 对不上清单，于是 runtime-pack 真的跑了（25.6 s）；
+  - build 272 s，冒烟子集 31 个用例全过；
+  - 清理一步执行了。
+
+### IT-sys-peer-macos14、IT-sys-peer-macos15
+
+- 对端校验用例的名字都是 `it_sys_peer_current_*`，不带 macOS 版本。所以由摘要按机器的 macOS 归类（`summary::on_os`），macOS 版本取自 `facts::os`，不靠 workflow 传参：
+  - macOS 14 记作 IT-sys-peer-macos14；
+  - macOS 15 记作 IT-sys-peer-macos15；
+  - 其他版本（作者本机）照旧记作 IT-sys-peer-current。
+- 同时发现：加了 `--in <组合>` 时，摘要里结果的 suite 原来记的是作业名（如 `rust`、`security-macos14`），trace-ids 不认，PR 的摘要也就算不进 `pr`。
+  - 改为记组合名：`Run` 新增 `suite`，取 `--in` 的组合，没有 `--in` 时取目标本身。
+  - `nightly.yml` 改为带 `within: nightly`。
+  - 作业行为不变：只有 `pr` 会让作业跳过或缩小范围。
+- `tests/ids.toml`：两项都改为 `"nightly"`（active）。
+- 40315239100 的摘要构件推导不出来：它们由旧版 xtask 写出，结果记的是 IT-sys-peer-current，suite 是 `security-macos14`。用 trace-ids 读，只能得出 IT-sys-peer-current "ran only in security-macos14"。
+- 模拟核对：把这两份摘要按新格式改写（id 按 `os` 归类，suite 记作 `nightly`），trace-ids `status` 得到：
+
+  ```
+  done (2)
+    IT-sys-peer-macos14  M1a T021    passed in nightly
+    IT-sys-peer-macos15  M1a T021    passed in nightly
+  ```
+
+- 核对方法（用新版 xtask 跑出的 nightly 运行）：
+
+  ```
+  gh run download <运行号> --repo boris-w/cupper --pattern 'security-macos14-*-summary' --dir nightly
+  node tools/trace-ids/src/main.ts status \
+    --summary nightly/security-macos14-macos-14-summary/security-macos14-<提交>.json \
+    --summary nightly/security-macos14-macos-15-summary/security-macos14-<提交>.json
+  ```
+
+  - 两项都应列在 `done` 下，写着 "passed in nightly"。
+  - 只给 nightly 的摘要时，UNIT-sys-uniqueid 会因为 "ran only in nightly" 列为 problem：它登记在 `pr`，要和 PR 的摘要一起读。
+  - IT-sys-peer 要等 IT-sys-peer-current 在作者本机的 `pr` 运行里通过才算完成。
+- 结果（d5f4adc 上手动触发的 nightly，[运行 40323977621](https://github.com/boris-w/cupper/actions/runs/40323977621)）：
+  - [security-macos14 (macos-14)](https://github.com/boris-w/cupper/actions/runs/40323977621/job/121575785465)：`os` 为 macOS 14.8.9，结果记作 IT-sys-peer-macos14，suite 为 `nightly`，通过；
+  - [security-macos14 (macos-15)](https://github.com/boris-w/cupper/actions/runs/40323977621/job/121575785827)：`os` 为 macOS 15.7.9，结果记作 IT-sys-peer-macos15，suite 为 `nightly`，通过；
+  - 用这两份摘要（`security-macos14-d5f4adc3d3c6.json`）照上面的命令核对，trace-ids `status` 输出：
+
+    ```
+    done (2)
+      IT-sys-peer-macos14  M1a T021    passed in nightly
+      IT-sys-peer-macos15  M1a T021    passed in nightly
+    pending (414)
+      IT-sys-peer                           M1a T021    waiting for IT-sys-peer-current
+      IT-sys-peer-current                   M1a T021    no test ran
+    problem (1)
+      UNIT-sys-uniqueid  M1a T021    ran only in nightly, not in its suite pr
+    ```
+
+  - 本机（macOS 26.4）跑 `cargo xtask ci security-macos14 --in nightly --record …`，结果照旧记作 IT-sys-peer-current。
+
+### 规模（第三轮，按模块）
+
+| 模块 | 草估 | 实际 |
+|---|---|---|
+| 运行时包就绪的判断（`staged`、`mismatch`，e2e、compat、host-bundle 改用）及测试 | 60 | +68 −16 |
+| 缓存清理（组合 action、e2e-repeat、setup 的注释） | 15 | +17 −2 |
+| 对端校验按 macOS 归类、suite 记组合名、`within: nightly`、ids.toml 及测试 | 60 | +74 −9 |
+
+`cargo xtask size`：本分支 +215 −66（净 +149）。第一轮（合并 8df33d4）是 +393 −169，两轮合计新增 608 行，越过了停止线 600，没到硬停止线 700。写完映射时才发现这一点，随即报给编排者，由编排者决定是否拆分。

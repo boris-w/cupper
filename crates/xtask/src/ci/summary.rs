@@ -69,8 +69,11 @@ const SUMMARY: Shape = Shape::Object(&[
 
 pub struct Run<'a> {
     pub commit: &'a str,
-    /// The job or composite that was invoked; it is the suite of every result.
+    /// The job or composite that was invoked.
     pub target: &'a str,
+    /// The suite of every result: the composite the job ran within (`--in`),
+    /// or the target.
+    pub suite: &'a str,
     pub toolchain: &'a [(&'static str, Option<String>)],
     pub os: &'a str,
     pub machine: &'a str,
@@ -123,7 +126,7 @@ fn results(run: &Run) -> Vec<Value> {
     let mut passed_by_id: BTreeMap<&str, bool> = BTreeMap::new();
     for case in run.reports.iter().flat_map(|report| &report.cases) {
         if let Some(id) = ids::owner(run.ids, &case.name) {
-            *passed_by_id.entry(id).or_insert(true) &= case.passed;
+            *passed_by_id.entry(on_os(id, run.os)).or_insert(true) &= case.passed;
         }
     }
     passed_by_id
@@ -131,12 +134,26 @@ fn results(run: &Run) -> Vec<Value> {
         .map(|(id, passed)| {
             json!({
                 "id": id,
-                "suite": run.target,
+                "suite": run.suite,
                 "result": if passed { Outcome::Pass } else { Outcome::Fail }.as_str(),
                 "commit": run.commit,
             })
         })
         .collect()
+}
+
+/// The ID a result counts for. The peer checks carry IT-sys-peer-current;
+/// run on macOS 14 or 15, by `os` from `facts`, they count for
+/// IT-sys-peer-macos14 or -macos15 (plan 1.6, R7).
+fn on_os<'a>(id: &'a str, os: &str) -> &'a str {
+    let major = os
+        .strip_prefix("macOS ")
+        .and_then(|version| version.split('.').next());
+    match (id, major) {
+        ("IT-sys-peer-current", Some("14")) => "IT-sys-peer-macos14",
+        ("IT-sys-peer-current", Some("15")) => "IT-sys-peer-macos15",
+        _ => id,
+    }
 }
 
 /// Checks the summary, then writes it as `<dir>/<file_name>`.
@@ -289,6 +306,7 @@ mod tests {
         build(&Run {
             commit: COMMIT,
             target: "pr",
+            suite: "pr",
             toolchain: &[("rustc", Some("1.96.0".to_owned())), ("pnpm", None)],
             os: "macOS 26.4",
             machine: "MacBook Pro (Apple M4 Max)",
@@ -332,6 +350,49 @@ mod tests {
         let mut nested = summary.clone();
         nested["os"] = json!({"name": "macOS"});
         check_shape(&nested, &SUMMARY, "summary").expect_err("object in a scalar field");
+    }
+
+    #[test]
+    fn unit_ci_summary_peer_checks_count_for_the_macos_they_ran_on() {
+        let ids = [
+            "IT-sys-peer-current",
+            "IT-sys-peer-macos14",
+            "IT-sys-peer-macos15",
+        ];
+        let ids: Vec<String> = ids.map(str::to_owned).to_vec();
+        let reports = [JobReport {
+            name: "security-macos14",
+            outcome: Outcome::Pass,
+            passed: 1,
+            failed: 0,
+            duration_ms: 10,
+            cases: vec![TestCase {
+                name: "peer::tests::it_sys_peer_current_exec_changes_the_token".to_owned(),
+                passed: true,
+            }],
+            skipped: Vec::new(),
+            artifacts: Vec::new(),
+        }];
+        for (os, id) in [
+            ("macOS 14.8.9", "IT-sys-peer-macos14"),
+            ("macOS 15.7.9", "IT-sys-peer-macos15"),
+            ("macOS 26.4", "IT-sys-peer-current"),
+        ] {
+            let summary = build(&Run {
+                commit: COMMIT,
+                target: "security-macos14",
+                suite: "nightly",
+                toolchain: &[],
+                os,
+                machine: "Apple Virtual Machine 1 (Apple M1 (Virtual))",
+                duration_ms: 10,
+                reports: &reports,
+                ids: &ids,
+            });
+            let expected =
+                json!([{"id": id, "suite": "nightly", "result": "pass", "commit": COMMIT}]);
+            assert_eq!(summary["results"], expected, "{os}");
+        }
     }
 
     #[test]
