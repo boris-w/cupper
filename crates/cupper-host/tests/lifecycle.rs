@@ -16,14 +16,14 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
-use cupper_cli::client::{self, ClientAuth, ClientError, Incoming, Options};
+use cupper_cli::client::{self, ClientAuth, ClientError, CloseReason, Incoming, Options};
 use cupper_cli::harness::HarnessKey;
 use cupper_cli::verify::HostCheck;
 use cupper_host::clock::{Clock, SystemClock};
 use cupper_host::diag::log::log_dir;
 use cupper_host::driver::runtime::launch;
 use cupper_host::gateway::listen::HostLock;
-use cupper_host::gateway::testkit::{KEY, TempDir};
+use cupper_host::gateway::testkit::{self, KEY, TempDir};
 use cupper_host::store::meta::{self, MetaKey};
 use cupper_host::store::open_reader;
 use cupper_protocol::error::ErrorReason;
@@ -42,6 +42,7 @@ use cupper_protocol::methods::stream::StreamSubscribe;
 use cupper_protocol::proof;
 use cupper_protocol::recording::{Body, INSTANCE_EXITED, INSTANCE_STARTED, Recording};
 use cupper_protocol::transport::socket_path;
+use cupper_sys::RefusalKind;
 use rusqlite::Connection;
 use serde_json::{Value, json};
 
@@ -161,6 +162,19 @@ async fn it_lifecycle_read_marks_and_presence_reach_the_index() {
     assert_eq!(exit_code(&mut host).await, 0);
 }
 
+/// A harness connection through the gateway's test client, which checks no
+/// token: it reads what the host sent even after the host has exited.
+async fn raw_connect(data_dir: &Path) -> testkit::Client {
+    let socket = socket_path(data_dir, &cupper_sys::user_temp_dir().unwrap());
+    let mut raw = testkit::Client::connect(&socket).await;
+    let nonce = raw.hello().await;
+    let pid = i32::try_from(std::process::id()).unwrap();
+    let (auth, _) = testkit::key_auth("harness", &KEY, &nonce, pid);
+    let params = testkit::initialize_params(&nonce, auth);
+    raw.call("initialize", params).await.unwrap();
+    raw
+}
+
 /// How the test asks the host to exit.
 #[derive(Debug, Clone, Copy)]
 enum Trigger {
@@ -187,6 +201,7 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
             .map(|c| c.principal_kind.as_str())
             .collect();
         assert_eq!(kinds, ["test_harness"]);
+        let mut raw = raw_connect(&data_dir).await;
 
         match trigger {
             Trigger::HostExit => {
@@ -198,24 +213,37 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
             }
             Trigger::Sigterm => terminate(&host),
         }
-        // The client's worst order: the host is gone before its reader runs
-        // (it runs on this test's one thread, blocked here), and the host's
-        // last frames still come, then the end (T196).
+        // The client's reader runs on this test's one thread, blocked here
+        // until the host is gone: the order load brings about now and then.
         let exited = host.wait().unwrap();
-        let Some(Incoming::Other { method, params }) = client.next().await else {
-            panic!("{trigger:?}: no host/shutdown");
-        };
-        assert_eq!(method, "host/shutdown", "{trigger:?}");
-        assert_eq!(
-            params,
-            json!({"reason": "user_quit", "restart_expected": false})
-        );
-        assert_eq!(
-            client.next().await,
-            None,
-            "{trigger:?}: the connection ends"
-        );
         assert_eq!(exited.code(), Some(0), "{trigger:?}");
+        let shutdown = json!({"reason": "user_quit", "restart_expected": false});
+        // The host sent `host/shutdown` before it closed: a connection that
+        // checks no token reads it after the host has exited too.
+        let sent = raw.next().await.expect("host/shutdown");
+        assert_eq!(
+            (&sent["method"], &sent["params"]),
+            (&json!("host/shutdown"), &shutdown),
+            "{trigger:?}"
+        );
+        assert_eq!(raw.next().await, None, "{trigger:?}");
+        // The client checks the host's token on every read and refuses what
+        // it reads once the host has exited (design 5.8.1): it gets
+        // `host/shutdown` only if it read it in time, and then sees the host
+        // gone either way (T196).
+        if let Some(incoming) = client.next().await {
+            let Incoming::Other { method, params } = incoming else {
+                panic!("{trigger:?}: {incoming:?}");
+            };
+            assert_eq!((method.as_str(), params), ("host/shutdown", shutdown));
+            assert_eq!(client.next().await, None, "{trigger:?}");
+        }
+        let gone = match client.close_reason() {
+            Some(CloseReason::Eof) => true,
+            Some(CloseReason::Refused(refusal)) => refusal.kind == RefusalKind::PeerExited,
+            _ => false,
+        };
+        assert!(gone, "{trigger:?}: {:?}", client.close_reason());
 
         let (start, clean) = (MetaKey::LastStartAt, MetaKey::LastCleanExitAt);
         assert!(
