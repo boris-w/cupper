@@ -6,6 +6,7 @@ use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::Once;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::time::Duration;
@@ -13,6 +14,34 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 const WAIT: Duration = Duration::from_secs(10);
+
+/// Runs the agent once, to its exit, before any test times it. The first
+/// start of a freshly linked binary waits for the system's scan of it: 4 to
+/// 11 s at a load of 40, which counted against a test's 10 s as the agent's
+/// own silence (T196).
+fn first_start() {
+    static STARTED: Once = Once::new();
+    STARTED.call_once(|| {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_cupper-fake-agent"))
+            .args(["--fault", "exit_on_start"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let (_never, pace) = channel::<()>();
+        for _ in 0..1200 {
+            if child.try_wait().unwrap().is_some() {
+                return;
+            }
+            let _ = pace.recv_timeout(Duration::from_millis(50));
+        }
+        // Not reaped yet, so the pid is still this child's.
+        let _ = child.kill();
+        let _ = child.wait();
+        panic!("the agent's first start took over 60 s");
+    });
+}
 
 pub struct Fake {
     child: Child,
@@ -40,6 +69,7 @@ impl Fake {
     }
 
     pub fn spawn_with(args: &[&str], env: &[(&str, &str)]) -> Self {
+        first_start();
         static COUNT: AtomicU32 = AtomicU32::new(0);
         let n = COUNT.fetch_add(1, Ordering::Relaxed);
         let cwd = std::env::temp_dir().join(format!("cupper-fake-{}-{n}", std::process::id()));
