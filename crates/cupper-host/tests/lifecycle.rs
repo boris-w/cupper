@@ -213,29 +213,20 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
             }
             Trigger::Sigterm => terminate(&host),
         }
-        // The client's reader runs on this test's one thread, blocked here
-        // until the host is gone: the order load brings about now and then.
-        let exited = host.wait().unwrap();
-        assert_eq!(exited.code(), Some(0), "{trigger:?}");
-        let shutdown = json!({"reason": "user_quit", "restart_expected": false});
-        // The host sent `host/shutdown` before it closed: a connection that
-        // checks no token reads it after the host has exited too.
-        let sent = raw.next().await.expect("host/shutdown");
-        assert_eq!(
-            (&sent["method"], &sent["params"]),
-            (&json!("host/shutdown"), &shutdown),
-            "{trigger:?}"
-        );
-        assert_eq!(raw.next().await, None, "{trigger:?}");
         // The client checks the host's token on every read and refuses what
         // it reads once the host has exited (design 5.8.1): it gets
-        // `host/shutdown` only if it read it in time, and then sees the host
-        // gone either way (T196).
+        // `host/shutdown` if it reads before the exit, which load can put
+        // off, and sees the host gone either way (T196).
+        let shutdown = json!({"reason": "user_quit", "restart_expected": false});
         if let Some(incoming) = client.next().await {
             let Incoming::Other { method, params } = incoming else {
                 panic!("{trigger:?}: {incoming:?}");
             };
-            assert_eq!((method.as_str(), params), ("host/shutdown", shutdown));
+            assert_eq!(
+                (method.as_str(), &params),
+                ("host/shutdown", &shutdown),
+                "{trigger:?}"
+            );
             assert_eq!(client.next().await, None, "{trigger:?}");
         }
         let gone = match client.close_reason() {
@@ -244,6 +235,16 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
             _ => false,
         };
         assert!(gone, "{trigger:?}: {:?}", client.close_reason());
+        assert_eq!(exit_code(&mut host).await, 0, "{trigger:?}");
+        // The host did send it: a connection that checks no token reads it
+        // after the host has exited too.
+        let sent = raw.next().await.expect("host/shutdown");
+        assert_eq!(
+            (&sent["method"], &sent["params"]),
+            (&json!("host/shutdown"), &shutdown),
+            "{trigger:?}"
+        );
+        assert_eq!(raw.next().await, None, "{trigger:?}");
 
         let (start, clean) = (MetaKey::LastStartAt, MetaKey::LastCleanExitAt);
         assert!(
