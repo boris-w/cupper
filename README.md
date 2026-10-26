@@ -6,13 +6,13 @@ Status: early development (milestone M1a). Nothing is released yet.
 
 ## Layout
 
-| Path | What |
-|---|---|
-| `crates/` | Rust: the session host, its protocol, system interfaces, the CLI, a fake agent for tests, and `xtask` |
-| `apps/desktop/` | The Electron app |
-| `packages/` | TypeScript libraries shared by the app |
-| `protocol/` | The host protocol's schema and samples |
-| `docs/` | PRD, technical design, plan, decisions and the record of every task (in Chinese) |
+| Path            | What                                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------- |
+| `crates/`       | Rust: the session host, its protocol, system interfaces, the CLI, a fake agent for tests, and `xtask` |
+| `apps/desktop/` | The Electron app                                                                                      |
+| `packages/`     | TypeScript libraries shared by the app                                                                |
+| `protocol/`     | The host protocol's schema and samples                                                                |
+| `docs/`         | PRD, technical design, plan, decisions and the record of every task (in Chinese)                      |
 
 ## Building and testing
 
