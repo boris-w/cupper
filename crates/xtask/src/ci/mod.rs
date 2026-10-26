@@ -7,7 +7,7 @@ mod ctx;
 mod facts;
 pub mod git;
 mod ids;
-mod jobs;
+pub mod jobs;
 pub mod lock;
 mod summary;
 

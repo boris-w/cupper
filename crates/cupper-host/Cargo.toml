@@ -94,6 +94,11 @@ required-features = ["test-harness"]
 name = "gold_b"
 required-features = ["test-harness"]
 
+# The compat suite's runner, which `cargo xtask compat` starts (T064).
+[[test]]
+name = "compat"
+required-features = ["test-harness"]
+
 # The T069 cases run the host with a `harness_key` and armed failpoints.
 [[test]]
 name = "crash_concurrency"
