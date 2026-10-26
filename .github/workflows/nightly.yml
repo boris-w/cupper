@@ -1,0 +1,41 @@
+# The nightly jobs that exist (design 5.1.6, plan 1.8), on main: the
+# differential test of the views, the peer checks on macOS 14 and 15 (Q24,
+# R7), the e2e suite in full, and the compat suite's framework. `perf` stays
+# off CI: a runner is no reference machine (T197).
+name: nightly
+
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  differential:
+    uses: ./.github/workflows/xtask.yml
+    with:
+      job: differential
+      runner: macos-15
+  security-macos14:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-14, macos-15]
+    uses: ./.github/workflows/xtask.yml
+    with:
+      job: security-macos14
+      runner: ${{ matrix.runner }}
+  e2e:
+    uses: ./.github/workflows/xtask.yml
+    with:
+      job: e2e
+      runner: macos-15
+      timeout: 120
+  compat-framework:
+    uses: ./.github/workflows/xtask.yml
+    with:
+      job: compat-framework
+      runner: macos-15
+      timeout: 60
