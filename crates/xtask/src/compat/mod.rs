@@ -21,6 +21,7 @@ use serde_json::json;
 
 use crate::ci::git;
 use crate::clock::Stopwatch;
+use crate::runtime_pack;
 use report::{Mode, Named, Outcome, Report};
 
 pub const USAGE: &str = "usage: cargo xtask compat (--fake | --real [--model <model>]) [--dry-run]
@@ -40,7 +41,6 @@ pub const USAGE: &str = "usage: cargo xtask compat (--fake | --real [--model <mo
 
 /// Where `cargo xtask host-bundle --kind e2e` puts the host a real run uses.
 const HOST: &str = "target/host-bundle/e2e/CupperHost.app/Contents/MacOS/cupper-host";
-const RUNTIME: &str = "target/runtime-pack/Contents";
 
 #[derive(Debug, Default, PartialEq)]
 struct Options {
@@ -163,7 +163,7 @@ fn run(root: &Path, options: &Options) -> Result<bool> {
     match (options.dry_run, options.real) {
         (true, _) => {}
         (false, true) => {
-            if !root.join(RUNTIME).is_dir() {
+            if !runtime_pack::staged(root)? {
                 xtask("runtime-pack")?;
             }
             xtask("host-bundle --kind e2e --debug")?;

@@ -5,7 +5,7 @@
 // joins as a second client. At the end the app quits, the host is stopped,
 // and every process the test started must be gone.
 
-import { execFileSync, type ChildProcess } from "node:child_process";
+import { execFile, execFileSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -41,8 +41,12 @@ export class Cupper {
   #window: Page | undefined;
   #dialogs: Dialogs | undefined;
   #procs: Proc[] = [];
+  /** A test without `@focus` keeps its app out of the foreground and the Dock (T195). */
+  readonly #background: boolean;
+  #fronts: Front[] = [];
 
-  constructor(testConfig: Record<string, unknown>) {
+  constructor(testConfig: Record<string, unknown>, background: boolean) {
+    this.#background = background;
     mkdirSync(ROOTS, { recursive: true, mode: 0o700 });
     this.root = realpathSync(mkdtempSync(join(ROOTS, "t-")));
     const owner = processes().filter((proc) => proc.pid === process.pid);
@@ -80,7 +84,10 @@ export class Cupper {
 
   /** Starts the app, takes over its native dialogs' stand-ins, and waits for its window. */
   async launch({ throttled = false } = {}): Promise<void> {
-    const env = { ...process.env, CUPPER_E2E_DIR: this.root };
+    const background: Record<string, string> = this.#background
+      ? { CUPPER_E2E_BACKGROUND: "1" }
+      : {};
+    const env = { ...process.env, CUPPER_E2E_DIR: this.root, ...background };
     // Two apps at once, and other windows of the machine, cover each other:
     // Chromium would then hold back a covered window's timers and frames,
     // and the panel's arming or the views' flush wait on them. `throttled`
@@ -98,6 +105,9 @@ export class Cupper {
       throw new Error("the app did not start");
     }
     this.track(tree(this.#main.pid));
+    if (this.#background) {
+      this.#fronts.push(new Front(this.#main.pid));
+    }
     this.#dialogs = await Dialogs.attach(this.app);
     this.#window = await this.app.firstWindow();
   }
@@ -141,6 +151,19 @@ export class Cupper {
     const app = this.#main;
     const host = this.host(table);
     this.track(this.processes(table));
+    this.#fronts.forEach((front) => front.stop());
+    const [samples, hits] = this.#fronts.reduce(([n, h], f) => [n + f.samples, h + f.hits], [0, 0]);
+    if (hits > 0) {
+      problems.push(
+        `the app took the foreground in ${hits} of ${samples} samples; it needs @focus`,
+      );
+    }
+    if (app?.pid !== undefined && this.#background && app.exitCode === null) {
+      const kind = lsappinfo(`info -only ApplicationType "$(lsappinfo find pid=${app.pid})"`);
+      if (!kind.includes("UIElement")) {
+        problems.push(`the app is in the Dock: ${kind.trim()}`);
+      }
+    }
     if (app && app.exitCode === null && app.signalCode === null) {
       await this.quitWithoutAsking().catch(() => problems.push("the app did not quit"));
     }
@@ -195,6 +218,32 @@ export class Cupper {
       this.#procs.some((p) => p.pid === proc.pid && p.started === proc.started);
     this.#procs.push(...procs.filter((proc) => !known(proc)));
     writeFileSync(join(this.root, PROCS), JSON.stringify(this.#procs));
+  }
+}
+
+const lsappinfo = (args: string) =>
+  execFileSync("sh", ["-c", `lsappinfo ${args}`], { encoding: "utf8" });
+
+/** How often the app `pid` was the foreground app, sampled every 250 ms (T195). */
+class Front {
+  samples = 0;
+  hits = 0;
+  readonly #timer: ReturnType<typeof setInterval>;
+
+  constructor(pid: number) {
+    const front = 'lsappinfo info -only pid "$(lsappinfo front)"';
+    this.#timer = setInterval(() => {
+      execFile("sh", ["-c", front], (err, out) => {
+        if (!err) {
+          this.samples += 1;
+          this.hits += Number(/=(\d+)/.exec(out)?.[1]) === pid ? 1 : 0;
+        }
+      });
+    }, 250);
+  }
+
+  stop(): void {
+    clearInterval(this.#timer);
   }
 }
 
@@ -269,7 +318,7 @@ export const test = base.extend<{ testConfig: Record<string, unknown>; cupper: C
   /** The host's `test_config` beyond the fake agent: `clock`, `durations`, failpoints. */
   testConfig: [{}, { option: true }],
   cupper: async ({ testConfig }, use, info) => {
-    const cupper = new Cupper(testConfig);
+    const cupper = new Cupper(testConfig, !info.tags.includes("@focus"));
     try {
       await use(cupper);
     } finally {

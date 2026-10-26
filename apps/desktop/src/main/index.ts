@@ -48,6 +48,12 @@ const flavor = __CUPPER_FLAVOR__;
 if (__CUPPER_FLAVOR__ === "e2e") {
   installDialogStandIns();
 }
+// e2e builds, for a test that needs no focus (T195): out of the Dock, and the
+// window shown without activating the app, so the user keeps the foreground.
+const background = __CUPPER_FLAVOR__ === "e2e" && process.env.CUPPER_E2E_BACKGROUND === "1";
+if (background) {
+  app.setActivationPolicy("accessory");
+}
 
 // First of all, before Electron acts on any of them (design 5.7.8).
 if (isReleaseLike(flavor)) {
@@ -200,7 +206,7 @@ function showMainWindow() {
   const preload = join(import.meta.dirname, "../preload/index.cjs");
   const window = new BrowserWindow(mainWindowOptions(flavor, preload));
   mainWindow = window;
-  window.once("ready-to-show", () => window.show());
+  window.once("ready-to-show", () => (background ? window.showInactive() : window.show()));
   watchInput(window, () => Date.now());
   window.on("closed", () => {
     mainWindow = null;

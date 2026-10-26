@@ -34,4 +34,5 @@ jobs:
       - uses: ./.github/actions/xtask
         with:
           job: ${{ matrix.job }}
+          within: nightly
           runner: ${{ matrix.runner }}
