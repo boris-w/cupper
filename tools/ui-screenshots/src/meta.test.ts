@@ -15,13 +15,11 @@ describe("UNIT-ui-baseline-meta", () => {
     expect(check.notes).toEqual([expect.stringContaining("Chromium 156.0.8078.5")]);
   });
 
-  test("a minor macOS update passes with a note", () => {
-    const check = compareMeta(baseline, { ...baseline, macos: "26.4.1" });
-    expect(check.ok).toBe(true);
-    expect(check.notes).toEqual([expect.stringContaining("pnpm ui:baseline")]);
-  });
-
-  test("another major macOS fails", () => {
-    expect(compareMeta(baseline, { ...baseline, macos: "27.0" }).ok).toBe(false);
+  test("another macOS passes with a note: the pixels decide", () => {
+    for (const macos of ["26.4.1", "15.7.9"]) {
+      const check = compareMeta(baseline, { ...baseline, macos });
+      expect(check.ok).toBe(true);
+      expect(check.notes).toEqual([expect.stringContaining("`ui-baseline` workflow")]);
+    }
   });
 });

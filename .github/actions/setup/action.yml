@@ -42,8 +42,10 @@ runs:
       with:
         key: ${{ inputs.cache-key }}
     # After rust-cache, so that these are saved before it cleans the target
-    # dir. The claude-agent-acp bundle's isolated dir, which holds Anthropic's
-    # SDK, is in no cache (ADR-11).
+    # dir. Cleaning deletes files but keeps directories: of the rest of
+    # target/runtime-pack, the stage and the claude-agent-acp bundle's
+    # isolated dir with Anthropic's SDK, the job deletes everything before
+    # (ADR-11), so that no cache holds even an empty stage.
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |

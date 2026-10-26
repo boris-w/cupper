@@ -202,6 +202,36 @@ fn conclude(
     Ok(())
 }
 
+/// Where `run` stages the runtime (its `contents`), below the repository root.
+pub const STAGE: &str = "target/runtime-pack/Contents";
+
+/// Whether the stage holds, file by file, the runtime that
+/// `runtime/manifest.json` pins. A stage that a cache restored in part, that
+/// a run left half-written or that an older manifest pinned is not one.
+pub fn staged(root: &Path) -> Result<bool> {
+    let stage = root.join(STAGE);
+    if !stage.is_dir() {
+        return Ok(false);
+    }
+    let manifest = Manifest::load(&root.join("runtime").join("manifest.json"))?;
+    Ok(mismatch(&hash_tree(&stage)?, &manifest.files).is_none())
+}
+
+/// The first way the files `found` differ from those the manifest lists.
+pub fn mismatch(
+    found: &BTreeMap<String, FileHash>,
+    listed: &BTreeMap<String, FileHash>,
+) -> Option<String> {
+    let differs = listed
+        .iter()
+        .find(|(path, file)| found.get(*path).map(|copy| &copy.sha256) != Some(&file.sha256));
+    if let Some((path, _)) = differs {
+        return Some(format!("`{path}` is missing or differs from the manifest"));
+    }
+    let extra = found.keys().find(|path| !listed.contains_key(*path))?;
+    Some(format!("`{extra}` is not in the manifest"))
+}
+
 /// The sha-256 of every file below `dir`, keyed by its `/`-separated path.
 pub fn hash_tree(dir: &Path) -> Result<BTreeMap<String, FileHash>> {
     let mut files = BTreeMap::new();
@@ -277,6 +307,34 @@ mod tests {
         }
         assert!(!dir.path().join("manifest.json").exists());
         assert!(!dir.path().join("licenses").exists());
+    }
+
+    #[test]
+    fn a_stage_is_ready_only_with_every_file_the_manifest_lists_and_no_other() {
+        let root = TempDir::new("pack-staged");
+        assert!(!staged(root.path()).expect("no stage"));
+        let stage = root.path().join(STAGE);
+        fs::create_dir_all(stage.join("Helpers")).expect("mkdir");
+        fs::write(stage.join("Helpers/node"), "node").expect("write");
+        let mut pinned = manifest(&[]);
+        pinned.files = hash_tree(&stage).expect("hash");
+        fs::create_dir_all(root.path().join("runtime")).expect("mkdir");
+        fs::write(root.path().join("runtime/manifest.json"), pinned.to_text()).expect("write");
+        assert!(staged(root.path()).expect("whole"));
+
+        fs::write(stage.join("extra"), "x").expect("write");
+        let found = hash_tree(&stage).expect("hash");
+        let why = mismatch(&found, &pinned.files);
+        assert_eq!(why.as_deref(), Some("`extra` is not in the manifest"));
+        assert!(!staged(root.path()).expect("an extra file"));
+        fs::remove_file(stage.join("extra")).expect("remove");
+        // What a cache keeps of a stage: its directories, without the files.
+        fs::remove_file(stage.join("Helpers/node")).expect("remove");
+        let found = hash_tree(&stage).expect("hash");
+        let why = mismatch(&found, &pinned.files);
+        let expected = "`Helpers/node` is missing or differs from the manifest";
+        assert_eq!(why.as_deref(), Some(expected));
+        assert!(!staged(root.path()).expect("a skeleton"));
     }
 
     #[test]
