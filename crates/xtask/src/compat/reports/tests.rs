@@ -1,209 +1,125 @@
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::*;
-use crate::compat::report::{Check, ConfigFile, Named, Scenario};
 use crate::testutil::TempDir;
 
-const CLAUDE_ACP: &str = "0.91.0";
-const CODEX_ACP: &str = "2.2.2";
+/// The pinned claude-agent-acp and codex-acp of the committed manifest.
+const PINNED: [&str; 2] = ["0.91.0", "2.2.2"];
 
-fn report(mode: Mode, cli: &str, version: &str, adapter: &str, outcomes: &[Outcome]) -> Report {
-    let scenario = |(index, &outcome): (usize, &Outcome)| Scenario {
-        id: format!("s{index}"),
-        title: "a scenario".into(),
-        outcome,
-        detail: (outcome != Outcome::Pass).then(|| "not met: x".into()),
-        attempts: 1,
-        duration_ms: 100,
-        checks: vec![Check {
-            check: "x".into(),
-            passed: outcome == Outcome::Pass,
-        }],
-        gold_b: false,
-        recording: None,
+/// A run of `cli` at `version` on the adapter at `adapter`, a scenario per
+/// outcome; a real one hashes a configuration file.
+fn report(mode: &str, cli: &str, version: &str, adapter: &str, outcomes: &[&str]) -> Value {
+    let scenario = |(i, outcome): (usize, &&str)| {
+        json!({"id": format!("s{i}"), "title": "s",
+        "outcome": outcome, "detail": (*outcome != "pass").then_some("not met: x"),
+        "attempts": 1, "duration_ms": 100, "checks": [{"check": "x", "passed": *outcome == "pass"}],
+        "gold_b": false, "recording": null})
     };
-    let hash = Some("ab".repeat(32));
-    let config = ConfigFile {
-        path: "~/.claude/settings.json".into(),
-        before: hash.clone(),
-        after: hash,
-    };
-    let named = |name: &str, version: &str| Named {
-        name: name.into(),
-        version: version.into(),
-    };
-    Report {
-        v: 1,
-        commit: "0123456789abcdef0123456789abcdef01234567".into(),
-        mode,
-        agent: cli.into(),
-        model: (mode != Mode::Fake).then(|| "haiku".into()),
-        adapter: named("adapter", adapter),
-        cli: named(cli, version),
-        duration_ms: 1000,
-        scenarios: outcomes.iter().enumerate().map(scenario).collect(),
-        config_files: if mode == Mode::Fake {
-            Vec::new()
-        } else {
-            vec![config]
-        },
-        cli_sessions: Vec::new(),
-    }
+    let (real, hash) = (mode != "fake", "ab".repeat(32));
+    let config = json!({"path": "~/.claude/settings.json", "before": hash, "after": hash});
+    json!({"v": 1, "commit": "0123456789abcdef0123456789abcdef01234567", "mode": mode,
+        "agent": cli, "model": real.then_some("haiku"), "duration_ms": 1000,
+        "adapter": {"name": "adapter", "version": adapter}, "cli": {"name": cli, "version": version},
+        "scenarios": outcomes.iter().enumerate().map(scenario).collect::<Vec<_>>(),
+        "config_files": if real { vec![config] } else { vec![] }, "cli_sessions": []})
 }
 
-fn real(cli: &str, version: &str, adapter: &str) -> Report {
-    report(Mode::RealConfig, cli, version, adapter, &[Outcome::Pass; 2])
+fn real(cli: &str, version: &str, adapter: &str, outcomes: &[&str]) -> Value {
+    report("real_config", cli, version, adapter, outcomes)
 }
 
-fn ranges(reports: Vec<Report>) -> (Vec<String>, Vec<String>) {
-    let reports: Vec<_> = reports.into_iter().map(|r| ("r.json".into(), r)).collect();
-    let (spans, problems) = verified(&reports, [CLAUDE_ACP, CODEX_ACP]);
-    let spans = spans
-        .iter()
-        .map(|s| format!("{}-{}", s.min, s.max))
-        .collect();
-    (spans, problems)
+/// The range [`verified`] gives each CLI, as `min-max`, and its problems.
+fn ranges(reports: &[Value]) -> (Vec<String>, Vec<String>) {
+    let read = |r: &Value| ("r.json".into(), report::parse(&r.to_string()).unwrap());
+    let (spans, problems) = verified(&reports.iter().map(read).collect::<Vec<_>>(), PINNED);
+    let spans = spans.iter().map(|s| format!("{}-{}", s.min, s.max));
+    (spans.collect(), problems)
 }
 
-/// A work tree with the current schema, the committed manifest and no reports.
-fn work_tree(name: &str) -> TempDir {
-    let dir = TempDir::new(name);
-    let root = dir.path();
-    fs::create_dir_all(root.join("testdata/compat")).unwrap();
-    fs::write(root.join(report::SCHEMA), report::schema()).unwrap();
-    fs::create_dir_all(root.join("runtime")).unwrap();
-    let committed = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(MANIFEST);
-    fs::copy(committed, root.join(MANIFEST)).unwrap();
-    dir
-}
-
-fn put(root: &Path, name: &str, text: &str) {
-    let path = root.join(DIR).join(name);
+fn put(root: &Path, path: &str, text: &str) {
+    let path = root.join(path);
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, text).unwrap();
 }
 
 #[test]
-fn unit_compat_tools_reports_conform_or_say_why() {
-    let dir = work_tree("reports-conform");
-    let root = dir.path();
-    assert_eq!(
-        run(root, false).unwrap(),
-        Vec::<String>::new(),
-        "no reports"
-    );
-
-    let good = real("claude", "2.1.250", CLAUDE_ACP);
-    put(
-        root,
-        "claude/good.json",
-        &serde_json::to_string_pretty(&good).unwrap(),
-    );
-    let mut stray = json!(good);
-    stray["scenarios"][0]["stray"] = true.into();
-    put(root, "stray.json", &stray.to_string());
-    let mut head = good.clone();
-    head.commit = "HEAD".into();
-    put(root, "head.json", &serde_json::to_string(&head).unwrap());
-    put(root, "notes.txt", "not a report");
-    let problems = run(root, false).unwrap();
-    assert_eq!(problems.len(), 2, "{problems:#?}");
-    let head = "testdata/compat/reports/head.json: the commit is not a full hash";
-    assert_eq!(problems[0], head);
-    assert!(problems[1].starts_with("testdata/compat/reports/stray.json: unknown field `stray`"));
-
-    fs::write(root.join(report::SCHEMA), "{}\n").unwrap();
-    let problems = run(root, false).unwrap();
-    assert_eq!(
-        problems[0],
-        format!(
-            "{} is stale: UPDATE_GOLDEN=1 cargo test -p xtask",
-            report::SCHEMA
-        )
-    );
-}
-
-#[test]
 fn unit_compat_tools_range_is_the_baseline_widened_by_counted_reports() {
-    let baseline = ["2.1.200-2.1.296", "0.150.1-0.163.0"];
-    assert_eq!(
-        ranges(Vec::new()),
-        (baseline.map(Into::into).into(), Vec::new())
-    );
+    let baseline = ["2.1.200-2.1.296", "0.150.1-0.163.0"].map(String::from);
+    assert_eq!(ranges(&[]), (baseline.to_vec(), vec![]));
+    let [claude, codex] = PINNED;
+    let reports = [
+        real("claude", "2.1.1000", claude, &["pass", "pass"]),
+        report("isolated_config", "codex", "0.149.0", codex, &["pass"]),
+        // Left out: a fake run, another adapter, a failed, an inconclusive
+        // and an empty run.
+        report("fake", "claude", "fake", claude, &["pass"]),
+        real("claude", "2.1.2000", "0.90.0", &["pass"]),
+        real("claude", "2.1.3000", claude, &["pass", "fail"]),
+        real("claude", "2.1.4000", claude, &["inconclusive"]),
+        real("codex", "0.1.0", codex, &[]),
+    ];
+    let wider = ["2.1.200-2.1.1000", "0.149.0-0.163.0"].map(String::from);
+    assert_eq!(ranges(&reports), (wider.to_vec(), vec![]));
 
-    use Outcome::{Fail, Inconclusive, Pass};
-    let counted = vec![
-        real("claude", "2.1.1000", CLAUDE_ACP),
-        report(Mode::IsolatedConfig, "codex", "0.149.0", CODEX_ACP, &[Pass]),
+    let wrong = [
+        real("claude", "2.1", claude, &["pass"]),
+        real("gemini", "1.0.0", claude, &["pass"]),
     ];
-    let left_out = vec![
-        report(Mode::Fake, "claude", "fake", CLAUDE_ACP, &[Pass]),
-        real("claude", "2.1.2000", "0.90.0"),
-        report(
-            Mode::RealConfig,
-            "claude",
-            "2.1.3000",
-            CLAUDE_ACP,
-            &[Pass, Fail],
-        ),
-        report(
-            Mode::RealConfig,
-            "claude",
-            "2.1.4000",
-            CLAUDE_ACP,
-            &[Inconclusive, Pass],
-        ),
-        report(Mode::RealConfig, "codex", "0.1.0", CODEX_ACP, &[]),
-    ];
-    let wider = ["2.1.200-2.1.1000", "0.149.0-0.163.0"];
-    let all = [counted, left_out].concat();
-    assert_eq!(ranges(all), (wider.map(Into::into).into(), Vec::new()));
-
-    let wrong = vec![
-        real("claude", "2.1", CLAUDE_ACP),
-        real("gemini", "1.0.0", "1.0.0"),
-    ];
-    let (spans, problems) = ranges(wrong);
-    assert_eq!(spans, baseline);
-    assert_eq!(
-        problems,
-        [
-            "r.json: the CLI version `2.1` is not x.y.z",
-            "r.json: the CLI `gemini` is neither claude nor codex"
-        ]
-    );
+    let problems = [
+        "r.json: the CLI `claude 2.1` is not claude or codex at x.y.z",
+        "r.json: the CLI `gemini 1.0.0` is not claude or codex at x.y.z",
+    ]
+    .map(String::from);
+    assert_eq!(ranges(&wrong), (baseline.to_vec(), problems.to_vec()));
     for text in ["+1.0.0", "1.0.0.0", "1..0", "1.0.x", ""] {
         assert_eq!(version(text), None, "{text}");
     }
 }
 
 #[test]
-fn unit_compat_tools_manifest_holds_the_range_the_reports_give() {
-    let dir = work_tree("reports-manifest");
+fn unit_compat_tools_reports_conform_and_give_the_manifest_its_ranges() {
+    let dir = TempDir::new("compat-reports");
     let root = dir.path();
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    put(root, report::SCHEMA, &report::schema());
+    let manifest = fs::read_to_string(repo.join(MANIFEST)).unwrap();
+    put(root, MANIFEST, &manifest);
     let before = Manifest::load(&root.join(MANIFEST)).unwrap();
-    let wider = real("claude", "2.1.1000", &before.claude_agent_acp.version);
-    put(root, "wider.json", &serde_json::to_string(&wider).unwrap());
-    let problems = run(root, false).unwrap();
-    assert_eq!(
-        problems,
-        [
-            "runtime/manifest.json: cli.claude.verified is 2.1.200-2.1.296, the reports give \
-          2.1.200-2.1.1000: cargo xtask compat-reports --write"
-        ]
-    );
+    let check = |write| run(root, write).unwrap();
+    assert_eq!(check(false), Vec::<String>::new(), "no reports");
 
-    // Nothing is written while a report is wrong.
-    put(root, "broken.json", "{}");
-    assert_eq!(run(root, true).unwrap().len(), 1);
+    let good = real("claude", "2.1.1000", PINNED[0], &["pass"]);
+    put(root, &format!("{DIR}/claude/good.json"), &good.to_string());
+    let mut stray = good.clone();
+    stray["scenarios"][0]["stray"] = true.into();
+    put(root, &format!("{DIR}/stray.json"), &stray.to_string());
+    let mut head = good;
+    head["commit"] = "HEAD".into();
+    put(root, &format!("{DIR}/head.json"), &head.to_string());
+    put(root, &format!("{DIR}/notes.txt"), "not a report");
+    // Nothing is written while a report is wrong, though `good` widens the range.
+    let problems = check(true);
+    assert_eq!(problems.len(), 2, "{problems:#?}");
+    let head = format!("{DIR}/head.json: the commit is not a full hash");
+    assert_eq!(problems[0], head);
+    assert!(problems[1].starts_with(&format!("{DIR}/stray.json: unknown field `stray`")));
     assert_eq!(Manifest::load(&root.join(MANIFEST)).unwrap(), before);
-    fs::remove_file(root.join(DIR).join("broken.json")).unwrap();
 
-    assert_eq!(run(root, true).unwrap(), Vec::<String>::new());
+    fs::remove_file(root.join(DIR).join("stray.json")).unwrap();
+    fs::remove_file(root.join(DIR).join("head.json")).unwrap();
+    let stale = "runtime/manifest.json: cli.claude.verified is 2.1.200-2.1.296, the reports \
+        give 2.1.200-2.1.1000: cargo xtask compat-reports --write";
+    assert_eq!(check(false), [stale]);
+    assert_eq!(check(true), Vec::<String>::new());
     let mut want = before;
     want.cli.claude.verified.max = "2.1.1000".into();
     assert_eq!(Manifest::load(&root.join(MANIFEST)).unwrap(), want);
-    assert_eq!(run(root, false).unwrap(), Vec::<String>::new());
+    assert_eq!(check(false), Vec::<String>::new());
+
+    fs::write(root.join(report::SCHEMA), "{}\n").unwrap();
+    let schema = format!(
+        "{} is stale: UPDATE_GOLDEN=1 cargo test -p xtask",
+        report::SCHEMA
+    );
+    assert_eq!(check(false), [schema]);
 }

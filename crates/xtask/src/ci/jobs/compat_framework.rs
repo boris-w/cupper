@@ -47,44 +47,39 @@ mod tests {
     use super::*;
     use crate::testutil::{TempDir, clean_repo, git as run_git};
 
-    /// A branch off `main` with one commit that adds `path`.
-    fn branch_adding(name: &str, path: &str) -> TempDir {
-        let repo = clean_repo(name);
-        let dir = repo.path();
-        run_git(dir, &["branch", "-M", "main"]);
-        run_git(dir, &["checkout", "--quiet", "-b", "task"]);
-        let file = dir.join(path);
-        fs::create_dir_all(file.parent().expect("a parent")).expect("mkdir");
-        fs::write(&file, "changed\n").expect("write");
-        run_git(dir, &["add", path]);
-        run_git(dir, &["commit", "--quiet", "-m", "task"]);
-        repo
-    }
-
     #[test]
     fn unit_compat_tools_ci_pr_runs_the_framework_only_for_its_paths() {
-        let elsewhere = branch_adding("compat-elsewhere", "crates/cupper-host/src/lib.rs");
-        let logs = TempDir::new("compat-elsewhere-logs");
-        let mut ctx = JobCtx::new(elsewhere.path(), logs.path(), "compat-framework");
+        let paths = [
+            ("crates/cupper-host/tests/compat/scenarios.rs", true),
+            ("crates/xtask/src/compat/report.rs", true),
+            ("testdata/compat/reports/a.json", true),
+            ("crates/cupper-fake-agent/src/main.rs", false),
+            ("crates/cupper-host/tests/compat.rsx", false),
+        ];
+        for (path, ours) in paths {
+            assert_eq!(git::touches(COMPAT_PATHS, path), ours, "{path}");
+        }
+        // A branch off main that changes something else: both steps skipped.
+        let repo = clean_repo("compat-paths");
+        let dir = repo.path();
+        let commit = |path: &str| {
+            fs::create_dir_all(dir.join(path).parent().unwrap()).unwrap();
+            fs::write(dir.join(path), "changed\n").unwrap();
+            run_git(dir, &["add", path]);
+            run_git(dir, &["commit", "--quiet", "-m", path]);
+        };
+        run_git(dir, &["branch", "-M", "main"]);
+        run_git(dir, &["checkout", "--quiet", "-b", "task"]);
+        commit("crates/cupper-host/src/lib.rs");
+        let logs = TempDir::new("compat-paths-logs");
+        let mut ctx = JobCtx::new(dir, logs.path(), "compat-framework");
         ctx.target = "pr";
-        run(&mut ctx).expect("skipped");
-        assert_eq!(ctx.skipped, STEPS);
-        assert_eq!((ctx.passed, ctx.failed), (0, 0));
-
-        let scenarios = "crates/cupper-host/tests/compat/scenarios.rs";
-        let suite = branch_adding("compat-suite", scenarios);
-        assert!(!git::untouched_since_main(suite.path(), COMPAT_PATHS).expect("git"));
-        for path in [
-            "crates/xtask/src/compat/report.rs",
-            "testdata/compat/reports/a.json",
-        ] {
-            assert!(git::touches(COMPAT_PATHS, path), "{path}");
-        }
-        for path in [
-            "crates/cupper-fake-agent/src/main.rs",
-            "crates/cupper-host/tests/compat.rsx",
-        ] {
-            assert!(!git::touches(COMPAT_PATHS, path), "{path}");
-        }
+        run(&mut ctx).unwrap();
+        assert_eq!(
+            (ctx.skipped, ctx.passed + ctx.failed),
+            (STEPS.map(Into::into).into(), 0)
+        );
+        commit("testdata/compat/reports/a.json");
+        assert!(!git::untouched_since_main(dir, COMPAT_PATHS).unwrap());
     }
 }

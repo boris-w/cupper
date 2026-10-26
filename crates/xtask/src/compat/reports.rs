@@ -26,6 +26,7 @@ pub const USAGE: &str = "usage: cargo xtask compat-reports [--write]
 /// The committed reports: every `.json` file in it, subdirectories included.
 pub const DIR: &str = "testdata/compat/reports";
 const MANIFEST: &str = "runtime/manifest.json";
+const WRITE: &str = "cargo xtask compat-reports --write";
 
 /// ADR-08's verified ranges, before any report: the CLI, its lowest and its
 /// highest version. The order of `cli` in the manifest.
@@ -73,31 +74,28 @@ fn run(root: &Path, write: bool) -> Result<Vec<String>> {
     }
     let mut reports = Vec::new();
     for path in files(&root.join(DIR))? {
-        let shown = path
-            .strip_prefix(root)
-            .unwrap_or(&path)
-            .display()
-            .to_string();
-        match report::parse(&fs::read_to_string(&path)?) {
-            Ok(read) => {
-                let found = report::problems(&read);
-                problems.extend(
-                    found
-                        .into_iter()
-                        .map(|problem| format!("{shown}: {problem}")),
-                );
-                reports.push((shown, read));
+        let shown = path.strip_prefix(root)?.display().to_string();
+        let read = match report::parse(&fs::read_to_string(&path)?) {
+            Ok(read) => read,
+            Err(err) => {
+                problems.push(format!("{shown}: {err}"));
+                continue;
             }
-            Err(err) => problems.push(format!("{shown}: {err}")),
-        }
+        };
+        problems.extend(
+            report::problems(&read)
+                .iter()
+                .map(|p| format!("{shown}: {p}")),
+        );
+        reports.push((shown, read));
     }
     let path = root.join(MANIFEST);
     let mut manifest = Manifest::load(&path)?;
     let pinned = [
-        manifest.claude_agent_acp.version.as_str(),
-        manifest.codex_acp.version.as_str(),
+        &manifest.claude_agent_acp.version,
+        &manifest.codex_acp.version,
     ];
-    let (spans, found) = verified(&reports, pinned);
+    let (spans, found) = verified(&reports, pinned.map(String::as_str));
     problems.extend(found);
     let ranges = [&mut manifest.cli.claude, &mut manifest.cli.codex];
     for ((range, span), (cli, ..)) in ranges.into_iter().zip(spans).zip(BASELINE) {
@@ -105,11 +103,9 @@ fn run(root: &Path, write: bool) -> Result<Vec<String>> {
             range.verified = span;
         } else if range.verified != span {
             let shown = |span: &VersionSpan| format!("{}-{}", span.min, span.max);
+            let (now, given) = (shown(&range.verified), shown(&span));
             problems.push(format!(
-                "{MANIFEST}: cli.{cli}.verified is {}, the reports give {}: \
-                 cargo xtask compat-reports --write",
-                shown(&range.verified),
-                shown(&span)
+                "{MANIFEST}: cli.{cli}.verified is {now}, the reports give {given}: {WRITE}"
             ));
         }
     }
@@ -147,18 +143,13 @@ fn verified(reports: &[(String, Report)], pinned: [&str; 2]) -> (Vec<VersionSpan
     let mut spans = BASELINE.map(|(_, min, max)| [min, max].map(|v| version(v).expect("x.y.z")));
     for (shown, report) in reports.iter().filter(|(_, r)| r.mode != Mode::Fake) {
         let cli = &report.cli;
-        let Some(at) = BASELINE.iter().position(|(name, ..)| *name == cli.name) else {
-            problems.push(format!(
-                "{shown}: the CLI `{}` is neither claude nor codex",
-                cli.name
-            ));
-            continue;
-        };
-        let Some(found) = version(&cli.version) else {
-            problems.push(format!(
-                "{shown}: the CLI version `{}` is not x.y.z",
-                cli.version
-            ));
+        let at = BASELINE.iter().position(|(name, ..)| *name == cli.name);
+        let (Some(at), Some(found)) = (at, version(&cli.version)) else {
+            let what = format!(
+                "`{} {}` is not claude or codex at x.y.z",
+                cli.name, cli.version
+            );
+            problems.push(format!("{shown}: the CLI {what}"));
             continue;
         };
         if counts(report, pinned[at]) {
