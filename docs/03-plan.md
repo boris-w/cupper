@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.52
+- 版本：v1.3.53
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -277,7 +277,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T057 | （条件）Q8 后备：同一种 agent 的 prompt 全局串行（K1 已通过，不触发） | feat | 5.13 Q8、ADR-09 | T055 | 不触发：K1 已通过（T003，2026-10-19），IT-q8-fallback-claude 在 `tests/ids.toml` 里标"不适用（K1 已通过）"。原触发条件：K1 的 Q8（Claude）不通过。做：按 agent 配置的串行闸门，或只对该 agent 退回每会话一个适配器进程（按 T003 的报告二选一） | 新增 IT-q8-fallback-claude | M | 否 | H.drv |
 | T060 | Git 服务 I：GitCmd 与三档类型 | feat | 5.2.10（调用约定、三档） | T054 | 做：`GitCmd` 构造器（固定参数、绝对路径、可信 PATH、环境、工作目录、超时）、带 stdin 和 stderr 的 git 拉起辅助、三档类型从第一次调用起分开（编译期证明）、快照档的最小入口。不做：仓库档的规则与指纹（v1.3.16 起归 T097）、仓库档的执行（T098）、快照档（T061）、用户档（T123） | 新增 UNIT-git-cmd | M | 否 | H.git |
 | T061 | Git 服务 II：快照档与回合快照 | feat | 5.2.10（快照档）、5.2.6、5.9.8 | T043、T060 | 做：私有对象库、每工作区 GIT_DIR、白名单配置（含 LFS 标准取值换成绝对路径的生成）、复制 info 文件与 sharedindex、保留 mtime、自定义过滤器占位、排除超大和嵌套仓库、`snapshot.recorded`，接入快照端口；Q32 快照档逐键确认。真实 git-lfs 实测、`xtask git-lfs` 与性能基准拆给 T186（v1.3.51）。不做：diff（T120） | IT-git-snapshot-parity；新增 IT-git-racy、IT-git-filter-placeholder、IT-git-snapshot-malicious | L | 否 | H.git |
-| T186 | Git 服务 II-b：LFS 实测与快照的性能 | test | 5.2.10（快照档、LFS）、5.9.6 | T061 | 做：`cargo xtask git-lfs`（锁定版本从官方 release 下载、核对哈希、解压，请求不带个人信息）与 CI 步骤；用真实 git-lfs 跑快照档（Q32 的 LFS 部分）；PERF-snapshot 与基准数据（`perf` 作业未实现前写成每晚运行的用例）（v1.3.51 由 T061 拆出） | 新增 IT-git-lfs-snapshot、PERF-snapshot（由 T061 移来） | S | 否 | H.git、H.xt |
+| T186 | Git 服务 II-b：LFS 实测、快照的性能与回合前后的配置指纹 | test | 5.2.10（快照档、LFS）、5.9.6 | T061 | 做：`cargo xtask git-lfs`（锁定版本从官方 release 下载、核对哈希、解压，请求不带个人信息）与 CI 步骤；用真实 git-lfs 跑快照档（Q32 的 LFS 部分）；PERF-snapshot 与基准数据（`perf` 作业未实现前写成每晚运行的用例）；回合开始和结束时随快照计算仓库可执行配置指纹（T097 的纯函数），前后不同就在回合里写 `notice{repo_config_changed, params: {paths}}`（v1.3.53，T061 的发现）（v1.3.51 由 T061 拆出） | 新增 IT-git-lfs-snapshot、PERF-snapshot（由 T061 移来）、IT-git-turn-fingerprint | S | 否 | H.git、H.xt |
 | T062 | 宿主集成测试 I：网关同步、历史与通知意图 | test | 5.9.1、5.9.8；测试 #2 | T019、T029、T044、T047、T049、T059、T089、T100 | 做：真实宿主进程加 claude 形态假 agent 加 CLI 库：迁移 SP-4a 端到端测试 1–7、数据代次的进程级用例、历史与通知意图；缺陷按 1.2 的上限就地修 | IT-gw-sync、IT-NFR2-epoch、IT-history-from-host、IT-notification-intent；新增 IT-host-orphaned（回合进行中拉起宿主的父进程退出：不再开始新回合，回合结束后有序退出） | L | 否 | H.gw、H.orch |
 | T063 | 宿主集成测试 II：驱动与回合（K 清单） | test | 5.9.1、5.6.9 | T008、T009、T037、T044、T055 | 做：claude 形态假 agent 的进程级 K 清单用例；多次 resume 同一个会话后，断言宿主侧没有累积进程（上游 #1011，Q43）；依赖一满足就派发；缺陷按 1.2 的上限就地修。不做：codex 形态（T112） | IT-K1-close-resume、IT-K5-withdraw、IT-K6-crash-resume（含多次 resume 后的进程数）、IT-K6-output-then-crash、IT-K9-autonomous、IT-K14-old-cli-auth、IT-auth-none、IT-K19-unknown-kind-privileged、IT-thought-claude、IT-plan-entries | M | 否 | H.orch、H.drv |
 | T064 | 兼容套件框架 | feat | 5.9.5、5.1.6（compat-framework、testdata-scan） | T044、T047、T056、T116 | 做：`cargo xtask compat`（5.9.5 的剧本全集，含 Q8、未信任项目、Q28、Q34、思考流）、只断言结构、真实配置的前后哈希对比、报告与 JSON schema、录制脱敏并过本机敏感词清单后入库、`--fake`（含可重复地用假 agent 经宿主产出 B 层录制与金样例，替换 T065 首批录制用的一次性程序，v1.3.47）；真实模式的自我约束（每个剧本显式设权限模式：Claude `default`、Codex `read-only` 或 `workspace-write`；拒绝 privileged 选项和放宽档位，除非剧本声明且只作用于临时仓库；临时仓库只建在每个用户自己的临时目录）；`xtask ci compat-framework`；`testdata-scan` 加报告校验和已验证范围重算；`tools/rec-shape-diff`；`lsof` 断言 | `xtask ci compat-framework` 通过；新增 UNIT-compat-report、UNIT-compat-guards | L | 否 | H.xt、H.fake |
@@ -1720,7 +1720,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T057 （条件）Q8 后备：同一种 agent 的 prompt 全局串行（K1 已通过，不触发）
 - [x] T060 Git 服务 I：GitCmd 与三档类型
 - [ ] T061 Git 服务 II：快照档与回合快照
-- [ ] T186 Git 服务 II-b：LFS 实测与快照的性能
+- [ ] T186 Git 服务 II-b：LFS 实测、快照的性能与回合前后的配置指纹
 - [x] T062 宿主集成测试 I：网关同步、历史与通知意图
 - [ ] T063 宿主集成测试 II：驱动与回合（K 清单）
 - [ ] T064 兼容套件框架
@@ -1912,3 +1912,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.50 | 2026-10-20 | T185 写完第一版后用它自己统计为新增 286 行，超过硬停止线 240（rustfmt 展开、历史试跑必需的 `--rev`/`--main` 约 20 行、统计到工作区），在补文档和跑 CI 之前停下。剩下的是模板、流程文档与历史试跑，代码只再动十几行：编排者裁定上限约 300、硬停止线 330 |
 | v1.3.51 | 2026-10-26 | T061 开工前按模块估计约 1,140 行，按最近几个任务的实际偏差乘 1.2 约 1,370，越过停止线 1,300：真实 git-lfs 实测、`xtask git-lfs` 与 CI 步骤、PERF-snapshot 拆给新增的 T186（约 180 行，IT-git-lfs-snapshot、PERF-snapshot 由 T061 移来），依赖 T061；T061 约 1,190，停止线不变；T099 改为也依赖 T186 |
 | v1.3.52 | 2026-10-26 | RustSec 新发布 RUSTSEC-2026-0382（`rustls-webpki 0.103.15` 可能接受经已不受信任的 emSign 中间证书的证书链，经 `reqwest`、`rustls` 进入 `cupper-host`），所有分支的 license 作业因此失败。编排者在 T178 分支上单独提交升到 0.103.16（只改 `Cargo.lock` 一个包），随 T178 进 main，其他分支合 main 后恢复 |
+| v1.3.53 | 2026-10-26 | T061 评审：设计 5.2.10 要求回合开始和结束时随快照计算仓库可执行配置指纹、前后不同写 `notice{repo_config_changed}`，但没有任务认领（T097 只做了纯函数，T098 只在仓库档调用前后比对）。并进 T186（同一执行者、约 80 行，新增 IT-git-turn-fingerprint）。T069 的发现：信任在准备阶段恢复时，这个回合仍按附加时的设定不加载项目配置，M1a 保持现状、写进设计 5.2.6，是否以加载方式重新附加留给 T141 |
