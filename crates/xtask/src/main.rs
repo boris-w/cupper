@@ -5,6 +5,7 @@ mod clock;
 mod codesign;
 mod host_bundle;
 mod runtime_pack;
+mod size;
 #[cfg(test)]
 mod testutil;
 
@@ -17,13 +18,15 @@ fn main() -> ExitCode {
         Some((task, rest)) if task == "runtime-pack" => runtime_pack::main(rest),
         Some((task, rest)) if task == "host-bundle" => host_bundle::main(rest),
         Some((task, rest)) if task == "lock" => ci::lock::main(rest),
+        Some((task, rest)) if task == "size" => size::main(rest),
         _ => {
             eprintln!(
-                "{}\n\n{}\n\n{}\n\n{}",
+                "{}\n\n{}\n\n{}\n\n{}\n\n{}",
                 ci::usage(),
                 runtime_pack::USAGE,
                 host_bundle::USAGE,
-                ci::lock::USAGE
+                ci::lock::USAGE,
+                size::USAGE
             );
             ExitCode::from(2)
         }

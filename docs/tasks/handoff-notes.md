@@ -388,6 +388,11 @@
 | T069 | 会话 actor 在同一步里 await 写 blob（T177），写完之前不处理别的输入，32 MiB 的输出在慢盘上可能阻塞会话百毫秒级；故障测试里出问题的话，可改成后台写、挂起 `item.completed`。性质测试 `session_props` 不交回 `Spill`，生成长输出时要在测试驱动里补上 | T177 |
 | e2e（T178 及以后） | T176 的测试工具：`tools/e2e/src/raw.ts` 的原始协议客户端（自己分帧、自己给 `auth`，能发 `0x02` 分片）与假宿主（占住 `<数据目录>/run/host.sock`，先发 `host/hello`，`host_proof` 是随机值，记下对方发来的一切）；E2E-SEC-egress 的做法是 `sampleNetwork` 加正对照（假 agent 拉起 `nc -u -w 20 192.0.2.1 9`，`connect` 不发包）。e2e 构建的 CLI 不带密钥时只按 `peer` 弱校验，会连上假宿主 | T176 |
 | 网关的上传 | 每条连接最多 64 个未决 blob（`gateway/blobs.rs`，T176），零长度分片和乱序、超限留下的空条目都算在内，第 65 个的分片丢弃、它的 `blob/put` 以"分片加起来不等于大小"失败；只有带 `write` 的连接能上传 | T176 |
+| T064 | 首批 B 层录制用的一次性生成程序在 `docs/tasks/T065-gold-b-runner/generate.rs`（物料，不编译），用法在同目录 `notes.md`；可重复的生成器由 `xtask compat --fake` 接手（计划 v1.3.47）。录制放在 `testdata/recordings/cupper-fake-agent/0.0.0/fake/`，金样例在 `testdata/golden/gold-b/` 的同一路径；更新金样例用 `UPDATE_GOLDEN=1` | T065 |
+| 下一个动会话 actor 的任务 | 附加时 `session.capabilities` 连写两条（第一条命令列表为空，第二条来自 `available_commands_update`），附加的应答与第一条更新在 actor 里走两个通道、写进流的先后取决于时机。只影响事件顺序与条数；是否合并成一条由那个任务决定（T062、T065 都碰到） | T065 |
+| 拿原始帧比对的任务 | 宿主发给 agent 的 JSON-RPC id 是 UUID，比对时不能按字面比，要像 T067 的回放那样重映射；B 层的同步依赖 SDK 3.3.0 的按序分发（`gold_b_fake_sdk_answers_an_unknown_request_after_what_came_before`），升级 SDK 时这条用例会先失败 | T065 |
+| 所有任务（执行者） | **每次提交后跑一次 `cargo xtask size`**（T185）：统计本分支自己的增删（排除 lock、生成物、`docs/`、`testdata/`、截图基线、二进制，合进来的 main 不算），对照任务书的停止线报告余量，到 90% 或越线时以 `!!` 标出；推算或实际越线就停下汇报。新文件要先 `git add` 才计入。工具读当前 checkout 里的任务书，编排者在 main 上的裁定要等 main 合进分支后才读得到 | T185 |
+| 编排者写任务书 | 任务书的"规模"一节用模板里固定格式的一行：`- 停止线：<n>；硬停止线：<n>`（`cargo xtask size` 优先认它）；裁定改上限时直接改这一行，并在通知执行者时写明新数 | T185 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
