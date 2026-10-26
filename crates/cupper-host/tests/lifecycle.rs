@@ -22,6 +22,7 @@ use cupper_cli::verify::HostCheck;
 use cupper_host::clock::{Clock, SystemClock};
 use cupper_host::diag::log::log_dir;
 use cupper_host::driver::runtime::launch;
+use cupper_host::durations::{RUNTIME_BUNDLE, RUNTIME_DOWNLOAD};
 use cupper_host::gateway::listen::HostLock;
 use cupper_host::gateway::testkit::{self, KEY, TempDir};
 use cupper_host::store::meta::{self, MetaKey};
@@ -1443,7 +1444,11 @@ async fn it_runtime_startup_installs_from_the_registry_or_waits_for_an_upgrade()
     let (data_dir, mut host) = bundled_host(&dir, |_| ()).await;
     drop(connect(&data_dir).await);
     let clock = SystemClock::new();
-    let give_up = clock.now_mono() + PATIENCE;
+    // The install starts the node it copied, a new file the system scans
+    // first: 5 to 43 s at a load of 40 (T196). The test allows what the host
+    // allows the download and the bundling.
+    let install = RUNTIME_DOWNLOAD.design_value() + RUNTIME_BUNDLE.design_value();
+    let give_up = clock.now_mono() + install + PATIENCE;
     while adapter(&data_dir, "runtime") != ["ready"] {
         assert!(
             clock.now_mono() < give_up,
