@@ -169,11 +169,10 @@ fn unit_trust_scan_limits_count_files_and_bytes_with_link_targets() {
 }
 
 /// Directory links that fork at every level without a cycle: 2^20 visits
-/// without the guard, which stops the walk at the 20,001st entry.
+/// without the guard, which stops the walk at the 20,001st entry. The count
+/// says so whatever the machine's load, which a time limit did not (T196).
 #[test]
 fn unit_trust_scan_forking_directory_links_hit_the_entry_limit() {
-    use crate::clock::{Clock, SystemClock};
-
     let t = Tree::new("fork");
     const LEVELS: usize = 20;
     fs::create_dir(t.path("ws/.claude")).unwrap();
@@ -189,12 +188,10 @@ fn unit_trust_scan_forking_directory_links_hit_the_entry_limit() {
         symlink(&next, dir.join("a")).unwrap();
         symlink(&next, dir.join("b")).unwrap();
     }
-    let clock = SystemClock::new();
-    let started = clock.now_mono();
-    let err = t.scan().unwrap_err();
-    let took = clock.now_mono().saturating_duration_since(started);
+    let mut visited = 0;
+    let err = walk::walk_counting(&t.path("ws"), None, &mut visited).unwrap_err();
     assert_eq!(err.code(), "too_many_entries", "{err}");
-    assert!(took < std::time::Duration::from_secs(10), "{took:?}");
+    assert_eq!(visited, MAX_ENTRIES);
 }
 
 #[test]
