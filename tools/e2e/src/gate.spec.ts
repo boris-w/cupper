@@ -107,8 +107,10 @@ async function cover(cupper: Cupper) {
     await cupper.app.browserWindow(cupper.window)
   ).evaluate((w) => w.getBounds());
   await cupper.app.evaluate(({ BrowserWindow }, bounds) => {
+    // Not shown on creation, which would activate the app (T195).
     const cover = new BrowserWindow({
       ...bounds,
+      show: false,
       frame: false,
       alwaysOnTop: true,
       focusable: false,
