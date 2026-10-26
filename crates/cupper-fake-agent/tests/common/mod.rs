@@ -201,13 +201,19 @@ impl Fake {
         }
     }
 
-    /// True if no matching message arrives within `ms`.
+    /// True if no matching message arrives within `ms`. The agent must stay
+    /// up: once its stdout has closed nothing can arrive, and one that exited
+    /// would pass for quiet (T189).
     pub fn quiet(&mut self, ms: u64, matches: impl Fn(&Value) -> bool) -> bool {
         while let Some(message) = self.poll(Duration::from_millis(ms)) {
             if matches(&message) {
                 return false;
             }
         }
+        assert!(
+            !self.closed,
+            "the agent's stdout closed: it exited, it is not quiet"
+        );
         true
     }
 
