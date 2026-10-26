@@ -154,3 +154,8 @@ M1 里的 P1 只有 NFR-13（防休眠）顺带做进 M1b，其余 P1 留给 M2�
 - M1a 协议 crate 合并时，把 `protocol/schema/v1.json` 复制成 `protocol/released/v1-m1a.json`；`tools/schema-compat` 对它做方向敏感的比对，M1b 期间出现破坏性改动，CI 的 `protocol` 作业直接失败。
 - 同时为 `@cupper/shell-api` 的类型声明生成一份快照（`packages/shell-api/api-m1a.d.ts`），CI 比对：只允许新增成员和联合类型的新分支。
 - 冻结之后确实需要破坏性改动时，按 ADR-04 升主版本，不在 v1 里改。
+- **已冻结（T016，2026-10-26）**：`ci protocol` 多了三步：`schema-compat` 对 `v1-m1a.json` 比对；`integers` 检查导出文件里的整数都有界、不超过 ±(2^53−1)、不带 `format`；`shell-api-m1a` 由 `packages/shell-api/src/frozen.ts` 核对冻结成员还在、旧的调用仍能通过类型检查、冻结联合的旧分支都还在。
+  - **判为附加**：加方法、加可选字段、开放枚举加取值、开放联合加分支（含新增一种事件、视图里新增成员）。
+  - **判为破坏**：其余的改动。
+  - **方向**：由引用推出；没有被引用到的定义按两个方向从严判。
+  - **不比较**：描述、数值界的放宽、`x-errors` 的增减、`x-milestone`。

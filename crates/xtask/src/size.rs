@@ -28,6 +28,9 @@ pub const EXCLUDED: &[&str] = &[
     "tools/ui-screenshots/baselines/",
     "packages/protocol/src/gen/",
     "protocol/schema/",
+    // The contract as frozen in M1a (T016): copies, not written by hand.
+    "protocol/released/",
+    "packages/shell-api/api-m1a.d.ts",
     "protocol/fixtures/views.json",
     "runtime/manifest.json",
     "runtime/locks/",
@@ -223,6 +226,8 @@ mod tests {
             "tools/ui-screenshots/baselines/shell.png",
             "packages/protocol/src/gen/zod.gen.ts",
             "runtime/manifest.json",
+            "protocol/released/v1-m1a.json",
+            "packages/shell-api/api-m1a.d.ts",
         ] {
             assert!(excluded(path), "{path}");
         }

@@ -11,7 +11,7 @@ use std::time::Duration;
 use cupper_protocol::annotations::{X_BUILDS, X_MILESTONE};
 use cupper_protocol::domain::{ClientRole, PrincipalKind};
 use cupper_protocol::ids::{ConnId, SessionId};
-use cupper_protocol::methods::admin::{DiagRecordingExport, SettingsUpdate};
+use cupper_protocol::methods::admin::{DiagRecordingExport, SettingsGet, SettingsUpdate};
 use cupper_protocol::methods::catalog::catalog;
 use cupper_protocol::methods::git::GitRevert;
 use cupper_protocol::methods::project::{AgentsCapabilities, AgentsRefresh};
@@ -408,8 +408,6 @@ const ALLOWED: &[(&str, Why)] = {
         ("session/rename", Later(M1b)),
         ("session/restore", Later(M1b)),
         ("session/set_config", Later(M1b)),
-        ("settings/get", Until("T036")),
-        ("settings/update", Until("T036")),
         ("stream/ack", Later(M3)),
         // Build `test-harness` only.
         ("test/clock_advance", Builds(HARNESS)),
@@ -432,7 +430,11 @@ fn notification_params(name: &str) -> Value {
 #[tokio::test]
 async fn unit_unsupported_set_is_what_the_milestones_allow() {
     let fixture = Fixture::new();
-    let routes = fixture.start();
+    let mut routes = fixture.start();
+    // The host's settings (T036); a stub here.
+    let settings = || Arc::clone(&fixture.index) as Arc<dyn Port>;
+    routes.add::<SettingsGet>(settings());
+    routes.add::<SettingsUpdate>(settings());
     let catalog = catalog(&mut generator());
     // Every scope, so that only the table decides.
     let mut peer = Peer::new(harness());

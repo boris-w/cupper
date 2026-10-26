@@ -4,8 +4,10 @@ docs/
 spikes/
 CLAUDE.md
 pnpm-lock.yaml
-# Written by `export-schema` in its own canonical layout (`pnpm gen`).
+# Written by `export-schema` in its own canonical layout (`pnpm gen`), and
+# the copy M1a froze of it (T016), byte for byte.
 protocol/schema/
+protocol/released/
 # Written by `cargo xtask runtime-pack`; lockfiles and license texts are upstream bytes pinned by hash.
 runtime/manifest.json
 runtime/locks/
