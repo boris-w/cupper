@@ -13,13 +13,22 @@ export type Modifier = "shift" | "control" | "alt" | "meta";
  * Gives the window the focus, then waits out the second in which the guard
  * counts no key after a window gains focus (its rule 7). A test that counts
  * on the focus, through keys or clicks as real input, is tagged `@focus`.
+ *
+ * The app takes the focus even from the active app, and the second counts
+ * from when the window has it: a window that only asks may get it a while
+ * later, on a loaded machine seconds later, and a key in the second after
+ * that does not count (T189).
  */
 export async function focusWindow(cupper: Cupper): Promise<void> {
   const window = await cupper.app.browserWindow(cupper.window);
+  await cupper.app.evaluate(({ app }) => app.focus({ steal: true }));
   await window.evaluate((w) => {
     w.focus();
     w.webContents.focus();
   });
+  await expect
+    .poll(() => window.evaluate((w) => w.isFocused()), { message: "the window has the focus" })
+    .toBe(true);
   await cupper.window.waitForTimeout(1100);
 }
 
