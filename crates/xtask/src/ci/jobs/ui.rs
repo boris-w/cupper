@@ -26,10 +26,7 @@ pub const UI_PATHS: &[&str] = &[
 const SUITE: &str = "tools/ui-screenshots";
 
 pub fn run(ctx: &mut JobCtx) -> Result<()> {
-    if ctx.target == "pr"
-        && let Some(changed) = git::changed_since_main(ctx.root)?
-        && !changed.iter().any(|path| touches_ui(path))
-    {
+    if ctx.target == "pr" && git::untouched_since_main(ctx.root, UI_PATHS)? {
         ctx.skip(
             "test-ui",
             "no path the screenshots depend on changed since main",
@@ -51,16 +48,6 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     ctx.playwright("test-ui", &mut test)
 }
 
-fn touches_ui(path: &str) -> bool {
-    UI_PATHS.iter().any(|ui| {
-        if ui.ends_with('/') {
-            path.starts_with(ui)
-        } else {
-            path == *ui
-        }
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -75,7 +62,7 @@ mod tests {
             "pnpm-lock.yaml",
             "package.json",
         ] {
-            assert!(touches_ui(path), "{path}");
+            assert!(git::touches(UI_PATHS, path), "{path}");
         }
         for path in [
             "crates/cupper-host/src/lib.rs",
@@ -83,7 +70,7 @@ mod tests {
             "docs/tasks/T118-ui-screenshots/notes.md",
             "packages/ui-core-extra/x.ts",
         ] {
-            assert!(!touches_ui(path), "{path}");
+            assert!(!git::touches(UI_PATHS, path), "{path}");
         }
     }
 }

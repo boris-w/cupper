@@ -48,6 +48,23 @@ pub fn changed_since_main(root: &Path) -> Result<Option<Vec<String>>> {
     Ok(Some(names.lines().map(str::to_owned).collect()))
 }
 
+/// Whether `ci pr` skips a job that depends on `paths` only: the commits
+/// since `main` change none of them. Never when there is nothing to compare.
+pub fn untouched_since_main(root: &Path, paths: &[&str]) -> Result<bool> {
+    let Some(changed) = changed_since_main(root)? else {
+        return Ok(false);
+    };
+    Ok(!changed.iter().any(|path| touches(paths, path)))
+}
+
+/// Whether `path` is one of `paths`: a directory (ending in `/`) or a file.
+pub fn touches(paths: &[&str], path: &str) -> bool {
+    paths.iter().any(|dep| match dep.strip_suffix('/') {
+        Some(_) => path.starts_with(dep),
+        None => path == *dep,
+    })
+}
+
 pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String> {
     let output = Command::new("git")
         .arg("-C")

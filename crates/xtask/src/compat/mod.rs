@@ -4,10 +4,12 @@
 //! writes what happened; this makes the report of it, compares the real
 //! configuration before and after a real run ([`config`]), and with
 //! `--write` takes the recordings into `testdata/` ([`record`]).
+//! `cargo xtask compat-reports` checks the committed reports ([`reports`]).
 
 mod config;
 mod record;
 pub mod report;
+pub mod reports;
 
 use std::fs;
 use std::path::{Path, PathBuf};

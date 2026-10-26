@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.62
+- 版本：v1.3.63
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -265,6 +265,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T189 | 两处偶发失败 | fix | 5.9.4、1.8 | — | 做：E2E-SEC-real-input（`test-e2e-focus` 段里等面板"手动"提示超时）与 `unit_fake_scripts_faults_per_segment`（`exit_on_start` 的假 agent 10 s 内没退出），在高负载下复现、查明根因并修复；T099 要求同一提交上连续 20 次全绿（v1.3.57，T069 的 CI 撞上） | 不新增编号 | S | 否 | C |
 | T190 | 可选字段不发 `null` 的守卫 | test | 5.3.1、5.3.10 | T016 | 做：守卫测试：序列化 `cupper-protocol` 的金样例与夹具后，断言 schema 里的非必填属性上没有 `null`（值本身可为 `null` 的具名定义如 `CliPath` 除外），漏写 `skip_serializing_if` 时失败（v1.3.58，T016 的遗留） | 新增 UNIT-proto-absent-not-null | S | 否 | P |
 | T191 | 性能趋势补全 | test | 5.9.6 | T117 | 做：PERF-snapshot 每种情况补到 30 个样本（现为 T186 的 5 个，p95 只能取最大值）；PERF-bridge-gate 的事件循环延迟 p99 写进历史：e2e 夜间跑 `gate.spec.ts` 时设 `CUPPER_PERF_OUT`，`perf` 作业里统计、追加、判定的代码抽成共用函数给 e2e 作业调用，绝对闸门 p99 < 5 ms 仍由用例自己断言（v1.3.59，T117 的遗留） | 不新增编号 | S | 知情：e2e 要开窗口 | H.xt、H.git、C |
+| T195 | 不需要焦点的 e2e 用例不抢焦点 | test | 5.9.4、1.8 | T093、T189 | 做：不带 `@focus` 的 e2e 用例启动的 App 不激活、不抢前台、不出现在 Dock（只在 e2e 构建里，由启动参数或环境变量打开，发布构建的行为不变）；用前台应用采样证明这一阶段前台从不是测试 App；`@focus` 用例照旧抢焦点；被遮挡窗口的降频参数与 `throttled` 测量照旧有效（v1.3.63，用户决定：e2e 跑的时候不要接管桌面） | 不新增编号 | S | 知情：要跑 e2e | D.main、C |
 | **T044** | 会话 actor II：档位、越权、崩溃与晚到输出 | feat | 5.2.6（配置项、崩溃与恢复、晚到的工具输出） | T035、T043、T088、T095、T098 | 做：档位核对与 `config_unconfirmed`、回合中越权先改回再中断、发送闸门（暂停期间空闲时也不开回合）、`session/confirm_config`、`facts` 的 `mode_tier`（`session/set_config` 仍是 M1b，越权判断预留它作为合法来源）；适配器退出后 resume 与 `agent_restarted`、K6、K7；`late_tool_output` 与 `may_still_run` 的核对。不做：信任门控（v1.3.19 起归 T109）；进程级集成测试（T062、T063、T068） | 新增 IT-orch-gating（进程内） | L | 否 | H.orch |
 | T045 | cupper-cli I：客户端库、连接与宿主校验 | feat | 5.2.14、5.3.3 | T012、T014、T020 | 做：迁移 SP-4a 的 client：构建种类（特性 `dev-auth`、`self-use`、`test-harness`，都不开为发布）与 `--build-info`、套接字发现、按构建种类校验宿主（5.8.1：发布按签名要求；自用按编译期写入的宿主 cdhash，经审计令牌比对，之后每次读取比对令牌；开发按同目录宿主文件的 cdhash 弱校验并在输出里标"宿主未经签名校验"；e2e 由 T039 补上 `harness` 证明），发布构建拒绝 `weak_auth`；连接与握手（peer）、请求关联、`command_id`。不做：Mirror 与客户端同步状态机（v1.3.6 起归 T049）；子命令；cdhash 的写入（T005） | 新增 UNIT-cli-host-verify（四种构建的校验分支；cdhash 不符时拒绝连接）、UNIT-cli-client（握手与请求关联） | M | 否 | H.cli |
 | T049 | cupper-cli I-b：Mirror 与客户端同步状态机 | feat | 5.2.14、5.3.3 | T045 | 做：纯核心 `Mirror<V: View>`（只能经 `Mirror::index()`、`Mirror::session(id)` 构造）；`Waiting`、`Loading`、`Live` 三态；只有游标对得上的 `replay` 才保留视图和游标，其余（包括未知的 mode）一律丢弃；快照页核对 `at_seq`、`epoch` 和页序号；连续性缺口带游标重新订阅，`ViewError` 或信封解码失败不带游标重新订阅；`stream/reset` 保留游标；`Waiting` 时旧订阅的数据一律忽略。不做：子命令（T046） | 新增 UNIT-mirror | S | 否 | H.cli |
@@ -1733,7 +1734,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T063 宿主集成测试 II：驱动与回合（K 清单）
 - [x] T064 兼容套件框架
 - [ ] T187 兼容套件 II：真实模式与安全约束
-- [ ] T188 兼容套件 III：报告校验与已验证范围
+- [x] T188 兼容套件 III：报告校验与已验证范围
 - [ ] T192 兼容套件 IV：剧本补全
 - [ ] T194 兼容套件 V：审阅工具
 - [x] T065 B 层金样例运行器
@@ -1775,6 +1776,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T190 可选字段不发 `null` 的守卫
 - [ ] T191 性能趋势补全
 - [ ] T193 守卫的样例补全
+- [ ] T195 不需要焦点的 e2e 用例不抢焦点
 - [ ] T099 M1a 退出验收
 - [x] T100 索引 II：状态计算、已读、在场与通知意图
 - [x] T109 会话 actor II-b：信任门控
@@ -1938,3 +1940,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.60 | 2026-10-26 | T187 开工前按守则第 8 条拆分（估计约 1,200 行，区间 1,050–1,300；T064 拆分时估的 740 行漏了 21 个剧本的真实提示词与准备文件、报告的新取值、`cli_sessions`、真实报告入库，以及几个剧本的布置）：T187 收窄为真实模式与安全约束（约 660 行），新增 T192 剧本补全（其余 10 个剧本，约 540 行）。两者都改执行者与剧本表，串行；T066 改为也依赖 T192 |
 | v1.3.61 | 2026-10-26 | T190 写完才统计行数，+287，越过硬停止线 240（守则第 8 条要求每完成一个模块就统计）。守卫本身已完成、负面样例有效，裁定上限提到 310、硬停止线 330，不压缩。样例只覆盖到 211 个可选属性中的 134 个，其余由新增的 T193 按 schema 生成实例补上；T151 改为也依赖 T193 |
 | v1.3.62 | 2026-10-26 | T188 开工前按守则第 8 条拆分（直接相加约 690 行，乘 1.2 约 830，超过硬停止线 600）：T188 收窄为 Rust 的报告校验、已验证范围与 compat-framework 进 `ci pr`（约 345 行，UNIT-compat-tools 留下）；新增 T194，承接 TS 的 `rec-shape-diff` 与 `trace-ids --compat`（约 485 行，新增 UNIT-rec-shape-diff、UNIT-trace-ids-compat）。两者互不依赖；T066 改为也依赖 T194。另：v1.3.61 插入 T193 时把 T188 一行接到了同一行末尾，本次修正 |
+| v1.3.63 | 2026-10-26 | 用户决定派 T195：e2e 跑的时候每个用例的 App 都会激活、抢前台，用户没法同时用这台电脑。只有 `@focus` 用例真正需要焦点，其余的改为不激活。另：T187、T188 写完后越过硬停止线，T187 提高上限，T188 压缩测试，记在各自任务书的第二次裁定里 |
