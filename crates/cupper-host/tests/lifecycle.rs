@@ -1024,6 +1024,10 @@ async fn it_cli_commands_read_elevate_write_and_answer() {
             AND json LIKE '%{said}%' LIMIT 1"
         );
         until(&data_dir, "host.db", &says, &["said"]).await;
+        // What the agent says comes before its turn ends, by tens of ms under
+        // load; a message sent in between is queued, as it should (T196).
+        let running = "SELECT CAST(count(*) AS TEXT) FROM turns WHERE status = 'running'";
+        until(&data_dir, "host.db", running, &["0"]).await;
     }
 
     // A new session, a message waited for, and an interrupt.
