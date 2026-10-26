@@ -60,6 +60,7 @@ const COMMANDS: &[&str] = &[
     "write_file",
     "permission",
     "permission_options",
+    "withdraw_after",
     "question",
     "form",
     "plan_update",
@@ -157,6 +158,9 @@ pub struct Script {
     cancel: watch::Receiver<bool>,
     /// The latest `plan_update`, shown by `plan_confirm`.
     plan: String,
+    /// `withdraw_after <ms>`: the next request is withdrawn (K5) after this
+    /// long unless answered first, as Claude withdraws on a cancel.
+    withdraw_after: Option<u64>,
 }
 
 impl Script {
@@ -177,6 +181,7 @@ impl Script {
             cwd,
             cancel,
             plan: String::new(),
+            withdraw_after: None,
         }
     }
 
@@ -324,6 +329,7 @@ impl Script {
             }
             // A command's permission with these ACP options, e.g. of a kind
             // nobody knows (E2E-SEC-panel-numbering).
+            "withdraw_after" => self.withdraw_after = Some(num(0)),
             "permission_options" => {
                 let options = serde_json::from_str(rest).map_err(|_| Error::invalid_params())?;
                 return self.permission("p1", "execute", Some(options)).await;
@@ -608,6 +614,7 @@ impl Script {
     async fn ask(&mut self, method: &str, params: Value) -> Result<Option<Value>, Error> {
         let sent = self.cx.send_request(UntypedMessage::new(method, params)?);
         let withdraw = sent.cancellation_handle();
+        let after = self.withdraw_after.take();
         let (tx, rx) = oneshot::channel();
         sent.on_receiving_result(async move |result| {
             let _ = tx.send(result);
@@ -619,6 +626,10 @@ impl Script {
                 if self.persona == Claude {
                     withdraw.cancel()?;
                 }
+                Ok(None)
+            }
+            () = real_sleep(after.unwrap_or_default()), if after.is_some() => {
+                withdraw.cancel()?;
                 Ok(None)
             }
         }
