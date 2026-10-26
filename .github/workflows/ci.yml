@@ -1,0 +1,54 @@
+# `ci pr` on GitHub Actions (design 5.1.6, T197): each of its jobs on a runner
+# of its own, as `cargo xtask ci <job> --in pr`, which skips and narrows it as
+# `ci pr` does; on every PR and every push to main. Check names are
+# `ci / <job> (<runner>)`, and main's protection rule names them.
+#
+#   rust: fmt, clippy, the tests of every feature set, the golden tests.
+#   protocol: the generated schema and TS, schema compatibility, the views.
+#   ts: prettier, ESLint, tsc, Vitest.
+#   license: cargo deny, the license gate's first layer.
+#   testdata-scan: the test ID registry, the personal data scans.
+#   compat-framework: the compat suite's framework, when a change touches it.
+#   ui: the screenshot regression, when a change touches what it shows.
+#   e2e: the smoke subset, when a change touches what the app is built from.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  job:
+    name: ${{ matrix.job }} (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { job: rust, runner: macos-15, timeout: 120 }
+          - { job: protocol, runner: ubuntu-24.04, timeout: 30 }
+          - { job: ts, runner: ubuntu-24.04, timeout: 30 }
+          - { job: license, runner: ubuntu-24.04, timeout: 30 }
+          - { job: testdata-scan, runner: ubuntu-24.04, timeout: 30 }
+          - { job: compat-framework, runner: macos-15, timeout: 60 }
+          - { job: ui, runner: macos-15, timeout: 45 }
+          - { job: e2e, runner: macos-15, timeout: 90 }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/xtask
+        with:
+          job: ${{ matrix.job }}
+          within: pr
+          runner: ${{ matrix.runner }}

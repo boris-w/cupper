@@ -16,6 +16,8 @@
 #   parts              子编号：全部子编号完成才算完成
 #   versions           MAN：证据要与这些组件的当前版本相符，如 { electron = "major" }
 #   max_age_days       MAN：证据超过这么多天就过期
+#   scenario、cli      COMPAT：兼容套件里证明它的剧本与 CLI（claude、codex），compat 套件的必须写，
+#                      一对剧本与 CLI 只证明一个编号；`trace-ids --compat <报告>` 据此读兼容报告
 # 没有产出任务的编号放在 [unplanned]；文档里形似编号、但不是用例编号的写法放在 [not-ids]；
 # MAN 的证据追加在文件末尾：
 #   [[evidence]]
@@ -586,11 +588,11 @@ GOLD-B-fake = "pr"
 [T066]
 milestone = "M1a"
 MAN-compat-claude = "man"
-COMPAT-claude-thinking = "compat"
-COMPAT-untrusted-project-claude = "compat"
-COMPAT-claude-six-sessions = "compat"
-COMPAT-claude-close-running = "compat"
-COMPAT-claude-resume-procs = "compat"
+COMPAT-claude-thinking = { suite = "compat", scenario = "thinking", cli = "claude" }
+COMPAT-untrusted-project-claude = { suite = "compat", scenario = "untrusted-project", cli = "claude" }
+COMPAT-claude-six-sessions = { suite = "compat", scenario = "six-sessions", cli = "claude" }
+COMPAT-claude-close-running = { suite = "compat", scenario = "close-running", cli = "claude" }
+COMPAT-claude-resume-procs = { suite = "compat", scenario = "resume-procs", cli = "claude" }
 # 至少覆盖普通回合、审批、取消三个剧本（K12）
 GOLD-B-claude = "pr"
 
@@ -859,7 +861,7 @@ IT-K18-upstream-retry = "pr"
 [T113]
 milestone = "M1b"
 MAN-compat-codex = "man"
-COMPAT-untrusted-project-codex = "compat"
+COMPAT-untrusted-project-codex = { suite = "compat", scenario = "untrusted-project", cli = "codex" }
 GOLD-B-codex-s07 = "pr"
 MAN-compat = { parts = ["MAN-compat-claude", "MAN-compat-codex"] }
 COMPAT-untrusted-project = { parts = ["COMPAT-untrusted-project-claude", "COMPAT-untrusted-project-codex"] }

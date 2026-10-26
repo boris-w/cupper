@@ -428,6 +428,7 @@
 | T192 | 剧本编号以 `docs/tasks/T187-compat-real-mode/notes.md` 为准；`Scenario` 类型、`loosens`、进程检查（`lsof -F`）、真实宿主的启动方式都在 T187 里 | T187（已写入 brief） |
 | T197、下一个改 e2e 调度的任务 | `ci e2e`、`ci nightly` 里 `gate.spec.ts` 和另一个 worker 的用例并行（`workers: 2`），PERF-bridge-gate 的 p99 会受旁边用例影响，趋势比单独跑时噪。重新定 workers 时考虑让它单独跑 | T191 |
 | 编排者（下次本机 `ci nightly`） | PERF-bridge-gate 的第一行历史由本机的 `ci nightly` 写入（GitHub 上的 e2e 不提交历史）；跑完连同摘要一起提交 | T191 |
+| T066、升级适配器的任务 | 评审录制用 `node tools/rec-shape-diff/src/main.ts [--json] <旧> <新>`（没有差异 0，有差异 1）；COMPAT 编号由 `trace-ids status --compat <报告>` 推导，编号在 `tests/ids.toml` 里登记了剧本和 CLI。`not_applicable`、`observed`、`real_only` 都不让编号完成；要把编号标为不适用，照计划 1.6 写 `status` 和理由 | T194 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |

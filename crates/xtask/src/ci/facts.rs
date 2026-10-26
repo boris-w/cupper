@@ -71,6 +71,11 @@ pub fn machine(root: &Path) -> String {
 /// Names that identify the local user or machine: login names, host names,
 /// and the git author. Lowercase, for case-insensitive matching.
 pub fn identity(root: &Path) -> Vec<String> {
+    // A GitHub-hosted runner's user and host are made up per machine, not a
+    // person's, and its user `runner` is also a step's name (T197).
+    if std::env::var("RUNNER_ENVIRONMENT").is_ok_and(|env| env == "github-hosted") {
+        return Vec::new();
+    }
     let mut names: Vec<String> = ["USER", "LOGNAME"]
         .iter()
         .filter_map(|var| std::env::var(var).ok())

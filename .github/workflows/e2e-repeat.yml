@@ -1,0 +1,56 @@
+# One e2e test run N times in one call on an e2e build of the commit (T197):
+# for the runs a flaky test needs, with nobody at the machine (T189, D6).
+name: e2e-repeat
+
+on:
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: The spec, from tools/e2e
+        default: src/security.spec.ts
+      test:
+        description: The test's name, or the start of it
+        default: E2E-SEC-real-input
+      times:
+        description: How many times
+        default: "50"
+
+permissions:
+  contents: read
+
+jobs:
+  repeat:
+    name: ${{ inputs.test }} × ${{ inputs.times }} (macos-15)
+    runs-on: macos-15
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: e2e
+      - name: Build
+        run: |
+          pnpm install --frozen-lockfile
+          cargo xtask runtime-pack
+          cargo build --locked -p cupper-fake-agent
+          pnpm build:e2e
+      - name: Run
+        env:
+          SPEC: ${{ inputs.spec }}
+          TEST: ${{ inputs.test }}
+          TIMES: ${{ inputs.times }}
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/repeat.json
+        run: >-
+          pnpm --filter @cupper/e2e run test:e2e:one "$SPEC" -g "$TEST"
+          --repeat-each="$TIMES" --reporter=list,json
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-repeat
+          path: |
+            repeat.json
+            tools/e2e/dist/test-results/
+          retention-days: 14
+          if-no-files-found: ignore

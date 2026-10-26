@@ -1,0 +1,16 @@
+{
+  "name": "@cupper/rec-shape-diff",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "The shape of two recordings compared, for reviewing an adapter upgrade: methods, update kinds, _meta key paths, option IDs, stop reasons and error codes (design 5.9.5).",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "vite": "8.3.3",
+    "vitest": "5.0.3"
+  }
+}

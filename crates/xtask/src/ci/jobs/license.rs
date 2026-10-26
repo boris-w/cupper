@@ -19,6 +19,10 @@ const FETCHES: u32 = 3;
 
 pub fn run(ctx: &mut JobCtx) -> Result<()> {
     advisory_db(ctx)?;
+    // The offline check reads every crate's manifest: a new machine has none.
+    let mut crates = ctx.cargo();
+    crates.args(["fetch", "--locked"]);
+    ctx.check("fetch-crates", &mut crates)?;
     let mut deny = ctx.cargo();
     deny.args(["deny", "--locked", "--offline", "check"]);
     ctx.check("cargo-deny", &mut deny)?;
