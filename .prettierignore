@@ -12,3 +12,5 @@ runtime/locks/
 runtime/licenses/
 # Written by the Rust views (`UPDATE_GOLDEN=1`, `cupper-protocol` `view::parity`).
 protocol/fixtures/views.json
+# Written from the compat report's types (`UPDATE_GOLDEN=1 cargo test -p xtask`).
+testdata/compat/report.schema.json
