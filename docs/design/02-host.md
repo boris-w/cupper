@@ -476,6 +476,8 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 只属于界面的偏好（发送快捷键、主题覆盖、面板尺寸、语言覆盖）由桌面主进程存在 App 自己的 userData 里，不是会话数据，不经过宿主。
 
+- **设置变更的通知**（T036，2026-10-26）：M1a 不推送设置变更，其他窗口和 CLI 自己重新 `settings/get`；`cli_path`、`env_passthrough` 改了之后宿主重新发现 agent，经 `agents.updated` 体现。M1b 的设置页（T151）在索引流加 `settings.updated {settings}`（带全部设置，与 `settings/get` 的结果相同），索引视图加可选的 `settings`，后写的覆盖先写的，与 `host.updated` 同规则；这是附加式改动，冻结后允许。
+
 ## 5.2.12 运行时安装器
 
 按 ADR-08 实现，补充以下细化：

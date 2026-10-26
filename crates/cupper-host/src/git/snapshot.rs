@@ -35,9 +35,10 @@ use cupper_protocol::annotations::WirePath;
 use cupper_protocol::session::{DiffStat, ExcludedPath, ExclusionReason};
 use sha2::{Digest, Sha256};
 
+use super::repo::expand_home;
 use super::rules::{self, Unsafe};
 use super::run::RunError;
-use super::stamp::Layout;
+use super::stamp::{Fingerprint, Layout};
 use super::{GitCmd, GitTool, RepoOp, Snapshot, SnapshotOp, SnapshotTier};
 use crate::clock::Clock;
 use crate::durations::Durations;
@@ -67,6 +68,9 @@ pub struct Taken {
     pub partial: bool,
     /// Against the start tree, when there was one.
     pub stat: Option<DiffStat>,
+    /// The repository's executable configuration, for a turn's start and
+    /// end to compare (design 5.2.10; T186).
+    pub fingerprint: Fingerprint,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -105,14 +109,20 @@ pub async fn take(
     if !listing.status.success() {
         return Err(failed("config", &listing.stderr));
     }
-    let entries = rules::parse(&listing.stdout, &layout.work_tree)?;
+    let mut entries = rules::parse(&listing.stdout, &layout.work_tree)?;
     let (text, unrun) = (
         config::text(&entries, tool.git_lfs()),
         config::unrun(&entries, tool.git_lfs()),
     );
+    expand_home(&mut entries, tool.home.as_deref());
     let dir = tool.dir.clone();
-    let place = blocking(move || prepare(&dir, &layout, &text)).await?;
-    let taken = shoot(&tool.snapshot_tier(&place), &unrun, start, clock, durations).await;
+    let prepared = blocking(move || {
+        let fingerprint = Fingerprint::take(&layout, &entries)?;
+        Ok((prepare(&dir, &layout, &text)?, fingerprint))
+    });
+    let (place, fingerprint) = prepared.await?;
+    let tier = tool.snapshot_tier(&place);
+    let taken = shoot(&tier, &unrun, start, clock, durations, fingerprint).await;
     let index = place.index.clone();
     // A leftover temporary index costs space only.
     let _ = blocking(move || Ok(fs::remove_file(index)?)).await;
@@ -230,6 +240,7 @@ async fn shoot(
     start: Option<&str>,
     clock: &dyn Clock,
     durations: &Durations,
+    fingerprint: Fingerprint,
 ) -> Result<Taken, ShotError> {
     let call = |cmd: GitCmd<Snapshot>, what| async move {
         let output = tier.prepare(cmd).run(clock, durations).await?;
@@ -302,6 +313,7 @@ async fn shoot(
         excluded: excluded.collect(),
         partial,
         stat,
+        fingerprint,
     })
 }
 

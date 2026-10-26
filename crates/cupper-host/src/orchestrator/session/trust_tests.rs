@@ -7,13 +7,15 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
+use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::SessionId;
 use cupper_protocol::session::StopReason;
 use cupper_sys::{Command, Env};
 use serde_json::{Value, json};
 
+use super::actor::held;
 use super::gating_tests::changed;
-use super::tests::{Fixture, create, data, done, on, send};
+use super::tests::{Fixture, create, data, done, on, send, tags};
 use crate::clock::ManualClock;
 use crate::driver::api::{
     AgentSessionId, AttachTarget, DriverCommand, ProjectConfigPolicy, PromptTag,
@@ -90,6 +92,32 @@ async fn it_orch_trust_gating_a_change_before_a_prompt_holds_the_message() {
     trust_now(&f, None);
     f.ok("session/queue_resume", on(&session, "r-1")).await;
     assert_eq!(f.prompt().await.1, text("next"));
+}
+
+/// T068's leftover (T069): the first turn started, the check before it
+/// passed, and the project's configuration changes before the rescan ahead
+/// of its attach. The turn waits in its preparation with the gate shut, its
+/// agent attached without the project's configuration and no prompt sent;
+/// trusted again, the turn goes out, saying the configuration it runs with.
+#[tokio::test]
+async fn it_orch_trust_gating_a_first_turn_in_preparation_goes_out_once_trusted() {
+    let mut f = Fixture::new("trust-preparing").await;
+    trust_now(&f, None);
+    let release = held::hold(&f.project());
+    let session = created(&f).await;
+    f.events(&session, "turn.started", 1).await;
+    change(&f.project());
+    release.notify_one();
+    let found = notices(&f, &session, 2).await;
+    assert_eq!(found, [("project_config_changed".into(), Value::Null)]);
+    assert_eq!(f.attach().await.project_config, ProjectConfigPolicy::Ignore);
+    assert!(f.quiet(), "a prompt went out with the gate shut");
+    trust_now(&f, None);
+    f.ok("session/queue_resume", on(&session, "r-1")).await;
+    assert_eq!(f.prompt().await.1, text("hi"));
+    let configured = f.events(&session, "session.configured", 2).await;
+    let configured = data(&configured, "session.configured");
+    assert_eq!(configured.last().unwrap()["project_config"], "ignored");
 }
 
 #[tokio::test]
@@ -221,14 +249,13 @@ async fn it_orch_trust_gating_the_git_root_bounds_the_range() {
     assert!(f.quiet(), "the root's configuration is in the range");
 }
 
-/// IT-git-snapshot-parity at a turn: a git project's turn takes its start
-/// and end snapshots in the snapshot tier, and its row keeps both trees.
-#[tokio::test]
-async fn it_git_snapshot_parity_a_turn_takes_its_start_and_end_snapshots() {
+/// A fixture whose project is a git repository of its own, its sessions
+/// running the git on PATH; and git's home.
+async fn git_project(name: &str) -> (Fixture, TempDir) {
     let path = std::env::var_os("PATH").unwrap();
     let mut found = std::env::split_paths(&path).map(|d| d.join("git"));
     let git = found.find(|g| g.is_file()).unwrap();
-    let home = TempDir::new("snapshot-turn-home");
+    let home = TempDir::new(&format!("{name}-home"));
     let trusted = [
         git.parent().unwrap().into(),
         "/usr/bin".into(),
@@ -237,7 +264,7 @@ async fn it_git_snapshot_parity_a_turn_takes_its_start_and_end_snapshots() {
     let home_dir = Some(home.path().to_path_buf());
     let tool = GitTool::new(git.clone(), None, &trusted, home_dir, None, home.path()).unwrap();
     let tool = tool.with_test_env("GIT_CONFIG_NOSYSTEM", "1");
-    let mut f = Fixture::with_git("snapshot-turn", Some(tool)).await;
+    let f = Fixture::with_git(name, Some(tool)).await;
     let mut env = Env::new();
     env.set("HOME", home.path()).unwrap();
     env.set("GIT_CONFIG_NOSYSTEM", "1").unwrap();
@@ -246,6 +273,14 @@ async fn it_git_snapshot_parity_a_turn_takes_its_start_and_end_snapshots() {
     let clock = ManualClock::new();
     let out = run(&clock, init, None, Duration::from_secs(30)).await;
     assert!(out.unwrap().status.success());
+    (f, home)
+}
+
+/// IT-git-snapshot-parity at a turn: a git project's turn takes its start
+/// and end snapshots in the snapshot tier, and its row keeps both trees.
+#[tokio::test]
+async fn it_git_snapshot_parity_a_turn_takes_its_start_and_end_snapshots() {
+    let (mut f, _home) = git_project("snapshot-turn").await;
     fs::write(f.project().join("a.txt"), "a\n").unwrap();
 
     let session = f.started().await;
@@ -261,4 +296,45 @@ async fn it_git_snapshot_parity_a_turn_takes_its_start_and_end_snapshots() {
     let row = "SELECT (snapshot_start IS NOT NULL) || (snapshot_end IS NOT NULL) || ' ' || \
         snapshot_status FROM turns";
     assert_eq!(f.rows(row), ["11 ok"]);
+}
+
+/// IT-git-turn-fingerprint: a turn that changed the repository's executable
+/// configuration ends with `repo_config_changed`, naming what changed; the
+/// next one, which changed nothing of it, does not.
+#[tokio::test]
+async fn it_git_turn_fingerprint_a_turn_that_changed_the_config_says_so() {
+    let (mut f, _home) = git_project("turn-fingerprint").await;
+    let session = f.started().await;
+    let app = f.project();
+    fs::write(app.join(".gitattributes"), "* text\n").unwrap();
+    let mut config = fs::OpenOptions::new()
+        .append(true)
+        .open(app.join(".git/config"))
+        .unwrap();
+    std::io::Write::write_all(&mut config, b"[core]\n\tautocrlf = true\n").unwrap();
+    f.emit(done(PromptTag(1), StopReason::EndTurn));
+    let notices = |bodies: &[EventBody]| {
+        let items = data(bodies, "item.started");
+        let notices = items
+            .into_iter()
+            .filter(|i| i["code"] == "repo_config_changed");
+        notices
+            .map(|i| i["params"]["paths"].clone())
+            .collect::<Vec<_>>()
+    };
+    let bodies = f.events(&session, "turn.completed", 1).await;
+    let paths = [app.join(".git/config"), app.join(".gitattributes")];
+    let paths: Vec<String> = paths.iter().map(|p| p.display().to_string()).collect();
+    assert_eq!(notices(&bodies), [json!(paths)]);
+    let all = tags(&bodies);
+    assert!(
+        all.rfind("item.started") < all.find("turn.completed"),
+        "in the turn"
+    );
+
+    f.ok("session/send", send(&session, "s-1", "again")).await;
+    f.prompt().await;
+    f.emit(done(PromptTag(2), StopReason::EndTurn));
+    let bodies = f.events(&session, "turn.completed", 2).await;
+    assert_eq!(notices(&bodies).len(), 1, "no change in the second turn");
 }

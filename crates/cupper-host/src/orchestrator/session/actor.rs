@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
-use cupper_protocol::annotations::TimestampMs;
+use cupper_protocol::annotations::{TimestampMs, WirePath};
 use cupper_protocol::canonical;
 use cupper_protocol::capabilities::{ConfigOptionId, SessionCapabilities as Capabilities};
 use cupper_protocol::domain::{PrincipalKind, ResolvedBy, Tier};
@@ -64,6 +64,7 @@ use crate::durations::{Durations, SESSION_IDLE};
 use crate::gateway::{AuditEvent, AuditRecord, Call, ConfigState, TrustChange};
 use crate::git::GitTool;
 use crate::git::snapshot::{self, ShotError, Taken};
+use crate::git::stamp::Fingerprint;
 use crate::index::{ScanContext, git_of, status_of};
 use crate::ledger::{Outcome, Ticket};
 use crate::orchestrator::interaction::{self, Respond};
@@ -169,8 +170,8 @@ pub(super) struct SessionActor {
     attached: mpsc::UnboundedSender<Result<AttachInfo, AgentError>>,
     rescanned: mpsc::UnboundedSender<(Purpose, Rescan)>,
     snapshots: mpsc::UnboundedSender<(TurnId, SnapshotPhase, Result<Taken, ShotError>)>,
-    /// The start tree of each turn, for its end's change.
-    trees: HashMap<TurnId, String>,
+    /// The start tree and fingerprint of each turn, for its end to compare.
+    trees: HashMap<TurnId, (String, Fingerprint)>,
     /// The session would load the project's configuration while trusted.
     load_wanted: bool,
     /// The gate is shut for `project_config_changed`.
@@ -778,7 +779,7 @@ impl SessionActor {
         };
         self.outstanding += 1;
         let start = (phase == SnapshotPhase::End)
-            .then(|| self.trees.get(&turn_id).cloned())
+            .then(|| self.trees.get(&turn_id).map(|(tree, _)| tree.clone()))
             .flatten();
         let (cwd, back) = (self.parts.cwd.clone(), self.snapshots.clone());
         let (clock, durations) = (Arc::clone(&self.parts.clock), self.parts.durations.clone());
@@ -809,8 +810,25 @@ impl SessionActor {
                     false => SnapshotStatus::Partial,
                 };
                 match phase {
-                    SnapshotPhase::End => self.trees.remove(&turn_id),
-                    _ => self.trees.insert(turn_id.clone(), taken.tree.clone()),
+                    // The executable configuration changed during the turn.
+                    SnapshotPhase::End => {
+                        let before = self.trees.remove(&turn_id).map(|(_, before)| before);
+                        let changed = before.map(|b| b.changed(&taken.fingerprint));
+                        let changed = changed.unwrap_or_default();
+                        let paths = changed.iter().map(|p| WirePath(p.display().to_string()));
+                        let params = NoticeParams {
+                            paths: Some(paths.collect()),
+                            ..NoticeParams::default()
+                        };
+                        let (ids, now) = (self.parts.core.ids(), self.parts.clock.now());
+                        let notice = notice_with(ids, now, NoticeCode::RepoConfigChanged, params);
+                        step.events
+                            .extend(notice.into_iter().filter(|_| !changed.is_empty()));
+                    }
+                    _ => {
+                        let start = (taken.tree.clone(), taken.fingerprint);
+                        self.trees.insert(turn_id.clone(), start);
+                    }
                 };
                 step.tree = Some((turn_id.clone(), phase.clone(), taken.tree));
                 (status, None, taken.excluded, taken.stat)
@@ -897,6 +915,10 @@ impl SessionActor {
         };
         let hold = self.parts.quiescence.hold();
         tokio::spawn(async move {
+            #[cfg(test)]
+            if matches!(purpose, Purpose::Attach(_)) {
+                held::attach_rescan(&cwd).await;
+            }
             let found = rescan(readers, project, cwd, cx).await;
             // The actor may have stopped.
             let _ = back.send((purpose, found));
@@ -1341,4 +1363,37 @@ fn skipped(turn_id: TurnId, phase: SnapshotPhase) -> Input {
         excluded: Vec::new(),
         stat: None,
     }))
+}
+
+/// Unit tests only: the rescan before an attach in a project waits here
+/// until its test lets it go, so that the project can change between the
+/// check that started a turn and that rescan (T069).
+#[cfg(test)]
+pub(super) mod held {
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::{Arc, Mutex};
+
+    use tokio::sync::Notify;
+
+    static HELD: Mutex<Option<HashMap<PathBuf, Arc<Notify>>>> = Mutex::new(None);
+
+    /// Holds the attach rescans of the project at `path` (a real path);
+    /// `notify_one` lets one go.
+    pub fn hold(path: &Path) -> Arc<Notify> {
+        let mut held = HELD.lock().unwrap();
+        let held = held.get_or_insert_with(HashMap::new);
+        Arc::clone(held.entry(path.to_owned()).or_default())
+    }
+
+    pub(super) async fn attach_rescan(path: &Path) {
+        let found = HELD
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|h| h.get(path).cloned());
+        if let Some(release) = found {
+            release.notified().await;
+        }
+    }
 }

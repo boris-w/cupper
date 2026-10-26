@@ -400,6 +400,16 @@
 | 宿主的进程级用例 | 假 agent 的 `--calls <文件>` 记下每个收到的请求和 `session/cancel`（`{method, session, text}`），可直接断言 resume 与 new、prompt 重发次数；`withdraw_after <ms>` 一段时间后撤回下一个请求、剧本继续。`test_config.agents.<agent>.cli_version` 给注入的假 agent 指定版本，与探测到的版本走同一套分类 | T063 |
 | T120 及以后用 git 的任务 | 快照档（T061）：每个仓库一个私有对象库 `<数据目录>/git/<repo_key>/objects/`，每个工作区一个 GIT_DIR `<数据目录>/git/<repo_key>/ws/<ws_key>/`（key 是 realpath 的 sha-256 前 8 字节，0700，没有 `hooks/`），可供 `@` 文件列表、`git/status`、diff 复用；`SnapshotTier` 要传一个 `Place`，`snapshot::take` 里有构造它的 `prepare`。`turns.snapshot_start`、`snapshot_end` 存 tree id。私有对象库与 sharedindex 副本 M1 不回收。`core.excludesFile`、`core.attributesFile` 是相对路径时按快照档的工作目录解析，与用户在仓库里运行 git 时不同（少见，没处理） | T061 |
 | T186 | LFS 用例要把 `tool(…, lfs)` 指向 xtask 下载的 git-lfs；白名单配置里 LFS 取值的生成已有单元测试。超大未跟踪目录的判定是"文件数 × 目录数"的扫描，PERF-snapshot 可以一并量一下 | T061 |
+| 动桌面数据通路的任务 | 测量闸门（T078）：`PERF-bridge-gate`（`tools/e2e/src/gate.spec.ts`，每晚）在判定负载下断言主进程事件循环延迟 p99 < 5 ms 且没有流重置，当前约 1.6 ms；渲染进程钩子 `window.__cupperGate`（只在 e2e 构建）可按流计数、跟随窗口持有范围之外的流、经 `getBlob` 下载、以游标 0 订阅重放。夹具 `launch` 的 `throttled` 选项保留 Chromium 默认节流。Playwright 下页面不会进入隐藏状态，真正的隐藏需另写只经主进程 inspector 测量的脚本 | T078 |
+| T117 | PERF-snapshot（T186）是 `#[ignore]` 的每晚用例，`perf` 作业实现时用 `cargo test -p cupper-host --lib -- --ignored perf_snapshot` 跑，把打印的中位数写进历史数据；基准：1 万文件的合成仓库，热缓存下没有改动约 112 ms、改 10 个文件约 115 ms。回合指纹每次快照遍历整个工作区找 `.gitattributes`（含被忽略的大目录），10 万文件的仓库超预算时改为只看已跟踪和未忽略的 | T186 |
+| 跑 git 相关测试的任务 | 测试用的 git-lfs 由 `cargo xtask git-lfs` 下载（锁定 3.8.0，核对哈希），放在 `target/git-lfs/git-lfs`；CI 的 `rust` 作业先执行这一步。只跑 `cargo test` 时没有 git-lfs，LFS 用例跳过并提示 | T186 |
+| T182 | `runtime/licenses/codex-acp-THIRD_PARTY_NOTICES.md`（T006 生成）还没进 runtime-pack 的暂存和 App，要在 THIRD_PARTY_NOTICES 生成时一并放进去；manifest 的 `files` 哈希会随之变化 | T006 |
+| 升级 codex-acp 的任务 | 先把新标签的 `package-lock.json` 放进 `runtime/locks/`，再运行 `node tools/license-gate/src/main.ts codex-notices`（要联网，下载各包 tarball 核对 integrity 后取 LICENSE），否则许可证门禁会因找不到锁文件或声明不全而失败 | T006 |
+| T131（及加渲染入口的任务） | 加第二个渲染入口时，在 `tools/license-gate/src/main.ts` 的 `ENTRIES` 里登记它的环境名；`apps/desktop/vite.config.ts` 的插件把每个环境的模块写到 `dist/metafile/<环境>.json` | T006 |
+| T121、T124（git 写操作与 worktree 的故障点） | 故障点夹具与断言库在 `crates/cupper-host/tests/crash_concurrency.rs`（T069）：完整性检查、每条流 seq 连续、实时事件是日志前缀、在途命令按原 `command_id` 重试符合账本语义、消息各恰好一次；按命中次数倍增扫描（第 1、2、4、8……次到达时以 99 退出）。新故障点在 `failpoint.rs` 登记后，加进扫描表即可 | T069 |
+| 会话 actor 的测试 | `actor::held`（只在单元测试里编译，按项目路径登记）能让某次重扫停住，用来把配置变化放进"回合已开始、附加前的重扫还没做"这类窗口（T069）；会话夹具的 `events`、`attach`、`command` 等待都有 30 s 超时，超时时报出在等什么 | T069 |
+| 读设置的宿主任务 | 设置（T036）在 `crates/cupper-host/src/settings.rs`：宿主内部经 `SettingsHandle::current()` 取；默认值是 `worktrees.root` 为 `~/.cupper/worktrees`、三个通知开关开、新会话默认 Claude、`host.idle_exit_minutes` 为 10、`diagnostics.verbose` 关、不额外放行环境变量、CLI 路径为空（自动发现）。`cli_path`、`env_passthrough` 变了会先重新发现 agent 再回复；其余键 M1a 不推送 | T036 |
+| T126 | `apps.terminal`、`apps.editor` 的内置应用清单仍没有设计（T013 的交接），T036 的默认值暂用 macOS 自带的 Terminal 和 TextEdit | T036 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
