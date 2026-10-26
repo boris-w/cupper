@@ -69,8 +69,11 @@ const SUMMARY: Shape = Shape::Object(&[
 
 pub struct Run<'a> {
     pub commit: &'a str,
-    /// The job or composite that was invoked; it is the suite of every result.
+    /// The job or composite that was invoked.
     pub target: &'a str,
+    /// The suite of every result: the composite the job ran within (`--in`),
+    /// or the target.
+    pub suite: &'a str,
     pub toolchain: &'a [(&'static str, Option<String>)],
     pub os: &'a str,
     pub machine: &'a str,
@@ -131,7 +134,7 @@ fn results(run: &Run) -> Vec<Value> {
         .map(|(id, passed)| {
             json!({
                 "id": id,
-                "suite": run.target,
+                "suite": run.suite,
                 "result": if passed { Outcome::Pass } else { Outcome::Fail }.as_str(),
                 "commit": run.commit,
             })
@@ -289,6 +292,7 @@ mod tests {
         build(&Run {
             commit: COMMIT,
             target: "pr",
+            suite: "pr",
             toolchain: &[("rustc", Some("1.96.0".to_owned())), ("pnpm", None)],
             os: "macOS 26.4",
             machine: "MacBook Pro (Apple M4 Max)",
