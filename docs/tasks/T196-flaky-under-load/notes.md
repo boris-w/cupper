@@ -54,6 +54,6 @@
   - `it_self_check_a_changed_executable_makes_the_host_wait_for_an_upgrade` 同样在宿主退出前后读 `host/shutdown`，也会碰上同一个客户端缺陷，已由客户端修复覆盖。它原来容忍 `session/interrupt` 的回复可能丢失（"Its reply races the exit"）；这个回复排在退出之前发出，修复后一定能读到，所以改为 `unwrap()`。
   - `it_clock_advance_returns_once_the_host_settled` 用的是 testkit 的原始客户端，不核对令牌，不受影响。
 
-## 范围外
+## 范围外（未改）
 
-桌面端的 `host-client`（TS）也会核对宿主吗？如果它也在每次读后核对令牌，可能有同样的问题。本任务没有查，请在汇报里提出。
+桌面端的原生扩展 `cupper-desktop-native` 的 `relay.rs` 有同样的写法：每次读后 `peer_token(&self.host) != Ok(self.pinned)`，宿主一退出就以 `TokenChanged` 结束，把这次读到的字节丢掉。桌面端在宿主退出时可能收不到 `host/shutdown` 或最后的回复，修法同上。这在桌面模块，本任务没有改，汇报里提出。
