@@ -1,0 +1,70 @@
+# One job of `cargo xtask ci` on a runner of its own (design 5.1.6, T197),
+# for the job's workflow: the setup, the job, and as artifacts its summary
+# (`--record`), its raw logs, and the Playwright results of a failed run.
+name: xtask
+
+on:
+  workflow_call:
+    inputs:
+      job:
+        description: The xtask ci job
+        type: string
+        required: true
+      runner:
+        type: string
+        required: true
+      within:
+        description: The composite the job runs as one of (`--in`), or none
+        type: string
+        default: ""
+      timeout:
+        type: number
+        default: 45
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: ${{ inputs.job }} (${{ inputs.runner }})
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: ${{ inputs.timeout }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: ${{ inputs.job }}
+      - name: cargo-deny
+        if: inputs.job == 'license'
+        run: cargo install --locked cargo-deny@0.20.2
+      - name: cargo xtask ci ${{ inputs.job }}
+        env:
+          JOB: ${{ inputs.job }}
+          WITHIN: ${{ inputs.within }}
+        run: cargo xtask ci "$JOB" ${WITHIN:+--in "$WITHIN"} --record ci-summary
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.job }}-${{ inputs.runner }}-summary
+          path: ci-summary/
+          if-no-files-found: ignore
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.job }}-${{ inputs.runner }}-logs
+          path: .private/ci-logs/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: ignore
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.job }}-${{ inputs.runner }}-playwright
+          path: |
+            tools/e2e/dist/test-results/
+            tools/ui-screenshots/dist/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

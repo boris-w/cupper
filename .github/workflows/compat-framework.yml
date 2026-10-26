@@ -1,0 +1,24 @@
+# `cargo xtask ci compat-framework --in pr` (design 5.1.6): the compat suite's framework on the fake agent, when a change touches it.
+# On every PR and every push to main, as one of `ci pr`'s jobs.
+name: compat-framework
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  compat-framework:
+    uses: ./.github/workflows/xtask.yml
+    with:
+      job: compat-framework
+      runner: macos-15
+      within: pr
+      timeout: 60

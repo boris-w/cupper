@@ -1,0 +1,24 @@
+# `cargo xtask ci e2e --in pr` (design 5.1.6): the e2e build and its smoke subset, when a change touches what the app is built from.
+# On every PR and every push to main, as one of `ci pr`'s jobs.
+name: e2e
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  e2e:
+    uses: ./.github/workflows/xtask.yml
+    with:
+      job: e2e
+      runner: macos-15
+      within: pr
+      timeout: 90

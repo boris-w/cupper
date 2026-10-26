@@ -1,4 +1,5 @@
-# `cargo xtask ci license` (design 5.1.6). Dormant until the repository has a remote (U-P1).
+# `cargo xtask ci license --in pr` (design 5.1.6): cargo deny and the license gate's first layer.
+# On every PR and every push to main, as one of `ci pr`'s jobs.
 name: license
 
 on:
@@ -11,16 +12,13 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   license:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install cargo-deny
-        run: cargo install --locked cargo-deny@0.20.2
-      - run: cargo xtask ci license
+    uses: ./.github/workflows/xtask.yml
+    with:
+      job: license
+      runner: ubuntu-24.04
+      within: pr
+      timeout: 30
