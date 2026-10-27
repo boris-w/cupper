@@ -435,6 +435,7 @@
 | T066 | T192 补齐了 21 个剧本，实际运行时留意：`config-scope`、`untrusted-project` 开工前就放好了 `.claude/settings.json`，宿主可能判为配置已变而暂停队列，剧本以"不确定"结束；`crash-resume`、`resume-procs` 在两回合之间 SIGKILL 掉 `claude`，靠 K6 自动 resume；`close-running` 允许命令后等 3 秒收尾；真实模式的回合等待上限是 5 分钟。详见 `docs/tasks/T192-compat-scenarios/notes.md` | T192 |
 | T066 | 宿主的 `VERSION_PROBE` 只有 5 s；CLI 更新后第一次执行 `--version` 也要等 macOS 扫描新二进制，负载 35–50 下量到首次执行 4–29 s（用假 agent 和宿主副本量的，真实 CLI 没量过），机器忙时 CLI 发现可能超时。实际运行时量一次，需要的话放宽或先预热 | T196 |
 | T199 | 照 T196 的做法：先在高负载下复现、量出实际等待再修，不加重试。macOS 首次执行新二进制要扫描，计时前用 `first_start`（`tests/common`）先跑一次；负载的造法与 pid 回收见 `docs/tasks/T196-flaky-under-load/notes.md` | T196 |
+| 要在负载下复现或验证的任务 | 用 `test-repeat.yml`（cargo 或 Vitest 的单个用例重复 N 次、可选并行加压，参数 kind、package、args、filter、times、parallel、runner）或 `e2e-repeat.yml` 在 runner 上跑，请编排者触发；本机不造高负载（守则第 10 条）。`times` 是每份的次数，总次数是 `times × parallel` | T199 |
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
