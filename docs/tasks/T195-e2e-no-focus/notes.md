@@ -73,3 +73,14 @@
 **PR 的 ts 失败**：`apps/desktop/src/main/bridge/contract.test.ts` 的 "a request reaches the host re-serialized, and its response comes back" 收到空数组。`apps/desktop/src/main/bridge/testing.ts` 的 `settle` 只等 10 ms，runner 负载高时回应没赶上。本分支不碰 bridge；main 的 43ee901 上 ts 也是这个用例失败；本机单跑这个文件 10 次全过；PR 的第 2 次运行（attempt 2）里 ts 重跑通过。
 
 **PR 的 e2e 失败**：没跑到测试，`build` 步骤里 `xtask host-bundle` 报 `codesign failed: target/runtime-pack/Contents/Helpers/node: No such file or directory`。rust-cache 整键命中恢复了 target，`target/runtime-pack/Contents` 目录在，`xtask ci e2e` 只查 `Contents` 是不是目录（`crates/xtask/src/ci/jobs/e2e.rs`），于是跳过了 `runtime-pack`，但里面没有 `Helpers/node`。main 的 8df33d4 是冷缓存，跑了 `runtime-pack`，e2e 通过。属于 CI 缓存的问题（T197 的范围）。
+
+## 修复 1：E2E-single-instance 要标 `@focus`（2026-10-27）
+
+10-26 夜里的 nightly（https://github.com/boris-w/cupper/actions/runs/40412822285 ）在 e2e 全集的后台段报 `app.spec.ts:14 › E2E-single-instance` "the app took the foreground in 4 of 15 samples; it needs @focus"。后台段共 26 条，其余 25 条都通过了前台检查；`@focus` 段 18 条全过。
+
+### 规模估计（开工前）
+
+| 模块 | 估计 |
+|---|---|
+| `app.spec.ts`：E2E-single-instance 加 `@focus`。prettier 会把用例体缩进一层，所以按整段计 | 35 |
+| 合计 | 约 **35**，停止线 60 |
