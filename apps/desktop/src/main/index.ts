@@ -189,8 +189,11 @@ function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
   ipcMain.handle(HOST_OPEN, (event) => bridges.open(event.sender, event.senderFrame));
   if (__CUPPER_FLAVOR__ === "e2e") {
     // For the e2e tests' `electronApp.evaluate`: a window loses its
-    // connection without a reload (E2E-NFR1-4).
-    const disconnectWindow = (webContentsId: number) => bridges.disconnect(webContentsId);
+    // connection without a reload (E2E-NFR1-4). On a turn of its own: the
+    // inspector runs an evaluate in the middle of whatever JavaScript runs,
+    // and a socket destroyed while Node hands over its data throws there (T200).
+    const disconnectWindow = (webContentsId: number) =>
+      void setImmediate(() => bridges.disconnect(webContentsId));
     Object.assign(globalThis, { __cupperE2E: { disconnectWindow } });
   }
 }
