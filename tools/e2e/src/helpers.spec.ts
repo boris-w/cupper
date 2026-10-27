@@ -27,6 +27,34 @@ test("helpers: __cupperTest and dropping the window's connection", async ({ cupp
   expect(await client.counters()).toEqual({ gaps: 0, duplicates: 0, resets: 0 });
 });
 
+test("helpers: an error box shows nothing and returns, and the test takes it", async ({
+  cupper,
+}) => {
+  await cupper.launch();
+  await cupper.app.evaluate(({ dialog }) => dialog.showErrorBox("title", "content"));
+  const boxes = await cupper.dialogs.errorBoxes();
+  expect(boxes).toMatchObject([{ kind: "error", message: "title", detail: "content" }]);
+});
+
+test("helpers: an error nothing caught in the main process is logged, with no box", async ({
+  cupper,
+}) => {
+  await cupper.launch();
+  await cupper.app.evaluate(() => {
+    setTimeout(() => {
+      throw new Error("thrown on purpose");
+    });
+    void Promise.reject(new Error("rejected on purpose"));
+  });
+  await expect
+    .poll(() => cupper.uncaught().map((e) => e.split("\n")[0]))
+    .toEqual([
+      "unhandled rejection: Error: rejected on purpose",
+      "uncaught exception: Error: thrown on purpose",
+    ]);
+  expect(await cupper.dialogs.errorBoxes()).toEqual([]);
+});
+
 test.describe("on the manual clock", () => {
   test.use({ testConfig: { clock: "manual" } });
 

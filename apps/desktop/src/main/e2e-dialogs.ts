@@ -3,8 +3,9 @@
 // focus, not even one asked for while the app starts. Each call is recorded
 // in `globalThis.__e2eDialogs` and waits until the test answers it there
 // (`tools/e2e/src/dialogs.ts`); the synchronous message box answers
-// `cancelId` at once. The main process reads `dialog.showMessageBox` and the
-// rest when it calls them, so every call comes here. e2e builds only.
+// `cancelId` at once, and an error box returns at once and fails the test
+// unless it takes the box (T200). The main process reads `dialog.showMessageBox`
+// and the rest when it calls them, so every call comes here. e2e builds only.
 
 import { dialog, type MessageBoxOptions, type OpenDialogOptions } from "electron";
 
@@ -26,6 +27,10 @@ export function installDialogStandIns(): void {
   dialog.showMessageBoxSync = (...args: unknown[]) => {
     stand.answers.push(null);
     return message("message_sync", args).cancelId ?? 0;
+  };
+  dialog.showErrorBox = (title: string, content: string) => {
+    stand.answers.push(null);
+    stand.calls.push({ kind: "error", message: title, detail: content });
   };
   dialog.showOpenDialog = (...args: unknown[]) => {
     const { properties } = args.at(-1) as OpenDialogOptions;

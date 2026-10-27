@@ -44,6 +44,7 @@ export class Cupper {
   /** A test without `@focus` keeps its app out of the foreground and the Dock (T195). */
   readonly #background: boolean;
   #fronts: Front[] = [];
+  #uncaughtTaken = 0;
 
   constructor(testConfig: Record<string, unknown>, background: boolean) {
     this.#background = background;
@@ -134,6 +135,21 @@ export class Cupper {
     return status;
   }
 
+  /** The errors nothing caught in the main process so far (T200), from main.log; the test takes them. */
+  uncaught(): string[] {
+    let text = "";
+    try {
+      text = readFileSync(join(this.root, "logs", "main.log"), "utf8");
+    } catch {
+      // No log yet.
+    }
+    const lines = text.split("\n").filter(Boolean);
+    const entries = lines.map((line) => JSON.parse(line) as { msg: string; error?: string });
+    const found = entries.filter((e) => /^(uncaught exception|unhandled rejection)$/.test(e.msg));
+    this.#uncaughtTaken = found.length;
+    return found.map((e) => `${e.msg}: ${e.error}`);
+  }
+
   /** Quits as on shutdown: the app does not ask about running turns (design 5.7.1). */
   async quitWithoutAsking(): Promise<void> {
     await this.app.evaluate(({ powerMonitor }) => powerMonitor.emit("shutdown"));
@@ -165,8 +181,13 @@ export class Cupper {
       }
     }
     if (app && app.exitCode === null && app.signalCode === null) {
+      const boxes = (await this.#dialogs?.errorBoxes()) ?? [];
+      problems.push(...boxes.map((box) => `an error box: ${box.message}: ${box.detail}`));
       await this.quitWithoutAsking().catch(() => problems.push("the app did not quit"));
     }
+    const taken = this.#uncaughtTaken; // Before `uncaught()` moves it.
+    const fresh = this.uncaught().slice(taken);
+    problems.push(...fresh.map((e) => `main process: ${e}`));
     if (host && (await gone([host], 0)).length > 0) {
       signal([host], "SIGTERM");
       // An orderly exit closes the adapters first (design 5.2.13).
@@ -179,7 +200,7 @@ export class Cupper {
       signal(left, "SIGKILL");
       problems.push(`left behind: ${left.map((proc) => `${proc.pid} ${proc.args}`).join(", ")}`);
     }
-    if (info.status !== info.expectedStatus) {
+    if (info.status !== info.expectedStatus || problems.length > 0) {
       await attachLogs(info, this.root);
     }
     rmSync(this.root, { recursive: true, force: true });

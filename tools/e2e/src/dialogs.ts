@@ -1,7 +1,8 @@
 // The native dialogs, as the e2e build's main process records them from its
 // start (design 5.9.9, `apps/desktop/src/main/e2e-dialogs.ts`): each call
 // waits until the test answers it here (the synchronous message box answers
-// `cancelId` at once); no native dialog ever shows or takes the focus.
+// `cancelId` at once, an error box returns); no native dialog ever shows or
+// takes the focus. An error box the test does not take fails it (T200).
 
 import { expect } from "@playwright/test";
 import type { ElectronApplication } from "@playwright/test";
@@ -9,8 +10,8 @@ import type { ElectronApplication } from "@playwright/test";
 /** What a call showed: the fields of its options that the tests look at. */
 export interface NativeDialog {
   index: number;
-  /** `showMessageBox`, `showMessageBoxSync` or `showOpenDialog`. */
-  kind: "message" | "message_sync" | "open";
+  /** `showMessageBox`, `showMessageBoxSync`, `showOpenDialog` or `showErrorBox`, its title the `message`. */
+  kind: "message" | "message_sync" | "open" | "error";
   type?: string;
   message?: string;
   detail?: string;
@@ -29,6 +30,7 @@ interface Stand {
 
 export class Dialogs {
   readonly #app: ElectronApplication;
+  #errorsTaken = 0;
 
   private constructor(app: ElectronApplication) {
     this.#app = app;
@@ -47,6 +49,14 @@ export class Dialogs {
       const stand = (globalThis as unknown as { __e2eDialogs: Stand }).__e2eDialogs;
       return stand.calls.map((call, index) => ({ ...call, index }));
     });
+  }
+
+  /** The error boxes not taken yet, which the test takes: the fixture fails it on any it leaves. */
+  async errorBoxes(): Promise<NativeDialog[]> {
+    const boxes = (await this.calls()).filter((call) => call.kind === "error");
+    const fresh = boxes.slice(this.#errorsTaken);
+    this.#errorsTaken = boxes.length;
+    return fresh;
   }
 
   /** The first dialog from `from` on, once it shows. */
