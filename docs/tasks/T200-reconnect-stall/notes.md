@@ -85,3 +85,8 @@ RangeError [ERR_OUT_OF_RANGE]: The value of "err" is out of range. It must be a 
   - 这是 Node 文档的建议：未捕获异常之后，进程状态不再可信。
   - 代价有三：窗口重新加载会打断用户（宿主里的回合照常运行）；要防重启循环，比如 60 s 内第二次就退出不再重启；要多写约 30 行和对应的用例。
 - **方案 C：** 未处理的 rejection 按 A 处理；同步抛出的未捕获异常按 B 处理。
+
+## runner 上的验证
+
+- E2E-NFR1-4 × 300：https://github.com/boris-w/cupper/actions/runs/40464509695 ，提交 81137e3（已合进含 T199 的 main），300 次全部通过，用时 50.6 分钟。
+- PR #12 的 CI：https://github.com/boris-w/cupper/actions/runs/40464511746 ，8 个检查全部通过。
