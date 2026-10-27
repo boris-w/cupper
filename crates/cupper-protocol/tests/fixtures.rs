@@ -14,7 +14,9 @@
 //!   `view::parity` writes and checks (UNIT-views-parity).
 //!
 //! UNIT-proto-absent-not-null walks the same samples, as the Rust types
-//! encode them, along the exported schema: no optional field is `null`.
+//! encode them, along the exported schema: no optional field is `null`. So
+//! does it instances of every event, method and error with every property
+//! filled (`full`), then each with one optional property dropped (T193).
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -30,6 +32,9 @@ use schemars::generate::SchemaSettings;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
+
+#[path = "fixtures/full.rs"]
+mod full;
 
 fn dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../protocol/fixtures")
@@ -179,24 +184,47 @@ fn unit_proto_fixtures_every_method_roundtrips() {
 /// the exported schema. A `null` on a property that is not required is a
 /// fault, unless the property's own type takes `null` (a definition such as
 /// `CliPath`). Optional properties seen, with a value or an allowed `null`,
-/// are counted by `<definition>.<property>`.
+/// are counted by `<definition>.<property>`, and so are those absent from
+/// an object walked; `present` holds where the last ones seen were, as the
+/// JSON pointer of their object and their key.
+#[derive(Default)]
 struct Walk {
     defs: Map<String, Value>,
+    methods: Value,
+    root: String,
     faults: Vec<String>,
     reached: BTreeSet<String>,
+    absent: BTreeSet<String>,
+    present: Vec<(String, String)>,
 }
 
 impl Walk {
     fn new() -> Self {
-        let Value::Object(defs) = document()["$defs"].take() else {
+        let mut document = document();
+        let Value::Object(defs) = document["$defs"].take() else {
             unreachable!("the document has $defs")
         };
-        let (faults, reached) = (Vec::new(), BTreeSet::new());
+        let methods = document["x-methods"].take();
         Walk {
             defs,
-            faults,
-            reached,
+            methods,
+            ..Walk::default()
         }
+    }
+
+    /// The methods of every table of the catalog, with their entries.
+    fn entries(&self) -> impl Iterator<Item = (&String, &Value)> {
+        let tables = self
+            .methods
+            .as_object()
+            .into_iter()
+            .flat_map(|t| t.values());
+        tables.flat_map(|t| t.as_object().into_iter().flatten())
+    }
+
+    fn check(&mut self, root: &str, schema: &Value, value: &Value, owner: &str) {
+        self.root = root.to_owned();
+        self.walk(schema, value, owner, "");
     }
 
     /// The definition a `$ref` names, and its name.
@@ -284,24 +312,33 @@ impl Walk {
             .unwrap_or_default();
         match value {
             Value::Object(members) => {
+                let optional = props
+                    .keys()
+                    .filter(|k| !required.iter().any(|r| r == k.as_str()));
+                let gone = optional.filter(|k| !members.contains_key(*k));
+                self.absent.extend(gone.map(|k| format!("{owner}.{k}")));
                 for (key, member) in members {
-                    let (at, label) = (format!("{at}.{key}"), format!("{owner}.{key}"));
+                    let step = key.replace('~', "~0").replace('/', "~1");
+                    let (path, label) = (format!("{at}/{step}"), format!("{owner}.{key}"));
                     let Some(property) = props.get(key) else {
                         if let Some(each) =
                             schema.get("additionalProperties").filter(|s| s.is_object())
                         {
-                            self.walk(&each.clone(), member, owner, &at);
+                            self.walk(&each.clone(), member, owner, &path);
                         }
                         continue;
                     };
                     if !required.iter().any(|r| r == key.as_str()) {
                         if member.is_null() && !self.nullable(property) {
-                            self.faults.push(format!("{at}: null on optional {label}"));
+                            let root = &self.root;
+                            self.faults
+                                .push(format!("{root} {path}: null on optional {label}"));
                         } else {
                             self.reached.insert(label.clone());
+                            self.present.push((at.to_owned(), key.clone()));
                         }
                     }
-                    self.walk(property, member, &label, &at);
+                    self.walk(property, member, &label, &path);
                 }
             }
             Value::Array(items) => {
@@ -309,7 +346,7 @@ impl Walk {
                     return;
                 };
                 for (n, member) in items.iter().enumerate() {
-                    self.walk(&item.clone(), member, owner, &format!("{at}[{n}]"));
+                    self.walk(&item.clone(), member, owner, &format!("{at}/{n}"));
                 }
             }
             _ => {}
@@ -317,19 +354,50 @@ impl Walk {
     }
 }
 
-/// `value` as `T` decodes and encodes it, walked along `method`'s `part`.
+type Decode<'a> = &'a dyn Fn(&Value) -> Result<Value, String>;
+
+/// `decode` reads `value` as its Rust type and writes it again, and the walk
+/// checks what it writes; then the same with each optional property it had
+/// dropped in turn (T193): a missing `skip_serializing_if` turns that into `null`.
+fn guard(walk: &mut Walk, root: &str, schema: &Value, value: &Value, owner: &str, decode: Decode) {
+    let once = |walk: &mut Walk, value: &Value| match decode(value) {
+        Ok(encoded) => walk.check(root, schema, &encoded, owner),
+        Err(e) => walk
+            .faults
+            .push(format!("{root}: does not decode: {e}: {value}")),
+    };
+    walk.present.clear();
+    once(walk, value);
+    for (object, key) in std::mem::take(&mut walk.present) {
+        let mut dropped = value.clone();
+        if let Some(Value::Object(members)) = dropped.pointer_mut(&object)
+            && members.remove(&key).is_some()
+        {
+            once(walk, &dropped);
+        }
+    }
+}
+
+fn decode<T: Serialize + DeserializeOwned>(value: &Value) -> Result<Value, String> {
+    let decoded = serde_json::from_value::<T>(value.clone()).map_err(|e| e.to_string())?;
+    Ok(serde_json::to_value(decoded).unwrap())
+}
+
+/// `value` as `T` decodes and encodes it, guarded along `method`'s `part`.
 fn absent<T: Serialize + DeserializeOwned>(
     walk: &mut Walk,
     method: &str,
     part: &str,
     value: &Value,
 ) {
-    let encoded =
-        serde_json::to_value(serde_json::from_value::<T>(value.clone()).unwrap()).unwrap();
-    let methods = document()["x-methods"].take();
-    let tables = methods.as_object().into_iter().flat_map(|t| t.values());
-    let entry = tables.filter_map(|t| t.get(method)).next().unwrap().clone();
-    walk.walk(&entry[part], &encoded, method, &format!("{method} {part}"));
+    let entry = walk
+        .entries()
+        .find(|(m, _)| *m == method)
+        .unwrap()
+        .1
+        .clone();
+    let root = format!("{method} {part}");
+    guard(walk, &root, &entry[part], value, method, &decode::<T>);
 }
 
 /// The optional properties that were an `Option`: nullable before the
@@ -388,19 +456,19 @@ fn options() -> BTreeSet<String> {
 fn unit_proto_absent_not_null_samples_send_no_null_on_optional_fields() {
     let mut walk = Walk::new();
     let event = json!({"$ref": "#/$defs/Event"});
+    let read = |strictness| {
+        move |value: &Value| {
+            let decoded = Event::decode(value, strictness).map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(decoded.value).unwrap())
+        }
+    };
+    let (tolerant, strict) = (read(Strictness::Tolerant), read(Strictness::Strict));
     for case in cases("events.json")
         .iter()
         .filter(|c| c["expect"] != "invalid")
     {
-        let decoded = Event::decode(&case["event"], Strictness::Tolerant)
-            .unwrap()
-            .value;
-        walk.walk(
-            &event,
-            &serde_json::to_value(decoded).unwrap(),
-            "Event",
-            &format!("event {}", case["name"]),
-        );
+        let root = format!("event {}", case["name"]);
+        guard(&mut walk, &root, &event, &case["event"], "Event", &tolerant);
     }
     for case in &cases("methods.json") {
         each_method!(absent(&mut walk); case);
@@ -411,33 +479,51 @@ fn unit_proto_absent_not_null_samples_send_no_null_on_optional_fields() {
         } else {
             "SessionView"
         };
-        let name = &case["name"];
-        walk.walk(
-            &json!({"$ref": format!("#/$defs/{view}")}),
-            &case["expected"],
-            view,
-            &format!("view {name}"),
-        );
+        let (name, schema) = (&case["name"], json!({"$ref": format!("#/$defs/{view}")}));
+        walk.check(&format!("view {name}"), &schema, &case["expected"], view);
         for op in case["ops"].as_array().unwrap() {
-            walk.walk(
-                &json!({"$ref": "#/$defs/EventBody"}),
-                op,
-                "EventBody",
-                &format!("view {name} op"),
-            );
+            let body = json!({"$ref": "#/$defs/EventBody"});
+            walk.check(&format!("view {name} op"), &body, op, "EventBody");
         }
+    }
+
+    // Every event, method and error with every property filled (T193).
+    for value in full::full(&walk.defs, &event) {
+        let root = format!("full event {}", value["type"]);
+        guard(&mut walk, &root, &event, &value, "Event", &strict);
+    }
+    let mut calls = Vec::new();
+    for (method, entry) in walk.entries() {
+        let params = full::full(&walk.defs, &entry["params"]);
+        let results = entry.get("result").map(|r| full::full(&walk.defs, r));
+        let n = params.len().max(results.as_ref().map_or(0, Vec::len));
+        for i in 0..n {
+            let mut call = json!({"method": method, "params": params[i % params.len()]});
+            if let Some(results) = &results {
+                call["result"] = results[i % results.len()].clone();
+            }
+            calls.push(call);
+        }
+    }
+    for call in &calls {
+        each_method!(absent(&mut walk); call);
+    }
+    let error = json!({"$ref": "#/$defs/RpcError"});
+    for value in full::full(&walk.defs, &error) {
+        let decode = decode::<cupper_protocol::error::RpcError>;
+        guard(&mut walk, "full error", &error, &value, "RpcError", &decode);
     }
     assert_eq!(walk.faults, Vec::<String>::new());
 
     let options = options();
-    let missed: Vec<&String> = options
-        .iter()
-        .filter(|o| !walk.reached.contains(*o))
-        .collect();
+    let missed = |seen: &BTreeSet<String>| options.difference(seen).cloned().collect::<Vec<_>>();
+    let (unreached, unchecked) = (missed(&walk.reached), missed(&walk.absent));
     eprintln!(
-        "{} of {} Option properties reached; not reached:",
-        options.len() - missed.len(),
-        options.len()
+        "{} of {} Option properties reached, {} checked absent; not checked absent:",
+        options.len() - unreached.len(),
+        options.len(),
+        options.len() - unchecked.len()
     );
-    missed.iter().for_each(|o| eprintln!("  {o}"));
+    unchecked.iter().for_each(|o| eprintln!("  {o}"));
+    assert!(unreached.is_empty(), "not reached: {unreached:?}");
 }
