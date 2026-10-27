@@ -82,7 +82,9 @@ jobs:
           fi
       - name: Run
         run: |
-          set -uo pipefail
+          # The runner's bash starts with -e; a failed run is counted, and
+          # `grep -c` of none exits 1, so neither may end the script.
+          set +e -uo pipefail
           read -r -a extra <<< "$ARGS"
           # What libtest or Vitest prints when a test ran and passed.
           RAN='test result: ok\. [1-9][0-9]* passed|Tests +[1-9][0-9]* passed'
