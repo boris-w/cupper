@@ -1,0 +1,138 @@
+# One cargo or Vitest test run N times in one call, optionally as several
+# copies at once to load the runner (T199): for the runs a flaky test needs
+# under load, on a runner and not on the author's machine (CLAUDE.md rule 10).
+# Each copy runs the test `times` times, so a call makes times × parallel runs.
+# A run is every test binary of the package (cargo) or `vitest run` of the
+# project once, with the filter; the job fails if any run did.
+name: test-repeat
+
+on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: cargo or vitest
+        type: choice
+        options: [cargo, vitest]
+        default: cargo
+      package:
+        description: The cargo package, or the Vitest project's directory
+        default: cupper-host
+      args:
+        description: >-
+          More options: for cargo test's build, such as
+          --features test-harness --test gateway_sync; for vitest run, such as a test file
+        default: ""
+      filter:
+        description: The test's name, or part of it (libtest's filter, Vitest's -t)
+        default: ""
+      times:
+        description: How many runs each copy makes
+        default: "100"
+      parallel:
+        description: How many copies run at once (more than 1 loads the runner)
+        default: "1"
+      runner:
+        description: The runner
+        type: choice
+        options: [macos-15, ubuntu-24.04]
+        default: macos-15
+
+permissions:
+  contents: read
+
+jobs:
+  repeat:
+    name: ${{ inputs.filter }} × ${{ inputs.times }} × ${{ inputs.parallel }} (${{ inputs.runner }})
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 150
+    env:
+      KIND: ${{ inputs.kind }}
+      PACKAGE: ${{ inputs.package }}
+      ARGS: ${{ inputs.args }}
+      FILTER: ${{ inputs.filter }}
+      TIMES: ${{ inputs.times }}
+      PARALLEL: ${{ inputs.parallel }}
+      OUT: ${{ github.workspace }}/test-repeat
+      # A run that hangs is cut off, and counts as failed.
+      RUN_TIMEOUT: "1200"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: test-repeat
+      - name: Build
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          read -r -a extra <<< "$ARGS"
+          if [ "$KIND" = cargo ]; then
+            # The host's tests run the fake agent and the e2e build of the CLI
+            # from target/debug, as the rust job builds them.
+            cargo build --locked -p cupper-fake-agent
+            cargo build --locked -p cupper-cli --features test-harness
+            cargo test --locked -p "$PACKAGE" ${extra[@]+"${extra[@]}"} --no-run \
+              --message-format=json-render-diagnostics \
+              | jq -r 'select(.reason == "compiler-artifact" and .profile.test and .executable) | .executable' \
+              > "$OUT/binaries.txt"
+            cat "$OUT/binaries.txt"
+          else
+            pnpm install --frozen-lockfile
+          fi
+      - name: Run
+        run: |
+          set -uo pipefail
+          read -r -a extra <<< "$ARGS"
+          # What libtest or Vitest prints when a test ran and passed.
+          RAN='test result: ok\. [1-9][0-9]* passed|Tests +[1-9][0-9]* passed'
+          # One run: every binary, or vitest once; its output in $1.
+          run() {
+            if [ "$KIND" = cargo ]; then
+              local status=0 bin
+              while read -r bin; do
+                if [ -n "$FILTER" ]; then
+                  perl -e 'alarm shift; exec @ARGV' "$RUN_TIMEOUT" "$bin" "$FILTER" >> "$1" 2>&1 || status=1
+                else
+                  perl -e 'alarm shift; exec @ARGV' "$RUN_TIMEOUT" "$bin" >> "$1" 2>&1 || status=1
+                fi
+              done < "$OUT/binaries.txt"
+              return "$status"
+            fi
+            local name=()
+            if [ -n "$FILTER" ]; then
+              name=(-t "$FILTER")
+            fi
+            (cd "$PACKAGE" && perl -e 'alarm shift; exec @ARGV' "$RUN_TIMEOUT" \
+              pnpm exec vitest run ${name[@]+"${name[@]}"} ${extra[@]+"${extra[@]}"}) >> "$1" 2>&1
+          }
+          copy() {
+            local i
+            for i in $(seq 1 "$TIMES"); do
+              local log="$OUT/copy-$1-run-$i.log"
+              # A filter that matches no test fails too, so that a typo
+              # cannot pass for N runs.
+              if run "$log" && grep -Eq "$RAN" "$log"; then
+                echo "copy $1 run $i ok" >> "$OUT/results.txt"
+                rm -f "$log"
+              else
+                echo "copy $1 run $i FAILED" >> "$OUT/results.txt"
+              fi
+            done
+          }
+          for c in $(seq 1 "$PARALLEL"); do
+            copy "$c" &
+          done
+          wait
+          passed=$(grep -c ' ok$' "$OUT/results.txt")
+          failed=$(grep -c ' FAILED$' "$OUT/results.txt")
+          echo "$passed passed, $failed failed" | tee "$OUT/summary.txt"
+          grep ' FAILED$' "$OUT/results.txt" || true
+          [ "$failed" -eq 0 ]
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-repeat
+          path: test-repeat/
+          retention-days: 14
+          if-no-files-found: ignore
