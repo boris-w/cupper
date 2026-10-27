@@ -321,8 +321,11 @@ async fn start(client: &Client, project: &Value, message: &str) -> String {
 async fn it_nfr9_crash_under_load_kill9_again_and_again() {
     let dir = TempDir::new("under-load");
     let (data_dir, mut host, client, project) = project(&dir).await;
-    let load = "flood 200000 20";
-    let session = start(&client, &project, load).await;
+    // 200,000 fragments as fast as the agent can, 2,000 at a time: in one
+    // flood it queues all of them before it writes the first, 1.8 s at a
+    // load of 5 and 15 to 28 s at 100, which the wait below counted (T199).
+    let load = vec!["flood 2000 20"; 100].join("; sleep 1; ");
+    let session = start(&client, &project, &load).await;
     let deltas = format!(
         "SELECT count(*) FROM events WHERE stream = 'session/{session}' AND type = 'item.delta'"
     );
@@ -332,7 +335,7 @@ async fn it_nfr9_crash_under_load_kill9_again_and_again() {
         let client = connect(&data_dir).await;
         if round > 0 {
             let send = json!({"command_id": client::command_id(), "session_id": session,
-                "mode": "queue", "content": text(load)});
+                "mode": "queue", "content": text(&load)});
             request(&client, SessionSend::NAME, send).await.unwrap();
         }
         let (clock, from) = (SystemClock::new(), count());
