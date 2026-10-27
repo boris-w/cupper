@@ -136,3 +136,27 @@
   - e2e 的 `disconnectWindow` 轮询一放弃，就先附上窗口自己报的连接状态、等了多久、main.log 和 host.log；通过时把重连耗时记成 `reconnect_ms` 注解。
   - 主进程每次建窗口连接都记下耗时；失败时记下原因。
   - 请编排者在本分支上用 `e2e-repeat` 跑 100 次。
+
+### runner 上的修后连跑结果
+
+- **第 1 处**：run 40445262092（提交 7d0fef5），`times=100`、`parallel=2`。构件 `results.txt` 里 200 次全是 ok。
+  - 作业被标成失败，是 `test-repeat.yml` 自己的错：runner 的 bash 带 `-e`，200 次全过时 `grep -c ' FAILED$'` 找不到匹配、退出码为 1，脚本没打完汇总就退出了。8216080 已修（Run 这一步 `set +e`），编排者另开 PR #10 挑进了 main。
+- **第 3 处**：run 40445328766（7d0fef5），`times=50`、`parallel=2`。`results.txt` 里 100 次全是 ok，作业被标成失败的原因同上。
+- 本机测这个 workflow 脚本时，用过一次 `parallel=2` 的小样例（fake-agent 的 `unit_replay_each_start_plays_the_next_segment`）。22 次里失败过 1 次，日志被我清目录时删了，查不出原因；之后又跑了 38 次，都没再出现。编排者提醒：本机并行也算加压，以后本机只跑单份小样例，并行的情况放到 runner 上验。
+
+### 第 2 处：runner 上的诊断
+
+- **run 40445893797**（83feb2a，100 次）：失败 1 次（repeat26），99 次通过；通过时重连耗时 8–52 ms，中位数 14 ms。
+  - 失败那次是用例超过 90 s 的时限，不是轮询失败。拆除也超时了，总共 180 s。诊断没触发，日志也没附上。
+- **5b0a306 的改动**：fixture 在用例失败时先附日志、再退出 App；`disconnectWindow` 在断开 hook 返回后记一个注解。
+- **run 40448998123**（5b0a306，200 次）：失败 1 次（repeat63），199 次通过；重连耗时 8–40 ms，中位数 14 ms。失败那次的日志附上了：
+  - 断开 hook 正常返回（04:35:10.904）。host.log 在 10.906 记下窗口连接关闭（`peer_closed`）。
+  - 此后 App 进程一次也没再连上宿主。测试的 `status` 每秒照常连接、应答，一直到 04:35:30。
+  - main.log 停在断开之前的那行 "window connected"。之后既没有 "window connected"，也没有 "window connection failed"，主进程再没记过一行日志。
+  - 轮询在 20 s 后放弃。catch 里读窗口状态的 `evaluate` 当时没设上限，挂住了，所以报的是用例超时。拆除时退出 App 的 `app.evaluate` 也挂住了。
+- **结论**：窗口的数据连接被断开后，大约每 100 次有 1 次，Electron 主进程不再应答，`connect()` 既不成功也不失败。这是产品问题。
+  - 重连路径上的同步调用只有原生扩展的 `connectHost`。e2e 是 dev-auth 构建，它只做 `UnixStream::connect`、核对 uid、`Relay::start`，读代码看不出会阻塞的地方。
+  - 照约定停下，报给编排者。
+- **再一步的诊断**（fcde9c1，不改行为）：
+  - 两个探测都限 5 s。
+  - 轮询放弃时，用 `/usr/bin/sample` 对主进程采样 3 s，附上所有线程的栈。
