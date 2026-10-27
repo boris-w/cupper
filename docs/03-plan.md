@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.67
+- 版本：v1.3.68
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -1955,3 +1955,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.65 | 2026-10-26 | 用户决定建 GitHub 公开仓库、CI 上 GitHub、每个任务一个 PR，不重写历史（`docs/meetings/2026-10-26-github-remote/`），替换 U-P1。新增 T197 启用 Actions，T099 改为也依赖 T197，T099 的 20 次连跑与 T189 剩下的 50 次连跑都在 GitHub 的 macOS runner 上做。T187、T189 合并 |
 | v1.3.66 | 2026-10-26 | T197 第一阶段合并：GitHub CI 成为合并的门槛，main 设了保护规则（8 个检查）。新增 T198：桌面主进程 bridge 单测的 `settle()` 固定等 10 ms，在 GitHub runner 上偶发失败；T099 改为也依赖 T198 |
 | v1.3.67 | 2026-10-26 | 新增 T199：网关同步的一个用例在 GitHub runner 上偶发失败；T099 改为也依赖 T199。用户下班前决定：手上的 T192、T195、T196、T197 做完就停，T193、T198、T199 明天再派 |
+| v1.3.68 | 2026-10-27 | 10-26 夜里的 nightly 在 e2e 全集里抓到 E2E-single-instance 没标 `@focus`（T195 的前台检查生效），派 T195 修复 1。T199 收入 T196 的两处遗留（cargo 重新链接后宿主的首次执行、`fake_agent_host_from` 的宿主回收）。派发 T193、T198、T199 |
