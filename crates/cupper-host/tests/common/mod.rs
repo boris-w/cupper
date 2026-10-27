@@ -167,8 +167,12 @@ pub fn query(db: &Path, sql: &str) -> Vec<String> {
 }
 
 /// A host with the fake agent on a trusted project in `dir`, more of
-/// `test_config` in `config`; its data directory and the harness client.
-pub async fn fake_agent_host(dir: &TempDir, config: serde_json::Value) -> (PathBuf, Child, Client) {
+/// `test_config` in `config`; its data directory, the host and the harness
+/// client.
+pub async fn fake_agent_host(
+    dir: &TempDir,
+    config: serde_json::Value,
+) -> (PathBuf, Running, Client) {
     fake_agent_host_from(Path::new(HOST), dir, config).await
 }
 
@@ -176,9 +180,11 @@ pub async fn fake_agent_host_from(
     host: &Path,
     dir: &TempDir,
     config: serde_json::Value,
-) -> (PathBuf, Child, Client) {
+) -> (PathBuf, Running, Client) {
     let data_dir = fake_agent_data(dir);
-    let host = spawn_from(host, &data_dir, fake_agent_config(config));
+    // Running before the connection: a host that never listens is stopped
+    // too, when `connect` gives up (T199).
+    let host = Running(spawn_from(host, &data_dir, fake_agent_config(config)));
     let client = connect(&data_dir).await;
     (data_dir, host, client)
 }
