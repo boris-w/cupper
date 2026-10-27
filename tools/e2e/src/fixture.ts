@@ -146,6 +146,10 @@ export class Cupper {
    */
   async dispose(info: TestInfo): Promise<void> {
     const problems: string[] = [];
+    // First: a quit that hangs would leave the failure without them (T199).
+    if (info.status !== info.expectedStatus) {
+      await attachLogs(info, this.root);
+    }
     await this.cli.dispose();
     const table = processes();
     const app = this.#main;
@@ -178,9 +182,6 @@ export class Cupper {
     if (left.length > 0) {
       signal(left, "SIGKILL");
       problems.push(`left behind: ${left.map((proc) => `${proc.pid} ${proc.args}`).join(", ")}`);
-    }
-    if (info.status !== info.expectedStatus) {
-      await attachLogs(info, this.root);
     }
     rmSync(this.root, { recursive: true, force: true });
     if (problems.length > 0) {

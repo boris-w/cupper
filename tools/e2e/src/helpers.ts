@@ -59,6 +59,7 @@ export async function disconnectWindow(cupper: Cupper): Promise<void> {
       .__cupperE2E;
     hooks?.disconnectWindow(id);
   }, id);
+  test.info().annotations.push({ type: "disconnected", description: new Date().toISOString() });
   const started = Date.now();
   try {
     await expect
@@ -67,18 +68,17 @@ export async function disconnectWindow(cupper: Cupper): Promise<void> {
       })
       .toBe(true);
   } catch (error) {
-    // What the window says, and the logs before the teardown may run out of time (T199).
+    // What the window says and whether the main process answers; the
+    // fixture attaches the logs (T199).
     const state = await hostClient(cupper)
       .state()
       .catch((e: unknown) => String(e));
-    const body = JSON.stringify({ waited_ms: Date.now() - started, window: state });
+    const main = await Promise.race([
+      cupper.app.evaluate(() => "responds"),
+      new Promise<string>((done) => setTimeout(() => done("no answer in 5 s"), 5000)),
+    ]).catch((e: unknown) => String(e));
+    const body = JSON.stringify({ waited_ms: Date.now() - started, window: state, main });
     await test.info().attach("reconnect", { body, contentType: "application/json" });
-    for (const log of ["logs/main.log", "data/logs/host.log"]) {
-      await test
-        .info()
-        .attach(log, { path: join(cupper.root, log) })
-        .catch(() => undefined);
-    }
     throw error;
   }
   test.info().annotations.push({ type: "reconnect_ms", description: String(Date.now() - started) });
