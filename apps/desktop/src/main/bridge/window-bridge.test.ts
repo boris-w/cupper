@@ -7,12 +7,13 @@ import {
   MAX_BLOB_CHUNK_BYTES,
   MAX_FRAME_BYTES,
 } from "@cupper/host-client";
+import { until } from "@cupper/host-client/contract";
 import { MockHost, type MockConnection } from "@cupper/host-client/mock";
 import { CLIENT_NOTIFICATIONS, METHODS, type InputEvidence } from "@cupper/protocol";
 import { describe, expect, test, vi } from "vitest";
 
 import type { ToWindow } from "../../shared/ipc";
-import { fixtures, mockConnect, settle, wired } from "./testing";
+import { fixtures, mockConnect, wired } from "./testing";
 import {
   allowed,
   MAX_UNACKED_BYTES,
@@ -21,7 +22,12 @@ import {
   type WindowPort,
 } from "./window-bridge";
 
-/** A bridge whose window end is in the test's hands, with its timers. */
+/**
+ * A bridge whose window end is in the test's hands, with its timers. The
+ * mock's port has no delay, so what the bridge does with a window message
+ * or a host frame is done when the call returns; only a reconnect, which
+ * awaits `controlReady` and `connect`, is waited for.
+ */
 function bridged(host: MockHost, deps: Partial<BridgeDeps> = {}) {
   const posted: ToWindow[] = [];
   let send: (message: unknown) => void = () => undefined;
@@ -83,7 +89,6 @@ describe("UNIT-bridge-whitelist", () => {
       const params = { command_id: `c_${id}` };
       send({ type: "send", json: JSON.stringify({ jsonrpc: "2.0", id, method, params }) });
     });
-    await settle();
     flush();
     const reached = conn(host)
       .messages()
@@ -126,7 +131,6 @@ describe("UNIT-bridge-whitelist", () => {
     ]) {
       send(message);
     }
-    await settle();
     flush();
     expect(conn(host).frames.length).toBe(before);
     expect(messages()).toMatchObject([
@@ -150,7 +154,6 @@ describe("UNIT-bridge-whitelist", () => {
       json: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "blob/put", params: { hash: a } }),
     });
     blob(b, 6);
-    await settle();
     const blobs = conn(host)
       .frames.filter((f) => f.type === FRAME_BLOB)
       .map((f) => decodeBlobChunk(f.payload).hash);
@@ -201,19 +204,14 @@ describe("UNIT-bridge-lifecycle", () => {
     await bridge.open();
     conn(host).send({ jsonrpc: "2.0", method: "host/shutdown", params: { reason: "upgrade" } });
     conn(host).close();
-    await settle();
-    expect(posted.map((m) => m.type === "data" || m.state.status)).toEqual([true, "reconnecting"]);
+    const states = () => posted.map((m) => m.type === "data" || m.state.status);
+    await until(() => expect(states()).toEqual([true, "reconnecting"]));
     expect(host.connections).toHaveLength(1);
     controlBack();
-    await settle();
+    await until(() => expect(states()).toEqual([true, "reconnecting", "ready"]));
     host.notify("host/shutdown", { reason: "idle" });
     flush();
-    expect(posted.map((m) => m.type === "data" || m.state.status)).toEqual([
-      true,
-      "reconnecting",
-      "ready",
-      true,
-    ]);
+    expect(states()).toEqual([true, "reconnecting", "ready", true]);
     expect(posted[2]).toMatchObject({ handshake: { host: host.init.host } });
   });
 
@@ -224,11 +222,8 @@ describe("UNIT-bridge-lifecycle", () => {
     });
     await bridge.open();
     conn(host).close();
-    await settle();
-    expect(posted.at(-1)).toEqual({
-      type: "state",
-      state: { status: "failed", reason: "data_too_new" },
-    });
+    const failed = { type: "state", state: { status: "failed", reason: "data_too_new" } };
+    await until(() => expect(posted.at(-1)).toEqual(failed));
   });
 
   test("disconnect drops the connection and the bridge makes another; close ends it for good", async () => {
@@ -238,12 +233,13 @@ describe("UNIT-bridge-lifecycle", () => {
     shell.onConnectionState((state) => states.push(state.status));
     await shell.open();
     bridges[0]?.disconnect();
-    await settle();
-    expect(states).toEqual(["reconnecting", "ready"]);
+    await until(() => expect(states).toEqual(["reconnecting", "ready"]));
     expect(host.connections.map((c) => c.closed)).toEqual([true, false]);
     bridges[0]?.close();
-    await settle();
-    expect(host.connections.every((c) => c.closed)).toBe(true);
+    await until(() => expect(host.connections.every((c) => c.closed)).toBe(true));
+    // A closed bridge answers nothing: the pause gives a wrong reconnect the
+    // time an idle machine needs to show it; a loaded one may hide it.
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(states).toEqual(["reconnecting", "ready"]);
   });
 });
@@ -292,7 +288,6 @@ describe("UNIT-input-guard (window bridge)", () => {
     send(command(3, "git/revert", { command_id: "c_3", session_id: "s_1" }));
     input.give({ kind: "click" });
     send(command(4, "git/revert", { command_id: "c_4", session_id: "s_1" }));
-    await settle();
     flush();
     const sent = conn(host).messages().slice(1) as { id: number; params: unknown }[];
     expect(sent.map((m) => m.id)).toEqual([1, 4]);
@@ -317,19 +312,17 @@ describe("UNIT-input-guard (window bridge)", () => {
     const host = new MockHost(fixtures);
     host.handle("interaction/respond", () => undefined);
     const input = once();
-    const { bridge, send, flush, messages } = bridged(host, { input });
+    const { bridge, posted, send, flush, messages } = bridged(host, { input });
     await bridge.open();
     input.give(ENTER);
     send(respond(1, "c_1"));
     send(respond(2, "c_1", "selected"));
     conn(host).close();
-    await settle();
+    await until(() => expect(posted.at(-1)).toMatchObject({ state: { status: "ready" } }));
     send(respond(3, "c_1"));
-    await settle();
     expect(conn(host).messages().slice(1)).toMatchObject([{ id: 3, params: { input: ENTER } }]);
     conn(host).reply(3, { result: {} });
     send(respond(4, "c_1"));
-    await settle();
     flush();
     expect([2, 4].every((id) => refusedFor(messages(), id))).toBe(true);
     // Another document instance knows none of its commands.
@@ -337,7 +330,6 @@ describe("UNIT-input-guard (window bridge)", () => {
     await other.bridge.open();
     host.handle("interaction/respond", () => undefined);
     other.send(respond(1, "c_9"));
-    await settle();
     other.flush();
     expect(refusedFor(other.messages(), 1)).toBe(true);
   });
@@ -360,7 +352,6 @@ describe("UNIT-input-guard (window bridge)", () => {
     push(bad.slice().buffer);
     conn(host).reply(1, { result: {} });
     send(respond(2, "c_1"));
-    await settle();
     flush();
     const decoder = new FrameDecoder();
     posted.forEach((m) => m.type === "data" && decoder.push(new Uint8Array(m.chunk)));

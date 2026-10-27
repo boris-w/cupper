@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 
+import { until } from "@cupper/host-client/contract";
 import { MockHost } from "@cupper/host-client/mock";
 import type { MessagePortMain, WebContents, WebFrameMain } from "electron";
 import { describe, expect, test } from "vitest";
@@ -7,7 +8,7 @@ import { describe, expect, test } from "vitest";
 import { HOST_PORT } from "../../shared/ipc";
 import { MAIN_DOCUMENT_URL } from "../window";
 import { WindowBridges } from "./bridges";
-import { fixtures, mockConnect, settle } from "./testing";
+import { fixtures, mockConnect } from "./testing";
 import { InputGuard } from "../input/guard";
 
 /** A window's webContents, as far as the bridges use it. */
@@ -70,7 +71,6 @@ describe("UNIT-bridge-lifecycle", () => {
     window.emitter.emit("render-process-gone", {}, { reason: "crashed" });
     await open();
     window.emitter.emit("destroyed");
-    await settle();
-    expect(alive()).toEqual([false, false, false, false]);
+    await until(() => expect(alive()).toEqual([false, false, false, false]));
   });
 });

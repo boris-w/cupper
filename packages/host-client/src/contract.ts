@@ -19,11 +19,11 @@ const SHUTDOWN = { reason: "idle", restart_expected: false };
 
 /**
  * Until `check` passes. What crosses a channel takes as long as the machine
- * lets it, so the cases wait for what they expect, not for a time; the limit
+ * lets it, so tests wait for what they expect, not for a time; the limit
  * only ends a case that would wait for ever, and it fails with the last
  * check's message, which says what was awaited.
  */
-const until = (check: () => void) => vi.waitFor(check, { timeout: 5000, interval: 5 });
+export const until = (check: () => void) => vi.waitFor(check, { timeout: 5000, interval: 5 });
 
 export function hostPortContract(setup: () => Promise<HostPortFixture>): void {
   async function opened() {
