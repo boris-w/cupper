@@ -73,3 +73,62 @@
 **PR 的 ts 失败**：`apps/desktop/src/main/bridge/contract.test.ts` 的 "a request reaches the host re-serialized, and its response comes back" 收到空数组。`apps/desktop/src/main/bridge/testing.ts` 的 `settle` 只等 10 ms，runner 负载高时回应没赶上。本分支不碰 bridge；main 的 43ee901 上 ts 也是这个用例失败；本机单跑这个文件 10 次全过；PR 的第 2 次运行（attempt 2）里 ts 重跑通过。
 
 **PR 的 e2e 失败**：没跑到测试，`build` 步骤里 `xtask host-bundle` 报 `codesign failed: target/runtime-pack/Contents/Helpers/node: No such file or directory`。rust-cache 整键命中恢复了 target，`target/runtime-pack/Contents` 目录在，`xtask ci e2e` 只查 `Contents` 是不是目录（`crates/xtask/src/ci/jobs/e2e.rs`），于是跳过了 `runtime-pack`，但里面没有 `Helpers/node`。main 的 8df33d4 是冷缓存，跑了 `runtime-pack`，e2e 通过。属于 CI 缓存的问题（T197 的范围）。
+
+## 修复 1：E2E-single-instance 要标 `@focus`（2026-10-27）
+
+10-26 夜里的 nightly（https://github.com/boris-w/cupper/actions/runs/40412822285 ）在 e2e 全集的后台段报 `app.spec.ts:14 › E2E-single-instance` "the app took the foreground in 4 of 15 samples; it needs @focus"。后台段共 26 条，其余 25 条都通过了前台检查；`@focus` 段 18 条全过。
+
+### 规模估计（开工前）
+
+| 模块 | 估计 |
+|---|---|
+| `app.spec.ts`：E2E-single-instance 加 `@focus`。prettier 会把用例体缩进一层，所以按整段计 | 35 |
+| 合计 | 约 **35**，停止线 60 |
+
+### 改法
+
+`app.spec.ts` 的 E2E-single-instance 加 `{ tag: "@focus" }`，并加一行注释说明原因：第二次启动时，主进程在 `second-instance` 里调 `showMainWindow()`，对已有窗口执行 `show()`，这会激活 App。采样按第一个实例的 pid 记，4 次命中都是这一步。用例测的正是这个行为，所以要放进 `@focus` 段。主进程和前台检查都不改。
+
+### 同类排查：后台段的用例会不会走到激活路径
+
+主进程里会激活 App 的路径，以及后台段用例能不能走到：
+
+| 路径 | 何时触发 | 后台段的用例 |
+|---|---|---|
+| `showMainWindow()` 对已有窗口 `show()`（含最小化时的 `restore()`） | `second-instance`：又启动了一个实例 | 只有 E2E-single-instance，本次改为 `@focus` |
+| 同上 | `activate`：macOS 的 reopen，也就是点 Dock 图标，或经 LaunchServices（`open`、Finder）再次打开 | 走不到：后台模式是 `accessory`，没有 Dock 图标；用例不经 LaunchServices 启动 App |
+| 新建主窗口后在 `ready-to-show` 时 `show()` | 启动时；`mainWindow` 为空时的 `second-instance`、`activate` | 后台模式下改为 `showInactive()`（T195）；后台段没有用例关窗后再让它重建 |
+| 原生对话框（`showMessageBox`、`showMessageBoxSync`、`showOpenDialog`） | 退出确认、提权确认、添加项目等 | e2e 构建里由替身代答（`e2e-dialogs.ts`），不弹真对话框 |
+| `shell.openExternal` | 导航加固拦下的外部链接、ShellAPI 的 `openExternal` | 没有用例触发：`tools/e2e` 里没有点外部链接、`window.open` 或调 `openExternal` 的地方。它激活的是浏览器而不是本 App，前台检查抓不到，以后加这类用例要标 `@focus` 或替身代答 |
+
+用例代码里会激活 App 的写法：
+
+| 写法 | 用到它的用例 |
+|---|---|
+| `focusWindow()`（`app.focus({ steal: true })`、`w.focus()`） | 都在 `@focus` 用例里：helpers 的 2 条、interaction 的 5 条、nfr1 的 2 条、security 的 4 条 |
+| `activatePanel()`、`press()`、`pressDigit()`、`type()`（`sendInputEvent`，要窗口有焦点） | 同上，都在 `@focus` 用例里 |
+| 新建 `BrowserWindow`（默认 `show: true`） | 只有 `gate.spec.ts` 的 `cover()`：T195 已改为 `show: false` 再 `showInactive()`，e2e-repeat 40319605626 核对过 |
+| 再启动一个实例（`spawn(BUILT.app)`） | 只有 E2E-single-instance |
+
+后台段里的 Playwright 输入，即 `locator.press`、`keyboard.press`、`click`，走 CDP，不激活 App：
+- E2E-new-session-agent-claude 的 `composer.press("Enter")`；
+- E2E-SEC-csp 的菜单点击和 `Escape`。
+
+实测佐证：40412822285 的后台段共 26 条（PERF 的 3 条在 runner 上不跑），除 E2E-single-instance 外的 25 条都通过了前台检查。PERF-bridge-gate 的 3 条只在作者机器上跑，其中 covered 那条在 T195 修过。
+
+结论：要加 `@focus` 的只有 E2E-single-instance，没有发现其他本不该激活的用例。
+
+### 按模块统计
+
+| 模块 | 提交 | `cargo xtask size` 累计 |
+|---|---|---|
+| `app.spec.ts` 加 `@focus`（用例体缩进一层） | 99d7442 | +30 −27（净 +3），停止线 60 |
+
+本机核对：`playwright test --list --grep @focus` 列出 19 条，含 E2E-single-instance；eslint、tsc、prettier 通过。e2e 本身在 runner 上核对（见下）。
+
+### runner 上的核对（1c778f1）
+
+| 运行 | 内容 | 结果 |
+|---|---|---|
+| ci 40438066146（PR #6） | 8 个检查 | 全部通过 |
+| nightly 40438064169（编排者在本分支上触发） | e2e 全集，分前后台两段 | 48 条全过：后台段 25 条，没有前台命中；`@focus` 段 19 条，含 E2E-single-instance（3.4 s） |
