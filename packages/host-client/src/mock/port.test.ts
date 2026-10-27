@@ -8,7 +8,6 @@ import { createMockShellHost } from "./port";
 describe("UNIT-hostport-contract-mock", () => {
   hostPortContract(async () => {
     const host = new MockHost(fixtures);
-    const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-    return { shell: createMockShellHost(host), host, settle };
+    return { shell: createMockShellHost(host), host };
   });
 });
