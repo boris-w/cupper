@@ -429,7 +429,7 @@
 | T197、下一个改 e2e 调度的任务 | `ci e2e`、`ci nightly` 里 `gate.spec.ts` 和另一个 worker 的用例并行（`workers: 2`），PERF-bridge-gate 的 p99 会受旁边用例影响，趋势比单独跑时噪。重新定 workers 时考虑让它单独跑 | T191 |
 | 编排者（下次本机 `ci nightly`） | PERF-bridge-gate 的第一行历史由本机的 `ci nightly` 写入（GitHub 上的 e2e 不提交历史）；跑完连同摘要一起提交 | T191 |
 | T066、升级适配器的任务 | 评审录制用 `node tools/rec-shape-diff/src/main.ts [--json] <旧> <新>`（没有差异 0，有差异 1）；COMPAT 编号由 `trace-ids status --compat <报告>` 推导，编号在 `tests/ids.toml` 里登记了剧本和 CLI。`not_applicable`、`observed`、`real_only` 都不让编号完成；要把编号标为不适用，照计划 1.6 写 `status` 和理由 | T194 |
-| 编排者（下次整理文档） | 计划 1.8 按有远端改写：逐行建议在 `docs/tasks/T197-github-actions/notes.md`；T084 的"macOS 只比对大版本"已改为"Chromium 必须一致、macOS 不同只提示"，计划里 1.8 的截图基线行、T118 行、R9 三处要改；设计 5.1.6"截图基线由专用脚本在本机生成"改为由 `ui-baseline` 工作流在 runner 上生成 | T197 |
+| 编排者（下次整理文档） | 计划 1.8 按有远端改写：逐行建议在 `docs/tasks/T197-github-actions/notes.md`；T084 的"macOS 只比对大版本"已改为"Chromium 必须一致、macOS 不同只提示"，计划里 1.8 的截图基线行、T118 行、R9 三处要改；设计 5.1.6"截图基线由专用脚本在本机生成"改为由 `ui-baseline` 工作流在 runner 上生成 | T197（已完成，计划 v1.3.69） |
 | T099 | 20 次连跑在 GitHub 的 macOS runner 上做（nightly 的 e2e 全集或 `e2e-repeat`）；PERF 闸门在作者机器上判，托管 runner 上 `@perf` 用例不跑；IT-sys-peer-macos14/15 由 nightly 的摘要推导（`trace-ids status --summary`） | T197 |
 | 改 CI 的任务 | 下载缓存的键由几个作业共用，只用 git-lfs 的作业会先存下一份不完整的；按作业分键可以省一次下载。`target/` 下非 cargo 目录会被 rust-cache 留下骨架，只凭"目录在"判断就绪的地方都要改成按内容判断 | T197 |
 | T066 | T192 补齐了 21 个剧本，实际运行时留意：`config-scope`、`untrusted-project` 开工前就放好了 `.claude/settings.json`，宿主可能判为配置已变而暂停队列，剧本以"不确定"结束；`crash-resume`、`resume-procs` 在两回合之间 SIGKILL 掉 `claude`，靠 K6 自动 resume；`close-running` 允许命令后等 3 秒收尾；真实模式的回合等待上限是 5 分钟。详见 `docs/tasks/T192-compat-scenarios/notes.md` | T192 |
