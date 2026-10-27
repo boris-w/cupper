@@ -68,15 +68,26 @@ export async function disconnectWindow(cupper: Cupper): Promise<void> {
       })
       .toBe(true);
   } catch (error) {
-    // What the window says and whether the main process answers; the
-    // fixture attaches the logs (T199).
-    const state = await hostClient(cupper)
-      .state()
-      .catch((e: unknown) => String(e));
-    const main = await Promise.race([
-      cupper.app.evaluate(() => "responds"),
-      new Promise<string>((done) => setTimeout(() => done("no answer in 5 s"), 5000)),
-    ]).catch((e: unknown) => String(e));
+    // What the window says, whether the main process answers, and where its
+    // threads are; the fixture attaches the logs (T199). A process that
+    // stopped answering would hold up an unbounded evaluate.
+    const within = <T>(work: Promise<T>) =>
+      Promise.race([
+        work,
+        new Promise<string>((done) => setTimeout(() => done("no answer in 5 s"), 5000)),
+      ]).catch((e: unknown) => String(e));
+    const state = await within(hostClient(cupper).state());
+    const main = await within(cupper.app.evaluate(() => "responds"));
+    const pid = cupper.app.process().pid;
+    if (pid !== undefined) {
+      const sampled = test.info().outputPath("main-sample.txt");
+      try {
+        execFileSync("/usr/bin/sample", [String(pid), "3", "-file", sampled], { stdio: "ignore" });
+        await test.info().attach("main-sample.txt", { path: sampled });
+      } catch {
+        // No sample: the process is gone, or the tool is.
+      }
+    }
     const body = JSON.stringify({ waited_ms: Date.now() - started, window: state, main });
     await test.info().attach("reconnect", { body, contentType: "application/json" });
     throw error;
