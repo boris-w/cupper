@@ -62,6 +62,3 @@ export function wired(host: MockHost, deps: Partial<BridgeDeps> = {}) {
   });
   return { shell, bridges };
 }
-
-/** Lets what was posted cross the channel and the bridge's batch go out. */
-export const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 10));
