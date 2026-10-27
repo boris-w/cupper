@@ -160,3 +160,39 @@
 - **再一步的诊断**（fcde9c1，不改行为）：
   - 两个探测都限 5 s。
   - 轮询放弃时，用 `/usr/bin/sample` 对主进程采样 3 s，附上所有线程的栈。
+- **run 40453156576**（fcde9c1，200 次）：失败 2 次（repeat72、repeat104），198 次通过；通过时重连耗时 8–39 ms，中位数 12 ms。两次都附上了主进程的采样（`main-sample.txt`）：
+  - 两个探测（读窗口状态、主进程应答）都在 5 s 内没有回应：`{"window":"no answer in 5 s","main":"no answer in 5 s"}`。
+  - **主线程卡在一个原生的模态对话框里**：`-[NSAlert runModal]` → `-[NSApplication runModalForWindow:]` → `_doModalLoop`，在等事件。采样的 3 s 内一直如此，两次都一样。往上是 libuv 的 async 回调（`uv__async_io`）调进 JS，再从 JS 打开了这个对话框。JS 帧没有符号。
+  - 原生扩展的线程：只剩一对 `cupper-host-read` / `cupper-host-write`，在 `recvmsg` 里空等，是 control 连接的 relay；`cupper-host-wait` 在 `wait4` 里等宿主退出；4 个 `libuv-worker` 空闲。Electron 主进程里没有 tokio 线程。
+  - 被断开的窗口连接，它的 relay 线程已经退出了，也没有出现新的 relay 线程。所以重连连原生的 `connectHost` 都还没走到，主线程就进了模态框。
+
+## 交接给 T200
+
+第 2 处（E2E-NFR1-4 "a window whose connection dropped resumes from its cursor"）已查明是产品问题，T199 不改产品代码，修复交 T200。
+
+- **现象**：窗口的数据连接被断开（e2e 钩子 `bridges.disconnect`）后，大约每 100 次有 1 次，Electron 主线程弹出了一个原生模态对话框（`NSAlert runModal`），并一直停在那里。
+  - 于是窗口不再重连：main.log 断开后一行也没有，宿主再也没收到 App 的连接；
+  - 主进程和渲染进程的 `evaluate` 都不应答；
+  - 拆除时退出 App 也挂住，用例超过时限。
+- **证据**（runner 上的 e2e-repeat，构件名 `e2e-repeat`，保留 14 天）：
+  - run 40443859457（main 上，50 次）repeat18：轮询失败，拆除超时，没有日志。
+  - run 40445893797（83feb2a，100 次）repeat26：用例超时，拆除超时，没有日志。
+  - run 40448998123（5b0a306，200 次）repeat63：有 main.log 和 host.log。主进程断开后不再记日志，宿主侧 c_3 在 `peer_closed` 之后再没有 App 的连接。
+  - run 40453156576（fcde9c1，200 次）repeat72、repeat104：有日志和 `main-sample.txt`，主线程在 `NSAlert runModal` 里。
+  - 本机：T192 跑 `ci pr` 时出过一次（负载约 47），附件已被覆盖。
+  - 合计约 1%：550 次里失败 5 次。
+- **读码结论和推测**：
+  - 主进程里没有 `uncaughtException` 或 `unhandledRejection` 的处理。Electron 在主进程出现未捕获异常时，默认弹出 "A JavaScript error occurred in the main process" 这个模态错误框（`dialog.showErrorBox`，同步）。Node 的默认做法是把未处理的 rejection 当作未捕获异常。
+  - e2e 的对话框替身（`apps/desktop/src/main/e2e-dialogs.ts`）只替换了 `showMessageBox`、`showMessageBoxSync` 和 `showOpenDialog`，没有替换错误框。所以这种错误框会真的弹出来，挡住主线程。
+  - 最可能的情况：断开到重连之间，主进程里有一处异常或 rejection 没被处理，被默认处理器弹成了模态框。
+  - 窗口桥的 `#lost` 对 `controlReady` 和 `connect` 的失败都 catch 了，访问 `#conn` 的地方也都带 `?.`，读码没找到抛出点。
+  - 模态框是在 libuv 的 async 回调里打开的；新的 relay 还没建起来。所以抛出点在 socket 关闭之后、`connectHost` 之前。
+  - 对话框里的文字没有采到。
+- **建议 T200 先做的**：
+  1. 主进程装上 `uncaughtException` 和 `unhandledRejection` 的处理：把错误和栈记进 main.log，不弹模态框。至少 e2e 构建要这样，或者让 e2e 的替身把错误框也接住、记下来。然后在 runner 上再跑 `e2e-repeat` ×200，就能拿到抛出点。
+  2. 按抛出点修产品代码。
+  3. T199 留下的诊断可以直接用：
+     - fixture 失败时先附日志；
+     - `disconnectWindow` 的 `disconnected` 注解，以及轮询放弃时的探测和 `sample` 采样；
+     - 主进程的 "window connected" / "window connection failed" 日志。
+- **触发参数**：`e2e-repeat`，`spec=src/nfr1.spec.ts`，`test=E2E-NFR1-4: a window whose connection dropped`，`times=200`。
