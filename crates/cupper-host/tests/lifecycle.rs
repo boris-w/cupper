@@ -288,8 +288,8 @@ async fn it_lifecycle_runs_a_turn_with_the_fake_agent() {
         &["completed"],
     )
     .await;
-    terminate(&host);
-    assert_eq!(exit_code(&mut host).await, 0);
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
     // The adapter stopped with the host.
     let sql = "SELECT instance_id FROM adapters WHERE ended_at IS NOT NULL";
     assert_eq!(column(&data_dir, sql).len(), 1);
@@ -363,8 +363,8 @@ async fn unit_replay_a_host_runs_an_sp1_claude_turn() {
     create(&client, &prompt).await;
     let turns = "SELECT status FROM turns";
     until(&data_dir, "host.db", turns, &["completed"]).await;
-    terminate(&host);
-    assert_eq!(exit_code(&mut host).await, 0);
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
 }
 
 /// A recording of two instances: the first writes to stderr and exits, the
@@ -439,8 +439,8 @@ async fn it_recording_export_two_instances_read_back_and_sanitize() {
         .status()
         .unwrap();
     assert!(sanitized.success());
-    terminate(&host);
-    assert_eq!(exit_code(&mut host).await, 0);
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
 }
 
 #[tokio::test]
@@ -863,8 +863,8 @@ async fn it_elevate_lineage_waits_limits_expiry_grant_and_close() {
     for probe in [&mut first, &mut second, &mut third, &mut fourth] {
         probe.wait().unwrap();
     }
-    terminate(&host);
-    assert_eq!(exit_code(&mut host).await, 0);
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
 }
 
 /// The e2e build of `cupper`, beside the fake agent.
@@ -969,8 +969,7 @@ impl Repl {
 #[tokio::test]
 async fn it_cli_commands_read_elevate_write_and_answer() {
     let dir = TempDir::new("cli");
-    let (data_dir, host, client) = fake_agent_host(&dir, json!({"clock": "manual"})).await;
-    let mut host = Reaped(host);
+    let (data_dir, mut host, client) = fake_agent_host(&dir, json!({"clock": "manual"})).await;
     let session = create(&client, "say hi").await;
     let turns = "SELECT status FROM turns ORDER BY turn_no";
     until(&data_dir, "host.db", turns, &["completed"]).await;
@@ -1275,7 +1274,6 @@ async fn it_self_check_a_changed_executable_makes_the_host_wait_for_an_upgrade()
     let dir = TempDir::new("self-check");
     let exe = dir.path().join("cupper-host");
     std::fs::copy(HOST, &exe).unwrap();
-    first_start(&exe).await;
     let config = json!({"durations": {"supervisor_observe_ms": 20}});
     let (data_dir, mut host, mut client) = fake_agent_host_from(&exe, &dir, config).await;
     let mut raw = raw_connect(&data_dir).await;
@@ -1326,7 +1324,7 @@ async fn it_self_check_a_changed_executable_makes_the_host_wait_for_an_upgrade()
         }
     }
     assert!(host_gone(&client), "{:?}", client.close_reason());
-    assert_eq!(exit_code(&mut host).await, 0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
     assert_eq!(raw_shutdown(&mut raw).await["reason"], "upgrade");
 }
 
@@ -1345,7 +1343,6 @@ async fn bundled_host(dir: &TempDir, prepare: impl FnOnce(&Path)) -> (PathBuf, R
     let (exe, data_dir) = (contents.join("MacOS/cupper-host"), dir.path().join("data"));
     std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
     std::fs::copy(HOST, &exe).unwrap();
-    first_start(&exe).await;
     let mut tarball = tar::Builder::new(flate2::write::GzEncoder::new(
         Vec::new(),
         Default::default(),

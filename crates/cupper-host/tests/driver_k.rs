@@ -31,8 +31,8 @@ async fn host(dir: &TempDir, args: &[&str], config: Value) -> (PathBuf, Running,
     let mut config = config;
     config.as_object_mut().unwrap().remove("cli_version");
     config["agents"] = json!({"claude": agent});
-    let (data_dir, child, client) = fake_agent_host(dir, config).await;
-    (data_dir, Running(child), client, calls)
+    let (data_dir, host, client) = fake_agent_host(dir, config).await;
+    (data_dir, host, client, calls)
 }
 
 /// The calls the fake agent recorded: `(method, text of a prompt)`.

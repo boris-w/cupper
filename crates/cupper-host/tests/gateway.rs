@@ -3,6 +3,8 @@
 //! whose launcher has already gone exits (IT-devkey-orphan-start), and the
 //! CLI's `harness` client and the gateway prove the key to each other.
 
+mod common;
+
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStderr, Command, ExitStatus, Stdio};
@@ -169,6 +171,9 @@ fn it_devkey_orphan_start_exits_1() {
 /// Runs `program` once its parent has exited and launchd has adopted it;
 /// its exit status, read through kqueue, and its stderr.
 fn start_orphaned(program: &str, data_dir: &Path) -> (ExitStatus, String) {
+    // Its first start waits for the system's scan of the new file, which
+    // the 30 s below must not count (T199).
+    common::first_start(Path::new(program));
     // sh starts a subshell that waits for our line, then execs the program;
     // sh itself exits at once.
     let script = r#"exec 3<&0; (read go <&3; exec "$0" --data-dir "$1" 3<&-) & echo $!"#;

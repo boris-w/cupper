@@ -9,7 +9,7 @@ import { DatabaseSync } from "node:sqlite";
 import { createI18n } from "@cupper/i18n";
 
 import type { Line, Repl } from "./cli";
-import { expect, type Cupper } from "./fixture";
+import { expect, test, type Cupper } from "./fixture";
 import { gone, signal, tree } from "./procs";
 
 declare global {
@@ -59,11 +59,40 @@ export async function disconnectWindow(cupper: Cupper): Promise<void> {
       .__cupperE2E;
     hooks?.disconnectWindow(id);
   }, id);
-  await expect
-    .poll(async () => (await windowConnections(cupper)).some((conn) => !before.includes(conn)), {
-      message: "the window connects again",
-    })
-    .toBe(true);
+  test.info().annotations.push({ type: "disconnected", description: new Date().toISOString() });
+  const started = Date.now();
+  try {
+    await expect
+      .poll(async () => (await windowConnections(cupper)).some((conn) => !before.includes(conn)), {
+        message: "the window connects again",
+      })
+      .toBe(true);
+  } catch (error) {
+    // What the window says, whether the main process answers, and where its
+    // threads are; the fixture attaches the logs (T199). A process that
+    // stopped answering would hold up an unbounded evaluate.
+    const within = <T>(work: Promise<T>) =>
+      Promise.race([
+        work,
+        new Promise<string>((done) => setTimeout(() => done("no answer in 5 s"), 5000)),
+      ]).catch((e: unknown) => String(e));
+    const state = await within(hostClient(cupper).state());
+    const main = await within(cupper.app.evaluate(() => "responds"));
+    const pid = cupper.app.process().pid;
+    if (pid !== undefined) {
+      const sampled = test.info().outputPath("main-sample.txt");
+      try {
+        execFileSync("/usr/bin/sample", [String(pid), "3", "-file", sampled], { stdio: "ignore" });
+        await test.info().attach("main-sample.txt", { path: sampled });
+      } catch {
+        // No sample: the process is gone, or the tool is.
+      }
+    }
+    const body = JSON.stringify({ waited_ms: Date.now() - started, window: state, main });
+    await test.info().attach("reconnect", { body, contentType: "application/json" });
+    throw error;
+  }
+  test.info().annotations.push({ type: "reconnect_ms", description: String(Date.now() - started) });
 }
 
 /**

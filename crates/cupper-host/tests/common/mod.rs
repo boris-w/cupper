@@ -3,9 +3,12 @@
 //! uses part of it.
 #![allow(dead_code, reason = "each test crate that includes it uses part of it")]
 
+use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::channel;
+use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
 use cupper_cli::client::{self, Client, ClientAuth, ClientError, Options};
@@ -47,6 +50,7 @@ pub fn payload(test_config: serde_json::Value) -> Value {
 
 /// Runs `command` with `--data-dir <data_dir>`, `payload` on its stdin.
 pub fn start(command: &mut Command, data_dir: &Path, payload: &Value) -> Child {
+    first_start(Path::new(command.get_program()));
     let mut child = command
         .arg("--data-dir")
         .arg(data_dir)
@@ -95,28 +99,37 @@ pub async fn connect_once(
     client::Client::connect(&socket, &HostCheck::Harness, options).await
 }
 
-/// Runs `exe`, a fresh copy of the host, once to its exit before a test times
-/// it. The first start of a new file waits for the system's scan of it: 12
-/// to 29 s for the host at a load of 35, against a 30 s `connect` (T196).
-pub async fn first_start(exe: &Path) {
-    let mut child = Command::new(exe)
+/// Runs `program`, a host binary, once to its exit with `--build-info`, the
+/// first time this test process starts it, before anything is timed. The
+/// first start of a new file waits for the system's scan of it: 12 to 29 s
+/// for the host at a load of 35, against the 30 s a test gives the host to
+/// listen. A copy of the host is such a file (T196), and so is the host that
+/// cargo has just linked, for the first test that starts it (T199).
+pub fn first_start(program: &Path) {
+    static STARTED: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
+    let mut started = STARTED.lock().unwrap_or_else(PoisonError::into_inner);
+    if !started.insert(program.to_owned()) {
+        return;
+    }
+    let mut child = Command::new(program)
         .arg("--build-info")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .unwrap();
-    let clock = SystemClock::new();
-    let give_up = clock.now_mono() + 4 * PATIENCE;
-    while child.try_wait().unwrap().is_none() {
-        if clock.now_mono() >= give_up {
-            // Not reaped yet, so the pid is still this child's.
-            let _ = child.kill();
-            let _ = child.wait();
-            panic!("{} took over {:?} to start", exe.display(), 4 * PATIENCE);
+    // A channel nobody sends on paces the tries, 120 s of them at most.
+    let (_never, pace) = channel::<()>();
+    for _ in 0..2_400 {
+        if child.try_wait().unwrap().is_some() {
+            return;
         }
-        wait(&clock).await;
+        let _ = pace.recv_timeout(Duration::from_millis(50));
     }
+    // Not reaped yet, so the pid is still this child's.
+    let _ = child.kill();
+    let _ = child.wait();
+    panic!("{} took over 120 s to start", program.display());
 }
 
 /// The host's exit code, once it exits.
@@ -167,8 +180,12 @@ pub fn query(db: &Path, sql: &str) -> Vec<String> {
 }
 
 /// A host with the fake agent on a trusted project in `dir`, more of
-/// `test_config` in `config`; its data directory and the harness client.
-pub async fn fake_agent_host(dir: &TempDir, config: serde_json::Value) -> (PathBuf, Child, Client) {
+/// `test_config` in `config`; its data directory, the host and the harness
+/// client.
+pub async fn fake_agent_host(
+    dir: &TempDir,
+    config: serde_json::Value,
+) -> (PathBuf, Running, Client) {
     fake_agent_host_from(Path::new(HOST), dir, config).await
 }
 
@@ -176,9 +193,11 @@ pub async fn fake_agent_host_from(
     host: &Path,
     dir: &TempDir,
     config: serde_json::Value,
-) -> (PathBuf, Child, Client) {
+) -> (PathBuf, Running, Client) {
     let data_dir = fake_agent_data(dir);
-    let host = spawn_from(host, &data_dir, fake_agent_config(config));
+    // Running before the connection: a host that never listens is stopped
+    // too, when `connect` gives up (T199).
+    let host = Running(spawn_from(host, &data_dir, fake_agent_config(config)));
     let client = connect(&data_dir).await;
     (data_dir, host, client)
 }
