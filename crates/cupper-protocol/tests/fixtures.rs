@@ -218,8 +218,11 @@ impl Walk {
 
     /// Whether `value` can be `schema`: its type, and the constants it tags.
     fn fits(&self, schema: &Value, value: &Value) -> bool {
-        if let Some((name, def)) = self.def(schema) {
-            return name.starts_with("Unknown") || self.fits(def, value);
+        // A `$ref` with tags beside it, as a branch of a tagged union, fits both.
+        if let Some((name, def)) = self.def(schema)
+            && (name.starts_with("Unknown") || !self.fits(def, value))
+        {
+            return name.starts_with("Unknown");
         }
         let kind = match value {
             Value::Null => "null",
@@ -262,10 +265,12 @@ impl Walk {
         {
             self.walk(part, value, owner, at);
         }
-        if let Some(branches) = schema.get("anyOf").and_then(Value::as_array)
-            && let Some(branch) = branches.iter().find(|b| self.fits(b, value)).cloned()
-        {
-            self.walk(&branch, value, owner, at);
+        for key in ["anyOf", "oneOf"] {
+            if let Some(branches) = schema.get(key).and_then(Value::as_array)
+                && let Some(branch) = branches.iter().find(|b| self.fits(b, value)).cloned()
+            {
+                self.walk(&branch, value, owner, at);
+            }
         }
         let required = schema
             .get("required")
@@ -356,7 +361,7 @@ fn options() -> BTreeSet<String> {
             }
             collect(property, &label, out);
         }
-        for key in ["anyOf", "allOf", "items", "additionalProperties"] {
+        for key in ["anyOf", "oneOf", "allOf", "items", "additionalProperties"] {
             let parts = schema
                 .get(key)
                 .map(|p| p.as_array().cloned().unwrap_or_else(|| vec![p.clone()]));
