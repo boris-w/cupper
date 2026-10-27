@@ -53,9 +53,12 @@ describe("UNIT-privileged", () => {
       status: "user_activation_required",
     });
     let answer: (value: { response: number; checkboxChecked: boolean }) => void = () => undefined;
-    ui.confirm = () => new Promise((resolve) => (answer = resolve));
+    let shown: () => void = () => undefined;
+    const open = new Promise<void>((resolve) => (shown = resolve));
+    ui.confirm = () => new Promise((resolve) => ((answer = resolve), shown()));
     const first = ask(trust);
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // The second request comes while the first one's dialog is open.
+    await open;
     expect(await ask({ kind: "add_project" })).toEqual({ status: "busy" });
     answer({ response: 1, checkboxChecked: false });
     expect(await first).toEqual({ status: "cancelled" });
