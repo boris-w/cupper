@@ -111,3 +111,28 @@
   - 任何一次失败，作业就失败；失败那几次的日志作为构件上传。
 - **本机核对**：actionlint 1.7.12 无告警。用 macOS 自带的 bash 3.2，单份跑了两种 kind 的小样例，覆盖通过、失败、超时和没匹配上用例四种情况。
 - 编排者把它单独挑进了 PR #9，先合进 main，好让 `workflow_dispatch` 能触发。
+
+## 修后在 runner 上的连跑（取舍）
+
+- 第 1 处：`test-repeat`，`times=100`、`parallel=2`，共 200 次。
+- 第 3 处：`times=50`、`parallel=2`，共 100 次，不跑 200 次（编排者定）。这条用例不加负载时一次约 50 s，2 份并行跑 200 次会超过作业 150 分钟的上限。在负载下跑 100 次，作为证据已经足够。
+
+## 第 2 处：E2E-NFR1-4 "a window whose connection dropped resumes from its cursor"
+
+- **本机那次的现场**：T192 跑本机 `ci pr` 时出的（负载约 47，记录在 T043 worktree 的 ci-logs 里）。
+  - 用例跑了 68 s，同一批的其他 NFR1-4 用例都是 10–12 s。
+  - 失败在 `disconnectWindow` 等 "the window connects again" 的 20 s 轮询上。
+  - 附件（main.log、host.log）已经被后来的运行覆盖了。
+- **runner 上修前复现**：main 上 `e2e-repeat` 跑 50 次（run 40443859457），失败 1 次（repeat18）。
+  - 通过的 49 次，每次 6.9–11.3 s。
+  - 失败的那次，轮询等满 20 s 还没看到新连接。随后拆除超出了用例 90 s 的时限，日志没能附上，只留下 error-context.md。
+- **读代码的怀疑点**：
+  - 窗口连接断了以后，桥只重连一次（`#lost`）：先等 control 就绪，再调一次 `connect`。
+  - `connect` 里 `launcher.open` 的握手超时是 `TIMEOUT_MS = 5000`。超时或失败后，窗口状态置为 `failed`，不再重试。
+  - control 连接也是这样：断了就重连，`launcher.open` 失败就 `fail`。
+  - 设计 5.7.1 写的是"宿主断开或重启：主进程先重连 control，再为每个窗口重连数据连接"，没有写重试次数，也没有写退避。`ConnectionState` 的 `failed` 带原因，T071 的裁定里原因是拉起失败一类，ConnectionToast 会一直显示到连接再次就绪。
+  - 拆除超时还说明一点：失败之后 App 也没能按时退出。
+- **为了看清停在哪一步，补了诊断**（83feb2a）：
+  - e2e 的 `disconnectWindow` 轮询一放弃，就先附上窗口自己报的连接状态、等了多久、main.log 和 host.log；通过时把重连耗时记成 `reconnect_ms` 注解。
+  - 主进程每次建窗口连接都记下耗时；失败时记下原因。
+  - 请编排者在本分支上用 `e2e-repeat` 跑 100 次。
