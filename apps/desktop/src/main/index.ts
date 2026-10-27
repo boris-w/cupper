@@ -26,6 +26,7 @@ import { isReleaseLike } from "../shared/flavor";
 import { COMMAND_CHANNEL, HOST_OPEN } from "../shared/ipc";
 import { WindowBridges } from "./bridge/bridges";
 import { startHost } from "./host";
+import { catchUncaught } from "./errors";
 import { confirmQuit, confirmRestart, tellRestartRefused, type Translate } from "./host/dialogs";
 import { QuitGuard, type QuitHost } from "./host/lifecycle";
 import { MainLog } from "./log";
@@ -65,6 +66,8 @@ mkdirSync(dirs.userData, { recursive: true, mode: 0o700 });
 // Before the single-instance lock, which lives in userData.
 app.setPath("userData", dirs.userData);
 const log = new MainLog(dirs.logs, { home: app.getPath("home"), echo: flavor === "dev" });
+// Logged instead of Electron's modal error box (T200).
+catchUncaught(process, log);
 
 protocol.registerSchemesAsPrivileged([APP_SCHEME_PRIVILEGES]);
 app.enableSandbox();
@@ -198,8 +201,11 @@ function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
   ipcMain.handle(HOST_OPEN, (event) => bridges.open(event.sender, event.senderFrame));
   if (__CUPPER_FLAVOR__ === "e2e") {
     // For the e2e tests' `electronApp.evaluate`: a window loses its
-    // connection without a reload (E2E-NFR1-4).
-    const disconnectWindow = (webContentsId: number) => bridges.disconnect(webContentsId);
+    // connection without a reload (E2E-NFR1-4). On a turn of its own: the
+    // inspector runs an evaluate in the middle of whatever JavaScript runs,
+    // and a socket destroyed while Node hands over its data throws there (T200).
+    const disconnectWindow = (webContentsId: number) =>
+      void setImmediate(() => bridges.disconnect(webContentsId));
     Object.assign(globalThis, { __cupperE2E: { disconnectWindow } });
   }
 }
