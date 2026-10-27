@@ -78,9 +78,9 @@ flowchart LR
 | `notifications` | 只在通知的后备方案启用时工作（待定问题 Q2）：在 control 连接上订阅索引流，取出 `notification.intent` 弹系统通知；通知上不放"批准"按钮，点击后只导航 |
 | `menu` | macOS 菜单和快捷键：加速键在菜单里注册，经 `onCommand` 送到渲染进程，焦点在审查文档里时同样生效 |
 | `prefs` | 界面偏好，存在 userData（`cupper/ui/`） |
-| `logging` | `main.log` 轮转；渲染进程的错误转写进主进程日志（脱敏） |
+| `logging` | `main.log` 轮转；渲染进程的错误转写进主进程日志（脱敏）；主进程未处理的异常与 rejection（`uncaughtException`、`unhandledRejection`）连同栈和 `cause` 记进 `main.log`，不弹同步错误框，继续运行（T200：Electron 默认的同步错误框会挡住主线程，窗口就此重连不上；主进程手里的状态很少，会话在宿主里，窗口按游标重新取数据，所以继续运行，不重启） |
 
-主进程的代码在调用时才经 `dialog.showMessageBox` 取函数，不在模块加载时解构保存，这样 e2e 才能在主进程里替换它（测试确认，写进 [5.1.7](01-repo-build-ci.md#517-代码约束gatedesign-通过后写进-claudemd)）。
+主进程的代码在调用时才经 `dialog.showMessageBox` 取函数，不在模块加载时解构保存，这样 e2e 才能在主进程里替换它（测试确认，写进 [5.1.7](01-repo-build-ci.md#517-代码约束gatedesign-通过后写进-claudemd)）。e2e 的替身也接管 `dialog.showErrorBox`：被调用或 `main.log` 里出现未认领的未处理异常时，用例失败（T200）。
 
 ## 5.7.3 ShellAPI
 
