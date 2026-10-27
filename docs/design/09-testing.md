@@ -302,6 +302,7 @@ flowchart LR
 - e2e 里只有 UI 拉起宿主。主进程把启动载荷留在内存里，`kill -9` 之后重新拉起宿主时原样再传一次，harness 密钥因此一直有效。
 - 宿主读 stdin 有 2 s 超时，防止拉起方忘了关 stdin、启动一直卡住（[5.8.1](08-security.md#581-认证握手固定令牌)）。
 - 发布特性的宿主不读 stdin；5.9.1 的无特性测试断言：收到带 `harness_key` 的启动载荷时拒绝 harness 认证，并忽略 `test_config`。
+- 主进程的测试钩子凡是改动 I/O 状态（关闭套接字、销毁窗口等），都在 `setImmediate` 里执行。`electronApp.evaluate` 经 inspector 插进主进程正在运行的 JavaScript，套接字要是在 Node 交出读到的数据的半途被销毁，Node 会抛出异常（T200）。
 
 ## 5.9.10 测试编号与人工验证清单
 
