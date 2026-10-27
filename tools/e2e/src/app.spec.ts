@@ -11,35 +11,38 @@ import { expect, test, type Cupper } from "./fixture";
 import { BUILT } from "./paths";
 import { alive, tree } from "./procs";
 
-test("E2E-single-instance: a second launch quits and brings the first window forward", async ({
-  cupper,
-}) => {
-  await cupper.launch();
-  const { pid } = await cupper.connected();
-  const visible = () =>
-    cupper.app.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows().map((w) => w.isVisible()),
+// Bringing the first window forward activates the app: `@focus` (T195).
+test(
+  "E2E-single-instance: a second launch quits and brings the first window forward",
+  { tag: "@focus" },
+  async ({ cupper }) => {
+    await cupper.launch();
+    const { pid } = await cupper.connected();
+    const visible = () =>
+      cupper.app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().map((w) => w.isVisible()),
+      );
+    await cupper.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().forEach((w) => w.hide()),
     );
-  await cupper.app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows().forEach((w) => w.hide()),
-  );
-  expect(await visible()).toEqual([false]);
+    expect(await visible()).toEqual([false]);
 
-  const env = { ...process.env, CUPPER_E2E_DIR: cupper.root };
-  const second = spawn(BUILT.app, [], { env, stdio: "ignore" });
-  try {
-    const code = await new Promise((done) => second.once("close", done));
-    expect(code).toBe(0);
-  } finally {
-    second.kill("SIGKILL");
-  }
-  await expect.poll(visible).toEqual([true]);
-  expect(readFileSync(join(cupper.root, "logs/main.log"), "utf8")).toContain(
-    "another instance is running",
-  );
-  // Still the same host, and no second one.
-  expect((await cupper.cli.ok(["status"])).pid).toBe(pid);
-});
+    const env = { ...process.env, CUPPER_E2E_DIR: cupper.root };
+    const second = spawn(BUILT.app, [], { env, stdio: "ignore" });
+    try {
+      const code = await new Promise((done) => second.once("close", done));
+      expect(code).toBe(0);
+    } finally {
+      second.kill("SIGKILL");
+    }
+    await expect.poll(visible).toEqual([true]);
+    expect(readFileSync(join(cupper.root, "logs/main.log"), "utf8")).toContain(
+      "another instance is running",
+    );
+    // Still the same host, and no second one.
+    expect((await cupper.cli.ok(["status"])).pid).toBe(pid);
+  },
+);
 
 /** A session whose turn runs until it is cancelled; once the host counts it. */
 async function runningTurn(cupper: Cupper) {

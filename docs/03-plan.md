@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.68
+- 版本：v1.3.69
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -155,25 +155,25 @@
 - **条件任务**（名称前标"（条件）"）只在检查点不通过时派发：T057（K1 已通过，不触发）、T079（K2 已达标，不触发）、T119、T139、T158、T159；T162 在 Q35 *通过*时派发。依赖图里用虚线表示。
 - **可以提前的任务**（前置一栏标"可提前"）：T101、T102、T104、T105、T106（v1.1）、T110、T114。依赖满足后可以在 M1a 期间派发，但评审资源优先给 M1a 的关键链。其余 M1b 任务在 T099 之后派发。
 
-### 1.8 本机 CI（U-P1：先不建远端）
+### 1.8 CI（GitHub Actions，本机可复现）
 
-**v1.3.65 起有远端**：用户决定建 GitHub 公开仓库 `boris-w/cupper`，CI 放到 GitHub Actions 上跑，每个任务一个 PR，替换 U-P1（`docs/meetings/2026-10-26-github-remote/`）。T197 启用 Actions 之前，下表的本机做法照旧；之后 PR 以 GitHub CI 为准，本机只跑与改动相关的检查，下表各行由 T197 按远端改写。
+v1.3.65 起，用户决定建 GitHub 公开仓库 `boris-w/cupper`，CI 放到 GitHub Actions 上跑，每个任务一个 PR，替换 U-P1"先不建远端"（`docs/meetings/2026-10-26-github-remote/`）；T197 落实，v1.3.69 按落实后的情况改写本节。PR 以 GitHub 上 `pr` 组合各作业的检查为准；本机的 `cargo xtask ci <作业>` 照旧可用，用于复现和合并前的自查。
 
 | 项 | 做法 |
 |---|---|
-| 统一入口 | `cargo xtask ci <作业>`，作业与 [5.1.6](design/01-repo-build-ci.md#516-ci-流水线) 一一对应（`rust`、`protocol`、`ts`、`ui`、`license`、`testdata-scan`、`e2e`、`security-macos14`、`compat-framework`），另有组合作业 `pr`（每个 PR 的全部作业）和 `nightly`（每晚的全部作业，含 e2e 全集、差分测试、性能趋势、`release-config`、`codex-drift`）。workflow 文件照写，只调用这个入口，等有了远端再启用 |
-| 环境 | "干净 worktree"指 git 状态干净（`git status` 为空）；可以在 worktree 之间共享的只有下载缓存（cargo registry、pnpm store）和编译器缓存（sccache 这一类），不共用 `CARGO_TARGET_DIR`：cargo 对工作区成员的指纹不含绝对路径，另一个 worktree 编出的、时间更新的产物会被当成最新的（T015 实际遇到）。e2e 用的 App 和 `CupperHost.app` 必须由当前提交构建，摘要记下产物哈希，防止测到别的 worktree 留下的旧产物 |
-| 机器级锁 | e2e、`ui`、性能、nfr1 这几类作业取同一把机器级锁，串行运行，避免多个子 agent 和编排者同时跑时互抢 CPU、造成计时类误报。e2e 的 Playwright workers 固定为 2（T090），20 次连跑也按这个数字 |
-| 验收记录 | 入库的只有结构化摘要：提交、工具链版本、macOS 版本、机型泛称、各作业的通过数和失败数、耗时，以及逐编号的结果清单（编号、套件、结果、提交）和 e2e 产物哈希。原始日志放 `.private/`。摘要入库前过个人信息扫描（`xtask ci` 自带字段白名单检查，T052 之后再过 `testdata-scan`）（测试 #11） |
-| 每晚作业 | 每一波合并完、开始下一波之前，编排者在 main 上跑一次 `xtask ci nightly --record docs/ci/nightly/`，摘要随之提交 |
-| 截图基线 | 渲染因素固定（随夹具附带开源字体，固定视口、缩放、语言、时区、虚拟时钟，关闭动画，隐藏光标）；基线由专用脚本在本机生成，元数据记下 macOS 和 Chromium（Electron）版本。Chromium 版本严格比对，对不上就失败；macOS 只比对大版本，小版本变化只给提示，出现像素差异时才重新生成基线（T084，测试 #13） |
+| 统一入口 | `cargo xtask ci <作业>`，作业与 [5.1.6](design/01-repo-build-ci.md#516-ci-流水线) 一一对应（`rust`、`protocol`、`ts`、`ui`、`license`、`testdata-scan`、`e2e`、`security-macos14`、`compat-framework`），另有组合作业 `pr`（每个 PR 的全部作业）和 `nightly`（每晚的全部作业）。GitHub 上一个 `ci` workflow 用矩阵把 `pr` 的 8 个作业分到各自的 runner，每个都只调用 `cargo xtask ci <作业> --in pr`；按路径跳过和取子集都由 xtask 判断，workflow 不写 `paths`。检查名是 `ci / <作业> (<runner>)`，main 的保护规则要求这 8 个都通过 |
+| 环境 | 本机："干净 worktree"指 git 状态干净（`git status` 为空）；worktree 之间只共享下载缓存（cargo registry、pnpm store）和编译器缓存，不共用 `CARGO_TARGET_DIR`（T015 实际遇到）。runner：每个作业一台全新机器，缓存只有 cargo 注册表与 target（rust-cache）、pnpm store、runtime-pack 与 git-lfs 的下载；运行时包的 stage 按清单核对文件与哈希才算就绪，不进任何缓存（T197）。e2e 用的 App 和 `CupperHost.app` 必须由当前提交构建，摘要记下产物哈希 |
+| 机器级锁 | e2e、`ui`、性能、nfr1 这几类作业在本机取同一把机器级锁，串行运行，避免子 agent 和编排者互抢 CPU、造成计时类误报；runner 上每个作业独占一台机器，锁不起作用也不碍事。e2e 的 Playwright workers 取"核数减一，最多 2"（T090、T197） |
+| 验收记录 | 卷宗里记 PR 和运行的链接。GitHub 上的结构化摘要与原始日志作为构件上传（日志保留 7 天），不提交进仓库；本机跑的摘要仍可随任务提交。摘要的内容不变：提交、工具链版本、macOS 版本、机型泛称、各作业的通过数和失败数、耗时、逐编号的结果清单（编号、套件、结果、提交）和 e2e 产物哈希，入库或上传前过个人信息扫描（`xtask ci` 自带字段白名单检查，再过 `testdata-scan`）（测试 #11）。托管 runner 上身份名单为空，通用模式的扫描照旧 |
+| 每晚作业 | `nightly.yml` 每晚定时运行，也可手动触发：differential、`security-macos14`（在 `macos-14` 和 `macos-15` 上各一次）、e2e 全集、compat-framework。`perf` 不上 CI（runner 不是参考机型），由编排者在本机 main 上跑 `xtask ci nightly --record docs/ci/nightly/`，历史与摘要一起提交。编排者每天看一次 nightly 的结果 |
+| 截图基线 | 渲染因素固定（随夹具附带开源字体，固定视口、缩放、语言、时区、虚拟时钟，关闭动画，隐藏光标）。基线由 `ui-baseline.yml` 在 runner 上生成，产出为构件，经 PR 入库；元数据记下 macOS 和 Chromium（Electron）版本。Chromium 版本严格比对，对不上就失败；macOS 不同（不论大小版本）只给提示，由像素决定（T084，v1.3.69 由 T197 改：runner 与作者机器上的基线逐字节相同） |
 | 性能趋势 | "历史中位数"取自入库的历史数值序列 `testdata/perf/history.jsonl`（只含日期、提交、版本、机型泛称和统计值），每次 `xtask ci nightly` 里的 `perf` 作业每个指标追加一行；某项 p50 超过同一指标、同一机型历史 p50 中位数的 1.5 倍判为退化（T047、T117）。编排者在 main 上跑完 `ci nightly` 后，历史与摘要一起提交 |
 | LFS | xtask 下载锁定版本的 git-lfs 到缓存目录，核对哈希后使用，本机也能跑（T061、T121，测试 #12） |
-| M1a 退出 | 在退出候选的同一个提交上：`xtask ci e2e --suite nfr1` 连续 20 次全绿（Playwright 并行度同 CI 设定，不允许重试、跳过或隔离，失败一次查明根因后清零），再跑 5 次降速变体（占用一半核心的负载进程或降低优先级）；`xtask ci pr` 与 `xtask ci nightly` 各通过一次。运行期间作者不操作机器（T099） |
-| 本机替代不了的项 | macOS 14、15 上的对端校验（本机的 `security-macos14` 跑在作者机器的系统上，只记作 `IT-sys-peer-current`）；CI 负载下的稳定性。在 T099、T179 的记录里列为缺口，由用户确认接受。本地 macOS 虚拟机（Virtualization.framework）是可选方案，记为风险 R7，不作为前置条件 |
-| 以后建远端时 | 首次在 CI 上再跑一轮 20 次；推送前对全部历史做个人信息扫描；Actions 设置"外部贡献者的工作流需要批准"；不用自托管 runner；签名密钥只放受保护的 environment（R12） |
+| M1a 退出 | 在退出候选的同一个提交上：`xtask ci e2e --suite nfr1` 连续 20 次全绿（Playwright 并行度同 CI 设定，不允许重试、跳过或隔离，失败一次查明根因后清零），再跑 5 次降速变体（占用一半核心的负载进程或降低优先级）；`xtask ci pr` 与 `xtask ci nightly` 各通过一次。连跑在 GitHub 的 macOS runner 上做（`e2e-repeat` 或 nightly 的 e2e 全集），运行期间没人操作机器；PERF 闸门在作者机器上判（T099、T197） |
+| 本机替代不了的项 | 已由 CI 覆盖：macOS 14、15 上的对端校验由每晚的 `security-macos14` 在 `macos-14`、`macos-15` 上跑，按 runner 的 macOS 大版本记作 IT-sys-peer-macos14、-macos15（T197）。CI 负载下的稳定性由 runner 上的连跑覆盖 |
+| 仓库设置 | 外部贡献者的工作流一律需要批准；workflow 默认只读，只用 `pull_request` 触发；只允许 GitHub 官方的 action 和 `Swatinem/rust-cache`，必须锁定到提交 SHA；不用自托管 runner；签名密钥只放受保护的 environment（R12） |
 
-子 agent 不 push（[`CLAUDE.md`](../CLAUDE.md)）。编排者合并前在本机跑 `xtask ci pr`，与子 agent 的汇报核对（流程见 [`00-process.md`](00-process.md)）。
+子 agent 不 push（[`CLAUDE.md`](../CLAUDE.md) 守则第 1、9 条）：要在 GitHub 上跑时请编排者推送、开 PR。编排者合并前核对 PR 上的检查与子 agent 的汇报（流程见 [`00-process.md`](00-process.md)）。
 
 ### 1.9 "用户参与"一栏
 
@@ -410,7 +410,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T115 | 运行时安装器 II：按锁文件下载与本机打包 | feat | 5.2.12、ADR-08、ADR-11 | T056 | 做：HTTP 客户端（reqwest 加 rustls，加密实现用 `ring`，根证书用系统的，以 `cargo deny` 通过为准）、解析锁文件与注入的 registry、下载与 SRI、解包的路径检查、不运行包脚本、User-Agent 为 `cupper-runtime-installer/<版本>`、遵守登录 shell 的 `HTTPS_PROXY`、网络错误按 `Clock` 退避重试 3 次、用随包 Node 打包 claude-agent-acp（环境只有 `PATH`）并核对产物哈希 | 新增 IT-runtime-download（网络失败重试、SRI 不符、越界的 tarball、打包产物不符、经本地 registry 的完整安装，全部离线） | M | 否 | H.rt |
 | T116 | 录制导出 | feat | 5.9.3、5.9.9 | T047 | 做：`diag/recording_export`（test-harness、dev-auth 构建）从 `raw.db` 导出录制格式 v1（`Header::to_line`、`Frame::to_line`，`ts` 换算成段内相对时间），导出未脱敏的录制，由调用方入库前跑 `tools/sanitize`；适配器的 `stderr` 逐行、实例启动与退出的 `note` 写进原始帧（结构化脱敏） | 新增 IT-recording-export（v1.3.21 由 T047 移来；真实宿主加假 agent，导出后格式库能读回，经 `tools/sanitize` 和扫描） | M | 否 | H.core |
 | T117 | 宿主性能测量与趋势 | test | 5.9.6 | T047 | 做：迁移 SP-4a 的 `measure.rs`（原 T067）成三个 PERF 用例、`xtask ci perf` 作业（nightly）、历史数值序列 `testdata/perf/history.jsonl`（每行日期、版本、指标、p50/p95/max、样本数，不含机器名和路径），按历史中位数的 1.5 倍判定 | PERF-host-cold-start、PERF-index-snapshot、PERF-host-memory（v1.3.21 由 T047 移来） | M | 否 | H.core |
-| T118 | ui-core II-b：截图回归设施 | test | 5.9.1（截图回归）、5.1.6（`ui` 作业）、5.7.8（主文档的 CSP） | T084 | 做：Playwright（Chromium）+ 浏览器版 ShellAPI + TS mock 宿主的截图页；渲染因素固定（随夹具附带开源字体及许可证文本，中文字体做子集；固定视口、缩放、语言、时区、虚拟时钟，关闭动画，隐藏光标）；基线由专用脚本生成，元数据记下 macOS 与 Chromium（Electron）版本：Chromium 严格比对，macOS 只比对大版本，小版本变化只提示，出现像素差异才重新生成；`pnpm test:ui`、`xtask ci ui`（机器级锁），按改动路径接进 `xtask ci pr`；发布 CSP 下的违规计数（CSP 取主进程的同一份定义） | `xtask ci ui` 通过；UI-shell、UI-shell-narrow（窗口窄于 768、侧边面板自动收起）、UI-csp-zero（v1.3.22 由 T084 移来）；新增 UNIT-ui-baseline-meta | M | 否 | T.ui |
+| T118 | ui-core II-b：截图回归设施 | test | 5.9.1（截图回归）、5.1.6（`ui` 作业）、5.7.8（主文档的 CSP） | T084 | 做：Playwright（Chromium）+ 浏览器版 ShellAPI + TS mock 宿主的截图页；渲染因素固定（随夹具附带开源字体及许可证文本，中文字体做子集；固定视口、缩放、语言、时区、虚拟时钟，关闭动画，隐藏光标）；基线由专用脚本生成，元数据记下 macOS 与 Chromium（Electron）版本：Chromium 严格比对，macOS 只比对大版本，小版本变化只提示（v1.3.69 起 macOS 不同一律只提示，T197），出现像素差异才重新生成；`pnpm test:ui`、`xtask ci ui`（机器级锁），按改动路径接进 `xtask ci pr`；发布 CSP 下的违规计数（CSP 取主进程的同一份定义） | `xtask ci ui` 通过；UI-shell、UI-shell-narrow（窗口窄于 768、侧边面板自动收起）、UI-csp-zero（v1.3.22 由 T084 移来）；新增 UNIT-ui-baseline-meta | M | 否 | T.ui |
 | T128 | ui-core II-c：基础组件与行类型注册表 | feat | 5.7.5、5.7.10 | T084 | 做：行类型注册表（类型 → 组件，未知类型显示占位）；基础组件（工具栏按钮、菜单、tooltip、开关、警告框），样式按 ui-spec 第 4 节，只引用 token | 新增 UNIT-ui-components、UNIT-ui-row-registry | M | 否 | T.ui |
 | T129 | 运行时安装器 III：接进宿主启动 | feat | 5.2.12、5.2.13、ADR-08 | T059、T115 | 做：`Host::start` 在宿主的自检（T059）之后构造 `Installer`（`runtime::plans(manifest::embedded())`、`BundleDir::of_this_host()`、`runtime_dir(data_dir)`、运行中适配器所用的版本、`test_config.runtime.registry_url` 或 `npm::REGISTRY`、登录 shell 的 `HTTPS_PROXY`、`durations`），在后台 `run`，状态写进索引流的 `agents`；`Failed(BundleChanged)` 时转入待升级；下载响应加大小上限（T115 评审） | 新增 IT-runtime-startup（进程级：宿主启动后经本地 registry 装好，`agents` 的运行时状态到 `ready`；包内文件被改时转入待升级） | S | 否 | H.core |
 | T110 | Codex 提取层、选项对照表与 A 层金样例 | feat | 5.6.3–5.6.5、5.3.6、Q25、Q31 | T053、T102（可提前） | 做：Codex 提取层（`threadStatus`、`_meta.codex.error`、文本形式的错误、读取类命令、Q31）、选项对照表、配置项与档位（未知取值按 full_access） | GOLD-A-codex-s02、s04、s04b、s05、s06、s07、s10x（及其余 Codex 录制）、GOLD-A-tool-fields-codex、GOLD-A-option-map-codex、UNIT-option-map-codex | L | 否 | H.drv |
@@ -1607,7 +1607,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 |---|---|
 | R7 没有远端：macOS 14、15 上的对端校验覆盖不到（最低支持版本），CI 负载下的稳定性也测不到 | 列为缺口由用户确认（1.8）；可选：用 Virtualization.framework 在本机跑 macOS 14、15 虚拟机执行 `cupper-sys` 的测试（镜像与磁盘成本未核实） |
 | R8 本机 CI 占用作者机器：20 次加 5 次降速变体、8 小时浸泡、e2e 全集都需要机器空闲；几个子 agent 同时跑会互抢 CPU | 第 6 节提前约时段；e2e、`ui`、性能、nfr1 类作业由机器级锁串行（1.8） |
-| R9 截图基线随系统或 Chromium 升级整体漂移 | 1.8 的固定渲染因素；Chromium 版本严格比对，macOS 只比对大版本，有像素差异才重新生成，单独提交并评审差异 |
+| R9 截图基线随系统或 Chromium 升级整体漂移 | 1.8 的固定渲染因素；Chromium 版本严格比对，macOS 不同只提示（v1.3.69，T197：runner 与作者机器上的基线逐字节相同），有像素差异才在 runner 上重新生成，经 PR 单独评审差异 |
 | R10 真实 CLI 的额度和稳定性：Codex 走自定义网关、常过载（SP-1），结果可能"不确定" | 最便宜的模型、限定剧本；"不确定"允许有上限地重跑（T066 的注）；K12 给出 M1a 的退路 |
 | R11 Apple 账号推迟，发布组整体悬空；Electron 大版本在开发期间更替 | 已按 v1.1 移出 M1b；T182 不需要账号，可以按需提前；T107 在 SP-6 前跟进 Electron，之后按 5.10.6 的节奏 |
 | R12 以后建远端时，历史里可能有个人信息，公开仓库的 Actions 可能被外部贡献者利用 | 1.8"以后建远端时"一行的清单 |
@@ -1956,3 +1956,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.66 | 2026-10-26 | T197 第一阶段合并：GitHub CI 成为合并的门槛，main 设了保护规则（8 个检查）。新增 T198：桌面主进程 bridge 单测的 `settle()` 固定等 10 ms，在 GitHub runner 上偶发失败；T099 改为也依赖 T198 |
 | v1.3.67 | 2026-10-26 | 新增 T199：网关同步的一个用例在 GitHub runner 上偶发失败；T099 改为也依赖 T199。用户下班前决定：手上的 T192、T195、T196、T197 做完就停，T193、T198、T199 明天再派 |
 | v1.3.68 | 2026-10-27 | 10-26 夜里的 nightly 在 e2e 全集里抓到 E2E-single-instance 没标 `@focus`（T195 的前台检查生效），派 T195 修复 1。T199 收入 T196 的两处遗留（cargo 重新链接后宿主的首次执行、`fake_agent_host_from` 的宿主回收）。派发 T193、T198、T199 |
+| v1.3.69 | 2026-10-27 | 按 T197 落实后的情况改写 1.8：标题改为"CI（GitHub Actions，本机可复现）"；统一入口、环境、机器级锁、验收记录、每晚作业、截图基线、M1a 退出、本机替代不了的项各行改写；"以后建远端时"改为"仓库设置" |
