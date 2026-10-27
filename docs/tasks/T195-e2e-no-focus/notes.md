@@ -125,3 +125,10 @@
 | `app.spec.ts` 加 `@focus`（用例体缩进一层） | 99d7442 | +30 −27（净 +3），停止线 60 |
 
 本机核对：`playwright test --list --grep @focus` 列出 19 条，含 E2E-single-instance；eslint、tsc、prettier 通过。e2e 本身在 runner 上核对（见下）。
+
+### runner 上的核对（1c778f1）
+
+| 运行 | 内容 | 结果 |
+|---|---|---|
+| ci 40438066146（PR #6） | 8 个检查 | 全部通过 |
+| nightly 40438064169（编排者在本分支上触发） | e2e 全集，分前后台两段 | 48 条全过：后台段 25 条，没有前台命中；`@focus` 段 19 条，含 E2E-single-instance（3.4 s） |
