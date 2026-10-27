@@ -324,11 +324,13 @@ async fn it_gw_sync_first_answer_wins() {
 /// IT-gw-sync, SP-4a test 3: what a client missed while away comes back
 /// on reconnect, from its cursor, with no gap and nothing twice (the mirror
 /// checks every seq); contiguous deltas come as range events. A client
-/// with a coalescing window gets ranges live.
+/// with a coalescing window gets ranges live. On the manual clock: which
+/// deltas a 200 ms window takes depends on when the agent writes, so the
+/// window ends when the test advances the clock (T199).
 #[tokio::test(flavor = "multi_thread")]
 async fn it_gw_sync_reconnect_replays_without_gaps() {
     let dir = TempDir::new("sync-replay");
-    let (data_dir, _host, client) = fake_agent_host(&dir, json!({})).await;
+    let (data_dir, _host, client) = fake_agent_host(&dir, json!({"clock": "manual"})).await;
     let session = create(&client, "say first").await;
     let mut away = Peer::new(client, &session).await;
     away.ended(1).await;
@@ -364,8 +366,10 @@ async fn it_gw_sync_reconnect_replays_without_gaps() {
         "flood 400 5; sleep 300; flood 400 5",
     )
     .await;
-    windowed.ended(3).await;
+    // The whole turn is in the window, which ends now.
     writer.ended(3).await;
+    advance(&writer.client, 200).await;
+    windowed.ended(3).await;
     assert!(windowed.ranges > 0, "no range events live");
     same(windowed.view(), writer.view());
 }
