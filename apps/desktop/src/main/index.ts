@@ -26,6 +26,7 @@ import { isReleaseLike } from "../shared/flavor";
 import { COMMAND_CHANNEL, HOST_OPEN } from "../shared/ipc";
 import { WindowBridges } from "./bridge/bridges";
 import { startHost } from "./host";
+import { catchUncaught } from "./errors";
 import { confirmQuit, confirmRestart, tellRestartRefused, type Translate } from "./host/dialogs";
 import { QuitGuard, type QuitHost } from "./host/lifecycle";
 import { MainLog } from "./log";
@@ -65,6 +66,8 @@ mkdirSync(dirs.userData, { recursive: true, mode: 0o700 });
 // Before the single-instance lock, which lives in userData.
 app.setPath("userData", dirs.userData);
 const log = new MainLog(dirs.logs, { home: app.getPath("home"), echo: flavor === "dev" });
+// Logged instead of Electron's modal error box (T200).
+catchUncaught(process, log);
 
 protocol.registerSchemesAsPrivileged([APP_SCHEME_PRIVILEGES]);
 app.enableSandbox();
