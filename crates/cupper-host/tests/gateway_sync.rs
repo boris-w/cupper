@@ -177,8 +177,7 @@ fn same(a: &SessionView, b: &SessionView) {
 #[tokio::test(flavor = "multi_thread")]
 async fn it_gw_sync_two_clients_see_the_same_stream() {
     let dir = TempDir::new("sync-same");
-    let (data_dir, host, client) = fake_agent_host(&dir, json!({})).await;
-    let _host = Running(host);
+    let (data_dir, _host, client) = fake_agent_host(&dir, json!({})).await;
     let session = create(&client, "say hi").await;
     let mut a = Peer::new(client, &session).await;
     let mut b = Peer::new(connect(&data_dir).await, &session).await;
@@ -290,8 +289,7 @@ async fn pending(peer: &mut Peer) -> Value {
 #[tokio::test(flavor = "multi_thread")]
 async fn it_gw_sync_first_answer_wins() {
     let dir = TempDir::new("sync-first");
-    let (data_dir, host, client) = fake_agent_host(&dir, json!({})).await;
-    let _host = Running(host);
+    let (data_dir, _host, client) = fake_agent_host(&dir, json!({})).await;
     let script = "tool t1 execute Run tests; permission t1; say finished";
     let session = create(&client, script).await;
     let mut a = Peer::new(client, &session).await;
@@ -326,12 +324,13 @@ async fn it_gw_sync_first_answer_wins() {
 /// IT-gw-sync, SP-4a test 3: what a client missed while away comes back
 /// on reconnect, from its cursor, with no gap and nothing twice (the mirror
 /// checks every seq); contiguous deltas come as range events. A client
-/// with a coalescing window gets ranges live.
+/// with a coalescing window gets ranges live. On the manual clock: which
+/// deltas a 200 ms window takes depends on when the agent writes, so the
+/// window ends when the test advances the clock (T199).
 #[tokio::test(flavor = "multi_thread")]
 async fn it_gw_sync_reconnect_replays_without_gaps() {
     let dir = TempDir::new("sync-replay");
-    let (data_dir, host, client) = fake_agent_host(&dir, json!({})).await;
-    let _host = Running(host);
+    let (data_dir, _host, client) = fake_agent_host(&dir, json!({"clock": "manual"})).await;
     let session = create(&client, "say first").await;
     let mut away = Peer::new(client, &session).await;
     away.ended(1).await;
@@ -367,8 +366,10 @@ async fn it_gw_sync_reconnect_replays_without_gaps() {
         "flood 400 5; sleep 300; flood 400 5",
     )
     .await;
-    windowed.ended(3).await;
+    // The whole turn is in the window, which ends now.
     writer.ended(3).await;
+    advance(&writer.client, 200).await;
+    windowed.ended(3).await;
     assert!(windowed.ranges > 0, "no range events live");
     same(windowed.view(), writer.view());
 }
@@ -379,8 +380,7 @@ async fn it_gw_sync_reconnect_replays_without_gaps() {
 #[tokio::test(flavor = "multi_thread")]
 async fn it_gw_sync_slow_client_does_not_block_the_agent() {
     let dir = TempDir::new("sync-slow");
-    let (data_dir, host, client) = fake_agent_host(&dir, json!({})).await;
-    let _host = Running(host);
+    let (data_dir, _host, client) = fake_agent_host(&dir, json!({})).await;
     let session = create(&client, "say hi").await;
     let mut fast = Peer::new(client, &session).await;
     fast.ended(1).await;
@@ -635,8 +635,7 @@ async fn it_gw_sync_command_retries_are_idempotent() {
 #[tokio::test(flavor = "multi_thread")]
 async fn it_gw_sync_frames_stay_within_limit() {
     let dir = TempDir::new("sync-frames");
-    let (data_dir, host, client) = fake_agent_host(&dir, json!({})).await;
-    let _host = Running(host);
+    let (data_dir, _host, client) = fake_agent_host(&dir, json!({})).await;
     let session = create(&client, "say hi").await;
     let mut a = Peer::new(client, &session).await;
     a.ended(1).await;

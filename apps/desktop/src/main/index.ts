@@ -169,7 +169,19 @@ async function ready() {
 /** Each window document's data connection, through its windowBridge (design 5.7.1). */
 function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
   const bridges = new WindowBridges({
-    connect: openWindow,
+    // How long each window connection took, or why it failed: when a window
+    // does not come back, the log says where it stopped (T199).
+    connect: async () => {
+      const started = Date.now();
+      try {
+        const conn = await openWindow();
+        log.info("window connected", { ms: Date.now() - started });
+        return conn;
+      } catch (error) {
+        log.warn("window connection failed", { ms: Date.now() - started, error: String(error) });
+        throw error;
+      }
+    },
     guard: guardOf,
     controlReady: () => control.ready(),
     schedule: (task, ms) => void setTimeout(task, ms),
