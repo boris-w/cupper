@@ -9,7 +9,7 @@ import { DatabaseSync } from "node:sqlite";
 import { createI18n } from "@cupper/i18n";
 
 import type { Line, Repl } from "./cli";
-import { expect, type Cupper } from "./fixture";
+import { expect, test, type Cupper } from "./fixture";
 import { gone, signal, tree } from "./procs";
 
 declare global {
@@ -59,11 +59,29 @@ export async function disconnectWindow(cupper: Cupper): Promise<void> {
       .__cupperE2E;
     hooks?.disconnectWindow(id);
   }, id);
-  await expect
-    .poll(async () => (await windowConnections(cupper)).some((conn) => !before.includes(conn)), {
-      message: "the window connects again",
-    })
-    .toBe(true);
+  const started = Date.now();
+  try {
+    await expect
+      .poll(async () => (await windowConnections(cupper)).some((conn) => !before.includes(conn)), {
+        message: "the window connects again",
+      })
+      .toBe(true);
+  } catch (error) {
+    // What the window says, and the logs before the teardown may run out of time (T199).
+    const state = await hostClient(cupper)
+      .state()
+      .catch((e: unknown) => String(e));
+    const body = JSON.stringify({ waited_ms: Date.now() - started, window: state });
+    await test.info().attach("reconnect", { body, contentType: "application/json" });
+    for (const log of ["logs/main.log", "data/logs/host.log"]) {
+      await test
+        .info()
+        .attach(log, { path: join(cupper.root, log) })
+        .catch(() => undefined);
+    }
+    throw error;
+  }
+  test.info().annotations.push({ type: "reconnect_ms", description: String(Date.now() - started) });
 }
 
 /**
