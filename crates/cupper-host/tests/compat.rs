@@ -725,12 +725,12 @@ impl User {
         let mut recording = Recording::parse(&text).unwrap();
         let header = &mut recording.header;
         header.scenario = scenario.id.to_owned();
-        let usage = if scenario.gold_b {
-            Usage::GoldB
-        } else {
-            Usage::Replay
+        // A real GOLD-B sample is the extraction layer's too (design 5.9.3).
+        header.usage = match (scenario.gold_b, fake) {
+            (true, false) => vec![Usage::GoldA, Usage::GoldB],
+            (true, true) => vec![Usage::GoldB],
+            (false, _) => vec![Usage::Replay],
         };
-        header.usage = vec![usage];
         if fake {
             header.adapter = "cupper-fake-agent".into();
             header.adapter_version = "0.0.0".into();

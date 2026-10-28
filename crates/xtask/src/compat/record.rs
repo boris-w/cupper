@@ -3,9 +3,10 @@
 //! a real one, once `tools/sanitize` has redacted them with the run's
 //! temporary roots and the local sensitive word list and found nothing left;
 //! a real run's report, failures and all, into [`REPORTS`]; then the goldens
-//! (`UPDATE_GOLDEN=1`) and the generic scan of `testdata/`. A recording that
-//! differs from the committed one only in its times and request IDs stays as
-//! it is, so a run that changed nothing changes no file.
+//! of both layers (`UPDATE_GOLDEN=1`), checked, and the generic scan of
+//! `testdata/`. A recording that differs from the committed one only in its
+//! times and request IDs stays as it is, so a run that changed nothing
+//! changes no file.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -109,20 +110,21 @@ pub fn write(
         )?;
         println!("  {REPORTS}/{name}: written");
     }
-    let mut goldens = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
-    goldens.current_dir(root).env("UPDATE_GOLDEN", "1");
-    goldens.args([
-        "test",
-        "-p",
-        "cupper-host",
-        "--features",
-        "test-harness",
-        "--locked",
-    ]);
-    run(
-        goldens.args(["--test", "gold_b"]),
-        "the GOLD-B goldens were not written",
-    )?;
+    // Both layers, as `pnpm test:golden` runs them: a real GOLD-B sample is
+    // a GOLD-A one too. A test that matches recordings with goldens would race
+    // the writing, so it waits for the check that follows.
+    let goldens = |update: bool| {
+        let mut cargo = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
+        cargo.current_dir(root).args(["test", "-p", "cupper-host"]);
+        cargo.args(["--features", "test-harness", "--locked", "gold_"]);
+        if update {
+            cargo.env("UPDATE_GOLDEN", "1");
+            cargo.args(["--", "--skip", "recordings_and_goldens_match_up"]);
+        }
+        cargo
+    };
+    run(&mut goldens(true), "the goldens were not written")?;
+    run(&mut goldens(false), "the goldens do not hold")?;
     run(
         &mut node(root, &["scan", "testdata"]),
         "tools/sanitize found personal data",
