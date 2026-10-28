@@ -1,0 +1,101 @@
+# 系统日志摘录（`log show`，只留与原型相关的 usernoted、NotificationCenter、launchd 行；已去掉本机路径）
+
+2026-10-28 11:54:08.378 Df sp10-host[35705:bce41b2] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requesting authorization with options 6
+2026-10-28 11:54:08.378 E  usernoted[652:bce1720] [com.apple.unc:UserNotifications] Failed to find or validate client of identifier dev.cupper.spike.sp10.host with audit token <BSAuditToken: 0xa90081280; AUID: 501; EUID: 501; EGID: 20; RUID: 501; RGID: 20; PID: 35705; ASID: 100024; PIDVersion: 68520041>
+2026-10-28 11:54:08.379 Df sp10-host[35705:bce41b7] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requested authorization [ didGrant: 0 hasError: 1 hasCompletionHandler: 1 ]
+2026-10-28 11:56:47.874 E  usernoted[652:bce5bbd] [com.apple.unc:UserNotifications] Failed to find or validate client of identifier dev.cupper.spike.sp10.host with audit token <BSAuditToken: 0xa900836c0; AUID: 501; EUID: 501; EGID: 20; RUID: 501; RGID: 20; PID: 40023; ASID: 100024; PIDVersion: 68527844>
+2026-10-28 11:57:38.605 Df usernoted[652:bce8ada] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 11:57:38.606 Df sp10-host[42704:bce8bcd] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requesting authorization with options 6
+2026-10-28 11:57:38.607 Df NotificationCenter[721:1de0] [com.apple.unc:application] Found info for dev.cupper.spike.sp10.host at <private>. app name: SP10 Notifier
+2026-10-28 11:57:38.610 Df usernoted[652:bce8ada] [com.apple.unc:application] Sending request for permission for dev.cupper.spike.sp10.host with path /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 11:57:38.720 Df usernoted[652:bce8bd2] [com.apple.unc:application] Presenting <NotificationRecord app:"com.apple.notificationcenter.askpermissions" ident:"4177-4F12" req:"dev.cupper.spike.sp10.host" uuid:"DA491C76" source:"B85BE0F0" category:"permission"> as alert (["badge", "sound", "alert"])
+2026-10-28 11:57:49.437 Df usernoted[652:bce8bd2] [com.apple.unc:application] Removing displayed <NotificationRecord app:"com.apple.notificationcenter.askpermissions" ident:"4177-4F12" req:"dev.cupper.spike.sp10.host" uuid:"DA491C76" source:"B85BE0F0" category:"permission">
+2026-10-28 11:57:49.437 Df sp10-host[42704:bce8bcf] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requested authorization [ didGrant: 0 hasError: 1 hasCompletionHandler: 1 ]
+2026-10-28 11:59:08.792 Df usernoted[652:bcec619] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:00:55.342 Df usernoted[652:bcefcad] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:00:55.343 Df sp10-host[50183:bcefdb2] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requesting authorization with options 6
+2026-10-28 12:00:55.347 Df sp10-host[50183:bcefdb4] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requested authorization [ didGrant: 1 hasError: 0 hasCompletionHandler: 1 ]
+2026-10-28 12:00:55.348 Df usernoted[652:bcefdb8] [com.apple.unc:application] Presenting <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"2F86-AA86" req:"sp10-s1" uuid:"0ACF6046" source:"38F48E9E"> as banner (["badge", "sound", "alert"])
+2026-10-28 12:01:54.762 Df NotificationCenter[721:1de0] [com.apple.unc:application] [dev.cupper.spike.sp10.host:0ACF6046:2F86-AA86] action
+2026-10-28 12:01:54.762 Df usernoted[652:bcefdb9] [com.apple.unc:application] Received response <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"2F86-AA86" req:"sp10-s1" uuid:"0ACF6046" source:"38F48E9E" <response action: contents actIdent:  foreground: true text: nil> >
+2026-10-28 12:01:54.764 Df usernoted[652:bcefdb9] [com.apple.unc:application] Bringing app dev.cupper.spike.sp10.host front for response with URL: file:///Applications/SP10.app/Contents/Helpers/SP10Host.app/
+2026-10-28 12:02:05.078 Df usernoted[652:bcf1517] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:02:05.080 Df sp10-host[52058:bcf1aaf] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requesting authorization with options 6
+2026-10-28 12:02:05.081 Df sp10-host[52058:bcf1ab0] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requested authorization [ didGrant: 1 hasError: 0 hasCompletionHandler: 1 ]
+2026-10-28 12:02:05.083 Df usernoted[652:bcf1519] [com.apple.unc:application] Presenting <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"9756-F13E" req:"sp10-s2" uuid:"965BE769" source:"38F48E9E"> as banner (["badge", "sound", "alert"])
+2026-10-28 12:02:07.411 Df NotificationCenter[721:1de0] [com.apple.unc:application] [dev.cupper.spike.sp10.host:965BE769:9756-F13E] action
+2026-10-28 12:02:07.411 Df usernoted[652:bcf1519] [com.apple.unc:application] Received response <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"9756-F13E" req:"sp10-s2" uuid:"965BE769" source:"38F48E9E" <response action: contents actIdent:  foreground: true text: nil> >
+2026-10-28 12:02:07.412 Df usernoted[652:bcf1519] [com.apple.unc:application] Bringing app dev.cupper.spike.sp10.host front for response with URL: file:///Applications/SP10.app/Contents/Helpers/SP10Host.app/
+2026-10-28 12:02:07.434 Df launchd[1:bcf1975] [gui/501/application.dev.cupper.spike.sp10.host.144261244.144261290 [52155]:] Successfully spawned sp10-host[52155] because launch job demand
+2026-10-28 12:02:07.454 Df usernoted[652:bcf1519] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:02:19.545 Df usernoted[652:bcf1517] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:02:19.546 Df sp10-host[52745:bcf27b5] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requesting authorization with options 6
+2026-10-28 12:02:19.548 Df sp10-host[52745:bcf27bf] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requested authorization [ didGrant: 1 hasError: 0 hasCompletionHandler: 1 ]
+2026-10-28 12:02:19.550 Df usernoted[652:bcf1bc6] [com.apple.unc:application] Presenting <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"70DB-53D9" req:"sp10-s3" uuid:"8D89B331" source:"38F48E9E"> as banner (["badge", "sound", "alert"])
+2026-10-28 12:02:23.366 Df NotificationCenter[721:1de0] [com.apple.unc:application] [dev.cupper.spike.sp10.host:8D89B331:70DB-53D9] action
+2026-10-28 12:02:23.366 Df usernoted[652:bcf1517] [com.apple.unc:application] Received response <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"70DB-53D9" req:"sp10-s3" uuid:"8D89B331" source:"38F48E9E" <response action: contents actIdent:  foreground: true text: nil> >
+2026-10-28 12:02:23.367 Df usernoted[652:bcf1517] [com.apple.unc:application] Bringing app dev.cupper.spike.sp10.host front for response with URL: file:///Applications/SP10.app/Contents/Helpers/SP10Host.app/
+2026-10-28 12:02:23.383 Df launchd[1:bcf2682] [gui/501/application.dev.cupper.spike.sp10.host.144261244.144261290 [52803]:] Successfully spawned sp10-host[52803] because launch job demand
+2026-10-28 12:02:23.407 Df usernoted[652:bcf287b] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:02:31.687 Df usernoted[652:bcf2879] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:05:34.765 E  usernoted[652:bcf827a] [com.apple.unc:UserNotifications] Failed to find or validate client of identifier dev.cupper.spike.sp10.host with audit token <BSAuditToken: 0xa90f522c0; AUID: 501; EUID: 501; EGID: 20; RUID: 501; RGID: 20; PID: 59675; ASID: 100024; PIDVersion: 68564856>
+2026-10-28 12:05:57.466 Df usernoted[652:bcf827a] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:06:19.135 Df usernoted[652:bcf9366] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:06:19.136 Df sp10-host[61125:bcfa355] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requesting authorization with options 6
+2026-10-28 12:06:19.139 Df sp10-host[61125:bcfa359] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requested authorization [ didGrant: 1 hasError: 0 hasCompletionHandler: 1 ]
+2026-10-28 12:06:19.142 Df usernoted[652:bcfa35c] [com.apple.unc:application] Presenting <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"D6DB-439F" req:"sp10-s2b" uuid:"F345A6D0" source:"29E39C3E"> as banner (["badge", "sound", "alert"])
+2026-10-28 12:06:21.147 Df NotificationCenter[721:1de0] [com.apple.unc:application] [dev.cupper.spike.sp10.host:F345A6D0:D6DB-439F] action
+2026-10-28 12:06:21.148 Df usernoted[652:bcfa35c] [com.apple.unc:application] Received response <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"D6DB-439F" req:"sp10-s2b" uuid:"F345A6D0" source:"29E39C3E" <response action: contents actIdent:  foreground: true text: nil> >
+2026-10-28 12:06:21.148 Df usernoted[652:bcfa480] [com.apple.unc:application] Checking <private> for launch of dev.cupper.spike.sp10.host against 29E39C3E-DDDD-43EF-B02C-D1E0137EE716
+2026-10-28 12:06:21.149 Df usernoted[652:bcfa480] [com.apple.unc:application] Application dev.cupper.spike.sp10.host found using LaunchServices at <private>
+2026-10-28 12:06:21.169 Df launchd[1:bcfa367] [gui/501/application.dev.cupper.spike.sp10.host.144356236.144356279 [61250]:] Successfully spawned sp10-host[61250] because launch job demand
+2026-10-28 12:06:21.188 Df usernoted[652:bcf9366] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:07:48.095 Df usernoted[652:bcfbbc0] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:07:51.822 Df usernoted[652:bcfbbc0] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:10:08.261 Df usernoted[652:bcff321] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:10:08.262 Df sp10-host[69029:bd0000b] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requesting authorization with options 6
+2026-10-28 12:10:08.265 Df sp10-host[69029:bd00010] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requested authorization [ didGrant: 1 hasError: 0 hasCompletionHandler: 1 ]
+2026-10-28 12:10:08.266 Df usernoted[652:bd00014] [com.apple.unc:application] Presenting <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"0F3B-0C6D" req:"sp10-s2c" uuid:"199D50E7" source:"38CDFD5A"> as banner (["badge", "sound", "alert"])
+2026-10-28 12:10:13.064 Df NotificationCenter[721:1de0] [com.apple.unc:application] [dev.cupper.spike.sp10.host:199D50E7:0F3B-0C6D] action
+2026-10-28 12:10:13.064 Df usernoted[652:bd000a3] [com.apple.unc:application] Received response <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"0F3B-0C6D" req:"sp10-s2c" uuid:"199D50E7" source:"38CDFD5A" <response action: contents actIdent:  foreground: true text: nil> >
+2026-10-28 12:10:13.065 Df usernoted[652:bd000a4] [com.apple.unc:application] Checking <private> for launch of dev.cupper.spike.sp10.host against 38CDFD5A-258E-4C79-8752-15DBA5BF4C4B
+2026-10-28 12:10:13.066 Df usernoted[652:bd000a4] [com.apple.unc:application] Application dev.cupper.spike.sp10.host found using LaunchServices at <private>
+2026-10-28 12:10:13.084 Df launchd[1:bcffe6c] [gui/501/application.dev.cupper.spike.sp10.host.144409188.144409365 [69091]:] Successfully spawned sp10-host[69091] because launch job demand
+2026-10-28 12:10:13.104 Df usernoted[652:bd000a3] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:11:07.247 Df usernoted[652:bd0019f] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:11:39.460 Df usernoted[652:bd0019f] [com.apple.unc:server] Connection dev.cupper.spike.sp10.host with path: /Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28 12:11:39.460 Df sp10-host[71181:bd020aa] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requesting authorization with options 6
+2026-10-28 12:11:39.464 Df sp10-host[71181:bd020ae] [com.apple.UserNotifications:Connections] [dev.cupper.spike.sp10.host] Requested authorization [ didGrant: 1 hasError: 0 hasCompletionHandler: 1 ]
+2026-10-28 12:11:39.466 Df usernoted[652:bd020b2] [com.apple.unc:application] Presenting <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"6FA0-ECC1" req:"sp10-s5" uuid:"C08FFD21" source:"894BAC96"> as banner (["badge", "sound", "alert"])
+2026-10-28 12:11:41.712 Df NotificationCenter[721:1de0] [com.apple.unc:application] [dev.cupper.spike.sp10.host:C08FFD21:6FA0-ECC1] action
+2026-10-28 12:11:41.712 Df usernoted[652:bd0019f] [com.apple.unc:application] Received response <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"6FA0-ECC1" req:"sp10-s5" uuid:"C08FFD21" source:"894BAC96" <response action: contents actIdent:  foreground: true text: nil> >
+2026-10-28 12:11:41.713 Df usernoted[652:bd0019f] [com.apple.unc:application] Bringing app dev.cupper.spike.sp10.host front for response with URL: file:///Applications/SP10.app/Contents/Helpers/SP10Host.app/
+
+## 点击后 LaunchServices 的处理（CoreServicesUIAgent、launchservicesd；-600 时系统弹出 "The application … is not open anymore."）
+
+2026-10-28 12:01:54.765 Df CoreServicesUIAgent[51140:bcec641] [com.apple.launchservices:open] Found application <private> to open application <private>
+2026-10-28 12:01:54.771 Df launchservicesd[377:bcf13f6] [com.apple.launchservices:cas] CHECKIN:0x0-0xaa5ea54 50183 dev.cupper.spike.sp10.host
+2026-10-28 12:01:54.778 E  CoreServicesUIAgent[51140:bcec641] [com.apple.launchservices:open] Error Error Domain=NSOSStatusErrorDomain Code=-600 "procNotFound: no eligible process with specified descriptor" UserInfo={_LSLine=392, 
+2026-10-28 12:01:54.778 E  CoreServicesUIAgent[51140:bcec641] [com.apple.launchservices:default] LAUNCH: Launch failed in CSUI with error Error Domain=NSOSStatusErrorDomain Code=-600 "procNotFound: no eligible process with specifi
+2026-10-28 12:01:54.779 E  CoreServicesUIAgent[51140:bcf1433] [com.apple.launchservices:uiagent] handle LS launch error: status=-600 <private>
+2026-10-28 12:02:07.415 Df CoreServicesUIAgent[51140:bcf1433] [com.apple.launchservices:open] Found application <private> to open application <private>
+2026-10-28 12:02:07.424 Df CoreServicesUIAgent[51140:bcf19ce] [com.apple.launchservices:open] Opening URL <private> with application <FSNode 0x876edc6c0> { isDir = y, path = <private> }
+2026-10-28 12:02:07.437 Df CoreServicesUIAgent[51140:bcf1433] [com.apple.processmanager:front-35286506] LAUNCH: 0x0-0xaa60a56 dev.cupper.spike.sp10.host starting stopped process.
+2026-10-28 12:02:07.454 Df CoreServicesUIAgent[51140:bcf19ce] [com.apple.processmanager:front-35286506] LAUNCH: 0x0-0xaa61a57 dev.cupper.spike.sp10 starting stopped process.
+2026-10-28 12:02:07.504 Df launchservicesd[377:bcf1a72] [com.apple.launchservices:cas] CHECKIN:0x0-0xaa61a57 52156 dev.cupper.spike.sp10
+2026-10-28 12:02:23.368 Df CoreServicesUIAgent[51140:bcf19ce] [com.apple.launchservices:open] Found application <private> to open application <private>
+2026-10-28 12:02:23.374 Df CoreServicesUIAgent[51140:bcf2285] [com.apple.launchservices:open] Opening URL <private> with application <FSNode 0x87500b640> { isDir = y, path = <private> }
+2026-10-28 12:02:23.388 Df CoreServicesUIAgent[51140:bcf19ce] [com.apple.processmanager:front-35286506] LAUNCH: 0x0-0xaa63a59 dev.cupper.spike.sp10.host starting stopped process.
+2026-10-28 12:02:23.404 Df CoreServicesUIAgent[51140:bcf2285] [com.apple.processmanager:front-35286506] LAUNCH: 0x0-0xaa64a5a dev.cupper.spike.sp10 starting stopped process.
+2026-10-28 12:02:23.453 Df launchservicesd[377:bcf2738] [com.apple.launchservices:cas] CHECKIN:0x0-0xaa64a5a 52804 dev.cupper.spike.sp10
+2026-10-28 12:06:21.173 Df CoreServicesUIAgent[51140:bcf8cbc] [com.apple.processmanager:front-35286506] LAUNCH: 0x0-0xaa7ba71 dev.cupper.spike.sp10.host starting stopped process.
+2026-10-28 12:10:13.089 Df CoreServicesUIAgent[51140:bcfff24] [com.apple.processmanager:front-35286506] LAUNCH: 0x0-0xaa8ca82 dev.cupper.spike.sp10.host starting stopped process.
+2026-10-28 12:10:13.124 Df launchservicesd[377:bcfff77] [com.apple.launchservices:cas] CHECKIN:0x0-0xaa8ca82 69091 dev.cupper.spike.sp10.host
+2026-10-28 12:10:13.219 Df CoreServicesUIAgent[51140:bcfff24] [com.apple.launchservices:open] Opening URL <private> with application <FSNode 0x875edc520> { isDir = y, path = <private> }
+2026-10-28 12:10:13.237 Df CoreServicesUIAgent[51140:bcfff24] [com.apple.processmanager:front-35286506] LAUNCH: 0x0-0xaa8da83 dev.cupper.spike.sp10 starting stopped process.
+2026-10-28 12:10:13.300 Df launchservicesd[377:bcfff79] [com.apple.launchservices:cas] CHECKIN:0x0-0xaa8da83 69102 dev.cupper.spike.sp10
+2026-10-28 12:11:41.714 Df CoreServicesUIAgent[51140:bcfff24] [com.apple.launchservices:open] Found application <private> to open application <private>
+2026-10-28 12:11:41.716 Df launchservicesd[377:bd02052] [com.apple.launchservices:cas] CHECKIN:0x0-0xaa93a89 71181 dev.cupper.spike.sp10.host
+2026-10-28 12:11:41.720 E  CoreServicesUIAgent[51140:bcfff24] [com.apple.launchservices:open] Error Error Domain=NSOSStatusErrorDomain Code=-600 "procNotFound: no eligible process with specified descriptor" UserInfo={_LSLine=392, 
+2026-10-28 12:11:41.720 E  CoreServicesUIAgent[51140:bcfff24] [com.apple.launchservices:default] LAUNCH: Launch failed in CSUI with error Error Domain=NSOSStatusErrorDomain Code=-600 "procNotFound: no eligible process with specifi
+2026-10-28 12:11:41.720 E  CoreServicesUIAgent[51140:bcfff24] [com.apple.launchservices:uiagent] handle LS launch error: status=-600 <private>
