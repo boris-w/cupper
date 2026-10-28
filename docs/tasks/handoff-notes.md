@@ -452,3 +452,5 @@
 | T150 | Info.plist：`CFBundleDisplayName`、`CFBundleName` 写构建种类的显示名称，图标复制进 `CupperHost.app/Contents/Resources`；交 URL 用 `NSWorkspace.open([URL], withApplicationAt:)`，目标 App 按宿主路径往上三级找再核对身份（同一个 bundle id 可能登记着好几份）；授权被拒后界面提示去系统设置打开；没测的有 macOS 14 和 15、Developer ID 签名、从 DMG 拖入时嵌套 helper 的登记 | T101 |
 | T160 | 自用构建是第一个申请通知授权的构建，系统只在第一次登记时取名称和图标：宿主的 `CFBundleDisplayName`、`CFBundleName` 和图标要在第一次申请授权之前写对 | T101 |
 | T160 | Vite 保留了 `local` 这个 mode 名（与 `.env.local` 冲突），`vite build --mode local` 直接报错，自用构建现在构建不出来；T105 在临时副本里改成用 `self-use` 映射到 local | T105（进行中的发现） |
+| 显示 agent 状态的界面任务（AG-2、AG-5） | 等运行时安装期间，agent 的 `state` 仍是 `idle`，只有 runtime 显示 `installing`（启动中不通知索引）。界面要不要显示"适配器启动中"、要不要让宿主在启动开始时通知一次 `starting`，由这个任务定。回合因附加失败而结束时，失败原因不进会话流，界面要显示原因的话也在这里定 | T201 |
+| T055、T059 | 安装失败后，每次启动尝试都计入重启退避，5 分钟内 5 次后 agent 变成 `crashed`，和以前哈希核对失败时一样。安装失败是不是该另算，由维护宿主生命周期的任务定 | T201 |
