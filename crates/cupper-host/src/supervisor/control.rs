@@ -65,11 +65,12 @@ impl Control {
 
     /// Answers `host/exit` once its outcome is recorded, then has the
     /// supervisor exit. The answer and `host/shutdown` both go out before the
-    /// connection closes, in either order (ruled before T037).
+    /// connection closes, in either order (ruled before T037): the exit,
+    /// which closes the connections, starts once the answer is queued (T205).
     fn exit(&self, call: Call) -> Reply {
         let ticket = call.ticket.expect("host/exit is a command");
         let running = self.activity().running_turns;
-        let supervisor = self.supervisor.clone();
+        let (supervisor, queued) = (self.supervisor.clone(), call.reply_queued);
         async move {
             let params = serde_json::from_value::<HostExitParams>(call.params)
                 .map_err(|err| RpcError::new(INVALID_PARAMS, err.to_string()));
@@ -81,7 +82,10 @@ impl Control {
                 }
             };
             ticket.complete(Ok(json!({}))).commit().await?;
-            let _ = supervisor.send(Exit::Requested { force });
+            tokio::spawn(async move {
+                let _ = queued.await;
+                let _ = supervisor.send(Exit::Requested { force });
+            });
             Ok(json!({}))
         }
         .boxed()

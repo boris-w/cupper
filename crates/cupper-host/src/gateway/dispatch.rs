@@ -36,7 +36,7 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, oneshot};
 
 use super::audit::{AuditEvent, Auditor};
 use super::blobs::{self, Uploads};
@@ -67,6 +67,10 @@ pub struct Call {
     pub params: Value,
     /// A command's first run, for the executor to end (see [`crate::ledger`]).
     pub ticket: Option<Ticket>,
+    /// Resolves once the reply is queued on the connection, or never will
+    /// be: what must come after the reply waits on it, as the exit after
+    /// `host/exit`'s (design 5.2.13).
+    pub reply_queued: oneshot::Receiver<()>,
 }
 
 /// Where calls go: a mailbox, or an executor that runs each call in a task.
@@ -217,7 +221,8 @@ impl Dispatch {
 
     /// Answers `method` now, or queues the call and answers in a task.
     pub(super) fn request(&self, routes: &Routes, id: RpcId, method: &str, params: Value) {
-        match self.answer(routes, &id, method, params) {
+        let (queued, reply_queued) = oneshot::channel();
+        match self.answer(routes, &id, method, params, reply_queued) {
             Answer::Now(outcome) => self.outbox.push_frame(frame(&id, outcome)),
             Answer::Later(reply, place) => {
                 let outbox = Arc::clone(&self.outbox);
@@ -228,6 +233,7 @@ impl Dispatch {
                     // request as soon as it reads this reply.
                     drop(place);
                     outbox.push_frame(frame(&id, outcome));
+                    let _ = queued.send(());
                 });
             }
             Answer::Queued => {}
@@ -251,7 +257,7 @@ impl Dispatch {
         if let Target::Port(port) = &entry.target {
             let (hold, reply) = (
                 routes.quiescence().hold(),
-                port.deliver(self.call(principal, name, params, None)),
+                port.deliver(self.call(principal, name, params, None, oneshot::channel().1)),
             );
             tokio::spawn(async move {
                 let _hold = hold;
@@ -260,7 +266,14 @@ impl Dispatch {
         }
     }
 
-    fn answer(&self, routes: &Routes, id: &RpcId, method: &str, params: Value) -> Answer {
+    fn answer(
+        &self,
+        routes: &Routes,
+        id: &RpcId,
+        method: &str,
+        params: Value,
+        reply_queued: oneshot::Receiver<()>,
+    ) -> Answer {
         let Some((name, entry)) = routes.request_entry(method) else {
             return Answer::Now(Err(unsupported(method)));
         };
@@ -290,7 +303,8 @@ impl Dispatch {
         let executed = privileged(&principal, name, entry, &params);
         let reply = match &entry.target {
             Target::Port(port) => {
-                let reply = port.deliver(self.call(principal, name, params, ticket));
+                let call = self.call(principal, name, params, ticket, reply_queued);
+                let reply = port.deliver(call);
                 match executed {
                     Some(event) => {
                         let auditor = self.auditor.clone();
@@ -369,6 +383,7 @@ impl Dispatch {
         method: &'static str,
         params: Value,
         ticket: Option<Ticket>,
+        reply_queued: oneshot::Receiver<()>,
     ) -> Call {
         Call {
             conn: self.conn.clone(),
@@ -377,6 +392,7 @@ impl Dispatch {
             method,
             params,
             ticket,
+            reply_queued,
         }
     }
 }

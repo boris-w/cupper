@@ -34,6 +34,7 @@ use crate::store::streams::{Streams, StreamsConfig};
 use crate::store::{
     Database, MIGRATIONS, Readers, WRITER, Writer, WriterConfig, migrate, open_reader, open_writer,
 };
+use crate::supervisor::Exit;
 use crate::supervisor::control::Control;
 
 /// A port that keeps each call and its reply channel for the test to answer.
@@ -721,6 +722,48 @@ async fn unit_ledger_gateway_outcome_unknown_after_an_external_run_without_outco
     let repeat = peer.call(&routes, "session/send", send(1, "c-1")).await;
     assert_eq!(code(&repeat.unwrap_err()), ("conflict", "outcome_unknown"));
     assert!(fixture.sessions.take().is_empty());
+}
+
+/// IT-lifecycle, `host/exit` (T205): the exit, which closes the connections,
+/// starts once the answer is queued, and a call hears its reply is queued
+/// once it is. The supervisor used to hear of the exit before the answer was
+/// queued, and could close the connection first.
+#[tokio::test]
+async fn it_lifecycle_host_exit_starts_once_its_answer_is_queued() {
+    let fixture = Fixture::new();
+    let routes = fixture.start();
+    let (supervisor, mut exits) = tokio::sync::mpsc::unbounded_channel();
+    let control = Control::new(supervisor, Arc::new([]), Arc::default());
+    let mut peer = Peer::new(harness());
+    let params = json!({"command_id": "x-1", "force": true});
+    let (ledger, command) = (routes.ledger().unwrap(), "x-1".parse().unwrap());
+    let begun = ledger.begin(&harness().id, &command, "host/exit", &params);
+    let Ok(Begin::Run(ticket)) = begun else {
+        panic!("a first run");
+    };
+    let (queued, reply_queued) = oneshot::channel();
+    let opened = peer.opened.clone();
+    let call = Call {
+        conn: opened.conn,
+        principal: opened.principal,
+        client: opened.client,
+        method: "host/exit",
+        params,
+        ticket: Some(ticket),
+        reply_queued,
+    };
+    // The test is the gateway: the answer has come, but is not queued.
+    assert_eq!(control.deliver(call).await, Ok(json!({})));
+    assert!(exits.try_recv().is_err());
+    queued.send(()).unwrap();
+    assert_eq!(exits.recv().await, Some(Exit::Requested { force: true }));
+
+    let id = peer.send(&routes, "session/send", send(1, "a"));
+    let Delivered { call, reply } = fixture.sessions.take().pop().unwrap();
+    reply.send(Ok(json!({"disposition": "queued"}))).unwrap();
+    call.reply_queued.await.unwrap();
+    let queued = peer.reply(id).now_or_never();
+    assert_eq!(queued, Some(Ok(json!({"disposition": "queued"}))));
 }
 
 #[tokio::test]

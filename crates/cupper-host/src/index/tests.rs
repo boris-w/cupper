@@ -236,6 +236,7 @@ async fn presence(index: &IndexHandle, conn: u64, kind: PrincipalKind, seen: (bo
         method: ClientPresence::NAME,
         params: json!({"foreground": seen.0, "session_id": seen.1}),
         ticket: None,
+        reply_queued: tokio::sync::oneshot::channel().1,
     };
     index.deliver(call).await.unwrap();
 }
