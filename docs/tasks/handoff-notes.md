@@ -465,3 +465,5 @@
 | 以后要让 nightly 开 issue 时 | 不要给运行 codex 二进制的作业写权限（它跑的是从 npm 下载的第三方二进制）。做法：把 `codex-drift` 移出矩阵，另加一个 `needs: codex-drift`、`if: failure()` 的报告作业，只给它 `issues: write`，按固定标题或标签查重 | T114 |
 | T113 | `xtask compat --out` 只认绝对路径（执行者在 `crates/cupper-host` 下运行，相对路径找不到计划文件）；thinking 剧本的题目要能触发 adaptive 思考（T202 换成了答案唯一的逻辑题），Codex 的思考剧本照此出题 | T202 |
 | 接 Bedrock、Vertex 等服务商的任务 | 宿主经 `extraArgs` 请求 `thinking-display: summarized`，在第三方服务商上是否生效没有核实 | T202 |
+| T113 | `tools/sanitize` 对 Codex 的 MCP 服务器名改成了"先取名字再全局替换"，来源有四处，其中 OAuth 报错文本是 T204 新发现的；Codex 的报错里如果再见到带服务器名的新写法，要补进工具。Claude 的 MCP 服务器名仍只靠 `mcp__` 规则、`*mcp_servers` 数组和敏感词清单，"Some MCP servers are still connecting: <名字>" 这类文本只有清单兜底，要不要也按取名处理在本任务里定 | T204 |
+| 以后改 `cargo xtask size` 的任务 | 它把 `spikes/` 下的录制也算进规模，改 spike 录制的任务都会被多算（T204 多算了 107 行）；把 `spikes/*/recordings/` 加进排除列表 | T204 |
