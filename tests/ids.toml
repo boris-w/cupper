@@ -1171,6 +1171,11 @@ UNIT-claude-plan-reject-ends-turn = "pr"
 milestone = "M1a"
 IT-host-tests-no-real-cli = "pr"
 
+# 已入库录制的补充脱敏（计划 v1.3.74，T066、T102 发现）
+[T204]
+milestone = "M1a"
+UNIT-sanitize-codex-mcp = "pr"
+
 # 计划里没有产出任务的编号
 [unplanned]
 # 从第二个发布版起（计划 5.3 的 NFR-10）
