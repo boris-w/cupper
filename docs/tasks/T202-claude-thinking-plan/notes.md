@@ -72,3 +72,24 @@
 - `cargo test -p cupper-host --features test-harness --test gold_b --test interaction_trust`：9 个、7 个都通过。
 - `cargo clippy -p cupper-host --all-targets --features test-harness -- -D warnings`、`cargo fmt --all -- --check`：通过。
 - `cargo xtask size`：+95 −11（净 +84），停止线 250。
+
+## 合并 main 之后（b23f06f，含 T066）
+
+- T066 最后只把 approval、cancel、normal-turn 三份真实录制标成 `gold-a`、`gold-b`；`plan.jsonl` 只标了 `replay`，没有 GOLD-A 金样例，所以没有要按新映射重写的。
+- 合并后重跑：GOLD-A 26 个、GOLD-B 12 个（含 3 个真实 Claude 的）、`interaction_trust` 7 个，都通过。GOLD-B 回放忽略 `_meta`，真实录制里旧的 `session/new`（不带 `_meta`）照样能对上。
+
+## 真实运行（COMPAT-claude-thinking，用户 2026-10-28 许可）
+
+命令：`cargo xtask compat --real --model sonnet --only thinking --only plan --out <worktree>/target/compat-T202`，跑一次，没有重试。先跑过 `--dry-run`：两个剧本都没有被约束拒绝，`files` 为空，临时仓库在用户自己的临时目录里。`--out` 要写绝对路径：执行者在 `crates/cupper-host` 下运行，相对路径找不到计划文件。
+
+| 剧本 | 结果 | 模型、effort | 回合 | 约合 |
+|---|---|---|---|---|
+| plan | 通过：计划正文、请求已回答、没有 hello.txt、回合 `cancelled` | sonnet-5-5，low | 1 | 0.154 美元 |
+| thinking | 失败：没有 `thought` 条目 | sonnet-5-5，用户默认的 xhigh | 1 | 0.056 美元 |
+
+- 两个剧本的 `session/new` 都带 `{"claudeCode":{"options":{"extraArgs":{"thinking-display":"summarized"}}}}`。
+- 配置的 19 项前后都没有变化。运行后没有进程留下，临时目录都已由执行者删除。遗留清单写在主仓库的 `.private/cleanup/T202-leftovers.md`（2 个 CLI 会话），不入库。
+- **plan 回合有 14 条 `agent_thought_chunk`**，摘要正文共 130 个字符。T066 修复前录的 `plan.jsonl`（`session/new` 不带 `_meta`）一条都没有，T066 入库的全部真实录制里也一条都没有。思考显示在真实 CLI 上生效了。
+- plan 选 `reject` 之后，prompt 以 `cancelled` 返回，与 `ends_turn: true` 一致。
+- thinking 回合直接回答了 "17 × 23 = 391"，上下文只多了 51 个 token，与可见的回答长度相当：这个回合模型没有思考，不是思考了但显示被省掉。同一次运行里 plan 回合在 sonnet 上思考了，所以不是 sonnet 默认不思考；更可能是 adaptive 认为这道题不用想。按编排者的要求，停下汇报，没有改成 A，也没有重跑。
+- `xtask compat` 拒绝 `--real --write --only`（只跑部分剧本的报告不进 `testdata/compat/reports/`），这次没有 `--write`。报告和录制先留在本机的运行输出里，怎么入库由编排者定。
