@@ -163,21 +163,20 @@ pub fn fake_agent() -> PathBuf {
     agent
 }
 
-/// The launch of Claude's adapter from the runtime in `data_dir`: the CLI
+/// The launch of Claude's adapter from the runtime's `program`: the CLI
 /// that `locator` finds, or the one `settings` name, its version classified
 /// against the manifest's range, the variables `settings` pass on to it
 /// (design 5.6.6).
 pub async fn production(
     clock: &dyn Clock,
     durations: &Durations,
-    data_dir: &Path,
+    program: Program,
     (host, login): (&BTreeMap<String, String>, &LoginEnv),
     locator: &CliLocator,
     settings: &Settings,
 ) -> Launch {
-    let (node, bundle) = runtime::claude_adapter(&runtime::runtime_dir(data_dir));
     let mut launch = Launch {
-        program: Program::Runtime { node, bundle },
+        program,
         env: Env::new(),
         versions: versions(String::new(), CliCompat::Unsupported),
         cli: None,

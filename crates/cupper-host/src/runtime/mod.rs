@@ -35,7 +35,7 @@ use cupper_protocol::index::{RuntimeFailure, RuntimeState};
 use crate::clock::Clock;
 use crate::driver::probe;
 use crate::durations::{self, Durations};
-use crate::manifest::{self, FileHash};
+use crate::manifest::FileHash;
 use crate::pure::{Core, TimerTable};
 use crate::quiescence::ActorKind;
 
@@ -159,10 +159,9 @@ pub struct Installed {
     pub hash: FileHash,
 }
 
-/// What Claude's adapter starts from in `runtime_dir`: the installed node
-/// and bundle.
-pub fn claude_adapter(runtime_dir: &Path) -> (Installed, Installed) {
-    let plans = plans(manifest::embedded());
+/// What Claude's adapter starts from in `runtime_dir`: the node and bundle
+/// that the installer installs by `plans`.
+pub fn claude_adapter(runtime_dir: &Path, plans: &[ComponentPlan]) -> (Installed, Installed) {
     let file = |component: Component, name: &str| {
         let plan = plans.iter().find(|p| p.component == component);
         let plan = plan.expect("the manifest plans every component");
