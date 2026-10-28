@@ -55,11 +55,8 @@ export interface Change {
 /** Sorted keys and no descriptions: the same schema always hashes the same. */
 function canonical(_key: string, value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([key]) => key !== "description")
-      .sort(),
-  );
+  const kept = Object.entries(value).filter(([key]) => key !== "description");
+  return Object.fromEntries(kept.sort());
 }
 const hash = (node: unknown) =>
   createHash("sha256").update(JSON.stringify(node, canonical)).digest("hex").slice(0, 16);

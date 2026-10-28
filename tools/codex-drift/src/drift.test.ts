@@ -61,14 +61,8 @@ describe("UNIT-codex-drift", () => {
   });
 
   test("a method gone", () => {
-    const now = schemas(
-      [
-        ["turn/start", ref("TurnStartParams")],
-        ["thread/list", THREAD_LIST],
-      ],
-      [],
-      { TurnStartParams: TurnParams(["threadId", "mode"]), ListParams: TurnParams(["cursor"]) },
-    );
+    const now = base();
+    now[FILES.notification] = { oneOf: [] };
     expect(compare(BASELINE, summarize(now, now, ADAPTER))).toEqual([
       { method: "turn/completed", change: "gone" },
     ]);

@@ -126,9 +126,8 @@ if (command === "write") {
   const found = summary(dir, download(dir, verified));
   const baseline = { codexAcp: acp.version, codex: verified, ...found };
   writeFileSync(BASELINE, `${JSON.stringify(baseline, null, 2)}\n`);
-  console.log(
-    `baseline written: codex-acp ${acp.version} uses ${Object.keys(found.methods).length} methods`,
-  );
+  const used = Object.keys(found.methods).length;
+  console.log(`baseline written: codex-acp ${acp.version} uses ${used} methods`);
   process.exit(0);
 }
 const base = JSON.parse(readFileSync(BASELINE, "utf8")) as Summary & {
@@ -136,20 +135,16 @@ const base = JSON.parse(readFileSync(BASELINE, "utf8")) as Summary & {
   codex: string;
 };
 if (command === "fetch") {
-  const latest = (JSON.parse(curl(`${REGISTRY}@openai/codex/latest`)) as { version: string })
-    .version;
+  const { version: latest } = JSON.parse(curl(`${REGISTRY}@openai/codex/latest`)) as Fetched;
   const fetched = latest === base.codex ? { version: latest } : download(dir, latest);
   writeFileSync(fetchedFile, JSON.stringify(fetched));
   console.log(`the newest codex on npm: ${latest}; the baseline's: ${base.codex}`);
   process.exit(0);
 }
 if (base.codexAcp !== acp.version || base.codex !== verified) {
-  console.error(
-    `the baseline is for codex-acp ${base.codexAcp} and codex ${base.codex}, the manifest pins`,
-  );
-  console.error(
-    `codex-acp ${acp.version} and verifies codex up to ${verified}: rewrite it with \`write\``,
-  );
+  const pinned = `codex-acp ${acp.version} and codex verified up to ${verified}`;
+  console.error(`the baseline is for codex-acp ${base.codexAcp} and codex ${base.codex}`);
+  console.error(`the manifest has ${pinned}: rewrite the baseline with \`write\``);
   process.exit(1);
 }
 const fetched = JSON.parse(readFileSync(fetchedFile, "utf8")) as Fetched;
