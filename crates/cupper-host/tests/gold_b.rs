@@ -528,6 +528,9 @@ gold_b! {
     gold_b_fake_normal_turn => "cupper-fake-agent/0.0.0/fake/normal-turn",
     gold_b_fake_approval => "cupper-fake-agent/0.0.0/fake/approval",
     gold_b_fake_cancel => "cupper-fake-agent/0.0.0/fake/cancel",
+    gold_b_claude_normal_turn => "claude-agent-acp/0.91.0/2.1.296/normal-turn",
+    gold_b_claude_approval => "claude-agent-acp/0.91.0/2.1.296/approval",
+    gold_b_claude_cancel => "claude-agent-acp/0.91.0/2.1.296/cancel",
 }
 
 /// Every GOLD-B recording has a test above and a golden, and every golden

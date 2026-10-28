@@ -349,6 +349,9 @@ gold_a! {
     gold_a_claude_s10 => "s10-unauthenticated",
     gold_a_claude_s11 => "s11-image",
     gold_a_claude_s12 => "s12-resources",
+    gold_a_claude_compat_normal_turn => "normal-turn",
+    gold_a_claude_compat_approval => "approval",
+    gold_a_claude_compat_cancel => "cancel",
 }
 
 /// Every Claude recording for GOLD-A has a test above and a golden, and every

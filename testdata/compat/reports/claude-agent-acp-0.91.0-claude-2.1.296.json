@@ -1,0 +1,694 @@
+{
+  "v": 1,
+  "commit": "fcc891257302adf2cd9b442268772f51b1035aef",
+  "mode": "real_config",
+  "agent": "claude",
+  "model": "haiku",
+  "adapter": {
+    "name": "claude-agent-acp",
+    "version": "0.91.0"
+  },
+  "cli": {
+    "name": "claude",
+    "version": "2.1.296"
+  },
+  "duration_ms": 524069,
+  "scenarios": [
+    {
+      "id": "new-session",
+      "title": "a new session and its capabilities",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 19800,
+      "checks": [
+        {
+          "check": "the session's capabilities",
+          "passed": true
+        },
+        {
+          "check": "an item of kind agent_message",
+          "passed": true
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/new-session.jsonl"
+    },
+    {
+      "id": "normal-turn",
+      "title": "a turn with a thought and a tool call",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 24154,
+      "checks": [
+        {
+          "check": "a tool call of kind read",
+          "passed": true
+        },
+        {
+          "check": "an item of kind agent_message",
+          "passed": true
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": true,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/normal-turn.jsonl"
+    },
+    {
+      "id": "command-exit",
+      "title": "a command that exits with a non-zero code",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 22050,
+      "checks": [
+        {
+          "check": "a tool call of kind execute",
+          "passed": true
+        },
+        {
+          "check": "a tool call with a non-zero exit code",
+          "passed": true
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/command-exit.jsonl"
+    },
+    {
+      "id": "approval",
+      "title": "a command allowed once",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 23049,
+      "checks": [
+        {
+          "check": "a permission request resolved",
+          "passed": true
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": true,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/approval.jsonl"
+    },
+    {
+      "id": "reject",
+      "title": "a command rejected once",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 21040,
+      "checks": [
+        {
+          "check": "a permission request resolved",
+          "passed": true
+        },
+        {
+          "check": "no file rejected.txt",
+          "passed": true
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/reject.jsonl"
+    },
+    {
+      "id": "question",
+      "title": "a structured question answered",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 19992,
+      "checks": [
+        {
+          "check": "a question request resolved",
+          "passed": true
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/question.jsonl"
+    },
+    {
+      "id": "plan",
+      "title": "a plan, sent back to planning",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 24209,
+      "checks": [
+        {
+          "check": "a plan to confirm with its text",
+          "passed": true
+        },
+        {
+          "check": "a plan_confirm request resolved",
+          "passed": true
+        },
+        {
+          "check": "no file hello.txt",
+          "passed": true
+        },
+        {
+          "check": "the turn ended cancelled",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/plan.jsonl"
+    },
+    {
+      "id": "cancel",
+      "title": "an interrupt while a command runs",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 19552,
+      "checks": [
+        {
+          "check": "the turn ended cancelled",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": true,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/cancel.jsonl"
+    },
+    {
+      "id": "cancel-approval",
+      "title": "an interrupt while a request waits",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 23085,
+      "checks": [
+        {
+          "check": "a permission request cancelled",
+          "passed": true
+        },
+        {
+          "check": "the turn ended cancelled",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/cancel-approval.jsonl"
+    },
+    {
+      "id": "thinking",
+      "title": "a thought stream",
+      "outcome": "fail",
+      "detail": "not met: an item of kind thought",
+      "attempts": 1,
+      "duration_ms": 19118,
+      "checks": [
+        {
+          "check": "an item of kind thought",
+          "passed": false
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": null
+    },
+    {
+      "id": "steer",
+      "title": "a message steered into the running turn",
+      "outcome": "not_applicable",
+      "detail": "Steer comes with M1b: in M1a `session/send` in steer mode queues the message",
+      "attempts": 1,
+      "duration_ms": 0,
+      "checks": [],
+      "gold_b": false,
+      "recording": null
+    },
+    {
+      "id": "crash-resume",
+      "title": "the CLI killed, then the session resumed",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 23472,
+      "checks": [
+        {
+          "check": "a session_resumed notice",
+          "passed": true
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/crash-resume.jsonl"
+    },
+    {
+      "id": "host-restart",
+      "title": "the host restarted, then the session resumed",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 31933,
+      "checks": [
+        {
+          "check": "the host sent session/resume",
+          "passed": true
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/host-restart.jsonl"
+    },
+    {
+      "id": "image",
+      "title": "a prompt with an image",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 21588,
+      "checks": [
+        {
+          "check": "the image went to the agent",
+          "passed": true
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/image.jsonl"
+    },
+    {
+      "id": "concurrent-two",
+      "title": "two sessions prompting at once on one adapter (Q8)",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 49169,
+      "checks": [
+        {
+          "check": "each session holds only its own markers",
+          "passed": true
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/concurrent-two.jsonl"
+    },
+    {
+      "id": "six-sessions",
+      "title": "six sessions at once on one adapter",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 43308,
+      "checks": [
+        {
+          "check": "each session holds only its own markers",
+          "passed": true
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/six-sessions.jsonl"
+    },
+    {
+      "id": "close-running",
+      "title": "the adapter closed while a command runs (K21)",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 29064,
+      "checks": [
+        {
+          "check": "a command ran below the adapter",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/close-running.jsonl"
+    },
+    {
+      "id": "resume-procs",
+      "title": "the same session resumed again and again (Q43)",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 36175,
+      "checks": [
+        {
+          "check": "no more processes after the resumes",
+          "passed": true
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/resume-procs.jsonl"
+    },
+    {
+      "id": "untrusted-project",
+      "title": "an untrusted project's configuration takes no effect",
+      "outcome": "pass",
+      "detail": null,
+      "attempts": 1,
+      "duration_ms": 21097,
+      "checks": [
+        {
+          "check": "the session takes only the user's settings",
+          "passed": true
+        },
+        {
+          "check": "no file hook-ran",
+          "passed": true
+        },
+        {
+          "check": "no file mcp-ran",
+          "passed": true
+        },
+        {
+          "check": "no file helper-ran",
+          "passed": true
+        },
+        {
+          "check": "env.txt without CUPPER_COMPAT_ENV",
+          "passed": true
+        },
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/untrusted-project.jsonl"
+    },
+    {
+      "id": "hooks-reload",
+      "title": "hooks written in the middle of a turn (Q28)",
+      "outcome": "observed",
+      "detail": "hook-initial exists: true; hook-reloaded exists: true",
+      "attempts": 1,
+      "duration_ms": 25126,
+      "checks": [
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/hooks-reload.jsonl"
+    },
+    {
+      "id": "config-scope",
+      "title": "configuration above the project and outside the git root (Q34)",
+      "outcome": "observed",
+      "detail": "sub/own-ran exists: true; root-ran exists: false; outside-ran exists: false",
+      "attempts": 1,
+      "duration_ms": 17573,
+      "checks": [
+        {
+          "check": "the turn ended completed",
+          "passed": true
+        },
+        {
+          "check": "no descendant of an adapter holds the host's pipes or sockets",
+          "passed": true
+        },
+        {
+          "check": "no process is left once the host exits",
+          "passed": true
+        }
+      ],
+      "gold_b": false,
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/config-scope.jsonl"
+    }
+  ],
+  "config_files": [
+    {
+      "name": "~/.claude.json autoModeEnvSetup",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json autoPermissionsNotificationCount",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json bypassPermissionsModeAccepted",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json hasResetAutoModeOptInForDefaultOffer",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json hasSeenAutoModeEntryWarning",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json hasSeenAutoModeOutsideReadPrompt",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json mcpServers",
+      "changed": false
+    },
+    {
+      "name": "~/.claude/settings.json",
+      "changed": false
+    },
+    {
+      "name": "~/.claude/settings.local.json",
+      "changed": false
+    },
+    {
+      "name": "~/.codex/config.toml",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json projects.*.allowedTools",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json projects.*.hasTrustDialogAccepted",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json projects.*.mcpServers",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json projects.*.enabledMcpServers",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json projects.*.disabledMcpServers",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json projects.*.enabledMcpjsonServers",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json projects.*.disabledMcpjsonServers",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json projects.*.hasClaudeMdExternalIncludesApproved",
+      "changed": false
+    },
+    {
+      "name": "~/.claude.json projects added outside this run's temporary repositories",
+      "changed": false
+    }
+  ],
+  "cleanup": [
+    "26 sessions of the CLI, listed in cli-sessions.txt"
+  ]
+}
