@@ -363,7 +363,7 @@
 | Claude | 计划确认 | `exit-plan-auto` | allow_always | mode_switch，`mode_after: auto`（elevated） | 否 | 否 | privileged | 切换到低打扰的 Auto 模式（U6）；比经模式选择器切换更严，不放宽 |
 | Claude | 计划确认 | `exit-plan-clear-auto` | allow_always | mode_switch，`mode_after: auto`（elevated），并清空上下文 | 否 | 否 | privileged | — |
 | Claude | 计划确认 | `exit-plan-bypass` | allow_always | mode_switch，`mode_after: bypassPermissions`（full_access） | 否 | 否 | privileged | 等于切换到完全访问 |
-| Claude | 计划确认 | `reject` | reject_once | plan_revise | 否 | 否 | approve | 继续规划 |
+| Claude | 计划确认 | `reject` | reject_once | plan_revise | 否 | **是** | approve | 界面写明"拒绝将结束本回合"，用户另发 prompt 写修改意见。真实 CLI 拒绝后以 `cancelled` 结束回合，工具调用标 `nonExecutionKind: user-rejected`（T066，2.1.296；原先写的"否、继续规划"与实测不符） |
 | Codex | 文件修改 | `allow_once` | allow_once | once | 否 | 否 | approve | — |
 | Codex | 文件修改 | `allow_for_session` | allow_always | session | 否 | 否 | privileged | "don't ask again for these files" |
 | Codex | 命令 | `allow_once` | allow_once | once | 否 | 否 | approve | — |
