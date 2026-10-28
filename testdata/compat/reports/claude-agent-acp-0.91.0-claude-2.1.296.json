@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "commit": "fcc891257302adf2cd9b442268772f51b1035aef",
+  "commit": "2893c4e83076626bdeaf97ae3c75ba4977023f46",
   "mode": "real_config",
   "agent": "claude",
   "model": "haiku",
@@ -12,7 +12,7 @@
     "name": "claude",
     "version": "2.1.296"
   },
-  "duration_ms": 524069,
+  "duration_ms": 566498,
   "scenarios": [
     {
       "id": "new-session",
@@ -20,7 +20,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 19800,
+      "duration_ms": 19631,
       "checks": [
         {
           "check": "the session's capabilities",
@@ -52,7 +52,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 24154,
+      "duration_ms": 30692,
       "checks": [
         {
           "check": "a tool call of kind read",
@@ -84,7 +84,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 22050,
+      "duration_ms": 22731,
       "checks": [
         {
           "check": "a tool call of kind execute",
@@ -116,7 +116,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 23049,
+      "duration_ms": 21116,
       "checks": [
         {
           "check": "a permission request resolved",
@@ -144,7 +144,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 21040,
+      "duration_ms": 23419,
       "checks": [
         {
           "check": "a permission request resolved",
@@ -176,7 +176,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 19992,
+      "duration_ms": 22205,
       "checks": [
         {
           "check": "a question request resolved",
@@ -204,7 +204,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 24209,
+      "duration_ms": 26788,
       "checks": [
         {
           "check": "a plan to confirm with its text",
@@ -240,7 +240,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 19552,
+      "duration_ms": 19817,
       "checks": [
         {
           "check": "the turn ended cancelled",
@@ -264,7 +264,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 23085,
+      "duration_ms": 22285,
       "checks": [
         {
           "check": "a permission request cancelled",
@@ -289,14 +289,14 @@
     {
       "id": "thinking",
       "title": "a thought stream",
-      "outcome": "fail",
-      "detail": "not met: an item of kind thought",
+      "outcome": "pass",
+      "detail": null,
       "attempts": 1,
-      "duration_ms": 19118,
+      "duration_ms": 23691,
       "checks": [
         {
           "check": "an item of kind thought",
-          "passed": false
+          "passed": true
         },
         {
           "check": "the turn ended completed",
@@ -312,7 +312,7 @@
         }
       ],
       "gold_b": false,
-      "recording": null
+      "recording": "testdata/recordings/claude-agent-acp/0.91.0/2.1.296/thinking.jsonl"
     },
     {
       "id": "steer",
@@ -331,7 +331,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 23472,
+      "duration_ms": 25815,
       "checks": [
         {
           "check": "a session_resumed notice",
@@ -359,7 +359,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 31933,
+      "duration_ms": 35126,
       "checks": [
         {
           "check": "the host sent session/resume",
@@ -387,7 +387,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 21588,
+      "duration_ms": 22016,
       "checks": [
         {
           "check": "the image went to the agent",
@@ -415,7 +415,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 49169,
+      "duration_ms": 49498,
       "checks": [
         {
           "check": "each session holds only its own markers",
@@ -443,7 +443,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 43308,
+      "duration_ms": 29313,
       "checks": [
         {
           "check": "each session holds only its own markers",
@@ -471,7 +471,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 29064,
+      "duration_ms": 31592,
       "checks": [
         {
           "check": "a command ran below the adapter",
@@ -495,7 +495,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 36175,
+      "duration_ms": 47771,
       "checks": [
         {
           "check": "no more processes after the resumes",
@@ -523,7 +523,7 @@
       "outcome": "pass",
       "detail": null,
       "attempts": 1,
-      "duration_ms": 21097,
+      "duration_ms": 29859,
       "checks": [
         {
           "check": "the session takes only the user's settings",
@@ -567,7 +567,7 @@
       "outcome": "observed",
       "detail": "hook-initial exists: true; hook-reloaded exists: true",
       "attempts": 1,
-      "duration_ms": 25126,
+      "duration_ms": 32790,
       "checks": [
         {
           "check": "the turn ended completed",
@@ -591,7 +591,7 @@
       "outcome": "observed",
       "detail": "sub/own-ran exists: true; root-ran exists: false; outside-ran exists: false",
       "attempts": 1,
-      "duration_ms": 17573,
+      "duration_ms": 20759,
       "checks": [
         {
           "check": "the turn ended completed",
