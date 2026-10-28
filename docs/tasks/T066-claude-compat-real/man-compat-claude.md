@@ -50,3 +50,9 @@ CLI 在本机留下的会话、项目目录等列在主仓库不入库的 `.priv
 ## 抽查
 
 入库前由编排者扫描并逐个看过录制、报告和文档，用户接受了编排者的抽查结果，没有自己逐个文件查看（2026-10-28）。
+
+## 报告已被取代（T202，2026-10-28）
+
+- T202 在同一天用同一组版本整套重跑了一次：claude-agent-acp 0.91.0、Claude Code 2.1.296，其余剧本用 haiku，thinking 用 sonnet。那次宿主已经请求显示思考摘要，thinking 剧本也换了一道要推几步的题。
+- 新报告全部通过：19 个通过、2 个观察、steer 不适用。它取代了上面这份报告，同名文件 `testdata/compat/reports/claude-agent-acp-0.91.0-claude-2.1.296.json` 已改写，并计入已验证范围；范围仍然是 2.1.200–2.1.296。19 份录制和 GOLD-A、GOLD-B 金样例也跟着重新生成，另外新增了 thinking 的录制。详情见 `docs/tasks/T202-claude-thinking-plan/notes.md`。
+- 不新增 `[[evidence]]`：MAN-compat-claude 的证据仍然是这份记录。
