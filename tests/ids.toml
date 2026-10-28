@@ -1151,6 +1151,11 @@ milestone = "release"
 MAN-upgrade = "man"
 IT-prepare-upgrade = "pr"
 
+# 运行时装好之前启动适配器（计划 v1.3.71，T066 发现）
+[T201]
+milestone = "M1a"
+IT-runtime-first-prompt-waits = "pr"
+
 # 计划里没有产出任务的编号
 [unplanned]
 # 从第二个发布版起（计划 5.3 的 NFR-10）
