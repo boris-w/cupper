@@ -93,3 +93,37 @@
 - plan 选 `reject` 之后，prompt 以 `cancelled` 返回，与 `ends_turn: true` 一致。
 - thinking 回合直接回答了 "17 × 23 = 391"，上下文只多了 51 个 token，与可见的回答长度相当：这个回合模型没有思考，不是思考了但显示被省掉。同一次运行里 plan 回合在 sonnet 上思考了，所以不是 sonnet 默认不思考；更可能是 adaptive 认为这道题不用想。按编排者的要求，停下汇报，没有改成 A，也没有重跑。
 - `xtask compat` 拒绝 `--real --write --only`（只跑部分剧本的报告不进 `testdata/compat/reports/`），这次没有 `--write`。报告和录制先留在本机的运行输出里，怎么入库由编排者定。
+
+## 补充：换题、整套重跑（编排者 2026-10-28，用户许可约 150 个回合、1.5 美元）
+
+**换题**（`2893c4e`）：thinking 剧本的 prompt 换成一道排名次的小逻辑题：五个人，三个约束（Ben 紧跟在 Ana 后面；Cy 在 Dee 前、Eli 后；Dee 不是最后）。要分情况讨论（Eli、Cy、Dee 只能占 1、2、3 名，Ana、Ben 才能连着排），唯一答案是 Eli, Cy, Dee, Ana, Ben，用穷举核对过。检查和假 agent 的剧本不变；`--fake --only thinking` 通过，compat 的单元测试通过。
+
+**整套重跑**：`cargo xtask compat --real --write`（其余剧本用 haiku，thinking 用自己的 sonnet），先跑过 `--dry-run`。一次就过，没有剧本重试，整套也没有重跑：19 个通过、2 个观察（hooks-reload、config-scope，与 T066 相同）、steer 不适用。配置的 19 项前后都没有变化。没有进程遗留（运行后还在的 `claude` 进程都是今天之前启动的交互式会话，没有一个是 SDK 拉起的），临时目录都已删除。遗留清单追加在 `.private/cleanup/T202-leftovers.md`（26 个 CLI 会话）。
+
+| 剧本 | 结果 | 录制里的 thought 条数 |
+|---|---|---|
+| thinking（sonnet-5-5，用户默认的 xhigh） | 通过，答案 "Eli, Cy, Dee, Ana, Ben"，正确 | 38（摘要共 381 个字符） |
+| plan（sonnet-5-5） | 通过，reject 后回合 `cancelled` | 14 |
+| command-exit、question、reject、image、resume-procs、untrusted-project（haiku-5-5） | 通过 | 19、14、6、13、21、18 |
+| 其余 | 通过或观察 | 0 |
+
+T066 那批录制里一条 thought 都没有。
+
+**回合与费用**：录制里带 `cost` 的回合 38 个、0.342 美元；并发剧本另几个会话的回合不在导出的录制里，按 prompt 数补上（concurrent-two 另 10 个，six-sessions 另 10 个，close-running 1 个没有结束），一共约 59 个回合、约 0.45 美元。加上前面只跑两个剧本的那次（2 个回合、0.21 美元），本任务累计约 61 个回合、约 0.66 美元，在许可的范围内。
+
+**入库内容**：19 份录制重写，新增 `thinking.jsonl`（T066 那次 thinking 失败，没有录制）；报告 `testdata/compat/reports/claude-agent-acp-0.91.0-claude-2.1.296.json` 取代 T066 的那份（`commit` 是 `2893c4e`）；A、B 两层的三份真实 Claude 金样例（approval、cancel、normal-turn）跟着重写。
+
+**和 T066 那批的差异**（`rec-shape-diff`，19 份逐份比对）：
+- 全部 19 份：`session/new` 多了 `_meta.claudeCode.options.extraArgs.thinking-display`；crash-resume、host-restart 的 `session/resume` 也多了。这是本任务的改动。
+- 7 份多了 `agent_thought_chunk`：command-exit、image、plan、question、reject、resume-procs、untrusted-project。这是本任务要的结果。
+- 其余是模型这一次怎么做的不同，和宿主无关：
+  - approval、command-exit、image、six-sessions 少了 `_claude/rateLimit` 那组 `_meta`。额度窗口的更新只在变化时才发。
+  - cancel-approval 少了 `agent_message_chunk`：这次模型在请求之前没有先说话。
+  - image 多了一次 Read 工具调用（`tool_call`、`tool_call_update`，`toolResponse.file`）：这次模型用工具读了图片。
+  - plan 少了 `terminal_*` 那组 `_meta`：T066 那次模型在规划时运行过一条命令，这次没有。
+- 金样例：三份真实 Claude 的 GOLD-A、GOLD-B 都没有 thought（这三个剧本这次没有思考）。差异只是条数：usage 更新、命令列表事件少一两条，cancel 的回复文本多一段。`s05-questions` 等 SP-1 的 GOLD-A 不受影响。
+- 写入后 `--write` 自己跑的 GOLD-A 28 个、GOLD-B 12 个都通过，`sanitize scan testdata` 报 clean。
+
+**扫描**：27 个改动的文件（报告、6 份金样例、20 份录制）`sanitize words --list`（主仓库的敏感词清单）和 `sanitize scan` 都报 clean。`notes.md` 也过了 `words`。报告里没有本机路径和会话 ID（会话只记个数）。
+
+**已验证范围与编号**：`compat-reports --write` 之后 `runtime/manifest.json` 没有变化，仍然是 2.1.200–2.1.296（本机 CLI 本来就在上限）。这份报告全部通过，计入范围。`trace-ids status --compat <新报告>`：COMPAT-claude-thinking 变为"passed in compat"，另外 4 个 COMPAT 编号仍然通过。
