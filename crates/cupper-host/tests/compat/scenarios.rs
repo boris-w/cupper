@@ -395,14 +395,22 @@ pub const SCENARIOS: &[Scenario] = &[
         title: "hooks written in the middle of a turn (Q28)",
         mode: "default",
         real_only: Some("the fake agent reads no `.claude/settings.json`"),
+        // A hook of its own shows that the project's hooks run at all; the
+        // new one is written once the prompt has gone, before its commands.
+        files: &[(".claude/settings.json", INITIAL)],
         prompt: "Run the shell command `touch one.txt`; after it, run the shell command \
                  `touch two.txt` as a command of its own.",
         steps: &[
-            Step::Choose("allow_once"),
+            Step::Pause(3000),
             Step::WriteFile(".claude/settings.json", RELOADED),
             Step::Choose("allow_once"),
+            Step::Choose("allow_once"),
         ],
-        checks: &[Check::Observe("hook-reloaded"), DONE],
+        checks: &[
+            Check::Observe("hook-initial"),
+            Check::Observe("hook-reloaded"),
+            DONE,
+        ],
         ..BASE
     },
     Scenario {
@@ -411,13 +419,15 @@ pub const SCENARIOS: &[Scenario] = &[
         mode: "default",
         real_only: Some("the fake agent reads no `.claude/settings.json`"),
         project: Some("sub"),
+        // The project's own hook shows that hooks run at all.
         files: &[
             ("../.claude/settings.json", OUTSIDE),
             (".claude/settings.json", ROOT),
-            ("sub/.keep", ""),
+            ("sub/.claude/settings.json", OWN),
         ],
         prompt: "Reply with the single word: ready",
         checks: &[
+            Check::Observe("sub/own-ran"),
             Check::Observe("root-ran"),
             Check::Observe("outside-ran"),
             DONE,
@@ -431,10 +441,14 @@ pub const SCENARIOS: &[Scenario] = &[
 const UNTRUSTED_SETTINGS: &str = r#"{"env": {"CUPPER_COMPAT_ENV": "1"},
     "apiKeyHelper": "touch helper-ran && echo key",
     "hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "touch hook-ran"}]}]}}"#;
+const INITIAL: &str = r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
+    "command": "touch hook-initial"}]}]}}"#;
 const RELOADED: &str = r#"{"hooks": {"PreToolUse": [{"matcher": "Bash",
     "hooks": [{"type": "command", "command": "touch hook-reloaded"}]}]}}"#;
 const ROOT: &str = r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
     "command": "touch ../root-ran"}]}]}}"#;
+const OWN: &str = r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
+    "command": "touch own-ran"}]}]}}"#;
 const OUTSIDE: &str = r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
     "command": "touch ../outside-ran"}]}]}}"#;
 
