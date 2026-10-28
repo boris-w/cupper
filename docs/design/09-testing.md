@@ -282,6 +282,7 @@ flowchart LR
 | agent 命令（假 agent 的路径和参数），跳过运行时安装和 CLI 发现 | 启动载荷的 `test_config.agents.<agent>` | test-harness | 走正常的安装和发现 |
 | npm registry 地址 | `test_config.runtime.registry_url` | test-harness | `registry.npmjs.org` |
 | 登录 shell 的环境（PATH、`CLAUDE_CONFIG_DIR`、`CODEX_HOME` 等） | `test_config.login_env` | test-harness | 运行登录 shell |
+| CLI 发现的绝对常见位置（`/opt/homebrew/bin`、`/usr/local/bin` 等；`~/` 下的位置跟随 `HOME`） | `test_config.cli_root`：代替 `/`，测试目录在 `$TMPDIR` 下，发现不信任那里，所以测试只能经 `cli_path` 或 `test_config.agents` 引入 CLI（T203） | test-harness | `/` |
 | 系统通知 | `test_config.notifier: record`：写到测试接收端，不调用 UserNotifications，避免授权弹窗抢走焦点 | test-harness | 系统通知 |
 | 时钟和全部时长 | `test_config.clock`、`test_config.durations`；`test/clock_advance`（[5.2.16](02-host.md#5216-时间与可测性)） | test-harness | `SystemClock` 和设计值 |
 | 合成数据集（冷启动、长会话、SP-6 的夹具） | `test/seed {profile}`：经正常的写入路径灌入，profile 规定会话数、回合数、条目类型的比例、文本长度、单个超大回合（[5.2.16](02-host.md#5216-时间与可测性)） | test-harness | 不灌入 |
