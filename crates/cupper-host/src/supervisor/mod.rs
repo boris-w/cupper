@@ -226,10 +226,18 @@ impl Host {
         // Claude's runtime and the sessions on it, in the order they stop.
         let ids = Arc::new(IdGen::new(clock.clone()));
         let login_env = injected.login_env.clone();
+        // The adapter starts from what the installer installs, once it has.
+        let (plans, registry) = installer_inputs(&payload);
+        let (published, install) = runtime::progress();
+        let (node, bundle) = runtime::claude_adapter(&runtime::runtime_dir(&data_dir), &plans);
         let finder = Finder {
             clock: clock.clone(),
             durations: durations.clone(),
-            data_dir: data_dir.clone(),
+            runtime: launch::Program::Runtime {
+                node,
+                bundle,
+                install,
+            },
             login_env,
             #[cfg(feature = "test-harness")]
             agent: payload.test_config.agents.claude.clone(),
@@ -287,7 +295,6 @@ impl Host {
         quiescence.register(runtime::INSTALLER);
         let installing = Arc::new(AtomicBool::new(false));
         if let Some(bundle) = BundleDir::of_this_host().ok().filter(BundleDir::is_app) {
-            let (plans, registry) = installer_inputs(&payload);
             let installer = Installer {
                 plans,
                 bundle: Arc::new(bundle),
@@ -312,10 +319,14 @@ impl Host {
                         watch.bundle_changed();
                     }
                     let (state, failure) = runtime::adapter_state(statuses);
-                    index.runtime(state, failure);
+                    index.runtime(state.clone(), failure.clone());
+                    published.send_replace((state, failure));
                 };
                 participant.idle(installer.run(&*clock, publish)).await;
             });
+        } else {
+            // Nothing installs: the start checks what is there.
+            drop(published);
         }
         let launch = finder.launch_found(&found, &settings.current()).await;
         let redactor = Redactor::for_this_machine();
@@ -651,7 +662,7 @@ fn project_roots(reader: &rusqlite::Connection) -> rusqlite::Result<Vec<PathBuf>
 struct Finder {
     clock: Arc<dyn Clock>,
     durations: Durations,
-    data_dir: PathBuf,
+    runtime: launch::Program,
     login_env: Option<BTreeMap<String, String>>,
     #[cfg(feature = "test-harness")]
     agent: Option<crate::startup::test_config::AgentCommand>,
@@ -689,8 +700,8 @@ impl Finder {
             }
             return launch;
         }
-        let (dir, locator) = (&self.data_dir, &found.locator);
-        launch::production(clock, durations, dir, (host, login), locator, settings).await
+        let (program, locator) = (self.runtime.clone(), &found.locator);
+        launch::production(clock, durations, program, (host, login), locator, settings).await
     }
 }
 

@@ -12,7 +12,7 @@ use sha2::{Digest as _, Sha256};
 use super::plan::split;
 use super::*;
 use crate::clock::ManualClock;
-use crate::manifest::FileHash;
+use crate::manifest::{self, FileHash};
 use crate::store::testutil::TempDir;
 
 pub(super) const ESBUILD: &str = "Resources/runtime/esbuild-wasm-0.1.0";
