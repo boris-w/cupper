@@ -1068,7 +1068,7 @@ MAN-security-doc = "man"
 # （条件）主进程通知后备
 [T158]
 milestone = "M1b"
-UNIT-main-notifications = { suite = "pr", status = "conditional", reason = "K5 SP-10 通知身份（T101）不通过时由 T158 产出" }
+UNIT-main-notifications = { suite = "pr", status = "na", reason = "K5 有条件通过（T101，2026-10-28），T158 不触发；T150 的第一条验收不通过时再议" }
 
 # 自用构建
 [T160]

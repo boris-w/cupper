@@ -447,3 +447,8 @@
 | T113 | `tools/sanitize` 认不出 Codex 的 MCP 服务器名（工具标题 `mcp.<服务器>.<工具>`、`rawInput.server`、`_meta` 键名里的驼峰写法），声明 AIR 时也不换 `skillPath`。T102 用 spike 自己的预处理脚本绕过，录制入库之前要在 `tools/sanitize` 里补上并加测试；SP-1、T003 已入库的 Codex 录制里的 MCP 调用也要复查 | T102 |
 | T113 | 真实配置下，模型会绕开 apply_patch 改用用户配置的 MCP 工具写文件（被 read-only 沙箱拒绝），所以剧本的 prompt 要点名使用哪个工具。所有 MCP 调用是否都受沙箱约束，交安全工程师确认。另外加一个 Codex 版的"关闭时有命令正在运行" | T102 |
 | T113 | 2026-10-28 的最新版本：codex-acp 2.3.0（换用 ACP TS SDK 2.0，依赖 `@openai/codex ^0.164.0`），codex CLI 0.165.0（超出已验证上限 0.163.0）。升级适配器之前重跑 Q8、Q31。复用 T102 的 `config-hash.ts` 时，换成真正的 TOML 解析 | T102 |
+| T150 | 第一条验收（T101 没验证的缺口）：宿主改跑 NSApplication 之后，"宿主在、UI 已退出时重复拉起宿主"和 Finder 的"…is not open anymore"对话框是否消失。测法见 T101 汇报的遗留第 1 条；消除不了时，考虑改由 LaunchServices 拉起宿主（影响 ADR-01、Q21），或者启用 T158 | T101 |
+| T150 | 写任务书之前，编排者把 T101 汇报里"设计 5.2.9 要补的规则"6 条补进设计：宿主 bundle 先在 LaunchServices 登记（`LSRegisterURL`，在宿主进程启动之前）、主线程改跑 NSApplication、系统单独拉起的宿主只转交点击后退出（排在读 stdin 载荷之前）、有序退出时清掉通知、上报授权状态、宿主带图标和显示名称 | T101 |
+| T150 | Info.plist：`CFBundleDisplayName`、`CFBundleName` 写构建种类的显示名称，图标复制进 `CupperHost.app/Contents/Resources`；交 URL 用 `NSWorkspace.open([URL], withApplicationAt:)`，目标 App 按宿主路径往上三级找再核对身份（同一个 bundle id 可能登记着好几份）；授权被拒后界面提示去系统设置打开；没测的有 macOS 14 和 15、Developer ID 签名、从 DMG 拖入时嵌套 helper 的登记 | T101 |
+| T160 | 自用构建是第一个申请通知授权的构建，系统只在第一次登记时取名称和图标：宿主的 `CFBundleDisplayName`、`CFBundleName` 和图标要在第一次申请授权之前写对 | T101 |
+| T160 | Vite 保留了 `local` 这个 mode 名（与 `.env.local` 冲突），`vite build --mode local` 直接报错，自用构建现在构建不出来；T105 在临时副本里改成用 `self-use` 映射到 local | T105（进行中的发现） |
