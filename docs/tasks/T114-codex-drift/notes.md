@@ -79,3 +79,12 @@ codex 0.165.0 against 0.163.0, the 127 methods codex-acp 2.2.2 uses:
 第一版摘要把 tagged union 各个变体的属性合并在一起，这一条只显示成 `-required result`：其他变体（如 `mcpToolCall`）也有 `result`，掩盖了"属性被删掉"。现在变体内的属性和必填项都带上变体的标签，例如 `imageGeneration: property result`，并补了一个用例。
 
 工作目录里的 `HOME`/`CODEX_HOME` 跑完只多了 `tmp/arg0-macos`，没有别的文件。
+
+## `cargo xtask ci codex-drift --in nightly`（本机，提交 318ff70）
+
+- 当天 npm 的真实版本：`fetch` 通过（latest 0.165.0），`drift` 判失败，输出与上面相同，`codex-drift FAIL 1 passed, 1 failed (3.5s)`。基线没有改。
+- 用不通的代理 `HTTPS_PROXY=http://127.0.0.1:9` 模拟断网（照 T006）：`fetch` 试 3 次都失败，`fetch` 和 `drift` 都记为跳过，原因写的是 "npm could not be reached in 3 tries: the drift is undetermined"，作业通过，`skipped steps: codex-drift / fetch, drift`，约 21 秒。
+
+## 提交后的规模
+
+`cargo xtask size`：+551 −5（净 +546）。`tools/codex-drift` 507（其中测试 127），`crates/xtask` +38 −3，`.github` +4 −2，`.prettierignore` +2。比裁定后的停止线 540 多 6，低于硬停止线 600。
