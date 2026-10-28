@@ -466,6 +466,11 @@ impl User {
                         self.settle().await?;
                         self.counts.push(tree(self.host.0.id()).len());
                     }
+                    // Q43's numbers, for the log.
+                    println!(
+                        "{}: the host's processes {:?}",
+                        self.scenario.id, self.counts
+                    );
                 }
                 Step::Concurrent {
                     sessions,
