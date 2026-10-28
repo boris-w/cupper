@@ -61,6 +61,10 @@ pub struct CliLocator {
     boundaries: Boundaries,
     path: Vec<PathBuf>,
     home: PathBuf,
+    /// `test-harness`: `test_config.cli_root`, standing in for `/` in the
+    /// absolute common locations (design 5.9.9).
+    #[cfg(feature = "test-harness")]
+    root: Option<PathBuf>,
 }
 
 impl CliLocator {
@@ -71,7 +75,15 @@ impl CliLocator {
             boundaries,
             path,
             home,
+            #[cfg(feature = "test-harness")]
+            root: None,
         }
+    }
+
+    /// `test-harness`: the absolute common locations below `root` instead.
+    #[cfg(feature = "test-harness")]
+    pub fn under(self, root: Option<PathBuf>) -> Self {
+        Self { root, ..self }
     }
 
     /// Where agents can write: what a config dir must stay out of too.
@@ -143,10 +155,18 @@ impl CliLocator {
     fn common(&self, layout: &Layout) -> impl Iterator<Item = PathBuf> {
         let expand = |path: &&str| match path.strip_prefix("~/") {
             Some(rest) => self.home.join(rest),
-            None => PathBuf::from(path),
+            None => self.absolute(path),
         };
         let nvm = nvm_bin(&self.home).map(|bin| bin.join(layout.program));
         layout.common.iter().map(expand).chain(nvm)
+    }
+
+    fn absolute(&self, path: &str) -> PathBuf {
+        #[cfg(feature = "test-harness")]
+        if let Some(root) = &self.root {
+            return root.join(path.trim_start_matches('/'));
+        }
+        PathBuf::from(path)
     }
 }
 
@@ -247,6 +267,25 @@ mod tests {
         // Only JavaScript on PATH: the common location has the binary.
         let got = found(&tree, on_path(&tree, &["js/bin"]).locate(&SAMPLE, None));
         assert_eq!(got, ("home/.local/bin/claude".into(), Source::Common));
+    }
+
+    /// The common locations as the layout writes them, `~/` below the home
+    /// directory; `test_config.cli_root` moves the absolute ones only.
+    #[test]
+    fn unit_cli_resolver_claude_common_locations() {
+        let locator = CliLocator::new(Boundaries::new([], []), "", PathBuf::from("/h"));
+        let common = |locator: &CliLocator| {
+            let paths = locator.common(&CLAUDE).map(|p| p.display().to_string());
+            paths.collect::<Vec<_>>().join(" ")
+        };
+        let want = |root: &str| {
+            format!(
+                "{root}/opt/homebrew/bin/claude /h/.local/bin/claude {root}/usr/local/bin/claude /h/.npm-global/bin/claude"
+            )
+        };
+        assert_eq!(common(&locator), want(""));
+        #[cfg(feature = "test-harness")]
+        assert_eq!(common(&locator.under(Some("/r".into()))), want("/r"));
     }
 
     #[test]

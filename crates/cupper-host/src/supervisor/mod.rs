@@ -243,6 +243,8 @@ impl Host {
             agent: payload.test_config.agents.claude.clone(),
             #[cfg(feature = "test-harness")]
             in_process: payload.test_config.in_process.clone(),
+            #[cfg(feature = "test-harness")]
+            cli_root: payload.test_config.cli_root.clone(),
         };
         // Discovery runs the login shell once; the index's git and Claude's
         // launch both take this result.
@@ -606,21 +608,19 @@ struct Discovery {
     locator: CliLocator,
 }
 
-async fn discover(
-    login_env: Option<BTreeMap<String, String>>,
-    clock: &dyn Clock,
-    durations: &Durations,
-    roots: Vec<PathBuf>,
-) -> Discovery {
+async fn discover(finder: &Finder, roots: Vec<PathBuf>) -> Discovery {
     let host = std::env::vars_os()
         .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)));
     let host: BTreeMap<String, String> = host.collect();
-    let login = launch::login_env(clock, durations, &host, login_env).await;
+    let (clock, durations) = (&*finder.clock, &finder.durations);
+    let login = launch::login_env(clock, durations, &host, finder.login_env.clone()).await;
     let tmp = host.get("TMPDIR").map(String::as_str);
     let boundaries = Boundaries::new(roots, system_temp_dirs(tmp));
     let path = login.vars.get("PATH").map_or("", String::as_str);
     let home = PathBuf::from(host.get("HOME").cloned().unwrap_or_default());
     let locator = CliLocator::new(boundaries, path, home);
+    #[cfg(feature = "test-harness")]
+    let locator = locator.under(finder.cli_root.clone());
     Discovery {
         host,
         login,
@@ -668,11 +668,13 @@ struct Finder {
     agent: Option<crate::startup::test_config::AgentCommand>,
     #[cfg(feature = "test-harness")]
     in_process: Option<launch::InProcess>,
+    #[cfg(feature = "test-harness")]
+    cli_root: Option<PathBuf>,
 }
 
 impl Finder {
     async fn discover(&self, roots: Vec<PathBuf>) -> Discovery {
-        discover(self.login_env.clone(), &*self.clock, &self.durations, roots).await
+        discover(self, roots).await
     }
 
     /// Discovers again, then finds the launch: what `agents/refresh` does.
@@ -862,6 +864,10 @@ mod tests {
     async fn it_clock_advance_the_host_registers_every_kind_of_actor() {
         let dir = TempDir::new("kinds");
         let mut payload = Payload::default();
+        // The fake agent, never started: no CLI discovery in the test's own
+        // process, whose `HOME` is the user's (T203).
+        let agent = serde_json::json!({"program": launch::fake_agent()});
+        payload.test_config.agents.claude = Some(serde_json::from_value(agent).unwrap());
         let path = BTreeMap::from([("PATH".to_owned(), "/usr/bin:/bin".to_owned())]);
         payload.test_config.login_env = Some(path);
         let start = Start {

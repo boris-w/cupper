@@ -11,7 +11,7 @@ mod scenarios;
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Child, Command};
 use std::time::Duration;
 
 use cupper_cli::client::{self, Client};
@@ -150,6 +150,16 @@ fn own_temp(path: &Path) -> bool {
         .is_some_and(|(own, path)| path.starts_with(&own) && path != own)
 }
 
+/// The host on `data_dir`. A real run starts it as the user would, to find
+/// the user's CLI and its login; the fake one, as every other test (T203).
+fn start_host(program: &Path, data_dir: &Path, config: &Value, real: bool) -> Child {
+    let config = config.clone();
+    match real {
+        true => start(&mut Command::new(program), data_dir, &payload(config)),
+        false => spawn_from(program, data_dir, config),
+    }
+}
+
 async fn play(
     scenario: &'static Scenario,
     dir: TempDir,
@@ -203,7 +213,7 @@ async fn play(
         }
         None => (PathBuf::from(HOST), fake_agent_config(json!({}))),
     };
-    let host = Running(spawn_from(&program, &data_dir, config.clone()));
+    let host = Running(start_host(&program, &data_dir, &config, real.is_some()));
     let client = connect_blobs(&data_dir).await;
     let patience = Duration::from_secs(if real.is_some() { 300 } else { 30 });
     if real.is_some()
@@ -451,7 +461,7 @@ impl User {
                     self.settle().await?;
                     terminate(&self.host.0);
                     assert_eq!(exit_code(&mut self.host.0).await, 0, "the host stopped");
-                    let host = spawn_from(&self.program, &self.data_dir, self.config.clone());
+                    let host = start_host(&self.program, &self.data_dir, &self.config, self.real);
                     self.host = Running(host);
                     self.client = connect_blobs(&self.data_dir).await;
                 }

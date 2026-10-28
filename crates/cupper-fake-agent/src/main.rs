@@ -8,6 +8,11 @@ use tokio::signal::unix::{SignalKind, signal};
 
 /// `anyhow` only here, to print the cause chain of a failed start.
 fn main() -> anyhow::Result<()> {
+    // As `claude --version` answers, for a test that makes it the CLI.
+    if std::env::args().skip(1).eq(["--version"]) {
+        println!("{} (cupper-fake-agent)", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     let config = Config::parse(std::env::args().skip(1))?;
     if config.fault("exit_on_start") {
         std::process::exit(1);
