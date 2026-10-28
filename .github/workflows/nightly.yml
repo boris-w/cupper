@@ -1,7 +1,8 @@
 # The nightly jobs that exist (design 5.1.6, plan 1.8), on main: the
 # differential test of the views, the peer checks on macOS 14 and 15 (Q24,
-# R7), the e2e suite in full, and the compat suite's framework. `perf` stays
-# off CI: a runner is no reference machine (T197).
+# R7), the e2e suite in full, the compat suite's framework, and the codex
+# app-server methods codex-acp uses against the newest codex (T114). `perf`
+# stays off CI: a runner is no reference machine (T197).
 name: nightly
 
 on:
@@ -24,6 +25,7 @@ jobs:
           - { job: security-macos14, runner: macos-15, timeout: 45 }
           - { job: e2e, runner: macos-15, timeout: 120 }
           - { job: compat-framework, runner: macos-15, timeout: 60 }
+          - { job: codex-drift, runner: ubuntu-24.04, timeout: 30 }
     runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout }}
     steps:

@@ -1,0 +1,16 @@
+{
+  "name": "@cupper/codex-drift",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Whether the newest codex on npm changed the app-server methods the pinned codex-acp uses, against the baseline in testdata/codex-drift (design 5.1.6, ADR-08).",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "vite": "8.3.3",
+    "vitest": "5.0.3"
+  }
+}

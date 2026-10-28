@@ -14,6 +14,8 @@ runtime/locks/
 runtime/licenses/
 # Written by the Rust views (`UPDATE_GOLDEN=1`, `cupper-protocol` `view::parity`).
 protocol/fixtures/views.json
+# Written by `tools/codex-drift` (`write`).
+testdata/codex-drift/
 # Written from the compat report's types (`UPDATE_GOLDEN=1 cargo test -p xtask`).
 testdata/compat/report.schema.json
 # Written by `cargo xtask compat --real --write`, read back by `cargo xtask compat-reports`.

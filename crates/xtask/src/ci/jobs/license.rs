@@ -15,7 +15,7 @@ use anyhow::{Result, bail};
 use crate::ci::ctx::JobCtx;
 
 /// How many times fetching the advisory database is tried.
-const FETCHES: u32 = 3;
+pub(super) const FETCHES: u32 = 3;
 
 pub fn run(ctx: &mut JobCtx) -> Result<()> {
     advisory_db(ctx)?;
@@ -68,7 +68,7 @@ fn advisory_db(ctx: &mut JobCtx) -> Result<()> {
 }
 
 /// Runs `fetch` until it succeeds, `times` at most: whether it did.
-fn retry(times: u32, mut fetch: impl FnMut() -> Result<bool>) -> Result<bool> {
+pub(super) fn retry(times: u32, mut fetch: impl FnMut() -> Result<bool>) -> Result<bool> {
     for _ in 0..times {
         if fetch()? {
             return Ok(true);
