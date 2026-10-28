@@ -468,3 +468,4 @@
 | T113 | `tools/sanitize` 对 Codex 的 MCP 服务器名改成了"先取名字再全局替换"，来源有四处，其中 OAuth 报错文本是 T204 新发现的；Codex 的报错里如果再见到带服务器名的新写法，要补进工具。Claude 的 MCP 服务器名仍只靠 `mcp__` 规则、`*mcp_servers` 数组和敏感词清单，"Some MCP servers are still connecting: <名字>" 这类文本只有清单兜底，要不要也按取名处理在本任务里定 | T204 |
 | 以后改 `cargo xtask size` 的任务 | 它把 `spikes/` 下的录制也算进规模，改 spike 录制的任务都会被多算（T204 多算了 107 行）；把 `spikes/*/recordings/` 加进排除列表 | T204 |
 | 以后改宿主生命周期的任务 | `host/exit` 以外、和退出撞上的请求，应答仍可能在连接关闭时被丢弃（T205 只按 5.2.13 修了 host/exit）。它们能按 `command_id` 重试拿到结果；要让所有在路上的应答都在关闭前送出，设计要先定等待的上限，以及手动时钟下宽限期不会自己到期时怎么办 | T205 |
+| T103（SP-6）、M1b 的性能任务 | runner 上 3 份并行的负载下，宿主的会话流每轮会停顿几秒（最长 12.4 s，中位数 1.9 s），coalescer 的 40 ms 窗口被拉长到约 2 倍。执行者推断与 `host.db` 带 `checkpoint_fullfsync` 的 WAL 检查点有关，没有验证。这关系到 NFR-1 的流延迟，在参考机型上一并量 | T206 |
