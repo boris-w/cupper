@@ -1175,3 +1175,8 @@ UI-7 = "PRD 的需求编号"
 E2E-question-card = "旧名，计划 v1.1 改为 E2E-question-panel"
 UI-cards = "旧名，计划 v1.1 改为 UI-request-panel"
 IT-K11 = "计划 T140 的注里对 IT-K11-steer-idle-queued 的简写"
+
+[[evidence]]
+id = "MAN-compat-claude"
+date = "2026-10-28"
+record = "docs/tasks/T066-claude-compat-real/man-compat-claude.md"
