@@ -205,9 +205,14 @@ async fn play(
     };
     let host = Running(spawn_from(&program, &data_dir, config.clone()));
     let client = connect_blobs(&data_dir).await;
+    let patience = Duration::from_secs(if real.is_some() { 300 } else { 30 });
+    if real.is_some()
+        && let Err(ended) = installed(&data_dir, patience).await
+    {
+        return ended;
+    }
     let model = real.as_ref().map(|r| scenario.model.unwrap_or(&r.model));
     let session = create(&client, scenario, real.is_some(), model).await;
-    let patience = Duration::from_secs(if real.is_some() { 300 } else { 30 });
     let mut user = User {
         data_dir,
         session,
@@ -282,6 +287,31 @@ async fn play(
         "checks": checks, "recording": recording, "cli_sessions": sessions})
 }
 
+/// Until the host has installed the runtime, as a user waits for the first
+/// install to end before prompting (design 5.2.12): the suite checks the
+/// CLI, not a prompt sent while the runtime installs.
+async fn installed(data_dir: &Path, patience: Duration) -> Result<(), Value> {
+    let sql = "SELECT json_extract(json, '$.data.agents') FROM events
+               WHERE stream = 'index' AND type = 'agents.updated' ORDER BY seq DESC LIMIT 1";
+    let clock = SystemClock::new();
+    let give_up = clock.now_mono() + patience;
+    loop {
+        let agents = query(&data_dir.join("host.db"), sql);
+        let agents = agents.first().and_then(|a| serde_json::from_str(a).ok());
+        let agents: Vec<Value> = agents.unwrap_or_default();
+        let claude = agents.iter().find(|agent| agent["agent"] == "claude");
+        match claude.and_then(|agent| agent["adapter"]["runtime"].as_str()) {
+            Some("ready") => return Ok(()),
+            Some("failed") => return Err(ended("fail", "the runtime did not install")),
+            _ if clock.now_mono() >= give_up => {
+                let waited = format!("no runtime within {}s", patience.as_secs());
+                return Err(ended("inconclusive", &waited));
+            }
+            _ => wait(&clock).await,
+        }
+    }
+}
+
 /// The harness client, able to upload blobs (the image scenario).
 async fn connect_blobs(data_dir: &Path) -> Client {
     use cupper_cli::client::{ClientAuth, Options};
@@ -309,9 +339,12 @@ async fn create(
     } else {
         scenario.script
     };
+    // The run's model at its lowest effort; a scenario's own model keeps its
+    // effort, since it is there to think.
+    let effort = (real && scenario.model.is_none()).then_some("low");
     let params = json!({"command_id": client::command_id(), "agent": "claude",
         "project_id": ProjectId::from_uuid(1), "workspace": {"kind": "local"},
-        "config": {"permission_mode": scenario.mode, "model": model},
+        "config": {"permission_mode": scenario.mode, "model": model, "reasoning_effort": effort},
         "message": [{"type": "text", "text": text}]});
     let created = client.request::<SessionCreate>(typed(params));
     created.await.unwrap().session_id

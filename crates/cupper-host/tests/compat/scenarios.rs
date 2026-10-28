@@ -2,6 +2,8 @@
 //! after it, and structural checks on the host's events, never on the
 //! agent's words. The real CLI gets the prompt, the fake agent the script.
 //! `id`s never change: T188 and the COMPAT IDs name scenarios by them.
+//! Claude Code runs a read-only command (`echo`, `ls`, `sleep`) without
+//! asking, so a real prompt whose request is answered runs one that writes.
 
 pub struct Scenario {
     pub id: &'static str,
@@ -159,7 +161,8 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "command-exit",
         title: "a command that exits with a non-zero code",
         mode: "default",
-        prompt: "Run the shell command `ls no-such-file` and tell me its exit code.",
+        prompt: "Run the shell command `touch missing-dir/file.txt` once, then tell me its exit code. \
+                 Run no other command.",
         script: "permission t1 execute; terminal t1 2 1; say done",
         steps: &[Step::Choose("allow_once")],
         checks: &[Check::Tool("execute"), Check::ExitCode, DONE],
@@ -170,7 +173,7 @@ pub const SCENARIOS: &[Scenario] = &[
         title: "a command allowed once",
         gold_b: true,
         mode: "default",
-        prompt: "Run the shell command `echo cupper` and tell me what it printed.",
+        prompt: "Run the shell command `touch approved.txt`, then say done.",
         script: "tool t1 execute Run tests; permission t1; say finished",
         steps: &[Step::Choose("allow_once")],
         checks: &[Check::Request("permission", "resolved"), DONE],
@@ -180,7 +183,7 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "reject",
         title: "a command rejected once",
         mode: "default",
-        prompt: "Run the shell command `touch rejected.txt`.",
+        prompt: "Run the shell command `touch rejected.txt`. If I decline, stop: try nothing else.",
         script: "tool t1 execute Run tests; permission t1; say finished",
         steps: &[Step::Choose("reject_once")],
         checks: &[
@@ -221,7 +224,7 @@ pub const SCENARIOS: &[Scenario] = &[
         title: "an interrupt while a command runs",
         gold_b: true,
         mode: "default",
-        prompt: "Run the shell command `sleep 60`, then say done.",
+        prompt: "Run the shell command `touch started.txt && sleep 60`, then say done.",
         script: "tool t1 execute Run sleep; permission t1; wait_cancel",
         steps: &[
             Step::Choose("allow_once"),
@@ -235,7 +238,7 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "cancel-approval",
         title: "an interrupt while a request waits",
         mode: "default",
-        prompt: "Run the shell command `echo cupper` and tell me what it printed.",
+        prompt: "Run the shell command `touch asked.txt`, then say done.",
         script: "tool t1 execute Run tests; permission t1; say finished",
         steps: &[Step::Asked, Step::Interrupt],
         checks: &[
@@ -343,7 +346,7 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "close-running",
         title: "the adapter closed while a command runs (K21)",
         mode: "default",
-        prompt: "Run the shell command `sleep 300`.",
+        prompt: "Run the shell command `touch started.txt && sleep 300`.",
         // A command in a process group of its own, as Claude's are.
         script: "tool t1 execute Run sleep; permission t1; \
             write_file run.sh exec /usr/bin/perl -e 'setpgrp(0,0), exec(\"/bin/sleep\", \"300\")' \
@@ -392,7 +395,8 @@ pub const SCENARIOS: &[Scenario] = &[
         title: "hooks written in the middle of a turn (Q28)",
         mode: "default",
         real_only: Some("the fake agent reads no `.claude/settings.json`"),
-        prompt: "Run the shell command `echo one`, then the shell command `echo two`.",
+        prompt: "Run the shell command `touch one.txt`; after it, run the shell command \
+                 `touch two.txt` as a command of its own.",
         steps: &[
             Step::Choose("allow_once"),
             Step::WriteFile(".claude/settings.json", RELOADED),
