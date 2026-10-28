@@ -1329,14 +1329,25 @@ async fn it_self_check_a_changed_executable_makes_the_host_wait_for_an_upgrade()
 }
 
 /// Stands in for node running the bundling script (as in IT-runtime-download):
-/// it copies the entry to the bundle.
-const NODE: &str = "#!/bin/sh\n[ -f \"$2\" ] || exit 9\n/bin/cat \"$3/$4\" > \"$3/$5\"\n";
+/// it copies the entry to the bundle. Given the bundle alone, it is the
+/// adapter: the fake agent.
+fn node() -> String {
+    let agent = launch::fake_agent();
+    let agent = agent.display();
+    let bundling = "[ -f \"$2\" ] || exit 9\n/bin/cat \"$3/$4\" > \"$3/$5\"";
+    format!("#!/bin/sh\n[ $# = 1 ] && exec '{agent}'\n{bundling}\n")
+}
 const ENTRY: &[u8] = b"export const adapter = 1;";
 
 /// A host in `CupperHost.app` made in `dir`, with a fake node, esbuild-wasm
 /// and the bundling inputs, the manifest that pins them, and a registry
-/// serving the one package of the lockfile; started once `prepare` ran.
-async fn bundled_host(dir: &TempDir, prepare: impl FnOnce(&Path)) -> (PathBuf, Running) {
+/// serving the one package of the lockfile once `serve` is true, or other
+/// bytes once it is false; started once `prepare` ran.
+async fn bundled_host(
+    dir: &TempDir,
+    prepare: impl FnOnce(&Path),
+    serve: impl Future<Output = bool> + Send + 'static,
+) -> (PathBuf, Running) {
     use base64::Engine as _;
     use sha2::{Digest as _, Sha256, Sha512};
     let contents = dir.path().join("CupperHost.app/Contents");
@@ -1361,7 +1372,7 @@ async fn bundled_host(dir: &TempDir, prepare: impl FnOnce(&Path)) -> (PathBuf, R
     let mut manifest: serde_json::Value =
         serde_json::from_str(include_str!("../../../runtime/manifest.json")).unwrap();
     let files = [
-        ("Helpers/node", NODE.as_bytes().to_vec(), 0o755),
+        ("Helpers/node", node().into_bytes(), 0o755),
         (
             "Resources/runtime/esbuild-wasm-0.1.0/lib/main.js",
             b"main".to_vec(),
@@ -1399,6 +1410,11 @@ async fn bundled_host(dir: &TempDir, prepare: impl FnOnce(&Path)) -> (PathBuf, R
     let url = format!("http://{}/", registry.local_addr().unwrap());
     tokio::spawn(async move {
         use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+        let tarball = if serve.await {
+            tarball
+        } else {
+            b"no package".to_vec()
+        };
         while let Ok((mut stream, _)) = registry.accept().await {
             let mut head = [0; 4096];
             let _ = stream.read(&mut head).await;
@@ -1438,7 +1454,7 @@ fn adapter(data_dir: &Path, field: &str) -> Vec<String> {
 #[tokio::test]
 async fn it_runtime_startup_installs_from_the_registry_or_waits_for_an_upgrade() {
     let dir = TempDir::new("runtime");
-    let (data_dir, mut host) = bundled_host(&dir, |_| ()).await;
+    let (data_dir, mut host) = bundled_host(&dir, |_| (), async { true }).await;
     drop(connect(&data_dir).await);
     let clock = SystemClock::new();
     // The install starts the node it copied, a new file the system scans
@@ -1467,10 +1483,49 @@ async fn it_runtime_startup_installs_from_the_registry_or_waits_for_an_upgrade()
         )
         .unwrap()
     };
-    let (data_dir, mut host) = bundled_host(&dir, changed).await;
+    let (data_dir, mut host) = bundled_host(&dir, changed, async { true }).await;
     assert_eq!(exit_code(&mut host.0).await, 0);
     let upgrade = "SELECT CAST(json_extract(json, '$.data.pending_upgrade') AS TEXT) FROM events
                WHERE stream = 'index' AND type = 'host.updated' ORDER BY seq DESC LIMIT 1";
     assert_eq!(column(&data_dir, upgrade), ["1"]);
     assert_eq!(adapter(&data_dir, "failure"), ["bundle_changed"]);
+}
+
+/// IT-runtime-first-prompt-waits: the first prompt, sent while the runtime
+/// installs, waits for the install; its turn runs once the runtime is
+/// ready, and fails as `runtime_failed` when the install fails. The registry
+/// answers only once the turn waits, so the order holds without a sleep.
+#[tokio::test]
+async fn it_runtime_first_prompt_waits_for_the_install() {
+    for installs in [true, false] {
+        let dir = TempDir::new("first-prompt");
+        // The fake agent is the CLI too, a Mach-O the settings name.
+        let data_dir = fake_agent_data(&dir);
+        let sql = "INSERT INTO settings (key, value, updated_at)
+                   VALUES ('agents.claude.cli_path', ?1, 1)";
+        let cli = json!(launch::fake_agent()).to_string();
+        let conn = Connection::open(data_dir.join("host.db"));
+        conn.unwrap().execute(sql, [cli]).unwrap();
+        let (release, released) = tokio::sync::oneshot::channel();
+        let serve = async { released.await.unwrap_or(false) };
+        let (data_dir, mut host) = bundled_host(&dir, |_| (), serve).await;
+        let client = connect(&data_dir).await;
+        let session = create(&client, "say hi").await;
+        // The registry has not answered: the runtime installs, the turn waits.
+        let runtime = ADAPTER_FIELD.replace('?', "'runtime'");
+        until(&data_dir, "host.db", &runtime, &["installing"]).await;
+        let turns = "SELECT status FROM turns";
+        until(&data_dir, "host.db", turns, &["running"]).await;
+        release.send(installs).unwrap();
+        let ended = &events(&data_dir, &session, "turn.completed", 1).await[0];
+        let ended = (ended["status"].clone(), ended["error_code"].clone());
+        let (failure, expected) = match installs {
+            true => ("-", (json!("completed"), Value::Null)),
+            false => ("hash_mismatch", (json!("failed"), json!("runtime_failed"))),
+        };
+        assert_eq!(ended, expected);
+        assert_eq!(adapter(&data_dir, "failure"), [failure]);
+        terminate(&host.0);
+        assert_eq!(exit_code(&mut host.0).await, 0);
+    }
 }
