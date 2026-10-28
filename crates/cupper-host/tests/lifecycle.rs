@@ -1569,6 +1569,10 @@ async fn it_runtime_first_prompt_waits_for_the_install() {
             false => ("hash_mismatch", (json!("failed"), json!("runtime_failed"))),
         };
         assert_eq!(ended, expected);
+        // The index's stream is not the session's: the install's end may
+        // reach `agents.updated` after the turn ended (T205).
+        let over = if installs { "ready" } else { "failed" };
+        until(&data_dir, "host.db", &runtime, &[over]).await;
         assert_eq!(adapter(&data_dir, "failure"), [failure]);
         terminate(&host.0);
         assert_eq!(exit_code(&mut host.0).await, 0);
