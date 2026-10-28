@@ -34,10 +34,11 @@ pub const USAGE: &str = "usage: cargo xtask compat (--fake | --real [--model <mo
   --dry-run  the plan and the self-constraints' verdicts; nothing starts
   --only     a scenario to run; all by default
   --out      where the report and the recordings go (target/compat, emptied first)
-  --write    take the recordings (the GOLD-B ones of a fake run; all of a real
-             run, which must be whole, and its report) into testdata/ and update
-             the goldens; needs the sensitive word list,
-             .private/sensitive-words.txt of the main work tree or --words";
+  --write    take the recordings of the scenarios that passed (the GOLD-B ones
+             of a fake run, which must pass whole; all of a real run, which must
+             be whole and leave the configuration as it was, and its report)
+             into testdata/ and update the goldens; needs the sensitive word
+             list, .private/sensitive-words.txt of the main work tree or --words";
 
 /// Where `cargo xtask host-bundle --kind e2e` puts the host a real run uses.
 const HOST: &str = "target/host-bundle/e2e/CupperHost.app/Contents/MacOS/cupper-host";
@@ -263,10 +264,16 @@ fn run(root: &Path, options: &Options) -> Result<bool> {
         .for_each(|item| println!("  to clean up: {item}"));
     println!("report: {}", path.display());
     let failed = [Outcome::Fail, Outcome::Inconclusive];
-    let passed = !report.scenarios.iter().any(|s| failed.contains(&s.outcome))
-        && report.config_files.iter().all(|check| !check.changed);
+    let unchanged = report.config_files.iter().all(|check| !check.changed);
+    let passed = unchanged && !report.scenarios.iter().any(|s| failed.contains(&s.outcome));
     if let Some(words) = words {
-        ensure!(passed, "testdata/ left as it is: the run did not pass");
+        // A real run's report keeps what failed too, unless the run changed
+        // the configuration; a fake run's recordings only come from a pass.
+        let (kept, why) = match options.real {
+            true => (unchanged, "the run changed the configuration"),
+            false => (passed, "the run did not pass"),
+        };
+        ensure!(kept, "testdata/ left as it is: {why}");
         record::write(root, &out, &run.roots, &report, &words)?;
     }
     Ok(passed)

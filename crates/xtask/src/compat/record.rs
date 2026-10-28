@@ -1,11 +1,11 @@
-//! `--write`: the recordings into `testdata/` (design 5.9.3), those of the
-//! GOLD-B scenarios for a fake run and all for a real one, once
-//! `tools/sanitize` has redacted them with the run's temporary roots and the
-//! local sensitive word list and found nothing left; a real run's report
-//! into [`REPORTS`]; then the goldens (`UPDATE_GOLDEN=1`) and the generic
-//! scan of `testdata/`. A
-//! recording that differs from the committed one only in its times and
-//! request IDs stays as it is, so a run that changed nothing changes no file.
+//! `--write`: the recordings of the scenarios that passed into `testdata/`
+//! (design 5.9.3), those of the GOLD-B scenarios for a fake run and all for
+//! a real one, once `tools/sanitize` has redacted them with the run's
+//! temporary roots and the local sensitive word list and found nothing left;
+//! a real run's report, failures and all, into [`REPORTS`]; then the goldens
+//! (`UPDATE_GOLDEN=1`) and the generic scan of `testdata/`. A recording that
+//! differs from the committed one only in its times and request IDs stays as
+//! it is, so a run that changed nothing changes no file.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,7 +14,7 @@ use std::process::Command;
 use anyhow::{Context, Result, ensure};
 use serde_json::Value;
 
-use super::report::{Mode, Report};
+use super::report::{Mode, Outcome, Report, Scenario};
 use crate::ci::jobs::testdata_scan::{WORD_LIST, word_list};
 
 /// Where real runs' reports go, one per adapter and CLI version.
@@ -41,11 +41,12 @@ pub fn write(
     let (staged, clean) = (out.join("staged"), out.join("sanitized"));
     fs::create_dir_all(&staged)?;
     let fake = report.mode == Mode::Fake;
-    let taken = report
-        .scenarios
-        .iter()
-        .filter(|s| s.recording.is_some() && (s.gold_b || !fake));
-    let taken: Vec<_> = taken.collect();
+    // What a scenario that failed recorded is no sample: its report says why.
+    let took = |s: &Scenario| {
+        let done = matches!(s.outcome, Outcome::Pass | Outcome::Observed);
+        s.recording.is_some() && done && (s.gold_b || !fake)
+    };
+    let taken: Vec<_> = report.scenarios.iter().filter(|s| took(s)).collect();
     for scenario in &taken {
         let recording = scenario.recording.as_deref().context("a recording")?;
         fs::copy(
@@ -89,8 +90,8 @@ pub fn write(
     if !fake {
         // Its recordings named where they now are; it passes the word list too.
         let mut kept = report.clone();
-        for s in kept.scenarios.iter_mut().filter(|s| s.recording.is_some()) {
-            s.recording = Some(format!("{dir}/{}.jsonl", s.id));
+        for s in &mut kept.scenarios {
+            s.recording = took(s).then(|| format!("{dir}/{}.jsonl", s.id));
         }
         let name = format!(
             "{}-{}-{}-{}.json",
