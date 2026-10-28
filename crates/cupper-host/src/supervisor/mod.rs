@@ -853,6 +853,10 @@ mod tests {
     async fn it_clock_advance_the_host_registers_every_kind_of_actor() {
         let dir = TempDir::new("kinds");
         let mut payload = Payload::default();
+        // The fake agent, never started: no CLI discovery in the test's own
+        // process, whose `HOME` is the user's (T203).
+        let agent = serde_json::json!({"program": launch::fake_agent()});
+        payload.test_config.agents.claude = Some(serde_json::from_value(agent).unwrap());
         let path = BTreeMap::from([("PATH".to_owned(), "/usr/bin:/bin".to_owned())]);
         payload.test_config.login_env = Some(path);
         let start = Start {
