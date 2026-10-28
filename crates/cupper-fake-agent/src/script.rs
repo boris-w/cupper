@@ -606,6 +606,10 @@ impl Script {
             }
         }
         self.say(&format!("plan:{picked}"))?;
+        // Claude's rejected plan ends the turn, `cancelled`, as the real CLI's does.
+        if p == Claude && option.is_empty() {
+            return Ok(cancelled());
+        }
         Ok(Flow::Next)
     }
 
