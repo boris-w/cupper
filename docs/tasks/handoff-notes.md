@@ -459,3 +459,5 @@
 | T111 | `VERSION_PROBE` 的 5 s：真实 `claude --version` 空闲时约 10 ms，复制后第一次执行约 2.1 s，T196 在高负载下量到过 29 s。编排者采纳：超时后用 30 s 再试一次，Codex 的探测也照此 | T066 |
 | T113 | `rec-shape-diff` 的输出里，`toolResponse` 下随工具不同的键占了大半，要过滤；`tools/sanitize` 的 `words`、`scan` 会把绝对路径拼到工作目录后面（T066 只在调用处改成相对路径）；plan 模式下 CLI 会换用更贵的模型，估算额度时算进去 | T066 |
 | T053 的后续、显示压缩的界面任务 | 宿主没有声明 `clientCapabilities.session.compaction` 时，适配器不发 `compaction_update`，改用一个合成的工具调用（"Compact conversation"，kind 为 `think`），实时和回放都一样；套件里没有录到实例 | T066 |
+| 以后改桌面启动测试或 e2e 夹具的任务 | `apps/desktop` 的 `launch.test.ts`（手动运行）没有 `runtime.registry_url`，每次启动都会向公共 npm registry 请求运行时（不含个人信息），可以照 e2e 夹具指向关闭的本地端口；e2e 拉起的宿主沿用 Electron 进程真实的 `HOME`，宿主跑 git 时会读用户的全局 git 配置 | T203 |
+| T113 等下一次真实运行 | compat 真实模式的拉起方式在 T203 里只改了调用点（行为不变），还没有真跑过；T202 的整套重跑早于 T203 合并 | T203 |
