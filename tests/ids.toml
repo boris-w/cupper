@@ -596,6 +596,10 @@ COMPAT-claude-close-running = { suite = "compat", scenario = "close-running", cl
 COMPAT-claude-resume-procs = { suite = "compat", scenario = "resume-procs", cli = "claude" }
 # 至少覆盖普通回合、审批、取消三个剧本（K12）
 GOLD-B-claude = "pr"
+# 同三份真实录制的提取层金样例（设计 5.9.3：A 层用全部录制）
+GOLD-A-claude-compat-normal-turn = "pr"
+GOLD-A-claude-compat-approval = "pr"
+GOLD-A-claude-compat-cancel = "pr"
 
 # 宿主集成测试 III：交互、信任与档位
 [T068]
@@ -1192,3 +1196,8 @@ IT-K11 = "计划 T140 的注里对 IT-K11-steer-idle-queued 的简写"
 id = "MAN-notification-spike"
 date = "2026-10-28"
 record = "docs/tasks/T101-notification-identity/results.md"
+
+[[evidence]]
+id = "MAN-compat-claude"
+date = "2026-10-28"
+record = "docs/tasks/T066-claude-compat-real/man-compat-claude.md"

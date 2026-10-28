@@ -205,9 +205,14 @@ async fn play(
     };
     let host = Running(spawn_from(&program, &data_dir, config.clone()));
     let client = connect_blobs(&data_dir).await;
+    let patience = Duration::from_secs(if real.is_some() { 300 } else { 30 });
+    if real.is_some()
+        && let Err(ended) = installed(&data_dir, patience).await
+    {
+        return ended;
+    }
     let model = real.as_ref().map(|r| scenario.model.unwrap_or(&r.model));
     let session = create(&client, scenario, real.is_some(), model).await;
-    let patience = Duration::from_secs(if real.is_some() { 300 } else { 30 });
     let mut user = User {
         data_dir,
         session,
@@ -282,6 +287,31 @@ async fn play(
         "checks": checks, "recording": recording, "cli_sessions": sessions})
 }
 
+/// Until the host has installed the runtime, as a user waits for the first
+/// install to end before prompting (design 5.2.12): the suite checks the
+/// CLI, not a prompt sent while the runtime installs.
+async fn installed(data_dir: &Path, patience: Duration) -> Result<(), Value> {
+    let sql = "SELECT json_extract(json, '$.data.agents') FROM events
+               WHERE stream = 'index' AND type = 'agents.updated' ORDER BY seq DESC LIMIT 1";
+    let clock = SystemClock::new();
+    let give_up = clock.now_mono() + patience;
+    loop {
+        let agents = query(&data_dir.join("host.db"), sql);
+        let agents = agents.first().and_then(|a| serde_json::from_str(a).ok());
+        let agents: Vec<Value> = agents.unwrap_or_default();
+        let claude = agents.iter().find(|agent| agent["agent"] == "claude");
+        match claude.and_then(|agent| agent["adapter"]["runtime"].as_str()) {
+            Some("ready") => return Ok(()),
+            Some("failed") => return Err(ended("fail", "the runtime did not install")),
+            _ if clock.now_mono() >= give_up => {
+                let waited = format!("no runtime within {}s", patience.as_secs());
+                return Err(ended("inconclusive", &waited));
+            }
+            _ => wait(&clock).await,
+        }
+    }
+}
+
 /// The harness client, able to upload blobs (the image scenario).
 async fn connect_blobs(data_dir: &Path) -> Client {
     use cupper_cli::client::{ClientAuth, Options};
@@ -309,9 +339,12 @@ async fn create(
     } else {
         scenario.script
     };
+    // The run's model at its lowest effort; a scenario's own model keeps its
+    // effort, since it is there to think.
+    let effort = (real && scenario.model.is_none()).then_some("low");
     let params = json!({"command_id": client::command_id(), "agent": "claude",
         "project_id": ProjectId::from_uuid(1), "workspace": {"kind": "local"},
-        "config": {"permission_mode": scenario.mode, "model": model},
+        "config": {"permission_mode": scenario.mode, "model": model, "reasoning_effort": effort},
         "message": [{"type": "text", "text": text}]});
     let created = client.request::<SessionCreate>(typed(params));
     created.await.unwrap().session_id
@@ -433,6 +466,11 @@ impl User {
                         self.settle().await?;
                         self.counts.push(tree(self.host.0.id()).len());
                     }
+                    // Q43's numbers, for the log.
+                    println!(
+                        "{}: the host's processes {:?}",
+                        self.scenario.id, self.counts
+                    );
                 }
                 Step::Concurrent {
                     sessions,
@@ -687,12 +725,12 @@ impl User {
         let mut recording = Recording::parse(&text).unwrap();
         let header = &mut recording.header;
         header.scenario = scenario.id.to_owned();
-        let usage = if scenario.gold_b {
-            Usage::GoldB
-        } else {
-            Usage::Replay
+        // A real GOLD-B sample is the extraction layer's too (design 5.9.3).
+        header.usage = match (scenario.gold_b, fake) {
+            (true, false) => vec![Usage::GoldA, Usage::GoldB],
+            (true, true) => vec![Usage::GoldB],
+            (false, _) => vec![Usage::Replay],
         };
-        header.usage = vec![usage];
         if fake {
             header.adapter = "cupper-fake-agent".into();
             header.adapter_version = "0.0.0".into();
@@ -749,6 +787,11 @@ fn holds(check: &Check, events: &[Value], project: &Path) -> bool {
                 of(events, "interaction.resolved")
                     .any(|r| r["request_id"] == asked["request_id"] && r["status"] == *status)
             }),
+        Check::PlanText => of(events, "interaction.requested").any(|asked| {
+            let request = &asked["request"];
+            let text = request["plan"]["text"].as_str().unwrap_or_default();
+            request["type"] == "plan_confirm" && !text.trim().is_empty()
+        }),
         Check::Capabilities => of(events, "session.capabilities").any(|d| {
             d["config"]
                 .as_array()
@@ -788,14 +831,18 @@ fn holding(host: u32, procs: &[(u32, u32)]) -> Vec<u32> {
     if below.is_empty() {
         return below;
     }
-    let host_ends = ends(&lsof(&[host]))
-        .into_iter()
-        .flat_map(|(_, own, peer)| [own, peer]);
-    let host_ends: Vec<String> = host_ends.collect();
-    let held = ends(&lsof(&below))
-        .into_iter()
-        .filter(|(_, own, peer)| host_ends.contains(own) || host_ends.contains(peer));
-    held.map(|(pid, ..)| pid).collect()
+    shared(&ends(&lsof(&[host])), &ends(&lsof(&below)))
+}
+
+/// Of `below`'s ends, those of the processes sharing an address with
+/// `host`'s. A socket bound to a path has no peer: no address, not a match.
+fn shared(host: &[(u32, String, String)], below: &[(u32, String, String)]) -> Vec<u32> {
+    let host_ends: Vec<&String> = host.iter().flat_map(|(_, own, peer)| [own, peer]).collect();
+    let held = |end: &String| !end.is_empty() && host_ends.contains(&end);
+    let held = below
+        .iter()
+        .filter(|(_, own, peer)| held(own) || held(peer));
+    held.map(|(pid, ..)| *pid).collect()
 }
 
 fn lsof(pids: &[u32]) -> String {
@@ -931,5 +978,16 @@ mod tests {
         let text = "p10\nf0\ntPIPE\nd0xa1\nn->0xb2\nf3\ntREG\nn/x\np11\nf4\ntunix\nd0xc3\nn/sock\n";
         let pipe = (10, "0xa1".to_owned(), "0xb2".to_owned());
         assert_eq!(ends(text), [pipe, (11, "0xc3".to_owned(), String::new())]);
+        // The host's listening socket and the CLI's own share no address.
+        let host = ends("p1\nf6\ntunix\nd0xa1\nn->0xb2\nf9\ntunix\nd0xc3\nn/host.sock\n");
+        let cli = ends("p2\nf2\ntunix\nd0xd4\nn->0xe5\nf18\ntunix\nd0xf6\nn/cli.sock\n");
+        assert_eq!(shared(&host, &cli), Vec::<u32>::new());
+        // The other end of the host's socket; the host's listening socket
+        // itself, by its own address with no peer; a pipe to it.
+        let inherited = ends(
+            "p3\nf2\ntunix\nd0xb2\nn->0xa1\np5\nf3\ntunix\nd0xc3\nn/host.sock\n\
+             p4\nf1\ntPIPE\nd0x9\nn->0xc3\n",
+        );
+        assert_eq!(shared(&host, &inherited), [3, 5, 4]);
     }
 }

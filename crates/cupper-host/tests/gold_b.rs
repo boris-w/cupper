@@ -12,8 +12,9 @@
 //!   The frames after it go out once the virtual clock, which only the test
 //!   moves (`test/clock_advance`), reaches their recorded `t` from that match.
 //! - When the host has not sent the next frame by its recorded time, the
-//!   test acts as the user: `session/create` or `session/send` with the next
-//!   prompt's text, `interaction/respond` with the recorded option,
+//!   test acts as the user: `session/create` (with the model and effort the
+//!   host passed on) or `session/send` with the next prompt's text,
+//!   `interaction/respond` with the recorded option,
 //!   `session/interrupt` for `session/cancel`. Nothing else is a user's.
 //! - The host handles each frame the adapter writes before the next one goes
 //!   out ([`Run::sync`]): frames recorded at the same `t` would otherwise
@@ -343,7 +344,8 @@ impl Run {
                     None => {
                         let params = json!({"command_id": id, "agent": "claude",
                             "project_id": ProjectId::from_uuid(1),
-                            "workspace": {"kind": "local"}, "message": message});
+                            "workspace": {"kind": "local"}, "message": message,
+                            "config": config_of(frames)});
                         spawn_as::<SessionCreate>(user, params)
                     }
                     Some(session) => {
@@ -417,6 +419,27 @@ fn spawn_as<M: Method + Send + 'static>(
     tokio::spawn(async move { client.request::<Raw<M>>(params).await.map(drop) })
 }
 
+/// What the session was created with, as the host passed it on in `frames`:
+/// a config option's first value (`xtask compat` gives a real run's model
+/// and effort).
+fn config_of(frames: &[Frame]) -> Value {
+    let mut config = serde_json::Map::new();
+    for frame in frames {
+        let Body::Send(message) = &frame.body else {
+            continue;
+        };
+        let params = &message["params"];
+        let field = match params["configId"].as_str() {
+            _ if message["method"] != "session/set_config_option" => continue,
+            Some("model") => "model",
+            Some("effort") => "reasoning_effort",
+            _ => continue,
+        };
+        config.entry(field).or_insert(params["value"].clone());
+    }
+    Value::Object(config)
+}
+
 /// The text of the next `session/prompt` from `frames` on.
 fn next_prompt(frames: &[Frame]) -> String {
     let prompt = frames.iter().find_map(|frame| match &frame.body {
@@ -461,15 +484,13 @@ fn compare(name: &Path, golden: &str, actual: &[String]) -> Result<(), String> {
     }
 }
 
-/// Replays `scenario`'s recording and compares, or writes, its golden.
+/// Replays the recording at `scenario`, its path under `testdata/recordings/`
+/// without `.jsonl`, and compares, or writes, its golden.
 async fn check(scenario: &str) {
     let found = recordings()
         .into_iter()
-        .filter(|(name, _)| name.file_stem() == Some(scenario.as_ref()));
-    let (name, recording) = found
-        .into_iter()
-        .next()
-        .unwrap_or_else(|| panic!("no recording of {scenario}"));
+        .find(|(name, _)| name.with_extension("") == Path::new(scenario));
+    let (name, recording) = found.unwrap_or_else(|| panic!("no recording of {scenario}"));
     let dir = TempDir::new("gold-b");
     let mut run = Run::start(&dir).await;
     run.replay(&recording).await;
@@ -504,9 +525,12 @@ macro_rules! gold_b {
 }
 
 gold_b! {
-    gold_b_fake_normal_turn => "normal-turn",
-    gold_b_fake_approval => "approval",
-    gold_b_fake_cancel => "cancel",
+    gold_b_fake_normal_turn => "cupper-fake-agent/0.0.0/fake/normal-turn",
+    gold_b_fake_approval => "cupper-fake-agent/0.0.0/fake/approval",
+    gold_b_fake_cancel => "cupper-fake-agent/0.0.0/fake/cancel",
+    gold_b_claude_normal_turn => "claude-agent-acp/0.91.0/2.1.296/normal-turn",
+    gold_b_claude_approval => "claude-agent-acp/0.91.0/2.1.296/approval",
+    gold_b_claude_cancel => "claude-agent-acp/0.91.0/2.1.296/cancel",
 }
 
 /// Every GOLD-B recording has a test above and a golden, and every golden
@@ -514,14 +538,12 @@ gold_b! {
 #[test]
 fn gold_b_fake_recordings_and_goldens_match_up() {
     let recorded: Vec<PathBuf> = recordings().into_iter().map(|(name, _)| name).collect();
-    let stems: Vec<String> = (recorded.iter())
-        .map(|name| name.file_stem().unwrap().to_string_lossy().into_owned())
+    let mut named: Vec<PathBuf> = SCENARIOS
+        .iter()
+        .map(|s| PathBuf::from(s).with_extension("jsonl"))
         .collect();
-    assert_eq!(stems, {
-        let mut sorted = SCENARIOS.to_vec();
-        sorted.sort();
-        sorted
-    });
+    named.sort();
+    assert_eq!(recorded, named);
     let base = testdata().join("golden/gold-b");
     let goldens: Vec<PathBuf> = (files(&base).into_iter())
         .map(|path| path.strip_prefix(&base).unwrap().to_owned())

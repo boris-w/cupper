@@ -200,7 +200,10 @@ function redactCommands(cmds: Json[]): Json[] {
     if (!userSourced) return c;
     n++;
     const alias = name.startsWith("$") ? `$user-skill-${n}` : `user-skill-${n}`;
-    return { ...c, name: alias, description: "<redacted user skill>" };
+    // An input hint says what the skill does as much as its description.
+    const input =
+      typeof c.input?.hint === "string" ? { input: { ...c.input, hint: "<redacted>" } } : {};
+    return { ...c, name: alias, description: "<redacted user skill>", ...input };
   });
 }
 

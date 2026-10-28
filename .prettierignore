@@ -16,3 +16,5 @@ runtime/licenses/
 protocol/fixtures/views.json
 # Written from the compat report's types (`UPDATE_GOLDEN=1 cargo test -p xtask`).
 testdata/compat/report.schema.json
+# Written by `cargo xtask compat --real --write`, read back by `cargo xtask compat-reports`.
+testdata/compat/reports/

@@ -34,13 +34,16 @@ pub const USAGE: &str = "usage: cargo xtask compat (--fake | --real [--model <mo
   --dry-run  the plan and the self-constraints' verdicts; nothing starts
   --only     a scenario to run; all by default
   --out      where the report and the recordings go (target/compat, emptied first)
-  --write    take the recordings (the GOLD-B ones of a fake run; all of a real
-             run, which must be whole, and its report) into testdata/ and update
-             the goldens; needs the sensitive word list,
-             .private/sensitive-words.txt of the main work tree or --words";
+  --write    take the recordings of the scenarios that passed (the GOLD-B ones
+             of a fake run, which must pass whole; all of a real run, which must
+             be whole and leave the configuration as it was, and its report)
+             into testdata/ and update the goldens; needs the sensitive word
+             list, .private/sensitive-words.txt of the main work tree or --words";
 
 /// Where `cargo xtask host-bundle --kind e2e` puts the host a real run uses.
 const HOST: &str = "target/host-bundle/e2e/CupperHost.app/Contents/MacOS/cupper-host";
+/// Beside the report: the CLI's sessions a real run started, one per line.
+const SESSIONS: &str = "cli-sessions.txt";
 
 #[derive(Debug, Default, PartialEq)]
 struct Options {
@@ -218,11 +221,11 @@ fn run(root: &Path, options: &Options) -> Result<bool> {
         Some(before) => config::compare(before, &config::snapshot(&home)?, &run.roots),
         None => (Vec::new(), Vec::new()),
     };
-    cleanup.extend(
-        run.cli_sessions
-            .iter()
-            .map(|id| format!("the CLI's session {id}")),
-    );
+    // The report enters testdata/, so it counts the sessions; which they are
+    // stays in the output, for the list of leftovers.
+    fs::write(out.join(SESSIONS), run.cli_sessions.join("\n"))?;
+    let n = run.cli_sessions.len();
+    cleanup.extend((n > 0).then(|| format!("{n} sessions of the CLI, listed in {SESSIONS}")));
     let report = Report {
         v: 1,
         commit: git::head(root)?,
@@ -261,10 +264,16 @@ fn run(root: &Path, options: &Options) -> Result<bool> {
         .for_each(|item| println!("  to clean up: {item}"));
     println!("report: {}", path.display());
     let failed = [Outcome::Fail, Outcome::Inconclusive];
-    let passed = !report.scenarios.iter().any(|s| failed.contains(&s.outcome))
-        && report.config_files.iter().all(|check| !check.changed);
+    let unchanged = report.config_files.iter().all(|check| !check.changed);
+    let passed = unchanged && !report.scenarios.iter().any(|s| failed.contains(&s.outcome));
     if let Some(words) = words {
-        ensure!(passed, "testdata/ left as it is: the run did not pass");
+        // A real run's report keeps what failed too, unless the run changed
+        // the configuration; a fake run's recordings only come from a pass.
+        let (kept, why) = match options.real {
+            true => (unchanged, "the run changed the configuration"),
+            false => (passed, "the run did not pass"),
+        };
+        ensure!(kept, "testdata/ left as it is: {why}");
         record::write(root, &out, &run.roots, &report, &words)?;
     }
     Ok(passed)
