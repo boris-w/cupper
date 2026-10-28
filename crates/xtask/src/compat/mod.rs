@@ -41,6 +41,8 @@ pub const USAGE: &str = "usage: cargo xtask compat (--fake | --real [--model <mo
 
 /// Where `cargo xtask host-bundle --kind e2e` puts the host a real run uses.
 const HOST: &str = "target/host-bundle/e2e/CupperHost.app/Contents/MacOS/cupper-host";
+/// Beside the report: the CLI's sessions a real run started, one per line.
+const SESSIONS: &str = "cli-sessions.txt";
 
 #[derive(Debug, Default, PartialEq)]
 struct Options {
@@ -218,11 +220,11 @@ fn run(root: &Path, options: &Options) -> Result<bool> {
         Some(before) => config::compare(before, &config::snapshot(&home)?, &run.roots),
         None => (Vec::new(), Vec::new()),
     };
-    cleanup.extend(
-        run.cli_sessions
-            .iter()
-            .map(|id| format!("the CLI's session {id}")),
-    );
+    // The report enters testdata/, so it counts the sessions; which they are
+    // stays in the output, for the list of leftovers.
+    fs::write(out.join(SESSIONS), run.cli_sessions.join("\n"))?;
+    let n = run.cli_sessions.len();
+    cleanup.extend((n > 0).then(|| format!("{n} sessions of the CLI, listed in {SESSIONS}")));
     let report = Report {
         v: 1,
         commit: git::head(root)?,
