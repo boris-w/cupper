@@ -317,6 +317,12 @@ async fn start(client: &Client, project: &Value, message: &str) -> String {
 /// IT-NFR9-crash-under-load: while an agent writes as fast as it can, the
 /// host is killed (`kill -9`) five times over; after each start the store is
 /// consistent with what a client saw, and at the end the session goes on.
+///
+/// A round's kill comes at its 200th new delta (T206). The agent's output is
+/// still streaming into the log then, at any load: 200 deltas hold 3.2 MB at
+/// most, 160,000 of the 200,000 fragments. They add 1.6 to 1.9 MB, over which
+/// `host.db`'s WAL is checkpointed once or twice, and the client sees them
+/// live for the prefix check.
 #[tokio::test(flavor = "multi_thread")]
 async fn it_nfr9_crash_under_load_kill9_again_and_again() {
     let dir = TempDir::new("under-load");
@@ -338,11 +344,22 @@ async fn it_nfr9_crash_under_load_kill9_again_and_again() {
                 "mode": "queue", "content": text(&load)});
             request(&client, SessionSend::NAME, send).await.unwrap();
         }
+        // With under 16 KB in a window the coalescer writes a delta per 40 ms
+        // window: 8 s for the 200 at best, more when a loaded runner stretches
+        // the windows. So the patience is for each next delta, not all (T206).
         let (clock, from) = (SystemClock::new(), count());
-        let give_up = clock.now_mono() + PATIENCE;
-        while count() < from + 200 {
-            assert!(clock.now_mono() < give_up, "no load in round {round}");
+        let (mut written, mut give_up) = (from, clock.now_mono() + PATIENCE);
+        while written < from + 200 {
             wait(&clock).await;
+            let now = count();
+            if now > written {
+                (written, give_up) = (now, clock.now_mono() + PATIENCE);
+            }
+            let so_far = written - from;
+            assert!(
+                clock.now_mono() < give_up,
+                "round {round}: no new delta for {PATIENCE:?} after {so_far} of 200"
+            );
         }
         host.0.kill().unwrap();
         host.0.wait().unwrap();
