@@ -250,7 +250,8 @@ mod tests {
         impl io::Read for Tripwire {
             fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
                 self.0.store(true, Ordering::SeqCst);
-                let line = br#"{"harness_key": "00", "test_config": {"failpoints": []}}"#;
+                // `cli_root` included, which moves CLI discovery (T203).
+                let line = br#"{"harness_key": "00", "test_config": {"failpoints": [], "cli_root": "/r"}}"#;
                 let len = line.len().min(buf.len());
                 buf[..len].copy_from_slice(&line[..len]);
                 Ok(len)
