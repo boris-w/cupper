@@ -110,6 +110,8 @@ pub enum Check {
     ExitCode,
     /// A request of this type ended with this status.
     Request(&'static str, &'static str),
+    /// A plan to confirm came with its text.
+    PlanText,
     /// The session learnt the agent's options.
     Capabilities,
     /// The agent left no file at this path in the project.
@@ -211,11 +213,12 @@ pub const SCENARIOS: &[Scenario] = &[
         prompt: "Plan how to add a file hello.txt that says hello. Do not change anything.",
         script: "plan_update # Plan\\n- one step; plan_confirm; say after",
         steps: &[Step::Choose("reject_once")],
+        // Claude's plan comes in the request; rejecting it ends the turn.
         checks: &[
-            Check::Item("plan"),
+            Check::PlanText,
             Check::Request("plan_confirm", "resolved"),
             Check::NoFile("hello.txt"),
-            DONE,
+            Check::Turn("cancelled"),
         ],
         ..BASE
     },
@@ -479,6 +482,7 @@ impl Check {
             Self::Tool(kind) => format!("a tool call of kind {kind}"),
             Self::ExitCode => "a tool call with a non-zero exit code".into(),
             Self::Request(kind, status) => format!("a {kind} request {status}"),
+            Self::PlanText => "a plan to confirm with its text".into(),
             Self::Capabilities => "the session's capabilities".into(),
             Self::NoFile(path) => format!("no file {path}"),
             Self::Lacks(path, text) => format!("{path} without {text}"),

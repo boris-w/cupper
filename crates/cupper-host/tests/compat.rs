@@ -782,6 +782,11 @@ fn holds(check: &Check, events: &[Value], project: &Path) -> bool {
                 of(events, "interaction.resolved")
                     .any(|r| r["request_id"] == asked["request_id"] && r["status"] == *status)
             }),
+        Check::PlanText => of(events, "interaction.requested").any(|asked| {
+            let request = &asked["request"];
+            let text = request["plan"]["text"].as_str().unwrap_or_default();
+            request["type"] == "plan_confirm" && !text.trim().is_empty()
+        }),
         Check::Capabilities => of(events, "session.capabilities").any(|d| {
             d["config"]
                 .as_array()
