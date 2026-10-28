@@ -370,7 +370,7 @@
 | Codex | 命令 | `accept_execpolicy_amendment` | allow_always | persistent | **是** | 否 | privileged | 写入 Codex 的执行策略 |
 | Codex | 文件修改、命令 | `cancel` | reject_once | reject | 否 | **是** | approve | 界面写明"拒绝将结束本回合"（ADR-07） |
 | Codex | 计划确认（`toolCallId` 以 `plan-review:` 开头） | `implement_plan` | allow_once | plan_accept | 否 | 否 | approve | 在同一个 prompt 里继续实施 |
-| Codex | 计划确认 | `revise_plan` | reject_once | plan_revise | 否 | 未实测 | approve | 按"可能结束回合"提示，兼容套件补测 |
+| Codex | 计划确认 | `revise_plan` | reject_once | plan_revise | 否 | **是** | approve | 界面写明"拒绝将结束本回合"。T102 实测（codex-acp 2.2.2）：选它之后 prompt 立即返回 `end_turn`，协作模式保持 `plan` |
 | 任意 | 对照表里没有的 option_id，kind 已知 | 按 kind 兜底 | allow_once → once / approve；allow_always → persistent / privileged；reject_once → reject（Codex 视为 ends_turn）/ approve；reject_always → reject、persistent / approve | | | | | 同时记日志，提示更新对照表 |
 | 任意 | **kind 未知**（安全 #5） | — | 原值 | unknown | 是 | 未知 | privileged | `actionable_by` 只有 `desktop_ui` 和 `test_harness`；界面显示 agent 原文并标"效果未知"，不套用拒绝的样式，不响应 Enter 和 Esc |
 

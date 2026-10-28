@@ -439,3 +439,11 @@
 | 升级 claude-agent-acp 到 0.93 之前 | `/remote-control`（Q42）：先经安全评审，并由宿主拦截 | T003 |
 | T063、T066 | 观察多次 resume 之后的 `claude` 进程数（Q43，上游 #1011） | T003 |
 | 以后建远端、公开之前 | git 历史里有 SP-1 录制补充脱敏之前的内容，两份会议记录里也有带用户名的路径。要对全部历史做个人信息扫描并清理（计划 1.8、R12），由用户决定 | SP-1 补充脱敏 |
+| T110 | Q31：`phase` 只对声明了 `clientCapabilities._meta.jetbrains.air` 的客户端透出（`_meta.jetbrains.air.phase`，`commentary`、`final_answer`）。cupper 现在的声明拿不到，按宿主规则判定最终回答。要不要声明 AIR 由本任务评估；副作用：模式选项带 `kind`，命令列表带 `skillPath`（本机路径），工具调用改用 AIR 的渲染方式（只核对过 `exec_command`） | T102 |
+| T110 | Q25：codex-acp 2.2.2 的 4 个模式取值与 5.6.5 的档位表一致，不用改表。`revise_plan` 会结束回合（设计 5.3.6 已改为 ends_turn 是），对照表里这一项按实测写 | T102 |
+| T111 | Codex 关闭会话后不释放 MCP 进程：T102 每轮多出约 18 个，三轮之后有 78 个。测长时间运行下的进程数和内存，核对 ADR-09 的回收阈值和 NFR-11 的 6 会话估算 | T102 |
+| T111、T055 | K21：Codex 的工具命令（`zsh -c`）和 MCP 服务器都不在适配器的进程组里，按进程组清理杀不到它们。关闭前枚举适配器的全部后代，按各自的进程组逐个发信号，或者先让 CLI 自己正常退出（设计 5.8.4 已补 Codex 的结论） | T102 |
+| T038 | Codex 的工具命令也在新的会话和进程组里，血缘信号只剩祖先链；MCP 服务器在适配器的会话里，"同一会话"能识别 | T102 |
+| T113 | `tools/sanitize` 认不出 Codex 的 MCP 服务器名（工具标题 `mcp.<服务器>.<工具>`、`rawInput.server`、`_meta` 键名里的驼峰写法），声明 AIR 时也不换 `skillPath`。T102 用 spike 自己的预处理脚本绕过，录制入库之前要在 `tools/sanitize` 里补上并加测试；SP-1、T003 已入库的 Codex 录制里的 MCP 调用也要复查 | T102 |
+| T113 | 真实配置下，模型会绕开 apply_patch 改用用户配置的 MCP 工具写文件（被 read-only 沙箱拒绝），所以剧本的 prompt 要点名使用哪个工具。所有 MCP 调用是否都受沙箱约束，交安全工程师确认。另外加一个 Codex 版的"关闭时有命令正在运行" | T102 |
+| T113 | 2026-10-28 的最新版本：codex-acp 2.3.0（换用 ACP TS SDK 2.0，依赖 `@openai/codex ^0.164.0`），codex CLI 0.165.0（超出已验证上限 0.163.0）。升级适配器之前重跑 Q8、Q31。复用 T102 的 `config-hash.ts` 时，换成真正的 TOML 解析 | T102 |

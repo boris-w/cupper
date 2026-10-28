@@ -875,7 +875,7 @@ UNIT-codex-drift = "pr"
 # （条件）Q8 后备（Codex）
 [T119]
 milestone = "M1b"
-IT-q8-fallback-codex = { suite = "pr", status = "conditional", reason = "K6 Q8 的 Codex 部分（T102）不通过时由 T119 产出" }
+IT-q8-fallback-codex = { suite = "pr", status = "na", reason = "K6 已通过（T102，2026-10-28），T119 不触发" }
 
 # Git 服务 III：diff、file_diff、status 与 branches
 [T120]
