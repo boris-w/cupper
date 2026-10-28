@@ -1,0 +1,191 @@
+# 原型事件日志（两个进程追加到同一个文件；已去掉本机路径和其他应用的 bundle id）
+
+## 1 未登记的 helper 申请授权（11:54）
+
+2026-10-28T03:54:08Z sp10[35691] start argv=["spawn", "notify", "s1", "stay"] ppid=1
+2026-10-28T03:54:08Z sp10[35691] spawned helper rc=0 pid=35705
+2026-10-28T03:54:08Z sp10[35691] became active
+2026-10-28T03:54:08Z sp10-host[35705] start argv=["notify", "s1", "stay"] ppid=35691 sid=35705 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=no
+2026-10-28T03:54:08Z sp10-host[35705] requestAuthorization granted=false error=Optional(Error Domain=UNErrorDomain Code=1 "Notifications are not allowed for this application" UserInfo={NSLocalizedDescription=Notifications are not allowed for this application})
+2026-10-28T03:54:08Z sp10-host[35705] posted s1 error=Optional(Error Domain=UNErrorDomain Code=1 "Notifications are not allowed for this application" UserInfo={NSLocalizedDescription=Notifications are not allowed for this application})
+2026-10-28T03:54:08Z sp10-host[35705] authorization=0 alert=0 style=0 delivered=[]
+
+## 2 helper 用 LSRegisterURL 登记自己（11:56，status，不弹框）
+
+2026-10-28T03:56:47Z sp10[39896] start argv=["spawn-quit", "status"] ppid=1
+2026-10-28T03:56:47Z sp10[39896] spawned helper rc=0 pid=40023
+2026-10-28T03:56:47Z sp10-host[40023] start argv=["status"] ppid=39896 sid=40023 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=no
+2026-10-28T03:56:47Z sp10-host[40023] LSRegisterURL -> 0
+2026-10-28T03:56:48Z sp10-host[40023] authorization=0 alert=0 style=0 delivered=[]
+
+## 3 再次申请：授权请求弹出后被关掉 → denied（11:57–11:59）
+
+2026-10-28T03:57:38Z sp10[42700] start argv=["spawn", "notify", "s1", "stay"] ppid=1
+2026-10-28T03:57:38Z sp10[42700] spawned helper rc=0 pid=42704
+2026-10-28T03:57:38Z sp10[42700] became active
+2026-10-28T03:57:38Z sp10-host[42704] start argv=["notify", "s1", "stay"] ppid=42700 sid=42704 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T03:57:49Z sp10-host[42704] requestAuthorization granted=false error=Optional(Error Domain=UNErrorDomain Code=1 "Notifications are not allowed for this application" UserInfo={NSLocalizedDescription=Notifications are not allowed for this application})
+2026-10-28T03:57:49Z sp10-host[42704] posted s1 error=nil
+2026-10-28T03:57:49Z sp10-host[42704] authorization=1 alert=2 style=1 delivered=["sp10-s1"]
+2026-10-28T03:59:08Z sp10[47074] start argv=["spawn-quit", "status"] ppid=1
+2026-10-28T03:59:08Z sp10[47074] spawned helper rc=0 pid=47076
+2026-10-28T03:59:08Z sp10-host[47076] start argv=["status"] ppid=47074 sid=47076 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T03:59:09Z sp10-host[47076] authorization=1 alert=2 style=1 delivered=["sp10-s1"]
+
+## 4 用户在系统设置里打开通知后：s1、s2、s3、第 4 步（作废）（12:00–12:02）
+
+2026-10-28T04:00:55Z sp10[50178] start argv=["spawn", "notify", "s1", "stay"] ppid=1
+2026-10-28T04:00:55Z sp10[50178] spawned helper rc=0 pid=50183
+2026-10-28T04:00:55Z sp10[50178] became active
+2026-10-28T04:00:55Z sp10-host[50183] start argv=["notify", "s1", "stay"] ppid=50178 sid=50183 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:00:55Z sp10-host[50183] requestAuthorization granted=true error=nil
+2026-10-28T04:00:55Z sp10-host[50183] posted s1 error=nil
+2026-10-28T04:00:55Z sp10-host[50183] authorization=2 alert=2 style=1 delivered=["sp10-s1"]
+2026-10-28T04:01:54Z sp10-host[50183] didReceive sp10-s1 action=com.apple.UNNotificationDefaultActionIdentifier main-thread=true
+2026-10-28T04:01:54Z sp10-host[50183] main app by id=/Applications/SP10.app enclosing=/Applications/SP10.app frontmost=<another app>
+2026-10-28T04:01:54Z sp10[50178] became active
+2026-10-28T04:01:55Z sp10-host[50183] activate() -> true, frontmost=dev.cupper.spike.sp10
+2026-10-28T04:02:00Z sp10-host[50183] exit after the click
+2026-10-28T04:02:05Z sp10[52054] start argv=["spawn-quit", "notify", "s2", "exit"] ppid=1
+2026-10-28T04:02:05Z sp10[52054] spawned helper rc=0 pid=52058
+2026-10-28T04:02:05Z sp10-host[52058] start argv=["notify", "s2", "exit"] ppid=52054 sid=52058 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:02:05Z sp10-host[52058] requestAuthorization granted=true error=nil
+2026-10-28T04:02:05Z sp10-host[52058] posted s2 error=nil
+2026-10-28T04:02:05Z sp10-host[52058] authorization=2 alert=2 style=1 delivered=["sp10-s2"]
+2026-10-28T04:02:07Z sp10-host[52058] didReceive sp10-s2 action=com.apple.UNNotificationDefaultActionIdentifier main-thread=true
+2026-10-28T04:02:07Z sp10-host[52058] main app by id=/Applications/SP10.app enclosing=/Applications/SP10.app frontmost=<another app>
+2026-10-28T04:02:07Z sp10-host[52155] start argv=[] ppid=1 sid=1 XPC_SERVICE_NAME=application.dev.cupper.spike.sp10.host.144261244.144261290 bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:02:07Z sp10-host[52058] open sp10-spike://session/s2 -> pid=52156 error=nil
+2026-10-28T04:02:07Z sp10[52156] opened sp10-spike://session/s2
+2026-10-28T04:02:07Z sp10[52156] start argv=[] ppid=1
+2026-10-28T04:02:07Z sp10[52156] became active
+2026-10-28T04:02:08Z sp10-host[52058] exit after posting
+2026-10-28T04:02:19Z sp10[52725] start argv=["spawn-quit", "notify", "s3", "stay"] ppid=1
+2026-10-28T04:02:19Z sp10[52725] spawned helper rc=0 pid=52745
+2026-10-28T04:02:19Z sp10-host[52745] start argv=["notify", "s3", "stay"] ppid=52725 sid=52745 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:02:19Z sp10-host[52745] requestAuthorization granted=true error=nil
+2026-10-28T04:02:19Z sp10-host[52745] posted s3 error=nil
+2026-10-28T04:02:19Z sp10-host[52745] authorization=2 alert=2 style=1 delivered=["sp10-s3"]
+2026-10-28T04:02:23Z sp10-host[52745] didReceive sp10-s3 action=com.apple.UNNotificationDefaultActionIdentifier main-thread=true
+2026-10-28T04:02:23Z sp10-host[52745] main app by id=/Applications/SP10.app enclosing=/Applications/SP10.app frontmost=<another app>
+2026-10-28T04:02:23Z sp10-host[52803] start argv=[] ppid=1 sid=1 XPC_SERVICE_NAME=application.dev.cupper.spike.sp10.host.144261244.144261290 bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:02:23Z sp10-host[52745] open sp10-spike://session/s3 -> pid=52804 error=nil
+2026-10-28T04:02:23Z sp10[52804] opened sp10-spike://session/s3
+2026-10-28T04:02:23Z sp10[52804] start argv=[] ppid=1
+2026-10-28T04:02:23Z sp10[52804] became active
+2026-10-28T04:02:25Z sp10-host[52745] frontmost=dev.cupper.spike.sp10
+2026-10-28T04:02:28Z sp10-host[52745] exit after the click
+2026-10-28T04:02:31Z sp10[52946] start argv=["spawn-quit", "open-main", "s4", "sp10-unregistered"] ppid=1
+2026-10-28T04:02:31Z sp10[52946] spawned helper rc=0 pid=52949
+2026-10-28T04:02:31Z sp10-host[52949] start argv=["open-main", "s4", "sp10-unregistered"] ppid=52946 sid=52949 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:02:31Z sp10-host[52949] main app by id=/Applications/SP10.app enclosing=/Applications/SP10.app frontmost=dev.cupper.spike.sp10
+2026-10-28T04:02:32Z sp10-host[52949] activate() -> false, frontmost=<another app>
+2026-10-28T04:02:32Z sp10[53011] start argv=[] ppid=1
+2026-10-28T04:02:32Z sp10[53011] became active
+2026-10-28T04:02:33Z sp10-host[52949] openApplication error=nil frontmost=dev.cupper.spike.sp10
+2026-10-28T04:02:36Z sp10-host[52949] exit: timeout
+2026-10-28T04:04:00Z sp10[53011] became active
+
+## 5 重新构建 own（12:05，重新构建后第一次查询）
+
+2026-10-28T04:05:34Z sp10[59670] start argv=["spawn-quit", "status"] ppid=1
+2026-10-28T04:05:34Z sp10[59670] spawned helper rc=0 pid=59675
+2026-10-28T04:05:34Z sp10-host[59675] start argv=["status"] ppid=59670 sid=59675 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=no
+2026-10-28T04:05:34Z sp10-host[59675] LSRegisterURL -> 0
+2026-10-28T04:05:35Z sp10-host[59675] authorization=0 alert=0 style=0 delivered=[]
+2026-10-28T04:05:57Z sp10[60418] start argv=["spawn-quit", "status"] ppid=1
+2026-10-28T04:05:57Z sp10[60418] spawned helper rc=0 pid=60421
+2026-10-28T04:05:57Z sp10-host[60421] start argv=["status"] ppid=60418 sid=60421 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:05:58Z sp10-host[60421] authorization=2 alert=2 style=1 delivered=[]
+
+## 6 s2b：helper 退出后点击，系统启动的 helper 跑 CFRunLoop（12:06）
+
+2026-10-28T04:06:19Z sp10[61121] start argv=["spawn-quit", "notify", "s2b", "exit"] ppid=1
+2026-10-28T04:06:19Z sp10[61121] spawned helper rc=0 pid=61125
+2026-10-28T04:06:19Z sp10-host[61125] start argv=["notify", "s2b", "exit"] ppid=61121 sid=61125 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:06:19Z sp10-host[61125] requestAuthorization granted=true error=nil
+2026-10-28T04:06:19Z sp10-host[61125] posted s2b error=nil
+2026-10-28T04:06:19Z sp10-host[61125] authorization=2 alert=2 style=1 delivered=["sp10-s2b"]
+2026-10-28T04:06:20Z sp10-host[61125] exit after posting
+2026-10-28T04:06:21Z sp10-host[61250] start argv=[] ppid=1 sid=1 XPC_SERVICE_NAME=application.dev.cupper.spike.sp10.host.144356236.144356279 bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:06:51Z sp10-host[61250] exit: timeout
+
+## 7 重新构建：系统启动的 helper 改跑 NSApplication（12:07）
+
+2026-10-28T04:07:48Z sp10[64668] start argv=["spawn-quit", "status"] ppid=1
+2026-10-28T04:07:48Z sp10[64668] spawned helper rc=0 pid=64696
+2026-10-28T04:07:48Z sp10-host[64696] start argv=["status"] ppid=64668 sid=64696 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:07:49Z sp10-host[64696] authorization=2 alert=2 style=1 delivered=[]
+2026-10-28T04:07:51Z sp10[64745] start argv=["spawn-quit", "status"] ppid=1
+2026-10-28T04:07:51Z sp10[64745] spawned helper rc=0 pid=64751
+2026-10-28T04:07:51Z sp10-host[64751] start argv=["status"] ppid=64745 sid=64751 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:07:52Z sp10-host[64751] authorization=2 alert=2 style=1 delivered=[]
+
+## 8 s2c：helper 退出后点击，系统启动的 helper 跑 NSApplication（12:10）
+
+2026-10-28T04:10:08Z sp10[69025] start argv=["spawn-quit", "notify", "s2c", "exit"] ppid=1
+2026-10-28T04:10:08Z sp10[69025] spawned helper rc=0 pid=69029
+2026-10-28T04:10:08Z sp10-host[69029] start argv=["notify", "s2c", "exit"] ppid=69025 sid=69029 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:10:08Z sp10-host[69029] requestAuthorization granted=true error=nil
+2026-10-28T04:10:08Z sp10-host[69029] posted s2c error=nil
+2026-10-28T04:10:08Z sp10-host[69029] authorization=2 alert=2 style=1 delivered=["sp10-s2c"]
+2026-10-28T04:10:09Z sp10-host[69029] exit after posting
+2026-10-28T04:10:13Z sp10-host[69091] start argv=[] ppid=1 sid=1 XPC_SERVICE_NAME=application.dev.cupper.spike.sp10.host.144409188.144409365 bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:10:13Z sp10-host[69091] didReceive sp10-s2c action=com.apple.UNNotificationDefaultActionIdentifier main-thread=true
+2026-10-28T04:10:13Z sp10-host[69091] main app by id=/Applications/SP10.app enclosing=/Applications/SP10.app frontmost=<another app>
+2026-10-28T04:10:13Z sp10-host[69091] open sp10-spike://session/s2c -> pid=69102 error=nil
+2026-10-28T04:10:13Z sp10[69102] opened sp10-spike://session/s2c
+2026-10-28T04:10:13Z sp10[69102] start argv=[] ppid=1
+2026-10-28T04:10:13Z sp10[69102] became active
+2026-10-28T04:10:15Z sp10-host[69091] frontmost=dev.cupper.spike.sp10
+2026-10-28T04:10:18Z sp10-host[69091] exit after the click
+2026-10-28T04:10:23Z sp10[69102] became active
+2026-10-28T04:10:29Z sp10[69102] became active
+
+## 9 s4b：主 App 不在，交一个没有登记的 scheme（12:11）
+
+2026-10-28T04:11:07Z sp10[70446] start argv=["spawn-quit", "open-main", "s4b", "sp10-unregistered"] ppid=1
+2026-10-28T04:11:07Z sp10[70446] spawned helper rc=0 pid=70449
+2026-10-28T04:11:07Z sp10-host[70449] start argv=["open-main", "s4b", "sp10-unregistered"] ppid=70446 sid=70449 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:11:09Z sp10-host[70449] main app by id=/Applications/SP10.app enclosing=/Applications/SP10.app frontmost=<another app>
+2026-10-28T04:11:09Z sp10-host[70449] open sp10-unregistered://session/s4b -> pid=70483 error=nil
+2026-10-28T04:11:09Z sp10[70483] opened sp10-unregistered://session/s4b
+2026-10-28T04:11:09Z sp10[70483] start argv=[] ppid=1
+2026-10-28T04:11:09Z sp10[70483] became active
+2026-10-28T04:11:11Z sp10-host[70449] frontmost=dev.cupper.spike.sp10
+2026-10-28T04:11:14Z sp10-host[70449] exit: timeout
+
+## 10 s5：helper 改成 bare 写法后弹通知、点击（12:11）
+
+2026-10-28T04:11:39Z sp10[71156] start argv=["spawn", "notify", "s5", "stay"] ppid=1
+2026-10-28T04:11:39Z sp10[71156] spawned helper rc=0 pid=71181
+2026-10-28T04:11:39Z sp10[71156] became active
+2026-10-28T04:11:39Z sp10-host[71181] start argv=["notify", "s5", "stay"] ppid=71156 sid=71181 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:11:39Z sp10-host[71181] requestAuthorization granted=true error=nil
+2026-10-28T04:11:39Z sp10-host[71181] posted s5 error=nil
+2026-10-28T04:11:39Z sp10-host[71181] authorization=2 alert=2 style=1 delivered=["sp10-s5"]
+2026-10-28T04:11:40Z sp10[71156] became active
+2026-10-28T04:11:41Z sp10-host[71181] didReceive sp10-s5 action=com.apple.UNNotificationDefaultActionIdentifier main-thread=true
+2026-10-28T04:11:41Z sp10-host[71181] main app by id=/Applications/SP10.app enclosing=/Applications/SP10.app frontmost=dev.cupper.spike.sp10
+2026-10-28T04:11:42Z sp10-host[71181] activate() -> true, frontmost=dev.cupper.spike.sp10
+2026-10-28T04:11:46Z sp10-host[71181] exit after the click
+2026-10-28T04:11:48Z sp10[71156] became active
+
+## 11 s6：弹一条后全部移除（12:14）
+
+2026-10-28T04:14:05Z sp10[73298] start argv=["spawn-quit", "notify", "s6", "exit"] ppid=1
+2026-10-28T04:14:05Z sp10[73298] spawned helper rc=0 pid=73300
+2026-10-28T04:14:05Z sp10-host[73300] start argv=["notify", "s6", "exit"] ppid=73298 sid=73300 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:14:05Z sp10-host[73300] requestAuthorization granted=true error=nil
+2026-10-28T04:14:05Z sp10-host[73300] posted s6 error=nil
+2026-10-28T04:14:05Z sp10-host[73300] authorization=2 alert=2 style=1 delivered=["sp10-s6"]
+2026-10-28T04:14:06Z sp10-host[73300] exit after posting
+2026-10-28T04:14:09Z sp10[73329] start argv=["spawn-quit", "status"] ppid=1
+2026-10-28T04:14:09Z sp10[73329] spawned helper rc=0 pid=73331
+2026-10-28T04:14:09Z sp10-host[73331] start argv=["status"] ppid=73329 sid=73331 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:14:10Z sp10-host[73331] authorization=2 alert=2 style=1 delivered=["sp10-s6"]
+2026-10-28T04:14:13Z sp10[73339] start argv=["spawn-quit", "clear"] ppid=1
+2026-10-28T04:14:13Z sp10[73339] spawned helper rc=0 pid=73341
+2026-10-28T04:14:13Z sp10-host[73341] start argv=["clear"] ppid=73339 sid=73341 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-10-28T04:14:14Z sp10-host[73341] authorization=2 alert=2 style=1 delivered=[]
+
