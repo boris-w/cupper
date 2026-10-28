@@ -100,9 +100,11 @@ pub fn write(
         let path = root.join(REPORTS).join(&name);
         fs::create_dir_all(root.join(REPORTS))?;
         fs::write(&path, serde_json::to_string_pretty(&kept)? + "\n")?;
+        // `words` takes the paths it scans as relative to the work tree.
         let mut scan = node(root, &["words", "--list"]);
+        let relative = format!("{REPORTS}/{name}");
         run(
-            scan.arg(words).arg(&path),
+            scan.arg(words).arg(relative),
             "the report holds a sensitive word",
         )?;
         println!("  {REPORTS}/{name}: written");
