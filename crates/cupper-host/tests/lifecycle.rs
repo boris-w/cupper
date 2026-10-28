@@ -5,7 +5,8 @@
 //! the index. IT-project-add-trust adds and
 //! trusts a project in a git repository built here; IT-clock-advance and
 //! IT-seed drive the test interface; IT-self-check and IT-idle-exit the
-//! supervisor's watch; IT-runtime-startup the runtime installer. The tests talk to the host as the CLI's
+//! supervisor's watch; IT-runtime-startup the runtime installer; IT-host-tests-no-real-cli
+//! CLI discovery. The tests talk to the host as the CLI's
 //! `harness` client.
 
 mod common;
@@ -1263,6 +1264,50 @@ async fn it_idle_exit_once_nobody_is_connected_for_the_idle_time() {
         .collect();
     assert_eq!(exits.len(), 1, "{log}");
     assert_eq!(exits[0]["fields"]["reason"], "idle");
+}
+
+/// Claude's CLI in the index, once it lists the agent: `-` when none was found.
+async fn found_cli(data_dir: &Path) -> String {
+    drop(connect(data_dir).await);
+    let index = "FROM events WHERE stream = 'index' AND type = 'agents.updated'";
+    let listed = format!("SELECT CAST(count(*) > 0 AS TEXT) {index}");
+    until(data_dir, "host.db", &listed, &["1"]).await;
+    let cli = "coalesce(json_extract(json, '$.data.agents[0].cli'), '-')";
+    let latest = format!("SELECT {cli} {index} ORDER BY seq DESC LIMIT 1");
+    column(data_dir, &latest).remove(0)
+}
+
+/// IT-host-tests-no-real-cli: CLI discovery in a test sees only what the test
+/// put there (T203). A host of the shared fixture finds no CLI, whatever the
+/// machine has installed. With `cli_root` where discovery trusts it, the
+/// probe in the common location there is what the host finds and asks for
+/// its `--version`: the version is the probe's.
+#[tokio::test]
+async fn it_host_tests_no_real_cli_discovery_sees_only_the_test() {
+    let dir = TempDir::new("no-real-cli");
+    let data_dir = dir.path().join("data");
+    let host = Running(spawn(&data_dir));
+    assert_eq!(found_cli(&data_dir).await, "-");
+    drop(host);
+
+    // Outside the temp dirs, which discovery does not trust.
+    let root =
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("cli-root-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let probe = root.join("opt/homebrew/bin/claude");
+    std::fs::create_dir_all(probe.parent().unwrap()).unwrap();
+    std::fs::hard_link(launch::fake_agent(), &probe).unwrap();
+    // Its first start waits for the system's scan here, not in the host (T196).
+    let answered = Command::new(&probe).arg("--version").output().unwrap();
+    assert!(answered.status.success());
+    let probe = std::fs::canonicalize(probe).unwrap();
+    let data_dir = dir.path().join("probe");
+    let host = Running(spawn_with(&data_dir, json!({"cli_root": root})));
+    let cli: Value = serde_json::from_str(&found_cli(&data_dir).await).unwrap();
+    drop(host);
+    std::fs::remove_dir_all(&root).unwrap();
+    let version = json!(env!("CARGO_PKG_VERSION"));
+    assert_eq!((&cli["path"], &cli["version"]), (&json!(probe), &version));
 }
 
 /// IT-self-check: the host runs from a copy of its executable; with the copy
