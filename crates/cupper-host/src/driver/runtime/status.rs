@@ -49,7 +49,9 @@ pub fn auth(update: &AuthStatusUpdate) -> AuthStatus {
 pub fn status(launch: &Launch, running: Running, auth: &AuthStatus) -> AgentStatus {
     let runtime = match (&launch.program, launch.unavailable) {
         (_, Some(AgentErrorClass::RuntimeFailed)) => RuntimeState::Failed,
-        (Program::Runtime { node, bundle }, _) if !node.path.exists() || !bundle.path.exists() => {
+        (Program::Runtime { node, bundle, .. }, _)
+            if !node.path.exists() || !bundle.path.exists() =>
+        {
             RuntimeState::Missing
         }
         _ => RuntimeState::Ready,
@@ -114,6 +116,7 @@ mod tests {
             program: Program::Runtime {
                 node: missing("/missing/node"),
                 bundle: missing("/missing/bundle"),
+                install: crate::runtime::progress().1,
             },
             env: cupper_sys::Env::new(),
             versions,

@@ -226,6 +226,8 @@ struct Actor {
     instance: Option<Instance>,
     /// The wire of the instance that runs or is starting.
     wire: Option<(mpsc::UnboundedSender<Wire>, mpsc::UnboundedReceiver<Wire>)>,
+    /// Dropped, it ends the start's wait for the runtime installer.
+    start_stop: Option<oneshot::Sender<()>>,
     /// Of the instance's end: its process's status, its connection closed.
     exit: Option<ExitStatus>,
     closed: bool,
@@ -301,6 +303,7 @@ impl AgentRuntime {
             mail: mail.downgrade(),
             instance: None,
             wire: None,
+            start_stop: None,
             exit: None,
             closed: false,
             waiting: Vec::new(),
@@ -573,6 +576,8 @@ impl Actor {
                     let _ = done.send(());
                     return;
                 }
+                // A start that waits for the installer gives up.
+                self.start_stop = None;
                 // Before any signal, while the adapter still runs (5.6.8).
                 let group = self.instance.as_ref().and_then(|i| i.group);
                 let found = group.as_ref().map(ProcessGroup::with_descendants);
@@ -694,6 +699,8 @@ impl Actor {
         }
         let (wire, rx) = mpsc::unbounded_channel();
         (self.wire, self.exit, self.closed) = (Some((wire.clone(), rx)), None, false);
+        let (start_stop, stop) = oneshot::channel();
+        self.start_stop = Some(start_stop);
         let id = AdapterInstanceId::from_uuid(self.deps.ids.new_id().as_u128());
         let (launch, cx) = (self.deps.launch.clone(), self.deps.cx.clone());
         tokio::spawn(async move {
@@ -701,7 +708,8 @@ impl Actor {
             let exited = move |status| {
                 let _ = exited.send(status);
             };
-            let started = launch::start(&launch, &cx, id.clone(), wire.clone(), exited).await;
+            let mailbox = wire.clone();
+            let started = launch::start(&launch, &cx, id.clone(), mailbox, stop, exited).await;
             let _ = wire.send(Wire::Started(Box::new(started)));
             if let Ok(status) = exit.await {
                 // Recorded before the sessions hear of it.

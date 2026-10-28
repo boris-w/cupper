@@ -393,6 +393,15 @@ fn unit_fake_scripts_plan_update_and_confirm_claude() {
 }
 
 #[test]
+fn unit_fake_scripts_plan_rejected_by_claude_ends_the_turn() {
+    let mut fake = Fake::start(CLAUDE);
+    fake.answers.push_back(selected("reject"));
+    let response = fake.prompt("plan_confirm; say after");
+    assert_eq!(stop(&response), "cancelled");
+    assert_eq!(fake.texts(), ["plan:reject"]);
+}
+
+#[test]
 fn unit_fake_scripts_plan_confirm_codex_goes_idle_first() {
     let mut fake = Fake::start(CODEX);
     fake.set_config("collaboration_mode", "plan");

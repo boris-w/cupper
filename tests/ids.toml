@@ -596,6 +596,10 @@ COMPAT-claude-close-running = { suite = "compat", scenario = "close-running", cl
 COMPAT-claude-resume-procs = { suite = "compat", scenario = "resume-procs", cli = "claude" }
 # 至少覆盖普通回合、审批、取消三个剧本（K12）
 GOLD-B-claude = "pr"
+# 同三份真实录制的提取层金样例（设计 5.9.3：A 层用全部录制）
+GOLD-A-claude-compat-normal-turn = "pr"
+GOLD-A-claude-compat-approval = "pr"
+GOLD-A-claude-compat-cancel = "pr"
 
 # 宿主集成测试 III：交互、信任与档位
 [T068]
@@ -1068,7 +1072,7 @@ MAN-security-doc = "man"
 # （条件）主进程通知后备
 [T158]
 milestone = "M1b"
-UNIT-main-notifications = { suite = "pr", status = "conditional", reason = "K5 SP-10 通知身份（T101）不通过时由 T158 产出" }
+UNIT-main-notifications = { suite = "pr", status = "na", reason = "K5 有条件通过（T101，2026-10-28），T158 不触发；T150 的第一条验收不通过时再议" }
 
 # 自用构建
 [T160]
@@ -1162,6 +1166,11 @@ milestone = "M1a"
 UNIT-claude-session-thinking = "pr"
 UNIT-claude-plan-reject-ends-turn = "pr"
 
+# 宿主测试找到本机真实的 CLI（计划 v1.3.73，T201 发现）
+[T203]
+milestone = "M1a"
+IT-host-tests-no-real-cli = "pr"
+
 # 计划里没有产出任务的编号
 [unplanned]
 # 从第二个发布版起（计划 5.3 的 NFR-10）
@@ -1182,3 +1191,13 @@ UI-7 = "PRD 的需求编号"
 E2E-question-card = "旧名，计划 v1.1 改为 E2E-question-panel"
 UI-cards = "旧名，计划 v1.1 改为 UI-request-panel"
 IT-K11 = "计划 T140 的注里对 IT-K11-steer-idle-queued 的简写"
+
+[[evidence]]
+id = "MAN-notification-spike"
+date = "2026-10-28"
+record = "docs/tasks/T101-notification-identity/results.md"
+
+[[evidence]]
+id = "MAN-compat-claude"
+date = "2026-10-28"
+record = "docs/tasks/T066-claude-compat-real/man-compat-claude.md"

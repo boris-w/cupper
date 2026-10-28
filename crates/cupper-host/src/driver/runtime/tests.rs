@@ -1,6 +1,7 @@
 //! `AgentRuntime` with the fake agent (design 5.6.1, 5.6.6, 5.6.8, 5.8.5):
 //! IT-process-hygiene, IT-K13-echo-cwd, IT-K26-client-info, IT-K21-reap-group,
-//! IT-adapter-restart, and IT-orch-gating's `SetConfig`. The runtime's timers
+//! IT-adapter-restart, IT-orch-gating's `SetConfig`, and the start's wait of
+//! IT-runtime-first-prompt-waits. The runtime's timers
 //! run on `ManualClock`, which [`Fixture::tick`] moves to the deadlines the
 //! runtime sets.
 
@@ -17,9 +18,11 @@ use crate::diag::stderr::AdapterLog;
 use crate::driver::api::{NormUpdate, PromptTag};
 use crate::driver::probe::login_shell::{Failure, LoginEnv};
 use crate::orchestrator::testkit::text;
+use crate::runtime::{claude_adapter, plans, progress};
 use crate::store::testutil::{TempDir, host_writer, query, raw_db, raw_rows};
 use crate::store::{Durability, RAW_WRITER, RawWriter, RawWriterThread, WriterThread};
 use cupper_protocol::index::AgentStatus;
+use cupper_protocol::index::{RuntimeFailure, RuntimeState};
 use cupper_sys::{ProcessGroup, ProcessInfo, process_info};
 
 type Events = mpsc::UnboundedReceiver<DriverEvent>;
@@ -423,7 +426,8 @@ async fn gold_b_fake_in_process_adapter_has_no_process_to_signal() {
     player(started, release);
     let (mailbox, _heard) = mpsc::unbounded_channel::<FromAgent>();
     let id = AdapterInstanceId::from_uuid(1);
-    let instance = launch::start(&launch, &cx, id, mailbox, |_| ())
+    let stop = oneshot::channel().1;
+    let instance = launch::start(&launch, &cx, id, mailbox, stop, |_| ())
         .await
         .unwrap();
     assert!(instance.group.is_none());
@@ -638,6 +642,31 @@ async fn it_adapter_restart_backs_off_then_crashed() {
     assert_eq!(
         f.attach().await.unwrap_err().class,
         AgentErrorClass::RuntimeFailed
+    );
+}
+
+/// A start waits for the runtime installer (design 5.2.12): a stop ends the
+/// wait, and a failed install fails the start with its reason.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_runtime_first_prompt_waits_a_stop_ends_it_a_failure_is_named() {
+    let plans = plans(crate::manifest::embedded());
+    let (published, install) = progress();
+    let (node, bundle) = claude_adapter(Path::new("/missing"), &plans);
+    let mut launch = launch::injected(PathBuf::new(), Vec::new(), &host(), &login());
+    launch.program = launch::Program::Runtime {
+        node,
+        bundle,
+        install,
+    };
+    let f = Fixture::with("install-wait", launch, None);
+    let (attached, _) = tokio::join!(biased; f.attach(), f.stop());
+    assert!(attached.is_err());
+    published.send_replace((RuntimeState::Failed, Some(RuntimeFailure::HashMismatch)));
+    let failed = f.attach().await.unwrap_err();
+    assert_eq!(failed.class, AgentErrorClass::RuntimeFailed);
+    assert_eq!(
+        failed.message,
+        "the runtime's install failed: hash_mismatch"
     );
 }
 

@@ -29,13 +29,14 @@ use files::{Slot, copy_in};
 pub use files::{Verdict, verify};
 use machine::{Action, Input, InstallCore};
 pub use plan::{ADAPTER, ComponentPlan, Npm, Source, plans};
+use tokio::sync::watch;
 
 use cupper_protocol::index::{RuntimeFailure, RuntimeState};
 
 use crate::clock::Clock;
 use crate::driver::probe;
 use crate::durations::{self, Durations};
-use crate::manifest::{self, FileHash};
+use crate::manifest::FileHash;
 use crate::pure::{Core, TimerTable};
 use crate::quiescence::ActorKind;
 
@@ -93,9 +94,38 @@ pub enum Reason {
 
 pub type Statuses = BTreeMap<Component, Status>;
 
+/// Claude's adapter runtime as [`adapter_state`] gives it, published by the
+/// installer for the adapter's start (design 5.2.12).
+pub type AdapterState = (RuntimeState, Option<RuntimeFailure>);
+
+/// The installer's progress, as the adapter's start waits on it.
+#[derive(Debug, Clone)]
+pub struct Progress(watch::Receiver<AdapterState>);
+
+/// Where the installer publishes its progress, and what waits on it; once
+/// the sender is dropped, nothing installs any more.
+pub fn progress() -> (watch::Sender<AdapterState>, Progress) {
+    let (publish, progress) = watch::channel((RuntimeState::Missing, None));
+    (publish, Progress(progress))
+}
+
+impl Progress {
+    /// Waits until the runtime is ready or has failed; its failure. An
+    /// installer that stops first leaves the files to the start's check.
+    pub async fn done(&self) -> Result<(), RuntimeFailure> {
+        let mut progress = self.0.clone();
+        let over =
+            |(state, _): &AdapterState| matches!(state, RuntimeState::Ready | RuntimeState::Failed);
+        match progress.wait_for(over).await.map(|state| state.1.clone()) {
+            Ok(Some(failure)) => Err(failure),
+            _ => Ok(()),
+        }
+    }
+}
+
 /// Claude's adapter runtime as `agents.updated` shows it: the first failure,
 /// else installing, else ready once every component is.
-pub fn adapter_state(statuses: &Statuses) -> (RuntimeState, Option<RuntimeFailure>) {
+pub fn adapter_state(statuses: &Statuses) -> AdapterState {
     let failed = statuses.values().find_map(|status| match status {
         Status::Failed(reason) => Some(*reason),
         _ => None,
@@ -159,10 +189,9 @@ pub struct Installed {
     pub hash: FileHash,
 }
 
-/// What Claude's adapter starts from in `runtime_dir`: the installed node
-/// and bundle.
-pub fn claude_adapter(runtime_dir: &Path) -> (Installed, Installed) {
-    let plans = plans(manifest::embedded());
+/// What Claude's adapter starts from in `runtime_dir`: the node and bundle
+/// that the installer installs by `plans`.
+pub fn claude_adapter(runtime_dir: &Path, plans: &[ComponentPlan]) -> (Installed, Installed) {
     let file = |component: Component, name: &str| {
         let plan = plans.iter().find(|p| p.component == component);
         let plan = plan.expect("the manifest plans every component");

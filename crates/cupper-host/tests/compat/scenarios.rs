@@ -2,6 +2,8 @@
 //! after it, and structural checks on the host's events, never on the
 //! agent's words. The real CLI gets the prompt, the fake agent the script.
 //! `id`s never change: T188 and the COMPAT IDs name scenarios by them.
+//! Claude Code runs a read-only command (`echo`, `ls`, `sleep`) without
+//! asking, so a real prompt whose request is answered runs one that writes.
 
 pub struct Scenario {
     pub id: &'static str,
@@ -108,6 +110,8 @@ pub enum Check {
     ExitCode,
     /// A request of this type ended with this status.
     Request(&'static str, &'static str),
+    /// A plan to confirm came with its text.
+    PlanText,
     /// The session learnt the agent's options.
     Capabilities,
     /// The agent left no file at this path in the project.
@@ -159,7 +163,8 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "command-exit",
         title: "a command that exits with a non-zero code",
         mode: "default",
-        prompt: "Run the shell command `ls no-such-file` and tell me its exit code.",
+        prompt: "Run the shell command `touch missing-dir/file.txt` once, then tell me its exit code. \
+                 Run no other command.",
         script: "permission t1 execute; terminal t1 2 1; say done",
         steps: &[Step::Choose("allow_once")],
         checks: &[Check::Tool("execute"), Check::ExitCode, DONE],
@@ -170,7 +175,7 @@ pub const SCENARIOS: &[Scenario] = &[
         title: "a command allowed once",
         gold_b: true,
         mode: "default",
-        prompt: "Run the shell command `echo cupper` and tell me what it printed.",
+        prompt: "Run the shell command `touch approved.txt`, then say done.",
         script: "tool t1 execute Run tests; permission t1; say finished",
         steps: &[Step::Choose("allow_once")],
         checks: &[Check::Request("permission", "resolved"), DONE],
@@ -180,7 +185,7 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "reject",
         title: "a command rejected once",
         mode: "default",
-        prompt: "Run the shell command `touch rejected.txt`.",
+        prompt: "Run the shell command `touch rejected.txt`. If I decline, stop: try nothing else.",
         script: "tool t1 execute Run tests; permission t1; say finished",
         steps: &[Step::Choose("reject_once")],
         checks: &[
@@ -208,11 +213,12 @@ pub const SCENARIOS: &[Scenario] = &[
         prompt: "Plan how to add a file hello.txt that says hello. Do not change anything.",
         script: "plan_update # Plan\\n- one step; plan_confirm; say after",
         steps: &[Step::Choose("reject_once")],
+        // Claude's plan comes in the request; rejecting it ends the turn.
         checks: &[
-            Check::Item("plan"),
+            Check::PlanText,
             Check::Request("plan_confirm", "resolved"),
             Check::NoFile("hello.txt"),
-            DONE,
+            Check::Turn("cancelled"),
         ],
         ..BASE
     },
@@ -221,7 +227,7 @@ pub const SCENARIOS: &[Scenario] = &[
         title: "an interrupt while a command runs",
         gold_b: true,
         mode: "default",
-        prompt: "Run the shell command `sleep 60`, then say done.",
+        prompt: "Run the shell command `touch started.txt && sleep 60`, then say done.",
         script: "tool t1 execute Run sleep; permission t1; wait_cancel",
         steps: &[
             Step::Choose("allow_once"),
@@ -235,7 +241,7 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "cancel-approval",
         title: "an interrupt while a request waits",
         mode: "default",
-        prompt: "Run the shell command `echo cupper` and tell me what it printed.",
+        prompt: "Run the shell command `touch asked.txt`, then say done.",
         script: "tool t1 execute Run tests; permission t1; say finished",
         steps: &[Step::Asked, Step::Interrupt],
         checks: &[
@@ -343,7 +349,7 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "close-running",
         title: "the adapter closed while a command runs (K21)",
         mode: "default",
-        prompt: "Run the shell command `sleep 300`.",
+        prompt: "Run the shell command `touch started.txt && sleep 300`.",
         // A command in a process group of its own, as Claude's are.
         script: "tool t1 execute Run sleep; permission t1; \
             write_file run.sh exec /usr/bin/perl -e 'setpgrp(0,0), exec(\"/bin/sleep\", \"300\")' \
@@ -392,13 +398,22 @@ pub const SCENARIOS: &[Scenario] = &[
         title: "hooks written in the middle of a turn (Q28)",
         mode: "default",
         real_only: Some("the fake agent reads no `.claude/settings.json`"),
-        prompt: "Run the shell command `echo one`, then the shell command `echo two`.",
+        // A hook of its own shows that the project's hooks run at all; the
+        // new one is written once the prompt has gone, before its commands.
+        files: &[(".claude/settings.json", INITIAL)],
+        prompt: "Run the shell command `touch one.txt`; after it, run the shell command \
+                 `touch two.txt` as a command of its own.",
         steps: &[
-            Step::Choose("allow_once"),
+            Step::Pause(3000),
             Step::WriteFile(".claude/settings.json", RELOADED),
             Step::Choose("allow_once"),
+            Step::Choose("allow_once"),
         ],
-        checks: &[Check::Observe("hook-reloaded"), DONE],
+        checks: &[
+            Check::Observe("hook-initial"),
+            Check::Observe("hook-reloaded"),
+            DONE,
+        ],
         ..BASE
     },
     Scenario {
@@ -407,13 +422,15 @@ pub const SCENARIOS: &[Scenario] = &[
         mode: "default",
         real_only: Some("the fake agent reads no `.claude/settings.json`"),
         project: Some("sub"),
+        // The project's own hook shows that hooks run at all.
         files: &[
             ("../.claude/settings.json", OUTSIDE),
             (".claude/settings.json", ROOT),
-            ("sub/.keep", ""),
+            ("sub/.claude/settings.json", OWN),
         ],
         prompt: "Reply with the single word: ready",
         checks: &[
+            Check::Observe("sub/own-ran"),
             Check::Observe("root-ran"),
             Check::Observe("outside-ran"),
             DONE,
@@ -427,10 +444,14 @@ pub const SCENARIOS: &[Scenario] = &[
 const UNTRUSTED_SETTINGS: &str = r#"{"env": {"CUPPER_COMPAT_ENV": "1"},
     "apiKeyHelper": "touch helper-ran && echo key",
     "hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "touch hook-ran"}]}]}}"#;
+const INITIAL: &str = r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
+    "command": "touch hook-initial"}]}]}}"#;
 const RELOADED: &str = r#"{"hooks": {"PreToolUse": [{"matcher": "Bash",
     "hooks": [{"type": "command", "command": "touch hook-reloaded"}]}]}}"#;
 const ROOT: &str = r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
     "command": "touch ../root-ran"}]}]}}"#;
+const OWN: &str = r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
+    "command": "touch own-ran"}]}]}}"#;
 const OUTSIDE: &str = r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
     "command": "touch ../outside-ran"}]}]}}"#;
 
@@ -461,6 +482,7 @@ impl Check {
             Self::Tool(kind) => format!("a tool call of kind {kind}"),
             Self::ExitCode => "a tool call with a non-zero exit code".into(),
             Self::Request(kind, status) => format!("a {kind} request {status}"),
+            Self::PlanText => "a plan to confirm with its text".into(),
             Self::Capabilities => "the session's capabilities".into(),
             Self::NoFile(path) => format!("no file {path}"),
             Self::Lacks(path, text) => format!("{path} without {text}"),

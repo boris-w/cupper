@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
+use std::pin::pin;
 use std::process::ExitStatus;
 use std::sync::Arc;
 
@@ -16,9 +17,10 @@ use cupper_protocol::index::{CliInstall, ConfigDirState};
 use cupper_protocol::methods::admin::Settings;
 use cupper_protocol::recording::{INSTANCE_EXITED, INSTANCE_STARTED};
 use cupper_sys::{Command, Env, ProcessGroup, Signal, Stdio};
+use futures::future::{Either, select};
 use serde_json::json;
 use tokio::net::unix::pipe;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::clock::Clock;
 use crate::diag::stderr::{AdapterLog, Tail};
@@ -32,7 +34,7 @@ use crate::driver::tap::Tap;
 use crate::driver::transport::StdioTransport;
 use crate::durations::Durations;
 use crate::manifest;
-use crate::runtime::{self, Installed};
+use crate::runtime::{self, Installed, Progress};
 use crate::store::{Durability, RawSink, Receipt, Writer};
 use crate::supervisor::watch::SelfCheck;
 
@@ -43,8 +45,13 @@ pub enum Program {
     /// 5.9.9).
     Injected { program: PathBuf, args: Vec<String> },
     /// The runtime installer's node running the adapter's bundle, both
-    /// checked before each start (ADR-08).
-    Runtime { node: Installed, bundle: Installed },
+    /// checked before each start once the installer is done with them
+    /// (ADR-08, design 5.2.12).
+    Runtime {
+        node: Installed,
+        bundle: Installed,
+        install: Progress,
+    },
     /// `test-harness`: the adapter is played inside this process, over an
     /// in-memory transport (the B-layer golden runner, design 5.9.3).
     #[cfg(feature = "test-harness")]
@@ -163,21 +170,20 @@ pub fn fake_agent() -> PathBuf {
     agent
 }
 
-/// The launch of Claude's adapter from the runtime in `data_dir`: the CLI
+/// The launch of Claude's adapter from the runtime's `program`: the CLI
 /// that `locator` finds, or the one `settings` name, its version classified
 /// against the manifest's range, the variables `settings` pass on to it
 /// (design 5.6.6).
 pub async fn production(
     clock: &dyn Clock,
     durations: &Durations,
-    data_dir: &Path,
+    program: Program,
     (host, login): (&BTreeMap<String, String>, &LoginEnv),
     locator: &CliLocator,
     settings: &Settings,
 ) -> Launch {
-    let (node, bundle) = runtime::claude_adapter(&runtime::runtime_dir(data_dir));
     let mut launch = Launch {
-        program: Program::Runtime { node, bundle },
+        program,
         env: Env::new(),
         versions: versions(String::new(), CliCompat::Unsupported),
         cli: None,
@@ -279,12 +285,14 @@ fn failed(class: AgentErrorClass, message: impl ToString) -> AgentError {
 
 /// Starts instance `id` of `launch` in a session of its own (design 5.8.5)
 /// and connects to it: what the agent sends goes to `mailbox`, and `exited`
-/// hears the process's end.
+/// hears the process's end. A runtime still installing is waited for
+/// (design 5.2.12), unless `stop` comes first.
 pub async fn start<M: From<FromAgent> + Send + 'static>(
     launch: &Launch,
     cx: &Context,
     id: AdapterInstanceId,
     mailbox: mpsc::UnboundedSender<M>,
+    stop: oneshot::Receiver<()>,
     exited: impl FnOnce(ExitStatus) + Send + 'static,
 ) -> Result<Instance, AgentError> {
     use AgentErrorClass::RuntimeFailed;
@@ -299,7 +307,17 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
             command.args(args);
             command
         }
-        Program::Runtime { node, bundle } => {
+        Program::Runtime {
+            node,
+            bundle,
+            install,
+        } => {
+            // The installer may still be at it (design 5.2.12).
+            let Either::Left((done, _)) = select(pin!(install.done()), stop).await else {
+                let stopped = "stopped before the runtime was installed";
+                return Err(failed(AgentErrorClass::Other, stopped));
+            };
+            done.map_err(|f| failed(RuntimeFailed, format!("the runtime's install failed: {f}")))?;
             // Hashing the runtime reads it whole: off the async threads.
             let files = [node.clone(), bundle.clone()];
             let verified = tokio::task::spawn_blocking(move || {
