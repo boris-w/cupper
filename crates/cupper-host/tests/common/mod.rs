@@ -39,8 +39,20 @@ pub fn spawn_with(data_dir: &Path, test_config: serde_json::Value) -> Child {
     spawn_from(Path::new(HOST), data_dir, test_config)
 }
 
-pub fn spawn_from(program: &Path, data_dir: &Path, test_config: serde_json::Value) -> Child {
-    start(&mut Command::new(program), data_dir, &payload(test_config))
+/// CLI discovery sees only what the test puts there (T203): `HOME`, the
+/// login shell (unless `test_config` gives one) and the absolute common
+/// locations are beside `data_dir`, in a temp dir that it does not trust. A
+/// CLI comes from `test_config.agents` or the setting `agents.claude.cli_path`.
+pub fn spawn_from(program: &Path, data_dir: &Path, mut test_config: Value) -> Child {
+    let home = data_dir.with_file_name("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let config = test_config.as_object_mut().unwrap();
+    config.entry("login_env").or_insert(json!({}));
+    config
+        .entry("cli_root")
+        .or_insert(json!(data_dir.with_file_name("root")));
+    let mut command = Command::new(program);
+    start(command.env("HOME", home), data_dir, &payload(test_config))
 }
 
 /// The startup payload: [`KEY`] as `harness_key`, and `test_config`.

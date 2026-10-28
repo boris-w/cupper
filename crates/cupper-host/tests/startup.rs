@@ -122,12 +122,28 @@ async fn unit_release_features_host_does_not_read_stdin() {
     use std::time::Duration;
 
     use cupper_host::clock::{Clock, SystemClock};
+    use cupper_host::store;
 
     let payload = br#"{"harness_key": "not a key", "test_config": {"failpoints": [{"name": "no.such"}]}, "unknown": 1}"#;
-    let data_dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("cupper-host-release-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&data_dir);
+    let _ = std::fs::remove_dir_all(&dir);
+    // This build has no injection points, yet it must not find the CLI the
+    // machine has (T203): the setting names one that is not there, no login
+    // shell runs, and `HOME` is the test's.
+    let data_dir = dir.join("data");
+    std::fs::create_dir_all(&data_dir).unwrap();
+    let mut conn = store::open_writer(&data_dir.join("host.db"), store::Database::Host).unwrap();
+    let backups = data_dir.join("backups");
+    store::migrate(&mut conn, store::MIGRATIONS, &backups, &SystemClock::new()).unwrap();
+    let sql = "INSERT INTO settings (key, value, updated_at)
+               VALUES ('agents.claude.cli_path', ?1, 1)";
+    let cli = serde_json::json!(dir.join("no-cli")).to_string();
+    conn.execute(sql, [cli]).unwrap();
+    drop(conn);
     let mut child = host(&["--data-dir", data_dir.to_str().unwrap()])
+        .env("HOME", &dir)
+        .env_remove("SHELL")
         .stdin(Stdio::piped())
         .spawn()
         .expect("start cupper-host");
@@ -155,5 +171,5 @@ async fn unit_release_features_host_does_not_read_stdin() {
         log.contains("the host started") && log.contains("the host exits"),
         "{log}"
     );
-    std::fs::remove_dir_all(&data_dir).unwrap();
+    std::fs::remove_dir_all(&dir).unwrap();
 }

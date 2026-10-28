@@ -48,7 +48,10 @@ function setup() {
   const root = mkdtempSync(join(tmpdir(), "cupper-launch-"));
   dirs.push(root);
   writeFileSync(join(root, "harness_key"), `${"ab".repeat(32)}\n`, { mode: 0o600 });
-  writeFileSync(join(root, "test_config.json"), "{}");
+  // CLI discovery sees nothing of the machine's (T203): the system's PATH,
+  // and the common locations and HOME in the temp dir, which it does not trust.
+  const config = { login_env: { PATH: "/usr/bin:/bin" }, cli_root: root };
+  writeFileSync(join(root, "test_config.json"), JSON.stringify(config));
   const native = loadNative(join(TARGET, "debug/libcupper_native.dylib"), "e2e");
   const program = resolve(bundle ?? "", "CupperHost.app/Contents/MacOS/cupper-host");
   const launcher = () =>
@@ -56,7 +59,7 @@ function setup() {
       native,
       program,
       dataDir: join(root, "data"),
-      env: hostEnv(process.env),
+      env: { ...hostEnv(process.env), HOME: root },
       payload: () => e2ePayload(root),
     });
   const lockedPid = () => Number(readFileSync(join(root, "data/host.lock"), "utf8"));

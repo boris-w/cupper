@@ -60,6 +60,9 @@ export class Cupper {
       // The system's directories only, never the user's PATH: the host finds
       // `/usr/bin/git` there, so projects are git repositories (T054).
       login_env: { PATH: "/usr/bin:/bin:/usr/sbin:/sbin" },
+      // CLI discovery's common locations in the temp root, should a test
+      // take the fake agent away (T203).
+      cli_root: this.root,
       // The runtime install is refused on a closed loopback port: tests use
       // the fake agent and never reach the public registry (T178).
       runtime: { registry_url: "http://127.0.0.1:9/" },

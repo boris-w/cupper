@@ -33,6 +33,10 @@ pub struct TestConfig {
     /// The login-shell environment (`PATH`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`,
     /// ...) to use instead of running the login shell.
     pub login_env: Option<BTreeMap<String, String>>,
+    /// The directory standing in for `/` in the absolute common locations of
+    /// CLI discovery (design 5.6.6), so that a test sees no CLI the machine
+    /// has installed there.
+    pub cli_root: Option<PathBuf>,
     pub notifier: NotifierKind,
     /// Resident memory, in bytes, to report for each agent's adapter process
     /// group instead of sampling it (K20, design 5.6.8).
@@ -139,6 +143,7 @@ mod tests {
         assert_eq!(empty.agents, PerAgent::default());
         assert_eq!(empty.runtime, RuntimeConfig::default());
         assert_eq!(empty.login_env, None);
+        assert_eq!(empty.cli_root, None);
         assert_eq!(empty.notifier, NotifierKind::System);
         assert_eq!(empty.rss_samples, PerAgent::default());
     }
@@ -154,6 +159,7 @@ mod tests {
                 "agents": {"claude": {"program": "/opt/fake-agent", "args": ["--persona", "claude"]}},
                 "runtime": {"registry_url": "http://127.0.0.1:4873/"},
                 "login_env": {"PATH": "/usr/bin:/bin"},
+                "cli_root": "/r",
                 "notifier": "record",
                 "rss_samples": {"codex": 3221225472}
             }"#,
@@ -178,6 +184,7 @@ mod tests {
             Some("http://127.0.0.1:4873/")
         );
         assert_eq!(full.login_env.unwrap()["PATH"], "/usr/bin:/bin");
+        assert_eq!(full.cli_root, Some(PathBuf::from("/r")));
         assert_eq!(full.notifier, NotifierKind::Record);
         assert_eq!(full.rss_samples.codex, Some(3_221_225_472));
         assert_eq!(full.rss_samples.claude, None);
