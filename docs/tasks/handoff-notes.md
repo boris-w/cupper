@@ -461,3 +461,5 @@
 | T053 的后续、显示压缩的界面任务 | 宿主没有声明 `clientCapabilities.session.compaction` 时，适配器不发 `compaction_update`，改用一个合成的工具调用（"Compact conversation"，kind 为 `think`），实时和回放都一样；套件里没有录到实例 | T066 |
 | 以后改桌面启动测试或 e2e 夹具的任务 | `apps/desktop` 的 `launch.test.ts`（手动运行）没有 `runtime.registry_url`，每次启动都会向公共 npm registry 请求运行时（不含个人信息），可以照 e2e 夹具指向关闭的本地端口；e2e 拉起的宿主沿用 Electron 进程真实的 `HOME`，宿主跑 git 时会读用户的全局 git 配置 | T203 |
 | T113 等下一次真实运行 | compat 真实模式的拉起方式在 T203 里只改了调用点（行为不变），还没有真跑过；T202 的整套重跑早于 T203 合并 | T203 |
+| T113 | codex-drift 抓到 codex 0.165.0 的漂移，已记进 `testdata/codex-drift/reviewed.json`，跟进任务就是本任务：`ThreadItem` 的 `imageGeneration` 变体去掉了 `result`、改成 `inputImages`，codex-acp 2.2.2 的 `ImageGenerationReporter` 还在读 `item.result`，图像生成的结果会丢失（不会崩溃）；其余 13 个方法只是新增了可选字段和枚举值。扩展已验证范围、升级 codex-acp 时，用 `tools/codex-drift write` 重写基线，旧的审阅记录随之失效 | T114 |
+| 以后要让 nightly 开 issue 时 | 不要给运行 codex 二进制的作业写权限（它跑的是从 npm 下载的第三方二进制）。做法：把 `codex-drift` 移出矩阵，另加一个 `needs: codex-drift`、`if: failure()` 的报告作业，只给它 `issues: write`，按固定标题或标签查重 | T114 |

@@ -1836,7 +1836,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T111 Codex 接入：发现、运行时与回收
 - [ ] T112 Codex 回合语义集成测试
 - [ ] T113 Codex 兼容矩阵与 B 层补录
-- [ ] T114 codex-drift 检查
+- [x] T114 codex-drift 检查
 - [ ] T119 （条件）Q8 后备（Codex）（K6 已通过，不触发）
 - [ ] T120 Git 服务 III：diff、file_diff、status 与 branches
 - [ ] T121 Git 服务 IV：暂存、取消暂存与还原（含 SP-5 的 82 个用例）
