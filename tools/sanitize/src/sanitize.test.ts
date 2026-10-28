@@ -79,12 +79,11 @@ const FRAMES: [string, object][] = [
     },
   ],
 ];
-const RECORDING = [
-  HEADER,
-  ...FRAMES.map(([dir, body], i) => ({ seq: i + 1, t: 0, instance: 0, dir, ...body })),
-]
-  .map((line) => JSON.stringify(line) + "\n")
-  .join("");
+const record = (frames: [string, object][]) =>
+  [HEADER, ...frames.map(([dir, body], i) => ({ seq: i + 1, t: 0, instance: 0, dir, ...body }))]
+    .map((line) => JSON.stringify(line) + "\n")
+    .join("");
+const RECORDING = record(FRAMES);
 
 function sanitize(files: Record<string, string>) {
   const root = mkdtempSync(join(tmpdir(), "sanitize-"));
@@ -138,5 +137,60 @@ describe("sanitize", () => {
     const line = { seq: 1, t: 0, instance: 0, dir: "stderr", data: "cd /Users/someone-else/work" };
     const { result } = sanitize({ "s.jsonl": JSON.stringify(line) + "\n" });
     expect(result.findings).toEqual([{ file: "s.jsonl", line: 1, rule: "home directory path" }]);
+  });
+});
+
+describe("UNIT-sanitize-codex-mcp", () => {
+  const update = (u: object) => ({ msg: { method: "session/update", params: { update: u } } });
+  // Made-up MCP servers, each named in one of the ways Codex names them, then in other spellings.
+  const FRAMES: [string, object][] = [
+    ["stderr", { data: "config: `mcp_servers.acme-tracker.type` is ignored" }],
+    ["stderr", { data: "error=failed to refresh OAuth tokens for server zeta_docs: no grant" }],
+    [
+      "recv",
+      update({
+        sessionUpdate: "tool_call",
+        title: "mcp.widget_hub.search",
+        rawInput: { arguments: {} },
+        _meta: { is_mcp_tool_call: true },
+      }),
+    ],
+    ["recv", update({ sessionUpdate: "tool_call", rawInput: { server: "notesVault", tool: "f" } })],
+    ["recv", update({ rawOutput: { _meta: { "codex/widgetHubExecutionDurationMs": 3 } } })],
+    ["recv", update({ text: "ACME_TRACKER, Zeta Docs, notes-vault; a widget hubcap" })],
+    [
+      "recv",
+      update({
+        sessionUpdate: "available_commands_update",
+        availableCommands: [
+          { name: "$deploy", _meta: { jetbrains: { air: { skillPath: "/opt/acme/SKILL.md" } } } },
+        ],
+      }),
+    ],
+  ];
+
+  test("redacts the server names in every spelling and the skill paths", () => {
+    const { result, read } = sanitize({ "codex.jsonl": record(FRAMES) });
+    expect(result.findings).toEqual([]);
+    const text = read("codex.jsonl");
+    expect(text).not.toMatch(/acme.?tracker|zeta.?docs|widget.?hub\b|notes.?vault|\/opt\//i);
+    const [, config, oauth, title, raw, meta, prose, commands] = text
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    expect(config.data).toBe("config: `mcp_servers.<redacted>.type` is ignored");
+    expect(oauth.data).toBe("error=failed to refresh OAuth tokens for server <redacted>: no grant");
+    expect(title.msg.params.update.title).toBe("mcp.<redacted>.search");
+    expect(raw.msg.params.update.rawInput).toEqual({ server: "<redacted>", tool: "f" });
+    expect(meta.msg.params.update.rawOutput._meta).toEqual({
+      "codex/<redacted>ExecutionDurationMs": 3,
+    });
+    expect(prose.msg.params.update.text).toBe(
+      "<redacted>, <redacted>, <redacted>; a widget hubcap",
+    );
+    expect(commands.msg.params.update.availableCommands[0]._meta.jetbrains.air).toEqual({
+      skillPath: "<redacted skill path>",
+    });
+    expect(sanitize({ "codex.jsonl": text }).read("codex.jsonl")).toBe(text);
   });
 });

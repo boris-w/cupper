@@ -5,7 +5,7 @@
  * and the rule; never the text that matched.
  */
 import { globSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 export interface Finding {
   file: string;
@@ -67,12 +67,12 @@ export function either(...matchers: Matcher[]): Matcher {
   return (line) => matchers.flatMap((matcher) => matcher(line));
 }
 
-/** Files, directories (recursively) and glob patterns, relative to `cwd`. */
+/** Files, directories (recursively) and glob patterns, absolute or relative to `cwd`. */
 export function expand(targets: readonly string[], cwd: string): string[] {
   const files = new Set<string>();
   const walk = (path: string) => {
-    if (statSync(join(cwd, path)).isDirectory()) {
-      for (const name of readdirSync(join(cwd, path)).sort()) walk(join(path, name));
+    if (statSync(resolve(cwd, path)).isDirectory()) {
+      for (const name of readdirSync(resolve(cwd, path)).sort()) walk(join(path, name));
     } else {
       files.add(path);
     }
@@ -86,7 +86,7 @@ export function expand(targets: readonly string[], cwd: string): string[] {
 
 export function scan(files: readonly string[], cwd: string, matcher: Matcher): Finding[] {
   return files.flatMap((file) =>
-    readFileSync(join(cwd, file), "utf8")
+    readFileSync(resolve(cwd, file), "utf8")
       .split("\n")
       .flatMap((text, i) =>
         [...new Set(matcher(text))].map((rule) => ({ file, line: i + 1, rule })),

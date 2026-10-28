@@ -4,8 +4,9 @@
  * Everything machine- or person-specific comes from the machine the tool runs
  * on (home, user, temporary directory, host names), the temporary roots of
  * the recorded run and a local terms file, so this code holds no personal
- * data. Session IDs become `session-NN`. Running it on its own output changes
- * nothing.
+ * data. Session IDs become `session-NN`; the names of the user's MCP servers,
+ * taken from where Codex shows them, become `<redacted>` wherever they occur.
+ * Running it on its own output changes nothing.
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
@@ -105,30 +106,74 @@ function rules(m: Machine): [RegExp, string][] {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Codex's warnings quote MCP servers' config keys; its MCP client's errors name them. */
+const SERVER_IN_TEXT = [
+  /\bmcp_servers\.([A-Za-z0-9_-]+)/g,
+  /\bOAuth tokens for server ([A-Za-z0-9_-]+)/g,
+];
+
+/**
+ * The names in any spelling (`foo_bar`, `fooBar`, `FOO-BAR`, `foo bar`), not
+ * inside a longer word, though a camelCase key may go on (`fooBarExecutionDurationMs`).
+ */
+function spellings(names: Set<string>): RegExp | null {
+  const anyCase = (part: string) =>
+    part.replace(/[A-Za-z]/g, (c) => `[${c.toLowerCase()}${c.toUpperCase()}]`);
+  const words = [...names].map((name) =>
+    name
+      .split(/[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])/)
+      .filter(Boolean)
+      .map(anyCase)
+      .join("[\\s_.-]?"),
+  );
+  words.sort((a, b) => b.length - a.length);
+  return words.length
+    ? new RegExp(`(?<![A-Za-z0-9])(?:${words.join("|")})(?![a-z0-9])`, "g")
+    : null;
+}
+
 export class Sanitizer {
   readonly #machine: Machine;
   readonly #rules: [RegExp, string][];
   /** Session ID -> `session-NN`, filled from every input before anything is written. */
   readonly #sessions = new Map<string, string>();
+  /** Names of the user's MCP servers that Codex shows, likewise; `#names` matches them. */
+  readonly #servers = new Set<string>();
+  #names: RegExp | null | undefined;
 
   constructor(machine: Machine) {
     this.#machine = machine;
     this.#rules = rules(machine);
   }
 
-  collectSessionIds(v: Json): void {
-    if (Array.isArray(v)) return v.forEach((x) => this.collectSessionIds(x));
+  /** Session IDs and MCP server names, to redact wherever they occur. */
+  collect(v: Json): void {
+    // A placeholder such as `<redacted>` is no name.
+    const server = (name: unknown) =>
+      typeof name === "string" && /^[A-Za-z0-9][\w.-]*$/.test(name) && this.#servers.add(name);
+    if (typeof v === "string") {
+      for (const re of SERVER_IN_TEXT) for (const m of v.matchAll(re)) server(m[1]);
+      return;
+    }
+    if (Array.isArray(v)) return v.forEach((x) => this.collect(x));
     if (!v || typeof v !== "object") return;
+    // A Codex MCP tool call: title `mcp.<server>.<tool>`, raw input {server, tool, arguments}.
+    const input = v.rawInput;
+    if (v._meta?.is_mcp_tool_call === true || typeof input?.tool === "string") {
+      server(input?.server);
+      if (typeof v.title === "string") server(/^mcp\.([^.]+)\./.exec(v.title)?.[1]);
+    }
     for (const [k, x] of Object.entries(v)) {
       if (k === "sessionId" && typeof x === "string" && UUID.test(x) && !this.#sessions.has(x)) {
         this.#sessions.set(x, `session-${String(this.#sessions.size + 1).padStart(2, "0")}`);
       }
-      this.collectSessionIds(x);
+      this.collect(x);
     }
   }
 
   /** One line of a recording, redacted. */
   line(text: string): string {
+    this.#names ??= spellings(this.#servers);
     return JSON.stringify(this.#scrub(structural(JSON.parse(text))));
   }
 
@@ -146,12 +191,15 @@ export class Sanitizer {
       ...[...this.#sessions.keys()].map((id) => ["session ID", id] as [string, string]),
     ];
     if (m.user.length > 2) list.push(["user name", m.user]);
-    return either(terms(list), patterns);
+    const names = this.#names && new RegExp(this.#names.source);
+    const servers: Matcher = (line) => (names?.test(line) ? ["MCP server name"] : []);
+    return either(terms(list), patterns, servers);
   }
 
   #scrubString(s: string): string {
     let out = s;
     for (const [id, alias] of this.#sessions) out = out.split(id).join(alias);
+    if (this.#names) out = out.replace(this.#names, "<redacted>");
     for (const [re, rep] of this.#rules) out = out.replace(re, rep);
     // Long base64/hex runs (keys, signatures, hashes). Ids such as UUIDs or
     // "rs_<hex>" message ids are shorter or broken up by "-" / "_", so they survive.
@@ -160,7 +208,7 @@ export class Sanitizer {
     );
   }
 
-  /** Recursive scrub. Image payloads (the test PNG) pass untouched. */
+  /** Recursive scrub, keys too (`codex/<server>ExecutionDurationMs`); images pass untouched. */
   #scrub(v: Json): Json {
     if (typeof v === "string") return this.#scrubString(v);
     if (Array.isArray(v)) return v.map((x) => this.#scrub(x));
@@ -168,10 +216,14 @@ export class Sanitizer {
     const out: Json = {};
     for (const [k, x] of Object.entries(v)) {
       const image = typeof v.mimeType === "string" && v.mimeType.startsWith("image/");
-      if (k === "data" && typeof x === "string" && image) out[k] = x;
-      else if (k === "signature" && typeof x === "string") out[k] = "<signature>";
-      else if (/mcp_servers$/i.test(k) && Array.isArray(x)) out[k] = x.map((e) => this.#server(e));
-      else out[k] = this.#scrub(x);
+      const key = this.#scrubString(k);
+      if (k === "data" && typeof x === "string" && image) out[key] = x;
+      else if (k === "signature" && typeof x === "string") out[key] = "<signature>";
+      // Sent to JetBrains AIR clients: the local path of each skill or plugin.
+      else if (k === "skillPath" && typeof x === "string") out[key] = "<redacted skill path>";
+      else if (/mcp_servers$/i.test(k) && Array.isArray(x))
+        out[key] = x.map((e) => this.#server(e));
+      else out[key] = this.#scrub(x);
     }
     return out;
   }
@@ -295,7 +347,7 @@ export function sanitizeTree(
   const read = (file: string) =>
     readFileSync(join(inDir, file), "utf8").split("\n").filter(Boolean);
   const sanitizer = new Sanitizer(machine);
-  for (const file of files) read(file).forEach((l) => sanitizer.collectSessionIds(JSON.parse(l)));
+  for (const file of files) read(file).forEach((l) => sanitizer.collect(JSON.parse(l)));
   for (const file of files) {
     const out = read(file).map((l) => sanitizer.line(l));
     mkdirSync(dirname(join(outDir, file)), { recursive: true });
