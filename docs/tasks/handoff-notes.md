@@ -463,3 +463,5 @@
 | T113 等下一次真实运行 | compat 真实模式的拉起方式在 T203 里只改了调用点（行为不变），还没有真跑过；T202 的整套重跑早于 T203 合并 | T203 |
 | T113 | codex-drift 抓到 codex 0.165.0 的漂移，已记进 `testdata/codex-drift/reviewed.json`，跟进任务就是本任务：`ThreadItem` 的 `imageGeneration` 变体去掉了 `result`、改成 `inputImages`，codex-acp 2.2.2 的 `ImageGenerationReporter` 还在读 `item.result`，图像生成的结果会丢失（不会崩溃）；其余 13 个方法只是新增了可选字段和枚举值。扩展已验证范围、升级 codex-acp 时，用 `tools/codex-drift write` 重写基线，旧的审阅记录随之失效 | T114 |
 | 以后要让 nightly 开 issue 时 | 不要给运行 codex 二进制的作业写权限（它跑的是从 npm 下载的第三方二进制）。做法：把 `codex-drift` 移出矩阵，另加一个 `needs: codex-drift`、`if: failure()` 的报告作业，只给它 `issues: write`，按固定标题或标签查重 | T114 |
+| T113 | `xtask compat --out` 只认绝对路径（执行者在 `crates/cupper-host` 下运行，相对路径找不到计划文件）；thinking 剧本的题目要能触发 adaptive 思考（T202 换成了答案唯一的逻辑题），Codex 的思考剧本照此出题 | T202 |
+| 接 Bedrock、Vertex 等服务商的任务 | 宿主经 `extraArgs` 请求 `thinking-display: summarized`，在第三方服务商上是否生效没有核实 | T202 |
