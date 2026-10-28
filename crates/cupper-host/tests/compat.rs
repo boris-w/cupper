@@ -821,14 +821,18 @@ fn holding(host: u32, procs: &[(u32, u32)]) -> Vec<u32> {
     if below.is_empty() {
         return below;
     }
-    let host_ends = ends(&lsof(&[host]))
-        .into_iter()
-        .flat_map(|(_, own, peer)| [own, peer]);
-    let host_ends: Vec<String> = host_ends.collect();
-    let held = ends(&lsof(&below))
-        .into_iter()
-        .filter(|(_, own, peer)| host_ends.contains(own) || host_ends.contains(peer));
-    held.map(|(pid, ..)| pid).collect()
+    shared(&ends(&lsof(&[host])), &ends(&lsof(&below)))
+}
+
+/// Of `below`'s ends, those of the processes sharing an address with
+/// `host`'s. A socket bound to a path has no peer: no address, not a match.
+fn shared(host: &[(u32, String, String)], below: &[(u32, String, String)]) -> Vec<u32> {
+    let host_ends: Vec<&String> = host.iter().flat_map(|(_, own, peer)| [own, peer]).collect();
+    let held = |end: &String| !end.is_empty() && host_ends.contains(&end);
+    let held = below
+        .iter()
+        .filter(|(_, own, peer)| held(own) || held(peer));
+    held.map(|(pid, ..)| *pid).collect()
 }
 
 fn lsof(pids: &[u32]) -> String {
@@ -964,5 +968,16 @@ mod tests {
         let text = "p10\nf0\ntPIPE\nd0xa1\nn->0xb2\nf3\ntREG\nn/x\np11\nf4\ntunix\nd0xc3\nn/sock\n";
         let pipe = (10, "0xa1".to_owned(), "0xb2".to_owned());
         assert_eq!(ends(text), [pipe, (11, "0xc3".to_owned(), String::new())]);
+        // The host's listening socket and the CLI's own share no address.
+        let host = ends("p1\nf6\ntunix\nd0xa1\nn->0xb2\nf9\ntunix\nd0xc3\nn/host.sock\n");
+        let cli = ends("p2\nf2\ntunix\nd0xd4\nn->0xe5\nf18\ntunix\nd0xf6\nn/cli.sock\n");
+        assert_eq!(shared(&host, &cli), Vec::<u32>::new());
+        // The other end of the host's socket; the host's listening socket
+        // itself, by its own address with no peer; a pipe to it.
+        let inherited = ends(
+            "p3\nf2\ntunix\nd0xb2\nn->0xa1\np5\nf3\ntunix\nd0xc3\nn/host.sock\n\
+             p4\nf1\ntPIPE\nd0x9\nn->0xc3\n",
+        );
+        assert_eq!(shared(&host, &inherited), [3, 5, 4]);
     }
 }
