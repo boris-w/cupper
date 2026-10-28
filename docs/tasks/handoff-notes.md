@@ -454,3 +454,8 @@
 | T160 | Vite 保留了 `local` 这个 mode 名（与 `.env.local` 冲突），`vite build --mode local` 直接报错，自用构建现在构建不出来；T105 在临时副本里改成用 `self-use` 映射到 local | T105（进行中的发现） |
 | 显示 agent 状态的界面任务（AG-2、AG-5） | 等运行时安装期间，agent 的 `state` 仍是 `idle`，只有 runtime 显示 `installing`（启动中不通知索引）。界面要不要显示"适配器启动中"、要不要让宿主在启动开始时通知一次 `starting`，由这个任务定。回合因附加失败而结束时，失败原因不进会话流，界面要显示原因的话也在这里定 | T201 |
 | 以后改重启退避的任务 | 安装失败后，每次启动尝试都计入重启退避，5 分钟内 5 次后 agent 变成 `crashed`，和以前哈希核对失败时一样。安装失败是不是该另算，由维护宿主生命周期的任务定 | T201 |
+| 升级 claude-agent-acp 的任务 | 已验证范围的基线要和适配器版本绑在一起：ADR-08 的起始值只对 0.91.0 有效，升级后范围只由新版本的报告算出；新版本还没有计入的报告时，`compat-reports` 应当报错。0.93 候选版本要先补锁文件、清单条目（版本、产物哈希、新环境变量的归类）、`compat` 和 `host-bundle` 选择适配器的参数，以及 Q42 的拦截 | T066 |
+| 升级 claude-agent-acp 的任务 | 环境变量的静态扫描（5.6.6 的已知局限）：建议改成对 `CLAUDE_CODE_` 等前缀整体禁用、只放行逐个列出的名字；按产物特征提取登记表，依赖 SDK 打包后的内部形状，每次升级都可能失效 | T066 |
+| T111 | `VERSION_PROBE` 的 5 s：真实 `claude --version` 空闲时约 10 ms，复制后第一次执行约 2.1 s，T196 在高负载下量到过 29 s。编排者采纳：超时后用 30 s 再试一次，Codex 的探测也照此 | T066 |
+| T113 | `rec-shape-diff` 的输出里，`toolResponse` 下随工具不同的键占了大半，要过滤；`tools/sanitize` 的 `words`、`scan` 会把绝对路径拼到工作目录后面（T066 只在调用处改成相对路径）；plan 模式下 CLI 会换用更贵的模型，估算额度时算进去 | T066 |
+| T053 的后续、显示压缩的界面任务 | 宿主没有声明 `clientCapabilities.session.compaction` 时，适配器不发 `compaction_update`，改用一个合成的工具调用（"Compact conversation"，kind 为 `think`），实时和回放都一样；套件里没有录到实例 | T066 |
