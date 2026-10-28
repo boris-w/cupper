@@ -32,7 +32,7 @@ const FRAMES: [string, object][] = [
             sessionUpdate: "available_commands_update",
             availableCommands: [
               { name: "review", description: "Review a pull request" },
-              { name: "deploy-acme", description: "Ship it (user)" },
+              { name: "deploy-acme", description: "Ship it (user)", input: { hint: "[acme env]" } },
               { name: "notes:sync", description: "Sync notes" },
             ],
           },
@@ -111,6 +111,7 @@ describe("sanitize", () => {
     expect(
       lines[3].msg.params.update.availableCommands.map((c: { name: string }) => c.name),
     ).toEqual(["review", "user-skill-1", "user-skill-2"]);
+    expect(lines[3].msg.params.update.availableCommands[1].input).toEqual({ hint: "<redacted>" });
     expect(lines[4].msg.params.authStatus.account).toEqual({
       plan: "max",
       email: "<email>",
