@@ -85,6 +85,22 @@ codex 0.165.0 against 0.163.0, the 127 methods codex-acp 2.2.2 uses:
 - 当天 npm 的真实版本：`fetch` 通过（latest 0.165.0），`drift` 判失败，输出与上面相同，`codex-drift FAIL 1 passed, 1 failed (3.5s)`。基线没有改。
 - 用不通的代理 `HTTPS_PROXY=http://127.0.0.1:9` 模拟断网（照 T006）：`fetch` 试 3 次都失败，`fetch` 和 `drift` 都记为跳过，原因写的是 "npm could not be reached in 3 tries: the drift is undetermined"，作业通过，`skipped steps: codex-drift / fetch, drift`，约 21 秒。
 
+## 已审阅的漂移（编排者补充的设计，2026-10-28）
+
+只按上面的做法，main 上的 nightly 会从今晚起每天因为 0.165.0 失败，一直红到 T113 处理为止，还会盖住别的失败。所以改成每个新版本只报警一次：
+
+- `testdata/codex-drift/reviewed.json`：按 codex 版本记一条，写清对比的基线版本、审阅日期、跟进的任务、一句结论，以及当时报告列出的漂移（`render` 的逐行输出）。由 `review <dir> <task> <verdict>` 写入，经 PR 入库；基线和已验证范围都不动。
+- `check`：最新版本有记录，记录的基线就是当前基线，漂移也逐行相同，就判通过，并列出漂移和审阅结论。没有记录的版本判失败；有记录但漂移变了（或者基线换了），也判失败，并提示重新审阅。
+- 0.165.0 这条记录是在 darwin-arm64 上写的；CI 在 linux-x64 上跑，要逐行一致才通过。所以 CI 的这次运行也顺带检验了 schema 是否与平台无关。
+
+本机 `cargo xtask ci codex-drift --in nightly`（提交 be077e1）：`fetch` ok，`drift` ok，`codex-drift pass 2 passed, 0 failed (3.6s)`。步骤日志里先列出 14 个方法的漂移，最后一行是 `reviewed on 2026-10-28 (T113): 14 个方法的参数变了……`。记录之前同样的运行判失败，提示是 "not reviewed yet: once it is, record it with `review`"。
+
+基线过期的检查（manifest 的已验证上限或 codex-acp 版本与基线不一致）没有单元测试，在 scratchpad 的副本里把上限改成 0.165.0 手动验证过：退出码 1，提示用 `write` 重写基线。
+
 ## 提交后的规模
 
-`cargo xtask size`：+551 −5（净 +546）。`tools/codex-drift` 507（其中测试 127），`crates/xtask` +38 −3，`.github` +4 −2，`.prettierignore` +2。比裁定后的停止线 540 多 6，低于硬停止线 600。
+裁定后的线：停止线 540，硬停止线 600。
+
+- 第一版提交后（5c873d6），`cargo xtask size`：+551 −5。
+- 加上已审阅的漂移之后：+612 −5，超过硬停止线。在不影响可读性的前提下改短了几处：去重、消息改写、"方法消失"这个用例直接用 `base()` 去掉通知。
+- 最终（be077e1）：+598 −5（净 +593）。其中 `tools/codex-drift` 553（测试 141），`crates/xtask` +39 −3，`.github` +4 −2，`.prettierignore` +2。比停止线多 58，低于硬停止线 600。
