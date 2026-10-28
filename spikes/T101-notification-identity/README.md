@@ -1,6 +1,6 @@
 # T101 SP-10 通知身份
 
-原型实测代码，只用于回答待定问题 Q2（helper 的通知身份），不是产品代码。任务书见 `docs/tasks/T101-notification-identity/brief.md`，记录和结论见同目录的 `results.md`。
+原型实测代码，只用于回答待定问题 Q2（helper 的通知身份），不是产品代码。任务书见 `docs/tasks/T101-notification-identity/brief.md`，记录和结论见同目录的 `results.md`，脱敏后的日志在 `logs/`。
 
 ## 布局
 
@@ -8,7 +8,7 @@
 SP10.app                         dev.cupper.spike.sp10，名称 SP10 Spike，蓝色 M 图标，注册 sp10-spike:
   Contents/MacOS/sp10            主 App（app/main.swift）：一个窗口，列出收到的 URL；经 posix_spawn 拉起 helper
   Contents/Helpers/SP10Host.app  dev.cupper.spike.sp10.host，LSUIElement
-    Contents/MacOS/sp10-host     helper（host/main.swift）：不建 NSApplication，主线程跑 CFRunLoop
+    Contents/MacOS/sp10-host     helper（host/main.swift）：同宿主一样主线程跑 CFRunLoop；只有系统不带参数启动它时改跑 NSApplication（s2c）
 ```
 
 `build.sh own`：helper 有自己的显示名称 SP10 Notifier 和橙色 H 图标，名称、图标都与主 App 不同，所以看得出系统用的是哪个 bundle 的。`build.sh bare`：helper 的 Info.plist 照 T005 现在给宿主写的那样，只有 `CFBundleName`，没有图标。两种都是 ad-hoc 签名、开 hardened runtime（自用构建的签法）。
@@ -20,11 +20,13 @@ SP10.app                         dev.cupper.spike.sp10，名称 SP10 Spike，蓝
 `SP10_OUT=<目录> ./build.sh own` 之后，`open <目录>/SP10.app --args <主 App 的参数> <helper 的参数>`：
 
 - 主 App：`spawn`（拉起 helper 后留着）、`spawn-quit`（拉起后立即退出，模拟 UI 不在）；
-- helper：`notify <id> stay|exit`（申请授权、弹通知，然后等点击或 3 秒后退出）、`open-main <id> [scheme]`（不经点击，直接走点击后的路径）、`status`（授权状态和已送达的通知）、`clear`（先移除已送达的通知）。
+- helper：`notify <id> stay|exit`（申请授权、弹通知，然后等点击或 1 秒后退出）、`open-main <id> [scheme]`（2 秒后不经点击直接走点击后的路径，等拉起它的主 App 先退出）、`status`（授权状态和已送达的通知）、`clear`（先移除已送达的通知）。
 
 helper 收到点击后：主 App 在运行就先 `NSRunningApplication.activate()`，1 秒后还不在前台再 `NSWorkspace.openApplication`；不在运行就用 `NSWorkspace.open([URL], withApplicationAt:)` 只把 `sp10-spike://session/<id>` 交给按 bundle id 找到的那个 App。处理完 5 秒后退出。系统不带参数启动 helper 时，它等 30 秒，期间收到点击照上面处理。
 
-两个进程都把事件追加到 `~/Library/Logs/dev.cupper.spike.sp10.log`。
+helper 启动时发现自己没在 LaunchServices 登记（嵌套的 helper 系统不会自动登记，通知服务因此认不出它），就先调用 `LSRegisterURL` 登记自己。
+
+两个进程都把事件追加到 `~/Library/Logs/dev.cupper.spike.sp10.log`。实测时原型装在 `/Applications/SP10.app`（`SP10_OUT=/Applications`），与产品的安装位置相同。
 
 ## 副作用
 

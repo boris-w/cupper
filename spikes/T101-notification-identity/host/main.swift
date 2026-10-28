@@ -1,6 +1,6 @@
-// SP-10 helper (dev.cupper.spike.sp10.host), shaped like the product host: no NSApplication, the
-// main thread in a CFRunLoop. Modes: notify <session> stay|exit, open-main <session> [scheme],
-// status, clear, and no arguments (as the system starts it); see README.md.
+// SP-10 helper (dev.cupper.spike.sp10.host), shaped like the product host: the main thread in a
+// CFRunLoop, NSApplication only when the system starts it. Modes: notify <session> stay|exit,
+// open-main <session> [scheme], status, clear, and no arguments (as the system starts it).
 import AppKit
 import UserNotifications
 
@@ -80,6 +80,10 @@ let service = ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] ?? "-"
 let registered = NSWorkspace.shared.urlForApplication(withBundleIdentifier: hostID)?.path ?? "no"
 log("start argv=\(args) ppid=\(getppid()) sid=\(getsid(0)) XPC_SERVICE_NAME=\(service)"
     + " bundle=\(Bundle.main.bundleIdentifier ?? "-") registered=\(registered)")
+// usernoted finds its client through LaunchServices, which does not register a nested helper.
+if registered == "no" {
+    log("LSRegisterURL -> \(LSRegisterURL(Bundle.main.bundleURL as CFURL, false))")
+}
 var lifetime = 30.0
 switch (args.first, args.count) {
 case ("notify", 3):
@@ -92,12 +96,12 @@ case ("notify", 3):
         content.userInfo = ["session": args[1]]
         center.add(UNNotificationRequest(identifier: "sp10-\(args[1])", content: content, trigger: nil)) {
             log("posted \(args[1]) error=\(String(describing: $0))")
-            settings { if args[2] == "exit" { after(3) { log("exit after posting"); exit(0) } } }
+            settings { if args[2] == "exit" { after(1) { log("exit after posting"); exit(0) } } }
         }
     }
-case ("open-main", 2...3):
-    openMain(args[1], scheme: args.count == 3 ? args[2] : scheme)
-    lifetime = 5
+case ("open-main", 2...3):  // after the app that spawned it has quit
+    after(2) { openMain(args[1], scheme: args.count == 3 ? args[2] : scheme) }
+    lifetime = 7
 case ("status", 1), ("clear", 1):
     if args[0] == "clear" { center.removeAllDeliveredNotifications() }
     after(1) { settings { exit(0) } }
@@ -105,4 +109,5 @@ default: break
 }
 // A timer keeps the run loop from returning at once and bounds the helper's life.
 Timer.scheduledTimer(withTimeInterval: lifetime, repeats: false) { _ in log("exit: timeout"); exit(0) }
-CFRunLoopRun()
+// Started by the system: a bare run loop never got the click (step s2b), so try AppKit's.
+if args.isEmpty { NSApplication.shared.run() } else { CFRunLoopRun() }
