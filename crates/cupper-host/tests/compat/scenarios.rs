@@ -256,7 +256,12 @@ pub const SCENARIOS: &[Scenario] = &[
         mode: "default",
         // COMPAT-claude-thinking: haiku does not think aloud.
         model: Some("sonnet"),
-        prompt: "Think it through step by step, then tell me: what is 17 times 23?",
+        // A puzzle with one answer that takes a case analysis: an easy sum
+        // gets no thinking at all from adaptive thinking (T202).
+        prompt: "Five runners, Ana, Ben, Cy, Dee and Eli, finished a race in places 1 to 5 \
+                 with no ties. Ben finished directly after Ana. Cy finished ahead of Dee but \
+                 behind Eli. Dee did not finish last. Work out the finishing order, then reply \
+                 with one line: the five names in order, separated by commas.",
         script: "think pondering; say done",
         checks: &[Check::Item("thought"), DONE],
         ..BASE
