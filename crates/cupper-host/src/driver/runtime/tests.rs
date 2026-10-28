@@ -111,9 +111,18 @@ impl Fixture {
 
     /// A new session in the fixture's directory, and its events.
     async fn attach(&self) -> Result<(AgentSessionId, Events), AgentError> {
+        self.open(AttachTarget::New, ProjectConfigPolicy::Load)
+            .await
+    }
+
+    /// A session in the fixture's directory, opened as `target` says.
+    async fn open(
+        &self,
+        target: AttachTarget,
+        project_config: ProjectConfigPolicy,
+    ) -> Result<(AgentSessionId, Events), AgentError> {
         let (events, heard) = mpsc::unbounded_channel();
-        let (target, cwd) = (AttachTarget::New, self.dir.path().to_owned());
-        let (config, project_config) = (BTreeMap::new(), ProjectConfigPolicy::Load);
+        let (cwd, config) = (self.dir.path().to_owned(), BTreeMap::new());
         let attach = Attach {
             target,
             cwd,
@@ -479,6 +488,34 @@ async fn it_k26_client_info_names_cupper_only() {
     let client: serde_json::Value =
         serde_json::from_str(rest.split_once(" env=").unwrap().0).unwrap();
     assert_eq!(client["name"], "cupper");
+    f.stop().await;
+}
+
+/// UNIT-claude-session-thinking (design 5.6.3, T066): `session/new` and
+/// `session/resume` ask for the thinking as summaries, the CLI's
+/// `--thinking-display`, and nothing else of the thinking; with the same
+/// value, so the adapter does not rebuild a resumed session's process. An
+/// untrusted project's session loads the user's settings only, besides.
+#[tokio::test(flavor = "multi_thread")]
+async fn unit_claude_session_thinking_new_and_resume_ask_for_summaries() {
+    let f = Fixture::new("thinking", &[], None, None);
+    let options = |said: String| -> serde_json::Value {
+        let meta: serde_json::Value = serde_json::from_str(&said["meta=".len()..]).unwrap();
+        meta["claudeCode"]["options"].clone()
+    };
+    let display = json!({"thinking-display": "summarized"});
+    let mut new = f.attach().await.unwrap();
+    let opened = options(f.say(&mut new, "echo_meta").await);
+    assert_eq!(opened, json!({"extraArgs": display}));
+    let resume = AttachTarget::Resume(new.0.clone());
+    let mut resumed = f.open(resume, ProjectConfigPolicy::Load).await.unwrap();
+    assert_eq!(options(f.say(&mut resumed, "echo_meta").await), opened);
+    let resume = AttachTarget::Resume(new.0.clone());
+    let mut untrusted = f.open(resume, ProjectConfigPolicy::Ignore).await.unwrap();
+    assert_eq!(
+        options(f.say(&mut untrusted, "echo_meta").await),
+        json!({"extraArgs": display, "settingSources": ["user"]})
+    );
     f.stop().await;
 }
 

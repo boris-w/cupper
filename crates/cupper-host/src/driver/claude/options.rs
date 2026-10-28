@@ -135,7 +135,12 @@ fn row(scene: Scene, id: &str, kind: &OptionKind) -> Option<(OptionEffect, Scope
         (PlanConfirm, "exit-plan-bypass", K::AllowAlways) => {
             (switch(S::ModeSwitch, "bypassPermissions"), Privileged)
         }
-        (PlanConfirm, "reject", K::RejectOnce) => (effect(S::PlanRevise, false), Approve),
+        // The real CLI ends the turn as `cancelled` (T066, 2.1.296).
+        (PlanConfirm, "reject", K::RejectOnce) => {
+            let mut revise = effect(S::PlanRevise, false);
+            revise.ends_turn = Some(true);
+            (revise, Approve)
+        }
         _ => return None,
     })
 }
@@ -283,6 +288,34 @@ mod tests {
                 .map(|v| if v == "null" { "-".to_owned() } else { v })
                 .collect();
             assert_eq!(got.join(" "), expected, "{case}");
+        }
+    }
+
+    /// T066 (2.1.296): rejecting a plan ends the turn as `cancelled`; it is
+    /// still `plan_revise`. Every other option, and a reject elsewhere,
+    /// leaves the turn running.
+    #[test]
+    fn unit_claude_plan_reject_ends_turn_only_the_plan_s_reject() {
+        use Scene::*;
+        let ends = |scene, id, kind| {
+            let InteractionOption {
+                effect, requires, ..
+            } = built(scene, id, kind, "", None);
+            (effect.ends_turn, json!(effect.scope), requires)
+        };
+        let plan_revise = (Some(true), json!("plan_revise"), Scope::Approve);
+        assert_eq!(ends(PlanConfirm, "reject", "reject_once"), plan_revise);
+        for (id, kind) in [
+            ("exit-plan-default", "allow_once"),
+            ("exit-plan-auto", "allow_always"),
+            ("exit-plan-clear-auto", "allow_always"),
+            ("exit-plan-bypass", "allow_always"),
+        ] {
+            assert_eq!(ends(PlanConfirm, id, kind).0, Some(false), "{id}");
+        }
+        for scene in [FileEdit, Command, UnknownTool] {
+            let reject = (Some(false), json!("reject"), Scope::Approve);
+            assert_eq!(ends(scene, "reject", "reject_once"), reject, "{scene:?}");
         }
     }
 
