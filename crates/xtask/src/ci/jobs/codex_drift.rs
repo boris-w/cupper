@@ -5,7 +5,8 @@
 //! Fetching from npm is a step of its own, tried as often as the license job
 //! fetches its advisory database. When every try fails, the drift is
 //! undetermined, never a drift: both steps are skipped, the summary saying
-//! why. The comparison runs offline, and a drift fails the job.
+//! why. The comparison runs offline; a drift fails the job unless it is
+//! the one reviewed for that codex version (`testdata/codex-drift/reviewed.json`).
 
 use std::process::Command;
 

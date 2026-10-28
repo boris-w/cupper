@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { compare, FILES, summarize, type Node, type Schemas } from "./drift.ts";
+import { compare, FILES, render, reviewed, summarize, type Node, type Schemas } from "./drift.ts";
 
 const ref = (name: string) => ({ $ref: `#/definitions/${name}` });
 const TurnParams = (properties: string[]): Node =>
@@ -115,6 +115,26 @@ describe("UNIT-codex-drift", () => {
     const [was, now] = [base(undefined, item("result")), base(undefined, item())];
     const [change] = compare(summarize(was, was, ADAPTER), summarize(now, now, ADAPTER));
     expect(change?.defs).toEqual(["Done changed -image: property result"]);
+  });
+
+  test("a drift reviewed passes while it is the same, against the same baseline", () => {
+    const now = base(TurnParams(["threadId", "mode", "parentTurnId"]));
+    const drift = render(compare(BASELINE, summarize(now, now, ADAPTER)));
+    expect(drift).toEqual([
+      "turn/start: params changed",
+      "  TurnStartParams changed +property parentTurnId",
+    ]);
+    const review = {
+      baseline: "0.163.0",
+      reviewed: "2026-10-28",
+      task: "T113",
+      verdict: "ok",
+      drift,
+    };
+    expect(reviewed(drift, "0.163.0", review)).toBe(true);
+    expect(reviewed(drift, "0.163.0")).toBe(false);
+    expect(reviewed(drift, "0.165.0", review)).toBe(false);
+    expect(reviewed([...drift, "thread/list: gone"], "0.163.0", review)).toBe(false);
   });
 
   test("a method the adapter uses that the baseline does not have", () => {

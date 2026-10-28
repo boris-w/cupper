@@ -175,3 +175,30 @@ export function compare(base: Summary, now: Summary): Change[] {
   }
   return changes;
 }
+
+const TOLD = {
+  gone: "gone",
+  experimental: "experimental only",
+  params: "params changed",
+  new: "not in the baseline",
+};
+
+/** The changes as the report lists them: a line per method, an indented one per definition. */
+export const render = (changes: Change[]) =>
+  changes.flatMap(({ method, change, defs = [] }) => [
+    `${method}: ${TOLD[change]}`,
+    ...defs.map((def) => `  ${def}`),
+  ]);
+
+/** A drift someone reviewed: a newer codex's against `baseline`, as `render` gave it. */
+export interface Review {
+  baseline: string;
+  reviewed: string;
+  task: string;
+  verdict: string;
+  drift: string[];
+}
+
+/** Whether `review` holds this very drift against this very baseline. */
+export const reviewed = (drift: string[], baseline: string, review?: Review): review is Review =>
+  review?.baseline === baseline && JSON.stringify(review.drift) === JSON.stringify(drift);
