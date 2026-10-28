@@ -1,0 +1,5658 @@
+{
+  "codexAcp": "2.2.2",
+  "codex": "0.163.0",
+  "methods": {
+    "account/gatewayOAuth/changed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "2d127b5366b1b6a5",
+      "defs": [
+        "GatewayOAuthChangedNotification",
+        "GatewayOAuthStatus"
+      ]
+    },
+    "account/login/cancel": {
+      "kind": "request",
+      "stable": true,
+      "params": "7dd4bfcffe388a73",
+      "defs": [
+        "CancelLoginAccountParams"
+      ]
+    },
+    "account/login/completed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "c7e95e4af2002738",
+      "defs": [
+        "AccountLoginCompletedNotification",
+        "DesktopOnboardingEntrypoint"
+      ]
+    },
+    "account/login/start": {
+      "kind": "request",
+      "stable": true,
+      "params": "b95c7658f2d9a35f",
+      "defs": [
+        "LoginAccountParams",
+        "LoginAppBrand"
+      ]
+    },
+    "account/logout": {
+      "kind": "request",
+      "stable": true,
+      "params": "bcde375ebd4cbacf",
+      "defs": []
+    },
+    "account/rateLimits/read": {
+      "kind": "request",
+      "stable": true,
+      "params": "8347585c3f7782f7",
+      "defs": [
+        "GetAccountRateLimitsParams"
+      ]
+    },
+    "account/rateLimits/updated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "d2916c8cdb1effb5",
+      "defs": [
+        "AccountRateLimitsUpdatedNotification",
+        "CreditsSnapshot",
+        "PlanType",
+        "RateLimitReachedType",
+        "RateLimitSnapshot",
+        "RateLimitWindow",
+        "SpendControlLimitSnapshot"
+      ]
+    },
+    "account/read": {
+      "kind": "request",
+      "stable": true,
+      "params": "d1dd47ce8f700fc3",
+      "defs": [
+        "GetAccountParams"
+      ]
+    },
+    "account/updated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "7ff9b69810735743",
+      "defs": [
+        "AccountUpdatedNotification",
+        "AuthMode",
+        "PlanType"
+      ]
+    },
+    "app/list/updated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "0027493145675b15",
+      "defs": [
+        "AppBranding",
+        "AppInfo",
+        "AppListUpdatedNotification",
+        "AppMetadata",
+        "AppReview",
+        "AppScreenshot"
+      ]
+    },
+    "autoApprovalReview/strictReviewRequired": {
+      "kind": "notification",
+      "stable": true,
+      "params": "741d3f2df64c42ea",
+      "defs": [
+        "StrictReviewRequiredNotification"
+      ]
+    },
+    "command/exec/outputDelta": {
+      "kind": "notification",
+      "stable": true,
+      "params": "2c1b03faab527662",
+      "defs": [
+        "CommandExecOutputDeltaNotification",
+        "CommandExecOutputStream"
+      ]
+    },
+    "config/batchWrite": {
+      "kind": "request",
+      "stable": true,
+      "params": "7742f20ef0018a4b",
+      "defs": [
+        "ConfigBatchWriteParams",
+        "ConfigEdit",
+        "MergeStrategy"
+      ]
+    },
+    "config/mcpServer/reload": {
+      "kind": "request",
+      "stable": true,
+      "params": "bcde375ebd4cbacf",
+      "defs": []
+    },
+    "config/read": {
+      "kind": "request",
+      "stable": true,
+      "params": "c9936e8e9e2b9e5d",
+      "defs": [
+        "ConfigReadParams"
+      ]
+    },
+    "configWarning": {
+      "kind": "notification",
+      "stable": true,
+      "params": "caa4c5c387f3862f",
+      "defs": [
+        "ConfigWarningNotification",
+        "TextPosition",
+        "TextRange"
+      ]
+    },
+    "deprecationNotice": {
+      "kind": "notification",
+      "stable": true,
+      "params": "c90507a8c8114520",
+      "defs": [
+        "DeprecationNoticeNotification"
+      ]
+    },
+    "error": {
+      "kind": "notification",
+      "stable": true,
+      "params": "d74b6db14560e2d7",
+      "defs": [
+        "CodexErrorInfo",
+        "ErrorNotification",
+        "MisalignmentErrorDetails",
+        "MisalignmentSteer",
+        "NonSteerableTurnKind",
+        "TurnError"
+      ]
+    },
+    "externalAgentConfig/import/completed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "95a78d48d585aef0",
+      "defs": [
+        "ExternalAgentConfigImportCompletedNotification",
+        "ExternalAgentConfigImportItemTypeFailure",
+        "ExternalAgentConfigImportItemTypeSuccess",
+        "ExternalAgentConfigImportTypeResult",
+        "ExternalAgentConfigMigrationItemType"
+      ]
+    },
+    "externalAgentConfig/import/progress": {
+      "kind": "notification",
+      "stable": true,
+      "params": "9344dc78fad898cb",
+      "defs": [
+        "ExternalAgentConfigImportItemTypeFailure",
+        "ExternalAgentConfigImportItemTypeSuccess",
+        "ExternalAgentConfigImportProgressNotification",
+        "ExternalAgentConfigImportTypeResult",
+        "ExternalAgentConfigMigrationItemType"
+      ]
+    },
+    "fs/changed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "c980aa63bef281ba",
+      "defs": [
+        "AbsolutePathBuf",
+        "FsChangedNotification"
+      ]
+    },
+    "fuzzyFileSearch/sessionCompleted": {
+      "kind": "notification",
+      "stable": true,
+      "params": "84179821cc51b692",
+      "defs": [
+        "FuzzyFileSearchSessionCompletedNotification"
+      ]
+    },
+    "fuzzyFileSearch/sessionUpdated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "d78937ba4ae13821",
+      "defs": [
+        "FuzzyFileSearchMatchType",
+        "FuzzyFileSearchResult",
+        "FuzzyFileSearchSessionUpdatedNotification"
+      ]
+    },
+    "guardianWarning": {
+      "kind": "notification",
+      "stable": true,
+      "params": "6f6a680bf9f9cda2",
+      "defs": [
+        "GuardianWarningNotification"
+      ]
+    },
+    "hook/completed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "41cc59b40d5ea072",
+      "defs": [
+        "AbsolutePathBuf",
+        "HookCompletedNotification",
+        "HookEventName",
+        "HookExecutionMode",
+        "HookHandlerType",
+        "HookOutputEntry",
+        "HookOutputEntryKind",
+        "HookRunStatus",
+        "HookRunSummary",
+        "HookScope",
+        "HookSource"
+      ]
+    },
+    "hook/started": {
+      "kind": "notification",
+      "stable": true,
+      "params": "581e3fdbac22a2eb",
+      "defs": [
+        "AbsolutePathBuf",
+        "HookEventName",
+        "HookExecutionMode",
+        "HookHandlerType",
+        "HookOutputEntry",
+        "HookOutputEntryKind",
+        "HookRunStatus",
+        "HookRunSummary",
+        "HookScope",
+        "HookSource",
+        "HookStartedNotification"
+      ]
+    },
+    "hooks/list": {
+      "kind": "request",
+      "stable": true,
+      "params": "840e94d1eee8ae7d",
+      "defs": [
+        "HooksListParams"
+      ]
+    },
+    "initialize": {
+      "kind": "request",
+      "stable": true,
+      "params": "fd3c6f28543e82c0",
+      "defs": [
+        "ClientInfo",
+        "InitializeCapabilities",
+        "InitializeParams"
+      ]
+    },
+    "item/agentMessage/delta": {
+      "kind": "notification",
+      "stable": true,
+      "params": "9879cd8285e0a9ec",
+      "defs": [
+        "AgentMessageDeltaNotification"
+      ]
+    },
+    "item/autoApprovalReview/completed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "ab1a9125af472773",
+      "defs": [
+        "AbsolutePathBuf",
+        "AdditionalFileSystemPermissions",
+        "AdditionalNetworkPermissions",
+        "AutoReviewDecisionSource",
+        "FileSystemAccessMode",
+        "FileSystemPath",
+        "FileSystemSandboxEntry",
+        "FileSystemSpecialPath",
+        "GuardianApprovalReview",
+        "GuardianApprovalReviewAction",
+        "GuardianApprovalReviewStatus",
+        "GuardianCommandSource",
+        "GuardianRiskLevel",
+        "GuardianUserAuthorization",
+        "ItemGuardianApprovalReviewCompletedNotification",
+        "LegacyAppPathString",
+        "NetworkApprovalProtocol",
+        "RequestPermissionProfile"
+      ]
+    },
+    "item/autoApprovalReview/started": {
+      "kind": "notification",
+      "stable": true,
+      "params": "1d90e2be1c333338",
+      "defs": [
+        "AbsolutePathBuf",
+        "AdditionalFileSystemPermissions",
+        "AdditionalNetworkPermissions",
+        "FileSystemAccessMode",
+        "FileSystemPath",
+        "FileSystemSandboxEntry",
+        "FileSystemSpecialPath",
+        "GuardianApprovalReview",
+        "GuardianApprovalReviewAction",
+        "GuardianApprovalReviewStatus",
+        "GuardianCommandSource",
+        "GuardianRiskLevel",
+        "GuardianUserAuthorization",
+        "ItemGuardianApprovalReviewStartedNotification",
+        "LegacyAppPathString",
+        "NetworkApprovalProtocol",
+        "RequestPermissionProfile"
+      ]
+    },
+    "item/commandExecution/outputDelta": {
+      "kind": "notification",
+      "stable": true,
+      "params": "67e976444518e31a",
+      "defs": [
+        "CommandExecutionOutputDeltaNotification"
+      ]
+    },
+    "item/commandExecution/requestApproval": {
+      "kind": "serverRequest",
+      "stable": true,
+      "params": "bcd01344f8ba82cf",
+      "defs": [
+        "AdditionalFileSystemPermissions",
+        "AdditionalNetworkPermissions",
+        "AdditionalPermissionProfile",
+        "CommandAction",
+        "CommandExecutionApprovalDecision",
+        "CommandExecutionApprovalKind",
+        "CommandExecutionRequestApprovalParams",
+        "FileSystemAccessMode",
+        "FileSystemPath",
+        "FileSystemSandboxEntry",
+        "FileSystemSpecialPath",
+        "LegacyAppPathString",
+        "NetworkApprovalContext",
+        "NetworkApprovalProtocol",
+        "NetworkPolicyAmendment",
+        "NetworkPolicyRuleAction"
+      ]
+    },
+    "item/commandExecution/terminalInteraction": {
+      "kind": "notification",
+      "stable": true,
+      "params": "17f027557f1c8973",
+      "defs": [
+        "TerminalInteractionNotification"
+      ]
+    },
+    "item/completed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "476d05fdc51bb8f4",
+      "defs": [
+        "AbsolutePathBuf",
+        "AgentMessageDelivery",
+        "AsyncUserInputQuestion",
+        "ByteRange",
+        "CollabAgentState",
+        "CollabAgentStatus",
+        "CollabAgentTool",
+        "CollabAgentToolCallStatus",
+        "CommandAction",
+        "CommandExecutionSource",
+        "CommandExecutionStatus",
+        "DynamicToolCallOutputContentItem",
+        "DynamicToolCallStatus",
+        "FileUpdateChange",
+        "FunctionCallOutputBody",
+        "FunctionCallOutputContentItem",
+        "HookPromptFragment",
+        "ImageDetail",
+        "ImageGenerationFailure",
+        "ItemCompletedNotification",
+        "LegacyAppPathString",
+        "McpAppDisplayMode",
+        "McpAppUi",
+        "McpToolCallAppContext",
+        "McpToolCallError",
+        "McpToolCallResult",
+        "McpToolCallStatus",
+        "MemoryCitation",
+        "MemoryCitationEntry",
+        "MessagePhase",
+        "PatchApplyStatus",
+        "PatchChangeKind",
+        "ReasoningEffort",
+        "SubAgentActivityKind",
+        "TextElement",
+        "ThreadItem",
+        "UserInput",
+        "WebSearchAction"
+      ]
+    },
+    "item/fileChange/outputDelta": {
+      "kind": "notification",
+      "stable": true,
+      "params": "1924947ef50a48a9",
+      "defs": [
+        "FileChangeOutputDeltaNotification"
+      ]
+    },
+    "item/fileChange/patchUpdated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "708c1176e21989a7",
+      "defs": [
+        "FileChangePatchUpdatedNotification",
+        "FileUpdateChange",
+        "PatchChangeKind"
+      ]
+    },
+    "item/fileChange/requestApproval": {
+      "kind": "serverRequest",
+      "stable": true,
+      "params": "7f41bf48f0835e7b",
+      "defs": [
+        "FileChangeRequestApprovalParams"
+      ]
+    },
+    "item/mcpToolCall/progress": {
+      "kind": "notification",
+      "stable": true,
+      "params": "af1f71fbdff515ef",
+      "defs": [
+        "McpToolCallProgressNotification"
+      ]
+    },
+    "item/permissions/requestApproval": {
+      "kind": "serverRequest",
+      "stable": true,
+      "params": "d4ff401d508413c3",
+      "defs": [
+        "AdditionalFileSystemPermissions",
+        "AdditionalNetworkPermissions",
+        "FileSystemAccessMode",
+        "FileSystemPath",
+        "FileSystemSandboxEntry",
+        "FileSystemSpecialPath",
+        "LegacyAppPathString",
+        "PermissionsRequestApprovalParams",
+        "RequestPermissionProfile"
+      ]
+    },
+    "item/plan/delta": {
+      "kind": "notification",
+      "stable": true,
+      "params": "5726e91733b0f42f",
+      "defs": [
+        "PlanDeltaNotification"
+      ]
+    },
+    "item/reasoning/summaryPartAdded": {
+      "kind": "notification",
+      "stable": true,
+      "params": "3eae2905a9ce1413",
+      "defs": [
+        "ReasoningSummaryPartAddedNotification"
+      ]
+    },
+    "item/reasoning/summaryTextDelta": {
+      "kind": "notification",
+      "stable": true,
+      "params": "a76d188f78a9e696",
+      "defs": [
+        "ReasoningSummaryTextDeltaNotification"
+      ]
+    },
+    "item/reasoning/textDelta": {
+      "kind": "notification",
+      "stable": true,
+      "params": "bdbfb6d15bdc78fe",
+      "defs": [
+        "ReasoningTextDeltaNotification"
+      ]
+    },
+    "item/started": {
+      "kind": "notification",
+      "stable": true,
+      "params": "285f3451c259ec47",
+      "defs": [
+        "AbsolutePathBuf",
+        "AgentMessageDelivery",
+        "AsyncUserInputQuestion",
+        "ByteRange",
+        "CollabAgentState",
+        "CollabAgentStatus",
+        "CollabAgentTool",
+        "CollabAgentToolCallStatus",
+        "CommandAction",
+        "CommandExecutionSource",
+        "CommandExecutionStatus",
+        "DynamicToolCallOutputContentItem",
+        "DynamicToolCallStatus",
+        "FileUpdateChange",
+        "FunctionCallOutputBody",
+        "FunctionCallOutputContentItem",
+        "HookPromptFragment",
+        "ImageDetail",
+        "ImageGenerationFailure",
+        "ItemStartedNotification",
+        "LegacyAppPathString",
+        "McpAppDisplayMode",
+        "McpAppUi",
+        "McpToolCallAppContext",
+        "McpToolCallError",
+        "McpToolCallResult",
+        "McpToolCallStatus",
+        "MemoryCitation",
+        "MemoryCitationEntry",
+        "MessagePhase",
+        "PatchApplyStatus",
+        "PatchChangeKind",
+        "ReasoningEffort",
+        "SubAgentActivityKind",
+        "TextElement",
+        "ThreadItem",
+        "UserInput",
+        "WebSearchAction"
+      ]
+    },
+    "item/tool/requestUserInput": {
+      "kind": "serverRequest",
+      "stable": true,
+      "params": "f40f91af8a91a1e7",
+      "defs": [
+        "ToolRequestUserInputOption",
+        "ToolRequestUserInputParams",
+        "ToolRequestUserInputQuestion"
+      ]
+    },
+    "mcpServer/elicitation/request": {
+      "kind": "serverRequest",
+      "stable": true,
+      "params": "32c4d77d2984cc4d",
+      "defs": [
+        "McpElicitationArrayType",
+        "McpElicitationBooleanSchema",
+        "McpElicitationBooleanType",
+        "McpElicitationConstOption",
+        "McpElicitationEnumSchema",
+        "McpElicitationLegacyTitledEnumSchema",
+        "McpElicitationMultiSelectEnumSchema",
+        "McpElicitationNumberSchema",
+        "McpElicitationNumberType",
+        "McpElicitationObjectType",
+        "McpElicitationPrimitiveSchema",
+        "McpElicitationSchema",
+        "McpElicitationSingleSelectEnumSchema",
+        "McpElicitationStringFormat",
+        "McpElicitationStringSchema",
+        "McpElicitationStringType",
+        "McpElicitationTitledEnumItems",
+        "McpElicitationTitledMultiSelectEnumSchema",
+        "McpElicitationTitledSingleSelectEnumSchema",
+        "McpElicitationUntitledEnumItems",
+        "McpElicitationUntitledMultiSelectEnumSchema",
+        "McpElicitationUntitledSingleSelectEnumSchema",
+        "McpServerElicitationRequestParams"
+      ]
+    },
+    "mcpServer/event/stream/notification": {
+      "kind": "notification",
+      "stable": true,
+      "params": "f436618440f6f82e",
+      "defs": [
+        "McpServerEventNotification",
+        "McpServerEventStreamNotification"
+      ]
+    },
+    "mcpServer/oauth/login": {
+      "kind": "request",
+      "stable": true,
+      "params": "37c0a0664c13b349",
+      "defs": [
+        "McpServerOauthClientRegistration",
+        "McpServerOauthLoginParams"
+      ]
+    },
+    "mcpServer/oauthLogin/completed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "7647d1de29dbcc59",
+      "defs": [
+        "McpServerOauthLoginCompletedNotification"
+      ]
+    },
+    "mcpServer/startupStatus/updated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "f29f762e6fec23c6",
+      "defs": [
+        "McpServerStartupFailureReason",
+        "McpServerStartupState",
+        "McpServerStatusUpdatedNotification"
+      ]
+    },
+    "mcpServerStatus/list": {
+      "kind": "request",
+      "stable": true,
+      "params": "fdb830bbea3850b3",
+      "defs": [
+        "ListMcpServerStatusParams",
+        "McpServerStatusDetail"
+      ]
+    },
+    "model/list": {
+      "kind": "request",
+      "stable": true,
+      "params": "a2d66e08e619f31a",
+      "defs": [
+        "ModelListParams"
+      ]
+    },
+    "model/rerouted": {
+      "kind": "notification",
+      "stable": true,
+      "params": "e21c80b0ea2d23e2",
+      "defs": [
+        "ModelRerouteReason",
+        "ModelReroutedNotification"
+      ]
+    },
+    "model/safetyBuffering/updated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "4eaef94f0cc30807",
+      "defs": [
+        "ModelSafetyBufferingUpdatedNotification"
+      ]
+    },
+    "model/verification": {
+      "kind": "notification",
+      "stable": true,
+      "params": "e470f4bc83626ab4",
+      "defs": [
+        "ModelVerification",
+        "ModelVerificationNotification"
+      ]
+    },
+    "modelProvider/authRecoveryCompleted": {
+      "kind": "notification",
+      "stable": true,
+      "params": "5b9d2f6ac6059fbd",
+      "defs": [
+        "AuthRecoveryNotification"
+      ]
+    },
+    "modelProvider/authRecoveryStarted": {
+      "kind": "notification",
+      "stable": true,
+      "params": "5b9d2f6ac6059fbd",
+      "defs": [
+        "AuthRecoveryNotification"
+      ]
+    },
+    "process/exited": {
+      "kind": "notification",
+      "stable": true,
+      "params": "c00afaec9c4e55a4",
+      "defs": [
+        "ProcessExitedNotification"
+      ]
+    },
+    "process/outputDelta": {
+      "kind": "notification",
+      "stable": true,
+      "params": "6b8a0f4349e360ad",
+      "defs": [
+        "ProcessOutputDeltaNotification",
+        "ProcessOutputStream"
+      ]
+    },
+    "project/changed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "aba8fca7fc2d9096",
+      "defs": [
+        "ProjectChangeType",
+        "ProjectChangedNotification"
+      ]
+    },
+    "remoteControl/status/changed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "03a8933bfde43645",
+      "defs": [
+        "RemoteControlConnectionStatus",
+        "RemoteControlStatusChangedNotification"
+      ]
+    },
+    "review/start": {
+      "kind": "request",
+      "stable": true,
+      "params": "48a16b8c6163000e",
+      "defs": [
+        "ReviewDelivery",
+        "ReviewStartParams",
+        "ReviewTarget"
+      ]
+    },
+    "serverRequest/resolved": {
+      "kind": "notification",
+      "stable": true,
+      "params": "1031a6da0120d70a",
+      "defs": [
+        "RequestId",
+        "ServerRequestResolvedNotification"
+      ]
+    },
+    "skills/changed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "1e2e8025c39964b4",
+      "defs": [
+        "SkillsChangedNotification"
+      ]
+    },
+    "skills/extraRoots/set": {
+      "kind": "request",
+      "stable": true,
+      "params": "12f54845fea5a1b2",
+      "defs": [
+        "AbsolutePathBuf",
+        "SkillsExtraRootsSetParams"
+      ]
+    },
+    "skills/list": {
+      "kind": "request",
+      "stable": true,
+      "params": "595f0c7fd4ff9407",
+      "defs": [
+        "SkillsListParams"
+      ]
+    },
+    "thread/archive": {
+      "kind": "request",
+      "stable": true,
+      "params": "ae04a10cf9feb65f",
+      "defs": [
+        "ThreadArchiveParams"
+      ]
+    },
+    "thread/archived": {
+      "kind": "notification",
+      "stable": true,
+      "params": "d612d618cdf0136b",
+      "defs": [
+        "ThreadArchivedNotification"
+      ]
+    },
+    "thread/attachment/updated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "eb7788b9cb7d948f",
+      "defs": [
+        "ThreadAttachmentOperation",
+        "ThreadAttachmentUpdatedNotification"
+      ]
+    },
+    "thread/backgroundTerminals/list": {
+      "kind": "request",
+      "stable": false,
+      "params": "3e359615b6a771a0",
+      "defs": [
+        "ThreadBackgroundTerminalsListParams"
+      ]
+    },
+    "thread/backgroundTerminals/terminate": {
+      "kind": "request",
+      "stable": false,
+      "params": "5a4079734207053b",
+      "defs": [
+        "ThreadBackgroundTerminalsTerminateParams"
+      ]
+    },
+    "thread/closed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "9cd860cf6efbbd7e",
+      "defs": [
+        "ThreadClosedNotification"
+      ]
+    },
+    "thread/compact/start": {
+      "kind": "request",
+      "stable": true,
+      "params": "979f1ce6d0a3d5e8",
+      "defs": [
+        "ThreadCompactStartParams"
+      ]
+    },
+    "thread/compacted": {
+      "kind": "notification",
+      "stable": true,
+      "params": "9dcff441afb93798",
+      "defs": [
+        "ContextCompactedNotification"
+      ]
+    },
+    "thread/delete": {
+      "kind": "request",
+      "stable": true,
+      "params": "64baed7cb0139f84",
+      "defs": [
+        "ThreadDeleteParams"
+      ]
+    },
+    "thread/deleted": {
+      "kind": "notification",
+      "stable": true,
+      "params": "8733be523fc9806f",
+      "defs": [
+        "ThreadDeletedNotification"
+      ]
+    },
+    "thread/environment/connected": {
+      "kind": "notification",
+      "stable": true,
+      "params": "2265e21de87a5735",
+      "defs": [
+        "EnvironmentConnectionNotification"
+      ]
+    },
+    "thread/environment/disconnected": {
+      "kind": "notification",
+      "stable": true,
+      "params": "2265e21de87a5735",
+      "defs": [
+        "EnvironmentConnectionNotification"
+      ]
+    },
+    "thread/fork": {
+      "kind": "request",
+      "stable": true,
+      "params": "ee0d1f1254e4fec5",
+      "defs": [
+        "AbsolutePathBuf",
+        "ApprovalsReviewer",
+        "AskForApproval",
+        "SandboxMode",
+        "ThreadForkParams",
+        "ThreadSource"
+      ]
+    },
+    "thread/goal/clear": {
+      "kind": "request",
+      "stable": true,
+      "params": "a32fb19701e4829b",
+      "defs": [
+        "ThreadGoalClearParams",
+        "ThreadGoalMutationOrigin"
+      ]
+    },
+    "thread/goal/cleared": {
+      "kind": "notification",
+      "stable": true,
+      "params": "f6ca47fb8f16a9b9",
+      "defs": [
+        "ThreadGoalClearedNotification"
+      ]
+    },
+    "thread/goal/get": {
+      "kind": "request",
+      "stable": true,
+      "params": "a43168c621f865d0",
+      "defs": [
+        "ThreadGoalGetParams"
+      ]
+    },
+    "thread/goal/set": {
+      "kind": "request",
+      "stable": true,
+      "params": "da5e4e3bc21e36a6",
+      "defs": [
+        "ThreadGoalMutationOrigin",
+        "ThreadGoalSetParams",
+        "ThreadGoalStatus"
+      ]
+    },
+    "thread/goal/updated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "aca02d2325d5f34f",
+      "defs": [
+        "ThreadGoal",
+        "ThreadGoalStatus",
+        "ThreadGoalUpdatedNotification"
+      ]
+    },
+    "thread/items/list": {
+      "kind": "request",
+      "stable": true,
+      "params": "ce9031f6d6845591",
+      "defs": [
+        "SortDirection",
+        "ThreadItemsListAnchor",
+        "ThreadItemsListCursor",
+        "ThreadItemsListParams"
+      ]
+    },
+    "thread/list": {
+      "kind": "request",
+      "stable": true,
+      "params": "8f19ae3a2d81fc6a",
+      "defs": [
+        "SortDirection",
+        "ThreadListCwdFilter",
+        "ThreadListParams",
+        "ThreadSortKey",
+        "ThreadSourceKind"
+      ]
+    },
+    "thread/loaded/list": {
+      "kind": "request",
+      "stable": true,
+      "params": "a702d3625c9b8a27",
+      "defs": [
+        "ThreadLoadedListParams"
+      ]
+    },
+    "thread/name/set": {
+      "kind": "request",
+      "stable": true,
+      "params": "e80b931b5be32fce",
+      "defs": [
+        "ThreadSetNameParams"
+      ]
+    },
+    "thread/name/updated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "62d11497fbb7cd80",
+      "defs": [
+        "ThreadNameUpdatedNotification"
+      ]
+    },
+    "thread/project/updated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "d1129e69d4e43242",
+      "defs": [
+        "ThreadProjectUpdatedNotification"
+      ]
+    },
+    "thread/queue/changed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "2d0122af932ba25e",
+      "defs": [
+        "ThreadQueueChangedNotification"
+      ]
+    },
+    "thread/read": {
+      "kind": "request",
+      "stable": true,
+      "params": "06de856a911e22e9",
+      "defs": [
+        "ThreadReadParams"
+      ]
+    },
+    "thread/realtime/closed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "ac7a9ba45da4ef74",
+      "defs": [
+        "ThreadRealtimeClosedNotification"
+      ]
+    },
+    "thread/realtime/error": {
+      "kind": "notification",
+      "stable": true,
+      "params": "5d0d345cf52327d7",
+      "defs": [
+        "ThreadRealtimeErrorNotification"
+      ]
+    },
+    "thread/realtime/item/completed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "2bfcac3ed66f5904",
+      "defs": [
+        "ThreadRealtimeBemItemPresentation",
+        "ThreadRealtimeItem",
+        "ThreadRealtimeItemCompletedNotification",
+        "ThreadRealtimeSessionOutcome",
+        "ThreadRealtimeTranscriptRole"
+      ]
+    },
+    "thread/realtime/item/started": {
+      "kind": "notification",
+      "stable": true,
+      "params": "f6639a1d6c2ecb37",
+      "defs": [
+        "ThreadRealtimeBemItemPresentation",
+        "ThreadRealtimeItem",
+        "ThreadRealtimeItemStartedNotification",
+        "ThreadRealtimeSessionOutcome",
+        "ThreadRealtimeTranscriptRole"
+      ]
+    },
+    "thread/realtime/item/transcript/delta": {
+      "kind": "notification",
+      "stable": true,
+      "params": "e2ab085f12a4f1a5",
+      "defs": [
+        "ThreadRealtimeItemTranscriptDeltaNotification"
+      ]
+    },
+    "thread/realtime/itemAdded": {
+      "kind": "notification",
+      "stable": true,
+      "params": "657c35f9612dfecf",
+      "defs": [
+        "ThreadRealtimeItemAddedNotification"
+      ]
+    },
+    "thread/realtime/outputAudio/delta": {
+      "kind": "notification",
+      "stable": true,
+      "params": "a0b7bd01ca667ecc",
+      "defs": [
+        "ThreadRealtimeAudioChunk",
+        "ThreadRealtimeOutputAudioDeltaNotification"
+      ]
+    },
+    "thread/realtime/sdp": {
+      "kind": "notification",
+      "stable": true,
+      "params": "ad38d3842f00041f",
+      "defs": [
+        "ThreadRealtimeSdpNotification"
+      ]
+    },
+    "thread/realtime/started": {
+      "kind": "notification",
+      "stable": true,
+      "params": "bd8b99ea5296f91e",
+      "defs": [
+        "RealtimeConversationVersion",
+        "ThreadRealtimeStartedNotification"
+      ]
+    },
+    "thread/realtime/transcript/delta": {
+      "kind": "notification",
+      "stable": true,
+      "params": "8d798bc65e56ccda",
+      "defs": [
+        "ThreadRealtimeTranscriptDeltaNotification"
+      ]
+    },
+    "thread/realtime/transcript/done": {
+      "kind": "notification",
+      "stable": true,
+      "params": "726edeb1f71a713f",
+      "defs": [
+        "ThreadRealtimeTranscriptDoneNotification"
+      ]
+    },
+    "thread/resume": {
+      "kind": "request",
+      "stable": true,
+      "params": "7562248f8a43fdcb",
+      "defs": [
+        "AbsolutePathBuf",
+        "AgentMessageInputContent",
+        "ApprovalsReviewer",
+        "AskForApproval",
+        "ConfigurationReasoning",
+        "ContentItem",
+        "FunctionCallOutputBody",
+        "FunctionCallOutputContentItem",
+        "ImageDetail",
+        "InternalChatMessageMetadataPassthrough",
+        "LocalShellAction",
+        "LocalShellStatus",
+        "MessagePhase",
+        "Personality",
+        "ReasoningEffort",
+        "ReasoningItemContent",
+        "ReasoningItemReasoningSummary",
+        "ResponseItem",
+        "ResponsesApiWebSearchAction",
+        "SandboxMode",
+        "SortDirection",
+        "ThreadResumeInitialTurnsPageParams",
+        "ThreadResumeParams",
+        "TurnItemsView"
+      ]
+    },
+    "thread/reverted": {
+      "kind": "notification",
+      "stable": true,
+      "params": "9e1da51f61c8fc41",
+      "defs": [
+        "ThreadRevertedNotification"
+      ]
+    },
+    "thread/settings/update": {
+      "kind": "request",
+      "stable": false,
+      "params": "1cf5f1eda9431fb7",
+      "defs": [
+        "AbsolutePathBuf",
+        "ApprovalsReviewer",
+        "AskForApproval",
+        "CollaborationMode",
+        "ModeKind",
+        "MultiAgentMode",
+        "NetworkAccess",
+        "Personality",
+        "ReasoningEffort",
+        "ReasoningSummary",
+        "SandboxPolicy",
+        "Settings",
+        "ThreadSettingsUpdateParams"
+      ]
+    },
+    "thread/settings/updated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "ac780ae503e37f43",
+      "defs": [
+        "AbsolutePathBuf",
+        "ActivePermissionProfile",
+        "ApprovalsReviewer",
+        "AskForApproval",
+        "CollaborationMode",
+        "ModeKind",
+        "MultiAgentMode",
+        "NetworkAccess",
+        "Personality",
+        "ReasoningEffort",
+        "ReasoningSummary",
+        "SandboxPolicy",
+        "Settings",
+        "ThreadSettings",
+        "ThreadSettingsUpdatedNotification"
+      ]
+    },
+    "thread/start": {
+      "kind": "request",
+      "stable": true,
+      "params": "f06cfd15eb90c96d",
+      "defs": [
+        "AbsolutePathBuf",
+        "ApprovalsReviewer",
+        "AskForApproval",
+        "CapabilityRootLocation",
+        "DynamicToolNamespaceTool",
+        "DynamicToolSpec",
+        "LegacyAppPathString",
+        "MultiAgentMode",
+        "Personality",
+        "SandboxMode",
+        "SelectedCapabilityRoot",
+        "ThreadHistoryMode",
+        "ThreadSource",
+        "ThreadStartParams",
+        "ThreadStartSource",
+        "TurnEnvironmentParams"
+      ]
+    },
+    "thread/started": {
+      "kind": "notification",
+      "stable": true,
+      "params": "8b0548149495f573",
+      "defs": [
+        "AbsolutePathBuf",
+        "AgentMessageDelivery",
+        "AgentPath",
+        "AsyncUserInputQuestion",
+        "ByteRange",
+        "CodexErrorInfo",
+        "CollabAgentState",
+        "CollabAgentStatus",
+        "CollabAgentTool",
+        "CollabAgentToolCallStatus",
+        "CommandAction",
+        "CommandExecutionSource",
+        "CommandExecutionStatus",
+        "DynamicToolCallOutputContentItem",
+        "DynamicToolCallStatus",
+        "FileUpdateChange",
+        "FunctionCallOutputBody",
+        "FunctionCallOutputContentItem",
+        "GitInfo",
+        "HookPromptFragment",
+        "ImageDetail",
+        "ImageGenerationFailure",
+        "LegacyAppPathString",
+        "McpAppDisplayMode",
+        "McpAppUi",
+        "McpToolCallAppContext",
+        "McpToolCallError",
+        "McpToolCallResult",
+        "McpToolCallStatus",
+        "MemoryCitation",
+        "MemoryCitationEntry",
+        "MessagePhase",
+        "MisalignmentErrorDetails",
+        "MisalignmentSteer",
+        "NonSteerableTurnKind",
+        "PatchApplyStatus",
+        "PatchChangeKind",
+        "ReasoningEffort",
+        "SessionSource",
+        "SubAgentActivityKind",
+        "SubAgentSource",
+        "TextElement",
+        "Thread",
+        "ThreadActiveFlag",
+        "ThreadEnvironment",
+        "ThreadExtra",
+        "ThreadHistoryMode",
+        "ThreadId",
+        "ThreadItem",
+        "ThreadSection",
+        "ThreadSectionAppearance",
+        "ThreadSource",
+        "ThreadStartedNotification",
+        "ThreadStatus",
+        "Turn",
+        "TurnError",
+        "TurnItemsView",
+        "TurnStatus",
+        "UserInput",
+        "WebSearchAction"
+      ]
+    },
+    "thread/status/changed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "b9ed36994ba66400",
+      "defs": [
+        "ThreadActiveFlag",
+        "ThreadStatus",
+        "ThreadStatusChangedNotification"
+      ]
+    },
+    "thread/tokenUsage/updated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "e9e67f6c60ab8a72",
+      "defs": [
+        "ThreadTokenUsage",
+        "ThreadTokenUsageUpdatedNotification",
+        "TokenUsageBreakdown"
+      ]
+    },
+    "thread/turns/list": {
+      "kind": "request",
+      "stable": true,
+      "params": "471f7c00889dd5dc",
+      "defs": [
+        "SortDirection",
+        "ThreadTurnsListParams",
+        "TurnItemsView"
+      ]
+    },
+    "thread/unarchive": {
+      "kind": "request",
+      "stable": true,
+      "params": "a43119f96576d0f3",
+      "defs": [
+        "ThreadUnarchiveParams"
+      ]
+    },
+    "thread/unarchived": {
+      "kind": "notification",
+      "stable": true,
+      "params": "22af498a473846ac",
+      "defs": [
+        "ThreadUnarchivedNotification"
+      ]
+    },
+    "thread/unsubscribe": {
+      "kind": "request",
+      "stable": true,
+      "params": "fd03ce7bc858d2aa",
+      "defs": [
+        "ThreadUnsubscribeParams"
+      ]
+    },
+    "turn/completed": {
+      "kind": "notification",
+      "stable": true,
+      "params": "f28af2a1e892d36c",
+      "defs": [
+        "AbsolutePathBuf",
+        "AgentMessageDelivery",
+        "AsyncUserInputQuestion",
+        "ByteRange",
+        "CodexErrorInfo",
+        "CollabAgentState",
+        "CollabAgentStatus",
+        "CollabAgentTool",
+        "CollabAgentToolCallStatus",
+        "CommandAction",
+        "CommandExecutionSource",
+        "CommandExecutionStatus",
+        "DynamicToolCallOutputContentItem",
+        "DynamicToolCallStatus",
+        "FileUpdateChange",
+        "FunctionCallOutputBody",
+        "FunctionCallOutputContentItem",
+        "HookPromptFragment",
+        "ImageDetail",
+        "ImageGenerationFailure",
+        "LegacyAppPathString",
+        "McpAppDisplayMode",
+        "McpAppUi",
+        "McpToolCallAppContext",
+        "McpToolCallError",
+        "McpToolCallResult",
+        "McpToolCallStatus",
+        "MemoryCitation",
+        "MemoryCitationEntry",
+        "MessagePhase",
+        "MisalignmentErrorDetails",
+        "MisalignmentSteer",
+        "NonSteerableTurnKind",
+        "PatchApplyStatus",
+        "PatchChangeKind",
+        "ReasoningEffort",
+        "SubAgentActivityKind",
+        "TextElement",
+        "ThreadItem",
+        "Turn",
+        "TurnCompletedNotification",
+        "TurnError",
+        "TurnItemsView",
+        "TurnStatus",
+        "UserInput",
+        "WebSearchAction"
+      ]
+    },
+    "turn/diff/updated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "bc909eb5160e8c53",
+      "defs": [
+        "TurnDiffUpdatedNotification"
+      ]
+    },
+    "turn/interrupt": {
+      "kind": "request",
+      "stable": true,
+      "params": "acf84093527cd03d",
+      "defs": [
+        "TurnInterruptParams"
+      ]
+    },
+    "turn/moderationMetadata": {
+      "kind": "notification",
+      "stable": true,
+      "params": "e5bb9e97cbcadccd",
+      "defs": [
+        "TurnModerationMetadataNotification"
+      ]
+    },
+    "turn/plan/updated": {
+      "kind": "notification",
+      "stable": true,
+      "params": "9bfc56712df92ac4",
+      "defs": [
+        "TurnPlanStep",
+        "TurnPlanStepStatus",
+        "TurnPlanUpdatedNotification"
+      ]
+    },
+    "turn/start": {
+      "kind": "request",
+      "stable": true,
+      "params": "0587b75ca6d3f2bf",
+      "defs": [
+        "AbsolutePathBuf",
+        "AdditionalContextEntry",
+        "AdditionalContextKind",
+        "ApprovalsReviewer",
+        "AskForApproval",
+        "ByteRange",
+        "CollaborationMode",
+        "CyberAccessProgram",
+        "FunctionCallOutputBody",
+        "FunctionCallOutputContentItem",
+        "ImageDetail",
+        "LegacyAppPathString",
+        "ModeKind",
+        "MultiAgentMode",
+        "NetworkAccess",
+        "Personality",
+        "ReasoningEffort",
+        "ReasoningSummary",
+        "SandboxPolicy",
+        "Settings",
+        "TextElement",
+        "TurnEnvironmentParams",
+        "TurnStartParams",
+        "TurnToolOutput",
+        "UserInput"
+      ]
+    },
+    "turn/started": {
+      "kind": "notification",
+      "stable": true,
+      "params": "f8d74292cbd2fa62",
+      "defs": [
+        "AbsolutePathBuf",
+        "AgentMessageDelivery",
+        "AsyncUserInputQuestion",
+        "ByteRange",
+        "CodexErrorInfo",
+        "CollabAgentState",
+        "CollabAgentStatus",
+        "CollabAgentTool",
+        "CollabAgentToolCallStatus",
+        "CommandAction",
+        "CommandExecutionSource",
+        "CommandExecutionStatus",
+        "DynamicToolCallOutputContentItem",
+        "DynamicToolCallStatus",
+        "FileUpdateChange",
+        "FunctionCallOutputBody",
+        "FunctionCallOutputContentItem",
+        "HookPromptFragment",
+        "ImageDetail",
+        "ImageGenerationFailure",
+        "LegacyAppPathString",
+        "McpAppDisplayMode",
+        "McpAppUi",
+        "McpToolCallAppContext",
+        "McpToolCallError",
+        "McpToolCallResult",
+        "McpToolCallStatus",
+        "MemoryCitation",
+        "MemoryCitationEntry",
+        "MessagePhase",
+        "MisalignmentErrorDetails",
+        "MisalignmentSteer",
+        "NonSteerableTurnKind",
+        "PatchApplyStatus",
+        "PatchChangeKind",
+        "ReasoningEffort",
+        "SubAgentActivityKind",
+        "TextElement",
+        "ThreadItem",
+        "Turn",
+        "TurnError",
+        "TurnItemsView",
+        "TurnStartedNotification",
+        "TurnStatus",
+        "UserInput",
+        "WebSearchAction"
+      ]
+    },
+    "turn/steer": {
+      "kind": "request",
+      "stable": true,
+      "params": "2f3100fa086e6251",
+      "defs": [
+        "AdditionalContextEntry",
+        "AdditionalContextKind",
+        "ByteRange",
+        "ImageDetail",
+        "TextElement",
+        "TurnSteerParams",
+        "UserInput"
+      ]
+    },
+    "warning": {
+      "kind": "notification",
+      "stable": true,
+      "params": "8dbcb1ea1de5c308",
+      "defs": [
+        "WarningNotification"
+      ]
+    },
+    "windows/worldWritableWarning": {
+      "kind": "notification",
+      "stable": true,
+      "params": "3f1a334841013069",
+      "defs": [
+        "WindowsWorldWritableWarningNotification"
+      ]
+    },
+    "windowsSandbox/setupCompleted": {
+      "kind": "notification",
+      "stable": true,
+      "params": "0522380878f5bbe9",
+      "defs": [
+        "WindowsSandboxSetupCompletedNotification",
+        "WindowsSandboxSetupMode"
+      ]
+    }
+  },
+  "defs": {
+    "AbsolutePathBuf": {
+      "hash": "00404e686415370f",
+      "facets": []
+    },
+    "AccountLoginCompletedNotification": {
+      "hash": "9c995fa58b547f2d",
+      "facets": [
+        "property error",
+        "property loginId",
+        "property onboardingEntrypoint",
+        "property success",
+        "required success"
+      ]
+    },
+    "AccountRateLimitsUpdatedNotification": {
+      "hash": "7abbc6867b5789c1",
+      "facets": [
+        "property rateLimits",
+        "required rateLimits"
+      ]
+    },
+    "AccountUpdatedNotification": {
+      "hash": "c89025460eebe4cd",
+      "facets": [
+        "property authMode",
+        "property planType"
+      ]
+    },
+    "ActivePermissionProfile": {
+      "hash": "936c7f22952c3ff7",
+      "facets": [
+        "property extends",
+        "property id",
+        "required id"
+      ]
+    },
+    "AdditionalContextEntry": {
+      "hash": "1ea81be4efdf60fa",
+      "facets": [
+        "property kind",
+        "property value",
+        "required kind",
+        "required value"
+      ]
+    },
+    "AdditionalContextKind": {
+      "hash": "8319706ccdbe5a46",
+      "facets": [
+        "enum application",
+        "enum untrusted"
+      ]
+    },
+    "AdditionalFileSystemPermissions": {
+      "hash": "b8da3a9467a907b8",
+      "facets": [
+        "property entries",
+        "property globScanMaxDepth",
+        "property read",
+        "property write"
+      ]
+    },
+    "AdditionalNetworkPermissions": {
+      "hash": "2af00855f09e8d5c",
+      "facets": [
+        "property enabled"
+      ]
+    },
+    "AdditionalPermissionProfile": {
+      "hash": "49f97d730f6e6d2f",
+      "facets": [
+        "property fileSystem",
+        "property network"
+      ]
+    },
+    "AgentMessageDelivery": {
+      "hash": "a6136c8688cf08b5",
+      "facets": [
+        "enum async"
+      ]
+    },
+    "AgentMessageDeltaNotification": {
+      "hash": "48c409e23abd4a7b",
+      "facets": [
+        "property delta",
+        "property itemId",
+        "property threadId",
+        "property turnId",
+        "required delta",
+        "required itemId",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "AgentMessageInputContent": {
+      "hash": "b4924901a43d54ee",
+      "facets": [
+        "encrypted_content: property encrypted_content",
+        "encrypted_content: property type",
+        "encrypted_content: required encrypted_content",
+        "encrypted_content: required type",
+        "input_text: property text",
+        "input_text: property type",
+        "input_text: required text",
+        "input_text: required type",
+        "type = encrypted_content",
+        "type = input_text"
+      ]
+    },
+    "AgentPath": {
+      "hash": "00404e686415370f",
+      "facets": []
+    },
+    "AppBranding": {
+      "hash": "bbbcd370828cc57c",
+      "facets": [
+        "property category",
+        "property developer",
+        "property isDiscoverableApp",
+        "property privacyPolicy",
+        "property termsOfService",
+        "property website",
+        "required isDiscoverableApp"
+      ]
+    },
+    "AppInfo": {
+      "hash": "05c14ae1c46e81c8",
+      "facets": [
+        "property appMetadata",
+        "property branding",
+        "property description",
+        "property distributionChannel",
+        "property iconAssets",
+        "property iconDarkAssets",
+        "property id",
+        "property installUrl",
+        "property isAccessible",
+        "property isEnabled",
+        "property labels",
+        "property logoUrl",
+        "property logoUrlDark",
+        "property name",
+        "property pluginDisplayNames",
+        "required id",
+        "required name"
+      ]
+    },
+    "AppListUpdatedNotification": {
+      "hash": "381bde4057e5fe64",
+      "facets": [
+        "property data",
+        "required data"
+      ]
+    },
+    "AppMetadata": {
+      "hash": "85e688452870cd59",
+      "facets": [
+        "property categories",
+        "property developer",
+        "property firstPartyRequiresInstall",
+        "property review",
+        "property screenshots",
+        "property seoDescription",
+        "property showInComposerWhenUnlinked",
+        "property subCategories",
+        "property version",
+        "property versionId",
+        "property versionNotes"
+      ]
+    },
+    "AppReview": {
+      "hash": "9a16baf78ac2b47c",
+      "facets": [
+        "property status",
+        "required status"
+      ]
+    },
+    "AppScreenshot": {
+      "hash": "466c2fa94f8e21b3",
+      "facets": [
+        "property fileId",
+        "property url",
+        "property userPrompt",
+        "required userPrompt"
+      ]
+    },
+    "ApprovalsReviewer": {
+      "hash": "33f933ae58305332",
+      "facets": [
+        "enum auto_review",
+        "enum guardian_subagent",
+        "enum user"
+      ]
+    },
+    "AskForApproval": {
+      "hash": "ef4537b1c7f7200c",
+      "facets": [
+        "enum never",
+        "enum on-request",
+        "enum untrusted",
+        "property granular",
+        "required granular"
+      ]
+    },
+    "AsyncUserInputQuestion": {
+      "hash": "2981a7c80a4aaa97",
+      "facets": [
+        "property options",
+        "property title",
+        "required title"
+      ]
+    },
+    "AuthMode": {
+      "hash": "0e590111bb48384a",
+      "facets": [
+        "enum agentIdentity",
+        "enum apikey",
+        "enum bedrockAccessKeys",
+        "enum bedrockApiKey",
+        "enum chatgpt",
+        "enum chatgptAuthTokens",
+        "enum headers",
+        "enum personalAccessToken"
+      ]
+    },
+    "AuthRecoveryNotification": {
+      "hash": "3c8f81a87d8fa15b",
+      "facets": [
+        "property message",
+        "property provider",
+        "property threadId",
+        "property turnId",
+        "required message",
+        "required provider",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "AutoReviewDecisionSource": {
+      "hash": "d26215691b942dbd",
+      "facets": [
+        "enum agent"
+      ]
+    },
+    "ByteRange": {
+      "hash": "7eff92e4f5976d16",
+      "facets": [
+        "property end",
+        "property start",
+        "required end",
+        "required start"
+      ]
+    },
+    "CancelLoginAccountParams": {
+      "hash": "af91c3671d5ac026",
+      "facets": [
+        "property loginId",
+        "required loginId"
+      ]
+    },
+    "CapabilityRootLocation": {
+      "hash": "adb3fbc2b3a61e3b",
+      "facets": [
+        "environment: property environmentId",
+        "environment: property path",
+        "environment: property type",
+        "environment: required environmentId",
+        "environment: required path",
+        "environment: required type",
+        "type = environment"
+      ]
+    },
+    "ClientInfo": {
+      "hash": "fb8c1d3b688f80ca",
+      "facets": [
+        "property name",
+        "property title",
+        "property version",
+        "required name",
+        "required version"
+      ]
+    },
+    "CodexErrorInfo": {
+      "hash": "b7beec53a96bd25a",
+      "facets": [
+        "enum badRequest",
+        "enum contextWindowExceeded",
+        "enum cyberPolicy",
+        "enum flexUnavailable",
+        "enum internalServerError",
+        "enum misalignmentPolicyViolation",
+        "enum other",
+        "enum rateLimitExceeded",
+        "enum sandboxError",
+        "enum serverOverloaded",
+        "enum sessionBudgetExceeded",
+        "enum threadRollbackFailed",
+        "enum tooManyDenials",
+        "enum unauthorized",
+        "enum usageLimitExceeded",
+        "property activeTurnNotSteerable",
+        "property httpConnectionFailed",
+        "property responseStreamConnectionFailed",
+        "property responseStreamDisconnected",
+        "property responseTooManyFailedAttempts",
+        "required activeTurnNotSteerable",
+        "required httpConnectionFailed",
+        "required responseStreamConnectionFailed",
+        "required responseStreamDisconnected",
+        "required responseTooManyFailedAttempts"
+      ]
+    },
+    "CollabAgentState": {
+      "hash": "ac2c520ae1f5638e",
+      "facets": [
+        "property message",
+        "property status",
+        "required status"
+      ]
+    },
+    "CollabAgentStatus": {
+      "hash": "503192b1c8864715",
+      "facets": [
+        "enum completed",
+        "enum errored",
+        "enum interrupted",
+        "enum notFound",
+        "enum pendingInit",
+        "enum running",
+        "enum shutdown"
+      ]
+    },
+    "CollabAgentTool": {
+      "hash": "5af3e52130624121",
+      "facets": [
+        "enum closeAgent",
+        "enum followupTask",
+        "enum interruptAgent",
+        "enum listAgents",
+        "enum resumeAgent",
+        "enum sendInput",
+        "enum sendMessage",
+        "enum spawnAgent",
+        "enum wait"
+      ]
+    },
+    "CollabAgentToolCallStatus": {
+      "hash": "e78aaedf4de73115",
+      "facets": [
+        "enum completed",
+        "enum failed",
+        "enum inProgress",
+        "enum interrupted"
+      ]
+    },
+    "CollaborationMode": {
+      "hash": "b5f635bf01b2a223",
+      "facets": [
+        "property mode",
+        "property settings",
+        "required mode",
+        "required settings"
+      ]
+    },
+    "CommandAction": {
+      "hash": "96c594a77f4b9eae",
+      "facets": [
+        "listFiles: property command",
+        "listFiles: property path",
+        "listFiles: property type",
+        "listFiles: required command",
+        "listFiles: required type",
+        "read: property command",
+        "read: property name",
+        "read: property path",
+        "read: property type",
+        "read: required command",
+        "read: required name",
+        "read: required path",
+        "read: required type",
+        "search: property command",
+        "search: property path",
+        "search: property query",
+        "search: property type",
+        "search: required command",
+        "search: required type",
+        "type = listFiles",
+        "type = read",
+        "type = search",
+        "type = unknown",
+        "unknown: property command",
+        "unknown: property type",
+        "unknown: required command",
+        "unknown: required type"
+      ]
+    },
+    "CommandExecOutputDeltaNotification": {
+      "hash": "7c71ec05ad8cec0c",
+      "facets": [
+        "property capReached",
+        "property deltaBase64",
+        "property processId",
+        "property stream",
+        "required capReached",
+        "required deltaBase64",
+        "required processId",
+        "required stream"
+      ]
+    },
+    "CommandExecOutputStream": {
+      "hash": "d99e3e7af24ee612",
+      "facets": [
+        "enum stderr",
+        "enum stdout"
+      ]
+    },
+    "CommandExecutionApprovalDecision": {
+      "hash": "894709ff116d7576",
+      "facets": [
+        "enum accept",
+        "enum acceptForSession",
+        "enum cancel",
+        "enum decline",
+        "property acceptWithExecpolicyAmendment",
+        "property applyNetworkPolicyAmendment",
+        "required acceptWithExecpolicyAmendment",
+        "required applyNetworkPolicyAmendment"
+      ]
+    },
+    "CommandExecutionApprovalKind": {
+      "hash": "7d1bbc34a4189cec",
+      "facets": [
+        "enum command",
+        "enum writeStdin"
+      ]
+    },
+    "CommandExecutionOutputDeltaNotification": {
+      "hash": "48c409e23abd4a7b",
+      "facets": [
+        "property delta",
+        "property itemId",
+        "property threadId",
+        "property turnId",
+        "required delta",
+        "required itemId",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "CommandExecutionRequestApprovalParams": {
+      "hash": "1c8a946aa616145c",
+      "facets": [
+        "property additionalPermissions",
+        "property approvalId",
+        "property availableDecisions",
+        "property command",
+        "property commandActions",
+        "property cwd",
+        "property environmentId",
+        "property itemId",
+        "property kind",
+        "property networkApprovalContext",
+        "property proposedExecpolicyAmendment",
+        "property proposedNetworkPolicyAmendments",
+        "property reason",
+        "property startedAtMs",
+        "property threadId",
+        "property turnId",
+        "required itemId",
+        "required startedAtMs",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "CommandExecutionSource": {
+      "hash": "aed4d0e6fa8dc082",
+      "facets": [
+        "enum agent",
+        "enum unifiedExecInteraction",
+        "enum unifiedExecStartup",
+        "enum userShell"
+      ]
+    },
+    "CommandExecutionStatus": {
+      "hash": "db89bc7414cb0aa8",
+      "facets": [
+        "enum completed",
+        "enum declined",
+        "enum failed",
+        "enum inProgress"
+      ]
+    },
+    "ConfigBatchWriteParams": {
+      "hash": "4a09b74f2efe97a2",
+      "facets": [
+        "property edits",
+        "property expectedVersion",
+        "property filePath",
+        "property reloadUserConfig",
+        "required edits"
+      ]
+    },
+    "ConfigEdit": {
+      "hash": "3aec14d9eefda325",
+      "facets": [
+        "property keyPath",
+        "property mergeStrategy",
+        "property value",
+        "required keyPath",
+        "required mergeStrategy",
+        "required value"
+      ]
+    },
+    "ConfigReadParams": {
+      "hash": "2594877d03ca5d67",
+      "facets": [
+        "property cwd",
+        "property includeLayers"
+      ]
+    },
+    "ConfigWarningNotification": {
+      "hash": "9ae81c5de1859f25",
+      "facets": [
+        "property details",
+        "property path",
+        "property range",
+        "property summary",
+        "required summary"
+      ]
+    },
+    "ConfigurationReasoning": {
+      "hash": "ecd97a641be1d117",
+      "facets": [
+        "property effort",
+        "required effort"
+      ]
+    },
+    "ContentItem": {
+      "hash": "7b7684a9b6fa0c8d",
+      "facets": [
+        "input_audio: property audio_url",
+        "input_audio: property type",
+        "input_audio: required audio_url",
+        "input_audio: required type",
+        "input_image: property detail",
+        "input_image: property type",
+        "input_image: required type",
+        "input_text: property text",
+        "input_text: property type",
+        "input_text: required text",
+        "input_text: required type",
+        "output_text: property annotations",
+        "output_text: property logprobs",
+        "output_text: property text",
+        "output_text: property type",
+        "output_text: required text",
+        "output_text: required type",
+        "type = input_audio",
+        "type = input_image",
+        "type = input_text",
+        "type = output_text"
+      ]
+    },
+    "ContextCompactedNotification": {
+      "hash": "b5df015fe3b43c84",
+      "facets": [
+        "property threadId",
+        "property turnId",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "CreditsSnapshot": {
+      "hash": "4d4c08cde96f03b9",
+      "facets": [
+        "property balance",
+        "property hasCredits",
+        "property unlimited",
+        "required hasCredits",
+        "required unlimited"
+      ]
+    },
+    "CyberAccessProgram": {
+      "hash": "09996d1579b995f0",
+      "facets": [
+        "enum daybreakBlue",
+        "enum daybreakRed",
+        "enum standard"
+      ]
+    },
+    "DeprecationNoticeNotification": {
+      "hash": "ae1304a9a3e7f008",
+      "facets": [
+        "property details",
+        "property summary",
+        "required summary"
+      ]
+    },
+    "DesktopOnboardingEntrypoint": {
+      "hash": "8a3b85b2fb811269",
+      "facets": [
+        "enum life_sciences"
+      ]
+    },
+    "DynamicToolCallOutputContentItem": {
+      "hash": "b2638c18929f93f1",
+      "facets": [
+        "inputAudio: property audioUrl",
+        "inputAudio: property type",
+        "inputAudio: required audioUrl",
+        "inputAudio: required type",
+        "inputImage: property imageUrl",
+        "inputImage: property type",
+        "inputImage: required imageUrl",
+        "inputImage: required type",
+        "inputText: property text",
+        "inputText: property type",
+        "inputText: required text",
+        "inputText: required type",
+        "type = inputAudio",
+        "type = inputImage",
+        "type = inputText"
+      ]
+    },
+    "DynamicToolCallStatus": {
+      "hash": "3f9e827fd2d176fc",
+      "facets": [
+        "enum completed",
+        "enum failed",
+        "enum inProgress"
+      ]
+    },
+    "DynamicToolNamespaceTool": {
+      "hash": "3bf63fd300041350",
+      "facets": [
+        "function: property deferLoading",
+        "function: property description",
+        "function: property inputSchema",
+        "function: property name",
+        "function: property type",
+        "function: required description",
+        "function: required inputSchema",
+        "function: required name",
+        "function: required type",
+        "type = function"
+      ]
+    },
+    "DynamicToolSpec": {
+      "hash": "67a155db673e6e25",
+      "facets": [
+        "function: property deferLoading",
+        "function: property description",
+        "function: property inputSchema",
+        "function: property name",
+        "function: property type",
+        "function: required description",
+        "function: required inputSchema",
+        "function: required name",
+        "function: required type",
+        "namespace: property description",
+        "namespace: property name",
+        "namespace: property tools",
+        "namespace: property type",
+        "namespace: required description",
+        "namespace: required name",
+        "namespace: required tools",
+        "namespace: required type",
+        "type = function",
+        "type = namespace"
+      ]
+    },
+    "EnvironmentConnectionNotification": {
+      "hash": "8fefd7f62d9b10eb",
+      "facets": [
+        "property environmentId",
+        "property threadId",
+        "required environmentId",
+        "required threadId"
+      ]
+    },
+    "ErrorNotification": {
+      "hash": "e04c7dd3461eb23c",
+      "facets": [
+        "property error",
+        "property threadId",
+        "property turnId",
+        "property willRetry",
+        "required error",
+        "required threadId",
+        "required turnId",
+        "required willRetry"
+      ]
+    },
+    "ExternalAgentConfigImportCompletedNotification": {
+      "hash": "67d704dd06020c26",
+      "facets": [
+        "property importId",
+        "property itemTypeResults",
+        "required importId",
+        "required itemTypeResults"
+      ]
+    },
+    "ExternalAgentConfigImportItemTypeFailure": {
+      "hash": "4eaa612c9ea87f81",
+      "facets": [
+        "property cwd",
+        "property errorType",
+        "property failureStage",
+        "property itemType",
+        "property message",
+        "property source",
+        "property subErrorType",
+        "required failureStage",
+        "required itemType",
+        "required message"
+      ]
+    },
+    "ExternalAgentConfigImportItemTypeSuccess": {
+      "hash": "df940ff17e2a69f4",
+      "facets": [
+        "property cwd",
+        "property itemType",
+        "property source",
+        "property target",
+        "property title",
+        "required itemType"
+      ]
+    },
+    "ExternalAgentConfigImportProgressNotification": {
+      "hash": "67d704dd06020c26",
+      "facets": [
+        "property importId",
+        "property itemTypeResults",
+        "required importId",
+        "required itemTypeResults"
+      ]
+    },
+    "ExternalAgentConfigImportTypeResult": {
+      "hash": "195fe028fd4aabfc",
+      "facets": [
+        "property failures",
+        "property itemType",
+        "property successes",
+        "required failures",
+        "required itemType",
+        "required successes"
+      ]
+    },
+    "ExternalAgentConfigMigrationItemType": {
+      "hash": "fe5fc5be323edc88",
+      "facets": [
+        "enum AGENTS_MD",
+        "enum COMMANDS",
+        "enum CONFIG",
+        "enum HOOKS",
+        "enum MCP_SERVER_CONFIG",
+        "enum MEMORY",
+        "enum PLUGINS",
+        "enum SESSIONS",
+        "enum SKILLS",
+        "enum SUBAGENTS"
+      ]
+    },
+    "FileChangeOutputDeltaNotification": {
+      "hash": "48c409e23abd4a7b",
+      "facets": [
+        "property delta",
+        "property itemId",
+        "property threadId",
+        "property turnId",
+        "required delta",
+        "required itemId",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "FileChangePatchUpdatedNotification": {
+      "hash": "c00826b0a14f07fe",
+      "facets": [
+        "property changes",
+        "property itemId",
+        "property threadId",
+        "property turnId",
+        "required changes",
+        "required itemId",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "FileChangeRequestApprovalParams": {
+      "hash": "07acbeeadc844b62",
+      "facets": [
+        "property grantRoot",
+        "property itemId",
+        "property reason",
+        "property startedAtMs",
+        "property threadId",
+        "property turnId",
+        "required itemId",
+        "required startedAtMs",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "FileSystemAccessMode": {
+      "hash": "26a4ec0bab7a134f",
+      "facets": [
+        "enum deny",
+        "enum read",
+        "enum write"
+      ]
+    },
+    "FileSystemPath": {
+      "hash": "e58bf7ef7429e7d7",
+      "facets": [
+        "glob_pattern: property pattern",
+        "glob_pattern: property type",
+        "glob_pattern: required pattern",
+        "glob_pattern: required type",
+        "path: property path",
+        "path: property type",
+        "path: required path",
+        "path: required type",
+        "special: property type",
+        "special: property value",
+        "special: required type",
+        "special: required value",
+        "type = glob_pattern",
+        "type = path",
+        "type = special"
+      ]
+    },
+    "FileSystemSandboxEntry": {
+      "hash": "e0edceca5cc00d6e",
+      "facets": [
+        "property access",
+        "property path",
+        "required access",
+        "required path"
+      ]
+    },
+    "FileSystemSpecialPath": {
+      "hash": "0f369f7b6bff0747",
+      "facets": [
+        "kind = minimal",
+        "kind = project_roots",
+        "kind = root",
+        "kind = slash_tmp",
+        "kind = tmpdir",
+        "kind = unknown",
+        "minimal: property kind",
+        "minimal: required kind",
+        "project_roots: property kind",
+        "project_roots: property subpath",
+        "project_roots: required kind",
+        "root: property kind",
+        "root: required kind",
+        "slash_tmp: property kind",
+        "slash_tmp: required kind",
+        "tmpdir: property kind",
+        "tmpdir: required kind",
+        "unknown: property kind",
+        "unknown: property path",
+        "unknown: property subpath",
+        "unknown: required kind",
+        "unknown: required path"
+      ]
+    },
+    "FileUpdateChange": {
+      "hash": "d2863d98167c4ff2",
+      "facets": [
+        "property diff",
+        "property kind",
+        "property path",
+        "required diff",
+        "required kind",
+        "required path"
+      ]
+    },
+    "FsChangedNotification": {
+      "hash": "7d97683036c6ff2c",
+      "facets": [
+        "property changedPaths",
+        "property watchId",
+        "required changedPaths",
+        "required watchId"
+      ]
+    },
+    "FunctionCallOutputBody": {
+      "hash": "c69c8103770fac93",
+      "facets": []
+    },
+    "FunctionCallOutputContentItem": {
+      "hash": "65a372f2e4de5beb",
+      "facets": [
+        "encrypted_content: property encrypted_content",
+        "encrypted_content: property type",
+        "encrypted_content: required encrypted_content",
+        "encrypted_content: required type",
+        "input_audio: property audio_url",
+        "input_audio: property type",
+        "input_audio: required audio_url",
+        "input_audio: required type",
+        "input_image: property detail",
+        "input_image: property type",
+        "input_image: required type",
+        "input_text: property text",
+        "input_text: property type",
+        "input_text: required text",
+        "input_text: required type",
+        "type = encrypted_content",
+        "type = input_audio",
+        "type = input_image",
+        "type = input_text"
+      ]
+    },
+    "FuzzyFileSearchMatchType": {
+      "hash": "b0a008b271d93d28",
+      "facets": [
+        "enum directory",
+        "enum file"
+      ]
+    },
+    "FuzzyFileSearchResult": {
+      "hash": "cf6540f7a9372162",
+      "facets": [
+        "property file_name",
+        "property indices",
+        "property match_type",
+        "property path",
+        "property root",
+        "property score",
+        "required file_name",
+        "required match_type",
+        "required path",
+        "required root",
+        "required score"
+      ]
+    },
+    "FuzzyFileSearchSessionCompletedNotification": {
+      "hash": "4f678132038b4702",
+      "facets": [
+        "property sessionId",
+        "required sessionId"
+      ]
+    },
+    "FuzzyFileSearchSessionUpdatedNotification": {
+      "hash": "2b416c0caf0ee7e5",
+      "facets": [
+        "property files",
+        "property query",
+        "property sessionId",
+        "required files",
+        "required query",
+        "required sessionId"
+      ]
+    },
+    "GatewayOAuthChangedNotification": {
+      "hash": "4ba36ecaae5ce7ce",
+      "facets": [
+        "property authUrl",
+        "property error",
+        "property providerId",
+        "property status",
+        "required providerId",
+        "required status"
+      ]
+    },
+    "GatewayOAuthStatus": {
+      "hash": "94dd903c38d4faa3",
+      "facets": [
+        "enum failed",
+        "enum notReady",
+        "enum started",
+        "enum succeeded"
+      ]
+    },
+    "GetAccountParams": {
+      "hash": "1b33c17b98cc09ab",
+      "facets": [
+        "property refreshToken"
+      ]
+    },
+    "GetAccountRateLimitsParams": {
+      "hash": "ccfe214fcd002b5d",
+      "facets": [
+        "property excludeResetCreditDetails",
+        "property supportsLunaReserve"
+      ]
+    },
+    "GitInfo": {
+      "hash": "ed9f0616f53b0044",
+      "facets": [
+        "property branch",
+        "property originUrl",
+        "property sha"
+      ]
+    },
+    "GuardianApprovalReview": {
+      "hash": "a53066721911a35b",
+      "facets": [
+        "property rationale",
+        "property riskLevel",
+        "property status",
+        "property userAuthorization",
+        "required status"
+      ]
+    },
+    "GuardianApprovalReviewAction": {
+      "hash": "8ef52aa18a3b824c",
+      "facets": [
+        "applyPatch: property cwd",
+        "applyPatch: property files",
+        "applyPatch: property type",
+        "applyPatch: required cwd",
+        "applyPatch: required files",
+        "applyPatch: required type",
+        "command: property command",
+        "command: property cwd",
+        "command: property source",
+        "command: property type",
+        "command: required command",
+        "command: required cwd",
+        "command: required source",
+        "command: required type",
+        "execve: property argv",
+        "execve: property cwd",
+        "execve: property program",
+        "execve: property source",
+        "execve: property type",
+        "execve: required argv",
+        "execve: required cwd",
+        "execve: required program",
+        "execve: required source",
+        "execve: required type",
+        "mcpToolCall: property connectorId",
+        "mcpToolCall: property connectorName",
+        "mcpToolCall: property server",
+        "mcpToolCall: property toolName",
+        "mcpToolCall: property toolTitle",
+        "mcpToolCall: property type",
+        "mcpToolCall: required server",
+        "mcpToolCall: required toolName",
+        "mcpToolCall: required type",
+        "networkAccess: property host",
+        "networkAccess: property port",
+        "networkAccess: property protocol",
+        "networkAccess: property target",
+        "networkAccess: property type",
+        "networkAccess: required host",
+        "networkAccess: required port",
+        "networkAccess: required protocol",
+        "networkAccess: required target",
+        "networkAccess: required type",
+        "requestPermissions: property permissions",
+        "requestPermissions: property reason",
+        "requestPermissions: property type",
+        "requestPermissions: required permissions",
+        "requestPermissions: required type",
+        "type = applyPatch",
+        "type = command",
+        "type = execve",
+        "type = mcpToolCall",
+        "type = networkAccess",
+        "type = requestPermissions",
+        "type = writeStdin",
+        "writeStdin: property approvalId",
+        "writeStdin: property cwd",
+        "writeStdin: property processId",
+        "writeStdin: property stdin",
+        "writeStdin: property type",
+        "writeStdin: required approvalId",
+        "writeStdin: required cwd",
+        "writeStdin: required processId",
+        "writeStdin: required stdin",
+        "writeStdin: required type"
+      ]
+    },
+    "GuardianApprovalReviewStatus": {
+      "hash": "78ce4137b4fa78ed",
+      "facets": [
+        "enum aborted",
+        "enum approved",
+        "enum denied",
+        "enum inProgress",
+        "enum timedOut"
+      ]
+    },
+    "GuardianCommandSource": {
+      "hash": "73ad26cdc48a49fc",
+      "facets": [
+        "enum shell",
+        "enum unifiedExec"
+      ]
+    },
+    "GuardianRiskLevel": {
+      "hash": "20d0774d205f5562",
+      "facets": [
+        "enum critical",
+        "enum high",
+        "enum low",
+        "enum medium"
+      ]
+    },
+    "GuardianUserAuthorization": {
+      "hash": "8d64b0a2349cab34",
+      "facets": [
+        "enum high",
+        "enum low",
+        "enum medium",
+        "enum unknown"
+      ]
+    },
+    "GuardianWarningNotification": {
+      "hash": "2ea492d2c57eaab0",
+      "facets": [
+        "property message",
+        "property threadId",
+        "required message",
+        "required threadId"
+      ]
+    },
+    "HookCompletedNotification": {
+      "hash": "17fecfe60635dc42",
+      "facets": [
+        "property run",
+        "property threadId",
+        "property turnId",
+        "required run",
+        "required threadId"
+      ]
+    },
+    "HookEventName": {
+      "hash": "8613d26f739f1033",
+      "facets": [
+        "enum interrupt",
+        "enum permissionRequest",
+        "enum postCompact",
+        "enum postToolUse",
+        "enum preCompact",
+        "enum preToolUse",
+        "enum sessionEnd",
+        "enum sessionStart",
+        "enum stop",
+        "enum subagentStart",
+        "enum subagentStop",
+        "enum userPromptSubmit"
+      ]
+    },
+    "HookExecutionMode": {
+      "hash": "fe0a367ae7e95a38",
+      "facets": [
+        "enum async",
+        "enum sync"
+      ]
+    },
+    "HookHandlerType": {
+      "hash": "81d9162a907d3b19",
+      "facets": [
+        "enum agent",
+        "enum command",
+        "enum mcpTool",
+        "enum prompt"
+      ]
+    },
+    "HookOutputEntry": {
+      "hash": "468bcfaf43f46dda",
+      "facets": [
+        "property kind",
+        "property text",
+        "required kind",
+        "required text"
+      ]
+    },
+    "HookOutputEntryKind": {
+      "hash": "df5380b388f80db9",
+      "facets": [
+        "enum context",
+        "enum error",
+        "enum feedback",
+        "enum stop",
+        "enum warning"
+      ]
+    },
+    "HookPromptFragment": {
+      "hash": "0ed71c02f6f35419",
+      "facets": [
+        "property hookRunId",
+        "property text",
+        "required hookRunId",
+        "required text"
+      ]
+    },
+    "HookRunStatus": {
+      "hash": "8b808078d191d66f",
+      "facets": [
+        "enum blocked",
+        "enum completed",
+        "enum failed",
+        "enum running",
+        "enum stopped"
+      ]
+    },
+    "HookRunSummary": {
+      "hash": "cc0c0414fb7ac743",
+      "facets": [
+        "property completedAt",
+        "property displayOrder",
+        "property durationMs",
+        "property entries",
+        "property eventName",
+        "property executionMode",
+        "property handlerType",
+        "property id",
+        "property scope",
+        "property source",
+        "property sourcePath",
+        "property startedAt",
+        "property status",
+        "property statusMessage",
+        "required displayOrder",
+        "required entries",
+        "required eventName",
+        "required executionMode",
+        "required handlerType",
+        "required id",
+        "required scope",
+        "required sourcePath",
+        "required startedAt",
+        "required status"
+      ]
+    },
+    "HookScope": {
+      "hash": "c6c475736ebcc69b",
+      "facets": [
+        "enum thread",
+        "enum turn"
+      ]
+    },
+    "HookSource": {
+      "hash": "f08ae8c11ef2ea59",
+      "facets": [
+        "enum cloudManagedConfig",
+        "enum cloudRequirements",
+        "enum legacyManagedConfigFile",
+        "enum legacyManagedConfigMdm",
+        "enum mdm",
+        "enum plugin",
+        "enum project",
+        "enum sessionFlags",
+        "enum system",
+        "enum unknown",
+        "enum user"
+      ]
+    },
+    "HookStartedNotification": {
+      "hash": "17fecfe60635dc42",
+      "facets": [
+        "property run",
+        "property threadId",
+        "property turnId",
+        "required run",
+        "required threadId"
+      ]
+    },
+    "HooksListParams": {
+      "hash": "652e56c6a73e871c",
+      "facets": [
+        "property cwds"
+      ]
+    },
+    "ImageDetail": {
+      "hash": "4f720fa74fa362da",
+      "facets": [
+        "enum auto",
+        "enum high",
+        "enum low",
+        "enum original"
+      ]
+    },
+    "ImageGenerationFailure": {
+      "hash": "b99b78bff3b9f767",
+      "facets": [
+        "type = usageLimitExceeded",
+        "usageLimitExceeded: property limitId",
+        "usageLimitExceeded: property resetsAt",
+        "usageLimitExceeded: property type",
+        "usageLimitExceeded: required limitId",
+        "usageLimitExceeded: required type"
+      ]
+    },
+    "InitializeCapabilities": {
+      "hash": "0f89b25b9165987d",
+      "facets": [
+        "property experimentalApi",
+        "property explicitGatewayOauth",
+        "property extensions",
+        "property mcpServerOpenaiFormElicitation",
+        "property optOutNotificationMethods",
+        "property requestAttestation"
+      ]
+    },
+    "InitializeParams": {
+      "hash": "09829d1b93cc59b8",
+      "facets": [
+        "property capabilities",
+        "property clientInfo",
+        "required clientInfo"
+      ]
+    },
+    "InternalChatMessageMetadataPassthrough": {
+      "hash": "216b206def9bdde6",
+      "facets": [
+        "property turn_id"
+      ]
+    },
+    "ItemCompletedNotification": {
+      "hash": "2a5acd0d311b4b81",
+      "facets": [
+        "property completedAtMs",
+        "property item",
+        "property threadId",
+        "property turnId",
+        "required completedAtMs",
+        "required item",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "ItemGuardianApprovalReviewCompletedNotification": {
+      "hash": "02f80d1324454c4d",
+      "facets": [
+        "property action",
+        "property completedAtMs",
+        "property decisionSource",
+        "property review",
+        "property reviewId",
+        "property startedAtMs",
+        "property targetItemId",
+        "property threadId",
+        "property turnId",
+        "required action",
+        "required completedAtMs",
+        "required decisionSource",
+        "required review",
+        "required reviewId",
+        "required startedAtMs",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "ItemGuardianApprovalReviewStartedNotification": {
+      "hash": "895f0fbc074194be",
+      "facets": [
+        "property action",
+        "property review",
+        "property reviewId",
+        "property startedAtMs",
+        "property targetItemId",
+        "property threadId",
+        "property turnId",
+        "required action",
+        "required review",
+        "required reviewId",
+        "required startedAtMs",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "ItemStartedNotification": {
+      "hash": "4c76b7fecdd0fe5c",
+      "facets": [
+        "property item",
+        "property startedAtMs",
+        "property threadId",
+        "property turnId",
+        "required item",
+        "required startedAtMs",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "LegacyAppPathString": {
+      "hash": "00404e686415370f",
+      "facets": []
+    },
+    "ListMcpServerStatusParams": {
+      "hash": "fca4d47ad6b56d8d",
+      "facets": [
+        "property cursor",
+        "property detail",
+        "property limit",
+        "property serverName",
+        "property threadId"
+      ]
+    },
+    "LocalShellAction": {
+      "hash": "f84dde151082e6e3",
+      "facets": [
+        "exec: property command",
+        "exec: property env",
+        "exec: property timeout_ms",
+        "exec: property type",
+        "exec: property user",
+        "exec: property working_directory",
+        "exec: required command",
+        "exec: required type",
+        "type = exec"
+      ]
+    },
+    "LocalShellStatus": {
+      "hash": "b20aa65e8d52f5db",
+      "facets": [
+        "enum completed",
+        "enum in_progress",
+        "enum incomplete"
+      ]
+    },
+    "LoginAccountParams": {
+      "hash": "2eb9a4032ee08d75",
+      "facets": [
+        "amazonBedrock: property apiKey",
+        "amazonBedrock: property region",
+        "amazonBedrock: property type",
+        "amazonBedrock: required apiKey",
+        "amazonBedrock: required region",
+        "amazonBedrock: required type",
+        "amazonBedrockAccessKeys: property accessKeyId",
+        "amazonBedrockAccessKeys: property region",
+        "amazonBedrockAccessKeys: property secretAccessKey",
+        "amazonBedrockAccessKeys: property sessionToken",
+        "amazonBedrockAccessKeys: property type",
+        "amazonBedrockAccessKeys: required accessKeyId",
+        "amazonBedrockAccessKeys: required region",
+        "amazonBedrockAccessKeys: required secretAccessKey",
+        "amazonBedrockAccessKeys: required type",
+        "apiKey: property apiKey",
+        "apiKey: property type",
+        "apiKey: required apiKey",
+        "apiKey: required type",
+        "chatgpt: property appBrand",
+        "chatgpt: property codexStreamlinedLogin",
+        "chatgpt: property type",
+        "chatgpt: property useHostedLoginSuccessPage",
+        "chatgpt: required type",
+        "chatgptAuthTokens: property accessToken",
+        "chatgptAuthTokens: property chatgptAccountId",
+        "chatgptAuthTokens: property chatgptPlanType",
+        "chatgptAuthTokens: property type",
+        "chatgptAuthTokens: required accessToken",
+        "chatgptAuthTokens: required chatgptAccountId",
+        "chatgptAuthTokens: required type",
+        "chatgptDeviceCode: property type",
+        "chatgptDeviceCode: required type",
+        "type = amazonBedrock",
+        "type = amazonBedrockAccessKeys",
+        "type = apiKey",
+        "type = chatgpt",
+        "type = chatgptAuthTokens",
+        "type = chatgptDeviceCode"
+      ]
+    },
+    "LoginAppBrand": {
+      "hash": "b8005c51919c53c1",
+      "facets": [
+        "enum chatgpt",
+        "enum codex"
+      ]
+    },
+    "McpAppDisplayMode": {
+      "hash": "eb5153c7c9fa25d5",
+      "facets": [
+        "enum fullscreen",
+        "enum inline"
+      ]
+    },
+    "McpAppUi": {
+      "hash": "1086f2470429b1c8",
+      "facets": [
+        "property preferredModelDisplayMode",
+        "property resourceUri",
+        "required preferredModelDisplayMode",
+        "required resourceUri"
+      ]
+    },
+    "McpElicitationArrayType": {
+      "hash": "a8224421161f51e1",
+      "facets": [
+        "enum array"
+      ]
+    },
+    "McpElicitationBooleanSchema": {
+      "hash": "04de71a021760a03",
+      "facets": [
+        "property default",
+        "property description",
+        "property title",
+        "property type",
+        "required type"
+      ]
+    },
+    "McpElicitationBooleanType": {
+      "hash": "071bf9310ac156e2",
+      "facets": [
+        "enum boolean"
+      ]
+    },
+    "McpElicitationConstOption": {
+      "hash": "88e2ba392855202d",
+      "facets": [
+        "property const",
+        "property title",
+        "required const",
+        "required title"
+      ]
+    },
+    "McpElicitationEnumSchema": {
+      "hash": "245259c95fbd1704",
+      "facets": []
+    },
+    "McpElicitationLegacyTitledEnumSchema": {
+      "hash": "a06d3aba68f8e31c",
+      "facets": [
+        "property default",
+        "property description",
+        "property enum",
+        "property enumNames",
+        "property title",
+        "property type",
+        "required enum",
+        "required type"
+      ]
+    },
+    "McpElicitationMultiSelectEnumSchema": {
+      "hash": "3023a2003557fc25",
+      "facets": []
+    },
+    "McpElicitationNumberSchema": {
+      "hash": "7f6dfd1899cd4a3d",
+      "facets": [
+        "property default",
+        "property description",
+        "property maximum",
+        "property minimum",
+        "property title",
+        "property type",
+        "required type"
+      ]
+    },
+    "McpElicitationNumberType": {
+      "hash": "5f78b811161b5bb6",
+      "facets": [
+        "enum integer",
+        "enum number"
+      ]
+    },
+    "McpElicitationObjectType": {
+      "hash": "0c15a4822fc87fb3",
+      "facets": [
+        "enum object"
+      ]
+    },
+    "McpElicitationPrimitiveSchema": {
+      "hash": "d57ab20053fc844f",
+      "facets": []
+    },
+    "McpElicitationSchema": {
+      "hash": "4a8e7154d98668f9",
+      "facets": [
+        "property $schema",
+        "property properties",
+        "property required",
+        "property type",
+        "required properties",
+        "required type"
+      ]
+    },
+    "McpElicitationSingleSelectEnumSchema": {
+      "hash": "ac39cdc51f14f403",
+      "facets": []
+    },
+    "McpElicitationStringFormat": {
+      "hash": "e54df8b6f2778db4",
+      "facets": [
+        "enum date",
+        "enum date-time",
+        "enum email",
+        "enum uri"
+      ]
+    },
+    "McpElicitationStringSchema": {
+      "hash": "4a9b976b5d0bdff8",
+      "facets": [
+        "property default",
+        "property description",
+        "property format",
+        "property maxLength",
+        "property minLength",
+        "property title",
+        "property type",
+        "required type"
+      ]
+    },
+    "McpElicitationStringType": {
+      "hash": "e797617f4554bdcd",
+      "facets": [
+        "enum string"
+      ]
+    },
+    "McpElicitationTitledEnumItems": {
+      "hash": "bca4de9e4c8cf576",
+      "facets": [
+        "property anyOf",
+        "required anyOf"
+      ]
+    },
+    "McpElicitationTitledMultiSelectEnumSchema": {
+      "hash": "b108cd41762a391a",
+      "facets": [
+        "property default",
+        "property description",
+        "property items",
+        "property maxItems",
+        "property minItems",
+        "property title",
+        "property type",
+        "required items",
+        "required type"
+      ]
+    },
+    "McpElicitationTitledSingleSelectEnumSchema": {
+      "hash": "f479d0d96b50e7ad",
+      "facets": [
+        "property default",
+        "property description",
+        "property oneOf",
+        "property title",
+        "property type",
+        "required oneOf",
+        "required type"
+      ]
+    },
+    "McpElicitationUntitledEnumItems": {
+      "hash": "cfe2d6a3c8cf805f",
+      "facets": [
+        "property enum",
+        "property type",
+        "required enum",
+        "required type"
+      ]
+    },
+    "McpElicitationUntitledMultiSelectEnumSchema": {
+      "hash": "7c72d7ddd55e0dee",
+      "facets": [
+        "property default",
+        "property description",
+        "property items",
+        "property maxItems",
+        "property minItems",
+        "property title",
+        "property type",
+        "required items",
+        "required type"
+      ]
+    },
+    "McpElicitationUntitledSingleSelectEnumSchema": {
+      "hash": "9e6b0e74fb073a26",
+      "facets": [
+        "property default",
+        "property description",
+        "property enum",
+        "property title",
+        "property type",
+        "required enum",
+        "required type"
+      ]
+    },
+    "McpServerElicitationRequestParams": {
+      "hash": "06f8a40017d31780",
+      "facets": [
+        "form: property _meta",
+        "form: property message",
+        "form: property mode",
+        "form: property requestedSchema",
+        "form: required message",
+        "form: required mode",
+        "form: required requestedSchema",
+        "mode = form",
+        "mode = openai/form",
+        "mode = openai/userVerification",
+        "mode = openaiForm",
+        "mode = url",
+        "openai/form: property _meta",
+        "openai/form: property message",
+        "openai/form: property mode",
+        "openai/form: property requestedSchema",
+        "openai/form: required message",
+        "openai/form: required mode",
+        "openai/form: required requestedSchema",
+        "openai/userVerification: property _meta",
+        "openai/userVerification: property challenge",
+        "openai/userVerification: property description",
+        "openai/userVerification: property mode",
+        "openai/userVerification: property title",
+        "openai/userVerification: required challenge",
+        "openai/userVerification: required description",
+        "openai/userVerification: required mode",
+        "openai/userVerification: required title",
+        "openaiForm: property _meta",
+        "openaiForm: property message",
+        "openaiForm: property mode",
+        "openaiForm: property requestedSchema",
+        "openaiForm: required message",
+        "openaiForm: required mode",
+        "openaiForm: required requestedSchema",
+        "property serverName",
+        "property threadId",
+        "property turnId",
+        "required serverName",
+        "required threadId",
+        "url: property _meta",
+        "url: property elicitationId",
+        "url: property message",
+        "url: property mode",
+        "url: property url",
+        "url: required elicitationId",
+        "url: required message",
+        "url: required mode",
+        "url: required url"
+      ]
+    },
+    "McpServerEventNotification": {
+      "hash": "d2b22558b783ea3b",
+      "facets": [
+        "property method",
+        "property params",
+        "required method",
+        "required params"
+      ]
+    },
+    "McpServerEventStreamNotification": {
+      "hash": "b0a04637abe03495",
+      "facets": [
+        "property notification",
+        "property subscriptionId",
+        "required notification",
+        "required subscriptionId"
+      ]
+    },
+    "McpServerOauthClientRegistration": {
+      "hash": "b9138a17cebfff11",
+      "facets": [
+        "enum auto",
+        "enum cimd",
+        "enum dcr"
+      ]
+    },
+    "McpServerOauthLoginCompletedNotification": {
+      "hash": "4680bbbda009df6f",
+      "facets": [
+        "property error",
+        "property loginId",
+        "property name",
+        "property success",
+        "property threadId",
+        "required name",
+        "required success"
+      ]
+    },
+    "McpServerOauthLoginParams": {
+      "hash": "2b9f06ff3c670a6f",
+      "facets": [
+        "property clientRegistration",
+        "property name",
+        "property scopes",
+        "property threadId",
+        "property timeoutSecs",
+        "required name"
+      ]
+    },
+    "McpServerStartupFailureReason": {
+      "hash": "48978325633e52f4",
+      "facets": [
+        "enum reauthenticationRequired"
+      ]
+    },
+    "McpServerStartupState": {
+      "hash": "f3035fdabf9aa8f3",
+      "facets": [
+        "enum cancelled",
+        "enum failed",
+        "enum ready",
+        "enum starting"
+      ]
+    },
+    "McpServerStatusDetail": {
+      "hash": "905c3a1d0094bbd2",
+      "facets": [
+        "enum full",
+        "enum toolsAndAuthOnly"
+      ]
+    },
+    "McpServerStatusUpdatedNotification": {
+      "hash": "3511b26e58276148",
+      "facets": [
+        "property error",
+        "property failureReason",
+        "property name",
+        "property status",
+        "property threadId",
+        "required name",
+        "required status"
+      ]
+    },
+    "McpToolCallAppContext": {
+      "hash": "5505f5f917aec648",
+      "facets": [
+        "property actionName",
+        "property appName",
+        "property connectorId",
+        "property linkId",
+        "property resourceUri",
+        "required connectorId"
+      ]
+    },
+    "McpToolCallError": {
+      "hash": "2d9389fd413dd301",
+      "facets": [
+        "property message",
+        "required message"
+      ]
+    },
+    "McpToolCallProgressNotification": {
+      "hash": "553822395a0b89aa",
+      "facets": [
+        "property itemId",
+        "property message",
+        "property threadId",
+        "property turnId",
+        "required itemId",
+        "required message",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "McpToolCallResult": {
+      "hash": "91105d0dafa3e743",
+      "facets": [
+        "property _meta",
+        "property content",
+        "property structuredContent",
+        "required content"
+      ]
+    },
+    "McpToolCallStatus": {
+      "hash": "3f9e827fd2d176fc",
+      "facets": [
+        "enum completed",
+        "enum failed",
+        "enum inProgress"
+      ]
+    },
+    "MemoryCitation": {
+      "hash": "969d972b7899bcd7",
+      "facets": [
+        "property entries",
+        "property threadIds",
+        "required entries",
+        "required threadIds"
+      ]
+    },
+    "MemoryCitationEntry": {
+      "hash": "5555665499385af7",
+      "facets": [
+        "property lineEnd",
+        "property lineStart",
+        "property note",
+        "property path",
+        "required lineEnd",
+        "required lineStart",
+        "required note",
+        "required path"
+      ]
+    },
+    "MergeStrategy": {
+      "hash": "4ef8f96997a505a6",
+      "facets": [
+        "enum replace",
+        "enum upsert"
+      ]
+    },
+    "MessagePhase": {
+      "hash": "afa26461313b9086",
+      "facets": [
+        "enum commentary",
+        "enum final_answer",
+        "enum partial_answer"
+      ]
+    },
+    "MisalignmentErrorDetails": {
+      "hash": "8badd8d1600a2f17",
+      "facets": [
+        "property detailedExplanation",
+        "property errorType",
+        "property reviewTarget",
+        "property steer"
+      ]
+    },
+    "MisalignmentSteer": {
+      "hash": "2d9389fd413dd301",
+      "facets": [
+        "property message",
+        "required message"
+      ]
+    },
+    "ModeKind": {
+      "hash": "e94dd34de830e8ac",
+      "facets": [
+        "enum default",
+        "enum plan"
+      ]
+    },
+    "ModelListParams": {
+      "hash": "0b6006bbe857ef96",
+      "facets": [
+        "property cursor",
+        "property includeHidden",
+        "property limit"
+      ]
+    },
+    "ModelRerouteReason": {
+      "hash": "19c4dee9eaf7e438",
+      "facets": [
+        "enum highRiskCyberActivity"
+      ]
+    },
+    "ModelReroutedNotification": {
+      "hash": "5934b5126ce7ba4d",
+      "facets": [
+        "property fromModel",
+        "property reason",
+        "property threadId",
+        "property toModel",
+        "property turnId",
+        "required fromModel",
+        "required reason",
+        "required threadId",
+        "required toModel",
+        "required turnId"
+      ]
+    },
+    "ModelSafetyBufferingUpdatedNotification": {
+      "hash": "326bfca243e887b4",
+      "facets": [
+        "property fasterModel",
+        "property model",
+        "property reasons",
+        "property showBufferingUi",
+        "property threadId",
+        "property turnId",
+        "property useCases",
+        "required model",
+        "required reasons",
+        "required showBufferingUi",
+        "required threadId",
+        "required turnId",
+        "required useCases"
+      ]
+    },
+    "ModelVerification": {
+      "hash": "14e84ce14c8a1f78",
+      "facets": [
+        "enum trustedAccessForCyber"
+      ]
+    },
+    "ModelVerificationNotification": {
+      "hash": "f02b2d0719ecc6eb",
+      "facets": [
+        "property threadId",
+        "property turnId",
+        "property verifications",
+        "required threadId",
+        "required turnId",
+        "required verifications"
+      ]
+    },
+    "MultiAgentMode": {
+      "hash": "2b9e72f9e523fa4d",
+      "facets": [
+        "enum explicitRequestOnly",
+        "enum proactive",
+        "property custom",
+        "required custom"
+      ]
+    },
+    "NetworkAccess": {
+      "hash": "5cef26ffcef5d65b",
+      "facets": [
+        "enum enabled",
+        "enum restricted"
+      ]
+    },
+    "NetworkApprovalContext": {
+      "hash": "d21a1a9ddab85b40",
+      "facets": [
+        "property host",
+        "property protocol",
+        "required host",
+        "required protocol"
+      ]
+    },
+    "NetworkApprovalProtocol": {
+      "hash": "8ef0b53ce7abfd19",
+      "facets": [
+        "enum http",
+        "enum https",
+        "enum socks5Tcp",
+        "enum socks5Udp"
+      ]
+    },
+    "NetworkPolicyAmendment": {
+      "hash": "9f94e0340f1bff0c",
+      "facets": [
+        "property action",
+        "property host",
+        "required action",
+        "required host"
+      ]
+    },
+    "NetworkPolicyRuleAction": {
+      "hash": "4094de294376f2fa",
+      "facets": [
+        "enum allow",
+        "enum deny"
+      ]
+    },
+    "NonSteerableTurnKind": {
+      "hash": "68ae2507375db542",
+      "facets": [
+        "enum compact",
+        "enum review"
+      ]
+    },
+    "PatchApplyStatus": {
+      "hash": "db89bc7414cb0aa8",
+      "facets": [
+        "enum completed",
+        "enum declined",
+        "enum failed",
+        "enum inProgress"
+      ]
+    },
+    "PatchChangeKind": {
+      "hash": "3089ce01e6412826",
+      "facets": [
+        "add: property type",
+        "add: required type",
+        "delete: property type",
+        "delete: required type",
+        "type = add",
+        "type = delete",
+        "type = update",
+        "update: property move_path",
+        "update: property type",
+        "update: required type"
+      ]
+    },
+    "PermissionsRequestApprovalParams": {
+      "hash": "b9b7c61b8162e896",
+      "facets": [
+        "property cwd",
+        "property environmentId",
+        "property itemId",
+        "property permissions",
+        "property reason",
+        "property startedAtMs",
+        "property threadId",
+        "property turnId",
+        "required cwd",
+        "required itemId",
+        "required permissions",
+        "required startedAtMs",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "Personality": {
+      "hash": "09098bb89114ada7",
+      "facets": [
+        "enum friendly",
+        "enum none",
+        "enum pragmatic"
+      ]
+    },
+    "PlanDeltaNotification": {
+      "hash": "48c409e23abd4a7b",
+      "facets": [
+        "property delta",
+        "property itemId",
+        "property threadId",
+        "property turnId",
+        "required delta",
+        "required itemId",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "PlanType": {
+      "hash": "91106a4f55793a04",
+      "facets": [
+        "enum business",
+        "enum edu",
+        "enum edu_plus",
+        "enum edu_pro",
+        "enum ent26",
+        "enum enterprise",
+        "enum enterprise_cbp_automation",
+        "enum enterprise_cbp_usage_based",
+        "enum free",
+        "enum go",
+        "enum plus",
+        "enum pro",
+        "enum prolite",
+        "enum promax",
+        "enum self_serve_business_prolite",
+        "enum self_serve_business_usage_based",
+        "enum team",
+        "enum unknown"
+      ]
+    },
+    "ProcessExitedNotification": {
+      "hash": "a73b069040e989e6",
+      "facets": [
+        "property exitCode",
+        "property processHandle",
+        "property stderr",
+        "property stderrCapReached",
+        "property stdout",
+        "property stdoutCapReached",
+        "required exitCode",
+        "required processHandle",
+        "required stderr",
+        "required stderrCapReached",
+        "required stdout",
+        "required stdoutCapReached"
+      ]
+    },
+    "ProcessOutputDeltaNotification": {
+      "hash": "5c64be305d6b49f3",
+      "facets": [
+        "property capReached",
+        "property deltaBase64",
+        "property processHandle",
+        "property stream",
+        "required capReached",
+        "required deltaBase64",
+        "required processHandle",
+        "required stream"
+      ]
+    },
+    "ProcessOutputStream": {
+      "hash": "d99e3e7af24ee612",
+      "facets": [
+        "enum stderr",
+        "enum stdout"
+      ]
+    },
+    "ProjectChangeType": {
+      "hash": "6ef891eeb00bf319",
+      "facets": [
+        "enum created",
+        "enum deleted",
+        "enum updated"
+      ]
+    },
+    "ProjectChangedNotification": {
+      "hash": "32946ef1d2c1ee7b",
+      "facets": [
+        "property changeType",
+        "property projectId",
+        "required changeType",
+        "required projectId"
+      ]
+    },
+    "RateLimitReachedType": {
+      "hash": "f467441f37dc74ef",
+      "facets": [
+        "enum rate_limit_reached",
+        "enum workspace_member_credits_depleted",
+        "enum workspace_member_usage_limit_reached",
+        "enum workspace_owner_credits_depleted",
+        "enum workspace_owner_usage_limit_reached"
+      ]
+    },
+    "RateLimitSnapshot": {
+      "hash": "714a3be27b054faa",
+      "facets": [
+        "property credits",
+        "property individualLimit",
+        "property limitId",
+        "property limitName",
+        "property normalModelSlug",
+        "property planType",
+        "property primary",
+        "property rateLimitReachedType",
+        "property secondary",
+        "property spendControlReached"
+      ]
+    },
+    "RateLimitWindow": {
+      "hash": "3d36041b1613f60e",
+      "facets": [
+        "property resetsAt",
+        "property usedPercent",
+        "property windowDurationMins",
+        "required usedPercent"
+      ]
+    },
+    "RealtimeConversationVersion": {
+      "hash": "9ae93484e8a38ee7",
+      "facets": [
+        "enum v1",
+        "enum v2",
+        "enum v3"
+      ]
+    },
+    "ReasoningEffort": {
+      "hash": "9ac136edb99a2063",
+      "facets": []
+    },
+    "ReasoningItemContent": {
+      "hash": "506a29c4c64afa53",
+      "facets": [
+        "reasoning_text: property text",
+        "reasoning_text: property type",
+        "reasoning_text: required text",
+        "reasoning_text: required type",
+        "text: property text",
+        "text: property type",
+        "text: required text",
+        "text: required type",
+        "type = reasoning_text",
+        "type = text"
+      ]
+    },
+    "ReasoningItemReasoningSummary": {
+      "hash": "8aeab9ff1afd05c7",
+      "facets": [
+        "summary_text: property text",
+        "summary_text: property type",
+        "summary_text: required text",
+        "summary_text: required type",
+        "type = summary_text"
+      ]
+    },
+    "ReasoningSummary": {
+      "hash": "b6d79c75a5100577",
+      "facets": [
+        "enum auto",
+        "enum concise",
+        "enum detailed",
+        "enum none"
+      ]
+    },
+    "ReasoningSummaryPartAddedNotification": {
+      "hash": "3046a58a5da45dd3",
+      "facets": [
+        "property itemId",
+        "property summaryIndex",
+        "property threadId",
+        "property turnId",
+        "required itemId",
+        "required summaryIndex",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "ReasoningSummaryTextDeltaNotification": {
+      "hash": "fd0bb30d22e90fea",
+      "facets": [
+        "property delta",
+        "property itemId",
+        "property summaryIndex",
+        "property threadId",
+        "property turnId",
+        "required delta",
+        "required itemId",
+        "required summaryIndex",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "ReasoningTextDeltaNotification": {
+      "hash": "164dc07dfc10f9e3",
+      "facets": [
+        "property contentIndex",
+        "property delta",
+        "property itemId",
+        "property threadId",
+        "property turnId",
+        "required contentIndex",
+        "required delta",
+        "required itemId",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "RemoteControlConnectionStatus": {
+      "hash": "298d22856c858341",
+      "facets": [
+        "enum connected",
+        "enum connecting",
+        "enum disabled",
+        "enum errored"
+      ]
+    },
+    "RemoteControlStatusChangedNotification": {
+      "hash": "81e4a862b126b65e",
+      "facets": [
+        "property environmentId",
+        "property installationId",
+        "property serverName",
+        "property status",
+        "required installationId",
+        "required serverName",
+        "required status"
+      ]
+    },
+    "RequestId": {
+      "hash": "3dc93f3205fdd9ff",
+      "facets": []
+    },
+    "RequestPermissionProfile": {
+      "hash": "a3c701dcfedf8d6e",
+      "facets": [
+        "property fileSystem",
+        "property network"
+      ]
+    },
+    "ResponseItem": {
+      "hash": "61674764921f8bb2",
+      "facets": [
+        "additional_tools: property id",
+        "additional_tools: property role",
+        "additional_tools: property tools",
+        "additional_tools: property type",
+        "additional_tools: required role",
+        "additional_tools: required tools",
+        "additional_tools: required type",
+        "agent_message: property author",
+        "agent_message: property content",
+        "agent_message: property id",
+        "agent_message: property internal_chat_message_metadata_passthrough",
+        "agent_message: property recipient",
+        "agent_message: property type",
+        "agent_message: required author",
+        "agent_message: required content",
+        "agent_message: required recipient",
+        "agent_message: required type",
+        "compaction: property encrypted_content",
+        "compaction: property id",
+        "compaction: property internal_chat_message_metadata_passthrough",
+        "compaction: property type",
+        "compaction: required encrypted_content",
+        "compaction: required type",
+        "compaction_trigger: property type",
+        "compaction_trigger: required type",
+        "configuration_update: property reasoning",
+        "configuration_update: property type",
+        "configuration_update: required reasoning",
+        "configuration_update: required type",
+        "context_compaction: property encrypted_content",
+        "context_compaction: property id",
+        "context_compaction: property internal_chat_message_metadata_passthrough",
+        "context_compaction: property type",
+        "context_compaction: required type",
+        "custom_tool_call: property call_id",
+        "custom_tool_call: property encrypted_content",
+        "custom_tool_call: property id",
+        "custom_tool_call: property input",
+        "custom_tool_call: property internal_chat_message_metadata_passthrough",
+        "custom_tool_call: property name",
+        "custom_tool_call: property namespace",
+        "custom_tool_call: property status",
+        "custom_tool_call: property type",
+        "custom_tool_call: required call_id",
+        "custom_tool_call: required input",
+        "custom_tool_call: required name",
+        "custom_tool_call: required type",
+        "custom_tool_call_output: property call_id",
+        "custom_tool_call_output: property id",
+        "custom_tool_call_output: property internal_chat_message_metadata_passthrough",
+        "custom_tool_call_output: property name",
+        "custom_tool_call_output: property output",
+        "custom_tool_call_output: property type",
+        "custom_tool_call_output: required call_id",
+        "custom_tool_call_output: required output",
+        "custom_tool_call_output: required type",
+        "function_call: property arguments",
+        "function_call: property call_id",
+        "function_call: property encrypted_content",
+        "function_call: property encrypted_function_args",
+        "function_call: property id",
+        "function_call: property internal_chat_message_metadata_passthrough",
+        "function_call: property name",
+        "function_call: property namespace",
+        "function_call: property status",
+        "function_call: property type",
+        "function_call: required arguments",
+        "function_call: required call_id",
+        "function_call: required name",
+        "function_call: required type",
+        "function_call_output: property call_id",
+        "function_call_output: property id",
+        "function_call_output: property internal_chat_message_metadata_passthrough",
+        "function_call_output: property name",
+        "function_call_output: property namespace",
+        "function_call_output: property output",
+        "function_call_output: property type",
+        "function_call_output: required output",
+        "function_call_output: required type",
+        "image_generation_call: property encrypted_content",
+        "image_generation_call: property id",
+        "image_generation_call: property internal_chat_message_metadata_passthrough",
+        "image_generation_call: property result",
+        "image_generation_call: property revised_prompt",
+        "image_generation_call: property status",
+        "image_generation_call: property type",
+        "image_generation_call: required result",
+        "image_generation_call: required status",
+        "image_generation_call: required type",
+        "local_shell_call: property action",
+        "local_shell_call: property call_id",
+        "local_shell_call: property encrypted_content",
+        "local_shell_call: property id",
+        "local_shell_call: property internal_chat_message_metadata_passthrough",
+        "local_shell_call: property status",
+        "local_shell_call: property type",
+        "local_shell_call: required action",
+        "local_shell_call: required status",
+        "local_shell_call: required type",
+        "message: property content",
+        "message: property encrypted_content",
+        "message: property id",
+        "message: property internal_chat_message_metadata_passthrough",
+        "message: property phase",
+        "message: property role",
+        "message: property status",
+        "message: property type",
+        "message: required content",
+        "message: required role",
+        "message: required type",
+        "other: property type",
+        "other: required type",
+        "reasoning: property content",
+        "reasoning: property encrypted_content",
+        "reasoning: property id",
+        "reasoning: property internal_chat_message_metadata_passthrough",
+        "reasoning: property summary",
+        "reasoning: property type",
+        "reasoning: required summary",
+        "reasoning: required type",
+        "tool_search_call: property arguments",
+        "tool_search_call: property call_id",
+        "tool_search_call: property encrypted_content",
+        "tool_search_call: property execution",
+        "tool_search_call: property id",
+        "tool_search_call: property internal_chat_message_metadata_passthrough",
+        "tool_search_call: property status",
+        "tool_search_call: property type",
+        "tool_search_call: required arguments",
+        "tool_search_call: required execution",
+        "tool_search_call: required type",
+        "tool_search_output: property call_id",
+        "tool_search_output: property execution",
+        "tool_search_output: property id",
+        "tool_search_output: property internal_chat_message_metadata_passthrough",
+        "tool_search_output: property status",
+        "tool_search_output: property tools",
+        "tool_search_output: property type",
+        "tool_search_output: required execution",
+        "tool_search_output: required status",
+        "tool_search_output: required tools",
+        "tool_search_output: required type",
+        "type = additional_tools",
+        "type = agent_message",
+        "type = compaction",
+        "type = compaction_trigger",
+        "type = configuration_update",
+        "type = context_compaction",
+        "type = custom_tool_call",
+        "type = custom_tool_call_output",
+        "type = function_call",
+        "type = function_call_output",
+        "type = image_generation_call",
+        "type = local_shell_call",
+        "type = message",
+        "type = other",
+        "type = reasoning",
+        "type = tool_search_call",
+        "type = tool_search_output",
+        "type = web_search_call",
+        "web_search_call: property action",
+        "web_search_call: property encrypted_content",
+        "web_search_call: property id",
+        "web_search_call: property internal_chat_message_metadata_passthrough",
+        "web_search_call: property status",
+        "web_search_call: property type",
+        "web_search_call: required type"
+      ]
+    },
+    "ResponsesApiWebSearchAction": {
+      "hash": "7c74d0f37d0001b8",
+      "facets": [
+        "find_in_page: property pattern",
+        "find_in_page: property type",
+        "find_in_page: property url",
+        "find_in_page: required type",
+        "open_page: property type",
+        "open_page: property url",
+        "open_page: required type",
+        "other: property type",
+        "other: required type",
+        "search: property queries",
+        "search: property query",
+        "search: property type",
+        "search: required type",
+        "type = find_in_page",
+        "type = open_page",
+        "type = other",
+        "type = search"
+      ]
+    },
+    "ReviewDelivery": {
+      "hash": "407cb4d324c9c3b8",
+      "facets": [
+        "enum detached",
+        "enum inline"
+      ]
+    },
+    "ReviewStartParams": {
+      "hash": "1ed7ae2c1e51a25b",
+      "facets": [
+        "property delivery",
+        "property target",
+        "property threadId",
+        "required target",
+        "required threadId"
+      ]
+    },
+    "ReviewTarget": {
+      "hash": "beef674b1b4c40c2",
+      "facets": [
+        "baseBranch: property branch",
+        "baseBranch: property type",
+        "baseBranch: required branch",
+        "baseBranch: required type",
+        "commit: property sha",
+        "commit: property title",
+        "commit: property type",
+        "commit: required sha",
+        "commit: required type",
+        "custom: property instructions",
+        "custom: property type",
+        "custom: required instructions",
+        "custom: required type",
+        "type = baseBranch",
+        "type = commit",
+        "type = custom",
+        "type = uncommittedChanges",
+        "uncommittedChanges: property type",
+        "uncommittedChanges: required type"
+      ]
+    },
+    "SandboxMode": {
+      "hash": "640acba2b6bde486",
+      "facets": [
+        "enum danger-full-access",
+        "enum read-only",
+        "enum workspace-write"
+      ]
+    },
+    "SandboxPolicy": {
+      "hash": "9cb9ad9af9bbb6b7",
+      "facets": [
+        "dangerFullAccess: property type",
+        "dangerFullAccess: required type",
+        "externalSandbox: property networkAccess",
+        "externalSandbox: property type",
+        "externalSandbox: required type",
+        "readOnly: property networkAccess",
+        "readOnly: property type",
+        "readOnly: required type",
+        "type = dangerFullAccess",
+        "type = externalSandbox",
+        "type = readOnly",
+        "type = workspaceWrite",
+        "workspaceWrite: property excludeSlashTmp",
+        "workspaceWrite: property excludeTmpdirEnvVar",
+        "workspaceWrite: property networkAccess",
+        "workspaceWrite: property type",
+        "workspaceWrite: property writableRoots",
+        "workspaceWrite: required type"
+      ]
+    },
+    "SelectedCapabilityRoot": {
+      "hash": "a64b5c2aae556a1f",
+      "facets": [
+        "property id",
+        "property location",
+        "required id",
+        "required location"
+      ]
+    },
+    "ServerRequestResolvedNotification": {
+      "hash": "36ed106fedb19cba",
+      "facets": [
+        "property requestId",
+        "property threadId",
+        "required requestId",
+        "required threadId"
+      ]
+    },
+    "SessionSource": {
+      "hash": "a68a7fcc73975313",
+      "facets": [
+        "enum appServer",
+        "enum cli",
+        "enum exec",
+        "enum unknown",
+        "enum vscode",
+        "property custom",
+        "property subAgent",
+        "required custom",
+        "required subAgent"
+      ]
+    },
+    "Settings": {
+      "hash": "79ca7492c1357d34",
+      "facets": [
+        "property developer_instructions",
+        "property model",
+        "property reasoning_effort",
+        "required model"
+      ]
+    },
+    "SkillsChangedNotification": {
+      "hash": "a2c799262a3ce3c1",
+      "facets": []
+    },
+    "SkillsExtraRootsSetParams": {
+      "hash": "df9044670b175ba0",
+      "facets": [
+        "property extraRoots",
+        "required extraRoots"
+      ]
+    },
+    "SkillsListParams": {
+      "hash": "0465e4595373ec0b",
+      "facets": [
+        "property cwds",
+        "property forceReload"
+      ]
+    },
+    "SortDirection": {
+      "hash": "9b8522343e904a69",
+      "facets": [
+        "enum asc",
+        "enum desc"
+      ]
+    },
+    "SpendControlLimitSnapshot": {
+      "hash": "9132532ce5ab5821",
+      "facets": [
+        "property limit",
+        "property remainingPercent",
+        "property resetsAt",
+        "property used",
+        "required limit",
+        "required remainingPercent",
+        "required resetsAt",
+        "required used"
+      ]
+    },
+    "StrictReviewRequiredNotification": {
+      "hash": "7a38785d4f0feb87",
+      "facets": [
+        "property startedAtMs",
+        "property threadId",
+        "property turnId",
+        "required startedAtMs",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "SubAgentActivityKind": {
+      "hash": "9be96b7b1586f64b",
+      "facets": [
+        "enum completed",
+        "enum interacted",
+        "enum interrupted",
+        "enum started"
+      ]
+    },
+    "SubAgentSource": {
+      "hash": "37fa5ff077609b3f",
+      "facets": [
+        "enum compact",
+        "enum memory_consolidation",
+        "enum review",
+        "property other",
+        "property thread_spawn",
+        "required other",
+        "required thread_spawn"
+      ]
+    },
+    "TerminalInteractionNotification": {
+      "hash": "5bc9cd31db7893f1",
+      "facets": [
+        "property itemId",
+        "property processId",
+        "property stdin",
+        "property threadId",
+        "property turnId",
+        "required itemId",
+        "required processId",
+        "required stdin",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "TextElement": {
+      "hash": "c6b18cb1390e9f5d",
+      "facets": [
+        "property byteRange",
+        "property placeholder",
+        "required byteRange"
+      ]
+    },
+    "TextPosition": {
+      "hash": "b867f42f2ccecdec",
+      "facets": [
+        "property column",
+        "property line",
+        "required column",
+        "required line"
+      ]
+    },
+    "TextRange": {
+      "hash": "a3c4791d0ff65afd",
+      "facets": [
+        "property end",
+        "property start",
+        "required end",
+        "required start"
+      ]
+    },
+    "Thread": {
+      "hash": "9f677e1cd7d4994e",
+      "facets": [
+        "property agentNickname",
+        "property agentRole",
+        "property canAcceptDirectInput",
+        "property cliVersion",
+        "property createdAt",
+        "property cwd",
+        "property daybreakEnabled",
+        "property environments",
+        "property ephemeral",
+        "property extra",
+        "property forkedFromId",
+        "property gitInfo",
+        "property historyMode",
+        "property id",
+        "property model",
+        "property modelProvider",
+        "property name",
+        "property originator",
+        "property parentThreadId",
+        "property path",
+        "property preview",
+        "property projectId",
+        "property reasoningEffort",
+        "property recencyAt",
+        "property section",
+        "property sectionEnteredAt",
+        "property sessionId",
+        "property source",
+        "property status",
+        "property threadSource",
+        "property turns",
+        "property updatedAt",
+        "required cliVersion",
+        "required createdAt",
+        "required cwd",
+        "required ephemeral",
+        "required id",
+        "required modelProvider",
+        "required preview",
+        "required projectId",
+        "required sessionId",
+        "required source",
+        "required status",
+        "required turns",
+        "required updatedAt"
+      ]
+    },
+    "ThreadActiveFlag": {
+      "hash": "dcce1c490037c7ef",
+      "facets": [
+        "enum waitingOnApproval",
+        "enum waitingOnUserInput"
+      ]
+    },
+    "ThreadArchiveParams": {
+      "hash": "b6c9901e136c9163",
+      "facets": [
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadArchivedNotification": {
+      "hash": "b6c9901e136c9163",
+      "facets": [
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadAttachmentOperation": {
+      "hash": "c1f7db49c89b9927",
+      "facets": [
+        "enum created",
+        "enum deleted"
+      ]
+    },
+    "ThreadAttachmentUpdatedNotification": {
+      "hash": "db067f163276cb57",
+      "facets": [
+        "property attachmentId",
+        "property attachmentType",
+        "property identityKey",
+        "property operation",
+        "property threadId",
+        "required attachmentId",
+        "required attachmentType",
+        "required identityKey",
+        "required operation",
+        "required threadId"
+      ]
+    },
+    "ThreadBackgroundTerminalsListParams": {
+      "hash": "922ba6b26e8b05c1",
+      "facets": [
+        "property cursor",
+        "property limit",
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadBackgroundTerminalsTerminateParams": {
+      "hash": "5a920f45f4a28e26",
+      "facets": [
+        "property processId",
+        "property threadId",
+        "required processId",
+        "required threadId"
+      ]
+    },
+    "ThreadClosedNotification": {
+      "hash": "b6c9901e136c9163",
+      "facets": [
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadCompactStartParams": {
+      "hash": "b6c9901e136c9163",
+      "facets": [
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadDeleteParams": {
+      "hash": "b6c9901e136c9163",
+      "facets": [
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadDeletedNotification": {
+      "hash": "b6c9901e136c9163",
+      "facets": [
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadEnvironment": {
+      "hash": "ee6d02ee29ef6a14",
+      "facets": [
+        "property cwd",
+        "property environmentId",
+        "property runtimeWorkspaceRoots",
+        "required cwd",
+        "required environmentId",
+        "required runtimeWorkspaceRoots"
+      ]
+    },
+    "ThreadExtra": {
+      "hash": "a2c799262a3ce3c1",
+      "facets": []
+    },
+    "ThreadForkParams": {
+      "hash": "bdb7e177e456d930",
+      "facets": [
+        "property approvalPolicy",
+        "property approvalsReviewer",
+        "property baseInstructions",
+        "property beforeTurnId",
+        "property config",
+        "property cwd",
+        "property deferGoalContinuation",
+        "property developerInstructions",
+        "property ephemeral",
+        "property excludeTurns",
+        "property experimentalPredictionMode",
+        "property lastTurnId",
+        "property model",
+        "property modelProvider",
+        "property path",
+        "property permissions",
+        "property runtimeWorkspaceRoots",
+        "property sandbox",
+        "property serviceTier",
+        "property threadId",
+        "property threadSource",
+        "required threadId"
+      ]
+    },
+    "ThreadGoal": {
+      "hash": "f46ed0ce15bc9e8c",
+      "facets": [
+        "property createdAt",
+        "property objective",
+        "property status",
+        "property threadId",
+        "property timeUsedSeconds",
+        "property tokenBudget",
+        "property tokensUsed",
+        "property updatedAt",
+        "required createdAt",
+        "required objective",
+        "required status",
+        "required threadId",
+        "required timeUsedSeconds",
+        "required tokensUsed",
+        "required updatedAt"
+      ]
+    },
+    "ThreadGoalClearParams": {
+      "hash": "fa15e1f3d34876ef",
+      "facets": [
+        "property origin",
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadGoalClearedNotification": {
+      "hash": "b6c9901e136c9163",
+      "facets": [
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadGoalGetParams": {
+      "hash": "b6c9901e136c9163",
+      "facets": [
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadGoalMutationOrigin": {
+      "hash": "9c93c6afdc382ec8",
+      "facets": [
+        "enum automatic",
+        "enum user"
+      ]
+    },
+    "ThreadGoalSetParams": {
+      "hash": "2970d87dd98aa55c",
+      "facets": [
+        "property objective",
+        "property origin",
+        "property status",
+        "property threadId",
+        "property tokenBudget",
+        "required threadId"
+      ]
+    },
+    "ThreadGoalStatus": {
+      "hash": "b5ad001aab78acbf",
+      "facets": [
+        "enum active",
+        "enum blocked",
+        "enum budgetLimited",
+        "enum complete",
+        "enum paused",
+        "enum usageLimited"
+      ]
+    },
+    "ThreadGoalUpdatedNotification": {
+      "hash": "fce64ef3fa750bd8",
+      "facets": [
+        "property goal",
+        "property threadId",
+        "property turnId",
+        "required goal",
+        "required threadId"
+      ]
+    },
+    "ThreadHistoryMode": {
+      "hash": "57629e11c02b3347",
+      "facets": [
+        "enum legacy",
+        "enum paginated"
+      ]
+    },
+    "ThreadId": {
+      "hash": "00404e686415370f",
+      "facets": []
+    },
+    "ThreadItem": {
+      "hash": "86dc3ef9e07b74ab",
+      "facets": [
+        "agentMessage: property delivery",
+        "agentMessage: property id",
+        "agentMessage: property memoryCitation",
+        "agentMessage: property phase",
+        "agentMessage: property questions",
+        "agentMessage: property text",
+        "agentMessage: property type",
+        "agentMessage: required id",
+        "agentMessage: required text",
+        "agentMessage: required type",
+        "collabAgentToolCall: property agentsStates",
+        "collabAgentToolCall: property id",
+        "collabAgentToolCall: property model",
+        "collabAgentToolCall: property prompt",
+        "collabAgentToolCall: property reasoningEffort",
+        "collabAgentToolCall: property receiverThreadIds",
+        "collabAgentToolCall: property senderThreadId",
+        "collabAgentToolCall: property status",
+        "collabAgentToolCall: property tool",
+        "collabAgentToolCall: property type",
+        "collabAgentToolCall: required agentsStates",
+        "collabAgentToolCall: required id",
+        "collabAgentToolCall: required receiverThreadIds",
+        "collabAgentToolCall: required senderThreadId",
+        "collabAgentToolCall: required status",
+        "collabAgentToolCall: required tool",
+        "collabAgentToolCall: required type",
+        "commandExecution: property aggregatedOutput",
+        "commandExecution: property command",
+        "commandExecution: property commandActions",
+        "commandExecution: property cwd",
+        "commandExecution: property durationMs",
+        "commandExecution: property exitCode",
+        "commandExecution: property id",
+        "commandExecution: property pluginId",
+        "commandExecution: property processId",
+        "commandExecution: property scriptPath",
+        "commandExecution: property source",
+        "commandExecution: property status",
+        "commandExecution: property type",
+        "commandExecution: required command",
+        "commandExecution: required commandActions",
+        "commandExecution: required cwd",
+        "commandExecution: required id",
+        "commandExecution: required status",
+        "commandExecution: required type",
+        "contextCompaction: property id",
+        "contextCompaction: property type",
+        "contextCompaction: required id",
+        "contextCompaction: required type",
+        "dynamicToolCall: property arguments",
+        "dynamicToolCall: property contentItems",
+        "dynamicToolCall: property durationMs",
+        "dynamicToolCall: property id",
+        "dynamicToolCall: property namespace",
+        "dynamicToolCall: property status",
+        "dynamicToolCall: property success",
+        "dynamicToolCall: property tool",
+        "dynamicToolCall: property type",
+        "dynamicToolCall: required arguments",
+        "dynamicToolCall: required id",
+        "dynamicToolCall: required status",
+        "dynamicToolCall: required tool",
+        "dynamicToolCall: required type",
+        "enteredReviewMode: property id",
+        "enteredReviewMode: property review",
+        "enteredReviewMode: property type",
+        "enteredReviewMode: required id",
+        "enteredReviewMode: required review",
+        "enteredReviewMode: required type",
+        "exitedReviewMode: property id",
+        "exitedReviewMode: property review",
+        "exitedReviewMode: property type",
+        "exitedReviewMode: required id",
+        "exitedReviewMode: required review",
+        "exitedReviewMode: required type",
+        "fileChange: property changes",
+        "fileChange: property id",
+        "fileChange: property status",
+        "fileChange: property type",
+        "fileChange: required changes",
+        "fileChange: required id",
+        "fileChange: required status",
+        "fileChange: required type",
+        "functionCallOutput: property id",
+        "functionCallOutput: property name",
+        "functionCallOutput: property namespace",
+        "functionCallOutput: property output",
+        "functionCallOutput: property type",
+        "functionCallOutput: required id",
+        "functionCallOutput: required name",
+        "functionCallOutput: required output",
+        "functionCallOutput: required type",
+        "hookPrompt: property fragments",
+        "hookPrompt: property id",
+        "hookPrompt: property type",
+        "hookPrompt: required fragments",
+        "hookPrompt: required id",
+        "hookPrompt: required type",
+        "imageGeneration: property failure",
+        "imageGeneration: property id",
+        "imageGeneration: property result",
+        "imageGeneration: property revisedPrompt",
+        "imageGeneration: property savedPath",
+        "imageGeneration: property status",
+        "imageGeneration: property transparentBackground",
+        "imageGeneration: property type",
+        "imageGeneration: required id",
+        "imageGeneration: required result",
+        "imageGeneration: required status",
+        "imageGeneration: required type",
+        "imageView: property id",
+        "imageView: property path",
+        "imageView: property type",
+        "imageView: required id",
+        "imageView: required path",
+        "imageView: required type",
+        "mcpToolCall: property appContext",
+        "mcpToolCall: property arguments",
+        "mcpToolCall: property durationMs",
+        "mcpToolCall: property error",
+        "mcpToolCall: property id",
+        "mcpToolCall: property mcpAppResourceUri",
+        "mcpToolCall: property mcpAppUi",
+        "mcpToolCall: property pluginId",
+        "mcpToolCall: property readOnlyHint",
+        "mcpToolCall: property result",
+        "mcpToolCall: property server",
+        "mcpToolCall: property status",
+        "mcpToolCall: property tool",
+        "mcpToolCall: property type",
+        "mcpToolCall: required arguments",
+        "mcpToolCall: required id",
+        "mcpToolCall: required server",
+        "mcpToolCall: required status",
+        "mcpToolCall: required tool",
+        "mcpToolCall: required type",
+        "plan: property id",
+        "plan: property text",
+        "plan: property type",
+        "plan: required id",
+        "plan: required text",
+        "plan: required type",
+        "reasoning: property content",
+        "reasoning: property id",
+        "reasoning: property summary",
+        "reasoning: property type",
+        "reasoning: required id",
+        "reasoning: required type",
+        "sleep: property durationMs",
+        "sleep: property id",
+        "sleep: property type",
+        "sleep: required durationMs",
+        "sleep: required id",
+        "sleep: required type",
+        "subAgentActivity: property agentPath",
+        "subAgentActivity: property agentThreadId",
+        "subAgentActivity: property id",
+        "subAgentActivity: property kind",
+        "subAgentActivity: property model",
+        "subAgentActivity: property reasoningEffort",
+        "subAgentActivity: property type",
+        "subAgentActivity: required agentPath",
+        "subAgentActivity: required agentThreadId",
+        "subAgentActivity: required id",
+        "subAgentActivity: required kind",
+        "subAgentActivity: required type",
+        "type = agentMessage",
+        "type = collabAgentToolCall",
+        "type = commandExecution",
+        "type = contextCompaction",
+        "type = dynamicToolCall",
+        "type = enteredReviewMode",
+        "type = exitedReviewMode",
+        "type = fileChange",
+        "type = functionCallOutput",
+        "type = hookPrompt",
+        "type = imageGeneration",
+        "type = imageView",
+        "type = mcpToolCall",
+        "type = plan",
+        "type = reasoning",
+        "type = sleep",
+        "type = subAgentActivity",
+        "type = userMessage",
+        "type = webSearch",
+        "userMessage: property clientId",
+        "userMessage: property content",
+        "userMessage: property id",
+        "userMessage: property type",
+        "userMessage: required content",
+        "userMessage: required id",
+        "userMessage: required type",
+        "webSearch: property action",
+        "webSearch: property id",
+        "webSearch: property query",
+        "webSearch: property results",
+        "webSearch: property type",
+        "webSearch: required id",
+        "webSearch: required query",
+        "webSearch: required type"
+      ]
+    },
+    "ThreadItemsListAnchor": {
+      "hash": "1ddd78527a8ecd24",
+      "facets": [
+        "item: property itemId",
+        "item: property type",
+        "item: required itemId",
+        "item: required type",
+        "type = item"
+      ]
+    },
+    "ThreadItemsListCursor": {
+      "hash": "c177d26dec3d0bfb",
+      "facets": []
+    },
+    "ThreadItemsListParams": {
+      "hash": "9b66df5e59a024f2",
+      "facets": [
+        "property cursor",
+        "property limit",
+        "property sortDirection",
+        "property threadId",
+        "property turnId",
+        "required threadId"
+      ]
+    },
+    "ThreadListCwdFilter": {
+      "hash": "49f240701831daf4",
+      "facets": []
+    },
+    "ThreadListParams": {
+      "hash": "0d309dc4b9c6762e",
+      "facets": [
+        "property ancestorThreadId",
+        "property archived",
+        "property cursor",
+        "property cwd",
+        "property excludedThreadIds",
+        "property limit",
+        "property modelProviders",
+        "property originators",
+        "property parentThreadId",
+        "property projectId",
+        "property searchTerm",
+        "property sectionId",
+        "property sortDirection",
+        "property sortKey",
+        "property sourceKinds",
+        "property useStateDbOnly"
+      ]
+    },
+    "ThreadLoadedListParams": {
+      "hash": "302b681ef3952e30",
+      "facets": [
+        "property cursor",
+        "property limit"
+      ]
+    },
+    "ThreadNameUpdatedNotification": {
+      "hash": "13f2db06677a0377",
+      "facets": [
+        "property threadId",
+        "property threadName",
+        "required threadId"
+      ]
+    },
+    "ThreadProjectUpdatedNotification": {
+      "hash": "79ba684728d9879a",
+      "facets": [
+        "property projectId",
+        "property threadId",
+        "required projectId",
+        "required threadId"
+      ]
+    },
+    "ThreadQueueChangedNotification": {
+      "hash": "b6c9901e136c9163",
+      "facets": [
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadReadParams": {
+      "hash": "fe6bb52b098d24f8",
+      "facets": [
+        "property includeTurns",
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadRealtimeAudioChunk": {
+      "hash": "0c261b68e99ca27f",
+      "facets": [
+        "property data",
+        "property itemId",
+        "property numChannels",
+        "property sampleRate",
+        "property samplesPerChannel",
+        "required data",
+        "required numChannels",
+        "required sampleRate"
+      ]
+    },
+    "ThreadRealtimeBemItemPresentation": {
+      "hash": "0840a91ca9976584",
+      "facets": [
+        "inlineMarkdown: property type",
+        "inlineMarkdown: required type",
+        "inlineVisualization: property index",
+        "inlineVisualization: property type",
+        "inlineVisualization: required index",
+        "inlineVisualization: required type",
+        "type = inlineMarkdown",
+        "type = inlineVisualization",
+        "type = wholeItem",
+        "wholeItem: property type",
+        "wholeItem: required type"
+      ]
+    },
+    "ThreadRealtimeClosedNotification": {
+      "hash": "5b5e2a2a495e83d7",
+      "facets": [
+        "property reason",
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadRealtimeErrorNotification": {
+      "hash": "2ea492d2c57eaab0",
+      "facets": [
+        "property message",
+        "property threadId",
+        "required message",
+        "required threadId"
+      ]
+    },
+    "ThreadRealtimeItem": {
+      "hash": "23f1895fe952ae07",
+      "facets": [
+        "bemItemPromoted: property item_id",
+        "bemItemPromoted: property presentation",
+        "bemItemPromoted: property turn_id",
+        "bemItemPromoted: property type",
+        "bemItemPromoted: required item_id",
+        "bemItemPromoted: required presentation",
+        "bemItemPromoted: required turn_id",
+        "bemItemPromoted: required type",
+        "property id",
+        "property realtimeSessionId",
+        "realtimeSessionClosed: property outcome",
+        "realtimeSessionClosed: property type",
+        "realtimeSessionClosed: required outcome",
+        "realtimeSessionClosed: required type",
+        "realtimeSessionStarted: property type",
+        "realtimeSessionStarted: required type",
+        "required id",
+        "required realtimeSessionId",
+        "transcriptSegment: property role",
+        "transcriptSegment: property text",
+        "transcriptSegment: property type",
+        "transcriptSegment: required role",
+        "transcriptSegment: required text",
+        "transcriptSegment: required type",
+        "type = bemItemPromoted",
+        "type = realtimeSessionClosed",
+        "type = realtimeSessionStarted",
+        "type = transcriptSegment"
+      ]
+    },
+    "ThreadRealtimeItemAddedNotification": {
+      "hash": "928cae8072ca4d9c",
+      "facets": [
+        "property item",
+        "property threadId",
+        "required item",
+        "required threadId"
+      ]
+    },
+    "ThreadRealtimeItemCompletedNotification": {
+      "hash": "fcd0bb8b3e81e9aa",
+      "facets": [
+        "property item",
+        "property threadId",
+        "required item",
+        "required threadId"
+      ]
+    },
+    "ThreadRealtimeItemStartedNotification": {
+      "hash": "fcd0bb8b3e81e9aa",
+      "facets": [
+        "property item",
+        "property threadId",
+        "required item",
+        "required threadId"
+      ]
+    },
+    "ThreadRealtimeItemTranscriptDeltaNotification": {
+      "hash": "469579908168547a",
+      "facets": [
+        "property delta",
+        "property itemId",
+        "property threadId",
+        "required delta",
+        "required itemId",
+        "required threadId"
+      ]
+    },
+    "ThreadRealtimeOutputAudioDeltaNotification": {
+      "hash": "bb078adfc7bd0f52",
+      "facets": [
+        "property audio",
+        "property threadId",
+        "required audio",
+        "required threadId"
+      ]
+    },
+    "ThreadRealtimeSdpNotification": {
+      "hash": "6d9a9394aed0f7c0",
+      "facets": [
+        "property sdp",
+        "property threadId",
+        "required sdp",
+        "required threadId"
+      ]
+    },
+    "ThreadRealtimeSessionOutcome": {
+      "hash": "ad5ccc8a378e8b5d",
+      "facets": [
+        "enum ended",
+        "enum failed"
+      ]
+    },
+    "ThreadRealtimeStartedNotification": {
+      "hash": "208b352cebffe433",
+      "facets": [
+        "property realtimeSessionId",
+        "property threadId",
+        "property version",
+        "required threadId",
+        "required version"
+      ]
+    },
+    "ThreadRealtimeTranscriptDeltaNotification": {
+      "hash": "5f6854120220c672",
+      "facets": [
+        "property delta",
+        "property role",
+        "property threadId",
+        "required delta",
+        "required role",
+        "required threadId"
+      ]
+    },
+    "ThreadRealtimeTranscriptDoneNotification": {
+      "hash": "59b08b5a329c92a7",
+      "facets": [
+        "property role",
+        "property text",
+        "property threadId",
+        "required role",
+        "required text",
+        "required threadId"
+      ]
+    },
+    "ThreadRealtimeTranscriptRole": {
+      "hash": "6e216238d9e4feef",
+      "facets": [
+        "enum assistant",
+        "enum user"
+      ]
+    },
+    "ThreadResumeInitialTurnsPageParams": {
+      "hash": "1813ea04ec2eba6a",
+      "facets": [
+        "property itemsView",
+        "property limit",
+        "property sortDirection"
+      ]
+    },
+    "ThreadResumeParams": {
+      "hash": "5e59eccd3a41ee1a",
+      "facets": [
+        "property approvalPolicy",
+        "property approvalsReviewer",
+        "property baseInstructions",
+        "property config",
+        "property cwd",
+        "property developerInstructions",
+        "property excludeTurns",
+        "property history",
+        "property initialTurnsPage",
+        "property model",
+        "property modelProvider",
+        "property path",
+        "property permissions",
+        "property personality",
+        "property runtimeWorkspaceRoots",
+        "property sandbox",
+        "property serviceTier",
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadRevertedNotification": {
+      "hash": "b6c9901e136c9163",
+      "facets": [
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadSection": {
+      "hash": "718f63280efce8bb",
+      "facets": [
+        "property appearance",
+        "property id",
+        "property name",
+        "required id",
+        "required name"
+      ]
+    },
+    "ThreadSectionAppearance": {
+      "hash": "7e4deb7616211f04",
+      "facets": [
+        "property color",
+        "property icon"
+      ]
+    },
+    "ThreadSetNameParams": {
+      "hash": "f4f2fbc608aff3a6",
+      "facets": [
+        "property name",
+        "property threadId",
+        "required name",
+        "required threadId"
+      ]
+    },
+    "ThreadSettings": {
+      "hash": "1e6765b34208f387",
+      "facets": [
+        "property activePermissionProfile",
+        "property approvalPolicy",
+        "property approvalsReviewer",
+        "property collaborationMode",
+        "property cwd",
+        "property disabledPluginIds",
+        "property effort",
+        "property model",
+        "property modelProvider",
+        "property multiAgentMode",
+        "property personality",
+        "property sandboxPolicy",
+        "property serviceTier",
+        "property summary",
+        "required approvalPolicy",
+        "required approvalsReviewer",
+        "required collaborationMode",
+        "required cwd",
+        "required model",
+        "required modelProvider",
+        "required sandboxPolicy"
+      ]
+    },
+    "ThreadSettingsUpdateParams": {
+      "hash": "d419cef38810b81b",
+      "facets": [
+        "property approvalPolicy",
+        "property approvalsReviewer",
+        "property collaborationMode",
+        "property cwd",
+        "property disabledPluginIds",
+        "property effort",
+        "property model",
+        "property multiAgentMode",
+        "property permissions",
+        "property personality",
+        "property sandboxPolicy",
+        "property serviceTier",
+        "property summary",
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadSettingsUpdatedNotification": {
+      "hash": "bf08df3e2a3cd359",
+      "facets": [
+        "property threadId",
+        "property threadSettings",
+        "required threadId",
+        "required threadSettings"
+      ]
+    },
+    "ThreadSortKey": {
+      "hash": "5ae9975b8820c223",
+      "facets": [
+        "enum created_at",
+        "enum recency_at",
+        "enum section_position",
+        "enum updated_at"
+      ]
+    },
+    "ThreadSource": {
+      "hash": "00404e686415370f",
+      "facets": []
+    },
+    "ThreadSourceKind": {
+      "hash": "1c1ce211e165b96f",
+      "facets": [
+        "enum appServer",
+        "enum cli",
+        "enum exec",
+        "enum subAgent",
+        "enum subAgentCompact",
+        "enum subAgentOther",
+        "enum subAgentReview",
+        "enum subAgentThreadSpawn",
+        "enum unknown",
+        "enum vscode"
+      ]
+    },
+    "ThreadStartParams": {
+      "hash": "37da7de8e15d1179",
+      "facets": [
+        "property allowProviderModelFallback",
+        "property approvalPolicy",
+        "property approvalsReviewer",
+        "property baseInstructions",
+        "property config",
+        "property cwd",
+        "property daybreakEnabled",
+        "property developerInstructions",
+        "property dynamicTools",
+        "property environments",
+        "property ephemeral",
+        "property experimentalRawEvents",
+        "property historyMode",
+        "property mockExperimentalField",
+        "property model",
+        "property modelProvider",
+        "property multiAgentMode",
+        "property permissions",
+        "property personality",
+        "property projectId",
+        "property runtimeWorkspaceRoots",
+        "property sandbox",
+        "property selectedCapabilityRoots",
+        "property serviceName",
+        "property serviceTier",
+        "property sessionStartSource",
+        "property threadSource"
+      ]
+    },
+    "ThreadStartSource": {
+      "hash": "1b2d4b742850f803",
+      "facets": [
+        "enum clear",
+        "enum startup"
+      ]
+    },
+    "ThreadStartedNotification": {
+      "hash": "f46f7126936ba613",
+      "facets": [
+        "property thread",
+        "required thread"
+      ]
+    },
+    "ThreadStatus": {
+      "hash": "e442b509f2bed695",
+      "facets": [
+        "active: property activeFlags",
+        "active: property type",
+        "active: required activeFlags",
+        "active: required type",
+        "idle: property type",
+        "idle: required type",
+        "notLoaded: property type",
+        "notLoaded: required type",
+        "systemError: property type",
+        "systemError: required type",
+        "type = active",
+        "type = idle",
+        "type = notLoaded",
+        "type = systemError"
+      ]
+    },
+    "ThreadStatusChangedNotification": {
+      "hash": "863cc5c4f18e846c",
+      "facets": [
+        "property status",
+        "property threadId",
+        "required status",
+        "required threadId"
+      ]
+    },
+    "ThreadTokenUsage": {
+      "hash": "80218bcdd0faa09d",
+      "facets": [
+        "property last",
+        "property modelContextWindow",
+        "property total",
+        "required last",
+        "required total"
+      ]
+    },
+    "ThreadTokenUsageUpdatedNotification": {
+      "hash": "719884206577082b",
+      "facets": [
+        "property threadId",
+        "property tokenUsage",
+        "property turnId",
+        "required threadId",
+        "required tokenUsage",
+        "required turnId"
+      ]
+    },
+    "ThreadTurnsListParams": {
+      "hash": "4ef6aea1283e1ef4",
+      "facets": [
+        "property cursor",
+        "property itemsView",
+        "property limit",
+        "property sortDirection",
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadUnarchiveParams": {
+      "hash": "b6c9901e136c9163",
+      "facets": [
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadUnarchivedNotification": {
+      "hash": "b6c9901e136c9163",
+      "facets": [
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "ThreadUnsubscribeParams": {
+      "hash": "b6c9901e136c9163",
+      "facets": [
+        "property threadId",
+        "required threadId"
+      ]
+    },
+    "TokenUsageBreakdown": {
+      "hash": "df2fcd5f3bd2ad1e",
+      "facets": [
+        "property cacheWriteInputTokens",
+        "property cachedInputTokens",
+        "property inputTokens",
+        "property outputTokens",
+        "property reasoningOutputTokens",
+        "property totalTokens",
+        "required cachedInputTokens",
+        "required inputTokens",
+        "required outputTokens",
+        "required reasoningOutputTokens",
+        "required totalTokens"
+      ]
+    },
+    "ToolRequestUserInputOption": {
+      "hash": "7c7f66ef6d921c3b",
+      "facets": [
+        "property description",
+        "property label",
+        "required description",
+        "required label"
+      ]
+    },
+    "ToolRequestUserInputParams": {
+      "hash": "6449a00a6596281d",
+      "facets": [
+        "property autoResolutionMs",
+        "property isBlocking",
+        "property itemId",
+        "property questions",
+        "property threadId",
+        "property turnId",
+        "required isBlocking",
+        "required itemId",
+        "required questions",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "ToolRequestUserInputQuestion": {
+      "hash": "c74e319678876580",
+      "facets": [
+        "property header",
+        "property id",
+        "property isOther",
+        "property isSecret",
+        "property options",
+        "property question",
+        "required header",
+        "required id",
+        "required question"
+      ]
+    },
+    "Turn": {
+      "hash": "8bb549bcbe9f61a3",
+      "facets": [
+        "property completedAt",
+        "property durationMs",
+        "property error",
+        "property id",
+        "property items",
+        "property itemsView",
+        "property rootTurnId",
+        "property startedAt",
+        "property status",
+        "required id",
+        "required items",
+        "required status"
+      ]
+    },
+    "TurnCompletedNotification": {
+      "hash": "a876074ae36be017",
+      "facets": [
+        "property threadId",
+        "property turn",
+        "required threadId",
+        "required turn"
+      ]
+    },
+    "TurnDiffUpdatedNotification": {
+      "hash": "3bc1f936e8bf3ea2",
+      "facets": [
+        "property diff",
+        "property threadId",
+        "property turnId",
+        "required diff",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "TurnEnvironmentParams": {
+      "hash": "f30991088163feea",
+      "facets": [
+        "property cwd",
+        "property environmentId",
+        "property runtimeWorkspaceRoots",
+        "required cwd",
+        "required environmentId"
+      ]
+    },
+    "TurnError": {
+      "hash": "9709a4c3a9b5b5a5",
+      "facets": [
+        "property additionalDetails",
+        "property codexErrorInfo",
+        "property message",
+        "property misalignment",
+        "required message"
+      ]
+    },
+    "TurnInterruptParams": {
+      "hash": "b5df015fe3b43c84",
+      "facets": [
+        "property threadId",
+        "property turnId",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "TurnItemsView": {
+      "hash": "0a941dcad12c8efe",
+      "facets": [
+        "enum full",
+        "enum notLoaded",
+        "enum summary"
+      ]
+    },
+    "TurnModerationMetadataNotification": {
+      "hash": "955a6c07e0285821",
+      "facets": [
+        "property metadata",
+        "property threadId",
+        "property turnId",
+        "required metadata",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "TurnPlanStep": {
+      "hash": "aa7325d195285bee",
+      "facets": [
+        "property status",
+        "property step",
+        "required status",
+        "required step"
+      ]
+    },
+    "TurnPlanStepStatus": {
+      "hash": "7f862b60ac1972d0",
+      "facets": [
+        "enum completed",
+        "enum inProgress",
+        "enum pending"
+      ]
+    },
+    "TurnPlanUpdatedNotification": {
+      "hash": "c054217a62f374ad",
+      "facets": [
+        "property explanation",
+        "property plan",
+        "property threadId",
+        "property turnId",
+        "required plan",
+        "required threadId",
+        "required turnId"
+      ]
+    },
+    "TurnStartParams": {
+      "hash": "3cbd0bbc2addbd27",
+      "facets": [
+        "property additionalContext",
+        "property approvalPolicy",
+        "property approvalsReviewer",
+        "property clientUserMessageId",
+        "property collaborationMode",
+        "property cwd",
+        "property cyberAccessProgram",
+        "property disabledPluginIds",
+        "property effort",
+        "property environments",
+        "property input",
+        "property model",
+        "property multiAgentMode",
+        "property outputSchema",
+        "property parentTurnId",
+        "property permissions",
+        "property personality",
+        "property responsesapiClientMetadata",
+        "property rootTurnId",
+        "property runtimeWorkspaceRoots",
+        "property sandboxPolicy",
+        "property serviceTier",
+        "property serviceTierForTurn",
+        "property summary",
+        "property threadId",
+        "property toolOutput",
+        "property turnTrigger",
+        "required input",
+        "required threadId"
+      ]
+    },
+    "TurnStartedNotification": {
+      "hash": "a876074ae36be017",
+      "facets": [
+        "property threadId",
+        "property turn",
+        "required threadId",
+        "required turn"
+      ]
+    },
+    "TurnStatus": {
+      "hash": "63ae2e28aeb1cab3",
+      "facets": [
+        "enum completed",
+        "enum failed",
+        "enum inProgress",
+        "enum interrupted"
+      ]
+    },
+    "TurnSteerParams": {
+      "hash": "00b30554967794a7",
+      "facets": [
+        "property additionalContext",
+        "property clientUserMessageId",
+        "property expectedTurnId",
+        "property input",
+        "property responsesapiClientMetadata",
+        "property threadId",
+        "required expectedTurnId",
+        "required input",
+        "required threadId"
+      ]
+    },
+    "TurnToolOutput": {
+      "hash": "5a41e1ad989e5282",
+      "facets": [
+        "property name",
+        "property namespace",
+        "property output",
+        "property retain",
+        "required name",
+        "required output"
+      ]
+    },
+    "UserInput": {
+      "hash": "eaf95adb1054fe27",
+      "facets": [
+        "audio: property type",
+        "audio: property url",
+        "audio: required type",
+        "audio: required url",
+        "image: property detail",
+        "image: property type",
+        "image: required type",
+        "localAudio: property path",
+        "localAudio: property type",
+        "localAudio: required path",
+        "localAudio: required type",
+        "localImage: property detail",
+        "localImage: property path",
+        "localImage: property type",
+        "localImage: required path",
+        "localImage: required type",
+        "mention: property name",
+        "mention: property path",
+        "mention: property type",
+        "mention: required name",
+        "mention: required path",
+        "mention: required type",
+        "skill: property name",
+        "skill: property path",
+        "skill: property type",
+        "skill: required name",
+        "skill: required path",
+        "skill: required type",
+        "text: property text",
+        "text: property text_elements",
+        "text: property type",
+        "text: required text",
+        "text: required type",
+        "type = audio",
+        "type = image",
+        "type = localAudio",
+        "type = localImage",
+        "type = mention",
+        "type = skill",
+        "type = text"
+      ]
+    },
+    "WarningNotification": {
+      "hash": "e2d00bf5d3bbaf81",
+      "facets": [
+        "property message",
+        "property threadId",
+        "required message"
+      ]
+    },
+    "WebSearchAction": {
+      "hash": "a66937d065dacde4",
+      "facets": [
+        "findInPage: property pattern",
+        "findInPage: property type",
+        "findInPage: property url",
+        "findInPage: required type",
+        "openPage: property type",
+        "openPage: property url",
+        "openPage: required type",
+        "other: property type",
+        "other: required type",
+        "search: property queries",
+        "search: property query",
+        "search: property type",
+        "search: required type",
+        "type = findInPage",
+        "type = openPage",
+        "type = other",
+        "type = search"
+      ]
+    },
+    "WindowsSandboxSetupCompletedNotification": {
+      "hash": "1c1e0b82d07e4c8a",
+      "facets": [
+        "property error",
+        "property mode",
+        "property success",
+        "required mode",
+        "required success"
+      ]
+    },
+    "WindowsSandboxSetupMode": {
+      "hash": "4d5e368c709cad92",
+      "facets": [
+        "enum elevated",
+        "enum unelevated"
+      ]
+    },
+    "WindowsWorldWritableWarningNotification": {
+      "hash": "4b4fba11a3a01e68",
+      "facets": [
+        "property extraCount",
+        "property failedScan",
+        "property samplePaths",
+        "required extraCount",
+        "required failedScan",
+        "required samplePaths"
+      ]
+    }
+  }
+}
