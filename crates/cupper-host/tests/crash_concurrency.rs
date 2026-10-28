@@ -19,7 +19,7 @@ use std::process::{Command, Stdio};
 
 use cupper_cli::client::{self, Client, ClientAuth, Incoming, Options};
 use cupper_cli::harness::HarnessKey;
-use cupper_host::clock::{Clock, MonoTime, SystemClock};
+use cupper_host::clock::{Clock, SystemClock};
 use cupper_host::gateway::testkit::{KEY, TempDir};
 use cupper_protocol::methods::project::ProjectAdd;
 use cupper_protocol::methods::session::{SessionCreate, SessionSend};
@@ -317,11 +317,6 @@ async fn start(client: &Client, project: &Value, message: &str) -> String {
 /// IT-NFR9-crash-under-load: while an agent writes as fast as it can, the
 /// host is killed (`kill -9`) five times over; after each start the store is
 /// consistent with what a client saw, and at the end the session goes on.
-///
-/// T206 probe, reverted after the runs on the runner: it passes and fails as
-/// on main (a round whose 200 deltas take over [`PATIENCE`] fails), but waits
-/// on to time that round, and appends each round's timings to
-/// `test-repeat/t206-probe.txt` when test-repeat's directory is there.
 #[tokio::test(flavor = "multi_thread")]
 async fn it_nfr9_crash_under_load_kill9_again_and_again() {
     let dir = TempDir::new("under-load");
@@ -335,75 +330,26 @@ async fn it_nfr9_crash_under_load_kill9_again_and_again() {
         "SELECT count(*) FROM events WHERE stream = 'session/{session}' AND type = 'item.delta'"
     );
     let count = || query_count(&data_dir, &deltas);
-    let clock = SystemClock::new();
-    let since = |at: MonoTime| clock.now_mono().saturating_duration_since(at).as_millis();
     for round in 0..5 {
-        let (began, load_before) = (clock.now_mono(), load_average());
-        let (seq0, raw0) = (max_seq(&data_dir, &session), raw_received(&data_dir));
         let watching = watch(connect_with(&data_dir, plain()).await);
         let client = connect(&data_dir).await;
-        let connected = since(began);
-        let sending = clock.now_mono();
         if round > 0 {
             let send = json!({"command_id": client::command_id(), "session_id": session,
                 "mode": "queue", "content": text(&load)});
             request(&client, SessionSend::NAME, send).await.unwrap();
         }
-        let sent = since(sending);
-        let (waiting, from) = (clock.now_mono(), count());
-        let (mut first, mut at_patience) = (None, None);
-        let (mut last, mut last_at, mut silence) = (from, clock.now_mono(), 0);
-        let give_up = clock.now_mono() + PATIENCE * 8;
+        let (clock, from) = (SystemClock::new(), count());
+        let give_up = clock.now_mono() + PATIENCE;
         while count() < from + 200 {
-            let now = count();
-            if now > last {
-                silence = silence.max(since(last_at));
-                (last, last_at) = (now, clock.now_mono());
-                first.get_or_insert(since(waiting));
-            }
-            if at_patience.is_none() && clock.now_mono() >= waiting + PATIENCE {
-                at_patience = Some(now - from);
-            }
             assert!(clock.now_mono() < give_up, "no load in round {round}");
             wait(&clock).await;
         }
-        silence = silence.max(since(last_at));
-        let took = since(waiting);
-        let load_at_kill = load_average();
-        let host_side = delta_times(&data_dir, &session, seq0);
-        let raw = raw_received(&data_dir) - raw0;
         host.0.kill().unwrap();
         host.0.wait().unwrap();
-        let killed = clock.now_mono();
         let seen = watching.await.unwrap();
         host = self::host(&data_dir, json!([]));
         connect(&data_dir).await;
-        let restarted = since(killed);
-        let checking = clock.now_mono();
         consistent(&data_dir, &seen);
-        let checked = since(checking);
-        let line = format!(
-            "run={} round={round} load={load_before}/{load_at_kill} connect_ms={connected} \
-             send_ms={sent} first_delta_ms={} deltas200_ms={took} at_patience={} \
-             max_silence_ms={silence} {host_side} raw_recv={raw} seen={} restart_ms={restarted} \
-             check_ms={checked}\n",
-            std::process::id(),
-            first.map_or("-".to_owned(), |ms| ms.to_string()),
-            at_patience.map_or("-".to_owned(), |n| n.to_string()),
-            seen.len(),
-        );
-        eprint!("T206 {line}");
-        let out = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../test-repeat"));
-        if out.is_dir() {
-            use std::io::Write;
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(out.join("t206-probe.txt"))
-                .unwrap();
-            file.write_all(line.as_bytes()).unwrap();
-        }
-        assert!(at_patience.is_none(), "no load in round {round}");
     }
     let client = connect(&data_dir).await;
     let done = json!({"command_id": client::command_id(), "session_id": session,
@@ -413,52 +359,6 @@ async fn it_nfr9_crash_under_load_kill9_again_and_again() {
     until(&data_dir, "host.db", completed, &["1"]).await;
     terminate(&host.0);
     assert_eq!(exit_code(&mut host.0).await, 0);
-}
-
-/// The 1-minute load average (T206 probe).
-fn load_average() -> String {
-    let out = Command::new("/usr/sbin/sysctl")
-        .args(["-n", "vm.loadavg"])
-        .output()
-        .unwrap();
-    let out = String::from_utf8_lossy(&out.stdout).into_owned();
-    out.split_whitespace().nth(1).unwrap_or("?").to_owned()
-}
-
-/// The session stream's last seq (T206 probe).
-fn max_seq(data_dir: &Path, session: &str) -> u64 {
-    let sql =
-        format!("SELECT coalesce(max(seq), 0) FROM events WHERE stream = 'session/{session}'");
-    query_count(data_dir, &sql)
-}
-
-/// The frames the host read from adapters, as `raw.db` has them (T206 probe).
-fn raw_received(data_dir: &Path) -> u64 {
-    let conn = cupper_host::store::open_reader(&data_dir.join("raw.db")).unwrap();
-    let sql = "SELECT count(*) FROM raw_frames WHERE dir = 'recv'";
-    conn.query_row(sql, [], |row| row.get(0)).unwrap()
-}
-
-/// The deltas after `seq0` by their `ts`: their span, the longest gap, their
-/// mean size (T206 probe).
-fn delta_times(data_dir: &Path, session: &str, seq0: u64) -> String {
-    let sql = format!(
-        "SELECT CAST(json_extract(json, '$.ts') AS TEXT) || ' ' ||
-                CAST(length(json_extract(json, '$.data.text')) AS TEXT)
-         FROM events WHERE stream = 'session/{session}' AND type = 'item.delta'
-           AND seq > {seq0} ORDER BY seq"
-    );
-    let rows: Vec<(u64, u64)> = column(data_dir, &sql)
-        .iter()
-        .map(|row| {
-            let (ts, len) = row.split_once(' ').unwrap();
-            (ts.parse().unwrap(), len.parse().unwrap())
-        })
-        .collect();
-    let span = rows.last().unwrap().0 - rows[0].0;
-    let gap = rows.windows(2).map(|w| w[1].0 - w[0].0).max().unwrap_or(0);
-    let bytes = rows.iter().map(|row| row.1).sum::<u64>() / rows.len() as u64;
-    format!("host_span_ms={span} host_max_gap_ms={gap} bytes_per_delta={bytes}")
 }
 
 fn query_count(data_dir: &Path, sql: &str) -> u64 {
