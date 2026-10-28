@@ -1,0 +1,146 @@
+{
+ "name": "extra-codex-2.2.2",
+ "date": "2026-10-28",
+ "runs": [
+  {
+   "tag": "plain",
+   "modes": [
+    {
+     "value": "read-only",
+     "name": "Read-only",
+     "airKind": null
+    },
+    {
+     "value": "workspace-write",
+     "name": "Workspace access",
+     "airKind": null
+    },
+    {
+     "value": "agent",
+     "name": "Auto review",
+     "airKind": null
+    },
+    {
+     "value": "agent-full-access",
+     "name": "Full access",
+     "airKind": null
+    }
+   ],
+   "prompt": {
+    "ok": true,
+    "stopReason": "end_turn",
+    "elapsedMs": 10365,
+    "messages": {
+     "msg_00acb8df604e2565016ae172fb34fc87d0ae41d9d5b1fd331e": {
+      "chunks": 14,
+      "phases": [
+       null
+      ],
+      "metaKeys": []
+     },
+     "msg_00acb8df604e2565016ae173006e9887d0b857858c4b27b483": {
+      "chunks": 7,
+      "phases": [
+       null
+      ],
+      "metaKeys": []
+     }
+    }
+   },
+   "planReview": {
+    "reviews": [
+     {
+      "t": 25319,
+      "title": "Implement this plan?",
+      "options": [
+       "implement_plan:allow_once",
+       "revise_plan:reject_once"
+      ]
+     }
+    ],
+    "prompt": {
+     "ok": true,
+     "stopReason": "end_turn",
+     "elapsedMs": 12585,
+     "msFromReviewToResponse": 1
+    },
+    "updatesWithin5sAfterResponse": [],
+    "collaborationModeAfter": "plan",
+    "modeAfter": "read-only"
+   }
+  },
+  {
+   "tag": "air",
+   "modes": [
+    {
+     "value": "read-only",
+     "name": "Read-only",
+     "airKind": "standard"
+    },
+    {
+     "value": "workspace-write",
+     "name": "Workspace access",
+     "airKind": "standard"
+    },
+    {
+     "value": "agent",
+     "name": "Auto review",
+     "airKind": "auto_review"
+    },
+    {
+     "value": "agent-full-access",
+     "name": "Full access",
+     "airKind": "full_access"
+    }
+   ],
+   "prompt": {
+    "ok": true,
+    "stopReason": "end_turn",
+    "elapsedMs": 10163,
+    "messages": {
+     "msg_01d99cd778bd722d016ae1731b14a887d0b5d4d68d2ff3e265": {
+      "chunks": 10,
+      "phases": [
+       "commentary"
+      ],
+      "metaKeys": [
+       "jetbrains"
+      ]
+     },
+     "msg_01d99cd778bd722d016ae17320877887d0ad6cc1368a2a44fb": {
+      "chunks": 7,
+      "phases": [
+       "final_answer"
+      ],
+      "metaKeys": [
+       "jetbrains"
+      ]
+     }
+    }
+   },
+   "replay": {
+    "ok": true,
+    "messages": {
+     "msg_01d99cd778bd722d016ae1731b14a887d0b5d4d68d2ff3e265": {
+      "chunks": 1,
+      "phases": [
+       "commentary"
+      ],
+      "metaKeys": [
+       "jetbrains"
+      ]
+     },
+     "msg_01d99cd778bd722d016ae17320877887d0ad6cc1368a2a44fb": {
+      "chunks": 1,
+      "phases": [
+       "final_answer"
+      ],
+      "metaKeys": [
+       "jetbrains"
+      ]
+     }
+    }
+   }
+  }
+ ]
+}
