@@ -59,6 +59,20 @@ describe("UNIT-sensitive-list", () => {
     });
   });
 
+  test("words and scan take absolute paths, wherever they run", () => {
+    const root = tree({
+      "list.txt": list,
+      "data/a.jsonl": '{"x":"acme widgets","cwd":"/Users/jdoe"}',
+    });
+    const file = join(root, "data/a.jsonl");
+    const words = run(["words", "--list", join(root, "list.txt"), join(root, "data")], tmpdir());
+    expect(words.output).toBe(
+      `${file}:1: entry 1 of the sensitive word list\n1 findings in 1 of 1 files`,
+    );
+    const scan = run(["scan", join(root, "*/a.jsonl")], tmpdir());
+    expect(scan.output).toBe(`${file}:1: home directory path\n1 findings in 1 of 1 files`);
+  });
+
   test("the list is required, and so is a path to scan", () => {
     const root = tree({ "data/a.json": "{}\n" });
     expect(() => run(["words", "data"], root)).toThrow("`--list` is needed once");
