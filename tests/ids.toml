@@ -879,7 +879,7 @@ UNIT-codex-drift = "pr"
 # （条件）Q8 后备（Codex）
 [T119]
 milestone = "M1b"
-IT-q8-fallback-codex = { suite = "pr", status = "conditional", reason = "K6 Q8 的 Codex 部分（T102）不通过时由 T119 产出" }
+IT-q8-fallback-codex = { suite = "pr", status = "na", reason = "K6 已通过（T102，2026-10-28），T119 不触发" }
 
 # Git 服务 III：diff、file_diff、status 与 branches
 [T120]
@@ -1072,7 +1072,7 @@ MAN-security-doc = "man"
 # （条件）主进程通知后备
 [T158]
 milestone = "M1b"
-UNIT-main-notifications = { suite = "pr", status = "conditional", reason = "K5 SP-10 通知身份（T101）不通过时由 T158 产出" }
+UNIT-main-notifications = { suite = "pr", status = "na", reason = "K5 有条件通过（T101，2026-10-28），T158 不触发；T150 的第一条验收不通过时再议" }
 
 # 自用构建
 [T160]
@@ -1155,6 +1155,22 @@ milestone = "release"
 MAN-upgrade = "man"
 IT-prepare-upgrade = "pr"
 
+# 运行时装好之前启动适配器（计划 v1.3.71，T066 发现）
+[T201]
+milestone = "M1a"
+IT-runtime-first-prompt-waits = "pr"
+
+# Claude 的思考流与计划拒绝（计划 v1.3.72，T066 发现）
+[T202]
+milestone = "M1a"
+UNIT-claude-session-thinking = "pr"
+UNIT-claude-plan-reject-ends-turn = "pr"
+
+# 宿主测试找到本机真实的 CLI（计划 v1.3.73，T201 发现）
+[T203]
+milestone = "M1a"
+IT-host-tests-no-real-cli = "pr"
+
 # 计划里没有产出任务的编号
 [unplanned]
 # 从第二个发布版起（计划 5.3 的 NFR-10）
@@ -1175,6 +1191,11 @@ UI-7 = "PRD 的需求编号"
 E2E-question-card = "旧名，计划 v1.1 改为 E2E-question-panel"
 UI-cards = "旧名，计划 v1.1 改为 UI-request-panel"
 IT-K11 = "计划 T140 的注里对 IT-K11-steer-idle-queued 的简写"
+
+[[evidence]]
+id = "MAN-notification-spike"
+date = "2026-10-28"
+record = "docs/tasks/T101-notification-identity/results.md"
 
 [[evidence]]
 id = "MAN-compat-claude"

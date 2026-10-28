@@ -78,8 +78,8 @@ flowchart LR
 | diff | `content[].diff {path, oldText, newText}`，是带上下文的片段；`_meta.claudeCode.toolResponse.structuredPatch` 有 hunk 列表 | 每个 hunk 一个 `diff`，带 `_meta.kind`（add 或 update）；模型用 shell 运行 `apply_patch` 时**完全没有 diff** | 条目不带 diff；回合级的变更一律以 git 快照为准（GT-1） |
 | 工具状态 | 先 `pending`，参数流式补全，最后 `completed` 或 `failed` | 出现时就是 `in_progress`，参数完整 | — |
 | 运行状态 | 没有信号，宿主按 prompt 请求和响应推导 | `session_info_update._meta.codex.threadStatus`：`active`（带 `waitingOnApproval` 或 `waitingOnUserInput`）、`idle`、`systemError` | 宿主推导 |
-| 思考 | 适配器支持，但 haiku 上没有观察到 | `agent_thought_chunk` | 不显示思考区域（`extraction.thinking: false`） |
-| 计划 | TodoWrite 和 Task 工具在 SDK 会话里不可用；只有计划模式的 `plan_update`（unstable，Markdown） | 计划协作模式下的 `plan_update`（Markdown）；`update_plan` 可用时有 `plan` 条目 | `plan: markdown_only`，MS-4 的"每一步状态"对 Claude 可能做不到（待定问题 Q12） |
+| 思考 | 适配器支持。近期模型的 `thinking.display` 默认是 omitted，思考块只有签名、没有文本，适配器就不发 `agent_thought_chunk`（T066 在 sonnet 上实测）；宿主建会话和 resume 时经 `_meta.claudeCode.options.extraArgs` 传 `thinking-display: summarized`，只请求显示方式，不动思考的开关和档位（不覆盖用户的 CLI 配置，5.6.5）。不用 SDK 的 `thinking` 字段：它的 `type` 必填，会把思考强制打开（T202 按 claude-agent-acp 0.91.0、SDK 0.3.300 核实） | `agent_thought_chunk` | 不显示思考区域（`extraction.thinking: false`） |
+| 计划 | TodoWrite 和 Task 工具在 SDK 会话里不可用；计划正文只在 ExitPlanMode 审批请求的 `rawInput` 里，真实 CLI 在计划模式下不发 `plan_update`（T066） | 计划协作模式下的 `plan_update`（Markdown）；`update_plan` 可用时有 `plan` 条目 | `plan: markdown_only`，MS-4 的"每一步状态"对 Claude 可能做不到（待定问题 Q12） |
 | 标题 | 回合结束后 `session_info_update` 给 AI 标题 | 先给 prompt 截断的标题，约 5 s 后给 AI 标题 | 用第一条消息截断 |
 | 用量 | 每次调用模型后 `usage_update {used, size}`，回合结束时带 `cost`；`_meta` 里有 5 小时和 7 天额度窗口 | `usage_update {used, size}` | — |
 | 登录状态 | `_auth/status_update`（带邮箱和组织，**提取层只保留 `kind` 和套餐名**） | 同左 | — |
