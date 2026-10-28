@@ -750,11 +750,7 @@ impl Actor {
         // The agent gets the real path (K13).
         let cwd = fs::canonicalize(&pending.attach.cwd).unwrap_or(pending.attach.cwd);
         pending.attach.cwd = cwd.clone();
-        // Untrusted: Claude loads the user's settings only (design 5.2.6).
-        let meta = (pending.attach.project_config == ProjectConfigPolicy::Ignore).then(|| {
-            let options = json!({"settingSources": ["user"]});
-            Meta::from_iter([("claudeCode".to_owned(), json!({"options": options}))])
-        });
+        let meta = session_meta(&pending.attach.project_config);
         let wire = wire.clone();
         let sent = match pending.attach.target.clone() {
             AttachTarget::New => conn.request(
@@ -1186,6 +1182,21 @@ impl Actor {
         }
         self.notify();
     }
+}
+
+/// The `_meta` of `session/new` and `session/resume`, the same for both so
+/// that the adapter does not rebuild a resumed session's process:
+/// - the thinking as summaries (design 5.6.3): recent models leave its text
+///   out by default, and the adapter then has no thought to send (T066).
+///   Only the CLI's `--thinking-display`: the SDK's `thinking` would turn
+///   thinking on whatever the user set (design 5.6.5);
+/// - untrusted: Claude loads the user's settings only (design 5.2.6).
+fn session_meta(project_config: &ProjectConfigPolicy) -> Meta {
+    let mut options = json!({"extraArgs": {"thinking-display": "summarized"}});
+    if *project_config == ProjectConfigPolicy::Ignore {
+        options["settingSources"] = json!(["user"]);
+    }
+    Meta::from_iter([("claudeCode".to_owned(), json!({"options": options}))])
 }
 
 /// Empties `dir` for a probe: removed, then made again, the user's only

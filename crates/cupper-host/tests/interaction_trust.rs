@@ -389,20 +389,23 @@ async fn it_trust_rescan_before_prompt_a_change_during_a_turn_holds_the_next() {
 
 /// IT-trust-settingsources (design 5.2.6): an untrusted project's session
 /// runs with the user's settings only, `settingSources: ["user"]`; a trusted
-/// one's loads the project's.
+/// one's loads the project's. Both ask for the thinking as summaries (5.6.3).
 #[tokio::test]
 async fn it_trust_settingsources_untrusted_projects_load_the_user_s_settings_only() {
     let dir = TempDir::new("sources");
     configure(&dir.path().join("app"), "acme-a");
     let (data_dir, _host, client, project) = host(&dir, &[], false, json!({})).await;
+    let display = json!({"thinking-display": "summarized"});
     let untrusted = start(&client, &project, "echo_meta").await;
-    let user = json!({"claudeCode": {"options": {"settingSources": ["user"]}}});
+    let user = json!({"extraArgs": display, "settingSources": ["user"]});
+    let user = json!({"claudeCode": {"options": user}});
     said(&data_dir, &untrusted, &format!("meta={user}")).await;
     let configured = events(&data_dir, &untrusted, "session.configured", 1).await;
     assert_eq!(configured.last().unwrap()["project_config"], "ignored");
     trust(&client, &project).await;
     let trusted = start(&client, &project, "echo_meta").await;
-    said(&data_dir, &trusted, "meta=null").await;
+    let all = json!({"claudeCode": {"options": {"extraArgs": display}}});
+    said(&data_dir, &trusted, &format!("meta={all}")).await;
     let configured = events(&data_dir, &trusted, "session.configured", 1).await;
     assert_eq!(configured.last().unwrap()["project_config"], "loaded");
 }
