@@ -410,8 +410,12 @@ mod t207_probe {
     use std::net::Shutdown;
     use std::os::fd::AsRawFd;
     use std::os::unix::net::UnixStream;
-    use std::sync::Arc;
-    use std::time::Duration;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Barrier};
+    use std::time::{Duration, Instant};
+
+    /// Reads of the mini relay that gave up after 2 s.
+    static RELAY_STUCK: AtomicUsize = AtomicUsize::new(0);
 
     #[derive(Clone, Copy, Debug)]
     enum Closer {
@@ -484,6 +488,11 @@ mod t207_probe {
     fn trial(closer: Closer, wait: Wait, exchange: bool) -> usize {
         let (client, mut host) = UnixStream::pair().unwrap();
         let (ours, mut theirs) = UnixStream::pair().unwrap();
+        // The mini relay's own reads can miss an end of file the same way:
+        // they give up after 2 s, counted, instead of hanging the probe.
+        for end in [&client, &ours] {
+            end.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        }
         let client = Arc::new(client);
         let other = matches!(closer, Closer::Relay | Closer::BothOnce | Closer::WriteOnly);
         let ours = Arc::new(ours);
@@ -497,6 +506,10 @@ mod t207_probe {
                 let mut buf = [0; 256];
                 loop {
                     match (&*ours).read(&mut buf) {
+                        Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                            RELAY_STUCK.fetch_add(1, Ordering::Relaxed);
+                            break;
+                        }
                         Ok(0) | Err(_) => break,
                         Ok(n) => {
                             if (&*client).write_all(&buf[..n]).is_err() {
@@ -516,6 +529,10 @@ mod t207_probe {
                 let mut buf = [0; 256];
                 loop {
                     match (&*client).read(&mut buf) {
+                        Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                            RELAY_STUCK.fetch_add(1, Ordering::Relaxed);
+                            break;
+                        }
                         Ok(0) | Err(_) => break,
                         Ok(n) => {
                             let ours = ours.as_deref().unwrap();
@@ -657,11 +674,12 @@ mod t207_probe {
             }
             lines += &format!(
                 "pid={} closer={closer:?} wait={wait:?} exchange={exchange} tries={tries} \
-                 woke={} missed={} no_eof={}\n",
+                 woke={} missed={} no_eof={} relay_stuck={}\n",
                 std::process::id(),
                 counts[0],
                 counts[1],
-                counts[2]
+                counts[2],
+                RELAY_STUCK.swap(0, Ordering::Relaxed)
             );
         }
         let mut counts = [0usize; 3];
@@ -681,6 +699,130 @@ mod t207_probe {
             .create(true)
             .append(true)
             .open(out.join("t207-variants.txt"))
+            .unwrap();
+        file.write_all(lines.as_bytes()).unwrap();
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum Peer {
+        /// The peer closes its fd, as the host does when it exits.
+        Close,
+        /// The peer's socket is shut both ways, as `Relay::close` does.
+        Shutdown,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum Entry {
+        /// `recv_closing_fds` blocking with `SO_RCVTIMEO`, as the relay's
+        /// threads read.
+        Recv,
+        /// `poll(POLLIN)`, then `recv_closing_fds`.
+        PollRecv,
+        /// A level-triggered kqueue `EVFILT_READ`, then `recv_closing_fds`.
+        KqueueRecv,
+    }
+
+    /// One race of a reader entering its wait against the peer ending the
+    /// connection `delay` after both start: 0 woke with end of file, 1
+    /// missed it (there on reading again), 2 no end of file even then.
+    #[expect(clippy::disallowed_methods, reason = "T207 probe")]
+    fn race(peer: Peer, entry: Entry, delay: Duration) -> usize {
+        let (ours, theirs) = UnixStream::pair().unwrap();
+        ours.set_read_timeout(Some(TIMEOUT)).unwrap();
+        let kq = matches!(entry, Entry::KqueueRecv).then(|| register(&ours));
+        let start = Arc::new(Barrier::new(2));
+        let reader = {
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                let mut buf = [0; 64];
+                start.wait();
+                let ready = match entry {
+                    Entry::Recv => true,
+                    Entry::PollRecv => {
+                        let mut fd = libc::pollfd {
+                            fd: ours.as_raw_fd(),
+                            events: libc::POLLIN,
+                            revents: 0,
+                        };
+                        // SAFETY: one valid pollfd.
+                        let rc = unsafe { libc::poll(&mut fd, 1, TIMEOUT.as_millis() as i32) };
+                        assert!(rc >= 0);
+                        rc > 0
+                    }
+                    Entry::KqueueRecv => kevent_wait(kq.unwrap()),
+                };
+                let woke = ready
+                    && match cupper_sys::recv_closing_fds(&ours, &mut buf) {
+                        Ok(got) => {
+                            assert_eq!(got.len, 0);
+                            true
+                        }
+                        Err(err) if err.kind() == ErrorKind::WouldBlock => false,
+                        Err(err) => panic!("recv: {err}"),
+                    };
+                if let Some(kq) = kq {
+                    // SAFETY: our kqueue.
+                    unsafe { libc::close(kq) };
+                }
+                if woke {
+                    return 0;
+                }
+                ours.set_nonblocking(true).unwrap();
+                match cupper_sys::recv_closing_fds(&ours, &mut buf) {
+                    Ok(got) if got.len == 0 => 1,
+                    _ => 2,
+                }
+            })
+        };
+        start.wait();
+        let until = Instant::now() + delay;
+        while Instant::now() < until {
+            std::hint::spin_loop();
+        }
+        match peer {
+            Peer::Close => drop(theirs),
+            Peer::Shutdown => {
+                theirs.shutdown(Shutdown::Both).unwrap();
+                let outcome = reader.join().unwrap();
+                drop(theirs);
+                return outcome;
+            }
+        }
+        reader.join().unwrap()
+    }
+
+    #[test]
+    fn t207_probe_entry_races() {
+        let out = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../test-repeat"));
+        if !out.is_dir() {
+            return;
+        }
+        let tries: usize = std::env::var("T207_RACES").map_or(20_000, |n| n.parse().unwrap());
+        let mut lines = String::new();
+        for peer in [Peer::Close, Peer::Shutdown] {
+            for entry in [Entry::Recv, Entry::PollRecv, Entry::KqueueRecv] {
+                let mut counts = [0usize; 3];
+                // The peer ends the connection 0 to 30 µs after the reader
+                // starts to read, in 100 ns steps.
+                for i in 0..tries {
+                    let delay = Duration::from_nanos((i % 301) as u64 * 100);
+                    counts[race(peer, entry, delay)] += 1;
+                }
+                lines += &format!(
+                    "pid={} peer={peer:?} entry={entry:?} tries={tries} woke={} missed={} \
+                     no_eof={}\n",
+                    std::process::id(),
+                    counts[0],
+                    counts[1],
+                    counts[2]
+                );
+            }
+        }
+        eprint!("{lines}");
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(out.join("t207-races.txt"))
             .unwrap();
         file.write_all(lines.as_bytes()).unwrap();
     }
