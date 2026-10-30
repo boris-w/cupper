@@ -6,6 +6,7 @@
 pub mod acp;
 pub mod api;
 pub mod claude;
+pub mod codex;
 pub mod extract;
 #[cfg(test)]
 mod gold_a;

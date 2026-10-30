@@ -218,6 +218,10 @@ pub fn config_options(options: &[SessionConfigOption], tiers: Tiers) -> Vec<Conf
             Some(Category::Mode) => ConfigOptionId::PermissionMode,
             Some(Category::Model) => ConfigOptionId::Model,
             Some(Category::ThoughtLevel) => ConfigOptionId::ReasoningEffort,
+            // Codex's collaboration mode (design 5.6.5).
+            Some(Category::Other(other)) if other == "collaboration_mode" => {
+                ConfigOptionId::PlanMode
+            }
             _ => ConfigOptionId::from(agent_option_id.as_str()),
         };
         let risk = |value: &str| match id {
