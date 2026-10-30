@@ -222,17 +222,75 @@ test(
       await cupper.cli.ok(["send", id(stream), `say t${n}`, "--wait"]);
     }
     await cupper.window.reload();
+    // T208 probe: what the list and the window's streams do, frame by frame.
+    await cupper.window.evaluate(() => {
+      const start = performance.now();
+      const log: unknown[] = [];
+      let last = "";
+      const look = () => {
+        const list = document.querySelector("[data-stream-list]");
+        const rows = [...(list?.querySelectorAll("[data-index]") ?? [])];
+        const t = window.__cupperTest;
+        const views = t.views() as Record<string, { seq?: number; complete?: boolean }>;
+        const now = {
+          list: list ? [Math.round(list.scrollTop), list.scrollHeight, list.clientHeight] : null,
+          rows: rows.length
+            ? [
+                rows.length,
+                rows[0]?.getAttribute("data-index"),
+                rows.at(-1)?.getAttribute("data-index"),
+              ]
+            : 0,
+          buttons: [...(list?.querySelectorAll("button") ?? [])]
+            .map((b) => b.textContent)
+            .slice(0, 3),
+          main: document.querySelector("main")?.scrollTop,
+          c: t.counters(),
+          s: t.state().status,
+          v: Object.entries(views).map(([k, v]) => [k.slice(0, 9), v.seq, v.complete]),
+          vis: document.visibilityState,
+        };
+        const key = JSON.stringify(now);
+        if (key !== last) {
+          last = key;
+          log.push({ ms: Math.round(performance.now() - start), ...now });
+        }
+        requestAnimationFrame(look);
+      };
+      look();
+      const g = globalThis as { __probe?: unknown[]; __mark?: (m: string) => void };
+      g.__probe = log;
+      g.__mark = (m) => log.push({ ms: Math.round(performance.now() - start), mark: m });
+    });
+    const mark = (m: string) =>
+      cupper.window.evaluate(
+        (m) => (globalThis as { __mark?: (m: string) => void }).__mark?.(m),
+        m,
+      );
     await openSession(cupper, "say t1");
     const main = cupper.window.locator("main");
     // The window's first turn, at the top of the list.
     await expect(main.getByText("say t23", { exact: true })).toBeVisible();
+    await mark("t23 visible");
     await main.locator("[data-stream-list]").evaluate((list) => (list.scrollTop = 0));
+    await mark("scrolled");
     const anchor = main.getByText("say t4", { exact: true });
     await expect(anchor).toBeVisible();
     await expect(main.getByText("say t3", { exact: true })).toHaveCount(0);
     const before = await anchor.boundingBox();
     const t = await texts(cupper);
-    await main.getByRole("button", { name: t("stream:history_more") }).click();
+    await mark("click");
+    try {
+      await main.getByRole("button", { name: t("stream:history_more") }).click({ timeout: 10_000 });
+    } catch (error) {
+      const log = await cupper.window.evaluate(
+        () => (globalThis as { __probe?: unknown[] }).__probe,
+      );
+      await test
+        .info()
+        .attach("t208-probe.json", { body: JSON.stringify(log), contentType: "application/json" });
+      throw error;
+    }
     await expect(main.getByText("say t3", { exact: true })).toHaveCount(1);
     // Not moved by what came in front (the history control used to be held, and
     // the view moved by the whole page). The rows in front can still be off by
