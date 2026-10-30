@@ -162,6 +162,10 @@ mod tests {
 
     use super::*;
 
+    /// How long a test waits on the relay: one that missed a refusal would
+    /// leave the wait going forever.
+    const PATIENCE: Duration = Duration::from_secs(10);
+
     /// A relay to `host`, the other end of a pair: the "host" is this
     /// process, which also pins its token.
     fn started() -> (Arc<Relay>, UnixStream, UnixStream) {
@@ -169,18 +173,25 @@ mod tests {
         let pinned = peer_token(&client).unwrap();
         let (relay, theirs) = Relay::start(client, pinned).unwrap();
         let theirs = UnixStream::from(theirs);
-        // A relay that missed a refusal would leave a read waiting forever.
         for end in [&host, &theirs] {
-            end.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+            end.set_read_timeout(Some(PATIENCE)).unwrap();
         }
         (relay, host, theirs)
     }
 
-    /// Everything the main process reads until end of file.
-    fn drain(mut theirs: &UnixStream) -> Vec<u8> {
-        let mut data = Vec::new();
-        theirs.read_to_end(&mut data).unwrap();
-        data
+    /// Everything `end` reads until end of file, waiting as the main process
+    /// (libuv) and the host (tokio) do: until it is readable, then reading.
+    /// A blocking read can sleep through the relay's shutdown (T207).
+    fn drain(mut end: &UnixStream) -> Vec<u8> {
+        let (mut data, mut buf) = (Vec::new(), [0; 64]);
+        loop {
+            let readable = cupper_sys::wait_readable(end, Some(PATIENCE)).unwrap();
+            assert!(readable, "no end of file within {PATIENCE:?}");
+            match end.read(&mut buf).unwrap() {
+                0 => return data,
+                got => data.extend_from_slice(&buf[..got]),
+            }
+        }
     }
 
     #[test]
