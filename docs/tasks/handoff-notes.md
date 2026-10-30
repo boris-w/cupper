@@ -474,3 +474,5 @@
 | T112 | K17：Codex 文本形式的错误，宿主现在让回合以 `failed` 结束并带 `error_code`（如 `model_unsupported`），但还不写 `error` 条目 | T110 |
 | T113 | `initialize` 没有声明 `session.notices`、`session.compaction`，真实运行时 Codex 的压缩提示和配置警告会以不带 ID 的消息出现；录制里没出现过的选项（`decline`、命令上的 `allow_for_session`、网络策略、权限档案、MCP 审批）现在按 kind 兜底，录到后加进 5.3.6 和对照表；K17 要核对 `systemError` 和错误文本谁先到；prompt 之外出现 thread `active` 时交 T112 | T110 |
 | 以后的"第二种 agent"类任务 | 估规模时把共用代码的搬动单独列一项；搬动单独成一个提交，按净增计（T110 的补充裁定二） | T110 |
+| T113 | `tools/sanitize` 的 `<opaque>` 规则（64 个以上连续的 base64 字符）现在也作用于折叠后的文本，一条消息里被切开的长路径也可能被换成 `<opaque>`；入库新录制时金样例里出现意外的 `<opaque>`，原因在这里 | T210 |
+| 以后改 `tools/sanitize` 的任务 | `leftovers()` 里 MCP 服务器名的匹配器没有单独的测试覆盖，让它总是返回空，现有用例也不会失败（T204 起就是这样） | T210 |
