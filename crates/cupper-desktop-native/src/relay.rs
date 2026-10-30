@@ -7,7 +7,8 @@
 //! threads here relay between the other end and the host. Every read of the
 //! host goes through `recv_closing_fds` and is followed by a comparison of the
 //! host's token with the pinned one; its data reaches the main process only
-//! after both. Any refusal ends the connection both ways, and the main
+//! after both. Each thread waits for its socket to be readable before it
+//! reads (`recv`). Any refusal ends the connection both ways, and the main
 //! process reads end of file and asks for the [`CloseReason`].
 
 use std::io::{self, Write};
@@ -16,7 +17,7 @@ use std::os::fd::OwnedFd;
 use std::os::unix::net::UnixStream;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use cupper_sys::{AuditToken, peer_token, recv_closing_fds};
+use cupper_sys::{AuditToken, Received, peer_token, recv_closing_fds, wait_readable};
 
 /// Bytes read at a time, either way.
 const CHUNK: usize = 64 * 1024;
@@ -113,7 +114,7 @@ impl Relay {
     fn read_host(&self) {
         let mut buf = vec![0; CHUNK];
         let reason = loop {
-            let got = match recv_closing_fds(&self.host, &mut buf) {
+            let got = match recv(&self.host, &mut buf) {
                 Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
                 Err(_) => break CloseReason::HostClosed,
                 Ok(got) => got,
@@ -138,7 +139,7 @@ impl Relay {
         let mut buf = vec![0; CHUNK];
         let reason = loop {
             // Our own end: only the main process writes to it.
-            match recv_closing_fds(&self.ours, &mut buf) {
+            match recv(&self.ours, &mut buf) {
                 Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
                 Err(_) => break CloseReason::Local,
                 Ok(got) if got.len == 0 => break CloseReason::Local,
@@ -153,6 +154,14 @@ impl Relay {
     }
 }
 
+/// `recv_closing_fds` once `socket` is readable. A blocking read can sleep
+/// through the peer's shutdown, and the other end would then hear of it only
+/// when the peer closes its fd (T207, [`wait_readable`]).
+fn recv(socket: &UnixStream, buf: &mut [u8]) -> io::Result<Received> {
+    wait_readable(socket, None)?;
+    recv_closing_fds(socket, buf)
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Read;
@@ -162,6 +171,10 @@ mod tests {
 
     use super::*;
 
+    /// How long a test waits on the relay: one that missed a refusal would
+    /// leave the wait going forever.
+    const PATIENCE: Duration = Duration::from_secs(10);
+
     /// A relay to `host`, the other end of a pair: the "host" is this
     /// process, which also pins its token.
     fn started() -> (Arc<Relay>, UnixStream, UnixStream) {
@@ -169,18 +182,25 @@ mod tests {
         let pinned = peer_token(&client).unwrap();
         let (relay, theirs) = Relay::start(client, pinned).unwrap();
         let theirs = UnixStream::from(theirs);
-        // A relay that missed a refusal would leave a read waiting forever.
         for end in [&host, &theirs] {
-            end.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+            end.set_read_timeout(Some(PATIENCE)).unwrap();
         }
         (relay, host, theirs)
     }
 
-    /// Everything the main process reads until end of file.
-    fn drain(mut theirs: &UnixStream) -> Vec<u8> {
-        let mut data = Vec::new();
-        theirs.read_to_end(&mut data).unwrap();
-        data
+    /// Everything `end` reads until end of file, waiting as the main process
+    /// (libuv) and the host (tokio) do: until it is readable, then reading.
+    /// A blocking read can sleep through the relay's shutdown (T207).
+    fn drain(mut end: &UnixStream) -> Vec<u8> {
+        let (mut data, mut buf) = (Vec::new(), [0; 64]);
+        loop {
+            let readable = cupper_sys::wait_readable(end, Some(PATIENCE)).unwrap();
+            assert!(readable, "no end of file within {PATIENCE:?}");
+            match end.read(&mut buf).unwrap() {
+                0 => return data,
+                got => data.extend_from_slice(&buf[..got]),
+            }
+        }
     }
 
     #[test]
@@ -199,6 +219,29 @@ mod tests {
         drop(host);
         assert!(drain(&theirs).is_empty());
         assert_eq!(relay.reason(), Some(CloseReason::HostClosed));
+    }
+
+    /// The host ends a connection with `shutdown(Write)` (its gateway's
+    /// `OwnedWriteHalf` dropped) and closes the fd later; here not before
+    /// the main process has read end of file. A blocking read can sleep
+    /// through that shutdown (T207), so this is a matter of tries: with the
+    /// relay reading that way, 0.04–0.15% of tries on the runner came
+    /// through only at the close (test-repeat runs 41006408074 and
+    /// 41006415634), which 20000 tries all but always catch. The shutdown
+    /// comes after 0 to 3980 spins, so that some tries meet the relay as it
+    /// goes back to its read after the last frame.
+    #[test]
+    fn unit_native_relay_passes_the_hosts_shutdown_on_at_once() {
+        for i in 0..20_000 {
+            let (relay, mut host, theirs) = started();
+            host.write_all(b"x").unwrap();
+            for _ in 0..i % 200 * 20 {
+                std::hint::spin_loop();
+            }
+            host.shutdown(Shutdown::Write).unwrap();
+            assert_eq!(drain(&theirs), b"x", "try {i}");
+            assert_eq!(relay.reason(), Some(CloseReason::HostClosed));
+        }
     }
 
     #[test]
