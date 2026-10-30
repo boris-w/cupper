@@ -636,12 +636,16 @@ mod t207_probe {
     }
 
     fn kevent_wait(kq: i32) -> bool {
+        kevent_wait_for(kq, TIMEOUT)
+    }
+
+    fn kevent_wait_for(kq: i32, timeout: Duration) -> bool {
         // SAFETY: plain calls; `ev` and `ts` are valid.
         unsafe {
             let mut ev: libc::kevent = std::mem::zeroed();
             let ts = libc::timespec {
-                tv_sec: 0,
-                tv_nsec: TIMEOUT.as_nanos() as _,
+                tv_sec: timeout.as_secs() as _,
+                tv_nsec: timeout.subsec_nanos() as _,
             };
             let rc = libc::kevent(kq, std::ptr::null(), 0, &mut ev, 1, &ts);
             assert!(rc >= 0);
@@ -823,6 +827,103 @@ mod t207_probe {
             .create(true)
             .append(true)
             .open(out.join("t207-races.txt"))
+            .unwrap();
+        file.write_all(lines.as_bytes()).unwrap();
+    }
+
+    /// How long after its `shutdown(Write)` the host closes the fd in
+    /// [`relay_eof`]: long enough to tell the two apart.
+    const CLOSE_AFTER: Duration = Duration::from_millis(5);
+
+    /// The real relay, with the host ending a connection as its gateway
+    /// does: a last frame, then `shutdown(Write)` (its `OwnedWriteHalf`
+    /// dropped) `gap` later, then the fd closed [`CLOSE_AFTER`] after that
+    /// (the read half dropped) — or, with `half` false, just the fd closed
+    /// `gap` after the frame. The main process waits as libuv does
+    /// (kqueue, non-blocking reads). Returns the µs from the host's first
+    /// end to end of file at the main process.
+    #[expect(clippy::disallowed_methods, reason = "T207 probe")]
+    fn relay_eof(half: bool, gap: Duration) -> u128 {
+        let (client, host) = UnixStream::pair().unwrap();
+        let pinned = cupper_sys::peer_token(&client).unwrap();
+        let (_relay, theirs) = super::Relay::start(client, pinned).unwrap();
+        let theirs = UnixStream::from(theirs);
+        theirs.set_nonblocking(true).unwrap();
+        let kq = register(&theirs);
+        (&host).write_all(b"x").unwrap();
+        let until = Instant::now() + gap;
+        while Instant::now() < until {
+            std::hint::spin_loop();
+        }
+        let ended = Instant::now();
+        let closer = if half {
+            host.shutdown(Shutdown::Write).unwrap();
+            Some(std::thread::spawn(move || {
+                std::thread::sleep(CLOSE_AFTER);
+                drop(host);
+            }))
+        } else {
+            drop(host);
+            None
+        };
+        let mut buf = [0; 64];
+        let eof = loop {
+            match (&theirs).read(&mut buf) {
+                Ok(0) => break Instant::now(),
+                Ok(_) => {}
+                Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                    assert!(
+                        kevent_wait_for(kq, Duration::from_secs(10)),
+                        "no end of file"
+                    );
+                }
+                Err(err) => panic!("read: {err}"),
+            }
+        };
+        if let Some(closer) = closer {
+            closer.join().unwrap();
+        }
+        // SAFETY: our kqueue.
+        unsafe { libc::close(kq) };
+        (eof - ended).as_micros()
+    }
+
+    #[test]
+    fn t207_probe_relay_eof() {
+        let out = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../test-repeat"));
+        if !out.is_dir() {
+            return;
+        }
+        let tries: usize = std::env::var("T207_EOFS").map_or(4000, |n| n.parse().unwrap());
+        let mut lines = String::new();
+        for half in [true, false] {
+            let mut took: Vec<u128> = (0..tries)
+                // The host ends 0 to 40 µs after its last frame, in 200 ns
+                // steps.
+                .map(|i| relay_eof(half, Duration::from_nanos((i % 201) as u64 * 200)))
+                .collect();
+            took.sort_unstable();
+            let at = |q: f64| took[((took.len() - 1) as f64 * q) as usize];
+            let over = |us: u128| took.iter().filter(|t| **t >= us).count();
+            lines += &format!(
+                "pid={} half_close_first={half} tries={tries} p50_us={} p90_us={} p99_us={} \
+                 p999_us={} max_us={} over_1ms={} over_4ms={} over_10ms={}\n",
+                std::process::id(),
+                at(0.5),
+                at(0.9),
+                at(0.99),
+                at(0.999),
+                took[took.len() - 1],
+                over(1_000),
+                over(4_000),
+                over(10_000)
+            );
+        }
+        eprint!("{lines}");
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(out.join("t207-relay-eof.txt"))
             .unwrap();
         file.write_all(lines.as_bytes()).unwrap();
     }
