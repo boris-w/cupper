@@ -6,6 +6,7 @@
  * the recorded run and a local terms file, so this code holds no personal
  * data. Session IDs become `session-NN`; the names of the user's MCP servers,
  * taken from where Codex shows them, become `<redacted>` wherever they occur.
+ * A text streamed over several frames is redacted once more, folded.
  * Running it on its own output changes nothing.
  */
 import { execFileSync } from "node:child_process";
@@ -13,7 +14,9 @@ import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 
-import { either, expand, patterns, scan, terms, type Finding, type Matcher } from "./scan.ts";
+import { either, escapeRe, expand, hits, patterns, scan, terms } from "./scan.ts";
+import type { Finding, Matcher } from "./scan.ts";
+import { fold, streams } from "./streams.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- recordings are free-form JSON
 type Json = any;
@@ -50,10 +53,6 @@ function scutil(key: string): string {
   }
 }
 
-function escapeRe(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function variants(p: string): string[] {
   const out = new Set([p.replace(/\/+$/, "")]);
   try {
@@ -74,9 +73,39 @@ const encoded = (p: string) => p.replace(/[^A-Za-z0-9]/g, "-");
 /** Machine-specific path segments (for example the random part of TMPDIR). */
 const tmpSegments = (m: Machine) => m.tmp.split("/").filter((s) => s.length >= 12);
 
+/** A rule: what to replace, with what (`$1` names a group). */
+type Rule = [RegExp, string | ((match: string) => string)];
+
+const replace = (s: string, [re, rep]: Rule) =>
+  typeof rep === "string" ? s.replace(re, rep) : s.replace(re, rep);
+
+/**
+ * A rule applied to a text split into pieces, keeping the number of pieces:
+ * the replacement goes where its match starts, and the rest of the match is
+ * cut from the pieces it runs into.
+ */
+function replacePieces(pieces: string[], [re, rep]: Rule): string[] {
+  const { text, owner } = fold(pieces);
+  const matches = [...text.matchAll(re)];
+  if (!matches.length) return pieces;
+  const out: string[][] = pieces.map(() => []);
+  let at = 0;
+  const copy = (to: number) => {
+    for (; at < to; at++) out[owner[at] ?? 0]?.push(text.charAt(at));
+  };
+  for (const m of matches) {
+    copy(m.index);
+    const by = typeof rep === "string" ? rep.replace(/\$(\d)/g, (_, n) => m[n] ?? "") : rep(m[0]);
+    out[owner[m.index] ?? pieces.length - 1]?.push(by);
+    at = m.index + m[0].length;
+  }
+  copy(text.length);
+  return out.map((parts) => parts.join(""));
+}
+
 /** Ordered: longest, most specific paths first. */
-function rules(m: Machine): [RegExp, string][] {
-  const rules: [RegExp, string][] = [];
+function rules(m: Machine): Rule[] {
+  const rules: Rule[] = [];
   const add = (paths: string[], rep: string, map = (p: string) => p, tail = "") => {
     for (const p of paths.filter(Boolean).flatMap(variants)) {
       rules.push([new RegExp(escapeRe(map(p)) + tail, "g"), rep]);
@@ -103,6 +132,13 @@ function rules(m: Machine): [RegExp, string][] {
   rules.push([/\bmcp_servers\.[A-Za-z0-9_-]+/g, "mcp_servers.<redacted>"]);
   return rules;
 }
+
+// Long base64/hex runs (keys, signatures, hashes). Ids such as UUIDs or
+// "rs_<hex>" message ids are shorter or broken up by "-" / "_", so they survive.
+const OPAQUE: Rule = [
+  /[A-Za-z0-9+/=]{64,}/g,
+  (m) => (/[0-9]/.test(m) && /[A-Za-z]/.test(m) && !m.includes("//") ? "<opaque>" : m),
+];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -134,12 +170,14 @@ function spellings(names: Set<string>): RegExp | null {
 
 export class Sanitizer {
   readonly #machine: Machine;
-  readonly #rules: [RegExp, string][];
+  readonly #rules: Rule[];
   /** Session ID -> `session-NN`, filled from every input before anything is written. */
   readonly #sessions = new Map<string, string>();
   /** Names of the user's MCP servers that Codex shows, likewise; `#names` matches them. */
   readonly #servers = new Set<string>();
   #names: RegExp | null | undefined;
+  /** Every rule `#scrubString` applies, in order: set once every input is collected. */
+  #all: Rule[] = [];
 
   constructor(machine: Machine) {
     this.#machine = machine;
@@ -171,10 +209,26 @@ export class Sanitizer {
     }
   }
 
-  /** One line of a recording, redacted. */
-  line(text: string): string {
-    this.#names ??= spellings(this.#servers);
-    return JSON.stringify(this.#scrub(structural(JSON.parse(text))));
+  /** The lines of one recording, redacted, and each text streamed over several frames folded. */
+  lines(lines: readonly string[]): string[] {
+    if (this.#names === undefined) {
+      this.#names = spellings(this.#servers);
+      const sessions = [...this.#sessions].map(([id, alias]): Rule => [
+        RegExp(escapeRe(id), "g"),
+        alias,
+      ]);
+      const names: Rule[] = this.#names ? [[this.#names, "<redacted>"]] : [];
+      this.#all = [...sessions, ...names, ...this.#rules, OPAQUE];
+    }
+    const frames = lines.map((line) => this.#scrub(structural(JSON.parse(line))));
+    for (const pieces of streams(frames)) {
+      const texts = this.#all.reduce(
+        replacePieces,
+        pieces.map(({ at, key }) => at[key]),
+      );
+      pieces.forEach(({ at, key }, i) => (at[key] = texts[i]));
+    }
+    return frames.map((frame) => JSON.stringify(frame));
   }
 
   /** What must not be left in the output: the machine, the session IDs, the generic patterns. */
@@ -191,21 +245,13 @@ export class Sanitizer {
       ...[...this.#sessions.keys()].map((id) => ["session ID", id] as [string, string]),
     ];
     if (m.user.length > 2) list.push(["user name", m.user]);
-    const names = this.#names && new RegExp(this.#names.source);
-    const servers: Matcher = (line) => (names?.test(line) ? ["MCP server name"] : []);
+    const names = this.#names;
+    const servers: Matcher = (text) => (names ? hits("MCP server name", names, text) : []);
     return either(terms(list), patterns, servers);
   }
 
   #scrubString(s: string): string {
-    let out = s;
-    for (const [id, alias] of this.#sessions) out = out.split(id).join(alias);
-    if (this.#names) out = out.replace(this.#names, "<redacted>");
-    for (const [re, rep] of this.#rules) out = out.replace(re, rep);
-    // Long base64/hex runs (keys, signatures, hashes). Ids such as UUIDs or
-    // "rs_<hex>" message ids are shorter or broken up by "-" / "_", so they survive.
-    return out.replace(/[A-Za-z0-9+/=]{64,}/g, (m) =>
-      /[0-9]/.test(m) && /[A-Za-z]/.test(m) && !m.includes("//") ? "<opaque>" : m,
-    );
+    return this.#all.reduce(replace, s);
   }
 
   /** Recursive scrub, keys too (`codex/<server>ExecutionDurationMs`); images pass untouched. */
@@ -349,7 +395,7 @@ export function sanitizeTree(
   const sanitizer = new Sanitizer(machine);
   for (const file of files) read(file).forEach((l) => sanitizer.collect(JSON.parse(l)));
   for (const file of files) {
-    const out = read(file).map((l) => sanitizer.line(l));
+    const out = sanitizer.lines(read(file));
     mkdirSync(dirname(join(outDir, file)), { recursive: true });
     writeFileSync(join(outDir, file), out.join("\n") + "\n");
   }
