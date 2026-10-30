@@ -99,11 +99,11 @@ mod tests {
 
     use super::*;
     use crate::driver::extract::set_mode;
-    use crate::driver::gold_a::{extract, recordings};
+    use crate::driver::gold_a::{CLAUDE, extract, recordings};
 
     /// What Claude's adapter answered to `initialize` and `session/new` in s01.
     fn s01() -> (InitializeResponse, Vec<SessionConfigOption>) {
-        let (_, recording) = recordings(Some("s01-init-session")).remove(0);
+        let (_, recording) = recordings(&CLAUDE, Some("s01-init-session")).remove(0);
         let mut results = (recording.frames.iter()).filter_map(|frame| match &frame.body {
             Body::Recv(msg) => Some(msg["result"].clone()),
             _ => None,
@@ -158,7 +158,7 @@ mod tests {
         let caps = capabilities(&init, versions(), Vec::new(), Vec::new());
         assert_eq!(caps.extraction.plan, PlanExtraction::MarkdownOnly);
         for scenario in ["s02c-plan-tasks-enabled", "s02b-plan", "s05-questions"] {
-            for (_, recording) in recordings(Some(scenario)) {
+            for (_, recording) in recordings(&CLAUDE, Some(scenario)) {
                 let plans: Vec<Value> = (extract(&recording).iter())
                     .filter_map(|v| v.pointer("/event/update/plan").cloned())
                     .collect();

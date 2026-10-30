@@ -60,10 +60,15 @@ pub fn option(scene: Scene, option: &PermissionOption, command: Option<&str>) ->
     built
 }
 
-/// Whether the table has the option: GOLD-A checks that every option in a
-/// recording does.
-pub fn listed(scene: Scene, option: &PermissionOption) -> bool {
-    row(scene, &option.option_id.to_string(), &kind(option)).is_some()
+/// The options of `request` the table does not have, named with their
+/// scene: GOLD-A checks that a recording has none.
+pub fn unlisted(request: &RequestPermissionRequest) -> Vec<String> {
+    let scene = Scene::of(request);
+    let listed = |o: &&PermissionOption| row(scene, &o.option_id.to_string(), &kind(o)).is_some();
+    let missing = request.options.iter().filter(|o| !listed(o));
+    missing
+        .map(|o| format!("option {} in {scene:?}", o.option_id))
+        .collect()
 }
 
 /// The table, from SP-1's recordings (5.3.6). The kind must match as well.

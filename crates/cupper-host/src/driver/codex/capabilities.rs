@@ -82,3 +82,48 @@ pub const TIERS: Tiers = &[
     ("agent", Tier::Elevated),
     ("agent-full-access", Tier::FullAccess),
 ];
+
+#[cfg(test)]
+mod tests {
+    use cupper_protocol::capabilities::CliCompat;
+    use cupper_protocol::recording::Body;
+
+    use super::*;
+    use crate::driver::gold_a::{CODEX, recordings};
+
+    /// What s01's adapter answered, and the tiers of its modes (Q25).
+    #[test]
+    fn unit_capabilities_codex_from_initialize_and_the_session() {
+        let (_, recording) = recordings(&CODEX, Some("s01-init-session")).remove(0);
+        let mut results = (recording.frames.iter()).filter_map(|frame| match &frame.body {
+            Body::Recv(msg) => Some(msg["result"].clone()),
+            _ => None,
+        });
+        let init = results.find(|r| r["agentCapabilities"].is_object());
+        let init = serde_json::from_value(init.unwrap_or_default()).expect("initialize");
+        let options = results.find_map(|r| r.get("configOptions").cloned());
+        let options: Vec<SessionConfigOption> =
+            serde_json::from_value(options.unwrap_or_default()).expect("options");
+        let versions = Versions {
+            adapter: "2.2.2".into(),
+            cli: "0.159.2".into(),
+            cli_compat: CliCompat::Verified,
+        };
+        let caps = capabilities(&init, versions, config_options(&options), Vec::new());
+        assert!(caps.turn.steer.supported && !caps.turn.steer.side_effects);
+        assert!(!caps.turn.interrupt_stops_commands && caps.interactions.reject_ends_turn);
+        let ids: Vec<&str> = caps.config.iter().map(|o| o.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            ["permission_mode", "plan_mode", "model", "reasoning_effort"]
+        );
+        let risks = |o: &ConfigOption| o.values.iter().map(|v| v.risk.clone()).collect::<Vec<_>>();
+        use Tier::*;
+        assert_eq!(
+            risks(&caps.config[0]),
+            [Normal, Normal, Elevated, FullAccess]
+        );
+        assert_eq!(risks(&caps.config[1]), [Normal, Normal]);
+        assert_eq!(extract::tier(TIERS, "danger"), FullAccess);
+    }
+}
