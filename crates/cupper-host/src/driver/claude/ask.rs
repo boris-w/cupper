@@ -1,21 +1,20 @@
 //! Claude's requests (design 5.6.4): a permission request is a plan
 //! confirmation when ExitPlanMode asks (`switch_mode` with `exit-plan-`
-//! options), a permission otherwise; a form elicitation goes to the
-//! interaction broker as it came (design 5.3.6).
+//! options), a permission otherwise. A form elicitation goes to the
+//! interaction broker as it came ([`crate::driver::extract::elicitation`]).
 //!
 //! Options take their effects from the option table ([`options`]).
 
-use agent_client_protocol::schema::v1::{
-    CreateElicitationRequest, ElicitationMode, ElicitationScope, RequestPermissionRequest,
-};
+use agent_client_protocol::schema::v1::RequestPermissionRequest;
 use cupper_protocol::interaction::{
     InteractionRequest, PermissionRequest, PermissionTool, PlanConfirmRequest,
 };
 use serde_json::Value;
 
+use super::ClaudeSession;
 use super::options::{self, Scene};
-use super::{ClaudeSession, command, content_text, tool_kind};
-use crate::driver::api::{AskRequest, FormAsk};
+use crate::driver::api::AskRequest;
+use crate::driver::extract::{command, content_text, tool_kind};
 
 impl ClaudeSession {
     /// `session/request_permission`: the tool call it is about, and the request.
@@ -43,7 +42,7 @@ impl ClaudeSession {
                     item_id: None,
                     tool_kind: tool_kind(fields.kind.unwrap_or_default()),
                     command: command.map(|command| content_text(&command)),
-                    paths: self.paths(locations),
+                    paths: self.0.paths(locations),
                 },
                 options,
                 detail: None,
@@ -55,21 +54,4 @@ impl ClaudeSession {
             AskRequest::Classified(request),
         )
     }
-}
-
-/// `elicitation/create` in form mode: the tool call it is about, and the form.
-/// The URL mode is not in M1 (design 5.6.4).
-pub fn elicitation(request: &CreateElicitationRequest) -> Option<(Option<String>, AskRequest)> {
-    let ElicitationMode::Form(form) = &request.mode else {
-        return None;
-    };
-    let tool_call_id = match &form.scope {
-        ElicitationScope::Session(scope) => scope.tool_call_id.as_ref().map(ToString::to_string),
-        _ => None,
-    };
-    let form = FormAsk {
-        message: request.message.clone(),
-        schema: serde_json::to_value(&form.requested_schema).ok()?,
-    };
-    Some((tool_call_id, AskRequest::Form(form)))
 }
