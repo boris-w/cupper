@@ -59,6 +59,10 @@ pub struct Relay {
     ours: UnixStream,
     pinned: AuditToken,
     reason: Mutex<Option<CloseReason>>,
+    /// T207 probe, reverted after the runs on the runner: when `read_host`
+    /// left its loop, and when its `close` returned.
+    #[cfg(test)]
+    probe: Mutex<[Option<std::time::Instant>; 2]>,
 }
 
 impl Relay {
@@ -72,6 +76,8 @@ impl Relay {
             ours,
             pinned,
             reason: Mutex::new(None),
+            #[cfg(test)]
+            probe: Mutex::new([None; 2]),
         });
         let started = relay
             .spawn("cupper-host-read", Self::read_host)
@@ -131,7 +137,19 @@ impl Relay {
                 break CloseReason::Local;
             }
         };
+        #[cfg(test)]
+        self.mark(0);
         self.close(reason);
+        #[cfg(test)]
+        self.mark(1);
+    }
+
+    /// T207 probe.
+    #[cfg(test)]
+    #[expect(clippy::disallowed_methods, reason = "T207 probe")]
+    fn mark(&self, at: usize) {
+        self.probe.lock().unwrap_or_else(PoisonError::into_inner)[at] =
+            Some(std::time::Instant::now());
     }
 
     fn write_host(&self) {
@@ -183,9 +201,19 @@ mod tests {
         data
     }
 
+    /// T207 probe, reverted after the runs on the runner: it passes and fails
+    /// as on main (no end of file within the 10 s read timeout fails), but
+    /// waits on to see when the end of file comes, and appends the timings
+    /// to `test-repeat/t207-probe.txt` when test-repeat's directory is there.
     #[test]
+    #[expect(clippy::disallowed_methods, reason = "T207 probe")]
     fn unit_native_relay_forwards_both_ways_until_the_host_closes() {
+        use std::time::{Instant, SystemTime, UNIX_EPOCH};
+        let wall = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        let began = Instant::now();
+        let watchdog = Watchdog::start();
         let (relay, mut host, mut theirs) = started();
+        let ready = Instant::now();
         host.write_all(b"hello").unwrap();
         let mut got = [0; 5];
         theirs.read_exact(&mut got).unwrap();
@@ -196,9 +224,131 @@ mod tests {
         assert_eq!(&got, b"initialize");
         assert_eq!(relay.reason(), None);
 
+        let dropping = Instant::now();
         drop(host);
-        assert!(drain(&theirs).is_empty());
+        let mut data = Vec::new();
+        let first = (&theirs).read_to_end(&mut data);
+        let drained = Instant::now();
+        // On a timeout, wait on to see when the end of file comes, if at all.
+        let late = first.as_ref().err().map(|_| {
+            theirs
+                .set_read_timeout(Some(Duration::from_secs(120)))
+                .unwrap();
+            let again = (&theirs).read_to_end(&mut data);
+            (again.map_err(|err| err.kind()), Instant::now())
+        });
+        let gaps = watchdog.stop();
+        let [broke, closed] = *relay.probe.lock().unwrap();
+
+        let ms = |d: Duration| format!("{:.3}", d.as_secs_f64() * 1e3);
+        let after = |at: Option<Instant>| {
+            at.map_or("-".to_owned(), |at| {
+                ms(at.saturating_duration_since(dropping))
+            })
+        };
+        let me = std::process::id() as i32;
+        let since_exec = cupper_sys::process_info(me).map_or("-".to_owned(), |info| {
+            let start = Duration::from_micros(info.start.as_micros());
+            ms(wall.saturating_sub(start))
+        });
+        // The watchdog's gaps over 20 ms: the longest, and those that overlap
+        // the wait for the end of file.
+        let longest = gaps.iter().max_by_key(|(_, gap)| *gap);
+        let during: Duration = gaps
+            .iter()
+            .filter(|(end, gap)| *end > dropping && *end - *gap < drained)
+            .map(|(_, gap)| *gap)
+            .sum();
+        let line = format!(
+            "pid={me} since_exec_ms={since_exec} setup_ms={} exchange_ms={} broke_ms={} \
+             closed_ms={} drained_ms={} first={} late={} gaps_over_20ms={} longest_gap_ms={} \
+             longest_gap_end_ms={} gaps_during_drain_ms={} load={}\n",
+            ms(ready - began),
+            ms(dropping - ready),
+            after(broke),
+            after(closed),
+            ms(drained - dropping),
+            first
+                .as_ref()
+                .map_or_else(|err| format!("{:?}", err.kind()), |n| format!("ok:{n}")),
+            late.as_ref().map_or("-".to_owned(), |(again, at)| format!(
+                "{}@{}",
+                again
+                    .as_ref()
+                    .map_or_else(|kind| format!("{kind:?}"), |n| format!("ok:{n}")),
+                ms(at.saturating_duration_since(dropping))
+            )),
+            gaps.len(),
+            longest.map_or("-".to_owned(), |(_, gap)| ms(*gap)),
+            longest.map_or("-".to_owned(), |(end, _)| {
+                if *end >= dropping {
+                    ms(*end - dropping)
+                } else {
+                    format!("-{}", ms(dropping - *end))
+                }
+            }),
+            ms(during),
+            load_average(),
+        );
+        eprint!("T207 {line}");
+        let out = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../test-repeat"));
+        if out.is_dir() {
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(out.join("t207-probe.txt"))
+                .unwrap();
+            file.write_all(line.as_bytes()).unwrap();
+        }
+
+        first.unwrap();
+        assert!(data.is_empty());
         assert_eq!(relay.reason(), Some(CloseReason::HostClosed));
+    }
+
+    /// T207 probe: a thread that sleeps 1 ms at a time and keeps each gap
+    /// over 20 ms between its wakeups, with when it ended.
+    struct Watchdog {
+        stop: Arc<std::sync::atomic::AtomicBool>,
+        thread: std::thread::JoinHandle<Vec<(std::time::Instant, Duration)>>,
+    }
+
+    impl Watchdog {
+        #[expect(clippy::disallowed_methods, reason = "T207 probe")]
+        fn start() -> Self {
+            use std::sync::atomic::Ordering;
+            let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let flag = Arc::clone(&stop);
+            let thread = std::thread::spawn(move || {
+                let mut gaps = Vec::new();
+                let mut last = std::time::Instant::now();
+                while !flag.load(Ordering::Relaxed) {
+                    std::thread::sleep(Duration::from_millis(1));
+                    let now = std::time::Instant::now();
+                    if now - last > Duration::from_millis(20) {
+                        gaps.push((now, now - last));
+                    }
+                    last = now;
+                }
+                gaps
+            });
+            Self { stop, thread }
+        }
+
+        fn stop(self) -> Vec<(std::time::Instant, Duration)> {
+            self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+            self.thread.join().unwrap()
+        }
+    }
+
+    /// The 1-minute load average (T207 probe).
+    fn load_average() -> String {
+        let out = Command::new("/usr/sbin/sysctl")
+            .args(["-n", "vm.loadavg"])
+            .output()
+            .unwrap();
+        let out = String::from_utf8_lossy(&out.stdout).into_owned();
+        out.split_whitespace().nth(1).unwrap_or("?").to_owned()
     }
 
     #[test]
