@@ -50,3 +50,57 @@ So the failure is a race the test always runs: `status` against the next look of
 - Title: "... leaves the host to its own exit rule"; the ID is the same.
 - The release build's half (the host stays, 10-minute idle rule): IT-idle-exit (`crates/cupper-host/tests/lifecycle.rs`) and UNIT-orphan-policy cover the rule; SMOKE-SIGNED-reattach (T181, not done yet) the host outliving the app. Named in the test's comment.
 - Design and plan: no text says "idle rule" for this test except the T208 row of the plan, which quotes the old title.
+
+### On the runner (e2e-repeat)
+
+| Run | Commit | Copies at once | Result |
+|---|---|---|---|
+| [41002041448](https://github.com/boris-w/cupper/actions/runs/41002041448) | 7771c71 (before) | 1 | 200/200 passed, 1.5–5.4 s each |
+| [41003132122](https://github.com/boris-w/cupper/actions/runs/41003132122) | 541d1cb (after) | 1 | 200/200 passed, 1.3–4.1 s each |
+| [41007332700](https://github.com/boris-w/cupper/actions/runs/41007332700) | 228eb5e (after) | 2 | 200/200 passed, 1.3–5.7 s each, 244 s in all |
+
+Unloaded the race almost never loses: the CLI answers in milliseconds, against a look every second. The CI failure came from a nightly with two Playwright workers. The fixed test does not race at all: it waits for the exit, which always comes.
+
+## Not failing unloaded
+
+Both tests pass 200 times out of 200 one copy at a time on the runner (runs 41002041448 and 41002049698, both at 7771c71). Both CI failures were in runs with two Playwright workers (`xtask ci e2e`). So `e2e-repeat` got a `workers` input (9733858, default 1; a later `--workers` overrides the `--workers 1` of `test:e2e:one`, checked locally). It stays as a CI change.
+
+## Item 2: E2E-NFR1-4 "after a reload, earlier history ..." — in progress
+
+### What the CI failure says (run 40651531549, the JSON report only)
+
+- The click's call log: the locator resolved to the history button (`加载更早的历史`), the click waited for it to be visible, enabled and stable, then "element was detached from the DOM, retrying", and nothing more for 30 s. Read as: no button with that name came back in 30 s (the call log shows no second resolution; not checked against Playwright's logging code).
+- Before that the test had passed: `say t23` visible, the scroll to the top, `say t4` visible, `say t3` count 0. So the list was at the top with the history row rendered when the click started, and the row went away for good during the stability check (two frames).
+- The test took 43.8 s; it passes in 22.8 s in a nightly with two workers and 9.5–17.6 s alone on the runner.
+
+### Unloaded on the runner
+
+Run [41002049698](https://github.com/boris-w/cupper/actions/runs/41002049698), 7771c71, one copy: 200/200 passed.
+
+### Locally (one copy)
+
+- The test passes (about 6 s).
+- A probe that records the list per animation frame after the reload (scrollTop, scrollHeight, rows, whether the history button is there, sync counters, connection state, the session view's seq): the session view is complete about 80 ms after the reload; the list renders at the bottom, is measured and stays at the bottom; the test's scroll puts it at 0 and the history button appears; no resets, gaps or reconnects. The click then loads turns 1–3.
+- The same with the renderer slowed 20 times (`Emulation.setCPUThrottlingRate`): every step 15 times slower, same order, passes.
+
+### What can take the history row away (code reading; none confirmed)
+
+The row is index 0 of the virtual list, shown while the view's first turn is after turn 1 (`StreamList.tsx` `useHistory`). It goes away for good only if one of these happens:
+
+1. **The list leaves the top and stays at the bottom.** `ScrollKeeper.stuck` is set only by `onScroll` (within 24 px of the bottom) and on mount; while it is set, every render of `Rows` scrolls to the bottom (`useLayoutEffect`). Ways to set it while at the top: a remount of `Rows` (a fresh keeper), or a scroll event while the content fits the viewport (an emptied view while `scrollTop > 0`). Neither found: `SessionPage` is keyed by the session ID, `StreamList` only switches on its store, which `Subscriptions` keeps; at `scrollTop` 0 an emptied view fires no scroll event. TanStack Virtual 3.17.11's own scroll writes (`applyScrollAdjustment`, `_retryClampedAdjustment`) only adjust for items above the offset, of which there are none at 0; React's `onScroll` listener is on the element from its creation, before TanStack's, so `stuck` is cleared before TanStack re-renders on the test's scroll.
+2. **The history state becomes `none`.** Either turn 1 comes into the view (only a history page brings it; only the button calls it), or the view is empty: a view reset (`StreamSync.#drop`, on any `ViewError` or a snapshot reply) refills within milliseconds, so the row would come back and the click retry; not for 30 s unless the refill never arrives (a lost connection).
+3. **The renderer reloads or navigates** (back to the new-session page, no stream list at all): fits "detached and never back" best, but nothing in the app reloads it, and a crash would make Playwright report a crashed page, not a timeout.
+
+Checked and ruled out: late `snapshot.recorded` events for turns outside the snapshot's window (the turn machine drops snapshots of turns other than the current one, and both are written before `turn.completed`).
+
+### Probe on the runner, two at a time (running when work stopped)
+
+- 228eb5e is a probe commit (to be reverted before the PR): the same recorder in the real test, from the reload until the click, with marks at "t23 visible", "scrolled" and "click"; on a failed click (timeout 10 s) it attaches the record as `t208-probe.json`. e2e-repeat keeps `tools/e2e/dist/test-results/` and `repeat.json`, so a failure brings main.log, host.log, `error-context.md` (the page's aria snapshot) and the record.
+- Run [41007324304](https://github.com/boris-w/cupper/actions/runs/41007324304): `times=300`, `workers=2`. Not finished when work stopped.
+
+### Next
+
+1. Read run 41007324304: failures, their `t208-probe.json` (body attachment in `repeat.json`), `error-context.md`, main.log ("renderer gone", reconnects) and host.log.
+2. If it fails: the record says which of 1–3 above happened; fix the test's wait or the product (stop and report if the product fix is more than small), and add a case that reproduces it.
+3. If 300 pass: the load of two copies of this test is not CI's; next try a heavier mix (`times` higher, or two specs), or add the recorder's last frames to the test's failure output for good and wait for CI. Report to the orchestrator before choosing.
+4. Revert 228eb5e; after the fix, e2e-repeat both tests 100+ times with `workers=2`; then the PR.
