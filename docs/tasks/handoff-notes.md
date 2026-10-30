@@ -470,3 +470,7 @@
 | 以后改宿主生命周期的任务 | `host/exit` 以外、和退出撞上的请求，应答仍可能在连接关闭时被丢弃（T205 只按 5.2.13 修了 host/exit）。它们能按 `command_id` 重试拿到结果；要让所有在路上的应答都在关闭前送出，设计要先定等待的上限，以及手动时钟下宽限期不会自己到期时怎么办 | T205 |
 | T103（SP-6）、M1b 的性能任务 | runner 上 3 份并行的负载下，宿主的会话流每轮会停顿几秒（最长 12.4 s，中位数 1.9 s），coalescer 的 40 ms 窗口被拉长到约 2 倍。执行者推断与 `host.db` 带 `checkpoint_fullfsync` 的 WAL 检查点有关，没有验证。这关系到 NFR-1 的流延迟，在参考机型上一并量 | T206 |
 | 以后改 `tools/codex-drift` 的任务 | 摘要（`facets`）只看定义本身和第一层 `oneOf`/`anyOf`/`allOf`，看不到变体里再嵌的一层，0.165.0 的 `imageGeneration` 因此被描述成"去掉了 `result`"。哈希照样能发现变化，不会漏报 | T209 |
+| T111 | 运行时接 Codex 时用 `CodexSession::new`、`update`、`permission`、`set_config`、`prompt_done`，`codex::agent_error`，`codex::capabilities::{capabilities, config_options}`；`CodexSession::config()` 给 SetConfig 用；`prompt_done` 返回 `Err` 时发 `PromptFailed`。第二种 agent 要一个自己的 `ActorKind`（T055 的交接，T110 转来） | T110 |
+| T112 | K17：Codex 文本形式的错误，宿主现在让回合以 `failed` 结束并带 `error_code`（如 `model_unsupported`），但还不写 `error` 条目 | T110 |
+| T113 | `initialize` 没有声明 `session.notices`、`session.compaction`，真实运行时 Codex 的压缩提示和配置警告会以不带 ID 的消息出现；录制里没出现过的选项（`decline`、命令上的 `allow_for_session`、网络策略、权限档案、MCP 审批）现在按 kind 兜底，录到后加进 5.3.6 和对照表；K17 要核对 `systemError` 和错误文本谁先到；prompt 之外出现 thread `active` 时交 T112 | T110 |
+| 以后的"第二种 agent"类任务 | 估规模时把共用代码的搬动单独列一项；搬动单独成一个提交，按净增计（T110 的补充裁定二） | T110 |

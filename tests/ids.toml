@@ -1185,6 +1185,11 @@ IT-host-tests-no-real-cli = "pr"
 milestone = "M1a"
 UNIT-sanitize-codex-mcp = "pr"
 
+# 脱敏与扫描：跨 chunk 的文本（计划 v1.3.79，T110 发现）
+[T210]
+milestone = "M1b"
+UNIT-sanitize-across-chunks = "pr"
+
 # 计划里没有产出任务的编号
 [unplanned]
 # 从第二个发布版起（计划 5.3 的 NFR-10）

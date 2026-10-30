@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.78
+- 版本：v1.3.79
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -282,6 +282,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T207 | 原生扩展的中继用例在 runner 上超时 | fix | 5.9.1、5.7.1 | T206（发现） | 做：`relay::tests::unit_native_relay_forwards_both_ways_until_the_host_closes`（`crates/cupper-desktop-native/src/relay.rs:182`）在 PR #22 的运行里失败（run 40661950733），`read_to_end` 等满 10 s 的读超时返回 `WouldBlock`：宿主一端关闭之后，中继没有在 10 s 内把主进程那一端也关掉。查明是测试的等待太紧还是中继在负载下关得慢（后者是产品问题：窗口会晚发现连接已断），修复，在 runner 上用 `test-repeat` 连跑证明 | 不新增编号 | S | 否 | D.nat |
 | T208 | e2e 的两处偶发失败：退出后的 status 与重载后的历史 | fix | 5.9.4、1.8 | T206（发现） | 做：① `E2E-quit-confirm: idle, quitting asks nothing and leaves the host to its idle rule`（`tools/e2e/src/app.spec.ts:96`）在 10-28 的 nightly e2e 全集里失败（run 40779645990）：退出之后 `cupper status` 以退出码 3 结束；② `E2E-NFR1-4: after a reload, earlier history comes in front without moving the view`（`tools/e2e/src/nfr1.spec.ts:215`）在 main 的 push 运行里失败（run 40651531549）：`locator.click` 等满 30 s。查明根因并修复（测试的等待，或者产品的行为），在 runner 上用 `e2e-repeat` 连跑证明 | 不新增编号 | S | 否 | D.main、D.ui |
 | T209 | 审阅 codex 0.166.0 的漂移 | chore | 5.1.6、ADR-08 | T114 | 做：10-29 的 nightly 里 `codex-drift` 报了 codex 0.166.0 的漂移（run 40967230840），按 T114 的流程逐条审阅：和 0.165.0 那条记录比，多了哪些变化，对 codex-acp 2.2.2 有没有影响；用 `tools/codex-drift review` 写入 `testdata/codex-drift/reviewed.json`，跟进任务写 T113 | 不新增编号 | XS | 否 | C |
+| T210 | 脱敏与扫描：跨 chunk 的文本 | test | 5.9.3 | T110（发现） | 做：`tools/sanitize` 的脱敏和扫描都是逐帧做的，被切进多个 `agent_message_chunk`（以及思考块）的路径、名字看不到，T110 在 Codex s05 里就碰到一个被切成约 35 块的本机临时路径。先把同一条消息（按会话和条目归组）的文本折叠起来再匹配；匹配到时，在原帧上把命中的各块改写成占位，帧数和 seq 不变。补用例，全仓库的录制和金样例复扫 | 新增 UNIT-sanitize-across-chunks | S | 否 | H.xt |
 | **T044** | 会话 actor II：档位、越权、崩溃与晚到输出 | feat | 5.2.6（配置项、崩溃与恢复、晚到的工具输出） | T035、T043、T088、T095、T098 | 做：档位核对与 `config_unconfirmed`、回合中越权先改回再中断、发送闸门（暂停期间空闲时也不开回合）、`session/confirm_config`、`facts` 的 `mode_tier`（`session/set_config` 仍是 M1b，越权判断预留它作为合法来源）；适配器退出后 resume 与 `agent_restarted`、K6、K7；`late_tool_output` 与 `may_still_run` 的核对。不做：信任门控（v1.3.19 起归 T109）；进程级集成测试（T062、T063、T068） | 新增 IT-orch-gating（进程内） | L | 否 | H.orch |
 | T045 | cupper-cli I：客户端库、连接与宿主校验 | feat | 5.2.14、5.3.3 | T012、T014、T020 | 做：迁移 SP-4a 的 client：构建种类（特性 `dev-auth`、`self-use`、`test-harness`，都不开为发布）与 `--build-info`、套接字发现、按构建种类校验宿主（5.8.1：发布按签名要求；自用按编译期写入的宿主 cdhash，经审计令牌比对，之后每次读取比对令牌；开发按同目录宿主文件的 cdhash 弱校验并在输出里标"宿主未经签名校验"；e2e 由 T039 补上 `harness` 证明），发布构建拒绝 `weak_auth`；连接与握手（peer）、请求关联、`command_id`。不做：Mirror 与客户端同步状态机（v1.3.6 起归 T049）；子命令；cdhash 的写入（T005） | 新增 UNIT-cli-host-verify（四种构建的校验分支；cdhash 不符时拒绝连接）、UNIT-cli-client（握手与请求关联） | M | 否 | H.cli |
 | T049 | cupper-cli I-b：Mirror 与客户端同步状态机 | feat | 5.2.14、5.3.3 | T045 | 做：纯核心 `Mirror<V: View>`（只能经 `Mirror::index()`、`Mirror::session(id)` 构造）；`Waiting`、`Loading`、`Live` 三态；只有游标对得上的 `replay` 才保留视图和游标，其余（包括未知的 mode）一律丢弃；快照页核对 `at_seq`、`epoch` 和页序号；连续性缺口带游标重新订阅，`ViewError` 或信封解码失败不带游标重新订阅；`stream/reset` 保留游标；`Waiting` 时旧订阅的数据一律忽略。不做：子命令（T046） | 新增 UNIT-mirror | S | 否 | H.cli |
@@ -1807,6 +1808,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T207 原生扩展的中继用例在 runner 上超时
 - [ ] T208 e2e 的两处偶发失败：退出后的 status 与重载后的历史
 - [x] T209 审阅 codex 0.166.0 的漂移
+- [ ] T210 脱敏与扫描：跨 chunk 的文本
 - [ ] T099 M1a 退出验收
 - [x] T100 索引 II：状态计算、已读、在场与通知意图
 - [x] T109 会话 actor II-b：信任门控
@@ -1842,7 +1844,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T106 复刻核对：暗色与未核实项
 - [ ] T107 Electron 大版本跟进
 - [ ] T108 SP-6 场景 5、6：浸泡与输入法
-- [ ] T110 Codex 提取层、选项对照表与 A 层金样例
+- [x] T110 Codex 提取层、选项对照表与 A 层金样例
 - [ ] T111 Codex 接入：发现、运行时与回收
 - [ ] T112 Codex 回合语义集成测试
 - [ ] T113 Codex 兼容矩阵与 B 层补录
@@ -1986,3 +1988,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.76 | 2026-10-28 | T204 合并。新增 T206：NFR9 的崩溃用例在 runner 负载下又超时一次（T199 修过同一处）。T099 改为也依赖 T206 |
 | v1.3.77 | 2026-10-28 | T205 合并。新增 T207：原生扩展的中继用例在 PR #22 的 runner 上超时一次，还没派发。T099 改为也依赖 T207 |
 | v1.3.78 | 2026-10-30 | T206 合并。新增 T208：e2e 在 runner 上又有两处偶发失败（`E2E-quit-confirm` 退出后的 status、E2E-NFR1-4 重载后的历史）；新增 T209：codex 0.166.0 的漂移要审阅。T099 改为也依赖 T208、T209。派发 T207、T208、T209、T110 |
+| v1.3.79 | 2026-10-30 | T209、T110 合并。新增 T210：脱敏和扫描看不到被切进多个 chunk 的文本（T110 发现） |
