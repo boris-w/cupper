@@ -122,6 +122,21 @@ export function events(cupper: Cupper, stream: string): StoredEvent[] {
   }
 }
 
+/** The details of the host's audit records of `event` (`host.exiting`, ...) so far (design 5.8.6). */
+export function audit(cupper: Cupper, event: string): Record<string, unknown>[] {
+  const db = new DatabaseSync(join(cupper.dataDir, "host.db"), { readOnly: true });
+  try {
+    const rows = db
+      .prepare("SELECT detail_json FROM audit WHERE event = ? ORDER BY id")
+      .all(event) as { detail_json: string | null }[];
+    return rows.map(
+      ({ detail_json }) => JSON.parse(detail_json ?? "{}") as Record<string, unknown>,
+    );
+  } finally {
+    db.close();
+  }
+}
+
 /**
  * The first event of `stream` that `test` accepts, once the host has written
  * it: a barrier on an agent or the host, whether it came already or not.

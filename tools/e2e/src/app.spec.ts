@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { createI18n } from "@cupper/i18n";
 
 import { expect, test, type Cupper } from "./fixture";
+import { audit } from "./helpers";
 import { BUILT } from "./paths";
 import { alive, tree } from "./procs";
 
@@ -83,21 +84,22 @@ test("E2E-quit-confirm: with a running turn, quitting asks; no keeps it, yes end
   await expect.poll(() => alive(host).length, { timeout: 15_000 }).toBe(0);
 });
 
-test("E2E-quit-confirm: idle, quitting asks nothing and leaves the host to its idle rule", async ({
+test("E2E-quit-confirm: idle, quitting asks nothing and leaves the host to its own exit rule", async ({
   cupper,
 }) => {
   await cupper.launch();
-  const { pid } = await cupper.connected();
+  const host = tree((await cupper.connected()).pid as number);
   const closed = cupper.app.waitForEvent("close");
   // A dialog would keep the app open: the stand-in answers only when told.
   await quit(cupper);
   await closed;
-  // No `host/exit`: the host stays, without the app's connections.
-  const status = await cupper.cli.ok(["status"]);
-  expect(status.pid).toBe(pid);
-  expect(
-    (status.clients as { principal_kind: string }[]).map((c) => c.principal_kind),
-  ).not.toContain("desktop_ui");
+  // No `host/exit`: the host exits by its own rule. Here (`dev-auth`) the app
+  // that started it is gone, so it is orphaned and exits within a
+  // `supervisor_observe` (design 5.8.1). A release build's host stays and
+  // keeps the 10-minute idle rule: IT-idle-exit and UNIT-orphan-policy cover
+  // the rule, SMOKE-SIGNED-reattach the host outliving the app (T208).
+  await expect.poll(() => alive(host).length, { timeout: 15_000 }).toBe(0);
+  expect(audit(cupper, "host.exiting")).toEqual([{ reason: "orphaned", force: false }]);
 });
 
 test("E2E-quit-confirm: on shutdown the app quits without asking, even with a running turn", async ({
