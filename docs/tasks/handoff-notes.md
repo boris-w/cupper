@@ -461,7 +461,7 @@
 | T053 的后续、显示压缩的界面任务 | 宿主没有声明 `clientCapabilities.session.compaction` 时，适配器不发 `compaction_update`，改用一个合成的工具调用（"Compact conversation"，kind 为 `think`），实时和回放都一样；套件里没有录到实例 | T066 |
 | 以后改桌面启动测试或 e2e 夹具的任务 | `apps/desktop` 的 `launch.test.ts`（手动运行）没有 `runtime.registry_url`，每次启动都会向公共 npm registry 请求运行时（不含个人信息），可以照 e2e 夹具指向关闭的本地端口；e2e 拉起的宿主沿用 Electron 进程真实的 `HOME`，宿主跑 git 时会读用户的全局 git 配置 | T203 |
 | T113 等下一次真实运行 | compat 真实模式的拉起方式在 T203 里只改了调用点（行为不变），还没有真跑过；T202 的整套重跑早于 T203 合并 | T203 |
-| T113 | codex-drift 抓到 codex 0.165.0 的漂移，已记进 `testdata/codex-drift/reviewed.json`，跟进任务就是本任务：`ThreadItem` 的 `imageGeneration` 变体去掉了 `result`、改成 `inputImages`，codex-acp 2.2.2 的 `ImageGenerationReporter` 还在读 `item.result`，图像生成的结果会丢失（不会崩溃）；其余 13 个方法只是新增了可选字段和枚举值。扩展已验证范围、升级 codex-acp 时，用 `tools/codex-drift write` 重写基线，旧的审阅记录随之失效 | T114 |
+| T113 | codex-drift 抓到 codex 0.165.0 的漂移，已记进 `testdata/codex-drift/reviewed.json`，跟进任务就是本任务：`ThreadItem` 的 `imageGeneration` 变体，`result` 改成了和 `fileId` 二选一（T209 更正：不是删掉），另加了 `inputImages`。codex-acp 2.2.2 遇到 `fileId` 形式会调用 `item.result.trim()` 抛 TypeError：实时通知里图片丢失、工具调用收不到完成更新，`session/load` 回放整个失败。codex-acp 2.5.0 已修。要用真实 Codex 确认什么时候发 `fileId` 形式；0.166.0 的审阅另见 T209；其余 13 个方法只是新增了可选字段和枚举值。扩展已验证范围、升级 codex-acp 时，用 `tools/codex-drift write` 重写基线，旧的审阅记录随之失效 | T114 |
 | 以后要让 nightly 开 issue 时 | 不要给运行 codex 二进制的作业写权限（它跑的是从 npm 下载的第三方二进制）。做法：把 `codex-drift` 移出矩阵，另加一个 `needs: codex-drift`、`if: failure()` 的报告作业，只给它 `issues: write`，按固定标题或标签查重 | T114 |
 | T113 | `xtask compat --out` 只认绝对路径（执行者在 `crates/cupper-host` 下运行，相对路径找不到计划文件）；thinking 剧本的题目要能触发 adaptive 思考（T202 换成了答案唯一的逻辑题），Codex 的思考剧本照此出题 | T202 |
 | 接 Bedrock、Vertex 等服务商的任务 | 宿主经 `extraArgs` 请求 `thinking-display: summarized`，在第三方服务商上是否生效没有核实 | T202 |
@@ -469,3 +469,4 @@
 | 以后改 `cargo xtask size` 的任务 | 它把 `spikes/` 下的录制也算进规模，改 spike 录制的任务都会被多算（T204 多算了 107 行）；把 `spikes/*/recordings/` 加进排除列表 | T204 |
 | 以后改宿主生命周期的任务 | `host/exit` 以外、和退出撞上的请求，应答仍可能在连接关闭时被丢弃（T205 只按 5.2.13 修了 host/exit）。它们能按 `command_id` 重试拿到结果；要让所有在路上的应答都在关闭前送出，设计要先定等待的上限，以及手动时钟下宽限期不会自己到期时怎么办 | T205 |
 | T103（SP-6）、M1b 的性能任务 | runner 上 3 份并行的负载下，宿主的会话流每轮会停顿几秒（最长 12.4 s，中位数 1.9 s），coalescer 的 40 ms 窗口被拉长到约 2 倍。执行者推断与 `host.db` 带 `checkpoint_fullfsync` 的 WAL 检查点有关，没有验证。这关系到 NFR-1 的流延迟，在参考机型上一并量 | T206 |
+| 以后改 `tools/codex-drift` 的任务 | 摘要（`facets`）只看定义本身和第一层 `oneOf`/`anyOf`/`allOf`，看不到变体里再嵌的一层，0.165.0 的 `imageGeneration` 因此被描述成"去掉了 `result`"。哈希照样能发现变化，不会漏报 | T209 |
