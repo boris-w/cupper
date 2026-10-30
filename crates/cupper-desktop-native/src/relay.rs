@@ -396,3 +396,292 @@ mod tests {
         assert!(drain(&host).is_empty());
     }
 }
+
+/// T207 probe, reverted after the runs on the runner: the relay's shape with
+/// variants of how our end is ended and how the main process waits, each
+/// tried many times. A miss: the wait for end of file timed out although the
+/// relay had ended our end, and end of file was there when read again. Runs
+/// only when test-repeat's directory is there, and appends one line per
+/// variant to `test-repeat/t207-variants.txt`.
+#[cfg(test)]
+#[expect(unsafe_code, reason = "T207 probe: poll and kqueue")]
+mod t207_probe {
+    use std::io::{ErrorKind, Read, Write};
+    use std::net::Shutdown;
+    use std::os::fd::AsRawFd;
+    use std::os::unix::net::UnixStream;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    #[derive(Clone, Copy, Debug)]
+    enum Closer {
+        /// As `Relay::close`: both sockets, both ways, from each thread that
+        /// ends.
+        Relay,
+        /// Only the host thread ends our end, both ways; the other thread
+        /// just stops.
+        BothOnce,
+        /// The host thread shuts our end for writing only; the other thread
+        /// stops when the main process closes its end.
+        WriteOnly,
+        /// The host thread closes our end's fd (it is the only owner; no
+        /// other thread).
+        CloseFd,
+        /// Both ways, then the fd is closed (no other thread).
+        BothThenClose,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum Wait {
+        /// A blocking read with `SO_RCVTIMEO`, as the test.
+        Read,
+        /// `poll(POLLIN)`, then a read.
+        Poll,
+        /// A level-triggered kqueue `EVFILT_READ` added before the host
+        /// closes, as libuv adds it, then a read.
+        Kqueue,
+    }
+
+    const TIMEOUT: Duration = Duration::from_millis(100);
+
+    /// The test's steps on the real [`super::Relay`], with a blocking read.
+    fn real_relay() -> usize {
+        let (client, mut host) = UnixStream::pair().unwrap();
+        let pinned = cupper_sys::peer_token(&client).unwrap();
+        let (relay, theirs) = super::Relay::start(client, pinned).unwrap();
+        let mut theirs = UnixStream::from(theirs);
+        theirs
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        host.set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        host.write_all(b"hello").unwrap();
+        let mut got = [0; 5];
+        theirs.read_exact(&mut got).unwrap();
+        theirs.write_all(b"initialize").unwrap();
+        let mut got = [0; 10];
+        host.read_exact(&mut got).unwrap();
+        theirs.set_read_timeout(Some(TIMEOUT)).unwrap();
+        drop(host);
+        let mut buf = [0; 64];
+        let outcome = match theirs.read(&mut buf) {
+            Ok(0) => 0,
+            Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                theirs.set_nonblocking(true).unwrap();
+                match theirs.read(&mut buf) {
+                    Ok(0) => 1,
+                    _ => 2,
+                }
+            }
+            other => panic!("read: {other:?}"),
+        };
+        assert!(relay.reason().is_some());
+        outcome
+    }
+
+    /// One try: 0 woke with end of file, 1 missed it (there on reading
+    /// again), 2 no end of file even then.
+    fn trial(closer: Closer, wait: Wait, exchange: bool) -> usize {
+        let (client, mut host) = UnixStream::pair().unwrap();
+        let (ours, mut theirs) = UnixStream::pair().unwrap();
+        let client = Arc::new(client);
+        let other = matches!(closer, Closer::Relay | Closer::BothOnce | Closer::WriteOnly);
+        let ours = Arc::new(ours);
+        let end = move |client: &UnixStream, ours: &UnixStream| {
+            let _ = client.shutdown(Shutdown::Both);
+            let _ = ours.shutdown(Shutdown::Both);
+        };
+        let writer = other.then(|| {
+            let (client, ours) = (Arc::clone(&client), Arc::clone(&ours));
+            std::thread::spawn(move || {
+                let mut buf = [0; 256];
+                loop {
+                    match (&*ours).read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            if (&*client).write_all(&buf[..n]).is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if matches!(closer, Closer::Relay) {
+                    end(&client, &ours);
+                }
+            })
+        });
+        let reader = {
+            let mut ours = Some(ours);
+            std::thread::spawn(move || {
+                let mut buf = [0; 256];
+                loop {
+                    match (&*client).read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            let ours = ours.as_deref().unwrap();
+                            if (&*ours).write_all(&buf[..n]).is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+                let ours = ours.take().unwrap();
+                match closer {
+                    Closer::Relay | Closer::BothOnce => end(&client, &ours),
+                    Closer::WriteOnly => {
+                        let _ = client.shutdown(Shutdown::Both);
+                        let _ = ours.shutdown(Shutdown::Write);
+                    }
+                    Closer::CloseFd => {
+                        let _ = client.shutdown(Shutdown::Both);
+                        drop(Arc::into_inner(ours).unwrap());
+                    }
+                    Closer::BothThenClose => {
+                        end(&client, &ours);
+                        drop(Arc::into_inner(ours).unwrap());
+                    }
+                }
+            })
+        };
+        let kq = matches!(wait, Wait::Kqueue).then(|| register(&theirs));
+        theirs.set_read_timeout(Some(TIMEOUT)).unwrap();
+        host.set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        if exchange {
+            host.write_all(b"hello").unwrap();
+            let mut got = [0; 5];
+            theirs.read_exact(&mut got).unwrap();
+            if other {
+                theirs.write_all(b"initialize").unwrap();
+                let mut got = [0; 10];
+                host.read_exact(&mut got).unwrap();
+            }
+        }
+        theirs.set_read_timeout(Some(TIMEOUT)).unwrap();
+        drop(host);
+        let woke = match wait {
+            Wait::Read => {
+                let mut buf = [0; 64];
+                match theirs.read(&mut buf) {
+                    Ok(0) => true,
+                    Err(err) if err.kind() == ErrorKind::WouldBlock => false,
+                    other => panic!("read: {other:?}"),
+                }
+            }
+            Wait::Poll => {
+                let mut fd = libc::pollfd {
+                    fd: theirs.as_raw_fd(),
+                    events: libc::POLLIN,
+                    revents: 0,
+                };
+                // SAFETY: one valid pollfd.
+                let rc = unsafe { libc::poll(&mut fd, 1, TIMEOUT.as_millis() as i32) };
+                assert!(rc >= 0);
+                rc > 0
+            }
+            Wait::Kqueue => kevent_wait(kq.unwrap()),
+        };
+        reader.join().unwrap();
+        let outcome = if woke {
+            0
+        } else {
+            theirs.set_nonblocking(true).unwrap();
+            let mut buf = [0; 64];
+            match theirs.read(&mut buf) {
+                Ok(0) => 1,
+                _ => 2,
+            }
+        };
+        drop(theirs);
+        if let Some(writer) = writer {
+            writer.join().unwrap();
+        }
+        if let Some(kq) = kq {
+            // SAFETY: our kqueue.
+            unsafe { libc::close(kq) };
+        }
+        outcome
+    }
+
+    fn register(socket: &UnixStream) -> i32 {
+        // SAFETY: plain calls; `ev` is a valid kevent.
+        unsafe {
+            let kq = libc::kqueue();
+            assert!(kq >= 0);
+            let mut ev: libc::kevent = std::mem::zeroed();
+            ev.ident = socket.as_raw_fd() as usize;
+            ev.filter = libc::EVFILT_READ;
+            ev.flags = libc::EV_ADD;
+            let rc = libc::kevent(kq, &ev, 1, std::ptr::null_mut(), 0, std::ptr::null());
+            assert_eq!(rc, 0);
+            kq
+        }
+    }
+
+    fn kevent_wait(kq: i32) -> bool {
+        // SAFETY: plain calls; `ev` and `ts` are valid.
+        unsafe {
+            let mut ev: libc::kevent = std::mem::zeroed();
+            let ts = libc::timespec {
+                tv_sec: 0,
+                tv_nsec: TIMEOUT.as_nanos() as _,
+            };
+            let rc = libc::kevent(kq, std::ptr::null(), 0, &mut ev, 1, &ts);
+            assert!(rc >= 0);
+            rc > 0
+        }
+    }
+
+    #[test]
+    fn t207_probe_variants() {
+        let out = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../test-repeat"));
+        if !out.is_dir() {
+            return;
+        }
+        let variants = [
+            (Closer::Relay, Wait::Read, true),
+            (Closer::Relay, Wait::Read, false),
+            (Closer::Relay, Wait::Poll, true),
+            (Closer::Relay, Wait::Kqueue, true),
+            (Closer::BothOnce, Wait::Read, true),
+            (Closer::WriteOnly, Wait::Read, true),
+            (Closer::CloseFd, Wait::Read, true),
+            (Closer::BothThenClose, Wait::Read, true),
+        ];
+        let tries: usize = std::env::var("T207_TRIES").map_or(5000, |n| n.parse().unwrap());
+        let mut lines = String::new();
+        for (closer, wait, exchange) in variants {
+            let mut counts = [0usize; 3];
+            for _ in 0..tries {
+                counts[trial(closer, wait, exchange)] += 1;
+            }
+            lines += &format!(
+                "pid={} closer={closer:?} wait={wait:?} exchange={exchange} tries={tries} \
+                 woke={} missed={} no_eof={}\n",
+                std::process::id(),
+                counts[0],
+                counts[1],
+                counts[2]
+            );
+        }
+        let mut counts = [0usize; 3];
+        for _ in 0..tries {
+            counts[real_relay()] += 1;
+        }
+        lines += &format!(
+            "pid={} closer=RealRelay wait=Read exchange=true tries={tries} woke={} missed={} \
+             no_eof={}\n",
+            std::process::id(),
+            counts[0],
+            counts[1],
+            counts[2]
+        );
+        eprint!("{lines}");
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(out.join("t207-variants.txt"))
+            .unwrap();
+        file.write_all(lines.as_bytes()).unwrap();
+    }
+}
