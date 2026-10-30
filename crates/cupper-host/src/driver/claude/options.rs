@@ -6,22 +6,18 @@
 //! on a file edit but writes a persistent rule on a command, so when the tool
 //! is not known it counts as persistent (Q7).
 //!
-//! An option the table does not have falls back on its ACP kind (5.3.6's
-//! last two rows): `allow_always` is persistent and privileged; an unknown
-//! kind, the tap's original (K19), is the strictest (security #5). A
-//! persistent option names the command prefix it would allow, from its text
-//! or the command, and how far that reaches.
+//! An option the table does not have falls back on its kind
+//! ([`crate::driver::options`]). A persistent option names the command prefix
+//! it would allow, from its text or the command.
 
 use agent_client_protocol::schema::v1::{PermissionOption, RequestPermissionRequest};
-use cupper_protocol::interaction::{
-    EffectRule, EffectScope, InteractionOption, OptionEffect, OptionKind, PrefixRisk,
-};
+use cupper_protocol::interaction::{EffectScope, InteractionOption, OptionEffect, OptionKind};
 use cupper_protocol::rpc::Scope;
 use serde_json::Value;
 
 use super::capabilities::tier;
-use super::wire;
-use crate::driver::tap::k19;
+use crate::driver::extract::wire;
+use crate::driver::options::{self, Row, effect, kind};
 
 /// What a permission request is about, for its options' effects.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,31 +53,11 @@ impl Scene {
 
 /// The option as the protocol carries it; `command` is the request's command.
 pub fn option(scene: Scene, option: &PermissionOption, command: Option<&str>) -> InteractionOption {
-    let kind = kind(option);
-    let (mut effect, requires) =
-        row(scene, &option.option_id.to_string(), &kind).unwrap_or_else(|| by_kind(&kind));
-    if effect.persistent && scene != Scene::PlanConfirm {
-        let prefix = prefix(&option.name, command);
-        let prefix_risk = match prefix.as_deref().and_then(|p| p.split_whitespace().next()) {
-            Some(word) if interpreter(word) => PrefixRisk::Interpreter,
-            Some(_) => PrefixRisk::Normal,
-            None => PrefixRisk::Unparsed,
-        };
-        let (text, location) = (None, None);
-        effect.rule = Some(EffectRule {
-            text,
-            location,
-            prefix,
-            prefix_risk,
-        });
+    let mut built = options::option(option, |id, kind| row(scene, id, kind), false);
+    if built.effect.persistent && scene != Scene::PlanConfirm {
+        built.effect.rule = Some(options::rule(prefix(&option.name, command)));
     }
-    InteractionOption {
-        option_id: option.option_id.to_string(),
-        name: option.name.clone(),
-        kind,
-        effect,
-        requires,
-    }
+    built
 }
 
 /// Whether the table has the option: GOLD-A checks that every option in a
@@ -90,25 +66,8 @@ pub fn listed(scene: Scene, option: &PermissionOption) -> bool {
     row(scene, &option.option_id.to_string(), &kind(option)).is_some()
 }
 
-/// The agent's kind: the tap's original when it rewrote one (K19).
-fn kind(option: &PermissionOption) -> OptionKind {
-    let original = k19::original(option.meta.as_ref(), "kind").and_then(Value::as_str);
-    OptionKind::from(original.unwrap_or(&wire(&option.kind)))
-}
-
-fn effect(scope: EffectScope, persistent: bool) -> OptionEffect {
-    OptionEffect {
-        scope,
-        persistent,
-        ends_turn: Some(false),
-        mode_after: None,
-        tier_after: None,
-        rule: None,
-    }
-}
-
 /// The table, from SP-1's recordings (5.3.6). The kind must match as well.
-fn row(scene: Scene, id: &str, kind: &OptionKind) -> Option<(OptionEffect, Scope)> {
+fn row(scene: Scene, id: &str, kind: &OptionKind) -> Option<Row> {
     use {EffectScope as S, OptionKind as K, Scene::*, Scope::*};
     let switch = |scope, mode: &str| OptionEffect {
         mode_after: Some(mode.to_owned()),
@@ -145,27 +104,6 @@ fn row(scene: Scene, id: &str, kind: &OptionKind) -> Option<(OptionEffect, Scope
     })
 }
 
-/// 5.3.6's fallback for options the table does not have.
-fn by_kind(kind: &OptionKind) -> (OptionEffect, Scope) {
-    use {EffectScope as S, OptionKind as K, Scope::*};
-    match kind {
-        K::AllowOnce => (effect(S::Once, false), Approve),
-        K::AllowAlways => (effect(S::Persistent, true), Privileged),
-        K::RejectOnce => (effect(S::Reject, false), Approve),
-        K::RejectAlways => (effect(S::Reject, true), Approve),
-        K::Unknown(_) => {
-            let ends_turn = None;
-            (
-                OptionEffect {
-                    ends_turn,
-                    ..effect(S::Unclassified, true)
-                },
-                Privileged,
-            )
-        }
-    }
-}
-
 /// The prefix a persistent option allows: from Claude's text ("don't ask
 /// again for <prefix> commands", "allow access to <dir> and <prefix> *
 /// commands"), else the command's first word.
@@ -180,40 +118,6 @@ fn prefix(name: &str, command: Option<&str>) -> Option<String> {
         .or_else(first)
         .filter(|p| !p.is_empty())
         .map(str::to_owned)
-}
-
-/// A program that runs whatever follows it: allowing it allows anything.
-fn interpreter(word: &str) -> bool {
-    const INTERPRETERS: &[&str] = &[
-        "bash",
-        "sh",
-        "zsh",
-        "fish",
-        "dash",
-        "ksh",
-        "csh",
-        "node",
-        "deno",
-        "bun",
-        "ruby",
-        "perl",
-        "php",
-        "lua",
-        "env",
-        "sudo",
-        "xargs",
-        "exec",
-        "eval",
-        "nohup",
-        "nice",
-        "time",
-        "timeout",
-        "npx",
-        "uvx",
-        "osascript",
-    ];
-    let program = word.rsplit('/').next().unwrap_or(word);
-    INTERPRETERS.contains(&program) || program.starts_with("python")
 }
 
 #[cfg(test)]

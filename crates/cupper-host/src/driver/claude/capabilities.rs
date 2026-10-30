@@ -3,19 +3,17 @@
 //! map to cupper's by category, and permission modes to approval tiers
 //! (design 5.6.5).
 
-use agent_client_protocol::schema::v1::{
-    AvailableCommand, AvailableCommandInput, InitializeResponse, SessionConfigKind,
-    SessionConfigOption, SessionConfigOptionCategory as Category, SessionConfigSelectOptions,
-};
+use agent_client_protocol::schema::v1::{InitializeResponse, SessionConfigOption};
 use cupper_protocol::capabilities::{
-    ConfigOption, ConfigOptionId, ConfigValue, DiffExtraction, ExtractionCapabilities,
-    InteractionCapabilities, PlanExtraction, PromptCapabilities, RunStateSource,
-    SessionCapabilities, SessionLifecycle, SlashCommand, SteerCapability, TurnCapabilities,
-    Versions,
+    ConfigOption, DiffExtraction, ExtractionCapabilities, InteractionCapabilities, PlanExtraction,
+    PromptCapabilities, RunStateSource, SessionCapabilities, SessionLifecycle, SlashCommand,
+    SteerCapability, TurnCapabilities, Versions,
 };
 use cupper_protocol::domain::{AgentKind, Tier};
 use cupper_protocol::limits;
 use serde_json::Value;
+
+use crate::driver::extract::{self, Tiers};
 
 /// The capabilities of a session on an adapter that answered `initialize`
 /// with `init` (design 5.6.7). Fixed by the adapter rather than read: Claude
@@ -74,51 +72,13 @@ pub fn capabilities(
     }
 }
 
-/// The options the agent reports, by category; choices as the agent names
-/// them (CP-4). Boolean options have no place among them yet.
+/// The session's options, Claude's permission modes at their tier.
 pub fn config_options(options: &[SessionConfigOption]) -> Vec<ConfigOption> {
-    let option = |option: &SessionConfigOption| {
-        let SessionConfigKind::Select(select) = &option.kind else {
-            return None;
-        };
-        let agent_option_id = option.id.to_string();
-        let id = match &option.category {
-            Some(Category::Mode) => ConfigOptionId::PermissionMode,
-            Some(Category::Model) => ConfigOptionId::Model,
-            Some(Category::ThoughtLevel) => ConfigOptionId::ReasoningEffort,
-            _ => ConfigOptionId::from(agent_option_id.as_str()),
-        };
-        let risk = |value: &str| match id {
-            ConfigOptionId::PermissionMode => tier(value),
-            _ => Tier::Normal,
-        };
-        let choices = match &select.options {
-            SessionConfigSelectOptions::Ungrouped(choices) => choices.iter().collect(),
-            SessionConfigSelectOptions::Grouped(groups) => {
-                groups.iter().flat_map(|group| &group.options).collect()
-            }
-            _ => Vec::new(),
-        };
-        let values = (choices.into_iter())
-            .map(|choice| ConfigValue {
-                value: choice.value.to_string(),
-                name: choice.name.clone(),
-                description: choice.description.clone(),
-                risk: risk(&choice.value.to_string()),
-            })
-            .collect();
-        Some(ConfigOption {
-            id,
-            agent_option_id,
-            current: select.current_value.to_string(),
-            values,
-        })
-    };
-    options.iter().filter_map(option).collect()
+    extract::config_options(options, TIERS)
 }
 
 /// Claude's permission modes by approval tier (design 5.6.5).
-pub const TIERS: &[(&str, Tier)] = &[
+pub const TIERS: Tiers = &[
     ("default", Tier::Normal),
     ("plan", Tier::Normal),
     ("acceptEdits", Tier::Elevated),
@@ -129,44 +89,17 @@ pub const TIERS: &[(&str, Tier)] = &[
 /// The tier of a permission mode; one the table does not have counts as
 /// `full_access` until the table knows it.
 pub fn tier(mode: &str) -> Tier {
-    let row = TIERS.iter().find(|(known, _)| *known == mode);
-    row.map_or(Tier::FullAccess, |(_, tier)| tier.clone())
-}
-
-/// `current_mode_update`: sets the permission mode; false when there is none
-/// to set.
-pub fn set_mode(config: &mut [ConfigOption], mode: &str) -> bool {
-    let option = config
-        .iter_mut()
-        .find(|o| o.id == ConfigOptionId::PermissionMode);
-    match option {
-        Some(option) if option.current != mode => {
-            option.current = mode.to_owned();
-            true
-        }
-        _ => false,
-    }
-}
-
-pub fn commands(list: &[AvailableCommand]) -> Vec<SlashCommand> {
-    let command = |command: &AvailableCommand| SlashCommand {
-        name: command.name.clone(),
-        description: command.description.clone(),
-        input_hint: match &command.input {
-            Some(AvailableCommandInput::Unstructured(input)) => Some(input.hint.clone()),
-            _ => None,
-        },
-    };
-    list.iter().map(command).collect()
+    extract::tier(TIERS, mode)
 }
 
 #[cfg(test)]
 mod tests {
-    use cupper_protocol::capabilities::CliCompat;
+    use cupper_protocol::capabilities::{CliCompat, ConfigOptionId};
     use cupper_protocol::recording::Body;
 
     use super::*;
-    use crate::driver::claude::gold_a::{extract, recordings};
+    use crate::driver::extract::set_mode;
+    use crate::driver::gold_a::{extract, recordings};
 
     /// What Claude's adapter answered to `initialize` and `session/new` in s01.
     fn s01() -> (InitializeResponse, Vec<SessionConfigOption>) {

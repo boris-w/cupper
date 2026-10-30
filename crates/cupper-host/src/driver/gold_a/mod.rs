@@ -35,12 +35,13 @@ use cupper_protocol::recording::{Body, Recording, Usage};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
-use super::capabilities::TIERS;
-use super::options::{self, Scene};
-use super::{ClaudeSession, agent_error, ask, capabilities, prompt_done};
-use crate::driver::acp::AuthStatusUpdate;
-use crate::driver::api::{AskId, AskRequest, DriverEvent, PromptTag};
-use crate::driver::tap::k19;
+use super::acp::AuthStatusUpdate;
+use super::api::{AskId, AskRequest, DriverEvent, PromptTag};
+use super::claude::capabilities::{self, TIERS};
+use super::claude::options::{self, Scene};
+use super::claude::{ClaudeSession, agent_error};
+use super::extract::{elicitation, prompt_done};
+use super::tap::k19;
 
 const ADAPTER: &str = "claude-agent-acp";
 
@@ -166,7 +167,7 @@ impl Run {
             }
             "elicitation/create" => {
                 let request = parse::<CreateElicitationRequest>(params);
-                if let Some((tool_call_id, ask)) = request.as_ref().and_then(ask::elicitation) {
+                if let Some((tool_call_id, ask)) = request.as_ref().and_then(elicitation) {
                     self.ask(msg, tool_call_id, ask);
                 }
             }
