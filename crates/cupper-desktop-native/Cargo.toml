@@ -34,8 +34,6 @@ thiserror.workspace = true
 [dev-dependencies]
 # `send_with_fds`: a host that passes fds.
 cupper-sys = { path = "../cupper-sys", features = ["test-util"] }
-# T207 probe: poll and kqueue.
-libc = "0.2.191"
 
 [build-dependencies]
 napi-build = "=2.6.0"

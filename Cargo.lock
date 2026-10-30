@@ -315,7 +315,6 @@ dependencies = [
  "cupper-protocol",
  "cupper-sys",
  "getrandom 0.4.3",
- "libc",
  "napi",
  "napi-build",
  "napi-derive",
