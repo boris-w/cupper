@@ -13,7 +13,9 @@ export class ControlConnection {
   readonly client: HostClient;
   readonly #launcher: HostLauncher;
   readonly #options: ConnectOptions;
-  #closed = false;
+  #ended = false;
+  /** The connection that is up or being made: one at a time. */
+  #current: Promise<void> | undefined;
 
   constructor(launcher: HostLauncher, options: ConnectOptions, log: MainLog) {
     this.#launcher = launcher;
@@ -21,9 +23,13 @@ export class ControlConnection {
     this.client = new HostClient({ log: (message) => log.warn("control connection", { message }) });
   }
 
-  /** Connects; again each time the connection drops, until {@link close}. */
-  async connect(): Promise<void> {
-    if (this.#closed) {
+  /** Connects, unless connected or connecting; again each time it drops, until {@link end}. */
+  connect(): Promise<void> {
+    return (this.#current ??= this.#connect());
+  }
+
+  async #connect(): Promise<void> {
+    if (this.#ended) {
       return;
     }
     this.client.progress("connecting");
@@ -31,11 +37,18 @@ export class ControlConnection {
     try {
       connected = await this.#launcher.open(this.#options);
     } catch (error) {
+      this.#current = undefined;
       this.client.fail(error instanceof HostFailure ? error.reason : "unexpected");
       return;
     }
     const { port, handshake, rest, socket } = connected;
     socket.once("close", () => {
+      this.#current = undefined;
+      if (this.#ended) {
+        // Whatever still waits, `host/exit` included, ends as lost.
+        this.client.close();
+        return;
+      }
       this.client.detach();
       void this.connect();
     });
@@ -61,8 +74,14 @@ export class ControlConnection {
     });
   }
 
+  /** Quitting (T214): no connection after this one; no host started, for the windows either. */
+  end(): void {
+    this.#ended = true;
+    this.#launcher.close();
+  }
+
   close(): void {
-    this.#closed = true;
+    this.end();
     this.client.close();
   }
 }

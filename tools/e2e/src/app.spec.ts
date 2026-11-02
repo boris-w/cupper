@@ -9,7 +9,7 @@ import { createI18n } from "@cupper/i18n";
 
 import { expect, test, type Cupper } from "./fixture";
 import { BUILT } from "./paths";
-import { alive, tree } from "./procs";
+import { alive, processes, tree } from "./procs";
 
 // Bringing the first window forward activates the app: `@focus` (T195).
 test(
@@ -81,6 +81,32 @@ test("E2E-quit-confirm: with a running turn, quitting asks; no keeps it, yes end
   await closed;
   // `host/exit` with `force`: the host ends the turn and exits.
   await expect.poll(() => alive(host).length, { timeout: 15_000 }).toBe(0);
+});
+
+test("E2E-quit-confirm: once quitting is confirmed, the host's exit starts no other host", async ({
+  cupper,
+}) => {
+  await cupper.launch();
+  const { pid } = await cupper.connected();
+  const host = tree(pid as number);
+  await runningTurn(cupper);
+  await quit(cupper);
+  const asked = await cupper.dialogs.next(0);
+  // The app holds after the decision, as a slow quit would, past the host's exit (T214).
+  await cupper.app.evaluate(({ app }) => void app.once("before-quit", (e) => e.preventDefault()));
+  const log = () => readFileSync(join(cupper.root, "logs/main.log"), "utf8");
+  const seen = log().length;
+  await cupper.dialogs.answer(asked.index, 0);
+  await expect.poll(() => alive(host).length, { timeout: 15_000 }).toBe(0);
+  // The control connection ends with the host: it neither connects again nor starts one.
+  const states = () =>
+    log()
+      .slice(seen)
+      .match(/(?<="host connection","status":")\w+/g);
+  await expect.poll(states).toEqual(["closed"]);
+  const ours = `${BUILT.host} --data-dir ${cupper.dataDir}`;
+  expect(processes().filter((p) => p.args === ours)).toEqual([]);
+  expect(readFileSync(join(cupper.dataDir, "host.lock"), "utf8").trim()).toBe(String(pid));
 });
 
 test("E2E-quit-confirm: idle, quitting asks nothing and leaves the host to its idle rule", async ({
