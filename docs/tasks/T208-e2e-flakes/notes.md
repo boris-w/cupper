@@ -65,7 +65,7 @@ Unloaded the race almost never loses: the CLI answers in milliseconds, against a
 
 Both tests pass 200 times out of 200 one copy at a time on the runner (runs 41002041448 and 41002049698, both at 7771c71). Both CI failures were in runs with two Playwright workers (`xtask ci e2e`). So `e2e-repeat` got a `workers` input (9733858, default 1; a later `--workers` overrides the `--workers 1` of `test:e2e:one`, checked locally). It stays as a CI change.
 
-## Item 2: E2E-NFR1-4 "after a reload, earlier history ..." — in progress
+## Item 2: E2E-NFR1-4 "after a reload, earlier history ..." — a scroll undone by a render before its event
 
 ### What the CI failure says (run 40651531549, the JSON report only)
 
@@ -83,24 +83,40 @@ Run [41002049698](https://github.com/boris-w/cupper/actions/runs/41002049698), 7
 - A probe that records the list per animation frame after the reload (scrollTop, scrollHeight, rows, whether the history button is there, sync counters, connection state, the session view's seq): the session view is complete about 80 ms after the reload; the list renders at the bottom, is measured and stays at the bottom; the test's scroll puts it at 0 and the history button appears; no resets, gaps or reconnects. The click then loads turns 1–3.
 - The same with the renderer slowed 20 times (`Emulation.setCPUThrottlingRate`): every step 15 times slower, same order, passes.
 
-### What can take the history row away (code reading; none confirmed)
+### What the reading of the code had left open (before the probe)
 
-The row is index 0 of the virtual list, shown while the view's first turn is after turn 1 (`StreamList.tsx` `useHistory`). It goes away for good only if one of these happens:
+Three ways for the history row to go for good: the list goes back to the bottom and stays (`ScrollKeeper.stuck`), the history state becomes `none`, or the renderer reloads. The probe settled it: the first.
 
-1. **The list leaves the top and stays at the bottom.** `ScrollKeeper.stuck` is set only by `onScroll` (within 24 px of the bottom) and on mount; while it is set, every render of `Rows` scrolls to the bottom (`useLayoutEffect`). Ways to set it while at the top: a remount of `Rows` (a fresh keeper), or a scroll event while the content fits the viewport (an emptied view while `scrollTop > 0`). Neither found: `SessionPage` is keyed by the session ID, `StreamList` only switches on its store, which `Subscriptions` keeps; at `scrollTop` 0 an emptied view fires no scroll event. TanStack Virtual 3.17.11's own scroll writes (`applyScrollAdjustment`, `_retryClampedAdjustment`) only adjust for items above the offset, of which there are none at 0; React's `onScroll` listener is on the element from its creation, before TanStack's, so `stuck` is cleared before TanStack re-renders on the test's scroll.
-2. **The history state becomes `none`.** Either turn 1 comes into the view (only a history page brings it; only the button calls it), or the view is empty: a view reset (`StreamSync.#drop`, on any `ViewError` or a snapshot reply) refills within milliseconds, so the row would come back and the click retry; not for 30 s unless the refill never arrives (a lost connection).
-3. **The renderer reloads or navigates** (back to the new-session page, no stream list at all): fits "detached and never back" best, but nothing in the app reloads it, and a crash would make Playwright report a crashed page, not a timeout.
+### The probe on the runner, two at a time
 
-Checked and ruled out: late `snapshot.recorded` events for turns outside the snapshot's window (the turn machine drops snapshots of turns other than the current one, and both are written before `turn.completed`).
+Run [41007324304](https://github.com/boris-w/cupper/actions/runs/41007324304), 228eb5e (the test with a recorder, reverted in 82908ce), `times=300`, `workers=2`: **11 of 300 failed** (3.7 %), 10.6–46.8 s each.
 
-### Probe on the runner, two at a time (running when work stopped)
+| Where it failed | Times |
+|---|---|
+| `say t4` never visible after the scroll to the top | 8 |
+| `say t4` visible, gone by its `boundingBox` | 2 |
+| the history button detached during the click (the CI signature) | 1 |
 
-- 228eb5e is a probe commit (to be reverted before the PR): the same recorder in the real test, from the reload until the click, with marks at "t23 visible", "scrolled" and "click"; on a failed click (timeout 10 s) it attaches the record as `t208-probe.json`. e2e-repeat keeps `tools/e2e/dist/test-results/` and `repeat.json`, so a failure brings main.log, host.log, `error-context.md` (the page's aria snapshot) and the record.
-- Run [41007324304](https://github.com/boris-w/cupper/actions/runs/41007324304): `times=300`, `workers=2`. Not finished when work stopped.
+- In every `error-context.md` the list shows turns 17–23: it was at the bottom and stayed there.
+- main.log of each: `started`, `host connection`, two `window connected` (the start and the reload); no reconnect, no "renderer gone". host.log: no warning or error.
+- The record of the click failure (frames after the reload, ms): the session view complete at 259; the list at the bottom from 291, measured at 341 (`scrollTop` 2492); marks "t23 visible" 411, "scrolled" 488, "click" 625; **no frame saw the list anywhere but at the bottom** until the end (2987). Yet the test had seen `say t4` and the history button between 488 and 625. So the top rows were in the DOM only between frames.
 
-### Next
+### The cause
 
-1. Read run 41007324304: failures, their `t208-probe.json` (body attachment in `repeat.json`), `error-context.md`, main.log ("renderer gone", reconnects) and host.log.
-2. If it fails: the record says which of 1–3 above happened; fix the test's wait or the product (stop and report if the product fix is more than small), and add a case that reproduces it.
-3. If 300 pass: the load of two copies of this test is not CI's; next try a heavier mix (`times` higher, or two specs), or add the recorder's last frames to the test's failure output for good and wait for CI. Report to the orchestrator before choosing.
-4. Revert 228eb5e; after the fix, e2e-repeat both tests 100+ times with `workers=2`; then the PR.
+- `ScrollKeeper.stuck` changes only in React's `onScroll`. Every render of `Rows` that finds it set puts the list at the bottom (`useLayoutEffect`).
+- TanStack Virtual 3.17.11 ends "scrolling" 150 ms after the last scroll event, on a timer that **reads the offset from the DOM** (`observeOffset`: `debounce(..., () => cb(readOffset(element), false), isScrollingResetDelay)`), and renders. A timer is a task: it can run between frames.
+- The test scrolls to the top (`scrollTop = 0`, a task) about 70–150 ms after the list last stuck to the bottom. If the timer fires before the next frame dispatches the scroll event: the virtualizer reads 0 and renders the top rows; `onScroll` has not run, so `stuck` is still set and the layout effect writes `scrollTop = scrollHeight`. The virtualizer keeps offset 0 until the next scroll event, so `say t4` and the history button stay in the DOM for a while; the test can see them.
+- The next frame dispatches the scroll event: the list is at the bottom, `onScroll` keeps `stuck`, the virtualizer renders the bottom rows. From then on every render keeps it there; the history button is out of the virtual range for good.
+- With one copy frames come often and the window is narrow (0/200); with two apps on the runner frames are late and it opens (11/300); the CI failures were in runs with two workers.
+- Who else can hit it: a scroll made by script between frames while the list is settling, such as find-in-page or assistive technology. A user's wheel or keys scroll in the frame that also dispatches the event, so they do not.
+
+### Reproduced locally (deterministic, jsdom)
+
+`UNIT-stream-anchor` "a scroll whose event has not come yet is not undone by a render before it": the list at the bottom (`scrollTop` 800 of 1000, a scroll event), then `scrollTop = 0` without an event, then 300 ms for TanStack's own timer. Before the fix it fails: `scrollTop` is 1000. After the fix it is 0.
+
+### Fix (`packages/ui-core/src/stream`, 8525a89)
+
+- The keeper records where the list was when it last saw a scroll (`scrolled`) or put it (`put`): its own writes in the layout effect, and the virtualizer's, through a `scrollToFn` that wraps TanStack's `elementScroll`. These are the virtualizer's corrections as rows are measured.
+- `follows(top, height, client)`, before the layout effect puts the list at the bottom: a list more than 1 px from where it was last scrolled or put was scrolled, and its event has not come yet; `stuck` is worked out from it first.
+- Growth at the bottom does not move `scrollTop`, so the list still follows what streams in (new unit test "at the bottom it follows what comes in"). The browser clamping a shrunk list leaves it at the bottom, so it stays stuck.
+- Not done: the test waiting for the list to settle, or scrolling with the wheel. Either would hide the race rather than end it.
