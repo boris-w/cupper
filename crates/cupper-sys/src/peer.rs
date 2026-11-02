@@ -18,6 +18,7 @@ use std::fmt;
 use std::io;
 use std::mem;
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd};
+use std::time::Duration;
 
 use libc::c_int;
 
@@ -285,6 +286,46 @@ pub fn recv_closing_fds(socket: impl AsFd, buf: &mut [u8]) -> io::Result<Receive
         return Err(io::Error::other("control data truncated"));
     }
     Ok(Received { len, closed_fds })
+}
+
+/// Waits until `socket` has data or end of file to read, or has failed, so
+/// that the read after it does not block; `Ok(false)` once `timeout` has
+/// passed (`None`: no limit). An interrupted wait starts again.
+///
+/// A blocking read of a Unix stream socket can sleep through the peer's
+/// `shutdown` (T207; xnu-11417.140.69 and xnu-12377.121.6, `bsd/kern/`):
+/// finding no data and no end of file, `soreceive` calls `uipc_rcvd`, which
+/// takes both ends' locks in address order and so may let go of ours first
+/// (`unp_get_locks_in_order`). A `shutdown` in that gap marks end of file
+/// (`unp_shutdown`, `socantrcvmore`) while nobody waits yet, so it wakes
+/// no one, and `soreceive` goes on to `sbwait` without looking again: the
+/// read sleeps until data comes or its timeout. `poll` marks the buffer
+/// (`SB_SEL`) and checks it under the lock (`soo_select`), so that wakeup
+/// reaches it, as it reaches a kqueue reader. Closing the fd is not
+/// affected: `unp_disconnect` waits for a reader between the locks.
+pub fn wait_readable(socket: impl AsFd, timeout: Option<Duration>) -> io::Result<bool> {
+    let mut fd = libc::pollfd {
+        fd: socket.as_fd().as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    let millis = timeout.map_or(-1, |timeout| {
+        c_int::try_from(timeout.as_nanos().div_ceil(1_000_000)).unwrap_or(c_int::MAX)
+    });
+    loop {
+        // SAFETY: `fd` is one valid, writable pollfd that outlives the call;
+        // the kernel writes only its `revents`.
+        match unsafe { libc::poll(&mut fd, 1, millis) } {
+            0 => return Ok(false),
+            ready if ready > 0 => return Ok(true),
+            _ => {
+                let err = io::Error::last_os_error();
+                if err.kind() != io::ErrorKind::Interrupted {
+                    return Err(err);
+                }
+            }
+        }
+    }
 }
 
 /// Sends `data` with `fds` attached (`SCM_RIGHTS`) in one message, as a peer
@@ -601,6 +642,23 @@ mod tests {
                 closed_fds: 0
             }
         );
+    }
+
+    #[test]
+    fn it_sys_peer_current_wait_readable_sees_data_and_the_peers_shutdown() {
+        let (server, client) = UnixStream::pair().unwrap();
+        assert!(!wait_readable(&server, Some(Duration::ZERO)).unwrap());
+        (&client).write_all(b"x").unwrap();
+        assert!(wait_readable(&server, Some(Duration::ZERO)).unwrap());
+        let mut buf = [0u8; 4];
+        assert_eq!(recv_closing_fds(&server, &mut buf).unwrap().len, 1);
+        assert!(!wait_readable(&server, Some(Duration::ZERO)).unwrap());
+        client.shutdown(std::net::Shutdown::Write).unwrap();
+        assert!(
+            wait_readable(&server, None).unwrap(),
+            "end of file is readable"
+        );
+        assert_eq!(recv_closing_fds(&server, &mut buf).unwrap().len, 0);
     }
 
     #[test]

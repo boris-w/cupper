@@ -8,7 +8,7 @@
 
 ```
 Cupper.app/Contents/
-├── Info.plist                  dev.cupper.app；LSMinimumSystemVersion 14.0；cupper:// URL scheme；不写辅助功能、自动化、屏幕录制的用途说明
+├── Info.plist                  dev.cupper.app；LSMinimumSystemVersion 15.0；cupper:// URL scheme；不写辅助功能、自动化、屏幕录制的用途说明
 ├── MacOS/Cupper                Electron 主程序
 ├── Frameworks/                 Electron Framework、4 个 Electron helper、Squirrel.Mac 及其依赖
 ├── Helpers/
@@ -120,13 +120,13 @@ Cupper.app/Contents/
 - **起始版本：Electron 44.x 的最新补丁版本**（v1.6，T003 复核：2026-10-19 时是 44.9.0，10-17 发布；原定 44.8.0）。官方支持的是 42、43、44 三个大版本，45 在 beta。T074 开工时再复核一次。
 - **策略**：只用一个大版本构建，始终在官方支持的最新三个大版本之内；新的大版本正式发布后，在一个发布周期（约 8 周）内跟进，每次升级跑完整的 CI、e2e 和性能回归（ADR-03），并按人工验证清单用实体键盘确认真实输入的规则（MAN-keyboard）。M1a 开工时如果 45 已经正式发布两周以上，就直接从 45 开始。
 - **macOS 26 的卡顿问题**（ADR-03 提到 Qoder 为此升级）：根因是 Electron 覆盖了私有的 `_cornerMask` 接口，导致 WindowServer 的 GPU 负载过高，修复已于 2025-09 合入并回移到当时的各个支持版本（electron/electron #48376 等）。42 及以后的版本都已包含，44 不受影响。
-- Electron 的最低系统要求（macOS 12）低于我们的 macOS 14，没有冲突。
+- Electron 的最低系统要求（macOS 12）低于我们的 macOS 15，没有冲突。
 
 ## 5.10.7 发布流水线
 
 由推送受保护的 `release/vX.Y.Z` tag 触发（`release.yml`）；同一条流水线也用于 `release/vX.Y.Z-rc.N`，在正式发布之前跑通签名路径。作业放在需要人工批准的 protected environment 里，签名证书和 App Store Connect API key 只对它可见；在 `macos-15` runner 上运行（安全 #10）。
 
-1. 检查版本号一致：tag、`Cargo.toml`、`apps/desktop/package.json`。最近一次 `security-macos14` 的每晚校验必须是通过的（Q24）。
+1. 检查版本号一致：tag、`Cargo.toml`、`apps/desktop/package.json`。最近一次 `security-peer` 的每晚校验（macOS 15、26）必须是通过的（Q24）。
 2. `cargo xtask runtime-pack --verify`：下载 Node（核对 sha-256 和 GPG 签名）、重签 `node`；按 SRI 校验 codex-acp 和 esbuild-wasm；在隔离目录里按锁文件重算 claude-agent-acp 本机打包产物的哈希，与清单比对；检查适配器读取的环境变量没有未归类的新名字。
 3. **对每个二进制单独构建**：`cargo build -p cupper-host --release --locked`、`cargo build -p cupper-cli --release --locked`、`cargo build -p cupper-desktop-native --release --locked`，避免 cargo 合并特性把测试特性带进发布二进制（测试 #14）。
 4. `cargo xtask host-bundle`：组装并签名 `CupperHost.app`（含 `Helpers/node`）；单独签名 `cupper`。

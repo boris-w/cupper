@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.78
+- 版本：v1.3.82
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -140,13 +140,13 @@
     - MAN-notification = `-spike`（T101）+ `-product`（T150）；
     - MAN-ui6 = `-shell`（T152）+ `-full`（T148）；
     - UI-settings = `-agents`（T151）+ `-general`（T147）；
-    - IT-sys-peer = `-current`（T021，作者机器上的系统）+ `-macos14` + `-macos15`（后两个是缺口）。
+    - IT-sys-peer = `-current`（T021，作者机器上的系统）+ `-macos15` + `-macos26`（每晚由 `security-peer` 在 runner 上跑）；`-macos14` 自 2026-11-02 不适用（最低支持版本提到 15）。
   - 互为替代的条件任务（T131 与 T139、T150 与 T158）登记同一个编号，由实际派发的那个产出；MAN-keyboard 每个 Electron 大版本做一次（T077、T107），证据按版本区分。
   - "待完成"由 trace-ids 自动算出，任务不手工删行。
   - trace-ids 读测试运行结果（cargo-nextest 的 JUnit 报告和 Playwright 的 JSON 报告；stable 工具链下 libtest 的 JSON 输出不可用），确认编号确实执行、通过，并且跑在登记的套件里。`#[ignore]`、`test.skip` 的用例不算。
   - 人工项（MAN）的证据是 `docs/` 下带日期和版本的记录，格式由 T173 定；MAN-keyboard 要与当前 Electron 大版本对得上，升级后旧证据失效。
   - 条件任务的编号在检查点通过后标为"不适用（Kx 已通过）"，不挡里程碑退出（P-7）。
-  - 本机替代不了的编号（IT-sys-peer-macos14、IT-sys-peer-macos15）标为"缺口"，在 T099、T179 由用户确认后改为"缺口（用户已确认）"。本机跑的 `security-macos14` 只记作 `IT-sys-peer-current`，摘要记下系统版本，不算作 macOS 14 的覆盖。
+  - 对端校验的编号按 runner 的 macOS 大版本记作 IT-sys-peer-macos15、-macos26（v1.3.69 起由 CI 覆盖，2026-11-02 起为 15 和 26）。本机跑的 `security-peer` 只记作 `IT-sys-peer-current`，摘要记下系统版本。
   - 里程碑退出时，trace-ids 读入库摘要里的逐编号结果清单（1.8），所以"待完成为空"可以从仓库复核。
 - 端到端用例按 5.12.4 的〔PR〕〔晚〕标 `@smoke` 或不标，trace-ids 核对每个编号的套件（T090）。
 
@@ -161,16 +161,16 @@ v1.3.65 起，用户决定建 GitHub 公开仓库 `boris-w/cupper`，CI 放到 G
 
 | 项 | 做法 |
 |---|---|
-| 统一入口 | `cargo xtask ci <作业>`，作业与 [5.1.6](design/01-repo-build-ci.md#516-ci-流水线) 一一对应（`rust`、`protocol`、`ts`、`ui`、`license`、`testdata-scan`、`e2e`、`security-macos14`、`compat-framework`），另有组合作业 `pr`（每个 PR 的全部作业）和 `nightly`（每晚的全部作业）。GitHub 上一个 `ci` workflow 用矩阵把 `pr` 的 8 个作业分到各自的 runner，每个都只调用 `cargo xtask ci <作业> --in pr`；按路径跳过和取子集都由 xtask 判断，workflow 不写 `paths`。检查名是 `ci / <作业> (<runner>)`，main 的保护规则要求这 8 个都通过 |
+| 统一入口 | `cargo xtask ci <作业>`，作业与 [5.1.6](design/01-repo-build-ci.md#516-ci-流水线) 一一对应（`rust`、`protocol`、`ts`、`ui`、`license`、`testdata-scan`、`e2e`、`security-peer`、`compat-framework`），另有组合作业 `pr`（每个 PR 的全部作业）和 `nightly`（每晚的全部作业）。GitHub 上一个 `ci` workflow 用矩阵把 `pr` 的 8 个作业分到各自的 runner，每个都只调用 `cargo xtask ci <作业> --in pr`；按路径跳过和取子集都由 xtask 判断，workflow 不写 `paths`。检查名是 `ci / <作业> (<runner>)`，main 的保护规则要求这 8 个都通过 |
 | 环境 | 本机："干净 worktree"指 git 状态干净（`git status` 为空）；worktree 之间只共享下载缓存（cargo registry、pnpm store）和编译器缓存，不共用 `CARGO_TARGET_DIR`（T015 实际遇到）。runner：每个作业一台全新机器，缓存只有 cargo 注册表与 target（rust-cache）、pnpm store、runtime-pack 与 git-lfs 的下载；运行时包的 stage 按清单核对文件与哈希才算就绪，不进任何缓存（T197）。e2e 用的 App 和 `CupperHost.app` 必须由当前提交构建，摘要记下产物哈希 |
 | 机器级锁 | e2e、`ui`、性能、nfr1 这几类作业在本机取同一把机器级锁，串行运行，避免子 agent 和编排者互抢 CPU、造成计时类误报；runner 上每个作业独占一台机器，锁不起作用也不碍事。e2e 的 Playwright workers 取"核数减一，最多 2"（T090、T197） |
 | 验收记录 | 卷宗里记 PR 和运行的链接。GitHub 上的结构化摘要与原始日志作为构件上传（日志保留 7 天），不提交进仓库；本机跑的摘要仍可随任务提交。摘要的内容不变：提交、工具链版本、macOS 版本、机型泛称、各作业的通过数和失败数、耗时、逐编号的结果清单（编号、套件、结果、提交）和 e2e 产物哈希，入库或上传前过个人信息扫描（`xtask ci` 自带字段白名单检查，再过 `testdata-scan`）（测试 #11）。托管 runner 上身份名单为空，通用模式的扫描照旧 |
-| 每晚作业 | `nightly.yml` 每晚定时运行，也可手动触发：differential、`security-macos14`（在 `macos-14` 和 `macos-15` 上各一次）、e2e 全集、compat-framework。`perf` 不上 CI（runner 不是参考机型），由编排者在本机 main 上跑 `xtask ci nightly --record docs/ci/nightly/`，历史与摘要一起提交。编排者每天看一次 nightly 的结果 |
+| 每晚作业 | `nightly.yml` 每晚定时运行，也可手动触发：differential、`security-peer`（在 `macos-15` 和 `macos-26` 上各一次）、e2e 全集、compat-framework。`perf` 不上 CI（runner 不是参考机型），由编排者在本机 main 上跑 `xtask ci nightly --record docs/ci/nightly/`，历史与摘要一起提交。编排者每天看一次 nightly 的结果 |
 | 截图基线 | 渲染因素固定（随夹具附带开源字体，固定视口、缩放、语言、时区、虚拟时钟，关闭动画，隐藏光标）。基线由 `ui-baseline.yml` 在 runner 上生成，产出为构件，经 PR 入库；元数据记下 macOS 和 Chromium（Electron）版本。Chromium 版本严格比对，对不上就失败；macOS 不同（不论大小版本）只给提示，由像素决定（T084，v1.3.69 由 T197 改：runner 与作者机器上的基线逐字节相同） |
 | 性能趋势 | "历史中位数"取自入库的历史数值序列 `testdata/perf/history.jsonl`（只含日期、提交、版本、机型泛称和统计值），每次 `xtask ci nightly` 里的 `perf` 作业每个指标追加一行；某项 p50 超过同一指标、同一机型历史 p50 中位数的 1.5 倍判为退化（T047、T117）。编排者在 main 上跑完 `ci nightly` 后，历史与摘要一起提交 |
 | LFS | xtask 下载锁定版本的 git-lfs 到缓存目录，核对哈希后使用，本机也能跑（T061、T121，测试 #12） |
 | M1a 退出 | 在退出候选的同一个提交上：`xtask ci e2e --suite nfr1` 连续 20 次全绿（Playwright 并行度同 CI 设定，不允许重试、跳过或隔离，失败一次查明根因后清零），再跑 5 次降速变体（占用一半核心的负载进程或降低优先级）；`xtask ci pr` 与 `xtask ci nightly` 各通过一次。连跑在 GitHub 的 macOS runner 上做（`e2e-repeat` 或 nightly 的 e2e 全集），运行期间没人操作机器；PERF 闸门在作者机器上判（T099、T197） |
-| 本机替代不了的项 | 已由 CI 覆盖：macOS 14、15 上的对端校验由每晚的 `security-macos14` 在 `macos-14`、`macos-15` 上跑，按 runner 的 macOS 大版本记作 IT-sys-peer-macos14、-macos15（T197）。CI 负载下的稳定性由 runner 上的连跑覆盖 |
+| 本机替代不了的项 | 已由 CI 覆盖：macOS 15、26 上的对端校验由每晚的 `security-peer` 在 `macos-15`、`macos-26` 上跑，按 runner 的 macOS 大版本记作 IT-sys-peer-macos15、-macos26（T197；2026-11-02 起不再有 macOS 14，最低支持版本提到 15）。CI 负载下的稳定性由 runner 上的连跑覆盖 |
 | 仓库设置 | 外部贡献者的工作流一律需要批准；workflow 默认只读，只用 `pull_request` 触发；只允许 GitHub 官方的 action 和 `Swatinem/rust-cache`，必须锁定到提交 SHA；不用自托管 runner；签名密钥只放受保护的 environment（R12） |
 
 子 agent 不 push（[`CLAUDE.md`](../CLAUDE.md) 守则第 1、9 条）：要在 GitHub 上跑时请编排者推送、开 PR。编排者合并前核对 PR 上的检查与子 agent 的汇报（流程见 [`00-process.md`](00-process.md)）。
@@ -282,6 +282,12 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T207 | 原生扩展的中继用例在 runner 上超时 | fix | 5.9.1、5.7.1 | T206（发现） | 做：`relay::tests::unit_native_relay_forwards_both_ways_until_the_host_closes`（`crates/cupper-desktop-native/src/relay.rs:182`）在 PR #22 的运行里失败（run 40661950733），`read_to_end` 等满 10 s 的读超时返回 `WouldBlock`：宿主一端关闭之后，中继没有在 10 s 内把主进程那一端也关掉。查明是测试的等待太紧还是中继在负载下关得慢（后者是产品问题：窗口会晚发现连接已断），修复，在 runner 上用 `test-repeat` 连跑证明 | 不新增编号 | S | 否 | D.nat |
 | T208 | e2e 的两处偶发失败：退出后的 status 与重载后的历史 | fix | 5.9.4、1.8 | T206（发现） | 做：① `E2E-quit-confirm: idle, quitting asks nothing and leaves the host to its idle rule`（`tools/e2e/src/app.spec.ts:96`）在 10-28 的 nightly e2e 全集里失败（run 40779645990）：退出之后 `cupper status` 以退出码 3 结束；② `E2E-NFR1-4: after a reload, earlier history comes in front without moving the view`（`tools/e2e/src/nfr1.spec.ts:215`）在 main 的 push 运行里失败（run 40651531549）：`locator.click` 等满 30 s。查明根因并修复（测试的等待，或者产品的行为），在 runner 上用 `e2e-repeat` 连跑证明 | 不新增编号 | S | 否 | D.main、D.ui |
 | T209 | 审阅 codex 0.166.0 的漂移 | chore | 5.1.6、ADR-08 | T114 | 做：10-29 的 nightly 里 `codex-drift` 报了 codex 0.166.0 的漂移（run 40967230840），按 T114 的流程逐条审阅：和 0.165.0 那条记录比，多了哪些变化，对 codex-acp 2.2.2 有没有影响；用 `tools/codex-drift review` 写入 `testdata/codex-drift/reviewed.json`，跟进任务写 T113 | 不新增编号 | XS | 否 | C |
+| T210 | 脱敏与扫描：跨 chunk 的文本 | test | 5.9.3 | T110（发现） | 做：`tools/sanitize` 的脱敏和扫描都是逐帧做的，被切进多个 `agent_message_chunk`（以及思考块）的路径、名字看不到，T110 在 Codex s05 里就碰到一个被切成约 35 块的本机临时路径。先把同一条消息（按会话和条目归组）的文本折叠起来再匹配；匹配到时，在原帧上把命中的各块改写成占位，帧数和 seq 不变。补用例，全仓库的录制和金样例复扫 | 新增 UNIT-sanitize-across-chunks | S | 否 | H.xt |
+| T211 | 最低支持版本提到 macOS 15 | ci | 5.1.6、平台约束、Q24 | — | 做：GitHub 于 2026-11-02 停用 macOS 14 的 runner，用户决定只支持最近两三年的版本（`docs/meetings/2026-11-02-macos-floor/`）。对端校验的作业 `security-macos14` 改名 `security-peer`：每晚在 `macos-15`、`macos-26` 上各跑一次，改动 `cupper-sys` 的 PR 在 `macos-26` 上跑；摘要按 runner 的大版本记作 IT-sys-peer-macos15、-macos26；`LSMinimumSystemVersion`、electron-builder 的 `minimumSystemVersion` 改成 15.0；README 同步。先核实 GitHub 的 `macos-26` runner 可用 | IT-sys-peer-macos14 不适用；新增 IT-sys-peer-macos26 | S | 否 | H.xt、C |
+| T212 | CI 上 e2e 失败时留下附件 | ci | 5.1.6、5.9.4 | T208（发现） | 做：`xtask ci e2e` 先跑 `test-e2e`、再跑 `test-e2e-focus`，两轮共用 `dist/test-results`，Playwright 每轮开始时清空它，后一轮把前一轮失败用例的附件（main.log、host.log、截图、trace）删掉了，T208 查的两次 CI 失败都只剩 JSON 报告。两轮各用自己的输出目录，workflow 失败时把两轮的附件都作为构件上传；本机 `--record` 的摘要照常记下附件的位置 | 不新增编号 | XS | 否 | H.xt、C |
+| T213 | `host/exit` 之后读不到应答 | fix | 5.2.13、5.8.1 | T205（发现） | 做：`gold_b_claude_approval` 在 main 上又失败一次（run 41015350073，`gold_b.rs:394` 的 `Closed(Refused(PeerExited))`）：宿主送出 `host/exit` 的应答后很快退出，客户端每次读都要比对令牌（5.8.1），宿主退出后比对得到 `PeerExited`，已经到达的应答按规定不交付（T196 的裁定，不放宽）。所以客户端不能依赖读到 `host/exit` 的应答：以 EOF 或 `PeerExited` 结束等同于退出已受理。改 GOLD-B 的收尾和别的测试照此判定；核对 CLI、桌面主进程调用 `host/exit` 的地方都这样处理，不把它当失败报给用户；设计 5.2.13 补一句 | 不新增编号 | S | 否 | H.core、D.main |
+| T214 | 确认退出后桌面不再拉起宿主 | fix | 5.7.1、5.7.2、5.2.13 | T213（发现） | 做：`before-quit` 里经控制连接发 `host/exit`，`will-quit` 才关控制连接；宿主关连接时 `ControlConnection` 立即重连，宿主不在时 `launcher.open` 会再拉起一个，新宿主留到空闲退出（T213 读代码发现，没有实测）。先实测：退出后是否拉起新宿主、窗口连接是否重连、重启宿主时是否两次连接；再修：决定退出后不再重连、不再拉起宿主，重启只建一次连接；e2e 加一例（退出后没有新的宿主进程），挂在 E2E-quit-confirm 下，runner 上连跑 100 次以上 | 不新增编号 | S | 否 | D.main |
+| T215 | 握手被拒时桌面能弹"重启宿主"，重启后窗口重新连接 | fix | 5.8.1、5.7.1、5.7.2、5.5.1 | T214（发现） | 做：key 不同的 app 连旧宿主时，控制连接 3 次里 2 次报 `closed` 而不是 `unauthenticated`，不弹"需要重启宿主"，也不再重试（推测宿主回完握手错误就关连接，应答按 5.8.1 被拒收）；重启宿主后窗口不再连接。先核实原因；修成握手被拒时桌面稳定拿到拒绝原因（不放宽 5.8.1，改宿主行为或协议约定前先报编排者），重启后窗口重新连接；两条都有用例，新 e2e 在 runner 上连跑 100 次以上 | 不新增编号 | S | 否 | H.gateway、D.main |
 | **T044** | 会话 actor II：档位、越权、崩溃与晚到输出 | feat | 5.2.6（配置项、崩溃与恢复、晚到的工具输出） | T035、T043、T088、T095、T098 | 做：档位核对与 `config_unconfirmed`、回合中越权先改回再中断、发送闸门（暂停期间空闲时也不开回合）、`session/confirm_config`、`facts` 的 `mode_tier`（`session/set_config` 仍是 M1b，越权判断预留它作为合法来源）；适配器退出后 resume 与 `agent_restarted`、K6、K7；`late_tool_output` 与 `may_still_run` 的核对。不做：信任门控（v1.3.19 起归 T109）；进程级集成测试（T062、T063、T068） | 新增 IT-orch-gating（进程内） | L | 否 | H.orch |
 | T045 | cupper-cli I：客户端库、连接与宿主校验 | feat | 5.2.14、5.3.3 | T012、T014、T020 | 做：迁移 SP-4a 的 client：构建种类（特性 `dev-auth`、`self-use`、`test-harness`，都不开为发布）与 `--build-info`、套接字发现、按构建种类校验宿主（5.8.1：发布按签名要求；自用按编译期写入的宿主 cdhash，经审计令牌比对，之后每次读取比对令牌；开发按同目录宿主文件的 cdhash 弱校验并在输出里标"宿主未经签名校验"；e2e 由 T039 补上 `harness` 证明），发布构建拒绝 `weak_auth`；连接与握手（peer）、请求关联、`command_id`。不做：Mirror 与客户端同步状态机（v1.3.6 起归 T049）；子命令；cdhash 的写入（T005） | 新增 UNIT-cli-host-verify（四种构建的校验分支；cdhash 不符时拒绝连接）、UNIT-cli-client（握手与请求关联） | M | 否 | H.cli |
 | T049 | cupper-cli I-b：Mirror 与客户端同步状态机 | feat | 5.2.14、5.3.3 | T045 | 做：纯核心 `Mirror<V: View>`（只能经 `Mirror::index()`、`Mirror::session(id)` 构造）；`Waiting`、`Loading`、`Live` 三态；只有游标对得上的 `replay` 才保留视图和游标，其余（包括未知的 mode）一律丢弃；快照页核对 `at_seq`、`epoch` 和页序号；连续性缺口带游标重新订阅，`ViewError` 或信封解码失败不带游标重新订阅；`stream/reset` 保留游标；`Waiting` 时旧订阅的数据一律忽略。不做：子命令（T046） | 新增 UNIT-mirror | S | 否 | H.cli |
@@ -350,7 +356,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T097 | Git 服务 I-b：仓库档的规则与指纹 | feat | 5.2.10（仓库档：每次调用前读配置、仓库可执行配置指纹） | T022 | 做：纯函数：`git config --list --show-origin --includes -z` 输出的解析、配置来源检查（工作区内与其他 agent 可写的位置，git 目录除外、include 到工作区照样拒绝）、覆盖参数的计算（无条件覆盖、可执行类键置空、git-lfs 标准取值例外、子段带 `=` 的键拒绝）、仓库布局与可执行配置指纹。不做：执行（T098） | 新增 UNIT-git-repo-rules；UNIT-git-fingerprint（v1.3.16 由 T060 移来） | M | 否 | H.git |
 | T098 | Git 服务 I-c：仓库档的执行 | feat | 5.2.10（仓库档） | T060、T097 | 做：`RepoTier::run` 把 T060 的 `GitCmd` 与 T097 的规则接起来：调用前读配置并检查、覆盖、执行、不重试（被置空的 `required=true` 过滤器导致失败才判 `unsafe_repo_config`）、调用后比对指纹（只读命令丢结果）、`GitError` 与 notice 信号 | IT-git-repo-tier-malicious（v1.3.16 由 T060 移来） | S | 否 | H.git |
 | T094 | 登录 shell 环境与版本检测 | feat | 5.6.6（登录 shell、版本检查）、5.2.10（git 版本检测） | T020、T022 | 做：带 `Clock` 超时的拉起辅助、登录 shell 取环境（标记截取、解析、退回常见路径与语义码）、`--version` 与四种版本分类、git 版本（暂定最低 2.39）与 git-lfs 检测（`/usr/bin/git` 是 xcode-select 占位程序时不运行它）。不做：可信 PATH 与 CLI 解析（T054） | UNIT-version-classify（v1.3.13 由 T054 移来）；新增 UNIT-login-shell | M | 否 | H.drv |
-| **T099** | M1a 退出验收 | chore | 5.12.2（退出标准）；1.8 | T006、T016、T036、T061、T062、T063、T066、T067、T068、T069、T091、T092、T093、T117、T129、T136、T138、T163、T164、T168、T175、T176、T177、T186、T189、T190、T196、T197、T198、T199、T200、T201、T202、T203、T204、T205、T206、T207、T208、T209 | 做：在退出候选的同一个提交上：`xtask ci e2e --suite nfr1` 连跑 20 次，再跑 5 次降速变体，`xtask ci pr` 与 `xtask ci nightly` 各通过一次；核对 UNIT-unsupported-set、M1a 的待完成登记为空（按入库的逐编号结果清单复核）、契约已冻结；写记录（含本机替代不了的缺口：IT-sys-peer-macos14、IT-sys-peer-macos15，CI 负载下的稳定性）。不稳定用例的修复另开 fix 任务 | 运行记录（结构化摘要）存档；缺口经用户确认；M1a 同步会纪要 | M | 知情：运行期间不操作机器；是：确认缺口、参加同步会 | C |
+| **T099** | M1a 退出验收 | chore | 5.12.2（退出标准）；1.8 | T006、T016、T036、T061、T062、T063、T066、T067、T068、T069、T091、T092、T093、T117、T129、T136、T138、T163、T164、T168、T175、T176、T177、T186、T189、T190、T196、T197、T198、T199、T200、T201、T202、T203、T204、T205、T206、T207、T208、T209、T211、T212、T213、T214、T215 | 做：在退出候选的同一个提交上：`xtask ci e2e --suite nfr1` 连跑 20 次，再跑 5 次降速变体，`xtask ci pr` 与 `xtask ci nightly` 各通过一次；核对 UNIT-unsupported-set、M1a 的待完成登记为空（按入库的逐编号结果清单复核）、契约已冻结；写记录（含本机替代不了的项：IT-sys-peer-macos15、IT-sys-peer-macos26 和 CI 负载下的稳定性已由 runner 覆盖，记下是哪次运行；其余缺口）。不稳定用例的修复另开 fix 任务 | 运行记录（结构化摘要）存档；缺口经用户确认；M1a 同步会纪要 | M | 知情：运行期间不操作机器；是：确认缺口、参加同步会 | C |
 | T100 | 索引 II：状态计算、已读、在场与通知意图 | feat | 5.2.9 | T034 | 做：会话状态计算（含 v1.4 的 `pending_kind`）与 100 ms 合并的纯核心、`IndexNotes` 扩充与会话 actor 的接线（会话创建、回合开始与结束、标题、分支、归档、最近活动）、`session/mark_read`、只采信 desktop_ui 的在场、`notification.intent`、`agents` 的接口（T009 的 `AgentStatus`）。不做：系统通知；通知意图的进程级用例（T062） | UNIT-index-status（含 `pending_kind`）；新增 UNIT-index-intent（直接向 IndexActor 输入状态变化）（v1.3.19 由 T034 移来） | M | 否 | H.idx |
 
 **注**
@@ -518,7 +524,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | 编号 | 名称 | 类型 | 设计依据 | 前置 | 做什么 / 不做什么 | 验收（用例编号） | 规模 | 用户参与 | 区域 |
 |---|---|---|---|---|---|---|---|---|---|
 | T180 | Developer ID 签名与公证 | build | 5.10.2、U-R3 | T161；账号到位 | 前提：账号到位。做：宿主、CLI、Node、App 与 helper 的 Developer ID 签名、entitlements 白名单、公证与 staple（App、DMG）、Team ID 写进签名要求 | MAN-node-notarize；新增 UNIT-signing-check（codesign、spctl、entitlements 白名单、Info.plist 不含用途说明） | L | 是：Developer ID 证书、App Store Connect API key | H.xt、D.main、C |
-| T181 | 发布流水线、签名后冒烟与 RC | ci | 5.10.7 | T180 | 做：发布流水线（版本一致、macOS 14 最近一次通过、逐个二进制构建、`--self-test`、产物检查、签名后冒烟、草稿上传）与 RC 演练；那时是否已有远端，按当时情况定 | SMOKE-SIGNED-codesign-auth、SMOKE-SIGNED-no-weak-auth、SMOKE-SIGNED-cli-readonly、SMOKE-SIGNED-reattach、SMOKE-SIGNED-handshake-matrix、SMOKE-SIGNED-reject-fake-host、SMOKE-SIGNED-reject-weak-host | L | 是：签名凭据与发布环境 | C |
+| T181 | 发布流水线、签名后冒烟与 RC | ci | 5.10.7 | T180 | 做：发布流水线（版本一致、`security-peer` 最近一次通过、逐个二进制构建、`--self-test`、产物检查、签名后冒烟、草稿上传）与 RC 演练；那时是否已有远端，按当时情况定 | SMOKE-SIGNED-codesign-auth、SMOKE-SIGNED-no-weak-auth、SMOKE-SIGNED-cli-readonly、SMOKE-SIGNED-reattach、SMOKE-SIGNED-handshake-matrix、SMOKE-SIGNED-reject-fake-host、SMOKE-SIGNED-reject-weak-host | L | 是：签名凭据与发布环境 | C |
 | T182 | 许可证门禁第二层与第三方声明 | ci | 5.10.7（第二层）、ADR-11 | T161 | 做：最终产物的内容指纹扫描（锁文件按哈希放行）与负面样例、THIRD_PARTY_NOTICES 生成 | 新增 UNIT-license-gate-l2、UNIT-third-party-notices | M | 否 | C |
 | T183 | 自动更新与升级流程 | feat | 5.10.5、5.5.7、Q20 | T181 | 做：electron-updater 与 `updater`、`host/prepare_upgrade`、安装空窗、安装位置检查、`before-quit-for-update`；升级演练 | MAN-upgrade；新增 IT-prepare-upgrade | L | 是：升级演练需要两个签名版本 | D.main、H.core |
 | T184 | 首次正式发布 | chore | 5.10.7、ADR-11、PRD 第 8 节 | T157、T182、T183 | 做：确认 bundle id 前缀（Q5 的最后机会）、大范围公开前确认政策边界、发布草稿 | 发布记录 | S | 是：用户决定发布与公开范围 | C |
@@ -1274,7 +1280,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | | CI：`license`（第一层） | T001（`cargo deny`）、T006 |
 | | CI：`testdata-scan` | T002、T052、T064 |
 | | CI：`e2e` | T090 |
-| | CI：`security-macos14` | T021（本机运行，macOS 14、15 为缺口） |
+| | CI：`security-peer` | T021；每晚在 macOS 15、26 的 runner 上跑（T197、T211） |
 | | CI：`compat-framework` | T064 |
 | 核心骨架与测试基础设施 | `Clock`、`IdGen`、`disallowed-methods`、纯核心框架 | T022（clippy 配置在 T001） |
 | | `AcpTransport`（stdio 和内存） | T050 |
@@ -1423,7 +1429,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | UI-5 | UI-locale → T154 |
 | UI-6 | MAN-ui6 → T152（`-shell`）、T148（`-full`）；UI-shell、UI-shell-narrow → T118；复刻核对 T106 |
 | SEC-6 | E2E-SEC-egress → T092；宿主的 Seatbelt 外发检查 → T069（IT-host-egress-seatbelt） |
-| SEC-8 | UNIT-policy-matrix → T031；UNIT-release-features → T023；IT-process-hygiene → T055；E2E-SEC-csp、E2E-SEC-real-input、E2E-SEC-privileged、E2E-SEC-fake-host、E2E-SEC-egress → T092；E2E-SEC-review-iso → T131；E2E-SEC-switches → T161；SMOKE-SIGNED-codesign-auth、SMOKE-SIGNED-no-weak-auth、SMOKE-SIGNED-cli-readonly、SMOKE-SIGNED-reattach、SMOKE-SIGNED-handshake-matrix、SMOKE-SIGNED-reject-fake-host、SMOKE-SIGNED-reject-weak-host → T181 †（Q35 通过时，T162 的 MAN-local-signed 在作者机器上覆盖其中的握手、重连和 `weak_auth`）；另有新增的 E2E-SEC-no-key-client、E2E-SEC-double-initialize、E2E-SEC-cli-fake-host → T092；IT-sys-peer-current、UNIT-sys-uniqueid → T021（IT-sys-peer-macos14、IT-sys-peer-macos15 为缺口）；IT-devkey-launcher-only、IT-devkey-orphan-start → T030；UNIT-orphan-policy → T037；IT-host-orphaned → T062；UNIT-cli-host-verify → T045 |
+| SEC-8 | UNIT-policy-matrix → T031；UNIT-release-features → T023；IT-process-hygiene → T055；E2E-SEC-csp、E2E-SEC-real-input、E2E-SEC-privileged、E2E-SEC-fake-host、E2E-SEC-egress → T092；E2E-SEC-review-iso → T131；E2E-SEC-switches → T161；SMOKE-SIGNED-codesign-auth、SMOKE-SIGNED-no-weak-auth、SMOKE-SIGNED-cli-readonly、SMOKE-SIGNED-reattach、SMOKE-SIGNED-handshake-matrix、SMOKE-SIGNED-reject-fake-host、SMOKE-SIGNED-reject-weak-host → T181 †（Q35 通过时，T162 的 MAN-local-signed 在作者机器上覆盖其中的握手、重连和 `weak_auth`）；另有新增的 E2E-SEC-no-key-client、E2E-SEC-double-initialize、E2E-SEC-cli-fake-host → T092；IT-sys-peer-current、UNIT-sys-uniqueid → T021；IT-sys-peer-macos15、-macos26 → 每晚的 `security-peer`（T197、T211）；IT-devkey-launcher-only、IT-devkey-orphan-start → T030；UNIT-orphan-policy → T037；IT-host-orphaned → T062；UNIT-cli-host-verify → T045 |
 | SEC-10 | IT-interaction-expire → T068；UNIT-digest-jcs → T010 |
 | NFR-1 | E2E-NFR1-1、E2E-NFR1-2、E2E-NFR1-3、E2E-NFR1-4、E2E-NFR1-5 → T091；连续 20 次全绿 → T099（本机，1.8） |
 | NFR-2 | E2E-NFR2-retry → T172；IT-NFR2-epoch → T062（决策表在 T024） |
@@ -1486,7 +1492,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | Q20 | M1b 发布任务 | T183 † |
 | Q21 | SP-10（M2 前） | 自用前须知里的警示 T160、完整说明 T157；disclaim 评估在 M2 |
 | Q23 | M1b | T123 |
-| Q24 | M1a 起 | T021（在作者机器的系统上运行，记作 IT-sys-peer-current；macOS 14、15 为缺口）；发布前的检查 T181 † |
+| Q24 | M1a 起 | T021（作者机器上记作 IT-sys-peer-current）；每晚在 macOS 15、26 的 runner 上跑（T197、T211）；发布前的检查 T181 † |
 | Q25 | M1b | T102（初查）、T110（未知取值按 full_access）、T113（实测） |
 | Q26 | M1a | T077；Electron 升级后随 MAN-keyboard 复测（T107） |
 | Q27 | M1a | T092 |
@@ -1543,7 +1549,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | `testdata-scan` | T002 | T052、T064 |
 | `e2e` | T090 | 各端到端任务 |
 | `release-config` | T161 | — |
-| `security-macos14` | T021 | —（本机运行时只记作 IT-sys-peer-current） |
+| `security-peer`（原名 `security-macos14`） | T021、T211 | 每晚在 `macos-15`、`macos-26` 上跑；本机运行时只记作 IT-sys-peer-current |
 | `compat-framework` | T064 | — |
 | `codex-drift` | T114 | — |
 | `release` | T181 † | — |
@@ -1582,7 +1588,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | 8 | M1a 期间任意时间，T150 之前 | SP-10：helper 申请通知授权（会弹系统授权框），观察通知和点击跳转 | T101 | 在场点"允许"，确认现象 |
 | 9 | M1a 期间任意时间，T111 之前 | Q8（Codex）并发剧本，消耗额度；运行前自己备份 `~/.codex/config.toml` 和 `hooks.json`（仓库外，0600），运行后看差异报告（新增的 `[projects]` 信任项单独列出），决定保留还是恢复 | T102 | 备份、知悉额度、决定 |
 | 10 | T005、T073 合并后任意时间 | Q35：在专用钥匙串里建代码签名证书（或用免费 Apple ID 登录 Xcode 后把身份迁入专用钥匙串），设置钥匙串密码，验证时按提示输入；通过后设计与 ADR-05 的补充要用户确认 | T105、T162 | 在场操作；确认修订 |
-| 11 | M1a 退出 | 在作者机器上连跑 20 次加 5 次降速变体，可能要几个小时；确认本机替代不了的缺口（IT-sys-peer-macos14、IT-sys-peer-macos15，CI 负载下的稳定性）；M1a 同步会 | T099 | 运行期间不操作机器；确认缺口；参会 |
+| 11 | M1a 退出 | 在作者机器上连跑 20 次加 5 次降速变体，可能要几个小时；确认本机替代不了的缺口（对端校验和 CI 负载下的稳定性已由 runner 覆盖，见 1.8）；M1a 同步会 | T099 | 运行期间不操作机器；确认缺口；参会 |
 | 12 | M1b 开始前（T106 之前） | 补截暗色主界面截图，以及 ui-spec 7.3 中需要截图核对的几项（会话行尾的时间与 diff 统计、回到底部按钮、运行中输入框有内容时的发送按钮），放在主仓库的 `.private/references/`（T106 的子 agent 只读） | T106 | 截图 |
 | 13 | M1b B1 | 新的 Electron 大版本上做 MAN-keyboard | T107 | 亲自操作 |
 | 14 | M1b B1 | 自用构建交付：读"自用前须知"；之后只用自用构建处理真实项目；共存测试会同时运行两种构建 | T160 | 阅读；遵守 |
@@ -1615,7 +1621,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 
 | 风险 | 应对 |
 |---|---|
-| R7 没有远端：macOS 14、15 上的对端校验覆盖不到（最低支持版本），CI 负载下的稳定性也测不到 | 列为缺口由用户确认（1.8）；可选：用 Virtualization.framework 在本机跑 macOS 14、15 虚拟机执行 `cupper-sys` 的测试（镜像与磁盘成本未核实） |
+| R7 没有远端：最低支持版本上的对端校验覆盖不到，CI 负载下的稳定性也测不到 | 2026-10-26 起有了 GitHub 远端，由 runner 覆盖（1.8）；2026-11-02 GitHub 停用 macOS 14 的 runner，最低支持版本随之提到 15 |
 | R8 本机 CI 占用作者机器：20 次加 5 次降速变体、8 小时浸泡、e2e 全集都需要机器空闲；几个子 agent 同时跑会互抢 CPU | 第 6 节提前约时段；e2e、`ui`、性能、nfr1 类作业由机器级锁串行（1.8） |
 | R9 截图基线随系统或 Chromium 升级整体漂移 | 1.8 的固定渲染因素；Chromium 版本严格比对，macOS 不同只提示（v1.3.69，T197：runner 与作者机器上的基线逐字节相同），有像素差异才在 runner 上重新生成，经 PR 单独评审差异 |
 | R10 真实 CLI 的额度和稳定性：Codex 走自定义网关、常过载（SP-1），结果可能"不确定" | 最便宜的模型、限定剧本；"不确定"允许有上限地重跑（T066 的注）；K12 给出 M1a 的退路 |
@@ -1804,9 +1810,15 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T204 已入库录制的补充脱敏
 - [x] T205 两个偶发失败：安装失败原因与 GOLD-B 收尾
 - [x] T206 NFR9 崩溃用例在 runner 负载下超时
-- [ ] T207 原生扩展的中继用例在 runner 上超时
+- [x] T207 原生扩展的中继用例在 runner 上超时
 - [ ] T208 e2e 的两处偶发失败：退出后的 status 与重载后的历史
-- [ ] T209 审阅 codex 0.166.0 的漂移
+- [x] T209 审阅 codex 0.166.0 的漂移
+- [x] T210 脱敏与扫描：跨 chunk 的文本
+- [x] T211 最低支持版本提到 macOS 15
+- [x] T212 CI 上 e2e 失败时留下附件
+- [x] T213 `host/exit` 之后读不到应答
+- [x] T214 确认退出后桌面不再拉起宿主
+- [ ] T215 握手被拒时桌面能弹"重启宿主"，重启后窗口重新连接
 - [ ] T099 M1a 退出验收
 - [x] T100 索引 II：状态计算、已读、在场与通知意图
 - [x] T109 会话 actor II-b：信任门控
@@ -1842,7 +1854,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T106 复刻核对：暗色与未核实项
 - [ ] T107 Electron 大版本跟进
 - [ ] T108 SP-6 场景 5、6：浸泡与输入法
-- [ ] T110 Codex 提取层、选项对照表与 A 层金样例
+- [x] T110 Codex 提取层、选项对照表与 A 层金样例
 - [ ] T111 Codex 接入：发现、运行时与回收
 - [ ] T112 Codex 回合语义集成测试
 - [ ] T113 Codex 兼容矩阵与 B 层补录
@@ -1986,3 +1998,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.76 | 2026-10-28 | T204 合并。新增 T206：NFR9 的崩溃用例在 runner 负载下又超时一次（T199 修过同一处）。T099 改为也依赖 T206 |
 | v1.3.77 | 2026-10-28 | T205 合并。新增 T207：原生扩展的中继用例在 PR #22 的 runner 上超时一次，还没派发。T099 改为也依赖 T207 |
 | v1.3.78 | 2026-10-30 | T206 合并。新增 T208：e2e 在 runner 上又有两处偶发失败（`E2E-quit-confirm` 退出后的 status、E2E-NFR1-4 重载后的历史）；新增 T209：codex 0.166.0 的漂移要审阅。T099 改为也依赖 T208、T209。派发 T207、T208、T209、T110 |
+| v1.3.79 | 2026-10-30 | T209、T110 合并。新增 T210：脱敏和扫描看不到被切进多个 chunk 的文本（T110 发现） |
+| v1.3.80 | 2026-11-02 | T207、T210 合并。GitHub 停用 macOS 14 的 runner，用户决定只支持最近两三年的 macOS，最低支持版本提到 15（`docs/meetings/2026-11-02-macos-floor/`）：1.6、1.8、R7、Q24 各处随之改写；新增 T211（作业改名 `security-peer`，每晚在 macOS 15、26 上跑），T099 改为也依赖 T211 |
+| v1.3.81 | 2026-11-02 | 新增 T212（CI 上 e2e 失败时附件被下一轮清空，T208 发现）、T213（`host/exit` 之后宿主退出得快，客户端按 5.8.1 不交付已到的应答，GOLD-B 收尾偶发失败）。T099 改为也依赖这两项 |
+| v1.3.82 | 2026-11-02 | T211 合并：对端校验的作业改名 `security-peer`，每晚在 macOS 15、26 的 runner 上跑，构建产物的最低系统版本是 15.0。T213 合并：`host/exit` 的应答读不到时，以 EOF 或 `PeerExited` 结束也算退出已受理（5.2.13 补一句）。T212 合并：e2e 的两轮各用自己的输出目录，CI 失败时两轮的附件都进构件。新增 T214（确认退出后桌面可能再拉起宿主，T213 发现），T099 改为也依赖它。T214 合并：决定退出后控制连接不再重连、launcher 不再拉起宿主。新增 T215（握手被拒时桌面有时只看到 `closed`，不弹重启；重启后窗口不再连接，T214 发现），T099 改为也依赖它 |

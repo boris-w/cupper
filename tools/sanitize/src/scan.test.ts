@@ -95,7 +95,8 @@ describe("generic patterns", () => {
       ["AWS access key", "AKIA" + "ABCDEFGHIJ234567"],
       ["Slack token", fake("xoxb-", 4)],
     ];
-    for (const [rule, line] of hits) expect(patterns(line), line).toEqual([rule]);
+    const rules = (line: string) => patterns(line).map(([rule]) => rule);
+    for (const [rule, line] of hits) expect(rules(line), line).toEqual([rule]);
   });
 
   test("pass placeholders", () => {

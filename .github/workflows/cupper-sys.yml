@@ -1,5 +1,6 @@
-# `cargo xtask ci security-macos14` (design 5.1.6, Q24) on macOS 14 for a PR
-# that changes cupper-sys; every night it runs on macOS 14 and 15 (nightly.yml).
+# `cargo xtask ci security-peer` (design 5.1.6, Q24) on macOS 26 for a PR
+# that changes cupper-sys (every PR's `rust` job runs its tests on macOS 15);
+# every night it runs on macOS 15 and 26 (nightly.yml).
 name: cupper-sys
 
 on:
@@ -15,9 +16,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  security-macos14:
-    name: security-macos14 (macos-14)
-    runs-on: macos-14
+  security-peer:
+    name: security-peer (macos-26)
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -26,5 +27,5 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/xtask
         with:
-          job: security-macos14
-          runner: macos-14
+          job: security-peer
+          runner: macos-26

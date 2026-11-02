@@ -33,6 +33,7 @@ pub use group::{ProcessGroup, Signal};
 pub use peer::send_with_fds;
 pub use peer::{
     AuditToken, Received, Refusal, RefusalKind, peer_pid, peer_token, peer_uid, recv_closing_fds,
+    wait_readable,
 };
 pub use proc::{
     ProcessInfo, StartTime, UniqueIds, descendants, has_tty, parent_chain, pid_path, process_info,

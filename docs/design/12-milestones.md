@@ -16,7 +16,7 @@
 
 | 部分 | 内容 |
 |---|---|
-| 工程 | 仓库结构、Rust 和 pnpm 工作区、工具链锁定；CI 的 `rust`（含金样例）、`protocol`、`ts`、`ui`、`license`（第一层）、`testdata-scan`、`e2e`、`security-macos14`、`compat-framework`（[5.1.6](01-repo-build-ci.md#516-ci-流水线)） |
+| 工程 | 仓库结构、Rust 和 pnpm 工作区、工具链锁定；CI 的 `rust`（含金样例）、`protocol`、`ts`、`ui`、`license`（第一层）、`testdata-scan`、`e2e`、`security-peer`、`compat-framework`（[5.1.6](01-repo-build-ci.md#516-ci-流水线)） |
 | **核心骨架与测试基础设施**（第一个宿主任务） | `Clock` 和 `IdGen`、`disallowed-methods`；纯核心的框架；`AcpTransport`（stdio 和内存）；故障点；`--test-config` 和 stdin 启动载荷；`--build-info`；写线程的组提交（[5.2.16](02-host.md#5216-时间与可测性)） |
 | **技术验证**（驱动层之前；v1.6：T003 已完成，K1 通过，结论见 5.6.10、5.8.4、5.13） | Q8 的 Claude 部分：用 SP-1 的 TS 客户端补跑并发剧本（U-R5，已定（2026-10-16），允许运行）；Q9：SDK 3.3 的扩展方法；SP-4b 遗留第 7 条：真实适配器拉起工具命令时会不会 setsid；Q26：Electron 44 上 Playwright、`sendInputEvent`、`input-event` 与 `before-input-event` 的关系，并用实体键盘确认一次（在 windowBridge 任务里）；Q27：整个 App 的外发检查方法 |
 | `cupper-protocol` | v1 的全部类型（含 M1b 才用的方法，先定契约）；schema 导出，含 `x-scope`、`x-idempotent`、`x-mergeable`、`x-id`、`x-time`、`x-path` 注解和视图的序列化格式；TS 生成链及后处理；合并时冻结（[5.12.5](#5125-契约冻结清单)） |

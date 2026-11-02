@@ -11,6 +11,8 @@ export interface QuitHost {
   status(): Promise<HostStatusResult>;
   /** `host/exit`; `force` interrupts running turns. */
   exit(force: boolean): Promise<unknown>;
+  /** Quitting: no connection is made again, and no host started (T214). */
+  end(): void;
 }
 
 export class QuitGuard {
@@ -31,6 +33,7 @@ export class QuitGuard {
   /** Shutdown, logout or an update: quit without asking. */
   skip(): void {
     this.#skipped = true;
+    this.#host()?.end();
   }
 
   /** `before-quit` may go on; otherwise wait for {@link decide}. */
@@ -48,10 +51,13 @@ export class QuitGuard {
     const host = this.#host();
     // Without an answer, nothing can be lost by quitting: the host decides.
     const status = await host?.status().catch(() => undefined);
-    if (status && (status.running_turns > 0 || status.pending_interactions > 0)) {
-      if (!(await this.#confirm(status))) {
-        return "stay";
-      }
+    const ask = status && (status.running_turns > 0 || status.pending_interactions > 0);
+    if (ask && !(await this.#confirm(status))) {
+      return "stay";
+    }
+    // Before `host/exit`: the host's exit closes the connection.
+    host?.end();
+    if (ask) {
       // The host may close the connection before it answers.
       await host?.exit(true).catch(() => undefined);
     }

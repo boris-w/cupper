@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, test } from "vitest";
 
+import { main } from "./main.ts";
 import { sanitizeTree, type Machine } from "./sanitize.ts";
 
 // A made-up machine; none of these names exist.
@@ -192,5 +193,83 @@ describe("UNIT-sanitize-codex-mcp", () => {
       skillPath: "<redacted skill path>",
     });
     expect(sanitize({ "codex.jsonl": text }).read("codex.jsonl")).toBe(text);
+  });
+});
+
+describe("UNIT-sanitize-across-chunks", () => {
+  const update = (u: object) => ["recv", { msg: { params: { sessionId: session, update: u } } }];
+  const chunk = (kind: string, text: string, messageId?: string) =>
+    update({ sessionUpdate: `agent_${kind}_chunk`, messageId, content: { type: "text", text } });
+  const output = (data: string) =>
+    update({
+      sessionUpdate: "tool_call_update",
+      toolCallId: "c1",
+      _meta: { terminal_output: { data } },
+    });
+  // The temporary path over four message chunks, thoughts between them; a
+  // local term over two thought chunks with no ID; a bearer token over three
+  // deltas of a command's output. The last thought is another text.
+  const FRAMES = [
+    chunk("message", "Wrote [a.txt](/", "m1"),
+    chunk("message", "var/fol", "m1"),
+    chunk("thought", "Working for Ac"),
+    chunk("thought", "me Corp"),
+    chunk("thought", " today, Ac"),
+    chunk("message", "ders/zz/qwerty", "m1"),
+    chunk("message", "uiopasdfgh/T/run/a.txt)", "m1"),
+    output("curl -H 'Authorization: Bear"),
+    output("er a1B2c3D4"),
+    output("e5F6g7H8' x\n"),
+    chunk("thought", "me Corp"),
+  ] as [string, object][];
+  interface Update {
+    content?: { text: string };
+    _meta?: { terminal_output: { data: string } };
+  }
+  const text = ({ msg: { params } }: { msg: { params: { update: Update } } }) =>
+    params.update.content?.text ?? params.update._meta?.terminal_output.data;
+
+  test("redacts a match over several chunks into its first, keeping the frames and seq", () => {
+    const { result, read } = sanitize({ "s.jsonl": record(FRAMES) });
+    expect(result.findings).toEqual([]);
+    const out = read("s.jsonl");
+    const [, ...frames] = out
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    expect(frames.map((f) => f.seq)).toEqual(FRAMES.map((_, i) => i + 1));
+    expect(frames.map(text)).toEqual([
+      "Wrote [a.txt](<tmpdir>/",
+      "",
+      "Working for <redacted>",
+      "",
+      " today, Ac",
+      "",
+      "run/a.txt)",
+      "curl -H 'Authorization: Bearer <secret>",
+      "",
+      "' x\n",
+      "me Corp",
+    ]);
+    expect(sanitize({ "s.jsonl": out }).read("s.jsonl")).toBe(out);
+  });
+
+  test("the scans report the range of lines a match runs over, not the text", () => {
+    const { root } = sanitize({ "s.jsonl": record(FRAMES), "list.txt": "acme corp\n" });
+    const run = (...args: string[]) => {
+      const lines: string[] = [];
+      return [main(args, join(root, "in"), (l) => lines.push(l)), ...lines];
+    };
+    expect(run("scan", "s.jsonl")).toEqual([
+      1,
+      "s.jsonl:2-7: per-user temporary path",
+      "s.jsonl:9-11: bearer token",
+      "2 findings in 1 of 1 files",
+    ]);
+    expect(run("words", "--list", "list.txt", "s.jsonl")).toEqual([
+      1,
+      "s.jsonl:4-5: entry 1 of the sensitive word list",
+      "1 findings in 1 of 1 files",
+    ]);
   });
 });

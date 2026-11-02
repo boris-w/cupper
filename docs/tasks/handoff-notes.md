@@ -461,7 +461,7 @@
 | T053 的后续、显示压缩的界面任务 | 宿主没有声明 `clientCapabilities.session.compaction` 时，适配器不发 `compaction_update`，改用一个合成的工具调用（"Compact conversation"，kind 为 `think`），实时和回放都一样；套件里没有录到实例 | T066 |
 | 以后改桌面启动测试或 e2e 夹具的任务 | `apps/desktop` 的 `launch.test.ts`（手动运行）没有 `runtime.registry_url`，每次启动都会向公共 npm registry 请求运行时（不含个人信息），可以照 e2e 夹具指向关闭的本地端口；e2e 拉起的宿主沿用 Electron 进程真实的 `HOME`，宿主跑 git 时会读用户的全局 git 配置 | T203 |
 | T113 等下一次真实运行 | compat 真实模式的拉起方式在 T203 里只改了调用点（行为不变），还没有真跑过；T202 的整套重跑早于 T203 合并 | T203 |
-| T113 | codex-drift 抓到 codex 0.165.0 的漂移，已记进 `testdata/codex-drift/reviewed.json`，跟进任务就是本任务：`ThreadItem` 的 `imageGeneration` 变体去掉了 `result`、改成 `inputImages`，codex-acp 2.2.2 的 `ImageGenerationReporter` 还在读 `item.result`，图像生成的结果会丢失（不会崩溃）；其余 13 个方法只是新增了可选字段和枚举值。扩展已验证范围、升级 codex-acp 时，用 `tools/codex-drift write` 重写基线，旧的审阅记录随之失效 | T114 |
+| T113 | codex-drift 抓到 codex 0.165.0 的漂移，已记进 `testdata/codex-drift/reviewed.json`，跟进任务就是本任务：`ThreadItem` 的 `imageGeneration` 变体，`result` 改成了和 `fileId` 二选一（T209 更正：不是删掉），另加了 `inputImages`。codex-acp 2.2.2 遇到 `fileId` 形式会调用 `item.result.trim()` 抛 TypeError：实时通知里图片丢失、工具调用收不到完成更新，`session/load` 回放整个失败。codex-acp 2.5.0 已修。要用真实 Codex 确认什么时候发 `fileId` 形式；0.166.0 的审阅另见 T209；其余 13 个方法只是新增了可选字段和枚举值。扩展已验证范围、升级 codex-acp 时，用 `tools/codex-drift write` 重写基线，旧的审阅记录随之失效 | T114 |
 | 以后要让 nightly 开 issue 时 | 不要给运行 codex 二进制的作业写权限（它跑的是从 npm 下载的第三方二进制）。做法：把 `codex-drift` 移出矩阵，另加一个 `needs: codex-drift`、`if: failure()` 的报告作业，只给它 `issues: write`，按固定标题或标签查重 | T114 |
 | T113 | `xtask compat --out` 只认绝对路径（执行者在 `crates/cupper-host` 下运行，相对路径找不到计划文件）；thinking 剧本的题目要能触发 adaptive 思考（T202 换成了答案唯一的逻辑题），Codex 的思考剧本照此出题 | T202 |
 | 接 Bedrock、Vertex 等服务商的任务 | 宿主经 `extraArgs` 请求 `thinking-display: summarized`，在第三方服务商上是否生效没有核实 | T202 |
@@ -469,3 +469,14 @@
 | 以后改 `cargo xtask size` 的任务 | 它把 `spikes/` 下的录制也算进规模，改 spike 录制的任务都会被多算（T204 多算了 107 行）；把 `spikes/*/recordings/` 加进排除列表 | T204 |
 | 以后改宿主生命周期的任务 | `host/exit` 以外、和退出撞上的请求，应答仍可能在连接关闭时被丢弃（T205 只按 5.2.13 修了 host/exit）。它们能按 `command_id` 重试拿到结果；要让所有在路上的应答都在关闭前送出，设计要先定等待的上限，以及手动时钟下宽限期不会自己到期时怎么办 | T205 |
 | T103（SP-6）、M1b 的性能任务 | runner 上 3 份并行的负载下，宿主的会话流每轮会停顿几秒（最长 12.4 s，中位数 1.9 s），coalescer 的 40 ms 窗口被拉长到约 2 倍。执行者推断与 `host.db` 带 `checkpoint_fullfsync` 的 WAL 检查点有关，没有验证。这关系到 NFR-1 的流延迟，在参考机型上一并量 | T206 |
+| 以后改 `tools/codex-drift` 的任务 | 摘要（`facets`）只看定义本身和第一层 `oneOf`/`anyOf`/`allOf`，看不到变体里再嵌的一层，0.165.0 的 `imageGeneration` 因此被描述成"去掉了 `result`"。哈希照样能发现变化，不会漏报 | T209 |
+| T111 | 运行时接 Codex 时用 `CodexSession::new`、`update`、`permission`、`set_config`、`prompt_done`，`codex::agent_error`，`codex::capabilities::{capabilities, config_options}`；`CodexSession::config()` 给 SetConfig 用；`prompt_done` 返回 `Err` 时发 `PromptFailed`。第二种 agent 要一个自己的 `ActorKind`（T055 的交接，T110 转来） | T110 |
+| T112 | K17：Codex 文本形式的错误，宿主现在让回合以 `failed` 结束并带 `error_code`（如 `model_unsupported`），但还不写 `error` 条目 | T110 |
+| T113 | `initialize` 没有声明 `session.notices`、`session.compaction`，真实运行时 Codex 的压缩提示和配置警告会以不带 ID 的消息出现；录制里没出现过的选项（`decline`、命令上的 `allow_for_session`、网络策略、权限档案、MCP 审批）现在按 kind 兜底，录到后加进 5.3.6 和对照表；K17 要核对 `systemError` 和错误文本谁先到；prompt 之外出现 thread `active` 时交 T112 | T110 |
+| 以后的"第二种 agent"类任务 | 估规模时把共用代码的搬动单独列一项；搬动单独成一个提交，按净增计（T110 的补充裁定二） | T110 |
+| T113 | `tools/sanitize` 的 `<opaque>` 规则（64 个以上连续的 base64 字符）现在也作用于折叠后的文本，一条消息里被切开的长路径也可能被换成 `<opaque>`；入库新录制时金样例里出现意外的 `<opaque>`，原因在这里 | T210 |
+| 以后改 `tools/sanitize` 的任务 | `leftovers()` 里 MCP 服务器名的匹配器没有单独的测试覆盖，让它总是返回空，现有用例也不会失败（T204 起就是这样） | T210 |
+| 以后查偶发失败的任务 | macOS 上阻塞读等 Unix 套接字的 EOF、对端用 `shutdown` 结束时，偶尔会睡过对端的半关闭（xnu 的竞争，T207 的 notes 有证据）。别的测试和 testkit 里还有没有这样的写法，T207 没有排查；碰到"读不到 EOF、等满超时"的偶发失败，先查这一点 | T207 |
+| 下一个改动 `crates/cupper-sys/**` 的任务 | `cupper-sys.yml` 改到 `macos-26` 上跑（作业 `security-peer (macos-26)`），T211 的分支没改 cupper-sys，它还没真正跑过；合并前要看到它在 PR 上通过 | T211 |
+| T160 | Rust 二进制没有设置 deployment target，Mach-O 里的 minos 是 rustc 的默认值，和 `LSMinimumSystemVersion` 15.0 不一致；打自用版时定要不要设 `MACOSX_DEPLOYMENT_TARGET=15.0` | T211 |
+| 以后查 e2e 偶发失败的任务 | e2e 的 Electron 用例没有开 Playwright 的 screenshot 和 trace，失败时构件里只有 fixture 挂上的日志（`logs/main.log`、`data/logs/*.log`）和 `error-context.md`；两轮分别在 `rest/`、`focus/` 下。缺截图时再单独开任务加 | T212 |

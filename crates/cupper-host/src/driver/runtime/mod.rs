@@ -85,6 +85,7 @@ use super::api::{
     AskRequest, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent, ProjectConfigPolicy,
 };
 use super::claude::{self, ClaudeSession, capabilities};
+use super::extract;
 use crate::clock::IdGen;
 use crate::durations::{
     ADAPTER_CLOSE_WAIT, ADAPTER_TERM_WAIT, Durations, PROBE_COMMANDS, RESOURCE_SAMPLE,
@@ -840,7 +841,7 @@ impl Actor {
             Wire::Prompted(session, tag, result) => {
                 let event = match result {
                     Ok(response) => {
-                        let (stop_reason, usage) = claude::prompt_done(&response);
+                        let (stop_reason, usage) = extract::prompt_done(&response);
                         DriverEvent::PromptDone {
                             tag,
                             stop_reason,
@@ -1084,7 +1085,7 @@ impl Actor {
                     },
                     _ => None,
                 };
-                let asked = claude::ask::elicitation(&request);
+                let asked = extract::elicitation(&request);
                 let (Some(session), Some((tool_call_id, request))) = (session, asked) else {
                     let decline = CreateElicitationResponse::new(
                         agent_client_protocol::schema::v1::ElicitationAction::Decline,

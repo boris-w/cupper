@@ -1,20 +1,34 @@
 /**
  * Personal data scans over test data (design 5.9.3): generic patterns that
  * need no knowledge of the machine, and lists of terms such as the
- * maintainer's local sensitive word list. A finding names the file, the line
- * and the rule; never the text that matched.
+ * maintainer's local sensitive word list. Each line is scanned, and so is
+ * each text a recording streams over several frames, folded. A finding names
+ * the file, the line or the range of lines and the rule; never the text that
+ * matched.
  */
 import { globSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
+import { fold, streams } from "./streams.ts";
+
 export interface Finding {
   file: string;
   line: number;
+  /** The last line, when the match runs over several frames. */
+  to?: number;
   rule: string;
 }
 
-/** The rules one line of text breaks. */
-export type Matcher = (line: string) => string[];
+/** A rule a text breaks and where: from `start` to before `end`. */
+export type Hit = readonly [rule: string, start: number, end: number];
+
+export type Matcher = (text: string) => Hit[];
+
+export const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Every match of `re` in `text` as a hit of `rule`. */
+export const hits = (rule: string, re: RegExp, text: string): Hit[] =>
+  [...text.matchAll(re)].map((m) => [rule, m.index, m.index + m[0].length]);
 
 /** Placeholder domains (RFC 2606, RFC 6761) are not personal. */
 const PLACEHOLDER_DOMAIN = /(^|\.)(example|example\.(com|net|org)|invalid|test|localhost)$/i;
@@ -33,19 +47,19 @@ const PATTERNS: readonly (readonly [string, RegExp])[] = [
 ];
 
 /** Generic patterns: home and temporary paths, email addresses, token shapes. */
-export const patterns: Matcher = (line) =>
-  PATTERNS.flatMap(([rule, re]) => {
-    const matches = [...line.matchAll(re)];
-    return matches.some((m) => !PLACEHOLDER_DOMAIN.test(m.groups?.domain ?? "")) ? [rule] : [];
-  });
+export const patterns: Matcher = (text) =>
+  PATTERNS.flatMap(([rule, re]) =>
+    [...text.matchAll(re)]
+      .filter((m) => !PLACEHOLDER_DOMAIN.test(m.groups?.domain ?? ""))
+      .map((m): Hit => [rule, m.index, m.index + m[0].length]),
+  );
 
 /** Case-insensitive substrings, each with the rule it reports. */
 export function terms(list: readonly (readonly [rule: string, term: string])[]): Matcher {
-  const lowered = list.map(([rule, term]) => [rule, term.toLowerCase()] as const);
-  return (line) => {
-    const lower = line.toLowerCase();
-    return lowered.flatMap(([rule, term]) => (term && lower.includes(term) ? [rule] : []));
-  };
+  const res = list.flatMap(([rule, t]) =>
+    t ? [[rule, new RegExp(escapeRe(t), "gi")] as const] : [],
+  );
+  return (text) => res.flatMap(([rule, re]) => hits(rule, re, text));
 }
 
 /** Lines of a word list: one entry per line, `#` starts a comment line. */
@@ -85,15 +99,33 @@ export function expand(targets: readonly string[], cwd: string): string[] {
 }
 
 export function scan(files: readonly string[], cwd: string, matcher: Matcher): Finding[] {
-  return files.flatMap((file) =>
-    readFileSync(resolve(cwd, file), "utf8")
-      .split("\n")
-      .flatMap((text, i) =>
-        [...new Set(matcher(text))].map((rule) => ({ file, line: i + 1, rule })),
-      ),
-  );
+  return files.flatMap((file) => {
+    const lines = readFileSync(resolve(cwd, file), "utf8").split("\n");
+    const found = new Map<string, Finding>();
+    const add = (f: Finding) => found.set(`${f.line}-${f.to ?? f.line}:${f.rule}`, f);
+    lines.forEach((text, i) => matcher(text).forEach(([rule]) => add({ file, line: i + 1, rule })));
+    for (const pieces of streams(lines.map(json))) {
+      const { text, owner } = fold(pieces.map(({ at, key }) => at[key]));
+      for (const [rule, start, end] of matcher(text)) {
+        const line = (at: number) => (pieces[owner[at] ?? 0]?.frame ?? 0) + 1;
+        const [first, last] = [line(start), line(end - 1)];
+        add(last > first ? { file, line: first, to: last, rule } : { file, line: first, rule });
+      }
+    }
+    return [...found.values()].sort((a, b) => a.line - b.line);
+  });
+}
+
+function json(line: string): unknown {
+  try {
+    return JSON.parse(line);
+  } catch {
+    return undefined;
+  }
 }
 
 export function report(findings: readonly Finding[]): string[] {
-  return findings.map(({ file, line, rule }) => `${file}:${line}: ${rule}`);
+  return findings.map(
+    ({ file, line, to, rule }) => `${file}:${line}${to ? `-${to}` : ""}: ${rule}`,
+  );
 }

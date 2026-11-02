@@ -1,5 +1,5 @@
-//! GOLD-A (design 5.9.3): every Claude recording in `testdata/recordings/`
-//! whose `usage` has `gold-a` goes through what the runtime puts in front of
+//! GOLD-A (design 5.9.3): every recording of Claude's or Codex's adapter in
+//! `testdata/recordings/` whose `usage` has `gold-a` goes through what the runtime puts in front of
 //! the extraction layer, the tap's K19 rewrite and the SDK's types, and the
 //! result is compared with its golden: the same path under
 //! `testdata/golden/gold-a/`. `UPDATE_GOLDEN=1` writes the goldens instead
@@ -19,6 +19,10 @@
 //! is folded into a single event, since how the agent cuts it depends on the
 //! machine's load. IDs, paths and times stay as recorded: they come from a
 //! recording that does not change.
+//!
+//! Claude's cases are below, Codex's in [`codex`].
+
+mod codex;
 
 use std::collections::HashMap;
 use std::fs;
@@ -27,22 +31,67 @@ use std::path::{Path, PathBuf};
 use agent_client_protocol::Error;
 use agent_client_protocol::schema::v1::{
     CreateElicitationRequest, InitializeResponse, PromptResponse, RequestPermissionRequest,
-    SessionConfigOption, SessionNotification,
+    SessionConfigOption, SessionNotification, SessionUpdate,
 };
-use cupper_protocol::capabilities::{CliCompat, Versions};
+use cupper_protocol::capabilities::{
+    CliCompat, ConfigOption, SessionCapabilities, SlashCommand, Versions,
+};
 use cupper_protocol::item::ToolKind;
 use cupper_protocol::recording::{Body, Recording, Usage};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
-use super::capabilities::TIERS;
-use super::options::{self, Scene};
-use super::{ClaudeSession, agent_error, ask, capabilities, prompt_done};
-use crate::driver::acp::AuthStatusUpdate;
-use crate::driver::api::{AskId, AskRequest, DriverEvent, PromptTag};
-use crate::driver::tap::k19;
+use super::acp::AuthStatusUpdate;
+use super::api::{AgentError, AskId, AskRequest, DriverEvent, PromptTag};
+use super::claude::{self, ClaudeSession};
+use super::codex::{self as codex_layer, CodexSession};
+use super::extract::{Tiers, elicitation, prompt_done};
+use super::tap::k19;
 
-const ADAPTER: &str = "claude-agent-acp";
+/// What the runner calls of an adapter's extraction layer.
+pub(super) struct Layer {
+    adapter: &'static str,
+    open: fn(PathBuf, Vec<ConfigOption>) -> Extractor,
+    capabilities: fn(
+        &InitializeResponse,
+        Versions,
+        Vec<ConfigOption>,
+        Vec<SlashCommand>,
+    ) -> SessionCapabilities,
+    config_options: fn(&[SessionConfigOption]) -> Vec<ConfigOption>,
+    agent_error: fn(&Error) -> AgentError,
+    unlisted: fn(&RequestPermissionRequest) -> Vec<String>,
+    tiers: Tiers,
+}
+
+pub(super) static CLAUDE: Layer = Layer {
+    adapter: "claude-agent-acp",
+    open: |cwd, config| Extractor::Claude(ClaudeSession::new(cwd, config)),
+    capabilities: claude::capabilities::capabilities,
+    config_options: claude::capabilities::config_options,
+    agent_error: claude::agent_error,
+    unlisted: claude::options::unlisted,
+    tiers: claude::capabilities::TIERS,
+};
+
+pub(super) static CODEX: Layer = Layer {
+    adapter: "codex-acp",
+    open: |cwd, config| Extractor::Codex(CodexSession::new(cwd, config)),
+    capabilities: codex_layer::capabilities::capabilities,
+    config_options: codex_layer::capabilities::config_options,
+    agent_error: codex_layer::agent_error,
+    unlisted: codex_layer::options::unlisted,
+    tiers: codex_layer::capabilities::TIERS,
+};
+
+/// The layer of the adapter that made `recording`.
+fn layer(recording: &Recording) -> &'static Layer {
+    let adapter = &recording.header.adapter;
+    [&CLAUDE, &CODEX]
+        .into_iter()
+        .find(|layer| layer.adapter == adapter)
+        .expect("a known adapter")
+}
 
 fn testdata() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../testdata")
@@ -66,11 +115,12 @@ fn files(dir: &Path) -> Vec<PathBuf> {
     found
 }
 
-/// The Claude recordings for GOLD-A, by path under `testdata/recordings/`.
-pub(super) fn recordings(scenario: Option<&str>) -> Vec<(PathBuf, Recording)> {
+/// The recordings of `layer`'s adapter for GOLD-A, by path under
+/// `testdata/recordings/`.
+pub(super) fn recordings(layer: &Layer, scenario: Option<&str>) -> Vec<(PathBuf, Recording)> {
     let base = testdata().join("recordings");
     let named = |path: &PathBuf| scenario.is_none_or(|s| path.file_stem() == Some(s.as_ref()));
-    (files(&base.join(ADAPTER)).into_iter().filter(named))
+    (files(&base.join(layer.adapter)).into_iter().filter(named))
         .map(|path| {
             let text = fs::read_to_string(&path).expect("a recording");
             let recording = Recording::parse(&text).expect("a recording in format v1");
@@ -89,7 +139,13 @@ pub(super) fn extract(recording: &Recording) -> Vec<Value> {
         cli: header.cli_version.clone(),
         cli_compat: CliCompat::Verified,
     };
-    let mut run = Run::default();
+    let mut run = Run {
+        layer: layer(recording),
+        out: Vec::new(),
+        sessions: HashMap::new(),
+        asks: HashMap::new(),
+        prompts: 0,
+    };
     for (n, segment) in recording.segments().enumerate() {
         run.out.push(json!({"segment": n}));
         // The client's requests of this instance, by JSON-RPC ID.
@@ -121,13 +177,42 @@ pub(super) fn extract(recording: &Recording) -> Vec<Value> {
     fold(run.out)
 }
 
-#[derive(Default)]
 struct Run {
+    layer: &'static Layer,
     out: Vec<Value>,
-    sessions: HashMap<String, ClaudeSession>,
+    sessions: HashMap<String, Extractor>,
     /// By the JSON-RPC ID of the agent's request.
     asks: HashMap<String, AskId>,
     prompts: u64,
+}
+
+/// One session's extraction layer.
+enum Extractor {
+    Claude(ClaudeSession),
+    Codex(CodexSession),
+}
+
+impl Extractor {
+    fn update(&mut self, update: &SessionUpdate) -> Vec<DriverEvent> {
+        match self {
+            Self::Claude(session) => session.update(update),
+            Self::Codex(session) => session.update(update),
+        }
+    }
+
+    fn permission(&self, request: &RequestPermissionRequest) -> (String, AskRequest) {
+        match self {
+            Self::Claude(session) => session.permission(request),
+            Self::Codex(session) => session.permission(request),
+        }
+    }
+
+    fn set_config(&mut self, options: &[SessionConfigOption]) -> DriverEvent {
+        match self {
+            Self::Claude(session) => session.set_config(options),
+            Self::Codex(session) => session.set_config(options),
+        }
+    }
 }
 
 impl Run {
@@ -135,9 +220,9 @@ impl Run {
         self.out.push(json!({"event": event}));
     }
 
-    fn session(&mut self, id: impl ToString) -> &mut ClaudeSession {
-        let new = || ClaudeSession::new(PathBuf::new(), Vec::new());
-        self.sessions.entry(id.to_string()).or_insert_with(new)
+    fn session(&mut self, id: impl ToString) -> &mut Extractor {
+        let new = (self.layer.open)(PathBuf::new(), Vec::new());
+        self.sessions.entry(id.to_string()).or_insert(new)
     }
 
     /// A notification or a request from the agent.
@@ -166,7 +251,7 @@ impl Run {
             }
             "elicitation/create" => {
                 let request = parse::<CreateElicitationRequest>(params);
-                if let Some((tool_call_id, ask)) = request.as_ref().and_then(ask::elicitation) {
+                if let Some((tool_call_id, ask)) = request.as_ref().and_then(elicitation) {
                     self.ask(msg, tool_call_id, ask);
                 }
             }
@@ -197,7 +282,7 @@ impl Run {
             PromptTag(self.prompts)
         });
         if let Some(error) = msg.get("error").and_then(parse::<Error>) {
-            let error = agent_error(&error);
+            let error = (self.layer.agent_error)(&error);
             return match tag {
                 Some(tag) => self.event(DriverEvent::PromptFailed { tag, error }),
                 None => self
@@ -209,7 +294,7 @@ impl Run {
         match method {
             "initialize" => {
                 if let Some(init) = parse::<InitializeResponse>(result) {
-                    let caps = capabilities::capabilities(&init, versions.clone(), vec![], vec![]);
+                    let caps = (self.layer.capabilities)(&init, versions.clone(), vec![], vec![]);
                     self.out.push(json!({"capabilities": caps}));
                 }
             }
@@ -218,11 +303,11 @@ impl Run {
                     .as_str()
                     .or(params["sessionId"].as_str());
                 let options = parse::<Vec<SessionConfigOption>>(&result["configOptions"]);
-                let config = capabilities::config_options(&options.unwrap_or_default());
+                let config = (self.layer.config_options)(&options.unwrap_or_default());
                 let cwd = params["cwd"].as_str().unwrap_or_default();
                 let session = json!({"session_id": id, "cwd": cwd, "config": config});
                 self.out.push(json!({"session": session}));
-                let session = ClaudeSession::new(cwd.into(), config);
+                let session = (self.layer.open)(cwd.into(), config);
                 self.sessions
                     .insert(id.unwrap_or_default().to_owned(), session);
             }
@@ -233,14 +318,21 @@ impl Run {
                 self.event(event);
             }
             "session/prompt" => {
+                let id = params["sessionId"].as_str().unwrap_or_default();
                 if let (Some(tag), Some(response)) = (tag, parse::<PromptResponse>(result)) {
-                    let (stop_reason, usage) = prompt_done(&response);
-                    let done = DriverEvent::PromptDone {
-                        tag,
-                        stop_reason,
-                        usage,
+                    let done = match self.session(id) {
+                        Extractor::Codex(session) => session.prompt_done(&response),
+                        Extractor::Claude(_) => Ok(prompt_done(&response)),
                     };
-                    self.event(done);
+                    let event = match done {
+                        Ok((stop_reason, usage)) => DriverEvent::PromptDone {
+                            tag,
+                            stop_reason,
+                            usage,
+                        },
+                        Err(error) => DriverEvent::PromptFailed { tag, error },
+                    };
+                    self.event(event);
                 }
             }
             _ => {}
@@ -280,12 +372,14 @@ fn fold(out: Vec<Value>) -> Vec<Value> {
     folded
 }
 
-/// Compares `scenario`'s extraction with its golden, or writes the golden.
-fn check(scenario: &str) {
-    let found = recordings(Some(scenario));
+/// Compares the extraction of `layer`'s `scenario` with its golden, or
+/// writes the golden.
+fn check(layer: &Layer, scenario: &str) {
+    let found = recordings(layer, Some(scenario));
+    let adapter = layer.adapter;
     assert!(
         !found.is_empty(),
-        "no Claude recording of {scenario} for GOLD-A"
+        "no {adapter} recording of {scenario} for GOLD-A"
     );
     for (name, recording) in found {
         let path = testdata().join("golden/gold-a").join(&name);
@@ -318,19 +412,21 @@ fn check(scenario: &str) {
     }
 }
 
+/// A test per scenario of `$layer`, and the scenarios as `$scenarios`.
 macro_rules! gold_a {
-    ($($test:ident => $scenario:literal,)*) => {
+    ($layer:ident, $scenarios:ident; $($test:ident => $scenario:literal,)*) => {
         $(
             #[test]
             fn $test() {
-                check($scenario);
+                crate::driver::gold_a::check(&$layer, $scenario);
             }
         )*
-        const SCENARIOS: &[&str] = &[$($scenario),*];
+        const $scenarios: &[&str] = &[$($scenario),*];
     };
 }
+use gold_a;
 
-gold_a! {
+gold_a! { CLAUDE, SCENARIOS;
     gold_a_claude_s01 => "s01-init-session",
     gold_a_claude_s02 => "s02-normal-turn",
     gold_a_claude_s02b => "s02b-plan",
@@ -358,18 +454,26 @@ gold_a! {
 /// golden has its recording (design 5.9.3).
 #[test]
 fn gold_a_claude_recordings_and_goldens_match_up() {
-    let recorded: Vec<PathBuf> = recordings(None).into_iter().map(|(name, _)| name).collect();
+    match_up(&CLAUDE, SCENARIOS);
+}
+
+/// Every recording of `layer`'s adapter for GOLD-A has a scenario among
+/// `scenarios` and a golden, and every golden has its recording.
+fn match_up(layer: &Layer, scenarios: &[&str]) {
+    let recorded: Vec<PathBuf> = (recordings(layer, None).into_iter())
+        .map(|(name, _)| name)
+        .collect();
     for name in &recorded {
         let scenario = name
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or_default();
-        assert!(SCENARIOS.contains(&scenario), "{name:?} has no GOLD-A test");
+        assert!(scenarios.contains(&scenario), "{name:?} has no GOLD-A test");
         let golden = testdata().join("golden/gold-a").join(name);
         assert!(golden.is_file(), "{name:?} has no golden");
     }
     let goldens = testdata().join("golden/gold-a");
-    let paths = files(&goldens.join(ADAPTER));
+    let paths = files(&goldens.join(layer.adapter));
     for path in paths {
         let name = path.strip_prefix(&goldens).expect("under the goldens");
         assert!(
@@ -379,11 +483,11 @@ fn gold_a_claude_recordings_and_goldens_match_up() {
     }
 }
 
-/// The fields each tool call of `scenario` ends with, from its start and
-/// updates, later values winning; in the order the calls started.
-fn tool_calls(scenario: &str) -> Vec<Value> {
+/// The fields each tool call of `layer`'s `scenario` ends with, from its
+/// start and updates, later values winning; in the order the calls started.
+fn tool_calls(layer: &Layer, scenario: &str) -> Vec<Value> {
     let mut calls: Vec<Value> = Vec::new();
-    for value in recordings(Some(scenario))
+    for value in recordings(layer, Some(scenario))
         .iter()
         .flat_map(|(_, r)| extract(r))
     {
@@ -409,7 +513,7 @@ fn tool_calls(scenario: &str) -> Vec<Value> {
 /// relative to the workspace, and their diffs (design 5.6.3).
 #[test]
 fn gold_a_tool_fields_claude_of_commands_and_edits() {
-    let commands: Vec<Value> = (tool_calls("s03-exec").iter())
+    let commands: Vec<Value> = (tool_calls(&CLAUDE, "s03-exec").iter())
         .map(|c| {
             json!([
                 c["command"],
@@ -429,7 +533,7 @@ fn gold_a_tool_fields_claude_of_commands_and_edits() {
             json!([sh, cwd, {"replace": "out\nerr"}, 3, "failed"]),
         ]
     );
-    let edits: Vec<Value> = (tool_calls("s02-normal-turn").iter())
+    let edits: Vec<Value> = (tool_calls(&CLAUDE, "s02-normal-turn").iter())
         .filter(|call| call["tool_kind"] == "edit")
         .map(|call| {
             json!([
@@ -486,6 +590,7 @@ fn gold_a_unknown_enums_are_judged_by_their_originals() {
 /// The values of `recording` that the tables do not have (design 5.9.5):
 /// options by scene, tool kinds and permission modes.
 fn not_in_tables(recording: &Recording) -> Vec<String> {
+    let layer = layer(recording);
     let mut missing = Vec::new();
     for frame in &recording.frames {
         let Body::Recv(msg) = &frame.body else {
@@ -497,12 +602,7 @@ fn not_in_tables(recording: &Recording) -> Vec<String> {
         if msg["method"] == "session/request_permission"
             && let Some(request) = parse::<RequestPermissionRequest>(params)
         {
-            let scene = Scene::of(&request);
-            let unlisted = request
-                .options
-                .iter()
-                .filter(|o| !options::listed(scene, o));
-            missing.extend(unlisted.map(|o| format!("option {} in {scene:?}", o.option_id)));
+            missing.extend((layer.unlisted)(&request));
         }
         for kind in [&update["kind"], &params["toolCall"]["kind"]].map(Value::as_str) {
             if let Some(ToolKind::Unknown(kind)) = kind.map(ToolKind::from) {
@@ -527,7 +627,7 @@ fn not_in_tables(recording: &Recording) -> Vec<String> {
         })
         .chain([&update["currentModeId"]]);
         for mode in modes.filter_map(Value::as_str) {
-            if !TIERS.iter().any(|(known, _)| *known == mode) {
+            if !layer.tiers.iter().any(|(known, _)| *known == mode) {
                 missing.push(format!("permission mode {mode}"));
             }
         }
@@ -539,7 +639,7 @@ fn not_in_tables(recording: &Recording) -> Vec<String> {
 
 #[test]
 fn gold_a_option_map_claude_has_every_recorded_value() {
-    for (name, recording) in recordings(None) {
+    for (name, recording) in recordings(&CLAUDE, None) {
         assert_eq!(not_in_tables(&recording), Vec::<String>::new(), "{name:?}");
     }
 }

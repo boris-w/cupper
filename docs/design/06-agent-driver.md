@@ -217,7 +217,7 @@ ACP 的 `configOptions` 按 `category` 映射到 cupper 的配置项，具体取
 | K21 | Claude 适配器退出不等子进程（s12、SP-4a）；工具命令有自己的会话和进程组（T003） | `claude` CLI 残留约 300 MB；杀适配器的进程组之后，正在运行的命令仍在（被 launchd 收养） | 关闭时先 `session/close`，再枚举全部后代、按各自的进程组逐个发信号（顺序见 [5.6.8](#568-资源回收)）；意外退出后按 `adapters` 表里记下的进程组清理 | IT-K21-reap-group（沿用 SP-4a 的端到端测试，补"后代在另一个进程组"）；COMPAT-claude-close-running（关闭时有命令正在运行，T066） |
 | K22 | Claude 命令输出不流式（s03） | 命令结束前没有任何输出 | `output_streaming: false`，界面显示"运行中" | GOLD-A-claude-s03 |
 | K23 | Codex 偶发丢失第一行输出（s07，codex-local 一次） | — | 不做处理，记录在案 | 不测：上游的偶发行为，cupper 没有对应的规避逻辑可测 |
-| K24 | Codex 用 shell 运行 `apply_patch`（s05） | 没有 diff | 条目 `extraction: partial`；回合 diff 以 git 为准 | GOLD-A-codex-s05 |
+| K24 | Codex 用 shell 运行 `apply_patch`（s05） | 没有 diff | 条目是一条字段齐全的命令，不带 diff（合并器按必填字段判为 `full`，T110）；回合 diff 一律以 git 快照为准（GT-1） | GOLD-A-codex-s05 |
 | K25 | Claude 的 TodoWrite 在 SDK 会话不可用（s02c） | 没有 `plan` 条目 | 能力里标 `plan: markdown_only` | GOLD-A-claude-s02c；UNIT-capabilities-plan |
 | K26 | `clientInfo.name` 外发（SP-2） | 出现在 codex 发往 OpenAI 的 User-Agent 里 | 固定为 `cupper`，不带任何用户信息 | IT-K26-client-info（假 agent 断言 `clientInfo.name == "cupper"`） |
 | K27 | SDK 3.3.0：没有处理器的请求永远收不到响应（T003） | agent 发来的未知请求带 `params.sessionId` 时，Client 角色的默认处理器把它标成"稍后重试"，再也不回，agent 一直挂着；同样带 `sessionId` 的未知通知一直堆在内存里 | 在处理器链的最后注册无类型的 `on_receive_dispatch`：未知请求回 method not found，未知通知直接丢弃，响应照常转发（[5.6.10](#5610-线路分接层)） | UNIT-acp-unhandled（沿用 T003 的 `tests/unhandled.rs`，假 agent 发未知请求和通知） |

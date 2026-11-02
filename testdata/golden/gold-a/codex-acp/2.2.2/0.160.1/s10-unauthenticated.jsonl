@@ -1,0 +1,4 @@
+{"segment":0}
+{"capabilities":{"agent":"codex","commands":[],"config":[],"extraction":{"diff":"per_hunk","exit_code":true,"output_streaming":true,"plan":"entries","run_state":"agent_reported","thinking":true},"interactions":{"plan_confirm":true,"question_forms":true,"reject_ends_turn":true},"prompt":{"file_ref":true,"image":true,"max_image_bytes":10485760},"session":{"fork":false,"load_history":true,"resume":true},"turn":{"interrupt":true,"interrupt_stops_commands":false,"queue":true,"steer":{"side_effects":false,"supported":true}},"versions":{"adapter":"2.2.2","cli":"0.160.1","cli_compat":"verified"}}}
+{"auth":{"kind":"none","plan":null}}
+{"failed":{"error":{"class":"not_logged_in","form":{"rpc":{"agent_code":-32000}},"message":"Authentication required"},"method":"session/new"}}
