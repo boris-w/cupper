@@ -34,7 +34,7 @@ function stop(running: { path: string; cdhash: string } | null, lock = "4321\n")
 }
 
 function quitting(status: Partial<HostStatusResult> | undefined, answer = true, exits = true) {
-  const calls = { confirms: 0, exits: [] as boolean[] };
+  const calls = { confirms: 0, host: [] as string[] };
   const host: QuitHost = {
     status: () =>
       status === undefined
@@ -45,9 +45,10 @@ function quitting(status: Partial<HostStatusResult> | undefined, answer = true, 
             ...status,
           } as HostStatusResult),
     exit: (force) => {
-      calls.exits.push(force);
+      calls.host.push(force ? "exit(force)" : "exit");
       return exits ? Promise.resolve() : Promise.reject(new Error("timeout"));
     },
+    end: () => void calls.host.push("end"),
   };
   const guard = new QuitGuard(
     () => host,
@@ -79,7 +80,8 @@ describe("UNIT-host-restart", () => {
       expect(guard.settled).toBe(false);
       expect(await guard.decide()).toBe("quit");
       expect(guard.settled).toBe(true);
-      expect(calls).toEqual({ confirms: asked ? 1 : 0, exits: asked ? [true] : [] });
+      // `end` before `host/exit`: the host's exit starts no other host (T214).
+      expect(calls).toEqual({ confirms: +asked, host: asked ? ["end", "exit(force)"] : ["end"] });
     }
   });
 
@@ -89,14 +91,14 @@ describe("UNIT-host-restart", () => {
     const { guard, calls } = quitting({ running_turns: 1 }, true, false);
     expect(await guard.decide()).toBe("quit");
     expect(guard.settled).toBe(true);
-    expect(calls).toEqual({ confirms: 1, exits: [true] });
+    expect(calls).toEqual({ confirms: 1, host: ["end", "exit(force)"] });
   });
 
   test("a cancelled confirmation keeps the app; asking twice shows one dialog", async () => {
     const { guard, calls } = quitting({ running_turns: 1 }, false);
     const [one, two] = await Promise.all([guard.decide(), guard.decide()]);
     expect([one, two]).toEqual(["stay", "stay"]);
-    expect(calls).toEqual({ confirms: 1, exits: [] });
+    expect(calls).toEqual({ confirms: 1, host: [] });
     expect(guard.settled).toBe(false);
   });
 
@@ -104,6 +106,6 @@ describe("UNIT-host-restart", () => {
     const { guard, calls } = quitting({ running_turns: 3 });
     guard.skip();
     expect(guard.settled).toBe(true);
-    expect(calls).toEqual({ confirms: 0, exits: [] });
+    expect(calls).toEqual({ confirms: 0, host: ["end"] });
   });
 });

@@ -59,6 +59,7 @@ export class HostLauncher {
   readonly #native:
     { native: DevAuthNative; key: HostKey } | { native: ReleaseNative; key?: never };
   #payload: Record<string, unknown> | undefined;
+  #closed = false;
 
   constructor(config: LaunchConfig) {
     this.#config = config;
@@ -69,8 +70,16 @@ export class HostLauncher {
       : { native: native.native };
   }
 
+  /** Quitting: from now on no connection is made and no host started (T214). */
+  close(): void {
+    this.#closed = true;
+  }
+
   /** A handshaken connection; throws {@link HostFailure}. */
   async open(options: ConnectOptions): Promise<Connected> {
+    if (this.#closed) {
+      throw new HostFailure("closed");
+    }
     const first = await this.#connect(options);
     if (first !== "absent") {
       return first;

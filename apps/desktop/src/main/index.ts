@@ -250,6 +250,7 @@ function quitHost(): QuitHost | undefined {
     client && {
       status: () => within(2000, client.request("host/status")),
       exit: (force) => within(3000, client.command("host/exit", { force })),
+      end: () => host?.control.end(),
     }
   );
 }
