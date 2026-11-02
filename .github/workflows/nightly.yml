@@ -21,7 +21,7 @@ jobs:
       matrix:
         include:
           - { job: differential, runner: macos-15, timeout: 45 }
-          - { job: security-macos14, runner: macos-14, timeout: 45 }
+          - { job: security-macos14, runner: macos-26, timeout: 45 }
           - { job: security-macos14, runner: macos-15, timeout: 45 }
           - { job: e2e, runner: macos-15, timeout: 120 }
           - { job: compat-framework, runner: macos-15, timeout: 60 }
