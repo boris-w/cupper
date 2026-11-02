@@ -20,7 +20,7 @@
 
 ```mermaid
 flowchart LR
-  subgraph MAC["用户的 Mac（macOS 14+）"]
+  subgraph MAC["用户的 Mac（macOS 15+）"]
     subgraph APP["Cupper.app"]
       MAIN["Electron 主进程<br/>拉起宿主 · 连接 · 白名单 · 原生确认 · 更新"]
       WIN["渲染进程（每个窗口）<br/>主文档 @cupper/ui-core"]
@@ -126,11 +126,11 @@ flowchart TB
 | 未经信任的项目不加载项目自带的 agent 配置 | PRD v1.2 PS-2 | [5.2.6](design/02-host.md#项目信任) |
 | 时间只经 `Clock`，有状态的决策写成纯核心 | 测试评审 #1 | [5.2.16](design/02-host.md#5216-时间与可测性) |
 | 协议和 ShellAPI 的契约在 M1a 冻结，M1b 只加不改 | NFR-1 | [5.12.5](design/12-milestones.md#5125-契约冻结清单) |
-| 不为兼容旧系统写任何代码，最低 macOS 14 | 平台约束 | 全文 |
+| 不为兼容旧系统写任何代码，最低 macOS 15 | 平台约束 | 全文 |
 
 ## 平台约束
 
-- 桌面端只支持 macOS 14 及以上，即最近三年的版本（14、15、26）。用户于 2026-10-16 确认（U-T1）。
+- 桌面端只支持最近两三年的 macOS，目前是 macOS 15 及以上（15、26）。用户于 2026-10-16 定为 macOS 14 及以上（U-T1）；2026-11-02 GitHub 停用 macOS 14 的 runner 后，用户改为只支持最近两三年的版本，最低提到 15（`docs/meetings/2026-11-02-macos-floor/`）。以后新的大版本发布、GitHub 停用更老的 runner 时照此往前移。
 - **不写兼容代码**：不为兼容旧系统写任何兼容分支或补丁代码。需要新版本系统才有的 API 时，直接提高最低版本（2026-10-16 用户确认）。
 
 ## 2. ADR 索引

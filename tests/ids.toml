@@ -116,10 +116,10 @@ milestone = "M1a"
 # 对端校验的结果按摘要里的 os 归类：macOS 14、15（每晚的 runner）记作 -macos14、-macos15，
 # 其他 macOS（作者本机）记作 -current（T197）
 IT-sys-peer-current = "pr"
-IT-sys-peer-macos14 = "nightly"
+IT-sys-peer-macos14 = { suite = "nightly", status = "na", reason = "最低支持版本提到 macOS 15（用户 2026-11-02，GitHub 停用 macOS 14 的 runner）" }
 IT-sys-peer-macos15 = "nightly"
 UNIT-sys-uniqueid = "pr"
-IT-sys-peer = { parts = ["IT-sys-peer-current", "IT-sys-peer-macos14", "IT-sys-peer-macos15"] }
+IT-sys-peer = { parts = ["IT-sys-peer-current", "IT-sys-peer-macos14", "IT-sys-peer-macos15", "IT-sys-peer-macos26"] }
 
 # 宿主核心骨架 I：时钟、纯核心框架与静止屏障登记
 [T022]
@@ -1189,6 +1189,11 @@ UNIT-sanitize-codex-mcp = "pr"
 [T210]
 milestone = "M1b"
 UNIT-sanitize-across-chunks = "pr"
+
+# 最低支持版本提到 macOS 15（计划 v1.3.80）
+[T211]
+milestone = "M1a"
+IT-sys-peer-macos26 = "nightly"
 
 # 计划里没有产出任务的编号
 [unplanned]

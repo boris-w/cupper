@@ -126,7 +126,7 @@ cupper/
 
 有远端后托管在 GitHub Actions。所有 job 都不需要登录任何 agent；不使用任何 self-hosted runner（测试 #8、安全 #10）。
 
-**通用加固**（安全 #10）：第三方 Action 按提交 SHA 固定；workflow 默认 `permissions: contents: read`，需要更多权限的 job 单独声明；不用 `pull_request_target`；依赖安装用 `pnpm install --frozen-lockfile` 和 `cargo --locked`；macOS runner 固定标签（`macos-15`、`macos-14`），不用 `macos-latest`。
+**通用加固**（安全 #10）：第三方 Action 按提交 SHA 固定；workflow 默认 `permissions: contents: read`，需要更多权限的 job 单独声明；不用 `pull_request_target`；依赖安装用 `pnpm install --frozen-lockfile` 和 `cargo --locked`；macOS runner 固定标签（`macos-15`、`macos-26`），不用 `macos-latest`。
 
 | job | runner | 触发 | 步骤 | 失败即阻止合并 |
 |---|---|---|---|---|
@@ -139,7 +139,7 @@ cupper/
 | `e2e` | `macos-15` | 每个 PR（冒烟子集，按改动路径过滤）；每晚（全集） | `pnpm build:e2e`；`pnpm test:e2e` | 是 |
 | `release-config` | `macos-15` | 每晚 | 发布配置、不签名的构建：`@electron/fuses read` 逐项断言、Info.plist 里有 `ElectronAsarIntegrity`、`asarUnpack` 为空（原生扩展只经 `extraResources` 放在 `Resources/native/`）、asar 文件清单、带未知命令行开关启动应立即退出、产物里扫描测试钩子的标记串、宿主和 CLI 的 `--build-info` 不含 `dev-auth` 和 `test-harness`、许可证门禁第二层（[5.10.7](10-release.md#5107-发布流水线)）；`cargo xtask runtime-pack --verify` | 否（失败开 issue） |
 | `differential` | `macos-15` | 每晚（`nightly` 组合作业） | TS 与 Rust 视图的差分测试（UNIT-views-differential，5.9.1 测试 #16）：Rust 的 proptest 生成随机事件流，各按三种方式 fold，写出用例文件，TS 读同一文件比较视图 JSON（T072） |
-| `security-macos14` | `macos-14` | 每晚；改动 `cupper-sys` 的 PR 按路径过滤直接跑 | `cupper-sys` 的对端校验测试：`LOCAL_PEERTOKEN` 的"最后一次 I/O 进程"语义、exec 后 pidversion 变化被拒、fork 出的进程共用 fd 被拒、`SCM_RIGHTS` 传来的 fd 被 `recv_closing_fds` 关闭（v1.8：普通读取会装入 fd，T021 实测）、csops、错误码。macOS 15 由 `rust` 作业覆盖 | 按路径过滤的 PR 上：是；每晚：开 issue。发布前最近一次必须通过（Q24） |
+| `security-peer`（原名 `security-macos14`） | `macos-15`、`macos-26` | 每晚在两个版本上各跑一次；改动 `cupper-sys` 的 PR 按路径过滤在 `macos-26` 上跑（macOS 15 由每个 PR 的 `rust` 作业覆盖） | `cupper-sys` 的对端校验测试：`LOCAL_PEERTOKEN` 的"最后一次 I/O 进程"语义、exec 后 pidversion 变化被拒、fork 出的进程共用 fd 被拒、`SCM_RIGHTS` 传来的 fd 被 `recv_closing_fds` 关闭（v1.8：普通读取会装入 fd，T021 实测）、csops、错误码。macOS 15 由 `rust` 作业覆盖 | 按路径过滤的 PR 上：是；每晚：开 issue。发布前最近一次必须通过（Q24） |
 | `compat-framework` | `macos-15` | 每晚；改动 `xtask` 兼容套件的 PR | `cargo xtask compat --fake`：用假 agent 跑兼容套件的框架和报告生成 | 是（PR 上） |
 | `codex-drift` | ubuntu | 每天定时 | 发现新的 codex 版本时，检查 codex-acp 引用的 app-server 方法有没有变化（ADR-08） | 否（失败开 issue） |
 | `release` | `macos-15` | 推送受保护的 `release/v*` tag（含 `release/vX.Y.Z-rc.N`） | 见 [5.10.7](10-release.md#5107-发布流水线)；放在需要人工批准的 protected environment 里，签名证书和 App Store Connect API key 只对它可见 | — |
@@ -151,7 +151,7 @@ flowchart LR
   PR["PR"] --> R["rust（含金样例）"] & P["protocol"] & T["ts"] & U["ui"] & L["license"] & D["testdata-scan"] & E["e2e 冒烟"]
   R & P & T & U & L & D & E --> M{"全部通过"}
   M -->|是| MERGE["merge --no-ff"]
-  NIGHT["每晚"] --> E2["e2e 全集"] & RC["release-config"] & S14["security-macos14"] & CF["compat-framework"]
+  NIGHT["每晚"] --> E2["e2e 全集"] & RC["release-config"] & S14["security-peer"] & CF["compat-framework"]
   TAG["受保护的 release/v* tag"] --> REL["release（人工批准）：构建 → 签名 → 公证 → 签名后冒烟 → 验证 → 草稿发布"]
 ```
 
