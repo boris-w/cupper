@@ -8,7 +8,7 @@
 
 ```
 Cupper.app/Contents/
-├── Info.plist                  dev.cupper.app；LSMinimumSystemVersion 14.0；cupper:// URL scheme；不写辅助功能、自动化、屏幕录制的用途说明
+├── Info.plist                  dev.cupper.app；LSMinimumSystemVersion 15.0；cupper:// URL scheme；不写辅助功能、自动化、屏幕录制的用途说明
 ├── MacOS/Cupper                Electron 主程序
 ├── Frameworks/                 Electron Framework、4 个 Electron helper、Squirrel.Mac 及其依赖
 ├── Helpers/

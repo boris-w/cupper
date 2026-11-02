@@ -113,8 +113,8 @@ UNIT-sys-reap-group = "pr"
 # cupper-sys II：对端校验与代码签名
 [T021]
 milestone = "M1a"
-# 对端校验的结果按摘要里的 os 归类：macOS 14、15（每晚的 runner）记作 -macos14、-macos15，
-# 其他 macOS（作者本机）记作 -current（T197）
+# 对端校验的结果按摘要里的 os 归类：GitHub 托管 runner 上的 macOS 15、26 记作 -macos15、-macos26，
+# 其他地方（作者本机）一律记作 -current（T197、T211）
 IT-sys-peer-current = "pr"
 IT-sys-peer-macos14 = { suite = "nightly", status = "na", reason = "最低支持版本提到 macOS 15（用户 2026-11-02，GitHub 停用 macOS 14 的 runner）" }
 IT-sys-peer-macos15 = "nightly"

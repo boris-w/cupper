@@ -122,7 +122,7 @@ cupper/
 
 ## 5.1.6 CI 流水线
 
-**当前的执行方式（2026-10-26 起，替换 U-P1）**：仓库的远端是 GitHub 上的公开仓库 `boris-w/cupper`，下表各 job 在 GitHub Actions 上按 runner 一列运行：每个 PR 由 `ci` workflow 以 `cargo xtask ci <job> --in pr` 跑 `pr` 组合的 8 个 job，main 的保护规则要求它们通过；每晚由 `nightly.yml` 运行。结构化摘要与原始日志作为构件上传，卷宗里记 PR 和运行的链接。截图基线由 `ui-baseline.yml` 在 runner 上生成、经 PR 入库。`security-macos14` 在 `macos-14`、`macos-15` 上都跑，覆盖了原先本机替代不了的对端校验。`perf` 不上 CI，在作者机器上跑。本机的 `cargo xtask ci <job>` 照旧可用，用于复现与自查。细则见 `docs/03-plan.md` 1.8（T197）。
+**当前的执行方式（2026-10-26 起，替换 U-P1）**：仓库的远端是 GitHub 上的公开仓库 `boris-w/cupper`，下表各 job 在 GitHub Actions 上按 runner 一列运行：每个 PR 由 `ci` workflow 以 `cargo xtask ci <job> --in pr` 跑 `pr` 组合的 8 个 job，main 的保护规则要求它们通过；每晚由 `nightly.yml` 运行。结构化摘要与原始日志作为构件上传，卷宗里记 PR 和运行的链接。截图基线由 `ui-baseline.yml` 在 runner 上生成、经 PR 入库。`security-peer` 在 `macos-15`、`macos-26` 上都跑，覆盖了原先本机替代不了的对端校验。`perf` 不上 CI，在作者机器上跑。本机的 `cargo xtask ci <job>` 照旧可用，用于复现与自查。细则见 `docs/03-plan.md` 1.8（T197）。
 
 有远端后托管在 GitHub Actions。所有 job 都不需要登录任何 agent；不使用任何 self-hosted runner（测试 #8、安全 #10）。
 
