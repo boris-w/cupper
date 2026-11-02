@@ -1,0 +1,46 @@
+{
+  "artifacts": [],
+  "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+  "duration_ms": 30775,
+  "jobs": [
+    {
+      "duration_ms": 30775,
+      "failed": 0,
+      "name": "protocol",
+      "passed": 188,
+      "result": "pass",
+      "skipped": []
+    }
+  ],
+  "machine": "linux x86_64",
+  "os": "Ubuntu 24.04.5 LTS",
+  "results": [
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "UNIT-proto-fixtures",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "UNIT-ts-fixtures",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "UNIT-views-parity",
+      "result": "pass",
+      "suite": "pr"
+    }
+  ],
+  "target": "protocol",
+  "toolchain": {
+    "cargo": "1.96.0",
+    "cargo_deny": null,
+    "node": "24.13.0",
+    "pnpm": "12.14.0",
+    "rustc": "1.96.0"
+  },
+  "version": 1
+}

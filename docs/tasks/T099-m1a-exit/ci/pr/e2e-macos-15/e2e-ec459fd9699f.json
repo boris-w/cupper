@@ -1,0 +1,155 @@
+{
+  "artifacts": [
+    {
+      "name": "Cupper E2E.app",
+      "sha256": "2551bb3892ae0a636d11bb275d35e58603dbc1e1ce1437144ce8bec138f66950"
+    },
+    {
+      "name": "CupperHost.app",
+      "sha256": "5d5f8f6defcf4769a34d71d4594473e090b7537f4b169ca21c60cb9c6d68177c"
+    },
+    {
+      "name": "cupper",
+      "sha256": "471da69b01241ca55f2221131f98c850994a4c8a376ab4646d9d50083d8fc618"
+    }
+  ],
+  "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+  "duration_ms": 430282,
+  "jobs": [
+    {
+      "duration_ms": 430282,
+      "failed": 0,
+      "name": "e2e",
+      "passed": 32,
+      "result": "pass",
+      "skipped": []
+    }
+  ],
+  "machine": "Apple Virtual Machine 1 (Apple M1 (Virtual))",
+  "os": "macOS 15.8.2",
+  "results": [
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-NFR1-1",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-NFR1-2",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-NFR1-3",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-NFR1-4",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-NFR1-5",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-SEC-cli-fake-host",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-SEC-csp",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-SEC-double-initialize",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-SEC-fake-host",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-SEC-no-key-client",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-SEC-panel-arming",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-SEC-panel-numbering",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-SEC-privileged",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-SEC-real-input",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-approve-enter-esc",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-new-session-agent-claude",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-project-add-trust",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-question-panel",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "E2E-reject-with-message",
+      "result": "pass",
+      "suite": "pr"
+    }
+  ],
+  "target": "e2e",
+  "toolchain": {
+    "cargo": "1.96.0",
+    "cargo_deny": null,
+    "node": "24.13.0",
+    "pnpm": "12.14.0",
+    "rustc": "1.96.0"
+  },
+  "version": 1
+}

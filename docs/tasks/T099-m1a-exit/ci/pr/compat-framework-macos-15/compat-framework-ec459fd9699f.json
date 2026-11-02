@@ -1,0 +1,46 @@
+{
+  "artifacts": [],
+  "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+  "duration_ms": 61864,
+  "jobs": [
+    {
+      "duration_ms": 61864,
+      "failed": 0,
+      "name": "compat-framework",
+      "passed": 15,
+      "result": "pass",
+      "skipped": []
+    }
+  ],
+  "machine": "Apple Virtual Machine 1 (Apple M1 (Virtual))",
+  "os": "macOS 15.8.2",
+  "results": [
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "UNIT-compat-guards",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "UNIT-compat-report",
+      "result": "pass",
+      "suite": "pr"
+    },
+    {
+      "commit": "ec459fd9699f0d487aa1af79c5b1e49009157dda",
+      "id": "UNIT-compat-tools",
+      "result": "pass",
+      "suite": "pr"
+    }
+  ],
+  "target": "compat-framework",
+  "toolchain": {
+    "cargo": "1.96.0",
+    "cargo_deny": null,
+    "node": "24.13.0",
+    "pnpm": "12.14.0",
+    "rustc": "1.96.0"
+  },
+  "version": 1
+}
