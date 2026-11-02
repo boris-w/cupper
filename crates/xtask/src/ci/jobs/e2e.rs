@@ -10,7 +10,8 @@
 //! failed tests' attachments in a folder of its own, as a Playwright run
 //! empties its folder when it starts (T212). Outside `ci pr`, PERF-bridge-gate
 //! hands its samples to `CUPPER_PERF_OUT`, and once every test passed they
-//! join the PERF history ([`perf::trend`]).
+//! join the PERF history ([`perf::trend`]); on a GitHub-hosted runner it
+//! judges no budget, told by `CUPPER_PERF_RECORD_ONLY` (M1a sync D1).
 
 use std::fs;
 use std::path::Path;
@@ -20,7 +21,7 @@ use sha2::{Digest, Sha256};
 
 use super::perf;
 use crate::ci::ctx::{Artifact, JobCtx};
-use crate::ci::git;
+use crate::ci::{facts, git};
 use crate::runtime_pack;
 
 /// What the e2e build and the suite are made of: a directory (ending in `/`),
@@ -95,6 +96,7 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
 
     let samples = ctx.step_file("samples", "jsonl");
     let _ = fs::remove_file(&samples);
+    let hosted = facts::hosted();
     // The display stays awake while the suite runs: once it sleeps the
     // screen locks, and the app's windows can be neither seen nor focused.
     let mut suite = |step: &str, results: &str, args: &[&str]| {
@@ -104,17 +106,15 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
             .args(args);
         if !smoke {
             test.env("CUPPER_PERF_OUT", &samples);
+            if hosted {
+                test.env("CUPPER_PERF_RECORD_ONLY", "1");
+            }
         }
         ctx.playwright(step, &mut test)
     };
-    // A GitHub-hosted runner is no reference machine: the PERF tests and
-    // their trend are the author's machine's (T197).
-    let hosted = std::env::var("RUNNER_ENVIRONMENT").is_ok_and(|env| env == "github-hosted");
     let (rest, focus): (&[&str], &str) = if smoke {
         let both = "(?=.*@smoke)(?=.*@focus)";
         (&["--grep", "@smoke", "--grep-invert", "@focus"], both)
-    } else if hosted {
-        (&["--grep-invert", "@focus|@perf"], "@focus")
     } else {
         (&["--grep-invert", "@focus"], "@focus")
     };
@@ -126,11 +126,6 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     );
     rest.and(focus)?;
     if smoke {
-        return Ok(());
-    }
-    if hosted {
-        let reason = "a GitHub-hosted runner is no reference machine: PERF is the author's";
-        ctx.skip("perf", reason);
         return Ok(());
     }
     perf::trend(ctx, &samples)

@@ -15,6 +15,8 @@ IT-gap-ok = { suite = "nightly", status = "gap-confirmed", reason = "user, 2026-
 IT-na = { suite = "pr", status = "na", reason = "K1 passed" }
 IT-cond = { suite = "pr", status = "conditional", reason = "K2 fails" }
 IT-f-core = "pr"
+PERF-a = "nightly"
+PERF-b = { suite = "nightly", status = "record", reason = "D1" }
 MAN-keyboard = { suite = "man", versions = { electron = "major" } }
 MAN-doc = { suite = "man", max_age_days = 30 }
 
@@ -153,6 +155,18 @@ versions = { electron = "45.0.1" }
     expect(states([result("IT-gap", "nightly", "pass")])["IT-gap"]?.[0]).toBe("done");
   });
 
+  test("a measurement completes an ID that only records, not one judged on its budget", () => {
+    const measured = ["PERF-a", "PERF-b"].map((id) => result(id, "nightly", "measured"));
+    expect(states(measured)).toMatchObject({
+      "PERF-a": ["problem", "measured, not judged: nightly.json"],
+      "PERF-b": ["done", "measured in nightly"],
+    });
+    expect(states([result("PERF-b", "nightly", "pass")])["PERF-b"]?.[0]).toBe("done");
+    expect(states([])["PERF-b"]).toEqual(["pending", "no test ran"]);
+    expect(states([result("PERF-b", "pr", "measured")])["PERF-b"]?.[0]).toBe("problem");
+    expect(states([result("PERF-b", "nightly", "fail")])["PERF-b"]?.[0]).toBe("problem");
+  });
+
   test("results of unregistered IDs stray", () => {
     const stray = result("UI-0", "pr", "pass");
     expect(evaluate(registry(), [stray, result("UNIT-a", "pr", "pass")], CONTEXT).stray).toEqual([
@@ -163,8 +177,8 @@ versions = { electron = "45.0.1" }
   test("a milestone selects the IDs due by then; a task, its own", () => {
     const all = registry();
     const ids = (entries: { id: string }[]) => entries.map((entry) => entry.id).sort();
-    expect(ids(select(all, { milestone: "M1a" }))).toHaveLength(10);
-    expect(ids(select(all, { milestone: "M1b" }))).toHaveLength(13);
+    expect(ids(select(all, { milestone: "M1a" }))).toHaveLength(12);
+    expect(ids(select(all, { milestone: "M1b" }))).toHaveLength(15);
     expect(ids(select(all, { task: "T002" }))).toEqual(["IT-f", "IT-f-git", "MAN-ui"]);
     expect(complete({ standing: "settled", detail: "" })).toBe(true);
     expect(complete({ standing: "problem", detail: "" })).toBe(false);

@@ -12,6 +12,7 @@ describe("UNIT-trace-ids: results", () => {
       results: [
         { id: "UNIT-ci-lock", suite: "pr", result: "pass", commit: "0123" },
         { id: "UNIT-ci-summary", suite: "pr", result: "fail", commit: "0123" },
+        { id: "PERF-a", suite: "nightly", result: "measured", commit: "0123" },
       ],
     });
     expect(readSummary(summary, "pr.json")).toEqual({
@@ -19,6 +20,7 @@ describe("UNIT-trace-ids: results", () => {
       results: [
         { id: "UNIT-ci-lock", suite: "pr", outcome: "pass", source: "pr.json" },
         { id: "UNIT-ci-summary", suite: "pr", outcome: "fail", source: "pr.json" },
+        { id: "PERF-a", suite: "nightly", outcome: "measured", source: "pr.json" },
       ],
     });
     expect(() => readSummary('{"version": 2, "commit": "x", "results": []}', "a.json")).toThrow(

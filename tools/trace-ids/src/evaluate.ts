@@ -2,12 +2,12 @@
  * Where each registered ID stands, derived from test results and the evidence
  * of manual checks (plan 1.6); nothing is ticked off by hand.
  *
- * - done: passed in its registered suite, has current evidence, or all of its
- *   sub-IDs are done or settled;
+ * - done: passed (or, for an ID that only records, measured) in its suite,
+ *   has current evidence, or all of its sub-IDs are done or settled;
  * - settled: not applicable, or a gap the user confirmed;
  * - pending: nothing ran yet, no evidence yet, a gap, a conditional task's ID,
  *   or sub-IDs still open;
- * - problem: failed, only skipped, ran in another suite only, stale evidence,
+ * - problem: failed, only skipped or measured, ran in another suite only, stale evidence,
  *   or results that should have been a sub-ID's.
  */
 import { MILESTONES, type Entry, type Milestone, type Registry } from "./registry.ts";
@@ -75,7 +75,7 @@ export function evaluate(registry: Registry, results: Result[], context: Context
     } else {
       found = tested(entry, own);
     }
-    if (found.standing !== "pending" || entry.status === "active") {
+    if (found.standing !== "pending" || ["active", "record"].includes(entry.status)) {
       return found;
     }
     return state("pending", `${entry.status}: ${entry.reason}`);
@@ -89,20 +89,24 @@ export function evaluate(registry: Registry, results: Result[], context: Context
 }
 
 function tested(entry: Entry, own: Result[]): State {
+  // An ID that only records counts a measurement as a pass (M1a sync D1).
+  const record = entry.status === "record";
+  const counted = record ? ["pass", "measured"] : ["pass"];
   const failed = own.filter((result) => result.outcome === "fail");
-  const passed = own.filter((result) => result.outcome === "pass");
+  const passed = own.filter((result) => counted.includes(result.outcome));
   if (failed.length) {
     return state("problem", `failed: ${sources(failed)}`);
   }
   if (passed.some((result) => result.suite === entry.suite)) {
-    return state("done", `passed in ${entry.suite}`);
+    return state("done", `${record ? "measured" : "passed"} in ${entry.suite}`);
   }
   if (passed.length) {
     const suites = [...new Set(passed.map((result) => result.suite))].join(", ");
     return state("problem", `ran only in ${suites}, not in its suite ${entry.suite}`);
   }
   if (own.length) {
-    return state("problem", `skipped: ${sources(own)}`);
+    const measured = own.some((result) => result.outcome === "measured");
+    return state("problem", `${measured ? "measured, not judged" : "skipped"}: ${sources(own)}`);
   }
   return state("pending", "no test ran");
 }

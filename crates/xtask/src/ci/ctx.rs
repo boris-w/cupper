@@ -31,6 +31,8 @@ pub struct JobCtx<'a> {
     pub skipped: Vec<String>,
     /// What the job built and tested, by digest (e2e, plan 1.8).
     pub artifacts: Vec<Artifact>,
+    /// What the PERF tests measured, for the summary (design 5.9.6).
+    pub perf: Vec<Value>,
     /// The job holds the machine lock: what it runs is told so, and a
     /// `cargo xtask lock` among it does not wait for the lock.
     pub machine_lock: bool,
@@ -60,6 +62,7 @@ impl<'a> JobCtx<'a> {
             cases: Vec::new(),
             skipped: Vec::new(),
             artifacts: Vec::new(),
+            perf: Vec::new(),
             machine_lock: false,
         }
     }

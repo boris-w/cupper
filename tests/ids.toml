@@ -12,7 +12,8 @@
 # 需要更多字段时写成内联表：
 #   suite、milestone   同上；milestone 覆盖段的默认值
 #   status、reason     conditional（条件任务的编号，检查点通过后改为 na）、na（不适用）、
-#                      gap（缺口：本机替代不了）、gap-confirmed（缺口，用户已确认）；都要写 reason
+#                      gap（缺口：本机替代不了）、gap-confirmed（缺口，用户已确认）、
+#                      record（只记录：PERF 有测量结果就算完成，不按预算判定）；都要写 reason
 #   parts              子编号：全部子编号完成才算完成
 #   versions           MAN：证据要与这些组件的当前版本相符，如 { electron = "major" }
 #   max_age_days       MAN：证据超过这么多天就过期
@@ -115,9 +116,7 @@ UNIT-sys-reap-group = "pr"
 milestone = "M1a"
 # 对端校验的结果按摘要里的 os 归类：GitHub 托管 runner 上的 macOS 15、26 记作 -macos15、-macos26，
 # 其他地方（作者本机）一律记作 -current（T197、T211）
-# -current 登记在 nightly（2026-11-02，T099）：T211 起托管 runner 的结果按大版本记作 -macos15、-macos26，
-# PR 都在托管 runner 上跑，-current 只由作者机器上的 nightly 产出
-IT-sys-peer-current = "nightly"
+IT-sys-peer-current = { suite = "nightly", status = "na", reason = "M1a 同步会 D2：用户的 Mac 是 macOS 26，由 -macos26 覆盖" }
 IT-sys-peer-macos14 = { suite = "nightly", status = "na", reason = "最低支持版本提到 macOS 15（用户 2026-11-02，GitHub 停用 macOS 14 的 runner）" }
 IT-sys-peer-macos15 = "nightly"
 UNIT-sys-uniqueid = "pr"
@@ -396,9 +395,9 @@ IT-recording-export = "pr"
 # 宿主性能测量与趋势（计划 v1.3.21 由 T047 拆出）
 [T117]
 milestone = "M1a"
-PERF-host-cold-start = "nightly"
-PERF-index-snapshot = "nightly"
-PERF-host-memory = "nightly"
+PERF-host-cold-start = { suite = "nightly", status = "record", reason = "M1a 同步会 D1：只记录、不卡闸门" }
+PERF-index-snapshot = { suite = "nightly", status = "record", reason = "M1a 同步会 D1：只记录、不卡闸门" }
+PERF-host-memory = { suite = "nightly", status = "record", reason = "M1a 同步会 D1：只记录、不卡闸门" }
 
 # 驱动层 I：传输、线路分接与 ACP 连接
 [T050]
@@ -530,7 +529,7 @@ IT-git-snapshot-malicious = "pr"
 [T186]
 milestone = "M1a"
 IT-git-lfs-snapshot = "pr"
-PERF-snapshot = "nightly"
+PERF-snapshot = { suite = "nightly", status = "record", reason = "M1a 同步会 D1：只记录、不卡闸门" }
 IT-git-turn-fingerprint = "pr"
 
 # 宿主集成测试 I：网关同步、历史与通知意图
@@ -684,7 +683,7 @@ MAN-keyboard = { suite = "man", versions = { electron = "major" } }
 [T078]
 milestone = "M1a"
 # K2 不达标时，T079 合并后重测同一编号
-PERF-bridge-gate = "nightly"
+PERF-bridge-gate = { suite = "nightly", status = "record", reason = "M1a 同步会 D1：只记录、不卡闸门" }
 
 # （条件）utilityProcess 宿主桥加委托票据
 [T079]
@@ -1065,10 +1064,10 @@ UI-locale = "pr"
 # SP-6 场景改写为性能回归
 [T155]
 milestone = "M1b"
-PERF-ui-stream = "nightly"
-PERF-ui-long-session = "nightly"
-PERF-ui-switch = "nightly"
-PERF-ui-occluded = "nightly"
+PERF-ui-stream = { suite = "nightly", status = "record", reason = "M1a 同步会 D1：只记录、不卡闸门" }
+PERF-ui-long-session = { suite = "nightly", status = "record", reason = "M1a 同步会 D1：只记录、不卡闸门" }
+PERF-ui-switch = { suite = "nightly", status = "record", reason = "M1a 同步会 D1：只记录、不卡闸门" }
+PERF-ui-occluded = { suite = "nightly", status = "record", reason = "M1a 同步会 D1：只记录、不卡闸门" }
 
 # 防休眠（NFR-13）
 [T156]
