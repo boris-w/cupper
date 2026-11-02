@@ -482,3 +482,6 @@
 | 以后查 e2e 偶发失败的任务 | e2e 的 Electron 用例没有开 Playwright 的 screenshot 和 trace，失败时构件里只有 fixture 挂上的日志（`logs/main.log`、`data/logs/*.log`）和 `error-context.md`；两轮分别在 `rest/`、`focus/` 下。缺截图时再单独开任务加 | T212 |
 | 以后查 e2e 偶发失败的任务 | e2e 构建开了 `dev-auth`，App 退出后宿主约 1 s 内按孤儿规则有序退出（5.8.1）。凡是 App 退出之后还去连宿主的 e2e 用例都会和这次退出抢时间；T208 只核查了 `app.spec.ts` 的退出用例，别的 spec 没有核查 | T208 |
 | 以后改宿主生命周期的任务 | `host/exit` 的应答在宿主关掉连接后仍可能被客户端按 5.8.1 拒收（T213），桌面和 CLI 都已把连接结束当作退出已受理。要让客户端稳定读到退出应答，可以把 T215 在握手阶段用的"半关闭写端、等客户端关闭"用到退出时的连接上，代价是宿主退出最多多等关闭宽限 2 s | T215 |
+| T111 | runtime 在 `Wire::Prompted` 的错误分支里吞掉 `AdapterExited` 一类的 prompt 失败，回合由实例结束时的 `AdapterExited` 结束（`driver/runtime/mod.rs` 约第 853 行，紧跟在 `claude::agent_error` 之后）。接 Codex 时：仍用同一个 actor、只换分类器的话，这条判断留在换上去的分类器之后；另起 actor 的话，在它的 prompt 结果处理里加同样的判断。Codex 的 `agent_error` 已经把 `incoming_transport_closed` 归为 `AdapterExited`。`Wire::Opened`、`Wire::Configured` 也写死了 `claude::agent_error` | T218 |
+| 以后改 adapter 生命周期或 5.6.8 清理规则的任务 | "连接关了、进程不退"时拿不到 `exit`，`AdapterExited` 不发，回合停在 `Prompting`，要等用户中断（修前也挂住，只是挂在下一个回合）。可能的补法：`FromAgent::Closed` 到了、进程没退、也不在停止中时，按意外结束杀掉进程组。另有同类窗口在 attach 上：adapter 恰好在 `session/new` 或 `resume` 途中退出时，attach 以 `adapter_exited` 失败，不写 `agent_restarted`，下一条消息若赶在旧实例结束前 attach 会再失败一次 | T218 |
+| 以后改宿主集成测试辅助的任务 | `tests/common/mod.rs` 的 `until` 失败时只打印期望值，不打印最后读到的值；T216 的 4 次失败因此看不出第三个回合已经 `failed`。约 3 行可补 | T218 |

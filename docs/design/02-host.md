@@ -223,7 +223,7 @@ stateDiagram-v2
 
 | 情况 | 会话 actor 的处理 |
 |---|---|
-| 适配器进程退出（`AgentRuntime` 广播 `AdapterExited`） | 当前回合标为 `failed`（`adapter_exited`）；挂着的交互请求标为 `expired`（SEC-10）；`link` 变为 `Detached`；写一条 `notice`（`agent_restarted`）。下一次发送时重新连接并 `session/resume` |
+| 适配器进程退出（`AgentRuntime` 广播 `AdapterExited`） | 当前回合标为 `failed`（`adapter_exited`）；挂着的交互请求标为 `expired`（SEC-10）；`link` 变为 `Detached`；写一条 `notice`（`agent_restarted`）。下一次发送时重新连接并 `session/resume`。adapter 退出时 SDK 先以 `incoming_transport_closed` 让在途的 prompt 失败；runtime 不转发这个失败，回合由随后的 `AdapterExited` 结束，所以会话总在旧实例清掉之后才发下一条消息（T218） |
 | Claude 的 CLI 在回合中崩溃（`-32603`） | 回合标为 `failed`，写 `notice`。下一次发送收到 "Session not found" 时，自动 `session/resume` 再重发一次（只在这个 prompt 还没有产生任何更新时重发） |
 | Codex 的 app-server 被杀（`1001`，`restartable: true`） | 回合标为 `failed`，写 `notice`；下一个 prompt 由 codex-acp 自动重启 app-server |
 | 宿主崩溃 | 见 [5.2.13](#5213-进程监护与宿主生命周期) 的启动恢复 |

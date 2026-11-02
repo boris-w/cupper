@@ -55,7 +55,7 @@ flowchart LR
 | `Update(NormUpdate)` | 规范化后的更新：`AgentText {message_id, text}`、`Thought {text}`、`ToolStart {tool_call_id, tool_kind, title, paths, command?}`、`ToolUpdate {tool_call_id, title?, status?, output: Append\|Replace?, exit_code?, diffs?}`（`Append` 映射为协议里 `field: output` 的 `item.delta`，`Replace` 映射为结束时给出的完整输出，[5.3.5](03-protocol-v1.md#535-事件类型目录)）、`Plan {entries \| markdown}`、`Compaction {phase, summary?}` |
 | `Permission(PermissionAsk, Responder)`、`Question(QuestionAsk, Responder)` | 已分类、已标好选项生效范围的交互请求（[5.6.4](#564-交互请求的分类与选项映射)） |
 | `RequestWithdrawn(ask_ref)` | Claude 发来 `$/cancel_request`：SDK 把对应请求的 `Responder::cancellation()` 标为已取消，`AgentRuntime` 据此发出（v1.6） |
-| `PromptDone {stop_reason, usage?}`、`PromptFailed(AgentError)` | prompt 的结果 |
+| `PromptDone {stop_reason, usage?}`、`PromptFailed(AgentError)` | prompt 的结果。连接关闭造成的失败（`adapter_exited` 一类）不发 `PromptFailed`，由实例结束时的 `AdapterExited` 代替（T218） |
 | `RunState {active, waiting_on_approval, waiting_on_user_input, system_error}` | Codex 的 `threadStatus` |
 | `ConfigChanged(options)`、`CommandsChanged(commands)` | `config_option_update`、`current_mode_update`、`available_commands_update`。**`CommandsChanged` 去重**（v1.6，T003）：Claude 在每个会话开始和每个回合开始时，都推一次完整的命令列表（本机 22–32 KB，取决于装了多少 skill）。`AgentRuntime` 按会话记住上一份列表的摘要，内容没有变化就不发事件；会话流里的 `session.capabilities` 也只在内容变化时写（[5.3.5](03-protocol-v1.md#535-事件类型目录)） |
 | `TitleChanged {title, source}`、`Usage {used, size, cost?}` | `session_info_update`、`usage_update` |
