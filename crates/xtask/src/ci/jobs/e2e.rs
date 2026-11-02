@@ -6,7 +6,9 @@
 //! touch a path the app is built from (`E2E_PATHS`) or there is nothing to
 //! compare; `ci e2e` and `ci nightly` run every test. Either way those tagged
 //! `@focus` run last and one at a time: they need the window's focus, which
-//! another test's app takes when it starts. Outside `ci pr`, PERF-bridge-gate
+//! another test's app takes when it starts. Each of the two runs keeps its
+//! failed tests' attachments in a folder of its own, as a Playwright run
+//! empties its folder when it starts (T212). Outside `ci pr`, PERF-bridge-gate
 //! hands its samples to `CUPPER_PERF_OUT`, and once every test passed they
 //! join the PERF history ([`perf::trend`]).
 
@@ -41,6 +43,8 @@ pub const E2E_PATHS: &[&str] = &[
 ];
 
 const SUITE: &str = "tools/e2e";
+/// Where the two runs put their attachments, from the suite: a folder each in it.
+const RESULTS: &str = "dist/test-results";
 const ARTIFACTS: &[(&str, &str)] = &[
     (
         "Cupper E2E.app",
@@ -93,9 +97,10 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     let _ = fs::remove_file(&samples);
     // The display stays awake while the suite runs: once it sleeps the
     // screen locks, and the app's windows can be neither seen nor focused.
-    let mut suite = |step: &str, args: &[&str]| {
+    let mut suite = |step: &str, results: &str, args: &[&str]| {
         let mut test = ctx.command("caffeinate");
         test.args(["-d", "pnpm", "--dir", SUITE, "exec", "playwright", "test"])
+            .arg(format!("--output={RESULTS}/{results}"))
             .args(args);
         if !smoke {
             test.env("CUPPER_PERF_OUT", &samples);
@@ -113,8 +118,12 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     } else {
         (&["--grep-invert", "@focus"], "@focus")
     };
-    let rest = suite("test-e2e", rest);
-    let focus = suite("test-e2e-focus", &["--grep", focus, "--workers", "1"]);
+    let rest = suite("test-e2e", "rest", rest);
+    let focus = suite(
+        "test-e2e-focus",
+        "focus",
+        &["--grep", focus, "--workers", "1"],
+    );
     rest.and(focus)?;
     if smoke {
         return Ok(());
