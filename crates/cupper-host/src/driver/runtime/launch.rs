@@ -335,14 +335,17 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
     };
     command.env(launch.env.clone()).new_session();
     if let Some(check) = &cx.self_check {
+        tracing::info!("T218 self check {id}");
         check.check().await;
     }
+    tracing::info!("T218 spawn {id}");
     for stdio in [Command::stdin, Command::stdout, Command::stderr] {
         stdio(&mut command, Stdio::Pipe);
     }
     let mut child = cupper_sys::spawn(&command).map_err(|e| failed(RuntimeFailed, e))?;
     let group = child.group();
     record(cx, &id, &group, launch).await;
+    tracing::info!("T218 recorded {id} pid {}", group.pgid);
     // The instance's raw frames begin and end with its notes (design 5.9.3).
     let tap = Tap::new(id.to_string(), Arc::clone(&cx.clock), cx.raw.clone());
     let recorder = tap.recorder();
@@ -372,6 +375,7 @@ pub async fn start<M: From<FromAgent> + Send + 'static>(
             .map_err(|e| e.to_string()),
         Err(err) => Err(err.to_string()),
     };
+    tracing::info!("T218 opened {id}: {:?}", opened.as_ref().err());
     match opened {
         Ok((conn, init)) => Ok(Instance {
             id,

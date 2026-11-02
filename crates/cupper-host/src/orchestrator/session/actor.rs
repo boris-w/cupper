@@ -765,6 +765,7 @@ impl SessionActor {
             self.parts.index.note(&self.parts.id, at, notes);
         }
         for command in driver {
+            tracing::info!("T218 session driver {command:?}");
             self.parts.agent.send(command);
         }
         for target in attach {
@@ -955,6 +956,12 @@ impl SessionActor {
     /// `project_config_changed`, with a notice; the index records a project
     /// that became `stale`. A trusted project again reopens it.
     async fn trust(&mut self, purpose: Purpose, seq: u64, found: Rescan) {
+        tracing::info!(
+            "T218 session rescan {seq} attach {} trusted {} failure {:?}",
+            matches!(purpose, Purpose::Attach(_)),
+            found.trusted,
+            found.failure
+        );
         self.outstanding -= 1;
         // An older rescan saw the project before the newest one did: it takes
         // the newest one's findings, and records nothing of its own.
@@ -1057,6 +1064,7 @@ impl SessionActor {
     }
 
     fn attach(&mut self, target: AttachTarget) {
+        tracing::info!("T218 session attach {target:?}");
         self.outstanding += 1;
         let attach = Attach {
             target,
@@ -1075,6 +1083,7 @@ impl SessionActor {
     /// An attach came back: its capabilities and configuration go into the
     /// stream when they changed, the agent's session into the row.
     async fn attach_done(&mut self, result: Result<AttachInfo, AgentError>) {
+        tracing::info!("T218 session attach done: {:?}", result.as_ref().err());
         self.outstanding -= 1;
         let mut step = Step::default();
         let mut mode = None;
@@ -1131,6 +1140,9 @@ impl SessionActor {
     /// An event of the agent. A change of its options rewrites the
     /// configuration, and the guard checks the permission mode.
     async fn agent(&mut self, event: DriverEvent) {
+        if !matches!(event, DriverEvent::Update(_)) {
+            tracing::info!("T218 session agent event {event:?}");
+        }
         if self.stopping && matches!(event, DriverEvent::AdapterExited { .. }) {
             return;
         }
