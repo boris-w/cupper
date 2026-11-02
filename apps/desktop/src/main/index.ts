@@ -199,6 +199,7 @@ function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
     },
   });
   ipcMain.handle(HOST_OPEN, (event) => bridges.open(event.sender, event.senderFrame));
+  control.client.onState((state) => void (state.status === "ready" && bridges.reload()));
   if (__CUPPER_FLAVOR__ === "e2e") {
     // For the e2e tests' `electronApp.evaluate`: a window loses its
     // connection without a reload (E2E-NFR1-4). On a turn of its own: the

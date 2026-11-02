@@ -26,6 +26,8 @@ export class WindowBridges {
   /** By `webContents.id`. */
   readonly #bridges = new Map<number, WindowBridge>();
   readonly #bound = new WeakSet<WebContents>();
+  /** Windows whose connection failed; they load again once the control connection is back. */
+  readonly #failed = new Set<WebContents>();
 
   constructor(deps: BridgesDeps) {
     this.#deps = deps;
@@ -44,21 +46,34 @@ export class WindowBridges {
     this.close(id);
     this.#bind(contents);
     const { bridge: end, window } = this.#deps.channel();
-    const bridge = new WindowBridge(end, { ...this.#deps, input });
+    const failed = () => void this.#failed.add(contents);
+    const bridge = new WindowBridge(end, { ...this.#deps, input, failed });
     this.#bridges.set(id, bridge);
     try {
       const handshake = await bridge.open();
       if (this.#bridges.get(id) !== bridge) {
         throw new Error("the document went away during the handshake");
       }
+      this.#failed.delete(contents);
       contents.postMessage(HOST_PORT, null, [window]);
       return handshake;
     } catch (error) {
       if (this.#bridges.get(id) === bridge) {
         this.close(id);
+        failed();
       }
       throw error;
     }
+  }
+
+  /**
+   * The control connection is back, as after restarting the host: windows
+   * whose connection failed load again, and their documents open anew (T215).
+   */
+  reload(): void {
+    const failed = [...this.#failed];
+    this.#failed.clear();
+    failed.filter((contents) => !contents.isDestroyed()).forEach((contents) => contents.reload());
   }
 
   close(id: number): void {
@@ -83,7 +98,10 @@ export class WindowBridges {
       }
     });
     contents.on("render-process-gone", () => this.close(id));
-    contents.once("destroyed", () => this.close(id));
+    contents.once("destroyed", () => {
+      this.close(id);
+      this.#failed.delete(contents);
+    });
   }
 }
 

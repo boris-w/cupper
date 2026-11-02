@@ -67,6 +67,8 @@ export interface BridgeDeps {
   schedule(task: () => void, ms: number): void;
   /** The window's real input. */
   input: Pick<InputGuard, "take">;
+  /** A dropped connection did not come back. */
+  failed?(): void;
 }
 
 /** Whether a window may send `method`: as a request when it has an `id`. */
@@ -179,6 +181,9 @@ export class WindowBridge {
       const reason = (err as { reason?: unknown } | null)?.reason;
       const failed = typeof reason === "string" ? reason : "host_unreachable";
       this.#window.post({ type: "state", state: { status: "failed", reason: failed } });
+      if (!this.#closed) {
+        this.#deps.failed?.();
+      }
       return;
     }
     if (this.#closed) {
