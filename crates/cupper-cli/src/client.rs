@@ -30,7 +30,7 @@ use cupper_protocol::methods::stream::{
 use cupper_protocol::proof::{self, Channel, Direction};
 use cupper_protocol::rpc::{self, Message, Method, Notification, RawMessage, RpcId};
 use cupper_protocol::sync::StreamId;
-use cupper_sys::{AuditToken, Refusal, recv_closing_fds};
+use cupper_sys::{AuditToken, Refusal, RefusalKind, recv_closing_fds};
 use serde_json::Value;
 use tokio::io::{AsyncWriteExt, Interest};
 use tokio::net::UnixStream;
@@ -83,6 +83,21 @@ pub enum CloseReason {
     Malformed,
     #[error("reading the socket failed: {0}")]
     Io(io::ErrorKind),
+}
+
+impl CloseReason {
+    /// The connection ended as a host's that exited does: the end of the
+    /// stream, or a read refused because the host had closed its end or
+    /// exited (design 5.8.1). What the host wrote last, `host/shutdown` or
+    /// the reply to `host/exit`, may be refused with that read: a caller
+    /// takes this end as the exit it asked for (T213).
+    pub fn host_gone(&self) -> bool {
+        match self {
+            Self::Eof => true,
+            Self::Refused(refusal) => refusal.kind == RefusalKind::PeerExited,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -509,7 +524,7 @@ mod tests {
 
     use cupper_protocol::limits::V1;
     use cupper_protocol::methods::Empty;
-    use cupper_protocol::methods::handshake::HostStatus;
+    use cupper_protocol::methods::handshake::{HostExit, HostExitParams, HostStatus};
     use cupper_sys::{Cdhash, own_cdhash};
     use serde_json::json;
     use tokio::io::AsyncReadExt;
@@ -763,6 +778,48 @@ mod tests {
         assert_eq!(client.close_reason(), Some(CloseReason::TokenChanged));
         drop(input);
         assert!(cat.wait().unwrap().success());
+    }
+
+    #[tokio::test]
+    async fn unit_cli_client_a_reply_read_after_the_host_closed_is_refused() {
+        // The host answers `host/exit` and closes its end before the client
+        // reads: the token check after that read finds the host gone, and the
+        // reply is refused with it (design 5.8.1), as a fork's write would be.
+        let (stream, mut host) = pair();
+        let end = stream.as_fd().try_clone_to_owned().unwrap();
+        let script = tokio::spawn(async move {
+            host.hello(1, 1).await;
+            host.initialize(1).await;
+            host
+        });
+        let client = Client::handshake(stream, &this_process(), Options::default()).await;
+        let (client, mut host) = (client.unwrap(), script.await.unwrap());
+        let answer = async move {
+            let request = host.recv().await.unwrap();
+            assert_eq!(request["method"], "host/exit");
+            let reply = json!({"jsonrpc": "2.0", "id": request["id"], "result": {}});
+            let reply = frame::encode_json(&reply).unwrap();
+            // Nothing awaits from here on: the client's reader runs after.
+            cupper_sys::send_with_fds(&host.stream, &reply, &[]).unwrap();
+            drop(host);
+            // A spawn on another thread may hold a copy of the end a moment.
+            while cupper_sys::peer_token(&end).is_ok() {
+                std::thread::yield_now();
+            }
+        };
+        let params = HostExitParams {
+            command_id: command_id(),
+            force: true,
+        };
+        let (replied, ()) = tokio::join!(client.request::<HostExit>(params), answer);
+        let Err(ClientError::Closed(Some(reason))) = replied else {
+            panic!("{replied:?}");
+        };
+        assert!(
+            matches!(&reason, CloseReason::Refused(r) if r.kind == RefusalKind::PeerExited),
+            "{reason:?}"
+        );
+        assert!(reason.host_gone());
     }
 
     #[cfg(feature = "test-harness")]

@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
-use cupper_cli::client::{self, ClientAuth, ClientError, CloseReason, Incoming, Options};
+use cupper_cli::client::{self, ClientAuth, ClientError, Incoming, Options};
 use cupper_cli::harness::HarnessKey;
 use cupper_cli::verify::HostCheck;
 use cupper_host::clock::{Clock, SystemClock};
@@ -44,7 +44,6 @@ use cupper_protocol::methods::stream::StreamSubscribe;
 use cupper_protocol::proof;
 use cupper_protocol::recording::{Body, INSTANCE_EXITED, INSTANCE_STARTED, Recording};
 use cupper_protocol::transport::socket_path;
-use cupper_sys::RefusalKind;
 use rusqlite::Connection;
 use serde_json::{Value, json};
 
@@ -177,16 +176,6 @@ async fn raw_connect(data_dir: &Path) -> testkit::Client {
     raw
 }
 
-/// The client's connection ended as a host's that exited does: the end of the
-/// stream, or a read refused because the host had exited (design 5.8.1).
-fn host_gone(client: &client::Client) -> bool {
-    match client.close_reason() {
-        Some(CloseReason::Eof) => true,
-        Some(CloseReason::Refused(refusal)) => refusal.kind == RefusalKind::PeerExited,
-        _ => false,
-    }
-}
-
 /// The first `host/shutdown` a raw connection reads, to its end.
 async fn raw_shutdown(raw: &mut testkit::Client) -> Value {
     loop {
@@ -258,7 +247,7 @@ async fn it_lifecycle_host_exit_and_sigterm_exit_in_order() {
             assert_eq!(client.next().await, None, "{trigger:?}");
         }
         assert!(
-            host_gone(&client),
+            client.close_reason().is_some_and(|r| r.host_gone()),
             "{trigger:?}: {:?}",
             client.close_reason()
         );
@@ -1368,7 +1357,8 @@ async fn it_self_check_a_changed_executable_makes_the_host_wait_for_an_upgrade()
             assert_eq!(params["reason"], "upgrade");
         }
     }
-    assert!(host_gone(&client), "{:?}", client.close_reason());
+    let gone = client.close_reason().is_some_and(|r| r.host_gone());
+    assert!(gone, "{:?}", client.close_reason());
     assert_eq!(exit_code(&mut host.0).await, 0);
     assert_eq!(raw_shutdown(&mut raw).await["reason"], "upgrade");
 }
