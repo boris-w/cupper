@@ -200,16 +200,17 @@ test(
     expect(resolved(cupper, stream, first)).toBe(false);
     // A menu over the panel takes the keys.
     const t = await texts(cupper);
-    await cupper.window
-      .getByRole("button", { name: t("sidebar:project_menu") })
-      .first()
-      .click();
+    const menu = cupper.window.getByRole("button", { name: t("sidebar:project_menu") }).first();
+    await menu.click();
     await expect(cupper.window.getByRole("menu")).toBeVisible();
     await pressDigit(cupper, 1);
     await cupper.window.waitForTimeout(600);
     expect(resolved(cupper, stream, first)).toBe(false);
     await press(cupper, "Escape");
     await expect(cupper.window.getByRole("menu")).toHaveCount(0);
+    // The closed menu gives its button the focus a task later (Radix's
+    // FocusScope); moved before that, the focus would go back to the button.
+    await expect(menu).toBeFocused();
     // Answered; the next request's panel comes unarmed.
     await focusOptions(cupper);
     await cupper.window.waitForTimeout(1100);
