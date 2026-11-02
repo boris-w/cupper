@@ -73,6 +73,25 @@ test(
 );
 
 test(
+  "E2E-SEC-fake-host: a host an earlier app started is restarted when asked, and the window connects",
+  { tag: "@smoke" },
+  async ({ cupper }) => {
+    await cupper.launch();
+    const { pid } = await cupper.connected();
+    // A running turn keeps the host after its app quits.
+    await cupper.cli.ok(["new", "--agent", "claude", "--project", cupper.repo, "wait_cancel"]);
+    await expect.poll(async () => (await cupper.cli.ok(["status"])).running_turns).toBe(1);
+    await cupper.quitWithoutAsking();
+    // Another instance, another key: the host refuses it, and says so (T215).
+    await cupper.launch();
+    const dialog = await cupper.dialogs.next();
+    expect(dialog.message).toBe((await texts(cupper))("host:restart_title"));
+    await cupper.dialogs.answer(dialog.index, 0);
+    expect((await cupper.connected()).pid).not.toBe(pid);
+  },
+);
+
+test(
   "E2E-SEC-cli-fake-host: the CLI refuses a fake host with exit code 4",
   { tag: "@smoke" },
   async ({ cupper }) => {
