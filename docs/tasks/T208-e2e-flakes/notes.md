@@ -120,3 +120,20 @@ Run [41007324304](https://github.com/boris-w/cupper/actions/runs/41007324304), 2
 - `follows(top, height, client)`, before the layout effect puts the list at the bottom: a list more than 1 px from where it was last scrolled or put was scrolled, and its event has not come yet; `stuck` is worked out from it first.
 - Growth at the bottom does not move `scrollTop`, so the list still follows what streams in (new unit test "at the bottom it follows what comes in"). The browser clamping a shrunk list leaves it at the bottom, so it stays stuck.
 - Not done: the test waiting for the list to settle, or scrolling with the wheel. Either would hide the race rather than end it.
+
+### On the runner after the fix
+
+| Run | Commit | Copies at once | Result |
+|---|---|---|---|
+| [41007324304](https://github.com/boris-w/cupper/actions/runs/41007324304) | 228eb5e (before, with the probe) | 2 | 289/300 passed, 11 failed; median 15.9 s |
+| [41378847141](https://github.com/boris-w/cupper/actions/runs/41378847141) | 32a6f20 (after) | 2 | **300/300 passed**; median 36.3 s |
+
+- Durations: in run 41378847141 the first 138 tests took 16.6–19.4 s, close to the run before the fix. From about 03:10:30 UTC to the end, every test took 37–45 s, and the two copies started and finished within 0.2 s of each other. A step in the middle of a run, with the two copies in lockstep, points at the runner and not at each test.
+- Locally, single copy, the same test with a CPU count of the app's processes, three times each:
+
+  | | Wall clock | App CPU time |
+  |---|---|---|
+  | With the fix | 4.7–5.3 s | 2.34–2.58 s |
+  | Without the fix (the two files reverted, app rebuilt) | 4.8–7.2 s | 2.36–2.56 s |
+
+  The fix does not add work: it adds no render and no scroll, only a comparison before the layout effect's write.
