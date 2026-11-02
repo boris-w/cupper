@@ -7,6 +7,7 @@ import type { InteractionOption, InteractionOutcome, InteractionRequested } from
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
@@ -29,8 +30,9 @@ export const ARMING_MS = 500;
 /** RP-3: typing in the composer this recently keeps the panel from taking the focus. */
 export const TYPED_RECENTLY_MS = 2000;
 
-/** What the composer tells the panel that replaces it: focus, and when it was last typed in. */
+/** What the composer tells the panel that replaces it, and a panel what comes after it. */
 export interface ComposerActivity {
+  /** Whether the page's focus was in this place as it changed hands, the window in front or not. */
   focused: boolean;
   typedAt: number;
 }
@@ -63,6 +65,7 @@ export function RequestPanel(props: {
   const cmdEnterSeen = useRef(false);
   const keys = useRef<(key: PanelKey) => void>(() => undefined);
   const list = useRef<HTMLUListElement>(null);
+  const root = useRef<HTMLDivElement>(null);
 
   const arm = useCallback(() => {
     setReady(false);
@@ -84,8 +87,9 @@ export function RequestPanel(props: {
     setHint("manual");
   };
 
-  // RP-3: the focus moves to the panel only when it was in the composer, the
-  // composer is empty and was not typed in for 2 s; it never leaves elsewhere.
+  // RP-3: the focus moves to the panel only when the page's focus was in the
+  // composer (or the panel before), the window in front or not, the composer
+  // is empty and was not typed in for 2 s; it never leaves elsewhere.
   useEffect(() => {
     const { drafts, attachments } = ui.getState();
     const empty = !drafts[sessionId] && (attachments[sessionId]?.length ?? 0) === 0;
@@ -98,6 +102,14 @@ export function RequestPanel(props: {
     }
     // Decided once, when the panel appears.
   }, []);
+
+  // The next panel, or the composer back in this place, takes the focus if this one had it.
+  useLayoutEffect(() => {
+    const node = root.current;
+    return () => {
+      props.activity.current.focused = Boolean(node?.contains(document.activeElement));
+    };
+  }, [props.activity]);
 
   const { client } = useHost();
   const { show } = useToasts();
@@ -204,19 +216,27 @@ export function RequestPanel(props: {
 
   return (
     <div
+      ref={root}
       data-request-panel=""
       data-request-kind={request.type}
       data-ready={ready || undefined}
       data-activation={active ? "auto" : "manual"}
       onKeyDown={onKeyDown}
       onFocus={() => !active && ready && activate()}
-      onMouseDownCapture={() => {
+      onMouseDownCapture={(event) => {
         downWhileReady.current = ready;
         // The hint goes once the click is over: taking it away now would move
         // the buttons under the pointer, and the click would miss (RP-2).
         if (ready) activate(false);
+        // Before then, a click takes no focus either.
+        else event.preventDefault();
       }}
-      onClickCapture={() => downWhileReady.current && setHint(null)}
+      onClickCapture={() => {
+        if (!downWhileReady.current) return;
+        setHint(null);
+        // A click on the text or a blank leaves the focus outside: the keys go to the options.
+        if (!root.current?.contains(document.activeElement)) list.current?.focus();
+      }}
       className="rounded-composer bg-surface-composer shadow-composer"
     >
       <div className="flex items-start gap-2 px-4 pt-3 pb-2">

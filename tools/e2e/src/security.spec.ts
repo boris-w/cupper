@@ -125,8 +125,11 @@ test(
     await pressDigit(cupper, 1);
     await cupper.window.waitForTimeout(600);
     expect(resolved(cupper, stream, request)).toBe(false);
-    // Once active, the first cmd-Enter only says how to submit; the second does.
-    await focusOptions(cupper);
+    // One Tab from the composer it replaced activates it, past the guard's
+    // second after a key; the first cmd-Enter only says how to submit.
+    await press(cupper, "Tab");
+    await expect(panel).toHaveAttribute("data-activation", "auto");
+    await cupper.window.waitForTimeout(1100);
     await press(cupper, "Enter", ["meta"]);
     await expect(panel.getByText(t("request:cmd_enter"))).toBeVisible();
     expect(resolved(cupper, stream, request)).toBe(false);
@@ -137,10 +140,13 @@ test(
     await composer.focus();
     await type(cupper, "x");
     await press(cupper, "Backspace");
-    request = await permission(cupper, stream);
+    await permission(cupper, stream);
     await panelReady(cupper);
     await expect(panel).toHaveAttribute("data-activation", "manual");
-    await cupper.cli.ok(["approve", id(stream), request]);
+    // A click on its title gives it the keys.
+    await panel.locator("p").first().click();
+    await cupper.window.waitForTimeout(1100);
+    await pressDigit(cupper, 1);
     await expect(panel).toHaveCount(0);
     // Empty and quiet for 2 s: the panel takes the focus; a typing key revokes it,
     // and the Enter right after does not submit.
@@ -194,16 +200,17 @@ test(
     expect(resolved(cupper, stream, first)).toBe(false);
     // A menu over the panel takes the keys.
     const t = await texts(cupper);
-    await cupper.window
-      .getByRole("button", { name: t("sidebar:project_menu") })
-      .first()
-      .click();
+    const menu = cupper.window.getByRole("button", { name: t("sidebar:project_menu") }).first();
+    await menu.click();
     await expect(cupper.window.getByRole("menu")).toBeVisible();
     await pressDigit(cupper, 1);
     await cupper.window.waitForTimeout(600);
     expect(resolved(cupper, stream, first)).toBe(false);
     await press(cupper, "Escape");
     await expect(cupper.window.getByRole("menu")).toHaveCount(0);
+    // The closed menu gives its button the focus a task later (Radix's
+    // FocusScope); moved before that, the focus would go back to the button.
+    await expect(menu).toBeFocused();
     // Answered; the next request's panel comes unarmed.
     await focusOptions(cupper);
     await cupper.window.waitForTimeout(1100);

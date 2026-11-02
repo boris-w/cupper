@@ -5,7 +5,7 @@ import type { InteractionOption } from "@cupper/protocol";
 import type { Handshake } from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, onTestFinished, test, vi } from "vitest";
 
 import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
 import { RouterProvider } from "../app/router";
@@ -198,6 +198,45 @@ describe("UNIT-request-panel", () => {
     }
   });
 
+  /** Request `id` asked with the composer quiet for 2 s, then answered by 1. */
+  async function askAndAnswer(run: Awaited<ReturnType<typeof setup>>, id: string) {
+    act(() => vi.advanceTimersByTime(2000));
+    await run.push({ ...permission(), data: { ...permission().data, request_id: id } });
+    const activation = run.panel()?.dataset.activation;
+    await run.ready();
+    await run.press("1");
+    await run.push({ type: "interaction.resolved", data: { request_id: id, status: "resolved" } });
+    return activation;
+  }
+
+  test("an answered panel gives the focus back to the composer; the next request takes it", async () => {
+    const run = await setup();
+    screen.getByRole("textbox").focus();
+    expect(await askAndAnswer(run, "r_1")).toBe("auto");
+    expect(document.activeElement).toBe(screen.getByRole("textbox"));
+    expect(await askAndAnswer(run, "r_2")).toBe("auto");
+  });
+
+  test("the window behind: the composer keeps the page's focus, the panel takes it", async () => {
+    const run = await setup();
+    const box = screen.getByRole("textbox");
+    box.focus();
+    // The window loses the focus: the composer hears a blur, but the page's focus stays.
+    fireEvent.blur(box);
+    expect(await askAndAnswer(run, "r_1")).toBe("auto");
+  });
+
+  test("the focus moved off the composer an answered panel gave back: the next waits", async () => {
+    const run = await setup();
+    screen.getByRole("textbox").focus();
+    expect(await askAndAnswer(run, "r_1")).toBe("auto");
+    const elsewhere = document.body.appendChild(document.createElement("button"));
+    onTestFinished(() => elsewhere.remove());
+    elsewhere.focus();
+    expect(await askAndAnswer(run, "r_2")).toBe("manual");
+    expect(document.activeElement).toBe(elsewhere);
+  });
+
   test("a typing key revokes the keyboard; Tab or a click brings it back", async () => {
     const run = await setup();
     screen.getByRole("textbox").focus();
@@ -224,6 +263,35 @@ describe("UNIT-request-panel", () => {
     await act(async () => void fireEvent.click(skip));
     expect(screen.queryByRole("status")).toBeNull();
     expect(run.responses()).toEqual([{ type: "selected", option_id: "o4" }]);
+  });
+
+  /** A permission waiting for Tab or a click, and its title. */
+  async function waiting() {
+    const run = await setup();
+    await run.push(permission());
+    return { ...run, title: run.panel()?.querySelector("p") as HTMLElement };
+  }
+
+  test("a click on the panel's text puts the focus on its options: numbers, Esc, Enter", async () => {
+    const run = await waiting();
+    await run.ready();
+    fireEvent.mouseDown(run.title);
+    await act(async () => void fireEvent.click(run.title));
+    expect(document.activeElement).toBe(screen.getByRole("listbox"));
+    for (const key of ["1", "Escape", "Enter"]) await run.press(key);
+    expect(run.responses()).toEqual(
+      ["o1", "o4", "o1"].map((option_id) => ({ type: "selected", option_id })),
+    );
+  });
+
+  test("a click pressed before the panel was ready takes no focus, nor keys after", async () => {
+    const run = await waiting();
+    expect(fireEvent.mouseDown(run.title)).toBe(false);
+    await act(async () => void fireEvent.click(run.title));
+    await run.ready();
+    expect(run.panel()?.contains(document.activeElement)).toBe(false);
+    await run.press("Enter");
+    expect(run.responses()).toEqual([]);
   });
 
   test("numbers are positions in options: privileged confirms, unknown effect does nothing", async () => {

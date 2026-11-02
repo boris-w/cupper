@@ -4,7 +4,7 @@
 // composer's place and give it back as it was.
 
 import type { PromptBlock } from "@cupper/protocol";
-import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 import { useStore } from "zustand";
 
 import { useT } from "../app/providers";
@@ -108,6 +108,16 @@ export function Composer(props: {
     area.current?.focus();
   };
 
+  // RP-3 reads where the page's focus was as the panel takes this place, the
+  // window in front or not; a panel that had it gives it back.
+  useLayoutEffect(() => {
+    const node = area.current;
+    if (activity?.current.focused) node?.focus();
+    return () => {
+      if (activity) activity.current.focused = document.activeElement === node;
+    };
+  }, [activity]);
+
   // Esc from outside the composer (and outside other fields, menus and dialogs) brings the focus back.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -179,11 +189,7 @@ export function Composer(props: {
           placeholder={placeholder}
           aria-label={placeholder}
           onChange={(event) => ui.getState().setDraft(key, event.target.value)}
-          onFocus={() => activity && (activity.current.focused = true)}
-          onBlur={() => {
-            setArmed(false);
-            if (activity) activity.current.focused = false;
-          }}
+          onBlur={() => setArmed(false)}
           onKeyDown={(event) => {
             if (activity) activity.current.typedAt = Date.now();
             if (event.key !== "Escape") {
