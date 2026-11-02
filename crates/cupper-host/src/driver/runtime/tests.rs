@@ -147,10 +147,19 @@ impl Fixture {
         }
     }
 
-    /// The adapter exits; once its sessions heard it.
-    async fn crash(&self, session: &mut (AgentSessionId, Events)) {
-        let heard = self.prompt(session, "exit 1");
-        while !matches!(heard.recv().await, Some(DriverEvent::AdapterExited { .. })) {}
+    /// The adapter exits under the prompt `script`; once its sessions heard
+    /// it. The prompt ends with the instance, not before it (T218): a session
+    /// that heard of the failure first would send its next message to the
+    /// instance that is gone.
+    async fn crash(&self, session: &mut (AgentSessionId, Events), script: &str) {
+        let heard = self.prompt(session, script);
+        loop {
+            match heard.recv().await.unwrap() {
+                DriverEvent::AdapterExited { .. } => break,
+                DriverEvent::PromptFailed { error, .. } => panic!("{error:?}"),
+                _ => {}
+            }
+        }
     }
 
     fn prompt<'a>(
@@ -455,6 +464,44 @@ async fn gold_b_fake_in_process_adapter_has_no_process_to_signal() {
     assert_eq!(took, Duration::from_secs(8));
 }
 
+/// In-process adapters that answer every request. A prompt `fail` fails as
+/// the agent's error; under `cut` the adapter closes its output and exits
+/// once the host closed the connection, so the prompt's failure is on the
+/// runtime's wire before the exit.
+#[cfg(feature = "test-harness")]
+fn cutting(mut started: mpsc::UnboundedReceiver<launch::InProcessAgent>) {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    tokio::spawn(async move {
+        while let Some(agent) = started.recv().await {
+            let (read, mut write) = tokio::io::split(agent.stream);
+            let mut lines = BufReader::new(read).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let msg: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let script = &msg["params"]["prompt"][0]["text"];
+                let (key, value) = match msg["method"].as_str() {
+                    Some("initialize") => ("result", json!({"protocolVersion": 1})),
+                    Some("session/new" | "session/resume") => ("result", json!({"sessionId": "s"})),
+                    Some("session/prompt") if script == "cut" => break,
+                    Some("session/prompt") if script == "fail" => {
+                        ("error", json!({"code": -32603, "message": "boom"}))
+                    }
+                    Some("session/prompt") => ("result", json!({"stopReason": "end_turn"})),
+                    _ => continue,
+                };
+                let mut reply = json!({"jsonrpc": "2.0", "id": msg["id"]});
+                reply[key] = value;
+                write
+                    .write_all(format!("{reply}\n").as_bytes())
+                    .await
+                    .unwrap();
+            }
+            write.shutdown().await.unwrap();
+            while let Ok(Some(_)) = lines.next_line().await {}
+            drop(agent.exit);
+        }
+    });
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn it_process_hygiene_no_inherited_fds_allowed_env_own_session() {
     let f = Fixture::new("hygiene", &[], None, None);
@@ -602,13 +649,38 @@ async fn it_k21_reap_group_sampling_finds_the_groups_a_crash_leaves() {
     // The child runs `/bin/sleep`, the CLI here.
     assert_eq!((sampled.rss_bytes, sampled.claude_processes), (1 << 30, 1));
     // The adapter dies; the group it left is killed, as sampling found it.
-    f.crash(&mut session).await;
+    f.crash(&mut session, "exit 1").await;
     assert!(tree.gone().await);
     let groups = f.column("SELECT groups FROM adapters");
     assert_eq!(
         groups,
         [format!("[[{},{}]]", child.pid, child.start.as_micros())]
     );
+}
+
+/// IT-adapter-restart (T218): a prompt the adapter's exit cuts off ends
+/// with the instance, though its failure comes first; the session's next
+/// message then resumes it on the next instance. A prompt the agent fails is
+/// the session's to hear at once.
+#[cfg(feature = "test-harness")]
+#[tokio::test(flavor = "multi_thread")]
+async fn it_adapter_restart_a_cut_off_prompt_ends_with_the_instance() {
+    let (agents, started) = mpsc::unbounded_channel();
+    let mut launch = launch::injected(PathBuf::new(), Vec::new(), &host(), &login());
+    launch.program = launch::Program::InProcess(launch::InProcess(agents));
+    let f = Fixture::with("cut-off", launch, None);
+    cutting(started);
+    let mut session = f.attach().await.unwrap();
+    let failed = f.prompt(&mut session, "fail").recv().await.unwrap();
+    let other = |e: &AgentError| e.class == AgentErrorClass::Other;
+    assert!(
+        matches!(&failed, DriverEvent::PromptFailed { error, .. } if other(error)),
+        "{failed:?}"
+    );
+    f.crash(&mut session, "cut").await;
+    let resume = AttachTarget::Resume(session.0.clone());
+    let mut session = f.open(resume, ProjectConfigPolicy::Load).await.unwrap();
+    assert_eq!(f.say(&mut session, "again").await, "");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -618,7 +690,7 @@ async fn it_adapter_restart_backs_off_then_crashed() {
     let f = Fixture::new("restart", &[], None, None);
     let mut session = f.attach().await.unwrap();
     for wait in [1, 2] {
-        f.crash(&mut session).await;
+        f.crash(&mut session, "exit 1").await;
         let start = f.clock.now_mono();
         session = f.attach().await.unwrap();
         assert_eq!(since(&f, start), Duration::from_secs(wait));
