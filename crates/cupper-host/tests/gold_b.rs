@@ -391,7 +391,14 @@ impl Run {
         }
         let params = json!({"command_id": client::command_id(), "force": true});
         let exit = self.client.request::<Raw<handshake::HostExit>>(params);
-        exit.await.unwrap();
+        // The host may close the connection before the client reads the
+        // reply, which the client then refuses (design 5.8.1): a connection
+        // that ended as a host's that exited takes the exit as accepted too.
+        match exit.await {
+            Ok(_) => {}
+            Err(client::ClientError::Closed(Some(reason))) if reason.host_gone() => {}
+            Err(err) => panic!("host/exit: {err}"),
+        }
         let exited = within("the host's exit", self.host).await.unwrap();
         assert_eq!(exited, cupper_host::exit::HostExit::Ok);
     }
