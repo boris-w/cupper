@@ -115,7 +115,9 @@ UNIT-sys-reap-group = "pr"
 milestone = "M1a"
 # 对端校验的结果按摘要里的 os 归类：GitHub 托管 runner 上的 macOS 15、26 记作 -macos15、-macos26，
 # 其他地方（作者本机）一律记作 -current（T197、T211）
-IT-sys-peer-current = "pr"
+# -current 登记在 nightly（2026-11-02，T099）：T211 起托管 runner 的结果按大版本记作 -macos15、-macos26，
+# PR 都在托管 runner 上跑，-current 只由作者机器上的 nightly 产出
+IT-sys-peer-current = "nightly"
 IT-sys-peer-macos14 = { suite = "nightly", status = "na", reason = "最低支持版本提到 macOS 15（用户 2026-11-02，GitHub 停用 macOS 14 的 runner）" }
 IT-sys-peer-macos15 = "nightly"
 UNIT-sys-uniqueid = "pr"
@@ -687,7 +689,7 @@ PERF-bridge-gate = "nightly"
 # （条件）utilityProcess 宿主桥加委托票据
 [T079]
 milestone = "M1a"
-IT-ticket-auth = { suite = "pr", status = "conditional", reason = "K2 测量闸门（T078）不达标时由 T079 产出" }
+IT-ticket-auth = { suite = "pr", status = "na", reason = "K2 已达标（T078），T079 不触发" }
 
 # ui-core I：状态层与安全规则
 [T080]
