@@ -9,10 +9,30 @@ export class ScrollKeeper {
   /** At the bottom: follow the growth. */
   stuck = true;
   #anchor: { key: string; index: number; delta: number } | undefined;
+  /** Where the list was when last scrolled or put. */
+  #top: number | undefined;
 
   /** The user scrolled; whether the list is at the bottom now. */
   scrolled(top: number, height: number, client: number): boolean {
+    this.#top = top;
     this.stuck = height - top - client <= STICK_PX;
+    return this.stuck;
+  }
+
+  /** The list was put at `top`, by the list or its virtualizer: not a scroll. */
+  put(top: number): void {
+    this.#top = top;
+  }
+
+  /**
+   * Whether to put the list at the bottom now. A list that is not where it
+   * was last scrolled or put was scrolled, and its event has not come yet:
+   * the virtualizer may have read it on a timer and rendered first (T208).
+   */
+  follows(top: number, height: number, client: number): boolean {
+    if (this.#top !== undefined && Math.abs(top - this.#top) > 1) {
+      this.scrolled(top, height, client);
+    }
     return this.stuck;
   }
 

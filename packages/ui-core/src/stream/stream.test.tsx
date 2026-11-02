@@ -106,6 +106,13 @@ describe("UNIT-stream-anchor", () => {
     expect(keeper.scrolled(775, 1000, 200)).toBe(false);
   });
 
+  test("a list not where it was put was scrolled, whether or not its event came", () => {
+    const keeper = new ScrollKeeper();
+    keeper.put(800);
+    expect(keeper.follows(800, 1400, 200), "grown, not moved").toBe(true);
+    expect(keeper.follows(0, 1400, 200), "moved to the top").toBe(false);
+  });
+
   test("earlier history comes in front on request, from the first turn's cursor", async () => {
     const { frame, pages } = await setup();
     expect(screen.getByText("第二个")).toBeTruthy();
@@ -116,6 +123,34 @@ describe("UNIT-stream-anchor", () => {
     expect(pages()).toEqual([{ session_id: "s_1", cursor: { turn_no: 2 } }]);
     expect(screen.getByText("第一个")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "加载更早的历史" }), "turn 1 is in").toBeNull();
+  });
+
+  test("a scroll whose event has not come yet is not undone by a render before it (T208)", async () => {
+    await setup();
+    const list = document.querySelector("[data-stream-list]") as HTMLElement;
+    Object.defineProperties(list, { scrollHeight: { value: 1000 }, clientHeight: { value: 200 } });
+    list.scrollTop = 800;
+    fireEvent.scroll(list);
+    // Scrolled to the top between frames: the virtualizer's end of scrolling,
+    // 150 ms after the last scroll event, reads it and renders first.
+    list.scrollTop = 0;
+    await act(() => new Promise((done) => setTimeout(done, 300)));
+    expect(list.scrollTop).toBe(0);
+  });
+
+  test("at the bottom it follows what comes in", async () => {
+    await setup();
+    const list = document.querySelector("[data-stream-list]") as HTMLElement;
+    let height = 1000;
+    Object.defineProperties(list, {
+      scrollHeight: { get: () => height },
+      clientHeight: { value: 200 },
+    });
+    list.scrollTop = 800;
+    fireEvent.scroll(list);
+    height = 1400;
+    await act(() => new Promise((done) => setTimeout(done, 300)));
+    expect(list.scrollTop).toBe(1400);
   });
 
   test("scrolled up, a button goes back to the bottom", async () => {
