@@ -71,3 +71,10 @@ M1a 的退出标准在设计 5.12.2 和计划 1.8 的"M1a 退出"一行。CI 已
 ## 汇报要求
 
 完成后按 `docs/templates/task-report.md` 的结构，把汇报全文作为最终回复返回，由编排者存档为本目录的 `report.md`。不要自己创建 `report.md`。汇报里不要写本机的绝对路径。其他物料由执行者在任务分支上提交。
+
+## 补充裁定（2026-11-02）
+
+- **候选 18b3640 作废**：它的 `ci` 运行（41392847292）里 `it_lifecycle_startup_ends_what_the_last_run_left_running` 失败。这是测试没等 `trap` 生效的偶发问题，当天第二次出现。按 1.8 不靠重跑把它算作通过，另开 T216（只改测试）。
+- **先合并已做的基础设施**：本分支到 4877ab4 为止的提交（`e2e-repeat` 的降速输入与 @focus 分轮、登记表里 IT-sys-peer-current 改 nightly 和 IT-ticket-auth 改 na、notes 与 MAN-keyboard 的操作脚本）作为 T099 的第一部分，经 PR 合进 main。
+- **新候选**：T216 与上面这部分都合并后的 main，由编排者写明。pr、runner 上的 nightly、e2e-repeat 的 20 次和 5 次、作者机器上的 nightly 都在新候选上重做，`e2e-repeat` 直接 `--ref main`。18b3640 上已有的结果写进记录，只作旁证。
+- **MAN-keyboard**：证据按 Electron 版本登记，和候选提交无关，2026-11-02 由用户在 18b3640 的 e2e 构建上做。
