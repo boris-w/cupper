@@ -5,7 +5,7 @@
 
 import type { SessionView } from "@cupper/host-client";
 import type { HistoryCursor } from "@cupper/protocol";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { elementScroll, useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
 import { useHost, useT } from "../app/providers";
@@ -74,6 +74,11 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
     estimateSize: () => 44,
     getItemKey: (index) => rows[index]?.key ?? index,
     overscan: 8,
+    // Its own scrolls, as it keeps rows in place while they are measured.
+    scrollToFn: (offset, options, instance) => {
+      elementScroll(offset, options, instance);
+      keeper.put(instance.scrollElement?.scrollTop ?? offset);
+    },
   });
   const total = virtualizer.getTotalSize();
   const locate = (key: string) => {
@@ -84,12 +89,19 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
 
   useLayoutEffect(() => {
     const element = scroller.current;
-    const restored = keeper.restore(locate);
-    if (element && restored !== undefined) {
-      element.scrollTop = restored;
-    } else if (element && keeper.stuck) {
-      element.scrollTop = element.scrollHeight;
+    if (!element) {
+      return;
     }
+    const restored = keeper.restore(locate);
+    const { scrollTop, scrollHeight, clientHeight } = element;
+    if (restored !== undefined) {
+      element.scrollTop = restored;
+    } else if (keeper.follows(scrollTop, scrollHeight, clientHeight)) {
+      element.scrollTop = scrollHeight;
+    } else {
+      return;
+    }
+    keeper.put(element.scrollTop);
   });
 
   const loadEarlier = () => {

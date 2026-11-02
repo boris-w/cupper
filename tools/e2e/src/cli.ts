@@ -119,7 +119,9 @@ export class Cli {
     const { code, lines, stderr } = await this.run(args, as);
     const [first] = lines;
     if (code !== 0 || first === undefined) {
-      throw new Error(`cupper ${args.join(" ")}: exit ${code}; ${stderr}`);
+      // With `--json` the CLI's own error is a line on stdout.
+      const said = lines.map((line) => JSON.stringify(line)).join(" ");
+      throw new Error(`cupper ${args.join(" ")}: exit ${code}; ${said}; ${stderr}`);
     }
     return first;
   }

@@ -14,13 +14,16 @@ on:
       times:
         description: How many times
         default: "50"
+      workers:
+        description: How many copies at once; 2 is the load of `xtask ci e2e` (T208)
+        default: "1"
 
 permissions:
   contents: read
 
 jobs:
   repeat:
-    name: ${{ inputs.test }} × ${{ inputs.times }} (macos-15)
+    name: ${{ inputs.test }} × ${{ inputs.times }}, ${{ inputs.workers }} at once (macos-15)
     runs-on: macos-15
     timeout-minutes: 150
     steps:
@@ -41,10 +44,11 @@ jobs:
           SPEC: ${{ inputs.spec }}
           TEST: ${{ inputs.test }}
           TIMES: ${{ inputs.times }}
+          WORKERS: ${{ inputs.workers }}
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/repeat.json
         run: >-
           pnpm --filter @cupper/e2e run test:e2e:one "$SPEC" -g "$TEST"
-          --repeat-each="$TIMES" --reporter=list,json
+          --repeat-each="$TIMES" --workers="$WORKERS" --reporter=list,json
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
