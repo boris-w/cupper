@@ -98,7 +98,10 @@ describe("UNIT-trace-ids: registry", () => {
     ]);
     expect(bad('UNIT-a = { suite = "pr", status = "done", owner = "me" }')).toEqual([
       "UNIT-a in [T001]: unknown field `owner`",
-      "UNIT-a in [T001]: status must be one of active, conditional, na, gap, gap-confirmed",
+      "UNIT-a in [T001]: status must be one of active, record, conditional, na, gap, gap-confirmed",
+    ]);
+    expect(bad('UNIT-a = { suite = "pr", status = "record", reason = "D1" }')).toEqual([
+      "UNIT-a in [T001]: status record: PERF IDs only",
     ]);
     expect(bad('UNIT-a = { suite = "pr", parts = ["UNIT-a-x", "UNIT-a-y"] }')).toEqual([
       "UNIT-a in [T001]: an ID made of sub-IDs has no suite of its own",

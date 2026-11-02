@@ -7,7 +7,8 @@
 import { owner } from "./ids.ts";
 import { isTable, type Entry } from "./registry.ts";
 
-export type Outcome = "pass" | "fail" | "skip";
+/** `measured`: a PERF test that ran judging no budget (M1a sync D1). */
+export type Outcome = "pass" | "fail" | "skip" | "measured";
 
 export interface Result {
   id: string;
@@ -22,7 +23,7 @@ export interface Summary {
   results: Result[];
 }
 
-const OUTCOMES: readonly unknown[] = ["pass", "fail", "skip"];
+const OUTCOMES: readonly unknown[] = ["pass", "fail", "skip", "measured"];
 
 /** The per-ID results of a summary written by `xtask ci --record`. */
 export function readSummary(text: string, source: string): Summary {
@@ -33,7 +34,7 @@ export function readSummary(text: string, source: string): Summary {
   const results = list(summary.results).map((result) => {
     const { id, suite, result: outcome } = result;
     if (typeof id !== "string" || typeof suite !== "string" || !OUTCOMES.includes(outcome)) {
-      throw new Error(`${source}: a result needs an id, a suite and pass, fail or skip`);
+      throw new Error(`${source}: a result needs an id, a suite and pass, fail, skip or measured`);
     }
     return { id, suite, outcome: outcome as Outcome, source };
   });

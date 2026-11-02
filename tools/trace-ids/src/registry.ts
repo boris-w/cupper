@@ -9,7 +9,7 @@ import { idsIn, isId } from "./ids.ts";
 
 export const MILESTONES = ["M1a", "M1b", "release", "M2", "later"] as const;
 export const SUITES = ["pr", "nightly", "release", "compat", "man"] as const;
-export const STATUSES = ["active", "conditional", "na", "gap", "gap-confirmed"] as const;
+export const STATUSES = ["active", "record", "conditional", "na", "gap", "gap-confirmed"] as const;
 /** Components a manual check can be bound to: its evidence names their versions. */
 export const COMPONENTS = ["electron"] as const;
 const PRECISIONS = ["major", "exact"] as const;
@@ -163,6 +163,8 @@ function readEntry(id: string, spec: unknown, at: string, problems: string[]): F
   }
   if (!oneOf(STATUSES, status)) {
     fail(`status must be one of ${STATUSES.join(", ")}`);
+  } else if (status === "record" && !id.startsWith("PERF-")) {
+    fail("status record: PERF IDs only");
   } else if (status !== "active" && (typeof reason !== "string" || reason === "")) {
     fail(`status ${status} needs a reason`);
   } else if (reason !== undefined && typeof reason !== "string") {
