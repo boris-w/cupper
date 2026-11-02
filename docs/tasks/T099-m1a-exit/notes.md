@@ -76,3 +76,7 @@ The 12 tests per run: `nfr1.spec.ts`'s 10 (7 of them not `@focus`) and `nfr1-res
 - main after T216, T217, T218 and T099's first part (PR #33, merged as 7b67605); the branch `chore/T099-m1a-exit-2` starts there.
 - Every run of the brief is done again on it; `e2e-repeat` runs with `--ref main`, so it tests that commit itself.
 - MAN-keyboard was done on 18b3640's e2e build: its evidence is bound to Electron 44.9.0, not to a commit (brief, second ruling).
+
+## A was not run
+
+The user decided that load and performance runs stay off their machine for now (`docs/meetings/2026-11-02-perf-local/minutes.md`, D1). So PERF-host-cold-start, PERF-index-snapshot, PERF-host-memory, PERF-snapshot, PERF-bridge-gate and IT-sys-peer-current have no result, and `trace-ids verify --milestone M1a` stops at "7 of 288 IDs not done" (IT-sys-peer waits for -current). The registry is left as it is; the record lists the seven with their reasons and the options for the sync meeting.

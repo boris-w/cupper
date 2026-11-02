@@ -3,8 +3,9 @@
 - 退出候选：`ec459fd`（`ec459fd9699f0d487aa1af79c5b1e49009157dda`，main）。T216、T217、T218 和 T099 第一部分（PR #33）合并、T217 存档之后的提交。
 - 第一个候选 `18b3640` 作废，见第 7 节。它上面的结果只作旁证。
 - 日期：2026-11-02
-- 在哪里跑：连跑、`ci pr`、runner 上的 `ci nightly` 都在 GitHub 托管的 runner 上，运行期间没人操作。作者机器只跑一次 `ci nightly`，用来判 PERF 闸门、产出 IT-sys-peer-current。
-- 摘要：14 份 runner 摘要从构件下载后入库，在 `ci/pr/`、`ci/nightly/` 下；作者机器上的摘要放在 `ci/local/`。目录名就是构件名，例如 `security-peer-macos-26`。
+- 在哪里跑：连跑、`ci pr`、`ci nightly` 都在 GitHub 托管的 runner 上，运行期间没人操作。
+- 按计划 1.8，作者机器上还要跑一次 `ci nightly`（判 PERF 闸门、产出 IT-sys-peer-current）。用户决定不跑（`docs/meetings/2026-11-02-perf-local/minutes.md`，D1），这几项列为缺口，见第 4、6 节。
+- 摘要：14 份 runner 摘要从构件下载后入库，在 `ci/pr/`、`ci/nightly/` 下。目录名就是构件名，例如 `security-peer-macos-26`。
 
 ## 结论
 
@@ -14,9 +15,9 @@
 | 2 | 降速变体 5 次全绿 | e2e-repeat [41414671830](https://github.com/boris-w/cupper/actions/runs/41414671830) | 通过：60/60 |
 | 3 | `ci pr` 通过一次 | ci [41413977102](https://github.com/boris-w/cupper/actions/runs/41413977102) | 通过：8 个检查全绿 |
 | 3 | `ci nightly`（runner） | nightly [41414675363](https://github.com/boris-w/cupper/actions/runs/41414675363) | 通过：6 个作业全绿 |
-| 3 | PERF 闸门（作者机器上的 `ci nightly`） | 见第 4 节 | （待填） |
+| 3 | PERF 闸门（作者机器上的 `ci nightly`） | 没有跑 | **缺口**：用户决定不在作者机器上跑（第 4 节） |
 | 4 | UNIT-unsupported-set | pr 的 rust 作业 | 通过 |
-| 4 | `trace-ids verify --milestone M1a` | 见第 5 节 | （待填） |
+| 4 | `trace-ids verify --milestone M1a` | 第 5 节 | **不通过**：288 个编号里 7 个没完成，都是作者机器上那次 nightly 才能产出的（第 5 节） |
 | 4 | 契约已冻结 | pr 的 protocol 作业 | 通过：`schema-compat` 0 breaking、0 additive；ShellAPI 快照（`shell-api-m1a`）通过 |
 | 4 | COMPAT 编号 | T202 入库的兼容报告 | 5 个 M1a 编号全部通过 |
 | 4 | MAN 编号 | 入库的证据 | MAN-compat-claude、MAN-keyboard 都有证据 |
@@ -78,7 +79,17 @@
 
 ## 4. PERF 闸门（作者机器）
 
-（待填：编排者在主工作区跑 `cargo xtask ci nightly --record .private/t099-nightly`，结果交来后填写。）
+**没有跑。**
+- 计划 1.8：PERF 闸门在作者机器上判，runner 不是参考机型（T197）。办法是编排者在主工作区跑一次 `cargo xtask ci nightly --record …`（约 45–60 分钟，期间用户离开机器）。
+- 用户决定不跑，会议记录 `docs/meetings/2026-11-02-perf-local/minutes.md`：
+  - D1：用户原话"嗯 压测不在我的电脑上做，先放一放吧"。
+  - D2：其余各项照常完成；这几个编号列为缺口，交 M1a 同步会决定；以后不安排在用户机器上跑 PERF 或本机 nightly。
+- 因此没有产出的编号：
+  - PERF-host-cold-start、PERF-index-snapshot、PERF-host-memory（`perf` 作业，T117）；
+  - PERF-snapshot（`perf` 作业，T186）；
+  - PERF-bridge-gate（`e2e` 作业里的 `@perf` 用例，T078；托管 runner 上不跑）；
+  - IT-sys-peer-current（作者真机上的对端校验，T021），以及由它和 -macos15、-macos26 组成的 IT-sys-peer。
+- 替代办法见第 6 节第 1 条。
 
 ## 5. 核对
 
@@ -104,16 +115,34 @@
     --compat testdata/compat/reports/claude-agent-acp-0.91.0-claude-2.1.296.json
   ```
 
-  - 只用 runner 的 14 份摘要时，288 个编号里还有 7 个没完成：PERF-host-cold-start、PERF-index-snapshot、PERF-host-memory、PERF-snapshot、PERF-bridge-gate、IT-sys-peer-current，以及等它的 IT-sys-peer。这 7 个都只能由作者机器上的 nightly 产出（第 4 节）。没有 problem，也没有未登记的编号。
-  - 加上作者机器的摘要之后：（待填）。
+  - 结果：**不通过**（退出码 1），"M1a: 7 of 288 IDs not done"。没有 problem，也没有未登记的编号。没有为了让它通过而改登记。
+  - 没完成的 7 个，原因都是第 4 节那次作者机器上的 nightly 没有跑：
+
+    | 编号 | 任务 | trace-ids 的说法 | 原因 |
+    |---|---|---|---|
+    | PERF-host-cold-start | T117 | no test ran | `perf` 作业只在作者机器上跑 |
+    | PERF-index-snapshot | T117 | no test ran | 同上 |
+    | PERF-host-memory | T117 | no test ran | 同上 |
+    | PERF-snapshot | T186 | no test ran | 同上 |
+    | PERF-bridge-gate | T078 | no test ran | `e2e` 作业在托管 runner 上不跑 `@perf` 用例 |
+    | IT-sys-peer-current | T021 | no test ran | 托管 runner 上的结果按 macOS 版本记作 -macos15、-macos26；-current 只由作者机器产出 |
+    | IT-sys-peer | T021 | waiting for IT-sys-peer-current | 它的子编号 -macos15、-macos26 都已通过，只差 -current |
+
+  - 其余 281 个都已完成或已定（不适用）：PR 和 nightly 的编号由 14 份摘要证明，COMPAT 由兼容报告证明，MAN 由证据证明。
 
 ## 6. 本机替代不了的缺口（请用户确认）
 
-1. **macOS 15、26 上的对端校验**：已由 runner 覆盖。nightly 41414675363 的 `security-peer` 在 macOS 15.8.2 和 26.6.2 上各跑一次，记作 IT-sys-peer-macos15、-macos26，都通过。作者机器（macOS 26.4）上的那一份记作 -current（第 4 节）。macOS 14 自 2026-11-02 起不再支持。
-2. **CI 负载下的稳定性**：已由 runner 上的连跑覆盖。第 1 节 20 次（240 次运行），第 2 节降速 5 次（60 次运行），都没有失败。
-   - 局限：runner 只有 macOS 15。e2e 在 macOS 26 上只有作者机器 nightly 里跑的一次全集，没有连跑。
+1. **PERF 闸门与 IT-sys-peer-current 没有跑**（第 4 节）
+   - 涉及 7 个编号：PERF-host-cold-start、PERF-index-snapshot、PERF-host-memory、PERF-snapshot、PERF-bridge-gate、IT-sys-peer-current，以及等它的 IT-sys-peer。
+   - 原因是用户的决定：`docs/meetings/2026-11-02-perf-local/minutes.md` 的 D1。
+   - 可选的替代办法，请用户在同步会上定：
+     - (1) 改用 GitHub 的大型 runner 跑 PERF，并在那上面重新标定阈值和历史基线。好处是不占用户机器。代价是：大型 runner 要付费；同样是共享虚拟机，波动比真机大，要先量出波动，才能定判定线。
+     - (2) PERF 降为只记录、不卡闸门：照常在 nightly 里跑、写进历史，但不作为退出条件；等自用构建（T160）之后在真机上补测并恢复闸门。需要改计划 1.8、设计 5.9.6 的口径，以及 5 个编号的登记。
+     - (3) IT-sys-peer-current 单独处理：在作者机器上只跑一次 `cargo xtask ci security-peer --in nightly --record …`，只编译 cupper-sys 的测试，约几分钟，负载低，不弹窗，不用离开机器。它和 PERF 无关，可以单独决定；要不要做由用户定。
+2. **macOS 15、26 上的对端校验**：已由 runner 覆盖。nightly 41414675363 的 `security-peer` 在 macOS 15.8.2 和 26.6.2 上各跑一次，记作 IT-sys-peer-macos15、-macos26，都通过。作者机器上的 -current 见上一条。macOS 14 自 2026-11-02 起不再支持。
+3. **CI 负载下的稳定性**：已由 runner 上的连跑覆盖。第 1 节 20 次（240 次运行），第 2 节降速 5 次（60 次运行），都没有失败。
+   - 局限：e2e 的 runner 只有 macOS 15，这次验收里 e2e 没有在 macOS 26 上跑过。原本只有作者机器 nightly 里的一次全集，它也没跑。
    - 局限：降速负载是 3 核里占 2 核的忙循环，代表不了磁盘或内存紧张的情况。
-3. **PERF 只在作者机器上判**：runner 不是参考机型。每个指标只在一台机器、一次运行上判；趋势判定靠 `testdata/perf/history.jsonl` 里同一机型的历史。
 4. **MAN-keyboard 是在 18b3640 上做的，T217 之后没有重做**：
    - T217 改了请求面板的焦点行为：点击面板会移焦点；RP-3 改为读页面里的焦点。按键的处理（主进程 `inputGuard`、宿主对真实输入的核对）没有改。
    - T217 的改动由 5 个单元测试和 E2E-SEC-panel-arming 守着，后者在 runner 上连跑了 50 次。
@@ -142,7 +171,11 @@
 
 供编排者和用户开会时用，会后另写纪要（`docs/meetings/`）。
 
-1. **M1a 做了什么**
+1. **缺口，请用户决定**（第 6 节）
+   - PERF 闸门的 5 个编号和 IT-sys-peer-current 没有跑，`trace-ids verify --milestone M1a` 因此不通过（7 of 288）。在第 6 节第 1 条的 (1) 大型 runner、(2) 只记录不卡闸门、(3) 单独跑一次 `security-peer` 之间选择；选定后要改的计划、设计和登记，由编排者另开任务。
+   - 第 6 节其余各条逐条确认：对端校验、CI 负载下的稳定性、MAN-keyboard 不重做、原生确认框、e2e 构建上的真实输入、真实 Claude 兼容结果的时间。
+   - K4 是否算通过、M1b 是否开始，取决于上面两点。
+2. **M1a 做了什么**
    - 范围：设计 5.12.2 的全部内容，逐项对照见计划 5.1。
      - M1a 的任务已合并 155 个，包括本次验收中加的 T216–T218。
      - 两个条件任务不触发：T057（K1 通过）、T079（K2 达标）。
@@ -152,10 +185,9 @@
      - GitHub Actions：每个 PR 跑 8 个检查，nightly 有 6 个作业，另有 `test-repeat`、`e2e-repeat` 两个手动连跑 workflow（T197）。
      - 最低支持版本提到 macOS 15，对端校验在 macOS 15、26 的 runner 上跑（T211）。
      - T189 起的 fix 任务修掉了 runner 和真实运行里暴露的偶发失败与产品缺陷。
-2. **退出验收的结果**：本记录的结论表和第 1–5 节。
-3. **请用户确认的缺口**：第 6 节逐条确认。
+3. **退出验收的结果**：本记录的结论表和第 1–5 节。
 4. **遗留问题**（交接事项里与 M1b 有关的，按影响排列）
-   - **流延迟**：runner 上 3 份并行时，宿主的会话流每轮会停顿几秒（最长 12.4 s，中位数 1.9 s）。推测与 WAL 检查点的 fullfsync 有关，没有验证。这关系到 NFR-1 的流延迟，要在参考机型上量（T103、M1b 的性能任务）。
+   - **流延迟**：runner 上 3 份并行时，宿主的会话流每轮会停顿几秒（最长 12.4 s，中位数 1.9 s）。推测与 WAL 检查点的 fullfsync 有关，没有验证。这关系到 NFR-1 的流延迟，原定在参考机型上量（T103、M1b 的性能任务）；在哪里量，取决于第 1 项的决定。
    - **退出时的应答**：
      - `host/exit` 的应答仍可能被客户端按 5.8.1 拒收（T213、T215）。桌面和 CLI 都已把连接结束当作退出已受理。
      - 和退出撞上的其他请求，应答可能随连接关闭而丢失，能按 `command_id` 重试拿到（T205）。
