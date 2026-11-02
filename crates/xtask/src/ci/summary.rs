@@ -65,6 +65,21 @@ const SUMMARY: Shape = Shape::Object(&[
             ("sha256", Shape::Scalar),
         ])),
     ),
+    (
+        "perf",
+        Shape::List(&Shape::Object(&[
+            ("date", Shape::Scalar),
+            ("commit", Shape::Scalar),
+            ("version", Shape::Scalar),
+            ("machine", Shape::Scalar),
+            ("metric", Shape::Scalar),
+            ("unit", Shape::Scalar),
+            ("n", Shape::Scalar),
+            ("p50", Shape::Scalar),
+            ("p95", Shape::Scalar),
+            ("max", Shape::Scalar),
+        ])),
+    ),
 ]);
 
 pub struct Run<'a> {
@@ -77,7 +92,7 @@ pub struct Run<'a> {
     pub toolchain: &'a [(&'static str, Option<String>)],
     pub os: &'a str,
     /// Ran on a GitHub-hosted runner, where the peer checks count for the
-    /// runner's macOS (plan 1.8).
+    /// runner's macOS (plan 1.8) and PERF is measured, not judged.
     pub hosted: bool,
     pub machine: &'a str,
     pub duration_ms: u64,
@@ -121,10 +136,12 @@ pub fn build(run: &Run) -> Value {
             .flat_map(|report| &report.artifacts)
             .map(|artifact| json!({"name": artifact.name, "sha256": artifact.sha256}))
             .collect::<Vec<_>>(),
+        "perf": run.reports.iter().flat_map(|report| &report.perf).collect::<Vec<_>>(),
     })
 }
 
-/// One entry per test ID that ran: it passes when all of its tests passed.
+/// One entry per test ID that ran: it passes when all of its tests passed,
+/// and a PERF ID on a GitHub-hosted runner was `measured` (M1a sync D1).
 fn results(run: &Run) -> Vec<Value> {
     let mut passed_by_id: BTreeMap<&str, bool> = BTreeMap::new();
     for case in run.reports.iter().flat_map(|report| &report.cases) {
@@ -135,12 +152,12 @@ fn results(run: &Run) -> Vec<Value> {
     passed_by_id
         .into_iter()
         .map(|(id, passed)| {
-            json!({
-                "id": id,
-                "suite": run.suite,
-                "result": if passed { Outcome::Pass } else { Outcome::Fail }.as_str(),
-                "commit": run.commit,
-            })
+            let result = match (passed, run.hosted && id.starts_with("PERF-")) {
+                (false, _) => Outcome::Fail.as_str(),
+                (true, true) => "measured",
+                (true, false) => Outcome::Pass.as_str(),
+            };
+            json!({"id": id, "suite": run.suite, "result": result, "commit": run.commit})
         })
         .collect()
 }
@@ -286,6 +303,7 @@ mod tests {
                 ],
                 skipped: vec!["sensitive-words".to_owned()],
                 artifacts: Vec::new(),
+                perf: Vec::new(),
             },
             JobReport {
                 name: "perf",
@@ -296,6 +314,7 @@ mod tests {
                 cases: Vec::new(),
                 skipped: Vec::new(),
                 artifacts: Vec::new(),
+                perf: Vec::new(),
             },
             JobReport {
                 name: "e2e",
@@ -309,6 +328,8 @@ mod tests {
                     name: "Cupper E2E.app".to_owned(),
                     sha256: "ab".repeat(32),
                 }],
+                perf: vec![json!({"metric": "bridge_loop_delay_p99", "unit": "ms",
+                    "n": 1, "p50": 1.5, "p95": 1.5, "max": 1.5})],
             },
         ];
         build(&Run {
@@ -349,6 +370,7 @@ mod tests {
             ("/jobs/0", "log"),
             ("/results/0", "author"),
             ("/artifacts/0", "path"),
+            ("/perf/0", "samples"),
         ] {
             let mut bad = summary.clone();
             let map = bad.pointer_mut(object).and_then(Value::as_object_mut);
@@ -362,25 +384,28 @@ mod tests {
     }
 
     #[test]
-    fn unit_ci_summary_peer_checks_count_for_the_macos_they_ran_on() {
+    fn unit_ci_summary_on_a_runner_peer_checks_count_for_its_macos_and_perf_is_measured() {
         let ids = [
             "IT-sys-peer-current",
             "IT-sys-peer-macos15",
             "IT-sys-peer-macos26",
+            "PERF-snapshot",
         ];
         let ids: Vec<String> = ids.map(str::to_owned).to_vec();
+        let names = ["it_sys_peer_current_exec", "perf_snapshot_10k"];
         let reports = [JobReport {
             name: "security-peer",
             outcome: Outcome::Pass,
             passed: 1,
             failed: 0,
             duration_ms: 10,
-            cases: vec![TestCase {
-                name: "peer::tests::it_sys_peer_current_exec_changes_the_token".to_owned(),
+            cases: Vec::from(names.map(|name| TestCase {
+                name: format!("tests::{name}"),
                 passed: true,
-            }],
+            })),
             skipped: Vec::new(),
             artifacts: Vec::new(),
+            perf: Vec::new(),
         }];
         for (os, hosted, id) in [
             ("macOS 15.7.9", true, "IT-sys-peer-macos15"),
@@ -401,8 +426,9 @@ mod tests {
                 reports: &reports,
                 ids: &ids,
             });
-            let expected =
-                json!([{"id": id, "suite": "nightly", "result": "pass", "commit": COMMIT}]);
+            let perf = if hosted { "measured" } else { "pass" };
+            let expected = json!([{"id": id, "suite": "nightly", "result": "pass", "commit": COMMIT},
+                {"id": "PERF-snapshot", "suite": "nightly", "result": perf, "commit": COMMIT}]);
             assert_eq!(summary["results"], expected, "{os}, hosted: {hosted}");
         }
     }

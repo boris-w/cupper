@@ -80,6 +80,7 @@ struct JobReport {
     cases: Vec<TestCase>,
     skipped: Vec<String>,
     artifacts: Vec<Artifact>,
+    perf: Vec<serde_json::Value>,
 }
 
 struct Options<'a> {
@@ -162,7 +163,7 @@ fn run(args: &[String], cwd: &Path) -> Result<bool> {
             suite: seen,
             toolchain: &facts::toolchain(&root),
             os: &facts::os(&root),
-            hosted: std::env::var("RUNNER_ENVIRONMENT").is_ok_and(|env| env == "github-hosted"),
+            hosted: facts::hosted(),
             machine: &machine,
             duration_ms,
             reports: &reports,
@@ -207,6 +208,7 @@ fn run_job(job: &Job, target: &str, root: &Path, log_dir: &Path) -> JobReport {
         cases: Vec::new(),
         skipped: Vec::new(),
         artifacts: Vec::new(),
+        perf: Vec::new(),
     };
     let Some(run) = job.run else {
         eprintln!("{}: not implemented yet, skipped", job.name);
@@ -233,6 +235,7 @@ fn run_job(job: &Job, target: &str, root: &Path, log_dir: &Path) -> JobReport {
     report.cases = ctx.cases;
     report.skipped = ctx.skipped;
     report.artifacts = ctx.artifacts;
+    report.perf = ctx.perf;
     report
 }
 

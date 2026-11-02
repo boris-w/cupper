@@ -7,8 +7,9 @@
 // fragments a second follow as a stress report, not judged. Each test logs
 // its numbers as one `gate` line; when `CUPPER_PERF_OUT` names a file (the
 // e2e job outside `ci pr`), a judged test that passed adds its p99 there as a
-// PERF sample, for the trend in `testdata/perf/history.jsonl`. Tagged `@perf`:
-// a GitHub-hosted runner is no reference machine and leaves them out (T197).
+// PERF sample, for the trend in `testdata/perf/history.jsonl`. Tagged `@perf`.
+// A GitHub-hosted runner is no reference machine: there the e2e job sets
+// `CUPPER_PERF_RECORD_ONLY`, and the p99 is only recorded (M1a sync D1).
 
 import { createHash, randomBytes } from "node:crypto";
 import { appendFileSync, readFileSync } from "node:fs";
@@ -230,7 +231,9 @@ for (const covered of [false, true]) {
       expect(resync.events).toBeGreaterThanOrEqual(5000);
       expect(Object.keys(load).filter((stream) => /^g\d$/.test(stream))).toHaveLength(4);
       expect(reset, "no stream reset").toBe(0);
-      expect(delay.p99, "the main process's event loop delay, p99 in ms").toBeLessThan(5);
+      if (!process.env.CUPPER_PERF_RECORD_ONLY) {
+        expect(delay.p99, "the main process's event loop delay, p99 in ms").toBeLessThan(5);
+      }
       const out = process.env.CUPPER_PERF_OUT;
       if (out) {
         const metric = `bridge_loop_delay_p99${covered ? "_covered" : ""}`;

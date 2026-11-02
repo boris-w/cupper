@@ -3,9 +3,9 @@
 //! test hands its samples to the file in `CUPPER_PERF_OUT`; [`trend`] works
 //! out n, p50, p95 and the maximum of each metric, appends them to
 //! [`HISTORY`] and fails when a metric's p50 is over [`REGRESSION`] times the
-//! median p50 of its history on the same kind of machine. CI runners are
-//! not reference hardware, so only the trend counts here. The e2e job hands
-//! PERF-bridge-gate's samples to [`trend`] too.
+//! median p50 of its history on the same kind of machine. On a GitHub-hosted
+//! runner, no reference machine, they only go to the summary (M1a sync D1).
+//! The e2e job hands PERF-bridge-gate's samples to [`trend`] too.
 //!
 //! A history line holds the date, the commit, the version, the generic model
 //! name (`facts::machine`), the metric, its unit, n, p50, p95 and max: no
@@ -68,8 +68,8 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     trend(ctx, &samples)
 }
 
-/// The samples the PERF tests wrote to `samples`, appended to [`HISTORY`] as
-/// lines of this run; fails when one of them regressed.
+/// The samples the PERF tests wrote to `samples` as lines of this run, for the
+/// summary and, off GitHub-hosted runners, [`HISTORY`]; fails on a regression.
 pub fn trend(ctx: &mut JobCtx, samples: &Path) -> Result<()> {
     let run = Run {
         date: date(u64::try_from(clock::unix_ms() / 86_400_000).unwrap_or(0)),
@@ -77,7 +77,12 @@ pub fn trend(ctx: &mut JobCtx, samples: &Path) -> Result<()> {
         version: env!("CARGO_PKG_VERSION").to_owned(),
         machine: facts::machine(ctx.root),
     };
-    let (lines, regressions) = append(ctx.root, samples, &run)?;
+    let lines = lines(samples, &run)?;
+    let regressions = match facts::hosted() {
+        true => Vec::new(),
+        false => append(ctx.root, &lines)?,
+    };
+    ctx.perf.extend(lines.iter().cloned());
     for line in &lines {
         let text = |key: &str| line[key].as_str().unwrap_or_default().to_owned();
         let (metric, unit) = (text("metric"), text("unit"));
@@ -94,14 +99,16 @@ pub fn trend(ctx: &mut JobCtx, samples: &Path) -> Result<()> {
     bail!("regressed: {}", regressions.join("; "))
 }
 
-/// Appends the lines of `run` for the samples in `samples` to the history of
-/// the work tree at `root`: the lines, and the regressions among them.
-fn append(root: &Path, samples: &Path, run: &Run) -> Result<(Vec<Value>, Vec<String>)> {
+/// The history lines of `run` for the samples in `samples`.
+fn lines(samples: &Path, run: &Run) -> Result<Vec<Value>> {
     let text = fs::read_to_string(samples).context("the PERF tests wrote no samples")?;
-    let measured = text
-        .lines()
-        .map(Measured::parse)
-        .collect::<Result<Vec<_>>>()?;
+    let line = |text| Ok(Measured::parse(text)?.line(run));
+    text.lines().map(line).collect()
+}
+
+/// Appends `lines` to the history of the work tree at `root`: the
+/// regressions among them.
+fn append(root: &Path, lines: &[Value]) -> Result<Vec<String>> {
     let history_path = root.join(HISTORY);
     let previous = fs::read_to_string(&history_path).unwrap_or_default();
     let history: Vec<Value> = previous
@@ -109,12 +116,11 @@ fn append(root: &Path, samples: &Path, run: &Run) -> Result<(Vec<Value>, Vec<Str
         .map(serde_json::from_str)
         .collect::<Result<_, _>>()
         .context("read the PERF history")?;
-    let lines: Vec<Value> = measured.iter().map(|m| m.line(run)).collect();
-    let regressions = regressions(&history, &lines);
+    let regressions = regressions(&history, lines);
     let added: String = lines.iter().map(|line| format!("{line}\n")).collect();
     fs::create_dir_all(history_path.parent().expect("a directory"))?;
     fs::write(&history_path, previous + &added).context("write the PERF history")?;
-    Ok((lines, regressions))
+    Ok(regressions)
 }
 
 /// One metric's samples, as a test recorded them.
@@ -302,15 +308,17 @@ mod tests {
             fs::write(&samples, format!("{line}\n")).unwrap();
         };
         sample(2.0);
-        let (first, regressions) = append(root, &samples, &run()).unwrap();
+        let first = lines(&samples, &run()).unwrap();
+        let regressions = append(root, &first).unwrap();
         assert!(regressions.is_empty(), "no history yet: {regressions:?}");
         let history = || fs::read_to_string(root.join(HISTORY)).unwrap();
         assert_eq!(history(), format!("{}\n", first[0]));
         sample(3.5);
-        let (second, regressions) = append(root, &samples, &run()).unwrap();
+        let second = lines(&samples, &run()).unwrap();
+        let regressions = append(root, &second).unwrap();
         assert_eq!(regressions, ["bridge_loop_delay_p99 p50 3.5 over 1.5 × 2"]);
         assert_eq!(history(), format!("{}\n{}\n", first[0], second[0]));
         fs::remove_file(&samples).unwrap();
-        assert!(append(root, &samples, &run()).is_err(), "no samples");
+        assert!(lines(&samples, &run()).is_err(), "no samples");
     }
 }
