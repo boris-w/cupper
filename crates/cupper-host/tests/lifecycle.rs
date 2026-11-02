@@ -11,7 +11,7 @@
 
 mod common;
 
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -80,10 +80,17 @@ async fn it_lifecycle_startup_ends_what_the_last_run_left_running() {
     let start = |script: &str| {
         let mut command = cupper_sys::Command::new("/bin/sh");
         command.args(["-c", script]).new_session();
+        command.stdout(cupper_sys::Stdio::Pipe);
         cupper_sys::spawn(&command).unwrap()
     };
     let mut adapter = start("exec /bin/sleep 60");
-    let mut tool = start("trap '' TERM; /bin/sleep 60; :");
+    let mut tool = start("trap '' TERM; echo ready; /bin/sleep 60; :");
+    // The host starts once the shell has set its trap: SIGTERM before that
+    // would end it, and SIGKILL find nothing (T216).
+    let mut ready = String::new();
+    let stdout = std::fs::File::from(tool.stdout.take().unwrap());
+    BufReader::new(stdout).read_line(&mut ready).unwrap();
+    assert_eq!(ready, "ready\n");
     let groups = json!([[tool.pid(), tool.start().as_micros()]]).to_string();
     conn.execute(
         "INSERT INTO adapters (instance_id, agent, pid, pgid, start_us, adapter_version,
@@ -920,7 +927,6 @@ impl Repl {
         let (tx, lines) = tokio::sync::mpsc::unbounded_channel();
         let stdout = std::io::BufReader::new(child.stdout.take().unwrap());
         std::thread::spawn(move || {
-            use std::io::BufRead;
             for line in stdout.lines().map_while(Result::ok) {
                 let _ = tx.send(serde_json::from_str(&line).unwrap());
             }
