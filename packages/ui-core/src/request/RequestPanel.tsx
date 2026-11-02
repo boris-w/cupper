@@ -63,6 +63,7 @@ export function RequestPanel(props: {
   const cmdEnterSeen = useRef(false);
   const keys = useRef<(key: PanelKey) => void>(() => undefined);
   const list = useRef<HTMLUListElement>(null);
+  const root = useRef<HTMLDivElement>(null);
 
   const arm = useCallback(() => {
     setReady(false);
@@ -204,19 +205,27 @@ export function RequestPanel(props: {
 
   return (
     <div
+      ref={root}
       data-request-panel=""
       data-request-kind={request.type}
       data-ready={ready || undefined}
       data-activation={active ? "auto" : "manual"}
       onKeyDown={onKeyDown}
       onFocus={() => !active && ready && activate()}
-      onMouseDownCapture={() => {
+      onMouseDownCapture={(event) => {
         downWhileReady.current = ready;
         // The hint goes once the click is over: taking it away now would move
         // the buttons under the pointer, and the click would miss (RP-2).
         if (ready) activate(false);
+        // Before then, a click takes no focus either.
+        else event.preventDefault();
       }}
-      onClickCapture={() => downWhileReady.current && setHint(null)}
+      onClickCapture={() => {
+        if (!downWhileReady.current) return;
+        setHint(null);
+        // A click on the text or a blank leaves the focus outside: the keys go to the options.
+        if (!root.current?.contains(document.activeElement)) list.current?.focus();
+      }}
       className="rounded-composer bg-surface-composer shadow-composer"
     >
       <div className="flex items-start gap-2 px-4 pt-3 pb-2">

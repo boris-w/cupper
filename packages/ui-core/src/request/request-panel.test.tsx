@@ -226,6 +226,35 @@ describe("UNIT-request-panel", () => {
     expect(run.responses()).toEqual([{ type: "selected", option_id: "o4" }]);
   });
 
+  /** A permission waiting for Tab or a click, and its title. */
+  async function waiting() {
+    const run = await setup();
+    await run.push(permission());
+    return { ...run, title: run.panel()?.querySelector("p") as HTMLElement };
+  }
+
+  test("a click on the panel's text puts the focus on its options: numbers, Esc, Enter", async () => {
+    const run = await waiting();
+    await run.ready();
+    fireEvent.mouseDown(run.title);
+    await act(async () => void fireEvent.click(run.title));
+    expect(document.activeElement).toBe(screen.getByRole("listbox"));
+    for (const key of ["1", "Escape", "Enter"]) await run.press(key);
+    expect(run.responses()).toEqual(
+      ["o1", "o4", "o1"].map((option_id) => ({ type: "selected", option_id })),
+    );
+  });
+
+  test("a click pressed before the panel was ready takes no focus, nor keys after", async () => {
+    const run = await waiting();
+    expect(fireEvent.mouseDown(run.title)).toBe(false);
+    await act(async () => void fireEvent.click(run.title));
+    await run.ready();
+    expect(run.panel()?.contains(document.activeElement)).toBe(false);
+    await run.press("Enter");
+    expect(run.responses()).toEqual([]);
+  });
+
   test("numbers are positions in options: privileged confirms, unknown effect does nothing", async () => {
     const run = await setup();
     screen.getByRole("textbox").focus();
