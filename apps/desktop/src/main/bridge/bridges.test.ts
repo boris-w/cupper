@@ -7,24 +7,27 @@ import { describe, expect, test } from "vitest";
 
 import { HOST_PORT } from "../../shared/ipc";
 import { MAIN_DOCUMENT_URL } from "../window";
-import { WindowBridges } from "./bridges";
+import { WindowBridges, type BridgesDeps } from "./bridges";
 import { fixtures, mockConnect } from "./testing";
 import { InputGuard } from "../input/guard";
 
 /** A window's webContents, as far as the bridges use it. */
-function contents(id: number) {
+function contents(id: number, reloads: number[] = []) {
   const emitter = new EventEmitter();
   const mainFrame = { url: MAIN_DOCUMENT_URL } as WebFrameMain;
   const sent: unknown[][] = [];
   const postMessage = (...args: unknown[]) => void sent.push(args);
-  return {
-    it: Object.assign(emitter, { id, mainFrame, postMessage }) as unknown as WebContents,
-    emitter,
-    sent,
+  const more = {
+    id,
+    mainFrame,
+    postMessage,
+    isDestroyed: () => false,
+    reload: () => reloads.push(id),
   };
+  return { it: Object.assign(emitter, more) as unknown as WebContents, emitter, sent };
 }
 
-function bridges(host: MockHost) {
+function bridges(host: MockHost, deps: Partial<BridgesDeps> = {}) {
   return new WindowBridges({
     connect: () => mockConnect(host),
     controlReady: async () => undefined,
@@ -34,6 +37,7 @@ function bridges(host: MockHost) {
       bridge: { post: () => undefined, onMessage: () => undefined, close: () => undefined },
       window: {} as MessagePortMain,
     }),
+    ...deps,
   });
 }
 
@@ -72,5 +76,34 @@ describe("UNIT-bridge-lifecycle", () => {
     await open();
     window.emitter.emit("destroyed");
     await until(() => expect(alive()).toEqual([false, false, false, false]));
+  });
+
+  test("windows whose connection failed load again once the control connection is back", async () => {
+    // As after restarting a host this app could not prove its key to (T215).
+    const host = new MockHost(fixtures);
+    let refused = true;
+    let controlBack = true;
+    const all = bridges(host, {
+      connect: () => (refused ? Promise.reject(new Error("unauthenticated")) : mockConnect(host)),
+      controlReady: () => (controlBack ? Promise.resolve() : Promise.reject(new Error("failed"))),
+    });
+    const reloads: number[] = [];
+    const open = (id: number) => {
+      const window = contents(id, reloads).it;
+      return all.open(window, window.mainFrame);
+    };
+    await expect(open(1)).rejects.toThrow("unauthenticated");
+    refused = false;
+    await open(2);
+    await open(3);
+    // Window 2's connection drops and does not come back; window 3's stays.
+    controlBack = false;
+    host.connections[0]?.close();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(reloads).toEqual([]);
+    all.reload();
+    expect(reloads).toEqual([1, 2]);
+    all.reload();
+    expect(reloads).toEqual([1, 2]);
   });
 });
