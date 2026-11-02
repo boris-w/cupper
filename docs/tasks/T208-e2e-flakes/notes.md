@@ -127,8 +127,9 @@ Run [41007324304](https://github.com/boris-w/cupper/actions/runs/41007324304), 2
 |---|---|---|---|
 | [41007324304](https://github.com/boris-w/cupper/actions/runs/41007324304) | 228eb5e (before, with the probe) | 2 | 289/300 passed, 11 failed; median 15.9 s |
 | [41378847141](https://github.com/boris-w/cupper/actions/runs/41378847141) | 32a6f20 (after) | 2 | **300/300 passed**; median 36.3 s |
+| [41387190303](https://github.com/boris-w/cupper/actions/runs/41387190303) | be46b0b (after) | 2 | **100/100 passed**; 15.3–27.2 s, median 17.4 s, no step |
 
-- Durations: in run 41378847141 the first 138 tests took 16.6–19.4 s, close to the run before the fix. From about 03:10:30 UTC to the end, every test took 37–45 s, and the two copies started and finished within 0.2 s of each other. A step in the middle of a run, with the two copies in lockstep, points at the runner and not at each test.
+- Durations: in run 41378847141 the first 138 tests took 16.6–19.4 s, close to the run before the fix. From about 03:10:30 UTC to the end, every test took 37–45 s, and the two copies started and finished within 0.2 s of each other. A step in the middle of a run, with the two copies in lockstep, points at the runner and not at each test. The orchestrator's repeat (run 41387190303, 100 times) had no step: every quarter's median was 16.3–18.3 s. So the step was the runner.
 - Locally, single copy, the same test with a CPU count of the app's processes, three times each:
 
   | | Wall clock | App CPU time |
