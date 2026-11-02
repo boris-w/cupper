@@ -15,7 +15,7 @@ use cupper_sys::{RefusalKind, Requirement};
 use serde_json::{Value, json};
 
 use super::testkit::{Client, KEY, TestGateway, initialize_params, key_auth};
-use super::{AuditEvent, CloseReason, Routes, Verdict};
+use super::{AuditEvent, CONN, CloseReason, Routes, Verdict};
 #[cfg(any(feature = "dev-auth", feature = "test-harness"))]
 use crate::clock::SystemClock;
 use crate::clock::{ManualClock, MonoTime};
@@ -53,6 +53,7 @@ async fn refused(gw: &mut TestGateway, make: impl Fn(&str) -> Value) -> Value {
     let params = key_params(&nonce, make(&nonce));
     let err = client.call("initialize", params).await.unwrap_err();
     assert_eq!(client.next().await, None, "closed after {err}");
+    drop(client);
     assert!(matches!(gw.closed().await, CloseReason::HandshakeFailed(_)));
     err
 }
@@ -188,6 +189,7 @@ async fn it_handshake_failed_initialize_is_answered_then_closed() {
             assert_eq!(err["data"]["supported"], json!({"min": 1, "max": 1}));
         }
         assert_eq!(client.next().await, None, "closed after {err}");
+        drop(client);
 
         let accepted = gw.record().await.event;
         let AuditEvent::Accepted {
@@ -205,6 +207,27 @@ async fn it_handshake_failed_initialize_is_answered_then_closed() {
             "{reason:?}"
         );
     }
+}
+
+#[tokio::test]
+async fn it_handshake_refused_the_host_keeps_its_end_until_the_client_closes() {
+    // The client compares the host's token on every read (design 5.8.1): it
+    // reads the error and the end of file while the host's end is open (T215).
+    let routes = Routes::default();
+    let quiet = routes.quiescence().clone();
+    let clock = Arc::new(ManualClock::new());
+    let mut gw = TestGateway::with(TestGateway::config(None), clock, routes);
+    let mut client = Client::connect(&gw.socket).await;
+    let mut params = initialize_params(&client.hello().await, peer());
+    params["nonce"] = json!("ab".repeat(32));
+    let err = client.call("initialize", params).await.unwrap_err();
+    assert_eq!(code(&err), ("unauthenticated", "bad_nonce"));
+    assert_eq!(client.next().await, None);
+    quiet.settled().await;
+    assert_eq!(quiet.running(CONN), 1, "the host closed its end first");
+    assert!(cupper_sys::peer_token(client.stream()).is_ok());
+    drop(client);
+    assert!(matches!(gw.closed().await, CloseReason::HandshakeFailed(_)));
 }
 
 #[tokio::test]
@@ -361,6 +384,7 @@ async fn it_handshake_first_message_must_be_initialize() {
             assert_eq!(reply["error"]["code"], error, "{reply}");
         }
         assert_eq!(client.next().await, None);
+        drop(client);
         let closed = gw.closed().await;
         assert!(expect(&closed), "{closed:?}");
     }

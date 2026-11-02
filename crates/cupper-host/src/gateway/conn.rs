@@ -65,10 +65,20 @@ pub(super) async fn run(live: Live, stream: UnixStream, id: ConnId) {
         // peer that does not read.
         outbox.finish();
         let grace = gw.durations.get(GATEWAY_CLOSE_GRACE);
-        let grace = std::pin::pin!(gw.clock.timer_at(gw.clock.now_mono() + grace));
+        let mut grace = std::pin::pin!(gw.clock.timer_at(gw.clock.now_mono() + grace));
         participant
-            .idle(futures::future::select(&mut writing, grace))
+            .idle(future::select(&mut writing, grace.as_mut()))
             .await;
+        // A refused handshake: the writer is done, its end shut. The peer
+        // checks the host's token on every read, which an end the host
+        // closed no longer gives (design 5.8.1): the end stays open, what
+        // comes is dropped, until the peer closes or the grace ends (T215).
+        let refused = matches!(conn.phase, Phase::Hello(_))
+            && !matches!(end.reason, CloseReason::HostExiting);
+        if refused && writing.is_finished() {
+            let drained = std::pin::pin!(drain(&reader));
+            participant.idle(future::select(drained, grace)).await;
+        }
     }
     outbox.close();
     writing.abort();
@@ -356,6 +366,12 @@ async fn interrupted(deadline: Option<&mut Timer>, closing: &mut watch::Receiver
         },
         None => exiting.await,
     }
+}
+
+/// Reads until the peer closes, dropping what comes.
+async fn drain(reader: &OwnedReadHalf) {
+    let mut buf = [0; 1024];
+    while matches!(read(reader.as_ref(), &mut buf).await, Ok(got) if got.len > 0) {}
 }
 
 /// Reads like `read(2)`, closing any fds that came with the data: a plain
