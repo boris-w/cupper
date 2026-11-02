@@ -479,3 +479,4 @@
 | 以后查偶发失败的任务 | macOS 上阻塞读等 Unix 套接字的 EOF、对端用 `shutdown` 结束时，偶尔会睡过对端的半关闭（xnu 的竞争，T207 的 notes 有证据）。别的测试和 testkit 里还有没有这样的写法，T207 没有排查；碰到"读不到 EOF、等满超时"的偶发失败，先查这一点 | T207 |
 | 下一个改动 `crates/cupper-sys/**` 的任务 | `cupper-sys.yml` 改到 `macos-26` 上跑（作业 `security-peer (macos-26)`），T211 的分支没改 cupper-sys，它还没真正跑过；合并前要看到它在 PR 上通过 | T211 |
 | T160 | Rust 二进制没有设置 deployment target，Mach-O 里的 minos 是 rustc 的默认值，和 `LSMinimumSystemVersion` 15.0 不一致；打自用版时定要不要设 `MACOSX_DEPLOYMENT_TARGET=15.0` | T211 |
+| 以后查 e2e 偶发失败的任务 | e2e 的 Electron 用例没有开 Playwright 的 screenshot 和 trace，失败时构件里只有 fixture 挂上的日志（`logs/main.log`、`data/logs/*.log`）和 `error-context.md`；两轮分别在 `rest/`、`focus/` 下。缺截图时再单独开任务加 | T212 |
