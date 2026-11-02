@@ -375,53 +375,12 @@ async fn it_recording_export_two_instances_read_back_and_sanitize() {
     let session = create(&client, "say hi; stderr oops").await;
     let turns = "SELECT status FROM turns ORDER BY turn_no";
     until(&data_dir, "host.db", turns, &["completed"]).await;
-    // T218 probe: the same verdict at 30 s, but a late turn is waited for
-    // (120 s more) and the host's state is printed, to tell slow from stuck.
-    let clock = SystemClock::new();
     for (text, statuses) in [
         ("exit 0", &["completed", "failed"][..]),
         ("say again", &["completed", "failed", "completed"]),
     ] {
-        eprintln!("T218 send {text:?} at {}", clock.now_wall_ms());
         send(&client, &session, text).await;
-        eprintln!("T218 sent {text:?} at {}", clock.now_wall_ms());
-        let started = clock.now_mono();
-        let (late, give_up) = (started + PATIENCE, started + PATIENCE * 5);
-        let mut dumped = false;
-        loop {
-            let now = query(&data_dir.join("host.db"), turns);
-            if now == statuses {
-                break;
-            }
-            // Every turn ended, one of them not as expected: no more waiting.
-            let ended = now.len() == statuses.len() && !now.iter().any(|s| s == "running");
-            if ended && !dumped {
-                eprintln!(
-                    "T218 ENDED OTHERWISE {text:?} at {}: {now:?}",
-                    clock.now_wall_ms()
-                );
-                dumped = true;
-                break;
-            }
-            if clock.now_mono() >= late && !dumped {
-                dumped = true;
-                eprintln!("T218 LATE {text:?} at {}: {now:?}", clock.now_wall_ms());
-                t218_dump(&data_dir, &session, host.0.id());
-            }
-            if clock.now_mono() >= give_up {
-                eprintln!("T218 GAVE UP {text:?} at {}: {now:?}", clock.now_wall_ms());
-                break;
-            }
-            wait(&clock).await;
-        }
-        let took = clock.now_mono().saturating_duration_since(started);
-        eprintln!("T218 {text:?} took {took:?}, at {}", clock.now_wall_ms());
-        if dumped || (text == "say again" && std::env::var_os("T218_DUMP").is_some()) {
-            t218_dump(&data_dir, &session, host.0.id());
-        }
-        if dumped {
-            panic!("{turns}: not {statuses:?} within {PATIENCE:?} (T218 probe)");
-        }
+        until(&data_dir, "host.db", turns, statuses).await;
     }
     // Raw frames hold no barrier: wait for the notes to land.
     let notes = "SELECT json_extract(frame, '$.event') FROM raw_frames WHERE dir = 'note'
@@ -1614,97 +1573,4 @@ async fn it_runtime_first_prompt_waits_for_the_install() {
         terminate(&host.0);
         assert_eq!(exit_code(&mut host.0).await, 0);
     }
-}
-
-/// T218 probe: what the host has of the session, its adapters and its log,
-/// the host's adapter processes and the load.
-fn t218_dump(data_dir: &Path, session: &SessionId, host: u32) {
-    let rows = |db: &Path, sql: &str| -> Vec<String> {
-        let conn = open_reader(db).unwrap();
-        let mut q = conn.prepare(sql).unwrap();
-        let n = q.column_count();
-        let cell = |v: rusqlite::types::ValueRef<'_>| match v {
-            rusqlite::types::ValueRef::Null => "-".to_owned(),
-            rusqlite::types::ValueRef::Integer(v) => v.to_string(),
-            rusqlite::types::ValueRef::Real(v) => v.to_string(),
-            rusqlite::types::ValueRef::Text(t) => String::from_utf8_lossy(t).into_owned(),
-            rusqlite::types::ValueRef::Blob(_) => "<blob>".to_owned(),
-        };
-        q.query_map([], |row| {
-            Ok((0..n)
-                .map(|i| cell(row.get_ref(i).unwrap()))
-                .collect::<Vec<_>>()
-                .join(" | "))
-        })
-        .unwrap()
-        .collect::<Result<_, _>>()
-        .unwrap()
-    };
-    let print = |title: &str, lines: Vec<String>| {
-        eprintln!("T218 == {title}");
-        for line in lines {
-            eprintln!("T218   {line}");
-        }
-    };
-    let host_db = data_dir.join("host.db");
-    print(
-        "turns",
-        rows(
-            &host_db,
-            "SELECT turn_no, status, started_at, ended_at, stop_reason, snapshot_status, first_seq, last_seq FROM turns ORDER BY turn_no",
-        ),
-    );
-    print(
-        "sessions",
-        rows(
-            &host_db,
-            "SELECT state, queue_paused, queue_version, agent_session_id FROM sessions",
-        ),
-    );
-    print(
-        "adapters",
-        rows(
-            &host_db,
-            "SELECT instance_id, pid, started_at, ended_at, exit_status FROM adapters ORDER BY started_at",
-        ),
-    );
-    let sql = format!(
-        "SELECT seq, ts, type, substr(json_extract(json, '$.data'), 1, 200) FROM events WHERE stream = 'session/{session}' ORDER BY seq"
-    );
-    print("session events", rows(&host_db, &sql));
-    print(
-        "index events",
-        rows(
-            &host_db,
-            "SELECT seq, ts, type, substr(json_extract(json, '$.data'), 1, 200) FROM events WHERE stream = 'index' ORDER BY seq",
-        ),
-    );
-    print(
-        "raw",
-        rows(
-            &data_dir.join("raw.db"),
-            "SELECT ts, substr(instance_id, 1, 14), seq, dir, substr(frame, 1, 120) FROM raw_frames ORDER BY ts, seq",
-        ),
-    );
-    let log = std::fs::read_to_string(log_dir(data_dir).join("host.log")).unwrap_or_default();
-    print("host.log", log.lines().map(str::to_owned).collect());
-    let ps = Command::new("/bin/ps")
-        .args(["-A", "-o", "pid=,ppid=,pgid=,stat=,etime=,command="])
-        .output()
-        .unwrap();
-    let ps = String::from_utf8_lossy(&ps.stdout).into_owned();
-    let host = host.to_string();
-    let children = ps.lines().filter(|l| {
-        l.split_whitespace().nth(1) == Some(host.as_str())
-            || l.split_whitespace().next() == Some(host.as_str())
-    });
-    print("ps", children.map(str::to_owned).collect());
-    let load = Command::new("/usr/sbin/sysctl")
-        .args(["-n", "vm.loadavg"])
-        .output()
-        .unwrap();
-    print(
-        "load",
-        vec![String::from_utf8_lossy(&load.stdout).trim().to_owned()],
-    );
 }

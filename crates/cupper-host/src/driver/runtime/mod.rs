@@ -464,7 +464,6 @@ impl Actor {
 
     fn due(&mut self) {
         while let Some(due) = self.timers.pop_due(self.now()) {
-            tracing::info!("T218 due {due:?}");
             match due {
                 Due::Start => self.ensure_started(),
                 Due::Sample => self.sample(),
@@ -562,16 +561,7 @@ impl Actor {
 
     async fn mail(&mut self, mail: Mail) {
         match mail {
-            Mail::Attach(pending) => {
-                tracing::info!(
-                    "T218 mail attach: instance {} wire {} stopping {} waiting {}",
-                    self.instance.is_some(),
-                    self.wire.is_some(),
-                    self.stopping.is_some(),
-                    self.waiting.len()
-                );
-                self.attach(*pending)
-            }
+            Mail::Attach(pending) => self.attach(*pending),
             Mail::Command(command) => self.command(command).await,
             Mail::Withdrawn(ask) => {
                 // Still asked: tell its session, which answers `Cancelled`.
@@ -695,12 +685,6 @@ impl Actor {
     /// starting, or the backoff is not over: then when it is.
     fn ensure_started(&mut self) {
         let busy = self.instance.is_some() || self.wire.is_some() || self.stopping.is_some();
-        tracing::info!(
-            "T218 ensure_started: busy {busy} waiting {} next {:?} now {:?}",
-            self.waiting.len(),
-            self.restarts.next_start(),
-            self.now()
-        );
         if busy || self.waiting.is_empty() {
             return;
         }
@@ -726,15 +710,11 @@ impl Actor {
                 let _ = exited.send(status);
             };
             let mailbox = wire.clone();
-            tracing::info!("T218 start {id}");
             let started = launch::start(&launch, &cx, id.clone(), mailbox, stop, exited).await;
-            tracing::info!("T218 started {id}: {}", started.is_ok());
             let _ = wire.send(Wire::Started(Box::new(started)));
             if let Ok(status) = exit.await {
-                tracing::info!("T218 exited {id}: {status}");
                 // Recorded before the sessions hear of it.
                 let _ = launch::ended(&cx.writer, cx.clock.now_wall_ms(), &id, status).await;
-                tracing::info!("T218 exit recorded {id}");
                 let _ = wire.send(Wire::Exited(status));
             }
         });
@@ -769,16 +749,13 @@ impl Actor {
 
     fn attach(&mut self, mut pending: Pending) {
         let (Some(instance), Some((wire, _))) = (&self.instance, &self.wire) else {
-            tracing::info!("T218 attach waits");
             self.waiting.push(pending);
             return self.ensure_started();
         };
         // Closing: the attach hears that the adapter went away.
         let Some(conn) = &instance.conn else {
-            tracing::info!("T218 attach: no conn");
             return;
         };
-        tracing::info!("T218 attach to {}", instance.id);
         // The agent gets the real path (K13).
         let cwd = fs::canonicalize(&pending.attach.cwd).unwrap_or(pending.attach.cwd);
         pending.attach.cwd = cwd.clone();
@@ -806,22 +783,10 @@ impl Actor {
             ),
         };
         // The connection is gone; its exit follows and fails the attach.
-        tracing::info!("T218 attach sent: {:?}", sent.as_ref().err());
         drop(sent);
     }
 
     fn wire(&mut self, wire: Wire) {
-        match &wire {
-            Wire::Agent(_) => {}
-            Wire::Started(started) => tracing::info!("T218 wire started: {}", started.is_ok()),
-            Wire::Opened(_, result) => {
-                tracing::info!("T218 wire opened: {:?}", result.as_ref().err())
-            }
-            Wire::Prompted(_, tag, result) => {
-                tracing::info!("T218 wire prompted {tag:?}: {:?}", result.as_ref().err())
-            }
-            other => tracing::info!("T218 wire {other:?}"),
-        }
         match wire {
             Wire::Started(started) => self.started(*started),
             Wire::Exited(status) => {
@@ -1012,10 +977,8 @@ impl Actor {
 
     async fn command(&mut self, command: DriverCommand) {
         let Some((_, conn, wire)) = link(&self.instance, &self.wire) else {
-            tracing::info!("T218 command dropped: {command:?}");
             return;
         };
-        tracing::info!("T218 command: {command:?}");
         match command {
             DriverCommand::Prompt {
                 session,
@@ -1136,8 +1099,7 @@ impl Actor {
                     (Asked::Form(responder), tool_call_id, request),
                 );
             }
-            FromAgent::Closed(result) => {
-                tracing::info!("T218 closed: {result:?}");
+            FromAgent::Closed(_) => {
                 self.closed = true;
                 self.end();
             }
@@ -1192,7 +1154,6 @@ impl Actor {
 
     /// Ends the instance once it has exited and its connection has closed.
     fn end(&mut self) {
-        tracing::info!("T218 end? exit {:?} closed {}", self.exit, self.closed);
         let (Some(status), true) = (self.exit, self.closed) else {
             return;
         };
@@ -1202,10 +1163,8 @@ impl Actor {
             return;
         }
         let Some(Instance { id, tail, .. }) = self.instance.take() else {
-            tracing::info!("T218 end: no instance");
             return;
         };
-        tracing::info!("T218 end {id}");
         self.wire = None;
         self.asks.clear();
         // Their attaches hear that the adapter went away.
