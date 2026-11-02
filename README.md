@@ -23,7 +23,7 @@ pnpm test
 cargo xtask ci pr # every check a pull request runs
 ```
 
-macOS 14 or later is required.
+macOS 15 or later is required.
 
 ## License
 
