@@ -296,7 +296,7 @@ fn info_plist(identifier: &str) -> String {
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>{version}</string>
 	<key>CFBundleVersion</key><string>{version}</string>
-	<key>LSMinimumSystemVersion</key><string>14.0</string>
+	<key>LSMinimumSystemVersion</key><string>15.0</string>
 	<key>LSUIElement</key><true/>
 </dict>
 </plist>
@@ -396,7 +396,7 @@ mod tests {
         assert_eq!(plist["CFBundleIdentifier"], "dev.cupper.app.local.host");
         assert_eq!(plist["CFBundleExecutable"], "cupper-host");
         assert_eq!(plist["LSUIElement"], true);
-        assert_eq!(plist["LSMinimumSystemVersion"], "14.0");
+        assert_eq!(plist["LSMinimumSystemVersion"], "15.0");
         let keys: Vec<&String> = plist.as_object().expect("a dictionary").keys().collect();
         assert!(
             !keys.iter().any(|key| key.contains("UsageDescription")),
