@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.84
+- 版本：v1.3.85
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -140,13 +140,14 @@
     - MAN-notification = `-spike`（T101）+ `-product`（T150）；
     - MAN-ui6 = `-shell`（T152）+ `-full`（T148）；
     - UI-settings = `-agents`（T151）+ `-general`（T147）；
-    - IT-sys-peer = `-current`（T021，作者机器上的系统）+ `-macos15` + `-macos26`（每晚由 `security-peer` 在 runner 上跑）；`-macos14` 自 2026-11-02 不适用（最低支持版本提到 15）。
+    - IT-sys-peer = `-current`（T021，作者机器上的系统）+ `-macos15` + `-macos26`（每晚由 `security-peer` 在 runner 上跑）；`-macos14`、`-current` 自 2026-11-02 不适用（最低支持版本提到 15；用户的 Mac 是 macOS 26，由 `-macos26` 覆盖，M1a 同步会 D2）。
+    - PERF 编号一律登记为 `status = "record"`（只记录）：在登记的套件里有 `measured` 或 `pass` 就算完成，不按预算判定；托管 runner 的摘要把 PERF 结果记作 `measured`；登记为 `active` 的编号只有 `measured` 时算问题（M1a 同步会 D1，T219）。
   - 互为替代的条件任务（T131 与 T139、T150 与 T158）登记同一个编号，由实际派发的那个产出；MAN-keyboard 每个 Electron 大版本做一次（T077、T107），证据按版本区分。
   - "待完成"由 trace-ids 自动算出，任务不手工删行。
   - trace-ids 读测试运行结果（cargo-nextest 的 JUnit 报告和 Playwright 的 JSON 报告；stable 工具链下 libtest 的 JSON 输出不可用），确认编号确实执行、通过，并且跑在登记的套件里。`#[ignore]`、`test.skip` 的用例不算。
   - 人工项（MAN）的证据是 `docs/` 下带日期和版本的记录，格式由 T173 定；MAN-keyboard 要与当前 Electron 大版本对得上，升级后旧证据失效。
   - 条件任务的编号在检查点通过后标为"不适用（Kx 已通过）"，不挡里程碑退出（P-7）。
-  - 对端校验的编号按 runner 的 macOS 大版本记作 IT-sys-peer-macos15、-macos26（v1.3.69 起由 CI 覆盖，2026-11-02 起为 15 和 26）。本机跑的 `security-peer` 只记作 `IT-sys-peer-current`，摘要记下系统版本。
+  - 对端校验的编号按 runner 的 macOS 大版本记作 IT-sys-peer-macos15、-macos26（v1.3.69 起由 CI 覆盖，2026-11-02 起为 15 和 26）。本机跑的 `security-peer` 只记作 `IT-sys-peer-current`（该编号自 2026-11-02 不适用），摘要记下系统版本。
   - 里程碑退出时，trace-ids 读入库摘要里的逐编号结果清单（1.8），所以"待完成为空"可以从仓库复核。
 - 端到端用例按 5.12.4 的〔PR〕〔晚〕标 `@smoke` 或不标，trace-ids 核对每个编号的套件（T090）。
 
@@ -165,12 +166,12 @@ v1.3.65 起，用户决定建 GitHub 公开仓库 `boris-w/cupper`，CI 放到 G
 | 环境 | 本机："干净 worktree"指 git 状态干净（`git status` 为空）；worktree 之间只共享下载缓存（cargo registry、pnpm store）和编译器缓存，不共用 `CARGO_TARGET_DIR`（T015 实际遇到）。runner：每个作业一台全新机器，缓存只有 cargo 注册表与 target（rust-cache）、pnpm store、runtime-pack 与 git-lfs 的下载；运行时包的 stage 按清单核对文件与哈希才算就绪，不进任何缓存（T197）。e2e 用的 App 和 `CupperHost.app` 必须由当前提交构建，摘要记下产物哈希 |
 | 机器级锁 | e2e、`ui`、性能、nfr1 这几类作业在本机取同一把机器级锁，串行运行，避免子 agent 和编排者互抢 CPU、造成计时类误报；runner 上每个作业独占一台机器，锁不起作用也不碍事。e2e 的 Playwright workers 取"核数减一，最多 2"（T090、T197） |
 | 验收记录 | 卷宗里记 PR 和运行的链接。GitHub 上的结构化摘要与原始日志作为构件上传（日志保留 7 天），不提交进仓库；本机跑的摘要仍可随任务提交。摘要的内容不变：提交、工具链版本、macOS 版本、机型泛称、各作业的通过数和失败数、耗时、逐编号的结果清单（编号、套件、结果、提交）和 e2e 产物哈希，入库或上传前过个人信息扫描（`xtask ci` 自带字段白名单检查，再过 `testdata-scan`）（测试 #11）。托管 runner 上身份名单为空，通用模式的扫描照旧 |
-| 每晚作业 | `nightly.yml` 每晚定时运行，也可手动触发：differential、`security-peer`（在 `macos-15` 和 `macos-26` 上各一次）、e2e 全集、compat-framework。`perf` 不上 CI（runner 不是参考机型），由编排者在本机 main 上跑 `xtask ci nightly --record docs/ci/nightly/`，历史与摘要一起提交。编排者每天看一次 nightly 的结果 |
+| 每晚作业 | `nightly.yml` 每晚定时运行，也可手动触发：differential、`security-peer`（在 `macos-15` 和 `macos-26` 上各一次）、e2e 全集、compat-framework。`perf`（`macos-15`）也在 nightly 里跑，只记录：测量照做，各指标的 n、p50、p95、最大值以历史行的格式写进摘要的 `perf` 列表，不按预算判定、不判退化，也不写 `history.jsonl`；e2e 全集同样跑 PERF-bridge-gate，只记录 p99（`CUPPER_PERF_RECORD_ONLY`）；托管 runner 上的 PERF 编号在摘要里记作 `measured`（M1a 同步会 D1，T219）。编排者每天看一次 nightly 的结果 |
 | 截图基线 | 渲染因素固定（随夹具附带开源字体，固定视口、缩放、语言、时区、虚拟时钟，关闭动画，隐藏光标）。基线由 `ui-baseline.yml` 在 runner 上生成，产出为构件，经 PR 入库；元数据记下 macOS 和 Chromium（Electron）版本。Chromium 版本严格比对，对不上就失败；macOS 不同（不论大小版本）只给提示，由像素决定（T084，v1.3.69 由 T197 改：runner 与作者机器上的基线逐字节相同） |
-| 性能趋势 | "历史中位数"取自入库的历史数值序列 `testdata/perf/history.jsonl`（只含日期、提交、版本、机型泛称和统计值），每次 `xtask ci nightly` 里的 `perf` 作业每个指标追加一行；某项 p50 超过同一指标、同一机型历史 p50 中位数的 1.5 倍判为退化（T047、T117）。编排者在 main 上跑完 `ci nightly` 后，历史与摘要一起提交 |
+| 性能趋势 | "历史中位数"取自入库的历史数值序列 `testdata/perf/history.jsonl`（只含日期、提交、版本、机型泛称和统计值），只由作者机器上的 `xtask ci perf` 或 `ci nightly` 追加，并在那里判退化：某项 p50 超过同一指标、同一机型历史 p50 中位数的 1.5 倍判为退化（T047、T117）。按 2026-11-02 的决定，目前不安排在作者机器上跑（`docs/meetings/2026-11-02-perf-local/`）；runner 上的数值只在 nightly 摘要的 `perf` 列表里。PERF 不卡任何里程碑；有了自用构建、用户愿意时在真机上补测，届时再定是否恢复闸门（M1a 同步会 D1，T219） |
 | LFS | xtask 下载锁定版本的 git-lfs 到缓存目录，核对哈希后使用，本机也能跑（T061、T121，测试 #12） |
-| M1a 退出 | 在退出候选的同一个提交上：`xtask ci e2e --suite nfr1` 连续 20 次全绿（Playwright 并行度同 CI 设定，不允许重试、跳过或隔离，失败一次查明根因后清零），再跑 5 次降速变体（占用一半核心的负载进程或降低优先级）；`xtask ci pr` 与 `xtask ci nightly` 各通过一次。连跑在 GitHub 的 macOS runner 上做（`e2e-repeat` 或 nightly 的 e2e 全集），运行期间没人操作机器；PERF 闸门在作者机器上判（T099、T197） |
-| 本机替代不了的项 | 已由 CI 覆盖：macOS 15、26 上的对端校验由每晚的 `security-peer` 在 `macos-15`、`macos-26` 上跑，按 runner 的 macOS 大版本记作 IT-sys-peer-macos15、-macos26（T197；2026-11-02 起不再有 macOS 14，最低支持版本提到 15）。CI 负载下的稳定性由 runner 上的连跑覆盖 |
+| M1a 退出 | 在退出候选的同一个提交上：`xtask ci e2e --suite nfr1` 连续 20 次全绿（Playwright 并行度同 CI 设定，不允许重试、跳过或隔离，失败一次查明根因后清零），再跑 5 次降速变体（占用一半核心的负载进程或降低优先级）；`xtask ci pr` 与 `xtask ci nightly` 各通过一次。连跑在 GitHub 的 macOS runner 上做（`e2e-repeat` 或 nightly 的 e2e 全集），运行期间没人操作机器；PERF 不作为退出条件，只记录（M1a 同步会 D1，T219） |
+| 本机替代不了的项 | 已由 CI 覆盖：macOS 15、26 上的对端校验由每晚的 `security-peer` 在 `macos-15`、`macos-26` 上跑，按 runner 的 macOS 大版本记作 IT-sys-peer-macos15、-macos26（T197；2026-11-02 起不再有 macOS 14，最低支持版本提到 15）。CI 负载下的稳定性由 runner 上的连跑覆盖。作者真机上的对端校验（IT-sys-peer-current）自 2026-11-02 不适用：用户的 Mac 是 macOS 26，由 IT-sys-peer-macos26 覆盖（M1a 同步会 D2） |
 | 仓库设置 | 外部贡献者的工作流一律需要批准；workflow 默认只读，只用 `pull_request` 触发；只允许 GitHub 官方的 action 和 `Swatinem/rust-cache`，必须锁定到提交 SHA；不用自托管 runner；签名密钥只放受保护的 environment（R12） |
 
 子 agent 不 push（[`CLAUDE.md`](../CLAUDE.md) 守则第 1、9 条）：要在 GitHub 上跑时请编排者推送、开 PR。编排者合并前核对 PR 上的检查与子 agent 的汇报（流程见 [`00-process.md`](00-process.md)）。
@@ -465,7 +466,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T152 | 视觉调整：暗色核对结果、半透明侧边栏与窗口外观 | feat | 5.7.4、5.7.7（主题）、5.7.10、PS-1、UI-3、UI-6 | T103、T106 | 做：按 T106 的核对结果修正暗色取值（编排者先更新设计 5.7.10），完成暗色主题（两个文档共用）、跟随系统与覆盖、Shiki 双主题；半透明侧边栏（`vibrancy: 'menu'`，关闭后和系统"降低透明度"时用不透明的回退色）；窗口外观的细节（顶栏、交通灯与侧边栏头部的对齐）；不改动内部组件；一并更新它影响到的已有截图基线（单独提交）。排在 SP-6 的场景 1–4、7、8 之后；同波里先合并它 | UI-layout、UI-theme；MAN-ui6-shell | M | 是：MAN-ui6-shell 需要作者与本机 Codex 并排比对 | T.ui、D.main |
 | T153 | 会话管理界面、快捷键与"打开"按钮 | feat | 5.7.7（快捷键）、5.5.9、PS-4、UI-0、UI-4 | T125、T126、T152 | 做：会话行的悬停菜单和右键菜单、顶栏的"⋯"会话菜单（重命名弹窗、归档与 worktree 清理提示、复制工作目录）；5.7.7 按 Codex 默认值的快捷键子集与 cupper 的别名（⌘.、⌘⌥T），菜单加速键经 `onCommand`（含 ⌘⌥A 跳到下一个需要处理的会话）；顶栏的"打开" | E2E-archive-cleanup、E2E-next-needs-action、E2E-shortcuts、E2E-workspace-open | M | 否 | T.ui、D.main |
 | **T154** | 中英文与截图基线 | feat | 5.7.7（本地化）、UI-5 | T148 | 做：补齐中英文文案（含主进程原生确认框）、跟随系统语言与覆盖、截图回归扩到两种主题乘两种语言；基线锁定的是 T148 修正后的视觉 | UI-locale | M | 否 | T.ui、D.main |
-| T155 | SP-6 场景改写为性能回归 | test | 5.9.7（产出） | T103、T146、T150 | 做：把场景 2、3、4、7、8 改写成 `xtask ci nightly` 的性能回归与趋势阈值，覆盖代码高亮、回合折叠和"从通知跳过去" | 新增 PERF-ui-stream、PERF-ui-long-session、PERF-ui-switch、PERF-ui-occluded | M | 否 | T.ui、C |
+| T155 | SP-6 场景改写为性能回归 | test | 5.9.7（产出） | T103、T146、T150 | 做：把场景 2、3、4、7、8 改写成 `xtask ci nightly` 的性能测量（只记录，D1），覆盖代码高亮、回合折叠和"从通知跳过去" | 新增 PERF-ui-stream、PERF-ui-long-session、PERF-ui-switch、PERF-ui-occluded | M | 否 | T.ui、C |
 | T156 | 防休眠（NFR-13） | feat | 5.2.13（防休眠） | T099 | 做：cupper-sys 的 IOPMAssertion、Supervisor 的引用计数、`host.updated.power_assertion` | 新增 IT-power-assertion | S | 否 | H.sys、H.core |
 | T157 | 安全边界说明（用户文档，完整版） | docs | 5.8.7、Q21、Q28、Q34 | T113 | 做：在 T160 的"自用前须知"基础上，按 5.8.7 写完整的用户文档，补上 Codex 部分和 Q28、Q34 的结论，以及自用构建的剩余风险（包内的库被替换后仍会被加载；每次手动替换 App 都要重新确认 TCC 授权；两者的根本解决都是 Q35） | MAN-security-doc | S | 否（建议用户审阅） | Doc |
 | T158 | （条件）主进程通知后备 | feat | 5.7.2（notifications）、Q2 | T099、T101 | 触发：K5 不通过。做：主进程在 control 连接上订阅索引流，取 `notification.intent` 弹通知（不放批准按钮），点击只导航；替代 T150 的宿主通知部分 | E2E-notification-navigate；新增 UNIT-main-notifications（含"通知没有任何操作按钮"） | M | 否 | D.main |
@@ -1496,7 +1497,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | Q20 | M1b 发布任务 | T183 † |
 | Q21 | SP-10（M2 前） | 自用前须知里的警示 T160、完整说明 T157；disclaim 评估在 M2 |
 | Q23 | M1b | T123 |
-| Q24 | M1a 起 | T021（作者机器上记作 IT-sys-peer-current）；每晚在 macOS 15、26 的 runner 上跑（T197、T211）；发布前的检查 T181 † |
+| Q24 | M1a 起 | T021（作者机器上记作 IT-sys-peer-current，2026-11-02 起不适用，D2）；每晚在 macOS 15、26 的 runner 上跑（T197、T211）；发布前的检查 T181 † |
 | Q25 | M1b | T102（初查）、T110（未知取值按 full_access）、T113（实测） |
 | Q26 | M1a | T077；Electron 升级后随 MAN-keyboard 复测（T107） |
 | Q27 | M1a | T092 |
@@ -1540,7 +1541,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 
 ### 5.7 CI 作业
 
-对照 [5.1.6](design/01-repo-build-ci.md#516-ci-流水线)。全部经 `cargo xtask ci <作业>` 在本机执行（1.8）。
+对照 [5.1.6](design/01-repo-build-ci.md#516-ci-流水线)。全部经 `cargo xtask ci <作业>` 执行，T197 起在 GitHub Actions 上跑（1.8）。
 
 | 作业 | 建立 | 扩充 |
 |---|---|---|
@@ -1553,11 +1554,12 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | `testdata-scan` | T002 | T052、T064 |
 | `e2e` | T090 | 各端到端任务 |
 | `release-config` | T161 | — |
-| `security-peer`（原名 `security-macos14`） | T021、T211 | 每晚在 `macos-15`、`macos-26` 上跑；本机运行时只记作 IT-sys-peer-current |
+| `security-peer`（原名 `security-macos14`） | T021、T211 | 每晚在 `macos-15`、`macos-26` 上跑；本机运行时只记作 IT-sys-peer-current（不适用，D2） |
 | `compat-framework` | T064 | — |
 | `codex-drift` | T114 | — |
 | `release` | T181 † | — |
-| 每晚的其他检查（差分测试、性能趋势） | T072、T047 | T061、T078、T155 |
+| 每晚的其他检查（差分测试、性能测量，只记录） | T072、T047 | T061、T078、T155、T219 |
+| `perf` | T117 | T191；T219 起每晚在 runner 上只记录 |
 | 本机执行的约束（1.8：干净检查、机器级锁、逐编号结果清单、e2e 产物哈希、性能历史入库） | T001（UNIT-ci-summary、UNIT-ci-lock） | T002（里程碑退出读入库的结果清单）、T090（产物由当前提交构建）、T047（性能历史） |
 
 ### 5.8 界面复刻：F3 定为进 M1 的元素
@@ -1826,7 +1828,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T216 IT-lifecycle 的清理用例在 trap 生效之前就发了 SIGTERM
 - [x] T217 点击请求面板后键盘能操作面板
 - [x] T218 录制导出用例：adapter 重启后的回合在负载下 30 秒内没完成
-- [ ] T219 PERF 改为只记录、不卡闸门；真机对端校验改为不适用
+- [x] T219 PERF 改为只记录、不卡闸门；真机对端校验改为不适用
 - [x] T099 M1a 退出验收
 - [x] T100 索引 II：状态计算、已读、在场与通知意图
 - [x] T109 会话 actor II-b：信任门控
@@ -2012,3 +2014,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.82 | 2026-11-02 | T211 合并：对端校验的作业改名 `security-peer`，每晚在 macOS 15、26 的 runner 上跑，构建产物的最低系统版本是 15.0。T213 合并：`host/exit` 的应答读不到时，以 EOF 或 `PeerExited` 结束也算退出已受理（5.2.13 补一句）。T212 合并：e2e 的两轮各用自己的输出目录，CI 失败时两轮的附件都进构件。新增 T214（确认退出后桌面可能再拉起宿主，T213 发现），T099 改为也依赖它。T214 合并：决定退出后控制连接不再重连、launcher 不再拉起宿主。新增 T215（握手被拒时桌面有时只看到 `closed`，不弹重启；重启后窗口不再连接，T214 发现），T099 改为也依赖它。T208 合并：idle 退出用例改为等 dev-auth 宿主按孤儿规则退出并核对审计；StreamList 的 layout effect 不再撤回事件未到的滚动；`e2e-repeat` 加 `workers` 输入。T215 合并：握手被拒时宿主送完错误只半关闭写端，等客户端关闭（最多 2 s），03-protocol-v1 补一句；重启宿主后失败的窗口重新载入。T099 依赖的任务至此全部合并 |
 | v1.3.83 | 2026-11-02 | T099 开工：退出候选 18b3640 的 `ci` 运行里 IT-lifecycle 的清理用例偶发失败（测试没等 `trap` 生效），候选作废。新增 T216（只改测试），T099 改为也依赖它；T216 和 T099 已做的基础设施（`e2e-repeat` 的降速与 @focus 分轮、登记表两处）合并后，再定新候选，所有运行在新候选上重做。MAN-keyboard 由用户在 18b3640 的 e2e 构建上做完，7 项全部通过；过程中发现点击面板卡片不会把键盘焦点移进面板，新增 T217，T099 改为也依赖它。T216 合并：清理用例的子进程先报就绪再起宿主。新增 T218（T216 连跑时发现录制导出用例在负载下偶发超时），T099 改为也依赖它。T218 合并：adapter 中途退出时，runtime 不转发 SDK 先给出的 prompt 失败，回合由 `AdapterExited` 结束（产品缺陷，违反 5.2.6；5.2.6、06 各补一句）。T217 合并：点击面板空白处移焦点；RP-3 读页面焦点，不看窗口是否在前台（5.7.8 补一段）。T099 依赖的任务至此全部合并。T099 两部分合并：退出候选 ec459fd 上 GitHub 的四项全部通过，MAN-keyboard 入证据；本机 nightly 按用户决定不跑（`docs/meetings/2026-11-02-perf-local/`），`trace-ids verify --milestone M1a` 有 7 个编号未完成，K4 待同步会决定 |
 | v1.3.84 | 2026-11-02 | M1a 同步会（`docs/meetings/2026-11-02-m1a-sync/`）：PERF 只记录、不卡闸门（D1）；IT-sys-peer-current 由 macOS 26 runner 代替、改为不适用（D2）；MAN-keyboard 不重做（D3）；真实兼容在 M1b 再跑（D4）；K4 通过（D5）。T099 打勾。新增 T219 落实 D1、D2，合并后打 `gate/m1a`，再派 M1b 第一波 |
+| v1.3.85 | 2026-11-02 | T219 合并：nightly 在托管 runner 上跑 `perf`、e2e 跑 PERF-bridge-gate，只记录（摘要的 `perf` 列表、结果 `measured`）；登记表新增 `record` 状态，9 个 PERF 编号改为只记录；IT-sys-peer-current 不适用。1.6、1.8、5.4、5.5、5.7、T155 随之改写 |

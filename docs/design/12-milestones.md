@@ -97,7 +97,7 @@
 | NFR-2 | 断线续传不丢不重；命令重试不重复执行 | 流（游标、快照、`data_epoch`）、账本 | `stream/*`、`command_id` | M1a 实现；M1b 验收 | E2E-NFR2-retry〔晚〕；IT-NFR2-epoch〔PR〕 |
 | NFR-4 | 会话数据只在本机 | 数据目录 | — | M1a | E2E-SEC-egress〔晚〕；代码审查：宿主只访问 npm 仓库 |
 | NFR-5 | 锁定适配器版本，升级经回归；已验证的 CLI 范围 | 运行时清单、兼容矩阵、金样例 | — | M1a（Claude）/ M1b（Codex） | MAN-compat〔人〕；`testdata-scan` 的范围比对、选项和档位取值检查〔PR〕 |
-| NFR-6 | 冷启动 2 秒内可用；流式不卡；长会话流畅 | 启动路径、快照窗口、行虚拟化 | — | 预算与测量闸门 M1a；SP-6 与优化 M1b | PERF（5.9.6）〔晚〕；SP-6〔人〕 |
+| NFR-6 | 冷启动 2 秒内可用；流式不卡；长会话流畅 | 启动路径、快照窗口、行虚拟化 | — | 预算与测量闸门 M1a；SP-6 与优化 M1b | PERF（5.9.6）〔晚，只记录〕；SP-6〔人〕 |
 | NFR-7 | 宿主自己实现排队、状态、diff、worktree、索引、路由；私有扩展探测到才用 | 会话编排、git 服务、能力描述 | `SessionCapabilities` | M1a / M1b | IT-degrade-steering、IT-degrade-plan、IT-degrade-thinking：假 agent 分别关掉 steering、计划、思考能力时，功能按 AG-4 隐藏或降级（以后新增可降级的能力时按同样格式加编号）〔PR〕 |
 | NFR-8 | 单实例；界面崩溃不影响会话；退出前提示；升级时推迟重启宿主 | 进程监护、`lifecycle`、更新流程 | `host/status`、`host/exit`、`host/prepare_upgrade` | 单实例与退出提示 M1a；升级 M1b | E2E-single-instance、E2E-quit-confirm〔晚〕；SMOKE-SIGNED-reattach〔发〕（"界面崩溃不影响会话"只对发布构建成立，PRD v1.2 第 10 节，Q22）；MAN-upgrade〔人〕 |
 | NFR-9 | 宿主崩溃和 agent 崩溃后的恢复，不损坏历史 | 启动恢复、`AgentRuntime` 重启、SQLite WAL 与持久性配置 | `interrupted`、`expired`、`notice` | M1a 实现；M1b 验收 | E2E-NFR9-adapter-crash、E2E-NFR9-cli-crash〔晚〕；IT-NFR9-failpoints、IT-NFR9-crash-under-load〔PR〕 |
