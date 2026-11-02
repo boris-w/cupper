@@ -1,12 +1,16 @@
-# One e2e test run N times in one call on an e2e build of the commit (T197):
-# for the runs a flaky test needs, with nobody at the machine (T189, D6).
+# The e2e tests a spec and a name match, each run N times in one call on an
+# e2e build of the commit (T197): for the runs a flaky test needs, with nobody
+# at the machine (T189, D6). As in `xtask ci e2e`, the tests tagged `@focus`
+# run after the rest, one at a time, so that a whole spec runs at CI's
+# parallelism (T099). Busy processes can slow the tests down: M1a's exit runs
+# nfr1 with half the runner's cores taken (T099).
 name: e2e-repeat
 
 on:
   workflow_dispatch:
     inputs:
       spec:
-        description: The spec, from tools/e2e
+        description: The spec, from tools/e2e (a pattern of its path)
         default: src/security.spec.ts
       test:
         description: The test's name, or the start of it
@@ -15,15 +19,22 @@ on:
         description: How many times
         default: "50"
       workers:
-        description: How many copies at once; 2 is the load of `xtask ci e2e` (T208)
+        description: >-
+          How many copies at once of the tests not tagged @focus; 2 is the load
+          of `xtask ci e2e` (T208). Those tagged @focus run one at a time
         default: "1"
+      load:
+        description: >-
+          How many busy processes run alongside the tests; 2 is half the
+          runner's 3 cores, rounded up (T099)
+        default: "0"
 
 permissions:
   contents: read
 
 jobs:
   repeat:
-    name: ${{ inputs.test }} × ${{ inputs.times }}, ${{ inputs.workers }} at once (macos-15)
+    name: ${{ inputs.test }} × ${{ inputs.times }}, ${{ inputs.workers }} at once, load ${{ inputs.load }} (macos-15)
     runs-on: macos-15
     timeout-minutes: 150
     steps:
@@ -45,16 +56,35 @@ jobs:
           TEST: ${{ inputs.test }}
           TIMES: ${{ inputs.times }}
           WORKERS: ${{ inputs.workers }}
-          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/repeat.json
-        run: >-
-          pnpm --filter @cupper/e2e run test:e2e:one "$SPEC" -g "$TEST"
-          --repeat-each="$TIMES" --workers="$WORKERS" --reporter=list,json
+          LOAD: ${{ inputs.load }}
+        run: |
+          # A failed run must not end the script before the next one.
+          set +e -u
+          for ((i = 0; i < LOAD; i++)); do yes > /dev/null & done
+          echo "$LOAD busy processes on $(sysctl -n hw.ncpu) cores"
+          # One Playwright run, with a report and a folder of its own: a run
+          # empties its folder when it starts (T212).
+          run() {
+            PLAYWRIGHT_JSON_OUTPUT_FILE="$GITHUB_WORKSPACE/repeat-$1.json" \
+              pnpm --filter @cupper/e2e run test:e2e:one "$SPEC" "${@:2}" \
+              --output="dist/test-results/$1" --repeat-each="$TIMES" \
+              --reporter=list,json --pass-with-no-tests
+          }
+          run rest -g "$TEST" --grep-invert @focus --workers="$WORKERS"
+          rest=$?
+          run focus -g "(?=.*@focus)(?=.*$TEST)" --workers=1
+          focus=$?
+          uptime
+          busy=$(jobs -p)
+          [ -z "$busy" ] || kill $busy
+          [ "$rest" -eq 0 ] && [ "$focus" -eq 0 ]
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-repeat
           path: |
-            repeat.json
+            repeat-rest.json
+            repeat-focus.json
             tools/e2e/dist/test-results/
           retention-days: 14
           if-no-files-found: ignore
