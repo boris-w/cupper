@@ -19,6 +19,10 @@
 //!   start waits out the backoff ([`lifecycle::Restarts`]); attaches that
 //!   wait start it when the backoff is over, and five failures within five
 //!   minutes make the agent `crashed`.
+//! - **A prompt the connection's close cuts off** ends with the instance,
+//!   not with the SDK's failure that comes first: the session hears of its
+//!   turn's end once the instance is gone, so that its next message goes to
+//!   the next instance (T218).
 //! - **A stop** follows 5.6.8: `session/close` for every session, stdin
 //!   closed, 3 s each; then SIGTERM to the adapter's group and those of all
 //!   its descendants, found before any signal, and SIGKILL 2 s later. An
@@ -850,6 +854,11 @@ impl Actor {
                     }
                     Err(err) => {
                         let mut error = claude::agent_error(&err);
+                        // Cut off by the connection's close: the
+                        // instance's `AdapterExited` ends it (T218).
+                        if error.class == AgentErrorClass::AdapterExited {
+                            return;
+                        }
                         // K14: a CLI older than the verified range says it
                         // needs a login when it cannot read the config.
                         let versions = &self.deps.launch.versions;
