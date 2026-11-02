@@ -14,6 +14,8 @@ export class ControlConnection {
   readonly #launcher: HostLauncher;
   readonly #options: ConnectOptions;
   #closed = false;
+  /** The connection that is up or being made: one at a time. */
+  #current: Promise<void> | undefined;
 
   constructor(launcher: HostLauncher, options: ConnectOptions, log: MainLog) {
     this.#launcher = launcher;
@@ -21,8 +23,12 @@ export class ControlConnection {
     this.client = new HostClient({ log: (message) => log.warn("control connection", { message }) });
   }
 
-  /** Connects; again each time the connection drops, until {@link close}. */
-  async connect(): Promise<void> {
+  /** Connects, unless connected or connecting; again each time it drops, until {@link close}. */
+  connect(): Promise<void> {
+    return (this.#current ??= this.#connect());
+  }
+
+  async #connect(): Promise<void> {
     if (this.#closed) {
       return;
     }
@@ -31,11 +37,13 @@ export class ControlConnection {
     try {
       connected = await this.#launcher.open(this.#options);
     } catch (error) {
+      this.#current = undefined;
       this.client.fail(error instanceof HostFailure ? error.reason : "unexpected");
       return;
     }
     const { port, handshake, rest, socket } = connected;
     socket.once("close", () => {
+      this.#current = undefined;
       this.client.detach();
       void this.connect();
     });
