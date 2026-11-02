@@ -28,7 +28,6 @@ use cupper_protocol::rpc::{Method, Scope};
 #[cfg(feature = "test-harness")]
 use cupper_protocol::view::IndexView;
 use cupper_protocol::view::{SessionView, View};
-use cupper_sys::RefusalKind;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -58,13 +57,10 @@ impl From<ClientError> for Failure {
     fn from(err: ClientError) -> Self {
         // A host that writes and closes is refused as gone before its data
         // is read (T049): the same as the end of the stream.
-        let gone = |reason: &Option<CloseReason>| match reason {
-            None | Some(CloseReason::Eof) => true,
-            Some(CloseReason::Refused(refusal)) => refusal.kind == RefusalKind::PeerExited,
-            _ => false,
-        };
         match err {
-            ClientError::Closed(reason) if gone(&reason) => Self::HostGone,
+            ClientError::Closed(reason) if reason.as_ref().is_none_or(CloseReason::host_gone) => {
+                Self::HostGone
+            }
             ClientError::Io(err)
                 if matches!(
                     err.kind(),
@@ -627,6 +623,7 @@ mod tests {
     use std::io;
 
     use cupper_protocol::error::{ErrorCode, ErrorReason, RpcError};
+    use cupper_sys::RefusalKind;
 
     use super::*;
 

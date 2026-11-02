@@ -30,7 +30,7 @@ use cupper_protocol::methods::stream::{
 use cupper_protocol::proof::{self, Channel, Direction};
 use cupper_protocol::rpc::{self, Message, Method, Notification, RawMessage, RpcId};
 use cupper_protocol::sync::StreamId;
-use cupper_sys::{AuditToken, Refusal, recv_closing_fds};
+use cupper_sys::{AuditToken, Refusal, RefusalKind, recv_closing_fds};
 use serde_json::Value;
 use tokio::io::{AsyncWriteExt, Interest};
 use tokio::net::UnixStream;
@@ -83,6 +83,21 @@ pub enum CloseReason {
     Malformed,
     #[error("reading the socket failed: {0}")]
     Io(io::ErrorKind),
+}
+
+impl CloseReason {
+    /// The connection ended as a host's that exited does: the end of the
+    /// stream, or a read refused because the host had closed its end or
+    /// exited (design 5.8.1). What the host wrote last, `host/shutdown` or
+    /// the reply to `host/exit`, may be refused with that read: a caller
+    /// takes this end as the exit it asked for (T213).
+    pub fn host_gone(&self) -> bool {
+        match self {
+            Self::Eof => true,
+            Self::Refused(refusal) => refusal.kind == RefusalKind::PeerExited,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
