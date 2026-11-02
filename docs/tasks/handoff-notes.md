@@ -481,3 +481,4 @@
 | T160 | Rust 二进制没有设置 deployment target，Mach-O 里的 minos 是 rustc 的默认值，和 `LSMinimumSystemVersion` 15.0 不一致；打自用版时定要不要设 `MACOSX_DEPLOYMENT_TARGET=15.0` | T211 |
 | 以后查 e2e 偶发失败的任务 | e2e 的 Electron 用例没有开 Playwright 的 screenshot 和 trace，失败时构件里只有 fixture 挂上的日志（`logs/main.log`、`data/logs/*.log`）和 `error-context.md`；两轮分别在 `rest/`、`focus/` 下。缺截图时再单独开任务加 | T212 |
 | 以后查 e2e 偶发失败的任务 | e2e 构建开了 `dev-auth`，App 退出后宿主约 1 s 内按孤儿规则有序退出（5.8.1）。凡是 App 退出之后还去连宿主的 e2e 用例都会和这次退出抢时间；T208 只核查了 `app.spec.ts` 的退出用例，别的 spec 没有核查 | T208 |
+| 以后改宿主生命周期的任务 | `host/exit` 的应答在宿主关掉连接后仍可能被客户端按 5.8.1 拒收（T213），桌面和 CLI 都已把连接结束当作退出已受理。要让客户端稳定读到退出应答，可以把 T215 在握手阶段用的"半关闭写端、等客户端关闭"用到退出时的连接上，代价是宿主退出最多多等关闭宽限 2 s | T215 |
