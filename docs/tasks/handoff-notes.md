@@ -485,3 +485,5 @@
 | T111 | runtime 在 `Wire::Prompted` 的错误分支里吞掉 `AdapterExited` 一类的 prompt 失败，回合由实例结束时的 `AdapterExited` 结束（`driver/runtime/mod.rs` 约第 853 行，紧跟在 `claude::agent_error` 之后）。接 Codex 时：仍用同一个 actor、只换分类器的话，这条判断留在换上去的分类器之后；另起 actor 的话，在它的 prompt 结果处理里加同样的判断。Codex 的 `agent_error` 已经把 `incoming_transport_closed` 归为 `AdapterExited`。`Wire::Opened`、`Wire::Configured` 也写死了 `claude::agent_error` | T218 |
 | 以后改 adapter 生命周期或 5.6.8 清理规则的任务 | "连接关了、进程不退"时拿不到 `exit`，`AdapterExited` 不发，回合停在 `Prompting`，要等用户中断（修前也挂住，只是挂在下一个回合）。可能的补法：`FromAgent::Closed` 到了、进程没退、也不在停止中时，按意外结束杀掉进程组。另有同类窗口在 attach 上：adapter 恰好在 `session/new` 或 `resume` 途中退出时，attach 以 `adapter_exited` 失败，不写 `agent_restarted`，下一条消息若赶在旧实例结束前 attach 会再失败一次 | T218 |
 | 以后改宿主集成测试辅助的任务 | `tests/common/mod.rs` 的 `until` 失败时只打印期望值，不打印最后读到的值；T216 的 4 次失败因此看不出第三个回合已经 `failed`。约 3 行可补 | T218 |
+| 以后改请求面板的任务 | 没有选项列表的面板（只能自由输入的提问、`unsupported_schema` 的提问、不认识的类型）：RP-3 自动接管和点击都会把面板设为 active，但没有列表可以放焦点，按键落在 body 上。这是原有限制 | T217 |
+| 以后查 e2e 偶发失败的任务 | Radix 的菜单、对话框关掉后，FocusScope 用 `setTimeout(0)` 把焦点还给触发按钮。e2e 用例在关掉菜单后立即移焦点的，焦点可能被拿回去：先 `await expect(<触发按钮>).toBeFocused()` 再移。T217 只修了 E2E-SEC-panel-arming 一处 | T217 |
