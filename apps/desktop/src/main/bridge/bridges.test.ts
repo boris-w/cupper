@@ -101,6 +101,11 @@ describe("UNIT-bridge-lifecycle", () => {
     host.connections[0]?.close();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(reloads).toEqual([]);
+    // A window that closed meanwhile is forgotten.
+    refused = true;
+    const closed = contents(4, reloads);
+    await expect(all.open(closed.it, closed.it.mainFrame)).rejects.toThrow();
+    closed.emitter.emit("destroyed");
     all.reload();
     expect(reloads).toEqual([1, 2]);
     all.reload();

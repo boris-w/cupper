@@ -98,7 +98,10 @@ export class WindowBridges {
       }
     });
     contents.on("render-process-gone", () => this.close(id));
-    contents.once("destroyed", () => this.close(id));
+    contents.once("destroyed", () => {
+      this.close(id);
+      this.#failed.delete(contents);
+    });
   }
 }
 
