@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.81
+- 版本：v1.3.82
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -1812,7 +1812,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T208 e2e 的两处偶发失败：退出后的 status 与重载后的历史
 - [x] T209 审阅 codex 0.166.0 的漂移
 - [x] T210 脱敏与扫描：跨 chunk 的文本
-- [ ] T211 最低支持版本提到 macOS 15
+- [x] T211 最低支持版本提到 macOS 15
 - [ ] T212 CI 上 e2e 失败时留下附件
 - [ ] T213 `host/exit` 之后读不到应答
 - [ ] T099 M1a 退出验收
@@ -1997,3 +1997,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.79 | 2026-10-30 | T209、T110 合并。新增 T210：脱敏和扫描看不到被切进多个 chunk 的文本（T110 发现） |
 | v1.3.80 | 2026-11-02 | T207、T210 合并。GitHub 停用 macOS 14 的 runner，用户决定只支持最近两三年的 macOS，最低支持版本提到 15（`docs/meetings/2026-11-02-macos-floor/`）：1.6、1.8、R7、Q24 各处随之改写；新增 T211（作业改名 `security-peer`，每晚在 macOS 15、26 上跑），T099 改为也依赖 T211 |
 | v1.3.81 | 2026-11-02 | 新增 T212（CI 上 e2e 失败时附件被下一轮清空，T208 发现）、T213（`host/exit` 之后宿主退出得快，客户端按 5.8.1 不交付已到的应答，GOLD-B 收尾偶发失败）。T099 改为也依赖这两项 |
+| v1.3.82 | 2026-11-02 | T211 合并：对端校验的作业改名 `security-peer`，每晚在 macOS 15、26 的 runner 上跑，构建产物的最低系统版本是 15.0 |
