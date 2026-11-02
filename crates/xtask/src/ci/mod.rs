@@ -162,6 +162,7 @@ fn run(args: &[String], cwd: &Path) -> Result<bool> {
             suite: seen,
             toolchain: &facts::toolchain(&root),
             os: &facts::os(&root),
+            hosted: std::env::var("RUNNER_ENVIRONMENT").is_ok_and(|env| env == "github-hosted"),
             machine: &machine,
             duration_ms,
             reports: &reports,

@@ -76,6 +76,9 @@ pub struct Run<'a> {
     pub suite: &'a str,
     pub toolchain: &'a [(&'static str, Option<String>)],
     pub os: &'a str,
+    /// Ran on a GitHub-hosted runner, where the peer checks count for the
+    /// runner's macOS (plan 1.8).
+    pub hosted: bool,
     pub machine: &'a str,
     pub duration_ms: u64,
     pub reports: &'a [JobReport],
@@ -126,7 +129,7 @@ fn results(run: &Run) -> Vec<Value> {
     let mut passed_by_id: BTreeMap<&str, bool> = BTreeMap::new();
     for case in run.reports.iter().flat_map(|report| &report.cases) {
         if let Some(id) = ids::owner(run.ids, &case.name) {
-            *passed_by_id.entry(on_os(id, run.os)).or_insert(true) &= case.passed;
+            *passed_by_id.entry(on_os(id, run)).or_insert(true) &= case.passed;
         }
     }
     passed_by_id
@@ -143,15 +146,20 @@ fn results(run: &Run) -> Vec<Value> {
 }
 
 /// The ID a result counts for. The peer checks carry IT-sys-peer-current;
-/// run on macOS 14 or 15, by `os` from `facts`, they count for
-/// IT-sys-peer-macos14 or -macos15 (plan 1.6, R7).
-fn on_os<'a>(id: &'a str, os: &str) -> &'a str {
-    let major = os
+/// run on a runner's macOS 15 or 26, by `os` from `facts`, they count for
+/// IT-sys-peer-macos15 or -macos26 (plan 1.6, R7). Elsewhere, on the author's
+/// macOS of any version, they stay IT-sys-peer-current.
+fn on_os<'a>(id: &'a str, run: &Run) -> &'a str {
+    if !run.hosted {
+        return id;
+    }
+    let major = run
+        .os
         .strip_prefix("macOS ")
         .and_then(|version| version.split('.').next());
     match (id, major) {
-        ("IT-sys-peer-current", Some("14")) => "IT-sys-peer-macos14",
         ("IT-sys-peer-current", Some("15")) => "IT-sys-peer-macos15",
+        ("IT-sys-peer-current", Some("26")) => "IT-sys-peer-macos26",
         _ => id,
     }
 }
@@ -309,6 +317,7 @@ mod tests {
             suite: "pr",
             toolchain: &[("rustc", Some("1.96.0".to_owned())), ("pnpm", None)],
             os: "macOS 26.4",
+            hosted: false,
             machine: "MacBook Pro (Apple M4 Max)",
             duration_ms: 1500,
             reports: &reports,
@@ -356,12 +365,12 @@ mod tests {
     fn unit_ci_summary_peer_checks_count_for_the_macos_they_ran_on() {
         let ids = [
             "IT-sys-peer-current",
-            "IT-sys-peer-macos14",
             "IT-sys-peer-macos15",
+            "IT-sys-peer-macos26",
         ];
         let ids: Vec<String> = ids.map(str::to_owned).to_vec();
         let reports = [JobReport {
-            name: "security-macos14",
+            name: "security-peer",
             outcome: Outcome::Pass,
             passed: 1,
             failed: 0,
@@ -373,17 +382,20 @@ mod tests {
             skipped: Vec::new(),
             artifacts: Vec::new(),
         }];
-        for (os, id) in [
-            ("macOS 14.8.9", "IT-sys-peer-macos14"),
-            ("macOS 15.7.9", "IT-sys-peer-macos15"),
-            ("macOS 26.4", "IT-sys-peer-current"),
+        for (os, hosted, id) in [
+            ("macOS 15.7.9", true, "IT-sys-peer-macos15"),
+            ("macOS 26.4", true, "IT-sys-peer-macos26"),
+            ("macOS 14.8.9", true, "IT-sys-peer-current"),
+            ("macOS 26.4", false, "IT-sys-peer-current"),
+            ("macOS 15.7.9", false, "IT-sys-peer-current"),
         ] {
             let summary = build(&Run {
                 commit: COMMIT,
-                target: "security-macos14",
+                target: "security-peer",
                 suite: "nightly",
                 toolchain: &[],
                 os,
+                hosted,
                 machine: "Apple Virtual Machine 1 (Apple M1 (Virtual))",
                 duration_ms: 10,
                 reports: &reports,
@@ -391,7 +403,7 @@ mod tests {
             });
             let expected =
                 json!([{"id": id, "suite": "nightly", "result": "pass", "commit": COMMIT}]);
-            assert_eq!(summary["results"], expected, "{os}");
+            assert_eq!(summary["results"], expected, "{os}, hosted: {hosted}");
         }
     }
 
