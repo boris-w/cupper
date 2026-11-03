@@ -20,7 +20,9 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use cupper_protocol::annotations::{TimestampMs, WirePath};
 use cupper_protocol::canonical;
-use cupper_protocol::capabilities::{ConfigOptionId, SessionCapabilities as Capabilities};
+use cupper_protocol::capabilities::{
+    ConfigOption, ConfigOptionId, SessionCapabilities as Capabilities,
+};
 use cupper_protocol::domain::{PrincipalKind, ResolvedBy, Tier};
 use cupper_protocol::envelope::Cause;
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
@@ -39,7 +41,8 @@ use cupper_protocol::methods::session::{
     self as methods, Disposition as Wire, FallbackReason, SessionCapabilities,
     SessionConfirmConfig, SessionConfirmConfigParams, SessionGet, SessionGetResult,
     SessionInterrupt, SessionInterruptParams, SessionInterruptResult, SessionQueueResume,
-    SessionSend, SessionSendParams, SessionSendResult,
+    SessionSend, SessionSendParams, SessionSendResult, SessionSetConfig, SessionSetConfigParams,
+    SessionSetConfigResult,
 };
 use cupper_protocol::rpc::Method;
 use cupper_protocol::session::{
@@ -58,8 +61,8 @@ use super::{IndexNotes, Note, internal, mode_tier, not_found, parse, privileged,
 use crate::clock::Clock;
 use crate::diag::full::Redactor;
 use crate::driver::api::{
-    AgentError, AgentPort, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent,
-    ProjectConfigPolicy,
+    AgentError, AgentErrorForm, AgentPort, Attach, AttachInfo, AttachTarget, ConfigResult,
+    DriverCommand, DriverEvent, ProjectConfigPolicy,
 };
 use crate::durations::{Durations, SESSION_IDLE};
 use crate::files::FileLists;
@@ -98,6 +101,7 @@ enum Next {
     Mail(Option<Mail>),
     Agent(DriverEvent),
     Attached(Result<AttachInfo, AgentError>),
+    Configured(Box<Setting>),
     Rescanned(Purpose, u64, Rescan),
     Snapshot(TurnId, SnapshotPhase, Result<Taken, ShotError>),
     Stop(Stop),
@@ -178,6 +182,7 @@ pub(super) struct SessionActor {
     inbox: mpsc::UnboundedReceiver<Mail>,
     events: mpsc::UnboundedSender<DriverEvent>,
     attached: mpsc::UnboundedSender<Result<AttachInfo, AgentError>>,
+    configured: mpsc::UnboundedSender<Box<Setting>>,
     rescanned: mpsc::UnboundedSender<(Purpose, u64, Rescan)>,
     /// The rescans started so far, and the latest started of those that came
     /// back, with what it found: they run side by side, and one that started
@@ -238,10 +243,21 @@ struct Command {
     deferrable: bool,
 }
 
+/// A `session/set_config` the agent was asked for: its command, the option
+/// and the value, and what the agent said.
+struct Setting {
+    command: Command,
+    option: String,
+    value: String,
+    result: ConfigResult,
+}
+
 /// The reply a step gives a command.
 enum Reply {
     Turn(turn::Reply),
     Interaction(interaction::Reply),
+    /// `session/set_config`'s.
+    Config(Outcome),
     /// `{}`.
     Done,
 }
@@ -283,6 +299,7 @@ impl SessionActor {
     ) -> Option<mpsc::UnboundedReceiver<Mail>> {
         let (events, mut agent) = mpsc::unbounded_channel();
         let (attached, mut attaches) = mpsc::unbounded_channel();
+        let (configured, mut settings) = mpsc::unbounded_channel();
         let (rescanned, mut rescans) = mpsc::unbounded_channel();
         let (snapshots, mut shots) = mpsc::unbounded_channel();
         let alarm = Alarm::new(Arc::clone(&parts.clock));
@@ -305,6 +322,7 @@ impl SessionActor {
             inbox,
             events,
             attached,
+            configured,
             rescanned,
             rescans: 0,
             newest: None,
@@ -327,6 +345,7 @@ impl SessionActor {
                     mail = actor.inbox.recv() => Next::Mail(mail),
                     Some(event) = agent.recv() => Next::Agent(event),
                     Some(result) = attaches.recv() => Next::Attached(result),
+                    Some(setting) = settings.recv() => Next::Configured(setting),
                     Some((purpose, seq, found)) = rescans.recv() => {
                         Next::Rescanned(purpose, seq, found)
                     }
@@ -346,6 +365,7 @@ impl SessionActor {
                 Next::Mail(None) => return None,
                 Next::Agent(event) => actor.agent(event).await,
                 Next::Attached(result) => actor.attach_done(result).await,
+                Next::Configured(setting) => actor.configured(*setting).await,
                 Next::Rescanned(purpose, seq, found) => actor.trust(purpose, seq, found).await,
                 Next::Snapshot(turn, phase, taken) => actor.snapshotted(turn, phase, taken).await,
                 Next::Stop((force, done)) => {
@@ -396,6 +416,9 @@ impl SessionActor {
     }
 
     async fn call(&mut self, call: Call, reply: oneshot::Sender<Outcome>) {
+        if call.method == SessionSetConfig::NAME {
+            return self.set_config(call, reply).await;
+        }
         let (principal, params) = (call.principal, call.params);
         let mut audit = Vec::new();
         let mut step = Step::default();
@@ -508,6 +531,151 @@ impl SessionActor {
             };
             self.input(Input::Tier(set), None, Step::default()).await;
         }
+    }
+
+    /// `session/set_config` (design 5.2.6 "配置项"): an option and a value of
+    /// the capabilities, a looser tier by the tier rules (design 5.8.2), the
+    /// tier guard told who sets it. An attached session's agent sets it, and
+    /// the reply waits for the agent's; a detached session takes it at its
+    /// next attach. Either way a later attach applies it again.
+    async fn set_config(&mut self, call: Call, reply: oneshot::Sender<Outcome>) {
+        let principal = call.principal;
+        let checked = parse::<SessionSetConfigParams>(&call.params)
+            .and_then(|params| Ok((self.option_tier(&params, &principal)?, params)));
+        let (tier, params) = match checked {
+            Ok(checked) => checked,
+            Err(err) => {
+                if let Some(ticket) = call.ticket {
+                    ticket.reject(err.clone());
+                }
+                return drop(reply.send(Err(err)));
+            }
+        };
+        let facts = Facts {
+            mode_tier: tier.clone(),
+            ..Facts::default()
+        };
+        let (command, at) = (
+            Confirmable::SetConfig(params.clone()),
+            self.parts.clock.now_wall_ms(),
+        );
+        let audit = privileged(command, &facts, &principal.id, &call.conn, at);
+        let cause = Some(Cause {
+            command_id: params.command_id,
+            principal: principal.id.clone(),
+        });
+        let command = Command {
+            ticket: call.ticket,
+            cause,
+            reply,
+            audit: audit.into_iter().collect(),
+            deferrable: false,
+        };
+        if let Some(tier) = tier {
+            let set = tier_guard::Input::Set {
+                by: principal,
+                tier,
+            };
+            self.input(Input::Tier(set), None, Step::default()).await;
+        }
+        let (option, value) = (params.option.to_string(), params.value);
+        let Some(session) = self.parts.core.agent_session().cloned() else {
+            self.parts.config.insert(option.clone(), value.clone());
+            self.parts.configured.config.insert(option, value);
+            let config = self.parts.configured.config.clone();
+            let mut step = Step::default();
+            let configured = self.parts.configured.clone();
+            step.events.push(EventBody::SessionConfigured(configured));
+            step.reply = Some(Reply::Config(Ok(json!(SessionSetConfigResult { config }))));
+            return self.commit(step, Some(command)).await;
+        };
+        self.outstanding += 1;
+        let (back, set) = (self.configured.clone(), (option.clone(), value.clone()));
+        let asked = self.parts.agent.set_config(DriverCommand::SetConfig {
+            session,
+            option,
+            value,
+        });
+        tokio::spawn(async move {
+            let ((option, value), result) = (set, asked.await);
+            let setting = Setting {
+                command,
+                option,
+                value,
+                result,
+            };
+            // The actor may have stopped.
+            let _ = back.send(Box::new(setting));
+        });
+    }
+
+    /// The tier `params` move the session to, for the permission mode; the
+    /// option and the value are the capabilities'.
+    fn option_tier(
+        &self,
+        params: &SessionSetConfigParams,
+        by: &Principal,
+    ) -> Result<Option<Tier>, RpcError> {
+        let capabilities = self.capabilities();
+        let options = capabilities.as_ref().map(|c| c.config.as_slice());
+        let option = options
+            .unwrap_or_default()
+            .iter()
+            .find(|o| o.id == params.option);
+        let Some(option) = option else {
+            let error = RpcError::app(ErrorCode::Unsupported, "the agent has no such option");
+            return Err(error.with_data(|data| data.capability = Some(params.option.to_string())));
+        };
+        let value = option.values.iter().find(|v| v.value == params.value);
+        let value = value.ok_or_else(|| RpcError::new(INVALID_PARAMS, "no such value"))?;
+        if params.option != ConfigOptionId::PermissionMode {
+            return Ok(None);
+        }
+        policy::tier_change(by, self.tier().as_ref(), &value.risk)?;
+        Ok(Some(value.risk.clone()))
+    }
+
+    /// The agent set the option, or refused; the command gets its reply.
+    async fn configured(&mut self, setting: Setting) {
+        self.outstanding -= 1;
+        let Setting {
+            command,
+            option,
+            value,
+            result,
+        } = setting;
+        let outcome = match result {
+            // The stream has them before the reply goes.
+            Ok(options) => {
+                self.parts.config.insert(option, value);
+                let config = options
+                    .iter()
+                    .map(|o| (o.id.to_string(), o.current.clone()));
+                let config = config.collect();
+                let config = Ok(json!(SessionSetConfigResult { config }));
+                let step = Step {
+                    reply: Some(Reply::Config(config)),
+                    ..Step::default()
+                };
+                return self.options(options, step, Some(command)).await;
+            }
+            Err(error) => {
+                let message = self.parts.redactor.text(&error.message);
+                let agent_code = match error.form {
+                    AgentErrorForm::Rpc { agent_code } => Some(agent_code.to_string()),
+                    _ => None,
+                };
+                let refused = RpcError::app(ErrorCode::AgentError, &message);
+                Err(refused.with_data(|data| {
+                    (data.agent_code, data.agent_message) = (agent_code, Some(message))
+                }))
+            }
+        };
+        let step = Step {
+            reply: Some(Reply::Config(outcome)),
+            ..Step::default()
+        };
+        self.commit(step, Some(command)).await;
     }
 
     /// `session/confirm_config`: the configuration the confirmation saw is
@@ -690,6 +858,7 @@ impl SessionActor {
                 Some(Reply::Turn(reply)) => self.outcome(reply, command.cause.as_ref()),
                 Some(Reply::Interaction(reply)) => reply.map(|r| json!(r)).map_err(RpcError::from),
                 Some(Reply::Done) => Ok(json!({})),
+                Some(Reply::Config(outcome)) => outcome,
                 None => Err(internal("the command had no reply")),
             };
             if outcome.is_ok() {
@@ -1182,7 +1351,17 @@ impl SessionActor {
             let step = self.commands_changed(&event);
             return self.input(Input::Agent(event), None, step).await;
         };
-        let mut step = Step::default();
+        self.options(options, Step::default(), None).await
+    }
+
+    /// The agent's options as they are now, with the command whose reply
+    /// waited for them, if one did.
+    async fn options(
+        &mut self,
+        options: Vec<ConfigOption>,
+        mut step: Step,
+        command: Option<Command>,
+    ) {
         let config = options
             .iter()
             .map(|o| (o.id.to_string(), o.current.clone()));
@@ -1200,9 +1379,9 @@ impl SessionActor {
                     tier,
                     during_turn,
                 };
-                self.input(Input::Tier(mode), None, step).await
+                self.input(Input::Tier(mode), command, step).await
             }
-            None => self.commit(step, None).await,
+            None => self.commit(step, command).await,
         }
     }
 

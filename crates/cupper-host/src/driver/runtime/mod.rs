@@ -98,7 +98,8 @@ use self::status::{AgentNotes, Running};
 use super::acp::{AcpConnection, FromAgent};
 use super::api::{
     AgentError, AgentErrorClass, AgentErrorForm, AgentPort, AgentSessionId, AskAnswer, AskId,
-    AskRequest, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent, ProjectConfigPolicy,
+    AskRequest, Attach, AttachInfo, AttachTarget, ConfigResult, DriverCommand, DriverEvent,
+    ProjectConfigPolicy,
 };
 use super::extract;
 use crate::clock::IdGen;
@@ -146,7 +147,8 @@ pub struct AgentRuntime {
 #[derive(Debug)]
 enum Mail {
     Attach(Box<Pending>),
-    Command(DriverCommand),
+    /// With its reply, for a `SetConfig` that has one.
+    Command(DriverCommand, Option<oneshot::Sender<ConfigResult>>),
     Withdrawn(AskId),
     Stop(oneshot::Sender<()>),
     Restart,
@@ -177,7 +179,11 @@ enum Wire {
         Result<(String, Vec<SessionConfigOption>), Error>,
     ),
     /// `session/set_config_option`, while attaching or for `SetConfig`.
-    Configured(String, Result<Vec<SessionConfigOption>, Error>),
+    Configured(
+        String,
+        Result<Vec<SessionConfigOption>, Error>,
+        Option<oneshot::Sender<ConfigResult>>,
+    ),
     Prompted(String, super::api::PromptTag, Result<PromptResponse, Error>),
     /// A stop's `session/close` was answered.
     SessionClosed,
@@ -426,7 +432,19 @@ impl AgentPort for AgentRuntime {
     }
 
     fn send(&self, command: DriverCommand) {
-        let _ = self.mail.send(Mail::Command(command));
+        let _ = self.mail.send(Mail::Command(command, None));
+    }
+
+    fn set_config(&self, command: DriverCommand) -> BoxFuture<'static, ConfigResult> {
+        let (reply, answer) = oneshot::channel();
+        let _ = self.mail.send(Mail::Command(command, Some(reply)));
+        let gone = || {
+            Err(error(
+                AgentErrorClass::ProcessExited,
+                "the adapter went away",
+            ))
+        };
+        Box::pin(answer.map(move |reply| reply.unwrap_or_else(|_| gone())))
     }
 }
 
@@ -632,7 +650,7 @@ impl Actor {
     async fn mail(&mut self, mail: Mail) {
         match mail {
             Mail::Attach(pending) => self.attach(*pending),
-            Mail::Command(command) => self.command(command).await,
+            Mail::Command(command, reply) => self.command(command, reply).await,
             Mail::Withdrawn(ask) => {
                 // Still asked: tell its session, which answers `Cancelled`.
                 if let Some((session, ..)) = self.asks.get(&ask) {
@@ -744,7 +762,8 @@ impl Actor {
             let close = DriverCommand::Close {
                 session: info.session,
             };
-            mail.upgrade().map(|mail| mail.send(Mail::Command(close)));
+            mail.upgrade()
+                .map(|mail| mail.send(Mail::Command(close, None)));
             // In the cache before the answer, for `agents/capabilities`.
             let _ = cache::write(&writer, &caps.agent, clock.now_wall_ms(), &caps).await;
             let _ = reply.send(Ok(caps));
@@ -904,12 +923,24 @@ impl Actor {
                     }
                 }
             }
-            Wire::Configured(session, result) => {
-                let Some(opening) = self.opening.get_mut(&session) else {
-                    // `SetConfig`: the session hears all the options. A
-                    // refusal leaves them as they were.
-                    if let (Some(route), Ok(options)) = (self.sessions.get_mut(&session), result) {
-                        let _ = route.events.send(route.extract.set_config(&options));
+            Wire::Configured(session, result, reply) => {
+                let opening = self.opening.get_mut(&session).filter(|_| reply.is_none());
+                let Some(opening) = opening else {
+                    // `SetConfig`: the session hears all the options, and
+                    // the reply, if one waits, too. A refusal leaves them as
+                    // they were.
+                    let agent = self.agent();
+                    let result = match (self.sessions.get_mut(&session), result) {
+                        (Some(route), Ok(options)) => {
+                            let changed = route.extract.set_config(&options);
+                            let _ = route.events.send(changed);
+                            Ok(route.extract.config().to_vec())
+                        }
+                        (_, Err(err)) => Err(agent.error(&err)),
+                        (None, Ok(_)) => return,
+                    };
+                    if let Some(reply) = reply {
+                        let _ = reply.send(result);
                     }
                     return;
                 };
@@ -1019,7 +1050,7 @@ impl Actor {
             let request = SetSessionConfigOptionRequest::new(session.clone(), option, value);
             let sent = conn.request(request, move |result: Result<_, Error>| {
                 let result = result.map(|r| r.config_options);
-                let _ = wire.send(Wire::Configured(session, result));
+                let _ = wire.send(Wire::Configured(session, result, None));
             });
             drop(sent);
             return;
@@ -1073,7 +1104,11 @@ impl Actor {
         self.commands = commands;
     }
 
-    async fn command(&mut self, command: DriverCommand) {
+    async fn command(
+        &mut self,
+        command: DriverCommand,
+        reply: Option<oneshot::Sender<ConfigResult>>,
+    ) {
         // A reclaim or a restart: the session resumes on the next instance
         // and sends the prompt again (K6).
         if let DriverCommand::Prompt { session, tag, .. } = &command
@@ -1148,7 +1183,7 @@ impl Actor {
                 let request = SetSessionConfigOptionRequest::new(id.clone(), option, value);
                 let sent = conn.request(request, move |result: Result<_, Error>| {
                     let result = result.map(|r| r.config_options);
-                    let _ = wire.send(Wire::Configured(id, result));
+                    let _ = wire.send(Wire::Configured(id, result, reply));
                 });
                 drop(sent);
             }

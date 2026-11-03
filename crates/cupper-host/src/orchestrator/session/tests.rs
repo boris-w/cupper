@@ -27,8 +27,8 @@ use super::{IndexNotes, Note, SessionDeps, SessionManager};
 use crate::clock::{Clock, IdGen, ManualClock};
 use crate::diag::full::Redactor;
 use crate::driver::api::{
-    AgentError, AgentPort, AgentSessionId, Attach, AttachInfo, AttachTarget, DriverCommand,
-    DriverEvent, NormUpdate, ProjectConfigPolicy, PromptTag,
+    AgentError, AgentPort, AgentSessionId, Attach, AttachInfo, AttachTarget, ConfigResult,
+    DriverCommand, DriverEvent, NormUpdate, ProjectConfigPolicy, PromptTag,
 };
 use crate::durations::Durations;
 use crate::files::{FileLists, FilesDeps, FilesService};
@@ -57,6 +57,7 @@ pub(super) const HOME: &str = "/Users/jdoe-example";
 enum Seen {
     Attach(Attach, mpsc::UnboundedSender<DriverEvent>, Attached),
     Command(DriverCommand),
+    SetConfig(DriverCommand, oneshot::Sender<ConfigResult>),
 }
 
 #[derive(Debug)]
@@ -75,6 +76,12 @@ impl AgentPort for Agent {
 
     fn send(&self, command: DriverCommand) {
         self.0.send(Seen::Command(command)).unwrap();
+    }
+
+    fn set_config(&self, command: DriverCommand) -> BoxFuture<'static, ConfigResult> {
+        let (reply, answer) = oneshot::channel();
+        self.0.send(Seen::SetConfig(command, reply)).unwrap();
+        Box::pin(answer.map(Result::unwrap))
     }
 }
 
@@ -407,6 +414,36 @@ impl Fixture {
             panic!("an attach")
         };
         reply.send(Err(error)).unwrap();
+    }
+
+    /// `session/set_config` as `by`. When the agent is asked, `answer`
+    /// replies to the option and value; the options it gives also come as
+    /// `ConfigChanged`, as the runtime sends them.
+    pub async fn set_config(
+        &mut self,
+        by: Principal,
+        params: Value,
+        answer: impl FnOnce(&str, &str) -> ConfigResult,
+    ) -> Result<Value, Value> {
+        let mut peer = Peer::new(by);
+        let call = peer.call(&self.routes, "session/set_config", params);
+        let mut call = std::pin::pin!(call);
+        let asked = tokio::select! {
+            done = &mut call => return done,
+            asked = self.seen.recv() => asked,
+        };
+        let Some(Seen::SetConfig(DriverCommand::SetConfig { option, value, .. }, reply)) = asked
+        else {
+            panic!("{asked:?}")
+        };
+        let answered = answer(&option, &value);
+        if let (Ok(options), Some(events)) = (&answered, &self.events) {
+            events
+                .send(DriverEvent::ConfigChanged(options.clone()))
+                .unwrap();
+        }
+        reply.send(answered).unwrap();
+        soon("set_config's reply", call).await
     }
 
     pub async fn command(&mut self) -> DriverCommand {

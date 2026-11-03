@@ -15,7 +15,6 @@ use cupper_protocol::methods::admin::{DiagRecordingExport, SettingsGet, Settings
 use cupper_protocol::methods::catalog::catalog;
 use cupper_protocol::methods::git::GitRevert;
 use cupper_protocol::methods::project::{AgentsCapabilities, AgentsRefresh};
-use cupper_protocol::methods::session::SessionSetConfig;
 use cupper_protocol::rpc::{Milestone, Scope};
 use cupper_protocol::schema::generator;
 use futures::FutureExt;
@@ -400,7 +399,6 @@ const ALLOWED: &[(&str, Why)] = {
         ("session/queue_edit", Later(M1b)),
         ("session/rename", Later(M1b)),
         ("session/restore", Later(M1b)),
-        ("session/set_config", Later(M1b)),
         ("stream/ack", Later(M3)),
         // Build `test-harness` only.
         ("test/clock_advance", Builds(HARNESS)),
@@ -519,7 +517,6 @@ async fn unit_policy_matrix_gateway_refuses_before_anything_runs() {
     let mut routes = fixture.start();
     let to = || Arc::clone(&fixture.sessions) as Arc<dyn Port>;
     routes.add::<SettingsUpdate>(to());
-    routes.add::<SessionSetConfig>(to());
     routes.add::<GitRevert>(to());
     let cli = principal("pr_cli", PrincipalKind::Cli, None, &[Read]);
     let remote = [Read, Write, Approve];

@@ -27,7 +27,7 @@ use cupper_protocol::methods::interaction::{InteractionGet, InteractionRespond};
 use cupper_protocol::methods::project::{ProjectAdd, ProjectTrust, ProjectTrustInfo};
 use cupper_protocol::methods::session::{
     SessionCapabilities, SessionConfirmConfig, SessionCreate, SessionGet, SessionInterrupt,
-    SessionMarkRead, SessionQueueResume, SessionSend,
+    SessionMarkRead, SessionQueueResume, SessionSend, SessionSetConfig,
 };
 use cupper_protocol::methods::stream::{
     BlobGet, BlobPut, HistoryPage, StreamSubscribe, StreamUnsubscribe,
@@ -168,6 +168,7 @@ impl Routes {
         self.add::<SessionInterrupt>(to());
         self.add::<SessionQueueResume>(to());
         self.add::<SessionConfirmConfig>(to());
+        self.add::<SessionSetConfig>(to());
         self.add::<SessionGet>(to());
         self.add::<SessionCapabilities>(to());
         self.add::<InteractionRespond>(to());

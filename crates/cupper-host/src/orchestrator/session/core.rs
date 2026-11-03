@@ -204,6 +204,11 @@ impl SessionCore {
         self.machine.queued()
     }
 
+    /// The attached agent session.
+    pub fn agent_session(&self) -> Option<&AgentSessionId> {
+        self.machine.agent_session()
+    }
+
     /// The adapter instance of the last attach.
     pub fn instance(&self) -> Option<&AdapterInstanceId> {
         self.instance.as_ref()
