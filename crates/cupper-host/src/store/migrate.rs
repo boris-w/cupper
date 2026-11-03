@@ -2,7 +2,9 @@
 //!
 //! - The scripts are `migrations/NNNN_<name>.sql`, compiled in as
 //!   [`MIGRATIONS`]. Script `NNNN` brings the database to `schema_version`
-//!   `NNNN`. Until T160, `0001` is the only script and changes in place (P-4).
+//!   `NNNN`. Every script on `main` is released (self-use builds come from
+//!   there) and never changes: a schema change is a new script, its hash
+//!   pinned and a sample of its version added in IT-migrations-samples (P-4).
 //! - Each script runs in its own transaction, which also records its number
 //!   in `meta.schema_version`. A crash between two scripts leaves the database
 //!   at the earlier one; the next start goes on with the next script and runs
