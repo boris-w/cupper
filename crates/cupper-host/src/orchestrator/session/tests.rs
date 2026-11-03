@@ -301,7 +301,13 @@ impl Fixture {
         };
         let conn = open_reader(&dir.host_db()).unwrap();
         let home = dir.path().join("home");
-        let settings = SettingsHandle::load(&conn, writer.clone(), Arc::clone(&shared), &home, dir.path());
+        let settings = SettingsHandle::load(
+            &conn,
+            writer.clone(),
+            Arc::clone(&shared),
+            &home,
+            dir.path(),
+        );
         let files = FilesDeps {
             git: git.clone(),
             readers: readers.clone(),
