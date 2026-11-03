@@ -170,6 +170,14 @@ impl Fixture {
                 _ => {}
             }
         }
+        self.settled().await;
+    }
+
+    /// Waits until the runtime is through with the step that told the
+    /// sessions their adapter exited: its alarm follows the timers it
+    /// cancelled then, which [`tick`](Self::tick) would advance to (T224).
+    async fn settled(&self) {
+        self.runtime.status().await;
     }
 
     fn prompt<'a>(
@@ -820,6 +828,7 @@ async fn it_adapter_restart_backs_off_then_crashed() {
     // the `AdapterExited` its session heard first (T218). (The next
     // instance's first session has the same ID, `fake-0-1`.)
     f.prompt(&mut session, "say lost");
+    f.settled().await;
     let start = f.clock.now_mono();
     let old = mem::replace(&mut session, f.attach().await.unwrap());
     assert_eq!(since(&f, start), Duration::ZERO);
