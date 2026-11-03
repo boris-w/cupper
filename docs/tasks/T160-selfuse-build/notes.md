@@ -61,3 +61,19 @@
 | 加上 selfuse 作业、三个用例、nightly | +740（离停止线 60） |
 
 比估计（705）多 5%。测试 424 行（估计 415），实现 316 行（估计 290）。
+
+### 第一次在 runner 上运行（nightly 41581457853，b767fd4）
+
+构建四步都成功（build 273 s）；用例 10 过 3 败。构件 `selfuse-macos-15-logs` 下载到本机一个新的空目录，内容只当数据读。
+
+1. **IT-selfuse-build 的"没有测试入口"**：asar 里命中 `__cupperE2E`、`CUPPER_E2E_DIR`、`CUPPER_E2E_BACKGROUND`。
+   - 本机 `vite build --mode self-use` 到临时目录后扫描：代码文件一个都没有，只有 `main/index.js.map` 命中，命中的正是这三个名字。原因是 sourcesContent 带着 `main/index.ts` 的源码，其中有 e2e 专用、已被 Vite 去掉的那几段。
+   - 修法：发布配置和自用配置的 `files` 加 `!**/*.map`。App 里没有地方读 source map（没有 `setSourceMapsEnabled`，也没有 `--enable-source-maps`）。
+2. **E2E-selfuse-coexist 的 helper 列表**：实际起来的是主程序、Renderer helper、**两个**普通 helper 和宿主，没有 GPU helper。
+   - 本机核对：VS Code 用的是 Electron 42.10，它的 `--type=gpu-process` 跑在 "Code Helper" 里，没有 "(GPU)"。所以 Electron 44 的 GPU 进程跑在普通 helper 里，GPU helper 和 Plugin helper 一样不会启动。
+   - 原用例的期望写错了。改为断言主程序、普通 helper、Renderer helper、宿主，以及进程类型里有 gpu-process、renderer、utility。
+3. **E2E-selfuse-replace 退出旧 App 超时**：
+   - host.log：B 的 CLI 一连上（`conn.rejected peer_exited`，CLI 校验 cdhash 不符后自己断开），旧宿主就写下 `host.pending_upgrade`，0.45 s 后以 `upgrade` 有序退出。
+   - 旧界面马上拉起了两次新宿主（control 连接和窗口连接各一次），都因为旧宿主还占着锁、以退出码 3 退出（相隔 10 ms）。之后预算 500 ms 用完，界面停在 `failed: host_unreachable`。这一次没有出现"旧界面接上新宿主"。
+   - 第一次 SIGTERM 后 30 s 内，App 里一直有进程在运行；finally 里的第二次 SIGTERM 让它立刻结束（整个用例 39 s）。Electron 只把第一个 SIGTERM 当作优雅退出，之后恢复默认处理。所以被替换后的旧 App 卡在了优雅退出的过程中，卡在哪里还不知道。
+   - 这次没有修，只加了诊断：等待超时时附上 App 里还在运行的进程（pid、ppid、运行时长、参数）和 Chromium 的 stderr；旧 App 的退出改为 soft 检查，后面的步骤照常跑。
