@@ -234,7 +234,8 @@ async function run(cupper: Cupper, { streams = 4, rate = 100, covered = false } 
   return numbers;
 }
 
-test.describe.configure({ mode: "serial", timeout: 180_000 });
+// On a runner the stress report took up to 139 s (T220).
+test.describe.configure({ mode: "serial", timeout: 240_000 });
 
 for (const covered of [false, true]) {
   test(
