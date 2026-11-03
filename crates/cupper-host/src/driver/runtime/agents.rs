@@ -1,7 +1,7 @@
-//! `agents/capabilities` and `agents/refresh` (design 5.6.6, 5.6.7): the
-//! capability cache for the new-session page, and the settings page's
-//! "check again", which finds the CLI, checks its version and, while the
-//! cache is empty, probes the agent. Only Claude has a runtime in M1a.
+//! `agents/capabilities`, `agents/refresh` and `agents/restart` (design
+//! 5.6.6–5.6.8): the capability cache for the new-session page, the settings
+//! page's "check again", which finds the CLI, checks its version and, while
+//! the cache is empty, probes the agent, and its restart.
 
 use std::fmt;
 use std::sync::Arc;
@@ -10,24 +10,25 @@ use cupper_protocol::domain::AgentKind;
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
 use cupper_protocol::methods::project::{
     AgentsCapabilities, AgentsCapabilitiesParams, AgentsCapabilitiesResult, AgentsRefresh,
-    AgentsRefreshResult,
+    AgentsRefreshResult, AgentsRestart, AgentsRestartParams,
 };
 use cupper_protocol::rpc::Method;
 use futures::FutureExt;
 use futures::future::BoxFuture;
+use serde_json::json;
 
-use super::launch::Launch;
+use super::launch::{Agent, Launch};
 use super::{AgentRuntime, cache};
 use crate::gateway::{Call, Port, Reply, Routes};
 use crate::store::{Readers, Writer};
 
-/// Finds the agent's CLI and its launch again: the login shell, the locator
+/// Finds an agent's CLI and its launch again: the login shell, the locator
 /// and the version check, as at startup.
-pub type Find = Arc<dyn Fn() -> BoxFuture<'static, Launch> + Send + Sync>;
+pub type Find = Arc<dyn Fn(Agent) -> BoxFuture<'static, Launch> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct Agents {
-    claude: AgentRuntime,
+    runtimes: Vec<(Agent, AgentRuntime)>,
     readers: Readers,
     writer: Writer,
     find: Find,
@@ -36,7 +37,7 @@ pub struct Agents {
 impl fmt::Debug for Agents {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Agents")
-            .field("claude", &self.claude)
+            .field("runtimes", &self.runtimes)
             .finish_non_exhaustive()
     }
 }
@@ -50,9 +51,14 @@ fn internal(err: impl fmt::Display) -> RpcError {
 }
 
 impl Agents {
-    pub fn new(claude: AgentRuntime, readers: Readers, writer: Writer, find: Find) -> Self {
+    pub fn new(
+        runtimes: Vec<(Agent, AgentRuntime)>,
+        readers: Readers,
+        writer: Writer,
+        find: Find,
+    ) -> Self {
         Self {
-            claude,
+            runtimes,
             readers,
             writer,
             find,
@@ -62,20 +68,23 @@ impl Agents {
     pub fn route(self: &Arc<Self>, routes: &mut Routes) {
         routes.add::<AgentsCapabilities>(Arc::clone(self) as Arc<dyn Port>);
         routes.add::<AgentsRefresh>(Arc::clone(self) as Arc<dyn Port>);
+        routes.add::<AgentsRestart>(Arc::clone(self) as Arc<dyn Port>);
     }
 
-    fn check(agent: &AgentKind) -> Result<(), RpcError> {
-        match agent {
-            AgentKind::Claude => Ok(()),
-            _ => Err(unavailable("only Claude runs in this version")),
-        }
+    fn runtime(&self, agent: &AgentKind) -> Result<(Agent, &AgentRuntime), RpcError> {
+        let found = self
+            .runtimes
+            .iter()
+            .find(|(known, _)| known.kind() == *agent);
+        let found = found.map(|(known, runtime)| (*known, runtime));
+        found.ok_or_else(|| unavailable("the agent has no runtime"))
     }
 
     pub async fn capabilities(
         &self,
         agent: &AgentKind,
     ) -> Result<AgentsCapabilitiesResult, RpcError> {
-        Self::check(agent)?;
+        self.runtime(agent)?;
         let cached = cache::read(&self.readers, agent).await.map_err(internal)?;
         Ok(AgentsCapabilitiesResult { cached })
     }
@@ -83,18 +92,18 @@ impl Agents {
     /// The next adapter starts with what is found now; a cache of other
     /// versions goes, and an empty one is filled by a probe.
     pub async fn refresh(&self, agent: &AgentKind) -> Result<AgentsRefreshResult, RpcError> {
-        Self::check(agent)?;
-        let launch = (self.find)().await;
+        let (known, runtime) = self.runtime(agent)?;
+        let launch = (self.find)(known).await;
         let invalidated = cache::invalidate(&self.writer, agent, &launch.versions);
         invalidated.await.map_err(internal)?;
         let available = launch.unavailable.is_none();
-        self.claude.relaunch(launch);
+        runtime.relaunch(launch);
         let cached = cache::read(&self.readers, agent).await.map_err(internal)?;
         if available && cached.is_none() {
             // A failure shows in the status; the cache stays empty.
-            let _ = self.claude.probe().await;
+            let _ = runtime.probe().await;
         }
-        let status = self.claude.status().await;
+        let status = runtime.status().await;
         let status = status.ok_or_else(|| unavailable("the agent's runtime stopped"))?;
         Ok(AgentsRefreshResult { status })
     }
@@ -104,6 +113,22 @@ impl Port for Agents {
     fn deliver(&self, call: Call) -> Reply {
         let agents = self.clone();
         async move {
+            if call.method == AgentsRestart::NAME {
+                let ticket = call.ticket.expect("agents/restart is a command");
+                let params = serde_json::from_value::<AgentsRestartParams>(call.params);
+                let params = params.map_err(|err| RpcError::new(INVALID_PARAMS, err.to_string()));
+                let found = params.and_then(|p| Ok(agents.runtime(&p.agent)?.1.clone()));
+                let runtime = match found {
+                    Ok(runtime) => runtime,
+                    Err(err) => {
+                        ticket.reject(err.clone());
+                        return Err(err);
+                    }
+                };
+                ticket.complete(Ok(json!({}))).commit().await?;
+                runtime.restart();
+                return Ok(json!({}));
+            }
             let params = serde_json::from_value::<AgentsCapabilitiesParams>(call.params);
             let agent = params
                 .map_err(|err| RpcError::new(INVALID_PARAMS, err.to_string()))?

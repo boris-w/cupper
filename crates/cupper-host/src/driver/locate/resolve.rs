@@ -61,6 +61,29 @@ pub const CLAUDE: Layout = Layout {
     }],
 };
 
+pub const CODEX: Layout = Layout {
+    program: "codex",
+    common: &[
+        // The Homebrew cask links its Mach-O from `Caskroom/codex/<version>/`.
+        "/opt/homebrew/bin/codex",
+        "/usr/local/bin/codex",
+        "~/.npm-global/bin/codex",
+    ],
+    npm: &[NpmPackage {
+        dir: "@openai/codex",
+        // A JavaScript launcher, which `CODEX_PATH` cannot take (K15).
+        entries: &["bin/codex.js"],
+        // Where the launcher looks (0.163.0): the platform package, nested,
+        // or beside the package when hoisted and in pnpm's store; else the
+        // package itself, as up to 0.159 (SP-2).
+        natives: &[
+            "node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex",
+            "../codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex",
+            "vendor/aarch64-apple-darwin/bin/codex",
+        ],
+    }],
+};
+
 /// What a found CLI resolves to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Resolved {
@@ -221,5 +244,60 @@ mod tests {
         let found = tree.path(&format!("nested/{pkg}/bin/claude.exe"));
         let resolved = resolve(&found, &CLAUDE, refuse_natives);
         assert_eq!(resolved, Some(Resolved::Unsupported));
+    }
+
+    /// K15: an npm `codex` is a JavaScript launcher; the binary is in the
+    /// platform package (nested, hoisted) or, up to 0.159, in the package.
+    #[test]
+    fn unit_cli_resolver_codex_install_layouts() {
+        let pkg = "lib/node_modules/@openai/codex";
+        let native = "vendor/aarch64-apple-darwin/bin/codex";
+        let arm64 = format!("node_modules/@openai/codex-darwin-arm64/{native}");
+        let tree = Tree::new(
+            "resolver-codex",
+            &format!(
+                "
+                brew/Caskroom/codex/0.163.0/codex-aarch64-apple-darwin macho
+                brew/bin/codex                                -> ../Caskroom/codex/0.163.0/codex-aarch64-apple-darwin
+                npm/{pkg}/bin/codex.js                        exec #!/usr/bin/env node
+                npm/{pkg}/{arm64}                             macho
+                npm/bin/codex                                 -> ../{pkg}/bin/codex.js
+                hoisted/{pkg}/bin/codex.js                    exec #!/usr/bin/env node
+                hoisted/lib/{arm64}                           macho
+                old/{pkg}/bin/codex.js                        exec #!/usr/bin/env node
+                old/{pkg}/{native}                            macho
+                bare/{pkg}/bin/codex.js                       exec #!/usr/bin/env node
+                home/Library/pnpm/codex                       exec #!/bin/sh
+                "
+            ),
+        );
+        let real = |path: &Path| fs::canonicalize(path).ok();
+        let resolved = |found: &str| resolve(&tree.path(found), &CODEX, real);
+        let native_at = |binary: &str, install| {
+            let binary = tree.path(binary);
+            Some(Resolved::Native { binary, install })
+        };
+        let brew = "brew/Caskroom/codex/0.163.0/codex-aarch64-apple-darwin";
+        assert_eq!(
+            resolved("brew/bin/codex"),
+            native_at(brew, CliInstall::Native)
+        );
+        for (found, binary) in [
+            ("npm/bin/codex".to_owned(), format!("npm/{pkg}/{arm64}")),
+            (
+                format!("hoisted/{pkg}/bin/codex.js"),
+                format!("hoisted/lib/{arm64}"),
+            ),
+            (
+                format!("old/{pkg}/bin/codex.js"),
+                format!("old/{pkg}/{native}"),
+            ),
+        ] {
+            let want = native_at(&binary, CliInstall::NpmShim);
+            assert_eq!(resolved(&found), want, "{found}");
+        }
+        let unsupported = Some(Resolved::Unsupported);
+        assert_eq!(resolved(&format!("bare/{pkg}/bin/codex.js")), unsupported);
+        assert_eq!(resolved("home/Library/pnpm/codex"), unsupported);
     }
 }

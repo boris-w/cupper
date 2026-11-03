@@ -28,6 +28,8 @@ pub struct Manifest {
     pub node: Pinned,
     pub esbuild_wasm: Pinned,
     pub claude_agent_acp: ClaudeAgentAcp,
+    /// codex-acp, bundled as `Resources/runtime/codex-acp-<version>/`.
+    pub codex_acp: Pinned,
     /// The runtime's files by their path in the app bundle.
     pub files: BTreeMap<String, FileHash>,
 }

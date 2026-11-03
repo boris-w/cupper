@@ -158,6 +158,8 @@ open_enum! {
         CliMissing => "cli_missing",
         RuntimeFailed => "runtime_failed",
         HostRestarted => "host_restarted",
+        /// Codex cannot run in a project that is not trusted (design 5.2.6).
+        ProjectUntrusted => "project_untrusted",
     }
 }
 

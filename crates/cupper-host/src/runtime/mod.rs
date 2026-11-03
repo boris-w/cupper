@@ -6,7 +6,7 @@
 //! each version with one `rename(2)`.
 //!
 //! The pure core in `machine` decides; [`Installer`] carries out its actions
-//! and publishes each component's [`Status`]. codex-acp joins in T111.
+//! and publishes each component's [`Status`].
 
 #[cfg(test)]
 mod download_tests;
@@ -28,13 +28,14 @@ use cupper_sys::{Command, Env};
 use files::{Slot, copy_in};
 pub use files::{Verdict, verify};
 use machine::{Action, Input, InstallCore};
-pub use plan::{ADAPTER, ComponentPlan, Npm, Source, plans};
+pub use plan::{ADAPTER, CODEX_ADAPTER, ComponentPlan, Npm, Source, plans};
 use tokio::sync::watch;
 
 use cupper_protocol::index::{RuntimeFailure, RuntimeState};
 
 use crate::clock::Clock;
 use crate::driver::probe;
+use crate::driver::runtime::launch::Agent;
 use crate::durations::{self, Durations};
 use crate::manifest::FileHash;
 use crate::pure::{Core, TimerTable};
@@ -49,6 +50,7 @@ pub enum Component {
     Node,
     EsbuildWasm,
     ClaudeAgentAcp,
+    CodexAcp,
 }
 
 impl Component {
@@ -58,6 +60,15 @@ impl Component {
             Self::Node => "node",
             Self::EsbuildWasm => "esbuild-wasm",
             Self::ClaudeAgentAcp => "claude-agent-acp",
+            Self::CodexAcp => "codex-acp",
+        }
+    }
+
+    /// What `agent`'s adapter needs installed.
+    pub fn of(agent: Agent) -> &'static [Component] {
+        match agent {
+            Agent::Claude => &[Self::Node, Self::EsbuildWasm, Self::ClaudeAgentAcp],
+            Agent::Codex => &[Self::Node, Self::CodexAcp],
         }
     }
 
@@ -94,8 +105,8 @@ pub enum Reason {
 
 pub type Statuses = BTreeMap<Component, Status>;
 
-/// Claude's adapter runtime as [`adapter_state`] gives it, published by the
-/// installer for the adapter's start (design 5.2.12).
+/// An agent's adapter runtime as [`adapter_state`] gives it, published by
+/// the installer for the adapter's start (design 5.2.12).
 pub type AdapterState = (RuntimeState, Option<RuntimeFailure>);
 
 /// The installer's progress, as the adapter's start waits on it.
@@ -123,10 +134,13 @@ impl Progress {
     }
 }
 
-/// Claude's adapter runtime as `agents.updated` shows it: the first failure,
-/// else installing, else ready once every component is.
-pub fn adapter_state(statuses: &Statuses) -> AdapterState {
-    let failed = statuses.values().find_map(|status| match status {
+/// `agent`'s adapter runtime as `agents.updated` shows it, by the components
+/// it needs: the first failure, else installing, else ready once every
+/// component is.
+pub fn adapter_state(statuses: &Statuses, agent: Agent) -> AdapterState {
+    let needed = Component::of(agent).iter();
+    let statuses: Vec<Status> = needed.filter_map(|c| statuses.get(c).copied()).collect();
+    let failed = statuses.iter().find_map(|status| match status {
         Status::Failed(reason) => Some(*reason),
         _ => None,
     });
@@ -136,11 +150,11 @@ pub fn adapter_state(statuses: &Statuses) -> AdapterState {
         Reason::Network => RuntimeFailure::Network,
         Reason::HashMismatch => RuntimeFailure::HashMismatch,
     });
-    let any = |wanted: Status| statuses.values().any(|status| *status == wanted);
+    let any = |wanted: Status| statuses.contains(&wanted);
     let state = match () {
         () if failure.is_some() => RuntimeState::Failed,
         () if any(Status::Installing) => RuntimeState::Installing,
-        () if statuses.values().all(|status| *status == Status::Ready) => RuntimeState::Ready,
+        () if statuses.iter().all(|status| *status == Status::Ready) => RuntimeState::Ready,
         () => RuntimeState::Missing,
     };
     (state, failure)
@@ -189,9 +203,13 @@ pub struct Installed {
     pub hash: FileHash,
 }
 
-/// What Claude's adapter starts from in `runtime_dir`: the node and bundle
-/// that the installer installs by `plans`.
-pub fn claude_adapter(runtime_dir: &Path, plans: &[ComponentPlan]) -> (Installed, Installed) {
+/// What `agent`'s adapter starts from in `runtime_dir`: the node and the
+/// adapter that the installer installs by `plans`.
+pub fn adapter(
+    runtime_dir: &Path,
+    plans: &[ComponentPlan],
+    agent: Agent,
+) -> (Installed, Installed) {
     let file = |component: Component, name: &str| {
         let plan = plans.iter().find(|p| p.component == component);
         let plan = plan.expect("the manifest plans every component");
@@ -200,7 +218,10 @@ pub fn claude_adapter(runtime_dir: &Path, plans: &[ComponentPlan]) -> (Installed
         Installed { path, hash }
     };
     let node = file(Component::Node, "node");
-    (node, file(Component::ClaudeAgentAcp, ADAPTER))
+    match agent {
+        Agent::Claude => (node, file(Component::ClaudeAgentAcp, ADAPTER)),
+        Agent::Codex => (node, file(Component::CodexAcp, CODEX_ADAPTER)),
+    }
 }
 
 /// Installs the components of `plans` into the runtime directory.

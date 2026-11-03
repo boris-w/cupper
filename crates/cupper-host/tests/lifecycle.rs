@@ -1429,6 +1429,11 @@ async fn bundled_host(
             b"// bundles".to_vec(),
             0o644,
         ),
+        (
+            "Resources/runtime/codex-acp-0.1.0/index.mjs",
+            b"// codex-acp".to_vec(),
+            0o644,
+        ),
     ];
     manifest["files"] = json!({});
     for (path, bytes, mode) in files {
@@ -1441,6 +1446,7 @@ async fn bundled_host(
     }
     manifest["node"]["version"] = json!("1.0.0");
     manifest["esbuild_wasm"]["version"] = json!("0.1.0");
+    manifest["codex_acp"]["version"] = json!("0.1.0");
     manifest["claude_agent_acp"] = json!({"version": "0.9.0", "lockfile": "locks/claude.json",
         "entry": "node_modules/a/index.js", "bundle_sha256": format!("{:x}", Sha256::digest(ENTRY))});
     let manifest_path = dir.path().join("manifest.json");

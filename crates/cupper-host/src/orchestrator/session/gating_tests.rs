@@ -197,6 +197,32 @@ async fn it_orch_gating_an_option_makes_its_chooser_the_setter() {
     assert_eq!(f.rows("SELECT mode_set_by FROM sessions"), ["pr_cli"]);
 }
 
+/// IT-K20-reclaim: a reclaimed adapter cut nothing off. The idle session
+/// writes no notice; its next message resumes the agent's session.
+#[tokio::test]
+async fn it_k20_reclaim_an_idle_session_resumes_without_a_notice() {
+    let mut f = Fixture::new("reclaim").await;
+    let session = f.started().await;
+    f.emit(done(PromptTag(1), StopReason::EndTurn));
+    f.events(&session, "turn.completed", 1).await;
+    f.emit(DriverEvent::AdapterExited {
+        instance: AdapterInstanceId::from_uuid(1),
+        status: ExitStatus::from_raw(0),
+        stderr: String::new(),
+        reclaimed: true,
+    });
+    f.ok("session/send", send(&session, "s-1", "two")).await;
+    let resume = AttachTarget::Resume(AgentSessionId("agent-1".into()));
+    assert_eq!(f.attach().await.target, resume);
+    assert_eq!(f.prompt().await.1, text("two"));
+    let items = f.events(&session, "item.started", 2).await;
+    let items = data(&items, "item.started");
+    assert!(
+        items.iter().all(|item| item["kind"] != "notice"),
+        "{items:?}"
+    );
+}
+
 #[tokio::test]
 async fn it_orch_gating_crashes_restart_and_resume() {
     let mut f = Fixture::new("crash").await;
@@ -209,6 +235,7 @@ async fn it_orch_gating_crashes_restart_and_resume() {
         instance,
         status,
         stderr,
+        reclaimed: false,
     });
     let bodies = f.events(&session, "turn.completed", 1).await;
     assert_eq!(

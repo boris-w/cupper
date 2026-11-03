@@ -328,6 +328,7 @@ impl World {
                     instance,
                     status: ExitStatus::from_raw(9),
                     stderr: String::new(),
+                    reclaimed: false,
                 })
             }
             Op::Advance(_) => return None,

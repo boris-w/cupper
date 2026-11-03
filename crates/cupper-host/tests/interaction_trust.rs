@@ -1,7 +1,8 @@
 //! Interactions, project trust and the approval tier on a host process
 //! (design 5.9.8): IT-form, IT-plan-confirm, IT-interaction-expire,
-//! IT-config-unconfirmed, IT-trust-stale, IT-trust-rescan-before-prompt and
-//! IT-trust-settingsources. The agent is the claude-shaped fake agent, the
+//! IT-config-unconfirmed, IT-trust-stale, IT-trust-rescan-before-prompt,
+//! IT-trust-settingsources and IT-codex-untrusted. The agent is the
+//! claude-shaped fake agent (Codex's has its own shape), the
 //! project a directory of the test's own, and the tests talk to the host as
 //! the CLI's `harness` client.
 
@@ -15,7 +16,7 @@ use cupper_host::driver::runtime::launch;
 use cupper_host::gateway::testkit::TempDir;
 use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::methods::project::{
-    ProjectAdd, ProjectTrust, ProjectTrustInfo, ProjectTrustInfoParams,
+    AgentsRestart, ProjectAdd, ProjectTrust, ProjectTrustInfo, ProjectTrustInfoParams,
 };
 use cupper_protocol::methods::session::{SessionConfirmConfig, SessionCreate, SessionQueueResume};
 use serde_json::{Value, json};
@@ -408,4 +409,40 @@ async fn it_trust_settingsources_untrusted_projects_load_the_user_s_settings_onl
     said(&data_dir, &trusted, &format!("meta={all}")).await;
     let configured = events(&data_dir, &trusted, "session.configured", 1).await;
     assert_eq!(configured.last().unwrap()["project_config"], "loaded");
+}
+
+/// IT-codex-untrusted: codex-acp cannot leave a project's configuration out,
+/// so Codex has no session in a project that is not trusted. Trusted, its
+/// session runs, without Claude's `_meta`.
+#[tokio::test]
+async fn it_codex_untrusted_no_session_until_the_project_is_trusted() {
+    let dir = TempDir::new("codex-untrusted");
+    let config = dir.path().join("app/.codex");
+    std::fs::create_dir_all(&config).unwrap();
+    std::fs::write(config.join("config.toml"), "model = \"acme\"").unwrap();
+    let codex = json!({"program": launch::fake_agent(), "args": ["--persona", "codex"]});
+    let config = json!({"agents": {"codex": codex}});
+    let (data_dir, _host, client, project) = host(&dir, &[], false, config).await;
+    let create = || {
+        let params = json!({"command_id": client::command_id(), "agent": "codex",
+            "project_id": project, "workspace": {"kind": "local"},
+            "message": [{"type": "text", "text": "echo_meta"}]});
+        client.request::<SessionCreate>(typed(params))
+    };
+    let unavailable = ("unavailable".into(), "project_untrusted".into());
+    assert_eq!(refused(create().await), unavailable);
+    trust(&client, &project).await;
+    let session = create().await.unwrap().session_id;
+    said(&data_dir, &session, "meta=null").await;
+    let completed = events(&data_dir, &session, "turn.completed", 1).await;
+    assert_eq!(completed[0]["status"], "completed");
+    // `agents/restart`: once the session heard it, it attaches again for
+    // its next message.
+    let restart = json!({"command_id": client::command_id(), "agent": "codex"});
+    let restarted = client.request::<AgentsRestart>(typed(restart)).await;
+    restarted.unwrap();
+    let notice = notice(&data_dir, &session, 3).await;
+    assert_eq!(notice, ("agent_restarted".into(), Value::Null));
+    send(&client, &session, "say again").await;
+    said(&data_dir, &session, "again").await;
 }

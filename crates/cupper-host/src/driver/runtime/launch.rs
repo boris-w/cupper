@@ -26,8 +26,8 @@ use crate::clock::Clock;
 use crate::diag::stderr::{AdapterLog, Tail};
 use crate::driver::acp::{AcpConnection, FromAgent};
 use crate::driver::api::{AgentError, AgentErrorClass, AgentErrorForm};
-use crate::driver::locate::env_rules::{self, adapter_env, check_config_dir};
-use crate::driver::locate::{CliLocator, resolve};
+use crate::driver::locate::CliLocator;
+use crate::driver::locate::env_rules::{adapter_env, check_config_dir};
 use crate::driver::probe::login_shell::{self, Failure, LoginEnv};
 use crate::driver::probe::version::{self, VerifiedRange, VersionClass};
 use crate::driver::tap::Tap;
@@ -37,6 +37,8 @@ use crate::manifest;
 use crate::runtime::{self, Installed, Progress};
 use crate::store::{Durability, RawSink, Receipt, Writer};
 use crate::supervisor::watch::SelfCheck;
+
+pub use super::agent::Agent;
 
 /// What the adapter runs.
 #[derive(Debug, Clone)]
@@ -77,6 +79,7 @@ pub struct InProcessAgent {
 /// How the agent's adapters start.
 #[derive(Debug, Clone)]
 pub struct Launch {
+    pub agent: Agent,
     pub program: Program,
     pub env: Env,
     pub versions: Versions,
@@ -121,33 +124,35 @@ pub async fn login_env(
     login_shell::read(clock, durations, Path::new(shell), env, &wanted).await
 }
 
-/// The launch of an injected `program`, with the environment rules all the
-/// same (design 5.6.6); the config dir comes unchecked from the test.
+/// The launch of `agent` from an injected `program`, with the environment
+/// rules all the same (design 5.6.6); the config dir comes unchecked from the
+/// test.
 #[cfg(any(test, feature = "test-harness"))]
 pub fn injected(
+    agent: Agent,
     program: PathBuf,
     args: Vec<String>,
     host: &BTreeMap<String, String>,
     login: &LoginEnv,
 ) -> Launch {
-    let config_dir = login.vars.get("CLAUDE_CONFIG_DIR").cloned();
+    let config_dir = login.vars.get(agent.vars().config_dir).cloned();
     let dir_state = match config_dir {
         Some(_) => ConfigDirState::Ok,
         None => ConfigDirState::Default,
     };
-    let config_dir = config_dir.map(env_rules::ConfigDir::from_test_config);
-    let claude = env_rules::CLAUDE;
+    let config_dir = config_dir.map(crate::driver::locate::env_rules::ConfigDir::from_test_config);
     let (env, _) = adapter_env(
-        claude,
+        agent.vars(),
         host,
         &login.vars,
         &program,
         config_dir.as_ref(),
         &[],
     );
-    let versions = versions(String::new(), CliCompat::Unsupported);
+    let versions = versions(agent, String::new(), CliCompat::Unsupported);
     let (program, cli, unavailable) = (Program::Injected { program, args }, None, None);
     Launch {
+        agent,
         program,
         env,
         versions,
@@ -170,11 +175,12 @@ pub fn fake_agent() -> PathBuf {
     agent
 }
 
-/// The launch of Claude's adapter from the runtime's `program`: the CLI
+/// The launch of `agent`'s adapter from the runtime's `program`: the CLI
 /// that `locator` finds, or the one `settings` name, its version classified
 /// against the manifest's range, the variables `settings` pass on to it
 /// (design 5.6.6).
 pub async fn production(
+    agent: Agent,
     clock: &dyn Clock,
     durations: &Durations,
     program: Program,
@@ -183,18 +189,18 @@ pub async fn production(
     settings: &Settings,
 ) -> Launch {
     let mut launch = Launch {
+        agent,
         program,
         env: Env::new(),
-        versions: versions(String::new(), CliCompat::Unsupported),
+        versions: versions(agent, String::new(), CliCompat::Unsupported),
         cli: None,
         config_dir: ConfigDirState::Default,
         unavailable: Some(AgentErrorClass::CliMissing),
     };
-    let cli_path = settings.claude_cli_path.0.as_ref().map(|p| Path::new(&p.0));
-    let Ok(found) = locator.locate(&resolve::CLAUDE, cli_path) else {
+    let Ok(found) = locator.locate(agent.layout(), agent.cli_path(settings)) else {
         return launch;
     };
-    let config_dir = login.vars.get("CLAUDE_CONFIG_DIR");
+    let config_dir = login.vars.get(agent.vars().config_dir);
     let (uid, boundaries) = (cupper_sys::current_uid(), locator.boundaries());
     let config_dir = config_dir.map(|dir| check_config_dir(dir, uid, boundaries).ok());
     launch.config_dir = match &config_dir {
@@ -203,13 +209,12 @@ pub async fn production(
         Some(None) => ConfigDirState::Rejected,
     };
     let config_dir = config_dir.flatten();
-    let claude = env_rules::CLAUDE;
-    let binary = &found.binary;
+    let (vars, binary) = (agent.vars(), &found.binary);
     let passthrough = &settings.env_passthrough;
     let config_dir = config_dir.as_ref();
-    (launch.env, _) = adapter_env(claude, host, &login.vars, binary, config_dir, passthrough);
+    (launch.env, _) = adapter_env(vars, host, &login.vars, binary, config_dir, passthrough);
     let found_version = version::probe(clock, durations, binary, launch.env.clone()).await;
-    launch.versions = cli_versions(found_version);
+    launch.versions = cli_versions(agent, found_version);
     let cli_version = launch.versions.cli.clone();
     let (path, install) = (found.binary, found.install);
     let cli = Cli {
@@ -221,10 +226,11 @@ pub async fn production(
     launch
 }
 
-/// The versions with Claude's CLI at `found`, against the range verified for
-/// the pinned adapter; `test_config.agents.claude.cli_version` plays one (K14).
-pub fn cli_versions(found: Option<version::Version>) -> Versions {
-    let range = &manifest::embedded().cli.claude;
+/// The versions with `agent`'s CLI at `found`, against the range verified
+/// for the pinned adapter; `test_config.agents.<agent>.cli_version` plays one
+/// (K14).
+pub fn cli_versions(agent: Agent, found: Option<version::Version>) -> Versions {
+    let range = agent.range();
     let range = VerifiedRange {
         min: &range.verified.min,
         max: &range.verified.max,
@@ -237,11 +243,11 @@ pub fn cli_versions(found: Option<version::Version>) -> Versions {
         _ => CliCompat::Unsupported,
     };
     let cli = found.map(|v| format!("{}.{}.{}", v.major, v.minor, v.patch));
-    versions(cli.unwrap_or_default(), compat)
+    versions(agent, cli.unwrap_or_default(), compat)
 }
 
-fn versions(cli: String, cli_compat: CliCompat) -> Versions {
-    let adapter = manifest::embedded().claude_agent_acp.version.clone();
+fn versions(agent: Agent, cli: String, cli_compat: CliCompat) -> Versions {
+    let adapter = agent.adapter_version().to_owned();
     Versions {
         adapter,
         cli,
@@ -427,7 +433,6 @@ async fn in_process<M: From<FromAgent> + Send + 'static>(
 /// The `adapters` row, written as soon as the process runs, so that a host
 /// that dies leaves a record of what to clean up (design 5.2.13).
 async fn record(cx: &Context, id: &AdapterInstanceId, group: &ProcessGroup, launch: &Launch) {
-    let manifest = manifest::embedded();
     let cli = launch.cli.clone();
     let (cli_path, cli_version) = cli
         .map(|c| (c.path.display().to_string(), c.version))
@@ -439,14 +444,15 @@ async fn record(cx: &Context, id: &AdapterInstanceId, group: &ProcessGroup, laun
         cx.clock.now_wall_ms(),
     );
     let versions = (
-        manifest.claude_agent_acp.version.clone(),
-        manifest.node.version.clone(),
+        launch.versions.adapter.clone(),
+        manifest::embedded().node.version.clone(),
     );
+    let agent = launch.agent.kind().to_string();
     let write = cx.writer.submit(Durability::Normal, move |conn| {
         conn.execute(
             "INSERT INTO adapters (instance_id, agent, pid, pgid, start_us, adapter_version,
                  node_version, cli_path, cli_version, started_at)
-             VALUES (?1, 'claude', ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+             VALUES (?1, ?9, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             (
                 row.0,
                 row.1,
@@ -456,6 +462,7 @@ async fn record(cx: &Context, id: &AdapterInstanceId, group: &ProcessGroup, laun
                 cli_path,
                 cli_version,
                 row.3,
+                agent,
             ),
         )
         .map(drop)
