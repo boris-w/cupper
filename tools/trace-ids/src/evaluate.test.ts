@@ -25,6 +25,7 @@ milestone = "M1b"
 IT-f-git = "pr"
 IT-f = { parts = ["IT-f-core", "IT-f-git"] }
 MAN-ui = "man"
+MAN-s = { suite = "man", versions = { claude = "any" } }
 
 [[evidence]]
 id = "MAN-keyboard"
@@ -36,6 +37,12 @@ versions = { electron = "44.9.0" }
 id = "MAN-doc"
 date = "2026-10-01"
 record = "docs/b.md"
+
+[[evidence]]
+id = "MAN-s"
+date = "2026-10-01"
+record = "docs/s.md"
+versions = { claude = "2.1.0" }
 `;
 
 const CONTEXT: Context = { today: "2026-10-19", versions: { electron: "44.10.1" } };
@@ -115,6 +122,8 @@ describe("UNIT-trace-ids: evaluate", () => {
       "problem",
       "evidence of 2026-10-01 (docs/a.md): the current electron version is unknown",
     ]);
+    // "any": named in the evidence, and current whatever the version now (T173).
+    expect(later["MAN-s"]).toEqual(["done", "evidence of 2026-10-01 (docs/s.md)"]);
     const early = states([], { today: "2026-09-30", versions: { electron: "44.9.0" } });
     expect(early["MAN-keyboard"]?.[1]).toBe(
       "evidence of 2026-10-01 (docs/a.md) is dated after today",
@@ -178,8 +187,8 @@ versions = { electron = "45.0.1" }
     const all = registry();
     const ids = (entries: { id: string }[]) => entries.map((entry) => entry.id).sort();
     expect(ids(select(all, { milestone: "M1a" }))).toHaveLength(12);
-    expect(ids(select(all, { milestone: "M1b" }))).toHaveLength(15);
-    expect(ids(select(all, { task: "T002" }))).toEqual(["IT-f", "IT-f-git", "MAN-ui"]);
+    expect(ids(select(all, { milestone: "M1b" }))).toHaveLength(16);
+    expect(ids(select(all, { task: "T002" }))).toEqual(["IT-f", "IT-f-git", "MAN-s", "MAN-ui"]);
     expect(complete({ standing: "settled", detail: "" })).toBe(true);
     expect(complete({ standing: "problem", detail: "" })).toBe(false);
   });

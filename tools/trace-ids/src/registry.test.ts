@@ -112,12 +112,17 @@ describe("UNIT-trace-ids: registry", () => {
     expect(
       bad('UNIT-a = { suite = "pr", max_age_days = 30, versions = { electron = "major" } }'),
     ).toEqual([
-      'UNIT-a in [T001]: versions: MAN only, { electron = "major" | "exact" }',
+      'UNIT-a in [T001]: versions: MAN only, { electron = "major" | "exact" | "any", others = "any" }',
       "UNIT-a in [T001]: max_age_days: MAN only, a whole number of days",
     ]);
     expect(
       bad('MAN-a = { suite = "man", versions = { node = "major" }, max_age_days = 0 }'),
     ).toHaveLength(2);
+    // Only Electron's current version is known: the rest can only be named (T173).
+    expect(bad('MAN-a = { suite = "man", versions = { claude = "exact" } }')).toHaveLength(1);
+    expect(
+      bad('MAN-a = { suite = "man", versions = { claude = "any", "codex-acp" = "any" } }'),
+    ).toEqual([]);
     expect(problemsOf('[T001]\nmilestone = "M1a"\nUNIT-a = "pr"\n[T002]\nUNIT-a = "pr"')).toEqual([
       "UNIT-a in [T002]: already registered under [T001]",
     ]);

@@ -10,9 +10,17 @@ import { idsIn, isId } from "./ids.ts";
 export const MILESTONES = ["M1a", "M1b", "release", "M2", "later"] as const;
 export const SUITES = ["pr", "nightly", "release", "compat", "man"] as const;
 export const STATUSES = ["active", "record", "conditional", "na", "gap", "gap-confirmed"] as const;
-/** Components a manual check can be bound to: its evidence names their versions. */
-export const COMPONENTS = ["electron"] as const;
-const PRECISIONS = ["major", "exact"] as const;
+/**
+ * Components a manual check can be bound to: its evidence names their
+ * versions. "major" and "exact" compare them with the current version, which
+ * trace-ids knows for `TRACKED` only; "any" only requires the evidence to name
+ * one (T173).
+ */
+export const COMPONENTS = [
+  ...["electron", "cupper", "macos", "claude", "claude-agent-acp", "codex", "codex-acp"],
+] as const;
+const TRACKED = ["electron"];
+const PRECISIONS = ["major", "exact", "any"] as const;
 const FIELDS = [
   ...["suite", "milestone", "status", "reason", "parts", "versions", "max_age_days"],
   ...["scenario", "cli"],
@@ -171,10 +179,13 @@ function readEntry(id: string, spec: unknown, at: string, problems: string[]): F
     fail("reason must be text");
   }
   if (versions !== undefined) {
-    const known = (entry: [string, unknown]) =>
-      oneOf(COMPONENTS, entry[0]) && oneOf(PRECISIONS, entry[1]);
+    const known = ([component, precision]: [string, unknown]) =>
+      oneOf(COMPONENTS, component) &&
+      oneOf(PRECISIONS, precision) &&
+      (precision === "any" || TRACKED.includes(component));
     if (!manual || !isTable(versions) || !Object.entries(versions).every(known)) {
-      fail(`versions: MAN only, { ${COMPONENTS.join(" | ")} = "major" | "exact" }`);
+      const tracked = TRACKED.join(" | ");
+      fail(`versions: MAN only, { ${tracked} = "major" | "exact" | "any", others = "any" }`);
     }
   }
   const days = (value: unknown) => manual && Number.isInteger(value) && (value as number) > 0;
