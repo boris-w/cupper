@@ -49,6 +49,9 @@ describe("E2E-selfuse-replace", () => {
       });
       await until("the old host gone", () => !processes().has(running.pid) || undefined);
 
+      // Soft: what follows still runs if the old app does not quit. Electron
+      // takes one SIGTERM gracefully; the next quit's SIGTERM ends it.
+      await old.quit().catch((error: unknown) => expect.soft(String(error)).toBe(""));
       await old.quit();
       const now = new App(installed, "cupper-local");
       try {

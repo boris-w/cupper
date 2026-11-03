@@ -104,6 +104,7 @@ export class App {
   readonly pid: number;
   readonly #log: string;
   readonly #from: number;
+  readonly #stderr: string[] = [];
 
   constructor(
     readonly path: string,
@@ -112,11 +113,24 @@ export class App {
     this.#log = join(logs(name), "main.log");
     this.#from = size(this.#log);
     const exe = String(plist(join(path, "Contents/Info.plist")).CFBundleExecutable);
-    const pid = spawn(join(path, "Contents/MacOS", exe), [], { stdio: "ignore" }).pid;
-    if (pid === undefined) {
+    const app = spawn(join(path, "Contents/MacOS", exe), [], {
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    app.stderr.on("data", (chunk: Buffer) => this.#stderr.push(chunk.toString()));
+    if (app.pid === undefined) {
       throw new Error(`${path} did not start`);
     }
-    this.pid = pid;
+    this.pid = app.pid;
+  }
+
+  /** `until`, whose timeout tells what runs from the app and what Chromium printed. */
+  #until(what: string, check: () => true | undefined, ms?: number) {
+    return until(what, check, ms).catch((error: unknown) => {
+      const ps = execFileSync("ps", ["-x", "-o", "pid=,ppid=,etime=,args="], { encoding: "utf8" });
+      const inside = ps.split("\n").filter((line) => line.includes(` ${this.path}/`));
+      const stderr = this.#stderr.join("").slice(-4000);
+      throw new Error(`${String(error)}; app ${String(this.pid)}\n${inside.join("\n")}\n${stderr}`);
+    });
   }
 
   /**
@@ -125,7 +139,7 @@ export class App {
    * `main.log` ends the wait.
    */
   async ready(): Promise<void> {
-    await until(`${this.name} ready`, () => {
+    await this.#until(`${this.name} ready`, () => {
       const lines = linesSince(this.#log, this.#from);
       const failed = lines.find((line) => line.level === "error" || line.status === "failed");
       if (failed) {
@@ -149,11 +163,18 @@ export class App {
     return inside.map((exe) => exe.slice(this.path.length + 1)).sort();
   }
 
+  /** The `--type` of each Chromium process running from the app. */
+  types(): string[] {
+    const ps = execFileSync("ps", ["-x", "-o", "args="], { encoding: "utf8" }).split("\n");
+    const inside = ps.filter((args) => args.startsWith(`${this.path}/`));
+    return inside.flatMap((args) => /--type=([\w-]+)/.exec(args)?.[1] ?? []);
+  }
+
   /** SIGTERM, which Electron takes as ⌘Q; then nothing may run from the app. */
   async quit(): Promise<void> {
     if (processes().get(this.pid)?.startsWith(`${this.path}/`)) {
       process.kill(this.pid, "SIGTERM");
     }
-    await until(`${this.name} gone`, () => this.running().length === 0 || undefined, 30_000);
+    await this.#until(`${this.name} gone`, () => this.running().length === 0 || undefined, 30_000);
   }
 }
