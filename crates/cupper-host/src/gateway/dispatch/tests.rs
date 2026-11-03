@@ -394,7 +394,6 @@ const ALLOWED: &[(&str, Why)] = {
         ("files/search", Later(M1b)),
         ("git/branches", Later(M1b)),
         ("git/commit", Later(M1b)),
-        ("git/file_diff", Later(M1b)),
         ("git/push", Later(M1b)),
         ("git/revert", Later(M1b)),
         ("git/stage", Later(M1b)),

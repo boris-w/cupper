@@ -1,7 +1,12 @@
 //! `git/diff` in the snapshot tier (design 5.2.10, "diff 与 hunk"). Every
 //! range compares two trees: a turn's start and end snapshots, or its start
 //! and a snapshot taken now while it runs; the index and a snapshot taken
-//! now (`unstaged`); HEAD and the index (`staged`).
+//! now (`unstaged`); HEAD and the index (`staged`). Trees never change, so
+//! the cache keeps a diff as its trees and file list, and `git/file_diff`
+//! makes a file's patch from them when asked: the same patch every time.
+
+mod cache;
+mod hunks;
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -13,7 +18,10 @@ use cupper_protocol::methods::git::{DiffSnapshot, GitDiffFile};
 use cupper_protocol::session::{DiffStat, ExcludedPath, SnapshotStatus};
 use cupper_protocol::view::{Entry, ItemView, SessionView};
 
-use super::snapshot::{self, Opened, ShotError, Taken, output, shoot};
+pub use cache::DiffCache;
+pub use hunks::units;
+
+use super::snapshot::{self, Opened, Place, ShotError, Taken, output, shoot};
 use super::stamp::Fingerprint;
 use super::{GitCmd, GitTool, SnapshotOp};
 use crate::clock::Clock;
@@ -32,6 +40,10 @@ pub enum Range {
 /// A diff made.
 #[derive(Debug, Clone)]
 pub struct Diffed {
+    /// Where its patches are made.
+    pub place: Place,
+    pub old: String,
+    pub new: String,
     pub files: Vec<GitDiffFile>,
     /// The snapshot a running turn's range took now.
     pub taken: Option<Taken>,
@@ -106,7 +118,14 @@ async fn make(
             file.filter_unsupported = hits.contains(file.path.0.as_bytes());
         }
     }
-    Ok(Diffed { files, taken })
+    let place = opened.place.clone();
+    Ok(Diffed {
+        place,
+        old,
+        new,
+        files,
+        taken,
+    })
 }
 
 /// `diff-tree -z --raw --numstat` output: the raw records, then a numstat
@@ -163,6 +182,25 @@ pub fn stat(files: &[GitDiffFile]) -> DiffStat {
         added: files.iter().map(|f| f.additions).sum(),
         removed: files.iter().map(|f| f.deletions).sum(),
     }
+}
+
+/// The patch of `file` between `old` and `new`: the file alone, not what is
+/// under a directory of its name; with a rename's source.
+pub async fn patch(
+    tool: &GitTool,
+    diffed: &Diffed,
+    file: &GitDiffFile,
+    clock: &dyn Clock,
+    durations: &Durations,
+) -> Result<Vec<u8>, ShotError> {
+    let mut args = vec![diffed.old.clone(), diffed.new.clone(), "--".into()];
+    for path in std::iter::once(&file.path).chain(&file.old_path) {
+        args.push(format!(":(literal){}", path.0));
+        args.push(format!(":(exclude,literal){}/", path.0));
+    }
+    let cmd = GitCmd::snapshot(SnapshotOp::DiffPatch).args(args);
+    let tier = tool.snapshot_tier(&diffed.place);
+    output(&tier, cmd, "diff-tree", clock, durations).await
 }
 
 /// What a turn range notes, from the session's view: its snapshots, with
