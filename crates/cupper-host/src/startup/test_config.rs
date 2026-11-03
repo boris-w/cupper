@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Deserializer};
 
+use crate::driver::runtime::launch::Agent;
 use crate::durations::Durations;
 use crate::failpoint::Failpoints;
 
@@ -76,6 +77,14 @@ pub enum NotifierKind {
 pub struct PerAgent<T> {
     pub claude: Option<T>,
     pub codex: Option<T>,
+}
+
+impl<T> PerAgent<T> {
+    pub fn of(&self, agent: Agent) -> Option<&T> {
+        match agent {
+            Agent::Claude => self.claude.as_ref(),
+        }
+    }
 }
 
 impl<T> Default for PerAgent<T> {

@@ -43,6 +43,7 @@
 //!   the agent's status for the index (`status`).
 //! - Steering (T140) is not served yet; its commands are dropped.
 
+pub mod agent;
 pub mod agents;
 pub mod cache;
 pub mod content;
@@ -75,11 +76,11 @@ use serde_json::json;
 use tokio::sync::{mpsc, oneshot, watch};
 
 use cupper_protocol::capabilities::{CliCompat, SessionCapabilities, SlashCommand};
-use cupper_protocol::domain::AgentKind;
 use sha2::{Digest, Sha256};
 
 use cupper_protocol::index::{AgentState, AgentStatus, AuthState, AuthStatus};
 
+use self::agent::{Agent, Extractor};
 use self::launch::{Context, Instance, Launch};
 use self::lifecycle::{Resources, Restarts};
 use self::status::{AgentNotes, Running};
@@ -88,7 +89,6 @@ use super::api::{
     AgentError, AgentErrorClass, AgentErrorForm, AgentPort, AgentSessionId, AskAnswer, AskId,
     AskRequest, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent, ProjectConfigPolicy,
 };
-use super::claude::{self, ClaudeSession, capabilities};
 use super::extract;
 use crate::clock::IdGen;
 use crate::durations::{
@@ -178,7 +178,7 @@ impl From<FromAgent> for Wire {
 #[derive(Debug)]
 struct Route {
     events: mpsc::UnboundedSender<DriverEvent>,
-    claude: ClaudeSession,
+    extract: Extractor,
     cwd: PathBuf,
     /// The digest of the command list the session has, once it attached.
     commands: Option<[u8; 32]>,
@@ -297,12 +297,8 @@ impl AgentRuntime {
             Alarm::new(deps.cx.clock.clone()),
             Restarts::new(&deps.durations),
         );
-        let versions = &deps.launch.versions;
-        drop(cache::invalidate(
-            &deps.cx.writer,
-            &AgentKind::Claude,
-            versions,
-        ));
+        let (agent, versions) = (deps.launch.agent.kind(), &deps.launch.versions);
+        drop(cache::invalidate(&deps.cx.writer, &agent, versions));
         let actor = Actor {
             deps,
             mail: mail.downgrade(),
@@ -456,6 +452,10 @@ impl Actor {
 
     fn now(&self) -> crate::clock::MonoTime {
         self.deps.cx.clock.now_mono()
+    }
+
+    fn agent(&self) -> Agent {
+        self.deps.launch.agent
     }
 
     fn set(&mut self, key: Due, after: Duration) {
@@ -818,7 +818,7 @@ impl Actor {
             Wire::Opened(pending, result) => match result {
                 Ok((session, options)) => self.opened(*pending, session, options),
                 Err(err) => {
-                    let _ = pending.reply.send(Err(claude::agent_error(&err)));
+                    let _ = pending.reply.send(Err(self.agent().error(&err)));
                 }
             },
             Wire::Configured(session, result) => {
@@ -826,7 +826,7 @@ impl Actor {
                     // `SetConfig`: the session hears all the options. A
                     // refusal leaves them as they were.
                     if let (Some(route), Ok(options)) = (self.sessions.get_mut(&session), result) {
-                        let _ = route.events.send(route.claude.set_config(&options));
+                        let _ = route.events.send(route.extract.set_config(&options));
                     }
                     return;
                 };
@@ -837,23 +837,24 @@ impl Actor {
                     }
                     Err(err) => {
                         if let Some(opening) = self.opening.remove(&session) {
-                            let _ = opening.reply.send(Err(claude::agent_error(&err)));
+                            let _ = opening.reply.send(Err(self.agent().error(&err)));
                         }
                     }
                 }
             }
             Wire::Prompted(session, tag, result) => {
-                let event = match result {
-                    Ok(response) => {
-                        let (stop_reason, usage) = extract::prompt_done(&response);
-                        DriverEvent::PromptDone {
-                            tag,
-                            stop_reason,
-                            usage,
-                        }
-                    }
-                    Err(err) => {
-                        let mut error = claude::agent_error(&err);
+                let agent = self.agent();
+                let Some(route) = self.sessions.get_mut(&session) else {
+                    return;
+                };
+                let result = result.map_err(|err| agent.error(&err));
+                let event = match result.and_then(|done| route.extract.prompt_done(&done)) {
+                    Ok((stop_reason, usage)) => DriverEvent::PromptDone {
+                        tag,
+                        stop_reason,
+                        usage,
+                    },
+                    Err(mut error) => {
                         // Cut off by the connection's close: the
                         // instance's `AdapterExited` ends it (T218).
                         if error.class == AgentErrorClass::AdapterExited {
@@ -886,7 +887,7 @@ impl Actor {
 
     /// A session opened: its route, then its options as attached.
     fn opened(&mut self, pending: Pending, session: String, options: Vec<SessionConfigOption>) {
-        let config = capabilities::config_options(&options);
+        let config = self.agent().config_options(&options);
         let agent_option = |id: &str| config.iter().find(|o| o.id.as_str() == id);
         // Only the options whose value differs.
         let todo = (pending.attach.config.iter())
@@ -896,13 +897,13 @@ impl Actor {
             })
             .collect();
         let cwd = pending.attach.cwd.clone();
-        let claude = ClaudeSession::new(cwd.clone(), config);
+        let extract = Extractor::new(self.agent(), cwd.clone(), config);
         let events = pending.events;
         self.sessions.insert(
             session.clone(),
             Route {
                 events,
-                claude,
+                extract,
                 cwd,
                 commands: None,
             },
@@ -937,14 +938,15 @@ impl Actor {
             return;
         }
         let opening = self.opening.remove(&session).expect("just found");
-        let config = capabilities::config_options(&opening.options);
+        let agent = self.agent();
+        let config = agent.config_options(&opening.options);
         let commands = self.commands.clone();
         if let Some(route) = self.sessions.get_mut(&session) {
-            route.claude.set_config(&opening.options);
+            route.extract.set_config(&opening.options);
             route.commands = Some(digest(&commands));
         }
         let versions = self.deps.launch.versions.clone();
-        let caps = capabilities::capabilities(&instance.init, versions, config, commands);
+        let caps = agent.capabilities(&instance.init, versions, config, commands);
         let info = AttachInfo {
             session: AgentSessionId(session),
             instance: instance.id.clone(),
@@ -1034,7 +1036,7 @@ impl Actor {
                 };
                 // cupper's ID of the option, as the agent names it.
                 let named = route
-                    .claude
+                    .extract
                     .config()
                     .iter()
                     .find(|o| o.id.as_str() == option);
@@ -1069,7 +1071,7 @@ impl Actor {
                 let Some(route) = self.sessions.get_mut(&session) else {
                     return;
                 };
-                for event in route.claude.update(&notification.update) {
+                for event in route.extract.update(&notification.update) {
                     match event {
                         DriverEvent::CommandsChanged(commands) => self.commands(&session, commands),
                         event => self.to_session(&session, event),
@@ -1081,7 +1083,7 @@ impl Actor {
                 let Some(route) = self.sessions.get(&session) else {
                     return drop(responder.respond_with_error(Error::invalid_params()));
                 };
-                let (tool_call_id, request) = route.claude.permission(&request);
+                let (tool_call_id, request) = route.extract.permission(&request);
                 let cancellation = responder.cancellation();
                 let asked = (Asked::Permission(responder), Some(tool_call_id), request);
                 self.ask(session, cancellation, asked);

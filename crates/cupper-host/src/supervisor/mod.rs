@@ -17,7 +17,7 @@ mod recover;
 mod seed;
 pub mod watch;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fmt;
 use std::future::poll_fn;
@@ -27,7 +27,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::Poll;
 
-use cupper_protocol::domain::AgentKind;
 use cupper_protocol::index::HostUpdated;
 use cupper_protocol::methods::admin::{Settings, SettingsGet, SettingsUpdate};
 use cupper_protocol::methods::handshake::{HostShutdown, HostShutdownParams, ShutdownReason};
@@ -46,11 +45,12 @@ use crate::clock::{Clock, IdGen, SystemClock};
 use crate::diag::full::Redactor;
 use crate::diag::log::log_dir;
 use crate::diag::stderr::AdapterLog;
+use crate::driver::api::AgentPort;
 use crate::driver::locate::CliLocator;
 use crate::driver::locate::trust::{Boundaries, system_temp_dirs};
 use crate::driver::probe::login_shell::LoginEnv;
 use crate::driver::runtime::agents::{Agents, Find};
-use crate::driver::runtime::launch::{self, Launch};
+use crate::driver::runtime::launch::{self, Agent, Launch};
 use crate::driver::runtime::{AGENT_RUNTIME, AgentRuntime, RuntimeDeps};
 use crate::durations::Durations;
 use crate::exit::HostExit;
@@ -223,32 +223,38 @@ impl Host {
         let self_check = SelfCheck::new(watch.clone());
         let admission = Arc::new(Admission::default());
 
-        // Claude's runtime and the sessions on it, in the order they stop.
+        // The agents' runtimes and the sessions on them, in the order they stop.
         let ids = Arc::new(IdGen::new(clock.clone()));
-        let login_env = injected.login_env.clone();
-        // The adapter starts from what the installer installs, once it has.
+        // Each adapter starts from what the installer installs, once it has.
         let (plans, registry) = installer_inputs(&payload);
         let (published, install) = runtime::progress();
-        let (node, bundle) = runtime::claude_adapter(&runtime::runtime_dir(&data_dir), &plans);
-        let finder = Finder {
-            clock: clock.clone(),
-            durations: durations.clone(),
-            runtime: launch::Program::Runtime {
-                node,
-                bundle,
-                install,
-            },
-            login_env,
-            #[cfg(feature = "test-harness")]
-            agent: payload.test_config.agents.claude.clone(),
-            #[cfg(feature = "test-harness")]
-            in_process: payload.test_config.in_process.clone(),
-            #[cfg(feature = "test-harness")]
-            cli_root: payload.test_config.cli_root.clone(),
-        };
-        // Discovery runs the login shell once; the index's git and Claude's
-        // launch both take this result.
-        let found = finder.discover(project_roots(&reader)?).await;
+        let finders: Vec<Finder> = [(Agent::Claude, install)]
+            .into_iter()
+            .map(|(agent, install)| {
+                let (node, bundle) =
+                    runtime::claude_adapter(&runtime::runtime_dir(&data_dir), &plans);
+                Finder {
+                    agent,
+                    clock: clock.clone(),
+                    durations: durations.clone(),
+                    runtime: launch::Program::Runtime {
+                        node,
+                        bundle,
+                        install,
+                    },
+                    login_env: injected.login_env.clone(),
+                    #[cfg(feature = "test-harness")]
+                    command: payload.test_config.agents.of(agent).cloned(),
+                    #[cfg(feature = "test-harness")]
+                    in_process: payload.test_config.in_process.clone(),
+                    #[cfg(feature = "test-harness")]
+                    cli_root: payload.test_config.cli_root.clone(),
+                }
+            })
+            .collect();
+        // Discovery runs the login shell once; the index's git and the
+        // agents' launches all take this result.
+        let found = finders[0].discover(project_roots(&reader)?).await;
         let git = git_tool(&found, &data_dir)?;
         let home = PathBuf::from(found.host.get("HOME").cloned().unwrap_or_default());
         let settings = SettingsHandle::load(&reader, writer.clone(), clock.clone(), &home)?;
@@ -330,54 +336,58 @@ impl Host {
             // Nothing installs: the start checks what is there.
             drop(published);
         }
-        let launch = finder.launch_found(&found, &settings.current()).await;
-        let redactor = Redactor::for_this_machine();
-        let log = AdapterLog::open(
-            &log_dir(&data_dir),
-            "claude",
-            clock.clone(),
-            redactor.clone(),
-        )
-        .unwrap_or_else(|_| AdapterLog::unwritten(clock.clone(), redactor));
-        let cx = launch::Context {
-            clock: clock.clone(),
-            writer: writer.clone(),
-            raw: raw_sink,
-            log,
-            self_check: self_check.clone(),
-        };
         quiescence.register(AGENT_RUNTIME);
-        let deps = RuntimeDeps {
-            launch,
-            cx,
-            ids: ids.clone(),
-            blobs: blobs.clone(),
-            quiescence: quiescence.clone(),
-            probe_dir: data_dir.join("probe").join("claude"),
-            durations: durations.clone(),
-            notes: Arc::new(index.clone()),
-            rss: test_rss(&payload),
-        };
-        let claude = AgentRuntime::start(deps);
+        let mut runtimes = Vec::new();
+        for finder in &finders {
+            let (agent, name) = (finder.agent, finder.agent.kind().to_string());
+            let launch = finder.launch_found(&found, &settings.current()).await;
+            let redactor = Redactor::for_this_machine();
+            let log = AdapterLog::open(&log_dir(&data_dir), &name, clock.clone(), redactor.clone())
+                .unwrap_or_else(|_| AdapterLog::unwritten(clock.clone(), redactor));
+            let cx = launch::Context {
+                clock: clock.clone(),
+                writer: writer.clone(),
+                raw: raw_sink.clone(),
+                log,
+                self_check: self_check.clone(),
+            };
+            let deps = RuntimeDeps {
+                launch,
+                cx,
+                ids: ids.clone(),
+                blobs: blobs.clone(),
+                quiescence: quiescence.clone(),
+                probe_dir: data_dir.join("probe").join(&name),
+                durations: durations.clone(),
+                notes: Arc::new(index.clone()),
+                rss: test_rss(&payload, agent),
+            };
+            runtimes.push((agent, AgentRuntime::start(deps)));
+        }
         let find: Find = {
-            let (finder, readers, settings) = (finder.clone(), readers.clone(), settings.clone());
-            Arc::new(move || {
-                let (finder, readers, settings) =
-                    (finder.clone(), readers.clone(), settings.current());
+            let (finders, readers, settings) = (finders.clone(), readers.clone(), settings.clone());
+            Arc::new(move |agent| {
+                let finder = finders.iter().find(|finder| finder.agent == agent);
+                let finder = finder.expect("every agent has a finder").clone();
+                let (readers, settings) = (readers.clone(), settings.current());
                 Box::pin(async move {
                     let roots = readers.read(project_roots).await.unwrap_or_default();
                     finder.launch(roots, &settings).await
                 })
             })
         };
-        let agents = Agents::new(claude.clone(), readers.clone(), writer.clone(), find);
+        let agents = Agents::new(runtimes.clone(), readers.clone(), writer.clone(), find);
+        let ports = runtimes.iter().map(|(agent, runtime)| {
+            let port: Arc<dyn AgentPort> = Arc::new(runtime.clone());
+            (agent.kind(), port)
+        });
         let sessions = SessionManager::new(SessionDeps {
             streams: streams.clone(),
             readers: readers.clone(),
             clock: clock.clone(),
             ids: ids.clone(),
             durations: durations.clone(),
-            agents: HashMap::from([(AgentKind::Claude, Arc::new(claude.clone()) as _)]),
+            agents: ports.collect(),
             quiescence: quiescence.clone(),
             audit: records.clone(),
             index: Arc::new(index.clone()),
@@ -386,11 +396,14 @@ impl Host {
             blobs: blobs.clone(),
         });
         sessions.reopen().await;
-        let parts: Arc<[Arc<dyn Part>]> = Arc::new([
-            Arc::new(sessions.clone()),
-            Arc::new(claude),
-            Arc::new(index.clone()),
-        ]);
+        let mut parts: Vec<Arc<dyn Part>> = vec![Arc::new(sessions.clone())];
+        parts.extend(
+            runtimes
+                .into_iter()
+                .map(|(_, runtime)| Arc::new(runtime) as _),
+        );
+        parts.push(Arc::new(index.clone()));
+        let parts: Arc<[Arc<dyn Part>]> = parts.into();
         let (to_supervisor, exits) = mpsc::unbounded_channel();
         let control = Arc::new(Control::new(
             to_supervisor.clone(),
@@ -655,17 +668,18 @@ fn project_roots(reader: &rusqlite::Connection) -> rusqlite::Result<Vec<PathBuf>
     roots.collect()
 }
 
-/// How Claude's adapters start, found at startup and again on
+/// How an agent's adapters start, found at startup and again on
 /// `agents/refresh`: the program of `test_config.agents`, else the runtime
 /// with the CLI discovered.
 #[derive(Debug, Clone)]
 struct Finder {
+    agent: Agent,
     clock: Arc<dyn Clock>,
     durations: Durations,
     runtime: launch::Program,
     login_env: Option<BTreeMap<String, String>>,
     #[cfg(feature = "test-harness")]
-    agent: Option<crate::startup::test_config::AgentCommand>,
+    command: Option<crate::startup::test_config::AgentCommand>,
     #[cfg(feature = "test-harness")]
     in_process: Option<launch::InProcess>,
     #[cfg(feature = "test-harness")]
@@ -686,24 +700,26 @@ impl Finder {
     async fn launch_found(&self, found: &Discovery, settings: &Settings) -> Launch {
         let (clock, durations) = (&*self.clock, &self.durations);
         let (host, login) = (&found.host, &found.login);
+        let agent = self.agent;
         #[cfg(feature = "test-harness")]
         if let Some(agents) = &self.in_process {
-            let mut launch = launch::injected(PathBuf::new(), Vec::new(), host, login);
+            let mut launch = launch::injected(agent, PathBuf::new(), Vec::new(), host, login);
             launch.program = launch::Program::InProcess(agents.clone());
             return launch;
         }
         #[cfg(feature = "test-harness")]
-        if let Some(agent) = &self.agent {
-            let (program, args) = (agent.program.clone(), agent.args.clone());
-            let mut launch = launch::injected(program, args, host, login);
-            if let Some(version) = &agent.cli_version {
+        if let Some(command) = &self.command {
+            let (program, args) = (command.program.clone(), command.args.clone());
+            let mut launch = launch::injected(agent, program, args, host, login);
+            if let Some(version) = &command.cli_version {
                 let found = crate::driver::probe::version::Version::find(version);
-                launch.versions = launch::cli_versions(found);
+                launch.versions = launch::cli_versions(agent, found);
             }
             return launch;
         }
         let (program, locator) = (self.runtime.clone(), &found.locator);
-        launch::production(clock, durations, program, (host, login), locator, settings).await
+        let shell = (host, login);
+        launch::production(agent, clock, durations, program, shell, locator, settings).await
     }
 }
 
@@ -730,13 +746,13 @@ fn installer_inputs(payload: &Payload) -> (Vec<ComponentPlan>, String) {
     }
 }
 
-/// `test_config.rss_samples` of Claude (design 5.9.9).
-fn test_rss(payload: &Payload) -> Option<u64> {
+/// `test_config.rss_samples` of `agent` (design 5.9.9).
+fn test_rss(payload: &Payload, agent: Agent) -> Option<u64> {
     #[cfg(feature = "test-harness")]
-    return payload.test_config.rss_samples.claude;
+    return payload.test_config.rss_samples.of(agent).copied();
     #[cfg(not(feature = "test-harness"))]
     {
-        let _ = payload;
+        let _ = (payload, agent);
         None
     }
 }

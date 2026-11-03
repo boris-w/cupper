@@ -9,7 +9,6 @@
 use std::fmt;
 
 use cupper_protocol::annotations::WirePath;
-use cupper_protocol::domain::AgentKind;
 use cupper_protocol::index::{
     AdapterStatus, AgentState, AgentStatus, AuthState, AuthStatus, CliStatus, RuntimeState,
 };
@@ -69,7 +68,7 @@ pub fn status(launch: &Launch, running: Running, auth: &AuthStatus) -> AgentStat
         install: cli.install.clone(),
     });
     AgentStatus {
-        agent: AgentKind::Claude,
+        agent: launch.agent.kind(),
         state,
         cli,
         adapter: AdapterStatus {
@@ -113,6 +112,7 @@ mod tests {
             cli_compat: CliCompat::OlderUntested,
         };
         Launch {
+            agent: crate::driver::runtime::agent::Agent::Claude,
             program: Program::Runtime {
                 node: missing("/missing/node"),
                 bundle: missing("/missing/bundle"),

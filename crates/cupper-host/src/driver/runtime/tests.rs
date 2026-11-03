@@ -21,6 +21,7 @@ use crate::orchestrator::testkit::text;
 use crate::runtime::{claude_adapter, plans, progress};
 use crate::store::testutil::{TempDir, host_writer, query, raw_db, raw_rows};
 use crate::store::{Durability, RAW_WRITER, RawWriter, RawWriterThread, WriterThread};
+use cupper_protocol::domain::AgentKind;
 use cupper_protocol::index::AgentStatus;
 use cupper_protocol::index::{RuntimeFailure, RuntimeState};
 use cupper_sys::{ProcessGroup, ProcessInfo, process_info};
@@ -40,7 +41,8 @@ impl Fixture {
     /// `claude`.
     fn new(name: &str, args: &[&str], cli: Option<&str>, rss: Option<u64>) -> Self {
         let args = args.iter().map(|arg| (*arg).to_owned()).collect();
-        let mut launch = launch::injected(launch::fake_agent(), args, &host(), &login());
+        let mut launch =
+            launch::injected(Agent::Claude, launch::fake_agent(), args, &host(), &login());
         launch.cli = cli.map(|cli| launch::Cli {
             path: cli.into(),
             version: String::new(),
@@ -307,7 +309,13 @@ fn runtime(dir: &TempDir) -> AgentRuntime {
     let var = |(k, v): (&str, &str)| (k.to_owned(), v.to_owned());
     let host = BTreeMap::from([("HOME", "/h"), ("SECRET", "x"), ("TERM", "dumb")].map(var));
     let login = LoginEnv::fallback(Failure::ShellMissing);
-    let launch = launch::injected(launch::fake_agent(), Vec::new(), &host, &login);
+    let launch = launch::injected(
+        Agent::Claude,
+        launch::fake_agent(),
+        Vec::new(),
+        &host,
+        &login,
+    );
     let (raw, log) = (
         raw.sink(),
         AdapterLog::unwritten(Arc::clone(&clock), Redactor::default()),
@@ -413,7 +421,7 @@ fn player(
 #[tokio::test(flavor = "multi_thread")]
 async fn gold_b_fake_in_process_adapter_has_no_process_to_signal() {
     let (agents, started) = mpsc::unbounded_channel();
-    let mut launch = launch::injected(PathBuf::new(), Vec::new(), &host(), &login());
+    let mut launch = launch::injected(Agent::Claude, PathBuf::new(), Vec::new(), &host(), &login());
     launch.program = launch::Program::InProcess(launch::InProcess(agents));
 
     let (dir, clock) = (TempDir::new("in-process-launch"), ManualClock::new());
@@ -666,7 +674,7 @@ async fn it_k21_reap_group_sampling_finds_the_groups_a_crash_leaves() {
 #[tokio::test(flavor = "multi_thread")]
 async fn it_adapter_restart_a_cut_off_prompt_ends_with_the_instance() {
     let (agents, started) = mpsc::unbounded_channel();
-    let mut launch = launch::injected(PathBuf::new(), Vec::new(), &host(), &login());
+    let mut launch = launch::injected(Agent::Claude, PathBuf::new(), Vec::new(), &host(), &login());
     launch.program = launch::Program::InProcess(launch::InProcess(agents));
     let f = Fixture::with("cut-off", launch, None);
     cutting(started);
@@ -724,7 +732,7 @@ async fn it_runtime_first_prompt_waits_a_stop_ends_it_a_failure_is_named() {
     let plans = plans(crate::manifest::embedded());
     let (published, install) = progress();
     let (node, bundle) = claude_adapter(Path::new("/missing"), &plans);
-    let mut launch = launch::injected(PathBuf::new(), Vec::new(), &host(), &login());
+    let mut launch = launch::injected(Agent::Claude, PathBuf::new(), Vec::new(), &host(), &login());
     launch.program = launch::Program::Runtime {
         node,
         bundle,
@@ -822,12 +830,19 @@ async fn agents_probe_cache_and_refresh() {
     let runtime = runtime(&dir);
     let (writer, _thread) = host_writer(&dir, &ManualClock::new());
     let readers = Readers::open(&dir.host_db()).unwrap();
-    let find: agents::Find = Arc::new(|| {
+    let find: agents::Find = Arc::new(|agent| {
         let login = LoginEnv::fallback(Failure::ShellMissing);
-        let launch = launch::injected(launch::fake_agent(), Vec::new(), &BTreeMap::new(), &login);
+        let launch = launch::injected(
+            agent,
+            launch::fake_agent(),
+            Vec::new(),
+            &BTreeMap::new(),
+            &login,
+        );
         Box::pin(async move { launch })
     });
-    let agents = Agents::new(runtime.clone(), readers, writer, find);
+    let runtimes = vec![(Agent::Claude, runtime.clone())];
+    let agents = Agents::new(runtimes, readers, writer, find);
     let claude = AgentKind::Claude;
     assert_eq!(agents.capabilities(&claude).await.unwrap().cached, None);
     let codex = agents.capabilities(&AgentKind::Codex).await.unwrap_err();
