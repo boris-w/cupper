@@ -4,15 +4,22 @@
 // sanitizer's schema narrowed to http(s) URLs and no agent class names; then
 // rehype-harden. Links open through `ShellAPI.openExternal`, never in the
 // document; an image is a link to it and never loads. The look is static CSS
-// (`.md` in styles/stream.css, design 5.7.10).
+// (`.md` in styles/stream.css, design 5.7.10). A code block is highlighted
+// once its fence closes (design 5.7.6), never again while the text streams.
 
 import { harden } from "rehype-harden";
 import rehypeSanitize, { defaultSchema, type Options as Schema } from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
-import type { ReactNode } from "react";
-import { Streamdown, type Components, type StreamdownProps } from "streamdown";
+import { isValidElement, type ReactNode } from "react";
+import {
+  Streamdown,
+  useIsCodeFenceIncomplete,
+  type Components,
+  type StreamdownProps,
+} from "streamdown";
 
 import { useShell } from "../app/providers";
+import { language, LANGUAGE_CLASSES, useHighlight } from "./highlight";
 
 type PluggableList = NonNullable<StreamdownProps["rehypePlugins"]>;
 
@@ -25,8 +32,9 @@ export const isWeb = (url: unknown): url is string =>
 const schema: Schema = {
   ...defaultSchema,
   protocols: { href: WEB, src: WEB, cite: WEB },
-  // A class name could pick a style of the app's own (T136): none from agents.
-  attributes: { ...defaultSchema.attributes, code: [] },
+  // A class name could pick a style of the app's own (T136): none from
+  // agents. A code block's known language picks its grammar, and goes no further.
+  attributes: { ...defaultSchema.attributes, code: [["className", ...LANGUAGE_CLASSES]] },
 };
 
 export const remarkPlugins: PluggableList = [remarkGfm];
@@ -65,12 +73,44 @@ function Link({ href, children }: { href?: string; children?: ReactNode }) {
   );
 }
 
+/** A fenced block: plain while its fence is open, then highlighted if its language is known. */
+function CodeBlock({ children }: { children?: ReactNode }) {
+  const code = isValidElement<{ className?: string; children?: ReactNode }>(children)
+    ? children.props
+    : {};
+  const text = typeof code.children === "string" ? code.children : "";
+  const info = /\blanguage-(\S+)/.exec(code.className ?? "")?.[1];
+  const open = useIsCodeFenceIncomplete();
+  const lines = useHighlight(text, open ? undefined : language(info));
+  return (
+    <pre data-highlighted={lines ? "" : undefined}>
+      <code>
+        {lines
+          ? lines.map((line, n) => (
+              <span key={n}>
+                {n > 0 && "\n"}
+                {line.map(({ text, category }, m) =>
+                  category ? (
+                    <span key={m} className={`hl-${category}`}>
+                      {text}
+                    </span>
+                  ) : (
+                    text
+                  ),
+                )}
+              </span>
+            ))
+          : text}
+      </code>
+    </pre>
+  );
+}
+
 const components: Components = {
   a: ({ href, children }) => <Link href={href}>{children}</Link>,
   // streamdown draws these as spans with utility classes this app lacks.
   strong: ({ children }) => <strong>{children}</strong>,
-  // Plain blocks: highlighting and code block controls are T143's.
-  pre: ({ children }) => <pre>{children}</pre>,
+  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
   table: ({ children }) => (
     <div className="overflow-x-auto">
       <table>{children}</table>

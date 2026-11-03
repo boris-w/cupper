@@ -80,6 +80,39 @@ const TOOLS = [
   tool("i_8", "execute", { command: "pnpm test --filter ui-core" }),
 ] as EventBody[];
 
+const CODE = [
+  "```ts",
+  "// 读取配置，缺省时用默认值",
+  'import { readFile } from "node:fs/promises";',
+  "",
+  "export async function load(path: string, retries = 3): Promise<Config> {",
+  '  const text = await readFile(path, "utf8");',
+  "  return { ...JSON.parse(text), retries, debug: false };",
+  "}",
+  "```",
+  "```html",
+  '<a class="link" href="https://example.com/docs">文档</a>',
+  "```",
+  "```python",
+  "def total(items: list[int]) -> int:",
+  '    """求和"""',
+  "    return sum(items, start=0)",
+  "```",
+].join("\n");
+
+const completed = (turn_id: string, status = "completed") => ({
+  type: "turn.completed",
+  data: { turn_id, status, ended_at: 2, duration_ms: 8000, final_item_ids: [] },
+});
+
+const HIGHLIGHT = [
+  ...header,
+  started("i_1", "agent_message"),
+  delta("i_1", CODE),
+  done("i_1"),
+  completed("t_1"),
+] as EventBody[];
+
 async function show(page: Page, stream: EventBody[], theme: "light" | "dark") {
   await open(page, { info: { theme }, streams: { "session/s_1": stream } });
   await page.evaluate(() => window.cupperShell.navigate({ kind: "session", session_id: "s_1" }));
@@ -89,6 +122,7 @@ for (const theme of ["light", "dark"] as const) {
   test(`UI-stream-markdown ${theme}`, async ({ page }) => {
     await show(page, MARKDOWN, theme);
     await expect(page.getByText("改动概要")).toBeVisible();
+    await expect(page.locator("pre[data-highlighted]")).toBeVisible();
     await expect(page).toHaveScreenshot(`stream-markdown-${theme}.png`);
     expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
   });
@@ -99,6 +133,13 @@ for (const theme of ["light", "dark"] as const) {
     await page.getByText("读取了 2 个文件，搜索了 1 次").click();
     await expect(page.getByText("退出码 1")).toBeVisible();
     await expect(page).toHaveScreenshot(`stream-tools-${theme}.png`);
+    expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
+  });
+
+  test(`UI-code-highlight ${theme}`, async ({ page }) => {
+    await show(page, HIGHLIGHT, theme);
+    await expect(page.locator("pre[data-highlighted]")).toHaveCount(3);
+    await expect(page).toHaveScreenshot(`stream-code-${theme}.png`);
     expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
   });
 }
