@@ -152,6 +152,22 @@ const PLAN_MARKDOWN = [
   completed("t_1"),
 ] as EventBody[];
 
+const error = (item_id: string, code: string, guidance: string, more: object = {}) =>
+  started(item_id, "error", { code, guidance, retryable: guidance === "retry", ...more });
+/** Every recovery step once; the retry is in the last turn, which can send its message again. */
+const ERRORS = [
+  ...header,
+  error("i_1", "not_logged_in", "run_login_in_terminal", { raw: "Authentication required" }),
+  error("i_2", "cli_too_old", "upgrade_cli"),
+  error("i_3", "cli_missing", "install_cli"),
+  error("i_4", "quota_exhausted", "quota_exhausted"),
+  error("i_5", "model_unsupported", "change_model"),
+  error("i_6", "adapter_crashed", "restart_agent"),
+  error("i_7", "other", "page_admin", { raw: "unknown guidance falls back to none" }),
+  error("i_8", "restartable", "retry"),
+  completed("t_1", "failed"),
+] as EventBody[];
+
 async function show(page: Page, stream: EventBody[], theme: "light" | "dark") {
   await open(page, { info: { theme }, streams: { "session/s_1": stream } });
   await page.evaluate(() => window.cupperShell.navigate({ kind: "session", session_id: "s_1" }));
@@ -201,6 +217,14 @@ for (const theme of ["light", "dark"] as const) {
     // A plan in a finished turn has no pill.
     await expect(page.getByRole("button", { name: /^第 / })).toHaveCount(0);
     await expect(page).toHaveScreenshot(`stream-plan-markdown-${theme}.png`);
+    expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
+  });
+
+  test(`UI-error ${theme}`, async ({ page }) => {
+    await show(page, ERRORS, theme);
+    await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "复制命令" })).toBeVisible();
+    await expect(page).toHaveScreenshot(`stream-error-${theme}.png`);
     expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
   });
 }

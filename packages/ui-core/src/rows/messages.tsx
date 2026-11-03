@@ -1,12 +1,16 @@
 // The stream's other rows (design 5.7.4): the assistant's answer in
 // Markdown, thinking (MS-2), and notices and errors in the warning box
-// (MS-5), their text from the semantic codes. Recovery steps are T143's.
+// (MS-5), their text from the semantic codes, an error's recovery step in it.
 
 import { escapeInvisible } from "@cupper/i18n";
+import type { PromptBlock } from "@cupper/protocol";
 import { useState } from "react";
 
-import { useT } from "../app/providers";
+import { useHost, useT } from "../app/providers";
 import { Alert } from "../components/Alert";
+import { codeOf, useSessionState } from "../composer/send";
+import { useToasts } from "../feedback/toaster";
+import { useStreamActions } from "../stream/actions";
 import { useDuration } from "./basic";
 import { Markdown } from "./markdown";
 import { registerRow, type RowOf } from "./stream";
@@ -70,15 +74,84 @@ const ERRORS = [
   "host_restarted",
 ];
 
-/** An error, and the agent's own text under it. */
-function ErrorRow({ row: { error } }: { row: RowOf<"error"> }) {
+/** Recovery steps with a text; `none`, and a step this build does not know, add nothing. */
+const GUIDANCE = [
+  "retry",
+  "run_login_in_terminal",
+  "upgrade_cli",
+  "install_cli",
+  "quota_exhausted",
+  "change_model",
+  "restart_agent",
+];
+
+/** What logs an agent in: cupper does not, the user does in a terminal (AG-2). */
+const LOGIN: Record<string, string> = { claude: "claude", codex: "codex login" };
+
+const BUTTON =
+  "shrink-0 rounded-md bg-btn-secondary px-2 py-0.5 text-fg hover:bg-hover disabled:opacity-50";
+
+/** Sends the turn's first message again, as it was: text, files, pictures, comments. */
+function Retry({ content }: { content: PromptBlock[] }) {
+  const t = useT();
+  const { client } = useHost();
+  const { show } = useToasts();
+  const { sessionId } = useStreamActions();
+  const [sending, setSending] = useState(false);
+  const retry = () => {
+    setSending(true);
+    client
+      .command("session/send", { session_id: sessionId, mode: "queue", content })
+      .catch((error: unknown) =>
+        show({ id: "send", text: t("composer:send_failed", { code: codeOf(error) }) }),
+      )
+      .finally(() => setSending(false));
+  };
+  return (
+    <button type="button" disabled={sending} onClick={retry} className={BUTTON}>
+      {t("stream:retry")}
+    </button>
+  );
+}
+
+/** The command that logs the session's agent in, to copy into a terminal. */
+function LoginCommand() {
+  const t = useT();
+  const { agent } = useSessionState(useStreamActions().sessionId);
+  const command = LOGIN[agent];
+  return (
+    command && (
+      <span className="mt-1 flex items-center gap-2">
+        <code className="rounded-xs bg-btn-secondary px-1 font-mono text-code">{command}</code>
+        <button
+          type="button"
+          onClick={() => void navigator.clipboard.writeText(command)}
+          className={BUTTON}
+        >
+          {t("stream:copy_command")}
+        </button>
+      </span>
+    )
+  );
+}
+
+/** An error, the agent's own text under it, and what to do about it. */
+function ErrorRow({ row: { error, retry } }: { row: RowOf<"error"> }) {
   const t = useT();
   const key = ERRORS.includes(error.code) ? `stream:error_${error.code}` : "stream:error_other";
+  const guidance = GUIDANCE.includes(error.guidance) ? error.guidance : undefined;
+  const button = guidance === "retry" && retry;
   return (
-    <Alert tone="danger">
+    <Alert tone="danger" action={button && <Retry content={button} />}>
       <div>{t(key)}</div>
       {error.raw && (
         <div className="mt-1 break-words text-fg-tertiary">{escapeInvisible(error.raw)}</div>
+      )}
+      {guidance && !button && (
+        <div data-guidance={guidance} className="mt-1 text-fg-secondary">
+          {t(`stream:guidance_${guidance}`)}
+          {guidance === "run_login_in_terminal" && <LoginCommand />}
+        </div>
       )}
     </Alert>
   );

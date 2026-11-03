@@ -137,7 +137,7 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
   };
 
   return (
-    <StreamActions value={{ loadEarlier }}>
+    <StreamActions value={{ sessionId, loadEarlier }}>
       <div className="relative min-h-0 flex-1">
         <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto" data-stream-list>
           <div className="relative w-full" style={{ height: total }}>

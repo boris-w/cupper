@@ -4,7 +4,7 @@ import { MockHost } from "@cupper/host-client/mock";
 import type { Handshake } from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeAll, describe, expect, test } from "vitest";
+import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
 import { ToasterProvider } from "../feedback/toaster";
@@ -45,6 +45,8 @@ function item(item_id: string, kind: string, fields: object, n = 1) {
     data: { item_id, turn_id: `t_${n}`, started_at: n, kind, ...fields },
   };
 }
+const error = (id: string, guidance: string, n: number) =>
+  item(id, "error", { code: "other", guidance, retryable: false }, n);
 
 /** Session s_1 of `agent`, with `ops`; its host answers `session/send`. */
 async function setup(ops: object[], agent = "claude") {
@@ -148,5 +150,68 @@ describe("UI-plan", () => {
     expect(runningPlan(row(["completed", "completed"]))?.n).toBe(2);
     expect(runningPlan(row(["pending"], "completed"))).toBeUndefined();
     expect(runningPlan(row([]))).toBeUndefined();
+  });
+});
+
+describe("UI-error", () => {
+  const KNOWN = [
+    "run_login_in_terminal",
+    "upgrade_cli",
+    "install_cli",
+    "quota_exhausted",
+    "change_model",
+    "restart_agent",
+  ];
+  const OPS = [
+    ...turn(1, [{ type: "text", text: "第一次" }], "failed"),
+    error("e_0", "retry", 1),
+    ...turn(2, [
+      { type: "text", text: "再来一次" },
+      { type: "file_ref", path: "a.rs" },
+    ]),
+    ...[...KNOWN, "none", "page_admin"].map((guidance, n) => error(`e_${n + 1}`, guidance, 2)),
+    error("e_9", "retry", 2),
+  ];
+
+  test("each step says what to do; none, and a step this build does not know, add nothing", async () => {
+    await setup(OPS, "codex");
+    const shown = [...document.querySelectorAll("[data-guidance]")];
+    expect(shown.map((box) => box.getAttribute("data-guidance"))).toEqual(["retry", ...KNOWN]);
+    expect(shown.map((box) => box.firstChild?.textContent)).toEqual([
+      "重新发送消息即可重试。",
+      "在终端里登录后重试。",
+      "在终端里升级命令行工具后重试。",
+      "在终端里安装命令行工具后重试。",
+      "等额度恢复后再试，或者换一个账号。",
+      "换一个模型后重试。",
+      "重启 agent 后重试。",
+    ]);
+    expect(document.querySelectorAll("[role=alert]")).toHaveLength(10);
+  });
+
+  test("login: the agent's command, to copy into a terminal", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    await setup(OPS, "codex");
+    expect(screen.getByText("codex login").tagName).toBe("CODE");
+    fireEvent.click(screen.getByRole("button", { name: "复制命令" }));
+    expect(writeText).toHaveBeenCalledWith("codex login");
+  });
+
+  test("retry, in the last turn only, sends the message that started it again as it was", async () => {
+    const requests = await setup(OPS);
+    const [retry, ...more] = screen.getAllByRole("button", { name: "重试" });
+    expect(more).toEqual([]);
+    await act(async () => void fireEvent.click(retry as HTMLElement));
+    expect(requests("session/send")).toEqual([
+      expect.objectContaining({
+        session_id: "s_1",
+        mode: "queue",
+        content: [
+          { type: "text", text: "再来一次" },
+          { type: "file_ref", path: "a.rs" },
+        ],
+      }),
+    ]);
   });
 });

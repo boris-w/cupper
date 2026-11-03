@@ -74,7 +74,14 @@ export type StreamRow =
   /** Two or more tool calls in a row with one `group_id`: one row, its own expansion. */
   | { kind: "activity_group"; key: string; groupId: string; tools: ToolData[]; running: boolean }
   | { kind: "notice"; key: string; itemId: string; notice: Notice }
-  | { kind: "error"; key: string; itemId: string; error: ErrorItem }
+  | {
+      kind: "error";
+      key: string;
+      itemId: string;
+      error: ErrorItem;
+      /** In the last turn: the message that started it, to send again (`retry`). */
+      retry?: PromptBlock[];
+    }
   /** The plan changes in place `running`, until its turn ends. */
   | { kind: "plan"; key: string; itemId: string; plan: Plan; running: boolean }
   | {
