@@ -4,9 +4,11 @@
 // them: on the author's Mac those directories hold Cupper Local in daily use.
 
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+
+import { expect } from "vitest";
 
 export const HOST_APP = "Contents/Helpers/CupperHost.app";
 export const HOST = `${HOST_APP}/Contents/MacOS/cupper-host`;
@@ -175,11 +177,41 @@ export class App {
     return inside.flatMap((args) => /--type=([\w-]+)/.exec(args)?.[1] ?? []);
   }
 
-  /** SIGTERM, which Electron takes as ⌘Q; then nothing may run from the app. */
+  /**
+   * SIGTERM, which Electron takes as ⌘Q; then nothing may run from the app.
+   * Electron takes one SIGTERM gracefully: when that one does not end the
+   * app, a second ends it, so that no single-instance lock outlives the
+   * test; the quit still fails.
+   */
   async quit(): Promise<void> {
-    if (processes().get(this.pid)?.startsWith(`${this.path}/`)) {
-      process.kill(this.pid, "SIGTERM");
-    }
-    await this.#until(`${this.name} gone`, () => this.running().length === 0 || undefined, 30_000);
+    const signal = () => {
+      if (processes().get(this.pid)?.startsWith(`${this.path}/`)) {
+        process.kill(this.pid, "SIGTERM");
+      }
+    };
+    const gone = () => this.running().length === 0 || undefined;
+    signal();
+    await this.#until(`${this.name} gone`, gone, 30_000).catch(async (error: unknown) => {
+      signal();
+      await until(`${this.name} ended`, gone, 10_000);
+      throw error;
+    });
   }
+}
+
+/** For `finally`: quits `apps`; a failure is told beside the test's own, not over it. */
+export async function quitAll(...apps: App[]): Promise<void> {
+  for (const app of apps) {
+    await app.quit().catch((error: unknown) => expect.soft(error).toBeUndefined());
+  }
+}
+
+/** Once the host has installed its runtime: then nothing reads the app bundle (design 5.2.12). */
+export function runtimeInstalled(name: string): true | undefined {
+  const installed = (component: string) => {
+    const dir = join(data(name), "runtime", component);
+    const versions = existsSync(dir) ? readdirSync(dir).filter((v) => !v.startsWith(".")) : [];
+    return versions.some((version) => existsSync(join(dir, version, ".installed.json")));
+  };
+  return ["node", "esbuild-wasm", "claude-agent-acp"].every(installed) || undefined;
 }

@@ -7,7 +7,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { App, built, cdhash, cli, data, helper, HOST, HOST_APP, logs } from "./app";
+import { App, built, cdhash, cli, data, helper, HOST, HOST_APP, logs, quitAll } from "./app";
 
 describe("E2E-selfuse-coexist", () => {
   it("runs beside the dev build; every helper starts and the native extension loads", async () => {
@@ -45,7 +45,7 @@ describe("E2E-selfuse-coexist", () => {
       expect(status.status, status.stderr).toBe(0);
       expect(JSON.parse(status.stdout)).toMatchObject({ pending_upgrade: false, running_turns: 0 });
     } finally {
-      await Promise.all([own.quit(), dev.quit()]);
+      await quitAll(own, dev);
     }
   });
 });

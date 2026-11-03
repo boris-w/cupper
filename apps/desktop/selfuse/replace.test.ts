@@ -11,7 +11,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { App, built, cdhash, cli, HOST_APP, linesSince, logs, processes, size, until } from "./app";
+import { App, built, cdhash, cli, HOST_APP, linesSince, logs } from "./app";
+import { processes, quitAll, runtimeInstalled, size, until } from "./app";
 
 describe("E2E-selfuse-replace", () => {
   it("the old host waits to be upgraded and exits; the new app runs the new host", async () => {
@@ -28,6 +29,9 @@ describe("E2E-selfuse-replace", () => {
       expect(running.cdhash).toBe(oldHost);
       const hostLog = join(logs("cupper-local"), "host.log");
       const from = size(hostLog);
+      // Not while the host copies its runtime from the bundle: it would find
+      // the change itself, and go before the new CLI comes.
+      await until("the runtime installed", () => runtimeInstalled("cupper-local"), 180_000);
 
       // As Finder replaces an app: the old bundle goes, the new one comes.
       rmSync(installed, { recursive: true });
@@ -68,10 +72,10 @@ describe("E2E-selfuse-replace", () => {
         expect(now.host().cdhash).toBe(newHost);
         expect(cli(installed, "status").status).toBe(0);
       } finally {
-        await now.quit();
+        await quitAll(now);
       }
     } finally {
-      await old.quit();
+      await quitAll(old);
       rmSync(dir, { recursive: true, force: true });
     }
   });
