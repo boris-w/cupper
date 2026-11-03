@@ -403,6 +403,7 @@ impl Host {
             admission: Arc::clone(&admission),
             blobs: blobs.clone(),
             power: power.clone(),
+            redactor: Redactor::for_this_machine(),
         });
         sessions.reopen().await;
         let mut parts: Vec<Arc<dyn Part>> = vec![Arc::new(sessions.clone())];

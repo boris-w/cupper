@@ -16,6 +16,7 @@
 //!   opens next. Each resolution goes to the judge (`Resolved`).
 //! - The machine's `CancelAsks` and `Settle` go to the broker, so a turn's
 //!   requests are resolved before its `turn.completed` (design 5.3.11).
+//! - A failed turn's `error` item interjects as a request does (MS-5).
 //! - The tier guard hears of the permission mode; its interrupt and gate go
 //!   to the machine, its revert to the agent, and `config_unconfirmed` comes
 //!   with a notice.
@@ -32,7 +33,7 @@ use cupper_protocol::domain::{BlobRef, Tier};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{AdapterInstanceId, ItemId, PrincipalId, RequestId, SessionId, TurnId};
 use cupper_protocol::interaction::{InteractionResolved, InteractionStatus, ResolutionReason};
-use cupper_protocol::item::{ItemCompleted, ItemPatch, ItemStatus, NoticeCode};
+use cupper_protocol::item::{Item, ItemCompleted, ItemPatch, ItemStatus, NoticeCode};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::session::{ConfirmationReason, PauseReason, TurnCompleted, TurnStatus};
 
@@ -226,7 +227,14 @@ impl SessionCore {
             let signal = TurnSignal::of(&action);
             let mut settle = None;
             match action {
-                turn::Action::Event(body) => out.push(Action::Event(body)),
+                turn::Action::Event(body) => {
+                    if let EventBody::ItemStarted(started) = &body
+                        && let Item::Error(_) = started.item
+                    {
+                        self.coalesce(coalescer::Input::Interject, now, out);
+                    }
+                    out.push(Action::Event(body))
+                }
                 turn::Action::Timer(request) => out.push(timer(request, Key::Turn)),
                 turn::Action::Driver(command) => out.push(Action::Driver(command)),
                 // The coalescer writes `turn.completed`.

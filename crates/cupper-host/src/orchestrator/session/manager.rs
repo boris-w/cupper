@@ -41,6 +41,7 @@ use super::load::load;
 use super::rows::Rows;
 use super::{IndexNotes, internal, not_found, parse, privileged, tier_of};
 use crate::clock::{Clock, IdGen};
+use crate::diag::full::Redactor;
 use crate::driver::api::{AgentPort, ProjectConfigPolicy};
 use crate::durations::Durations;
 use crate::gateway::{AuditRecord, Call, Port, Reply, SessionPort};
@@ -80,6 +81,7 @@ pub struct SessionDeps {
     pub blobs: BlobStore,
     /// What keeps the Mac awake (design 5.2.13).
     pub power: Power,
+    pub redactor: Redactor,
 }
 
 /// The session manager. Clones share it; the host has one.
@@ -319,6 +321,7 @@ impl SessionManager {
             quiescence: deps.quiescence.clone(),
             blobs: deps.blobs.clone(),
             power: deps.power.share(),
+            redactor: deps.redactor.clone(),
         };
         let first = SendRequest {
             content: params.message,
