@@ -5,12 +5,14 @@
 //! The orderly exit comes on `host/exit` ([`control`]), on SIGTERM, when
 //! the store writer has died (T024 review: the host cannot run without it),
 //! and from the [`watch`]: idle, orphaned, or once an upgrade waits. Before
-//! retention starts, [`reap`] ends the adapters a previous run left.
+//! retention starts, [`reap`] ends the adapters a previous run left. The
+//! [`power`] assertion keeps the Mac awake while agents work.
 
 mod audit;
 pub mod control;
 #[cfg(feature = "test-harness")]
 mod harness;
+pub mod power;
 mod reap;
 mod recover;
 #[cfg(feature = "test-harness")]
@@ -36,6 +38,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use self::control::Control;
+use self::power::Power;
 #[cfg(test)]
 pub(crate) use self::recover::end_previous_run;
 use self::watch::{Admission, SelfCheck, Watch, WatchDeps};
@@ -153,6 +156,7 @@ pub struct Host {
     exits: mpsc::UnboundedReceiver<Exit>,
     terminate: Signal,
     socket: PathBuf,
+    power: Power,
     /// The barrier's registry, for the test that every kind is in it.
     #[cfg(all(test, feature = "test-harness"))]
     quiescence: Quiescence,
@@ -219,7 +223,7 @@ impl Host {
         let maintenance = maintenance.spawn(&quiescence);
         // The runtime installer (T129) starts after the self-check is set up,
         // and reports `Failed(BundleChanged)` through `Watch::bundle_changed`.
-        let (watch, watching) = Watch::new();
+        let (watch, power, watching) = Watch::new();
         let self_check = SelfCheck::new(watch.clone());
         let admission = Arc::new(Admission::default());
 
@@ -289,7 +293,7 @@ impl Host {
             host: HostUpdated {
                 version: env!("CARGO_PKG_VERSION").to_owned(),
                 weak_auth: cfg!(feature = "dev-auth"),
-                // The self-check (T059) and the power assertion (T156).
+                // Until the self-check (T059) or the power assertion says.
                 pending_upgrade: false,
                 power_assertion: false,
                 last_exit_abnormal: run.abnormal,
@@ -398,6 +402,7 @@ impl Host {
             git: git.clone(),
             admission: Arc::clone(&admission),
             blobs: blobs.clone(),
+            power: power.clone(),
         });
         sessions.reopen().await;
         let mut parts: Vec<Arc<dyn Part>> = vec![Arc::new(sessions.clone())];
@@ -509,6 +514,7 @@ impl Host {
             exits,
             terminate,
             socket,
+            power,
             #[cfg(all(test, feature = "test-harness"))]
             quiescence,
             _lock: lock,
@@ -588,6 +594,7 @@ impl Host {
         if !matches!(stopped.await, Ok(true)) {
             code = HostExit::Error;
         }
+        self.power.exit().await;
         let _ = std::fs::remove_file(&self.socket);
         code
     }

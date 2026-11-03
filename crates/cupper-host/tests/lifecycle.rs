@@ -5,7 +5,7 @@
 //! the index. IT-project-add-trust adds and
 //! trusts a project in a git repository built here; IT-clock-advance and
 //! IT-seed drive the test interface; IT-self-check and IT-idle-exit the
-//! supervisor's watch; IT-runtime-startup the runtime installer; IT-host-tests-no-real-cli
+//! supervisor's watch; IT-power-assertion its power assertion; IT-runtime-startup the runtime installer; IT-host-tests-no-real-cli
 //! CLI discovery. The tests talk to the host as the CLI's
 //! `harness` client.
 
@@ -1578,5 +1578,65 @@ async fn it_runtime_first_prompt_waits_for_the_install() {
         assert_eq!(adapter(&data_dir, "failure"), [failure]);
         terminate(&host.0);
         assert_eq!(exit_code(&mut host.0).await, 0);
+    }
+}
+
+/// IT-power-assertion (design 5.2.13, NFR-13): the host holds the assertion
+/// while a turn runs, its request waiting or answered, and releases it once
+/// the turn ends: `pmset` lists it under the host's pid, and `host.updated`
+/// says so each time it changes. A host killed with SIGKILL leaves none
+/// behind, and the next start says it holds none. A request outside a turn
+/// never comes (5.3), so the core's tests cover a request alone.
+#[tokio::test]
+async fn it_power_assertion_follows_turns_and_requests_and_ends_with_the_host() {
+    let dir = TempDir::new("power");
+    let (data_dir, mut host, client) = fake_agent_host(&dir, json!({})).await;
+    let pid = host.0.id();
+    let session = create(&client, "permission p1; wait_cancel").await;
+    let asked = events(&data_dir, &session, "interaction.requested", 1).await;
+    awake(&data_dir, pid, &["0", "1"]).await;
+    let allow = json!({"type": "selected", "option_id": "allow-once"});
+    respond(&client, &session, &asked[0], allow).await.unwrap();
+    events(&data_dir, &session, "interaction.resolved", 1).await;
+    let params = json!({"command_id": client::command_id(), "session_id": session});
+    let interrupt = client.request::<SessionInterrupt>(typed(params));
+    interrupt.await.unwrap();
+    events(&data_dir, &session, "turn.completed", 1).await;
+    // Held once, from the request to the turn's end.
+    awake(&data_dir, pid, &["0", "1", "0"]).await;
+
+    send(&client, &session, "wait_cancel").await;
+    awake(&data_dir, pid, &["0", "1", "0", "1"]).await;
+    let kill = Command::new("/bin/kill")
+        .args(["-KILL", &pid.to_string()])
+        .status();
+    assert!(kill.unwrap().success());
+    assert_eq!(host.0.wait().unwrap().signal(), Some(9));
+    held_by(pid, false).await;
+    let host = Running(spawn_from(
+        Path::new(HOST),
+        &data_dir,
+        fake_agent_config(json!({})),
+    ));
+    drop(connect(&data_dir).await);
+    awake(&data_dir, host.0.id(), &["0", "1", "0", "1", "0"]).await;
+}
+
+/// Waits until `host.updated` has said `said` of the power assertion, and
+/// `pmset` agrees with the last of it for host `pid`.
+async fn awake(data_dir: &Path, pid: u32, said: &[&str]) {
+    let sql = "SELECT CAST(json_extract(json, '$.data.power_assertion') AS TEXT) FROM events
+               WHERE stream = 'index' AND type = 'host.updated' ORDER BY seq";
+    until(data_dir, "host.db", sql, said).await;
+    held_by(pid, said.last() == Some(&"1")).await;
+}
+
+async fn held_by(pid: u32, held: bool) {
+    let clock = SystemClock::new();
+    let give_up = clock.now_mono() + PATIENCE;
+    let name = cupper_host::supervisor::power::NAME.to_owned();
+    while cupper_sys::idle_sleep_assertions(pid).contains(&name) != held {
+        assert!(clock.now_mono() < give_up, "pid {pid}: held is not {held}");
+        wait(&clock).await;
     }
 }

@@ -52,6 +52,7 @@ use crate::policy::{self, Confirmable, Facts};
 use crate::quiescence::{ActorKind, Participant, Quiescence};
 use crate::store::streams::{Batch, StreamView, Streams};
 use crate::store::{BlobStore, Durability, Readers};
+use crate::supervisor::power::Power;
 use crate::supervisor::watch::Admission;
 use crate::supervisor::{Activity, Part};
 
@@ -77,6 +78,8 @@ pub struct SessionDeps {
     /// Whether new sessions and turns are accepted (design 5.2.13).
     pub admission: Arc<Admission>,
     pub blobs: BlobStore,
+    /// What keeps the Mac awake (design 5.2.13).
+    pub power: Power,
 }
 
 /// The session manager. Clones share it; the host has one.
@@ -315,6 +318,7 @@ impl SessionManager {
             durations: deps.durations.clone(),
             quiescence: deps.quiescence.clone(),
             blobs: deps.blobs.clone(),
+            power: deps.power.share(),
         };
         let first = SendRequest {
             content: params.message,

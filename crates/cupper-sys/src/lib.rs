@@ -15,6 +15,7 @@ mod env;
 mod exit;
 mod group;
 mod peer;
+mod power;
 mod proc;
 mod runloop;
 mod spawn;
@@ -35,6 +36,9 @@ pub use peer::{
     AuditToken, Received, Refusal, RefusalKind, peer_pid, peer_token, peer_uid, recv_closing_fds,
     wait_readable,
 };
+pub use power::IdleSleepAssertion;
+#[cfg(any(test, feature = "test-util"))]
+pub use power::idle_sleep_assertions;
 pub use proc::{
     ProcessInfo, StartTime, UniqueIds, descendants, has_tty, parent_chain, pid_path, process_info,
     resident_size, unique_ids,
@@ -57,6 +61,9 @@ pub enum Error {
     /// A Security framework call returned this `OSStatus`.
     #[error("{call} returned OSStatus {status}")]
     Security { call: &'static str, status: i32 },
+    /// An IOKit call returned this `IOReturn`.
+    #[error("{call} returned IOReturn {status:#x}")]
+    IoKit { call: &'static str, status: i32 },
     /// A system call failed.
     #[error("{call} failed")]
     Os {
