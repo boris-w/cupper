@@ -502,3 +502,6 @@
 | 以后写 `ManualClock` 用例的任务 | 听到运行时某一步中途发出的事件就立刻 `tick`，可能推到一个已经取消、但闹钟还没换掉的截止时间（T224 的第二个原因）；先做一次往返（例如 `status()`）等那一步做完。在 `Alarm`/`TimerTable` 取消定时器时立刻撤掉时钟上的登记是产品代码，另议 | T224 |
 | 以后要区分新旧实例上会话的用例 | 假 agent 的会话 ID 每个进程都从 `fake-0-1` 数起，新实例的第一个会话和旧会话同 ID；可以让 `--segment-file` 或进程号参与生成 ID | T224 |
 | T121 | 暂存时按 `diff_token` 取出 `Diffed`，用 `diff::patch` 重新生成文件的补丁，再用 `diff::units` 按 `hunk_id` 找单位；缓存没有 `hunk_id` 到路径的索引，目标是 `{hunk_ids}` 时要么由 T121 加索引，要么逐个文件重新生成补丁去找 | T221 |
+| T148 | "回到底部"按钮（T082 起）用的 `bg-bg` 没有对应 token，背景是透明的，应为 `bg-surface` 一类；尺寸是 32，设计是 28 | T143 |
+| T152 或以后统一更新截图基线的任务 | 截图页的字体栈要整套固定：无衬线和等宽都要接上夹具里的中文子集，否则代码里的中文会退到系统字体，基线随 runner 的 macOS 小版本变（T143 只改了等宽）；基线只由 `ui-baseline` workflow 生成 | T143 |
+| T141、T151、T153 | 错误条目的恢复指引：`change_model` 的入口在 T141（模型选择器），`upgrade_cli`、`install_cli`、`restart_agent` 在 T151（设置页 agent 状态、`agents/restart`），`run_login_in_terminal` 的"打开终端"在 T153；T143 现在只给文字和可复制的命令 | T143 |
