@@ -73,6 +73,8 @@ protocol.registerSchemesAsPrivileged([APP_SCHEME_PRIVILEGES]);
 app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
+/** Once the app goes on to quit: no window opens any more (T225). */
+let quitting = false;
 let host: ReturnType<typeof startHost> | undefined;
 let i18n: ReturnType<typeof createI18n> | undefined;
 const t: Translate = (key, values) => (i18n ??= createI18n()).t(key, values);
@@ -110,12 +112,22 @@ function start() {
   app.on("window-all-closed", () => undefined);
   // Before `will-quit`: running turns and waiting requests are asked about.
   app.on("before-quit", (event) => {
+    log.info("before-quit", { settled: quit.settled });
+    quitting ||= quit.settled;
     if (!quit.settled) {
       event.preventDefault();
-      void quit.decide().then((decision) => decision === "quit" && app.quit());
+      // On a later turn (T225): with no host to ask, the decision comes
+      // within this event's dispatch, and Electron, which records whether it
+      // quits only once this event returns, would undo an `app.quit()` made
+      // in it: the windows would close, and the app stay.
+      void quit.decide().then((decision) => decision === "quit" && setImmediate(() => app.quit()));
     }
   });
-  app.on("will-quit", () => host?.control.close());
+  app.on("will-quit", () => {
+    log.info("will-quit");
+    host?.control.close();
+  });
+  app.on("quit", (_event, code) => log.info("quit", { code }));
   try {
     const e2eRoot = __CUPPER_FLAVOR__ === "e2e" ? process.env.CUPPER_E2E_DIR : undefined;
     const version = app.getVersion();
@@ -212,7 +224,7 @@ function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
 }
 
 function showMainWindow() {
-  if (!app.isReady()) {
+  if (!app.isReady() || quitting) {
     return;
   }
   if (mainWindow !== null) {

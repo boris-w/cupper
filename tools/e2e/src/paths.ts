@@ -9,9 +9,16 @@ import { fileURLToPath } from "node:url";
 const REPO = fileURLToPath(new URL("../../../", import.meta.url));
 const APP = join(REPO, "apps/desktop/dist/pack/e2e/mac-arm64/Cupper E2E.app");
 
+/** The app's executable and its host's, in the bundle. */
+export const IN_APP = {
+  app: "Contents/MacOS/Cupper E2E",
+  host: "Contents/Helpers/CupperHost.app/Contents/MacOS/cupper-host",
+};
+
 export const BUILT = {
-  app: join(APP, "Contents/MacOS/Cupper E2E"),
-  host: join(APP, "Contents/Helpers/CupperHost.app/Contents/MacOS/cupper-host"),
+  bundle: APP,
+  app: join(APP, IN_APP.app),
+  host: join(APP, IN_APP.host),
   cli: join(REPO, "target/host-bundle/e2e/cupper"),
   fakeAgent: join(REPO, "target/debug/cupper-fake-agent"),
 };

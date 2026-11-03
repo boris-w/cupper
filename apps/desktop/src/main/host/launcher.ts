@@ -84,6 +84,10 @@ export class HostLauncher {
     if (first !== "absent") {
       return first;
     }
+    // Quitting began while it dialed (T225).
+    if (this.#closed) {
+      throw new HostFailure("closed");
+    }
     if (this.installing) {
       throw new HostFailure("updating");
     }
