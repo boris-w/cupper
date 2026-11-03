@@ -110,6 +110,10 @@ durations! {
     /// How long `--version` of a CLI, git or git-lfs, and `xcode-select -p`,
     /// may take (design 5.6.6, 5.2.10).
     VERSION_PROBE = "version_probe", Duration::from_secs(5);
+    /// The second `--version` of a CLI after the first timed out: a CLI's
+    /// first run after it was copied can take seconds, under load tens of
+    /// them (T066, T196).
+    VERSION_PROBE_RETRY = "version_probe_retry", Duration::from_secs(30);
     /// How long an adapter has to answer `session/close`, and then to exit
     /// once its stdin is closed (design 5.6.8, 5.2.13).
     ADAPTER_CLOSE_WAIT = "adapter_close_wait", Duration::from_secs(3);
