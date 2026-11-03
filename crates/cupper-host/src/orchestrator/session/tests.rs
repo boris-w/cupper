@@ -40,6 +40,7 @@ use crate::store::streams::{Published, Push, Sink, Streams, StreamsConfig};
 use crate::store::testutil::{TempDir, host_writer, query};
 use crate::store::{BlobStore, Durability, Readers, Writer, WriterThread, log, open_reader};
 use crate::supervisor::end_previous_run;
+use crate::supervisor::power::Power;
 use crate::supervisor::{Activity, Part};
 use crate::trust::Scan;
 
@@ -288,6 +289,7 @@ impl Fixture {
             git,
             admission: Arc::default(),
             blobs: blobs.clone(),
+            power: Power::new().0,
         };
         let conn = open_reader(&dir.host_db()).unwrap();
         let ledger = Ledger::load(&conn, writer.clone(), shared, &durations).unwrap();

@@ -129,6 +129,7 @@ enum Mail {
     Agent(Box<AgentStatus>),
     /// The self-check found the code on disk changed.
     PendingUpgrade,
+    PowerAssertion(bool),
     /// The runtime installer's state of an agent's adapter runtime.
     Runtime(AgentKind, RuntimeState, Option<RuntimeFailure>),
     Checkpoint(oneshot::Sender<()>),
@@ -207,6 +208,11 @@ impl IndexHandle {
     /// `host.updated` says an upgrade waits (design 5.2.13).
     pub fn pending_upgrade(&self) {
         let _ = self.mail.send(Mail::PendingUpgrade);
+    }
+
+    /// `host.updated` says whether the host keeps the Mac awake (design 5.2.13).
+    pub fn power_assertion(&self, held: bool) {
+        let _ = self.mail.send(Mail::PowerAssertion(held));
     }
 
     /// The gateway whose clients `clients.updated` lists; set once it exists.
@@ -370,6 +376,12 @@ impl IndexActor {
                     self.append(EventBody::HostUpdated(self.deps.host.clone()))
                         .await;
                 }
+                Mail::PowerAssertion(held) if held != self.deps.host.power_assertion => {
+                    self.deps.host.power_assertion = held;
+                    self.append(EventBody::HostUpdated(self.deps.host.clone()))
+                        .await;
+                }
+                Mail::PowerAssertion(_) => {}
                 #[cfg(feature = "test-harness")]
                 Mail::Reconcile(done) => {
                     if let Ok(mut tables) = self.deps.readers.read(rows::read).await {
