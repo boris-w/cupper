@@ -44,6 +44,7 @@ use crate::clock::{Clock, IdGen};
 use crate::diag::full::Redactor;
 use crate::driver::api::{AgentPort, ProjectConfigPolicy};
 use crate::durations::Durations;
+use crate::files::FileLists;
 use crate::gateway::{AuditRecord, Call, Port, Reply, SessionPort};
 use crate::git::GitTool;
 use crate::ledger::Outcome;
@@ -82,6 +83,8 @@ pub struct SessionDeps {
     /// What keeps the Mac awake (design 5.2.13).
     pub power: Power,
     pub redactor: Redactor,
+    /// `files/search`'s lists, which a turn's end makes stale.
+    pub lists: FileLists,
 }
 
 /// The session manager. Clones share it; the host has one.
@@ -322,6 +325,7 @@ impl SessionManager {
             blobs: deps.blobs.clone(),
             power: deps.power.share(),
             redactor: deps.redactor.clone(),
+            lists: deps.lists.clone(),
         };
         let first = SendRequest {
             content: params.message,

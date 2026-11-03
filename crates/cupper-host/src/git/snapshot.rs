@@ -111,6 +111,22 @@ pub async fn take(
     taken
 }
 
+/// The files `@` references offer (design 5.2.11): the tracked and the
+/// untracked ones, ignored ones left out, NUL-separated.
+pub async fn files(
+    tool: &GitTool,
+    work_tree: &Path,
+    clock: &dyn Clock,
+    durations: &Durations,
+) -> Result<Vec<u8>, ShotError> {
+    let opened = open(tool, work_tree, clock, durations).await?;
+    let tier = tool.snapshot_tier(&opened.place);
+    let ls = GitCmd::snapshot(SnapshotOp::LsFiles);
+    let listed = output(&tier, ls, "ls-files", clock, durations).await;
+    opened.close().await;
+    listed
+}
+
 /// cupper's GIT_DIR for a work tree, opened for one call: its configuration
 /// written again, a fresh copy of the work tree's index.
 #[derive(Debug)]

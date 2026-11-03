@@ -62,6 +62,7 @@ use crate::driver::api::{
     ProjectConfigPolicy,
 };
 use crate::durations::{Durations, SESSION_IDLE};
+use crate::files::FileLists;
 use crate::gateway::{AuditEvent, AuditRecord, Call, ConfigState, TrustChange};
 use crate::git::GitTool;
 use crate::git::snapshot::{self, ShotError, Taken};
@@ -145,6 +146,7 @@ pub(super) struct Parts {
     pub power: Share,
     /// For what the agent says of its errors (`error` items' `raw`).
     pub redactor: Redactor,
+    pub lists: FileLists,
 }
 
 /// What the actor starts with besides its parts: its first input, and what
@@ -676,6 +678,10 @@ impl SessionActor {
         let turn_ended = events
             .iter()
             .any(|b| matches!(b, EventBody::TurnCompleted(_)));
+        // Before anyone can see the turn's end (design 5.2.11).
+        if turn_ended {
+            self.parts.lists.forget(&self.parts.cwd);
+        }
         if let Some(command) = command {
             let outcome = match reply {
                 Some(Reply::Turn(reply)) => self.outcome(reply, command.cause.as_ref()),

@@ -18,7 +18,9 @@ use cupper_protocol::ids::ConnId;
 use cupper_protocol::methods::admin::{
     AuthElevate, AuthElevationGet, AuthElevationRespond, PolicyDescribe,
 };
-use cupper_protocol::methods::git::{GitBranches, GitDiff, GitFileDiff, GitStatus};
+use cupper_protocol::methods::git::{
+    FilesSearch, GitBranches, GitDiff, GitFileDiff, GitStatus, WorkspaceOpen,
+};
 use cupper_protocol::methods::handshake::{ClientPresence, Ping};
 use cupper_protocol::methods::interaction::{InteractionGet, InteractionRespond};
 use cupper_protocol::methods::project::{ProjectAdd, ProjectTrust, ProjectTrustInfo};
@@ -198,6 +200,12 @@ impl Routes {
         self.add::<GitDiff>(Arc::clone(&port));
         self.add::<GitFileDiff>(Arc::clone(&port));
         self.add::<GitBranches>(port);
+    }
+
+    /// The file service (T126): `files/search` and `workspace/open`.
+    pub fn files(&mut self, port: Arc<dyn Port>) {
+        self.add::<FilesSearch>(Arc::clone(&port));
+        self.add::<WorkspaceOpen>(port);
     }
 
     /// The gateway serves `stream/subscribe`, `stream/unsubscribe` and
