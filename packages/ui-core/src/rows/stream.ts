@@ -5,8 +5,8 @@
 //
 // T082 registers `history`, `turn_header`, `user_message` and `unknown`;
 // T166 `agent_message`, `thought`, `tool`, `activity_group`, `notice` and
-// `error`; T165 `request`. `plan` and `late_tool_output` wait for T146; until
-// a kind is registered its rows show the placeholder of `RowRegistry`.
+// `error`; T165 `request`; T143 `plan`. `late_tool_output` waits for T146;
+// until a kind is registered its rows show the placeholder of `RowRegistry`.
 
 import type {
   ErrorItem,
@@ -74,8 +74,16 @@ export type StreamRow =
   /** Two or more tool calls in a row with one `group_id`: one row, its own expansion. */
   | { kind: "activity_group"; key: string; groupId: string; tools: ToolData[]; running: boolean }
   | { kind: "notice"; key: string; itemId: string; notice: Notice }
-  | { kind: "error"; key: string; itemId: string; error: ErrorItem }
-  | { kind: "plan"; key: string; itemId: string; plan: Plan }
+  | {
+      kind: "error";
+      key: string;
+      itemId: string;
+      error: ErrorItem;
+      /** In the last turn: the message that started it, to send again (`retry`). */
+      retry?: PromptBlock[];
+    }
+  /** The plan changes in place `running`, until its turn ends. */
+  | { kind: "plan"; key: string; itemId: string; plan: Plan; running: boolean }
   | {
       kind: "late_tool_output";
       key: string;

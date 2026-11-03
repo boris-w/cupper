@@ -85,6 +85,29 @@
   border-top: 1px solid var(--color-border);
 }
 
+/* Code highlighting: the categories of design 5.7.10, as fixed classes (rows/highlight.ts). */
+.hl-keyword {
+  color: var(--color-code-keyword);
+}
+.hl-string {
+  color: var(--color-code-string);
+}
+.hl-literal {
+  color: var(--color-code-literal);
+}
+.hl-variable {
+  color: var(--color-code-variable);
+}
+.hl-attribute {
+  color: var(--color-code-attribute);
+}
+.hl-name {
+  color: var(--color-code-name);
+}
+.hl-comment {
+  color: var(--color-code-comment);
+}
+
 /* ANSI colours (SGR 30–37, 90–97): fixed classes, never a colour of the output. */
 .ansi-black,
 .ansi-white {

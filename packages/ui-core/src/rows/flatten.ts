@@ -5,7 +5,7 @@
 // a plain tool row.
 
 import type { Placeholder, SessionView } from "@cupper/host-client";
-import type { Entry, ItemView } from "@cupper/protocol";
+import type { Entry, ItemView, PromptBlock } from "@cupper/protocol";
 
 import type { StreamRow, ToolData } from "./stream";
 
@@ -17,7 +17,7 @@ export type History = "none" | "more" | "loading" | "failed";
 export function flatten(view: ViewJson, unknown: Placeholder[], history: History): StreamRow[] {
   const rows: StreamRow[] =
     history === "none" ? [] : [{ kind: "history", key: "history", state: history }];
-  for (const turn of view.turns) {
+  for (const [n, turn] of view.turns.entries()) {
     const { turn_id, turn_no, started_at } = turn.started;
     const completed = turn.completed ?? undefined;
     rows.push({
@@ -29,17 +29,18 @@ export function flatten(view: ViewJson, unknown: Placeholder[], history: History
       startedAt: started_at,
       ...(completed ? { durationMs: completed.duration_ms } : {}),
     });
-    entries(view, turn.entries, rows);
+    entries(view, turn.entries, rows, n === view.turns.length - 1);
   }
-  entries(view, view.tail, rows);
+  entries(view, view.tail, rows, false);
   unknown.forEach(({ body }, n) =>
     rows.push({ kind: "unknown", key: `unknown:${n}`, type: body.type, body }),
   );
   return rows;
 }
 
-function entries(view: ViewJson, list: Entry[], rows: StreamRow[]): void {
+function entries(view: ViewJson, list: Entry[], rows: StreamRow[], last: boolean): void {
   let group: { id: string; tools: ToolData[] } | undefined;
+  let prompt: PromptBlock[] | undefined;
   const close = () => {
     const [first, ...rest] = group?.tools ?? [];
     if (group && first) {
@@ -88,6 +89,12 @@ function entries(view: ViewJson, list: Entry[], rows: StreamRow[]): void {
     }
     close();
     const row = item && itemRow(item);
+    if (row?.kind === "user_message" && !row.steered) {
+      prompt ??= row.content;
+    }
+    if (row?.kind === "error" && last && prompt) {
+      row.retry = prompt;
+    }
     if (row?.kind === "user_message" && row.replyTo) {
       const asked = view.requests[row.replyTo]?.requested.request as {
         title?: unknown;
@@ -149,7 +156,7 @@ function itemRow({ item, text, end }: ItemView): StreamRow | undefined {
     case "error":
       return { kind: "error", key, itemId, error: fields<"error">(item) };
     case "plan":
-      return { kind: "plan", key, itemId, plan: fields<"plan">(item) };
+      return { kind: "plan", key, itemId, plan: fields<"plan">(item), running: !end };
     case "late_tool_output":
       return {
         kind: "late_tool_output",
