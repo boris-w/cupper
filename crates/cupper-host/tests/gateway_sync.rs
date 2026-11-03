@@ -25,7 +25,7 @@ use cupper_protocol::methods::handshake::{ClientPresence, ClientPresenceParams};
 use cupper_protocol::methods::session::{SessionInterrupt, SessionQueueResume, SessionSend};
 use cupper_protocol::methods::stream::{
     BlobGet, BlobGetParams, BlobPut, BlobPutParams, HistoryPage, HistoryPageParams,
-    StreamSubscribeParams, StreamSubscribeResult, StreamUnsubscribe,
+    StreamSubscribeParams, StreamSubscribeResult,
 };
 use cupper_protocol::proof;
 use cupper_protocol::rpc::{Idempotency, Method, MethodError, Milestone, Scope};
@@ -59,8 +59,17 @@ impl Peer {
         Self::with(client, Mirror::session(session.clone())).await
     }
 
-    /// Subscribes `session` with its cursor, if it has one.
+    /// Subscribes `session` with its cursor, if it has one, and the index.
     async fn with(client: Client, session: Mirror<SessionView>) -> Self {
+        let mut peer = Self::session_only(client, session).await;
+        mirror::subscribe(&peer.client, &mut peer.index)
+            .await
+            .unwrap();
+        peer
+    }
+
+    /// Subscribes `session` only.
+    async fn session_only(client: Client, session: Mirror<SessionView>) -> Self {
         let mut peer = Self {
             client,
             stream: session.stream().clone(),
@@ -71,9 +80,6 @@ impl Peer {
             blob: Vec::new(),
         };
         mirror::subscribe(&peer.client, &mut peer.session)
-            .await
-            .unwrap();
-        mirror::subscribe(&peer.client, &mut peer.index)
             .await
             .unwrap();
         peer
@@ -326,10 +332,10 @@ async fn it_gw_sync_first_answer_wins() {
 /// checks every seq); contiguous deltas come as range events. A client
 /// with a coalescing window gets ranges live. On the manual clock: which
 /// deltas a 200 ms window takes depends on when the agent writes, so the
-/// window ends when the test advances the clock (T199). The window holds
-/// the session's events only: a run of one stream's events ends at another
-/// stream's, and the index writes `host.updated` (the power assertion) as
-/// the turn starts, before or after the first delta (T227).
+/// window ends when the test advances the clock (T199). That client takes
+/// the session only: a run of one stream's events ends at another stream's,
+/// and the index writes `host.updated` (the power assertion) as the turn
+/// starts, before or after the first delta (T227).
 #[tokio::test(flavor = "multi_thread")]
 async fn it_gw_sync_reconnect_replays_without_gaps() {
     let dir = TempDir::new("sync-replay");
@@ -361,11 +367,9 @@ async fn it_gw_sync_reconnect_replays_without_gaps() {
         coalesce_ms: Some(200),
         ..Options::default()
     };
-    let mut windowed = Peer::new(connect_with(&data_dir, options).await, &session).await;
+    let windowed = connect_with(&data_dir, options).await;
+    let mut windowed = Peer::session_only(windowed, Mirror::session(session.clone())).await;
     windowed.until(|p| p.session.is_live()).await;
-    let index = json!({"stream": "index"});
-    let unsubscribed = windowed.client.request::<StreamUnsubscribe>(typed(index));
-    unsubscribed.await.unwrap();
     send(
         &writer.client,
         &session,
