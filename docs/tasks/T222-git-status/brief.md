@@ -1,6 +1,6 @@
 # T222 Git 服务 IIIc：status、branches 与 cupper diff
 
-- 派发日期：（派发时填）
+- 派发日期：2026-11-03
 - 执行者：子 agent（Rust 工程师，宿主 Git 服务与 CLI）
 - 分支：`feat/T222-git-status`
 - 依赖：T120（`git/diff` 的四种范围与 `DiffCache`）。T123（提交与推送）、T125（worktree 检查与归档）依赖本任务
