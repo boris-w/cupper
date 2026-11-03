@@ -149,7 +149,7 @@ function itemRow({ item, text, end }: ItemView): StreamRow | undefined {
     case "error":
       return { kind: "error", key, itemId, error: fields<"error">(item) };
     case "plan":
-      return { kind: "plan", key, itemId, plan: fields<"plan">(item) };
+      return { kind: "plan", key, itemId, plan: fields<"plan">(item), running: !end };
     case "late_tool_output":
       return {
         kind: "late_tool_output",

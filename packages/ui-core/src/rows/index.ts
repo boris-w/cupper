@@ -2,5 +2,6 @@
 // Each task that adds row kinds imports its module here.
 import "./basic";
 import "./messages";
+import "./plan";
 import "./tools";
 import "../request/RequestRow";

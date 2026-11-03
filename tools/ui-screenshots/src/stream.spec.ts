@@ -113,6 +113,45 @@ const HIGHLIGHT = [
   completed("t_1"),
 ] as EventBody[];
 
+const step = (content: string, status: string) => ({ content, status });
+/** A running turn whose plan is at step 2 of 4, under work that pushed it out of view. */
+const PLAN_STEPS = [
+  ...header,
+  started("i_1", "plan", {
+    source: "entries",
+    entries: [
+      step("读一遍 README，列出过时的段落", "completed"),
+      step("重写安装一节", "in_progress"),
+      step("补上贡献指南的链接", "pending"),
+      step("跑一遍全部测试", "pending"),
+    ],
+  }),
+  ...Array.from({ length: 16 }, (_, n) => n + 1).flatMap((n) => [
+    tool(`i_t${n}`, "read", { paths: [`docs/part-${n}.md`] }),
+    done(`i_t${n}`),
+  ]),
+  started("i_2", "agent_message"),
+  delta("i_2", "安装一节改成了 `pnpm i`，接下来补链接。"),
+  done("i_2"),
+  tool("i_3", "edit", { paths: ["README.md"] }),
+] as EventBody[];
+
+const PLAN_MARKDOWN = [
+  ...header,
+  started("i_1", "plan", {
+    source: "markdown",
+    markdown: {
+      type: "text",
+      text: "1. 先补测试\n2. 再改实现，`cargo test` 通过后提交",
+    },
+  }),
+  done("i_1"),
+  started("i_2", "agent_message"),
+  delta("i_2", "计划写好了，等你确认。"),
+  done("i_2"),
+  completed("t_1"),
+] as EventBody[];
+
 async function show(page: Page, stream: EventBody[], theme: "light" | "dark") {
   await open(page, { info: { theme }, streams: { "session/s_1": stream } });
   await page.evaluate(() => window.cupperShell.navigate({ kind: "session", session_id: "s_1" }));
@@ -140,6 +179,28 @@ for (const theme of ["light", "dark"] as const) {
     await show(page, HIGHLIGHT, theme);
     await expect(page.locator("pre[data-highlighted]")).toHaveCount(3);
     await expect(page).toHaveScreenshot(`stream-code-${theme}.png`);
+    expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
+  });
+
+  test(`UI-plan steps and pill ${theme}`, async ({ page }) => {
+    await show(page, PLAN_STEPS, theme);
+    const first = page.getByText("读一遍 README，列出过时的段落");
+    await expect(page.getByText("正在编辑 README.md")).toBeInViewport();
+    await expect(first).not.toBeInViewport();
+    await page.getByRole("button", { name: "第 2 / 4 步" }).click();
+    await expect(first).toBeInViewport();
+    await expect(page.getByRole("button", { name: "回到底部" })).toBeVisible();
+    await expect(page).toHaveScreenshot(`stream-plan-steps-${theme}.png`);
+    expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
+  });
+
+  test(`UI-plan markdown ${theme}`, async ({ page }) => {
+    await show(page, PLAN_MARKDOWN, theme);
+    await page.getByRole("button", { name: "计划" }).click();
+    await expect(page.getByText("先补测试")).toBeVisible();
+    // A plan in a finished turn has no pill.
+    await expect(page.getByRole("button", { name: /^第 / })).toHaveCount(0);
+    await expect(page).toHaveScreenshot(`stream-plan-markdown-${theme}.png`);
     expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
   });
 }

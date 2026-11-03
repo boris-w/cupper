@@ -1,15 +1,15 @@
 // The message stream (design 5.7.6): the session view flattened into rows,
 // virtualized row by row. Earlier history comes in front on request, without
 // moving what is on screen; while at the bottom the list follows the stream,
-// and once scrolled up it stops and offers a way back down.
+// and once scrolled up it stops and offers a way back down. A running turn's
+// plan has a pill there that scrolls to it.
 
 import type { SessionView } from "@cupper/host-client";
 import type { HistoryCursor } from "@cupper/protocol";
 import { elementScroll, useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
-import { useHost, useT } from "../app/providers";
-import { ArrowUpIcon } from "../components/icons";
+import { useHost } from "../app/providers";
 import { flatten, type History } from "../rows/flatten";
 import { RowView } from "../rows/registry";
 import { streamRows } from "../rows/stream";
@@ -17,6 +17,7 @@ import "../rows";
 import { useStreams } from "../state/provider";
 import { useEntry, type StreamStore } from "../state/stream";
 import { StreamActions } from "./actions";
+import { ComposerOverlays, runningPlan } from "./ComposerOverlays";
 import { ScrollKeeper } from "./scroll";
 
 export function StreamList({ sessionId }: { sessionId: string }) {
@@ -59,7 +60,6 @@ function useHistory(sessionId: string, store: StreamStore<SessionView>, first?: 
 }
 
 function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<SessionView> }) {
-  const t = useT();
   const view = store.view;
   useEntry(view, "view");
   const json = view.toJSON();
@@ -128,6 +128,13 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
     setStuck(true);
     virtualizer.scrollToOffset(total);
   };
+  const plan = runningPlan(rows);
+  const toPlan = () => {
+    const index = rows.findIndex((row) => row.key === plan?.key);
+    keeper.stuck = false;
+    setStuck(false);
+    virtualizer.scrollToIndex(index, { align: "start" });
+  };
 
   return (
     <StreamActions value={{ loadEarlier }}>
@@ -152,16 +159,7 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
             })}
           </div>
         </div>
-        {!stuck && (
-          <button
-            type="button"
-            aria-label={t("stream:to_bottom")}
-            onClick={toBottom}
-            className="absolute bottom-2 left-1/2 flex size-8 -translate-x-1/2 rotate-180 items-center justify-center rounded-full border border-border bg-bg shadow-sm hover:bg-hover"
-          >
-            <ArrowUpIcon />
-          </button>
-        )}
+        <ComposerOverlays plan={plan} onPlan={toPlan} away={!stuck} onBottom={toBottom} />
       </div>
     </StreamActions>
   );
