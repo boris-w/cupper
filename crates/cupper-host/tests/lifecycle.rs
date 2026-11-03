@@ -986,6 +986,12 @@ async fn it_cli_commands_read_elevate_write_and_answer() {
         "{sessions:?}"
     );
     assert_eq!(cupper_once(&data_dir, &["history", &s], "").0, 0);
+    // `cupper diff` reaches the git service; the project is no repository.
+    let (code, diff) = cupper_once(&data_dir, &["diff", &s, "--scope", "unstaged"], "");
+    assert_eq!(
+        (code, &diff[0]["error"]["reason"]),
+        (1, &json!("not_a_repo"))
+    );
     // Writing as the read-only `cli` principal.
     let (code, refused) = cupper_once(&data_dir, &["send", &s, "hello"], "");
     let error = &refused[0]["error"];

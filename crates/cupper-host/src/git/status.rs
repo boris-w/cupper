@@ -60,8 +60,12 @@ async fn states(
         let file = at(&mut files, path);
         (file.index, file.old_path) = (status, old_path.map(WirePath));
     }
+    // An unmerged path comes twice: `U`, then against its stage 2.
     for (status, path, _) in name_status(&changed) {
-        at(&mut files, path).worktree = status;
+        let file = at(&mut files, path);
+        if file.worktree != GitFileStatus::Unmerged {
+            file.worktree = status;
+        }
     }
     for path in split(&untracked) {
         let file = at(&mut files, String::from_utf8_lossy(path).into_owned());

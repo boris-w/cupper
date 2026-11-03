@@ -19,6 +19,9 @@ use cupper_protocol::methods::Empty;
 use cupper_protocol::methods::admin::AuthElevate;
 #[cfg(feature = "test-harness")]
 use cupper_protocol::methods::admin::TestClockAdvance;
+use cupper_protocol::methods::git::{
+    DiffScope, GitDiff, GitDiffFile, GitFileDiff, GitFileDiffResult,
+};
 use cupper_protocol::methods::handshake::HostStatus;
 use cupper_protocol::methods::interaction::InteractionRespond;
 use cupper_protocol::methods::project::ProjectAdd;
@@ -209,6 +212,7 @@ impl Cli {
             Command::Sessions { watch } => self.sessions(watch).await?,
             Command::Watch(session) => self.watch(session).await?,
             Command::History(session) => self.history(session).await?,
+            Command::Diff { session, scope } => self.diff(session, scope).await?,
             Command::New {
                 agent,
                 project,
@@ -413,6 +417,23 @@ impl Cli {
         }
     }
 
+    /// The diff of `scope`, then each of its files' units.
+    async fn diff(&mut self, session: SessionId, scope: DiffScope) -> Result<(), Failure> {
+        let ask = json!({"session_id": session, "scope": scope});
+        let diff = self.call::<GitDiff>(ask).await?;
+        let stat = &diff.stat;
+        let (files, added, removed) = (stat.files, stat.added, stat.removed);
+        let summary = || format!("{files} files, +{added} -{removed}");
+        self.out.emit(json!(diff), summary);
+        for file in &diff.files {
+            let ask =
+                json!({"session_id": session, "diff_token": diff.diff_token, "path": file.path});
+            let units = self.call::<GitFileDiff>(ask).await?;
+            self.out.emit(json!(units), || patch(file, &units));
+        }
+        Ok(())
+    }
+
     /// Until the turn of a message sent ends: `turn` when it started, or
     /// once queue entry `queued` went and no turn runs.
     async fn wait(
@@ -557,6 +578,28 @@ fn line(event: &Value) -> String {
     format!("{seq}{}", event["type"].as_str().unwrap_or("?"))
 }
 
+/// A file of a diff for people: its change, then each unit's header and
+/// lines, or where its lines are.
+fn patch(file: &GitDiffFile, units: &GitFileDiffResult) -> String {
+    let old = (file.old_path.as_ref()).map_or(String::new(), |old| format!(" (from {})", old.0));
+    let (added, deleted) = (file.additions, file.deletions);
+    let mut text = format!(
+        "{} {}{old} +{added} -{deleted}",
+        file.change.as_str(),
+        file.path.0
+    );
+    for hunk in &units.hunks {
+        let lines = hunk.lines.iter().flatten().map(String::as_str);
+        let blob =
+            (hunk.lines_blob.as_ref()).map(|b| format!("({} bytes in blob {})", b.size, b.hash));
+        for line in [hunk.header.as_str()].into_iter().chain(lines) {
+            text = text + "\n" + line;
+        }
+        text.extend(blob.map(|blob| format!("\n{blob}")));
+    }
+    text
+}
+
 fn summary(request: &InteractionRequest) -> String {
     match request {
         InteractionRequest::Permission(permission) => format!("permission: {}", permission.title),
@@ -630,6 +673,33 @@ mod tests {
     fn refused(code: ErrorCode, reason: Option<ErrorReason>) -> Failure {
         let error = RpcError::app(code, "refused");
         Failure::Refused(reason.map_or(error.clone(), |reason| error.with_reason(reason)))
+    }
+
+    #[test]
+    fn unit_cli_diff_shows_a_file_and_its_units() {
+        let file = json!({"path": "b.rs", "old_path": "a.rs", "change": "update", "additions": 1,
+            "deletions": 0, "binary": false});
+        let units = json!({"path": "b.rs", "hunks": [
+            {"hunk_id": "hk_1", "unit": "mode", "header": "old mode 100644\nnew mode 100755"},
+            {"hunk_id": "hk_2", "unit": "hunk", "header": "@@ -1 +1,2 @@", "lines": [" a", "+b"]},
+            {"hunk_id": "hk_3", "unit": "hunk", "header": "@@ -9 +10 @@",
+                "lines_blob": {"hash": "ab".repeat(32), "size": 70000, "media_type": "text/x-diff"}}]});
+        let shown = patch(
+            &serde_json::from_value(file).unwrap(),
+            &serde_json::from_value(units).unwrap(),
+        );
+        let blob = format!("(70000 bytes in blob {})", "ab".repeat(32));
+        let want = [
+            "update b.rs (from a.rs) +1 -0",
+            "old mode 100644",
+            "new mode 100755",
+            "@@ -1 +1,2 @@",
+            " a",
+            "+b",
+            "@@ -9 +10 @@",
+            &blob,
+        ];
+        assert_eq!(shown.lines().collect::<Vec<_>>(), want);
     }
 
     #[test]

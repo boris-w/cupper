@@ -22,3 +22,10 @@
 宿主侧取回并接好后（status、branches、HEAD 的上游，加两份单元用例），`cargo xtask size` 已是 +352 −42。还没做：`cupper diff`（参数、输出和单元用例约 75）、IT-git-status（约 100）。推算合计约 530，越过停止线 450，低于硬停止线 550。估计偏低在两处：`head.rs` 改写后的差异按整个文件计（+~100，估了 25）；`status.rs` 连单元用例 184 行（估了 135 加用例）。
 
 做法建议：放宽停止线到约 540、一次做完；或者把 `cupper diff` 拆出去（约 75 行），本任务约 455。
+
+## 完成时（编排者放宽为停止线 540、硬停止线 600）
+
+- `cargo xtask size`：+532 −46（cupper-cli +104，cupper-host +428 −46）。
+- 估计偏低的另一处：`cupper diff` 连单元用例 104 行，估了约 75 行。
+- IT-git-status 找到一个取回代码里的错误：`diff-files` 对未合并的路径先报 `U`，再拿 stage 2 比工作区报一次 `M`，后一条把工作区一栏改成了 `modified`。现在工作区一栏是 `unmerged` 时保持不变。
+- `cupper diff` 的文字输出由纯函数 `patch` 的单元用例覆盖；进程级 IT-cli-commands 加一段，确认 CLI 经宿主到 git 服务这条路是通的（项目不是仓库时返回 `not_a_repo`）。

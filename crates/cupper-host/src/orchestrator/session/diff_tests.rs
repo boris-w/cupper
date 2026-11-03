@@ -1,15 +1,18 @@
-//! IT-git-diff-scopes and IT-git-file-diff: `git/diff` of every range and
-//! `git/file_diff` (design 5.2.10) on IT-orch-lifecycle's fixture, its
+//! IT-git-diff-scopes, IT-git-file-diff and IT-git-status: `git/diff` of
+//! every range, `git/file_diff` and `git/status` (design 5.2.10) on
+//! IT-orch-lifecycle's fixture, its
 //! project a git repository and its sessions running the git on PATH. Scopes:
 //! a turn while it runs and once it ended, `unstaged`, `staged` before and
 //! after the first commit, and the errors of a turn without its snapshots
 //! and of an unmerged index. File diffs: the whole path from a diff's token
 //! to a file's units, made again from the cached trees; the kinds of units
-//! themselves are `git::diff::hunks`' unit tests.
+//! themselves are `git::diff::hunks`' unit tests. Status: HEAD on a branch
+//! before its first commit, ahead of and behind its upstream, and detached;
+//! the files' states; a merge in progress; and the branches.
 
 use std::time::Duration;
 
-use cupper_protocol::ids::SessionId;
+use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::session::StopReason;
 use cupper_sys::{Command, Env};
 use serde_json::{Value, json};
@@ -212,4 +215,63 @@ async fn it_git_file_diff_units_of_a_diff_by_its_token() {
     );
     f.clock.advance(Duration::from_secs(600));
     assert_eq!(refused(&token, "a.txt").await, "conflict stale_diff");
+}
+
+/// HEAD before the first commit; then a commit only the upstream has, one
+/// only the branch has, and changes of every kind; then detached in the
+/// middle of a merge with `u.txt` in conflict.
+const UNBORN: &str = "git checkout -q -b main; printf 'a\\n' > a.txt; git add a.txt";
+const HISTORY: &str = "printf 'c\\n' > c.txt; printf 'e\\n' > e.txt; git add -A; c() { git -c \
+    user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m \"$1\"; }; c one; c theirs; \
+    git remote add origin /nonexistent; git update-ref refs/remotes/origin/main HEAD; \
+    git reset -q --hard HEAD~1; c ours; git branch -q -u origin/main; \
+    printf 'a2\\n' >> a.txt; git mv c.txt d.txt; rm e.txt; printf 'u\\n' > u.txt; \
+    printf 'b\\n' > b.txt; git add b.txt";
+const MERGING: &str = "git checkout -q --detach; touch .git/MERGE_HEAD";
+
+/// `git/status`: the rest of the result, and its files as `<path>[ <- <old>] <index> <work tree>`.
+async fn status(f: &Fixture, session: &SessionId) -> (Value, Vec<String>) {
+    let mut result = f.ok("git/status", json!({"session_id": session})).await;
+    let files = result.as_object_mut().unwrap().remove("files").unwrap();
+    let shown = files.as_array().unwrap().iter().map(|file| {
+        let text = |key: &str| file[key].as_str().unwrap_or_default().to_owned();
+        let old = [" <-", &text("old_path")].join(" ");
+        let old = if old.len() > 4 { old } else { String::new() };
+        [text("path") + &old, text("index"), text("worktree")].join(" ")
+    });
+    (result, shown.collect())
+}
+
+#[tokio::test]
+async fn it_git_status_head_files_operations_and_branches() {
+    let (mut f, home) = git_project("status").await;
+    sh(&f, &home, UNBORN).await;
+    let session = f.started().await;
+    let (unborn, files) = status(&f, &session).await;
+    assert_eq!(unborn, json!({"branch": "main", "ahead": 0, "behind": 0}));
+    assert_eq!(files, ["a.txt added unmodified"]);
+
+    sh(&f, &home, HISTORY).await;
+    let (head, files) = status(&f, &session).await;
+    let upstream = json!({"branch": "main", "upstream": "origin/main", "ahead": 1, "behind": 1});
+    assert_eq!(head, upstream);
+    let changed = [
+        "a.txt unmodified modified",
+        "b.txt added unmodified",
+        "d.txt <- c.txt renamed unmodified",
+        "e.txt unmodified deleted",
+        "u.txt untracked untracked",
+    ];
+    assert_eq!(files, changed);
+    let project = json!({"project_id": ProjectId::from_uuid(1)});
+    let branches = json!({"current": "main", "local": ["main"], "remote": ["origin/main"]});
+    assert_eq!(f.ok("git/branches", project).await, branches);
+
+    sh(&f, &home, &format!("{MERGING}; {CONFLICT}")).await;
+    let (merging, files) = status(&f, &session).await;
+    let merge = json!({"ahead": 0, "behind": 0, "in_progress": "merge"});
+    assert_eq!(
+        (merging, files[4].as_str()),
+        (merge, "u.txt unmerged unmerged")
+    );
 }
