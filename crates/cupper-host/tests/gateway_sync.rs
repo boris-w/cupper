@@ -25,7 +25,7 @@ use cupper_protocol::methods::handshake::{ClientPresence, ClientPresenceParams};
 use cupper_protocol::methods::session::{SessionInterrupt, SessionQueueResume, SessionSend};
 use cupper_protocol::methods::stream::{
     BlobGet, BlobGetParams, BlobPut, BlobPutParams, HistoryPage, HistoryPageParams,
-    StreamSubscribeParams, StreamSubscribeResult,
+    StreamSubscribeParams, StreamSubscribeResult, StreamUnsubscribe,
 };
 use cupper_protocol::proof;
 use cupper_protocol::rpc::{Idempotency, Method, MethodError, Milestone, Scope};
@@ -326,7 +326,10 @@ async fn it_gw_sync_first_answer_wins() {
 /// checks every seq); contiguous deltas come as range events. A client
 /// with a coalescing window gets ranges live. On the manual clock: which
 /// deltas a 200 ms window takes depends on when the agent writes, so the
-/// window ends when the test advances the clock (T199).
+/// window ends when the test advances the clock (T199). The window holds
+/// the session's events only: a run of one stream's events ends at another
+/// stream's, and the index writes `host.updated` (the power assertion) as
+/// the turn starts, before or after the first delta (T227).
 #[tokio::test(flavor = "multi_thread")]
 async fn it_gw_sync_reconnect_replays_without_gaps() {
     let dir = TempDir::new("sync-replay");
@@ -360,6 +363,9 @@ async fn it_gw_sync_reconnect_replays_without_gaps() {
     };
     let mut windowed = Peer::new(connect_with(&data_dir, options).await, &session).await;
     windowed.until(|p| p.session.is_live()).await;
+    let index = json!({"stream": "index"});
+    let unsubscribed = windowed.client.request::<StreamUnsubscribe>(typed(index));
+    unsubscribed.await.unwrap();
     send(
         &writer.client,
         &session,
