@@ -202,6 +202,9 @@ importers:
       '@cupper/ui-core':
         specifier: workspace:*
         version: link:../../packages/ui-core
+      '@electron/fuses':
+        specifier: 1.8.0
+        version: 1.8.0
       '@tailwindcss/vite':
         specifier: 4.3.3
         version: 4.3.3(vite@8.3.3(@types/node@24.19.1)(jiti@2.7.0))

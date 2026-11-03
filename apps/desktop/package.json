@@ -21,6 +21,7 @@
     "@cupper/protocol": "workspace:*",
     "@cupper/shell-api": "workspace:*",
     "@cupper/ui-core": "workspace:*",
+    "@electron/fuses": "1.8.0",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "24.19.1",
     "electron": "44.9.0",
