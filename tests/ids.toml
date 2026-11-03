@@ -994,9 +994,14 @@ E2E-file-ref = "nightly"
 [T143]
 milestone = "M1b"
 UI-code-highlight = "pr"
-E2E-error-guidance = "nightly"
 UI-plan = "pr"
 UI-error = "pr"
+
+# 宿主写 `error` 条目与恢复指引（MS-5）
+[T226]
+milestone = "M1b"
+E2E-error-guidance = "nightly"
+IT-error-item = "pr"
 
 # 新建会话页：两种 agent、工作区与分支
 [T144]

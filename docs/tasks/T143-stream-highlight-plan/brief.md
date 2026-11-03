@@ -21,13 +21,13 @@ M1a 的消息流（T082 行列表、T166 消息行与 Markdown）已经能显示
    - Markdown 计划显示为"计划"摘要条，可以展开；
    - **计划药丸**（F3）：回合运行中有 `plan` 条目时，输入框上方浮一枚药丸"第 n / m 步"，n 是进行中的那一步，点击后滚动到计划条目；放在 `<ComposerOverlays/>`，用 `--shadow-pill`。
 3. **恢复指引**（MS-5）：错误条目用警告框样式，`ErrorItem.guidance`（`retry`、`run_login_in_terminal`、`upgrade_cli`、`install_cli`、`quota_exhausted`、`change_model`、`restart_agent`、`none`）映射成框里的按钮；未知取值按开放枚举兜底。按钮做什么，按 5.7.4 和已有的界面入口来定；还没有入口的（例如设置页），先说明，不在本任务造新入口。
-4. 用例：UI-code-highlight、E2E-error-guidance、UI-plan（含计划药丸）、UI-error，都已登记在 `tests/ids.toml`。需要别的新编号先告诉 `main`。
+4. 用例：UI-code-highlight、UI-plan（含计划药丸）、UI-error，都已登记在 `tests/ids.toml`。需要别的新编号先告诉 `main`。（2026-11-03：宿主从不写 `error` 条目，E2E-error-guidance 和宿主那一半移到 T226，见计划 v1.3.86。）
 
 **不做**：活动组折叠、晚到输出等（T146）；diff 的高亮（审查文档的 Worker，T130 起）；设置页（T147、T151）；改宿主下发的语义码。
 
 ## 验收标准
 
-- [ ] 四个用例通过；E2E-error-guidance 在 nightly 路径上能跑（`〔晚〕`），附运行链接。
+- [ ] 三个用例通过。
 - [ ] 渲染进程的安全约束都守住（见"注意"）。
 - [ ] 截图基线如有变化，按计划 1.5 的规则处理，在汇报里列出。
 - [ ] PR 上 GitHub CI 的 8 个检查都通过，汇报里写上 PR 和运行的链接（守则第 9 条）。
