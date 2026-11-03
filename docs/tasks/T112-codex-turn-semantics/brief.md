@@ -19,7 +19,7 @@ T110 做了 Codex 的提取层，T111 把它接进运行时，T226 让失败的�
    - **IT-K7-restartable**：app-server 被杀，返回 `1001`、`restartable: true`；回合标为 `failed` 并写 `error` 条目（guidance `retry`）；下一个 prompt 由适配器自动重启。
    - **IT-K12-plan-confirm-idle**：计划确认请求发出时线程已是 idle；有 prompt 在途时回合以 prompt 响应为准，挂着的交互请求不失效。
    - **IT-K17-text-error**：收到 `systemError` 时，把那段文字转成这个回合的 `Failure`，由回合机的 `end()` 统一写 `error` 条目（T226 的交接：每个回合一条，复用 `failure::guidance()` 和 `orchestrator::instant()`），回合带 `error_code`（如 `model_unsupported`）。
-   - **IT-K18-upstream-retry**：上游过载自动重试时写 `notice: upstream_retry` 显示进度。
+   - ~~IT-K18-upstream-retry~~：2026-11-03 执行中发现宿主从不写这条 notice，按设计 upsert 要改 `ItemPatch`，超出就地修的上限，移到 T230。
 2. 交接事项里写给 T112 的条目：
    - K14 在会话打开时的改判：codex 形态打开时的认证错误（T063 的交接）；
    - K17 的错误条目（T110、T226 的交接）。
@@ -30,7 +30,7 @@ T110 做了 Codex 的提取层，T111 把它接进运行时，T226 让失败的�
 
 ## 验收标准
 
-- [ ] 七个用例通过。
+- [ ] 六个用例通过（IT-K18 移到 T230）。
 - [ ] 就地修的缺陷各有用例守着，汇报里逐条列出。
 - [ ] PR 上 GitHub CI 的 8 个检查都通过，汇报里写上 PR 和运行的链接（守则第 9 条）。
 

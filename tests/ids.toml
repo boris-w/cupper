@@ -870,6 +870,10 @@ IT-K4-cancel-pending-approval = "pr"
 IT-K7-restartable = "pr"
 IT-K12-plan-confirm-idle = "pr"
 IT-K17-text-error = "pr"
+
+# upstream_retry 的 notice 在回合内 upsert（K18）
+[T230]
+milestone = "M1b"
 IT-K18-upstream-retry = "pr"
 
 # Codex 兼容矩阵与 B 层补录
