@@ -19,7 +19,8 @@ use cupper_protocol::methods::admin::{
     AuthElevate, AuthElevationGet, AuthElevationRespond, PolicyDescribe,
 };
 use cupper_protocol::methods::git::{
-    FilesSearch, GitBranches, GitDiff, GitFileDiff, GitStatus, WorkspaceOpen,
+    FilesSearch, GitBranches, GitDiff, GitFileDiff, GitRevert, GitStage, GitStatus, GitUnstage,
+    WorkspaceOpen,
 };
 use cupper_protocol::methods::handshake::{ClientPresence, Ping};
 use cupper_protocol::methods::interaction::{InteractionGet, InteractionRespond};
@@ -194,12 +195,16 @@ impl Routes {
         self.notification::<ClientPresence>(port);
     }
 
-    /// The git service (T120, T221, T222) serves its read methods.
+    /// The git service (T120, T221, T222, T121) serves its methods but
+    /// commit and push.
     pub fn git(&mut self, port: Arc<dyn Port>) {
         self.add::<GitStatus>(Arc::clone(&port));
         self.add::<GitDiff>(Arc::clone(&port));
         self.add::<GitFileDiff>(Arc::clone(&port));
-        self.add::<GitBranches>(port);
+        self.add::<GitBranches>(Arc::clone(&port));
+        self.add::<GitStage>(Arc::clone(&port));
+        self.add::<GitUnstage>(Arc::clone(&port));
+        self.add::<GitRevert>(port);
     }
 
     /// The file service (T126): `files/search` and `workspace/open`.

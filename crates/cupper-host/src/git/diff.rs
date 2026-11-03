@@ -19,7 +19,7 @@ use cupper_protocol::session::{DiffStat, ExcludedPath, SnapshotStatus};
 use cupper_protocol::view::{Entry, ItemView, SessionView};
 
 pub use cache::DiffCache;
-pub use hunks::units;
+pub use hunks::{pick, units};
 
 use super::snapshot::{self, Opened, Place, ShotError, Taken, output, shoot};
 use super::stamp::Fingerprint;
@@ -40,8 +40,11 @@ pub enum Range {
 /// A diff made.
 #[derive(Debug, Clone)]
 pub struct Diffed {
+    pub range: Range,
     /// Where its patches are made.
     pub place: Place,
+    /// The filters the configuration defines and the snapshot tier does not run.
+    pub unrun: BTreeSet<Vec<u8>>,
     pub old: String,
     pub new: String,
     pub files: Vec<GitDiffFile>,
@@ -83,6 +86,7 @@ async fn make(
             Fingerprint::default(),
         )
     };
+    let kept = range.clone();
     let (old, new, taken) = match range {
         Range::Turn(start, Some(end)) => (start, end, None),
         Range::Turn(start, None) => {
@@ -118,9 +122,11 @@ async fn make(
             file.filter_unsupported = hits.contains(file.path.0.as_bytes());
         }
     }
-    let place = opened.place.clone();
+    let (place, unrun) = (opened.place.clone(), opened.unrun.clone());
     Ok(Diffed {
+        range: kept,
         place,
+        unrun,
         old,
         new,
         files,
@@ -184,23 +190,39 @@ pub fn stat(files: &[GitDiffFile]) -> DiffStat {
     }
 }
 
-/// The patch of `file` between `old` and `new`: the file alone, not what is
-/// under a directory of its name; with a rename's source.
+/// The patch between the diff's trees of `files`, each alone (not what is
+/// under a directory of its name) and with a rename's source; of every file
+/// without `files`. Never of a file under a filter the host does not run.
 pub async fn patch(
     tool: &GitTool,
     diffed: &Diffed,
-    file: &GitDiffFile,
+    files: Option<&[&GitDiffFile]>,
     clock: &dyn Clock,
     durations: &Durations,
 ) -> Result<Vec<u8>, ShotError> {
     let mut args = vec![diffed.old.clone(), diffed.new.clone(), "--".into()];
-    for path in std::iter::once(&file.path).chain(&file.old_path) {
+    for path in files.into_iter().flatten().flat_map(|file| paths(file)) {
         args.push(format!(":(literal){}", path.0));
         args.push(format!(":(exclude,literal){}/", path.0));
+    }
+    let filtered: Vec<&GitDiffFile> = diffed
+        .files
+        .iter()
+        .filter(|f| f.filter_unsupported)
+        .collect();
+    for path in filtered.iter().flat_map(|file| paths(file)) {
+        args.push(format!(":(exclude,literal){}", path.0));
     }
     let cmd = GitCmd::snapshot(SnapshotOp::DiffPatch).args(args);
     let tier = tool.snapshot_tier(&diffed.place);
     output(&tier, cmd, "diff-tree", clock, durations).await
+}
+
+/// A file's path, and a rename's source.
+fn paths(file: &GitDiffFile) -> impl Iterator<Item = &WirePath> {
+    [Some(&file.path), file.old_path.as_ref()]
+        .into_iter()
+        .flatten()
 }
 
 /// What a turn range notes, from the session's view: its snapshots, with

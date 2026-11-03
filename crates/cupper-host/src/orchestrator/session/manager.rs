@@ -46,7 +46,7 @@ use crate::driver::api::{AgentPort, ProjectConfigPolicy};
 use crate::durations::Durations;
 use crate::files::FileLists;
 use crate::gateway::{AuditRecord, Call, Port, Reply, SessionPort};
-use crate::git::GitTool;
+use crate::git::{GitTool, RepoNotice, SessionNotes};
 use crate::ledger::Outcome;
 use crate::orchestrator::queue::preview;
 use crate::orchestrator::turn::{self, SendMode, SendRequest};
@@ -544,6 +544,7 @@ impl SessionManager {
                 Mail::IgnoreProjectConfig(done) => {
                     let _ = done.send(Err(err.clone()));
                 }
+                Mail::Notice(_) => {}
             }
         }
     }
@@ -657,6 +658,14 @@ impl Port for SessionManager {
             }
         }
         refuse(*call, internal("the session stopped"))
+    }
+}
+
+impl SessionNotes for SessionManager {
+    /// Queues `notice` for the session's actor; a session that cannot load
+    /// drops it.
+    fn notice(&self, id: &SessionId, notice: RepoNotice) {
+        let _ = self.mailbox(id).send(Mail::Notice(notice));
     }
 }
 

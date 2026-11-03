@@ -4,25 +4,89 @@
 //! submodule and LFS files. A unit's ID is a hash of its file and its
 //! content, so the same change has the same ID in every diff.
 
+use std::collections::BTreeSet;
+
+use cupper_protocol::ids::HunkId;
 use cupper_protocol::methods::git::{DiffHunk, HunkUnit};
 use sha2::{Digest, Sha256};
+
+/// Where a unit is in its file's part of the patch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Part {
+    Whole,
+    Mode,
+    /// These lines.
+    Hunk(usize, usize),
+}
 
 /// The units of a `diff-tree -p --no-renames` patch, file after file. Every
 /// unit has `lines`; the caller moves long ones into blobs.
 pub fn units(patch: &[u8]) -> Vec<DiffHunk> {
+    let lines = split(patch);
+    let files = sections(&lines).flat_map(|lines| file(lines).1);
+    files.map(|(unit, _)| unit).collect()
+}
+
+/// The units of `patch` named in `ids` as a patch for `git apply`, a file
+/// in one part: a whole file as it is, a mode change as its mode lines,
+/// hunks after the file's `index`, `---` and `+++` lines. Also how many of
+/// `ids` it found.
+pub fn pick(patch: &[u8], ids: &BTreeSet<HunkId>) -> (Vec<u8>, usize) {
+    let (lines, mut out, mut found) = (split(patch), Vec::new(), 0);
+    for lines in sections(&lines) {
+        let (head, units) = file(lines);
+        let chosen = units.into_iter().filter(|(u, _)| ids.contains(&u.hunk_id));
+        let chosen: Vec<Part> = chosen.map(|(_, part)| part).collect();
+        found += chosen.len();
+        let keep = |prefixes: &[&[u8]]| {
+            let head = lines[..head].iter().copied();
+            head.filter(|line| prefixes.iter().any(|p| line.starts_with(p)))
+                .collect::<Vec<_>>()
+        };
+        if chosen.contains(&Part::Whole) {
+            out.extend_from_slice(lines);
+            continue;
+        }
+        out.extend(lines.first().filter(|_| !chosen.is_empty()));
+        if chosen.contains(&Part::Mode) {
+            out.extend(keep(&[b"old mode ", b"new mode "]));
+        }
+        let hunks = chosen.iter().filter_map(|part| match *part {
+            Part::Hunk(from, to) => Some(&lines[from..to]),
+            _ => None,
+        });
+        let hunks: Vec<&[&[u8]]> = hunks.collect();
+        if !hunks.is_empty() {
+            out.extend(keep(&[b"index ", b"--- ", b"+++ "]));
+            hunks
+                .into_iter()
+                .for_each(|hunk| out.extend_from_slice(hunk));
+        }
+    }
+    let mut patch = out.join(&b"\n"[..]);
+    patch.extend(out.first().map(|_| b'\n'));
+    (patch, found)
+}
+
+fn split(patch: &[u8]) -> Vec<&[u8]> {
     let mut lines: Vec<&[u8]> = patch.split(|b| *b == b'\n').collect();
     if lines.last().is_some_and(|line| line.is_empty()) {
         lines.pop();
     }
+    lines
+}
+
+/// Each file's part of the patch's lines.
+fn sections<'a>(lines: &'a [&'a [u8]]) -> impl Iterator<Item = &'a [&'a [u8]]> {
     let starts = (0..lines.len()).filter(|&i| lines[i].starts_with(b"diff --git "));
     let mut starts: Vec<usize> = starts.collect();
     starts.push(lines.len());
-    let files = starts.windows(2).map(|w| &lines[w[0]..w[1]]);
-    files.flat_map(file).collect()
+    let ranges: Vec<(usize, usize)> = starts.windows(2).map(|w| (w[0], w[1])).collect();
+    ranges.into_iter().map(move |(from, to)| &lines[from..to])
 }
 
-/// The units of one file's part of the patch.
-fn file(lines: &[&[u8]]) -> Vec<DiffHunk> {
+/// The units of one file's part of the patch, and where its header ends.
+fn file(lines: &[&[u8]]) -> (usize, Vec<(DiffHunk, Part)>) {
     let body_at = lines
         .iter()
         .position(|line| line.starts_with(b"@@ ") || line.starts_with(b"GIT binary patch"));
@@ -60,29 +124,28 @@ fn file(lines: &[&[u8]]) -> Vec<DiffHunk> {
             body.iter().partition(|line| line.starts_with(b"@@ "));
         header.extend(if binary { &body[..1] } else { &hunk_heads[..] });
         let shown = (!binary).then_some(&rest[..]);
-        return vec![unit(diff, HunkUnit::WholeFile, lines, &header, shown)];
+        let whole = unit(diff, HunkUnit::WholeFile, lines, &header, shown);
+        return (head.len(), vec![(whole, Part::Whole)]);
     }
     let mut units = Vec::new();
     if let (Some(old), Some(new)) = (field(b"old mode "), field(b"new mode ")) {
         let header = [[b"old mode ", old].concat(), [b"new mode ", new].concat()];
         let header: Vec<&[u8]> = header.iter().map(Vec::as_slice).collect();
-        units.push(unit(diff, HunkUnit::Mode, &header, &header, None));
+        units.push((
+            unit(diff, HunkUnit::Mode, &header, &header, None),
+            Part::Mode,
+        ));
     }
     let mut at = 0;
     while at < body.len() {
         let end = (at + 1..body.len()).find(|&i| body[i].starts_with(b"@@ "));
         let end = end.unwrap_or(body.len());
         let hunk = &body[at..end];
-        units.push(unit(
-            diff,
-            HunkUnit::Hunk,
-            hunk,
-            &hunk[..1],
-            Some(&hunk[1..]),
-        ));
+        let unit = unit(diff, HunkUnit::Hunk, hunk, &hunk[..1], Some(&hunk[1..]));
+        units.push((unit, Part::Hunk(head.len() + at, head.len() + end)));
         at = end;
     }
-    units
+    (head.len(), units)
 }
 
 /// The start of an LFS pointer file's first line.
@@ -169,6 +232,26 @@ mod tests {
         assert_ne!(units(other.as_bytes())[0].hunk_id, cut[2].hunk_id);
         let ids: std::collections::BTreeSet<_> = cut.iter().map(|u| &u.hunk_id).collect();
         assert_eq!(ids.len(), 3);
+    }
+
+    #[test]
+    fn unit_git_hunks_pick_makes_a_patch_of_the_units_chosen() {
+        let cut = units(MODE_AND_HUNKS.as_bytes());
+        let chosen = |at: &[usize]| {
+            let ids: BTreeSet<HunkId> = at.iter().map(|&i| cut[i].hunk_id.clone()).collect();
+            let (patch, found) = pick(MODE_AND_HUNKS.as_bytes(), &ids);
+            (String::from_utf8(patch).unwrap(), found)
+        };
+        let (diff, file) = (
+            "diff --git a/f b/f\n",
+            "index 0ff3bbb..9bebd18\n--- a/f\n+++ b/f\n",
+        );
+        let second = "@@ -15,3 +15,3 @@ fn x\n 15\n-16\n+sixteen\n\\ No newline at end of file\n";
+        assert_eq!(chosen(&[2]), (format!("{diff}{file}{second}"), 1));
+        let mode = format!("{diff}old mode 100644\nnew mode 100755\n");
+        assert_eq!(chosen(&[0]), (mode, 1));
+        assert_eq!(chosen(&[0, 1, 2]), (MODE_AND_HUNKS.to_owned(), 3));
+        assert_eq!(chosen(&[]), (String::new(), 0));
     }
 
     #[test]

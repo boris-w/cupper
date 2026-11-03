@@ -30,7 +30,7 @@ use cupper_sys::{Command, Env};
 pub use cmd::{GitCmd, Repo, RepoOp, Snapshot, SnapshotOp};
 pub use repo::{Done, GitError, RepoNotice};
 use run::{Output, RunError};
-pub use service::{GitDeps, GitService};
+pub use service::{GitDeps, GitService, SessionNotes};
 
 use crate::clock::Clock;
 use crate::durations::{DurationKey, Durations};
