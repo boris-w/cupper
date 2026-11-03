@@ -418,7 +418,7 @@ export const zExclusionReason = z.union([
 export const zExtraction = z.union([z.enum(["full", "partial", "none"]), z.string()]);
 
 /**
- * Open enum: unknown values must be accepted. Known: not_logged_in cli_too_old session_not_found process_exited restartable model_unsupported quota_exhausted other adapter_exited adapter_crashed cli_missing runtime_failed host_restarted
+ * Open enum: unknown values must be accepted. Known: not_logged_in cli_too_old session_not_found process_exited restartable model_unsupported quota_exhausted other adapter_exited adapter_crashed cli_missing runtime_failed host_restarted project_untrusted
  */
 export const zFailureCode = z.union([
   z.enum([
@@ -435,6 +435,7 @@ export const zFailureCode = z.union([
     "cli_missing",
     "runtime_failed",
     "host_restarted",
+    "project_untrusted",
   ]),
   z.string(),
 ]);

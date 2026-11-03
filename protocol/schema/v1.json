@@ -2653,7 +2653,8 @@
             "adapter_crashed",
             "cli_missing",
             "runtime_failed",
-            "host_restarted"
+            "host_restarted",
+            "project_untrusted"
           ],
           "type": "string"
         },
@@ -2661,7 +2662,7 @@
           "type": "string"
         }
       ],
-      "description": "Open enum: unknown values must be accepted. Known: not_logged_in cli_too_old session_not_found process_exited restartable model_unsupported quota_exhausted other adapter_exited adapter_crashed cli_missing runtime_failed host_restarted "
+      "description": "Open enum: unknown values must be accepted. Known: not_logged_in cli_too_old session_not_found process_exited restartable model_unsupported quota_exhausted other adapter_exited adapter_crashed cli_missing runtime_failed host_restarted project_untrusted "
     },
     "Fallback": {
       "description": "What a reader shows in place of an event type it does not know (design 5.3.11).\n\nOnly a client older than the event type reads it, and such a client has no\ntranslation for the semantic codes the new type brings, so a code would not\nhelp. The client draws its own localized placeholder of shape `kind`;\n`summary` appears only in a tooltip or in diagnostics.",

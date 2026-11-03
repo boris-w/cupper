@@ -51,6 +51,14 @@ impl Fixture {
         Self::with(name, launch, rss)
     }
 
+    /// The codex-shaped fake agent with `args`.
+    fn codex(name: &str, args: &[&str], rss: Option<u64>) -> Self {
+        let args = ["--persona", "codex"].iter().chain(args);
+        let args = args.map(|arg| (*arg).to_owned()).collect();
+        let launch = launch::injected(Agent::Codex, launch::fake_agent(), args, &host(), &login());
+        Self::with(name, launch, rss)
+    }
+
     fn with(name: &str, launch: Launch, rss: Option<u64>) -> Self {
         let (dir, clock) = (TempDir::new(name), ManualClock::new());
         let (writer, _writer) = host_writer(&dir, &clock);
@@ -664,6 +672,20 @@ async fn it_k21_reap_group_sampling_finds_the_groups_a_crash_leaves() {
         groups,
         [format!("[[{},{}]]", child.pid, child.start.as_micros())]
     );
+}
+
+/// IT-codex-untrusted: codex-acp loads the project's configuration whatever
+/// it is asked, so a session that must leave it out does not open, and no
+/// adapter starts for it (design 5.2.6).
+#[tokio::test(flavor = "multi_thread")]
+async fn it_codex_untrusted_an_attach_without_the_project_config_is_refused() {
+    let f = Fixture::codex("codex-untrusted", &[], None);
+    let ignore = f.open(AttachTarget::New, ProjectConfigPolicy::Ignore).await;
+    assert_eq!(ignore.unwrap_err().class, AgentErrorClass::ProjectUntrusted);
+    assert_eq!(f.column("SELECT instance_id FROM adapters").len(), 0);
+    let mut session = f.attach().await.unwrap();
+    assert_eq!(f.say(&mut session, "say up").await, "up");
+    f.stop().await;
 }
 
 /// IT-adapter-restart (T218): a prompt the adapter's exit cuts off ends

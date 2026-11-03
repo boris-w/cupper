@@ -752,6 +752,13 @@ impl Actor {
     }
 
     fn attach(&mut self, mut pending: Pending) {
+        // codex-acp loads the project's configuration whatever it is asked
+        // (design 5.2.6): an untrusted project's session does not open.
+        let ignore = pending.attach.project_config == ProjectConfigPolicy::Ignore;
+        if self.agent() == Agent::Codex && ignore {
+            let untrusted = error(AgentErrorClass::ProjectUntrusted, "project_untrusted");
+            return drop(pending.reply.send(Err(untrusted)));
+        }
         let (Some(instance), Some((wire, _))) = (&self.instance, &self.wire) else {
             self.waiting.push(pending);
             return self.ensure_started();

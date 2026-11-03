@@ -321,6 +321,9 @@ pub enum AgentErrorClass {
     /// The adapter's connection closed under the request: the adapter
     /// exited, and its requests expire with it (SEC-10).
     AdapterExited,
+    /// Codex's attach in a project that is not trusted: codex-acp cannot
+    /// leave the project's configuration out (design 5.2.6).
+    ProjectUntrusted,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -350,6 +353,7 @@ impl AgentErrorClass {
             Self::RuntimeFailed => FailureCode::RuntimeFailed,
             Self::Crashed => FailureCode::AdapterCrashed,
             Self::AdapterExited => FailureCode::AdapterExited,
+            Self::ProjectUntrusted => FailureCode::ProjectUntrusted,
         }
     }
 }
