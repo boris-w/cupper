@@ -1,6 +1,6 @@
 # T220 PERF-bridge-gate 的压力用例在 runner 上点不开会话
 
-- 派发日期：（派发时填）
+- 派发日期：2026-11-03
 - 执行者：子 agent（e2e 与桌面工程师）
 - 分支：`fix/T220-bridge-gate-stress`
 - 依赖：T219（发现）。`gate/m1a` 等本任务

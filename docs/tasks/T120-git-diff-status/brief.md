@@ -1,6 +1,6 @@
 # T120 Git 服务 III：diff、file_diff、status 与 branches
 
-- 派发日期：（派发时填）
+- 派发日期：2026-11-03
 - 执行者：子 agent（Rust 工程师，宿主 Git 服务）
 - 分支：`feat/T120-git-diff-status`
 - 依赖：T099（M1a 已退出）。T121、审查面板等依赖本任务（M1b 关键链）
