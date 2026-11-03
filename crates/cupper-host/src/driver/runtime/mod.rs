@@ -897,7 +897,11 @@ impl Actor {
                 self.inflight = self.inflight.saturating_sub(1);
                 match result {
                     Ok((session, options)) => self.opened(*pending, session, options),
-                    Err(err) => drop(pending.reply.send(Err(self.agent().error(&err)))),
+                    // Codex asks for a login as the session opens (K14).
+                    Err(err) => {
+                        let error = self.judged(self.agent().error(&err));
+                        drop(pending.reply.send(Err(error)));
+                    }
                 }
             }
             Wire::Configured(session, result) => {
@@ -934,35 +938,37 @@ impl Actor {
                         stop_reason,
                         usage,
                     },
-                    Err(mut error) => {
+                    Err(error) => {
                         // Cut off by the connection's close: the
                         // instance's `AdapterExited` ends it (T218).
                         if error.class == AgentErrorClass::AdapterExited {
                             return;
                         }
-                        // K14: a CLI older than the verified range says it
-                        // needs a login when it cannot read the config.
-                        let versions = &self.deps.launch.versions;
-                        let old = matches!(
-                            versions.cli_compat,
-                            CliCompat::OlderUntested | CliCompat::Unsupported
-                        );
-                        if error.class == AgentErrorClass::NotLoggedIn
-                            && old
-                            && !versions.cli.is_empty()
-                        {
-                            error.class = AgentErrorClass::CliTooOld;
-                        }
-                        if error.class == AgentErrorClass::NotLoggedIn {
-                            self.auth.state = AuthState::LoggedOut;
-                            self.notify();
-                        }
+                        let error = self.judged(error);
                         DriverEvent::PromptFailed { tag, error }
                     }
                 };
                 self.to_session(&session, event);
             }
         }
+    }
+
+    /// K14: a CLI older than the verified range says it needs a login when
+    /// it cannot read the config. A login it needs shows in the status.
+    fn judged(&mut self, mut error: AgentError) -> AgentError {
+        let versions = &self.deps.launch.versions;
+        let old = matches!(
+            versions.cli_compat,
+            CliCompat::OlderUntested | CliCompat::Unsupported
+        );
+        if error.class == AgentErrorClass::NotLoggedIn && old && !versions.cli.is_empty() {
+            error.class = AgentErrorClass::CliTooOld;
+        }
+        if error.class == AgentErrorClass::NotLoggedIn {
+            self.auth.state = AuthState::LoggedOut;
+            self.notify();
+        }
+        error
     }
 
     /// A session opened: its route, then its options as attached.
