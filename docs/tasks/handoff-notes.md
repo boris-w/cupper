@@ -492,3 +492,8 @@
 | T144、T151 或补 i18n 的界面任务 | `stream` 命名空间没有 `error_project_untrusted` 的文案，Codex 在未信任项目里的错误现在显示为"其他错误"；新建会话页和设置页会看到 Codex 的状态（没装 CLI 时为 `unavailable`） | T111 |
 | T113 或维护者手动 | 长时间运行下 Codex 的 MCP 进程数和内存（T102 交接），核对 5.6.8 的回收阈值和 NFR-11 的估算，要用真实 Codex | T111 |
 | 以后在本机跑宿主集成测试的任务 | lifecycle 里的 `it_cli_commands_*`、`it_elevate_lineage_*` 要先 `cargo build -p cupper-cli --features test-harness`（CI 的 `cli-e2e` 一步会做），否则本机会失败 | T111 |
+| 以后改快照档或项目登记的任务 | 项目是仓库的子目录时（monorepo），`Layout::read` 要求工作区目录里就有 `.git`，回合快照记成 `skipped/not_a_repo`，`git/diff` 也拿不到结果；T061 起就是这样 | T120 |
+| T121 | 仓库档拒绝或配置变化时，会话流里没有 `notice{unsafe_repo_config / repo_config_changed}`：Git 服务不是会话流的写者，要经会话 actor 转一道；现在只返回错误并写 `git.unsafe_repo_config` 审计。T121 的写操作也需要这条通路 | T120 |
+| T130 或以后附加协议字段的任务 | `git/diff` 的文件列表没有 blob 兜底，几百个文件以上会超过 64,000 字节的帧，宿主只能回 `too_large`；要改得在协议里附加一个可选字段 | T120 |
+| T221、T222 | `unstaged` 里 git-crypt 这类过滤器的文件：没改动也会显示为"已变化"（快照里是占位 blob，index 里是密文）；可以在工作区内容与 index 的 stat 一致时保留 index 条目 | T120 |
+| T124 | `git/diff` 对回合范围一律加 `mixed_changes`；worktree 模式出现后，按 GT-1 只在本地模式下加 | T120 |
