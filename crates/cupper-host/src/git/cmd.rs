@@ -51,6 +51,9 @@ pub enum RepoOp {
     MergeBase,
     CheckRefFormat,
     BranchList,
+    /// `branch --show-current`: the branch HEAD names, also before its
+    /// first commit; nothing on a detached HEAD.
+    BranchCurrent,
     /// `apply --cached` of the patch given as input.
     Stage,
     /// `apply --cached -R`.
@@ -88,6 +91,11 @@ pub enum SnapshotOp {
     WriteTree,
     /// Lines added and removed between two trees, no program run.
     DiffStat,
+    /// The index's unmerged entries.
+    Unmerged,
+    /// Two trees' changed files, renames found: raw records, then as many
+    /// numstat records (design 5.2.10).
+    DiffList,
 }
 
 /// A command's fixed words, with `-z` where the command has it.
@@ -112,6 +120,7 @@ impl RepoOp {
             Self::MergeBase => (&["merge-base"], true),
             Self::CheckRefFormat => (&["check-ref-format"], true),
             Self::BranchList => (&["branch", "--list"], true),
+            Self::BranchCurrent => (&["branch", "--show-current"], true),
             Self::Stage => (&["apply", "--whitespace=nowarn", "--cached"], false),
             Self::Unstage => (&["apply", "--whitespace=nowarn", "--cached", "-R"], false),
             Self::Revert => (&["apply", "--whitespace=nowarn", "-R"], false),
@@ -181,6 +190,20 @@ impl SnapshotOp {
                     "-z",
                     "--numstat",
                     "--no-renames",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                ],
+                true,
+            ),
+            Self::Unmerged => (&["ls-files", "-z", "--unmerged"], true),
+            Self::DiffList => (
+                &[
+                    "diff-tree",
+                    "-r",
+                    "-z",
+                    "-M",
+                    "--raw",
+                    "--numstat",
                     "--no-ext-diff",
                     "--no-textconv",
                 ],

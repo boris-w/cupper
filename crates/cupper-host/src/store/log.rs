@@ -197,7 +197,7 @@ impl TurnSnapshot {
 }
 
 /// The ops of turn `turn_no`, at their current versions.
-pub(super) fn turn_ops(
+pub fn turn_ops(
     conn: &Connection,
     session: &SessionId,
     turn_no: u32,

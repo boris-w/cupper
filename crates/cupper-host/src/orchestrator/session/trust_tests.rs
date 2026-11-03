@@ -281,7 +281,7 @@ async fn it_orch_trust_gating_the_git_root_bounds_the_range() {
 
 /// A fixture whose project is a git repository of its own, its sessions
 /// running the git on PATH; and git's home.
-async fn git_project(name: &str) -> (Fixture, TempDir) {
+pub(super) async fn git_project(name: &str) -> (Fixture, TempDir) {
     let path = std::env::var_os("PATH").unwrap();
     let mut found = std::env::split_paths(&path).map(|d| d.join("git"));
     let git = found.find(|g| g.is_file()).unwrap();

@@ -20,8 +20,8 @@ use super::budget;
 use super::rows::Project;
 use crate::clock::Clock;
 use crate::durations::Durations;
-use crate::gateway::{AuditEvent, AuditRecord};
-use crate::git::{GitCmd, GitError, GitTool, RepoOp};
+use crate::gateway::AuditRecord;
+use crate::git::{GitCmd, GitTool, RepoOp};
 use crate::trust::{self, Scan, Trust};
 
 /// The project's directory, its git work tree, and the scan of its range.
@@ -93,26 +93,7 @@ async fn locate(tool: &GitTool, tree: &Path, cx: &Context) -> Result<(PathBuf, S
     let cmd = GitCmd::repo(RepoOp::RevParse).args(args);
     let tier = tool.repo_tier(tree);
     let done = tier.run(&*cx.clock, &cx.durations, &cx.writable, cmd).await;
-    let done = done.map_err(|err: GitError| {
-        if let Some((reason, origin)) = err.refusal() {
-            let (command, reason) = ("rev_parse".to_owned(), reason.to_owned());
-            let event = AuditEvent::GitUnsafe {
-                command,
-                reason,
-                origin,
-            };
-            let at_ms = cx.clock.now_wall_ms();
-            // Nobody listening is the receiver's choice.
-            let _ = cx.audit.send(AuditRecord {
-                at_ms,
-                conn: None,
-                event,
-            });
-        }
-        let error = RpcError::app(err.code(), err.to_string());
-        err.reason()
-            .map_or(error.clone(), |reason| error.with_reason(reason))
-    })?;
+    let done = done.map_err(|err| err.reported("rev_parse", &cx.audit, &*cx.clock))?;
     let out = String::from_utf8_lossy(&done.output.stdout);
     let mut lines = out.lines();
     match (lines.next(), lines.next()) {

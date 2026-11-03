@@ -56,7 +56,7 @@ use crate::durations::Durations;
 use crate::exit::HostExit;
 use crate::gateway::listen::{HostLock, ListenError};
 use crate::gateway::{AuditEvent, AuditRecord, Gateway, GatewayConfig, HostEvent, Port, Routes};
-use crate::git::GitTool;
+use crate::git::{GitDeps, GitService, GitTool};
 use crate::index::{INDEX, IndexDeps, IndexError, IndexHandle};
 use crate::ledger::{Ledger, LedgerError, SWEEPER};
 use crate::manifest;
@@ -395,7 +395,7 @@ impl Host {
             quiescence: quiescence.clone(),
             audit: records.clone(),
             index: Arc::new(index.clone()),
-            git,
+            git: git.clone(),
             admission: Arc::clone(&admission),
             blobs: blobs.clone(),
         });
@@ -419,6 +419,16 @@ impl Host {
         // `stream/subscribe`, `stream/unsubscribe` and `history/page`.
         routes.streams(streams.clone(), readers.clone());
         control.route(&mut routes);
+        GitService::new(GitDeps {
+            git,
+            readers: readers.clone(),
+            streams: streams.clone(),
+            clock: clock.clone(),
+            ids: ids.clone(),
+            durations: durations.clone(),
+            audit: records.clone(),
+        })
+        .route(&mut routes);
         #[cfg(feature = "test-harness")]
         Arc::new(harness::Harness {
             clock: injected.manual.clone(),
