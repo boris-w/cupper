@@ -34,7 +34,8 @@
 //!   crash of the host.
 //! - **Codex's adapter is reclaimed** (5.6.8, K20: it keeps the MCP servers
 //!   of closed sessions) at a sample that finds it idle, with no prompt or
-//!   session opening in flight, no request asked and no thread at work, and
+//!   session opening in flight, no request asked, no thread at work and
+//!   nothing from the agent for 10 s (a turn of its own, K9), and
 //!   over 2 GiB, or without work for 30 minutes, or probed with no session
 //!   left. It stops as the host stops it; its sessions hear `AdapterExited`
 //!   as reclaimed, and attaches meanwhile wait for the next instance.
@@ -98,8 +99,8 @@ use super::api::{
 use super::extract;
 use crate::clock::IdGen;
 use crate::durations::{
-    ADAPTER_CLOSE_WAIT, ADAPTER_TERM_WAIT, CODEX_RECLAIM_IDLE, Durations, PROBE_COMMANDS,
-    RESOURCE_SAMPLE,
+    ADAPTER_CLOSE_WAIT, ADAPTER_TERM_WAIT, AUTONOMOUS_SILENCE, CODEX_RECLAIM_IDLE, Durations,
+    PROBE_COMMANDS, RESOURCE_SAMPLE,
 };
 use crate::pure::{Alarm, TimerRequest, TimerTable};
 use crate::quiescence::{ActorKind, Participant, Quiescence};
@@ -565,9 +566,11 @@ impl Actor {
     fn reclaimable(&self, rss_bytes: u64) -> bool {
         let active = self.sessions.values().any(|route| route.active);
         let idle = self.inflight == 0 && self.asks.is_empty() && self.opening.is_empty();
-        let idle = idle && !active && self.stopping.is_none();
-        let quiet = self.now().saturating_duration_since(self.busy_at);
-        let quiet = quiet >= self.deps.durations.get(CODEX_RECLAIM_IDLE);
+        let since = self.now().saturating_duration_since(self.busy_at);
+        // Output a moment ago may be a turn of the agent's own (K3, K9).
+        let recent = since < self.deps.durations.get(AUTONOMOUS_SILENCE);
+        let idle = idle && !active && !recent && self.stopping.is_none();
+        let quiet = since >= self.deps.durations.get(CODEX_RECLAIM_IDLE);
         let probed = self.probed && self.sessions.is_empty();
         self.agent() == Agent::Codex && idle && (rss_bytes > RECLAIM_RSS || quiet || probed)
     }
