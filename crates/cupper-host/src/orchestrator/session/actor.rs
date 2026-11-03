@@ -56,6 +56,7 @@ use super::load::request as stored;
 use super::rows::Rows;
 use super::{IndexNotes, Note, internal, mode_tier, not_found, parse, privileged, tier_of};
 use crate::clock::Clock;
+use crate::diag::full::Redactor;
 use crate::driver::api::{
     AgentError, AgentPort, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent,
     ProjectConfigPolicy,
@@ -142,6 +143,8 @@ pub(super) struct Parts {
     pub blobs: BlobStore,
     /// The session's share of what keeps the Mac awake.
     pub power: Share,
+    /// For what the agent says of its errors (`error` items' `raw`).
+    pub redactor: Redactor,
 }
 
 /// What the actor starts with besides its parts: its first input, and what
@@ -1082,6 +1085,10 @@ impl SessionActor {
     /// stream when they changed, the agent's session into the row.
     async fn attach_done(&mut self, result: Result<AttachInfo, AgentError>) {
         self.outstanding -= 1;
+        let mut result = result;
+        if let Err(error) = &mut result {
+            error.message = self.parts.redactor.text(&error.message);
+        }
         let mut step = Step::default();
         let mut mode = None;
         if let Ok(info) = &result {
@@ -1139,6 +1146,10 @@ impl SessionActor {
     async fn agent(&mut self, event: DriverEvent) {
         if self.stopping && matches!(event, DriverEvent::AdapterExited { .. }) {
             return;
+        }
+        let mut event = event;
+        if let DriverEvent::PromptFailed { error, .. } = &mut event {
+            error.message = self.parts.redactor.text(&error.message);
         }
         let DriverEvent::ConfigChanged(options) = event else {
             let step = self.commands_changed(&event);

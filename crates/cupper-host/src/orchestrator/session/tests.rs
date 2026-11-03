@@ -25,6 +25,7 @@ use tokio::sync::{Notify, mpsc, oneshot};
 
 use super::{IndexNotes, Note, SessionDeps, SessionManager};
 use crate::clock::{Clock, IdGen, ManualClock};
+use crate::diag::full::Redactor;
 use crate::driver::api::{
     AgentError, AgentPort, AgentSessionId, Attach, AttachInfo, AttachTarget, DriverCommand,
     DriverEvent, NormUpdate, ProjectConfigPolicy, PromptTag,
@@ -45,6 +46,9 @@ use crate::supervisor::{Activity, Part};
 use crate::trust::Scan;
 
 type Attached = oneshot::Sender<Result<AttachInfo, AgentError>>;
+
+/// The home directory the sessions' redactor knows.
+pub(super) const HOME: &str = "/Users/jdoe-example";
 
 /// What the session asked of its agent, in order.
 #[derive(Debug)]
@@ -290,6 +294,7 @@ impl Fixture {
             admission: Arc::default(),
             blobs: blobs.clone(),
             power: Power::new().0,
+            redactor: Redactor::new(Some(HOME), None),
         };
         let conn = open_reader(&dir.host_db()).unwrap();
         let ledger = Ledger::load(&conn, writer.clone(), shared, &durations).unwrap();
@@ -371,6 +376,14 @@ impl Fixture {
             .unwrap();
         self.events = Some(events);
         attach
+    }
+
+    /// Refuses the next attach with `error`.
+    pub async fn refuse(&mut self, error: AgentError) {
+        let Some(Seen::Attach(.., reply)) = soon("an attach", self.seen.recv()).await else {
+            panic!("an attach")
+        };
+        reply.send(Err(error)).unwrap();
     }
 
     pub async fn command(&mut self) -> DriverCommand {

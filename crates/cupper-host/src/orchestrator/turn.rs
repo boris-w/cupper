@@ -29,6 +29,8 @@
 //! - A prompt that fails with "Session not found" before any update is sent
 //!   once more after a resume (K6); an exited adapter or CLI leaves an
 //!   `agent_restarted` notice (K7).
+//! - A failed turn gets its `error` item (MS-5) before its end settles: the
+//!   attach's error, the prompt's, or the exited adapter's stderr.
 
 use std::mem;
 use std::sync::Arc;
@@ -48,6 +50,7 @@ use cupper_protocol::session::{
 };
 use thiserror::Error;
 
+use super::failure::Failure;
 use super::queue::{QueueCore, QueueEditError, QueueFull, QueueOp, preview};
 use crate::clock::{IdGen, Now};
 use crate::driver::api::{
@@ -55,7 +58,7 @@ use crate::driver::api::{
     DriverEvent, PromptTag,
 };
 use crate::durations::{Durations, INTERRUPT_FALLBACK, TURN_PREPARE};
-use crate::orchestrator::notice;
+use crate::orchestrator::{instant, notice};
 use crate::pure::{Core, TimerRequest};
 
 #[derive(Debug)]
@@ -315,7 +318,7 @@ pub struct TurnMismatch;
 struct Outcome {
     status: TurnStatus,
     stop_reason: Option<StopReason>,
-    error_code: Option<FailureCode>,
+    failure: Option<Failure>,
     usage: Option<TurnUsage>,
     pause: Option<PauseReason>,
 }
@@ -325,15 +328,15 @@ impl Outcome {
         Self {
             status,
             stop_reason: None,
-            error_code: None,
+            failure: None,
             usage: None,
             pause,
         }
     }
 
-    fn failed(code: FailureCode) -> Self {
+    fn failed(failure: Failure) -> Self {
         Self {
-            error_code: Some(code),
+            failure: Some(failure),
             ..Self::new(TurnStatus::Failed, Some(PauseReason::TurnFailed))
         }
     }
@@ -717,7 +720,7 @@ impl TurnMachine {
                     ..
                 }) = self.turn
                 {
-                    self.end(Outcome::failed(error.class.failure_code()), now, out);
+                    self.end(Outcome::failed(Failure::of(&error)), now, out);
                 }
             }
         }
@@ -795,7 +798,7 @@ impl TurnMachine {
                 ..Outcome::new(TurnStatus::Cancelled, Some(PauseReason::TurnCancelled))
             },
             (Some(Phase::Prompting(t) | Phase::Cancelling(t)), Err(error)) if *t == tag => {
-                Outcome::failed(error.class.failure_code())
+                Outcome::failed(Failure::of(&error))
             }
             // The prompt of a turn that ended at its interrupt deadline.
             _ => return,
@@ -840,7 +843,7 @@ impl TurnMachine {
     /// session only attaches again (design 5.6.8).
     fn adapter_exited(
         &mut self,
-        (instance, reclaimed): (AdapterInstanceId, bool),
+        (instance, reclaimed, stderr): (AdapterInstanceId, bool, String),
         now: Now,
         out: &mut Vec<Action>,
     ) {
@@ -864,7 +867,7 @@ impl TurnMachine {
             })
         );
         if running {
-            self.end(Outcome::failed(FailureCode::AdapterExited), now, out);
+            self.end(Outcome::failed(Failure::exited(&stderr)), now, out);
         }
         if running || !reclaimed {
             out.extend(notice(&self.ids, now, NoticeCode::AgentRestarted).map(Action::Event));
@@ -923,7 +926,7 @@ impl TurnMachine {
             turn_id: turn.id.clone(),
             status: outcome.status,
             stop_reason: outcome.stop_reason,
-            error_code: outcome.error_code,
+            error_code: outcome.failure.as_ref().map(|f| f.code.clone()),
             usage: outcome.usage,
             ended_at: TimestampMs(now.wall_ms),
             duration_ms: DurationMs(u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)),
@@ -940,6 +943,10 @@ impl TurnMachine {
         } else {
             ResolutionReason::TurnEnded
         };
+        if let Some(failure) = outcome.failure {
+            let item = instant(&self.ids, now, Some(turn.id.clone()), failure.item());
+            out.extend(item.map(Action::Event));
+        }
         out.push(Action::Settle {
             end: end.clone(),
             asks,
@@ -1013,8 +1020,9 @@ impl Core for TurnMachine {
             Input::Driver(DriverEvent::AdapterExited {
                 instance,
                 reclaimed,
+                stderr,
                 ..
-            }) => self.adapter_exited((instance, reclaimed), now, &mut out),
+            }) => self.adapter_exited((instance, reclaimed, stderr), now, &mut out),
             // Output came: the prompt is not sent again (K6).
             Input::Driver(DriverEvent::Update(_)) => {
                 if let Some(turn) = &mut self.turn {

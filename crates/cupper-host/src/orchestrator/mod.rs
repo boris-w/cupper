@@ -6,6 +6,7 @@
 
 pub mod autonomous;
 pub mod coalescer;
+pub mod failure;
 pub mod grouping;
 pub mod interaction;
 #[cfg(test)]
@@ -21,7 +22,7 @@ pub mod turn;
 
 use cupper_protocol::annotations::{DurationMs, TimestampMs};
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::ItemId;
+use cupper_protocol::ids::{ItemId, TurnId};
 use cupper_protocol::item::{
     Item, ItemCompleted, ItemStarted, ItemStatus, Notice, NoticeCode, NoticeParams,
 };
@@ -40,12 +41,21 @@ pub(crate) fn notice_with(
     code: NoticeCode,
     params: NoticeParams,
 ) -> [EventBody; 2] {
+    instant(ids, now, None, Item::Notice(Notice { code, params }))
+}
+
+/// An item that starts and ends at once: a notice, an error.
+pub(crate) fn instant(
+    ids: &IdGen,
+    now: Now,
+    turn_id: Option<TurnId>,
+    item: Item,
+) -> [EventBody; 2] {
     let item_id = ItemId::from_uuid(ids.new_id_at(now.wall_ms).as_u128());
     let at = TimestampMs(now.wall_ms);
-    let item = Item::Notice(Notice { code, params });
     let started = ItemStarted {
         item_id: item_id.clone(),
-        turn_id: None,
+        turn_id,
         started_at: at,
         group_id: None,
         item,

@@ -298,7 +298,7 @@ pub enum CompactionPhase {
 pub struct AgentError {
     pub class: AgentErrorClass,
     pub form: AgentErrorForm,
-    /// Truncated and redacted.
+    /// Truncated; the session redacts it before its stream gets it.
     pub message: String,
 }
 

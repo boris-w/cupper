@@ -221,6 +221,7 @@ pub(super) async fn load(
         quiescence: deps.quiescence.clone(),
         blobs: deps.blobs.clone(),
         power: deps.power.share(),
+        redactor: deps.redactor.clone(),
     };
     let start = Start {
         first: Input::Restored(Box::new(restored)),
