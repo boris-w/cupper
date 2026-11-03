@@ -1,0 +1,35 @@
+{
+  "artifacts": [],
+  "commit": "1f972d24468f9fa4f39fe7d54e848dad5012ad78",
+  "duration_ms": 34656,
+  "jobs": [
+    {
+      "duration_ms": 34655,
+      "failed": 0,
+      "name": "differential",
+      "passed": 3,
+      "result": "pass",
+      "skipped": []
+    }
+  ],
+  "machine": "Apple Virtual Machine 1 (Apple M1 (Virtual))",
+  "os": "macOS 15.8.2",
+  "perf": [],
+  "results": [
+    {
+      "commit": "1f972d24468f9fa4f39fe7d54e848dad5012ad78",
+      "id": "UNIT-views-differential",
+      "result": "pass",
+      "suite": "nightly"
+    }
+  ],
+  "target": "differential",
+  "toolchain": {
+    "cargo": "1.96.0",
+    "cargo_deny": null,
+    "node": "24.13.0",
+    "pnpm": "12.14.0",
+    "rustc": "1.96.0"
+  },
+  "version": 1
+}

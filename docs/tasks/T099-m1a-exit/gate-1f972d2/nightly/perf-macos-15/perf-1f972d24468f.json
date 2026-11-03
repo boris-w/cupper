@@ -1,0 +1,114 @@
+{
+  "artifacts": [],
+  "commit": "1f972d24468f9fa4f39fe7d54e848dad5012ad78",
+  "duration_ms": 341755,
+  "jobs": [
+    {
+      "duration_ms": 341755,
+      "failed": 0,
+      "name": "perf",
+      "passed": 6,
+      "result": "pass",
+      "skipped": []
+    }
+  ],
+  "machine": "Apple Virtual Machine 1 (Apple M1 (Virtual))",
+  "os": "macOS 15.8.2",
+  "perf": [
+    {
+      "commit": "1f972d24468f",
+      "date": "2026-11-03",
+      "machine": "Apple Virtual Machine 1 (Apple M1 (Virtual))",
+      "max": 38.02,
+      "metric": "host_cold_start",
+      "n": 30,
+      "p50": 23.72,
+      "p95": 37.74,
+      "unit": "ms",
+      "version": "0.0.0"
+    },
+    {
+      "commit": "1f972d24468f",
+      "date": "2026-11-03",
+      "machine": "Apple Virtual Machine 1 (Apple M1 (Virtual))",
+      "max": 38.0,
+      "metric": "host_memory",
+      "n": 30,
+      "p50": 37.89,
+      "p95": 38.0,
+      "unit": "MiB",
+      "version": "0.0.0"
+    },
+    {
+      "commit": "1f972d24468f",
+      "date": "2026-11-03",
+      "machine": "Apple Virtual Machine 1 (Apple M1 (Virtual))",
+      "max": 5.29,
+      "metric": "index_snapshot",
+      "n": 30,
+      "p50": 3.32,
+      "p95": 5.0,
+      "unit": "ms",
+      "version": "0.0.0"
+    },
+    {
+      "commit": "1f972d24468f",
+      "date": "2026-11-03",
+      "machine": "Apple Virtual Machine 1 (Apple M1 (Virtual))",
+      "max": 119.72,
+      "metric": "snapshot_10k_no_change",
+      "n": 30,
+      "p50": 93.03,
+      "p95": 116.97,
+      "unit": "ms",
+      "version": "0.0.0"
+    },
+    {
+      "commit": "1f972d24468f",
+      "date": "2026-11-03",
+      "machine": "Apple Virtual Machine 1 (Apple M1 (Virtual))",
+      "max": 153.08,
+      "metric": "snapshot_10k_10_files_changed",
+      "n": 30,
+      "p50": 123.25,
+      "p95": 138.85,
+      "unit": "ms",
+      "version": "0.0.0"
+    }
+  ],
+  "results": [
+    {
+      "commit": "1f972d24468f9fa4f39fe7d54e848dad5012ad78",
+      "id": "PERF-host-cold-start",
+      "result": "measured",
+      "suite": "nightly"
+    },
+    {
+      "commit": "1f972d24468f9fa4f39fe7d54e848dad5012ad78",
+      "id": "PERF-host-memory",
+      "result": "measured",
+      "suite": "nightly"
+    },
+    {
+      "commit": "1f972d24468f9fa4f39fe7d54e848dad5012ad78",
+      "id": "PERF-index-snapshot",
+      "result": "measured",
+      "suite": "nightly"
+    },
+    {
+      "commit": "1f972d24468f9fa4f39fe7d54e848dad5012ad78",
+      "id": "PERF-snapshot",
+      "result": "measured",
+      "suite": "nightly"
+    }
+  ],
+  "target": "perf",
+  "toolchain": {
+    "cargo": "1.96.0",
+    "cargo_deny": null,
+    "node": "24.13.0",
+    "pnpm": "12.14.0",
+    "rustc": "1.96.0"
+  },
+  "version": 1
+}
