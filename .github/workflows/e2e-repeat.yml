@@ -57,6 +57,9 @@ jobs:
           TIMES: ${{ inputs.times }}
           WORKERS: ${{ inputs.workers }}
           LOAD: ${{ inputs.load }}
+          # A GitHub-hosted runner: PERF only recorded, as in the nightly e2e
+          # job (M1a sync D1, T220).
+          CUPPER_PERF_RECORD_ONLY: "1"
         run: |
           # A failed run must not end the script before the next one.
           set +e -u
