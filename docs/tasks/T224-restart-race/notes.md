@@ -20,6 +20,24 @@
 - `it_adapter_restart_backs_off_then_crashed`：重启后先等到 `AdapterExited`，再发旧会话的 prompt，确定性地走"实例结束之后"这条路径：prompt 没有回应，随后新 attach 不退避，新会话说的是自己的内容。
 - 新增 `it_adapter_restart_a_prompt_during_the_stop_is_sent_again`：假 agent 带 `--fault linger`，stdin 关闭后不退出、忽略 SIGTERM，停止要等时钟推进（关闭 stdin 后 3 s 发 SIGTERM，再 2 s SIGKILL），而时钟只由用例推进。所以无论用例的任务被挂起多久，prompt 到达时都还在停止中，确定性地得到 `PromptFailed(SessionNotFound)`；之后推进时钟、等到 `AdapterExited`，resume 后重发成功。本机在 `restart()` 后插入 200 ms 真实等待，它照样通过。
 
+## 修前连跑里的第二种失败
+
+修前在 main 上连跑 800 次，失败 50 次，全部是 `it_adapter_restart_backs_off_then_crashed`（构件里逐次的日志）：
+
+- 49 次在 `tests.rs:823`，`AdapterExited { …, status: ExitStatus(unix_wait_status(0)), stderr: "", reclaimed: false }`，即上面的原因；
+- 1 次（copy 3 第 23 次）在 `tests.rs:828`，重启之后的 attach 在时钟上用了 2 s（期望 0）。
+
+第二种的原因：运行时在一步的中间（`end()` 里）向会话广播 `AdapterExited`，而它取消的定时器（这里是 SIGKILL 的 `Due::Kill`，2 s）在 `ManualClock` 上的登记，要到这一步结束、`Alarm::follow` 换掉闹钟时才去掉。`ManualClock::next_deadline` 把还没去掉的登记也算进去。用例听到 `AdapterExited` 后立刻 `tick`，如果运行时的线程还没走到 `follow`，时钟就被推到那个已经取消的 2 s。2 s 正是 `ADAPTER_TERM_WAIT`；重启清掉了失败记录，不会有退避。
+
+确定性复现：实验时在 `end()` 广播之后插入 50 ms 的真实等待。原用例每次都失败（崩溃那一段先失败：`left: 3s, right: 1s`）；加了下面的改法之后，运行时的全部用例照样通过。实验代码没有提交。
+
+改法：`Fixture::crash` 和重启那一段，在读时钟之前先做一次 `status()` 往返（`Fixture::settled`）。运行时按顺序处理信箱，`status` 的应答在广播 `AdapterExited` 的那一步之后，那一步的 `follow` 已经做完。
+
+产品没有受影响：真实时钟不会被推进，取消的定时器只是晚一点被丢弃。
+
 ## runner 连跑
 
 参数：`kind=cargo`、`package=cupper-host`、`args=--features test-harness --lib`、`filter=it_adapter_restart`、`times=200`、`parallel=4`（4 份同时跑，给 runner 加负载）、`runner=macos-15`。修前在 main，修后在本分支。
+
+- 修前（main，10f2a8d）：https://github.com/boris-w/cupper/actions/runs/41589780790 ，750 通过、50 失败（49 次 `tests.rs:823`，1 次 `tests.rs:828`）。
+- 修后第一版（a91abb7，只改了先后）：https://github.com/boris-w/cupper/actions/runs/41589784125 ，800 全部通过；`tests.rs:828` 那种在这一版里仍然可能出现，所以又补了一个提交。
