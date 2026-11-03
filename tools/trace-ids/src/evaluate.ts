@@ -127,6 +127,10 @@ function manual(entry: Entry, registry: Registry, context: Context): State {
     return state("problem", `${at} is older than ${entry.maxAgeDays} days`);
   }
   for (const [component, precision] of Object.entries(entry.versions ?? {})) {
+    // The evidence names it (`check`); no version is current or stale.
+    if (precision === "any") {
+      continue;
+    }
     const now = context.versions[component];
     const then = latest.versions[component] ?? "?";
     const major = (version: string) => version.replace(/^\D*/, "").split(".")[0];

@@ -15,7 +15,9 @@
 #                      gap（缺口：本机替代不了）、gap-confirmed（缺口，用户已确认）、
 #                      record（只记录：PERF 有测量结果就算完成，不按预算判定）；都要写 reason
 #   parts              子编号：全部子编号完成才算完成
-#   versions           MAN：证据要与这些组件的当前版本相符，如 { electron = "major" }
+#   versions           MAN：证据要写这些组件的版本，如 { electron = "major" }、{ claude = "any" }；
+#                      "major"、"exact" 还要与当前版本相符（只能用于 electron），"any" 只要求写上；
+#                      组件和证据格式见 docs/manual/README.md
 #   max_age_days       MAN：证据超过这么多天就过期
 #   scenario、cli      COMPAT：兼容套件里证明它的剧本与 CLI（claude、codex），compat 套件的必须写，
 #                      一对剧本与 CLI 只证明一个编号；`trace-ids --compat <报告>` 据此读兼容报告
@@ -1172,10 +1174,10 @@ PROP-retention-boundary = "pr"
 # M1b 退出验收
 [T179]
 milestone = "M1b"
-MAN-S1 = "man"
-MAN-S2 = "man"
-MAN-S3 = "man"
-MAN-S4 = "man"
+MAN-S1 = { suite = "man", versions = { cupper = "any", macos = "any", claude = "any", "claude-agent-acp" = "any", codex = "any", "codex-acp" = "any" } }
+MAN-S2 = { suite = "man", versions = { cupper = "any", macos = "any", claude = "any", "claude-agent-acp" = "any", codex = "any", "codex-acp" = "any" } }
+MAN-S3 = { suite = "man", versions = { cupper = "any", macos = "any", claude = "any", "claude-agent-acp" = "any", codex = "any", "codex-acp" = "any" } }
+MAN-S4 = { suite = "man", versions = { cupper = "any", macos = "any", claude = "any", "claude-agent-acp" = "any", codex = "any", "codex-acp" = "any" } }
 
 # Developer ID 签名与公证
 [T180]
