@@ -33,8 +33,8 @@
 //!   descendants' groups, kept in the `adapters` row for the cleanup after a
 //!   crash of the host.
 //! - **Codex's adapter is reclaimed** (5.6.8, K20: it keeps the MCP servers
-//!   of closed sessions) at a sample that finds it idle, with no prompt in
-//!   flight, no request asked, no thread at work and no session opening, and
+//!   of closed sessions) at a sample that finds it idle, with no prompt or
+//!   session opening in flight, no request asked and no thread at work, and
 //!   over 2 GiB, or without work for 30 minutes, or probed with no session
 //!   left. It stops as the host stops it; its sessions hear `AdapterExited`
 //!   as reclaimed, and attaches meanwhile wait for the next instance.
@@ -271,7 +271,7 @@ struct Actor {
     cached: Option<SessionCapabilities>,
     auth: AuthStatus,
     participant: Participant,
-    /// Prompts sent and not answered.
+    /// Prompts, `session/new` and `session/resume` sent and not answered.
     inflight: usize,
     /// The instance's latest work: its start, a prompt, what the agent sent.
     busy_at: crate::clock::MonoTime,
@@ -858,7 +858,7 @@ impl Actor {
             ),
         };
         // The connection is gone; its exit follows and fails the attach.
-        drop(sent);
+        self.inflight += usize::from(sent.is_ok());
     }
 
     fn wire(&mut self, wire: Wire) {
@@ -886,12 +886,13 @@ impl Actor {
                 }
             }
             Wire::Agent(message) => self.incoming(*message),
-            Wire::Opened(pending, result) => match result {
-                Ok((session, options)) => self.opened(*pending, session, options),
-                Err(err) => {
-                    let _ = pending.reply.send(Err(self.agent().error(&err)));
+            Wire::Opened(pending, result) => {
+                self.inflight = self.inflight.saturating_sub(1);
+                match result {
+                    Ok((session, options)) => self.opened(*pending, session, options),
+                    Err(err) => drop(pending.reply.send(Err(self.agent().error(&err)))),
                 }
-            },
+            }
             Wire::Configured(session, result) => {
                 let Some(opening) = self.opening.get_mut(&session) else {
                     // `SetConfig`: the session hears all the options. A
