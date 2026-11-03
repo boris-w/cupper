@@ -991,11 +991,15 @@ IT-degrade-steering = "pr"
 IT-degrade-plan = "pr"
 IT-degrade-thinking = "pr"
 
-# 配置选择：set_config 与模式选择器
+# 配置选择 I：宿主的 session/set_config
 [T141]
 milestone = "M1b"
-E2E-full-access-native = "nightly"
 IT-set-config-tier = "pr"
+
+# 配置选择 II：权限按钮与模型选择器
+[T231]
+milestone = "M1b"
+E2E-full-access-native = "nightly"
 
 # 输入框增强 I：@ 文件引用与拖入文件
 [T142]
