@@ -1,9 +1,12 @@
 //! The git service's port (design 5.2.10, 5.3.4): `git/status`, `git/diff`,
-//! `git/file_diff` and `git/branches`, each call in its reply's task. A
+//! `git/file_diff`, `git/branches`, and the writes `git/stage`,
+//! `git/unstage` and `git/revert`, each call in its reply's task. A
 //! session's workspace and turn trees come from the store, a turn's notes
 //! from the session's view, and the diffs made stay in a [`DiffCache`] for
-//! their `diff_token` to name.
+//! their `diff_token` to name. The repo tier's notices go to the session's
+//! stream through its actor, the stream's only writer.
 
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -11,9 +14,10 @@ use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::ids::{DiffToken, SessionId, TurnId};
 use cupper_protocol::limits::V1;
 use cupper_protocol::methods::git::{
-    DiffCaveat, DiffHunk, DiffScope, DiffSnapshot, GitBranches, GitBranchesParams,
+    DiffCaveat, DiffHunk, DiffScope, DiffSnapshot, GitApplyParams, GitBranches, GitBranchesParams,
     GitBranchesResult, GitDiffParams, GitDiffResult, GitFileDiff, GitFileDiffParams,
-    GitFileDiffResult, GitStatus, GitStatusParams, GitStatusResult,
+    GitFileDiffResult, GitRevert, GitStage, GitStatus, GitStatusParams, GitStatusResult, GitTarget,
+    GitUnstage,
 };
 use cupper_protocol::rpc::Method;
 use cupper_protocol::sync::StreamId;
@@ -28,10 +32,12 @@ use super::diff::{self, DiffCache, Diffed, Range, turn_notes};
 use super::head::{self, Head};
 use super::run::RunError;
 use super::snapshot::ShotError;
-use super::{GitError, GitTool, status};
+use super::stamp::Layout;
+use super::{GitCmd, GitError, GitTool, RepoNotice, RepoOp, snapshot, status};
 use crate::clock::{Clock, IdGen};
 use crate::durations::{DIFF_CACHE_TTL, Durations};
 use crate::gateway::{AuditRecord, Call, Port, Reply, Routes};
+use crate::ledger::Outcome;
 use crate::store::streams::{StreamView, Streams};
 use crate::store::{BlobStore, Readers, log};
 
@@ -49,20 +55,49 @@ pub struct GitDeps {
     pub blobs: BlobStore,
     /// For `git.unsafe_repo_config`.
     pub audit: mpsc::UnboundedSender<AuditRecord>,
+    /// Where the repo tier's notices go.
+    pub notes: Arc<dyn SessionNotes>,
 }
 
-/// The git service. Clones share its cache.
+/// The session streams, for notices of the repo tier (design 5.2.10, rules
+/// 2, 5 and 6), which the session's actor writes.
+pub trait SessionNotes: Send + Sync + std::fmt::Debug {
+    fn notice(&self, session: &SessionId, notice: RepoNotice);
+}
+
+/// The git service. Clones share its cache and locks.
 #[derive(Debug, Clone)]
 pub struct GitService {
     deps: GitDeps,
     cache: Arc<Mutex<DiffCache<Diffed>>>,
+    locks: Arc<RepoLock>,
+}
+
+/// One lock per repository, for what changes a user's index or work tree
+/// (design 5.2.10, "并发"); the snapshot tier and reads take none.
+#[derive(Debug, Default)]
+struct RepoLock(Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>);
+
+impl RepoLock {
+    /// The lock of the repository `work_tree` belongs to, by its common dir.
+    async fn hold(&self, work_tree: &Path) -> Result<tokio::sync::OwnedMutexGuard<()>, RpcError> {
+        let tree = work_tree.to_owned();
+        let layout = tokio::task::spawn_blocking(move || Layout::read(&tree.canonicalize()?));
+        let layout = layout.await.map_err(internal)?.map_err(internal)?;
+        let lock = {
+            let mut locks = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            Arc::clone(locks.entry(layout.common_dir).or_default())
+        };
+        Ok(lock.lock_owned().await)
+    }
 }
 
 impl GitService {
     pub fn new(deps: GitDeps) -> Self {
         let cache = DiffCache::new(deps.durations.get(DIFF_CACHE_TTL));
         let cache = Arc::new(Mutex::new(cache));
-        Self { deps, cache }
+        let locks = Arc::default();
+        Self { deps, cache, locks }
     }
 
     pub fn route(self, routes: &mut Routes) {
@@ -74,7 +109,11 @@ impl GitService {
         let (range, notes) = match &params.scope {
             DiffScope::Unstaged => (Range::Unstaged, None),
             DiffScope::Staged => (
-                Range::Staged(self.head(tool, &work_tree).await?.commit),
+                Range::Staged(
+                    self.head(&params.session_id, tool, &work_tree)
+                        .await?
+                        .commit,
+                ),
                 None,
             ),
             DiffScope::LastTurn => self.turn(&params.session_id, None).await?,
@@ -130,7 +169,7 @@ impl GitService {
         let file = file.ok_or_else(|| not_found("file in the diff"))?;
         let mut hunks = Vec::new();
         if !file.filter_unsupported {
-            let patch = diff::patch(tool, &diffed, file, clock, durations).await;
+            let patch = diff::patch(tool, &diffed, Some(&[file]), clock, durations).await;
             hunks = self.inline(diff::units(&patch.map_err(shot)?)).await?;
         }
         Ok(GitFileDiffResult {
@@ -158,7 +197,7 @@ impl GitService {
 
     async fn status(&self, params: GitStatusParams) -> Result<GitStatusResult, RpcError> {
         let (tool, work_tree) = (self.tool()?, self.workspace(&params.session_id).await?);
-        let head = self.head(tool, &work_tree).await?;
+        let head = self.head(&params.session_id, tool, &work_tree).await?;
         let (clock, durations) = (&*self.deps.clock, &self.deps.durations);
         let commit = head.commit.as_deref();
         let found = status::files(tool, &work_tree, commit, clock, durations).await;
@@ -183,16 +222,179 @@ impl GitService {
         let tier = tool.repo_tier(Path::new(&path));
         let (clock, durations) = (&*self.deps.clock, &self.deps.durations);
         let listed = status::branches(&tier, clock, durations, &writable).await;
-        listed.map_err(|err| self.reported("for_each_ref", err))
+        listed.map_err(|err| self.reported(None, "for_each_ref", err))
     }
 
-    /// HEAD of `work_tree`, through the repo tier.
-    async fn head(&self, tool: &GitTool, work_tree: &Path) -> Result<Head, RpcError> {
+    /// `git/stage`, `git/unstage` or `git/revert` (`op`): the units a cached
+    /// diff's target names, applied in the repo tier under the repository's
+    /// lock once the command is `pending_external` on disk (design 5.2.5).
+    async fn write(&self, op: RepoOp, call: Call) -> Outcome {
+        let (params, mut ticket) = (parse::<GitApplyParams>(&call.params), call.ticket);
+        let prepared = match params {
+            Ok(params) => self.patch(op, &params).await.map(|made| (params, made)),
+            Err(err) => Err(err),
+        };
+        let (params, (work_tree, patch)) = match prepared {
+            Ok(prepared) => prepared,
+            Err(err) => {
+                if let Some(ticket) = ticket {
+                    ticket.reject(err.clone());
+                }
+                return Err(err);
+            }
+        };
+        let (session, notes) = (&params.session_id, &self.deps.notes);
+        let lock = self.locks.hold(&work_tree).await?;
+        if let Some(ticket) = ticket.as_mut() {
+            ticket.mark_external().await.map_err(internal)?;
+        }
+        let cmd = GitCmd::repo(op).input(patch);
+        let (tier, writable) = (self.tool()?.repo_tier(&work_tree), self.writable().await?);
+        let done = tier.run(&*self.deps.clock, &self.deps.durations, &writable, cmd);
+        let done = done.await;
+        drop(lock);
+        let err = match done {
+            Ok(done) => {
+                if let Some(notice) = done.notice {
+                    notes.notice(session, notice);
+                }
+                let outcome = Ok(json!({}));
+                if let Some(ticket) = ticket {
+                    let committed = ticket.complete(outcome.clone()).commit().await;
+                    committed.map_err(internal)?;
+                }
+                return outcome;
+            }
+            Err(err) => err,
+        };
+        // Killed, or gone wrong after git ran: whether it applied is unknown,
+        // which the ledger tells a retry. Otherwise nothing changed, and a
+        // retry may run it again.
+        let unknown = matches!(err, GitError::Run(_) | GitError::Fingerprint(_));
+        let lock_held =
+            matches!(&err, GitError::Failed { stderr, .. } if stderr.contains("index.lock"));
+        let err = match &err {
+            GitError::Failed { .. } if lock_held => {
+                notes_of(notes, session, &err);
+                error(
+                    ErrorCode::GitError,
+                    Some(ErrorReason::LockHeld),
+                    "index.lock is held",
+                )
+            }
+            GitError::Failed { .. } => {
+                notes_of(notes, session, &err);
+                stale("the patch does not apply")
+            }
+            _ => self.reported(Some(session), "apply", err),
+        };
+        if let Some(ticket) = ticket.filter(|_| !unknown) {
+            ticket.reject(err.clone());
+        }
+        Err(err)
+    }
+
+    /// The work tree and the patch `op` applies for `params`: the target's
+    /// units of the cached diff, which must be of the range `op` goes with.
+    /// Staging checks the user's own attributes too.
+    async fn patch(
+        &self,
+        op: RepoOp,
+        params: &GitApplyParams,
+    ) -> Result<(PathBuf, Vec<u8>), RpcError> {
+        let (tool, work_tree) = (self.tool()?, self.workspace(&params.session_id).await?);
+        let (clock, durations) = (&*self.deps.clock, &self.deps.durations);
+        let diffed = self
+            .cache()
+            .get(&params.diff_token, &work_tree, clock.now_mono());
+        let diffed = diffed.ok_or_else(|| stale("no such diff"))?;
+        // Staging takes the unstaged changes, unstaging the staged ones;
+        // reverting those of the work tree or of a turn.
+        let fits = matches!(
+            (op, &diffed.range),
+            (RepoOp::Stage, Range::Unstaged)
+                | (RepoOp::Unstage, Range::Staged(_))
+                | (RepoOp::Revert, Range::Unstaged | Range::Turn(..))
+        );
+        if !fits {
+            return Err(stale("the diff is of another range"));
+        }
+        let filtered = || {
+            error(
+                ErrorCode::GitError,
+                Some(ErrorReason::FilterUnsupported),
+                "a filter the host does not run",
+            )
+        };
+        let made = |patch: Result<Vec<u8>, ShotError>| patch.map_err(shot);
+        let (patch, files) = match &params.target {
+            GitTarget::All(false) => return Err(RpcError::new(INVALID_PARAMS, "`all` is true")),
+            GitTarget::All(true) => (
+                made(diff::patch(tool, &diffed, None, clock, durations).await)?,
+                None,
+            ),
+            GitTarget::Paths(paths) => {
+                let found = paths
+                    .iter()
+                    .map(|p| diffed.files.iter().find(|f| f.path == *p));
+                let files: Vec<_> = found
+                    .collect::<Option<_>>()
+                    .ok_or_else(|| stale("a path is not in the diff"))?;
+                if files.iter().any(|f| f.filter_unsupported) {
+                    return Err(filtered());
+                }
+                let patch = diff::patch(tool, &diffed, Some(&files), clock, durations).await;
+                (made(patch)?, Some(files))
+            }
+            GitTarget::HunkIds(ids) => {
+                let whole = made(diff::patch(tool, &diffed, None, clock, durations).await)?;
+                let ids: BTreeSet<_> = ids.iter().cloned().collect();
+                let (patch, found) = diff::pick(&whole, &ids);
+                if found < ids.len() {
+                    return Err(stale("a hunk is not in the diff"));
+                }
+                (patch, None)
+            }
+        };
+        // The target's files are all under a filter, or the diff is empty.
+        if patch.is_empty() {
+            return Err(stale("nothing to apply"));
+        }
+        if op == RepoOp::Stage && !diffed.unrun.is_empty() {
+            let all = diffed
+                .files
+                .iter()
+                .filter(|f| !f.filter_unsupported)
+                .collect();
+            let targets = files.unwrap_or(all);
+            let paths = targets
+                .iter()
+                .flat_map(|f| [f.path.0.as_bytes(), b"\0"].concat());
+            let check = GitCmd::repo(RepoOp::CheckAttr).input(paths.collect());
+            let writable = self.writable().await?;
+            let tier = tool.repo_tier(&work_tree);
+            let done = tier.run(clock, durations, &writable, check).await;
+            let done =
+                done.map_err(|err| self.reported(Some(&params.session_id), "check_attr", err))?;
+            if !snapshot::filtered(&done.output.stdout, &diffed.unrun).is_empty() {
+                return Err(filtered());
+            }
+        }
+        Ok((work_tree, patch))
+    }
+
+    /// HEAD of `session`'s `work_tree`, through the repo tier.
+    async fn head(
+        &self,
+        session: &SessionId,
+        tool: &GitTool,
+        work_tree: &Path,
+    ) -> Result<Head, RpcError> {
         let writable = self.writable().await?;
         let (clock, durations) = (&*self.deps.clock, &self.deps.durations);
         let tier = tool.repo_tier(work_tree);
         let head = head::head(&tier, clock, durations, &writable).await;
-        head.map_err(|err| self.reported("head", err))
+        head.map_err(|err| self.reported(Some(session), "head", err))
     }
 
     /// A turn range: its trees from its `turns` row (the latest turn's
@@ -272,7 +474,12 @@ impl GitService {
         self.deps.readers.read(read).await.map_err(internal)
     }
 
-    fn reported(&self, command: &str, err: GitError) -> RpcError {
+    /// The protocol's error for a repo tier call; its notice goes to
+    /// `session`'s stream.
+    fn reported(&self, session: Option<&SessionId>, command: &str, err: GitError) -> RpcError {
+        if let Some(session) = session {
+            notes_of(&self.deps.notes, session, &err);
+        }
         err.reported(command, &self.deps.audit, &*self.deps.clock)
     }
 
@@ -295,6 +502,9 @@ impl Port for GitService {
                 GitStatus::NAME => Ok(json!(service.status(parse(&call.params)?).await?)),
                 GitFileDiff::NAME => Ok(json!(service.file_diff(parse(&call.params)?).await?)),
                 GitBranches::NAME => Ok(json!(service.branches(parse(&call.params)?).await?)),
+                GitStage::NAME => service.write(RepoOp::Stage, call).await,
+                GitUnstage::NAME => service.write(RepoOp::Unstage, call).await,
+                GitRevert::NAME => service.write(RepoOp::Revert, call).await,
                 _ => Ok(json!(service.diff(parse(&call.params)?).await?)),
             }
         }
@@ -330,6 +540,17 @@ fn error(code: ErrorCode, reason: Option<ErrorReason>, message: &str) -> RpcErro
 fn missing() -> RpcError {
     let reason = Some(ErrorReason::SnapshotMissing);
     error(ErrorCode::Unavailable, reason, "the turn has no snapshots")
+}
+
+/// The notice of a repo tier call that failed, in `session`'s stream.
+fn notes_of(notes: &Arc<dyn SessionNotes>, session: &SessionId, err: &GitError) {
+    if let Some(notice) = err.notice() {
+        notes.notice(session, notice);
+    }
+}
+
+fn stale(why: &str) -> RpcError {
+    error(ErrorCode::Conflict, Some(ErrorReason::StaleDiff), why)
 }
 
 fn not_found(what: &str) -> RpcError {

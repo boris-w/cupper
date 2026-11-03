@@ -1,5 +1,6 @@
-//! IT-git-diff-scopes, IT-git-file-diff and IT-git-status: `git/diff` of
-//! every range, `git/file_diff` and `git/status` (design 5.2.10) on
+//! IT-git-diff-scopes, IT-git-file-diff, IT-git-status and IT-git-stage:
+//! `git/diff` of every range, `git/file_diff`, `git/status` and the writes
+//! (design 5.2.10) on
 //! IT-orch-lifecycle's fixture, its
 //! project a git repository and its sessions running the git on PATH. Scopes:
 //! a turn while it runs and once it ended, `unstaged`, `staged` before and
@@ -12,12 +13,14 @@
 
 use std::time::Duration;
 
+use cupper_protocol::domain::PrincipalKind;
 use cupper_protocol::ids::{ProjectId, SessionId};
+use cupper_protocol::rpc::Scope;
 use cupper_protocol::session::StopReason;
 use cupper_sys::{Command, Env};
 use serde_json::{Value, json};
 
-use super::tests::{Fixture, code, done, harness};
+use super::tests::{Fixture, code, data, done, harness, principal};
 use super::trust_tests::git_project;
 use crate::clock::ManualClock;
 use crate::driver::api::PromptTag;
@@ -273,5 +276,104 @@ async fn it_git_status_head_files_operations_and_branches() {
     assert_eq!(
         (merging, files[4].as_str()),
         (merge, "u.txt unmerged unmerged")
+    );
+}
+
+/// Two hunks in `a.txt`, a new file, and a change under the filter.
+const EDITS: &str = "seq 1 20 | sed 's/^2$/two/; s/^18$/eighteen/' > a.txt; printf 'n\\n' > n.txt; \
+    printf 's2\\n' > s.txt";
+/// A configuration source in the workspace, which the repo tier refuses.
+const UNSAFE: &str = "printf '[core]\\n\\tautocrlf = false\\n' > inc.cfg; \
+    git config include.path ../inc.cfg";
+
+#[tokio::test]
+async fn it_git_stage_writes_what_a_token_names() {
+    let (mut f, home) = git_project("stage").await;
+    sh(
+        &f,
+        &home,
+        &format!("{ADDED}; seq 1 20 > a.txt; git add -A; {COMMIT}"),
+    )
+    .await;
+    let session = f.started().await;
+    sh(&f, &home, EDITS).await;
+    let token = async |scope| diff(&f, &session, json!(scope)).await.1["diff_token"].take();
+    let write = |method, token: &Value, target: Value, command: &str| {
+        let params = json!({"command_id": command, "session_id": session, "diff_token": token,
+            "target": target});
+        f.call(harness(), method, params)
+    };
+    let refused = |done: Result<Value, Value>| code(done.unwrap_err());
+
+    // One hunk by its ID; the command again is a replay.
+    let unstaged = token("unstaged").await;
+    let file = json!({"session_id": session, "diff_token": unstaged, "path": "a.txt"});
+    let second = json!({"hunk_ids": [f.ok("git/file_diff", file).await["hunks"][1]["hunk_id"]]});
+    assert_eq!(
+        write("git/stage", &unstaged, second.clone(), "g-1").await,
+        Ok(json!({}))
+    );
+    let again = write("git/stage", &unstaged, second.clone(), "g-1").await;
+    assert_eq!(again, Ok(json!({"replayed": true})));
+    assert_eq!(
+        diff(&f, &session, json!("staged")).await.0,
+        ["update a.txt +1 -1"]
+    );
+    // The hunk is in the index now; a token of another range does not fit.
+    let stale = "conflict stale_diff";
+    assert_eq!(
+        refused(write("git/stage", &unstaged, second, "g-2").await),
+        stale
+    );
+    let all = json!({"all": true});
+    assert_eq!(
+        refused(write("git/unstage", &unstaged, all.clone(), "g-3").await),
+        stale
+    );
+
+    // A whole file by its path, not one under a filter the host does not run.
+    let unstaged = token("unstaged").await;
+    write("git/stage", &unstaged, json!({"paths": ["n.txt"]}), "g-4")
+        .await
+        .unwrap();
+    let filtered = write("git/stage", &unstaged, json!({"paths": ["s.txt"]}), "g-5").await;
+    assert_eq!(refused(filtered), "git_error filter_unsupported");
+    let staged = ["update a.txt +1 -1", "add n.txt +1 -0"];
+    assert_eq!(diff(&f, &session, json!("staged")).await.0, staged);
+
+    // All unstaged again, then all reverted: by the window only with input.
+    write("git/unstage", &token("staged").await, all.clone(), "g-6")
+        .await
+        .unwrap();
+    let unstaged = token("unstaged").await;
+    let window = principal(
+        "pr_desktop",
+        PrincipalKind::DesktopUi,
+        &[Scope::Read, Scope::Write],
+    );
+    let revert = json!({"command_id": "g-7", "session_id": session, "diff_token": unstaged,
+        "target": all});
+    let unseen = f.call(window, "git/revert", revert).await;
+    assert_eq!(refused(unseen), "forbidden user_activation_required");
+    write("git/revert", &unstaged, all.clone(), "g-8")
+        .await
+        .unwrap();
+    let (left, _) = diff(&f, &session, json!("unstaged")).await;
+    assert_eq!(left, ["update s.txt +1 -1 filter"]);
+
+    // Refused by the repo tier: the error, and a notice in the session's stream.
+    sh(&f, &home, UNSAFE).await;
+    let items = async |n| data(&f.events(&session, "item.started", n).await, "item.started");
+    let before = items(0).await.len();
+    let unstaged = token("unstaged").await;
+    let unsafe_config = write("git/stage", &unstaged, all, "g-9").await;
+    assert_eq!(refused(unsafe_config), "git_error unsafe_repo_config");
+    let notice = items(before + 1).await.pop().unwrap();
+    assert_eq!(
+        (&notice["code"], notice["params"]["paths"][0].as_str()),
+        (
+            &json!("unsafe_repo_config"),
+            f.project().join("inc.cfg").to_str()
+        )
     );
 }

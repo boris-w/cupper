@@ -54,6 +54,8 @@ pub enum RepoOp {
     /// `branch --show-current`: the branch HEAD names, also before its
     /// first commit; nothing on a detached HEAD.
     BranchCurrent,
+    /// `check-attr -z --stdin filter` of the paths given as input; runs nothing.
+    CheckAttr,
     /// `apply --cached` of the patch given as input.
     Stage,
     /// `apply --cached -R`.
@@ -129,6 +131,7 @@ impl RepoOp {
             Self::CheckRefFormat => (&["check-ref-format"], true),
             Self::BranchList => (&["branch", "--list"], true),
             Self::BranchCurrent => (&["branch", "--show-current"], true),
+            Self::CheckAttr => (&["check-attr", "-z", "--stdin", "filter"], true),
             Self::Stage => (&["apply", "--whitespace=nowarn", "--cached"], false),
             Self::Unstage => (&["apply", "--whitespace=nowarn", "--cached", "-R"], false),
             Self::Revert => (&["apply", "--whitespace=nowarn", "-R"], false),

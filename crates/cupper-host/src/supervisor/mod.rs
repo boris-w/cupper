@@ -434,6 +434,7 @@ impl Host {
             durations: durations.clone(),
             blobs: blobs.clone(),
             audit: records.clone(),
+            notes: Arc::new(sessions.clone()),
         })
         .route(&mut routes);
         #[cfg(feature = "test-harness")]

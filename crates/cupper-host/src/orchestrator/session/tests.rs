@@ -299,18 +299,20 @@ impl Fixture {
         let conn = open_reader(&dir.host_db()).unwrap();
         let ledger = Ledger::load(&conn, writer.clone(), shared, &durations).unwrap();
         let mut routes = Routes::new(ledger);
+        let clock = Arc::clone(&deps.clock);
+        let manager = SessionManager::new(deps);
         GitService::new(GitDeps {
             git,
             readers: readers.clone(),
             streams: streams.clone(),
-            clock: Arc::clone(&deps.clock),
-            ids: Arc::new(IdGen::seeded(Arc::clone(&deps.clock), 2)),
+            clock: Arc::clone(&clock),
+            ids: Arc::new(IdGen::seeded(clock, 2)),
             durations: durations.clone(),
             blobs: blobs.clone(),
             audit: records,
+            notes: Arc::new(manager.clone()),
         })
         .route(&mut routes);
-        let manager = SessionManager::new(deps);
         routes.sessions(Arc::new(manager.clone()));
         routes.streams(streams.clone(), readers);
         routes.blobs(blobs);

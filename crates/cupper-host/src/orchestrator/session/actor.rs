@@ -63,9 +63,9 @@ use crate::driver::api::{
 };
 use crate::durations::{Durations, SESSION_IDLE};
 use crate::gateway::{AuditEvent, AuditRecord, Call, ConfigState, TrustChange};
-use crate::git::GitTool;
 use crate::git::snapshot::{self, ShotError, Taken};
 use crate::git::stamp::Fingerprint;
+use crate::git::{GitTool, RepoNotice};
 use crate::index::{ScanContext, git_of, status_of};
 use crate::ledger::{Outcome, Ticket};
 use crate::orchestrator::interaction::{self, Respond};
@@ -86,6 +86,8 @@ pub(super) enum Mail {
     /// Leave the project's configuration out from now on (design 5.2.6:
     /// "不加载项目配置继续"); the host's own entry until M1b's method.
     IgnoreProjectConfig(oneshot::Sender<Result<(), RpcError>>),
+    /// A notice of the git service (design 5.2.10), which writes no stream.
+    Notice(RepoNotice),
 }
 /// The host's exit, whether forced, and the reply once the session took it.
 pub(super) type Stop = (bool, oneshot::Sender<()>);
@@ -338,6 +340,7 @@ impl SessionActor {
                     actor.ignore_project_config().await;
                     let _ = done.send(Ok(()));
                 }
+                Next::Mail(Some(Mail::Notice(notice))) => actor.notice(notice).await,
                 Next::Mail(None) => return None,
                 Next::Agent(event) => actor.agent(event).await,
                 Next::Attached(result) => actor.attach_done(result).await,
@@ -1044,6 +1047,24 @@ impl SessionActor {
     /// "不加载项目配置继续" (design 5.2.6): from now on the session leaves the
     /// project's configuration out; the idle agent session is closed, so the
     /// next turn resumes it with `settingSources: ["user"]`.
+    /// `notice` in the stream now, its paths as they are.
+    async fn notice(&mut self, notice: RepoNotice) {
+        let paths: Vec<WirePath> = (notice.paths.iter())
+            .map(|path| WirePath(path.display().to_string()))
+            .collect();
+        let params = NoticeParams {
+            paths: (!paths.is_empty()).then_some(paths),
+            ..NoticeParams::default()
+        };
+        let (ids, now) = (self.parts.core.ids(), self.parts.clock.now());
+        let events = notice_with(ids, now, notice.code, params).into();
+        let step = Step {
+            events,
+            ..Step::default()
+        };
+        self.commit(step, None).await;
+    }
+
     async fn ignore_project_config(&mut self) {
         (self.load_wanted, self.ignore_for_good) = (false, true);
         self.parts.project_config = ProjectConfigPolicy::Ignore;
