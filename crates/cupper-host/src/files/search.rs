@@ -25,7 +25,10 @@ const REPLY_BYTES: usize = 48_000;
 /// The file lists of workspaces, each for its time to live; a turn's end
 /// drops its workspace's (design 5.2.11). Clones share them.
 #[derive(Debug, Clone, Default)]
-pub struct FileLists(Arc<Mutex<HashMap<PathBuf, (MonoTime, Arc<[String]>)>>>);
+pub struct FileLists(Arc<Mutex<Lists>>);
+
+/// Each workspace's files, and when they were listed.
+type Lists = HashMap<PathBuf, (MonoTime, Arc<[String]>)>;
 
 impl FileLists {
     /// A turn in `workspace` ended: its files may have changed.
@@ -56,7 +59,7 @@ impl FileLists {
         files
     }
 
-    fn lock(&self) -> MutexGuard<'_, HashMap<PathBuf, (MonoTime, Arc<[String]>)>> {
+    fn lock(&self) -> MutexGuard<'_, Lists> {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
