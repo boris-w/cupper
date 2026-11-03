@@ -1,15 +1,20 @@
 # The nightly jobs that exist (design 5.1.6, plan 1.8), on main: the
 # differential test of the views, the peer checks on macOS 15 and 26 (Q24,
-# R7), the e2e suite in full, the compat suite's framework, and the codex
-# app-server methods codex-acp uses against the newest codex (T114). `perf`
-# and e2e's PERF tests only record their numbers in the summary, judged
-# against no budget: a runner is no reference machine (M1a sync D1).
+# R7), the e2e suite in full, Cupper Local built and checked (T160), the
+# compat suite's framework, and the codex app-server methods codex-acp uses
+# against the newest codex (T114). `perf` and e2e's PERF tests only record
+# their numbers in the summary, judged against no budget: a runner is no
+# reference machine (M1a sync D1). Started by hand, it can run one job only.
 name: nightly
 
 on:
   schedule:
     - cron: "0 18 * * *"
   workflow_dispatch:
+    inputs:
+      job:
+        description: The one job to run, such as selfuse; empty runs them all
+        default: ""
 
 permissions:
   contents: read
@@ -25,17 +30,20 @@ jobs:
           - { job: security-peer, runner: macos-15, timeout: 45 }
           - { job: security-peer, runner: macos-26, timeout: 45 }
           - { job: e2e, runner: macos-15, timeout: 120 }
+          - { job: selfuse, runner: macos-15, timeout: 60 }
           - { job: perf, runner: macos-15, timeout: 60 }
           - { job: compat-framework, runner: macos-15, timeout: 60 }
           - { job: codex-drift, runner: ubuntu-24.04, timeout: 30 }
     runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: inputs.job == '' || inputs.job == matrix.job
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: ./.github/actions/xtask
+      - if: inputs.job == '' || inputs.job == matrix.job
+        uses: ./.github/actions/xtask
         with:
           job: ${{ matrix.job }}
           within: nightly
