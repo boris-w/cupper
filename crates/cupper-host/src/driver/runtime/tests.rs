@@ -170,6 +170,14 @@ impl Fixture {
                 _ => {}
             }
         }
+        self.settled().await;
+    }
+
+    /// Waits until the runtime is through with the step that told the
+    /// sessions their adapter exited: its alarm follows the timers it
+    /// cancelled then, which [`tick`](Self::tick) would advance to (T224).
+    async fn settled(&self) {
+        self.runtime.status().await;
     }
 
     fn prompt<'a>(
@@ -813,20 +821,20 @@ async fn it_adapter_restart_backs_off_then_crashed() {
     // `agents/restart`: the adapter stops, which is no failure, and its
     // session attaches again at once.
     f.runtime.restart();
-    // A prompt meanwhile fails as "Session not found", to be sent again (K6).
-    let heard = f.prompt(&mut session, "say lost");
     let exited = |e: &DriverEvent| matches!(e, DriverEvent::AdapterExited { .. });
-    let failed = |e: &DriverEvent| matches!(e, DriverEvent::PromptFailed { .. }) || exited(e);
-    let (_, failed) = until(heard, failed).await;
-    let lost = |e: &AgentError| e.class == AgentErrorClass::SessionNotFound;
-    let lost = matches!(&failed, DriverEvent::PromptFailed { error, .. } if lost(error));
-    assert!(lost, "{failed:?}");
     let (_, exited) = f.tick(8, until(&mut session.1, exited)).await;
     assert!(!reclaimed(&exited), "{exited:?}");
+    // A prompt after the instance ended goes nowhere: its turn ends with
+    // the `AdapterExited` its session heard first (T218). (The next
+    // instance's first session has the same ID, `fake-0-1`.)
+    f.prompt(&mut session, "say lost");
+    f.settled().await;
     let start = f.clock.now_mono();
-    session = f.attach().await.unwrap();
+    let old = mem::replace(&mut session, f.attach().await.unwrap());
     assert_eq!(since(&f, start), Duration::ZERO);
     assert_eq!(f.say(&mut session, "say up").await, "up");
+    let (_, mut old) = old;
+    assert!(old.try_recv().is_err());
     f.stop().await;
 
     // Five failed starts within 5 minutes: `crashed`, until cleared.
@@ -846,6 +854,29 @@ async fn it_adapter_restart_backs_off_then_crashed() {
         f.attach().await.unwrap_err().class,
         AgentErrorClass::RuntimeFailed
     );
+}
+
+/// IT-adapter-restart: a prompt that comes while `agents/restart` stops the
+/// adapter fails as "Session not found", so that its session resumes on the
+/// next instance and sends it again (K6). The adapter lingers after its
+/// stdin closed: the stop waits for the clock, which only the test moves.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_adapter_restart_a_prompt_during_the_stop_is_sent_again() {
+    let f = Fixture::new("restart-prompt", &["--fault", "linger"], None, None);
+    let mut session = f.attach().await.unwrap();
+    f.runtime.restart();
+    let exited = |e: &DriverEvent| matches!(e, DriverEvent::AdapterExited { .. });
+    let failed = |e: &DriverEvent| matches!(e, DriverEvent::PromptFailed { .. }) || exited(e);
+    let (_, failed) = until(f.prompt(&mut session, "say lost"), failed).await;
+    let lost = |e: &AgentError| e.class == AgentErrorClass::SessionNotFound;
+    let lost = matches!(&failed, DriverEvent::PromptFailed { error, .. } if lost(error));
+    assert!(lost, "{failed:?}");
+    let (_, exited) = f.tick(8, until(&mut session.1, exited)).await;
+    assert!(!reclaimed(&exited), "{exited:?}");
+    let resume = AttachTarget::Resume(session.0.clone());
+    let mut session = f.open(resume, ProjectConfigPolicy::Load).await.unwrap();
+    assert_eq!(f.say(&mut session, "say lost").await, "lost");
+    f.stop().await;
 }
 
 /// A start waits for the runtime installer (design 5.2.12): a stop ends the
