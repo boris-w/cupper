@@ -1,8 +1,11 @@
-//! IT-git-diff-scopes: `git/diff` of every range (design 5.2.10) on
-//! IT-orch-lifecycle's fixture, its project a git repository and its
-//! sessions running the git on PATH: a turn while it runs and once it
-//! ended, `unstaged`, `staged` before and after the first commit, and the
-//! errors of a turn without its snapshots and of an unmerged index.
+//! IT-git-diff-scopes and IT-git-file-diff: `git/diff` of every range and
+//! `git/file_diff` (design 5.2.10) on IT-orch-lifecycle's fixture, its
+//! project a git repository and its sessions running the git on PATH. Scopes:
+//! a turn while it runs and once it ended, `unstaged`, `staged` before and
+//! after the first commit, and the errors of a turn without its snapshots
+//! and of an unmerged index. File diffs: the whole path from a diff's token
+//! to a file's units, made again from the cached trees; the kinds of units
+//! themselves are `git::diff::hunks`' unit tests.
 
 use std::time::Duration;
 
@@ -135,4 +138,78 @@ async fn it_git_diff_scopes_turns_the_work_tree_the_index_and_head() {
         let unmerged = refused(&f, &session, json!(scope)).await;
         assert_eq!(unmerged, "unavailable index_unmerged", "{scope}");
     }
+}
+
+/// A mode change with two hunks, a rename, a long new file and a filtered one.
+const EDITED: &str = "seq 1 20 | sed 's/^2$/two/; s/^18$/eighteen/' > a.txt; chmod +x a.txt; \
+    mv m.txt n.txt; seq 1 3000 > long.txt; printf 's2\\n' > s.txt";
+
+#[tokio::test]
+async fn it_git_file_diff_units_of_a_diff_by_its_token() {
+    let (mut f, home) = git_project("file-diff").await;
+    sh(
+        &f,
+        &home,
+        &format!("{ADDED}; seq 1 20 > a.txt; git add -A; {COMMIT}"),
+    )
+    .await;
+    let session = f.started().await;
+    sh(&f, &home, EDITED).await;
+    let token = diff(&f, &session, json!("unstaged")).await.1["diff_token"].take();
+    let file_diff = |token: &Value, path: &str| {
+        let params = json!({"session_id": session, "diff_token": token, "path": path});
+        f.call(harness(), "git/file_diff", params)
+    };
+    let units = |result: &Value| {
+        let hunks = result["hunks"].as_array().unwrap().iter();
+        let unit = |h: &Value| {
+            format!(
+                "{} {}",
+                h["unit"].as_str().unwrap(),
+                h["header"].as_str().unwrap()
+            )
+        };
+        hunks.map(unit).collect::<Vec<_>>()
+    };
+    let a = file_diff(&token, "a.txt").await.unwrap();
+    let mode = "mode old mode 100644\nnew mode 100755";
+    assert_eq!(
+        units(&a),
+        [mode, "hunk @@ -1,5 +1,5 @@", "hunk @@ -15,6 +15,6 @@"]
+    );
+    assert_eq!(
+        a["hunks"][1]["lines"],
+        json!([" 1", "-2", "+two", " 3", " 4", " 5"])
+    );
+    assert_eq!(
+        file_diff(&token, "a.txt").await.unwrap(),
+        a,
+        "the same from the same trees"
+    );
+    // A rename: its source's deletion and its addition, whole files.
+    let renamed = units(&file_diff(&token, "n.txt").await.unwrap());
+    let gone = "whole_file deleted file mode 100644\n@@ -1,20 +0,0 @@";
+    assert_eq!(
+        renamed,
+        [gone, "whole_file new file mode 100644\n@@ -0,0 +1,20 @@"]
+    );
+    // Lines past the inline limit come as a blob.
+    let long = &file_diff(&token, "long.txt").await.unwrap()["hunks"][0];
+    assert!(long.get("lines").is_none());
+    let blob = String::from_utf8(f.blob(&long["lines_blob"]["hash"]).await).unwrap();
+    assert_eq!((blob.lines().count(), &blob[..6]), (3000, "+1\n+2\n"));
+    // A file under a filter the host does not run has nothing to act on.
+    assert_eq!(
+        file_diff(&token, "s.txt").await.unwrap()["hunks"],
+        json!([])
+    );
+
+    let refused = async |token: &Value, path| code(file_diff(token, path).await.unwrap_err());
+    assert_eq!(refused(&token, "b.txt").await, "not_found ");
+    assert_eq!(
+        refused(&json!("dt_0"), "a.txt").await,
+        "conflict stale_diff"
+    );
+    f.clock.advance(Duration::from_secs(600));
+    assert_eq!(refused(&token, "a.txt").await, "conflict stale_diff");
 }

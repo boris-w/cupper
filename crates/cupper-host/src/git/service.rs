@@ -1,32 +1,36 @@
-//! The git service's port (design 5.2.10, 5.3.4): `git/diff`, each call in
-//! its reply's task. A session's workspace and turn trees come from the
-//! store, a turn's notes from the session's view.
+//! The git service's port (design 5.2.10, 5.3.4): `git/diff` and
+//! `git/file_diff`, each call in its reply's task. A session's workspace and
+//! turn trees come from the store, a turn's notes from the session's view,
+//! and the diffs made stay in a [`DiffCache`] for their `diff_token` to name.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::ids::{DiffToken, SessionId, TurnId};
+use cupper_protocol::limits::V1;
 use cupper_protocol::methods::git::{
-    DiffCaveat, DiffScope, DiffSnapshot, GitDiffParams, GitDiffResult,
+    DiffCaveat, DiffHunk, DiffScope, DiffSnapshot, GitDiffParams, GitDiffResult, GitFileDiff,
+    GitFileDiffParams, GitFileDiffResult,
 };
+use cupper_protocol::rpc::Method;
 use cupper_protocol::sync::StreamId;
 use cupper_protocol::view::{SessionView, View};
 use futures::FutureExt;
 use rusqlite::OptionalExtension;
-use serde::Deserialize;
-use serde_json::json;
+use serde::de::DeserializeOwned;
+use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
-use super::diff::{self, Range, turn_notes};
+use super::diff::{self, DiffCache, Diffed, Range, turn_notes};
 use super::run::RunError;
 use super::snapshot::ShotError;
 use super::{GitError, GitTool, head};
 use crate::clock::{Clock, IdGen};
-use crate::durations::Durations;
+use crate::durations::{DIFF_CACHE_TTL, Durations};
 use crate::gateway::{AuditRecord, Call, Port, Reply, Routes};
 use crate::store::streams::{StreamView, Streams};
-use crate::store::{Readers, log};
+use crate::store::{BlobStore, Readers, log};
 
 /// What the git service needs of the host.
 #[derive(Debug, Clone)]
@@ -38,19 +42,24 @@ pub struct GitDeps {
     pub clock: Arc<dyn Clock>,
     pub ids: Arc<IdGen>,
     pub durations: Durations,
+    /// Where hunks too long to send inline go.
+    pub blobs: BlobStore,
     /// For `git.unsafe_repo_config`.
     pub audit: mpsc::UnboundedSender<AuditRecord>,
 }
 
-/// The git service.
+/// The git service. Clones share its cache.
 #[derive(Debug, Clone)]
 pub struct GitService {
     deps: GitDeps,
+    cache: Arc<Mutex<DiffCache<Diffed>>>,
 }
 
 impl GitService {
     pub fn new(deps: GitDeps) -> Self {
-        Self { deps }
+        let cache = DiffCache::new(deps.durations.get(DIFF_CACHE_TTL));
+        let cache = Arc::new(Mutex::new(cache));
+        Self { deps, cache }
     }
 
     pub fn route(self, routes: &mut Routes) {
@@ -82,14 +91,63 @@ impl GitService {
         });
         let token = format!("dt_{:032x}", self.deps.ids.new_id().as_u128());
         let diff_token: DiffToken = token.parse().expect("dt_ and hex digits");
-        let stat = diff::stat(&diffed.files);
+        let (files, stat) = (diffed.files.clone(), diff::stat(&diffed.files));
+        let now = clock.now_mono();
+        self.cache()
+            .insert(diff_token.clone(), &work_tree, diffed, now);
         Ok(GitDiffResult {
             diff_token,
-            files: diffed.files,
+            files,
             snapshot,
             stat,
             caveats,
         })
+    }
+
+    /// The units of one file of a diff in the cache; none for a file under
+    /// a filter the host does not run.
+    async fn file_diff(&self, params: GitFileDiffParams) -> Result<GitFileDiffResult, RpcError> {
+        let (tool, work_tree) = (self.tool()?, self.workspace(&params.session_id).await?);
+        let (clock, durations) = (&*self.deps.clock, &self.deps.durations);
+        let diffed = self
+            .cache()
+            .get(&params.diff_token, &work_tree, clock.now_mono());
+        let stale = || {
+            error(
+                ErrorCode::Conflict,
+                Some(ErrorReason::StaleDiff),
+                "no such diff",
+            )
+        };
+        let diffed = diffed.ok_or_else(stale)?;
+        let file = diffed.files.iter().find(|f| f.path == params.path);
+        let file = file.ok_or_else(|| not_found("file in the diff"))?;
+        let mut hunks = Vec::new();
+        if !file.filter_unsupported {
+            let patch = diff::patch(tool, &diffed, file, clock, durations).await;
+            hunks = self.inline(diff::units(&patch.map_err(shot)?)).await?;
+        }
+        Ok(GitFileDiffResult {
+            path: params.path,
+            hunks,
+        })
+    }
+
+    /// `hunks` with the lines past the inline limit in blobs, and those of
+    /// every later hunk once the result would outgrow a frame (design 5.3.1).
+    async fn inline(&self, mut hunks: Vec<DiffHunk>) -> Result<Vec<DiffHunk>, RpcError> {
+        // Room for the envelope and the path.
+        let mut room = V1.max_frame_bytes as usize - 8_000;
+        for hunk in &mut hunks {
+            if size(&hunk.lines) > V1.max_inline_bytes as usize || size(hunk) > room {
+                let lines = hunk.lines.take().unwrap_or_default();
+                let text: String = lines.iter().map(|line| format!("{line}\n")).collect();
+                let put = self.deps.blobs.put(text.into(), "text/x-diff".into(), None);
+                hunk.lines_blob = Some(put.await.map_err(internal)?);
+            }
+            room = room.saturating_sub(size(hunk));
+        }
+        Ok(hunks)
     }
 
     /// The commit HEAD of `work_tree` is at, through the repo tier.
@@ -181,6 +239,10 @@ impl GitService {
     fn reported(&self, command: &str, err: GitError) -> RpcError {
         err.reported(command, &self.deps.audit, &*self.deps.clock)
     }
+
+    fn cache(&self) -> MutexGuard<'_, DiffCache<Diffed>> {
+        self.cache.lock().unwrap_or_else(PoisonError::into_inner)
+    }
 }
 
 /// A `turns` row: ID, number, status, start and end trees.
@@ -193,12 +255,22 @@ impl Port for GitService {
     fn deliver(&self, call: Call) -> Reply {
         let service = self.clone();
         async move {
-            let params = GitDiffParams::deserialize(&call.params);
-            let params = params.map_err(|err| RpcError::new(INVALID_PARAMS, err.to_string()))?;
-            Ok(json!(service.diff(params).await?))
+            match call.method {
+                GitFileDiff::NAME => Ok(json!(service.file_diff(parse(&call.params)?).await?)),
+                _ => Ok(json!(service.diff(parse(&call.params)?).await?)),
+            }
         }
         .boxed()
     }
+}
+
+fn parse<T: DeserializeOwned>(params: &Value) -> Result<T, RpcError> {
+    T::deserialize(params).map_err(|err| RpcError::new(INVALID_PARAMS, err.to_string()))
+}
+
+/// The size of `value` in the wire's JSON.
+fn size(value: &impl serde::Serialize) -> usize {
+    serde_json::to_string(value).map_or(0, |json| json.len())
 }
 
 /// A snapshot tier failure as the protocol has it.

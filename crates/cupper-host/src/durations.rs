@@ -174,6 +174,8 @@ durations! {
     GIT_WORKTREE_ADD = "git_worktree_add", Duration::from_secs(600);
     /// `git push` in the user tier (design 5.2.10).
     GIT_PUSH = "git_push", Duration::from_secs(300);
+    /// How long a `diff_token` names its diff (design 5.2.10).
+    DIFF_CACHE_TTL = "diff_cache_ttl", Duration::from_secs(600);
     /// The registry's own tests: a short coalescing window.
     #[cfg(test)]
     TEST_TICK = "test_tick", Duration::from_millis(40);

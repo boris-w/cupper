@@ -96,6 +96,8 @@ pub enum SnapshotOp {
     /// Two trees' changed files, renames found: raw records, then as many
     /// numstat records (design 5.2.10).
     DiffList,
+    /// The patch between two trees, renames as deletions and additions.
+    DiffPatch,
 }
 
 /// A command's fixed words, with `-z` where the command has it.
@@ -206,6 +208,20 @@ impl SnapshotOp {
                     "--numstat",
                     "--no-ext-diff",
                     "--no-textconv",
+                ],
+                true,
+            ),
+            Self::DiffPatch => (
+                &[
+                    "diff-tree",
+                    "-p",
+                    "--no-renames",
+                    "--no-color",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--full-index",
+                    "--binary",
+                    "-U3",
                 ],
                 true,
             ),

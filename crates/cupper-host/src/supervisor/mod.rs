@@ -426,6 +426,7 @@ impl Host {
             clock: clock.clone(),
             ids: ids.clone(),
             durations: durations.clone(),
+            blobs: blobs.clone(),
             audit: records.clone(),
         })
         .route(&mut routes);
