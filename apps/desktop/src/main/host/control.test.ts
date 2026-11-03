@@ -10,13 +10,16 @@ import type { ConnectOptions } from "./connection";
 import { ControlConnection } from "./control";
 import type { HostLauncher } from "./launcher";
 
-function control() {
-  const state = { closed: false, sockets: [] as EventEmitter[] };
+function control(opened: Promise<unknown> = Promise.resolve()) {
+  const state = { closed: false, sockets: [] as EventEmitter[], conns: 0 };
   const port = { send: () => undefined, onData: () => () => undefined, close: () => undefined };
-  const open = () => {
+  const conn = { close: () => void (state.conns -= 1) };
+  const open = async () => {
+    await opened;
     const socket = new EventEmitter();
     state.sockets.push(socket);
-    return Promise.resolve({ port, handshake: {}, rest: new Uint8Array(), socket });
+    state.conns += 1;
+    return { port, handshake: {}, rest: new Uint8Array(), socket, conn };
   };
   const launcher = { open, close: () => void (state.closed = true) } as unknown as HostLauncher;
   const log = { warn: () => undefined } as unknown as MainLog;
@@ -34,6 +37,17 @@ describe("UNIT-launcher", () => {
     expect(conn.client.state).toEqual({ status: "closed" });
     // `host/exit` is not sent again, nor waited for.
     await expect(exit).rejects.toThrow();
+  });
+
+  test("a connection that comes after quitting is decided is closed, not taken (T225)", async () => {
+    const { promise, resolve } = Promise.withResolvers<undefined>();
+    const { conn, state } = control(promise);
+    const connecting = conn.connect();
+    conn.end();
+    resolve(undefined);
+    await connecting;
+    expect(state).toMatchObject({ sockets: { length: 1 }, conns: 0 });
+    expect(conn.client.state.status).toBe("connecting");
   });
 
   test("connecting while a connection is up or being made opens no other", async () => {

@@ -115,6 +115,14 @@ describe("UNIT-launcher", () => {
     expect(new Set(state.dials)).toEqual(new Set([one?.key]));
   });
 
+  test("quitting while it dials starts no host (T225)", async () => {
+    const { state, launcher } = fakeHost(true);
+    const opened = launcher.open(OPTIONS);
+    launcher.close();
+    expect(await failure(opened)).toBe("closed");
+    expect(state.spawns).toEqual([]);
+  });
+
   test("a release build starts the host without a payload", async () => {
     const { state, launcher } = fakeHost(false);
     state.listening = true;
