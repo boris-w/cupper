@@ -91,3 +91,16 @@ IT-selfuse-build 和 E2E-selfuse-coexist 通过；E2E-selfuse-replace 只在 sof
   - window 连接 38.052 关闭（窗口关了）；**control 连接一直开到 06:14:08**，第二次 SIGTERM 杀掉进程时才关。也就是说 `will-quit` 里的 `control.close()` 没有关掉它：重连在退出开始之后才完成。
 - **第一次运行（41581457853）也一样**：SIGTERM 落在重连期间，那次重连以 `host_unreachable` 失败，旧 App 照样没退出。
 - **代码上能看到的一个缺口**（没有改）：`ControlConnection.end()` 不会取消正在进行的 `#connect()`；`launcher.open()` 返回后，`#connect()` 不看 `#ended` 就 `attach`，而 `HostClient.attach()` 对已经 `close()` 的客户端也照样回到 ready。具体卡在退出流程的哪一步，没有证实。
+
+### 第三次运行（nightly 41589556442，6c76959）与随后的用例修正
+
+- **E2E-selfuse-coexist 没有就绪**：replace 留下的旧 App 没退出，一直占着 `cupper-local/ui` 的单实例锁。coexist 启动的 App 在 main.log 里记下 `another instance is running; quitting` 后就退出了。
+- **E2E-selfuse-replace 本身的失败**：
+  - 用例一就绪就换包。这时旧宿主首次运行的安装器正在从包里复制 esbuild-wasm，发现包变了（`runtime install: Err(BundleChanged)`），宿主自己进入待升级并退出。
+  - 新 CLI 来连时宿主已经不在，退出码是 3 而不是 4。这个失败被 finally 里的退出超时盖住了。
+  - 旧 App 的 control 连接在 SIGTERM 之前约 0.4 s 就已经停在 `failed: spawn_failed`，但它照样没退出。窗口已经关了，主进程的 JS 还在运行（收到 `second-instance` 后又建了一个窗口）。所以退出卡住并不限于"重连途中"。编排者据此扩大了 T225 的范围（main 489fede）。
+- **用例的修正**（编排者裁定，停止线放宽到 850）：
+  - 换包前，先等运行时的三个组件都有 `.installed.json`。这个信号与运行顺序无关：已经装过的组件不会再写安装日志，但标记文件一直在。
+  - 退出超时后用第二次 SIGTERM 结束 App，退出检查本身仍判失败。
+  - finally 里的退出失败用 `expect.soft` 报告，不盖住用例原来的失败。
+- 编排者已定：E2E-selfuse-replace 在 T225 修好之前必然失败；T160 等 T225 合并后再跑一次 selfuse，三个用例都通过才合并。
