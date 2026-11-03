@@ -148,8 +148,15 @@ async function run(cupper: Cupper, { streams = 4, rate = 100, covered = false } 
   await cupper.connected();
   const host = await harness(cupper);
   const flood = `flood_rate ${rate} ${SECONDS + 30} 500`;
-  const sessions: string[] = [];
-  for (let n = 1; n <= streams; n++) sessions.push(await session(cupper, `say g${n}`));
+  // One after another, each first turn over: the sidebar shows a project's
+  // five last active sessions, so the last four made are among them (T220),
+  // and what follows in a stream is its flood.
+  const [sessions, said]: [string[], number[]] = [[], []];
+  for (let n = 1; n <= streams; n++) {
+    const made = await session(cupper, `say g${n}`);
+    said.push((await untilEvent(cupper, made, (e) => e.type === "turn.completed")).seq);
+    sessions.push(made);
+  }
   // About 5,000 events in one session, to replay (`test/seed`, design 5.9.9).
   const seed = (sessions: number, turns: number, items: number) =>
     host.call("test/seed", { profile: { sessions, turns, items_per_turn: items, mix: "sp1" } });
@@ -159,11 +166,6 @@ async function run(cupper: Cupper, { streams = 4, rate = 100, covered = false } 
   const seeded = ids.find((one) => !sessions.map(id).includes(one));
   expect(seeded).toBeDefined();
   const blob = await putBlob(host.peer, host.call, randomBytes(5 * 1024 * 1024));
-  // Each first turn over, so that what follows in a stream is the flood.
-  const said: number[] = [];
-  for (const s of sessions) {
-    said.push((await untilEvent(cupper, s, (e) => e.type === "turn.completed")).seq);
-  }
   // The UI holds the session on screen and the three seen before (design
   // 5.7.6), opened before the flood: under it a runner's renderer falls so
   // far behind that a click waits out its timeout for animation frames (T220).
