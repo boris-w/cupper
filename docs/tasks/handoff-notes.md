@@ -509,3 +509,6 @@
 | T125 | `git::status::in_progress(git_dir)` 可以直接用于 ADR-10 的第 3 条规则（有进行中的合并、rebase 等时不删 worktree） | T222 |
 | 界面要频繁查 `git/status` 的任务（审查面板等） | 一次 status 要两次仓库档调用，每次前后各遍历一遍工作区（指纹），加上快照档的 refresh；带大 `node_modules` 的仓库会慢到秒级，频繁轮询之前要缓存（T120 汇报第 5 条同一件事） | T222 |
 | 以后在本机跑 IT-cli-commands 的任务 | 它用 target 里 e2e 构建的 `cupper` 二进制；只跑 `cargo test -p cupper-host` 不会重编 CLI，新命令会找不到，先 `cargo build -p cupper-cli --features test-harness` 或用 `--workspace` | T222 |
+| 以后改适配器生命周期的任务 | 实例结束时 `end()` 取 stderr 的 `Tail::text()`，不等读取任务读到 EOF（`AdapterLog::read` 的 JoinHandle 被丢掉），进程写完就退出时可能漏掉最后几行；可以限时等读到 EOF（防孙进程一直占着 stderr）。attach 途中适配器退出时，`raw` 里没有 stderr 尾部 | T226 |
+| T112 | K17 识别出的文字错误交给回合机，作为这个回合的 `Failure`，由 `end()` 统一写，保持每个回合一条；可复用 `failure::guidance()` 和 `orchestrator::instant()` | T226 |
+| 以后改消息流界面的任务 | 错误条目的警告框整段显示 `raw`，适配器退出时是最多约 2,000 个字符的 stderr 尾部，可以考虑折叠 | T226 |

@@ -62,7 +62,7 @@ flowchart LR
 | `UpstreamRetry {attempt, max}` | Codex 的 `_meta.codex.error` 且 `willRetry` 为真 |
 | `AdapterExited {instance_id, status, reclaimed}` | 广播给该 agent 的所有会话；`reclaimed` 表示是回收停掉的，会话只重新 attach，没有回合被打断时不写 `agent_restarted`（T111） |
 
-`AgentError` 统一三类错误（ADR-06）：JSON-RPC 错误（保留 `agent_code` 和截断、脱敏后的 `message`）、以文本出现的错误、会自动重试的上游错误；并给出 cupper 的分类：`not_logged_in`、`cli_too_old`、`session_not_found`、`process_exited`、`restartable`、`model_unsupported`、`quota_exhausted`、`project_untrusted`（Codex 在未信任的项目里，T111）、`other`。分类器按 agent 分开（`claude::agent_error`、`codex::agent_error`），T218 的判断在分类之后，对两种 agent 相同。
+`AgentError` 统一三类错误（ADR-06）：JSON-RPC 错误（保留 `agent_code` 和截断后的 `message`；分类器只截断，会话 actor 在写进会话流之前用 `Redactor` 做完整脱敏，T226）、以文本出现的错误、会自动重试的上游错误；并给出 cupper 的分类：`not_logged_in`、`cli_too_old`、`session_not_found`、`process_exited`、`restartable`、`model_unsupported`、`quota_exhausted`、`project_untrusted`（Codex 在未信任的项目里，T111）、`other`。分类器按 agent 分开（`claude::agent_error`、`codex::agent_error`），T218 的判断在分类之后，对两种 agent 相同。
 
 **`AgentRuntime` → `IndexActor`**：`AgentStatus {cli, adapter, runtime, auth, rss, state}`，用于设置页的 agent 状态和新建会话页的提示（AG-2、AG-5）。
 
