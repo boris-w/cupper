@@ -10,6 +10,8 @@ mod diff_tests;
 #[cfg(test)]
 mod error_tests;
 #[cfg(test)]
+mod files_tests;
+#[cfg(test)]
 mod gating_tests;
 #[cfg(test)]
 mod idle_tests;

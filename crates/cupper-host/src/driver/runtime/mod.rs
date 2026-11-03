@@ -84,7 +84,9 @@ use futures::future::{BoxFuture, Either, select};
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot, watch};
 
-use cupper_protocol::capabilities::{CliCompat, SessionCapabilities, SlashCommand};
+use cupper_protocol::capabilities::{
+    CliCompat, PromptCapabilities, SessionCapabilities, SlashCommand,
+};
 use sha2::{Digest, Sha256};
 
 use cupper_protocol::index::{AgentState, AgentStatus, AuthState, AuthStatus};
@@ -1087,7 +1089,14 @@ impl Actor {
                 let Some(route) = self.sessions.get(&id) else {
                     return;
                 };
-                let blocks = content::blocks(&content, &route.cwd, &self.deps.blobs).await;
+                // An attach cached the agent's capabilities: no images before.
+                let prompt = self.cached.as_ref().map(|caps| caps.prompt.clone());
+                let prompt = prompt.unwrap_or(PromptCapabilities {
+                    image: false,
+                    file_ref: true,
+                    max_image_bytes: 0,
+                });
+                let blocks = content::blocks(&content, &route.cwd, &prompt, &self.deps.blobs).await;
                 let blocks = match blocks {
                     Ok(blocks) => blocks,
                     Err(message) => {

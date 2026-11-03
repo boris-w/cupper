@@ -32,10 +32,32 @@ use crate::gateway::{Call, Port, Reply};
 use crate::ledger::Ticket;
 use crate::store::{Durability, WriteError, Writer};
 
+/// The terminals `apps.terminal` names one of, as `open -a` knows them.
+pub const TERMINALS: &[&str] = &[
+    "Terminal",
+    "iTerm",
+    "Ghostty",
+    "Warp",
+    "WezTerm",
+    "kitty",
+    "Alacritty",
+];
+/// The editors of `apps.editor`.
+pub const EDITORS: &[&str] = &[
+    "TextEdit",
+    "Visual Studio Code",
+    "Cursor",
+    "Zed",
+    "Sublime Text",
+    "Xcode",
+    "Nova",
+    "BBEdit",
+];
+
 /// The settings nobody changed: CLIs discovered, no more variables for the
 /// adapters, worktrees under [`worktrees_root`], every notification on,
 /// Claude for new sessions, the idle exit after 10 minutes, no detailed
-/// logs. The apps are macOS's own until the built-in list exists (T013).
+/// logs. The apps are macOS's own.
 pub fn defaults(home: &Path, data_dir: &Path) -> Settings {
     Settings {
         claude_cli_path: CliPath(None),
@@ -125,11 +147,10 @@ pub fn apply(
     if next.idle_exit_minutes == 0 {
         return Err("host.idle_exit_minutes must be at least 1".into());
     }
-    if [&next.terminal_app, &next.editor_app]
-        .iter()
-        .any(|app| app.is_empty())
+    if !TERMINALS.contains(&next.terminal_app.as_str())
+        || !EDITORS.contains(&next.editor_app.as_str())
     {
-        return Err("an app must be named".into());
+        return Err("the apps come from the built-in lists".into());
     }
     Ok((next, set))
 }

@@ -28,6 +28,11 @@ cupper-sys = { path = "../cupper-sys" }
 flate2.workspace = true
 futures = { version = "0.3.34", default-features = false, features = ["std"] }
 getrandom = "0.4.3"
+# `files/search` (design 5.2.11): the fuzzy match of `@` references (MIT;
+# T126 ruling, instead of the MPL-2.0 nucleo-matcher), and the walk of a
+# directory outside git, `.gitignore` honoured.
+fuzzy-matcher = "=0.3.7"
+ignore = "=0.4.34"
 # Exact: the bundled SQLite (3.53.2) comes with this release (design 5.1.3).
 # No default features: the store does not use the statement cache (`cache`),
 # and the other default only matters on wasm. `fallible_uint` binds `u64`

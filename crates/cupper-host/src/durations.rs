@@ -176,6 +176,10 @@ durations! {
     GIT_PUSH = "git_push", Duration::from_secs(300);
     /// How long a `diff_token` names its diff (design 5.2.10).
     DIFF_CACHE_TTL = "diff_cache_ttl", Duration::from_secs(600);
+    /// How long `files/search` keeps a workspace's file list (design 5.2.11).
+    FILE_LIST_TTL = "file_list_ttl", Duration::from_secs(5);
+    /// How long `open` may take to hand a workspace to an app (UI-0).
+    APP_OPEN = "app_open", Duration::from_secs(30);
     /// The registry's own tests: a short coalescing window.
     #[cfg(test)]
     TEST_TICK = "test_tick", Duration::from_millis(40);

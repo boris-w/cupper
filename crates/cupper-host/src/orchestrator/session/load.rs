@@ -222,6 +222,7 @@ pub(super) async fn load(
         blobs: deps.blobs.clone(),
         power: deps.power.share(),
         redactor: deps.redactor.clone(),
+        lists: deps.lists.clone(),
     };
     let start = Start {
         first: Input::Restored(Box::new(restored)),

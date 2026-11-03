@@ -57,6 +57,7 @@ use crate::driver::runtime::launch::{self, Agent, Launch};
 use crate::driver::runtime::{AGENT_RUNTIME, AgentRuntime, RuntimeDeps};
 use crate::durations::Durations;
 use crate::exit::HostExit;
+use crate::files::{FileLists, FilesDeps, FilesService};
 use crate::gateway::listen::{HostLock, ListenError};
 use crate::gateway::{AuditEvent, AuditRecord, Gateway, GatewayConfig, HostEvent, Port, Routes};
 use crate::git::{GitDeps, GitService, GitTool};
@@ -390,6 +391,7 @@ impl Host {
             let port: Arc<dyn AgentPort> = Arc::new(runtime.clone());
             (agent.kind(), port)
         });
+        let lists = FileLists::default();
         let sessions = SessionManager::new(SessionDeps {
             streams: streams.clone(),
             readers: readers.clone(),
@@ -405,6 +407,7 @@ impl Host {
             blobs: blobs.clone(),
             power: power.clone(),
             redactor: Redactor::for_this_machine(),
+            lists: lists.clone(),
         });
         sessions.reopen().await;
         let mut parts: Vec<Arc<dyn Part>> = vec![Arc::new(sessions.clone())];
@@ -426,6 +429,16 @@ impl Host {
         // `stream/subscribe`, `stream/unsubscribe` and `history/page`.
         routes.streams(streams.clone(), readers.clone());
         control.route(&mut routes);
+        FilesService::new(FilesDeps {
+            git: git.clone(),
+            readers: readers.clone(),
+            clock: clock.clone(),
+            durations: durations.clone(),
+            settings: settings.clone(),
+            lists,
+            opener: "/usr/bin/open".into(),
+        })
+        .route(&mut routes);
         GitService::new(GitDeps {
             git,
             readers: readers.clone(),

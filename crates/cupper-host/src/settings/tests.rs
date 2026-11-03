@@ -56,6 +56,7 @@ fn unit_settings_rows_over_the_defaults_and_the_checks() {
         json!({"agents.env_passthrough": ["API_KEY", "not-a-name"]}),
         json!({"host.idle_exit_minutes": 0}),
         json!({"apps.editor": ""}),
+        json!({"apps.terminal": "Calculator"}),
     ];
     for value in refused {
         assert!(apply(&read, &patch(value.clone())).is_err(), "{value}");
