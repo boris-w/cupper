@@ -11,7 +11,7 @@ M1b 的关键链从 T120 开始：审查面板要的 diff、按文件的 diff、
 
 ## 范围
 
-> 2026-11-03 拆分（计划 v1.3.86，`report-r1.md` 末尾）：本任务收窄为快照档拆分、`git/diff` 的四种范围、`DiffCache` 和路由；下面第 2 条、第 4 条和第 5 条移到 T221、T222。
+> 2026-11-03 拆分（计划 v1.3.86，`report-r1.md` 末尾）：本任务收窄为快照档拆分、`git/diff` 的四种范围和路由；下面第 2 条、第 3 条（`DiffCache`，评审后移出）、第 4 条和第 5 条移到 T221、T222。
 
 **做**（计划 T120 一行和第 3 节的注）：
 1. `git/diff`：四种范围，`diff_token`、`caveats`、`index_unmerged`、`stat`、`filter_unsupported`，按 5.2.10。

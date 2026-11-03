@@ -89,3 +89,27 @@
 
 - r1 的 5 条范围外发现照旧，你已收进交接事项。
 - 设计 5.2.10 里有两处需要改：`DiffCache` 的写法（存 tree 对，不存补丁），以及仓库档的只读命令清单补上 `branch --show-current`。
+
+## 评审后的补充（b0380c6）
+
+**和你的评审意见不一样的一处，请确认**：我把整个 `DiffCache` 都移给了 T221，没有只拿掉 `get`。
+
+只拿掉 `get` 的话，编译器会报 `Cached` 的 `token`、`diff` 两个字段从来没被读过（dead_code）。缓存里的东西只写不读，`insert` 和过期淘汰也就跟着成了没人用的代码，要留下就只能加 `#[expect(dead_code)]` 把警告压住。所以我按你给的退路"不能测就一起移出"处理：
+
+- 移出：`git/diff/cache.rs`（含 `get` 和它的单元用例）、时长登记 `diff_cache_ttl`、`Diffed.old` 和 `new`、service 里的缓存字段和插入那几行。
+- 都从 `0e1c0f0` 取回，取回清单已补进 `notes.md`。
+- 移出后，`git/diff` 照旧返回 `IdGen` 生成的 `diff_token`，但在 T221 接上缓存之前，这个 token 不指向任何东西。本任务里也没有读 token 的方法。
+
+如果你还是要把 `insert` 留在 T120，我就在 `b0380c6` 上加回 `insert` 和淘汰，加 `#[expect(dead_code)]` 并注明由 T221 移除，你定。
+
+**提交**：`b0380c6 refactor(git): move DiffCache out to T221`，已经请你推送。
+
+**本机检查**：
+- `cargo xtask size` 现在是 **+860 −54**。
+- `cargo clippy -p cupper-host --all-targets --all-features` 和 `cargo clippy --workspace --all-targets` 都没有警告。
+- IT-git-diff-scopes、`unit_git_diff_turn_notes_...`、UNIT-unsupported-set、`cargo xtask ci testdata-scan` 都通过。
+
+**CI**：
+- 我交这份补充时，PR #42 的头还是 `0e1c0f0`，`b0380c6` 还没推。
+- `0e1c0f0` 那次运行 https://github.com/boris-w/cupper/actions/runs/41582793610 我上次看时 8 项都还是 pending；这次再查，`gh` 连不上 GitHub（超时），没能确认结果。
+- 推送 `b0380c6` 会取代那次运行。新运行有失败的话，用 SendMessage 叫我，我在同一个 worktree 里修。

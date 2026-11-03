@@ -441,8 +441,8 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T113 | Codex 兼容矩阵与 B 层补录 | test | 5.9.5、5.9.3 | T112 | 做：用真实 Codex 跑兼容套件（Q8 复核、Q25、Q34、未信任项目拒绝启动），用宿主重录取消场景补 K3 的 B 层金样例，已验证范围写进清单；录制和报告入库前过本机敏感词清单并由用户抽查 | MAN-compat-codex、COMPAT-untrusted-project-codex、GOLD-B-codex-s07 | M | 是：真实 Codex CLI，消耗额度；运行前备份配置（P-14）；入库前抽查录制和报告 | H.fake |
 | T114 | codex-drift 检查 | ci | 5.1.6（codex-drift）、ADR-08 | T004（可提前） | 做：由 SP-2 的脚本迁移 `tools/codex-drift`，作为 `xtask ci nightly` 的一步，在发现新 codex 版本时比对 app-server 方法 | 新增 UNIT-codex-drift | S | 否 | C |
 | T119 | （条件）Q8 后备（Codex） | feat | 5.13 Q8、ADR-09 | T111 | 触发：K6 不通过。做：对 Codex 启用 T057 的串行闸门（T057 未做时在这里实现） | IT-q8-fallback-codex | M | 否 | H.drv |
-| **T120** | Git 服务 III：diff 的四种范围与 DiffCache | feat | 5.2.10（diff 与 hunk）、5.3.4 | T099 | 做：快照档拆成打开与拍快照两步、四种范围的 `git/diff`（`diff_token`、`caveats`、`index_unmerged`、`stat`、`filter_unsupported`）、`DiffCache`、路由。不做：写操作；`git/file_diff` 与 hunk 切分（T221）；`git/status`、`git/branches`、`cupper diff`（T222）（v1.3.86 开工后越过硬停止线拆出） | IT-git-diff-scopes | L | 否 | H.git |
-| **T221** | Git 服务 IIIb：file_diff 与 hunk 切分 | feat | 5.2.10（diff 与 hunk）、5.3.4 | T120 | 做：`git/file_diff` 的三种操作单位（`hunk`、`mode`、`whole_file`；新增、删除、二进制、符号链接、子模块、LFS 指针）、按内容寻址的 `hunk_id`、大 hunk 转 blob；单个文件的补丁按 `DiffCache` 里的 tree 对重新生成 | 新增 IT-git-file-diff | M | 否 | H.git |
+| **T120** | Git 服务 III：diff 的四种范围 | feat | 5.2.10（diff 与 hunk）、5.3.4 | T099 | 做：快照档拆成打开与拍快照两步、四种范围的 `git/diff`（`diff_token`、`caveats`、`index_unmerged`、`stat`、`filter_unsupported`）、路由。不做：写操作；`DiffCache`、`git/file_diff` 与 hunk 切分（T221，缓存要等有读它的方法才进 main）；`git/status`、`git/branches`、`cupper diff`（T222）（v1.3.86 开工后越过硬停止线拆出） | IT-git-diff-scopes | L | 否 | H.git |
+| **T221** | Git 服务 IIIb：DiffCache、file_diff 与 hunk 切分 | feat | 5.2.10（diff 与 hunk）、5.3.4 | T120 | 做：四种范围共用 `diff_token` 的 `DiffCache`（存 tree 对和文件列表，不存补丁）、`git/file_diff` 的三种操作单位（`hunk`、`mode`、`whole_file`；新增、删除、二进制、符号链接、子模块、LFS 指针）、按内容寻址的 `hunk_id`、大 hunk 转 blob；单个文件的补丁按 `DiffCache` 里的 tree 对重新生成 | 新增 IT-git-file-diff | M | 否 | H.git |
 | T222 | Git 服务 IIIc：status、branches 与 cupper diff | feat | 5.2.10（git/status）、5.3.4、5.2.14 | T120 | 做：`git/status`（HEAD、进行中的操作、文件状态）、`git/branches`、`cupper diff` | 新增 IT-git-status | M | 否 | H.git、H.cli |
 | **T121** | Git 服务 IV：暂存、取消暂存与还原（含 SP-5 的 82 个用例） | feat | 5.2.10（hunk 操作、并发）、5.2.5、5.9.8 | T221 | 做：仓库档 `apply --cached` 和 `-R`、`RepoLock`、`pending_external` 强制同步、`stale_diff`、暂存前 `check-attr`；把 SP-5 的 82 个 hunk 用例改写成 Rust 测试（原 T122）；Q32 仓库档写操作逐键确认；LFS 路径用锁定版本的 git-lfs 实测；在 T069 的夹具上登记写操作前后的故障点 | IT-git-hunk、IT-NFR9-failpoints-git；新增 IT-git-stage | L | 否 | H.git |
 | T123 | Git 服务 V：提交与推送（用户档）与 Q23 | feat | 5.2.10（用户档）、Q23 | T222 | 做：`commit -F -`、`push --set-upstream`、错误映射与脱敏的 stderr 尾部、指纹变化的确认参数；Q23（SSH agent、GPG、凭据助手）的验证与恢复指引 | IT-git-commit-push（本地裸仓库） | M | 可选：用作者的 SSH 和 GPG 配置手动验证 Q23 | H.git |
@@ -502,7 +502,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 - **T107**：保证 SP-6 测的就是要交付的 Electron 版本（桌面 #14）。
 - **T110（L）**：同 T053。
 - **T111（L）**：发现、运行时复制和回收都作用于 Codex 的 AgentRuntime，IT-K20-reclaim 需要完整路径。
-- **T120（L）**：四种范围共用 `diff_token` 与 `DiffCache`。v1.3.86 开工后实现部分就越过硬停止线（估约 935 行，做完约 1,650 行），拆出 T221（`git/file_diff` 与 hunk 切分，T121 改为依赖它）和 T222（`git/status`、`git/branches`、`cupper diff`，T123、T125 改为依赖它）。
+- **T120（L）**：四种范围共用 `diff_token` 与 `DiffCache`。v1.3.86 开工后实现部分就越过硬停止线（估约 935 行，做完约 1,650 行），拆出 T221（`DiffCache`、`git/file_diff` 与 hunk 切分，T121 改为依赖它）和 T222（`git/status`、`git/branches`、`cupper diff`，T123、T125 改为依赖它）。
 - **T121（L）**：并入原 T122（测试 #17）：82 个用例本来就是暂存操作的验收，分开后 T121 合并时只剩 IT-git-stage。
 - **T124（L）**：worktree 添加、`session/create` 的 worktree 分支和崩溃恢复是同一个准备流程。
 - **T125（L）**：7 条规则的结论直接决定归档和恢复的行为。
@@ -1879,8 +1879,8 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T113 Codex 兼容矩阵与 B 层补录
 - [x] T114 codex-drift 检查
 - [ ] T119 （条件）Q8 后备（Codex）（K6 已通过，不触发）
-- [ ] T120 Git 服务 III：diff 的四种范围与 DiffCache
-- [ ] T221 Git 服务 IIIb：file_diff 与 hunk 切分
+- [ ] T120 Git 服务 III：diff 的四种范围
+- [ ] T221 Git 服务 IIIb：DiffCache、file_diff 与 hunk 切分
 - [ ] T222 Git 服务 IIIc：status、branches 与 cupper diff
 - [ ] T121 Git 服务 IV：暂存、取消暂存与还原（含 SP-5 的 82 个用例）
 - [ ] T123 Git 服务 V：提交与推送（用户档）与 Q23
@@ -2027,4 +2027,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.83 | 2026-11-02 | T099 开工：退出候选 18b3640 的 `ci` 运行里 IT-lifecycle 的清理用例偶发失败（测试没等 `trap` 生效），候选作废。新增 T216（只改测试），T099 改为也依赖它；T216 和 T099 已做的基础设施（`e2e-repeat` 的降速与 @focus 分轮、登记表两处）合并后，再定新候选，所有运行在新候选上重做。MAN-keyboard 由用户在 18b3640 的 e2e 构建上做完，7 项全部通过；过程中发现点击面板卡片不会把键盘焦点移进面板，新增 T217，T099 改为也依赖它。T216 合并：清理用例的子进程先报就绪再起宿主。新增 T218（T216 连跑时发现录制导出用例在负载下偶发超时），T099 改为也依赖它。T218 合并：adapter 中途退出时，runtime 不转发 SDK 先给出的 prompt 失败，回合由 `AdapterExited` 结束（产品缺陷，违反 5.2.6；5.2.6、06 各补一句）。T217 合并：点击面板空白处移焦点；RP-3 读页面焦点，不看窗口是否在前台（5.7.8 补一段）。T099 依赖的任务至此全部合并。T099 两部分合并：退出候选 ec459fd 上 GitHub 的四项全部通过，MAN-keyboard 入证据；本机 nightly 按用户决定不跑（`docs/meetings/2026-11-02-perf-local/`），`trace-ids verify --milestone M1a` 有 7 个编号未完成，K4 待同步会决定 |
 | v1.3.84 | 2026-11-02 | M1a 同步会（`docs/meetings/2026-11-02-m1a-sync/`）：PERF 只记录、不卡闸门（D1）；IT-sys-peer-current 由 macOS 26 runner 代替、改为不适用（D2）；MAN-keyboard 不重做（D3）；真实兼容在 M1b 再跑（D4）；K4 通过（D5）。T099 打勾。新增 T219 落实 D1、D2，合并后打 `gate/m1a`，再派 M1b 第一波 |
 | v1.3.85 | 2026-11-02 | T219 合并：nightly 在托管 runner 上跑 `perf`、e2e 跑 PERF-bridge-gate，只记录（摘要的 `perf` 列表、结果 `measured`）；登记表新增 `record` 状态，9 个 PERF 编号改为只记录；IT-sys-peer-current 不适用。1.6、1.8、5.4、5.5、5.7、T155 随之改写。`gate/m1a` 候选 5da6f1c：`ci` 通过，nightly 的 e2e 里 PERF-bridge-gate 压力用例失败（`perf`、`differential` 被 fail-fast 取消），不打 tag；新增 T220，修好后换候选再验 |
-| v1.3.86 | 2026-11-03 | 派发 T220 与 M1b 第一波的 T160、T120、T111。T120 开工后越过硬停止线，拆出 T221（`git/file_diff` 与 hunk 切分）和 T222（`git/status`、`git/branches`、`cupper diff`），新增 IT-git-file-diff、IT-git-status；T121 改为依赖 T221，T123、T125 改为依赖 T222；M1b 关键路径由 17 增至 19。新增 T223（P-4 缺的样例库、通用迁移用例和已发布脚本的锁定，T160 发现；用户安装自用构建之前合并），新增 IT-migrations-samples。SP-6 改在 GitHub runner 上跑（`docs/meetings/2026-11-03-sp6-runner/`）：T103、T104、T108 的测量只记录，浸泡缩短到约 5 小时，场景 6 仍由作者手动做；设计 5.9.6、5.9.7 随之改写 |
+| v1.3.86 | 2026-11-03 | 派发 T220 与 M1b 第一波的 T160、T120、T111。T120 开工后越过硬停止线，拆出 T221（`DiffCache`、`git/file_diff` 与 hunk 切分）和 T222（`git/status`、`git/branches`、`cupper diff`），新增 IT-git-file-diff、IT-git-status；T121 改为依赖 T221，T123、T125 改为依赖 T222；M1b 关键路径由 17 增至 19。新增 T223（P-4 缺的样例库、通用迁移用例和已发布脚本的锁定，T160 发现；用户安装自用构建之前合并），新增 IT-migrations-samples。SP-6 改在 GitHub runner 上跑（`docs/meetings/2026-11-03-sp6-runner/`）：T103、T104、T108 的测量只记录，浸泡缩短到约 5 小时，场景 6 仍由作者手动做；设计 5.9.6、5.9.7 随之改写 |
