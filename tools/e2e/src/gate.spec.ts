@@ -16,6 +16,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, test, type Cupper } from "./fixture";
+import { untilEvent } from "./helpers";
 import { id, openSession, session } from "./nfr1";
 import { dial, initialize, keyProof, type Peer } from "./raw";
 
@@ -138,9 +139,9 @@ const frameRate = (cupper: Cupper) =>
 
 /**
  * The run: `streams` sessions flooding `rate` fragments of 500 characters a
- * second, the window holding the last four it opened and following the rest
- * through the gate; the blob at 5 s, the resync at 10 s, the index growing
- * all along. Its numbers.
+ * second, the window holding the last four, opened before the flood, and
+ * following the rest through the gate; the blob at 5 s, the resync at 10 s,
+ * the index growing all along. Its numbers.
  */
 async function run(cupper: Cupper, { streams = 4, rate = 100, covered = false } = {}) {
   await cupper.launch({ throttled: true });
@@ -148,7 +149,7 @@ async function run(cupper: Cupper, { streams = 4, rate = 100, covered = false } 
   const host = await harness(cupper);
   const flood = `flood_rate ${rate} ${SECONDS + 30} 500`;
   const sessions: string[] = [];
-  for (let n = 1; n <= streams; n++) sessions.push(await session(cupper, `say g${n}; ${flood}`));
+  for (let n = 1; n <= streams; n++) sessions.push(await session(cupper, `say g${n}`));
   // About 5,000 events in one session, to replay (`test/seed`, design 5.9.9).
   const seed = (sessions: number, turns: number, items: number) =>
     host.call("test/seed", { profile: { sessions, turns, items_per_turn: items, mix: "sp1" } });
@@ -158,12 +159,24 @@ async function run(cupper: Cupper, { streams = 4, rate = 100, covered = false } 
   const seeded = ids.find((one) => !sessions.map(id).includes(one));
   expect(seeded).toBeDefined();
   const blob = await putBlob(host.peer, host.call, randomBytes(5 * 1024 * 1024));
-  // The UI holds the session on screen and the three seen before (design 5.7.6).
-  for (let n = Math.max(1, streams - 3); n <= streams; n++) await openSession(cupper, `say g${n};`);
+  // Each first turn over, so that what follows in a stream is the flood.
+  const said: number[] = [];
+  for (const s of sessions) {
+    said.push((await untilEvent(cupper, s, (e) => e.type === "turn.completed")).seq);
+  }
+  // The UI holds the session on screen and the three seen before (design
+  // 5.7.6), opened before the flood: under it a runner's renderer falls so
+  // far behind that a click waits out its timeout for animation frames (T220).
+  for (let n = Math.max(1, streams - 3); n <= streams; n++) await openSession(cupper, `say g${n}`);
   await cupper.window.evaluate(
     (more) => more.forEach((s) => window.__cupperGate.follow(s)),
     sessions.slice(0, -4),
   );
+  for (const s of sessions) await cupper.cli.ok(["send", id(s), flood]);
+  // The streams are up once each has text of its flood.
+  for (const [n, s] of sessions.entries()) {
+    await untilEvent(cupper, s, (e) => e.type === "item.delta" && e.seq > (said[n] ?? 0));
+  }
   if (covered) await cover(cupper);
   const frames = await frameRate(cupper);
   const resets = await cupper.window.evaluate(() => window.__cupperGate.resets());
