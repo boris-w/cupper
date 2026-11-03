@@ -1,0 +1,43 @@
+# T160 工作笔记
+
+- 执行者：子 agent（构建与桌面工程师）
+
+## 开工前核对到的现状
+
+- `cargo xtask host-bundle --kind self-use` 已有（T005）：宿主 `dev.cupper.app.local.host`、特性 `dev-auth`；CLI `dev.cupper.cli.local`、特性 `self-use`，编进宿主的 cdhash；两者都开 hardened runtime。
+- 桌面主进程已有 `local` 这个 flavor（`paths.ts` 的 `cupper-local`、`isReleaseLike`、原生扩展按 flavor 核对），但 **Vite 拒绝 `local` 当 mode 名**（与 `.env.local` 冲突，`flavors.test.ts` 的注释里写了），所以还没有任何办法构建出 local 的界面代码。要给 Vite 一个别的 mode 名，映射到 flavor `local`。
+- dev、e2e 两份 electron-builder 配置都没有把 CLI 放进 `Contents/Helpers/cupper`；5.10.1 的包结构有它，IT-selfuse-build 也要从产物里的 CLI 读宿主 cdhash。
+- electron-builder 的 `extends` 会把数组拼接（`extraFiles`、`protocols`），自用配置继承发布配置时两份宿主路径、两个 URL scheme 都会进去。所以两份配置各自完整，自用配置的文件头列出与发布配置的差异。
+- electron-builder 给主程序签 `entitlements`，给其余每个文件（4 个 helper、framework、dylib、原生扩展）签 `entitlementsInherit`；`signIgnore` 的宿主和 CLI 保留 `host-bundle` 的签名，Node 保留 `runtime-pack` 的签名。
+- Electron 44 的 fuse 线有 9 根：第 9 根（下标 8，Electron 的 `WasmTrapHandlers`）@electron/fuses 1.8.0 和 electron-builder 都不认识，设计 5.7.8 也没列，出厂是开启。
+- Electron 自带的 Info.plist 有摄像头、麦克风、蓝牙（两项）、音频采集的用途说明；没有 `NSAppleEventsUsageDescription`。
+- 宿主的 worktree 根目录默认值对所有构建都是 `~/.cupper/worktrees`；5.4.1、5.7.9 要求自用构建用 `~/.cupper-local/worktrees/`，开发构建用 `~/.cupper-dev/worktrees/`。自用构建和开发构建的宿主特性相同（都只有 `dev-auth`），宿主分不清自己是哪一种，只能像 `log_dir` 一样按数据目录的名字推出来。
+- 宿主的"待升级"自检已有（`supervisor::watch::SelfCheck`）：每个新连接 accept 时、拉起适配器前比对磁盘上和运行中的 cdhash；不一致就写审计 `host.pending_upgrade`，没有回合时有序退出，`host.exiting` 的 reason 是 `upgrade`。
+- 自用构建的 fuses 关掉了 `enableNodeCliInspectArguments`，Playwright 的 `_electron` 用不了，两个 E2E 只能直接启动 App，看日志、`host.lock`、进程表和 CLI。
+
+## 规模估计（停止线 800，硬停止线 1,000）
+
+**实现**
+
+| 模块 | 内容 | 草估 |
+|---|---|---|
+| 打包配置 | `electron-builder.release.yml`、`electron-builder.local.yml`、两份 entitlements | 110 |
+| 构建入口 | `build:local`（desktop 和根目录）、Vite 的 mode `self-use` → flavor `local`、测试入口名单提成模块供扫描复用 | 35 |
+| 宿主的 worktree 根目录 | 按数据目录推出默认值，与 `log_dir` 同一规则 | 25 |
+| xtask `selfuse` 作业 | 仅在 GitHub 托管的 runner 上：构建自用、"下一版"自用（宿主和 CLI 用 dev profile，cdhash 不同）、开发构建；跑三个用例；摘要记 App 的摘要值；App 的日志进构件。注册进 nightly；`nightly.yml` 加一行，另加可选输入只跑一个作业 | 120 |
+| **实现小计** | | **290** |
+
+**测试**
+
+| 项 | 内容 | 草估 |
+|---|---|---|
+| 共用的辅助 | 启动 App、按日志等就绪、`host.lock`、进程表、codesign、退出并确认没有残留；只在托管 runner 上运行的防护 | 130 |
+| IT-selfuse-build | Info.plist、逐个 Mach-O 的签名标志与 entitlements（含 helper）与 identifier、`@electron/fuses` 逐项、asar 里没有测试入口、`--build-info` 与 CLI 内嵌的 cdhash、原生扩展的 `buildInfo` | 120 |
+| E2E-selfuse-coexist | 与开发构建同时运行：各自的宿主、`host.lock`、数据和日志目录；helper 都起来；原生扩展加载（control 连接就绪）；开发构建退出后自用的宿主照常 | 60 |
+| E2E-selfuse-replace | 装到临时目录、运行、替换成"下一版"：新 CLI 拒绝旧宿主，旧宿主写 `host.pending_upgrade` 并以 `upgrade` 退出；退出旧 App 后新 App 跑新宿主 | 80 |
+| 宿主 worktree 根目录的单元测试、flavor 扫描加 `self-use` | | 25 |
+| **测试小计** | | **415** |
+
+合计约 705 行，离停止线 800 不远。按以往的偏差乘 1.15 约 810，会擦线；每个模块完成后跑一次 `cargo xtask size`，推算越过 800 就停下汇报。文档（`docs/`）不计入。
+
+## 过程记录
