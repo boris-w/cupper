@@ -491,7 +491,7 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 | 4 | `Option.effect.ends_turn` | 类型为 `Option<bool>`，不出现表示未知。用于效果未知的选项，以及未实测的 Codex `revise_plan` |
 | 5 | `item.updated`、`item.completed` 中要更新的字段 | 共用展开的 `ItemPatch`：各类条目可以更新的字段都写成可选字段，不带 `kind`；同名字段在各类条目里类型相同 |
 | 6 | `workspace.failed` | `{code: ErrorCode, reason?: ErrorReason}`，与错误对象的写法一致 |
-| 7 | `turn.completed.error_code`、`SessionSummary.error_code`、`error` 条目的 `code` | 开放枚举 `FailureCode`：5.6.2 中 `AgentError` 的分类（`not_logged_in`、`cli_too_old`、`session_not_found`、`process_exited`、`restartable`、`model_unsupported`、`quota_exhausted`、`other`），再加宿主侧的 `adapter_exited`、`host_restarted` 等 |
+| 7 | `turn.completed.error_code`、`SessionSummary.error_code`、`error` 条目的 `code` | 开放枚举 `FailureCode`：5.6.2 中 `AgentError` 的分类（`not_logged_in`、`cli_too_old`、`session_not_found`、`process_exited`、`restartable`、`model_unsupported`、`quota_exhausted`、`project_untrusted`、`other`），再加宿主侧的 `adapter_exited`、`host_restarted` 等 |
 | 8 | `AgentStatus` | `{agent, state, cli?: {path, version?, compat, install}, adapter: {version, runtime, failure?}, auth: {state, kind?, plan?}, rss_bytes?, config_dir}`。登录状态只有类型和套餐名，不含邮箱、组织 |
 | 9 | 用量里的 `cost` | `{amount, currency}`，形状与 ACP 的 `usage_update` 相同 |
 | 10 | `session.configured.config` 的值、提问回答的 `values` | 配置项的值是字符串，ACP 的配置项是 select 类型。回答的值是带类型的 `AnswerValue`（字符串、数字、布尔、字符串数组），数字用 `serde_json::Number`，保证整数往返时不会变成浮点数 |
@@ -506,7 +506,7 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 | `ConfigDirState` | `default`、`ok`、`rejected` |
 | `AuthState` | `logged_in`、`logged_out`、`unchecked`。不用 `unknown`，因为 `open_enum!` 已经占用了 `Unknown` 这个变体名 |
 | `DiffSide` | `old`、`new` |
-| `FailureCode` | 第 7 条列出的取值，加上 `adapter_crashed`、`cli_missing`、`runtime_failed` |
+| `FailureCode` | 第 7 条列出的取值，加上 `adapter_crashed`、`cli_missing`、`runtime_failed`；T111 附加 `project_untrusted` |
 | `FallbackKind` | `item`、`hidden` |
 | `CliCompat` | 不新增取值；读不到版本号时记为 `unsupported` |
 

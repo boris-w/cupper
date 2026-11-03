@@ -487,5 +487,8 @@
 | 以后改宿主集成测试辅助的任务 | `tests/common/mod.rs` 的 `until` 失败时只打印期望值，不打印最后读到的值；T216 的 4 次失败因此看不出第三个回合已经 `failed`。约 3 行可补 | T218 |
 | 以后改请求面板的任务 | 没有选项列表的面板（只能自由输入的提问、`unsupported_schema` 的提问、不认识的类型）：RP-3 自动接管和点击都会把面板设为 active，但没有列表可以放焦点，按键落在 body 上。这是原有限制 | T217 |
 | 以后查 e2e 偶发失败的任务 | Radix 的菜单、对话框关掉后，FocusScope 用 `setTimeout(0)` 把焦点还给触发按钮。e2e 用例在关掉菜单后立即移焦点的，焦点可能被拿回去：先 `await expect(<触发按钮>).toBeFocused()` 再移。T217 只修了 E2E-SEC-panel-arming 一处 | T217 |
-| M1b B2 之前（T103 SP-6、T108 浸泡、K8） | SP-6 的场景、8 小时浸泡和 K8 的判定原定在作者机器上压测（设计 5.9.7"判定以作者的机器为准"、计划第 6 节第 15、16 行）。2026-11-02 用户决定不在自己的电脑上跑压测（`docs/meetings/2026-11-02-perf-local/`、`2026-11-02-m1a-sync/` D1），两者冲突，派 T103 之前要请用户再定；R8 的描述随之改 | T219 |
+| M1b B2 之前（T103 SP-6、T108 浸泡、K8） | SP-6 的场景、8 小时浸泡和 K8 的判定原定在作者机器上压测（设计 5.9.7"判定以作者的机器为准"、计划第 6 节第 15、16 行）。2026-11-02 用户决定不在自己的电脑上跑压测（`docs/meetings/2026-11-02-perf-local/`、`2026-11-02-m1a-sync/` D1），两者冲突，派 T103 之前要请用户再定；R8 的描述随之改。**2026-11-03 已定**：改在 GitHub runner 上跑，只记录，浸泡约 5 小时（`docs/meetings/2026-11-03-sp6-runner/`，计划 v1.3.86） | T219 |
 | 以后看性能趋势的任务 | 托管 runner 上的 PERF 数值只在 nightly 摘要的 `perf` 列表里，构件按保留期过期、不入库。要长期看趋势，需要定期把这些行汇总入库（格式与 `history.jsonl` 相同，机型泛称是 "Apple Virtual Machine 1 (Apple M1 (Virtual))"，不能和真机的历史混在一起判） | T219 |
+| T144、T151 或补 i18n 的界面任务 | `stream` 命名空间没有 `error_project_untrusted` 的文案，Codex 在未信任项目里的错误现在显示为"其他错误"；新建会话页和设置页会看到 Codex 的状态（没装 CLI 时为 `unavailable`） | T111 |
+| T113 或维护者手动 | 长时间运行下 Codex 的 MCP 进程数和内存（T102 交接），核对 5.6.8 的回收阈值和 NFR-11 的估算，要用真实 Codex | T111 |
+| 以后在本机跑宿主集成测试的任务 | lifecycle 里的 `it_cli_commands_*`、`it_elevate_lineage_*` 要先 `cargo build -p cupper-cli --features test-harness`（CI 的 `cli-e2e` 一步会做），否则本机会失败 | T111 |
