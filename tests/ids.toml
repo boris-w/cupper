@@ -1101,6 +1101,11 @@ IT-selfuse-build = "nightly"
 E2E-selfuse-coexist = "nightly"
 E2E-selfuse-replace = "nightly"
 
+# 迁移样例库与已发布脚本的锁定（P-4）
+[T223]
+milestone = "M1b"
+IT-migrations-samples = "pr"
+
 # release-config 检查
 [T161]
 milestone = "M1b"
