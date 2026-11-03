@@ -96,14 +96,6 @@ pub enum SnapshotOp {
     /// Two trees' changed files, renames found: raw records, then as many
     /// numstat records (design 5.2.10).
     DiffList,
-    /// The patch between two trees, renames as deletions and additions.
-    DiffPatch,
-    /// Refreshes the stat data of the (temporary) index.
-    Refresh,
-    /// The index against a tree, renames found.
-    DiffIndex,
-    /// The work tree against the index.
-    DiffFiles,
 }
 
 /// A command's fixed words, with `-z` where the command has it.
@@ -217,29 +209,9 @@ impl SnapshotOp {
                 ],
                 true,
             ),
-            Self::DiffPatch => (
-                &[
-                    "diff-tree",
-                    "-p",
-                    "--no-renames",
-                    "--no-color",
-                    "--no-ext-diff",
-                    "--no-textconv",
-                    "--full-index",
-                    "--binary",
-                    "-U3",
-                ],
-                true,
-            ),
-            Self::Refresh => (&["update-index", "-q", "--unmerged", "--refresh"], false),
-            Self::DiffIndex => (
-                &["diff-index", "--cached", "-z", "--name-status", "-M"],
-                true,
-            ),
-            Self::DiffFiles => (&["diff-files", "-z", "--name-status"], true),
         };
         let timeout = match self {
-            Self::AddAll | Self::WriteTree | Self::Refresh => GIT_SNAPSHOT,
+            Self::AddAll | Self::WriteTree => GIT_SNAPSHOT,
             _ => GIT_COMMAND,
         };
         Spec {

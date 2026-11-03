@@ -51,3 +51,14 @@
 3. **T120c**：`git/status`、`git/branches`、`cupper diff`、相应用例（需新编号，如 IT-git-status）。约 330。
 
 另一种做法是提高本任务的上限到约 1,700，一次做完。
+
+## 收窄后（编排者裁定，2026-11-03）
+
+采用三段拆法：本任务只做 `git/diff` 四种范围、`DiffCache`、路由和 IT-git-diff-scopes 的范围部分，停止线 1000、硬停止线 1100；`git/file_diff`、hunk 切分、大 hunk 转 blob 归 T221（IT-git-file-diff），`git/status`、`git/branches`、`cupper diff` 归 T222（IT-git-status）。在 `38f85e0` 之上提交，移出的代码之后用 `git show 38f85e0:<path>` 取回：
+
+- T221：`crates/cupper-host/src/git/diff/hunks.rs`；`git/diff.rs` 里的 `patch`、`Diffed.place`；`git/service.rs` 里的 `file_diff`、`inline`；`SnapshotOp::DiffPatch`。
+- T222：`crates/cupper-host/src/git/status.rs`（`Head` 的上游与领先落后、文件状态、`in_progress`、`branches`）；`git/service.rs` 里的 `status`、`branches`；`SnapshotOp::Refresh`、`DiffIndex`、`DiffFiles`。
+
+留下的 HEAD 只取提交（`git/head.rs` 的 `commit`），供 `staged` 用；T222 在它上面加分支、上游和领先落后。`DiffCache::get` 目前只有单元用例调用，第一个调用方是 T221 的 `git/file_diff`（编排者裁定 DiffCache 留在本任务）。
+
+收窄后 `cargo xtask size`：+998 −54。变异检查：去掉 `index_unmerged` 的检查、去掉 `filter_unsupported` 的标记，IT-git-diff-scopes 都失败。

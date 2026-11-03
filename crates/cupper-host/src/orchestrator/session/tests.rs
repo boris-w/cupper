@@ -299,7 +299,6 @@ impl Fixture {
             clock: Arc::clone(&deps.clock),
             ids: Arc::new(IdGen::seeded(Arc::clone(&deps.clock), 2)),
             durations: durations.clone(),
-            blobs: blobs.clone(),
             audit: records,
         })
         .route(&mut routes);

@@ -10,13 +10,13 @@
 
 mod cmd;
 pub mod diff;
+mod head;
 mod repo;
 pub mod rules;
 pub mod run;
 mod service;
 pub mod snapshot;
 pub mod stamp;
-pub mod status;
 
 use std::ffi::{OsStr, OsString};
 use std::fs::DirBuilder;

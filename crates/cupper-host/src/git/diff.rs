@@ -1,27 +1,25 @@
-//! `git/diff` and `git/file_diff` in the snapshot tier (design 5.2.10, "diff
-//! 与 hunk"). Every range compares two trees: a turn's start and end
-//! snapshots, or its start and a snapshot taken now while it runs; the
-//! index and a snapshot taken now (`unstaged`); HEAD and the index
-//! (`staged`). Trees never change, so a file's patch is the same whenever it
-//! is made: the cache keeps the trees and the file list, and
-//! `git/file_diff` makes one file's patch when asked.
+//! `git/diff` in the snapshot tier (design 5.2.10, "diff 与 hunk"). Every
+//! range compares two trees: a turn's start and end snapshots, or its start
+//! and a snapshot taken now while it runs; the index and a snapshot taken
+//! now (`unstaged`); HEAD and the index (`staged`). Trees never change, so
+//! the cache keeps a diff as its trees and file list: a file's patch is the
+//! same whenever it is made from them.
 
 mod cache;
-mod hunks;
 
 use std::collections::BTreeSet;
+use std::path::Path;
 
 use cupper_protocol::annotations::WirePath;
 use cupper_protocol::ids::TurnId;
 use cupper_protocol::item::{DiffChange, Item};
 use cupper_protocol::methods::git::{DiffSnapshot, GitDiffFile};
-use cupper_protocol::session::{DiffStat, SnapshotStatus};
+use cupper_protocol::session::{DiffStat, ExcludedPath, SnapshotStatus};
 use cupper_protocol::view::{Entry, ItemView, SessionView};
 
 pub use cache::DiffCache;
-pub use hunks::units;
 
-use super::snapshot::{self, Opened, Place, ShotError, Taken, output, shoot};
+use super::snapshot::{self, Opened, ShotError, Taken, output, shoot};
 use super::stamp::Fingerprint;
 use super::{GitCmd, GitTool, SnapshotOp};
 use crate::clock::Clock;
@@ -31,7 +29,7 @@ use crate::durations::Durations;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Range {
     Unstaged,
-    /// HEAD's tree; `None` before the first commit.
+    /// HEAD's commit; `None` before the first one.
     Staged(Option<String>),
     /// A turn's start tree and end tree, `None` while it runs.
     Turn(String, Option<String>),
@@ -40,8 +38,6 @@ pub enum Range {
 /// A diff made.
 #[derive(Debug, Clone)]
 pub struct Diffed {
-    /// Where its patches are made.
-    pub place: Place,
     pub old: String,
     pub new: String,
     pub files: Vec<GitDiffFile>,
@@ -53,26 +49,16 @@ pub struct Diffed {
 /// [`ShotError::Unmerged`] while the index has a conflict.
 pub async fn diff(
     tool: &GitTool,
-    work_tree: &std::path::Path,
+    work_tree: &Path,
     range: Range,
     clock: &dyn Clock,
     durations: &Durations,
 ) -> Result<Diffed, ShotError> {
     let opened = snapshot::open(tool, work_tree, clock, durations).await?;
     let made = make(tool, &opened, range, clock, durations).await;
-    let place = opened.place.clone();
     opened.close().await;
-    let (old, new, files, taken) = made?;
-    Ok(Diffed {
-        place,
-        old,
-        new,
-        files,
-        taken,
-    })
+    made
 }
-
-type Made = (String, String, Vec<GitDiffFile>, Option<Taken>);
 
 async fn make(
     tool: &GitTool,
@@ -80,7 +66,7 @@ async fn make(
     range: Range,
     clock: &dyn Clock,
     durations: &Durations,
-) -> Result<Made, ShotError> {
+) -> Result<Diffed, ShotError> {
     let tier = tool.snapshot_tier(&opened.place);
     let out = |cmd, what| output(&tier, cmd, what, clock, durations);
     let now = || {
@@ -128,7 +114,12 @@ async fn make(
             file.filter_unsupported = hits.contains(file.path.0.as_bytes());
         }
     }
-    Ok((old, new, files, taken))
+    Ok(Diffed {
+        old,
+        new,
+        files,
+        taken,
+    })
 }
 
 /// `diff-tree -z --raw --numstat` output: the raw records, then a numstat
@@ -187,25 +178,6 @@ pub fn stat(files: &[GitDiffFile]) -> DiffStat {
     }
 }
 
-/// The patch of `file` between `old` and `new`: the file alone, not what is
-/// under a directory of its name; with a rename's source.
-pub async fn patch(
-    tool: &GitTool,
-    diffed: &Diffed,
-    file: &GitDiffFile,
-    clock: &dyn Clock,
-    durations: &Durations,
-) -> Result<Vec<u8>, ShotError> {
-    let mut args = vec![diffed.old.clone(), diffed.new.clone(), "--".into()];
-    for path in std::iter::once(&file.path).chain(&file.old_path) {
-        args.push(format!(":(literal){}", path.0));
-        args.push(format!(":(exclude,literal){}/", path.0));
-    }
-    let cmd = GitCmd::snapshot(SnapshotOp::DiffPatch).args(args);
-    let tier = tool.snapshot_tier(&diffed.place);
-    output(&tier, cmd, "diff-tree", clock, durations).await
-}
-
 /// What a turn range notes, from the session's view: its snapshots, with
 /// what they left out, and whether commands that may still run could have
 /// changed the work tree meanwhile (design 5.2.6, "晚到的工具输出"): the turn
@@ -218,14 +190,11 @@ pub fn turn_notes(view: &SessionView, turn: &TurnId) -> Option<(DiffSnapshot, bo
         excluded: Vec::new(),
     };
     for shot in &at.snapshots {
-        if shot.status != SnapshotStatus::Ok {
-            snapshot.status = shot.status.clone();
-        }
-        let new = shot
-            .excluded
-            .iter()
-            .filter(|e| !snapshot.excluded.contains(e));
-        snapshot.excluded.extend(new.cloned().collect::<Vec<_>>());
+        add(
+            &mut snapshot,
+            shot.status != SnapshotStatus::Ok,
+            &shot.excluded,
+        );
     }
     let items = at.entries.iter().filter_map(|entry| match entry {
         Entry::Item(id) => view.items.get(id),
@@ -248,4 +217,66 @@ pub fn turn_notes(view: &SessionView, turn: &TurnId) -> Option<(DiffSnapshot, bo
     };
     let still = view.items.iter().any(|(id, item)| running(id, item));
     Some((snapshot, late || still))
+}
+
+/// Adds to `snapshot` what another snapshot left out, `partial` or not.
+pub fn add(snapshot: &mut DiffSnapshot, partial: bool, excluded: &[ExcludedPath]) {
+    if partial || !excluded.is_empty() {
+        snapshot.status = SnapshotStatus::Partial;
+    }
+    let new: Vec<_> = excluded
+        .iter()
+        .filter(|e| !snapshot.excluded.contains(e))
+        .collect();
+    snapshot.excluded.extend(new.into_iter().cloned());
+}
+
+#[cfg(test)]
+mod tests {
+    use cupper_protocol::view::View;
+    use serde_json::json;
+
+    use super::*;
+    use crate::store::testutil::body;
+
+    /// Turn 1 cancels a command that may still run; its output comes late in
+    /// turn 2 and ends there; turn 3 starts after that.
+    #[test]
+    fn unit_git_diff_turn_notes_say_what_snapshots_left_and_late_commands() {
+        let too_large = json!([{"path": "big.bin", "reason": "too_large"}]);
+        let events = json!([
+            ["turn.started", {"turn_id": "t_1", "turn_no": 1, "origin": "user", "started_at": 1}],
+            ["snapshot.recorded", {"turn_id": "t_1", "phase": "start", "status": "ok", "excluded": []}],
+            ["item.started", {"item_id": "i_c", "turn_id": "t_1", "started_at": 2, "kind": "tool_call",
+                "tool_kind": "execute", "title": "Run", "paths": [], "command": "npm start", "cwd": "/w",
+                "output_state": "none", "extraction": "full"}],
+            ["item.completed", {"item_id": "i_c", "status": "cancelled", "ended_at": 5, "duration_ms": 1,
+                "may_still_run": true}],
+            ["snapshot.recorded", {"turn_id": "t_1", "phase": "end", "status": "partial",
+                "excluded": too_large}],
+            ["turn.completed", {"turn_id": "t_1", "status": "cancelled", "ended_at": 6, "duration_ms": 5,
+                "final_item_ids": []}],
+            ["turn.started", {"turn_id": "t_2", "turn_no": 2, "origin": "user", "started_at": 10}],
+            ["item.started", {"item_id": "i_l", "turn_id": "t_2", "started_at": 11,
+                "kind": "late_tool_output", "output_state": "streaming",
+                "ref": {"item_id": "i_c", "turn_id": "t_1", "title": "Run", "command": "npm start"}}],
+            ["item.completed", {"item_id": "i_l", "status": "completed", "ended_at": 20, "duration_ms": 9}],
+            ["turn.completed", {"turn_id": "t_2", "status": "completed", "ended_at": 30, "duration_ms": 20,
+                "final_item_ids": []}],
+            ["turn.started", {"turn_id": "t_3", "turn_no": 3, "origin": "user", "started_at": 40}]
+        ]);
+        let mut view = SessionView::default();
+        for event in events.as_array().unwrap() {
+            let event = json!({"type": event[0], "data": event[1]});
+            view.apply(&body(event)).unwrap();
+        }
+        let notes = |n: u32| turn_notes(&view, &format!("t_{n}").parse().unwrap());
+        let (snapshot, late) = notes(1).unwrap();
+        assert_eq!(snapshot.status, SnapshotStatus::Partial);
+        assert_eq!(json!(snapshot.excluded), too_large);
+        // The command ran on after turn 1 and through turn 2, not turn 3.
+        let lates = [late, notes(2).unwrap().1, notes(3).unwrap().1];
+        assert_eq!(lates, [true, true, false]);
+        assert!(notes(4).is_none());
+    }
 }

@@ -475,17 +475,17 @@ fn stat(output: &[u8]) -> DiffStat {
     stat
 }
 
-pub(super) fn split(output: &[u8]) -> impl Iterator<Item = &[u8]> {
+fn split(output: &[u8]) -> impl Iterator<Item = &[u8]> {
     output.split(|b| *b == 0).filter(|field| !field.is_empty())
 }
 
-pub(super) fn failed(what: &'static str, stderr: &[u8]) -> ShotError {
+fn failed(what: &'static str, stderr: &[u8]) -> ShotError {
     let tail = String::from_utf8_lossy(&stderr[stderr.len().saturating_sub(512)..]);
     ShotError::Failed(what, tail.trim_end().to_owned())
 }
 
 /// File system work off the async runtime (T109, T138).
-pub(super) async fn blocking<T: Send + 'static>(
+async fn blocking<T: Send + 'static>(
     work: impl FnOnce() -> Result<T, ShotError> + Send + 'static,
 ) -> Result<T, ShotError> {
     let joined = tokio::task::spawn_blocking(work).await;
