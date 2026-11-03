@@ -45,3 +45,14 @@
 3. T143 留下的 `change_model` 入口：错误框里加"换模型"按钮、打开模型菜单，约 20 行；规模有余量就做，否则列进汇报。
 
 ## 实现记录
+
+- 宿主部分完成后 `cargo xtask size` 为 +470（估算 340，偏高 38%）：actor +193（估 130）、IT-set-config-tier 169（估 140）、夹具 +49、runtime +65。照这个偏差推算，界面约 480，加上 E2E 约 60，合计约 1,010，超过 1,000。按事先定好的规则停下来报告；编排者裁定拆分（2026-11-03）：T141 只含宿主，界面、审阅截图和 E2E-full-access-native 移到 T231。
+
+## 取舍（宿主）
+
+- **`AgentPort::set_config` 带回复**：`DriverCommand::SetConfig` 照旧没有回复，留给 TierGuard 改回档位时用。runtime 收到 `session/set_config_option` 的结果后，先给会话发 `ConfigChanged`，再把同一份选项交给等着的回复；agent 拒绝时回复它的错误。适配器不在时回复"the adapter went away"。
+- **回复晚于流**：会话收到 agent 的回复后，先按返回的选项写 `session.configured`，并让 TierGuard 核对模式，然后在同一次提交里回复命令。随后到达的 `ConfigChanged` 内容相同，什么也不写。所以客户端拿到回复时，流里已经是新配置，`mode_set_by` 也已经写进行里。
+- **档位**：取值的档位来自能力里这个值的 `risk`，从会话当前的档位出发，按 `policy::tier_change` 判定。放宽之前先告诉 TierGuard 设定者是谁（`Set {by, tier}`），等 agent 报告新模式时再记下 `mode_set_by`；进入完全访问时同时记下 `full_access_confirmed_at`。完全访问写 `privileged.executed` 审计（`policy/describe` 的描述）。
+- **核对**：没有这个选项返回 `unsupported`（`data.capability` 为选项名）；没有这个取值返回 INVALID_PARAMS；agent 拒绝返回 `agent_error`，带 `agent_code` 和脱敏后的 `agent_message`。
+- **未连接时**：只记进会话的配置（`parts.config`）并写 `session.configured`，回复里是记下后的配置；下次 attach 照常把这些值逐项应用。已连接时成功修改的值也记进 `parts.config`，所以之后同一个 actor 里再 attach（例如适配器重启后 resume），应用的是用户选的值，而不是创建时的值；`config_json` 随 `session.configured` 更新，重启后加载的也是它。
+- **已知缺口**：attach 已经发出、还没返回时，会话算未连接，这期间的修改要等下一次 attach 才会应用。
