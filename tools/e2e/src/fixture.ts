@@ -21,7 +21,7 @@ import {
 
 import { Cli, type Line } from "./cli";
 import { Dialogs } from "./dialogs";
-import { BUILT, ROOTS } from "./paths";
+import { BUILT, IN_APP, ROOTS } from "./paths";
 import { alive, gone, processes, signal, tree, type Proc } from "./procs";
 
 /** Who made a root: a Playwright worker. A root whose owner is gone is stale. */
@@ -41,6 +41,7 @@ export class Cupper {
   #window: Page | undefined;
   #dialogs: Dialogs | undefined;
   #procs: Proc[] = [];
+  #bundle = BUILT.bundle;
   /** A test without `@focus` keeps its app out of the foreground and the Dock (T195). */
   readonly #background: boolean;
   #fronts: Front[] = [];
@@ -86,8 +87,12 @@ export class Cupper {
     return required(this.#dialogs);
   }
 
-  /** Starts the app, takes over its native dialogs' stand-ins, and waits for its window. */
-  async launch({ throttled = false } = {}): Promise<void> {
+  /**
+   * Starts the app, takes over its native dialogs' stand-ins, and waits for
+   * its window. `bundle`: a copy of the app the test may change (T225).
+   */
+  async launch({ throttled = false, bundle = BUILT.bundle } = {}): Promise<void> {
+    this.#bundle = bundle;
     const background: Record<string, string> = this.#background
       ? { CUPPER_E2E_BACKGROUND: "1" }
       : {};
@@ -103,7 +108,8 @@ export class Cupper {
           "--disable-renderer-backgrounding",
           "--disable-background-timer-throttling",
         ];
-    this.#app = await _electron.launch({ executablePath: BUILT.app, args, env });
+    const executablePath = join(bundle, IN_APP.app);
+    this.#app = await _electron.launch({ executablePath, args, env });
     this.#main = this.#app.process();
     if (this.#main.pid === undefined) {
       throw new Error("the app did not start");
@@ -238,7 +244,9 @@ export class Cupper {
       return undefined;
     }
     return table.find(
-      (proc) => proc.pid === pid && proc.args === `${BUILT.host} --data-dir ${this.dataDir}`,
+      (proc) =>
+        proc.pid === pid &&
+        proc.args === `${this.#bundle}/${IN_APP.host} --data-dir ${this.dataDir}`,
     );
   }
 
