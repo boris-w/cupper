@@ -214,6 +214,9 @@ pub enum DriverEvent {
         status: ExitStatus,
         /// The latest stderr, redacted, for the `error` item's details (MS-5).
         stderr: String,
+        /// Codex's idle adapter was reclaimed (design 5.6.8): nothing was
+        /// cut off.
+        reclaimed: bool,
     },
 }
 

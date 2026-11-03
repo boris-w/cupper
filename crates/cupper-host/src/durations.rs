@@ -126,6 +126,9 @@ durations! {
     ADAPTER_CRASH_WINDOW = "adapter_crash_window", Duration::from_secs(300);
     /// How often a runtime samples its adapter's processes (design 5.2.13).
     RESOURCE_SAMPLE = "resource_sample", Duration::from_secs(30);
+    /// How long Codex's adapter may go without work before it is reclaimed
+    /// (design 5.6.8, ADR-09).
+    CODEX_RECLAIM_IDLE = "codex_reclaim_idle", Duration::from_secs(30 * 60);
     /// How long a probe waits for the agent's command list after its session
     /// opened (design 5.6.7).
     PROBE_COMMANDS = "probe_commands", Duration::from_millis(200);

@@ -32,6 +32,12 @@
 //!   memory for [`AgentRuntime::resources`] and the agent's status, and the
 //!   descendants' groups, kept in the `adapters` row for the cleanup after a
 //!   crash of the host.
+//! - **Codex's adapter is reclaimed** (5.6.8, K20: it keeps the MCP servers
+//!   of closed sessions) at a sample that finds it idle, with no prompt in
+//!   flight, no request asked, no thread at work and no session opening, and
+//!   over 2 GiB, or without work for 30 minutes, or probed with no session
+//!   left. It stops as the host stops it; its sessions hear `AdapterExited`
+//!   as reclaimed, and attaches meanwhile wait for the next instance.
 //! - **Command lists** (design 5.6.2): Claude pushes its whole list when a
 //!   session opens and at every turn's start. An attach answers with the
 //!   agent's latest list without waiting for the session's own; after that a
@@ -92,7 +98,8 @@ use super::api::{
 use super::extract;
 use crate::clock::IdGen;
 use crate::durations::{
-    ADAPTER_CLOSE_WAIT, ADAPTER_TERM_WAIT, Durations, PROBE_COMMANDS, RESOURCE_SAMPLE,
+    ADAPTER_CLOSE_WAIT, ADAPTER_TERM_WAIT, CODEX_RECLAIM_IDLE, Durations, PROBE_COMMANDS,
+    RESOURCE_SAMPLE,
 };
 use crate::pure::{Alarm, TimerRequest, TimerTable};
 use crate::quiescence::{ActorKind, Participant, Quiescence};
@@ -103,6 +110,9 @@ use cupper_sys::{ProcessGroup, Signal};
 
 /// The runtimes in the quiescence barrier.
 pub const AGENT_RUNTIME: ActorKind = ActorKind::new("agent_runtime");
+
+/// Over this much resident memory, Codex's idle adapter is reclaimed.
+const RECLAIM_RSS: u64 = 2 << 30;
 
 /// What a runtime needs of the host.
 #[derive(Clone)]
@@ -182,6 +192,8 @@ struct Route {
     cwd: PathBuf,
     /// The digest of the command list the session has, once it attached.
     commands: Option<[u8; 32]>,
+    /// Its thread works, as the agent reports it (Codex).
+    active: bool,
 }
 
 /// An attach applying its configuration, option by option.
@@ -210,7 +222,10 @@ enum Due {
 /// ends once the adapter has exited and the groups are gone or killed.
 #[derive(Debug)]
 struct Stopping {
-    done: oneshot::Sender<()>,
+    /// The host's stop waits for it. A reclaim or a restart has none, and
+    /// attaches meanwhile wait for the next instance.
+    done: Option<oneshot::Sender<()>>,
+    reclaimed: bool,
     groups: Vec<ProcessGroup>,
     closing: usize,
     /// SIGTERM went out.
@@ -256,6 +271,12 @@ struct Actor {
     cached: Option<SessionCapabilities>,
     auth: AuthStatus,
     participant: Participant,
+    /// Prompts sent and not answered.
+    inflight: usize,
+    /// The instance's latest work: its start, a prompt, what the agent sent.
+    busy_at: crate::clock::MonoTime,
+    /// The instance served a probe.
+    probed: bool,
 }
 
 fn digest(commands: &[SlashCommand]) -> [u8; 32] {
@@ -326,6 +347,9 @@ impl AgentRuntime {
                 plan: None,
             },
             participant,
+            inflight: 0,
+            busy_at: crate::clock::MonoTime::ZERO,
+            probed: false,
         };
         // The index lists the agent from the start.
         actor.notify();
@@ -529,6 +553,39 @@ impl Actor {
         self.resources.send_replace(Some(resources));
         self.notify();
         self.set(Due::Sample, self.deps.durations.get(RESOURCE_SAMPLE));
+        if self.reclaimable(resources.rss_bytes) {
+            self.stop(None, true);
+        }
+    }
+
+    /// Whether Codex's adapter goes (5.6.8): idle, and over 2 GiB, or
+    /// without work for 30 minutes, or probed with no session left.
+    fn reclaimable(&self, rss_bytes: u64) -> bool {
+        let active = self.sessions.values().any(|route| route.active);
+        let idle = self.inflight == 0 && self.asks.is_empty() && self.opening.is_empty();
+        let idle = idle && !active && self.stopping.is_none();
+        let quiet = self.now().saturating_duration_since(self.busy_at);
+        let quiet = quiet >= self.deps.durations.get(CODEX_RECLAIM_IDLE);
+        let probed = self.probed && self.sessions.is_empty();
+        self.agent() == Agent::Codex && idle && (rss_bytes > RECLAIM_RSS || quiet || probed)
+    }
+
+    /// Begins a stop: `done`, the host's, hears its end; a reclaim's
+    /// sessions hear that they were reclaimed.
+    fn stop(&mut self, done: Option<oneshot::Sender<()>>, reclaimed: bool) {
+        // Before any signal, while the adapter still runs (5.6.8).
+        let group = self.instance.as_ref().and_then(|i| i.group);
+        let found = group.as_ref().map(ProcessGroup::with_descendants);
+        let groups = lifecycle::union(found.unwrap_or_default(), &self.recorded);
+        self.stopping = Some(Stopping {
+            done,
+            reclaimed,
+            groups,
+            closing: 0,
+            signalled: false,
+        });
+        self.timers.apply(TimerRequest::Cancel(Due::Sample));
+        self.begin_stop();
     }
 
     /// A stop's first step: `session/close` for every session.
@@ -583,24 +640,21 @@ impl Actor {
                 }
                 // A start that waits for the installer gives up.
                 self.start_stop = None;
-                // Before any signal, while the adapter still runs (5.6.8).
-                let group = self.instance.as_ref().and_then(|i| i.group);
-                let found = group.as_ref().map(ProcessGroup::with_descendants);
-                let groups = lifecycle::union(found.unwrap_or_default(), &self.recorded);
-                self.stopping = Some(Stopping {
-                    done,
-                    groups,
-                    closing: 0,
-                    signalled: false,
-                });
-                self.begin_stop();
+                match &mut self.stopping {
+                    // A reclaim on its way becomes the host's stop.
+                    Some(stopping) => stopping.done = Some(done),
+                    None => self.stop(Some(done), false),
+                }
             }
             Mail::ClearCrashed => {
                 self.restarts.clear();
                 self.notify();
                 self.ensure_started();
             }
-            Mail::Probe(reply) => self.probe(reply),
+            Mail::Probe(reply) => {
+                self.probed = true;
+                self.probe(reply);
+            }
             Mail::Status(reply) => {
                 let _ = reply.send(self.status());
             }
@@ -727,7 +781,7 @@ impl Actor {
     fn started(&mut self, started: Result<Instance, AgentError>) {
         match started {
             Ok(instance) => {
-                self.instance = Some(instance);
+                (self.instance, self.busy_at) = (Some(instance), self.now());
                 self.notify();
                 self.set(Due::Sample, self.deps.durations.get(RESOURCE_SAMPLE));
                 if self.stopping.is_some() {
@@ -744,8 +798,8 @@ impl Actor {
                 for pending in mem::take(&mut self.waiting) {
                     let _ = pending.reply.send(Err(err.clone()));
                 }
-                if let Some(stopping) = self.stopping.take() {
-                    let _ = stopping.done.send(());
+                if let Some(done) = self.stopping.take().and_then(|s| s.done) {
+                    let _ = done.send(());
                 }
             }
         }
@@ -758,6 +812,10 @@ impl Actor {
         if self.agent() == Agent::Codex && ignore {
             let untrusted = error(AgentErrorClass::ProjectUntrusted, "project_untrusted");
             return drop(pending.reply.send(Err(untrusted)));
+        }
+        // A reclaim: the next instance opens it.
+        if self.stopping.as_ref().is_some_and(|s| s.done.is_none()) {
+            return self.waiting.push(pending);
         }
         let (Some(instance), Some((wire, _))) = (&self.instance, &self.wire) else {
             self.waiting.push(pending);
@@ -851,6 +909,7 @@ impl Actor {
                 }
             }
             Wire::Prompted(session, tag, result) => {
+                (self.inflight, self.busy_at) = (self.inflight.saturating_sub(1), self.now());
                 let agent = self.agent();
                 let Some(route) = self.sessions.get_mut(&session) else {
                     return;
@@ -914,6 +973,7 @@ impl Actor {
                 extract,
                 cwd,
                 commands: None,
+                active: false,
             },
         );
         let reply = pending.reply;
@@ -1021,7 +1081,8 @@ impl Actor {
                 let sent = conn.request(request, move |result| {
                     let _ = wire.send(Wire::Prompted(id, tag, result));
                 });
-                drop(sent);
+                (self.inflight, self.busy_at) =
+                    (self.inflight + usize::from(sent.is_ok()), self.now());
             }
             DriverCommand::Cancel { session } => {
                 drop(conn.notify(CancelNotification::new(session.0)));
@@ -1073,13 +1134,20 @@ impl Actor {
     }
 
     fn incoming(&mut self, message: FromAgent) {
+        self.busy_at = self.now();
         match message {
             FromAgent::Update(notification) => {
                 let session = notification.session_id.to_string();
                 let Some(route) = self.sessions.get_mut(&session) else {
                     return;
                 };
-                for event in route.extract.update(&notification.update) {
+                let events = route.extract.update(&notification.update);
+                for event in &events {
+                    if let DriverEvent::RunState(state) = event {
+                        route.active = state.active;
+                    }
+                }
+                for event in events {
                     match event {
                         DriverEvent::CommandsChanged(commands) => self.commands(&session, commands),
                         event => self.to_session(&session, event),
@@ -1194,15 +1262,22 @@ impl Actor {
         (self.recorded, self.exit) = (Vec::new(), None);
         self.resources.send_replace(None);
         let (instance, stderr) = (id, tail.map(|tail| tail.text()).unwrap_or_default());
+        let reclaimed = self.stopping.as_ref().is_some_and(|s| s.reclaimed);
         let exited = DriverEvent::AdapterExited {
             instance,
             status,
             stderr,
+            reclaimed,
         };
         self.broadcast(exited);
         self.sessions.clear();
+        (self.inflight, self.probed) = (0, false);
         match self.stopping.take() {
-            Some(stopping) => drop(stopping.done.send(())),
+            Some(Stopping {
+                done: Some(done), ..
+            }) => drop(done.send(())),
+            // A reclaim: the attaches that came meanwhile start the next.
+            Some(_) => self.ensure_started(),
             None => {
                 self.restarts.failed(self.now());
                 self.ensure_started();

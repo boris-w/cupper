@@ -688,6 +688,83 @@ async fn it_codex_untrusted_an_attach_without_the_project_config_is_refused() {
     f.stop().await;
 }
 
+/// The run states a session hears until an event that `ends`, and that event.
+async fn until(
+    heard: &mut Events,
+    ends: impl Fn(&DriverEvent) -> bool,
+) -> (Vec<bool>, DriverEvent) {
+    let mut active = Vec::new();
+    loop {
+        let event = heard.recv().await.unwrap();
+        if let DriverEvent::RunState(state) = &event {
+            active.push(state.active);
+        }
+        if ends(&event) {
+            return (active, event);
+        }
+    }
+}
+
+fn reclaimed(event: &DriverEvent) -> bool {
+    matches!(
+        event,
+        DriverEvent::AdapterExited {
+            reclaimed: true,
+            ..
+        }
+    )
+}
+
+/// IT-K20-reclaim: Codex's adapter keeps the MCP servers of closed sessions
+/// (K20), so it is reclaimed at a sample that finds it idle and over 2 GiB.
+/// A prompt in flight holds it: the first sample passes, and the one after
+/// the prompt came back reclaims it. The session, its thread's state heard,
+/// resumes on the next instance.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_k20_reclaim_over_2_gib_once_no_prompt_is_in_flight() {
+    let f = Fixture::codex("k20-memory", &[], Some(3 << 30));
+    let start = f.clock.now_mono();
+    let mut session = f.attach().await.unwrap();
+    let id = session.0.clone();
+    let heard = f.prompt(&mut session, "wait_cancel");
+    let (working, _) = until(heard, |e| matches!(e, DriverEvent::RunState(_))).await;
+    let mut resources = f.runtime.resources();
+    drop(f.tick(30, resources.wait_for(Option::is_some)).await);
+    f.runtime.send(DriverCommand::Cancel {
+        session: id.clone(),
+    });
+    let (idle, _) = until(heard, |e| matches!(e, DriverEvent::PromptDone { .. })).await;
+    assert_eq!((working, idle), (vec![true], vec![false]));
+    let (_, exited) = f
+        .tick(
+            60,
+            until(heard, |e| matches!(e, DriverEvent::AdapterExited { .. })),
+        )
+        .await;
+    assert!(reclaimed(&exited), "{exited:?}");
+    assert!(f.clock.now_mono() >= start + Duration::from_secs(60));
+    let resume = AttachTarget::Resume(id);
+    let mut session = f.open(resume, ProjectConfigPolicy::Load).await.unwrap();
+    assert_eq!(f.say(&mut session, "say again").await, "again");
+    let ended = f.column("SELECT count(ended_at) || '/' || count(*) FROM adapters");
+    assert_eq!(ended, ["1/2"]);
+    f.stop().await;
+}
+
+/// IT-K20-reclaim: small, the adapter goes after 30 minutes without work.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_k20_reclaim_after_30_minutes_without_work() {
+    let f = Fixture::codex("k20-quiet", &[], None);
+    let mut session = f.attach().await.unwrap();
+    f.say(&mut session, "say hi").await;
+    let done = f.clock.now_mono();
+    let exited = |e: &DriverEvent| matches!(e, DriverEvent::AdapterExited { .. });
+    let (_, exited) = f.tick(31 * 60, until(&mut session.1, exited)).await;
+    let quiet = f.clock.now_mono().saturating_duration_since(done);
+    assert!(reclaimed(&exited), "{exited:?}");
+    assert!((30 * 60..31 * 60).contains(&quiet.as_secs()), "{quiet:?}");
+}
+
 /// IT-adapter-restart (T218): a prompt the adapter's exit cuts off ends
 /// with the instance, though its failure comes first; the session's next
 /// message then resumes it on the next instance. A prompt the agent fails is
