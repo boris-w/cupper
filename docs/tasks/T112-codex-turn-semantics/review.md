@@ -21,3 +21,7 @@
 
 - **交接事项**（已写入 handoff-notes）：假 agent 的 codex 形态 `say` 不带 `messageId`，以后要区分模型的话和适配器的文字时，给它加一个带 ID 的 `say`。
 - T230 交给同一个执行者，用 T054，从 notes 里取回草稿。
+
+## 补充：一处更正（2026-11-03，T230 开工时）
+
+执行者在 T230 开工时更正：`ItemPatch` 早就有 `params: Option<NoticeParams>`，Rust 和 TS 的会话视图都会合并它，界面的 NoticeRow 也已经用 `params.attempt`、`params.max` 填文案。所以 K18 移出 T112 的理由里，"要改接口"一条不成立。另一条理由仍然成立：notice 要在回合里保持打开，不再是开始即结束的即时条目，所以单独做一个任务仍然合适。T230 的范围已相应收窄。

@@ -11,6 +11,8 @@
 
 ## 范围
 
+> 2026-11-03 开工时更正：`ItemPatch` 早就有 `params`，两边的会话视图和界面的 NoticeRow 都已支持，下面第 1、2、5 条不用做，没有协议改动。本任务只做第 3、4 条（会话这一侧和用例）。
+
 **做**：
 1. 协议附加：`ItemPatch` 加可选的 `params`。契约已冻结，只能附加，`schema-compat` 必须 0 breaking；`pnpm gen` 并提交生成物。
 2. Rust 与 TS 两边的会话视图都按 `params` 合并。
@@ -23,7 +25,7 @@
 ## 验收标准
 
 - [ ] IT-K18-upstream-retry 通过。
-- [ ] `schema-compat` 0 breaking（只附加 `ItemPatch.params`）。
+- [ ] 不改协议。
 - [ ] PR 上 GitHub CI 的 8 个检查都通过，汇报里写上 PR 和运行的链接（守则第 9 条）。
 
 ## 规模
