@@ -1,7 +1,9 @@
 /*
  * The screenshots' fixed fonts (plan 1.8): open fonts from the fixtures stand
  * in for the system's, so that a baseline does not depend on the machine.
- * Inter has the Latin glyphs; the subset of Noto Sans SC has the rest.
+ * Inter has the Latin glyphs; the subset of Noto Sans SC has the rest. Code
+ * keeps the system's monospace font for Latin, but Chinese in it takes the
+ * subset too, instead of the system's Chinese font.
  */
 @font-face {
   font-family: "Fixture Inter";
@@ -15,4 +17,5 @@
 }
 :root {
   --font-sans: "Fixture Inter", "Fixture Noto Sans SC";
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, "Fixture Noto Sans SC", monospace;
 }
