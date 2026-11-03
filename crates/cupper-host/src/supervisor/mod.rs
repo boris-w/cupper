@@ -227,12 +227,14 @@ impl Host {
         let ids = Arc::new(IdGen::new(clock.clone()));
         // Each adapter starts from what the installer installs, once it has.
         let (plans, registry) = installer_inputs(&payload);
-        let (published, install) = runtime::progress();
-        let finders: Vec<Finder> = [(Agent::Claude, install)]
+        let mut published = Vec::new();
+        let finders: Vec<Finder> = [Agent::Claude, Agent::Codex]
             .into_iter()
-            .map(|(agent, install)| {
-                let (node, bundle) =
-                    runtime::claude_adapter(&runtime::runtime_dir(&data_dir), &plans);
+            .map(|agent| {
+                let (publish, install) = runtime::progress();
+                published.push((agent, publish));
+                let runtime_dir = runtime::runtime_dir(&data_dir);
+                let (node, bundle) = runtime::adapter(&runtime_dir, &plans, agent);
                 Finder {
                     agent,
                     clock: clock.clone(),
@@ -326,9 +328,11 @@ impl Host {
                     {
                         watch.bundle_changed();
                     }
-                    let (state, failure) = runtime::adapter_state(statuses);
-                    index.runtime(state.clone(), failure.clone());
-                    published.send_replace((state, failure));
+                    for (agent, published) in &published {
+                        let (state, failure) = runtime::adapter_state(statuses, *agent);
+                        index.runtime(agent.kind(), state.clone(), failure.clone());
+                        published.send_replace((state, failure));
+                    }
                 };
                 participant.idle(installer.run(&*clock, publish)).await;
             });
@@ -883,7 +887,8 @@ mod tests {
         // The fake agent, never started: no CLI discovery in the test's own
         // process, whose `HOME` is the user's (T203).
         let agent = serde_json::json!({"program": launch::fake_agent()});
-        payload.test_config.agents.claude = Some(serde_json::from_value(agent).unwrap());
+        payload.test_config.agents.claude = Some(serde_json::from_value(agent.clone()).unwrap());
+        payload.test_config.agents.codex = Some(serde_json::from_value(agent).unwrap());
         let path = BTreeMap::from([("PATH".to_owned(), "/usr/bin:/bin".to_owned())]);
         payload.test_config.login_env = Some(path);
         let start = Start {

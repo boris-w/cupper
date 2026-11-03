@@ -26,6 +26,7 @@ mod projects;
 mod rows;
 mod status;
 
+use std::collections::HashMap;
 use std::mem;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock, Weak};
@@ -128,8 +129,8 @@ enum Mail {
     Agent(Box<AgentStatus>),
     /// The self-check found the code on disk changed.
     PendingUpgrade,
-    /// The runtime installer's state of Claude's adapter runtime.
-    Runtime(RuntimeState, Option<RuntimeFailure>),
+    /// The runtime installer's state of an agent's adapter runtime.
+    Runtime(AgentKind, RuntimeState, Option<RuntimeFailure>),
     Checkpoint(oneshot::Sender<()>),
     /// `test/seed` wrote sessions: reconcile with the tables again.
     #[cfg(feature = "test-harness")]
@@ -182,7 +183,7 @@ impl IndexHandle {
             mail: mail.clone(),
             gateway: Arc::clone(&gateway),
             deps,
-            runtime: None,
+            runtime: HashMap::new(),
         };
         tokio::spawn(actor.run(inbox, participant));
         Ok(Self { mail, gateway })
@@ -199,8 +200,8 @@ impl IndexHandle {
 
     /// `agents.updated` shows the runtime installer's state for Claude's
     /// adapter, whatever its runtime reports (design 5.2.12).
-    pub fn runtime(&self, state: RuntimeState, failure: Option<RuntimeFailure>) {
-        let _ = self.mail.send(Mail::Runtime(state, failure));
+    pub fn runtime(&self, agent: AgentKind, state: RuntimeState, failure: Option<RuntimeFailure>) {
+        let _ = self.mail.send(Mail::Runtime(agent, state, failure));
     }
 
     /// `host.updated` says an upgrade waits (design 5.2.13).
@@ -285,8 +286,8 @@ struct IndexActor {
     mail: mpsc::UnboundedSender<Mail>,
     gateway: Arc<OnceLock<Weak<Gateway>>>,
     deps: IndexDeps,
-    /// What the runtime installer last said of Claude's adapter runtime.
-    runtime: Option<(RuntimeState, Option<RuntimeFailure>)>,
+    /// What the runtime installer last said of each agent's adapter runtime.
+    runtime: HashMap<AgentKind, (RuntimeState, Option<RuntimeFailure>)>,
 }
 
 impl IndexActor {
@@ -354,16 +355,13 @@ impl IndexActor {
                 }
                 Mail::Rescanned(project, scan) => self.rescanned(project, scan).await,
                 Mail::Agent(status) => self.agent(*status).await,
-                Mail::Runtime(state, failure) => {
-                    self.runtime = Some((state, failure));
-                    let claude = |view: &IndexView| {
-                        let agents = view.agents.as_ref()?.agents.iter();
-                        agents
-                            .clone()
-                            .find(|a| a.agent == AgentKind::Claude)
-                            .cloned()
+                Mail::Runtime(agent, state, failure) => {
+                    self.runtime.insert(agent.clone(), (state, failure));
+                    let status = |view: &IndexView| {
+                        let mut agents = view.agents.as_ref()?.agents.iter();
+                        agents.find(|a| a.agent == agent).cloned()
                     };
-                    if let Some(status) = read(&self.handle, claude) {
+                    if let Some(status) = read(&self.handle, status) {
                         self.agent(status).await;
                     }
                 }
@@ -689,7 +687,7 @@ impl IndexActor {
 
     /// One agent's status into `agents.updated`.
     async fn agent(&mut self, mut status: AgentStatus) {
-        if let (AgentKind::Claude, Some((state, failure))) = (&status.agent, &self.runtime) {
+        if let Some((state, failure)) = self.runtime.get(&status.agent) {
             status.adapter.runtime = state.clone();
             status.adapter.failure = failure.clone();
         }

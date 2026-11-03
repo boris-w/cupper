@@ -42,8 +42,8 @@ pub struct TestConfig {
     /// Resident memory, in bytes, to report for each agent's adapter process
     /// group instead of sampling it (K20, design 5.6.8).
     pub rss_samples: PerAgent<u64>,
-    /// Claude's adapters played inside the host's process instead of started
-    /// (the B-layer golden runner, design 5.9.3). Only a host started in a
+    /// Every agent's adapters played inside the host's process instead of
+    /// started (the B-layer golden runner, design 5.9.3). Only a host started in a
     /// test's own process can have it; no payload carries it.
     #[cfg(feature = "test-harness")]
     #[serde(skip)]
@@ -83,6 +83,7 @@ impl<T> PerAgent<T> {
     pub fn of(&self, agent: Agent) -> Option<&T> {
         match agent {
             Agent::Claude => self.claude.as_ref(),
+            Agent::Codex => self.codex.as_ref(),
         }
     }
 }

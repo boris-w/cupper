@@ -18,7 +18,7 @@ use crate::diag::stderr::AdapterLog;
 use crate::driver::api::{NormUpdate, PromptTag};
 use crate::driver::probe::login_shell::{Failure, LoginEnv};
 use crate::orchestrator::testkit::text;
-use crate::runtime::{claude_adapter, plans, progress};
+use crate::runtime::{adapter, plans, progress};
 use crate::store::testutil::{TempDir, host_writer, query, raw_db, raw_rows};
 use crate::store::{Durability, RAW_WRITER, RawWriter, RawWriterThread, WriterThread};
 use cupper_protocol::domain::AgentKind;
@@ -731,7 +731,7 @@ async fn it_adapter_restart_backs_off_then_crashed() {
 async fn it_runtime_first_prompt_waits_a_stop_ends_it_a_failure_is_named() {
     let plans = plans(crate::manifest::embedded());
     let (published, install) = progress();
-    let (node, bundle) = claude_adapter(Path::new("/missing"), &plans);
+    let (node, bundle) = adapter(Path::new("/missing"), &plans, Agent::Claude);
     let mut launch = launch::injected(Agent::Claude, PathBuf::new(), Vec::new(), &host(), &login());
     launch.program = launch::Program::Runtime {
         node,

@@ -329,13 +329,24 @@ fn plans_of_the_embedded_manifest_cover_each_component() {
     let Source::Npm(npm) = &claude.source else {
         panic!("{claude:?}")
     };
-    // Every other file is the input of a bundle, or codex-acp's (T111).
+    // codex-acp is copied as it is bundled (T111).
+    let codex = &plans[3];
+    assert_eq!(codex.version, manifest.codex_acp.version);
+    assert_eq!(
+        codex.files.keys().collect::<Vec<_>>(),
+        ["LICENSE", CODEX_ADAPTER]
+    );
+    let Source::Bundle(sources) = &codex.source else {
+        panic!("{codex:?}")
+    };
+    assert_eq!(
+        codex.files[CODEX_ADAPTER],
+        manifest.files[&sources[CODEX_ADAPTER]]
+    );
+    // Every other file is the input of a bundle.
     let inputs = [&npm.lockfile.0, &npm.script.0];
-    let rest = manifest
-        .files
-        .keys()
-        .filter(|path| inputs.contains(path) || path.starts_with("Resources/runtime/codex-acp-"));
-    let copied = plans[..2]
+    let rest = manifest.files.keys().filter(|path| inputs.contains(path));
+    let copied = [&plans[0], &plans[1], codex]
         .iter()
         .map(|plan| plan.files.len())
         .sum::<usize>();

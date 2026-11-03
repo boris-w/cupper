@@ -519,7 +519,7 @@ impl Actor {
         self.recorded = groups.into_iter().filter(ProcessGroup::is_alive).collect();
         launch::record_groups(&self.deps.cx.writer, &instance.id, &self.recorded);
         let sessions = self.sessions.len();
-        if resources.claude_processes > sessions {
+        if self.agent() == Agent::Claude && resources.claude_processes > sessions {
             tracing::warn!(
                 ?resources,
                 sessions,
@@ -763,7 +763,8 @@ impl Actor {
         // The agent gets the real path (K13).
         let cwd = fs::canonicalize(&pending.attach.cwd).unwrap_or(pending.attach.cwd);
         pending.attach.cwd = cwd.clone();
-        let meta = session_meta(&pending.attach.project_config);
+        let claude = self.agent() == Agent::Claude;
+        let meta = claude.then(|| session_meta(&pending.attach.project_config));
         let wire = wire.clone();
         let sent = match pending.attach.target.clone() {
             AttachTarget::New => conn.request(
@@ -1204,8 +1205,8 @@ impl Actor {
     }
 }
 
-/// The `_meta` of `session/new` and `session/resume`, the same for both so
-/// that the adapter does not rebuild a resumed session's process:
+/// Claude's `_meta` of `session/new` and `session/resume`, the same for both
+/// so that the adapter does not rebuild a resumed session's process:
 /// - the thinking as summaries (design 5.6.3): recent models leave its text
 ///   out by default, and the adapter then has no thought to send (T066).
 ///   Only the CLI's `--thinking-display`: the SDK's `thinking` would turn
