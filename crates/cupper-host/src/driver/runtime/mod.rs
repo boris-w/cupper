@@ -38,7 +38,9 @@
 //!   nothing from the agent for 10 s (a turn of its own, K9), and
 //!   over 2 GiB, or without work for 30 minutes, or probed with no session
 //!   left. It stops as the host stops it; its sessions hear `AdapterExited`
-//!   as reclaimed, and attaches meanwhile wait for the next instance.
+//!   as reclaimed. Meanwhile, as during `agents/restart`, attaches wait for
+//!   the next instance, and a prompt fails as "Session not found", so that
+//!   its session resumes there and sends it again (K6).
 //! - **Command lists** (design 5.6.2): Claude pushes its whole list when a
 //!   session opens and at every turn's start. An attach answers with the
 //!   agent's latest list without waiting for the session's own; after that a
@@ -1064,6 +1066,14 @@ impl Actor {
     }
 
     async fn command(&mut self, command: DriverCommand) {
+        // A reclaim or a restart: the session resumes on the next instance
+        // and sends the prompt again (K6).
+        if let DriverCommand::Prompt { session, tag, .. } = &command
+            && self.stopping.as_ref().is_some_and(|s| s.done.is_none())
+        {
+            let (tag, error) = (*tag, error(AgentErrorClass::SessionNotFound, "restarting"));
+            return self.to_session(&session.0, DriverEvent::PromptFailed { tag, error });
+        }
         let Some((_, conn, wire)) = link(&self.instance, &self.wire) else {
             return;
         };

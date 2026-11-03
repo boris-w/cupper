@@ -813,7 +813,14 @@ async fn it_adapter_restart_backs_off_then_crashed() {
     // `agents/restart`: the adapter stops, which is no failure, and its
     // session attaches again at once.
     f.runtime.restart();
+    // A prompt meanwhile fails as "Session not found", to be sent again (K6).
+    let heard = f.prompt(&mut session, "say lost");
     let exited = |e: &DriverEvent| matches!(e, DriverEvent::AdapterExited { .. });
+    let failed = |e: &DriverEvent| matches!(e, DriverEvent::PromptFailed { .. }) || exited(e);
+    let (_, failed) = until(heard, failed).await;
+    let lost = |e: &AgentError| e.class == AgentErrorClass::SessionNotFound;
+    let lost = matches!(&failed, DriverEvent::PromptFailed { error, .. } if lost(error));
+    assert!(lost, "{failed:?}");
     let (_, exited) = f.tick(8, until(&mut session.1, exited)).await;
     assert!(!reclaimed(&exited), "{exited:?}");
     let start = f.clock.now_mono();

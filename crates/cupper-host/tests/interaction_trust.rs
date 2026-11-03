@@ -16,7 +16,7 @@ use cupper_host::driver::runtime::launch;
 use cupper_host::gateway::testkit::TempDir;
 use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::methods::project::{
-    ProjectAdd, ProjectTrust, ProjectTrustInfo, ProjectTrustInfoParams,
+    AgentsRestart, ProjectAdd, ProjectTrust, ProjectTrustInfo, ProjectTrustInfoParams,
 };
 use cupper_protocol::methods::session::{SessionConfirmConfig, SessionCreate, SessionQueueResume};
 use serde_json::{Value, json};
@@ -436,4 +436,13 @@ async fn it_codex_untrusted_no_session_until_the_project_is_trusted() {
     said(&data_dir, &session, "meta=null").await;
     let completed = events(&data_dir, &session, "turn.completed", 1).await;
     assert_eq!(completed[0]["status"], "completed");
+    // `agents/restart`: once the session heard it, it attaches again for
+    // its next message.
+    let restart = json!({"command_id": client::command_id(), "agent": "codex"});
+    let restarted = client.request::<AgentsRestart>(typed(restart)).await;
+    restarted.unwrap();
+    let notice = notice(&data_dir, &session, 3).await;
+    assert_eq!(notice, ("agent_restarted".into(), Value::Null));
+    send(&client, &session, "say again").await;
+    said(&data_dir, &session, "again").await;
 }
