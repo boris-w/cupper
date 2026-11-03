@@ -251,7 +251,8 @@ impl Host {
         let found = finder.discover(project_roots(&reader)?).await;
         let git = git_tool(&found, &data_dir)?;
         let home = PathBuf::from(found.host.get("HOME").cloned().unwrap_or_default());
-        let settings = SettingsHandle::load(&reader, writer.clone(), clock.clone(), &home)?;
+        let settings =
+            SettingsHandle::load(&reader, writer.clone(), clock.clone(), &home, &data_dir)?;
         // The audit records of the gateway, the sessions, the index and the
         // host itself.
         let (records, audit) = mpsc::unbounded_channel();
