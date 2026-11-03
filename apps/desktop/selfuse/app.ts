@@ -213,5 +213,5 @@ export function runtimeInstalled(name: string): true | undefined {
     const versions = existsSync(dir) ? readdirSync(dir).filter((v) => !v.startsWith(".")) : [];
     return versions.some((version) => existsSync(join(dir, version, ".installed.json")));
   };
-  return ["node", "esbuild-wasm", "claude-agent-acp"].every(installed) || undefined;
+  return ["node", "esbuild-wasm", "claude-agent-acp", "codex-acp"].every(installed) || undefined;
 }

@@ -53,18 +53,8 @@ describe("E2E-selfuse-replace", () => {
       });
       await until("the old host gone", () => !processes().has(running.pid) || undefined);
 
-      // Its host gone, the old UI connects again and starts the host now on
-      // disk. Quitting while it connects hangs the app (T225, whose
-      // E2E-quit-during-reconnect covers it): first the outcome of both of
-      // its connections, as main.log records them.
-      await until("the old UI's reconnection", () => {
-        const lines = old.log();
-        const since = lines.findLastIndex((line) => line.status === "reconnecting");
-        const after = since < 0 ? [] : lines.slice(since + 1);
-        const control = after.some((line) => ["ready", "failed"].includes(String(line.status)));
-        const window = after.some((line) => String(line.msg).startsWith("window connect"));
-        return (control && window) || undefined;
-      });
+      // Quit straight away, as a user who replaced the app without quitting
+      // it first does: the old UI may still be connecting again (T225).
       await old.quit();
       const now = new App(installed, "cupper-local");
       try {
