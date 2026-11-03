@@ -512,7 +512,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 **有序退出**（`host/exit`、SIGTERM、空闲、升级）：停止 accept → 向所有连接发 `host/shutdown` 通知 → 如果是强制退出，运行中的回合标为 `interrupted` → 按 ADR-09 的顺序关闭适配器（逐个 `session/close` → 关闭 stdin → 等进程组退出 3 s → SIGTERM → 2 s → SIGKILL）→ 写检查点、清空写线程队列、写 `meta.last_clean_exit_at` → 释放电源断言 → 删除套接字 → 释放锁。
 
-**防休眠**（NFR-13，M1 为 P1）：有进行中的回合或待处理的交互请求时，持有 `PreventUserIdleSystemSleep` 断言，没有时立即释放。
+**防休眠**（NFR-13，M1 为 P1）：有进行中的回合或待处理的交互请求时，持有 `PreventUserIdleSystemSleep` 断言，没有时立即释放。T156 的实现：每个会话 actor 在处理完每个输入后报"运行中的回合 + 待处理请求"的计数，会话离开内存时归还；`Supervisor` 的纯核心按总数决定取得或释放，断言由监护 actor 持有，`host.updated.power_assertion` 如实反映；有序退出时释放，之后不再取得；断言名是固定的 `cupper: agents at work`。设置页"通用"里的开关（5.7.4）还没接，T147 接入时用设置键 `host.prevent_idle_sleep`（默认开），关掉时立即释放。
 
 **资源采样**：每 30 秒采样一次各适配器进程组的常驻内存，写进 `agents` 状态（NFR-11、ADR-09 的设置页显示），并交给驱动层的回收策略（[5.6.8](06-agent-driver.md#568-资源回收)）。
 

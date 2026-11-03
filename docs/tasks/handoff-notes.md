@@ -497,3 +497,4 @@
 | T130 或以后附加协议字段的任务 | `git/diff` 的文件列表没有 blob 兜底，几百个文件以上会超过 64,000 字节的帧，宿主只能回 `too_large`；要改得在协议里附加一个可选字段 | T120 |
 | T221、T222 | `unstaged` 里 git-crypt 这类过滤器的文件：没改动也会显示为"已变化"（快照里是占位 blob，index 里是密文）；可以在工作区内容与 index 的 stat 一致时保留 index 条目 | T120 |
 | T124 | `git/diff` 对回合范围一律加 `mixed_changes`；worktree 模式出现后，按 GT-1 只在本地模式下加 | T120 |
+| T147 | 设置页"通用"的防休眠开关：设置键 `host.prevent_idle_sleep: bool`（默认 true，write 即可），宿主启动时读初值，`SettingsPort` 在它变化时调 `Power::enabled(bool)`；`PowerCore` 加输入 `Enabled(bool)`，持有条件改成"计数 > 0、已启用、未退出"，约 15 行加测试（T156 的建议） | T156 |
