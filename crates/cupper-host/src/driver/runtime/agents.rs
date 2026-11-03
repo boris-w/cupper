@@ -1,7 +1,7 @@
-//! `agents/capabilities` and `agents/refresh` (design 5.6.6, 5.6.7): the
-//! capability cache for the new-session page, and the settings page's
-//! "check again", which finds the CLI, checks its version and, while the
-//! cache is empty, probes the agent.
+//! `agents/capabilities`, `agents/refresh` and `agents/restart` (design
+//! 5.6.6–5.6.8): the capability cache for the new-session page, the settings
+//! page's "check again", which finds the CLI, checks its version and, while
+//! the cache is empty, probes the agent, and its restart.
 
 use std::fmt;
 use std::sync::Arc;
@@ -10,11 +10,12 @@ use cupper_protocol::domain::AgentKind;
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
 use cupper_protocol::methods::project::{
     AgentsCapabilities, AgentsCapabilitiesParams, AgentsCapabilitiesResult, AgentsRefresh,
-    AgentsRefreshResult,
+    AgentsRefreshResult, AgentsRestart, AgentsRestartParams,
 };
 use cupper_protocol::rpc::Method;
 use futures::FutureExt;
 use futures::future::BoxFuture;
+use serde_json::json;
 
 use super::launch::{Agent, Launch};
 use super::{AgentRuntime, cache};
@@ -67,6 +68,7 @@ impl Agents {
     pub fn route(self: &Arc<Self>, routes: &mut Routes) {
         routes.add::<AgentsCapabilities>(Arc::clone(self) as Arc<dyn Port>);
         routes.add::<AgentsRefresh>(Arc::clone(self) as Arc<dyn Port>);
+        routes.add::<AgentsRestart>(Arc::clone(self) as Arc<dyn Port>);
     }
 
     fn runtime(&self, agent: &AgentKind) -> Result<(Agent, &AgentRuntime), RpcError> {
@@ -111,6 +113,22 @@ impl Port for Agents {
     fn deliver(&self, call: Call) -> Reply {
         let agents = self.clone();
         async move {
+            if call.method == AgentsRestart::NAME {
+                let ticket = call.ticket.expect("agents/restart is a command");
+                let params = serde_json::from_value::<AgentsRestartParams>(call.params);
+                let params = params.map_err(|err| RpcError::new(INVALID_PARAMS, err.to_string()));
+                let found = params.and_then(|p| Ok(agents.runtime(&p.agent)?.1.clone()));
+                let runtime = match found {
+                    Ok(runtime) => runtime,
+                    Err(err) => {
+                        ticket.reject(err.clone());
+                        return Err(err);
+                    }
+                };
+                ticket.complete(Ok(json!({}))).commit().await?;
+                runtime.restart();
+                return Ok(json!({}));
+            }
             let params = serde_json::from_value::<AgentsCapabilitiesParams>(call.params);
             let agent = params
                 .map_err(|err| RpcError::new(INVALID_PARAMS, err.to_string()))?

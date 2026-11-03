@@ -768,12 +768,19 @@ async fn it_k20_reclaim_after_30_minutes_without_work() {
 /// IT-adapter-restart (T218): a prompt the adapter's exit cuts off ends
 /// with the instance, though its failure comes first; the session's next
 /// message then resumes it on the next instance. A prompt the agent fails is
-/// the session's to hear at once.
+/// the session's to hear at once. Both agents' classifiers (T111).
 #[cfg(feature = "test-harness")]
 #[tokio::test(flavor = "multi_thread")]
 async fn it_adapter_restart_a_cut_off_prompt_ends_with_the_instance() {
+    for agent in [Agent::Claude, Agent::Codex] {
+        cut_off(agent).await;
+    }
+}
+
+#[cfg(feature = "test-harness")]
+async fn cut_off(agent: Agent) {
     let (agents, started) = mpsc::unbounded_channel();
-    let mut launch = launch::injected(Agent::Claude, PathBuf::new(), Vec::new(), &host(), &login());
+    let mut launch = launch::injected(agent, PathBuf::new(), Vec::new(), &host(), &login());
     launch.program = launch::Program::InProcess(launch::InProcess(agents));
     let f = Fixture::with("cut-off", launch, None);
     cutting(started);
@@ -803,6 +810,16 @@ async fn it_adapter_restart_backs_off_then_crashed() {
         assert_eq!(since(&f, start), Duration::from_secs(wait));
         assert_eq!(f.say(&mut session, "say up").await, "up");
     }
+    // `agents/restart`: the adapter stops, which is no failure, and its
+    // session attaches again at once.
+    f.runtime.restart();
+    let exited = |e: &DriverEvent| matches!(e, DriverEvent::AdapterExited { .. });
+    let (_, exited) = f.tick(8, until(&mut session.1, exited)).await;
+    assert!(!reclaimed(&exited), "{exited:?}");
+    let start = f.clock.now_mono();
+    session = f.attach().await.unwrap();
+    assert_eq!(since(&f, start), Duration::ZERO);
+    assert_eq!(f.say(&mut session, "say up").await, "up");
     f.stop().await;
 
     // Five failed starts within 5 minutes: `crashed`, until cleared.
@@ -817,7 +834,7 @@ async fn it_adapter_restart_backs_off_then_crashed() {
         f.attach().await.unwrap_err().class,
         AgentErrorClass::Crashed
     );
-    f.runtime.clear_crashed();
+    f.runtime.restart();
     assert_eq!(
         f.attach().await.unwrap_err().class,
         AgentErrorClass::RuntimeFailed

@@ -144,7 +144,7 @@ enum Mail {
     Command(DriverCommand),
     Withdrawn(AskId),
     Stop(oneshot::Sender<()>),
-    ClearCrashed,
+    Restart,
     Probe(oneshot::Sender<Result<SessionCapabilities, AgentError>>),
     Status(oneshot::Sender<AgentStatus>),
     /// `agents/refresh` found the CLI again (design 5.6.6).
@@ -363,9 +363,11 @@ impl AgentRuntime {
         self.resources.clone()
     }
 
-    /// Forgets the failures, so that a `crashed` agent starts again.
-    pub fn clear_crashed(&self) {
-        let _ = self.mail.send(Mail::ClearCrashed);
+    /// `agents/restart` (design 5.6.8): the adapter stops as the host stops
+    /// it, its sessions hear that it exited and attach again; the failures
+    /// are forgotten, so that a `crashed` agent starts again.
+    pub fn restart(&self) {
+        let _ = self.mail.send(Mail::Restart);
     }
 }
 
@@ -641,14 +643,17 @@ impl Actor {
                 // A start that waits for the installer gives up.
                 self.start_stop = None;
                 match &mut self.stopping {
-                    // A reclaim on its way becomes the host's stop.
+                    // A reclaim or a restart becomes the host's stop.
                     Some(stopping) => stopping.done = Some(done),
                     None => self.stop(Some(done), false),
                 }
             }
-            Mail::ClearCrashed => {
+            Mail::Restart => {
                 self.restarts.clear();
                 self.notify();
+                if self.instance.is_some() && self.stopping.is_none() {
+                    self.stop(None, false);
+                }
                 self.ensure_started();
             }
             Mail::Probe(reply) => {
@@ -813,7 +818,7 @@ impl Actor {
             let untrusted = error(AgentErrorClass::ProjectUntrusted, "project_untrusted");
             return drop(pending.reply.send(Err(untrusted)));
         }
-        // A reclaim: the next instance opens it.
+        // A reclaim or a restart: the next instance opens it.
         if self.stopping.as_ref().is_some_and(|s| s.done.is_none()) {
             return self.waiting.push(pending);
         }
@@ -1276,7 +1281,7 @@ impl Actor {
             Some(Stopping {
                 done: Some(done), ..
             }) => drop(done.send(())),
-            // A reclaim: the attaches that came meanwhile start the next.
+            // A reclaim or a restart: what came meanwhile starts the next.
             Some(_) => self.ensure_started(),
             None => {
                 self.restarts.failed(self.now());
