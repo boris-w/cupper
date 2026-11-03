@@ -104,3 +104,17 @@ IT-selfuse-build 和 E2E-selfuse-coexist 通过；E2E-selfuse-replace 只在 sof
   - 退出超时后用第二次 SIGTERM 结束 App，退出检查本身仍判失败。
   - finally 里的退出失败用 `expect.soft` 报告，不盖住用例原来的失败。
 - 编排者已定：E2E-selfuse-replace 在 T225 修好之前必然失败；T160 等 T225 合并后再跑一次 selfuse，三个用例都通过才合并。
+
+### 第四次运行（nightly 41604114489，7a4f9ad，已合入 T225）
+
+IT-selfuse-build 和 E2E-selfuse-coexist 通过。E2E-selfuse-replace 卡在用例自己的"等旧界面重连出结果"这一步，60 s 后超时。
+
+- **前半段都按预期**：换包前等运行时装好有效（claude-agent-acp 08:48:43 装好）；新 CLI 以退出码 4 拒绝旧宿主；旧宿主写下 `host.pending_upgrade`，以 upgrade 退出。
+- **等不到的原因**：
+  - 旧界面在 45.091 开始 `reconnecting`。它拉起的宿主因为旧宿主还占着锁，以退出码 3 退出，45.597 control 连接停在 `failed: host_unreachable`。
+  - control 连接失败后，窗口桥不会再去连接，所以 main.log 里没有 `window connected` 或 `window connection failed` 这一行。用例同时要求 control 和窗口两个结果，就一直等不到。
+  - 第 1、2 次运行里窗口都去连了，是时序不同。
+  - 日志的写法没有变。
+- **超时后进入 finally**：旧 App 0.2 s 内退出，main.log 是 `before-quit` → `before-quit` → `will-quit` → `quit`，说明 T225 的修复在自用构建上也生效：control 连接停在 failed 时也退得出。
+- **改动**（编排者裁定）：删掉这段等待，旧宿主一退出就退出旧 App，与用户忘了先退出就换包的情形一致。重连途中退出由 E2E-quit-during-reconnect 守着。
+- **另一处同步**：main 新增了 codex-acp 运行时组件，换包前等待的组件里加上它。
