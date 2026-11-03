@@ -446,7 +446,9 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | **T120** | Git 服务 III：diff 的四种范围 | feat | 5.2.10（diff 与 hunk）、5.3.4 | T099 | 做：快照档拆成打开与拍快照两步、四种范围的 `git/diff`（`diff_token`、`caveats`、`index_unmerged`、`stat`、`filter_unsupported`）、路由。不做：写操作；`DiffCache`、`git/file_diff` 与 hunk 切分（T221，缓存要等有读它的方法才进 main）；`git/status`、`git/branches`、`cupper diff`（T222）（v1.3.86 开工后越过硬停止线拆出） | IT-git-diff-scopes | L | 否 | H.git |
 | **T221** | Git 服务 IIIb：DiffCache、file_diff 与 hunk 切分 | feat | 5.2.10（diff 与 hunk）、5.3.4 | T120 | 做：四种范围共用 `diff_token` 的 `DiffCache`（存 tree 对和文件列表，不存补丁）、`git/file_diff` 的三种操作单位（`hunk`、`mode`、`whole_file`；新增、删除、二进制、符号链接、子模块、LFS 指针）、按内容寻址的 `hunk_id`、大 hunk 转 blob；单个文件的补丁按 `DiffCache` 里的 tree 对重新生成 | 新增 IT-git-file-diff | M | 否 | H.git |
 | T222 | Git 服务 IIIc：status、branches 与 cupper diff | feat | 5.2.10（git/status）、5.3.4、5.2.14 | T120 | 做：`git/status`（HEAD、进行中的操作、文件状态）、`git/branches`、`cupper diff` | 新增 IT-git-status | M | 否 | H.git、H.cli |
-| **T121** | Git 服务 IV：暂存、取消暂存与还原（含 SP-5 的 82 个用例） | feat | 5.2.10（hunk 操作、并发）、5.2.5、5.9.8 | T221 | 做：仓库档 `apply --cached` 和 `-R`、`RepoLock`、`pending_external` 强制同步、`stale_diff`、暂存前 `check-attr`；把 SP-5 的 82 个 hunk 用例改写成 Rust 测试（原 T122）；Q32 仓库档写操作逐键确认；LFS 路径用锁定版本的 git-lfs 实测；在 T069 的夹具上登记写操作前后的故障点 | IT-git-hunk、IT-NFR9-failpoints-git；新增 IT-git-stage | L | 否 | H.git |
+| **T121** | Git 服务 IV：暂存、取消暂存与还原 | feat | 5.2.10（hunk 操作、并发）、5.2.5 | T221 | 做：`git/stage`、`git/unstage`、`git/revert` 共用一条写路径：按 `diff_token` 重新生成补丁（从 `hunk_id` 找文件时对整对 tree 跑一次 `diff-tree -p` 再挑单位，缓存不加索引）、按选中的单位拼补丁（纯函数）、用户仓库里 `check-attr filter`、`RepoLock`、`pending_external`（`Ticket::mark_external`）、仓库档 `apply [--cached] [-R]`、`stale_diff`；操作与范围对应：stage 只认 `unstaged`，unstage 只认 `staged`，revert 认 `unstaged` 与回合范围；仓库档写操作后配置变化或被拒时经会话 actor 写 `notice`（Git 服务不是会话流的写者）。不做：SP-5 的 82 个用例（T228）；Q32、LFS 与故障点（T229）（v1.3.86 开工前估算后拆出） | 新增 IT-git-stage | L | 否 | H.git、H.orch |
+| T228 | Git 服务 IV-b：SP-5 的 82 个 hunk 用例 | test | 5.2.10（hunk 操作）、5.9.8 | T121 | 做：把 SP-5 的 82 个 hunk 用例（原 T122）改写成 Rust 测试，经 service 执行操作；产品里不适用的几行（libgit2 两列、`-M` 补丁、不带 `--binary`、未跟踪文件）按产品的等价行为改写，对应关系写进 notes | IT-git-hunk | M | 否 | H.git |
+| T229 | Git 服务 IV-c：Q32、LFS 与写操作的故障点 | test | 5.2.10（调用约定）、5.9.8、Q32 | T121 | 做：在 T098 的恶意夹具上跑 stage、unstage、revert，确认没有程序被执行（Q32 仓库档写操作逐键确认）；用锁定版本的 git-lfs 实测写操作（没有 git-lfs 时跳过）；在 T069 的夹具上登记 apply 前后的故障点 | IT-NFR9-failpoints-git | S | 否 | H.git |
 | T123 | Git 服务 V：提交与推送（用户档）与 Q23 | feat | 5.2.10（用户档）、Q23 | T222 | 做：`commit -F -`、`push --set-upstream`、错误映射与脱敏的 stderr 尾部、指纹变化的确认参数；Q23（SSH agent、GPG、凭据助手）的验证与恢复指引 | IT-git-commit-push（本地裸仓库） | M | 可选：用作者的 SSH 和 GPG 配置手动验证 Q23 | H.git |
 | T124 | worktree 创建（CP-5） | feat | 5.2.10（worktree）、5.5.2、5.2.13 | T099 | 做：`worktree add`（位置与权限、分支名校验与后缀、lock、1 秒后 refresh、进度、required 过滤器的提示）、`session/create` 的 worktree 分支、崩溃后复用已登记的 worktree；在 T069 的夹具上登记"worktree add 进行中"故障点 | IT-worktree-create、IT-NFR9-failpoints-worktree | L | 否 | H.git、H.orch |
 | T125 | worktree 检查、归档、恢复与重命名 | feat | 5.2.10、5.2.6、5.5.9 | T222、T124 | 做：`worktree/check` 的 7 条规则、`session/archive`、`session/restore`、`session/rename`、`session/list_archived`、`project/remove` | IT-worktree-check-rules、IT-session-archive-restore | L | 否 | H.git、H.orch、H.idx |
@@ -487,7 +489,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T172 | M1b 端到端：NFR-2、NFR-9 与容量 | test | 5.9.4（NFR-2、NFR-9）、NFR-11 | T111、T121、T124 | 做：断线后同一 `command_id` 重发不重复执行、适配器和 CLI 崩溃后恢复、6 个会话同时运行；核对故障点的子编号全部通过 | E2E-NFR2-retry、E2E-NFR9-adapter-crash、E2E-NFR9-cli-crash、E2E-six-sessions、IT-NFR9-failpoints | M | 否 | D.main |
 | T173 | S1–S4 逐步检查表与人工证据格式 | docs | 5.12.3（退出标准 ①）、5.9.10 | T099 | 做：写 MAN-S1 至 MAN-S4 的检查表（步骤、通过条件、CLI 与适配器版本、日期）；定下全部 MAN 项证据的统一格式，与 trace-ids 的核对对齐 | 检查表与证据格式经编排者审阅 | S | 否 | Doc |
 | T174 | Q16 保留参数复核 | chore | 5.13 Q16 | T160 | 做：只读、只统计宿主日志里的订阅模式和游标落后量，据此调整窗口和保留参数，补边界性质测试；日志原文不进仓库也不进汇报 | 新增 PROP-retention-boundary | S | 是：授权读取作者自用一段时间后的本机日志 | H.store |
-| **T179** | M1b 退出验收 | chore | 5.12.3（退出标准） | T105、T108、T114、T154、T155、T156、T157、T161、T170、T171、T172、T173、T174 | 做：作者用自用构建、两种 agent 按检查表走完 S1–S4 并存档；在同一提交上 `xtask ci pr`、`xtask ci nightly` 各通过一次；核对 NFR-2、NFR-9 的用例、UNIT-unsupported-set、M1b 的待完成登记为空（按入库的逐编号结果清单复核）；写记录（含本机替代不了的缺口） | MAN-S1、MAN-S2、MAN-S3、MAN-S4；运行记录存档；缺口经用户确认；M1b 同步会纪要 | S | 是：作者亲自走 S1–S4（真实 CLI，消耗额度），确认缺口 | C |
+| **T179** | M1b 退出验收 | chore | 5.12.3（退出标准） | T105、T108、T114、T154、T155、T156、T157、T161、T170、T171、T172、T173、T174、T228、T229 | 做：作者用自用构建、两种 agent 按检查表走完 S1–S4 并存档；在同一提交上 `xtask ci pr`、`xtask ci nightly` 各通过一次；核对 NFR-2、NFR-9 的用例、UNIT-unsupported-set、M1b 的待完成登记为空（按入库的逐编号结果清单复核）；写记录（含本机替代不了的缺口） | MAN-S1、MAN-S2、MAN-S3、MAN-S4；运行记录存档；缺口经用户确认；M1b 同步会纪要 | S | 是：作者亲自走 S1–S4（真实 CLI，消耗额度），确认缺口 | C |
 
 **注**
 
@@ -507,7 +509,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 - **T110（L）**：同 T053。
 - **T111（L）**：发现、运行时复制和回收都作用于 Codex 的 AgentRuntime，IT-K20-reclaim 需要完整路径。
 - **T120（L）**：四种范围共用 `diff_token` 与 `DiffCache`。v1.3.86 开工后实现部分就越过硬停止线（估约 935 行，做完约 1,650 行），拆出 T221（`DiffCache`、`git/file_diff` 与 hunk 切分，T121 改为依赖它）和 T222（`git/status`、`git/branches`、`cupper diff`，T123、T125 改为依赖它）。
-- **T121（L）**：并入原 T122（测试 #17）：82 个用例本来就是暂存操作的验收，分开后 T121 合并时只剩 IT-git-stage。
+- **T121（L）**：并入原 T122（测试 #17）：82 个用例本来就是暂存操作的验收，分开后 T121 合并时只剩 IT-git-stage。v1.3.86 开工前估算约 1,060–1,100 行，按 T120、T222 的偏差会到 1,250 以上，拆成 T121（写操作本身，关键路径）、T228（82 个用例）、T229（Q32、LFS、故障点）。
 - **T124（L）**：worktree 添加、`session/create` 的 worktree 分支和崩溃恢复是同一个准备流程。
 - **T125（L）**：7 条规则的结论直接决定归档和恢复的行为。
 - **T127、T147**：方法名、ShellAPI 成员在写 brief 时由编排者按 P-6 的裁定补进设计。
@@ -1017,7 +1019,9 @@ flowchart LR
     T120["T120<br/>diff 的四种范围"]
     T221["T221<br/>file_diff 与 hunk"]
     T222["T222<br/>status 与 branches"]
-    T121["T121<br/>暂存与还原（含 82 例）"]
+    T121["T121<br/>暂存与还原"]
+    T228["T228<br/>82 个 hunk 用例"]
+    T229["T229<br/>Q32、LFS 与故障点"]
     T123["T123<br/>提交与推送"]
     T124["T124<br/>worktree 创建"]
     T125["T125<br/>归档与恢复"]
@@ -1092,6 +1096,8 @@ flowchart LR
   T120 --> T221
   T120 --> T222
   T221 --> T121
+  T121 --> T228
+  T121 --> T229
   T222 --> T123
   T099 --> T124
   T222 --> T125
@@ -1364,7 +1370,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | Codex | Q8 的 Codex 部分 | T102 |
 | | `AgentRuntime`、提取层与对照表、`threadStatus`、晚到输出、未信任项目拒绝启动、资源回收 | T110、T111、T112（晚到输出的宿主逻辑在 T044） |
 | | 兼容矩阵跑 Codex，重录取消场景补 K3 的 B 层 | T113 |
-| Git 与 worktree | git 服务全部方法（三档、Q32、LFS） | T120、T221、T222、T121、T123（快照档在 T061） |
+| Git 与 worktree | git 服务全部方法（三档、Q32、LFS） | T120、T221、T222、T121、T228、T229、T123（快照档在 T061） |
 | | 新建 worktree（CP-5） | T124 |
 | | 归档、恢复与清理（PS-3、GT-5） | T125、T153 |
 | | 审查面板（GT-1 至 GT-4；文件树与整组操作；行内评论进输入框的附件条） | T130、T131 或 T139、T126（评论排成文本） |
@@ -1436,7 +1442,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | AP-5 | IT-form、IT-plan-confirm → T068；E2E-question-panel → T093 |
 | GT-1 | IT-git-diff-scopes → T120；IT-git-file-diff → T221；IT-git-status → T222；IT-git-snapshot-parity → T061；E2E-S3 → T171 |
 | GT-2 | E2E-review-comment → T131（K9 不通过时 T139） |
-| GT-3 | IT-git-hunk → T121；E2E-turn-changes-undo → T132；E2E-SEC-revert-confirm → T131（K9 不通过时 T139） |
+| GT-3 | IT-git-stage → T121；IT-git-hunk → T228；E2E-turn-changes-undo → T132；E2E-SEC-revert-confirm → T131（K9 不通过时 T139） |
 | GT-4 | IT-git-commit-push → T123 |
 | GT-5 | IT-worktree-check-rules → T125 |
 | UI-0 | E2E-workspace-open → T153 |
@@ -1455,7 +1461,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | NFR-6 | PERF（5.9.6）→ T047、T061、T078、T155；SP-6 → T103、T108 |
 | NFR-7 | IT-degrade-steering、IT-degrade-plan、IT-degrade-thinking → T140 |
 | NFR-8 | E2E-single-instance、E2E-quit-confirm → T090；SMOKE-SIGNED-reattach → T181 †，或 Q35 通过时 T162 的 MAN-local-signed †；MAN-upgrade → T183 †；自用构建手动替换时的待升级路径 → T160（E2E-selfuse-replace） |
-| NFR-9 | E2E-NFR9-adapter-crash、E2E-NFR9-cli-crash → T172；IT-NFR9-failpoints → T069（`-core`）、T121（`-git`）、T124（`-worktree`），T172 核对全部子编号；IT-NFR9-crash-under-load → T069 |
+| NFR-9 | E2E-NFR9-adapter-crash、E2E-NFR9-cli-crash → T172；IT-NFR9-failpoints → T069（`-core`）、T229（`-git`）、T124（`-worktree`），T172 核对全部子编号；IT-NFR9-crash-under-load → T069 |
 | NFR-10 | IT-migrations → T025；IT-n-minus-1-cli → 第二个发布版起（不在本计划，登记为"发布（推迟）"之后） |
 | NFR-11 | IT-six-sessions-shared-adapter → T069；E2E-six-sessions → T172 |
 | NFR-12 | UNIT-redaction → T028 |
@@ -1517,7 +1523,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | Q29 | M1b 开头 | T104（不通过：T139） |
 | Q30 | 改用隔离模式之前 | 不在本计划；兼容套件按 U-R4 用真实配置，报告记录运行模式（T064）；隔离的 `CODEX_HOME` 在 Q30 之后才考虑（P-14） |
 | Q31 | M1b Codex 提取层 | T102（初查）、T110 |
-| Q32 | M1a（快照档）、M1b（仓库档写操作、LFS） | T061、T121 |
+| Q32 | M1a（快照档）、M1b（仓库档写操作、LFS） | T061、T229 |
 | Q33 | 闸门不达标时 | T079 |
 | Q34 | M1a 兼容套件（Claude）、M1b（Codex） | T064、T066、T113；结论写进 T157；需要调整扫描范围时另开缺陷修复任务改 T035 |
 | Q35 | M1b 技术验证 | T105（通过条件含私钥隔离；通过：T162）。设计 v1.3 已更正：退化模式下 CLI 照常只读接入，Q35 的收益是 NFR-8 成立、UI 和 CLI 都按签名身份校验宿主 |
@@ -1888,7 +1894,9 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T120 Git 服务 III：diff 的四种范围
 - [x] T221 Git 服务 IIIb：DiffCache、file_diff 与 hunk 切分
 - [x] T222 Git 服务 IIIc：status、branches 与 cupper diff
-- [ ] T121 Git 服务 IV：暂存、取消暂存与还原（含 SP-5 的 82 个用例）
+- [ ] T121 Git 服务 IV：暂存、取消暂存与还原
+- [ ] T228 Git 服务 IV-b：SP-5 的 82 个 hunk 用例
+- [ ] T229 Git 服务 IV-c：Q32、LFS 与写操作的故障点
 - [ ] T123 Git 服务 V：提交与推送（用户档）与 Q23
 - [ ] T124 worktree 创建（CP-5）
 - [ ] T125 worktree 检查、归档、恢复与重命名
@@ -2035,4 +2043,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.83 | 2026-11-02 | T099 开工：退出候选 18b3640 的 `ci` 运行里 IT-lifecycle 的清理用例偶发失败（测试没等 `trap` 生效），候选作废。新增 T216（只改测试），T099 改为也依赖它；T216 和 T099 已做的基础设施（`e2e-repeat` 的降速与 @focus 分轮、登记表两处）合并后，再定新候选，所有运行在新候选上重做。MAN-keyboard 由用户在 18b3640 的 e2e 构建上做完，7 项全部通过；过程中发现点击面板卡片不会把键盘焦点移进面板，新增 T217，T099 改为也依赖它。T216 合并：清理用例的子进程先报就绪再起宿主。新增 T218（T216 连跑时发现录制导出用例在负载下偶发超时），T099 改为也依赖它。T218 合并：adapter 中途退出时，runtime 不转发 SDK 先给出的 prompt 失败，回合由 `AdapterExited` 结束（产品缺陷，违反 5.2.6；5.2.6、06 各补一句）。T217 合并：点击面板空白处移焦点；RP-3 读页面焦点，不看窗口是否在前台（5.7.8 补一段）。T099 依赖的任务至此全部合并。T099 两部分合并：退出候选 ec459fd 上 GitHub 的四项全部通过，MAN-keyboard 入证据；本机 nightly 按用户决定不跑（`docs/meetings/2026-11-02-perf-local/`），`trace-ids verify --milestone M1a` 有 7 个编号未完成，K4 待同步会决定 |
 | v1.3.84 | 2026-11-02 | M1a 同步会（`docs/meetings/2026-11-02-m1a-sync/`）：PERF 只记录、不卡闸门（D1）；IT-sys-peer-current 由 macOS 26 runner 代替、改为不适用（D2）；MAN-keyboard 不重做（D3）；真实兼容在 M1b 再跑（D4）；K4 通过（D5）。T099 打勾。新增 T219 落实 D1、D2，合并后打 `gate/m1a`，再派 M1b 第一波 |
 | v1.3.85 | 2026-11-02 | T219 合并：nightly 在托管 runner 上跑 `perf`、e2e 跑 PERF-bridge-gate，只记录（摘要的 `perf` 列表、结果 `measured`）；登记表新增 `record` 状态，9 个 PERF 编号改为只记录；IT-sys-peer-current 不适用。1.6、1.8、5.4、5.5、5.7、T155 随之改写。`gate/m1a` 候选 5da6f1c：`ci` 通过，nightly 的 e2e 里 PERF-bridge-gate 压力用例失败（`perf`、`differential` 被 fail-fast 取消），不打 tag；新增 T220，修好后换候选再验 |
-| v1.3.86 | 2026-11-03 | 派发 T220 与 M1b 第一波的 T160、T120、T111。T120 开工后越过硬停止线，拆出 T221（`DiffCache`、`git/file_diff` 与 hunk 切分）和 T222（`git/status`、`git/branches`、`cupper diff`），新增 IT-git-file-diff、IT-git-status；T121 改为依赖 T221，T123、T125 改为依赖 T222；M1b 关键路径由 17 增至 19。新增 T227（T199 修过的网关同步用例在 T222 的 PR 上又失败一次）。T226 合并：失败的回合在 Settle 之前写一条 `error` 条目（attach 被拒、prompt 失败、适配器意外退出带 stderr 尾部），`FailureCode` 到 `Guidance` 穷举映射，agent 的错误文本在会话入口脱敏；02、05、06 随之补写。T222 合并：`git/status`、`git/branches`、`cupper diff`；IT-git-status 查出取回代码里未合并路径被覆盖成 modified 的错误并已修。T225 合并：控制连接不可用时按 ⌘Q 或 SIGTERM，退出判定在 `before-quit` 里同步完成，嵌套的 `app.quit()` 被 Electron 撤回，App 关窗后留着；改为下一个回合再退出（07 的 `lifecycle` 补写），E2E-quit-during-reconnect 守住。T143 合并：代码高亮（JavaScript 正则引擎、固定 class）、计划与计划药丸、错误条目的恢复指引；截图页的等宽字体接上夹具里的中文子集。T221 合并：`DiffCache` 存 tree 对和文件列表，`git/file_diff` 按需重新生成补丁并切单位，大 hunk 转 blob（5.2.10 改写）。**`gate/m1a` 打在 1f972d2**：它的 `ci`（41597322966）和 nightly（41597345134）全部通过，`trace-ids verify --milestone M1a` 为 0 of 288 未完成（记录在 `docs/tasks/T099-m1a-exit/gate-1f972d2/`）。T224 合并：重启用例的两条路径各有确定性的用例，读时钟前先等运行时做完手头一步；修前 800 次败 50 次，修后 800/800。T220 合并：PERF-bridge-gate 先建会话、趁渲染进程空闲点开，再开始洪流，负载不变；托管 runner 上"没有流重置"也只记录（D1），e2e-repeat 同口径；修后三个用例各 20 次全过。`gate/m1a` 的新候选等 T224 合并。T156 合并：会话按回合和待处理请求计数，监护 actor 持有防休眠断言，`host.updated.power_assertion` 跟随，有序退出释放（5.2.13 补实现要点）。T120 合并（收窄后）：`git/diff` 的四种范围，HEAD 经仓库档 `branch --show-current` 取得（5.2.10 补进只读命令）；评审时 `DiffCache` 整个移给 T221（只写不读的缓存不进 main）。T111 合并：宿主按 agent 各起一个运行时，Codex 的 CLI 解析到原生二进制、codex-acp 从包内复制、未信任的项目在拉起适配器前拒绝（`FailureCode` 附加 `project_untrusted`）、空闲适配器回收（`AdapterExited` 加 `reclaimed`）、`agents/restart`；06、03 随之补写。新增 T226（T143 发现宿主从不写 `error` 条目：设计 5.5.2、06 的 K17、11 都要求写，计划漏了），E2E-error-guidance 由 T143 移到 T226，新增 IT-error-item，T112 改为也依赖 T226。T160 改为依赖 T225：E2E-selfuse-replace 要等包被换掉后能正常退出。新增 T225（T160 在 runner 上发现重连途中退出 App 会卡住，产品缺陷，新增 E2E-quit-during-reconnect；用户安装自用构建之前合并）。新增 T224（T111 加的重启用例在 T220 的 PR 上偶发失败，只改测试）。新增 T223（P-4 缺的样例库、通用迁移用例和已发布脚本的锁定，T160 发现；用户安装自用构建之前合并），新增 IT-migrations-samples。SP-6 改在 GitHub runner 上跑（`docs/meetings/2026-11-03-sp6-runner/`）：T103、T104、T108 的测量只记录，浸泡缩短到约 5 小时，场景 6 仍由作者手动做；设计 5.9.6、5.9.7 随之改写 |
+| v1.3.86 | 2026-11-03 | 派发 T220 与 M1b 第一波的 T160、T120、T111。T120 开工后越过硬停止线，拆出 T221（`DiffCache`、`git/file_diff` 与 hunk 切分）和 T222（`git/status`、`git/branches`、`cupper diff`），新增 IT-git-file-diff、IT-git-status；T121 改为依赖 T221，T123、T125 改为依赖 T222；M1b 关键路径由 17 增至 19。新增 T227（T199 修过的网关同步用例在 T222 的 PR 上又失败一次）。T121 开工前估算后拆成 T121（写操作，关键路径）、T228（SP-5 的 82 个用例，IT-git-hunk）、T229（Q32、LFS、故障点，IT-NFR9-failpoints-git）；T179 改为也依赖 T228、T229。T226 合并：失败的回合在 Settle 之前写一条 `error` 条目（attach 被拒、prompt 失败、适配器意外退出带 stderr 尾部），`FailureCode` 到 `Guidance` 穷举映射，agent 的错误文本在会话入口脱敏；02、05、06 随之补写。T222 合并：`git/status`、`git/branches`、`cupper diff`；IT-git-status 查出取回代码里未合并路径被覆盖成 modified 的错误并已修。T225 合并：控制连接不可用时按 ⌘Q 或 SIGTERM，退出判定在 `before-quit` 里同步完成，嵌套的 `app.quit()` 被 Electron 撤回，App 关窗后留着；改为下一个回合再退出（07 的 `lifecycle` 补写），E2E-quit-during-reconnect 守住。T143 合并：代码高亮（JavaScript 正则引擎、固定 class）、计划与计划药丸、错误条目的恢复指引；截图页的等宽字体接上夹具里的中文子集。T221 合并：`DiffCache` 存 tree 对和文件列表，`git/file_diff` 按需重新生成补丁并切单位，大 hunk 转 blob（5.2.10 改写）。**`gate/m1a` 打在 1f972d2**：它的 `ci`（41597322966）和 nightly（41597345134）全部通过，`trace-ids verify --milestone M1a` 为 0 of 288 未完成（记录在 `docs/tasks/T099-m1a-exit/gate-1f972d2/`）。T224 合并：重启用例的两条路径各有确定性的用例，读时钟前先等运行时做完手头一步；修前 800 次败 50 次，修后 800/800。T220 合并：PERF-bridge-gate 先建会话、趁渲染进程空闲点开，再开始洪流，负载不变；托管 runner 上"没有流重置"也只记录（D1），e2e-repeat 同口径；修后三个用例各 20 次全过。`gate/m1a` 的新候选等 T224 合并。T156 合并：会话按回合和待处理请求计数，监护 actor 持有防休眠断言，`host.updated.power_assertion` 跟随，有序退出释放（5.2.13 补实现要点）。T120 合并（收窄后）：`git/diff` 的四种范围，HEAD 经仓库档 `branch --show-current` 取得（5.2.10 补进只读命令）；评审时 `DiffCache` 整个移给 T221（只写不读的缓存不进 main）。T111 合并：宿主按 agent 各起一个运行时，Codex 的 CLI 解析到原生二进制、codex-acp 从包内复制、未信任的项目在拉起适配器前拒绝（`FailureCode` 附加 `project_untrusted`）、空闲适配器回收（`AdapterExited` 加 `reclaimed`）、`agents/restart`；06、03 随之补写。新增 T226（T143 发现宿主从不写 `error` 条目：设计 5.5.2、06 的 K17、11 都要求写，计划漏了），E2E-error-guidance 由 T143 移到 T226，新增 IT-error-item，T112 改为也依赖 T226。T160 改为依赖 T225：E2E-selfuse-replace 要等包被换掉后能正常退出。新增 T225（T160 在 runner 上发现重连途中退出 App 会卡住，产品缺陷，新增 E2E-quit-during-reconnect；用户安装自用构建之前合并）。新增 T224（T111 加的重启用例在 T220 的 PR 上偶发失败，只改测试）。新增 T223（P-4 缺的样例库、通用迁移用例和已发布脚本的锁定，T160 发现；用户安装自用构建之前合并），新增 IT-migrations-samples。SP-6 改在 GitHub runner 上跑（`docs/meetings/2026-11-03-sp6-runner/`）：T103、T104、T108 的测量只记录，浸泡缩短到约 5 小时，场景 6 仍由作者手动做；设计 5.9.6、5.9.7 随之改写 |
