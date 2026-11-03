@@ -371,7 +371,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 | 档位 | 在哪里执行 | 用于 | 防护 |
 |---|---|---|---|
 | 快照档 | cupper 自己的 GIT_DIR，`GIT_WORK_TREE` 指向工作区 | 回合快照；`last_turn`、`turn:<id>`、`unstaged`、`staged` 四种范围的文件列表和补丁；`@` 引用的文件列表；`worktree/check` 中关于工作区内容的规则；`git/status` 的文件状态 | 不读仓库本地的配置和 hooks，配置只放行白名单；属性文件照常读取，但属性引用的过滤器和 diff 驱动都没有定义 |
-| 仓库档 | 用户仓库 | 只读引用类：`rev-parse`、`for-each-ref`、`rev-list`、`symbolic-ref`、`merge-base`、`check-ref-format`、`branch --list`；会改动用户仓库的：`apply --cached`（暂存、取消暂存）、`apply -R`（还原）、`update-index --refresh`、`worktree add/lock/unlock/remove/prune/repair` | 每次调用前读配置并覆盖，调用后比对指纹，配置来源在工作区内时拒绝 |
+| 仓库档 | 用户仓库 | 只读引用类：`rev-parse`、`for-each-ref`、`rev-list`、`symbolic-ref`、`merge-base`、`check-ref-format`、`branch --list`、`branch --show-current`（T120：取 HEAD 时只用任何 HEAD 状态下都以 0 退出的命令，配置了 `required` 过滤器的仓库里非零退出会被判成 `unsafe_repo_config`）；会改动用户仓库的：`apply --cached`（暂存、取消暂存）、`apply -R`（还原）、`update-index --refresh`、`worktree add/lock/unlock/remove/prune/repair` | 每次调用前读配置并覆盖，调用后比对指纹，配置来源在工作区内时拒绝 |
 | 用户档 | 用户仓库 | 只用于用户在界面上点"提交""推送"：`commit`、`push` | 与在终端里执行一致：保留 hooks、签名、凭据助手。按钮旁注明"将运行仓库的 hooks"；本会话期间指纹变过时，确认文案带上这条提示 |
 
 **快照档：cupper 自己的 GIT_DIR**（纪要 D8 要求评估的方案。结论：采用；实验记录见 `docs/tasks/D02-design-revision/notes.md`）
@@ -424,7 +424,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
   - index 里有未合并的条目时（合并冲突中），`unstaged` 和 `staged` 返回 `unavailable`（`reason: index_unmerged`），界面提示先在终端解决冲突。
   - 结果带 `caveats`：`mixed_changes`（本地模式下可能混入用户自己或其他会话的改动，GT-1）；`late_tool_effects`（这个回合里有 `late_tool_output` 条目，或者回合进行期间还有 `may_still_run` 的命令，界面注明"包含取消后仍在运行的命令造成的改动"，纪要 D4）。
 - `git/file_diff` 在快照档里对同一对树执行 `diff-tree -p`，固定参数 `--no-color --no-ext-diff --no-textconv --full-index --binary -U3`，切成 hunk。用于暂存的补丁用 `--no-renames` 生成。每个 hunk 有按内容寻址的 `hunk_id`，标明操作单位：`hunk`、`mode`（权限位单独一个单位）、`whole_file`（新增、删除、二进制、符号链接、子模块指针、LFS）；`filter_unsupported` 的路径没有可操作的单位。
-- `DiffCache`：`diff_token` → 这次 diff 的全部补丁，每个工作区保留最近 32 个，10 分钟过期。`git/stage`、`git/unstage`、`git/revert` 带 `diff_token` 和 `hunk_id`，宿主取出原始补丁，在仓库档执行 `git apply --whitespace=nowarn [--cached] [-R]`。实验验证：快照档生成的补丁可以直接用 `apply --cached` 应用到用户仓库，结果与 `git add` 相同。token 不存在或补丁应用失败都返回 `conflict`（`reason: stale_diff`），客户端刷新后重试，不做模糊匹配（ADR-10）。这就是 ADR-04 所说"`hunk_id` 加 diff 基线"的具体做法：基线就是 `diff_token`。
+- `DiffCache`：`diff_token` → 这次 diff 的两棵 tree 和文件列表（不存补丁：tree 不可变，按需重新生成的补丁逐字节相同，`hunk_id` 也按内容寻址，T120、T221），每个工作区保留最近 32 个，从生成起 10 分钟过期、不续期；宿主重启后清空。`git/file_diff` 按 token 取出 tree 对，在快照档重新生成那一个文件的补丁再切单位；token 不存在、过期或不属于请求会话的工作区，返回 `conflict`（`reason: stale_diff`）。`git/stage`、`git/unstage`、`git/revert` 带 `diff_token` 和 `hunk_id`，宿主取出原始补丁，在仓库档执行 `git apply --whitespace=nowarn [--cached] [-R]`。实验验证：快照档生成的补丁可以直接用 `apply --cached` 应用到用户仓库，结果与 `git add` 相同。token 不存在或补丁应用失败都返回 `conflict`（`reason: stale_diff`），客户端刷新后重试，不做模糊匹配（ADR-10）。这就是 ADR-04 所说"`hunk_id` 加 diff 基线"的具体做法：基线就是 `diff_token`。
 - `git/revert` 会丢掉用户的改动，来自 window 角色时必须带主进程记录的真实输入证据（[5.2.5](#525-策略与命令账本)、[5.7.8](07-desktop.md#578-安全加固的落点)）。
 - 说明：GT-3 要求能取消暂存，取消暂存需要看到已暂存的内容，所以 `staged` 范围在 M1 就提供，尽管 PRD 把"其余审查范围"（F2）放在 P1。这个口径已定（2026-10-16，Q13，见 `docs/meetings/2026-10-16-gate-design-decisions/minutes.md`），记录在 PRD v1.2 第 10 节。
 
@@ -512,7 +512,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 **有序退出**（`host/exit`、SIGTERM、空闲、升级）：停止 accept → 向所有连接发 `host/shutdown` 通知 → 如果是强制退出，运行中的回合标为 `interrupted` → 按 ADR-09 的顺序关闭适配器（逐个 `session/close` → 关闭 stdin → 等进程组退出 3 s → SIGTERM → 2 s → SIGKILL）→ 写检查点、清空写线程队列、写 `meta.last_clean_exit_at` → 释放电源断言 → 删除套接字 → 释放锁。
 
-**防休眠**（NFR-13，M1 为 P1）：有进行中的回合或待处理的交互请求时，持有 `PreventUserIdleSystemSleep` 断言，没有时立即释放。
+**防休眠**（NFR-13，M1 为 P1）：有进行中的回合或待处理的交互请求时，持有 `PreventUserIdleSystemSleep` 断言，没有时立即释放。T156 的实现：每个会话 actor 在处理完每个输入后报"运行中的回合 + 待处理请求"的计数，会话离开内存时归还；`Supervisor` 的纯核心按总数决定取得或释放，断言由监护 actor 持有，`host.updated.power_assertion` 如实反映；有序退出时释放，之后不再取得；断言名是固定的 `cupper: agents at work`。设置页"通用"里的开关（5.7.4）还没接，T147 接入时用设置键 `host.prevent_idle_sleep`（默认开），关掉时立即释放。
 
 **资源采样**：每 30 秒采样一次各适配器进程组的常驻内存，写进 `agents` 状态（NFR-11、ADR-09 的设置页显示），并交给驱动层的回收策略（[5.6.8](06-agent-driver.md#568-资源回收)）。
 

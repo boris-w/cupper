@@ -72,7 +72,7 @@ flowchart LR
 | `inputGuard` | 按 [5.7.8](#578-安全加固的落点) 的规则记录每个窗口主框架上的真实输入 |
 | `privileged` | 执行 `ShellAPI.requestPrivileged`：检查真实输入 → 经 control 连接取内容 → 原生确认框 → 经 control 连接发送；同一时间只弹一个确认框，取消后的冷却逐次加长 |
 | `security` | 注册 `app` 协议（`standard`、`secure`、`supportFetchAPI`、`codeCache`）并为 `cupper`、`cupper-review` 两个主机分别下发 CSP 响应头；路径规范化后检查前缀，防目录穿越；加固 webContents；发布构建按白名单检查命令行开关 |
-| `lifecycle` | 单实例锁；退出前经 control 连接查 `host/status`，有运行中的回合或待处理的请求时弹原生确认框（NFR-8），确认后发 `host/exit`；关机和 `before-quit-for-update` 时跳过这一步 |
+| `lifecycle` | 单实例锁；退出前经 control 连接查 `host/status`，有运行中的回合或待处理的请求时弹原生确认框（NFR-8），确认后发 `host/exit`；关机和 `before-quit-for-update` 时跳过这一步。控制连接不可用时判定会在 `before-quit` 的同一次派发里完成，Electron 要等这个事件返回才记下"正在退出"，所以判定后的 `app.quit()` 延到下一个回合（T225）；进入退出后不再建窗口，退出后才完成的重连直接关掉，也不再拉起宿主 |
 | `updater` | electron-updater 集成，见 [5.10.5](10-release.md#5105-更新流程) |
 | `deeplink` | 按构建种类注册的 URL scheme（[5.7.9](#579-构建种类)），白名单路由，只做导航 |
 | `notifications` | 只在通知的后备方案启用时工作（待定问题 Q2）：在 control 连接上订阅索引流，取出 `notification.intent` 弹系统通知；通知上不放"批准"按钮，点击后只导航 |
@@ -448,7 +448,7 @@ v1.4 按用户决定 F1–F6（`docs/meetings/2026-10-19-ui-fidelity/minutes.md`
 │   │   ├── <MessageStream>         TanStack Virtual，按行虚拟化；顶部"加载更早的历史"
 │   │   │   └── 行：<TurnHeader status duration/> <UserMessage/> <ActivityGroupRow/>（展开后是 <ToolRow/>…）
 │   │   │         <AgentMessage/> <Thought/> <Plan/> <Notice/> <ErrorItem/> <LateToolOutput/> <RequestRecord/> <TurnChanges/>
-│   │   ├── <ComposerOverlays/>     计划药丸、回到底部、"再按一次 Esc 停止"等提示
+│   │   ├── <ComposerOverlays/>     计划药丸、回到底部、"再按一次 Esc 停止"等提示（T143：由消息列表在自己框的底部绘制，药丸与回到底部同行并排）
 │   │   ├── <QueueList/>            排队消息：预览、编辑、插话、暂停与继续
 │   │   └── <ComposerArea>          有待处理的请求时显示 <RequestPanel/>，否则显示 <Composer/>
 │   │       ├── <Composer/>         附件条、文字区（@、/）、底栏（+、权限、模型与强度、三态发送按钮）
@@ -545,7 +545,7 @@ v1.4 按用户决定 F1–F6（`docs/meetings/2026-10-19-ui-fidelity/minutes.md`
 | 命令 | 命令客户端生成 UUIDv7 的 `command_id`；连接断开时保留未完成的命令，重连后用同一个 `command_id` 重发（NFR-2）。需要真实输入的命令，免输入重发的条件见 [5.7.8](#578-安全加固的落点) |
 | 查询 | TanStack Query 管理请求-响应类的数据（`git/*`、`files/search`、`agents/capabilities`、`session/list_archived`）；收到相关事件时失效（例如 `turn.completed` 使该会话的 diff 失效） |
 | 界面状态 | zustand：选中的会话、面板开合与尺寸、每个会话的输入草稿、附件和滚动位置、评论草稿；侧边栏和侧边面板的宽度、文件树开合、发送快捷键、跟进行为、半透明侧边栏存 prefs（不跨设备同步） |
-| 长会话 | **按行虚拟化**（桌面 #12）：把回合标题、活动组摘要、消息、请求记录、改动卡片、提示拍平成一个行列表，活动组折叠时只占一行。内存里只有快照窗口加已翻页的历史。两条滚动规则：向前插入历史后视口不跳动（以视口顶部的行为锚点）；流式增长时贴底，用户向上滚动后停止贴底并显示 ↓ 按钮。Shiki 懒加载，代码块完成后再高亮；diff 的高亮在审查文档的 Worker 里 |
+| 长会话 | **按行虚拟化**（桌面 #12）：把回合标题、活动组摘要、消息、请求记录、改动卡片、提示拍平成一个行列表，活动组折叠时只占一行。内存里只有快照窗口加已翻页的历史。两条滚动规则：向前插入历史后视口不跳动（以视口顶部的行为锚点）；流式增长时贴底，用户向上滚动后停止贴底并显示 ↓ 按钮。Shiki 懒加载（JavaScript 正则引擎，不用 WASM），代码块完成后再高亮，结果按语言和文本缓存，超过 5 万字符的代码块不高亮（T143）；diff 的高亮在审查文档的 Worker 里 |
 | 校验 | 开发和测试构建对每条消息做 zod 校验；生产构建只校验非 delta 的事件（技术选型讨论会桌面工程师意见） |
 
 M1a 的消息流、store、订阅策略、HostPort 生命周期都按这里的最终形态实现，视觉从简（[5.12.2](12-milestones.md#5122-m1a宿主骨架)）。
@@ -843,7 +843,7 @@ v1.4 新增。取值来自 ui-spec 第 2、3 节：静态读取作者本机 Code
 
 半透明侧边栏（`vibrancy: 'menu'`）下没有固定色：亮色截图里列表区约 #F8F8F8；暗色未实测（Q37）。
 
-**代码高亮**（Shiki 双主题，只取这几个语法类别的颜色）
+**代码高亮**（Shiki，只取这七个语法类别的颜色，运算符和标点用正文色；T143 用固定的 `hl-*` class 加这里的 token 实现，不用 Shiki 的双主题输出，类别与 TextMate scope 的对应在 `packages/ui-core/src/rows/highlight.ts`）
 
 | 类别 | 亮色 | 暗色 |
 |---|---|---|

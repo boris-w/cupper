@@ -1033,7 +1033,7 @@ export type ExtractionCapabilities = {
 };
 
 /**
- * Open enum: unknown values must be accepted. Known: not_logged_in cli_too_old session_not_found process_exited restartable model_unsupported quota_exhausted other adapter_exited adapter_crashed cli_missing runtime_failed host_restarted
+ * Open enum: unknown values must be accepted. Known: not_logged_in cli_too_old session_not_found process_exited restartable model_unsupported quota_exhausted other adapter_exited adapter_crashed cli_missing runtime_failed host_restarted project_untrusted
  */
 export type FailureCode =
   | "not_logged_in"
@@ -1049,6 +1049,7 @@ export type FailureCode =
   | "cli_missing"
   | "runtime_failed"
   | "host_restarted"
+  | "project_untrusted"
   | (string & {});
 
 /**

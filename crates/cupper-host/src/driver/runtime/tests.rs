@@ -18,9 +18,10 @@ use crate::diag::stderr::AdapterLog;
 use crate::driver::api::{NormUpdate, PromptTag};
 use crate::driver::probe::login_shell::{Failure, LoginEnv};
 use crate::orchestrator::testkit::text;
-use crate::runtime::{claude_adapter, plans, progress};
+use crate::runtime::{adapter, plans, progress};
 use crate::store::testutil::{TempDir, host_writer, query, raw_db, raw_rows};
 use crate::store::{Durability, RAW_WRITER, RawWriter, RawWriterThread, WriterThread};
+use cupper_protocol::domain::AgentKind;
 use cupper_protocol::index::AgentStatus;
 use cupper_protocol::index::{RuntimeFailure, RuntimeState};
 use cupper_sys::{ProcessGroup, ProcessInfo, process_info};
@@ -40,12 +41,21 @@ impl Fixture {
     /// `claude`.
     fn new(name: &str, args: &[&str], cli: Option<&str>, rss: Option<u64>) -> Self {
         let args = args.iter().map(|arg| (*arg).to_owned()).collect();
-        let mut launch = launch::injected(launch::fake_agent(), args, &host(), &login());
+        let mut launch =
+            launch::injected(Agent::Claude, launch::fake_agent(), args, &host(), &login());
         launch.cli = cli.map(|cli| launch::Cli {
             path: cli.into(),
             version: String::new(),
             install: cupper_protocol::index::CliInstall::Native,
         });
+        Self::with(name, launch, rss)
+    }
+
+    /// The codex-shaped fake agent with `args`.
+    fn codex(name: &str, args: &[&str], rss: Option<u64>) -> Self {
+        let args = ["--persona", "codex"].iter().chain(args);
+        let args = args.map(|arg| (*arg).to_owned()).collect();
+        let launch = launch::injected(Agent::Codex, launch::fake_agent(), args, &host(), &login());
         Self::with(name, launch, rss)
     }
 
@@ -160,6 +170,14 @@ impl Fixture {
                 _ => {}
             }
         }
+        self.settled().await;
+    }
+
+    /// Waits until the runtime is through with the step that told the
+    /// sessions their adapter exited: its alarm follows the timers it
+    /// cancelled then, which [`tick`](Self::tick) would advance to (T224).
+    async fn settled(&self) {
+        self.runtime.status().await;
     }
 
     fn prompt<'a>(
@@ -307,7 +325,13 @@ fn runtime(dir: &TempDir) -> AgentRuntime {
     let var = |(k, v): (&str, &str)| (k.to_owned(), v.to_owned());
     let host = BTreeMap::from([("HOME", "/h"), ("SECRET", "x"), ("TERM", "dumb")].map(var));
     let login = LoginEnv::fallback(Failure::ShellMissing);
-    let launch = launch::injected(launch::fake_agent(), Vec::new(), &host, &login);
+    let launch = launch::injected(
+        Agent::Claude,
+        launch::fake_agent(),
+        Vec::new(),
+        &host,
+        &login,
+    );
     let (raw, log) = (
         raw.sink(),
         AdapterLog::unwritten(Arc::clone(&clock), Redactor::default()),
@@ -413,7 +437,7 @@ fn player(
 #[tokio::test(flavor = "multi_thread")]
 async fn gold_b_fake_in_process_adapter_has_no_process_to_signal() {
     let (agents, started) = mpsc::unbounded_channel();
-    let mut launch = launch::injected(PathBuf::new(), Vec::new(), &host(), &login());
+    let mut launch = launch::injected(Agent::Claude, PathBuf::new(), Vec::new(), &host(), &login());
     launch.program = launch::Program::InProcess(launch::InProcess(agents));
 
     let (dir, clock) = (TempDir::new("in-process-launch"), ManualClock::new());
@@ -658,15 +682,113 @@ async fn it_k21_reap_group_sampling_finds_the_groups_a_crash_leaves() {
     );
 }
 
+/// IT-codex-untrusted: codex-acp loads the project's configuration whatever
+/// it is asked, so a session that must leave it out does not open, and no
+/// adapter starts for it (design 5.2.6).
+#[tokio::test(flavor = "multi_thread")]
+async fn it_codex_untrusted_an_attach_without_the_project_config_is_refused() {
+    let f = Fixture::codex("codex-untrusted", &[], None);
+    let ignore = f.open(AttachTarget::New, ProjectConfigPolicy::Ignore).await;
+    assert_eq!(ignore.unwrap_err().class, AgentErrorClass::ProjectUntrusted);
+    assert_eq!(f.column("SELECT instance_id FROM adapters").len(), 0);
+    let mut session = f.attach().await.unwrap();
+    assert_eq!(f.say(&mut session, "say up").await, "up");
+    f.stop().await;
+}
+
+/// The run states a session hears until an event that `ends`, and that event.
+async fn until(
+    heard: &mut Events,
+    ends: impl Fn(&DriverEvent) -> bool,
+) -> (Vec<bool>, DriverEvent) {
+    let mut active = Vec::new();
+    loop {
+        let event = heard.recv().await.unwrap();
+        if let DriverEvent::RunState(state) = &event {
+            active.push(state.active);
+        }
+        if ends(&event) {
+            return (active, event);
+        }
+    }
+}
+
+fn reclaimed(event: &DriverEvent) -> bool {
+    matches!(
+        event,
+        DriverEvent::AdapterExited {
+            reclaimed: true,
+            ..
+        }
+    )
+}
+
+/// IT-K20-reclaim: Codex's adapter keeps the MCP servers of closed sessions
+/// (K20), so it is reclaimed at a sample that finds it idle and over 2 GiB.
+/// A prompt in flight holds it: the first sample passes, and the one after
+/// the prompt came back reclaims it. The session, its thread's state heard,
+/// resumes on the next instance.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_k20_reclaim_over_2_gib_once_no_prompt_is_in_flight() {
+    let f = Fixture::codex("k20-memory", &[], Some(3 << 30));
+    let start = f.clock.now_mono();
+    let mut session = f.attach().await.unwrap();
+    let id = session.0.clone();
+    let heard = f.prompt(&mut session, "wait_cancel");
+    let (working, _) = until(heard, |e| matches!(e, DriverEvent::RunState(_))).await;
+    let mut resources = f.runtime.resources();
+    drop(f.tick(30, resources.wait_for(Option::is_some)).await);
+    f.runtime.send(DriverCommand::Cancel {
+        session: id.clone(),
+    });
+    let (idle, _) = until(heard, |e| matches!(e, DriverEvent::PromptDone { .. })).await;
+    assert_eq!((working, idle), (vec![true], vec![false]));
+    let (_, exited) = f
+        .tick(
+            60,
+            until(heard, |e| matches!(e, DriverEvent::AdapterExited { .. })),
+        )
+        .await;
+    assert!(reclaimed(&exited), "{exited:?}");
+    assert!(f.clock.now_mono() >= start + Duration::from_secs(60));
+    let resume = AttachTarget::Resume(id);
+    let mut session = f.open(resume, ProjectConfigPolicy::Load).await.unwrap();
+    assert_eq!(f.say(&mut session, "say again").await, "again");
+    let ended = f.column("SELECT count(ended_at) || '/' || count(*) FROM adapters");
+    assert_eq!(ended, ["1/2"]);
+    f.stop().await;
+}
+
+/// IT-K20-reclaim: small, the adapter goes after 30 minutes without work.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_k20_reclaim_after_30_minutes_without_work() {
+    let f = Fixture::codex("k20-quiet", &[], None);
+    let mut session = f.attach().await.unwrap();
+    f.say(&mut session, "say hi").await;
+    let done = f.clock.now_mono();
+    let exited = |e: &DriverEvent| matches!(e, DriverEvent::AdapterExited { .. });
+    let (_, exited) = f.tick(31 * 60, until(&mut session.1, exited)).await;
+    let quiet = f.clock.now_mono().saturating_duration_since(done);
+    assert!(reclaimed(&exited), "{exited:?}");
+    assert!((30 * 60..31 * 60).contains(&quiet.as_secs()), "{quiet:?}");
+}
+
 /// IT-adapter-restart (T218): a prompt the adapter's exit cuts off ends
 /// with the instance, though its failure comes first; the session's next
 /// message then resumes it on the next instance. A prompt the agent fails is
-/// the session's to hear at once.
+/// the session's to hear at once. Both agents' classifiers (T111).
 #[cfg(feature = "test-harness")]
 #[tokio::test(flavor = "multi_thread")]
 async fn it_adapter_restart_a_cut_off_prompt_ends_with_the_instance() {
+    for agent in [Agent::Claude, Agent::Codex] {
+        cut_off(agent).await;
+    }
+}
+
+#[cfg(feature = "test-harness")]
+async fn cut_off(agent: Agent) {
     let (agents, started) = mpsc::unbounded_channel();
-    let mut launch = launch::injected(PathBuf::new(), Vec::new(), &host(), &login());
+    let mut launch = launch::injected(agent, PathBuf::new(), Vec::new(), &host(), &login());
     launch.program = launch::Program::InProcess(launch::InProcess(agents));
     let f = Fixture::with("cut-off", launch, None);
     cutting(started);
@@ -696,6 +818,23 @@ async fn it_adapter_restart_backs_off_then_crashed() {
         assert_eq!(since(&f, start), Duration::from_secs(wait));
         assert_eq!(f.say(&mut session, "say up").await, "up");
     }
+    // `agents/restart`: the adapter stops, which is no failure, and its
+    // session attaches again at once.
+    f.runtime.restart();
+    let exited = |e: &DriverEvent| matches!(e, DriverEvent::AdapterExited { .. });
+    let (_, exited) = f.tick(8, until(&mut session.1, exited)).await;
+    assert!(!reclaimed(&exited), "{exited:?}");
+    // A prompt after the instance ended goes nowhere: its turn ends with
+    // the `AdapterExited` its session heard first (T218). (The next
+    // instance's first session has the same ID, `fake-0-1`.)
+    f.prompt(&mut session, "say lost");
+    f.settled().await;
+    let start = f.clock.now_mono();
+    let old = mem::replace(&mut session, f.attach().await.unwrap());
+    assert_eq!(since(&f, start), Duration::ZERO);
+    assert_eq!(f.say(&mut session, "say up").await, "up");
+    let (_, mut old) = old;
+    assert!(old.try_recv().is_err());
     f.stop().await;
 
     // Five failed starts within 5 minutes: `crashed`, until cleared.
@@ -710,11 +849,34 @@ async fn it_adapter_restart_backs_off_then_crashed() {
         f.attach().await.unwrap_err().class,
         AgentErrorClass::Crashed
     );
-    f.runtime.clear_crashed();
+    f.runtime.restart();
     assert_eq!(
         f.attach().await.unwrap_err().class,
         AgentErrorClass::RuntimeFailed
     );
+}
+
+/// IT-adapter-restart: a prompt that comes while `agents/restart` stops the
+/// adapter fails as "Session not found", so that its session resumes on the
+/// next instance and sends it again (K6). The adapter lingers after its
+/// stdin closed: the stop waits for the clock, which only the test moves.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_adapter_restart_a_prompt_during_the_stop_is_sent_again() {
+    let f = Fixture::new("restart-prompt", &["--fault", "linger"], None, None);
+    let mut session = f.attach().await.unwrap();
+    f.runtime.restart();
+    let exited = |e: &DriverEvent| matches!(e, DriverEvent::AdapterExited { .. });
+    let failed = |e: &DriverEvent| matches!(e, DriverEvent::PromptFailed { .. }) || exited(e);
+    let (_, failed) = until(f.prompt(&mut session, "say lost"), failed).await;
+    let lost = |e: &AgentError| e.class == AgentErrorClass::SessionNotFound;
+    let lost = matches!(&failed, DriverEvent::PromptFailed { error, .. } if lost(error));
+    assert!(lost, "{failed:?}");
+    let (_, exited) = f.tick(8, until(&mut session.1, exited)).await;
+    assert!(!reclaimed(&exited), "{exited:?}");
+    let resume = AttachTarget::Resume(session.0.clone());
+    let mut session = f.open(resume, ProjectConfigPolicy::Load).await.unwrap();
+    assert_eq!(f.say(&mut session, "say lost").await, "lost");
+    f.stop().await;
 }
 
 /// A start waits for the runtime installer (design 5.2.12): a stop ends the
@@ -723,8 +885,8 @@ async fn it_adapter_restart_backs_off_then_crashed() {
 async fn it_runtime_first_prompt_waits_a_stop_ends_it_a_failure_is_named() {
     let plans = plans(crate::manifest::embedded());
     let (published, install) = progress();
-    let (node, bundle) = claude_adapter(Path::new("/missing"), &plans);
-    let mut launch = launch::injected(PathBuf::new(), Vec::new(), &host(), &login());
+    let (node, bundle) = adapter(Path::new("/missing"), &plans, Agent::Claude);
+    let mut launch = launch::injected(Agent::Claude, PathBuf::new(), Vec::new(), &host(), &login());
     launch.program = launch::Program::Runtime {
         node,
         bundle,
@@ -822,12 +984,19 @@ async fn agents_probe_cache_and_refresh() {
     let runtime = runtime(&dir);
     let (writer, _thread) = host_writer(&dir, &ManualClock::new());
     let readers = Readers::open(&dir.host_db()).unwrap();
-    let find: agents::Find = Arc::new(|| {
+    let find: agents::Find = Arc::new(|agent| {
         let login = LoginEnv::fallback(Failure::ShellMissing);
-        let launch = launch::injected(launch::fake_agent(), Vec::new(), &BTreeMap::new(), &login);
+        let launch = launch::injected(
+            agent,
+            launch::fake_agent(),
+            Vec::new(),
+            &BTreeMap::new(),
+            &login,
+        );
         Box::pin(async move { launch })
     });
-    let agents = Agents::new(runtime.clone(), readers, writer, find);
+    let runtimes = vec![(Agent::Claude, runtime.clone())];
+    let agents = Agents::new(runtimes, readers, writer, find);
     let claude = AgentKind::Claude;
     assert_eq!(agents.capabilities(&claude).await.unwrap().cached, None);
     let codex = agents.capabilities(&AgentKind::Codex).await.unwrap_err();

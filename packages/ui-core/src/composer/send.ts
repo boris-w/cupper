@@ -21,7 +21,7 @@ const ENVELOPE_BYTES = 1_024;
 
 const utf8 = (text: string) => new TextEncoder().encode(text);
 
-function codeOf(error: unknown): string {
+export function codeOf(error: unknown): string {
   if (error instanceof RpcFailure) {
     const code = (error.error.data as { code?: unknown } | undefined)?.code;
     return typeof code === "string" ? code : String(error.error.code);

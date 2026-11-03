@@ -41,7 +41,13 @@ export class ControlConnection {
       this.client.fail(error instanceof HostFailure ? error.reason : "unexpected");
       return;
     }
-    const { port, handshake, rest, socket } = connected;
+    const { port, handshake, rest, socket, conn } = connected;
+    if (this.#ended) {
+      // Quitting began while it connected (T225): closed, not taken.
+      this.#current = undefined;
+      conn.close();
+      return;
+    }
     socket.once("close", () => {
       this.#current = undefined;
       if (this.#ended) {

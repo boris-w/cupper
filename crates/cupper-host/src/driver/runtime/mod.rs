@@ -32,6 +32,15 @@
 //!   memory for [`AgentRuntime::resources`] and the agent's status, and the
 //!   descendants' groups, kept in the `adapters` row for the cleanup after a
 //!   crash of the host.
+//! - **Codex's adapter is reclaimed** (5.6.8, K20: it keeps the MCP servers
+//!   of closed sessions) at a sample that finds it idle, with no prompt or
+//!   session opening in flight, no request asked, no thread at work and
+//!   nothing from the agent for 10 s (a turn of its own, K9), and
+//!   over 2 GiB, or without work for 30 minutes, or probed with no session
+//!   left. It stops as the host stops it; its sessions hear `AdapterExited`
+//!   as reclaimed. Meanwhile, as during `agents/restart`, attaches wait for
+//!   the next instance, and a prompt fails as "Session not found", so that
+//!   its session resumes there and sends it again (K6).
 //! - **Command lists** (design 5.6.2): Claude pushes its whole list when a
 //!   session opens and at every turn's start. An attach answers with the
 //!   agent's latest list without waiting for the session's own; after that a
@@ -43,6 +52,7 @@
 //!   the agent's status for the index (`status`).
 //! - Steering (T140) is not served yet; its commands are dropped.
 
+pub mod agent;
 pub mod agents;
 pub mod cache;
 pub mod content;
@@ -75,11 +85,11 @@ use serde_json::json;
 use tokio::sync::{mpsc, oneshot, watch};
 
 use cupper_protocol::capabilities::{CliCompat, SessionCapabilities, SlashCommand};
-use cupper_protocol::domain::AgentKind;
 use sha2::{Digest, Sha256};
 
 use cupper_protocol::index::{AgentState, AgentStatus, AuthState, AuthStatus};
 
+use self::agent::{Agent, Extractor};
 use self::launch::{Context, Instance, Launch};
 use self::lifecycle::{Resources, Restarts};
 use self::status::{AgentNotes, Running};
@@ -88,11 +98,11 @@ use super::api::{
     AgentError, AgentErrorClass, AgentErrorForm, AgentPort, AgentSessionId, AskAnswer, AskId,
     AskRequest, Attach, AttachInfo, AttachTarget, DriverCommand, DriverEvent, ProjectConfigPolicy,
 };
-use super::claude::{self, ClaudeSession, capabilities};
 use super::extract;
 use crate::clock::IdGen;
 use crate::durations::{
-    ADAPTER_CLOSE_WAIT, ADAPTER_TERM_WAIT, Durations, PROBE_COMMANDS, RESOURCE_SAMPLE,
+    ADAPTER_CLOSE_WAIT, ADAPTER_TERM_WAIT, AUTONOMOUS_SILENCE, CODEX_RECLAIM_IDLE, Durations,
+    PROBE_COMMANDS, RESOURCE_SAMPLE,
 };
 use crate::pure::{Alarm, TimerRequest, TimerTable};
 use crate::quiescence::{ActorKind, Participant, Quiescence};
@@ -103,6 +113,9 @@ use cupper_sys::{ProcessGroup, Signal};
 
 /// The runtimes in the quiescence barrier.
 pub const AGENT_RUNTIME: ActorKind = ActorKind::new("agent_runtime");
+
+/// Over this much resident memory, Codex's idle adapter is reclaimed.
+const RECLAIM_RSS: u64 = 2 << 30;
 
 /// What a runtime needs of the host.
 #[derive(Clone)]
@@ -134,7 +147,7 @@ enum Mail {
     Command(DriverCommand),
     Withdrawn(AskId),
     Stop(oneshot::Sender<()>),
-    ClearCrashed,
+    Restart,
     Probe(oneshot::Sender<Result<SessionCapabilities, AgentError>>),
     Status(oneshot::Sender<AgentStatus>),
     /// `agents/refresh` found the CLI again (design 5.6.6).
@@ -178,10 +191,12 @@ impl From<FromAgent> for Wire {
 #[derive(Debug)]
 struct Route {
     events: mpsc::UnboundedSender<DriverEvent>,
-    claude: ClaudeSession,
+    extract: Extractor,
     cwd: PathBuf,
     /// The digest of the command list the session has, once it attached.
     commands: Option<[u8; 32]>,
+    /// Its thread works, as the agent reports it (Codex).
+    active: bool,
 }
 
 /// An attach applying its configuration, option by option.
@@ -210,7 +225,10 @@ enum Due {
 /// ends once the adapter has exited and the groups are gone or killed.
 #[derive(Debug)]
 struct Stopping {
-    done: oneshot::Sender<()>,
+    /// The host's stop waits for it. A reclaim or a restart has none, and
+    /// attaches meanwhile wait for the next instance.
+    done: Option<oneshot::Sender<()>>,
+    reclaimed: bool,
     groups: Vec<ProcessGroup>,
     closing: usize,
     /// SIGTERM went out.
@@ -256,6 +274,12 @@ struct Actor {
     cached: Option<SessionCapabilities>,
     auth: AuthStatus,
     participant: Participant,
+    /// Prompts, `session/new` and `session/resume` sent and not answered.
+    inflight: usize,
+    /// The instance's latest work: its start, a prompt, what the agent sent.
+    busy_at: crate::clock::MonoTime,
+    /// The instance served a probe.
+    probed: bool,
 }
 
 fn digest(commands: &[SlashCommand]) -> [u8; 32] {
@@ -297,12 +321,8 @@ impl AgentRuntime {
             Alarm::new(deps.cx.clock.clone()),
             Restarts::new(&deps.durations),
         );
-        let versions = &deps.launch.versions;
-        drop(cache::invalidate(
-            &deps.cx.writer,
-            &AgentKind::Claude,
-            versions,
-        ));
+        let (agent, versions) = (deps.launch.agent.kind(), &deps.launch.versions);
+        drop(cache::invalidate(&deps.cx.writer, &agent, versions));
         let actor = Actor {
             deps,
             mail: mail.downgrade(),
@@ -330,6 +350,9 @@ impl AgentRuntime {
                 plan: None,
             },
             participant,
+            inflight: 0,
+            busy_at: crate::clock::MonoTime::ZERO,
+            probed: false,
         };
         // The index lists the agent from the start.
         actor.notify();
@@ -343,9 +366,11 @@ impl AgentRuntime {
         self.resources.clone()
     }
 
-    /// Forgets the failures, so that a `crashed` agent starts again.
-    pub fn clear_crashed(&self) {
-        let _ = self.mail.send(Mail::ClearCrashed);
+    /// `agents/restart` (design 5.6.8): the adapter stops as the host stops
+    /// it, its sessions hear that it exited and attach again; the failures
+    /// are forgotten, so that a `crashed` agent starts again.
+    pub fn restart(&self) {
+        let _ = self.mail.send(Mail::Restart);
     }
 }
 
@@ -458,6 +483,10 @@ impl Actor {
         self.deps.cx.clock.now_mono()
     }
 
+    fn agent(&self) -> Agent {
+        self.deps.launch.agent
+    }
+
     fn set(&mut self, key: Due, after: Duration) {
         self.set_at(key, self.now() + after);
     }
@@ -519,7 +548,7 @@ impl Actor {
         self.recorded = groups.into_iter().filter(ProcessGroup::is_alive).collect();
         launch::record_groups(&self.deps.cx.writer, &instance.id, &self.recorded);
         let sessions = self.sessions.len();
-        if resources.claude_processes > sessions {
+        if self.agent() == Agent::Claude && resources.claude_processes > sessions {
             tracing::warn!(
                 ?resources,
                 sessions,
@@ -529,6 +558,41 @@ impl Actor {
         self.resources.send_replace(Some(resources));
         self.notify();
         self.set(Due::Sample, self.deps.durations.get(RESOURCE_SAMPLE));
+        if self.reclaimable(resources.rss_bytes) {
+            self.stop(None, true);
+        }
+    }
+
+    /// Whether Codex's adapter goes (5.6.8): idle, and over 2 GiB, or
+    /// without work for 30 minutes, or probed with no session left.
+    fn reclaimable(&self, rss_bytes: u64) -> bool {
+        let active = self.sessions.values().any(|route| route.active);
+        let idle = self.inflight == 0 && self.asks.is_empty() && self.opening.is_empty();
+        let since = self.now().saturating_duration_since(self.busy_at);
+        // Output a moment ago may be a turn of the agent's own (K3, K9).
+        let recent = since < self.deps.durations.get(AUTONOMOUS_SILENCE);
+        let idle = idle && !active && !recent && self.stopping.is_none();
+        let quiet = since >= self.deps.durations.get(CODEX_RECLAIM_IDLE);
+        let probed = self.probed && self.sessions.is_empty();
+        self.agent() == Agent::Codex && idle && (rss_bytes > RECLAIM_RSS || quiet || probed)
+    }
+
+    /// Begins a stop: `done`, the host's, hears its end; a reclaim's
+    /// sessions hear that they were reclaimed.
+    fn stop(&mut self, done: Option<oneshot::Sender<()>>, reclaimed: bool) {
+        // Before any signal, while the adapter still runs (5.6.8).
+        let group = self.instance.as_ref().and_then(|i| i.group);
+        let found = group.as_ref().map(ProcessGroup::with_descendants);
+        let groups = lifecycle::union(found.unwrap_or_default(), &self.recorded);
+        self.stopping = Some(Stopping {
+            done,
+            reclaimed,
+            groups,
+            closing: 0,
+            signalled: false,
+        });
+        self.timers.apply(TimerRequest::Cancel(Due::Sample));
+        self.begin_stop();
     }
 
     /// A stop's first step: `session/close` for every session.
@@ -583,24 +647,24 @@ impl Actor {
                 }
                 // A start that waits for the installer gives up.
                 self.start_stop = None;
-                // Before any signal, while the adapter still runs (5.6.8).
-                let group = self.instance.as_ref().and_then(|i| i.group);
-                let found = group.as_ref().map(ProcessGroup::with_descendants);
-                let groups = lifecycle::union(found.unwrap_or_default(), &self.recorded);
-                self.stopping = Some(Stopping {
-                    done,
-                    groups,
-                    closing: 0,
-                    signalled: false,
-                });
-                self.begin_stop();
+                match &mut self.stopping {
+                    // A reclaim or a restart becomes the host's stop.
+                    Some(stopping) => stopping.done = Some(done),
+                    None => self.stop(Some(done), false),
+                }
             }
-            Mail::ClearCrashed => {
+            Mail::Restart => {
                 self.restarts.clear();
                 self.notify();
+                if self.instance.is_some() && self.stopping.is_none() {
+                    self.stop(None, false);
+                }
                 self.ensure_started();
             }
-            Mail::Probe(reply) => self.probe(reply),
+            Mail::Probe(reply) => {
+                self.probed = true;
+                self.probe(reply);
+            }
             Mail::Status(reply) => {
                 let _ = reply.send(self.status());
             }
@@ -727,7 +791,7 @@ impl Actor {
     fn started(&mut self, started: Result<Instance, AgentError>) {
         match started {
             Ok(instance) => {
-                self.instance = Some(instance);
+                (self.instance, self.busy_at) = (Some(instance), self.now());
                 self.notify();
                 self.set(Due::Sample, self.deps.durations.get(RESOURCE_SAMPLE));
                 if self.stopping.is_some() {
@@ -744,14 +808,25 @@ impl Actor {
                 for pending in mem::take(&mut self.waiting) {
                     let _ = pending.reply.send(Err(err.clone()));
                 }
-                if let Some(stopping) = self.stopping.take() {
-                    let _ = stopping.done.send(());
+                if let Some(done) = self.stopping.take().and_then(|s| s.done) {
+                    let _ = done.send(());
                 }
             }
         }
     }
 
     fn attach(&mut self, mut pending: Pending) {
+        // codex-acp loads the project's configuration whatever it is asked
+        // (design 5.2.6): an untrusted project's session does not open.
+        let ignore = pending.attach.project_config == ProjectConfigPolicy::Ignore;
+        if self.agent() == Agent::Codex && ignore {
+            let untrusted = error(AgentErrorClass::ProjectUntrusted, "project_untrusted");
+            return drop(pending.reply.send(Err(untrusted)));
+        }
+        // A reclaim or a restart: the next instance opens it.
+        if self.stopping.as_ref().is_some_and(|s| s.done.is_none()) {
+            return self.waiting.push(pending);
+        }
         let (Some(instance), Some((wire, _))) = (&self.instance, &self.wire) else {
             self.waiting.push(pending);
             return self.ensure_started();
@@ -763,7 +838,8 @@ impl Actor {
         // The agent gets the real path (K13).
         let cwd = fs::canonicalize(&pending.attach.cwd).unwrap_or(pending.attach.cwd);
         pending.attach.cwd = cwd.clone();
-        let meta = session_meta(&pending.attach.project_config);
+        let claude = self.agent() == Agent::Claude;
+        let meta = claude.then(|| session_meta(&pending.attach.project_config));
         let wire = wire.clone();
         let sent = match pending.attach.target.clone() {
             AttachTarget::New => conn.request(
@@ -787,7 +863,7 @@ impl Actor {
             ),
         };
         // The connection is gone; its exit follows and fails the attach.
-        drop(sent);
+        self.inflight += usize::from(sent.is_ok());
     }
 
     fn wire(&mut self, wire: Wire) {
@@ -815,18 +891,19 @@ impl Actor {
                 }
             }
             Wire::Agent(message) => self.incoming(*message),
-            Wire::Opened(pending, result) => match result {
-                Ok((session, options)) => self.opened(*pending, session, options),
-                Err(err) => {
-                    let _ = pending.reply.send(Err(claude::agent_error(&err)));
+            Wire::Opened(pending, result) => {
+                self.inflight = self.inflight.saturating_sub(1);
+                match result {
+                    Ok((session, options)) => self.opened(*pending, session, options),
+                    Err(err) => drop(pending.reply.send(Err(self.agent().error(&err)))),
                 }
-            },
+            }
             Wire::Configured(session, result) => {
                 let Some(opening) = self.opening.get_mut(&session) else {
                     // `SetConfig`: the session hears all the options. A
                     // refusal leaves them as they were.
                     if let (Some(route), Ok(options)) = (self.sessions.get_mut(&session), result) {
-                        let _ = route.events.send(route.claude.set_config(&options));
+                        let _ = route.events.send(route.extract.set_config(&options));
                     }
                     return;
                 };
@@ -837,23 +914,25 @@ impl Actor {
                     }
                     Err(err) => {
                         if let Some(opening) = self.opening.remove(&session) {
-                            let _ = opening.reply.send(Err(claude::agent_error(&err)));
+                            let _ = opening.reply.send(Err(self.agent().error(&err)));
                         }
                     }
                 }
             }
             Wire::Prompted(session, tag, result) => {
-                let event = match result {
-                    Ok(response) => {
-                        let (stop_reason, usage) = extract::prompt_done(&response);
-                        DriverEvent::PromptDone {
-                            tag,
-                            stop_reason,
-                            usage,
-                        }
-                    }
-                    Err(err) => {
-                        let mut error = claude::agent_error(&err);
+                (self.inflight, self.busy_at) = (self.inflight.saturating_sub(1), self.now());
+                let agent = self.agent();
+                let Some(route) = self.sessions.get_mut(&session) else {
+                    return;
+                };
+                let result = result.map_err(|err| agent.error(&err));
+                let event = match result.and_then(|done| route.extract.prompt_done(&done)) {
+                    Ok((stop_reason, usage)) => DriverEvent::PromptDone {
+                        tag,
+                        stop_reason,
+                        usage,
+                    },
+                    Err(mut error) => {
                         // Cut off by the connection's close: the
                         // instance's `AdapterExited` ends it (T218).
                         if error.class == AgentErrorClass::AdapterExited {
@@ -886,7 +965,7 @@ impl Actor {
 
     /// A session opened: its route, then its options as attached.
     fn opened(&mut self, pending: Pending, session: String, options: Vec<SessionConfigOption>) {
-        let config = capabilities::config_options(&options);
+        let config = self.agent().config_options(&options);
         let agent_option = |id: &str| config.iter().find(|o| o.id.as_str() == id);
         // Only the options whose value differs.
         let todo = (pending.attach.config.iter())
@@ -896,15 +975,16 @@ impl Actor {
             })
             .collect();
         let cwd = pending.attach.cwd.clone();
-        let claude = ClaudeSession::new(cwd.clone(), config);
+        let extract = Extractor::new(self.agent(), cwd.clone(), config);
         let events = pending.events;
         self.sessions.insert(
             session.clone(),
             Route {
                 events,
-                claude,
+                extract,
                 cwd,
                 commands: None,
+                active: false,
             },
         );
         let reply = pending.reply;
@@ -937,14 +1017,15 @@ impl Actor {
             return;
         }
         let opening = self.opening.remove(&session).expect("just found");
-        let config = capabilities::config_options(&opening.options);
+        let agent = self.agent();
+        let config = agent.config_options(&opening.options);
         let commands = self.commands.clone();
         if let Some(route) = self.sessions.get_mut(&session) {
-            route.claude.set_config(&opening.options);
+            route.extract.set_config(&opening.options);
             route.commands = Some(digest(&commands));
         }
         let versions = self.deps.launch.versions.clone();
-        let caps = capabilities::capabilities(&instance.init, versions, config, commands);
+        let caps = agent.capabilities(&instance.init, versions, config, commands);
         let info = AttachInfo {
             session: AgentSessionId(session),
             instance: instance.id.clone(),
@@ -985,6 +1066,14 @@ impl Actor {
     }
 
     async fn command(&mut self, command: DriverCommand) {
+        // A reclaim or a restart: the session resumes on the next instance
+        // and sends the prompt again (K6).
+        if let DriverCommand::Prompt { session, tag, .. } = &command
+            && self.stopping.as_ref().is_some_and(|s| s.done.is_none())
+        {
+            let (tag, error) = (*tag, error(AgentErrorClass::SessionNotFound, "restarting"));
+            return self.to_session(&session.0, DriverEvent::PromptFailed { tag, error });
+        }
         let Some((_, conn, wire)) = link(&self.instance, &self.wire) else {
             return;
         };
@@ -1011,7 +1100,8 @@ impl Actor {
                 let sent = conn.request(request, move |result| {
                     let _ = wire.send(Wire::Prompted(id, tag, result));
                 });
-                drop(sent);
+                (self.inflight, self.busy_at) =
+                    (self.inflight + usize::from(sent.is_ok()), self.now());
             }
             DriverCommand::Cancel { session } => {
                 drop(conn.notify(CancelNotification::new(session.0)));
@@ -1034,7 +1124,7 @@ impl Actor {
                 };
                 // cupper's ID of the option, as the agent names it.
                 let named = route
-                    .claude
+                    .extract
                     .config()
                     .iter()
                     .find(|o| o.id.as_str() == option);
@@ -1063,13 +1153,20 @@ impl Actor {
     }
 
     fn incoming(&mut self, message: FromAgent) {
+        self.busy_at = self.now();
         match message {
             FromAgent::Update(notification) => {
                 let session = notification.session_id.to_string();
                 let Some(route) = self.sessions.get_mut(&session) else {
                     return;
                 };
-                for event in route.claude.update(&notification.update) {
+                let events = route.extract.update(&notification.update);
+                for event in &events {
+                    if let DriverEvent::RunState(state) = event {
+                        route.active = state.active;
+                    }
+                }
+                for event in events {
                     match event {
                         DriverEvent::CommandsChanged(commands) => self.commands(&session, commands),
                         event => self.to_session(&session, event),
@@ -1081,7 +1178,7 @@ impl Actor {
                 let Some(route) = self.sessions.get(&session) else {
                     return drop(responder.respond_with_error(Error::invalid_params()));
                 };
-                let (tool_call_id, request) = route.claude.permission(&request);
+                let (tool_call_id, request) = route.extract.permission(&request);
                 let cancellation = responder.cancellation();
                 let asked = (Asked::Permission(responder), Some(tool_call_id), request);
                 self.ask(session, cancellation, asked);
@@ -1184,15 +1281,22 @@ impl Actor {
         (self.recorded, self.exit) = (Vec::new(), None);
         self.resources.send_replace(None);
         let (instance, stderr) = (id, tail.map(|tail| tail.text()).unwrap_or_default());
+        let reclaimed = self.stopping.as_ref().is_some_and(|s| s.reclaimed);
         let exited = DriverEvent::AdapterExited {
             instance,
             status,
             stderr,
+            reclaimed,
         };
         self.broadcast(exited);
         self.sessions.clear();
+        (self.inflight, self.probed) = (0, false);
         match self.stopping.take() {
-            Some(stopping) => drop(stopping.done.send(())),
+            Some(Stopping {
+                done: Some(done), ..
+            }) => drop(done.send(())),
+            // A reclaim or a restart: what came meanwhile starts the next.
+            Some(_) => self.ensure_started(),
             None => {
                 self.restarts.failed(self.now());
                 self.ensure_started();
@@ -1202,8 +1306,8 @@ impl Actor {
     }
 }
 
-/// The `_meta` of `session/new` and `session/resume`, the same for both so
-/// that the adapter does not rebuild a resumed session's process:
+/// Claude's `_meta` of `session/new` and `session/resume`, the same for both
+/// so that the adapter does not rebuild a resumed session's process:
 /// - the thinking as summaries (design 5.6.3): recent models leave its text
 ///   out by default, and the adapter then has no thought to send (T066).
 ///   Only the CLI's `--thinking-display`: the SDK's `thinking` would turn

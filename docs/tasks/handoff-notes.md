@@ -487,5 +487,22 @@
 | 以后改宿主集成测试辅助的任务 | `tests/common/mod.rs` 的 `until` 失败时只打印期望值，不打印最后读到的值；T216 的 4 次失败因此看不出第三个回合已经 `failed`。约 3 行可补 | T218 |
 | 以后改请求面板的任务 | 没有选项列表的面板（只能自由输入的提问、`unsupported_schema` 的提问、不认识的类型）：RP-3 自动接管和点击都会把面板设为 active，但没有列表可以放焦点，按键落在 body 上。这是原有限制 | T217 |
 | 以后查 e2e 偶发失败的任务 | Radix 的菜单、对话框关掉后，FocusScope 用 `setTimeout(0)` 把焦点还给触发按钮。e2e 用例在关掉菜单后立即移焦点的，焦点可能被拿回去：先 `await expect(<触发按钮>).toBeFocused()` 再移。T217 只修了 E2E-SEC-panel-arming 一处 | T217 |
-| M1b B2 之前（T103 SP-6、T108 浸泡、K8） | SP-6 的场景、8 小时浸泡和 K8 的判定原定在作者机器上压测（设计 5.9.7"判定以作者的机器为准"、计划第 6 节第 15、16 行）。2026-11-02 用户决定不在自己的电脑上跑压测（`docs/meetings/2026-11-02-perf-local/`、`2026-11-02-m1a-sync/` D1），两者冲突，派 T103 之前要请用户再定；R8 的描述随之改 | T219 |
+| M1b B2 之前（T103 SP-6、T108 浸泡、K8） | SP-6 的场景、8 小时浸泡和 K8 的判定原定在作者机器上压测（设计 5.9.7"判定以作者的机器为准"、计划第 6 节第 15、16 行）。2026-11-02 用户决定不在自己的电脑上跑压测（`docs/meetings/2026-11-02-perf-local/`、`2026-11-02-m1a-sync/` D1），两者冲突，派 T103 之前要请用户再定；R8 的描述随之改。**2026-11-03 已定**：改在 GitHub runner 上跑，只记录，浸泡约 5 小时（`docs/meetings/2026-11-03-sp6-runner/`，计划 v1.3.86） | T219 |
 | 以后看性能趋势的任务 | 托管 runner 上的 PERF 数值只在 nightly 摘要的 `perf` 列表里，构件按保留期过期、不入库。要长期看趋势，需要定期把这些行汇总入库（格式与 `history.jsonl` 相同，机型泛称是 "Apple Virtual Machine 1 (Apple M1 (Virtual))"，不能和真机的历史混在一起判） | T219 |
+| T144、T151 或补 i18n 的界面任务 | `stream` 命名空间没有 `error_project_untrusted` 的文案，Codex 在未信任项目里的错误现在显示为"其他错误"；新建会话页和设置页会看到 Codex 的状态（没装 CLI 时为 `unavailable`） | T111 |
+| T113 或维护者手动 | 长时间运行下 Codex 的 MCP 进程数和内存（T102 交接），核对 5.6.8 的回收阈值和 NFR-11 的估算，要用真实 Codex | T111 |
+| 以后在本机跑宿主集成测试的任务 | lifecycle 里的 `it_cli_commands_*`、`it_elevate_lineage_*` 要先 `cargo build -p cupper-cli --features test-harness`（CI 的 `cli-e2e` 一步会做），否则本机会失败 | T111 |
+| 以后改快照档或项目登记的任务 | 项目是仓库的子目录时（monorepo），`Layout::read` 要求工作区目录里就有 `.git`，回合快照记成 `skipped/not_a_repo`，`git/diff` 也拿不到结果；T061 起就是这样 | T120 |
+| T121 | 仓库档拒绝或配置变化时，会话流里没有 `notice{unsafe_repo_config / repo_config_changed}`：Git 服务不是会话流的写者，要经会话 actor 转一道；现在只返回错误并写 `git.unsafe_repo_config` 审计。T121 的写操作也需要这条通路 | T120 |
+| T130 或以后附加协议字段的任务 | `git/diff` 的文件列表没有 blob 兜底，几百个文件以上会超过 64,000 字节的帧，宿主只能回 `too_large`；要改得在协议里附加一个可选字段 | T120 |
+| T221、T222 | `unstaged` 里 git-crypt 这类过滤器的文件：没改动也会显示为"已变化"（快照里是占位 blob，index 里是密文）；可以在工作区内容与 index 的 stat 一致时保留 index 条目 | T120 |
+| T124 | `git/diff` 对回合范围一律加 `mixed_changes`；worktree 模式出现后，按 GT-1 只在本地模式下加 | T120 |
+| T147 | 设置页"通用"的防休眠开关：设置键 `host.prevent_idle_sleep: bool`（默认 true，write 即可），宿主启动时读初值，`SettingsPort` 在它变化时调 `Power::enabled(bool)`；`PowerCore` 加输入 `Enabled(bool)`，持有条件改成"计数 > 0、已启用、未退出"，约 15 行加测试（T156 的建议） | T156 |
+| T103（SP-6） | 洪流下渲染进程很慢：屏幕上几 MB、没有换行的一段文字很可能被 streamdown 整块反复渲染（推测）；runner 上 6 路洪流时开始测量前只有 4–36 帧/s，压力报告的测量段会被拉长（两份压力用例同时跑时中位 71.5 s），p99 可比性有限 | T220 |
+| 以后写 `ManualClock` 用例的任务 | 听到运行时某一步中途发出的事件就立刻 `tick`，可能推到一个已经取消、但闹钟还没换掉的截止时间（T224 的第二个原因）；先做一次往返（例如 `status()`）等那一步做完。在 `Alarm`/`TimerTable` 取消定时器时立刻撤掉时钟上的登记是产品代码，另议 | T224 |
+| 以后要区分新旧实例上会话的用例 | 假 agent 的会话 ID 每个进程都从 `fake-0-1` 数起，新实例的第一个会话和旧会话同 ID；可以让 `--segment-file` 或进程号参与生成 ID | T224 |
+| T121 | 暂存时按 `diff_token` 取出 `Diffed`，用 `diff::patch` 重新生成文件的补丁，再用 `diff::units` 按 `hunk_id` 找单位；缓存没有 `hunk_id` 到路径的索引，目标是 `{hunk_ids}` 时要么由 T121 加索引，要么逐个文件重新生成补丁去找 | T221 |
+| T148 | "回到底部"按钮（T082 起）用的 `bg-bg` 没有对应 token，背景是透明的，应为 `bg-surface` 一类；尺寸是 32，设计是 28 | T143 |
+| T152 或以后统一更新截图基线的任务 | 截图页的字体栈要整套固定：无衬线和等宽都要接上夹具里的中文子集，否则代码里的中文会退到系统字体，基线随 runner 的 macOS 小版本变（T143 只改了等宽）；基线只由 `ui-baseline` workflow 生成 | T143 |
+| T141、T151、T153 | 错误条目的恢复指引：`change_model` 的入口在 T141（模型选择器），`upgrade_cli`、`install_cli`、`restart_agent` 在 T151（设置页 agent 状态、`agents/restart`），`run_login_in_terminal` 的"打开终端"在 T153；T143 现在只给文字和可复制的命令 | T143 |
+| 以后改桌面退出流程的任务 | 退出判定之前就开始的重连所拉起的宿主，连接会被关掉，进程本身靠宿主自己的规则退出：开发、自用构建按孤立规则约 1 s，发布构建要等 10 分钟空闲（T214 已记）；退出中收到 `second-instance` 不建窗口，只由 `quitting` 标记守住，没有专门的用例 | T225 |

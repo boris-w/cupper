@@ -891,10 +891,20 @@ UNIT-codex-drift = "pr"
 milestone = "M1b"
 IT-q8-fallback-codex = { suite = "pr", status = "na", reason = "K6 已通过（T102，2026-10-28），T119 不触发" }
 
-# Git 服务 III：diff、file_diff、status 与 branches
+# Git 服务 III：diff 的四种范围与 DiffCache
 [T120]
 milestone = "M1b"
 IT-git-diff-scopes = "pr"
+
+# Git 服务 IIIb：file_diff 与 hunk 切分
+[T221]
+milestone = "M1b"
+IT-git-file-diff = "pr"
+
+# Git 服务 IIIc：status、branches 与 cupper diff
+[T222]
+milestone = "M1b"
+IT-git-status = "pr"
 
 # Git 服务 IV：暂存、取消暂存与还原（含 SP-5 的 82 个用例）
 [T121]
@@ -984,9 +994,14 @@ E2E-file-ref = "nightly"
 [T143]
 milestone = "M1b"
 UI-code-highlight = "pr"
-E2E-error-guidance = "nightly"
 UI-plan = "pr"
 UI-error = "pr"
+
+# 宿主写 `error` 条目与恢复指引（MS-5）
+[T226]
+milestone = "M1b"
+E2E-error-guidance = "nightly"
+IT-error-item = "pr"
 
 # 新建会话页：两种 agent、工作区与分支
 [T144]
@@ -1090,6 +1105,16 @@ milestone = "M1b"
 IT-selfuse-build = "nightly"
 E2E-selfuse-coexist = "nightly"
 E2E-selfuse-replace = "nightly"
+
+# 迁移样例库与已发布脚本的锁定（P-4）
+[T223]
+milestone = "M1b"
+IT-migrations-samples = "pr"
+
+# 重连途中退出 App 会卡住
+[T225]
+milestone = "M1b"
+E2E-quit-during-reconnect = "nightly"
 
 # release-config 检查
 [T161]

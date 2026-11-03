@@ -60,7 +60,8 @@ impl Layout {
 }
 
 /// Each file covered, with the sha-256 of its content, `None` while missing.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// The default covers nothing: a snapshot no turn compares.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Fingerprint(BTreeMap<PathBuf, Option<[u8; 32]>>);
 
 impl Fingerprint {

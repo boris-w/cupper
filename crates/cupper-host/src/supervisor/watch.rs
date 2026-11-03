@@ -14,7 +14,8 @@
 //! Either exit waits for a look taken after new sessions and turns were
 //! closed: an earlier one may miss a turn that started since.
 //! [`WatchCore`] decides; the actor looks at the clients, the work and the
-//! parent every `supervisor_observe` and carries the decisions out.
+//! parent every `supervisor_observe` and carries the decisions out. The same
+//! actor holds the power assertion ([`power`](super::power)).
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -25,6 +26,7 @@ use cupper_protocol::error::{ErrorCode, ErrorReason, RpcError};
 use cupper_sys::Cdhash;
 use tokio::sync::mpsc;
 
+use super::power::{self, Holder, Power};
 use super::{Activity, Exit, Part};
 use crate::clock::{Clock, MonoTime, Now};
 use crate::durations::{Durations, SUPERVISOR_IDLE, SUPERVISOR_OBSERVE};
@@ -211,14 +213,19 @@ impl Admission {
 #[derive(Debug, Clone)]
 pub struct Watch(mpsc::UnboundedSender<Input>);
 
-/// The watch until [`Watching::start`]; what comes before waits.
+/// The watch and the power assertion until [`Watching::start`]; what comes
+/// before waits.
 #[derive(Debug)]
-pub struct Watching(mpsc::UnboundedReceiver<Input>);
+pub struct Watching(
+    mpsc::UnboundedReceiver<Input>,
+    mpsc::UnboundedReceiver<power::Mail>,
+);
 
 impl Watch {
-    pub fn new() -> (Self, Watching) {
+    pub fn new() -> (Self, Power, Watching) {
         let (mail, inbox) = mpsc::unbounded_channel();
-        (Self(mail), Watching(inbox))
+        let (power, powers) = Power::new();
+        (Self(mail), power, Watching(inbox, powers))
     }
 
     /// The code on disk is not what runs: an upgrade waits. The runtime
@@ -282,6 +289,12 @@ enum Due {
     Core(WatchTimer),
 }
 
+enum Next {
+    Input(Input),
+    Power(power::Mail),
+    Due,
+}
+
 impl Watching {
     pub fn start(self, deps: WatchDeps) {
         deps.quiescence.register(SUPERVISOR);
@@ -290,9 +303,10 @@ impl Watching {
             core: WatchCore::new(&deps.durations),
             timers: TimerTable::new(),
             alarm: Alarm::new(Arc::clone(&deps.clock)),
+            power: Holder::default(),
             deps,
         };
-        tokio::spawn(watcher.run(self.0, participant));
+        tokio::spawn(watcher.run(self, participant));
     }
 }
 
@@ -300,23 +314,31 @@ struct Watcher {
     core: WatchCore,
     timers: TimerTable<Due>,
     alarm: Alarm,
+    power: Holder,
     deps: WatchDeps,
 }
 
 impl Watcher {
-    async fn run(mut self, mut inbox: mpsc::UnboundedReceiver<Input>, participant: Participant) {
+    /// Runs as long as the host: the assertion lives here, with or without
+    /// a [`Watch`] left.
+    async fn run(mut self, Watching(mut inbox, mut powers): Watching, participant: Participant) {
         self.observe();
         loop {
             self.alarm.follow(&self.timers);
             let next = participant.idle(async {
                 tokio::select! {
-                    input = inbox.recv() => input.map(Some),
-                    () = self.alarm.rung() => Some(None),
+                    Some(input) = inbox.recv() => Next::Input(input),
+                    Some(mail) = powers.recv() => Next::Power(mail),
+                    () = self.alarm.rung() => Next::Due,
                 }
             });
             match next.await {
-                Some(Some(input)) => self.step(input),
-                Some(None) => {
+                Next::Input(input) => self.step(input),
+                Next::Power(mail) => {
+                    let now = self.deps.clock.now();
+                    self.power.handle(mail, now, &self.deps.index);
+                }
+                Next::Due => {
                     let now = self.deps.clock.now_mono();
                     while let Some(due) = self.timers.pop_due(now) {
                         match due {
@@ -325,7 +347,6 @@ impl Watcher {
                         }
                     }
                 }
-                None => break,
             }
         }
     }

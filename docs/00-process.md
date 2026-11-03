@@ -75,6 +75,6 @@ docs/
 - [x] ① PRD：v1.0 已确认（tag `gate/prd`）
 - [x] ② 技术设计：v1.0 已确认（tag `gate/design`）；ADR-01 至 ADR-11 已采纳；详细设计见 `docs/02-design.md` 第 5 节和 `docs/design/`
 - [x] ③ 任务拆分：v1.0 已确认（tag `gate/plan`），共 134 个任务
-- [ ] ④ 迭代开发：M1a 进行中
+- [ ] ④ 迭代开发：M1a 已通过（2026-11-03，tag `gate/m1a`，记录在 `docs/tasks/T099-m1a-exit/gate-1f972d2/`）；M1b 进行中
 - [ ] ⑤ 验收发布
 - [ ] ⑥ 复盘

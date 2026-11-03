@@ -8,9 +8,9 @@ use std::path::Path;
 
 use cupper_sys::{Command, Env};
 
-use super::run::run;
+use super::run::{RunError, run};
 use crate::clock::Clock;
-use crate::durations::{Durations, VERSION_PROBE};
+use crate::durations::{Durations, VERSION_PROBE, VERSION_PROBE_RETRY};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Version {
@@ -104,8 +104,9 @@ pub fn classify(version: Version, range: &VerifiedRange) -> Result<VersionClass,
 }
 
 /// The version `binary --version` prints, with `env` (the caller's
-/// allow-listed environment) and the [`VERSION_PROBE`] time limit; `None`
-/// when it fails, times out or prints no version.
+/// allow-listed environment) and the [`VERSION_PROBE`] time limit, then
+/// once more with [`VERSION_PROBE_RETRY`]'s; `None` when it fails, times out
+/// twice or prints no version.
 pub async fn probe(
     clock: &dyn Clock,
     durations: &Durations,
@@ -114,9 +115,11 @@ pub async fn probe(
 ) -> Option<Version> {
     let mut command = Command::new(binary);
     command.arg("--version").env(env);
-    let output = run(clock, command, durations.get(VERSION_PROBE))
-        .await
-        .ok()?;
+    let mut output = run(clock, command.clone(), durations.get(VERSION_PROBE)).await;
+    if matches!(output, Err(RunError::Timeout)) {
+        output = run(clock, command, durations.get(VERSION_PROBE_RETRY)).await;
+    }
+    let output = output.ok()?;
     let text = String::from_utf8_lossy(&output.stdout);
     output
         .status
@@ -207,5 +210,25 @@ mod tests {
         );
         assert_eq!(probe(&clock, &durations, &failing, Env::new()).await, None);
         assert_eq!(probe(&clock, &durations, &silent, Env::new()).await, None);
+        // A first run past the time limit is tried once more, longer (T066).
+        let started = dir.path().join("started");
+        let body = format!(
+            "[ -e {0} ] && echo 'codex-cli 0.163.0' && exit; touch {0}; exec sleep 60",
+            started.display()
+        );
+        let slow = script(dir.path(), "slow", &body);
+        let limit = clock.now_mono() + durations.get(VERSION_PROBE);
+        let mut probed = std::pin::pin!(probe(&clock, &durations, &slow, Env::new()));
+        let found = loop {
+            tokio::select! {
+                found = &mut probed => break found,
+                () = tokio::task::yield_now() => {
+                    if started.exists() && clock.now_mono() < limit {
+                        clock.advance_to(limit);
+                    }
+                }
+            }
+        };
+        assert_eq!(found, Some(v("0.163.0")));
     }
 }

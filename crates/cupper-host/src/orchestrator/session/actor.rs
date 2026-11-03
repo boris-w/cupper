@@ -76,6 +76,7 @@ use crate::pure::{Alarm, Core, TimerRequest, TimerTable};
 use crate::quiescence::{Participant, Quiescence};
 use crate::store::streams::{Batch, StreamHandle, StreamView, StreamWriter};
 use crate::store::{BlobStore, Durability, Readers};
+use crate::supervisor::power::Share;
 use crate::trust::{self, Scan};
 
 /// A call and where its reply goes.
@@ -139,6 +140,8 @@ pub(super) struct Parts {
     pub quiescence: Quiescence,
     /// Where tool outputs over the inline limit go.
     pub blobs: BlobStore,
+    /// The session's share of what keeps the Mac awake.
+    pub power: Share,
 }
 
 /// What the actor starts with besides its parts: its first input, and what
@@ -630,6 +633,9 @@ impl SessionActor {
         }
         let running = self.parts.core.turn_id().is_some();
         self.parts.running.store(running, Ordering::Relaxed);
+        // Turns and requests start and end in steps (design 5.2.13).
+        let pending = self.parts.pending.load(Ordering::Relaxed);
+        self.parts.power.set(pending.saturating_add(running.into()));
         let queued = self.parts.core.queued();
         self.parts.queued.store(queued, Ordering::Relaxed);
         self.alarm.follow(&self.timers);

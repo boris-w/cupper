@@ -236,7 +236,7 @@ impl SettingsHandle {
     }
 }
 
-/// Finds the agents again: `agents/refresh` of Claude.
+/// Finds the agents again: `agents/refresh` of each.
 pub type Rediscover = Arc<dyn Fn() -> BoxFuture<'static, ()> + Send + Sync>;
 
 /// `settings/get` and `settings/update`.
@@ -258,7 +258,12 @@ impl SettingsPort {
         let rediscover: Rediscover = Arc::new(move || {
             let agents = Arc::clone(&agents);
             // A failure shows in `agents.updated`; the settings stand.
-            async move { drop(agents.refresh(&AgentKind::Claude).await) }.boxed()
+            async move {
+                for agent in [AgentKind::Claude, AgentKind::Codex] {
+                    drop(agents.refresh(&agent).await);
+                }
+            }
+            .boxed()
         });
         Self {
             settings,

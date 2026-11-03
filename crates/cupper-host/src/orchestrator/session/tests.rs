@@ -32,7 +32,7 @@ use crate::driver::api::{
 use crate::durations::Durations;
 use crate::gateway::testkit::Peer;
 use crate::gateway::{AuditRecord, Routes};
-use crate::git::GitTool;
+use crate::git::{GitDeps, GitService, GitTool};
 use crate::ledger::Ledger;
 use crate::orchestrator::testkit::text;
 use crate::quiescence::Quiescence;
@@ -40,6 +40,7 @@ use crate::store::streams::{Published, Push, Sink, Streams, StreamsConfig};
 use crate::store::testutil::{TempDir, host_writer, query};
 use crate::store::{BlobStore, Durability, Readers, Writer, WriterThread, log, open_reader};
 use crate::supervisor::end_previous_run;
+use crate::supervisor::power::Power;
 use crate::supervisor::{Activity, Part};
 use crate::trust::Scan;
 
@@ -283,15 +284,27 @@ impl Fixture {
             durations: durations.clone(),
             agents: HashMap::from([(AgentKind::Claude, agent)]),
             quiescence: Quiescence::new(),
-            audit: records,
+            audit: records.clone(),
             index: Arc::clone(&index) as Arc<dyn IndexNotes>,
-            git,
+            git: git.clone(),
             admission: Arc::default(),
             blobs: blobs.clone(),
+            power: Power::new().0,
         };
         let conn = open_reader(&dir.host_db()).unwrap();
         let ledger = Ledger::load(&conn, writer.clone(), shared, &durations).unwrap();
         let mut routes = Routes::new(ledger);
+        GitService::new(GitDeps {
+            git,
+            readers: readers.clone(),
+            streams: streams.clone(),
+            clock: Arc::clone(&deps.clock),
+            ids: Arc::new(IdGen::seeded(Arc::clone(&deps.clock), 2)),
+            durations: durations.clone(),
+            blobs: blobs.clone(),
+            audit: records,
+        })
+        .route(&mut routes);
         let manager = SessionManager::new(deps);
         routes.sessions(Arc::new(manager.clone()));
         routes.streams(streams.clone(), readers);

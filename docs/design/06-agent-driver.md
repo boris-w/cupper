@@ -60,9 +60,9 @@ flowchart LR
 | `ConfigChanged(options)`、`CommandsChanged(commands)` | `config_option_update`、`current_mode_update`、`available_commands_update`。**`CommandsChanged` 去重**（v1.6，T003）：Claude 在每个会话开始和每个回合开始时，都推一次完整的命令列表（本机 22–32 KB，取决于装了多少 skill）。`AgentRuntime` 按会话记住上一份列表的摘要，内容没有变化就不发事件；会话流里的 `session.capabilities` 也只在内容变化时写（[5.3.5](03-protocol-v1.md#535-事件类型目录)） |
 | `TitleChanged {title, source}`、`Usage {used, size, cost?}` | `session_info_update`、`usage_update` |
 | `UpstreamRetry {attempt, max}` | Codex 的 `_meta.codex.error` 且 `willRetry` 为真 |
-| `AdapterExited {instance_id, status}` | 广播给该 agent 的所有会话 |
+| `AdapterExited {instance_id, status, reclaimed}` | 广播给该 agent 的所有会话；`reclaimed` 表示是回收停掉的，会话只重新 attach，没有回合被打断时不写 `agent_restarted`（T111） |
 
-`AgentError` 统一三类错误（ADR-06）：JSON-RPC 错误（保留 `agent_code` 和截断、脱敏后的 `message`）、以文本出现的错误、会自动重试的上游错误；并给出 cupper 的分类：`not_logged_in`、`cli_too_old`、`session_not_found`、`process_exited`、`restartable`、`model_unsupported`、`quota_exhausted`、`other`。
+`AgentError` 统一三类错误（ADR-06）：JSON-RPC 错误（保留 `agent_code` 和截断、脱敏后的 `message`）、以文本出现的错误、会自动重试的上游错误；并给出 cupper 的分类：`not_logged_in`、`cli_too_old`、`session_not_found`、`process_exited`、`restartable`、`model_unsupported`、`quota_exhausted`、`project_untrusted`（Codex 在未信任的项目里，T111）、`other`。分类器按 agent 分开（`claude::agent_error`、`codex::agent_error`），T218 的判断在分类之后，对两种 agent 相同。
 
 **`AgentRuntime` → `IndexActor`**：`AgentStatus {cli, adapter, runtime, auth, rss, state}`，用于设置页的 agent 状态和新建会话页的提示（AG-2、AG-5）。
 
@@ -178,9 +178,9 @@ ACP 的 `configOptions` 按 `category` 映射到 cupper 的配置项，具体取
 | 情况 | 策略 |
 |---|---|
 | Claude 会话空闲 | 会话 actor 空闲 10 分钟退出时 `session/close`，CLI 进程随之退出（ADR-09） |
-| Codex 适配器 | 该 agent 没有进行中的回合、没有待处理的交互请求，并且（进程组常驻内存超过 2 GiB，或距最后一个回合超过 30 分钟）时回收：逐个 `session/close`，停掉适配器，所有会话变为 `Detached`，下次使用时 `session/resume`（代价很小，SP-1） |
+| Codex 适配器 | 该 agent 没有进行中的回合、没有待处理的交互请求，并且（进程组常驻内存超过 2 GiB，或距最后一个回合超过 30 分钟，或探测过且已没有会话）时回收：逐个 `session/close`，停掉适配器，所有会话变为 `Detached`，下次使用时 `session/resume`（代价很小，SP-1）。T111 的实现：在 30 s 一次的资源采样时判断，所以最多晚 30 s；"没有进行中的回合"由运行时近似判断：没有在途的 prompt、`session/new`、`session/resume`，没有待答的请求，没有线程在工作（`threadStatus`），10 s 内没有收到 agent 的任何消息；回收沿用下面"关闭"的顺序，会话收到 `AdapterExited{reclaimed: true}`。回收或重启期间到来的 attach 等下一个实例；到来的 prompt 以 `session_not_found` 失败，会话 resume 后重发（K6）。已知局限：取消后仍在运行、又超过 10 s 不出声的命令（K3），遇到超过 2 GiB 时会被回收 |
 | 适配器意外退出 | 有会话在运行回合时立即重启，否则等下次使用再启动；退避 1、2、4 … 最长 30 秒；5 分钟内连续失败 5 次，状态改为 `crashed`，需要用户在设置页手动重启 |
-| 手动 | `agents/restart`（界面先提示会影响该 agent 的所有会话） |
+| 手动 | `agents/restart`（界面先提示会影响该 agent 的所有会话）：清掉失败计数，按"关闭"的顺序停掉正在运行的适配器（不算一次失败），会话收到 `AdapterExited` 后重新 attach；返回时适配器可能还在关闭（T111） |
 | 关闭 | v1.6 的顺序（T003：Claude Code 用 setsid 拉起工具命令，命令有自己的会话和进程组，杀适配器的进程组杀不到它们）：<br>1. 逐个 `session/close`，让 CLI 自己正常退出；<br>2. 关闭 stdin，限时等适配器退出；<br>3. 发任何信号之前，用 libproc 枚举适配器的全部后代，记下每个后代的进程组（组号加启动时间）；<br>4. 对这些进程组和适配器的进程组逐个发 SIGTERM，限时等待，再对仍在的发 SIGKILL。<br>顺序不能倒：适配器先退出的话，它的后代会被 launchd 收养，从进程树上再也找不到 |
 
 - **意外退出后的清理**：适配器意外退出时，它的后代已经被 launchd 收养。资源采样时顺带把后代的进程组（组号加启动时间）写进 `adapters` 表，宿主重启或重启适配器时，按记录逐个清理（[5.2.13](02-host.md#5213-进程监护与宿主生命周期)）。

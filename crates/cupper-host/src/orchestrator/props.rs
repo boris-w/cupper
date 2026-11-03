@@ -217,6 +217,7 @@ impl World {
                     instance: AdapterInstanceId::from_uuid(self.instance - 1),
                     status: ExitStatus::from_raw(9),
                     stderr: String::new(),
+                    reclaimed: false,
                 })
             }
             Op::Advance(ms) => {

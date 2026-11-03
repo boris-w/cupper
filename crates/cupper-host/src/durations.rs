@@ -110,6 +110,10 @@ durations! {
     /// How long `--version` of a CLI, git or git-lfs, and `xcode-select -p`,
     /// may take (design 5.6.6, 5.2.10).
     VERSION_PROBE = "version_probe", Duration::from_secs(5);
+    /// The second `--version` of a CLI after the first timed out: a CLI's
+    /// first run after it was copied can take seconds, under load tens of
+    /// them (T066, T196).
+    VERSION_PROBE_RETRY = "version_probe_retry", Duration::from_secs(30);
     /// How long an adapter has to answer `session/close`, and then to exit
     /// once its stdin is closed (design 5.6.8, 5.2.13).
     ADAPTER_CLOSE_WAIT = "adapter_close_wait", Duration::from_secs(3);
@@ -126,6 +130,9 @@ durations! {
     ADAPTER_CRASH_WINDOW = "adapter_crash_window", Duration::from_secs(300);
     /// How often a runtime samples its adapter's processes (design 5.2.13).
     RESOURCE_SAMPLE = "resource_sample", Duration::from_secs(30);
+    /// How long Codex's adapter may go without work before it is reclaimed
+    /// (design 5.6.8, ADR-09).
+    CODEX_RECLAIM_IDLE = "codex_reclaim_idle", Duration::from_secs(30 * 60);
     /// How long a probe waits for the agent's command list after its session
     /// opened (design 5.6.7).
     PROBE_COMMANDS = "probe_commands", Duration::from_millis(200);
@@ -167,6 +174,8 @@ durations! {
     GIT_WORKTREE_ADD = "git_worktree_add", Duration::from_secs(600);
     /// `git push` in the user tier (design 5.2.10).
     GIT_PUSH = "git_push", Duration::from_secs(300);
+    /// How long a `diff_token` names its diff (design 5.2.10).
+    DIFF_CACHE_TTL = "diff_cache_ttl", Duration::from_secs(600);
     /// The registry's own tests: a short coalescing window.
     #[cfg(test)]
     TEST_TICK = "test_tick", Duration::from_millis(40);

@@ -59,7 +59,7 @@ impl Restarts {
         Some(*last + base.saturating_mul(2u32.saturating_pow(doublings)).min(max))
     }
 
-    /// `agents/restart` (T111): the failures are forgotten.
+    /// `agents/restart`: the failures are forgotten.
     pub fn clear(&mut self) {
         (self.failures, self.crashed) = (VecDeque::new(), false);
     }

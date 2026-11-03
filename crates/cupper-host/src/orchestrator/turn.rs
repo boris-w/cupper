@@ -836,7 +836,14 @@ impl TurnMachine {
         true
     }
 
-    fn adapter_exited(&mut self, instance: AdapterInstanceId, now: Now, out: &mut Vec<Action>) {
+    /// A reclaimed adapter cut nothing off unless a prompt raced it: the
+    /// session only attaches again (design 5.6.8).
+    fn adapter_exited(
+        &mut self,
+        (instance, reclaimed): (AdapterInstanceId, bool),
+        now: Now,
+        out: &mut Vec<Action>,
+    ) {
         let Link::Attached {
             session,
             instance: current,
@@ -849,14 +856,19 @@ impl TurnMachine {
         }
         self.link = Link::Detached(Some(session.clone()));
         self.inflight = None;
-        if let Some(Turn {
-            phase: Phase::Prompting(_) | Phase::Cancelling(_) | Phase::Autonomous,
-            ..
-        }) = self.turn
-        {
+        let running = matches!(
+            self.turn,
+            Some(Turn {
+                phase: Phase::Prompting(_) | Phase::Cancelling(_) | Phase::Autonomous,
+                ..
+            })
+        );
+        if running {
             self.end(Outcome::failed(FailureCode::AdapterExited), now, out);
         }
-        out.extend(notice(&self.ids, now, NoticeCode::AgentRestarted).map(Action::Event));
+        if running || !reclaimed {
+            out.extend(notice(&self.ids, now, NoticeCode::AgentRestarted).map(Action::Event));
+        }
     }
 
     fn expired(&mut self, timer: TurnTimer, now: Now, out: &mut Vec<Action>) {
@@ -998,9 +1010,11 @@ impl Core for TurnMachine {
             Input::Driver(DriverEvent::PromptFailed { tag, error }) => {
                 self.prompt_returned(tag, Err(error), now, &mut out)
             }
-            Input::Driver(DriverEvent::AdapterExited { instance, .. }) => {
-                self.adapter_exited(instance, now, &mut out)
-            }
+            Input::Driver(DriverEvent::AdapterExited {
+                instance,
+                reclaimed,
+                ..
+            }) => self.adapter_exited((instance, reclaimed), now, &mut out),
             // Output came: the prompt is not sent again (K6).
             Input::Driver(DriverEvent::Update(_)) => {
                 if let Some(turn) = &mut self.turn {

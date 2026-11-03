@@ -129,3 +129,14 @@ export function ToolIcon({ kind }: { kind: string }) {
     </svg>
   );
 }
+
+/** A plan step's status (MS-4): an empty ring, a ring with a dot, or a ring with a tick. */
+export function StepIcon({ status }: { status: "pending" | "in_progress" | "completed" }) {
+  return (
+    <svg {...svg} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="6" />
+      {status === "in_progress" && <circle cx="8" cy="8" r="2.5" fill="currentColor" />}
+      {status === "completed" && <path d="M5.5 8.2l1.7 1.7 3.3-3.6" />}
+    </svg>
+  );
+}

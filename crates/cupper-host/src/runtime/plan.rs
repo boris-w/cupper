@@ -36,10 +36,12 @@ pub struct Npm {
 
 /// claude-agent-acp's bundle in its version directory.
 pub const ADAPTER: &str = "adapter.mjs";
+/// codex-acp's, as it is bundled.
+pub const CODEX_ADAPTER: &str = "index.mjs";
 /// The script that makes it, in the app bundle.
 pub const SCRIPT: &str = "Resources/runtime/bundle-claude-acp.mjs";
 
-/// The components this host installs. codex-acp is not among them (T111).
+/// The components this host installs.
 pub fn plans(manifest: &Manifest) -> Vec<ComponentPlan> {
     let (node, esbuild) = (&manifest.node.version, &manifest.esbuild_wasm.version);
     let mut plans = split(node, esbuild, &manifest.files);
@@ -53,7 +55,27 @@ pub fn plans(manifest: &Manifest) -> Vec<ComponentPlan> {
         &claude.entry,
         hash,
     ));
+    plans.push(codex(&manifest.codex_acp.version, &manifest.files));
     plans
+}
+
+/// codex-acp: the package directory `Resources/runtime/codex-acp-<version>/`,
+/// copied as it is bundled.
+fn codex(version: &str, files: &BTreeMap<String, FileHash>) -> ComponentPlan {
+    let package = format!("Resources/runtime/codex-acp-{version}/");
+    let (mut hashes, mut sources) = (BTreeMap::new(), BTreeMap::new());
+    for (source, hash) in files {
+        if let Some(target) = source.strip_prefix(&package) {
+            hashes.insert(target.to_owned(), hash.clone());
+            sources.insert(target.to_owned(), source.clone());
+        }
+    }
+    ComponentPlan {
+        component: Component::CodexAcp,
+        version: version.to_owned(),
+        files: hashes,
+        source: Source::Bundle(sources),
+    }
 }
 
 /// Node is `Helpers/node` and its licence; esbuild-wasm is the package

@@ -6,6 +6,8 @@
 mod actor;
 pub mod core;
 #[cfg(test)]
+mod diff_tests;
+#[cfg(test)]
 mod gating_tests;
 #[cfg(test)]
 mod idle_tests;

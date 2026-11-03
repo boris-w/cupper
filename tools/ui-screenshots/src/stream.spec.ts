@@ -80,6 +80,94 @@ const TOOLS = [
   tool("i_8", "execute", { command: "pnpm test --filter ui-core" }),
 ] as EventBody[];
 
+const CODE = [
+  "```ts",
+  "// 读取配置，缺省时用默认值",
+  'import { readFile } from "node:fs/promises";',
+  "",
+  "export async function load(path: string, retries = 3): Promise<Config> {",
+  '  const text = await readFile(path, "utf8");',
+  "  return { ...JSON.parse(text), retries, debug: false };",
+  "}",
+  "```",
+  "```html",
+  '<a class="link" href="https://example.com/docs">文档</a>',
+  "```",
+  "```python",
+  "def total(items: list[int]) -> int:",
+  '    """求和"""',
+  "    return sum(items, start=0)",
+  "```",
+].join("\n");
+
+const completed = (turn_id: string, status = "completed") => ({
+  type: "turn.completed",
+  data: { turn_id, status, ended_at: 2, duration_ms: 8000, final_item_ids: [] },
+});
+
+const HIGHLIGHT = [
+  ...header,
+  started("i_1", "agent_message"),
+  delta("i_1", CODE),
+  done("i_1"),
+  completed("t_1"),
+] as EventBody[];
+
+const step = (content: string, status: string) => ({ content, status });
+/** A running turn whose plan is at step 2 of 4, under work that pushed it out of view. */
+const PLAN_STEPS = [
+  ...header,
+  started("i_1", "plan", {
+    source: "entries",
+    entries: [
+      step("读一遍 README，列出过时的段落", "completed"),
+      step("重写安装一节", "in_progress"),
+      step("补上贡献指南的链接", "pending"),
+      step("跑一遍全部测试", "pending"),
+    ],
+  }),
+  ...Array.from({ length: 16 }, (_, n) => n + 1).flatMap((n) => [
+    tool(`i_t${n}`, "read", { paths: [`docs/part-${n}.md`] }),
+    done(`i_t${n}`),
+  ]),
+  started("i_2", "agent_message"),
+  delta("i_2", "安装一节改成了 `pnpm i`，接下来补链接。"),
+  done("i_2"),
+  tool("i_3", "edit", { paths: ["README.md"] }),
+] as EventBody[];
+
+const PLAN_MARKDOWN = [
+  ...header,
+  started("i_1", "plan", {
+    source: "markdown",
+    markdown: {
+      type: "text",
+      text: "1. 先补测试\n2. 再改实现，`cargo test` 通过后提交",
+    },
+  }),
+  done("i_1"),
+  started("i_2", "agent_message"),
+  delta("i_2", "计划写好了，等你确认。"),
+  done("i_2"),
+  completed("t_1"),
+] as EventBody[];
+
+const error = (item_id: string, code: string, guidance: string, more: object = {}) =>
+  started(item_id, "error", { code, guidance, retryable: guidance === "retry", ...more });
+/** Every recovery step once; the retry is in the last turn, which can send its message again. */
+const ERRORS = [
+  ...header,
+  error("i_1", "not_logged_in", "run_login_in_terminal", { raw: "Authentication required" }),
+  error("i_2", "cli_too_old", "upgrade_cli"),
+  error("i_3", "cli_missing", "install_cli"),
+  error("i_4", "quota_exhausted", "quota_exhausted"),
+  error("i_5", "model_unsupported", "change_model"),
+  error("i_6", "adapter_crashed", "restart_agent"),
+  error("i_7", "other", "page_admin", { raw: "unknown guidance falls back to none" }),
+  error("i_8", "restartable", "retry"),
+  completed("t_1", "failed"),
+] as EventBody[];
+
 async function show(page: Page, stream: EventBody[], theme: "light" | "dark") {
   await open(page, { info: { theme }, streams: { "session/s_1": stream } });
   await page.evaluate(() => window.cupperShell.navigate({ kind: "session", session_id: "s_1" }));
@@ -89,6 +177,7 @@ for (const theme of ["light", "dark"] as const) {
   test(`UI-stream-markdown ${theme}`, async ({ page }) => {
     await show(page, MARKDOWN, theme);
     await expect(page.getByText("改动概要")).toBeVisible();
+    await expect(page.locator("pre[data-highlighted]")).toBeVisible();
     await expect(page).toHaveScreenshot(`stream-markdown-${theme}.png`);
     expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
   });
@@ -99,6 +188,43 @@ for (const theme of ["light", "dark"] as const) {
     await page.getByText("读取了 2 个文件，搜索了 1 次").click();
     await expect(page.getByText("退出码 1")).toBeVisible();
     await expect(page).toHaveScreenshot(`stream-tools-${theme}.png`);
+    expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
+  });
+
+  test(`UI-code-highlight ${theme}`, async ({ page }) => {
+    await show(page, HIGHLIGHT, theme);
+    await expect(page.locator("pre[data-highlighted]")).toHaveCount(3);
+    await expect(page).toHaveScreenshot(`stream-code-${theme}.png`);
+    expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
+  });
+
+  test(`UI-plan steps and pill ${theme}`, async ({ page }) => {
+    await show(page, PLAN_STEPS, theme);
+    const first = page.getByText("读一遍 README，列出过时的段落");
+    await expect(page.getByText("正在编辑 README.md")).toBeInViewport();
+    await expect(first).not.toBeInViewport();
+    await page.getByRole("button", { name: "第 2 / 4 步" }).click();
+    await expect(first).toBeInViewport();
+    await expect(page.getByRole("button", { name: "回到底部" })).toBeVisible();
+    await expect(page).toHaveScreenshot(`stream-plan-steps-${theme}.png`);
+    expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
+  });
+
+  test(`UI-plan markdown ${theme}`, async ({ page }) => {
+    await show(page, PLAN_MARKDOWN, theme);
+    await page.getByRole("button", { name: "计划" }).click();
+    await expect(page.getByText("先补测试")).toBeVisible();
+    // A plan in a finished turn has no pill.
+    await expect(page.getByRole("button", { name: /^第 / })).toHaveCount(0);
+    await expect(page).toHaveScreenshot(`stream-plan-markdown-${theme}.png`);
+    expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
+  });
+
+  test(`UI-error ${theme}`, async ({ page }) => {
+    await show(page, ERRORS, theme);
+    await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "复制命令" })).toBeVisible();
+    await expect(page).toHaveScreenshot(`stream-error-${theme}.png`);
     expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
   });
 }
