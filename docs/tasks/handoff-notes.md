@@ -506,3 +506,6 @@
 | T152 或以后统一更新截图基线的任务 | 截图页的字体栈要整套固定：无衬线和等宽都要接上夹具里的中文子集，否则代码里的中文会退到系统字体，基线随 runner 的 macOS 小版本变（T143 只改了等宽）；基线只由 `ui-baseline` workflow 生成 | T143 |
 | T141、T151、T153 | 错误条目的恢复指引：`change_model` 的入口在 T141（模型选择器），`upgrade_cli`、`install_cli`、`restart_agent` 在 T151（设置页 agent 状态、`agents/restart`），`run_login_in_terminal` 的"打开终端"在 T153；T143 现在只给文字和可复制的命令 | T143 |
 | 以后改桌面退出流程的任务 | 退出判定之前就开始的重连所拉起的宿主，连接会被关掉，进程本身靠宿主自己的规则退出：开发、自用构建按孤立规则约 1 s，发布构建要等 10 分钟空闲（T214 已记）；退出中收到 `second-instance` 不建窗口，只由 `quitting` 标记守住，没有专门的用例 | T225 |
+| T125 | `git::status::in_progress(git_dir)` 可以直接用于 ADR-10 的第 3 条规则（有进行中的合并、rebase 等时不删 worktree） | T222 |
+| 界面要频繁查 `git/status` 的任务（审查面板等） | 一次 status 要两次仓库档调用，每次前后各遍历一遍工作区（指纹），加上快照档的 refresh；带大 `node_modules` 的仓库会慢到秒级，频繁轮询之前要缓存（T120 汇报第 5 条同一件事） | T222 |
+| 以后在本机跑 IT-cli-commands 的任务 | 它用 target 里 e2e 构建的 `cupper` 二进制；只跑 `cargo test -p cupper-host` 不会重编 CLI，新命令会找不到，先 `cargo build -p cupper-cli --features test-harness` 或用 `--workspace` | T222 |
