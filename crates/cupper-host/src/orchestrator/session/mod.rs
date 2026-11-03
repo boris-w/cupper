@@ -14,6 +14,8 @@ mod files_tests;
 #[cfg(test)]
 mod gating_tests;
 #[cfg(test)]
+mod hunk_tests;
+#[cfg(test)]
 mod idle_tests;
 #[cfg(test)]
 mod interaction_tests;
