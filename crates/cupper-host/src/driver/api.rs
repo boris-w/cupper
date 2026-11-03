@@ -39,7 +39,15 @@ pub trait AgentPort: Send + Sync + fmt::Debug {
     /// A command without a reply: `Prompt`, `Cancel`, `Close`, `Answer`, or
     /// `SetConfig`, whose result comes as `ConfigChanged`.
     fn send(&self, command: DriverCommand);
+
+    /// `SetConfig` with a reply (`session/set_config`): every option after
+    /// the change, which `ConfigChanged` brings as well, or the agent's
+    /// refusal.
+    fn set_config(&self, command: DriverCommand) -> BoxFuture<'static, ConfigResult>;
 }
+
+/// The options after a `SetConfig`, or why there are none.
+pub type ConfigResult = Result<Vec<ConfigOption>, AgentError>;
 
 /// The agent's own ID of a session (ACP `sessionId`), opaque to the host.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]

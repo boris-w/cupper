@@ -4,6 +4,8 @@
 //! serves the gateway's session port.
 
 mod actor;
+#[cfg(test)]
+mod config_tests;
 pub mod core;
 #[cfg(test)]
 mod diff_tests;
@@ -40,7 +42,7 @@ use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
 use cupper_protocol::ids::{ConnId, PrincipalId, ProjectId, RequestId, SessionId};
 use cupper_protocol::index::{PendingKind, SessionSummary};
 use cupper_protocol::methods::interaction::InteractionRespond;
-use cupper_protocol::methods::session::SessionCreate;
+use cupper_protocol::methods::session::{SessionCreate, SessionSetConfig};
 use cupper_protocol::rpc::Method;
 use cupper_protocol::session::TurnStatus;
 use serde::de::DeserializeOwned;
@@ -125,6 +127,7 @@ fn privileged(
     let method = match command {
         Confirmable::Create(_) => SessionCreate::NAME,
         Confirmable::Respond(_) => InteractionRespond::NAME,
+        Confirmable::SetConfig(_) => SessionSetConfig::NAME,
         _ => return None,
     };
     let described = policy::describe(&command, facts).ok()?;
