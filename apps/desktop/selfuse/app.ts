@@ -140,7 +140,7 @@ export class App {
    */
   async ready(): Promise<void> {
     await this.#until(`${this.name} ready`, () => {
-      const lines = linesSince(this.#log, this.#from);
+      const lines = this.log();
       const failed = lines.find((line) => line.level === "error" || line.status === "failed");
       if (failed) {
         throw new Error(`${this.name}: ${JSON.stringify(failed)}`);
@@ -148,6 +148,11 @@ export class App {
       const ready = lines.some((line) => line.msg === "host connection" && line.status === "ready");
       return (ready && lines.some((line) => line.msg === "window connected")) || undefined;
     });
+  }
+
+  /** What `main.log` got since the app started. */
+  log(): Record<string, unknown>[] {
+    return linesSince(this.#log, this.#from);
   }
 
   /** The host in `host.lock`, as it runs: its pid, executable and cdhash. */
