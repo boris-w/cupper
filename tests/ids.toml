@@ -1106,6 +1106,11 @@ E2E-selfuse-replace = "nightly"
 milestone = "M1b"
 IT-migrations-samples = "pr"
 
+# 重连途中退出 App 会卡住
+[T225]
+milestone = "M1b"
+E2E-quit-during-reconnect = "nightly"
+
 # release-config 检查
 [T161]
 milestone = "M1b"
