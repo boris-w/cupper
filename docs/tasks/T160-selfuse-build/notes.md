@@ -77,3 +77,17 @@
    - 旧界面马上拉起了两次新宿主（control 连接和窗口连接各一次），都因为旧宿主还占着锁、以退出码 3 退出（相隔 10 ms）。之后预算 500 ms 用完，界面停在 `failed: host_unreachable`。这一次没有出现"旧界面接上新宿主"。
    - 第一次 SIGTERM 后 30 s 内，App 里一直有进程在运行；finally 里的第二次 SIGTERM 让它立刻结束（整个用例 39 s）。Electron 只把第一个 SIGTERM 当作优雅退出，之后恢复默认处理。所以被替换后的旧 App 卡在了优雅退出的过程中，卡在哪里还不知道。
    - 这次没有修，只加了诊断：等待超时时附上 App 里还在运行的进程（pid、ppid、运行时长、参数）和 Chromium 的 stderr；旧 App 的退出改为 soft 检查，后面的步骤照常跑。
+
+### 第二次运行（nightly 41586879127，f3fff60）
+
+IT-selfuse-build 和 E2E-selfuse-coexist 通过；E2E-selfuse-replace 只在 soft 检查上失败，旧 App 第一次 SIGTERM 后 30 s 仍未退出。诊断给出：
+
+- **还在运行的进程**：主进程（40 s）、普通 helper 里的 gpu-process 和 network service、一个**由旧主进程拉起、已运行 30 s 的 cupper-host**（新版本的二进制）。Renderer 已经没了。
+- **host.log 的时间线**：
+  - 06:13:37.509 旧宿主以 upgrade 退出。
+  - 旧界面随即两次拉起新宿主：一次退出码 3，一次 37.795 起来了。
+  - 37.929–38.019 旧界面的 control 和 window 连接完成握手，main.log 在 38.028 记了"host connection ready"。
+  - 用例在旧宿主退出后最多约 0.3 s 发出 SIGTERM（每 250 ms 查一次进程表），落在这次重连的握手当中。
+  - window 连接 38.052 关闭（窗口关了）；**control 连接一直开到 06:14:08**，第二次 SIGTERM 杀掉进程时才关。也就是说 `will-quit` 里的 `control.close()` 没有关掉它：重连在退出开始之后才完成。
+- **第一次运行（41581457853）也一样**：SIGTERM 落在重连期间，那次重连以 `host_unreachable` 失败，旧 App 照样没退出。
+- **代码上能看到的一个缺口**（没有改）：`ControlConnection.end()` 不会取消正在进行的 `#connect()`；`launcher.open()` 返回后，`#connect()` 不看 `#ended` 就 `attach`，而 `HostClient.attach()` 对已经 `close()` 的客户端也照样回到 ready。具体卡在退出流程的哪一步，没有证实。
