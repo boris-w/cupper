@@ -41,3 +41,23 @@
 合计约 705 行，离停止线 800 不远。按以往的偏差乘 1.15 约 810，会擦线；每个模块完成后跑一次 `cargo xtask size`，推算越过 800 就停下汇报。文档（`docs/`）不计入。
 
 ## 过程记录
+
+### 实现中核对到的事
+
+- **electron-builder 给谁签什么**（在本机已有的 e2e 产物上只读核对）：osx-sign 给每个文件都传 `--entitlements` 和 `--options runtime`，但 codesign 只把 entitlements 嵌进可执行文件（MH_EXECUTE）：主程序、4 个 helper、`chrome_crashpad_handler`、`app_shim_loader`、`ShipIt`；framework、dylib 和原生扩展都没有 entitlements。所以 IT-selfuse-build 的白名单按"可执行文件 / 库"分：可执行文件是 `allow-jit` 加 `disable-library-validation`（宿主、CLI 为空，Node 只有 `allow-jit`），库一律为空。
+- **递归 `readdir` 会走进 framework 的符号链接**（`Versions/Current` → `A`、顶层的 `Helpers`、`Libraries`），同一个 Mach-O 出现两三次。扫描先 `realpath` 再去重：e2e 产物里是 17 个 Mach-O，自用构建多一个 CLI，共 18 个，全是 arm64 单架构。
+- **用例在本机只做过两件事**，都不启动任何 App：
+  - 不设 `RUNNER_ENVIRONMENT` 跑 `test:selfuse`：三个文件都在 `built()` 的防护上失败，没有启动任何东西；
+  - 把 IT-selfuse-build 指向本机旧的 e2e 产物：五条断言都按预期失败（身份、entitlements、`enableNodeCliInspectArguments`、asar 里的测试入口、`test-harness` 特性），说明每条检查都看得见它要找的东西。
+- **`codesign --display <pid>`** 给出运行中的 `Executable=` 和 `CDHash=`，用来核对 `host.lock` 里的宿主是哪一份；`ps -x -o comm=` 在 macOS 上是完整路径，用来看 App 里起了哪些进程。
+- **主进程收到 SIGTERM 等同 ⌘Q**：走 `before-quit`，没有运行中的回合时不问；宿主随后成为孤立状态，1 秒一次的观察发现后退出。
+
+### 规模
+
+| 时点 | `cargo xtask size` |
+|---|---|
+| 宿主 worktree 根目录 | +37 |
+| 加上打包配置、构建入口 | +208 |
+| 加上 selfuse 作业、三个用例、nightly | +740（离停止线 60） |
+
+比估计（705）多 5%。测试 424 行（估计 415），实现 316 行（估计 290）。
