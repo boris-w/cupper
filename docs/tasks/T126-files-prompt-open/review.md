@@ -24,3 +24,7 @@
   - T151、T153：默认编辑器 TextEdit 打不开文件夹，要改默认值或引导用户选择；
   - COMPAT 或真机验证：`resource_link` 的 `file://` uri 没有百分号编码；
   - 输入框或会话的后续任务：图片和越界引用可以在 `session/send` 时提前校验。
+
+## 补充：合并时的格式问题（编排者）
+
+合并 T126 时，`settings.rs` 和 T160 冲突。我解决后给会话测试夹具补了 `SettingsHandle::load` 的 `data_dir` 参数，但那一行超出了 rustfmt 的行宽。这个合并提交（5945e00）已经推送，main 的 rust 作业因此在格式检查上失败。只做格式化的修复走了 PR #53（`fix/T126-merge-fmt`，2b52d12），8 项全过后合并。教训：手工解决冲突后，推送前先跑 `cargo fmt --check`。
