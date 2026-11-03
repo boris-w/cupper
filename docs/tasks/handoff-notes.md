@@ -498,3 +498,4 @@
 | T221、T222 | `unstaged` 里 git-crypt 这类过滤器的文件：没改动也会显示为"已变化"（快照里是占位 blob，index 里是密文）；可以在工作区内容与 index 的 stat 一致时保留 index 条目 | T120 |
 | T124 | `git/diff` 对回合范围一律加 `mixed_changes`；worktree 模式出现后，按 GT-1 只在本地模式下加 | T120 |
 | T147 | 设置页"通用"的防休眠开关：设置键 `host.prevent_idle_sleep: bool`（默认 true，write 即可），宿主启动时读初值，`SettingsPort` 在它变化时调 `Power::enabled(bool)`；`PowerCore` 加输入 `Enabled(bool)`，持有条件改成"计数 > 0、已启用、未退出"，约 15 行加测试（T156 的建议） | T156 |
+| T103（SP-6） | 洪流下渲染进程很慢：屏幕上几 MB、没有换行的一段文字很可能被 streamdown 整块反复渲染（推测）；runner 上 6 路洪流时开始测量前只有 4–36 帧/s，压力报告的测量段会被拉长（两份压力用例同时跑时中位 71.5 s），p99 可比性有限 | T220 |
