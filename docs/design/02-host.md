@@ -272,7 +272,7 @@ Q14，纪要 D4。原则：**回合快照写入之后不可变**，事后的信�
 
 ### 配置项
 
-- `session/set_config` 由 actor 转给驱动的 `set_config`，用返回的最新配置写 `session.configured`。回合进行中也允许修改，由 agent 决定何时生效。新建会话时的初始配置在 `session/new` 之后立即应用（SP-4a 的 `apply_prefs`；resume 之后也要重新应用，因为 agent 会恢复 transcript 里的模式）。
+- `session/set_config` 由 actor 转给驱动的 `set_config`，用返回的最新配置写 `session.configured`（T141：驱动的 `set_config` 带回复；会话用回复里的选项写 `session.configured`，再在同一次提交里记账本、回复命令，客户端拿到回复时流里已是新配置；未连接时只记进会话配置、下次 attach 时应用，`config_json` 随之更新，resume 应用用户选的值）。回合进行中也允许修改，由 agent 决定何时生效。新建会话时的初始配置在 `session/new` 之后立即应用（SP-4a 的 `apply_prefs`；resume 之后也要重新应用，因为 agent 会恢复 transcript 里的模式）。
 - **档位的设定者**：每次档位变化都记下设定它的 principal（`sessions.mode_set_by`）。新会话的默认档位来自用户自己的 CLI 配置时，视为由创建会话的 principal 设定（安全 #3，纪要 D10）。经原生确认进入 `full_access` 时，记下 `sessions.full_access_confirmed_at`。
 - **事后核对**（安全 #3）：Attach、resume 之后，以及收到 `ConfigChanged` 时，核对实际档位。出现以下任一情况，会话进入 `config_unconfirmed`：
   - 实际是 `full_access`，但没有经原生确认的记录；
