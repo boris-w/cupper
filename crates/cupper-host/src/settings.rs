@@ -7,8 +7,9 @@
 //! finds the agents again, and `agents.updated` shows it; M1a pushes no
 //! other notice of a change (T036 ruling).
 
+use std::ffi::OsString;
 use std::fmt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use cupper_protocol::annotations::WirePath;
@@ -32,15 +33,15 @@ use crate::ledger::Ticket;
 use crate::store::{Durability, WriteError, Writer};
 
 /// The settings nobody changed: CLIs discovered, no more variables for the
-/// adapters, worktrees under `~/.cupper/worktrees`, every notification on,
+/// adapters, worktrees under [`worktrees_root`], every notification on,
 /// Claude for new sessions, the idle exit after 10 minutes, no detailed
 /// logs. The apps are macOS's own until the built-in list exists (T013).
-pub fn defaults(home: &Path) -> Settings {
+pub fn defaults(home: &Path, data_dir: &Path) -> Settings {
     Settings {
         claude_cli_path: CliPath(None),
         codex_cli_path: CliPath(None),
         env_passthrough: Vec::new(),
-        worktrees_root: WirePath(home.join(".cupper/worktrees").display().to_string()),
+        worktrees_root: WirePath(worktrees_root(home, data_dir).display().to_string()),
         notify_needs_action: true,
         notify_turn_completed: true,
         notify_error: true,
@@ -49,6 +50,22 @@ pub fn defaults(home: &Path) -> Settings {
         default_agent: AgentKind::Claude,
         idle_exit_minutes: 10,
         verbose_diagnostics: false,
+    }
+}
+
+/// Where worktrees go unless the user says: `~/.<name>/worktrees` for a data
+/// directory `~/Library/Application Support/<name>` (`cupper`,
+/// `cupper-local`, `cupper-dev`: one per build kind, design 5.4.1), as
+/// [`log_dir`](crate::diag::log::log_dir) finds the logs; `<data_dir>/worktrees`
+/// for any other, such as the temporary ones of tests.
+fn worktrees_root(home: &Path, data_dir: &Path) -> PathBuf {
+    match (data_dir.parent(), data_dir.file_name()) {
+        (Some(parent), Some(name)) if parent.ends_with("Library/Application Support") => {
+            let mut dot = OsString::from(".");
+            dot.push(name);
+            home.join(dot).join("worktrees")
+        }
+        _ => data_dir.join("worktrees"),
     }
 }
 
@@ -134,17 +151,18 @@ struct Shared {
 
 impl SettingsHandle {
     /// The settings `host.db` holds, read on `conn` at start, over the
-    /// defaults for `home`.
+    /// defaults for `home` and the host's `data_dir`.
     pub fn load(
         conn: &Connection,
         writer: Writer,
         clock: Arc<dyn Clock>,
         home: &Path,
+        data_dir: &Path,
     ) -> rusqlite::Result<Self> {
         let mut select = conn.prepare("SELECT key, value FROM settings")?;
         let rows = select.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
         let rows = rows.collect::<rusqlite::Result<Vec<(String, String)>>>()?;
-        let current = merged(&defaults(home), rows);
+        let current = merged(&defaults(home, data_dir), rows);
         let shared = Shared {
             current: Mutex::new(current),
             update: tokio::sync::Mutex::new(()),

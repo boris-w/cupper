@@ -1,0 +1,51 @@
+# The release build (design 5.7.9, 5.10.1, 5.10.2): every fuse of design
+# 5.7.8 burned, the hardened runtime on, and `allow-jit` the one entitlement
+# of the app and of every helper. The host and the CLI come signed from
+# `cargo xtask host-bundle --kind release`. Signing with a Developer ID,
+# notarizing and publishing come with T180; without an identity
+# electron-builder leaves the app unsigned, as `release-config` builds it
+# every night (T161).
+appId: dev.cupper.app
+productName: Cupper
+directories:
+  output: dist/pack/release
+files:
+  - package.json
+  - dist/main/**
+  - dist/preload/**
+  - dist/renderer/**
+  # No source maps: nothing reads them, and the main process's holds the
+  # source of the e2e-only code it left out (IT-selfuse-build, T160).
+  - "!**/*.map"
+npmRebuild: false
+# The native extension, outside the asar; the host bundle and the CLI in
+# Helpers (design 5.10.1).
+extraResources:
+  - from: ../../target/host-bundle/build/release/libcupper_native.dylib
+    to: native/cupper_native.node
+extraFiles:
+  - from: ../../target/host-bundle/release/CupperHost.app
+    to: Helpers/CupperHost.app
+  - from: ../../target/host-bundle/release/cupper
+    to: Helpers/cupper
+protocols:
+  - name: Cupper
+    schemes: [cupper]
+mac:
+  # `host-bundle` signed them; signing them again would change the host's
+  # cdhash, which the CLI checks.
+  signIgnore: ["CupperHost\\.app", "/Helpers/cupper$"]
+  target: [dmg, zip]
+  hardenedRuntime: true
+  entitlements: build/entitlements.release.plist
+  entitlementsInherit: build/entitlements.release.plist
+  minimumSystemVersion: "15.0"
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  loadBrowserProcessSpecificV8Snapshot: false
+  grantFileProtocolExtraPrivileges: false

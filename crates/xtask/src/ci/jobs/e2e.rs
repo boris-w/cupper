@@ -67,19 +67,7 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
         );
         return Ok(());
     }
-    let mut install = ctx.command("pnpm");
-    install.args(["install", "--frozen-lockfile"]);
-    ctx.check("install", &mut install)?;
-
-    // `host-bundle` takes the runtime from the stage, whole or not at all.
-    if runtime_pack::staged(ctx.root)? {
-        ctx.skip("runtime-pack", "the stage matches runtime/manifest.json");
-    } else {
-        // Public downloads only, pinned by `runtime/manifest.json`.
-        let mut pack = ctx.cargo();
-        pack.args(["xtask", "runtime-pack"]);
-        ctx.check("runtime-pack", &mut pack)?;
-    }
+    prepare(ctx)?;
     let mut agent = ctx.cargo();
     agent.args(["build", "--locked", "--package", "cupper-fake-agent"]);
     ctx.check("fake-agent", &mut agent)?;
@@ -131,6 +119,22 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     perf::trend(ctx, &samples)
 }
 
+/// `pnpm install`, and the runtime that `host-bundle` takes from the stage,
+/// whole or not at all.
+pub(super) fn prepare(ctx: &mut JobCtx) -> Result<()> {
+    let mut install = ctx.command("pnpm");
+    install.args(["install", "--frozen-lockfile"]);
+    ctx.check("install", &mut install)?;
+    if runtime_pack::staged(ctx.root)? {
+        ctx.skip("runtime-pack", "the stage matches runtime/manifest.json");
+        return Ok(());
+    }
+    // Public downloads only, pinned by `runtime/manifest.json`.
+    let mut pack = ctx.cargo();
+    pack.args(["xtask", "runtime-pack"]);
+    ctx.check("runtime-pack", &mut pack)
+}
+
 fn touches_e2e(path: &str) -> bool {
     E2E_PATHS.iter().any(|e2e| {
         if e2e.ends_with('/') || e2e.ends_with('-') {
@@ -143,7 +147,7 @@ fn touches_e2e(path: &str) -> bool {
 
 /// The sha-256 of a file, or of a bundle: each file's path and content and
 /// each link's path and target, in path order.
-fn digest(path: &Path) -> Result<String> {
+pub(super) fn digest(path: &Path) -> Result<String> {
     let hex = |bytes: &[u8]| format!("{:x}", Sha256::digest(bytes));
     let read =
         |path: &Path| fs::read(path).with_context(|| format!("cannot read {}", path.display()));

@@ -2,7 +2,7 @@
 // the main process, the preload and the renderer's main document. Every
 // runtime dependency is bundled, so the app declares no `dependencies`.
 //
-// `vite build --mode <flavor>` picks the build flavor (design 5.7.9). The
+// `vite build --mode <mode>` picks the build flavor (design 5.7.9). The
 // host's environment allowlist comes from the runtime manifest at build time,
 // so that the app and the host never keep two copies of it (design 5.6.6).
 
@@ -19,7 +19,16 @@ import type { Flavor } from "./src/shared/flavor.ts";
 const CHROME = "chrome152";
 const NODE = "node24";
 
-const FLAVORS: Record<Flavor, true> = { release: true, local: true, e2e: true, dev: true };
+/**
+ * Each mode's flavor. Vite keeps the mode `local` for `.env.local` files, so
+ * the self-use build's mode is `self-use`.
+ */
+const MODES: Record<string, Flavor> = {
+  release: "release",
+  "self-use": "local",
+  e2e: "e2e",
+  dev: "dev",
+};
 
 const at = (path: string) => resolve(import.meta.dirname, path);
 
@@ -57,13 +66,13 @@ function metafile(): Plugin {
 }
 
 export default defineConfig(({ mode }) => {
-  if (!Object.hasOwn(FLAVORS, mode)) {
-    const flavors = Object.keys(FLAVORS).join(", ");
-    throw new Error(`--mode must be a build flavor (${flavors}), not "${mode}"`);
+  if (!Object.hasOwn(MODES, mode)) {
+    const modes = Object.keys(MODES).join(", ");
+    throw new Error(`--mode must name a build flavor (${modes}), not "${mode}"`);
   }
   return {
     define: {
-      __CUPPER_FLAVOR__: JSON.stringify(mode),
+      __CUPPER_FLAVOR__: JSON.stringify(MODES[mode]),
       __CUPPER_HOST_ENV_ALLOW__: hostEnvAllow(),
     },
     // The renderer's styles: Tailwind over the tokens of `@cupper/ui-core`.
