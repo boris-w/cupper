@@ -43,11 +43,12 @@
 | 回收 | 231 | 30 | 其中用例 105 |
 | `agents/restart`，T218 对 Codex | 57 | 17 | 其中用例 23 |
 | 版本探测重试 | 34 | 7 | 其中用例 20 |
-| 两个小修 | 12 | 10 | 自检报告的期望、回收时把在途的 attach 算作工作 |
+| 四个小修 | 42 | 11 | 自检报告的期望；回收时把在途的 attach 算作工作、代理 10 s 内有输出时不回收；回收或重启期间的 prompt 以 "Session not found" 失败、由会话 resume 后重发（含用例） |
 
-合计增 986、删 277；搬动按净增计时是 986 − 376 + 208 = 818，在停止线 900 之内。`cargo xtask size` 不认搬动提交，显示越过停止线 86（硬停止线 1100 之内）。
+合计增 1016、删 278；搬动按净增计时是 1016 − 376 + 208 = 848，在停止线 900 之内。`cargo xtask size` 不认搬动提交，显示越过停止线 116（硬停止线 1100 之内）。
 
 ## 过程中的发现
 
 - `cupper-host` 的进程级用例 `it_cli_commands_read_elevate_write_and_answer`、`it_elevate_lineage_waits_limits_expiry_grant_and_close` 需要带 `test-harness` 的 `cupper` CLI（`cargo xtask ci` 的 `cli-e2e` 一步会构建）；本机只 `cargo build -p cupper-cli` 时这两个用例会失败，与本任务无关。
 - 用 `ManualClock` 的 `tick` 推进时钟时，它在 future 挂起的每个间隙都把时钟推到下一个截止时间，不等真实 I/O：回收用例要先等真实的事件（线程变为 active、prompt 返回），再推时钟到下一次采样，否则采样会在 prompt 真正发出或返回之前发生。
+- `agents/restart` 返回时适配器还在关闭：会话还没收到 `AdapterExited` 就发出的 prompt，若在关闭期间到达运行时，以 "Session not found" 失败并由会话 resume 后重发（K6）；若在实例结束之后才到，运行时丢弃它，回合由随后的 `AdapterExited` 以 `adapter_exited` 结束（与崩溃时相同）。进程级用例因此先等 `agent_restarted` 通知再发下一条消息。
