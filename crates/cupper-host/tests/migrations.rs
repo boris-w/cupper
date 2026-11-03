@@ -1,5 +1,12 @@
 //! IT-migrations (design 5.4.6, 5.9.8, test #11): `host.db` migrations with
 //! test scripts after the real ones (plan P-4), and the rebuild of `raw.db`.
+//!
+//! IT-migrations-samples (plan P-4): released scripts never change, and a
+//! sample `host.db` of every schema version, `testdata/migrations/v<N>.sql`,
+//! made by a host and never edited, migrates to the latest version with its
+//! data and a host starts on it.
+
+mod common;
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -7,15 +14,25 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
+use cupper_cli::client;
 use cupper_host::clock::ManualClock;
 use cupper_host::exit::HostExit;
 use cupper_host::failpoint;
+use cupper_host::gateway::testkit::TempDir;
 use cupper_host::store::meta::{self, MetaKey};
 use cupper_host::store::{
     self, Database, LAYOUT_VERSION, MIGRATIONS, MigrateError, Migrated, Migration, RAW_SCHEMA,
     RawDb, RawSchema,
 };
+use cupper_protocol::methods::Empty;
+use cupper_protocol::methods::admin::SettingsUpdate;
+use cupper_protocol::methods::handshake::HostStatus;
+use cupper_protocol::methods::session::SessionInterrupt;
 use rusqlite::Connection;
+use serde_json::json;
+use sha2::{Digest, Sha256};
+
+use common::*;
 
 /// Set in the child process that crashes between two scripts: its data
 /// directory.
@@ -354,4 +371,187 @@ fn it_migrations_raw_db_is_rebuilt_when_its_schema_changes() {
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
     assert_eq!(user_version, changed.version);
+}
+
+/// The released scripts and the sha-256 of each (plan P-4): every script on
+/// `main`, since self-use builds come from there. A released script never
+/// changes; a schema change is a new script, pinned here in the same change
+/// as the sample of the version it makes.
+const RELEASED: &[(&str, &str)] = &[(
+    "0001_initial",
+    "f0aa2e36717ba501927c4cca3d692e12c89e725ba63d597bba6bb3d4833ba215",
+)];
+
+#[test]
+fn it_migrations_samples_released_scripts_never_change() {
+    let hash = |sql: &str| hex(&Sha256::digest(sql));
+    let scripts: Vec<_> = MIGRATIONS.iter().map(|m| (m.name, hash(m.sql))).collect();
+    let pinned: Vec<_> = RELEASED.iter().map(|(n, h)| (*n, h.to_string())).collect();
+    let why = "a released script changed, or a new one is not pinned: change the schema with \
+        a new script, pin it in RELEASED, and add its sample (plan P-4)";
+    assert_eq!(scripts, pinned, "{why}");
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Set to make the sample of the latest schema version when it is missing.
+const WRITE: &str = "CUPPER_WRITE_MIGRATION_SAMPLE";
+
+#[tokio::test]
+async fn it_migrations_samples_every_version_migrates_and_a_host_starts() {
+    let samples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../testdata/migrations");
+    for version in 1..=real() {
+        let path = samples.join(format!("v{version}.sql"));
+        if !path.exists() && version == real() && std::env::var_os(WRITE).is_some() {
+            fs::create_dir_all(&samples).unwrap();
+            fs::write(&path, make_sample().await).unwrap();
+        }
+        let sample = fs::read_to_string(&path).unwrap_or_else(|_| {
+            panic!("no sample of schema version {version}: run this test with {WRITE}=1")
+        });
+        check_sample(version, &sample).await;
+    }
+}
+
+/// A sample of the latest version: a host runs a session with the fake
+/// agent (a tool call with an output long enough for a blob, a permission,
+/// a message queued, then an interrupt) and a security setting is changed;
+/// once it exits, its `host.db` as SQL, with no path of this machine.
+async fn make_sample() -> String {
+    let dir = TempDir::new("migration-sample");
+    let (data_dir, mut host, client) = fake_agent_host(&dir, json!({})).await;
+    let script = "tool t1 execute Run; tool_done t1 20000; permission p1 execute";
+    let session = create(&client, script).await;
+    events(&data_dir, &session, "interaction.requested", 1).await;
+    send(&client, &session, "later").await;
+    let stop = json!({"command_id": client::command_id(), "session_id": session});
+    client
+        .request::<SessionInterrupt>(typed(stop))
+        .await
+        .unwrap();
+    let patch = json!({"command_id": client::command_id(), "patch": {"diagnostics.verbose": true}});
+    client
+        .request::<SettingsUpdate>(typed(patch))
+        .await
+        .unwrap();
+    until(
+        &data_dir,
+        "host.db",
+        "SELECT status FROM turns",
+        &["cancelled"],
+    )
+    .await;
+    drop(client);
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
+    let conn = Connection::open(data_dir.join("host.db")).unwrap();
+    for (table, (_, rows)) in tables(&conn) {
+        assert!(!rows.is_empty(), "the sample has no rows in {table}");
+    }
+    let mut sample = format!(
+        "-- host.db at schema version {}, made by a host; never edit\n",
+        real()
+    );
+    let schema = "SELECT sql || ';' FROM sqlite_master WHERE sql IS NOT NULL
+        AND name NOT LIKE 'sqlite_%' ORDER BY type DESC, name";
+    let tables = tables(&conn).into_values().flat_map(|(_, rows)| rows);
+    for line in column(&conn, schema).into_iter().chain(tables) {
+        sample = sample + &line + "\n";
+    }
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let (tmp, canonical) = (dir.path().to_owned(), dir.path().canonicalize().unwrap());
+    let places = [canonical, tmp, workspace.canonicalize().unwrap()];
+    for (place, to) in places.iter().zip(["/sample", "/sample", "/cupper"]) {
+        sample = sample.replace(place.to_str().unwrap(), to);
+    }
+    assert!(
+        !sample.contains(env!("HOME")),
+        "no home directory in the sample"
+    );
+    sample
+}
+
+/// The sample of `version` has the schema the scripts up to it make, which
+/// catches a released script changed in place even with its pin; migrated
+/// to the latest version, it keeps its data; a host starts on it.
+async fn check_sample(version: u32, sample: &str) {
+    let dir = DataDir::new(&format!("sample-v{version}"));
+    let old = dir.open();
+    old.execute_batch(sample).unwrap();
+    let made = Connection::open_in_memory().unwrap();
+    for script in &MIGRATIONS[..version as usize] {
+        made.execute_batch(script.sql).unwrap();
+    }
+    let schema = "SELECT type || ' ' || name || ' ' || sql FROM sqlite_master
+        WHERE name NOT LIKE 'sqlite_%' ORDER BY name";
+    assert_eq!(
+        column(&old, schema),
+        column(&made, schema),
+        "v{version}'s schema"
+    );
+    let before = tables(&old);
+    drop(old);
+
+    let migrated = dir.migrate(MIGRATIONS, &ManualClock::new()).unwrap();
+    assert_eq!((migrated.from, migrated.to), (version, real()));
+    let conn = dir.open();
+    assert_eq!(column(&conn, "PRAGMA integrity_check"), ["ok"]);
+    assert!(column(&conn, "SELECT \"table\" FROM pragma_foreign_key_check").is_empty());
+    let after = tables(&conn);
+    for (table, (sql, rows)) in before {
+        let (sql_now, rows_now) = &after[&table];
+        // A table a later script changed keeps its rows; one it did not, every
+        // value; `meta` all but the schema version.
+        let kept = |rows: &[String]| {
+            rows.iter()
+                .filter(|r| !r.contains("'schema_version'"))
+                .count()
+        };
+        match (sql == *sql_now, table.as_str()) {
+            (true, "meta") => assert_eq!(kept(&rows), kept(rows_now), "meta"),
+            (true, _) => assert_eq!(&rows, rows_now, "{table}"),
+            (false, _) => assert_eq!(rows.len(), rows_now.len(), "{table}"),
+        }
+    }
+    drop(conn);
+
+    let mut host = Running(spawn_with(&dir.0, fake_agent_config(json!({}))));
+    let client = connect(&dir.0).await;
+    client.request::<HostStatus>(Empty {}).await.unwrap();
+    drop(client);
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0, "a host on v{version}");
+}
+
+/// Each table's statement and its rows as `INSERT`s, ordered by every column.
+fn tables(conn: &Connection) -> std::collections::BTreeMap<String, (String, Vec<String>)> {
+    let names =
+        "SELECT name || char(9) || coalesce(sql, '') FROM sqlite_master WHERE type = 'table'";
+    let rows = |table: &str| {
+        let columns = column(
+            conn,
+            &format!("SELECT name FROM pragma_table_info('{table}')"),
+        );
+        let quoted: Vec<String> = columns.iter().map(|c| format!("quote(\"{c}\")")).collect();
+        let ordered: Vec<String> = columns.iter().map(|c| format!("\"{c}\"")).collect();
+        let (values, order) = (quoted.join(" || ',' || "), ordered.join(", "));
+        let select = format!(
+            "SELECT 'INSERT INTO \"{table}\" VALUES(' || {values} || ');' FROM \"{table}\" ORDER BY {order}"
+        );
+        column(conn, &select)
+    };
+    let named = column(conn, names).into_iter().map(|row| {
+        let (name, sql) = row.split_once('\t').unwrap();
+        (name.to_owned(), (sql.to_owned(), rows(name)))
+    });
+    named.collect()
+}
+
+/// The first column of `sql`'s rows, as text.
+fn column(conn: &Connection, sql: &str) -> Vec<String> {
+    let mut select = conn.prepare(sql).unwrap();
+    let rows = select.query_map([], |row| row.get::<_, String>(0)).unwrap();
+    rows.map(Result::unwrap).collect()
 }
