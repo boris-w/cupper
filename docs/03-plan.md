@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.85
+- 版本：v1.3.86
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -11,7 +11,7 @@
 - **共 137 个任务**：M1a 78 个（含 2 个条件任务），M1b 54 个（含 5 个条件任务），"发布（推迟）"5 个。规模：M1a 非条件任务 S 3、M 48、L 25；M1b 非条件任务 S 11、M 26、L 12；发布组 S 1、M 1、L 3。L 的都在表后注明了为什么不再拆。
 - **没有远端也能验收**（U-P1：先不建远端）：所有 CI 检查都经 `cargo xtask ci <作业>` 在本机干净的 worktree 里执行，workflow 文件照写、暂不启用；入库的只有结构化摘要（1.8）。M1a 退出改为在作者机器上连跑 20 次加 5 次降速变体（T099）；本机替代不了的两项（macOS 14、15 上的对端校验，CI 负载下的稳定性）在 T099、T179 的记录里列为缺口，由用户确认。
 - **M1a 关键路径**（按规模加权，S=1、M=2、L=3，共 35；2026-10-19 v1.3.11 后）：T001 → T010 → T011 → T017 → T012 → T013 → T031 → T033 → T043 → T088 → T044 → T046 → T090 → T091 → T099。v1.3.11 拆分 T043 后，交互接线（T088）串在 T043 与 T044 之间，关键路径由 33 增至 35；桌面链等其他零松弛链见第 3.4 节。任务表里加粗的编号在零松弛的链上。
-- **M1b 关键路径**（从 T099 起，共 17）：T099 → T120 → T121 → T130 → T131 → T148 → T154 → T179。
+- **M1b 关键路径**（从 T099 起，共 19；v1.3.86 拆出 T221 后由 17 增至 19）：T099 → T120 → T221 → T121 → T130 → T131 → T148 → T154 → T179。
 - **v1.3 的变化**（D05：技术验证 T003 的结论，设计 v1.6；明细见 2.8）：K1 已通过，T057 不触发；T050 的扩展消息全部走 SDK，加两条 SDK 约束的用例；T055 加 `CommandsChanged` 去重和新的关闭顺序；T038 按"对 Claude 工具命令只剩祖先链"设定血缘信号的期望；T063、T066 观察多次 resume 后的进程数，T066 加 6 会话和关闭时有命令运行两个剧本；T074 的 Electron 起始版本改为 44.x 的最新补丁。依赖和波次不变。
 - **v1.2 的变化**（D04 第 2 轮：安全工程师对请求面板"附条件可以"，设计 v1.5；明细见 2.7）：请求面板的焦点、编号、"拒绝并附一条消息"的规则写进 T083；导航键清掉尚未用掉的输入（T077）；宿主核对 `digit` 与序号（T031）、记录 `reply_to`（T011、T012、T043）；还原确认按触发来源分开（T130、T131、T139）；通知没有操作按钮的单元测试（T150、T158）；新增 E2E-SEC-panel-numbering、E2E-reject-with-message、E2E-SEC-revert-confirm、UNIT-notifier-no-actions。依赖和波次不变。
 - **v1.1 的变化**（D04：用户决定界面 100% 复刻作者本机安装的 Codex，设计 v1.4、PRD v1.3；明细见 2.6）：
@@ -422,12 +422,12 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 |---|---|---|---|---|---|---|---|---|---|
 | T101 | SP-10 通知身份（Q2） | spike | 5.13 Q2、5.2.9 | —（可提前） | 做：在 `Contents/Helpers` 里的 helper bundle 申请通知授权、弹通知、点击回调并按 bundle id 激活主 App，确认系统设置里的名称和图标。不做：TCC 归属与 disclaim（M2） | MAN-notification-spike；判定报告 | S | 是：会弹系统授权框，需要用户在场 | SP |
 | T102 | 技术验证：Q8（Codex）、SP-4b #7（Codex）与 Q31 | spike | 5.13 Q8、Q31、5.9.5 | —（可提前） | 做：用 SP-1 的 TS 客户端跑 Codex 并发剧本；观察 codex-acp 拉起命令时的进程树；核对 `agentMessage.phase` 是否经 `_meta` 透出；初查 Codex 权限模式的取值（Q25）。约束同 T003，权限模式用 `read-only` 或 `workspace-write`；只在临时仓库里运行，不读写 `auth.json`；运行前用户自己备份 `~/.codex/config.toml` 和 `hooks.json`（仓库外，0600）（P-14） | 报告：Q8 逐轮数据、SP-4b #7、Q31 结论；运行前后哈希覆盖 `~/.codex/config.toml`、`~/.codex/hooks.json`，列出差异，新增的 `[projects]` 信任项单独列出 | M | 是：真实 Codex CLI，消耗额度；运行前自己备份配置，运行后决定保留还是恢复 | SP |
-| T103 | SP-6 渲染压力测试：场景 1–4、7、8 | spike | 5.9.7 | T107、T143 | 做：在作者机器上按 5.9.7 跑场景 1–4、7、8（含遮挡），出带数据和 trace 的报告；场景 7 中"从通知跳过去"一项在 T150 合并后由 T155 补测。不做：场景 5、6（T108），场景 9（T104） | SP-6 报告（场景 1–4、7、8） | M | 知情：在作者机器上运行并弹窗口 | SP、T.ui |
-| T104 | Q29 审查文档可行性（SP-6 场景 9） | spike | 5.7.5（审查文档）、5.9.7、Q29 | T074（可提前） | 做：在 `spikes/` 里用与 `apps/desktop` 相同的协议注册和 CSP 搭双源原型，验证 constructable stylesheet、跨源 iframe 里的 Worker 与模块脚本、桌面确认的 8 点、5,000 行 diff 的冷启动、内存、滚动和违规数 | Q29 判定报告 | M | 知情：在作者机器上测量 | SP |
+| T103 | SP-6 渲染压力测试：场景 1–4、7、8 | spike | 5.9.7 | T107、T143 | 做：在 GitHub 的 `macos-15` runner 上按 5.9.7 跑场景 1–4、7、8（含遮挡），只记录（v1.3.86，SP-6 改在 runner 上），出带数据和 trace 的报告；场景 7 中"从通知跳过去"一项在 T150 合并后由 T155 补测。不做：场景 5、6（T108），场景 9（T104） | SP-6 报告（场景 1–4、7、8） | M | 否 | SP、T.ui |
+| T104 | Q29 审查文档可行性（SP-6 场景 9） | spike | 5.7.5（审查文档）、5.9.7、Q29 | T074（可提前） | 做：在 `spikes/` 里用与 `apps/desktop` 相同的协议注册和 CSP 搭双源原型，验证 constructable stylesheet、跨源 iframe 里的 Worker 与模块脚本、桌面确认的 8 点、5,000 行 diff 的冷启动、内存、滚动和违规数（测量在 runner 上，只记录，v1.3.86） | Q29 判定报告 | M | 否 | SP |
 | T105 | 技术验证：Q35 本机签名身份 | spike | 5.13 Q35、5.8.1、5.7.9 | T005、T073（可提前） | 做：按注里的六项验证两种本机签名身份：私钥隔离（通过条件）、负面矩阵、两种身份下的签名事实、证书到期与更换、Team ID 和证书摘要的去向、签名后运行与重连与 CLI 提权 | Q35 判定报告（两种来源分别给结论）；仓库里不出现证书摘要、Team ID 和证书名 | M | 是：在专用钥匙串里建证书或登录 Xcode，设置钥匙串密码，需要用户在场 | SP |
 | T106 | 复刻核对：暗色与未核实项 | docs | 5.7.10、5.13 Q36–Q40；F2 | —（可提前） | 做：由子 agent 执行。按 F2 只读查看本机 App 包（不启动 App，不读用户数据目录，解包只放临时目录、结束时删除，不把任何代码或资源复制进仓库），并对照作者补截的截图（主仓库 `.private/references/`，只读，P-20）：逐项核对 5.7.10 的暗色取值（含输入框底色，Q37）、左栏 340 是否含导航栏（Q36）、会话行尾的时间与 diff 统计（Q38）、↑ 恢复（Q39）和 Q40 的各项，以及 Codex 的数字键是否"选中即提交"（Q41）；写成核对报告和"设计需要更正的取值"清单，由编排者更新设计 5.7.10 与 5.13。截图不复制进 worktree、不入库 | 核对报告（Q36–Q41 逐项结论，每项注明来源：本机包、截图或推测）经编排者审阅 | S | 是：补截暗色主界面等截图（第 6 节） | Doc |
 | T107 | Electron 大版本跟进 | build | 5.10.6；桌面 #14 | T099 | 做：升级到官方支持的最新大版本（满两周），跑全量 `xtask ci pr`、`xtask ci nightly`、`xtask ci e2e`；排在 SP-6 之前，保证 SP-6 测的就是要交付的版本 | MAN-keyboard（新的 Electron 大版本）；全量作业通过 | S | 是：MAN-keyboard 需要作者用实体键盘确认 | D.main |
-| T108 | SP-6 场景 5、6：浸泡与输入法 | spike | 5.9.7（场景 5、6） | T103 | 做：8 小时浸泡（每 5 分钟一个带工具调用的回合，对照内存增长上限）；流式输出期间用拼音输入（场景 6） | 浸泡报告；MAN-ime | S | 是：机器空出 8 小时；场景 6 需要作者用拼音输入 | SP、T.ui |
+| T108 | SP-6 场景 5、6：浸泡与输入法 | spike | 5.9.7（场景 5、6） | T103 | 做：在 runner 上浸泡约 5 小时（托管 runner 单个作业最长 6 小时；每 5 分钟一个带工具调用的回合，对照内存增长上限，只记录；v1.3.86）；流式输出期间用拼音输入（场景 6，作者在自己的机器上手动做） | 浸泡报告；MAN-ime | S | 是：场景 6 需要作者用拼音输入（约 15 分钟） | SP、T.ui |
 | T109 | 会话 actor II-b：信任门控 | feat | 5.2.6（项目信任） | T034、T044 | 做：Attach、每次发 prompt 之前（写 `turn.started` 之前，扫描期间消息留在队列）、每个回合结束三个时机重扫信任（git 根目录经仓库档、可写根目录取全部未删除项目的路径、扫描放阻塞线程池）；未信任时 `settingSources: ["user"]` 与 `project_config: ignored`；变为 `stale` 时经 `IndexNotes` 交给 IndexActor 改 `projects` 表、暂停本会话的队列并写 notice；"不加载项目配置继续"只做宿主内部入口（协议方法由 M1b 做确认界面的任务加）；复用 T044 的发送闸门 | 新增 IT-orch-trust-gating（进程内） | M | 否 | H.orch |
 | T115 | 运行时安装器 II：按锁文件下载与本机打包 | feat | 5.2.12、ADR-08、ADR-11 | T056 | 做：HTTP 客户端（reqwest 加 rustls，加密实现用 `ring`，根证书用系统的，以 `cargo deny` 通过为准）、解析锁文件与注入的 registry、下载与 SRI、解包的路径检查、不运行包脚本、User-Agent 为 `cupper-runtime-installer/<版本>`、遵守登录 shell 的 `HTTPS_PROXY`、网络错误按 `Clock` 退避重试 3 次、用随包 Node 打包 claude-agent-acp（环境只有 `PATH`）并核对产物哈希 | 新增 IT-runtime-download（网络失败重试、SRI 不符、越界的 tarball、打包产物不符、经本地 registry 的完整安装，全部离线） | M | 否 | H.rt |
 | T116 | 录制导出 | feat | 5.9.3、5.9.9 | T047 | 做：`diag/recording_export`（test-harness、dev-auth 构建）从 `raw.db` 导出录制格式 v1（`Header::to_line`、`Frame::to_line`，`ts` 换算成段内相对时间），导出未脱敏的录制，由调用方入库前跑 `tools/sanitize`；适配器的 `stderr` 逐行、实例启动与退出的 `note` 写进原始帧（结构化脱敏） | 新增 IT-recording-export（v1.3.21 由 T047 移来；真实宿主加假 agent，导出后格式库能读回，经 `tools/sanitize` 和扫描） | M | 否 | H.core |
@@ -441,11 +441,13 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T113 | Codex 兼容矩阵与 B 层补录 | test | 5.9.5、5.9.3 | T112 | 做：用真实 Codex 跑兼容套件（Q8 复核、Q25、Q34、未信任项目拒绝启动），用宿主重录取消场景补 K3 的 B 层金样例，已验证范围写进清单；录制和报告入库前过本机敏感词清单并由用户抽查 | MAN-compat-codex、COMPAT-untrusted-project-codex、GOLD-B-codex-s07 | M | 是：真实 Codex CLI，消耗额度；运行前备份配置（P-14）；入库前抽查录制和报告 | H.fake |
 | T114 | codex-drift 检查 | ci | 5.1.6（codex-drift）、ADR-08 | T004（可提前） | 做：由 SP-2 的脚本迁移 `tools/codex-drift`，作为 `xtask ci nightly` 的一步，在发现新 codex 版本时比对 app-server 方法 | 新增 UNIT-codex-drift | S | 否 | C |
 | T119 | （条件）Q8 后备（Codex） | feat | 5.13 Q8、ADR-09 | T111 | 触发：K6 不通过。做：对 Codex 启用 T057 的串行闸门（T057 未做时在这里实现） | IT-q8-fallback-codex | M | 否 | H.drv |
-| **T120** | Git 服务 III：diff、file_diff、status 与 branches | feat | 5.2.10（diff 与 hunk、git/status）、5.3.4 | T099 | 做：四种范围的 `git/diff`（`diff_token`、`caveats`、`index_unmerged`、`stat`、`filter_unsupported`）、`git/file_diff`（三种操作单位）、`DiffCache`、`git/status`、`git/branches`、`cupper diff`。不做：写操作 | IT-git-diff-scopes | L | 否 | H.git、H.cli |
-| **T121** | Git 服务 IV：暂存、取消暂存与还原（含 SP-5 的 82 个用例） | feat | 5.2.10（hunk 操作、并发）、5.2.5、5.9.8 | T120 | 做：仓库档 `apply --cached` 和 `-R`、`RepoLock`、`pending_external` 强制同步、`stale_diff`、暂存前 `check-attr`；把 SP-5 的 82 个 hunk 用例改写成 Rust 测试（原 T122）；Q32 仓库档写操作逐键确认；LFS 路径用锁定版本的 git-lfs 实测；在 T069 的夹具上登记写操作前后的故障点 | IT-git-hunk、IT-NFR9-failpoints-git；新增 IT-git-stage | L | 否 | H.git |
-| T123 | Git 服务 V：提交与推送（用户档）与 Q23 | feat | 5.2.10（用户档）、Q23 | T120 | 做：`commit -F -`、`push --set-upstream`、错误映射与脱敏的 stderr 尾部、指纹变化的确认参数；Q23（SSH agent、GPG、凭据助手）的验证与恢复指引 | IT-git-commit-push（本地裸仓库） | M | 可选：用作者的 SSH 和 GPG 配置手动验证 Q23 | H.git |
+| **T120** | Git 服务 III：diff 的四种范围与 DiffCache | feat | 5.2.10（diff 与 hunk）、5.3.4 | T099 | 做：快照档拆成打开与拍快照两步、四种范围的 `git/diff`（`diff_token`、`caveats`、`index_unmerged`、`stat`、`filter_unsupported`）、`DiffCache`、路由。不做：写操作；`git/file_diff` 与 hunk 切分（T221）；`git/status`、`git/branches`、`cupper diff`（T222）（v1.3.86 开工后越过硬停止线拆出） | IT-git-diff-scopes | L | 否 | H.git |
+| **T221** | Git 服务 IIIb：file_diff 与 hunk 切分 | feat | 5.2.10（diff 与 hunk）、5.3.4 | T120 | 做：`git/file_diff` 的三种操作单位（`hunk`、`mode`、`whole_file`；新增、删除、二进制、符号链接、子模块、LFS 指针）、按内容寻址的 `hunk_id`、大 hunk 转 blob；单个文件的补丁按 `DiffCache` 里的 tree 对重新生成 | 新增 IT-git-file-diff | M | 否 | H.git |
+| T222 | Git 服务 IIIc：status、branches 与 cupper diff | feat | 5.2.10（git/status）、5.3.4、5.2.14 | T120 | 做：`git/status`（HEAD、进行中的操作、文件状态）、`git/branches`、`cupper diff` | 新增 IT-git-status | M | 否 | H.git、H.cli |
+| **T121** | Git 服务 IV：暂存、取消暂存与还原（含 SP-5 的 82 个用例） | feat | 5.2.10（hunk 操作、并发）、5.2.5、5.9.8 | T221 | 做：仓库档 `apply --cached` 和 `-R`、`RepoLock`、`pending_external` 强制同步、`stale_diff`、暂存前 `check-attr`；把 SP-5 的 82 个 hunk 用例改写成 Rust 测试（原 T122）；Q32 仓库档写操作逐键确认；LFS 路径用锁定版本的 git-lfs 实测；在 T069 的夹具上登记写操作前后的故障点 | IT-git-hunk、IT-NFR9-failpoints-git；新增 IT-git-stage | L | 否 | H.git |
+| T123 | Git 服务 V：提交与推送（用户档）与 Q23 | feat | 5.2.10（用户档）、Q23 | T222 | 做：`commit -F -`、`push --set-upstream`、错误映射与脱敏的 stderr 尾部、指纹变化的确认参数；Q23（SSH agent、GPG、凭据助手）的验证与恢复指引 | IT-git-commit-push（本地裸仓库） | M | 可选：用作者的 SSH 和 GPG 配置手动验证 Q23 | H.git |
 | T124 | worktree 创建（CP-5） | feat | 5.2.10（worktree）、5.5.2、5.2.13 | T099 | 做：`worktree add`（位置与权限、分支名校验与后缀、lock、1 秒后 refresh、进度、required 过滤器的提示）、`session/create` 的 worktree 分支、崩溃后复用已登记的 worktree；在 T069 的夹具上登记"worktree add 进行中"故障点 | IT-worktree-create、IT-NFR9-failpoints-worktree | L | 否 | H.git、H.orch |
-| T125 | worktree 检查、归档、恢复与重命名 | feat | 5.2.10、5.2.6、5.5.9 | T120、T124 | 做：`worktree/check` 的 7 条规则、`session/archive`、`session/restore`、`session/rename`、`session/list_archived`、`project/remove` | IT-worktree-check-rules、IT-session-archive-restore | L | 否 | H.git、H.orch、H.idx |
+| T125 | worktree 检查、归档、恢复与重命名 | feat | 5.2.10、5.2.6、5.5.9 | T222、T124 | 做：`worktree/check` 的 7 条规则、`session/archive`、`session/restore`、`session/rename`、`session/list_archived`、`project/remove` | IT-worktree-check-rules、IT-session-archive-restore | L | 否 | H.git、H.orch、H.idx |
 | T126 | 文件搜索、提示内容映射与在外部应用打开 | feat | 5.2.11（文件服务）、5.3.4 | T099 | 做：`files/search`（快照档 `ls-files`、非 git 目录遍历、缓存、模糊匹配、UTF-16 区间）；`image`、`file_ref`、`review_comment`、`text_blob` 映射为 ACP 内容块；`workspace/open` | 新增 IT-files-search、UNIT-prompt-mapping、IT-workspace-open | M | 否 | H.git、H.orch |
 | T127 | 存储用量与清除快照对象 | feat | 5.4.5、5.7.4（设置页"存储"）；P-6 | T099 | 前提：写 brief 时编排者按 P-6 补进设计。做：查询各类数据大小（scope read）、清除快照对象（scope privileged，经原生确认），均为附加式方法；清除后旧回合的 diff 返回 `snapshot_missing` | 新增 IT-snapshot-purge | S | 否 | H.git、H.store、P |
 | **T130** | 审查面板：主文档部分 | feat | 5.7.5（审查面板）、5.5.8、5.7.8（RP-11） | T121、T123、T126 | 做：在 T084 的侧边面板里按 Codex 样式实现"变更"标签：头部（"查阅来源"范围下拉、增删统计、文件树开关、选项菜单的 M1 项：换行、diff 视图、展开收起全部、刷新）、文件树（默认关闭、⌘⇧E、筛选、Git 状态图标、右键菜单）、hunk 与文件操作的图标按钮、底部整组操作的药丸（还原全部、暂存全部或取消暂存全部）、还原确认控件（真实输入、500 ms 待命期、不提供"不再询问"；由"还原全部"按钮触发时默认焦点在"确认"，由审查文档触发时不自动获得焦点、同一时间只显示一个，RP-11）、"Git 操作"菜单与提交弹窗（"包含未暂存的更改"，提交、提交并推送、推送，hooks 与指纹提示）、`caveats`、空状态；行内评论的草稿由主文档持有，进入输入框的附件条（GT-2）；为 diff 视图留接口 | 新增 UNIT-review-actions、UI-review（文件树开合、整组操作在三种范围下的状态、空状态） | L | 否 | T.ui |
@@ -487,7 +489,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 - **可以提前的任务**（T101、T102、T104、T105、T110、T114）见 1.7。
 - **T101**：只验证 helper 的通知身份；TCC 归属与 disclaim（MAN-tcc）留在 M2 的 SP-10。
 - **T102**：作者机器上的 Codex 走自定义网关，常因过载重连（SP-1），结果"不确定"时重跑。隔离的 `CODEX_HOME` 要等 Q30 确认刷新令牌不会轮换之后才考虑（P-14）。
-- **T103、T108**：SP-6 拆成两个（桌面 #8）：T103 测场景 1–4、7、8，排在 T107（Electron 跟进）和 T143（代码高亮）之后，结论交给 T152；T108 是 8 小时浸泡和输入法，不挡 T152。K8 只有部分指标不达标时 T152 照常进行，只有触发 ADR-03 的改变条件时才停下。
+- **T103、T108**：SP-6 拆成两个（桌面 #8）：T103 测场景 1–4、7、8，排在 T107（Electron 跟进）和 T143（代码高亮）之后，结论交给 T152；T108 是浸泡和输入法，不挡 T152。K8 只有部分指标不达标时 T152 照常进行，只有触发 ADR-03 的改变条件时才停下。v1.3.86 起 SP-6 的测量（T103、T104、T108 的浸泡）在 GitHub runner 上跑，只记录，浸泡缩短到约 5 小时；runner 比作者机器慢得多，K8 只看有没有数量级的问题（`docs/meetings/2026-11-03-sp6-runner/`）。
 - **T105**：验证项（安全"对两个问题的回答"第 1 题）：
   1. 私钥隔离（通过条件）：签名身份放在只装它的专用钥匙串里，有独立密码、不在默认搜索列表、签完即锁、访问控制每次确认；实测同用户的另一个进程在没有用户输入时用它签名必须失败；
   2. 负面矩阵：同名自签名证书签的程序、ad-hoc 副本、四个 Electron helper、node、开发构建和 e2e 构建、同一身份签但带 `get-task-allow` 或未开 runtime 的程序，都被拒绝；
@@ -499,7 +501,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 - **T107**：保证 SP-6 测的就是要交付的 Electron 版本（桌面 #14）。
 - **T110（L）**：同 T053。
 - **T111（L）**：发现、运行时复制和回收都作用于 Codex 的 AgentRuntime，IT-K20-reclaim 需要完整路径。
-- **T120（L）**：四种范围共用 `diff_token` 与 `DiffCache`。
+- **T120（L）**：四种范围共用 `diff_token` 与 `DiffCache`。v1.3.86 开工后实现部分就越过硬停止线（估约 935 行，做完约 1,650 行），拆出 T221（`git/file_diff` 与 hunk 切分，T121 改为依赖它）和 T222（`git/status`、`git/branches`、`cupper diff`，T123、T125 改为依赖它）。
 - **T121（L）**：并入原 T122（测试 #17）：82 个用例本来就是暂存操作的验收，分开后 T121 合并时只剩 IT-git-stage。
 - **T124（L）**：worktree 添加、`session/create` 的 worktree 分支和崩溃恢复是同一个准备流程。
 - **T125（L）**：7 条规则的结论直接决定归档和恢复的行为。
@@ -1007,7 +1009,9 @@ flowchart LR
     T119["T119<br/>Q8 后备 Codex（条件）"]
   end
   subgraph H2["Git、worktree 与文件"]
-    T120["T120<br/>diff 与 status"]
+    T120["T120<br/>diff 的四种范围"]
+    T221["T221<br/>file_diff 与 hunk"]
+    T222["T222<br/>status 与 branches"]
     T121["T121<br/>暂存与还原（含 82 例）"]
     T123["T123<br/>提交与推送"]
     T124["T124<br/>worktree 创建"]
@@ -1080,10 +1084,12 @@ flowchart LR
   T004 --> T114
   T111 -.-> T119
   T099 --> T120
-  T120 --> T121
-  T120 --> T123
+  T120 --> T221
+  T120 --> T222
+  T221 --> T121
+  T222 --> T123
   T099 --> T124
-  T120 --> T125
+  T222 --> T125
   T124 --> T125
   T099 --> T126
   T099 --> T127
@@ -1164,7 +1170,7 @@ flowchart LR
   classDef crit stroke:#d62728,stroke-width:3px
   classDef cond stroke-dasharray:5 5
   classDef prior fill:#eeeeee,stroke:#999999
-  class T120,T121,T130,T131,T148,T154,T179 crit
+  class T120,T221,T121,T130,T131,T148,T154,T179 crit
   class T119,T139,T158,T159,T162 cond
   class T004,T005,T053,T073,T074,T099 prior
 ```
@@ -1201,7 +1207,7 @@ flowchart LR
 | 范围 | 路径 | 加权长度 |
 |---|---|---|
 | M1a（v1.3.11） | T001 → T010 → T011 → T017 → T012 → T013 → T031 → T033 → T043 → T088 → T044 → T046 → T090 → T091 → T099 | 35 |
-| M1b（T099 之后） | T099 → T120 → T121 → T130 → T131 → T148 → T154 → T179 | 17 |
+| M1b（T099 之后） | T099 → T120 → T221 → T121 → T130 → T131 → T148 → T154 → T179 | 19 |
 | 发布（推迟，T161 之后） | T161 → T180 → T181 → T183 → T184 | 10 |
 
 M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）和网关链（T030、T039、T073）也是零松弛；松弛为 1 的有存储链（T014、T026）、T045、兼容链（T047、T064、T066）、网关链的 T034、T038，以及 T042。
@@ -1233,7 +1239,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | 波次 | 任务（可并行） | 说明 |
 |---|---|---|
 | 提前（M1a 期间） | T101（W0 起）、T102（W0 起）、T104（W3 起）、T105（W6 起）、T106（W0 起）、T110（W5 起）、T114（W2 起） | SP-10（K5）、Q8 Codex（K6）、Q35（K7）、Q29（K9）的结论都要在用到它们的任务之前出来；T106 的复刻核对要在 T152 之前出来 |
-| B1 | T107、T111、**T120**、T124、T126、T127、T141、T143、T150、T156、T160、T173 | 界面任务按设计 5.7.10 直接开工，不等 T106；T107 先于 SP-6；T160 交付自用构建与"自用前须知" |
+| B1 | T107、T111、**T120**、**T221**、T222、T124、T126、T127、T141、T143、T150、T156、T160、T173 | 界面任务按设计 5.7.10 直接开工，不等 T106；T107 先于 SP-6；T160 交付自用构建与"自用前须知" |
 | B2 | T103、T112、**T121**、T123、T125、T140、T142、T146、T161、T174 | T103 SP-6（K8）测场景 1–4、7、8，T152 等它 |
 | B3 | T108、T113、**T130**、T145、T149、T151、T152、T155、T172 | T152 先合并，T130、T145、T149、T151 再按新的取值重新生成各自新增的基线（1.5） |
 | B4 | **T131**、T132、T144、T147、T153、T157 | T131 与 T139 只做其一（K9） |
@@ -1353,7 +1359,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | Codex | Q8 的 Codex 部分 | T102 |
 | | `AgentRuntime`、提取层与对照表、`threadStatus`、晚到输出、未信任项目拒绝启动、资源回收 | T110、T111、T112（晚到输出的宿主逻辑在 T044） |
 | | 兼容矩阵跑 Codex，重录取消场景补 K3 的 B 层 | T113 |
-| Git 与 worktree | git 服务全部方法（三档、Q32、LFS） | T120、T121、T123（快照档在 T061） |
+| Git 与 worktree | git 服务全部方法（三档、Q32、LFS） | T120、T221、T222、T121、T123（快照档在 T061） |
 | | 新建 worktree（CP-5） | T124 |
 | | 归档、恢复与清理（PS-3、GT-5） | T125、T153 |
 | | 审查面板（GT-1 至 GT-4；文件树与整组操作；行内评论进输入框的附件条） | T130、T131 或 T139、T126（评论排成文本） |
@@ -1423,7 +1429,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | AP-3 | IT-notification-intent → T062；UNIT-notifier-no-actions → T150；MAN-notification → T101（`-spike`）、T150（`-product`） |
 | AP-4 | E2E-NFR1-3 → T091 |
 | AP-5 | IT-form、IT-plan-confirm → T068；E2E-question-panel → T093 |
-| GT-1 | IT-git-diff-scopes → T120；IT-git-snapshot-parity → T061；E2E-S3 → T171 |
+| GT-1 | IT-git-diff-scopes → T120；IT-git-file-diff → T221；IT-git-status → T222；IT-git-snapshot-parity → T061；E2E-S3 → T171 |
 | GT-2 | E2E-review-comment → T131（K9 不通过时 T139） |
 | GT-3 | IT-git-hunk → T121；E2E-turn-changes-undo → T132；E2E-SEC-revert-confirm → T131（K9 不通过时 T139） |
 | GT-4 | IT-git-commit-push → T123 |
@@ -1599,8 +1605,8 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | 12 | M1b 开始前（T106 之前） | 补截暗色主界面截图，以及 ui-spec 7.3 中需要截图核对的几项（会话行尾的时间与 diff 统计、回到底部按钮、运行中输入框有内容时的发送按钮），放在主仓库的 `.private/references/`（T106 的子 agent 只读） | T106 | 截图 |
 | 13 | M1b B1 | 新的 Electron 大版本上做 MAN-keyboard | T107 | 亲自操作 |
 | 14 | M1b B1 | 自用构建交付：读"自用前须知"；之后只用自用构建处理真实项目；共存测试会同时运行两种构建 | T160 | 阅读；遵守 |
-| 15 | M1b B2 | SP-6 场景 1–4、7、8；Q29 的测量（T104 也可以更早） | T103、T104 | 运行期间不操作机器 |
-| 16 | M1b B3 | SP-6 的 8 小时浸泡；流式输出期间用拼音输入（约 15 分钟） | T108 | 让机器空出 8 小时；亲自输入 |
+| 15 | M1b B2 | 无：SP-6 场景 1–4、7、8 和 Q29 的测量改在 GitHub runner 上跑（v1.3.86） | T103、T104 | — |
+| 16 | M1b B3 | 流式输出期间用拼音输入（约 15 分钟）；浸泡改在 runner 上（v1.3.86） | T108 | 亲自输入 |
 | 17 | M1b | 真实 Codex 的兼容套件，消耗额度；运行前备份配置；入库前抽查录制和报告 | T113 | 备份、知悉额度、抽查 |
 | 18 | M1b（可选） | Q23：用作者自己的 SSH agent、GPG 签名配置手动验证一次提交和推送 | T123 | 可选 |
 | 19 | M1b | MAN-notification 在产品里复核一次 | T150 | 确认现象 |
@@ -1872,7 +1878,9 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T113 Codex 兼容矩阵与 B 层补录
 - [x] T114 codex-drift 检查
 - [ ] T119 （条件）Q8 后备（Codex）（K6 已通过，不触发）
-- [ ] T120 Git 服务 III：diff、file_diff、status 与 branches
+- [ ] T120 Git 服务 III：diff 的四种范围与 DiffCache
+- [ ] T221 Git 服务 IIIb：file_diff 与 hunk 切分
+- [ ] T222 Git 服务 IIIc：status、branches 与 cupper diff
 - [ ] T121 Git 服务 IV：暂存、取消暂存与还原（含 SP-5 的 82 个用例）
 - [ ] T123 Git 服务 V：提交与推送（用户档）与 Q23
 - [ ] T124 worktree 创建（CP-5）
@@ -2017,3 +2025,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.83 | 2026-11-02 | T099 开工：退出候选 18b3640 的 `ci` 运行里 IT-lifecycle 的清理用例偶发失败（测试没等 `trap` 生效），候选作废。新增 T216（只改测试），T099 改为也依赖它；T216 和 T099 已做的基础设施（`e2e-repeat` 的降速与 @focus 分轮、登记表两处）合并后，再定新候选，所有运行在新候选上重做。MAN-keyboard 由用户在 18b3640 的 e2e 构建上做完，7 项全部通过；过程中发现点击面板卡片不会把键盘焦点移进面板，新增 T217，T099 改为也依赖它。T216 合并：清理用例的子进程先报就绪再起宿主。新增 T218（T216 连跑时发现录制导出用例在负载下偶发超时），T099 改为也依赖它。T218 合并：adapter 中途退出时，runtime 不转发 SDK 先给出的 prompt 失败，回合由 `AdapterExited` 结束（产品缺陷，违反 5.2.6；5.2.6、06 各补一句）。T217 合并：点击面板空白处移焦点；RP-3 读页面焦点，不看窗口是否在前台（5.7.8 补一段）。T099 依赖的任务至此全部合并。T099 两部分合并：退出候选 ec459fd 上 GitHub 的四项全部通过，MAN-keyboard 入证据；本机 nightly 按用户决定不跑（`docs/meetings/2026-11-02-perf-local/`），`trace-ids verify --milestone M1a` 有 7 个编号未完成，K4 待同步会决定 |
 | v1.3.84 | 2026-11-02 | M1a 同步会（`docs/meetings/2026-11-02-m1a-sync/`）：PERF 只记录、不卡闸门（D1）；IT-sys-peer-current 由 macOS 26 runner 代替、改为不适用（D2）；MAN-keyboard 不重做（D3）；真实兼容在 M1b 再跑（D4）；K4 通过（D5）。T099 打勾。新增 T219 落实 D1、D2，合并后打 `gate/m1a`，再派 M1b 第一波 |
 | v1.3.85 | 2026-11-02 | T219 合并：nightly 在托管 runner 上跑 `perf`、e2e 跑 PERF-bridge-gate，只记录（摘要的 `perf` 列表、结果 `measured`）；登记表新增 `record` 状态，9 个 PERF 编号改为只记录；IT-sys-peer-current 不适用。1.6、1.8、5.4、5.5、5.7、T155 随之改写。`gate/m1a` 候选 5da6f1c：`ci` 通过，nightly 的 e2e 里 PERF-bridge-gate 压力用例失败（`perf`、`differential` 被 fail-fast 取消），不打 tag；新增 T220，修好后换候选再验 |
+| v1.3.86 | 2026-11-03 | 派发 T220 与 M1b 第一波的 T160、T120、T111。T120 开工后越过硬停止线，拆出 T221（`git/file_diff` 与 hunk 切分）和 T222（`git/status`、`git/branches`、`cupper diff`），新增 IT-git-file-diff、IT-git-status；T121 改为依赖 T221，T123、T125 改为依赖 T222；M1b 关键路径由 17 增至 19。SP-6 改在 GitHub runner 上跑（`docs/meetings/2026-11-03-sp6-runner/`）：T103、T104、T108 的测量只记录，浸泡缩短到约 5 小时，场景 6 仍由作者手动做；设计 5.9.6、5.9.7 随之改写 |
