@@ -475,3 +475,29 @@ async fn it_k17_text_error_fails_the_turn_with_its_words() {
     let messages = items(&data_dir, &session, "agent_message", 0).await.len();
     assert_eq!((errors, messages), (1, 0));
 }
+
+/// K14 on opening (T063's handoff): Codex says it needs a login as the
+/// session opens. With a CLI older than the verified range that is
+/// `cli_too_old`; otherwise `not_logged_in`, and the agent is logged out.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_k14_old_cli_auth_codex_fails_on_opening() {
+    let dir = TempDir::new("k14-codex");
+    let config = json!({"cli_version": "codex-cli 0.120.0"});
+    let (data_dir, _host, client, _) =
+        host_of("codex", &dir, &["--auth", "logged-out"], config).await;
+    let session = codex_session(&client, "say hi").await;
+    let ended = events(&data_dir, &session, "turn.completed", 1).await;
+    assert_eq!(ended[0]["error_code"], "cli_too_old");
+
+    let dir = TempDir::new("k14-codex-current");
+    let (data_dir, _host, client, _) =
+        host_of("codex", &dir, &["--auth", "logged-out"], json!({})).await;
+    let session = codex_session(&client, "say hi").await;
+    let ended = events(&data_dir, &session, "turn.completed", 1).await;
+    assert_eq!(ended[0]["error_code"], "not_logged_in");
+    let auth = "SELECT json_extract(value, '$.auth.state') FROM events,
+                json_each(events.json, '$.data.agents') WHERE stream = 'index'
+                AND events.type = 'agents.updated' AND json_extract(value, '$.agent') = 'codex'
+                ORDER BY seq DESC LIMIT 1";
+    until(&data_dir, "host.db", auth, &["logged_out"]).await;
+}
