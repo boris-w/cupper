@@ -339,4 +339,10 @@ CREATE INDEX raw_by_session ON raw_frames(agent_session_id, ts);
   3. 迁移失败：回滚当前事务，以退出码 6 退出（与"数据目录不可用"的 5 区分），界面给出备份位置和诊断包入口。
 - **事件升级器**（ADR-06、NFR-10）：每种事件带 `v`。宿主读取旧版本的事件（日志、检查点、回合快照）时，按类型逐级升级到当前版本后再使用或下发，客户端永远只看到当前版本。升级器放在宿主的 `store::upcast`，每个升级器都有"旧样例 → 新样例"的单元测试。
 - **视图检查点**带 `view_v`。版本不一致时丢弃检查点，用最近 20 个回合快照加其后的事件重建视图。
+- **已发布的脚本不再改**（P-4，T223）：`main` 上的迁移脚本都算已发布（自用构建直接从 `main` 出），sha-256 固定在 `crates/cupper-host/tests/migrations.rs` 的 `RELEASED` 里；每个表结构版本有一份由宿主在测试里生成的样例库 `testdata/migrations/v<N>.sql`。IT-migrations-samples 检查：脚本与登记一致；样例的表结构等于前 N 个脚本建出的结构；迁到最新后 `integrity_check`、`foreign_key_check` 通过、数据保留，宿主能在上面启动。改表结构的步骤：
+  1. 新加 `migrations/NNNN_<名称>.sql`，登记进 `MIGRATIONS`，已有脚本一字不改；
+  2. 把名字和 sha-256 追加进 `RELEASED`；
+  3. 用 `CUPPER_WRITE_MIGRATION_SAMPLE=1 cargo test -p cupper-host --all-features --test migrations it_migrations_samples` 生成这个版本的样例，和脚本一起提交；新表在样例剧本里没有数据时补一步；
+  4. 脚本要转换数据的，在 IT-migrations-samples 旁边加针对这次转换的断言；
+  5. 合并后脚本和样例都冻结。
 - **非数据库的文件**（blob、runtime、快照对象库）的布局版本写在 `meta.layout_version`，变化时由迁移脚本旁的 Rust 迁移函数处理。
