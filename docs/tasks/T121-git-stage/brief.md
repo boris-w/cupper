@@ -1,6 +1,6 @@
 # T121 Git 服务 IV：暂存、取消暂存与还原（含 SP-5 的 82 个用例）
 
-- 派发日期：（派发时填）
+- 派发日期：2026-11-03
 - 执行者：子 agent（Rust 工程师，宿主 Git 服务）
 - 分支：`feat/T121-git-stage`
 - 依赖：T221（`DiffCache`、`git/file_diff` 与 hunk 切分）。T130（审查面板）依赖本任务（M1b 关键链）
@@ -10,6 +10,8 @@
 T120、T221、T222 做完了读的一侧：四种范围的 `git/diff`、`DiffCache`（存 tree 对和文件列表）、`git/file_diff` 的三种操作单位和按内容寻址的 `hunk_id`、`git/status`。T121 做写的一侧：按 `diff_token` 和 `hunk_id` 暂存、取消暂存、还原，这是第一批在仓库档上改动用户 index 和工作区的操作。设计 5.2.10 的"diff 与 hunk"、"并发"，5.2.5 的 `pending_external`，ADR-10 已经定了做法。
 
 ## 范围
+
+> 2026-11-03 开工前估算后拆分（计划 v1.3.86）：本任务只做下面第 1–3 条和第 7 条里的 IT-git-stage，另加会话流 notice 的通路（仓库档写操作后配置变化或被拒时，经会话 actor 写 `notice`）。第 4 条（82 个用例）归 T228，第 5、6 条归 T229。操作与范围的对应：stage 只认 `unstaged`，unstage 只认 `staged`，revert 认 `unstaged` 和回合范围；从 `hunk_id` 找文件时对整对 tree 跑一次 `diff-tree -p` 再挑单位。
 
 **做**（计划 T121 一行，第 3 节的注）：
 1. `git/stage`、`git/unstage`、`git/revert`：
