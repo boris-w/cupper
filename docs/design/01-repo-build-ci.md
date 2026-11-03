@@ -115,6 +115,8 @@ cupper/
 | `pnpm test:ui` | Playwright（Chromium）+ mock 宿主的界面截图回归 |
 | `pnpm build:e2e` | 构建 e2e 版 App（与发布版同样的打包方式；签名和 fuses 的差异见 [5.7.9](07-desktop.md#579-构建种类)） |
 | `pnpm test:e2e` | Playwright `_electron` 驱动 e2e 版 App + 真实宿主 + 假 agent |
+| `pnpm build:local` | 构建自用构建 Cupper Local（先跑过 `cargo xtask runtime-pack`），产物在 `apps/desktop/dist/pack/local/mac-arm64/Cupper Local.app`（T160） |
+| `pnpm --dir apps/desktop run test:selfuse` | 自用构建的三个用例；只经 `cargo xtask ci selfuse` 在 GitHub 托管 runner 上运行，本机一律跳过（T160） |
 | `pnpm build:release` | 完整发布构建（需要签名证书），步骤见 [5.10.7](10-release.md#5107-发布流水线) |
 | `cargo xtask runtime-pack` | 下载并校验 Node、codex-acp、esbuild-wasm，重签 Node，计算 claude-agent-acp 本机打包产物的固定哈希，写回 `runtime/manifest.json`；从锁定的适配器产物里提取环境变量读取点，出现未归类的新名字就失败（[5.6.6](06-agent-driver.md#566-cli-的发现与版本检查)） |
 | `cargo xtask host-bundle` | 组装并签名 `CupperHost.app` |
@@ -137,6 +139,7 @@ cupper/
 | `license` | ubuntu | 每个 PR | `cargo deny check`；`tools/license-gate` 第一层：对每个进入 App 的 JS 入口（main、preload、两个渲染入口、runtime 脚本），按 pnpm 锁文件和打包器的 metafile 求出生产依赖的完整闭包，闭包里出现 `@anthropic-ai/claude-agent-sdk` 或 `@anthropic-ai/claude-code` 就失败；runtime 组件的许可证文本齐全。负面测试：故意引入这个依赖的样例工程，门禁必须失败（安全 #11） | 是 |
 | `testdata-scan` | ubuntu | 每个 PR | 对 `testdata/` 做通用模式的个人信息扫描（[5.9.3](09-testing.md#593-录制与金样例)）；校验兼容报告符合 schema，并从报告重新生成"已验证 CLI 范围"与清单比对；`tools/trace-ids check` 检查文档里引用的用例编号都登记在 `tests/ids.toml` 里（里程碑、产出任务、套件、状态），待完成清单由 `trace-ids status` 自动推导（T002）（[5.9.10](09-testing.md#5910-测试编号与人工验证清单)） | 是 |
 | `e2e` | `macos-15` | 每个 PR（冒烟子集，按改动路径过滤）；每晚（全集，含 PERF-bridge-gate，托管 runner 上只记录 p99） | `pnpm build:e2e`；`pnpm test:e2e` | 是 |
+| `selfuse` | `macos-15` | 每晚（`nightly.yml` 的可选输入 `job` 可以只跑它） | 构建自用构建、"下一版"自用构建（宿主和 CLI 用 dev profile，cdhash 不同）和开发构建，跑 IT-selfuse-build、E2E-selfuse-coexist、E2E-selfuse-replace，App 日志进构件；不在托管 runner 上时跳过（本机的 `cupper-local` 是日常在用的数据，T160） | 是 |
 | `perf` | `macos-15` | 每晚 | release 构建下宿主的 PERF 用例（PERF-host-cold-start、PERF-index-snapshot、PERF-host-memory）和 PERF-snapshot，一次一个；托管 runner 上只把各指标写进摘要，编号记作 `measured`，不判退化、不写历史；作者机器上按历史中位数的 1.5 倍判退化并追加 `history.jsonl`（5.9.6） | 否（只记录） |
 | `release-config` | `macos-15` | 每晚 | 发布配置、不签名的构建：`@electron/fuses read` 逐项断言、Info.plist 里有 `ElectronAsarIntegrity`、`asarUnpack` 为空（原生扩展只经 `extraResources` 放在 `Resources/native/`）、asar 文件清单、带未知命令行开关启动应立即退出、产物里扫描测试钩子的标记串、宿主和 CLI 的 `--build-info` 不含 `dev-auth` 和 `test-harness`、许可证门禁第二层（[5.10.7](10-release.md#5107-发布流水线)）；`cargo xtask runtime-pack --verify` | 否（失败开 issue） |
 | `differential` | `macos-15` | 每晚（`nightly` 组合作业） | TS 与 Rust 视图的差分测试（UNIT-views-differential，5.9.1 测试 #16）：Rust 的 proptest 生成随机事件流，各按三种方式 fold，写出用例文件，TS 读同一文件比较视图 JSON（T072） |

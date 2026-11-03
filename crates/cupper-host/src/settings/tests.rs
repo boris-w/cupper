@@ -28,11 +28,15 @@ fn desktop(role: ClientRole, scopes: &[Scope]) -> Principal {
 
 #[test]
 fn unit_settings_rows_over_the_defaults_and_the_checks() {
-    let defaults = defaults(Path::new("/Users/someone"));
-    assert_eq!(
-        defaults.worktrees_root.0,
-        "/Users/someone/.cupper/worktrees"
-    );
+    let home = Path::new("/Users/someone");
+    let worktrees = |data_dir: &str| defaults(home, Path::new(data_dir)).worktrees_root.0;
+    let support = "/Users/someone/Library/Application Support";
+    for kind in ["cupper", "cupper-local", "cupper-dev"] {
+        let root = format!("/Users/someone/.{kind}/worktrees");
+        assert_eq!(worktrees(&format!("{support}/{kind}")), root);
+    }
+    assert_eq!(worktrees("/tmp/case/data"), "/tmp/case/data/worktrees");
+    let defaults = defaults(home, Path::new(&format!("{support}/cupper")));
     assert!(defaults.notify_error && !defaults.verbose_diagnostics);
     // A row that holds, one of a key the host does not know, one that does
     // not fit.
@@ -52,6 +56,7 @@ fn unit_settings_rows_over_the_defaults_and_the_checks() {
         json!({"agents.env_passthrough": ["API_KEY", "not-a-name"]}),
         json!({"host.idle_exit_minutes": 0}),
         json!({"apps.editor": ""}),
+        json!({"apps.terminal": "Calculator"}),
     ];
     for value in refused {
         assert!(apply(&read, &patch(value.clone())).is_err(), "{value}");
@@ -69,7 +74,8 @@ async fn unit_settings_update_writes_its_keys_and_finds_the_agents_again() {
     let conn = open_reader(&dir.host_db()).unwrap();
     let shared: Arc<dyn Clock> = Arc::new(clock);
     let home = Path::new("/Users/someone");
-    let load = || SettingsHandle::load(&conn, writer.clone(), Arc::clone(&shared), home);
+    let load =
+        || SettingsHandle::load(&conn, writer.clone(), Arc::clone(&shared), home, dir.path());
     let settings = load().unwrap();
     let found = Arc::new(AtomicUsize::new(0));
     let rediscover: Rediscover = {

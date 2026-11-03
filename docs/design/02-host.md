@@ -457,8 +457,9 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 **文件服务**（CP-2 的 `@` 引用）
 
-- git 仓库：在快照档（[5.2.10](#5210-git-与-worktree-服务)）执行 `git ls-files -z --cached --others --exclude-standard` 得到文件列表；非 git 目录：用 `ignore` crate 遍历（遵守 `.gitignore`），最多 20 万个文件。
-- 列表按工作区缓存 5 秒，回合结束时失效；用 nucleo-matcher 做模糊匹配，返回相对路径、分数和匹配区间（UTF-16 偏移，方便 JS 高亮）。
+- git 仓库：在快照档（[5.2.10](#5210-git-与-worktree-服务)）执行 `git ls-files -z --cached --others --exclude-standard` 得到文件列表；非 git 目录（包括 git 仓库的子目录），以及快照档失败时：用 `ignore` crate 遍历（遵守 `.gitignore`，不进 `.git`，不跟随符号链接），最多 20 万个文件。
+- 列表按工作区缓存 5 秒（`file_list_ttl`），回合结束时失效：会话 actor 在提交含 `turn.completed` 的那一批之前丢掉自己工作区的列表；用 fuzzy-matcher（MIT，SkimMatcherV2；原定的 nucleo-matcher 是 MPL-2.0，不在 ADR-11 的白名单里，T126 改用）做模糊匹配，返回相对路径、分数和匹配区间（UTF-16 偏移，方便 JS 高亮）。
+- `workspace/open`：应用只能取内置清单里的名字（终端：Terminal、iTerm、Ghostty、Warp、WezTerm、kitty、Alacritty；编辑器：TextEdit、Visual Studio Code、Cursor、Zed、Sublime Text、Xcode、Nova、BBEdit；`finder` 用 Finder），设置更新和打开前都核对；执行 `/usr/bin/open -a <应用> <工作区>`，经 `cupper-sys::spawn`、不经 shell、环境为空，超时 `app_open`（30 s）；`open` 退出码非 0 时返回 `unavailable/app_not_found`（T126）。
 - 发送时，`@` 引用作为 `resource_link` 内容块传给 agent（ACP 基础能力）。
 
 **设置**

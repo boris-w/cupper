@@ -639,7 +639,7 @@ M1a 的消息流、store、订阅策略、HostPort 生命周期都按这里的�
 
 | 项 | 落点 | 验证方式 |
 |---|---|---|
-| Fuses | electron-builder 的 `electronFuses`：关闭 `runAsNode`、`enableNodeOptionsEnvironmentVariable`、`enableNodeCliInspectArguments`（e2e 构建保留）、`grantFileProtocolExtraPrivileges`、`loadBrowserProcessSpecificV8Snapshot`；打开 `enableEmbeddedAsarIntegrityValidation`、`onlyLoadAppFromAsar`、`enableCookieEncryption`（e2e 构建和自用构建关闭，[5.7.9](#579-构建种类)） | CI 对产物运行 `@electron/fuses read` 逐项断言；断言 Info.plist 里有 `ElectronAsarIntegrity`，`asarUnpack` 只有 `cupper_native.node` |
+| Fuses | electron-builder 的 `electronFuses`：关闭 `runAsNode`、`enableNodeOptionsEnvironmentVariable`、`enableNodeCliInspectArguments`（e2e 构建保留）、`grantFileProtocolExtraPrivileges`、`loadBrowserProcessSpecificV8Snapshot`；打开 `enableEmbeddedAsarIntegrityValidation`、`onlyLoadAppFromAsar`、`enableCookieEncryption`（e2e 构建和自用构建关闭，[5.7.9](#579-构建种类)） | CI 对产物运行 `@electron/fuses read` 逐项断言；断言 Info.plist 里有 `ElectronAsarIntegrity`，`asarUnpack` 为空（原生扩展只经 `extraResources` 放在 `Resources/native/`，与 5.1.6、5.10.7 一致）；Electron 44 的第 9 根 fuse `WasmTrapHandlers` 工具设不了，保持出厂（开启），用例按出厂断言（T160） |
 | 命令行开关 | 发布构建启动时按白名单检查命令行开关，出现任何不在白名单里的开关（含 `--inspect*`、`--remote-debugging-*`、`--js-flags`、`--no-sandbox`、`--disable-web-security`、`--user-data-dir`、`--proxy-server` 等）就退出；发布构建不开 DevTools（安全建议 #17） | e2e（发布配置的构建）：带未知开关启动，进程应立即退出 |
 | webPreferences | `sandbox`、`contextIsolation` 为 true；`nodeIntegration`、`nodeIntegrationInWorker`、`nodeIntegrationInSubFrames`、`webviewTag`、`allowRunningInsecureContent`、`experimentalFeatures`、`navigateOnDragDrop` 为 false；窗口的 `acceptFirstMouse` 保持默认的 false | 单元测试检查窗口创建参数 |
 | 加载方式 | 主文档只从 `app://cupper/` 加载，审查文档只从 `app://cupper-review/` 加载（`protocol.handle` 读取 asar，每个主机一个文件根目录，路径规范化后检查前缀）；不用 `file://`，**不从远端加载渲染层**（ADR-03） | e2e 检查两个文档的 `location.origin`；单元测试：`..`、编码后的 `%2e%2e` 等路径被拒 |
@@ -778,6 +778,7 @@ bundle identifier 的前缀定为 `dev.cupper`（Q5，已定（2026-10-16），�
 - 依赖 hardened runtime、codesign 认证、动态状态字的检查只能在发布构建上验证，由签名后的冒烟测试覆盖（[5.10.7](10-release.md#5107-发布流水线)）；5.9.4 的每条安全 e2e 都标明在哪种构建上跑。
 - 用户自行构建（没有 Team ID）时，按开发构建的身份和数据目录运行，宿主走退化认证并提示（ADR-05，Q22）。
 - **自用构建**（v1.2 新增，见 [5.12.3](12-milestones.md#5123-m1b桌面-mvp)）单独一套身份、数据目录、userData、worktree 根目录和 URL scheme，可以与开发构建同时运行、互不干扰：开发构建抢不到它的 `host.lock`，也读不到它的数据。开发构建和测试只用临时目录或 `cupper-dev/`，不在真实项目上运行真实 agent。
+- **自用构建的落地**（T160）：`pnpm build:local`，配置 `apps/desktop/electron-builder.local.yml`（与发布配置各写完整，不用 `extends`，否则数组会拼接）；Vite 的 mode 名是 `self-use`（`local` 被 Vite 的 `.env.local` 占用），映射到 flavor `local`；发布和自用构建都不带 source map（`!**/*.map`：主进程的 source map 带着 e2e 专用代码的源码）；Electron 44 不启动 GPU helper 和 Plugin helper，GPU 进程跑在普通 helper 里；worktree 根目录按数据目录推出（`cupper-local` → `~/.cupper-local/worktrees`，其他临时数据目录 → `<数据目录>/worktrees`）。用户文档在 `docs/user/`（自用前须知、安装与手动更新）。
 
 ## 5.7.10 设计参数
 

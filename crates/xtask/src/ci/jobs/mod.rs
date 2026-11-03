@@ -11,6 +11,7 @@ mod perf;
 mod protocol;
 mod rust;
 mod security;
+mod selfuse;
 pub mod testdata_scan;
 mod ts;
 mod ui;
@@ -51,6 +52,7 @@ pub const JOBS: &[Job] = &[
     job("testdata-scan", Some(testdata_scan::run)),
     job("differential", Some(differential::run)),
     locked("e2e", Some(e2e::run)),
+    job("selfuse", Some(selfuse::run)),
     locked("perf", Some(perf::run)),
     job("security-peer", Some(security::run)),
     job("compat-framework", Some(compat_framework::run)),
@@ -85,6 +87,7 @@ pub const COMPOSITES: &[(&str, &[&str])] = &[
             "differential",
             "ui",
             "e2e",
+            "selfuse",
             "perf",
             "release-config",
             "security-peer",

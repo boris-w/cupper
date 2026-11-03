@@ -31,12 +31,14 @@ use crate::driver::api::{
     DriverEvent, NormUpdate, ProjectConfigPolicy, PromptTag,
 };
 use crate::durations::Durations;
+use crate::files::{FileLists, FilesDeps, FilesService};
 use crate::gateway::testkit::Peer;
 use crate::gateway::{AuditRecord, Routes};
 use crate::git::{GitDeps, GitService, GitTool};
 use crate::ledger::Ledger;
 use crate::orchestrator::testkit::text;
 use crate::quiescence::Quiescence;
+use crate::settings::SettingsHandle;
 use crate::store::streams::{Published, Push, Sink, Streams, StreamsConfig};
 use crate::store::testutil::{TempDir, host_writer, query};
 use crate::store::{BlobStore, Durability, Readers, Writer, WriterThread, log, open_reader};
@@ -295,8 +297,26 @@ impl Fixture {
             blobs: blobs.clone(),
             power: Power::new().0,
             redactor: Redactor::new(Some(HOME), None),
+            lists: FileLists::default(),
         };
         let conn = open_reader(&dir.host_db()).unwrap();
+        let home = dir.path().join("home");
+        let settings = SettingsHandle::load(
+            &conn,
+            writer.clone(),
+            Arc::clone(&shared),
+            &home,
+            dir.path(),
+        );
+        let files = FilesDeps {
+            git: git.clone(),
+            readers: readers.clone(),
+            clock: Arc::clone(&shared),
+            durations: durations.clone(),
+            settings: settings.unwrap(),
+            lists: deps.lists.clone(),
+            opener: dir.path().join("open"),
+        };
         let ledger = Ledger::load(&conn, writer.clone(), shared, &durations).unwrap();
         let mut routes = Routes::new(ledger);
         let clock = Arc::clone(&deps.clock);
@@ -313,6 +333,7 @@ impl Fixture {
             notes: Arc::new(manager.clone()),
         })
         .route(&mut routes);
+        FilesService::new(files).route(&mut routes);
         routes.sessions(Arc::new(manager.clone()));
         routes.streams(streams.clone(), readers);
         routes.blobs(blobs);

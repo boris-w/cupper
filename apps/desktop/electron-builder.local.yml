@@ -1,0 +1,56 @@
+# The self-use build, Cupper Local (design 5.7.9): the release build of
+# electron-builder.release.yml with its own identity, and only these
+# differences, which IT-selfuse-build checks on the app (T160):
+# - `dev.cupper.app.local`, Cupper Local, `cupper-local://`; the host and the
+#   CLI of `cargo xtask host-bundle --kind self-use`;
+# - signed ad hoc, the hardened runtime still on: `disable-library-validation`
+#   joins `allow-jit`, for the app and every helper alike, since an ad-hoc
+#   app may load no library of its own without it;
+# - cookie encryption off: the UI uses no cookies, and with an ad-hoc
+#   signature every new copy of the app would prompt for the keychain;
+# - a plain app, installed and replaced by hand (docs/user/selfuse-install.md).
+appId: dev.cupper.app.local
+productName: Cupper Local
+directories:
+  output: dist/pack/local
+files:
+  - package.json
+  - dist/main/**
+  - dist/preload/**
+  - dist/renderer/**
+  # No source maps: nothing reads them, and the main process's holds the
+  # source of the e2e-only code it left out (IT-selfuse-build, T160).
+  - "!**/*.map"
+npmRebuild: false
+# The native extension, outside the asar; the host bundle and the CLI in
+# Helpers (design 5.10.1).
+extraResources:
+  - from: ../../target/host-bundle/build/release/libcupper_native.dylib
+    to: native/cupper_native.node
+extraFiles:
+  - from: ../../target/host-bundle/self-use/CupperHost.app
+    to: Helpers/CupperHost.app
+  - from: ../../target/host-bundle/self-use/cupper
+    to: Helpers/cupper
+protocols:
+  - name: Cupper Local
+    schemes: [cupper-local]
+mac:
+  # `host-bundle` signed them; signing them again would change the host's
+  # cdhash, which the CLI checks.
+  signIgnore: ["CupperHost\\.app", "/Helpers/cupper$"]
+  target: dir
+  identity: "-"
+  hardenedRuntime: true
+  entitlements: build/entitlements.local.plist
+  entitlementsInherit: build/entitlements.local.plist
+  minimumSystemVersion: "15.0"
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  loadBrowserProcessSpecificV8Snapshot: false
+  grantFileProtocolExtraPrivileges: false

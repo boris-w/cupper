@@ -391,7 +391,6 @@ const ALLOWED: &[(&str, Why)] = {
             "diag/recording_export",
             Builds(HARNESS || cfg!(feature = "dev-auth")),
         ),
-        ("files/search", Later(M1b)),
         ("git/commit", Later(M1b)),
         ("git/push", Later(M1b)),
         ("host/prepare_upgrade", Until("T183")),
@@ -407,7 +406,6 @@ const ALLOWED: &[(&str, Why)] = {
         ("test/clock_advance", Builds(HARNESS)),
         ("test/run_maintenance", Builds(HARNESS)),
         ("test/seed", Builds(HARNESS)),
-        ("workspace/open", Later(M1b)),
         ("worktree/check", Later(M1b)),
     ]
 };
@@ -431,6 +429,7 @@ async fn unit_unsupported_set_is_what_the_milestones_allow() {
     routes.add::<SettingsUpdate>(settings());
     // The git service (T120); a stub here too.
     routes.git(settings());
+    routes.files(settings());
     let catalog = catalog(&mut generator());
     // Every scope, so that only the table decides.
     let mut peer = Peer::new(harness());
