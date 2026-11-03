@@ -1,6 +1,6 @@
 # T221 Git 服务 IIIb：DiffCache、file_diff 与 hunk 切分
 
-- 派发日期：（派发时填）
+- 派发日期：2026-11-03
 - 执行者：子 agent（Rust 工程师，宿主 Git 服务）
 - 分支：`feat/T221-git-file-diff`
 - 依赖：T120（`git/diff` 的四种范围）。T121（暂存、取消暂存与还原）依赖本任务（M1b 关键链）
