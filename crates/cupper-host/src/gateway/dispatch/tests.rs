@@ -392,14 +392,10 @@ const ALLOWED: &[(&str, Why)] = {
             Builds(HARNESS || cfg!(feature = "dev-auth")),
         ),
         ("files/search", Later(M1b)),
-        ("git/branches", Later(M1b)),
         ("git/commit", Later(M1b)),
-        ("git/diff", Later(M1b)),
-        ("git/file_diff", Later(M1b)),
         ("git/push", Later(M1b)),
         ("git/revert", Later(M1b)),
         ("git/stage", Later(M1b)),
-        ("git/status", Later(M1b)),
         ("git/unstage", Later(M1b)),
         ("host/prepare_upgrade", Until("T183")),
         ("project/remove", Later(M1b)),
@@ -436,6 +432,8 @@ async fn unit_unsupported_set_is_what_the_milestones_allow() {
     let settings = || Arc::clone(&fixture.index) as Arc<dyn Port>;
     routes.add::<SettingsGet>(settings());
     routes.add::<SettingsUpdate>(settings());
+    // The git service (T120); a stub here too.
+    routes.git(settings());
     let catalog = catalog(&mut generator());
     // Every scope, so that only the table decides.
     let mut peer = Peer::new(harness());

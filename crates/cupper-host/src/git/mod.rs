@@ -9,11 +9,14 @@
 //! `<data dir>/git/`, with a fixed environment; nothing is looked up on PATH.
 
 mod cmd;
+pub mod diff;
 mod repo;
 pub mod rules;
 pub mod run;
+mod service;
 pub mod snapshot;
 pub mod stamp;
+pub mod status;
 
 use std::ffi::{OsStr, OsString};
 use std::fs::DirBuilder;
@@ -26,6 +29,7 @@ use cupper_sys::{Command, Env};
 pub use cmd::{GitCmd, Repo, RepoOp, Snapshot, SnapshotOp};
 pub use repo::{Done, GitError, RepoNotice};
 use run::{Output, RunError};
+pub use service::{GitDeps, GitService};
 
 use crate::clock::Clock;
 use crate::durations::{DurationKey, Durations};

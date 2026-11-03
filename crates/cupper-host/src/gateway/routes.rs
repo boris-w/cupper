@@ -18,6 +18,7 @@ use cupper_protocol::ids::ConnId;
 use cupper_protocol::methods::admin::{
     AuthElevate, AuthElevationGet, AuthElevationRespond, PolicyDescribe,
 };
+use cupper_protocol::methods::git::{GitBranches, GitDiff, GitFileDiff, GitStatus};
 use cupper_protocol::methods::handshake::{ClientPresence, Ping};
 use cupper_protocol::methods::interaction::{InteractionGet, InteractionRespond};
 use cupper_protocol::methods::project::{ProjectAdd, ProjectTrust, ProjectTrustInfo};
@@ -189,6 +190,14 @@ impl Routes {
     pub fn presence(&mut self, port: Arc<dyn IndexPort>) {
         self.add::<SessionMarkRead>(Arc::clone(&port) as Arc<dyn Port>);
         self.notification::<ClientPresence>(port);
+    }
+
+    /// The git service (T120) serves its read methods.
+    pub fn git(&mut self, port: Arc<dyn Port>) {
+        self.add::<GitStatus>(Arc::clone(&port));
+        self.add::<GitDiff>(Arc::clone(&port));
+        self.add::<GitFileDiff>(Arc::clone(&port));
+        self.add::<GitBranches>(port);
     }
 
     /// The gateway serves `stream/subscribe`, `stream/unsubscribe` and

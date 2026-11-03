@@ -36,7 +36,7 @@ use cupper_protocol::session::{DiffStat, ExcludedPath, ExclusionReason};
 use sha2::{Digest, Sha256};
 
 use super::repo::expand_home;
-use super::rules::{self, Unsafe};
+use super::rules::{self, Entry, Unsafe};
 use super::run::RunError;
 use super::stamp::{Fingerprint, Layout};
 use super::{GitCmd, GitTool, RepoOp, Snapshot, SnapshotOp, SnapshotTier};
@@ -85,6 +85,9 @@ pub enum ShotError {
     Run(#[from] RunError),
     #[error("git {0} failed: {1}")]
     Failed(&'static str, String),
+    /// A merge conflict is unresolved (design 5.2.10).
+    #[error("the index has unmerged entries")]
+    Unmerged,
 }
 
 /// Takes a snapshot of `work_tree`; with `start`, the lines changed since
@@ -96,6 +99,37 @@ pub async fn take(
     clock: &dyn Clock,
     durations: &Durations,
 ) -> Result<Taken, ShotError> {
+    let opened = open(tool, work_tree, clock, durations).await?;
+    let (layout, entries) = (opened.layout.clone(), opened.entries.clone());
+    let fingerprint = blocking(move || Ok(Fingerprint::take(&layout, &entries)?)).await;
+    let tier = tool.snapshot_tier(&opened.place);
+    let taken = match fingerprint {
+        Ok(fingerprint) => shoot(&tier, &opened.unrun, start, clock, durations, fingerprint).await,
+        Err(err) => Err(err),
+    };
+    opened.close().await;
+    taken
+}
+
+/// cupper's GIT_DIR for a work tree, opened for one call: its configuration
+/// written again, a fresh copy of the work tree's index.
+#[derive(Debug)]
+pub struct Opened {
+    pub place: Place,
+    pub layout: Layout,
+    /// The filters the configuration defines and the snapshot tier does not run.
+    pub unrun: BTreeSet<Vec<u8>>,
+    /// The effective configuration.
+    pub entries: Vec<Entry>,
+}
+
+/// Opens cupper's GIT_DIR for `work_tree`; [`Opened::close`] it after use.
+pub async fn open(
+    tool: &GitTool,
+    work_tree: &Path,
+    clock: &dyn Clock,
+    durations: &Durations,
+) -> Result<Opened, ShotError> {
     let tree = work_tree.to_owned();
     let layout = blocking(move || {
         let not_a_repo = |_| ShotError::NotARepo(tree.clone());
@@ -115,18 +149,33 @@ pub async fn take(
         config::unrun(&entries, tool.git_lfs()),
     );
     expand_home(&mut entries, tool.home.as_deref());
-    let dir = tool.dir.clone();
-    let prepared = blocking(move || {
-        let fingerprint = Fingerprint::take(&layout, &entries)?;
-        Ok((prepare(&dir, &layout, &text)?, fingerprint))
-    });
-    let (place, fingerprint) = prepared.await?;
-    let tier = tool.snapshot_tier(&place);
-    let taken = shoot(&tier, &unrun, start, clock, durations, fingerprint).await;
-    let index = place.index.clone();
-    // A leftover temporary index costs space only.
-    let _ = blocking(move || Ok(fs::remove_file(index)?)).await;
-    taken
+    let (dir, at) = (tool.dir.clone(), layout.clone());
+    let place = blocking(move || prepare(&dir, &at, &text)).await?;
+    Ok(Opened {
+        place,
+        layout,
+        unrun,
+        entries,
+    })
+}
+
+impl Opened {
+    /// The empty tree of the repository's object format, which git knows
+    /// without storing it.
+    pub fn empty_tree(&self) -> &'static str {
+        let format = self.entries.iter().rev();
+        let mut format = format.filter(|e| e.key == b"extensions.objectformat");
+        match format.next().and_then(|e| e.value.as_deref()) {
+            Some(b"sha256") => "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321",
+            _ => "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        }
+    }
+
+    /// Removes the temporary index; a leftover one costs space only.
+    pub async fn close(self) {
+        let index = self.place.index;
+        let _ = blocking(move || Ok(fs::remove_file(index)?)).await;
+    }
 }
 
 /// The GIT_DIR of `layout`'s work tree, with a fresh copy of its index.
@@ -234,7 +283,7 @@ fn copy(from: &Path, to: &Path) -> io::Result<()> {
 }
 
 /// Steps 2–4 of a snapshot, on its GIT_DIR.
-async fn shoot(
+pub(super) async fn shoot(
     tier: &SnapshotTier<'_>,
     unrun: &BTreeSet<Vec<u8>>,
     start: Option<&str>,
@@ -242,13 +291,7 @@ async fn shoot(
     durations: &Durations,
     fingerprint: Fingerprint,
 ) -> Result<Taken, ShotError> {
-    let call = |cmd: GitCmd<Snapshot>, what| async move {
-        let output = tier.prepare(cmd).run(clock, durations).await?;
-        match output.status.success() {
-            true => Ok(output.stdout),
-            false => Err(failed(what, &output.stderr)),
-        }
-    };
+    let call = |cmd, what| output(tier, cmd, what, clock, durations);
     let work_tree = tier.place.work_tree.clone();
     let untracked = call(GitCmd::snapshot(SnapshotOp::Untracked), "ls-files").await?;
     let dirs = call(GitCmd::snapshot(SnapshotOp::UntrackedDirs), "ls-files").await?;
@@ -317,6 +360,21 @@ async fn shoot(
     })
 }
 
+/// What `cmd` writes, or why it failed.
+pub(super) async fn output(
+    tier: &SnapshotTier<'_>,
+    cmd: GitCmd<Snapshot>,
+    what: &'static str,
+    clock: &dyn Clock,
+    durations: &Durations,
+) -> Result<Vec<u8>, ShotError> {
+    let output = tier.prepare(cmd).run(clock, durations).await?;
+    match output.status.success() {
+        true => Ok(output.stdout),
+        false => Err(failed(what, &output.stderr)),
+    }
+}
+
 /// What stays out of `untracked` (`ls-files -o`, nested repositories as
 /// `dir/`) given `dirs` (the same with wholly untracked directories as
 /// `dir/`).
@@ -358,7 +416,7 @@ type Placeholder = (Vec<u8>, u32, Vec<u8>);
 type Excluded = Vec<(Vec<u8>, ExclusionReason)>;
 
 /// The paths of `check-attr -z` output whose filter is one of `unrun`.
-fn filtered(output: &[u8], unrun: &BTreeSet<Vec<u8>>) -> Vec<(Vec<u8>, Vec<u8>)> {
+pub(super) fn filtered(output: &[u8], unrun: &BTreeSet<Vec<u8>>) -> Vec<(Vec<u8>, Vec<u8>)> {
     let fields: Vec<&[u8]> = split(output).collect();
     let triples = fields.chunks_exact(3);
     let hits = triples.filter(|t| unrun.contains(t[2]));
@@ -417,17 +475,17 @@ fn stat(output: &[u8]) -> DiffStat {
     stat
 }
 
-fn split(output: &[u8]) -> impl Iterator<Item = &[u8]> {
+pub(super) fn split(output: &[u8]) -> impl Iterator<Item = &[u8]> {
     output.split(|b| *b == 0).filter(|field| !field.is_empty())
 }
 
-fn failed(what: &'static str, stderr: &[u8]) -> ShotError {
+pub(super) fn failed(what: &'static str, stderr: &[u8]) -> ShotError {
     let tail = String::from_utf8_lossy(&stderr[stderr.len().saturating_sub(512)..]);
     ShotError::Failed(what, tail.trim_end().to_owned())
 }
 
 /// File system work off the async runtime (T109, T138).
-async fn blocking<T: Send + 'static>(
+pub(super) async fn blocking<T: Send + 'static>(
     work: impl FnOnce() -> Result<T, ShotError> + Send + 'static,
 ) -> Result<T, ShotError> {
     let joined = tokio::task::spawn_blocking(work).await;

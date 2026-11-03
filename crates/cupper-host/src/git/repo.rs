@@ -11,8 +11,9 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 
-use cupper_protocol::error::{ErrorCode, ErrorReason};
+use cupper_protocol::error::{ErrorCode, ErrorReason, RpcError};
 use cupper_protocol::item::NoticeCode;
+use tokio::sync::mpsc;
 
 use super::rules::{self, Bounds, Entry, Setup, Unsafe};
 use super::run::{Output, RunError};
@@ -21,6 +22,7 @@ use super::{GitCmd, Repo, RepoOp, RepoTier};
 use crate::clock::Clock;
 use crate::diag::redact;
 use crate::durations::Durations;
+use crate::gateway::{AuditEvent, AuditRecord};
 
 /// How much of the end of git's stderr a [`GitError::Failed`] keeps.
 const STDERR_TAIL: usize = 2048;
@@ -96,6 +98,34 @@ impl GitError {
             (None, Self::Run(RunError::Timeout)) => ErrorCode::Timeout,
             (None, _) => ErrorCode::GitError,
         }
+    }
+
+    /// The protocol's error, once `git.unsafe_repo_config` went to `audit`
+    /// if the repo tier refused to run `command` (design 5.8.6).
+    pub fn reported(
+        self,
+        command: &str,
+        audit: &mpsc::UnboundedSender<AuditRecord>,
+        clock: &dyn Clock,
+    ) -> RpcError {
+        if let Some((reason, origin)) = self.refusal() {
+            let (command, reason) = (command.to_owned(), reason.to_owned());
+            let event = AuditEvent::GitUnsafe {
+                command,
+                reason,
+                origin,
+            };
+            let at_ms = clock.now_wall_ms();
+            // Nobody listening is the receiver's choice.
+            let _ = audit.send(AuditRecord {
+                at_ms,
+                conn: None,
+                event,
+            });
+        }
+        let error = RpcError::app(self.code(), self.to_string());
+        self.reason()
+            .map_or(error.clone(), |reason| error.with_reason(reason))
     }
 
     /// The notice the caller writes, if any (rules 2, 5 and 6).

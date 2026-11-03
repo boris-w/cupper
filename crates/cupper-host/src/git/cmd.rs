@@ -51,6 +51,9 @@ pub enum RepoOp {
     MergeBase,
     CheckRefFormat,
     BranchList,
+    /// `branch --show-current`: the branch HEAD names, also before its
+    /// first commit; nothing on a detached HEAD.
+    BranchCurrent,
     /// `apply --cached` of the patch given as input.
     Stage,
     /// `apply --cached -R`.
@@ -88,6 +91,19 @@ pub enum SnapshotOp {
     WriteTree,
     /// Lines added and removed between two trees, no program run.
     DiffStat,
+    /// The index's unmerged entries.
+    Unmerged,
+    /// Two trees' changed files, renames found: raw records, then as many
+    /// numstat records (design 5.2.10).
+    DiffList,
+    /// The patch between two trees, renames as deletions and additions.
+    DiffPatch,
+    /// Refreshes the stat data of the (temporary) index.
+    Refresh,
+    /// The index against a tree, renames found.
+    DiffIndex,
+    /// The work tree against the index.
+    DiffFiles,
 }
 
 /// A command's fixed words, with `-z` where the command has it.
@@ -112,6 +128,7 @@ impl RepoOp {
             Self::MergeBase => (&["merge-base"], true),
             Self::CheckRefFormat => (&["check-ref-format"], true),
             Self::BranchList => (&["branch", "--list"], true),
+            Self::BranchCurrent => (&["branch", "--show-current"], true),
             Self::Stage => (&["apply", "--whitespace=nowarn", "--cached"], false),
             Self::Unstage => (&["apply", "--whitespace=nowarn", "--cached", "-R"], false),
             Self::Revert => (&["apply", "--whitespace=nowarn", "-R"], false),
@@ -186,9 +203,43 @@ impl SnapshotOp {
                 ],
                 true,
             ),
+            Self::Unmerged => (&["ls-files", "-z", "--unmerged"], true),
+            Self::DiffList => (
+                &[
+                    "diff-tree",
+                    "-r",
+                    "-z",
+                    "-M",
+                    "--raw",
+                    "--numstat",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                ],
+                true,
+            ),
+            Self::DiffPatch => (
+                &[
+                    "diff-tree",
+                    "-p",
+                    "--no-renames",
+                    "--no-color",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--full-index",
+                    "--binary",
+                    "-U3",
+                ],
+                true,
+            ),
+            Self::Refresh => (&["update-index", "-q", "--unmerged", "--refresh"], false),
+            Self::DiffIndex => (
+                &["diff-index", "--cached", "-z", "--name-status", "-M"],
+                true,
+            ),
+            Self::DiffFiles => (&["diff-files", "-z", "--name-status"], true),
         };
         let timeout = match self {
-            Self::AddAll | Self::WriteTree => GIT_SNAPSHOT,
+            Self::AddAll | Self::WriteTree | Self::Refresh => GIT_SNAPSHOT,
             _ => GIT_COMMAND,
         };
         Spec {
