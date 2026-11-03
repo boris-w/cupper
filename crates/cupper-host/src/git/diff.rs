@@ -1,11 +1,7 @@
 //! `git/diff` in the snapshot tier (design 5.2.10, "diff 与 hunk"). Every
 //! range compares two trees: a turn's start and end snapshots, or its start
 //! and a snapshot taken now while it runs; the index and a snapshot taken
-//! now (`unstaged`); HEAD and the index (`staged`). Trees never change, so
-//! the cache keeps a diff as its trees and file list: a file's patch is the
-//! same whenever it is made from them.
-
-mod cache;
+//! now (`unstaged`); HEAD and the index (`staged`).
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -16,8 +12,6 @@ use cupper_protocol::item::{DiffChange, Item};
 use cupper_protocol::methods::git::{DiffSnapshot, GitDiffFile};
 use cupper_protocol::session::{DiffStat, ExcludedPath, SnapshotStatus};
 use cupper_protocol::view::{Entry, ItemView, SessionView};
-
-pub use cache::DiffCache;
 
 use super::snapshot::{self, Opened, ShotError, Taken, output, shoot};
 use super::stamp::Fingerprint;
@@ -38,8 +32,6 @@ pub enum Range {
 /// A diff made.
 #[derive(Debug, Clone)]
 pub struct Diffed {
-    pub old: String,
-    pub new: String,
     pub files: Vec<GitDiffFile>,
     /// The snapshot a running turn's range took now.
     pub taken: Option<Taken>,
@@ -114,12 +106,7 @@ async fn make(
             file.filter_unsupported = hits.contains(file.path.0.as_bytes());
         }
     }
-    Ok(Diffed {
-        old,
-        new,
-        files,
-        taken,
-    })
+    Ok(Diffed { files, taken })
 }
 
 /// `diff-tree -z --raw --numstat` output: the raw records, then a numstat

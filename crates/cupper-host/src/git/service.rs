@@ -1,10 +1,9 @@
 //! The git service's port (design 5.2.10, 5.3.4): `git/diff`, each call in
 //! its reply's task. A session's workspace and turn trees come from the
-//! store, a turn's notes from the session's view, and the diffs made stay
-//! in a [`DiffCache`] for their `diff_token` to name.
+//! store, a turn's notes from the session's view.
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::ids::{DiffToken, SessionId, TurnId};
@@ -19,12 +18,12 @@ use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::mpsc;
 
-use super::diff::{self, DiffCache, Diffed, Range, turn_notes};
+use super::diff::{self, Range, turn_notes};
 use super::run::RunError;
 use super::snapshot::ShotError;
 use super::{GitError, GitTool, head};
 use crate::clock::{Clock, IdGen};
-use crate::durations::{DIFF_CACHE_TTL, Durations};
+use crate::durations::Durations;
 use crate::gateway::{AuditRecord, Call, Port, Reply, Routes};
 use crate::store::streams::{StreamView, Streams};
 use crate::store::{Readers, log};
@@ -43,18 +42,15 @@ pub struct GitDeps {
     pub audit: mpsc::UnboundedSender<AuditRecord>,
 }
 
-/// The git service. Clones share its cache.
+/// The git service.
 #[derive(Debug, Clone)]
 pub struct GitService {
     deps: GitDeps,
-    cache: Arc<Mutex<DiffCache<Diffed>>>,
 }
 
 impl GitService {
     pub fn new(deps: GitDeps) -> Self {
-        let cache = DiffCache::new(deps.durations.get(DIFF_CACHE_TTL));
-        let cache = Arc::new(Mutex::new(cache));
-        Self { deps, cache }
+        Self { deps }
     }
 
     pub fn route(self, routes: &mut Routes) {
@@ -86,13 +82,10 @@ impl GitService {
         });
         let token = format!("dt_{:032x}", self.deps.ids.new_id().as_u128());
         let diff_token: DiffToken = token.parse().expect("dt_ and hex digits");
-        let (files, stat) = (diffed.files.clone(), diff::stat(&diffed.files));
-        let now = clock.now_mono();
-        self.cache()
-            .insert(diff_token.clone(), &work_tree, diffed, now);
+        let stat = diff::stat(&diffed.files);
         Ok(GitDiffResult {
             diff_token,
-            files,
+            files: diffed.files,
             snapshot,
             stat,
             caveats,
@@ -187,10 +180,6 @@ impl GitService {
 
     fn reported(&self, command: &str, err: GitError) -> RpcError {
         err.reported(command, &self.deps.audit, &*self.deps.clock)
-    }
-
-    fn cache(&self) -> std::sync::MutexGuard<'_, DiffCache<Diffed>> {
-        self.cache.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 

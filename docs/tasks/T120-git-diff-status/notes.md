@@ -56,9 +56,13 @@
 
 采用三段拆法：本任务只做 `git/diff` 四种范围、`DiffCache`、路由和 IT-git-diff-scopes 的范围部分，停止线 1000、硬停止线 1100；`git/file_diff`、hunk 切分、大 hunk 转 blob 归 T221（IT-git-file-diff），`git/status`、`git/branches`、`cupper diff` 归 T222（IT-git-status）。在 `38f85e0` 之上提交，移出的代码之后用 `git show 38f85e0:<path>` 取回：
 
-- T221：`crates/cupper-host/src/git/diff/hunks.rs`；`git/diff.rs` 里的 `patch`、`Diffed.place`；`git/service.rs` 里的 `file_diff`、`inline`；`SnapshotOp::DiffPatch`。
+- T221：`crates/cupper-host/src/git/diff/hunks.rs`；`git/diff.rs` 里的 `patch`、`Diffed.place`；`git/service.rs` 里的 `file_diff`、`inline`；`SnapshotOp::DiffPatch`。评审后又移出（取 `0e1c0f0`）：整个 `DiffCache`（`git/diff/cache.rs`，含 `get` 和它的单元用例）、时长 `diff_cache_ttl`、`Diffed.old` 与 `new`、`git/service.rs` 里的缓存字段、`cache()` 和 `insert` 那几行。
 - T222：`crates/cupper-host/src/git/status.rs`（`Head` 的上游与领先落后、文件状态、`in_progress`、`branches`）；`git/service.rs` 里的 `status`、`branches`；`SnapshotOp::Refresh`、`DiffIndex`、`DiffFiles`。
 
 留下的 HEAD 只取提交（`git/head.rs` 的 `commit`），供 `staged` 用；T222 在它上面加分支、上游和领先落后。`DiffCache::get` 目前只有单元用例调用，第一个调用方是 T221 的 `git/file_diff`（编排者裁定 DiffCache 留在本任务）。
 
 收窄后 `cargo xtask size`：+998 −54。变异检查：去掉 `index_unmerged` 的检查、去掉 `filter_unsupported` 的标记，IT-git-diff-scopes 都失败。
+
+## 评审后（2026-11-03）
+
+评审要求把 `DiffCache::get` 移出，留下 `insert` 和过期淘汰。去掉 `get` 后编译器报 `Cached` 的 `token`、`diff` 两个字段 never read：缓存里的东西只写不读，`insert` 和淘汰也就成了没人用的代码，要留只能加 `#[expect(dead_code)]`。于是按评审给的退路"不能测就一起移出"，把整个 `DiffCache` 连同 `diff_cache_ttl`、`Diffed.old`/`new` 一起移给 T221。`git/diff` 照旧返回由 `IdGen` 生成的 `diff_token`，在 T221 接上缓存之前它不指向任何东西；本任务里也没有读 token 的方法。
