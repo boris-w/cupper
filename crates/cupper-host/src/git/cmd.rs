@@ -98,6 +98,12 @@ pub enum SnapshotOp {
     DiffList,
     /// The patch between two trees, renames as deletions and additions.
     DiffPatch,
+    /// Refreshes the stat data of the (temporary) index.
+    Refresh,
+    /// The index against a tree, renames found.
+    DiffIndex,
+    /// The work tree against the index.
+    DiffFiles,
 }
 
 /// A command's fixed words, with `-z` where the command has it.
@@ -225,9 +231,15 @@ impl SnapshotOp {
                 ],
                 true,
             ),
+            Self::Refresh => (&["update-index", "-q", "--unmerged", "--refresh"], false),
+            Self::DiffIndex => (
+                &["diff-index", "--cached", "-z", "--name-status", "-M"],
+                true,
+            ),
+            Self::DiffFiles => (&["diff-files", "-z", "--name-status"], true),
         };
         let timeout = match self {
-            Self::AddAll | Self::WriteTree => GIT_SNAPSHOT,
+            Self::AddAll | Self::WriteTree | Self::Refresh => GIT_SNAPSHOT,
             _ => GIT_COMMAND,
         };
         Spec {

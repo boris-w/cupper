@@ -17,6 +17,7 @@ pub mod run;
 mod service;
 pub mod snapshot;
 pub mod stamp;
+mod status;
 
 use std::ffi::{OsStr, OsString};
 use std::fs::DirBuilder;

@@ -1,7 +1,8 @@
-//! The git service's port (design 5.2.10, 5.3.4): `git/diff` and
-//! `git/file_diff`, each call in its reply's task. A session's workspace and
-//! turn trees come from the store, a turn's notes from the session's view,
-//! and the diffs made stay in a [`DiffCache`] for their `diff_token` to name.
+//! The git service's port (design 5.2.10, 5.3.4): `git/status`, `git/diff`,
+//! `git/file_diff` and `git/branches`, each call in its reply's task. A
+//! session's workspace and turn trees come from the store, a turn's notes
+//! from the session's view, and the diffs made stay in a [`DiffCache`] for
+//! their `diff_token` to name.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -10,8 +11,9 @@ use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::ids::{DiffToken, SessionId, TurnId};
 use cupper_protocol::limits::V1;
 use cupper_protocol::methods::git::{
-    DiffCaveat, DiffHunk, DiffScope, DiffSnapshot, GitDiffParams, GitDiffResult, GitFileDiff,
-    GitFileDiffParams, GitFileDiffResult,
+    DiffCaveat, DiffHunk, DiffScope, DiffSnapshot, GitBranches, GitBranchesParams,
+    GitBranchesResult, GitDiffParams, GitDiffResult, GitFileDiff, GitFileDiffParams,
+    GitFileDiffResult, GitStatus, GitStatusParams, GitStatusResult,
 };
 use cupper_protocol::rpc::Method;
 use cupper_protocol::sync::StreamId;
@@ -23,9 +25,10 @@ use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
 use super::diff::{self, DiffCache, Diffed, Range, turn_notes};
+use super::head::{self, Head};
 use super::run::RunError;
 use super::snapshot::ShotError;
-use super::{GitError, GitTool, head};
+use super::{GitError, GitTool, status};
 use crate::clock::{Clock, IdGen};
 use crate::durations::{DIFF_CACHE_TTL, Durations};
 use crate::gateway::{AuditRecord, Call, Port, Reply, Routes};
@@ -70,7 +73,10 @@ impl GitService {
         let (tool, work_tree) = (self.tool()?, self.workspace(&params.session_id).await?);
         let (range, notes) = match &params.scope {
             DiffScope::Unstaged => (Range::Unstaged, None),
-            DiffScope::Staged => (Range::Staged(self.head(tool, &work_tree).await?), None),
+            DiffScope::Staged => (
+                Range::Staged(self.head(tool, &work_tree).await?.commit),
+                None,
+            ),
             DiffScope::LastTurn => self.turn(&params.session_id, None).await?,
             DiffScope::Turn(turn) => self.turn(&params.session_id, Some(turn)).await?,
         };
@@ -150,13 +156,43 @@ impl GitService {
         Ok(hunks)
     }
 
-    /// The commit HEAD of `work_tree` is at, through the repo tier.
-    async fn head(&self, tool: &GitTool, work_tree: &Path) -> Result<Option<String>, RpcError> {
+    async fn status(&self, params: GitStatusParams) -> Result<GitStatusResult, RpcError> {
+        let (tool, work_tree) = (self.tool()?, self.workspace(&params.session_id).await?);
+        let head = self.head(tool, &work_tree).await?;
+        let (clock, durations) = (&*self.deps.clock, &self.deps.durations);
+        let commit = head.commit.as_deref();
+        let found = status::files(tool, &work_tree, commit, clock, durations).await;
+        let (files, in_progress) = found.map_err(shot)?;
+        Ok(GitStatusResult {
+            branch: head.branch,
+            upstream: head.upstream,
+            ahead: head.ahead,
+            behind: head.behind,
+            in_progress,
+            files,
+        })
+    }
+
+    async fn branches(&self, params: GitBranchesParams) -> Result<GitBranchesResult, RpcError> {
+        let tool = self.tool()?;
+        let id = params.project_id.to_string();
+        let sql = "SELECT path FROM projects WHERE project_id = ?1 AND removed_at IS NULL";
+        let path = self.read(move |c| c.query_row(sql, [id], |r| r.get::<_, String>(0)).optional());
+        let path = path.await?.ok_or_else(|| not_found("project"))?;
+        let writable = self.writable().await?;
+        let tier = tool.repo_tier(Path::new(&path));
+        let (clock, durations) = (&*self.deps.clock, &self.deps.durations);
+        let listed = status::branches(&tier, clock, durations, &writable).await;
+        listed.map_err(|err| self.reported("for_each_ref", err))
+    }
+
+    /// HEAD of `work_tree`, through the repo tier.
+    async fn head(&self, tool: &GitTool, work_tree: &Path) -> Result<Head, RpcError> {
         let writable = self.writable().await?;
         let (clock, durations) = (&*self.deps.clock, &self.deps.durations);
         let tier = tool.repo_tier(work_tree);
-        let commit = head::commit(&tier, clock, durations, &writable).await;
-        commit.map_err(|err| self.reported("head", err))
+        let head = head::head(&tier, clock, durations, &writable).await;
+        head.map_err(|err| self.reported("head", err))
     }
 
     /// A turn range: its trees from its `turns` row (the latest turn's
@@ -256,7 +292,9 @@ impl Port for GitService {
         let service = self.clone();
         async move {
             match call.method {
+                GitStatus::NAME => Ok(json!(service.status(parse(&call.params)?).await?)),
                 GitFileDiff::NAME => Ok(json!(service.file_diff(parse(&call.params)?).await?)),
+                GitBranches::NAME => Ok(json!(service.branches(parse(&call.params)?).await?)),
                 _ => Ok(json!(service.diff(parse(&call.params)?).await?)),
             }
         }

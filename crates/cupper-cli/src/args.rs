@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 
 use cupper_protocol::ids::{RequestId, SessionId};
+use cupper_protocol::methods::git::DiffScope;
 use cupper_protocol::rpc::Scope;
 
 pub const USAGE: &str = "usage: cupper [--data-dir <dir>] [--json] <command>
@@ -14,6 +15,8 @@ commands:
   sessions [--watch]                       the sessions, then their changes
   watch <session>                          the session's events as they come
   history <session>                        the session's earlier turns
+  diff <session> [--scope <scope>]         the diff, file by file; scope: last-turn
+                                           (default), unstaged, staged or a turn ID
   new --agent <agent> --project <path> <message>
   send <session> <text> [--wait]
   interrupt <session>
@@ -47,6 +50,10 @@ pub enum Command {
     },
     Watch(SessionId),
     History(SessionId),
+    Diff {
+        session: SessionId,
+        scope: DiffScope,
+    },
     New {
         agent: String,
         project: PathBuf,
@@ -130,6 +137,18 @@ pub fn command(words: &[String]) -> Result<Command, UsageError> {
         },
         "watch" => Command::Watch(flags.id(0)?),
         "history" => Command::History(flags.id(0)?),
+        "diff" => Command::Diff {
+            session: flags.id(0)?,
+            scope: match flags.value("--scope")?.as_deref() {
+                None | Some("last-turn") => DiffScope::LastTurn,
+                Some("unstaged") => DiffScope::Unstaged,
+                Some("staged") => DiffScope::Staged,
+                Some(turn) => DiffScope::Turn(
+                    turn.parse()
+                        .map_err(|_| usage(format!("no scope `{turn}`")))?,
+                ),
+            },
+        },
         "new" => Command::New {
             agent: flags.required("--agent")?,
             project: flags.required("--project")?.into(),
@@ -384,7 +403,22 @@ mod tests {
                 fields
             }
         );
+        let diff = |scope| Command::Diff {
+            session: s(),
+            scope,
+        };
+        for (line, scope) in [
+            ("", DiffScope::LastTurn),
+            (" --scope unstaged", DiffScope::Unstaged),
+            (" --scope t_7", DiffScope::Turn("t_7".parse().unwrap())),
+        ] {
+            assert_eq!(
+                command(&words(&format!("diff {}{line}", s()))).unwrap(),
+                diff(scope)
+            );
+        }
         let mistakes = [
+            "diff s_1 --scope everything",
             "status --watch",
             "send",
             "watch not-an-id",
