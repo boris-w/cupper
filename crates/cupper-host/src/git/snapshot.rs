@@ -475,7 +475,7 @@ fn stat(output: &[u8]) -> DiffStat {
     stat
 }
 
-fn split(output: &[u8]) -> impl Iterator<Item = &[u8]> {
+pub(super) fn split(output: &[u8]) -> impl Iterator<Item = &[u8]> {
     output.split(|b| *b == 0).filter(|field| !field.is_empty())
 }
 
@@ -485,7 +485,7 @@ fn failed(what: &'static str, stderr: &[u8]) -> ShotError {
 }
 
 /// File system work off the async runtime (T109, T138).
-async fn blocking<T: Send + 'static>(
+pub(super) async fn blocking<T: Send + 'static>(
     work: impl FnOnce() -> Result<T, ShotError> + Send + 'static,
 ) -> Result<T, ShotError> {
     let joined = tokio::task::spawn_blocking(work).await;
