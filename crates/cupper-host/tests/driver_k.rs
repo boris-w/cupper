@@ -501,3 +501,38 @@ async fn it_k14_old_cli_auth_codex_fails_on_opening() {
                 ORDER BY seq DESC LIMIT 1";
     until(&data_dir, "host.db", auth, &["logged_out"]).await;
 }
+
+/// IT-K18-upstream-retry: Codex retries an overloaded upstream by itself.
+/// The turn has one `upstream_retry` notice: started at the first attempt,
+/// updated with each, ended with the turn.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_k18_upstream_retry_one_notice_follows_the_attempts() {
+    let dir = TempDir::new("k18");
+    let (data_dir, _host, client, _) = host_of("codex", &dir, &[], json!({})).await;
+    let session = codex_session(&client, "upstream_retry 3; say through").await;
+    let ended = events(&data_dir, &session, "turn.completed", 1).await;
+    assert_eq!(ended[0]["status"], "completed");
+    let notices = items(&data_dir, &session, "notice", 1).await;
+    let [notice] = &notices[..] else {
+        panic!("{notices:?}")
+    };
+    assert_eq!(notice["code"], "upstream_retry");
+    assert_eq!(notice["turn_id"], ended[0]["turn_id"]);
+    let of_it = |kind: &str, field: &str| {
+        let sql = format!(
+            "SELECT coalesce(json_extract(json, '$.data.{field}'), '-') || '' FROM events
+             WHERE stream = 'session/{session}' AND type = '{kind}'
+             AND json_extract(json, '$.data.item_id') = '{}' ORDER BY seq",
+            notice["item_id"].as_str().unwrap()
+        );
+        query(&data_dir.join("host.db"), &sql)
+    };
+    let attempts = [&notice["params"]["attempt"]];
+    let updated = of_it("item.updated", "params.attempt");
+    assert_eq!(
+        (attempts, &notice["params"]["max"]),
+        ([&json!(1)], &json!(5))
+    );
+    assert_eq!(updated, ["2", "3"]);
+    assert_eq!(of_it("item.completed", "status"), ["completed"]);
+}

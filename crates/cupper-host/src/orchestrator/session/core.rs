@@ -511,6 +511,10 @@ impl Core for SessionCore {
                     DriverEvent::Update(update) => {
                         self.coalesce(coalescer::Input::Update(update), now, &mut out)
                     }
+                    DriverEvent::UpstreamRetry { attempt, max } => {
+                        let retry = coalescer::Input::Retry { attempt, max };
+                        self.coalesce(retry, now, &mut out);
+                    }
                     // Its requests end `expired`; nothing goes to it.
                     DriverEvent::AdapterExited { instance, .. } => {
                         if self.instance.as_ref() == Some(&instance) {

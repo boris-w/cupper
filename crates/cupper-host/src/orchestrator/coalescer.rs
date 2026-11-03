@@ -8,6 +8,9 @@
 //!   been written alone and merged by `item.delta`'s `Mergeable` rule.
 //! - Items carry their activity group; `turn.completed` carries the final
 //!   answer ([`TurnItems`]).
+//! - An agent that retries upstream by itself (Codex, K18) gets one
+//!   `upstream_retry` notice in the turn: started at the first attempt,
+//!   updated with each, ended with the turn.
 //! - Updates that arrive while no turn is open (none yet, or the running
 //!   turn's end is decided) wait for the next turn, which the autonomous
 //!   judge opens.
@@ -36,8 +39,8 @@ use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{GroupId, ItemId, TurnId};
 use cupper_protocol::item::{
     DeltaField, Extraction, Item, ItemCompleted, ItemDelta, ItemPatch, ItemStarted, ItemStatus,
-    ItemUpdated, LateToolOutput, Notice, NoticeCode, OutputState, Plan, ToolCall, ToolKind,
-    ToolRef,
+    ItemUpdated, LateToolOutput, Notice, NoticeCode, NoticeParams, OutputState, Plan, ToolCall,
+    ToolKind, ToolRef,
 };
 use cupper_protocol::limits::V1;
 use cupper_protocol::session::TurnCompleted;
@@ -77,6 +80,11 @@ pub struct Coalescer {
 pub enum Input {
     Turn(TurnSignal),
     Update(NormUpdate),
+    /// The agent retries upstream (K18).
+    Retry {
+        attempt: u32,
+        max: u32,
+    },
     /// Another event goes into the turn next: an interaction request.
     Interject,
     Expired(FlushTimer),
@@ -161,6 +169,8 @@ struct OpenTurn {
     /// The message or thought being written, with its ACP message ID.
     text: Option<(Target, Role, Option<String>)>,
     plan: Option<Target>,
+    /// The `upstream_retry` notice.
+    retry: Option<Target>,
     /// The end is decided: nothing more goes in.
     ending: bool,
 }
@@ -613,6 +623,31 @@ impl Coalescer {
         self.open_turn().plan = Some(item);
     }
 
+    fn retry(&mut self, attempt: u32, max: u32) {
+        if self.turn.as_ref().is_none_or(|turn| turn.ending) {
+            return;
+        }
+        let (attempt, max) = (Some(attempt), Some(max));
+        let params = NoticeParams {
+            attempt,
+            max,
+            ..NoticeParams::default()
+        };
+        if let Some(item) = self.open_turn().retry.clone() {
+            let params = Some(params);
+            return self.patch(
+                &item,
+                ItemPatch {
+                    params,
+                    ..ItemPatch::default()
+                },
+            );
+        }
+        let code = NoticeCode::UpstreamRetry;
+        let item = self.start(Item::Notice(Notice { code, params }), Role::Other);
+        self.open_turn().retry = Some(item);
+    }
+
     /// The turn's end is decided: its open items end.
     fn settle(&mut self, interrupted: bool) {
         let Some(turn) = &mut self.turn else {
@@ -620,7 +655,8 @@ impl Coalescer {
         };
         turn.ending = true;
         let (turn_id, text, plan) = (turn.id.clone(), turn.text.take(), turn.plan.take());
-        for item in text.map(|(item, ..)| item).into_iter().chain(plan) {
+        let ended = text.map(|(item, ..)| item).into_iter().chain(plan);
+        for item in ended.chain(turn.retry.take()) {
             self.end(&item, ItemStatus::Completed, false, ItemPatch::default());
         }
         let mut open: Vec<(Target, String)> = (self.tools.iter())
@@ -730,6 +766,7 @@ impl Core for Coalescer {
                     items,
                     text,
                     plan,
+                    retry: None,
                     ending: false,
                 });
                 for update in mem::take(&mut self.held) {
@@ -739,6 +776,7 @@ impl Core for Coalescer {
             Input::Turn(TurnSignal::Settled { interrupted }) => self.settle(interrupted),
             Input::Turn(TurnSignal::Completed(end)) => self.completed(end),
             Input::Update(update) => self.update(update),
+            Input::Retry { attempt, max } => self.retry(attempt, max),
             Input::Interject => {
                 self.flush();
                 self.turn.iter_mut().for_each(|turn| turn.items.end_group());
