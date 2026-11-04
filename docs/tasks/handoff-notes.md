@@ -551,3 +551,5 @@
 | T240 | `session/archive` 直接用 `git/cleanup.rs` 的 `check` 得到 blockers；删除前先 `worktree unlock`（加了锁的 worktree 不加 `-f -f` 删不掉）；`remove_case_only_dirty` 只在 `case_only_dirty` 为真且没有别的 blocker 时才加 `--force`；恢复 not_found 会话时用 `listed` 判断分支是否在别的 worktree 里检出；`listed` 现在返回锁的原因（`Option<Option<String>>`） | T125 |
 | T240、以后的性能任务 | `worktree/check` 的被忽略文件按文件计数，`node_modules` 这类大目录要全量列出，可能逼近只读命令 30 s 的超时；超时时应当只把这一项提示标为未知，不让整个检查失败（或改成 `--directory` 按目录计数） | T125 |
 | 以后改 `worktree/check` 的任务 | 仅大小写冲突不处理 Unicode 规范化：NFC 与 NFD 写法不同的同名路径不认作冲突；区分大小写的文件系统那一支没有实测（本机和 runner 都是不区分大小写的 APFS） | T125 |
+| T144、T238 | `lfs_object_missing`：还原（审查面板、T132 的撤销）和新建 worktree 时宿主不下载本地没有的 LFS 对象，界面提示"在终端里运行 `git lfs fetch`" | T237 |
+| 以后改 git LFS 的任务 | worktree 预检只看用户存储和 cupper 私有存储，没看 alternates 的 LFS 目录（可能误拒，少见）；超大仓库的 `ls-tree` 输出可能超过 64 MB 的 stdout 上限，worktree add 会失败；`.lfsconfig` 里写 `lfs.extension.*` 虽不会被执行，但会让 clean 失败，agent 可以借此让快照记为 `git_failed`（只是让功能失效）；revert 退出码 128 时可能已写了部分文件，仍按"没有改动"处理（原有行为） | T237 |
