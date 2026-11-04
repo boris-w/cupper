@@ -14,7 +14,9 @@ use cupper_cli::client::{self, Client};
 use cupper_host::driver::runtime::launch;
 use cupper_host::gateway::testkit::TempDir;
 use cupper_protocol::ids::{ProjectId, SessionId};
-use cupper_protocol::methods::session::{SessionCreate, SessionInterrupt};
+use cupper_protocol::methods::session::{
+    SessionCapabilities, SessionCreate, SessionInterrupt, SessionSend,
+};
 use serde_json::{Value, json};
 
 /// A host with Claude's fake agent run with `args` and recording its calls,
@@ -114,6 +116,28 @@ async fn interrupt(client: &Client, session: &SessionId) {
         .request::<SessionInterrupt>(typed(params))
         .await
         .unwrap();
+}
+
+/// `session/send` of `text` as a steer of `turn`; the result.
+async fn steer(client: &Client, session: &SessionId, text: &str, turn: &Value) -> Value {
+    let params = json!({"command_id": client::command_id(), "session_id": session,
+        "mode": "steer", "expected_turn_id": turn, "content": [{"type": "text", "text": text}]});
+    json!(client.request::<SessionSend>(typed(params)).await.unwrap())
+}
+
+/// The ID of the session's latest turn, once there are `n`.
+async fn turn(data_dir: &Path, session: &SessionId, n: usize) -> Value {
+    let started = events(data_dir, session, "turn.started", n).await;
+    started[n - 1]["turn_id"].clone()
+}
+
+/// How many `_session/steering` requests the agent got.
+fn steerings(path: &Path) -> usize {
+    let calls = calls(path);
+    calls
+        .iter()
+        .filter(|(m, _)| m == "_session/steering")
+        .count()
 }
 
 /// How many processes the host has below it, itself included.
@@ -535,4 +559,72 @@ async fn it_k18_upstream_retry_one_notice_follows_the_attempts() {
     );
     assert_eq!(updated, ["2", "3"]);
     assert_eq!(of_it("item.completed", "status"), ["completed"]);
+}
+
+/// IT-K10-steer-explicit-only: while Claude's turn runs, a `queue` message
+/// never steers; a `steer` naming the turn goes in as `steered`.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_k10_steer_explicit_only_a_queued_message_never_steers() {
+    let dir = TempDir::new("k10");
+    let (data_dir, _host, client, path) = host(&dir, &[], json!({})).await;
+    let session = create(&client, "say running; wait_cancel").await;
+    said(&data_dir, &session, "running").await;
+    let running = turn(&data_dir, &session, 1).await;
+    send(&client, &session, "for later").await;
+    assert_eq!(steerings(&path), 0, "a queued message steers");
+    let steered = steer(&client, &session, "now", &running).await;
+    let want = json!({"disposition": "steered", "turn_id": running});
+    assert_eq!(steered, want);
+    assert_eq!(sent(&path, "_session/steering", "now"), 1);
+    let messages = items(&data_dir, &session, "user_message", 2).await;
+    assert_eq!(
+        (&messages[1]["steered"], &messages[1]["turn_id"]),
+        (&json!(true), &running)
+    );
+    said(&data_dir, &session, "steered:now").await;
+    interrupt(&client, &session).await;
+}
+
+/// IT-K11-steer-idle-queued: Codex ignores `idleBehavior`, so the host
+/// steers only a prompting turn. A steer of a turn being cancelled is
+/// queued; one while idle starts a turn of its own. No steering goes out.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_k11_steer_idle_queued_outside_a_prompt() {
+    let dir = TempDir::new("k11");
+    let config = json!({"durations": {"interrupt_fallback_ms": 1000}});
+    let (data_dir, _host, client, path) = host_of("codex", &dir, &[], config).await;
+    let session = codex_session(&client, "say stuck; hang").await;
+    said(&data_dir, &session, "stuck").await;
+    let cancelling = turn(&data_dir, &session, 1).await;
+    interrupt(&client, &session).await;
+    let queued = steer(&client, &session, "while cancelling", &cancelling).await;
+    let reason = (&queued["disposition"], &queued["fallback_reason"]);
+    assert_eq!(reason, (&json!("queued"), &json!("not_prompting")));
+    events(&data_dir, &session, "turn.completed", 1).await;
+    let idle = steer(&client, &session, "say idle", &cancelling).await;
+    assert_eq!(idle["disposition"], "started");
+    said(&data_dir, &session, "idle").await;
+    assert_eq!(steerings(&path), 0);
+}
+
+/// IT-degrade-steering: an agent without steering shows
+/// `steer.supported: false`, and a steer is queued as `unsupported`.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_degrade_steering_unsupported_is_queued() {
+    let dir = TempDir::new("degrade-steering");
+    let (data_dir, _host, client, path) = host(&dir, &["--fault", "no_steering"], json!({})).await;
+    let session = create(&client, "say running; wait_cancel").await;
+    said(&data_dir, &session, "running").await;
+    let params = json!({"session_id": session});
+    let caps = client
+        .request::<SessionCapabilities>(typed(params))
+        .await
+        .unwrap();
+    assert!(!caps.turn.steer.supported);
+    let running = turn(&data_dir, &session, 1).await;
+    let queued = steer(&client, &session, "now", &running).await;
+    let reason = (&queued["disposition"], &queued["fallback_reason"]);
+    assert_eq!(reason, (&json!("queued"), &json!("unsupported")));
+    assert_eq!(steerings(&path), 0);
+    interrupt(&client, &session).await;
 }
