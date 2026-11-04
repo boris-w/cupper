@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 
 use super::commit_tests::gits;
 use super::hunk_tests::Case;
-use super::tests::{code, done, harness, send, tags};
+use super::tests::{code, data, done, harness, send, tags};
 use crate::orchestrator::testkit::text;
 
 /// `session/create` in a worktree from `main`, its branch named `hint`.
@@ -144,4 +144,80 @@ async fn it_worktree_create_refuses_a_bad_name_and_a_required_filter_fails_it() 
     }
     let first = "SELECT session_id FROM sessions WHERE initial_prompt_json IS NOT NULL";
     assert!(c.f.rows(first).is_empty());
+}
+
+/// What a crash left is taken over (design 5.2.13): the worktree added and
+/// locked, the host gone as the session waited to refresh it; or, when
+/// `branch_only`, the branch the add made and no worktree.
+async fn taken_over(branch_only: bool) {
+    let (mut c, session, path) = waiting(&format!("worktree-over-{branch_only}")).await;
+    if branch_only {
+        gits(
+            &c,
+            &format!("worktree unlock {path}\nworktree remove --force {path}"),
+        )
+        .await;
+    }
+    // The first run's wait stays; the next run's comes after its refresh.
+    c.f.restart().await;
+    c.f.events(&session, "workspace.preparing", 3).await;
+    while c.f.clock.pending() < 2 {
+        tokio::task::yield_now().await;
+    }
+    c.f.clock.advance(Duration::from_secs(1));
+    assert_eq!(c.f.attach().await.cwd, Path::new(&path));
+    assert_eq!(c.f.prompt().await.1, text("hi"));
+    let listed = c.git(&["worktree", "list", "--porcelain"], None).await;
+    let listed = String::from_utf8(listed).unwrap();
+    let locked = format!("branch refs/heads/cupper/x\nlocked cupper session {session}\n");
+    assert_eq!(listed.matches("worktree ").count(), 2, "{listed}");
+    assert!(listed.contains(&locked), "{listed}");
+    let heads = c.git(
+        &["for-each-ref", "--format=%(refname)", "refs/heads/cupper/"],
+        None,
+    );
+    assert_eq!(heads.await, b"refs/heads/cupper/x\n");
+}
+
+/// A session whose worktree is added and locked, as it waits to refresh it;
+/// the worktree's path.
+async fn waiting(name: &str) -> (Case, SessionId, String) {
+    let c = repo(name).await;
+    let session = created(&c, 1, "x").await;
+    c.f.events(&session, "workspace.preparing", 2).await;
+    while c.f.clock.pending() == 0 {
+        tokio::task::yield_now().await;
+    }
+    let path = c.f.rows("SELECT workspace_path FROM sessions").remove(0);
+    (c, session, path)
+}
+
+/// A worktree that git still has but whose directory is gone fails, and
+/// stays for the user to prune: the first message waits in the queue.
+#[tokio::test]
+async fn it_worktree_create_fails_once_the_worktree_a_crash_left_is_gone() {
+    let (mut c, session, path) = waiting("worktree-gone").await;
+    std::fs::remove_dir_all(&path).unwrap();
+    c.f.restart().await;
+    let events = c.f.events(&session, "workspace.failed", 1).await;
+    assert_eq!(
+        data(&events, "workspace.failed"),
+        [json!({"code": "not_found"})]
+    );
+    let queue = data(&events, "queue.updated").pop().unwrap();
+    assert_eq!(queue["paused"]["reason"], "workspace_failed");
+    assert_eq!(queue["entries"][0]["content"], json!(text("hi")));
+    let listed = c.git(&["worktree", "list", "--porcelain"], None).await;
+    let listed = String::from_utf8(listed).unwrap();
+    assert!(listed.contains(&format!("worktree {path}\n")), "{listed}");
+}
+
+#[tokio::test]
+async fn it_worktree_create_takes_over_the_worktree_a_crash_left() {
+    taken_over(false).await;
+}
+
+#[tokio::test]
+async fn it_worktree_create_takes_over_the_branch_a_crash_left() {
+    taken_over(true).await;
 }

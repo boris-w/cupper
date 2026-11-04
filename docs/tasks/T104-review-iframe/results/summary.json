@@ -1,0 +1,121 @@
+{
+ "runs": 30,
+ "failed": [],
+ "coldStartMs": {
+  "readyMs": {
+   "n": 30,
+   "p50": 156.10009765625,
+   "p95": 217.699951171875,
+   "max": 220.900146484375
+  },
+  "rowsMs": {
+   "n": 30,
+   "p50": 560.400146484375,
+   "p95": 752.699951171875,
+   "max": 765.10009765625
+  },
+  "highlightedMs": {
+   "n": 30,
+   "p50": 2462.39990234375,
+   "p95": 2957.099853515625,
+   "max": 3381.000244140625
+  },
+  "sinceLaunchMs": {
+   "n": 30,
+   "p50": 3000.10302734375,
+   "p95": 4104.97216796875,
+   "max": 5584.657958984375
+  }
+ },
+ "memoryMb": {
+  "reviewRenderer": {
+   "n": 30,
+   "p50": 296,
+   "p95": 304,
+   "max": 305
+  },
+  "mainRenderer": {
+   "n": 30,
+   "p50": 86,
+   "p95": 86,
+   "max": 86
+  },
+  "allProcesses": {
+   "n": 30,
+   "p50": 643,
+   "p95": 654,
+   "max": 654
+  }
+ },
+ "scrollFrameMs": {
+  "n": 24870,
+  "p50": 16.69999999999891,
+  "p95": 18.700000000000728,
+  "max": 115.29999999999927
+ },
+ "violations": 0,
+ "checks": {
+  "origins": [
+   "app://cupper",
+   "app://cupper-review"
+  ],
+  "outOfProcess": true,
+  "parentDocument": "SecurityError",
+  "preload": {
+   "main": true,
+   "review": false
+  },
+  "ports": {
+   "accepted": 1,
+   "ignored": 2,
+   "strays": 0
+  },
+  "workers": 2,
+  "rowsInDom": 400,
+  "adoptedStyleSheets": 1,
+  "styleElements": 1,
+  "injectedAsText": true,
+  "wasmInBundle": [],
+  "reviewUrlAfterNavigation": "app://cupper-review/index.html",
+  "blocked": [
+   "app://cupper-review/elsewhere.html"
+  ],
+  "lightAfterStray": true,
+  "themed": true,
+  "system": true,
+  "lang": "zh-CN",
+  "reviewFocused": true,
+  "forwarded": [
+   "a",
+   "Enter",
+   "p"
+  ],
+  "reviewKeys": [
+   "a",
+   "Escape",
+   "Enter",
+   "p"
+  ],
+  "seenByMain": [
+   "a@review",
+   "Escape@review",
+   "Enter@review",
+   "P@review",
+   "p@review",
+   "Enter@main"
+  ],
+  "evidenceFromReview": null,
+  "evidenceFromMain": {
+   "kind": "key",
+   "key": "enter"
+  },
+  "menuFromReview": 0,
+  "keystroke": "menu 1",
+  "clipboardWrite": {
+   "wrote": "ok",
+   "read": false
+  },
+  "scrolledTo": true
+ },
+ "differing": []
+}

@@ -72,6 +72,9 @@ jobs:
             # from target/debug, as the rust job builds them.
             cargo build --locked -p cupper-fake-agent
             cargo build --locked -p cupper-cli --features test-harness
+            # The LFS cases skip without target/git-lfs, and pass skipped; the
+            # downloads cache may lack it, so fetch it as the rust job does.
+            cargo xtask git-lfs
             cargo test --locked -p "$PACKAGE" ${extra[@]+"${extra[@]}"} --no-run \
               --message-format=json-render-diagnostics \
               | jq -r 'select(.reason == "compiler-artifact" and .profile.test and .executable) | .executable' \

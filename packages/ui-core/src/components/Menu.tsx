@@ -1,7 +1,12 @@
+import * as RadixContextMenu from "@radix-ui/react-context-menu";
 import * as RadixMenu from "@radix-ui/react-dropdown-menu";
-import type { ReactElement, ReactNode } from "react";
+import { useRef, type ReactElement, type ReactNode } from "react";
 
 import { CheckIcon } from "./icons";
+
+const CONTENT = "z-50 min-w-40 rounded-xl bg-surface-elevated p-1 text-sm shadow-menu";
+const ITEM =
+  "flex items-center rounded-xl px-2 py-1.25 outline-none data-disabled:text-fg-tertiary data-highlighted:bg-hover";
 
 /** A menu on `trigger`, such as a ToolbarButton (ui-spec 3.4–3.6); `children` are its items. */
 export function Menu(props: {
@@ -13,14 +18,25 @@ export function Menu(props: {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
+  // Closed by a key, the menu gives the focus back to its trigger; closed by
+  // the pointer, it does not, or the trigger's tooltip and focus ring would
+  // show after a click.
+  const pointer = useRef(false);
   return (
     <RadixMenu.Root open={props.open} onOpenChange={props.onOpenChange}>
       <RadixMenu.Trigger asChild>{props.trigger}</RadixMenu.Trigger>
       <RadixMenu.Portal>
         <RadixMenu.Content
+          onPointerDown={() => (pointer.current = true)}
+          onPointerDownOutside={() => (pointer.current = true)}
+          onKeyDown={() => (pointer.current = false)}
+          onCloseAutoFocus={(event) => {
+            if (pointer.current) event.preventDefault();
+            pointer.current = false;
+          }}
           align={props.align ?? "end"}
           sideOffset={4}
-          className="z-50 min-w-40 rounded-xl bg-surface-elevated p-1 text-sm shadow-menu"
+          className={CONTENT}
         >
           {props.children}
         </RadixMenu.Content>
@@ -45,7 +61,7 @@ export function MenuItem(props: {
       disabled={props.disabled}
       role={!choice ? "menuitem" : props.radio ? "menuitemradio" : "menuitemcheckbox"}
       aria-checked={props.checked}
-      className="flex items-center rounded-xl px-2 py-1.25 outline-none data-disabled:text-fg-tertiary data-highlighted:bg-hover"
+      className={ITEM}
     >
       {props.children}
       {choice && (
@@ -65,3 +81,21 @@ export function MenuLabel({ children }: { children: ReactNode }) {
     <RadixMenu.Label className="px-2 py-1 text-xs text-fg-tertiary">{children}</RadixMenu.Label>
   );
 }
+
+/** A menu at the pointer on a right-click on `children`, with the look of `Menu`. */
+export function ContextMenu(props: { children: ReactElement; items: ReactNode }) {
+  return (
+    <RadixContextMenu.Root>
+      <RadixContextMenu.Trigger asChild>{props.children}</RadixContextMenu.Trigger>
+      <RadixContextMenu.Portal>
+        <RadixContextMenu.Content className={CONTENT}>{props.items}</RadixContextMenu.Content>
+      </RadixContextMenu.Portal>
+    </RadixContextMenu.Root>
+  );
+}
+
+export const ContextMenuItem = (props: { onSelect(): void; children: ReactNode }) => (
+  <RadixContextMenu.Item onSelect={props.onSelect} className={ITEM}>
+    {props.children}
+  </RadixContextMenu.Item>
+);
