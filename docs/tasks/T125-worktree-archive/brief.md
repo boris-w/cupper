@@ -1,4 +1,6 @@
-# T125 worktree 检查、归档、恢复与重命名
+# T125 worktree 检查
+
+> **v1.3.87 拆分（2026-11-04，开工前估算约 805 行）**：本任务只做下面第 1 项（`worktree/check`）和 IT-worktree-check-rules；第 2–5 项与 IT-session-archive-restore 拆到 T240（会话归档、恢复、重命名与删除项目，任务书另写）。停止线改为 350，硬停止线 420。
 
 - 派发日期：2026-11-04
 - 执行者：子 agent（Rust 工程师，宿主 Git 服务与会话编排）
