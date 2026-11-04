@@ -37,6 +37,8 @@ mod output_tests;
 mod rebuild_tests;
 #[cfg(test)]
 mod recovery_tests;
+#[cfg(test)]
+mod restore_tests;
 mod rows;
 #[cfg(test)]
 pub(super) mod tests;

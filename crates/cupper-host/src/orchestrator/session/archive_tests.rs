@@ -21,7 +21,7 @@ use crate::clock::Clock;
 
 /// Session `n` in a new worktree named `hint`, its first turn ended; the
 /// worktree's path.
-async fn ended(c: &mut Case, n: u32, hint: &str) -> (SessionId, String) {
+pub(super) async fn ended(c: &mut Case, n: u32, hint: &str) -> (SessionId, String) {
     let session = created(c, n, hint).await;
     c.f.events(&session, "workspace.preparing", 2).await;
     let refresh = |c: &Case| Some(c.f.clock.now_mono() + Duration::from_secs(1));
@@ -37,7 +37,7 @@ async fn ended(c: &mut Case, n: u32, hint: &str) -> (SessionId, String) {
 }
 
 /// `more` as the command `a-<n>` of `session`.
-fn on(session: &SessionId, n: &str, mut more: Value) -> Value {
+pub(super) fn on(session: &SessionId, n: &str, mut more: Value) -> Value {
     (more["command_id"], more["session_id"]) = (json!(format!("a-{n}")), json!(session));
     more
 }
@@ -45,7 +45,9 @@ fn on(session: &SessionId, n: &str, mut more: Value) -> Value {
 #[tokio::test]
 async fn it_session_archive_keeps_removes_and_is_kept_from_work() {
     let mut c = repo("archive").await;
-    let hints = ["kept", "removed", "blocked", "cased", "unlisted", "gone"];
+    let hints = [
+        "kept", "removed", "blocked", "cased", "unlisted", "gone", "unsure",
+    ];
     let mut made = HashMap::new();
     for (n, hint) in (1..).zip(hints) {
         made.insert(hint, ended(&mut c, n, hint).await);
@@ -55,18 +57,25 @@ async fn it_session_archive_keeps_removes_and_is_kept_from_work() {
     let a = text(c.git(&["rev-parse", "main:a.txt"], None).await);
     let b = text(c.git(&["hash-object", "-w", "--stdin"], Some(b"b\n")).await);
     c.write(&format!("{}/new.txt", path("blocked")), "new\n");
-    let cased = format!(
-        "-C {p} update-index --add --cacheinfo 100644,{a},C.txt
-        -C {p} update-index --add --cacheinfo 100644,{b},c.txt
-        -C {p} commit -qm cased
-        -C {p} branch cased
-        -C {p} checkout -qf -- .
-        worktree unlock {u}
-        worktree remove --force {u}",
-        p = path("cased"),
-        u = path("unlisted"),
-    );
-    gits(&c, &cased).await;
+    // Dirty by case alone on a case-insensitive file system, as macOS's
+    // is: removed once confirmed, and not before (T125's probe).
+    for (hint, p) in [("cased", path("cased")), ("unsure", path("unsure"))] {
+        let cased = format!(
+            "-C {p} update-index --add --cacheinfo 100644,{a},C.txt
+            -C {p} update-index --add --cacheinfo 100644,{b},c.txt
+            -C {p} commit -qm cased
+            -C {p} branch {hint}-keep
+            -C {p} checkout -qf -- ."
+        );
+        gits(&c, &cased).await;
+    }
+    let insensitive = Path::new(&path("unsure")).join("c.TXT").exists();
+    let u = path("unlisted");
+    gits(
+        &c,
+        &format!("worktree unlock {u}\nworktree remove --force {u}"),
+    )
+    .await;
     std::fs::remove_dir_all(path("gone")).unwrap();
     let kept = made["kept"].0.clone();
     c.f.ok("session/rename", on(&kept, "r", json!({"title": "mine"})))
@@ -86,20 +95,29 @@ async fn it_session_archive_keeps_removes_and_is_kept_from_work() {
     let refused = c.f.err("project/remove", project.clone()).await;
     assert_eq!(refused, "conflict turn_running");
 
-    let asked = "keep remove remove remove_case_only_dirty remove remove".split(' ');
-    let outcomes = ["kept", "removed", "blocked", "removed", "removed", "kept"];
+    let asked = "keep remove remove remove_case_only_dirty remove remove remove".split(' ');
+    let unsure = if insensitive { "blocked" } else { "removed" };
+    let outcomes = [
+        "kept", "removed", "blocked", "removed", "removed", "kept", unsure,
+    ];
     for ((hint, asked), outcome) in hints.iter().zip(asked).zip(outcomes) {
         let archive = on(&made[hint].0, hint, json!({"worktree": asked}));
         let archived = c.f.ok("session/archive", archive).await;
         assert_eq!(archived["worktree"], outcome, "{hint}");
-        let blocked = (outcome == "blocked").then(|| json!(["untracked_files"]));
+        let rule = if *hint == "unsure" {
+            "modified_files"
+        } else {
+            "untracked_files"
+        };
+        let blocked = (outcome == "blocked").then(|| json!([rule]));
         assert_eq!(archived.get("blockers").cloned(), blocked, "{hint}");
         let there = Path::new(&path(hint)).exists();
-        assert_eq!(there, ["kept", "blocked"].contains(hint), "{hint}");
+        let stays = ["kept", "blocked"].contains(hint) || *hint == "unsure" && insensitive;
+        assert_eq!(there, stays, "{hint}");
     }
     let heads = ["for-each-ref", "--format=%(refname)", "refs/heads/cupper/"];
     let heads = text(c.git(&heads, None).await);
-    assert_eq!(heads.lines().count(), 6, "every branch stays");
+    assert_eq!(heads.lines().count(), 7, "every branch stays");
     let again = c.f.err(
         "session/archive",
         on(&kept, "k", json!({"worktree": "keep"})),
@@ -118,7 +136,7 @@ async fn it_session_archive_keeps_removes_and_is_kept_from_work() {
     c.f.ok("project/remove", project).await;
     let listed = c.f.ok("session/list_archived", json!({})).await;
     let listed = listed["sessions"].as_array().unwrap().clone();
-    assert_eq!(listed.len(), 7);
+    assert_eq!(listed.len(), 8);
     assert!(
         listed
             .iter()

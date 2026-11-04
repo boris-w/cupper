@@ -1,7 +1,8 @@
 //! Interactions, project trust and the approval tier on a host process
 //! (design 5.9.8): IT-form, IT-plan-confirm, IT-interaction-expire,
 //! IT-config-unconfirmed, IT-trust-stale, IT-trust-rescan-before-prompt,
-//! IT-trust-settingsources and IT-codex-untrusted. The agent is the
+//! IT-trust-settingsources, IT-codex-untrusted, and IT-session-archive's
+//! `project/remove` on the index. The agent is the
 //! claude-shaped fake agent (Codex's has its own shape), the
 //! project a directory of the test's own, and the tests talk to the host as
 //! the CLI's `harness` client.
@@ -16,7 +17,8 @@ use cupper_host::driver::runtime::launch;
 use cupper_host::gateway::testkit::TempDir;
 use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::methods::project::{
-    AgentsRestart, ProjectAdd, ProjectTrust, ProjectTrustInfo, ProjectTrustInfoParams,
+    AgentsRestart, ProjectAdd, ProjectRemove, ProjectTrust, ProjectTrustInfo,
+    ProjectTrustInfoParams,
 };
 use cupper_protocol::methods::session::{SessionConfirmConfig, SessionCreate, SessionQueueResume};
 use serde_json::{Value, json};
@@ -445,4 +447,31 @@ async fn it_codex_untrusted_no_session_until_the_project_is_trusted() {
     assert_eq!(notice, ("agent_restarted".into(), Value::Null));
     send(&client, &session, "say again").await;
     said(&data_dir, &session, "again").await;
+}
+
+/// IT-session-archive on a host: `project/remove` archives the project's
+/// session, off the index stream, and the index writes the project's
+/// `removed_at` and `project.removed`.
+#[tokio::test]
+async fn it_session_archive_project_remove_reaches_the_index() {
+    let dir = TempDir::new("project-remove");
+    let (data_dir, _host, client, project) = host(&dir, &[], true, json!({})).await;
+    let session = start(&client, &project, "say done").await;
+    status(&data_dir, &session, ("unread", "-")).await;
+    let remove = json!({"command_id": client::command_id(), "project_id": project});
+    client
+        .request::<ProjectRemove>(typed(remove))
+        .await
+        .unwrap();
+    let removed = "SELECT CAST(removed_at IS NOT NULL AS TEXT) FROM projects";
+    until(&data_dir, "host.db", removed, &["1"]).await;
+    let index = "SELECT type FROM events WHERE stream = 'index'
+        AND type IN ('project.removed', 'session.removed') ORDER BY type";
+    until(
+        &data_dir,
+        "host.db",
+        index,
+        &["project.removed", "session.removed"],
+    )
+    .await;
 }
