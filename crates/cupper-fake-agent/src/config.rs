@@ -9,7 +9,7 @@ pub const USAGE: &str =
     "usage: cupper-fake-agent [--persona claude|codex] [--auth logged-in|logged-out]
                          [--fault <name>[@<segment>]]... [--segment <n>] [--segment-file <path>]
                          [--replay <recording>]
-faults: exit_on_start, initialize_hang, set_config_error, resume_error, linger";
+faults: exit_on_start, initialize_hang, set_config_error, resume_error, linger, no_steering";
 
 const FAULTS: &[&str] = &[
     "exit_on_start",
@@ -18,6 +18,8 @@ const FAULTS: &[&str] = &[
     "resume_error",
     // Ignore SIGTERM, and stay after stdin closes (the host's closing order, 5.6.8).
     "linger",
+    // `initialize` says `steering.supported: false` (IT-degrade-steering).
+    "no_steering",
 ];
 
 #[derive(Debug, thiserror::Error)]

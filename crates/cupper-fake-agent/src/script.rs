@@ -16,7 +16,7 @@
 //! | `question <prompt>` | a one-field form, then `say answer:<value>` |
 //! | `form <q>=<a>\|<b> ...` | a multi-question form, then `say form:<content>` |
 //! | `plan_update <markdown>` / `plan_confirm` | a plan / its confirmation, then `say plan:<option>` |
-//! | `steer_ok` / `steer_new_turn` / `steer_hang` | how later `_session/steering` requests are answered |
+//! | `steer_ok` / `steer_new_turn` / `steer_prompt_required` / `steer_error` / `steer_hang` | how later `_session/steering` requests are answered |
 //! | `sleep <ms>` / `wait_cancel` / `hang` | wait / until `session/cancel` / forever, ignoring cancel |
 //! | `late_tool <id> <ms>` | start a command; once cancelled, its output arrives `ms` later |
 //! | `autonomous <ms>` | end the prompt; the rest of the script runs `ms` later, outside any prompt |
@@ -67,6 +67,8 @@ const COMMANDS: &[&str] = &[
     "plan_confirm",
     "steer_ok",
     "steer_new_turn",
+    "steer_prompt_required",
+    "steer_error",
     "steer_hang",
     "sleep",
     "wait_cancel",
@@ -353,10 +355,16 @@ impl Script {
                 self.update(persona::plan_update(p, &self.session, &self.plan))?;
             }
             "plan_confirm" => return self.plan_confirm().await,
-            "steer_ok" | "steer_new_turn" | "steer_hang" => {
+            "steer_ok"
+            | "steer_new_turn"
+            | "steer_prompt_required"
+            | "steer_error"
+            | "steer_hang" => {
                 let steer = match name {
                     "steer_ok" => Steer::Inject,
                     "steer_new_turn" => Steer::NewTurn,
+                    "steer_prompt_required" => Steer::PromptRequired,
+                    "steer_error" => Steer::Error,
                     _ => Steer::Hang,
                 };
                 agent::live(&mut lock(&self.state), &self.session)?.steer = steer;
