@@ -3,6 +3,7 @@
   "scope_last_turn": "最近一轮",
   "scope_unstaged": "未暂存",
   "scope_staged": "已暂存",
+  "scope_turn": "第 {{no}} 轮",
   "options": "选项",
   "show_files": "显示文件",
   "hide_files": "隐藏文件",
