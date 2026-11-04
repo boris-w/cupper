@@ -23,7 +23,10 @@ export interface UiState {
   attachments: Partial<Record<string, readonly PromptBlock[]>>;
   /** The message stream's scroll position, from the top. */
   scroll: Partial<Record<string, number>>;
+  /** A composer menu something outside it opened (`change_model`: `model`). */
+  menu: string | null;
   navigate(route: Route): void;
+  openMenu(menu: string | null): void;
   setDraft(sessionId: string, text: string): void;
   setAttachments(sessionId: string, blocks: readonly PromptBlock[]): void;
   setScroll(sessionId: string, top: number): void;
@@ -43,7 +46,9 @@ export function createUiStore(layout: LayoutState, route: Route = { page: "new" 
       drafts: {},
       attachments: {},
       scroll: {},
+      menu: null,
       navigate: (next) => set({ route: next }),
+      openMenu: (menu) => set({ menu }),
       setDraft: per("drafts"),
       setAttachments: per("attachments"),
       setScroll: per("scroll"),

@@ -187,6 +187,8 @@ describe("UI-error", () => {
       "重启 agent 后重试。",
     ]);
     expect(document.querySelectorAll("[role=alert]")).toHaveLength(10);
+    // `change_model` opens the composer's model menu (T231).
+    expect(screen.getAllByRole("button", { name: "换模型" })).toHaveLength(1);
   });
 
   test("login: the agent's command, to copy into a terminal", async () => {
