@@ -4,8 +4,8 @@
 // with these schemas and drop one that does not fit. The main document
 // holds every state; the review document is a view of it.
 //
-// Down: `init`, `theme_changed`; `files` (the diff's files,
-// what is folded, how they show); `render` (one
+// Down: `init`, `theme_changed`; `files` (the diff's files, what is folded,
+// how they show, the scope's actions and the drafts); `render` (one
 // file's hunks, the answer to `need_file`); `scroll_to`; `clear`.
 // Up: `ready`, `need_file`, `set_collapsed`, `hunk_action`, `draft_comment`,
 // `key_forward`.
@@ -49,6 +49,8 @@ export const zToReview = z.discriminatedUnion("type", [
     collapsed: z.array(zWirePath),
     view: z.enum(["auto", "split", "unified"]),
     wrap: z.boolean(),
+    actions: z.array(zAction),
+    drafts: z.array(zReviewComment),
   }),
   z.object({
     type: z.literal("render"),
@@ -108,7 +110,7 @@ export function patchOf(file: GitDiffFile, hunks: readonly ReviewHunk[]): string
   return [`--- ${from}`, `+++ ${to}`, ...body, ""].join("\n");
 }
 
-const isHead = (line: string) => line.startsWith("@@ ");
+export const isHead = (line: string) => line.startsWith("@@ ");
 
 /** A whole file's lines under its `@@` lines, by the counts each one gives. */
 function under(heads: string[], lines: readonly string[]): string[] {

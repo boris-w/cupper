@@ -87,5 +87,7 @@
   "doc_unfold": "展开",
   "doc_binary": "二进制文件，不显示内容",
   "doc_mode": "文件模式",
-  "doc_loading": "正在加载…"
+  "doc_loading": "正在加载…",
+  "doc_comment": "写一条评论…",
+  "doc_comment_save": "添加评论"
 }
