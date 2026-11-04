@@ -36,7 +36,7 @@ export function MenuItem(props: {
     <RadixMenu.Item
       onSelect={props.onSelect}
       disabled={props.disabled}
-      className="flex items-center gap-2 rounded-xl px-2 py-1.25 outline-none data-disabled:text-fg-tertiary data-highlighted:bg-hover"
+      className="flex items-center rounded-xl px-2 py-1.25 outline-none data-disabled:text-fg-tertiary data-highlighted:bg-hover"
     >
       {props.children}
     </RadixMenu.Item>

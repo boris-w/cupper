@@ -91,7 +91,9 @@ export function Choices(props: {
             {value.name}
             <span className="text-xs text-fg-tertiary">{props.hint?.(value)}</span>
           </span>
-          <span className="ml-auto">{value.value === props.value?.value && <CheckIcon />}</span>
+          <span className="ml-auto pl-2">
+            {value.value === props.value?.value && <CheckIcon />}
+          </span>
         </MenuItem>
       ))}
     </>
