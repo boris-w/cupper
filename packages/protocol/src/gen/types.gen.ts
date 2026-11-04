@@ -3542,6 +3542,12 @@ export type WorkspaceFailed = {
 export type WorkspaceKind = "local" | "worktree" | (string & {});
 
 export type WorkspaceOpenParams = {
+  /**
+   * A file or directory of the workspace, relative to it, instead of the
+   * workspace: the editor opens it, the terminal its directory, Finder
+   * selects it.
+   */
+  path?: WirePath;
   session_id: SessionId;
   target: OpenTarget;
 };
