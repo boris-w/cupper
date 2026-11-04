@@ -306,7 +306,8 @@ impl GitService {
                     "index.lock is held",
                 )
             }
-            GitError::Failed { .. } => {
+            // git apply's own refusal; past it git died, in a filter, say.
+            GitError::Failed { status, .. } if status.code() == Some(1) => {
                 notes_of(notes, session, &err);
                 stale("the patch does not apply")
             }
