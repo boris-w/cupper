@@ -19,3 +19,27 @@
 
 ## 实现记录
 
+- **按钮**：
+  - 范围的操作随 `files.actions` 下发，`ReviewFrame` 按 `ACTIONS[scope]` 给出，不在审查文档里判断范围。
+  - 文件头的按钮发不带 `hunk_ids` 的 `hunk_action`，主文档按整个文件执行。
+  - hunk 的按钮挂在每个宿主单元最后一个 pierre hunk 的末行下面（annotation）。pierre 的 hunk 序号按 `patchOf` 的顺序对回宿主的 `hunk_id`：一个 `whole_file` 单元可能有几个 `@@`，按钮只挂在最后一个下面。
+  - 文件模式的单元没有单独的按钮，文件头的按钮已经覆盖它。
+  - 按钮是只有图标的圆形 ghost 按钮，宽 28；tooltip 用 `title`，审查文档里没有 Radix。
+- **还原**：审查文档只发消息。`ReviewFrame` 校验后调 `act`，进 T130 的 `askRevert`（来源 `view`）：不抢焦点，同一时间只有一个。
+- **行内评论**：
+  - 用 pierre 自带的行号"+"（`enableGutterUtility` 加 `onGutterUtilityClick`）。按住拖动可以选多行，松开时回调给出行范围。
+  - 评论框是 range 末行下的一条 annotation：Esc 关闭，⌘Enter 或"添加评论"保存；关闭时清掉 pierre 的选中行。
+  - 引用的行文取自 pierre 的 `additionLines`/`deletionLines`：按 hunk 的 `*LineIndex` 换算。
+  - 草稿由主文档随 `files.drafts` 下发，显示为对应 `line_end` 行下的卡片。
+  - 评论框是 textarea，`keydown` 的目标是 textarea 时不转发给主文档。
+  - 打开着、还没保存的评论框只是审查文档里的临时状态，iframe 重载就没了。保存了的草稿在主文档，不会丢。
+- **剪贴板**：
+  - e2e 版本的审查文档钩子多一个 `copy(text)`，即 `navigator.clipboard.writeText`。
+  - 用例带 `@focus`，并且只在 `GITHUB_ACTIONS=true` 时运行，本机直接跳过，不碰剪贴板。
+  - 用例先确认焦点在主文档时写入被拒（`NotAllowedError`）；再点进审查文档写入，在主进程带等待地轮询 `clipboard.readText()`，把读到的值打印到日志里。
+- **本机跑过**：
+  - E2E-review-comment（评论部分）、E2E-SEC-revert-confirm、E2E-SEC-review-iso，各单份一次，都通过。都是后台模式：窗口不激活，没有真实按键，不碰剪贴板。
+  - 截图工具用临时配置在无头 Chromium 里跑了 review 的 19 个用例，功能都通过。
+- **基线**：
+  - 每个文件头多了按钮，hunk 下多了一行按钮，review、review-tree、review-commit 的 15 张基线都会变。
+  - 只用 `ui-baseline` 生成。
