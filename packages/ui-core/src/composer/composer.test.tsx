@@ -165,7 +165,10 @@ describe("the attachment strip", () => {
       ui.getState().setAttachments("s_1", [{ type: "file_ref", path: "README.md" }, comment]),
     );
     expect(screen.getByText("README.md")).toBeTruthy();
-    expect(screen.getByText("评论：src/a.ts 第 3 行")).toBeTruthy();
+    // Review comments go together, and open to each one's file, line and text.
+    fireEvent.click(screen.getByRole("button", { name: "1 条评论" }));
+    expect(screen.getByText("src/a.ts:3")).toBeTruthy();
+    expect(screen.getByText("改名")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: "移除" })[0] as HTMLElement);
     type(area, "看一下");
     await act(async () => void fireEvent.keyDown(area, { key: "Enter" }));
@@ -294,7 +297,7 @@ describe("UNIT-composer-config", () => {
     await userEvent.keyboard("{Enter}");
   };
   const pick = (name: RegExp) =>
-    act(async () => void fireEvent.click(screen.getByRole("menuitem", { name })));
+    act(async () => void fireEvent.click(screen.getByRole("menuitemradio", { name })));
 
   test("the permission menu sets a mode; full access goes through the native confirmation", async () => {
     const { requests, controls } = await setup("idle", [caps, configured("default")]);
@@ -302,6 +305,7 @@ describe("UNIT-composer-config", () => {
     await open("权限");
     expect(screen.getByText("agent 的操作要怎样批准？")).toBeTruthy();
     expect(screen.getByText("由 agent 判断哪些操作需要你批准")).toBeTruthy();
+    expect(screen.getByRole("menuitemradio", { checked: true }).textContent).toMatch(/^Default/);
     await pick(/Accept edits/);
     await open("权限");
     await pick(/Bypass/);

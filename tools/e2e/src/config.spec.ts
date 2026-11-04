@@ -25,7 +25,7 @@ test("E2E-full-access-native: full access through the native dialog, then the co
     [1, 0],
   ] as const) {
     await button.click();
-    await cupper.window.getByRole("menuitem", { name: /Bypass permissions/ }).click();
+    await cupper.window.getByRole("menuitemradio", { name: /Bypass permissions/ }).click();
     const dialog = await cupper.dialogs.next(n);
     expect(dialog).toMatchObject({ message: t("privileged:set_config_title") });
     expect(dialog.detail).toContain("say ready");

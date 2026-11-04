@@ -12,6 +12,7 @@ describe("createI18n", () => {
       "host",
       "privileged",
       "request",
+      "review",
       "shell",
       "sidebar",
       "stream",

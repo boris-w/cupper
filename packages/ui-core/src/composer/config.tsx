@@ -10,7 +10,6 @@ import { useCallback, type ComponentProps, type ReactNode } from "react";
 
 import { useHost, useT } from "../app/providers";
 import { Alert } from "../components/Alert";
-import { CheckIcon } from "../components/icons";
 import { MenuItem, MenuLabel } from "../components/Menu";
 import { usePrivileged } from "../feedback/privileged";
 import { useToasts } from "../feedback/toaster";
@@ -86,13 +85,15 @@ export function Choices(props: {
     <>
       <MenuLabel>{props.title}</MenuLabel>
       {props.option.values.map((value) => (
-        <MenuItem key={value.value} onSelect={() => props.pick(value)}>
+        <MenuItem
+          key={value.value}
+          radio
+          checked={value.value === props.value?.value}
+          onSelect={() => props.pick(value)}
+        >
           <span className="flex flex-col">
             {value.name}
             <span className="text-xs text-fg-tertiary">{props.hint?.(value)}</span>
-          </span>
-          <span className="ml-auto pl-2">
-            {value.value === props.value?.value && <CheckIcon />}
           </span>
         </MenuItem>
       ))}
