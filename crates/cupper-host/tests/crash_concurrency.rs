@@ -1,7 +1,8 @@
 //! Crash consistency, concurrency and egress on a host process (design
 //! 5.9.1, 5.9.8): IT-NFR9-failpoints-core, IT-NFR9-failpoints-git,
-//! IT-NFR9-crash-under-load, IT-six-sessions-shared-adapter and
-//! IT-host-egress-seatbelt. The agent is the claude-shaped fake agent.
+//! IT-NFR9-crash-under-load, IT-six-sessions-shared-adapter,
+//! IT-host-egress-seatbelt and IT-git-racy-unstaged. The agent is the
+//! claude-shaped fake agent.
 //!
 //! After every crash the host starts again and [`check`] asks of what is
 //! left: the store passes `PRAGMA integrity_check`; each stream's seqs are
@@ -13,9 +14,11 @@
 mod common;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs::{File, FileTimes};
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::{Duration, SystemTime};
 
 use cupper_cli::client::{self, Client, ClientAuth, Incoming, Options};
 use cupper_cli::harness::HarnessKey;
@@ -323,12 +326,10 @@ fn git_sh(dir: &Path, script: &str) -> String {
 async fn crash_in_git(point: &str, applied: bool) {
     let dir = TempDir::new("failpoint-git");
     let (data_dir, app) = (dir.path().join("data"), dir.path().join("app"));
-    // The change has another size than the file had: one of the same size
-    // within the commit's second goes unseen until T234.
     git_sh(
         dir.path(),
         "git init -q -b main app; cd app; printf 'a\\n' > a.txt; git add a.txt
-        git -c user.name=t -c user.email=t@example.invalid commit -qm init; printf 'changed\\n' > a.txt",
+        git -c user.name=t -c user.email=t@example.invalid commit -qm init; printf 'b\\n' > a.txt",
     );
     let launch = |failpoints| {
         let config = json!({"failpoints": failpoints, "login_env": {"PATH": "/usr/bin:/bin"}});
@@ -370,6 +371,69 @@ async fn it_nfr9_failpoints_git_before_apply() {
 #[tokio::test(flavor = "multi_thread")]
 async fn it_nfr9_failpoints_git_after_apply() {
     crash_in_git("git.after_apply", true).await;
+}
+
+/// Writes `content` to `path` and gives it the mtime of [`racy`].
+fn write_racy(path: &Path, content: &str) {
+    std::fs::write(path, content).unwrap();
+    racy(path);
+}
+
+/// Sets `path`'s mtime to one second in the past, always the same.
+fn racy(path: &Path) {
+    let second = SystemTime::UNIX_EPOCH + Duration::from_secs(1_767_225_600);
+    let times = FileTimes::new().set_modified(second);
+    let file = File::options().write(true).open(path).unwrap();
+    file.set_times(times).unwrap();
+}
+
+/// IT-git-racy-unstaged (T234): right after a commit, and after staging, a
+/// file changes within the index's second to content of its size; the
+/// unstaged diff has the change. The second is set, not waited for: the file
+/// keeps the mtime the index has for it and the index file gets it too, so
+/// git can only see the change by the content of a racily clean entry.
+/// `core.trustctime` is off: writing the file and setting its mtime change
+/// its ctime, which git would see without looking at the content.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_git_racy_unstaged_same_second_same_size() {
+    let dir = TempDir::new("racy-unstaged");
+    let (data_dir, app) = (dir.path().join("data"), dir.path().join("app"));
+    let (a_txt, index) = (app.join("a.txt"), app.join(".git/index"));
+    git_sh(
+        dir.path(),
+        "git init -q -b main app; git -C app config core.trustctime false",
+    );
+    write_racy(&a_txt, "a\n");
+    let commit =
+        "git add a.txt; git -c user.name=t -c user.email=t@example.invalid commit -qm init";
+    git_sh(&app, commit);
+    let config = json!({"login_env": {"PATH": "/usr/bin:/bin"}});
+    let mut host = Running(spawn_with(&data_dir, fake_agent_config(config)));
+    let client = connect(&data_dir).await;
+    let add = json!({"command_id": client::command_id(), "path": app});
+    let project = request(&client, ProjectAdd::NAME, add).await.unwrap();
+    let session = start(&client, &project["project_id"], FIRST).await;
+    assert!(ended(&data_dir, &mut host, 1).await);
+    let unstaged = async || {
+        let diff = json!({"session_id": session, "scope": "unstaged"});
+        let diff = request(&client, GitDiff::NAME, diff).await.unwrap();
+        let files = diff["files"].as_array().unwrap().iter();
+        let file = |f: &Value| ["path", "additions", "deletions"].map(|key| f[key].clone());
+        files.map(file).collect::<Vec<_>>()
+    };
+    let changed = vec![[json!("a.txt"), json!(1), json!(1)]];
+
+    // After the commit.
+    write_racy(&a_txt, "b\n");
+    racy(&index);
+    assert_eq!(unstaged().await, changed, "after the commit");
+    // After staging.
+    git_sh(&app, "git add a.txt");
+    write_racy(&a_txt, "c\n");
+    racy(&index);
+    assert_eq!(unstaged().await, changed, "after staging");
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
 }
 
 /// A host on a new data directory with its project added; the client.
