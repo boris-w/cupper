@@ -248,10 +248,12 @@ impl GitService {
         if let Some(ticket) = ticket.as_mut() {
             ticket.mark_external().await.map_err(internal)?;
         }
+        crate::failpoint!(GIT_BEFORE_APPLY);
         let cmd = GitCmd::repo(op).input(patch);
         let (tier, writable) = (self.tool()?.repo_tier(&work_tree), self.writable().await?);
         let done = tier.run(&*self.deps.clock, &self.deps.durations, &writable, cmd);
         let done = done.await;
+        crate::failpoint!(GIT_AFTER_APPLY);
         drop(lock);
         let err = match done {
             Ok(done) => {
