@@ -13,6 +13,7 @@ import { ToolbarButton } from "../components/ToolbarButton";
 import { ConnectionToast } from "../feedback/ConnectionToast";
 import { SidebarFooter, SidebarHeader, SidebarList } from "../sidebar";
 import { computeLayout, ratioOf, type Layout, type Viewport } from "../layout/layout";
+import { ReviewPanel } from "../review/ReviewPanel";
 import type { LayoutStore } from "../layout/store";
 import { Splitter } from "./Splitter";
 
@@ -52,6 +53,7 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
         commandHandler({
           toggle_sidebar: () => store.toggleSidebar(narrow),
           toggle_side_panel: () => store.toggleSidePanel(),
+          open_review_tab: () => store.set("sidePanelOpen", true),
         }),
       ),
     [api, narrow, store],
@@ -102,7 +104,9 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
               {t("shell:tab_changes")}
             </button>
           </div>
-          <div role="tabpanel" className="min-h-0 flex-1" />
+          <div role="tabpanel" className="min-h-0 flex-1">
+            <ReviewPanel />
+          </div>
           <Splitter
             label={t("shell:resize_side_panel")}
             edge="left"
