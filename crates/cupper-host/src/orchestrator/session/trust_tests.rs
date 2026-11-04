@@ -4,7 +4,7 @@
 //! digest of what its range holds when the test says so.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use cupper_protocol::event::EventBody;
@@ -282,6 +282,11 @@ async fn it_orch_trust_gating_the_git_root_bounds_the_range() {
 /// A fixture whose project is a git repository of its own, its sessions
 /// running the git on PATH; and git's home.
 pub(super) async fn git_project(name: &str) -> (Fixture, TempDir) {
+    git_project_with(name, None).await
+}
+
+/// [`git_project`], its sessions running `lfs` as the host's git-lfs.
+pub(super) async fn git_project_with(name: &str, lfs: Option<PathBuf>) -> (Fixture, TempDir) {
     let path = std::env::var_os("PATH").unwrap();
     let mut found = std::env::split_paths(&path).map(|d| d.join("git"));
     let git = found.find(|g| g.is_file()).unwrap();
@@ -292,7 +297,7 @@ pub(super) async fn git_project(name: &str) -> (Fixture, TempDir) {
         "/bin".into(),
     ];
     let home_dir = Some(home.path().to_path_buf());
-    let tool = GitTool::new(git.clone(), None, &trusted, home_dir, None, home.path()).unwrap();
+    let tool = GitTool::new(git.clone(), lfs, &trusted, home_dir, None, home.path()).unwrap();
     let tool = tool.with_test_env("GIT_CONFIG_NOSYSTEM", "1");
     let f = Fixture::with_git(name, Some(tool)).await;
     let mut env = Env::new();

@@ -21,7 +21,7 @@ use cupper_sys::{Command, Env};
 use serde_json::{Value, json};
 
 use super::tests::{Fixture, code, done, harness};
-use super::trust_tests::git_project;
+use super::trust_tests::git_project_with;
 use crate::clock::ManualClock;
 use crate::driver::api::PromptTag;
 use crate::git::run::run;
@@ -101,13 +101,20 @@ pub(super) struct Case {
     pub(super) f: Fixture,
     pub(super) home: TempDir,
     git: PathBuf,
+    /// The git-lfs of the user's git and the host's.
+    lfs: Option<PathBuf>,
     session: Option<SessionId>,
     commands: u32,
 }
 
 impl Case {
     pub(super) async fn new(name: &str) -> Self {
-        let (f, home) = git_project(name).await;
+        Self::with_lfs(name, None).await
+    }
+
+    /// A case whose user and host run `lfs` as git-lfs.
+    pub(super) async fn with_lfs(name: &str, lfs: Option<PathBuf>) -> Self {
+        let (f, home) = git_project_with(name, lfs.clone()).await;
         let path = std::env::var_os("PATH").unwrap();
         let mut found = std::env::split_paths(&path).map(|dir| dir.join("git"));
         let git = found.find(|git| git.is_file()).unwrap();
@@ -116,6 +123,7 @@ impl Case {
             f,
             home,
             git,
+            lfs,
             session,
             commands,
         }
@@ -152,6 +160,11 @@ impl Case {
         let mut env = Env::new();
         env.set("HOME", self.home.path()).unwrap();
         env.set("GIT_CONFIG_NOSYSTEM", "1").unwrap();
+        if let Some(lfs) = &self.lfs {
+            let path = [lfs.parent().unwrap(), self.git.parent().unwrap()];
+            env.set("PATH", std::env::join_paths(path).unwrap())
+                .unwrap();
+        }
         let mut git = Command::new(&self.git);
         let who = ["-c", "user.name=t", "-c", "user.email=t@example.invalid"];
         git.args(who)

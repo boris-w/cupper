@@ -23,6 +23,8 @@ mod hunk_tests;
 mod idle_tests;
 #[cfg(test)]
 mod interaction_tests;
+#[cfg(test)]
+mod lfs_tests;
 mod load;
 mod manager;
 #[cfg(test)]
