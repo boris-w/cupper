@@ -15,7 +15,12 @@ import type { PendingRevert } from "./actions";
 const BUTTON =
   "h-7 rounded-full px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-export function RevertConfirm(props: { pending: PendingRevert; settle(confirmed: boolean): void }) {
+/** `inline`: in the flow of its container, as on a turn card, not over the review panel's foot. */
+export function RevertConfirm(props: {
+  pending: PendingRevert;
+  settle(confirmed: boolean): void;
+  inline?: boolean;
+}) {
   const t = useT();
   const title = useId();
   const confirm = useRef<HTMLButtonElement>(null);
@@ -47,7 +52,7 @@ export function RevertConfirm(props: { pending: PendingRevert; settle(confirmed:
       aria-labelledby={title}
       data-ready={ready || undefined}
       onKeyDown={(event) => event.key === "Escape" && ready && props.settle(false)}
-      className="absolute inset-x-4 bottom-18 z-10 mx-auto max-w-90 rounded-2xl bg-surface-elevated p-4 shadow-pill"
+      className={`${props.inline ? "mt-2" : "absolute inset-x-4 bottom-18 z-10 mx-auto"} max-w-90 rounded-2xl bg-surface-elevated p-4 shadow-pill`}
     >
       <h2 id={title} className="truncate text-sm font-medium">
         {heading}
