@@ -74,6 +74,8 @@ function Diff({ state, files, need, setCollapsed }: DocProps & { files: Files })
         diffStyle: split ? "split" : "unified",
         overflow: files.wrap ? "wrap" : "scroll",
         preferredHighlighter: "shiki-js",
+        // A plain line between hunks: pierre's own words are not translated.
+        hunkSeparators: "simple",
         stickyHeaders: true,
         itemMetrics: { diffHeaderHeight: 36 },
         // Room under the last file for the panel's pill.
