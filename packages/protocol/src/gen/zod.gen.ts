@@ -462,7 +462,7 @@ export const zFallback = z.object({
 });
 
 /**
- * Open enum: unknown values must be accepted. Known: unsupported turn_mismatch not_prompting prompt_required timeout agent_error
+ * Open enum: unknown values must be accepted. Known: unsupported turn_mismatch not_prompting prompt_required timeout agent_error steer_pending
  */
 export const zFallbackReason = z.union([
   z.enum([
@@ -472,6 +472,7 @@ export const zFallbackReason = z.union([
     "prompt_required",
     "timeout",
     "agent_error",
+    "steer_pending",
   ]),
   z.string(),
 ]);
