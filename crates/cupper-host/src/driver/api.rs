@@ -81,8 +81,9 @@ pub enum DriverCommand {
         tag: PromptTag,
         content: PromptContent,
     },
-    /// Request, replied with `Result<SteerOutcome, AgentError>` within 5 s:
-    /// `_session/steering` with `idleBehavior: promptRequired`.
+    /// `_session/steering` with `idleBehavior: promptRequired`, answered by
+    /// `SteerDone` or `SteerFailed`; the session waits 5 s for it, and has
+    /// one steer at most in flight.
     Steer {
         session: AgentSessionId,
         content: PromptContent,
@@ -139,7 +140,8 @@ pub struct AttachInfo {
     pub capabilities: SessionCapabilities,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SteerOutcome {
     Injected,
     StartedNewTurn,
@@ -197,6 +199,9 @@ pub enum DriverEvent {
         tag: PromptTag,
         error: AgentError,
     },
+    /// The answer to the session's `Steer`.
+    SteerDone(SteerOutcome),
+    SteerFailed(AgentError),
     /// Codex's `threadStatus`. It never ends a turn while a prompt is in
     /// flight (K12).
     RunState(RunState),
