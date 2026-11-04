@@ -6,6 +6,7 @@
 
 use std::path::Path;
 
+use cupper_fake_agent::config::Config;
 use cupper_fake_agent::config::Persona::{self, Claude, Codex};
 use cupper_fake_agent::persona;
 use cupper_protocol::recording::{Body, Recording};
@@ -61,11 +62,13 @@ fn unit_replay_personas_match_the_sp1_recordings() {
         assert_eq!(ours["_meta"], init["_meta"], "{p:?}");
         // Config options, the modes among them, and the default mode.
         let new = &first(&s01, |m| m["result"]["sessionId"].is_string())["result"];
-        let ours = Value::from(persona::config_options(p));
+        let name = if p == Claude { "claude" } else { "codex" };
+        let configured = Config::parse(["--persona", name].map(String::from)).unwrap();
+        let ours = Value::from(persona::config_options(&configured));
         assert_eq!(config(&ours), config(&new["configOptions"]), "{p:?}");
         let modes = |options: &Value| options[0]["options"].clone();
         assert_eq!(modes(&ours), modes(&new["configOptions"]), "{p:?}");
-        let result = persona::session_result(p, None, &persona::config_options(p));
+        let result = persona::session_result(p, None, &persona::config_options(&configured));
         assert_eq!(
             result["modes"]["currentModeId"], new["modes"]["currentModeId"],
             "{p:?}"

@@ -205,6 +205,15 @@ pub fn elicitation(request: &CreateElicitationRequest) -> Option<(Option<String>
     Some((tool_call_id, AskRequest::Form(form)))
 }
 
+/// Whether `options` has `id`, with `value` among its values when one is
+/// named: all the session's options tell of its plan mode and thinking
+/// (T243), inferred rather than said. Before the agent reports any, as
+/// after `initialize`, nothing is known to be missing.
+pub fn offers(options: &[ConfigOption], id: ConfigOptionId, value: Option<&str>) -> bool {
+    let has = |o: &ConfigOption| value.is_none_or(|v| o.values.iter().any(|x| x.value == v));
+    options.is_empty() || options.iter().any(|o| o.id == id && has(o))
+}
+
 /// The options the agent reports, by category; choices as the agent names
 /// them (CP-4), permission modes at their tier. Boolean options have no place
 /// among them yet.

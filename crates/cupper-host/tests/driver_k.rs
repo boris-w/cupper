@@ -2,6 +2,7 @@
 //! process with the fake agent, Claude's or Codex's: each case runs what the
 //! agent does and asserts what the host made of it, by the events it stored,
 //! the frames it sent and the calls the fake agent recorded (`--calls`).
+//! IT-degrade-plan and IT-degrade-thinking run it `--without` either.
 
 mod common;
 
@@ -10,11 +11,16 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use common::*;
+use cupper_cli::client::ClientError;
 use cupper_cli::client::{self, Client};
 use cupper_host::driver::runtime::launch;
 use cupper_host::gateway::testkit::TempDir;
+use cupper_protocol::error::{APP_ERROR, INVALID_PARAMS};
 use cupper_protocol::ids::{ProjectId, SessionId};
-use cupper_protocol::methods::session::{SessionCreate, SessionInterrupt};
+use cupper_protocol::methods::session::{
+    SessionCapabilities, SessionCapabilitiesParams, SessionCreate, SessionInterrupt,
+    SessionSetConfig,
+};
 use serde_json::{Value, json};
 
 /// A host with Claude's fake agent run with `args` and recording its calls,
@@ -316,6 +322,90 @@ async fn it_plan_entries_one_plan_item_follows_the_updates() {
         WHERE type IN ('item.started', 'item.updated', 'item.completed') ORDER BY seq";
     let all = query(&data_dir.join("host.db"), markdown).join("\n");
     assert!(all.contains("3. test"), "{all}");
+}
+
+/// IT-degrade-plan, IT-degrade-thinking: the fake agent of `agent`'s
+/// persona `--without` `what`. The option, or Claude's `plan` value, is gone
+/// from the session's capabilities, the capability that follows it false
+/// and the other one not; setting it is refused and never reaches the
+/// agent; the turn has no plan, no thought and no request.
+async fn degraded(agent: &str, what: &str) {
+    let dir = TempDir::new(&format!("degrade-{agent}-{what}"));
+    let args = ["--without", what];
+    let (data_dir, _host, client, recorded) = host_of(agent, &dir, &args, json!({})).await;
+    let script = match what {
+        "plan" => "plan_update 1. read; plan_confirm; say done",
+        _ => "think pondering; say done",
+    };
+    let session = match agent {
+        "codex" => codex_session(&client, script).await,
+        _ => create(&client, script).await,
+    };
+    events(&data_dir, &session, "turn.completed", 1).await;
+    let asked = SessionCapabilitiesParams {
+        session_id: session.clone(),
+    };
+    let caps = client.request::<SessionCapabilities>(asked).await.unwrap();
+    let (option, value) = match (agent, what) {
+        ("claude", "plan") => ("permission_mode", "plan"),
+        (_, "plan") => ("plan_mode", "plan"),
+        _ => ("reasoning_effort", "high"),
+    };
+    let offered = caps.config.iter().find(|o| o.id.as_str() == option);
+    assert_eq!(offered.is_some(), (agent, what) == ("claude", "plan"));
+    assert!(offered.is_none_or(|o| o.values.iter().all(|v| v.value != value)));
+    let flags = (caps.interactions.plan_confirm, caps.extraction.thinking);
+    assert_eq!(flags, (what != "plan", what != "thinking"));
+    let set = json!({"command_id": client::command_id(), "session_id": session,
+        "option": option, "value": value});
+    let set = client.request::<SessionSetConfig>(typed(set)).await;
+    let Err(ClientError::Rpc(err)) = set else {
+        panic!("{set:?}")
+    };
+    let data = err.data.as_deref();
+    let got = (
+        err.code,
+        data.map(|d| d.code.to_string()),
+        data.and_then(|d| d.capability.clone()),
+    );
+    let unsupported = (APP_ERROR, Some("unsupported".into()), Some(option.into()));
+    let want = if offered.is_some() {
+        (INVALID_PARAMS, None, None)
+    } else {
+        unsupported
+    };
+    assert_eq!(got, want);
+    assert!(
+        calls(&recorded)
+            .iter()
+            .all(|(method, _)| method != "session/set_config_option")
+    );
+    let none = format!(
+        "SELECT CAST(count(*) AS TEXT) FROM events WHERE stream = 'session/{session}'
+         AND (type = 'interaction.requested' OR json_extract(json, '$.data.kind') IN ('plan', 'thought'))"
+    );
+    assert_eq!(query(&data_dir.join("host.db"), &none), ["0"]);
+    said(&data_dir, &session, "done").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn it_degrade_plan_claude() {
+    degraded("claude", "plan").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn it_degrade_plan_codex() {
+    degraded("codex", "plan").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn it_degrade_thinking_claude() {
+    degraded("claude", "thinking").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn it_degrade_thinking_codex() {
+    degraded("codex", "thinking").await;
 }
 
 /// IT-K2-reject-ends-turn: Codex's only rejection is `cancel`, which ends
