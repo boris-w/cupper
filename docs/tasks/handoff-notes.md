@@ -544,3 +544,5 @@
 | 本机跑会开窗口的检查的任务 | 先确认不会抢焦点、不会发真实按键、不会动剪贴板（T104 本机试跑时 `osascript` 把 App 抢到前台、发了一次 ⌘⇧P）；这类步骤只在 runner 上（`GITHUB_ACTIONS=true`）做 | T104 |
 | T131 | T232 的占位 `FileList` 在 `focus` 变化时滚到对应文件，这段随占位一起删掉，审查文档视图要自己响应 `focus`（`scroll_to`）；文件树是面板左侧一栏，固定宽 240，面板窄时怎么收起由 T131 一并定 | T232 |
 | T233 | 审查面板头部已有"显示文件"按钮（在"⋯"左边）；"Git 操作"菜单放在头部时避开它；菜单经指针关闭时不再把焦点送回触发按钮（`Menu.tsx`） | T232 |
+| T125 | `git/worktree.rs` 里有 `worktree list --porcelain` 的解析（`listed`，判断是否登记、是否锁上），归档、恢复时可以复用；`workspace.failed{not_found}`（worktree 目录被人删掉）的会话怎样恢复（重建 worktree 或转为只读）由 T125 定；恢复时第一条输入是 `Input::Restored`，闸门按 `restored.gate` 重设，另发 Gate 会被覆盖 | T236 |
+| T144 | `workspace.failed` 还有 `not_found`（worktree 目录被删，git 里的记录还在）：提示用户，并告诉他可以自己 `git worktree prune` | T236 |
