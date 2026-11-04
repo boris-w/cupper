@@ -24,7 +24,7 @@ use cupper_protocol::session::{
     SessionWorkspace,
 };
 use cupper_protocol::sync::StreamId;
-use cupper_protocol::view::{Entry, RequestView};
+use cupper_protocol::view::{Entry, RequestView, WorkspaceView};
 use rusqlite::types::Type;
 use rusqlite::{Connection, OptionalExtension, Row};
 use serde::de::DeserializeOwned;
@@ -35,6 +35,7 @@ use super::manager::{Counters, cached};
 use super::{SessionDeps, internal, mode_tier, not_found};
 use crate::driver::api::{AgentSessionId, ProjectConfigPolicy};
 use crate::gateway::principal_of;
+use crate::git::worktree::Plan;
 use crate::orchestrator::queue::{QueueCore, preview};
 use crate::orchestrator::turn::{SendMode, SendRequest};
 use crate::store::streams::StreamView;
@@ -55,6 +56,8 @@ struct Stored {
     workspace: (String, Option<String>, Option<String>, bool),
     /// The project is trusted now.
     trusted: bool,
+    /// The project's path.
+    repo: Option<String>,
     /// The first message, until it starts a turn or is queued.
     first: Option<String>,
     /// Each queued message, and the command that queued it.
@@ -86,8 +89,8 @@ pub(super) async fn load(
     // The view's configuration, capabilities and queue; its running turn
     // with the items that did not end, each with its start and, for a tool
     // call, whether it ran a command; and its pending requests.
-    let (configured, capabilities, queue_seen, running_turn, open, expired) =
-        stream.read(|view, _| {
+    let ((configured, preparing), capabilities, queue_seen, running_turn, open, expired) = stream
+        .read(|view, _| {
             let StreamView::Session(view) = view else {
                 unreachable!("a session's stream")
             };
@@ -101,8 +104,9 @@ pub(super) async fn load(
                 .map(|i| (i.item_id.clone(), i.started_at, command_of(&i.item)))
                 .collect();
             let pending = view.requests.values().filter(|r| r.is_pending());
+            let preparing = matches!(view.workspace, Some(WorkspaceView::Preparing(_)));
             (
-                view.configured.clone(),
+                (view.configured.clone(), preparing),
                 view.capabilities.clone(),
                 view.queue.is_some(),
                 running.map(|t| t.started.clone()),
@@ -195,6 +199,16 @@ pub(super) async fn load(
         first,
     };
     let initial = restored.first.is_some();
+    // Stopped while its worktree was added: added again, or what is there
+    // taken over (design 5.2.13).
+    let (_, branch, base_ref, _) = stored.workspace;
+    let worktree = (branch.zip(base_ref).zip(stored.repo)).filter(|_| preparing && initial);
+    let worktree = worktree.map(|((branch, base_ref), repo)| Plan {
+        repo: repo.into(),
+        path: stored.path.clone().into(),
+        branch,
+        base_ref,
+    });
 
     let setter = (setter, stored.confirmed);
     let (ids, durations) = (Arc::clone(&deps.ids), &deps.durations);
@@ -238,7 +252,7 @@ pub(super) async fn load(
         ignore_for_good: stored.ignored,
         initial,
         config_changed: stored.changed,
-        worktree: None,
+        worktree,
     };
     Ok((parts, start))
 }
@@ -312,7 +326,8 @@ fn read(conn: &Connection, session: &str) -> rusqlite::Result<Option<Stored>> {
              project_config_ignored, workspace_kind, worktree_branch, base_ref, read_only,
              (SELECT trust_state = 'trusted' FROM projects p
               WHERE p.project_id = sessions.project_id),
-             initial_prompt_json
+             initial_prompt_json,
+             (SELECT path FROM projects p WHERE p.project_id = sessions.project_id)
          FROM sessions WHERE session_id = ?1",
         [session],
         |r| {
@@ -330,6 +345,7 @@ fn read(conn: &Connection, session: &str) -> rusqlite::Result<Option<Stored>> {
                 workspace: (r.get(10)?, r.get(11)?, r.get(12)?, r.get(13)?),
                 trusted: r.get::<_, Option<bool>>(14)?.unwrap_or(false),
                 first: r.get(15)?,
+                repo: r.get(16)?,
                 queue: Vec::new(),
                 last_turn: None,
                 ended: Vec::new(),

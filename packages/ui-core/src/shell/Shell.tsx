@@ -54,6 +54,7 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
           toggle_sidebar: () => store.toggleSidebar(narrow),
           toggle_side_panel: () => store.toggleSidePanel(),
           open_review_tab: () => store.set("sidePanelOpen", true),
+          toggle_file_tree: () => store.toggleFileTree(),
         }),
       ),
     [api, narrow, store],
@@ -105,7 +106,7 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
             </button>
           </div>
           <div role="tabpanel" className="min-h-0 flex-1">
-            <ReviewPanel />
+            <ReviewPanel fileTree={prefs.fileTreeOpen} onFileTree={() => store.toggleFileTree()} />
           </div>
           <Splitter
             label={t("shell:resize_side_panel")}

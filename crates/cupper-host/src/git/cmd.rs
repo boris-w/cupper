@@ -94,6 +94,8 @@ pub enum RepoOp {
     /// `update-index --refresh`.
     RefreshIndex,
     WorktreeAdd,
+    /// `worktree list --porcelain -z`.
+    WorktreeList,
     WorktreeLock,
     WorktreeUnlock,
     WorktreeRemove,
@@ -166,6 +168,7 @@ impl RepoOp {
             Self::Revert => (&["apply", "--whitespace=nowarn", "-R"], false),
             Self::RefreshIndex => (&["update-index", "--refresh"], false),
             Self::WorktreeAdd => (&["worktree", "add"], false),
+            Self::WorktreeList => (&["worktree", "list", "--porcelain", "-z"], true),
             Self::WorktreeLock => (&["worktree", "lock"], false),
             Self::WorktreeUnlock => (&["worktree", "unlock"], false),
             Self::WorktreeRemove => (&["worktree", "remove"], false),

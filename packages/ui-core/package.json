@@ -18,6 +18,7 @@
     "@cupper/protocol": "workspace:*",
     "@cupper/shell-api": "workspace:*",
     "@pierre/diffs": "1.6.4",
+    "@radix-ui/react-context-menu": "2.4.1",
     "@radix-ui/react-dropdown-menu": "2.2.1",
     "@radix-ui/react-switch": "1.4.1",
     "@radix-ui/react-tooltip": "1.4.1",

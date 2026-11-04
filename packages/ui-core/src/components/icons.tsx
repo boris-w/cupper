@@ -157,3 +157,32 @@ export function CheckIcon() {
     </svg>
   );
 }
+
+export function MinusIcon() {
+  return (
+    <svg {...svg} stroke="currentColor" strokeLinecap="round">
+      <path d="M3 8h10" />
+    </svg>
+  );
+}
+
+/** An arrow turning back: revert. */
+export function UndoIcon() {
+  return (
+    <svg {...svg} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5.5 3.5L2.5 6.5l3 3" />
+      <path d="M2.5 6.5h7a3.5 3.5 0 0 1 0 7h-3" />
+    </svg>
+  );
+}
+
+/** A file's git status in a rounded square: added (+), deleted (−), changed (•). */
+export function GitStatusIcon({ change }: { change: string }) {
+  const mark = { add: "M8 5v6M5 8h6", delete: "M5 8h6" }[change];
+  return (
+    <svg {...svg} stroke="currentColor" strokeLinecap="round">
+      <rect x="2" y="2" width="12" height="12" rx="3" />
+      {mark ? <path d={mark} /> : <circle cx="8" cy="8" r="1.5" fill="currentColor" />}
+    </svg>
+  );
+}

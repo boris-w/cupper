@@ -21,6 +21,7 @@ export const PREF_KEYS: Record<keyof LayoutPrefs, string> = {
   sidebarWidth: "layout.sidebarWidth",
   sidePanelOpen: "layout.sidePanelOpen",
   sidePanelRatio: "layout.sidePanelRatio",
+  fileTreeOpen: "layout.fileTreeOpen",
 };
 
 const VALID: { [K in keyof LayoutPrefs]: (value: unknown) => value is LayoutPrefs[K] } = {
@@ -29,6 +30,7 @@ const VALID: { [K in keyof LayoutPrefs]: (value: unknown) => value is LayoutPref
   sidePanelOpen: (value) => typeof value === "boolean",
   sidePanelRatio: (value): value is number | null =>
     value === null || (typeof value === "number" && value >= 0 && value <= 1),
+  fileTreeOpen: (value) => typeof value === "boolean",
 };
 
 const FIELDS = Object.keys(PREF_KEYS) as (keyof LayoutPrefs)[];
@@ -104,6 +106,13 @@ export class LayoutStore {
 
   toggleSidePanel(): void {
     this.set("sidePanelOpen", !this.getState().prefs.sidePanelOpen);
+  }
+
+  /** ⌘⇧E: the review panel's file tree, opening the side panel to show it. */
+  toggleFileTree(): void {
+    const open = !this.getState().prefs.fileTreeOpen;
+    this.set("fileTreeOpen", open);
+    if (open) this.set("sidePanelOpen", true);
   }
 
   close(): void {

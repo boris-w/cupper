@@ -1,6 +1,7 @@
 //! Crash consistency, concurrency and egress on a host process (design
 //! 5.9.1, 5.9.8): IT-NFR9-failpoints-core, IT-NFR9-failpoints-git,
-//! IT-NFR9-crash-under-load, IT-six-sessions-shared-adapter,
+//! IT-NFR9-failpoints-worktree, IT-NFR9-crash-under-load,
+//! IT-six-sessions-shared-adapter,
 //! IT-host-egress-seatbelt and IT-git-racy-unstaged. The agent is the
 //! claude-shaped fake agent.
 //!
@@ -434,6 +435,70 @@ async fn it_git_racy_unstaged_same_second_same_size() {
     assert_eq!(unstaged().await, changed, "after staging");
     terminate(&host.0);
     assert_eq!(exit_code(&mut host.0).await, 0);
+}
+
+/// IT-NFR9-failpoints-worktree: a session created in a new worktree crashes
+/// at `point`, its `workspace.preparing` on disk (design 5.2.13). Started
+/// again, the store passes the checks, a retry of the create with its
+/// command's ID gets the session, which adds its worktree or takes over the
+/// one there and runs its first message; one worktree, one branch.
+async fn crash_in_worktree(point: &str) {
+    let dir = TempDir::new("failpoint-worktree");
+    let (data_dir, app) = (dir.path().join("data"), dir.path().join("app"));
+    let base = "git init -q -b main app; cd app
+        git -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m init";
+    git_sh(dir.path(), base);
+    let launch = |failpoints| {
+        let config = json!({"failpoints": failpoints, "login_env": {"PATH": "/usr/bin:/bin"}});
+        Running(spawn_with(&data_dir, fake_agent_config(config)))
+    };
+    let mut host = launch(json!([{"name": point}]));
+    let watching = watch(reach(&data_dir, &mut host).await.unwrap());
+    let client = reach(&data_dir, &mut host).await.unwrap();
+    let add = json!({"command_id": client::command_id(), "path": app});
+    let project = request(&client, ProjectAdd::NAME, add).await.unwrap();
+    let worktree = json!({"kind": "worktree", "base_ref": "main", "branch_hint": "w"});
+    let create = json!({"command_id": client::command_id(), "agent": "claude",
+        "project_id": project["project_id"], "workspace": worktree, "message": text(FIRST)});
+    // The reply may come before the crash, or not.
+    let _ = request(&client, SessionCreate::NAME, create.clone()).await;
+    assert_eq!(exit_code(&mut host.0).await, 99, "{point}");
+
+    let seen = watching.await.unwrap();
+    let mut host = launch(json!([]));
+    let client = connect(&data_dir).await;
+    consistent(&data_dir, &seen);
+    let again = request(&client, SessionCreate::NAME, create).await.unwrap();
+    let sessions = column(&data_dir, "SELECT session_id FROM sessions");
+    assert_eq!(sessions, [again["session_id"].as_str().unwrap()], "{point}");
+    assert!(ended(&data_dir, &mut host, 1).await, "{point}");
+    let ready = format!(
+        "SELECT count(*) FROM events WHERE stream = 'session/{}' AND type = 'workspace.ready'",
+        sessions[0]
+    );
+    assert_eq!(query_count(&data_dir, &ready), 1, "{point}");
+    let trees = git_sh(&app, "git worktree list --porcelain | grep -c '^worktree '");
+    let branches = git_sh(
+        &app,
+        "git for-each-ref --format='%(refname)' refs/heads/cupper/",
+    );
+    assert_eq!(
+        (trees.as_str(), branches.as_str()),
+        ("2", "refs/heads/cupper/w"),
+        "{point}"
+    );
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn it_nfr9_failpoints_worktree_before_the_add() {
+    crash_in_worktree("worktree.adding").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn it_nfr9_failpoints_worktree_after_the_add() {
+    crash_in_worktree("worktree.added").await;
 }
 
 /// A host on a new data directory with its project added; the client.

@@ -1067,8 +1067,14 @@ impl SessionActor {
                 let reason = err.reason().cloned();
                 step.events = vec![EventBody::WorkspaceFailed(WorkspaceFailed { code, reason })];
                 let (reason, shut) = (PauseReason::WorkspaceFailed, true);
-                let gate = Input::Machine(turn::Input::Gate { reason, shut });
-                self.input(gate, None, mem::take(&mut step)).await;
+                // A loaded session's gate is the one it restores with.
+                match self.preparing.as_mut().map(|p| &mut p.first) {
+                    Some(Input::Restored(restored)) => restored.gate.push(reason),
+                    _ => {
+                        let gate = Input::Machine(turn::Input::Gate { reason, shut });
+                        self.input(gate, None, mem::take(&mut step)).await;
+                    }
+                }
             }
         }
         let Some(Preparing { first, calls }) = self.preparing.take() else {
