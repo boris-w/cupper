@@ -56,7 +56,7 @@ const MARKDOWN = [
       status: "completed",
       ended_at: 2,
       duration_ms: 8000,
-      final_item_ids: [],
+      final_item_ids: ["i_2"],
     },
   },
 ] as EventBody[];
@@ -100,9 +100,10 @@ const CODE = [
   "```",
 ].join("\n");
 
-const completed = (turn_id: string, status = "completed") => ({
+/** The final answer is the messages after the last tool call (design 5.3.5), as the host fills it. */
+const completed = (turn_id: string, status = "completed", final_item_ids: string[] = []) => ({
   type: "turn.completed",
-  data: { turn_id, status, ended_at: 2, duration_ms: 8000, final_item_ids: [] },
+  data: { turn_id, status, ended_at: 2, duration_ms: 8000, final_item_ids },
 });
 
 const HIGHLIGHT = [
@@ -110,7 +111,7 @@ const HIGHLIGHT = [
   started("i_1", "agent_message"),
   delta("i_1", CODE),
   done("i_1"),
-  completed("t_1"),
+  completed("t_1", "completed", ["i_1"]),
 ] as EventBody[];
 
 const step = (content: string, status: string) => ({ content, status });
@@ -149,7 +150,7 @@ const PLAN_MARKDOWN = [
   started("i_2", "agent_message"),
   delta("i_2", "计划写好了，等你确认。"),
   done("i_2"),
-  completed("t_1"),
+  completed("t_1", "completed", ["i_2"]),
 ] as EventBody[];
 
 const error = (item_id: string, code: string, guidance: string, more: object = {}) =>
@@ -166,6 +167,72 @@ const ERRORS = [
   error("i_7", "other", "page_admin", { raw: "unknown guidance falls back to none" }),
   error("i_8", "restartable", "retry"),
   completed("t_1", "failed"),
+] as EventBody[];
+
+/** Turn `n`'s start and the user's message that opens it. */
+const opens = (n: number, text: string) => [
+  {
+    type: "turn.started",
+    data: { turn_id: `t_${n}`, started_at: STARTED, turn_no: n, origin: "user" },
+  },
+  started(`i_u${n}`, "user_message", {
+    turn_id: `t_${n}`,
+    content: [{ type: "text", text }],
+    steered: false,
+  }),
+];
+const in2 = { turn_id: "t_2" };
+/**
+ * Two completed turns: the first with work, a notice and a final answer; the
+ * second ends on a tool call, so it has no final answer (T146, Q from the host's rule).
+ */
+const FOLD = [
+  ...header,
+  started("i_1", "thought"),
+  done("i_1", { duration_ms: 2000 }),
+  tool("i_2", "read", { paths: ["README.md"], group_id: "g_1" }),
+  done("i_2"),
+  tool("i_3", "read", { paths: ["package.json"], group_id: "g_1" }),
+  done("i_3"),
+  started("i_4", "notice", { code: "upstream_retry", params: { attempt: 2, max: 5 } }),
+  tool("i_5", "edit", { paths: ["README.md"] }),
+  done("i_5"),
+  started("i_6", "agent_message"),
+  delta("i_6", "README 的安装一节改好了，命令换成了 `pnpm i`。"),
+  done("i_6"),
+  completed("t_1", "completed", ["i_6"]),
+  ...opens(2, "再跑一遍测试"),
+  started("i_7", "agent_message", in2),
+  delta("i_7", "我来跑一遍。"),
+  done("i_7"),
+  tool("i_8", "execute", { ...in2, command: "pnpm test" }),
+  done("i_8", { exit_code: 0 }),
+  completed("t_2", "completed", []),
+] as EventBody[];
+/**
+ * A cancelled turn whose command ran on: its call, pushed out of view by the
+ * work after it, and the late output in the next turn.
+ */
+const LATE = [
+  ...header,
+  tool("i_1", "execute", { command: "cargo test --workspace" }),
+  done("i_1", { status: "abandoned", may_still_run: true }),
+  ...Array.from({ length: 14 }, (_, n) => n + 1).flatMap((n) => [
+    tool(`i_t${n}`, "read", { paths: [`docs/part-${n}.md`] }),
+    done(`i_t${n}`),
+  ]),
+  completed("t_1", "cancelled"),
+  ...opens(2, "测试跑完了吗？"),
+  started("i_l", "late_tool_output", {
+    ...in2,
+    ref: { item_id: "i_1", turn_id: "t_1", title: "cargo test", command: "cargo test --workspace" },
+    output_state: "complete",
+    exit_code: 0,
+  }),
+  delta("i_l", "test result: ok. 412 passed; 0 failed\n", "output"),
+  started("i_2", "agent_message", in2),
+  delta("i_2", "跑完了，全部通过。"),
+  done("i_2"),
 ] as EventBody[];
 
 async function show(page: Page, stream: EventBody[], theme: "light" | "dark") {
@@ -228,3 +295,54 @@ for (const theme of ["light", "dark"] as const) {
     expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
   });
 }
+
+for (const theme of ["light", "dark"] as const) {
+  test(`UI-stream-fold ${theme}: completed turns fold to 用时, keeping what always shows`, async ({
+    page,
+  }) => {
+    await show(page, FOLD, theme);
+    const took = page.getByRole("button", { name: "用时 8 秒" });
+    const [first, second] = [took.first(), took.last()];
+    await expect(first).toHaveAttribute("aria-expanded", "false");
+    await expect(second).toHaveAttribute("aria-expanded", "false");
+    // The work folds away; the notice and the final answer stay; the second turn has none.
+    await expect(page.getByText("读取了 2 个文件")).toBeHidden();
+    await expect(page.getByText("上游服务暂时不可用，正在重试（第 2 / 5 次）。")).toBeVisible();
+    await expect(page.getByText("README 的安装一节改好了")).toBeVisible();
+    await expect(page.getByText("我来跑一遍。")).toBeHidden();
+    await page.mouse.move(400, 780);
+    await expect(page).toHaveScreenshot(`stream-fold-${theme}.png`);
+    expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
+  });
+}
+
+test("UI-stream-fold opens a turn and folds it again", async ({ page }) => {
+  await show(page, FOLD, "light");
+  const first = page.getByRole("button", { name: "用时 8 秒" }).first();
+  await first.click();
+  await expect(first).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByText("读取了 2 个文件")).toBeVisible();
+  await expect(page.getByText("已编辑 README.md")).toBeVisible();
+  await page.mouse.move(400, 780);
+  await expect(page).toHaveScreenshot("stream-fold-open.png");
+  await first.click();
+  await expect(page.getByText("已编辑 README.md")).toBeHidden();
+});
+
+test("UI-late-output folded, the jumps both ways and the final exit code", async ({ page }) => {
+  await show(page, LATE, "light");
+  const late = page.getByRole("button", { name: "取消后仍在运行：cargo test --workspace" });
+  const original = page.getByText("命令可能仍在运行");
+  await expect(late).toHaveAttribute("aria-expanded", "false");
+  await expect(original).not.toBeInViewport();
+  await page.getByRole("button", { name: "跳到原条目" }).click();
+  await expect(original).toBeInViewport();
+  await page.mouse.move(400, 780);
+  await expect(page).toHaveScreenshot("stream-late-original.png");
+  await page.getByRole("button", { name: "最终退出码 0" }).click();
+  await expect(late).toBeInViewport();
+  await late.click();
+  await expect(page.getByText("test result: ok. 412 passed; 0 failed")).toBeVisible();
+  await page.mouse.move(400, 780);
+  await expect(page).toHaveScreenshot("stream-late-output.png");
+});
