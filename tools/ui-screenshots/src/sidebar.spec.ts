@@ -159,3 +159,21 @@ test("UI-composer stop: an empty composer on a running turn stops it", async ({ 
   await page.mouse.move(650, 780);
   await expect(page).toHaveScreenshot("composer-stop.png");
 });
+
+test("UI-composer file references: the @ list, its matches bold", async ({ page }) => {
+  await open(page, { streams: { index: INDEX } });
+  await page.evaluate(() => {
+    const match = (path: string, ranges_utf16: number[][]) => ({ path, score: 1, ranges_utf16 });
+    const results = [
+      match("packages/ui-core/src/composer/Composer.tsx", [[30, 35]]),
+      match("packages/ui-core/src/composer/composer.test.tsx", [[30, 35]]),
+      match("docs/design/composer-notes.md", [[12, 17]]),
+    ];
+    window.cupperHost.handle("files/search", () => ({ result: { results } }));
+  });
+  await visit(page, "s_6");
+  await page.getByRole("textbox").fill("看一下 @compo");
+  await expect(page.getByRole("option")).toHaveCount(3);
+  await page.mouse.move(650, 780);
+  await expect(page).toHaveScreenshot("composer-file-ref.png");
+});
