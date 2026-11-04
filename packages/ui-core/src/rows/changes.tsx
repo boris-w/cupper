@@ -23,20 +23,30 @@ function TurnChangesRow({ row }: { row: RowOf<"turn_changes"> }) {
   const { sessionId = "" } = useStreamActions();
   const openReview = use(OpenReview);
   const [failure, setFailure] = useState<{ reason?: string; code?: string }>();
-  const actions = useActions(sessionId, (error) => {
+  const [fetching, setFetching] = useState(false);
+  const fail = (error: unknown) => {
     const data = error instanceof RpcFailure ? error.error.data : undefined;
     setFailure((data ?? {}) as { reason?: string; code?: string });
-  });
+  };
+  const actions = useActions(sessionId, fail);
   const { status, stat, reason, excluded } = row.snapshot;
   const recorded = status === "ok" || status === "partial";
   const diff = useDiff(sessionId, { turn: row.turnId }, recorded);
   const open = (path?: string) =>
     openReview({ sessionId, turnId: row.turnId, turnNo: row.turnNo, ...(path ? { path } : {}) });
-  const undo = () => {
-    if (!diff.data) return;
+  // A token lives 10 minutes (design 5.2.10), so undo takes a fresh one; the
+  // turn's diff is between two fixed snapshots, the same as on the card.
+  const undo = async () => {
     setFailure(undefined);
+    setFetching(true);
+    const fresh = await diff.refetch();
+    setFetching(false);
+    if (!fresh.data || fresh.isError) {
+      fail(fresh.error);
+      return;
+    }
     // From a button of the main document: the focus goes to "确认" (RP-11).
-    const diffToken = diff.data.diff_token;
+    const diffToken = fresh.data.diff_token;
     actions.askRevert({ source: "button", diffToken, target: { all: true }, hunk: false });
   };
 
@@ -58,8 +68,8 @@ function TurnChangesRow({ row }: { row: RowOf<"turn_changes"> }) {
         {status === "ok" && (
           <button
             type="button"
-            disabled={!diff.data || actions.busy}
-            onClick={undo}
+            disabled={!diff.data || actions.busy || fetching}
+            onClick={() => void undo()}
             className="shrink-0 rounded-md px-2 py-0.5 text-fg-secondary outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           >
             {t("stream:changes_undo")}
