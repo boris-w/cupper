@@ -40,7 +40,11 @@ export function ReviewPanel() {
   );
   const [store] = useState(createReviewStore);
   if (sessionId === undefined) {
-    return <Empty title={t("review:no_session")} />;
+    return (
+      <div className="flex h-full flex-col">
+        <Empty title={t("review:no_session")} />
+      </div>
+    );
   }
   return (
     <ReviewContext value={store}>
