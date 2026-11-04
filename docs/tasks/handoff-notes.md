@@ -529,3 +529,5 @@
 | T144 | 新建会话页还没有权限按钮和模型选择器：两个扩展拿不到会话流时不显示；第一条消息前显示缓存的能力时，一并接上 `composer/config.tsx` 的 `useOption`、`useSetOption` | T231 |
 | T148、T154 | 模型选择器的按钮直接显示 agent 给的名字，Claude 下是"Default (recommended) High"，偏长；要不要截断或用短名，在复刻度审阅里定 | T231 |
 | 以后改请求面板或错误条目的任务 | 错误条目的"换模型"打开的是输入框里的模型菜单；请求面板替换了输入框，或会话没有模型选项时，点了没有反应 | T231 |
+| T233 | 提交与推送的界面指引按语义码给：`signing_failed` 给改用 pinentry-mac 的指引；`auth_failed` 提示检查 ssh agent（只在 shell 配置里 export 的 `SSH_AUTH_SOCK` 从 GUI 启动时看不到）或凭据；没有上游时直接 `git/push` 回的是不带 reason 的 `git_error`（"has no upstream branch"），所以 `git/status` 没有 `upstream` 时默认带 `set_upstream`。失败的 git 输出在 `data.stderr`（末尾 2 KiB，已脱敏） | T123 |
+| 以后改用户档的任务 | 用户档不加任何 `-c`（`core.quotepath` 也不加），新加的固定覆盖只能进仓库档和快照档的 `overrides()`；失败分类读 `LC_ALL=C` 下的英文措辞，表驱动用例在 `git/user.rs` | T123 |
