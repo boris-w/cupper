@@ -6,6 +6,8 @@
 //! repo tier (5 and 6). All of it is read only.
 
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use cupper_protocol::error::RpcError;
@@ -18,7 +20,7 @@ use cupper_protocol::methods::session::WorktreeOutcome;
 use super::head::{self, Head};
 use super::service::{internal, shot, writable};
 use super::snapshot::{self, ShotError, blocking, output, split};
-use super::worktree::{Worktrees, listed, lock_reason};
+use super::worktree::{Heard, Plan, Worktrees, listed, lock_reason};
 use super::{GitCmd, GitError, GitTool, RepoOp, SnapshotOp, status};
 use crate::clock::Clock;
 use crate::durations::Durations;
@@ -188,5 +190,49 @@ impl Worktrees {
         let remove = remove.args([path]);
         self.run(repo, &writable, remove).await.map_err(failed)?;
         Ok((WorktreeOutcome::Removed, Vec::new()))
+    }
+
+    /// Brings `plan`'s worktree back for `session` (design 5.2.6, PS-3):
+    /// `add` takes over what is there or adds it from its branch. One git
+    /// lists without its directory is added again with `--force` when its
+    /// lock, if any, is the session's. `false`: the branch is gone, or out
+    /// in another worktree, which `--force` would let it be twice.
+    pub async fn restore(&self, plan: &Plan, session: &SessionId) -> Result<bool, RpcError> {
+        let writable = writable(&self.readers).await?;
+        let failed = |err| self.failed(err);
+        let (repo, path) = (&plan.repo, &plan.path);
+        let heads = format!("refs/heads/{}", plan.branch);
+        let heads = GitCmd::repo(RepoOp::ForEachRef).args(["--format=%(refname)", &heads]);
+        let heads = self.run(repo, &writable, heads).await.map_err(failed)?;
+        let list = GitCmd::repo(RepoOp::WorktreeList);
+        let list = self.run(repo, &writable, list).await.map_err(failed)?;
+        let list = &list.output.stdout;
+        let (out, own) = (
+            format!("branch refs/heads/{}", plan.branch),
+            path.as_os_str(),
+        );
+        let own = [b"worktree ", own.as_bytes()].concat();
+        let fields: Vec<&[u8]> = list.split(|b| *b == 0).collect();
+        let mut records = fields.split(|field| field.is_empty());
+        let other = |r: &[&[u8]]| r.first() != Some(&&own[..]) && r.contains(&out.as_bytes());
+        if heads.output.stdout.is_empty() || records.any(other) {
+            return Ok(false);
+        }
+        if let Some(lock) = listed(list, path).filter(|_| !path.is_dir()) {
+            if lock.is_some_and(|lock| lock != lock_reason(session)) {
+                return Ok(false);
+            }
+            let _lock = self.locks.hold(repo).await?;
+            let unlock = GitCmd::repo(RepoOp::WorktreeUnlock).args([path]);
+            let _ = self.run(repo, &writable, unlock).await;
+            let args = [
+                OsStr::new("--force"),
+                path.as_os_str(),
+                plan.branch.as_ref(),
+            ];
+            let add = GitCmd::repo(RepoOp::WorktreeAdd).args(args);
+            self.run(repo, &writable, add).await.map_err(failed)?;
+        }
+        self.add(plan, session, |_: Heard| {}).await.map(|()| true)
     }
 }

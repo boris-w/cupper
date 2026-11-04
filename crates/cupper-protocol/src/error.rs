@@ -92,6 +92,8 @@ open_enum! {
         LfsObjectMissing => "lfs_object_missing",
         /// `git/commit`: signing the commit failed, by gpg, ssh or x509 (Q23).
         SigningFailed => "signing_failed",
+        /// A write to a session restored without its worktree's branch (PS-3).
+        SessionReadOnly => "session_read_only",
         /// A write to an archived session, which `session/restore` brings back.
         SessionArchived => "session_archived",
         /// The session's queue holds its limit of messages (design 5.3.9).
@@ -140,6 +142,7 @@ impl ErrorReason {
             | R::IndexUnmerged
             | R::ProjectUntrusted
             | R::ScanFailed
+            | R::SessionReadOnly
             | R::SessionArchived => ErrorCode::Unavailable,
             R::HookFailed
             | R::NothingToCommit
