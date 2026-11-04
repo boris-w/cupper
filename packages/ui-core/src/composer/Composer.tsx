@@ -4,7 +4,14 @@
 // composer's place and give it back as it was.
 
 import type { PromptBlock } from "@cupper/protocol";
-import { useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
 import { useStore } from "zustand";
 
 import { useT } from "../app/providers";
@@ -130,6 +137,11 @@ export function Composer(props: {
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const closeOverlay = useRef<(() => void) | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
+  const [areaNode, setAreaNode] = useState<HTMLTextAreaElement | null>(null);
+  const areaRef = useCallback((node: HTMLTextAreaElement | null) => {
+    area.current = node;
+    setAreaNode(node);
+  }, []);
 
   const ready = sessionId !== undefined || projectId !== undefined;
   const empty = draft.trim() === "" && attachments.length === 0;
@@ -183,7 +195,9 @@ export function Composer(props: {
       : t("composer:placeholder", { agent: t(`sidebar:agent_${agent}`, { defaultValue: agent }) });
 
   return (
-    <OverlayContext value={{ container, setClose: (close) => (closeOverlay.current = close) }}>
+    <OverlayContext
+      value={{ container, area: areaNode, setClose: (close) => (closeOverlay.current = close) }}
+    >
       <div ref={setContainer} className="relative" />
       <TierHint sessionId={sessionId} />
       {armed && (
@@ -226,7 +240,7 @@ export function Composer(props: {
           />
         )}
         <textarea
-          ref={area}
+          ref={areaRef}
           rows={1}
           value={draft}
           placeholder={placeholder}

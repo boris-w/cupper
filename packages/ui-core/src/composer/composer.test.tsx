@@ -3,7 +3,7 @@ import { decodeBlobChunk, FRAME_BLOB, HostClient } from "@cupper/host-client";
 import { hostError, MockHost } from "@cupper/host-client/mock";
 import type { Handshake } from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test } from "vitest";
 
@@ -346,5 +346,53 @@ describe("UNIT-composer-config", () => {
     cleanup();
     await setup("idle", [configured("default")]);
     expect(screen.queryByRole("button", { name: "权限" })).toBeNull();
+  });
+});
+
+describe("file references", () => {
+  const configured = {
+    type: "session.configured",
+    data: {
+      ...{ agent: "claude", project_config: "loaded", read_only: false, config: {} },
+      workspace: { kind: "local", path: "/p" },
+    },
+  };
+  const results = [
+    { path: "src/review/a.ts", score: 9, ranges_utf16: [[4, 7]] },
+    { path: "docs/<b>rev</b>.md", score: 5, ranges_utf16: [[8, 11]] },
+  ];
+
+  test("@ lists the matches, ↓ and Enter take one as a file_ref, Esc closes", async () => {
+    const { area, requests, mock, ui } = await setup("idle", [configured]);
+    mock.handle("files/search", () => ({ result: { results } }));
+    await act(async () => void fireEvent.input(area, { target: { value: "see @rev" } }));
+    const list = await screen.findByRole("listbox", { name: "引用文件" });
+    expect(requests("files/search")).toEqual([{ session_id: "s_1", query: "rev", limit: 20 }]);
+    const options = within(list).getAllByRole("option");
+    expect(options.map((o) => o.textContent)).toEqual(results.map((r) => r.path));
+    expect(options[1]?.querySelector("span")?.textContent).toBe("rev");
+    fireEvent.keyDown(area, { key: "ArrowDown" });
+    expect(options[1]?.getAttribute("aria-selected")).toBe("true");
+    await act(async () => void fireEvent.keyDown(area, { key: "Enter" }));
+    expect(ui.getState().drafts.s_1).toBe("see ");
+    expect(ui.getState().attachments.s_1).toEqual([{ type: "file_ref", path: results[1]?.path }]);
+    expect(requests("session/send")).toEqual([]);
+    expect(screen.queryByRole("listbox")).toBeNull();
+
+    await act(async () => void fireEvent.input(area, { target: { value: "see @" } }));
+    await screen.findByRole("listbox");
+    await act(async () => void fireEvent.keyDown(area, { key: "Escape" }));
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  test("a dropped file in the workspace becomes a file_ref; one outside says so", async () => {
+    const { area, controls, ui } = await setup("idle", [configured]);
+    controls.setFilePath("a.ts", "/p/src/a.ts");
+    controls.setFilePath("x.ts", "/elsewhere/x.ts");
+    const files = [new File([], "a.ts"), new File([], "x.ts"), new File([], "made-up.ts")];
+    const box = area.closest("[data-composer]") as HTMLElement;
+    await act(async () => void fireEvent.drop(box, { dataTransfer: { files, types: ["Files"] } }));
+    expect(ui.getState().attachments.s_1).toEqual([{ type: "file_ref", path: "src/a.ts" }]);
+    expect(screen.getByText("只能引用工作区里的文件")).toBeTruthy();
   });
 });
