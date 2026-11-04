@@ -503,6 +503,7 @@ mod tests {
             "conflict/stale_diff",
             "conflict/outcome_unknown",
             "git_error",
+            "git_error/lfs_object_missing",
             "forbidden",
         ];
         assert_eq!(errors("git/revert"), json!(errors_of_apply));

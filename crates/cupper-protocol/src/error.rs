@@ -87,6 +87,9 @@ open_enum! {
         UnsafeRepoConfig => "unsafe_repo_config",
         RepoConfigChanged => "repo_config_changed",
         FilterUnsupported => "filter_unsupported",
+        /// An LFS object the call would check out is not in the repository,
+        /// and the host does not download it (`git lfs fetch` does).
+        LfsObjectMissing => "lfs_object_missing",
         /// `git/commit`: signing the commit failed, by gpg, ssh or x509 (Q23).
         SigningFailed => "signing_failed",
         /// The session's queue holds its limit of messages (design 5.3.9).
@@ -143,6 +146,7 @@ impl ErrorReason {
             | R::UnsafeRepoConfig
             | R::RepoConfigChanged
             | R::FilterUnsupported
+            | R::LfsObjectMissing
             | R::SigningFailed => ErrorCode::GitError,
             R::QueueFull => ErrorCode::TooLarge,
             R::Steer | R::Cancel => ErrorCode::Timeout,
