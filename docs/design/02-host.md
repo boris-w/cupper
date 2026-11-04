@@ -162,7 +162,7 @@ flowchart TB
 ### SessionManager
 
 - `HashMap<SessionId, SessionHandle>`，actor 按需启动，空闲（没有回合、没有排队、没有待处理请求）10 分钟后退出，退出前对 agent 会话调用 `session/close`，释放 Claude 的 CLI 进程（ADR-09）。
-- **新建**（`session/create`，详细时序见 [5.5.2](05-flows.md#552-新建会话含新建-worktree)）：校验项目和 agent → 生成 `session_id` → 一个事务写入：`sessions` 行（**第一条消息写进 `initial_prompt_json`**）、会话流的首批事件（`session.configured`、`workspace.preparing`）、命令结果 → 回复 `session_id` → 启动 actor，由它异步准备工作区、连接 agent、发出第一个回合。第一个回合开始时，`turn.started`、用户消息和清空 `initial_prompt_json` 在同一个事务里提交。这样宿主在准备工作区期间（`worktree add` 可能要几分钟）崩溃，已受理的消息也不会丢（测试 #10）。按 ADR-09，**会话总是和第一条消息一起创建**，不存在没有消息的空会话。
+- **新建**（`session/create`，详细时序见 [5.5.2](05-flows.md#552-新建会话含新建-worktree)）：校验项目和 agent → 生成 `session_id` → 一个事务写入：`sessions` 行（**第一条消息写进 `initial_prompt_json`**）、会话流的首批事件（`session.configured`、`workspace.preparing`）、命令结果 → 回复 `session_id` → 启动 actor，由它异步准备工作区、连接 agent、发出第一个回合。第一个回合开始时，`turn.started`、用户消息和清空 `initial_prompt_json` 在同一个事务里提交。这样宿主在准备工作区期间（`worktree add` 可能要几分钟）崩溃，已受理的消息也不会丢（测试 #10）。新建 worktree 时，这一批用 `synchronous=FULL` 加 `fullfsync` 提交，`workspace.preparing` 就是 `worktree add` 的在途标记，代替账本的 `pending_external`（命令结果已经和它一起提交，账本里没有在途的命令；T124）。准备期间，会进状态机的调用（send、interrupt、queue_resume 等）先排着，就绪或失败后按原顺序补上，只读调用照常回答。worktree 准备失败时会话状态不进 `error`：界面凭工作区视图的 `Failed{code, reason}` 和以 `workspace_failed` 暂停的队列显示失败，`queue_resume` 回 `unavailable`。按 ADR-09，**会话总是和第一条消息一起创建**，不存在没有消息的空会话。
 - **归档**：先由客户端调用 `worktree/check` 取得能否清理的结论；`session/archive` 关闭 agent 会话，按参数保留或删除 worktree（规则见 [5.2.10](#5210-git-与-worktree-服务)），会话从索引流移除。
 - **恢复**：分支还在就重建 worktree；分支不在就把会话标为只读（PS-3）。
 
@@ -441,10 +441,10 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 **worktree**（ADR-10，仓库档）
 
-- 位置 `~/.cupper/worktrees/<仓库名>-<短哈希>/<会话短名>`，可在设置中修改；根目录建成 0700。
-- 分支 `cupper/<短名>`，先 `check-ref-format --branch` 校验，冲突时加后缀。
-- 会话存续期间 `worktree lock --reason "cupper session <id>"`；建好后等 1 秒执行一次 `update-index --refresh`；不用 `--relative-paths`。
-- `worktree add` 的检出不运行自定义过滤器和 post-checkout hook（仓库档的覆盖）。过滤器设了 `required` 时检出会失败，界面提示"这个仓库配置了自定义过滤器，cupper 不会代为运行；请在终端创建 worktree，或改用本地模式"。
+- 位置 `~/.cupper/worktrees/<仓库名>-<短哈希>/<会话短名>`，可在设置中修改；根目录建成 0700。T124：仓库名取主 worktree 顶层目录的名字（裸仓库去掉 `.git`），短哈希取公共 git 目录 realpath 的 sha-256 前 8 位十六进制，目录按 0700 递归建好后再取 realpath。
+- 分支 `cupper/<短名>`，先 `check-ref-format --branch` 校验，冲突时加后缀。T124：短名取 `branch_hint`（只能是单段，不合格回 `invalid_params`），没有时用 `s-<会话 ID 末 8 位十六进制>`；分支和目录同名，后缀 `-2` 到 `-99`，用完回 `conflict`；名字在 `session/create` 里同步决定，之后被别人抢先建了同名分支时，add 失败、写 `workspace.failed`。项目不是 git 仓库（或不是工作树的顶层目录）时回 `unsupported/not_a_repo`；`base_ref` 不在创建时校验，写错的要等 add 失败。
+- 会话存续期间 `worktree lock --reason "cupper session <id>"`；建好后等 1 秒（`worktree_refresh`，经 `Clock`）执行一次 `update-index --refresh`；不用 `--relative-paths`。`RepoLock` 只覆盖 add 和 lock，等待期间不占，刷新前再拿；刷新失败不算失败。检出进度从 `worktree add` 的 stderr 边读边转发，按 `Updating files: n%` 写 `workspace.preparing{checkout, n}`（git 默认过 2 秒才开始写）。`RepoLock` 由 supervisor 建好，Git 服务和 worktree 共用。
+- `worktree add` 的检出不运行自定义过滤器和 post-checkout hook（仓库档的覆盖）。过滤器设了 `required` 时检出会失败，回 `workspace.failed{git_error, filter_unsupported}`，界面提示"这个仓库配置了自定义过滤器，cupper 不会代为运行；请在终端创建 worktree，或改用本地模式"。
 - `worktree/check` 按 ADR-10 的 7 条规则只读检查：第 1、2 条（修改、暂存、未跟踪）由快照档计算；第 3 条检查 git 目录里的标记文件；第 4 条检查锁文件；第 5、6 条用 `rev-list`；第 7 条检查子模块的 git 目录是否存在。返回阻止删除的原因和只提示不阻止的情况（被忽略文件的数量、只因大小写冲突显示为"脏"）。
 - 删除用 `git worktree remove`，不加 `--force`；只有"仅大小写冲突"且用户确认时才加 `--force`；默认保留分支。
 

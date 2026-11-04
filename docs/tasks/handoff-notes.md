@@ -537,3 +537,6 @@
 | T232 | 点击文件跳转用 `store.set({ focus: { path, line, seq: (focus?.seq ?? 0) + 1 } })`；文件行和 hunk 的操作按 `ACTIONS[scope]` 显示。顺带修共用组件：菜单关闭后焦点回到 `ToolbarButton`，它的 tooltip 和焦点环随之出现，用鼠标选完也是这样；鼠标关闭时不让 tooltip 因此打开，键盘关闭照常还焦点（截图用例现在靠先点一下空白处绕开） | T130 |
 | 以后加菜单的任务 | 菜单里可勾选的项用 `MenuItem` 的 `checked`（加 `radio` 表示单选），勾在条目末尾；不要自己画勾，也不要改 `MenuItem` 自身的间距（会挪动所有现有菜单，UI-new-session 的基线会变） | T130、T231 |
 | 改 `cargo xtask size` 的任务 | 它只按文件名排除 `Cargo.lock`、`pnpm-lock.yaml`，spike 自带的 npm `package-lock.json` 会被算进行数（T104 的 1,197 行）；排除名单可以加上 `package-lock.json` | T104 |
+| T144 | worktree 准备失败时会话状态是 `idle`，不进 `error`：界面凭工作区视图的 `Failed{code, reason}` 和以 `workspace_failed` 暂停的队列（第一条消息在里面）显示失败；`filter_unsupported` 的提示文案在 5.2.10；`base_ref` 不在创建时校验，从 `git/branches` 里选，避免 add 才失败；`branch_hint` 只能是单段 | T124 |
+| T236 | 载入时停在 Preparing、`initial_prompt_json` 不为空的会话还不会恢复：复用已登记的 worktree，分支已在时不带 `-b` 再 add；在途标记是 FULL 落盘的 `workspace.preparing`；`Worktrees::plan`、`add` 在 `git/worktree.rs`；故障点 `worktree.adding`、`worktree.added` | T124 |
+| 改 CI 或 setup 动作的任务 | setup 动作恢复的 downloads 缓存可能没有 `target/git-lfs/git-lfs`（先存下这个 key 的作业不跑 `xtask git-lfs`，key 存下后不再更新）；只有 rust 作业和 test-repeat（T235 之后）自己下载。按作业分键或在 setup 里补下载都行（T197 记过同一件事） | T235 |

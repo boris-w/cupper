@@ -109,7 +109,7 @@ sequenceDiagram
   H->>G: 结束快照（异步）
 ```
 
-失败分支：CLI 找不到、没登录、运行时安装失败时，`Attach` 返回 `unavailable` 和具体 `reason`；会话流写一条 `error` 条目（带恢复指引；T226：写在以 `failed` 结束的那个回合里，在 Settle 之前，每个回合至多一条，`FailureCode` 到 `Guidance` 的映射是穷举的纯函数，`retryable` 只在 guidance 为 `retry` 时为真），会话状态为 `error`，用户处理后重发即可。worktree 创建失败时写 `workspace.failed`。
+失败分支：CLI 找不到、没登录、运行时安装失败时，`Attach` 返回 `unavailable` 和具体 `reason`；会话流写一条 `error` 条目（带恢复指引；T226：写在以 `failed` 结束的那个回合里，在 Settle 之前，每个回合至多一条，`FailureCode` 到 `Guidance` 的映射是穷举的纯函数，`retryable` 只在 guidance 为 `retry` 时为真），会话状态为 `error`，用户处理后重发即可。worktree 创建失败时写 `workspace.failed`，第一条消息转成以 `workspace_failed` 暂停的排队消息，会话状态不进 `error`（T124）。
 
 ## 5.5.3 发送消息、排队、插话（Steer）
 
