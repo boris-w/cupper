@@ -28,6 +28,7 @@ use std::ffi::OsString;
 use std::marker::PhantomData;
 
 use crate::durations::{DurationKey, GIT_COMMAND, GIT_SNAPSHOT, GIT_WORKTREE_ADD};
+use crate::durations::{GIT_COMMIT, GIT_PUSH};
 
 /// The repo tier: git runs in the user's repository, checked and overridden
 /// on every call (T097, T098).
@@ -37,6 +38,33 @@ pub enum Repo {}
 /// The snapshot tier: git runs on cupper's own GIT_DIR (T061).
 #[derive(Debug)]
 pub enum Snapshot {}
+
+/// The user tier: the user's own commit and push, as in a terminal (T123).
+#[derive(Debug)]
+pub enum User {}
+
+/// The user tier's commands (design 5.2.10, "提交与推送").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserOp {
+    /// `commit -F -`: the message on stdin; the repository's hooks run.
+    Commit,
+    Push,
+}
+
+impl UserOp {
+    fn spec(self) -> Spec {
+        let (words, timeout): (&'static [&'static str], _) = match self {
+            Self::Commit => (&["commit", "-F", "-"], GIT_COMMIT),
+            Self::Push => (&["push"], GIT_PUSH),
+        };
+        let read_only = false;
+        Spec {
+            words,
+            read_only,
+            timeout,
+        }
+    }
+}
 
 /// The repo tier's commands (design 5.2.10): reading refs and config, and
 /// writing the user's index and worktrees.
@@ -276,6 +304,12 @@ impl GitCmd<Snapshot> {
     }
 }
 
+impl GitCmd<User> {
+    pub fn user(op: UserOp) -> Self {
+        Self::new(op.spec())
+    }
+}
+
 impl<T> GitCmd<T> {
     fn new(spec: Spec) -> Self {
         let (global, args, input) = (Vec::new(), Vec::new(), None);
@@ -327,15 +361,14 @@ impl<T> GitCmd<T> {
         self.input.take()
     }
 
-    /// The arguments after the program: global options, `-c core.quotepath`,
-    /// the caller's `-c`s, the tier's `fixed` ones, the `target` (`-C
-    /// <repo>`), the command's words and the caller's arguments.
+    /// The arguments after the program: global options, the caller's `-c`s,
+    /// the tier's `fixed` ones, the `target` (`-C <repo>`), the command's
+    /// words and the caller's arguments.
     pub(super) fn line(&self, fixed: &[OsString], target: &[OsString]) -> Vec<OsString> {
         let mut line: Vec<OsString> = vec!["--no-pager".into()];
         if self.spec.read_only {
             line.push("--no-optional-locks".into());
         }
-        line.extend(["-c".into(), "core.quotepath=false".into()]);
         line.extend(self.global.iter().chain(fixed).chain(target).cloned());
         line.extend(self.spec.words.iter().map(OsString::from));
         line.extend(self.args.iter().cloned());

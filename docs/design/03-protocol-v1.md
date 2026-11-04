@@ -191,12 +191,12 @@
 
 | 方法 | 类型 | 参数要点 | 结果要点 | 可能的错误 | 幂等 | scope |
 |---|---|---|---|---|---|---|
-| `git/status` | 请求 | `{session_id}` | `{branch, upstream?, ahead, behind, in_progress?, files: [{path, index, worktree}]}` | `unsupported/not_a_repo`、`git_error/unsafe_repo_config` | 天然 | read |
+| `git/status` | 请求 | `{session_id}` | `{branch, upstream?, ahead, behind, in_progress?, files: [{path, index, worktree}], repo_config_changed?: [path]}`（T123：本会话期间指纹变过的配置文件，供提交确认和面板提示） | `unsupported/not_a_repo`、`git_error/unsafe_repo_config` | 天然 | read |
 | `git/diff` | 请求 | `{session_id, scope: unstaged\|staged\|last_turn\|{turn: id}}` | `{diff_token, files: [{path, old_path?, change, additions, deletions, binary, filter_unsupported?}], snapshot?: {status, excluded}, stat: {files, added, removed}, caveats: [mixed_changes\|late_tool_effects]}` | `unavailable`（`snapshot_missing`、`index_unmerged`） | 天然 | read |
 | `git/file_diff` | 请求 | `{session_id, diff_token, path}` | `{path, hunks: [{hunk_id, unit: hunk\|mode\|whole_file, header, lines \| lines_blob}]}`；`filter_unsupported` 的路径没有可操作的 hunk | `conflict/stale_diff` | 天然 | read |
 | `git/stage`、`git/unstage`、`git/revert` | 请求 | `{command_id, session_id, diff_token, target: {all} \| {paths} \| {hunk_ids}, input?}`；`git/revert` 来自 window 角色时必须带 `input`（同 `interaction/respond`） | `{}` | `conflict/stale_diff`、`conflict/outcome_unknown`、`git_error`（含 `unsafe_repo_config`、`filter_unsupported`）、`forbidden`（含 `user_activation_required`） | 命令 | write |
-| `git/commit` | 请求 | `{command_id, session_id, message}` | `{oid}` | `git_error`（`hook_failed`、`nothing_to_commit`）、`conflict/outcome_unknown` | 命令 | write |
-| `git/push` | 请求 | `{command_id, session_id, set_upstream?}` | `{remote, branch}` | `git_error`（`auth_failed`、`rejected`） | 命令 | write |
+| `git/commit` | 请求 | `{command_id, session_id, message}` | `{oid}` | `git_error`（`hook_failed`、`nothing_to_commit`、`signing_failed`）、`conflict/outcome_unknown` | 命令 | write |
+| `git/push` | 请求 | `{command_id, session_id, set_upstream?}` | `{remote, branch}` | `git_error`（`auth_failed`、`rejected`）、`conflict/outcome_unknown`（T123） | 命令 | write |
 | `git/branches` | 请求 | `{project_id}` | `{current, local, remote}` | — | 天然 | read |
 | `worktree/check` | 请求 | `{session_id}` | `{removable, blockers: [rule], warnings: {ignored_files, case_only_dirty}}` | — | 天然 | read |
 | `files/search` | 请求 | `{session_id \| project_id, query, limit?}` | `{results: [{path, score, ranges_utf16}]}` | — | 天然 | read |
@@ -426,7 +426,7 @@ ConfigOption {
 | `unsupported` | `data.capability` 指出能力；`not_a_repo` | 否 | 隐藏功能 |
 | `unavailable` | `cli_missing`、`cli_not_logged_in`、`cli_too_old`、`runtime_installing`、`runtime_failed`、`adapter_starting`、`adapter_crashed`、`pending_upgrade`、`quota_exhausted`、`app_not_found`、`snapshot_missing`、`index_unmerged`、`project_untrusted`、`scan_failed` | 视 reason | 显示恢复指引（AG-2、MS-5） |
 | `agent_error` | `data.agent_code`、`data.agent_message`（截断、脱敏） | 否 | 显示 |
-| `git_error` | `hook_failed`、`nothing_to_commit`、`auth_failed`、`rejected`、`lock_held`、`unsafe_repo_config`、`repo_config_changed`、`filter_unsupported` | 视 reason | 显示 stderr 摘要或原因 |
+| `git_error` | `hook_failed`、`nothing_to_commit`、`signing_failed`（T123：gpg、ssh、x509 签名失败，界面给出改用图形版 pinentry 的指引）、`auth_failed`、`rejected`、`lock_held`、`unsafe_repo_config`、`repo_config_changed`、`filter_unsupported` | 视 reason | 显示 stderr 摘要或原因 |
 | `idempotency_mismatch` | — | 否 | 程序错误 |
 | `too_large` | — | 否 | 改用 blob |
 | `rate_limited` | 带 `retry_after_ms` | 是 | 退避 |

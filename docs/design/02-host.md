@@ -431,7 +431,13 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 **git/status**：分支、上游、领先落后用仓库档的只读引用类命令；进行中的操作（合并、cherry-pick、revert、rebase、bisect）直接检查 git 目录里的标记文件；文件状态由快照档计算。
 
-**提交与推送**（用户档）：`commit -F -` 从 stdin 读提交信息，会运行用户自己的 hooks；`push` 默认推当前分支，必要时 `--set-upstream`。失败时把 stderr 末尾（脱敏后）放进错误的 `data`。
+**提交与推送**（用户档）：`commit -F -` 从 stdin 读提交信息，会运行用户自己的 hooks；`push` 默认推当前分支，必要时 `--set-upstream <remote> HEAD`。失败时把 stderr 末尾（脱敏后）放进错误的 `data`。T123 落实：
+- 用户档不加任何 `-c` 覆盖（hooks、签名、凭据助手照常），环境与仓库档相同（下文"环境"）；`push` 的 stdin 为 `/dev/null`，需要输入凭据时因 `GIT_TERMINAL_PROMPT=0` 很快以 `auth_failed` 失败。
+- 失败的 reason 按 `LC_ALL=C` 下 git 的英文输出和退出码区分：`lock_held`、`nothing_to_commit`、`signing_failed`、`hook_failed`（提交时退出码 1）、`rejected`、`auth_failed`；其余回不带 reason 的 `git_error`。
+- 推送的 remote 取当前分支上游的 `%(upstream:remotename)`（remote 名可以带 `/`），没有上游时用 `origin`；detached HEAD 时回不带 reason 的 `git_error`。
+- 提交成功后经仓库档读 HEAD 得到 `oid`；超时（`git_commit`、`git_push` 各 5 分钟）或读 HEAD 失败时回 `conflict/outcome_unknown`，与崩溃后的重试一致（提交可能已经落地）。
+- "包含未暂存的更改"由界面先 `git/stage`（未暂存范围、全部）再 `git/commit`，宿主没有对应参数。
+- 指纹提示：会话 actor 记下本会话 `repo_config_changed` notice 的路径（加载时从回合快照和未修剪的事件重建，提交后不清空），`git/status` 的 `repo_config_changed` 从这里取，不查数据库。
 
 **worktree**（ADR-10，仓库档）
 
@@ -444,15 +450,15 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 **调用约定**（三档共用）
 
-- `GitCmd` 构造器：每类命令一组固定参数，统一 `-z`；只读命令加 `--no-optional-locks`；固定加 `-c core.quotepath=false`。
+- `GitCmd` 构造器：每类命令一组固定参数，统一 `-z`；只读命令加 `--no-optional-locks`；仓库档和快照档固定加 `-c core.quotepath=false`，用户档不加（T123：经 `GIT_CONFIG_PARAMETERS` 会带进 hooks 里调用的 git，输出就和终端不一样了）。
 - **程序的路径**（安全核对 2）：宿主启动时（以及 `agents/refresh` 时）把 `git` 和 `git-lfs` 解析成绝对路径，之后只用这两个绝对路径，不在每次调用时按 PATH 查找。解析时只看登录 shell 的 PATH 里的**可信条目**：是绝对路径，并且不在任何项目、工作区、worktree 根目录下，也不在临时目录（`$TMPDIR`、`/tmp`、`/private/var/folders`）下。解析结果和来源目录写进索引流的 `agents` 状态。
 - **环境**：git 子进程的 PATH 只保留上述可信条目（git 自己再拉起的 `ssh`、`gpg` 等也只能从这些目录里找到）；`LC_ALL=C`，便于解析报错；`GIT_TERMINAL_PROMPT=0`；继承 `SSH_AUTH_SOCK`。仓库档和用户档还带 `HOME`，让 git 读到用户的全局配置（`core.autocrlf`、`user.name` 等）：全局配置和其他来源一样过第 2 条的来源检查和第 4 条的置空，所以读它是安全的（T060 发现）。快照档用自己的白名单配置，是否带 `HOME` 由 T061 定。
 - **工作目录**：git 子进程的工作目录设为 cupper 自己的目录（`<数据目录>/git/`），目标仓库经 `-C <路径>`（仓库档、用户档）或 `GIT_DIR`、`GIT_WORK_TREE`（快照档）指定。
 - 所有 git 子进程都经 `cupper-sys::spawn` 拉起（[5.8.5](08-security.md#585-进程卫生)）。
-- 超时：只读命令 30 s；快照 60 s；`worktree add` 10 分钟（输出进度事件）；`push` 5 分钟。
+- 超时：只读命令 30 s；快照 60 s；`worktree add` 10 分钟（输出进度事件）；`commit`（会运行 hooks）、`push` 各 5 分钟。
 - 启动时检测 git 版本（暂定最低 2.39）和 git-lfs，结果放进索引流的 `agents` 状态里一起显示。解析出的 git 是 `/usr/bin/git` 时，它可能只是 xcode-select 的占位程序，没装命令行工具时一运行就弹安装对话框：先用 `xcode-select -p` 确认开发者目录存在、且其下的 `usr/bin/git` 存在，才运行它；否则判为 git 缺失并提示安装命令行工具，绝不运行占位程序（T054 发现，2026-10-20）。
 
-**并发**：会修改用户 index 或 worktree 的操作（stage、unstage、revert、commit、worktree add/remove）按仓库拿 `RepoLock`。快照档的每次调用使用自己的临时 index，不拿锁，可以与其他会话的快照并行；`config` 的重新生成写临时文件后改名。
+**并发**：会修改用户 index 或 worktree 的操作（stage、unstage、revert、commit、worktree add/remove）按仓库拿 `RepoLock`；`push` 不碰 index 和工作区，可能跑几分钟，不拿锁（T123），但与 `commit` 一样先写 `pending_external`。快照档的每次调用使用自己的临时 index，不拿锁，可以与其他会话的快照并行；`config` 的重新生成写临时文件后改名。
 
 ## 5.2.11 文件服务与设置
 

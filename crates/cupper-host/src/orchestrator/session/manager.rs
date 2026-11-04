@@ -4,7 +4,7 @@
 //! ([`load`](super::load)); its mailbox is in the table from the start, so a
 //! session has one actor however many calls come at once.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -339,6 +339,7 @@ impl SessionManager {
             project_gate: false,
             ignore_for_good: false,
             initial: true,
+            config_changed: BTreeSet::new(),
         };
         let participant = deps.quiescence.enter(SESSION);
         let (actor, mail) = ((parts, start), handle.mail.clone());
@@ -544,7 +545,7 @@ impl SessionManager {
                 Mail::IgnoreProjectConfig(done) => {
                     let _ = done.send(Err(err.clone()));
                 }
-                Mail::Notice(_) => {}
+                Mail::Notice(_) | Mail::ConfigChanged(_) => {}
             }
         }
     }
@@ -666,6 +667,13 @@ impl SessionNotes for SessionManager {
     /// drops it.
     fn notice(&self, id: &SessionId, notice: RepoNotice) {
         let _ = self.mailbox(id).send(Mail::Notice(notice));
+    }
+
+    /// From the session's actor; none from a session that cannot load.
+    fn repo_config_changed(&self, id: &SessionId) -> BoxFuture<'static, Vec<WirePath>> {
+        let (reply, paths) = oneshot::channel();
+        let _ = self.mailbox(id).send(Mail::ConfigChanged(reply));
+        Box::pin(paths.map(Result::unwrap_or_default))
     }
 }
 

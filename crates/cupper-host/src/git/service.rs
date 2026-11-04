@@ -10,19 +10,21 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use cupper_protocol::annotations::WirePath;
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::ids::{DiffToken, SessionId, TurnId};
 use cupper_protocol::limits::V1;
 use cupper_protocol::methods::git::{
     DiffCaveat, DiffHunk, DiffScope, DiffSnapshot, GitApplyParams, GitBranches, GitBranchesParams,
-    GitBranchesResult, GitDiffParams, GitDiffResult, GitFileDiff, GitFileDiffParams,
-    GitFileDiffResult, GitRevert, GitStage, GitStatus, GitStatusParams, GitStatusResult, GitTarget,
-    GitUnstage,
+    GitBranchesResult, GitCommit, GitCommitParams, GitCommitResult, GitDiffParams, GitDiffResult,
+    GitFileDiff, GitFileDiffParams, GitFileDiffResult, GitPush, GitPushParams, GitPushResult,
+    GitRevert, GitStage, GitStatus, GitStatusParams, GitStatusResult, GitTarget, GitUnstage,
 };
 use cupper_protocol::rpc::Method;
 use cupper_protocol::sync::StreamId;
 use cupper_protocol::view::{SessionView, View};
 use futures::FutureExt;
+use futures::future::BoxFuture;
 use rusqlite::OptionalExtension;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -33,11 +35,11 @@ use super::head::{self, Head};
 use super::run::RunError;
 use super::snapshot::ShotError;
 use super::stamp::Layout;
-use super::{GitCmd, GitError, GitTool, RepoNotice, RepoOp, snapshot, status};
+use super::{GitCmd, GitError, GitTool, RepoNotice, RepoOp, User, UserOp, snapshot, status, user};
 use crate::clock::{Clock, IdGen};
 use crate::durations::{DIFF_CACHE_TTL, Durations};
 use crate::gateway::{AuditRecord, Call, Port, Reply, Routes};
-use crate::ledger::Outcome;
+use crate::ledger::{Outcome, Ticket};
 use crate::store::streams::{StreamView, Streams};
 use crate::store::{BlobStore, Readers, log};
 
@@ -63,6 +65,8 @@ pub struct GitDeps {
 /// 2, 5 and 6), which the session's actor writes.
 pub trait SessionNotes: Send + Sync + std::fmt::Debug {
     fn notice(&self, session: &SessionId, notice: RepoNotice);
+    /// The paths of the session's `repo_config_changed` notices so far.
+    fn repo_config_changed(&self, session: &SessionId) -> BoxFuture<'static, Vec<WirePath>>;
 }
 
 /// The git service. Clones share its cache and locks.
@@ -205,7 +209,10 @@ impl GitService {
         let commit = head.commit.as_deref();
         let found = status::files(tool, &work_tree, commit, clock, durations).await;
         let (files, in_progress) = found.map_err(shot)?;
+        let notes = &self.deps.notes;
+        let changed = notes.repo_config_changed(&params.session_id).await;
         Ok(GitStatusResult {
+            repo_config_changed: (!changed.is_empty()).then_some(changed),
             branch: head.branch,
             upstream: head.upstream,
             ahead: head.ahead,
@@ -297,6 +304,91 @@ impl GitService {
             ticket.reject(err.clone());
         }
         Err(err)
+    }
+
+    /// `git/commit` (design 5.2.10, the user tier): `commit -F -`, the
+    /// message on stdin, the repository's hooks and signing as in a
+    /// terminal; then the new commit, read through the repo tier.
+    async fn commit(&self, call: Call) -> Outcome {
+        let mut ticket = call.ticket;
+        let asked = async {
+            let params: GitCommitParams = parse(&call.params)?;
+            let work_tree = self.workspace(&params.session_id).await?;
+            Ok((params, work_tree))
+        };
+        let (params, work_tree) = refuse(asked.await, &mut ticket)?;
+        let (op, tool) = (UserOp::Commit, self.tool()?);
+        let cmd = GitCmd::user(op).input(params.message.into_bytes());
+        self.user(op, &work_tree, cmd, &mut ticket).await?;
+        // The commit stands: should HEAD not be read, the ledger answers
+        // retries `outcome_unknown`.
+        let head = self.head(&params.session_id, tool, &work_tree).await?;
+        let oid = head.commit.unwrap_or_default();
+        settle(ticket, Ok(json!(GitCommitResult { oid }))).await
+    }
+
+    /// `git/push` (the user tier): the current branch, to its upstream, or
+    /// with `--set-upstream` to the upstream's remote, else `origin`.
+    async fn push(&self, call: Call) -> Outcome {
+        let mut ticket = call.ticket;
+        let asked = async {
+            let params: GitPushParams = parse(&call.params)?;
+            let work_tree = self.workspace(&params.session_id).await?;
+            let tool = self.tool()?;
+            let head = self.head(&params.session_id, tool, &work_tree).await?;
+            let detached = || RpcError::app(ErrorCode::GitError, "HEAD is detached");
+            let branch = head.branch.ok_or_else(detached)?;
+            let remote = head.remote.unwrap_or_else(|| "origin".into());
+            Ok((params, work_tree, branch, remote))
+        };
+        let (params, work_tree, branch, remote) = refuse(asked.await, &mut ticket)?;
+        let args = match params.set_upstream {
+            true => vec!["--set-upstream", &remote, "HEAD"],
+            false => Vec::new(),
+        };
+        let (op, cmd) = (UserOp::Push, GitCmd::user(UserOp::Push).args(args));
+        self.user(op, &work_tree, cmd, &mut ticket).await?;
+        settle(ticket, Ok(json!(GitPushResult { remote, branch }))).await
+    }
+
+    /// Runs `cmd` in the user tier once the command is `pending_external`
+    /// on disk; a commit under the repository's lock (design 5.2.10, "并发").
+    /// A failure rejects the command. One that may have taken effect, git
+    /// killed at its time limit or not started, is `outcome_unknown`, as
+    /// the ledger then answers its retries.
+    async fn user(
+        &self,
+        op: UserOp,
+        work_tree: &Path,
+        cmd: GitCmd<User>,
+        ticket: &mut Option<Ticket>,
+    ) -> Result<(), RpcError> {
+        let tier = self.tool()?.user_tier(work_tree);
+        let lock = match op {
+            UserOp::Commit => Some(self.locks.hold(work_tree).await?),
+            UserOp::Push => None,
+        };
+        if let Some(ticket) = ticket.as_mut() {
+            ticket.mark_external().await.map_err(internal)?;
+        }
+        let prepared = tier.prepare(cmd);
+        let done = prepared.run(&*self.deps.clock, &self.deps.durations).await;
+        drop(lock);
+        match done {
+            Ok(output) if output.status.success() => Ok(()),
+            Ok(output) => {
+                let err = user::failed(op, &output);
+                if let Some(ticket) = ticket.take() {
+                    ticket.reject(err.clone());
+                }
+                Err(err)
+            }
+            Err(err) => {
+                drop(ticket.take());
+                let reason = Some(ErrorReason::OutcomeUnknown);
+                Err(error(ErrorCode::Conflict, reason, &err.to_string()))
+            }
+        }
     }
 
     /// The work tree and the patch `op` applies for `params`: the target's
@@ -510,6 +602,8 @@ impl Port for GitService {
                 GitStage::NAME => service.write(RepoOp::Stage, call).await,
                 GitUnstage::NAME => service.write(RepoOp::Unstage, call).await,
                 GitRevert::NAME => service.write(RepoOp::Revert, call).await,
+                GitCommit::NAME => service.commit(call).await,
+                GitPush::NAME => service.push(call).await,
                 _ => Ok(json!(service.diff(parse(&call.params)?).await?)),
             }
         }
@@ -545,6 +639,24 @@ fn error(code: ErrorCode, reason: Option<ErrorReason>, message: &str) -> RpcErro
 fn missing() -> RpcError {
     let reason = Some(ErrorReason::SnapshotMissing);
     error(ErrorCode::Unavailable, reason, "the turn has no snapshots")
+}
+
+/// `outcome`, the command's, with its ticket completed.
+async fn settle(ticket: Option<Ticket>, outcome: Outcome) -> Outcome {
+    if let Some(ticket) = ticket {
+        let committed = ticket.complete(outcome.clone()).commit().await;
+        committed.map_err(internal)?;
+    }
+    outcome
+}
+
+/// `asked`, or its error with the command rejected: it never ran.
+fn refuse<T>(asked: Result<T, RpcError>, ticket: &mut Option<Ticket>) -> Result<T, RpcError> {
+    asked.inspect_err(|err| {
+        if let Some(ticket) = ticket.take() {
+            ticket.reject(err.clone());
+        }
+    })
 }
 
 /// The notice of a repo tier call that failed, in `session`'s stream.

@@ -490,6 +490,7 @@ mod tests {
             json!([
                 "git_error/hook_failed",
                 "git_error/nothing_to_commit",
+                "git_error/signing_failed",
                 "conflict/outcome_unknown"
             ])
         );

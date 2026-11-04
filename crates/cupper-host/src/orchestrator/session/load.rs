@@ -4,7 +4,7 @@
 //! core's [`Restored`]. What a view rebuilt from turn snapshots lacks is
 //! written again from the rows and the agent's cache (design 5.2.8; T169).
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::error::Error;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -62,6 +62,8 @@ struct Stored {
     /// The last turn's number, and its end as the startup cleanup recorded it.
     last_turn: Option<(u32, Option<u64>)>,
     ended: Vec<InteractionResolved>,
+    /// The paths of the session's `repo_config_changed` notices.
+    changed: BTreeSet<String>,
 }
 
 /// Loads session `id` for an actor of its own: `not_found` without its row.
@@ -230,6 +232,7 @@ pub(super) async fn load(
         project_gate,
         ignore_for_good: stored.ignored,
         initial,
+        config_changed: stored.changed,
     };
     Ok((parts, start))
 }
@@ -324,6 +327,7 @@ fn read(conn: &Connection, session: &str) -> rusqlite::Result<Option<Stored>> {
                 queue: Vec::new(),
                 last_turn: None,
                 ended: Vec::new(),
+                changed: BTreeSet::new(),
             })
         },
     );
@@ -363,7 +367,33 @@ fn read(conn: &Connection, session: &str) -> rusqlite::Result<Option<Stored>> {
     )?;
     let ended = select.query_map([session], |r| resolved(r, 0))?;
     stored.ended = ended.collect::<rusqlite::Result<_>>()?;
+    // The session's log: its turns' snapshots, and the events not pruned.
+    let mut select = conn.prepare(
+        "SELECT ops FROM turn_snapshots WHERE session_id = ?1 AND instr(ops, ?3) > 0
+         UNION ALL SELECT json FROM events WHERE stream = ?2 AND instr(json, ?3) > 0",
+    )?;
+    let stream = format!("session/{session}");
+    let notices = (session, &stream, "\"repo_config_changed\"");
+    let logged = select.query_map(notices, |r| r.get::<_, String>(0))?;
+    for logged in logged {
+        let logged: serde_json::Value = serde_json::from_str(&logged?).unwrap_or_default();
+        changed_paths(&logged, &mut stored.changed);
+    }
     Ok(Some(stored))
+}
+
+/// The paths of the `repo_config_changed` notices anywhere in `value`.
+fn changed_paths(value: &serde_json::Value, paths: &mut BTreeSet<String>) {
+    use serde_json::Value;
+    if value["kind"] == "notice" && value["code"] == "repo_config_changed" {
+        let named = value["params"]["paths"].as_array().into_iter().flatten();
+        paths.extend(named.filter_map(Value::as_str).map(String::from));
+    }
+    match value {
+        Value::Object(fields) => fields.values().for_each(|v| changed_paths(v, paths)),
+        Value::Array(values) => values.iter().for_each(|v| changed_paths(v, paths)),
+        _ => {}
+    }
 }
 
 /// Request `request` of session `session` as `interactions` has it, for
