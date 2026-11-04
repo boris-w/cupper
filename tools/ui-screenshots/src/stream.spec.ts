@@ -278,6 +278,14 @@ const TURN_DIFFS = {
 };
 
 /**
+ * The stream scrolled to its end before a shot. After a layout change the
+ * stream may stop following its end on a runner (T245); until T245, the shots
+ * of UI-turn-changes put it where they expect it.
+ */
+const toEnd = (page: Page) =>
+  page.locator("[data-stream-list]").evaluate((list) => list.scrollTo({ top: list.scrollHeight }));
+
+/**
  * The stream of `CHANGES`, its turns' diffs answered, and `revert` for
  * `git/revert`; the answers are set before the session page asks.
  */
@@ -423,6 +431,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByText("有 1 个文件没有记录下来，不能撤销")).toBeVisible();
     await expect(page.getByText("这一轮的改动没能记录")).toBeVisible();
     await expect(page.getByRole("button", { name: "撤销" })).toHaveCount(1);
+    await toEnd(page);
     await page.mouse.move(400, 780);
     await expect(page).toHaveScreenshot(`stream-changes-${theme}.png`);
     expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
@@ -439,6 +448,9 @@ test("UI-turn-changes a file opens the review panel on its turn", async ({ page 
   const panel = page.locator('aside[aria-label="侧边面板"]');
   await expect(panel.getByRole("button", { name: "查阅来源" })).toHaveText(/第 1 轮/);
   await expect(panel.getByText("src/lib.rs")).toBeVisible();
+  await expect(panel.getByText("+12")).toBeVisible();
+  // The panel narrows the stream, which lays out again: the shot is at its end (T245).
+  await toEnd(page);
   await page.mouse.move(400, 780);
   await expect(page).toHaveScreenshot("stream-changes-review.png");
 });
@@ -459,7 +471,7 @@ test("UI-turn-changes undo asks first; a stale patch says so and leads to the re
   const confirm = card.getByRole("alertdialog", { name: "是否还原更改？" });
   await expect(confirm).toHaveAttribute("data-ready", "true");
   await expect(confirm.getByRole("button", { name: "确认" })).toBeFocused();
-  // Where the list stands after the card grew depends on timing; the shot starts at the card.
+  // Where the list stands after the card grew depends on timing (T245); the shot starts at the card.
   await card.evaluate((element) => element.scrollIntoView({ block: "start" }));
   await page.mouse.move(400, 780);
   await expect(page).toHaveScreenshot("stream-changes-undo.png");
