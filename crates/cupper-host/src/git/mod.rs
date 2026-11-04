@@ -240,7 +240,12 @@ impl SnapshotTier<'_> {
             "GIT_CONFIG_GLOBAL",
             self.tool.dir.join("empty-config").as_os_str(),
         );
-        self.tool.prepare(cmd, &self.tool.overrides(), &[], env)
+        let mut prepared = self.tool.prepare(cmd, &self.tool.overrides(), &[], env);
+        // In the work tree's top: writing the index, git checks a racily
+        // clean entry against its file by a relative path, and a command
+        // without a work tree, such as `write-tree`, does not go there (T234).
+        prepared.command.current_dir(&place.work_tree);
+        prepared
     }
 }
 
@@ -336,9 +341,10 @@ mod tests {
         assert_eq!((args, stdin.as_str()), (want, "the patch"));
 
         // The snapshot tier: its GIT_DIR, work tree, index, objects and
-        // configuration, no `-C`.
+        // configuration, no `-C`; in the work tree's top.
+        let work = fs::canonicalize(dir.path()).expect("the temp dir");
         let place = snapshot::Place {
-            work_tree: "/work".into(),
+            work_tree: work.clone(),
             git_dir: "/ws".into(),
             index: "/ws/index.1".into(),
             objects: "/objects".into(),
@@ -349,13 +355,15 @@ mod tests {
             .run(&clock, &durations)
             .await
             .expect("runs");
-        let [env, args, ..] = recorded(dir.path());
+        let [env, args, _, cwd] = recorded(dir.path());
+        assert_eq!(cwd, work.display().to_string());
         let want = format!(
             "GIT_ALTERNATE_OBJECT_DIRECTORIES=/work/.git/objects \
              GIT_CONFIG_GLOBAL={}/git/empty-config GIT_CONFIG_NOSYSTEM=1 GIT_DIR=/ws \
              GIT_INDEX_FILE=/ws/index.1 GIT_OBJECT_DIRECTORY=/objects {base} \
-             GIT_WORK_TREE=/work HOME=/home/user LC_ALL=C {path}",
-            data.display()
+             GIT_WORK_TREE={} HOME=/home/user LC_ALL=C {path}",
+            data.display(),
+            work.display()
         );
         assert_eq!(env, want);
         let want = format!(
@@ -363,6 +371,16 @@ mod tests {
              -c {hooks} ls-files -z --cached --others --exclude-standard"
         );
         assert_eq!(args, want);
+        // A work tree that is gone: git does not start, an error like any other.
+        let gone = snapshot::Place {
+            work_tree: work.join("gone"),
+            ..place
+        };
+        let started = tool
+            .snapshot_tier(&gone)
+            .prepare(GitCmd::snapshot(SnapshotOp::LsFiles));
+        let started = started.run(&clock, &durations).await;
+        assert!(matches!(started, Err(RunError::Spawn(_))), "{started:?}");
 
         // The user tier: the environment of the repo tier, no override; the
         // message on stdin.
