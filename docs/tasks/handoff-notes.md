@@ -533,3 +533,7 @@
 | 以后改用户档的任务 | 用户档不加任何 `-c`（`core.quotepath` 也不加），新加的固定覆盖只能进仓库档和快照档的 `overrides()`；失败分类读 `LC_ALL=C` 下的英文措辞，表驱动用例在 `git/user.rs` | T123 |
 | T144、T125 | 会话工作区是某个仓库的子目录时，`Layout::read` 找不到 `.git`，快照记为 `skipped/not_a_repo`，diff 不可用（与 5.2.11"git 仓库的子目录按非 git 目录处理"一致）；新建会话页或项目添加如果允许选仓库的子目录，要给出提示 | T234 |
 | 以后改快照档的任务 | 快照档的 git 在工作区顶层运行（`SnapshotTier::prepare` 设 `current_dir`），不能改回 cupper 的目录，原因见 5.2.10"工作目录"；IT-git-racy-unstaged 用 `set_times` 加 `core.trustctime=false` 构造同一秒 | T234 |
+| T131 | diff 视图接口在 `packages/ui-core/src/review/view.ts`（`ReviewViewProps`、`ACTIONS`、`ViewTarget`），约定见 T130 汇报"给 T131 的 diff 视图接口"一节：删掉 `ReviewPanel.tsx` 里的占位 `FileList`，`Slots.reviewView` 留给测试替身；取 hunk 的查询键 `["session", id, "git/file_diff", diff_token, path]`；`auto` 视图"窄"的阈值由 T131 定；换掉占位后 review 的 8 张基线要重新生成（现在的基线里有占位的 `−0`） | T130 |
+| T232 | 点击文件跳转用 `store.set({ focus: { path, line, seq: (focus?.seq ?? 0) + 1 } })`；文件行和 hunk 的操作按 `ACTIONS[scope]` 显示。顺带修共用组件：菜单关闭后焦点回到 `ToolbarButton`，它的 tooltip 和焦点环随之出现，用鼠标选完也是这样；鼠标关闭时不让 tooltip 因此打开，键盘关闭照常还焦点（截图用例现在靠先点一下空白处绕开） | T130 |
+| 以后加菜单的任务 | 菜单里可勾选的项用 `MenuItem` 的 `checked`（加 `radio` 表示单选），勾在条目末尾；不要自己画勾，也不要改 `MenuItem` 自身的间距（会挪动所有现有菜单，UI-new-session 的基线会变） | T130、T231 |
+| 改 `cargo xtask size` 的任务 | 它只按文件名排除 `Cargo.lock`、`pnpm-lock.yaml`，spike 自带的 npm `package-lock.json` 会被算进行数（T104 的 1,197 行）；排除名单可以加上 `package-lock.json` | T104 |
