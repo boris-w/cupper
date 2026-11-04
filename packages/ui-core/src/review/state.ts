@@ -55,13 +55,11 @@ export function useDiff(sessionId: string, scope: ReviewScope) {
   });
 }
 
-/** `git/status`, with the paths whose executable configuration changed this session (T123). */
-export type ReviewStatus = GitStatusResult & { repo_config_changed?: string[] };
-
+/** `git/status`, with the paths whose executable configuration changed this session. */
 export function useStatus(sessionId: string) {
   const { client } = useHost();
   return useQuery({
     queryKey: statusKey(sessionId),
-    queryFn: () => client.request<ReviewStatus>("git/status", { session_id: sessionId }),
+    queryFn: () => client.request<GitStatusResult>("git/status", { session_id: sessionId }),
   });
 }
