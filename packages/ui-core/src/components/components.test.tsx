@@ -80,6 +80,13 @@ describe("UNIT-ui-components", () => {
     expect(rename).toHaveBeenCalledOnce();
     expect(archive).not.toHaveBeenCalled();
     expect(screen.queryByRole("menu")).toBeNull();
+    // Closed by a key, the focus is back on the trigger; closed by a click, it is not.
+    expect(document.activeElement).toBe(trigger);
+    await user.click(trigger);
+    await user.click(screen.getByRole("menuitem", { name: "重命名" }));
+    expect(rename).toHaveBeenCalledTimes(2);
+    expect(document.activeElement).not.toBe(trigger);
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   test("a switch toggles with Space unless disabled", async () => {

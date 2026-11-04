@@ -20,6 +20,8 @@ export interface LayoutPrefs {
   sidePanelOpen: boolean;
   /** Where the width sits between its minimum (0) and maximum (1); `null`: the default width. */
   sidePanelRatio: number | null;
+  /** The review panel's file tree (⌘⇧E). */
+  fileTreeOpen: boolean;
 }
 
 export const DEFAULT_PREFS: LayoutPrefs = {
@@ -27,6 +29,7 @@ export const DEFAULT_PREFS: LayoutPrefs = {
   sidebarWidth: SIDEBAR.default,
   sidePanelOpen: false,
   sidePanelRatio: null,
+  fileTreeOpen: false,
 };
 
 export interface Viewport {

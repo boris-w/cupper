@@ -7,18 +7,19 @@
 import { RpcFailure } from "@cupper/host-client";
 import type { GitDiffResult } from "@cupper/protocol";
 import { useQueryClient } from "@tanstack/react-query";
-import { use, useState, type ReactNode } from "react";
+import { use, useEffect, useRef, useState, type ReactNode } from "react";
 import { useStore } from "zustand";
 
 import { useHost, useT } from "../app/providers";
 import { SlotsContext } from "../app/slots";
 import { Alert } from "../components/Alert";
-import { ChevronDownIcon, MoreIcon, Spinner } from "../components/icons";
+import { ChevronDownIcon, MoreIcon, PaneIcon, Spinner } from "../components/icons";
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from "../components/Menu";
 import { ToolbarButton } from "../components/ToolbarButton";
 import { useToasts } from "../feedback/toaster";
 import { useUi } from "../state/provider";
 import { useActions } from "./actions";
+import { FileTree } from "./FileTree";
 import { RevertConfirm } from "./RevertConfirm";
 import {
   createReviewStore,
@@ -32,7 +33,8 @@ import {
 } from "./state";
 import { ACTIONS, addComment, commentsOf, type ReviewViewProps } from "./view";
 
-export function ReviewPanel() {
+/** `fileTree` and `onFileTree`: the file tree's preference (⌘⇧E), which the shell keeps. */
+export function ReviewPanel(props: { fileTree: boolean; onFileTree(): void }) {
   const t = useT();
   const ui = useUi();
   const sessionId = useStore(ui, ({ route }) =>
@@ -48,12 +50,13 @@ export function ReviewPanel() {
   }
   return (
     <ReviewContext value={store}>
-      <Review key={sessionId} sessionId={sessionId} />
+      <Review key={sessionId} sessionId={sessionId} {...props} />
     </ReviewContext>
   );
 }
 
-function Review({ sessionId }: { sessionId: string }) {
+function Review(props: { sessionId: string; fileTree: boolean; onFileTree(): void }) {
+  const { sessionId } = props;
   const t = useT();
   const ui = useUi();
   const store = useReviewStore();
@@ -65,6 +68,19 @@ function Review({ sessionId }: { sessionId: string }) {
   const attachments = useStore(ui, (ui) => ui.attachments[sessionId]);
   const changed = status.data?.repo_config_changed ?? [];
   const files = diff.data?.files ?? [];
+  // The diff view's and the file tree's actions, within what the scope offers.
+  const act: ReviewViewProps["act"] = (action, target, label) => {
+    if (!diff.data || !ACTIONS[state.scope].includes(action)) {
+      return;
+    }
+    const diffToken = diff.data.diff_token;
+    if (action === "revert") {
+      const hunk = "hunk_ids" in target;
+      actions.askRevert({ source: "view", diffToken, target, path: label, hunk });
+    } else {
+      void actions.run({ action, diffToken, target, path: label });
+    }
+  };
 
   let body: ReactNode;
   if (diff.isPending) {
@@ -85,7 +101,7 @@ function Review({ sessionId }: { sessionId: string }) {
     const scope = state.scope;
     body = <Empty title={t(`review:empty_${scope}`)} hint={t(`review:empty_${scope}_hint`)} />;
   } else {
-    const props: ReviewViewProps = {
+    const view: ReviewViewProps = {
       sessionId,
       scope: state.scope,
       diff: diff.data,
@@ -100,25 +116,15 @@ function Review({ sessionId }: { sessionId: string }) {
         else collapsed.delete(path);
         state.set({ collapsed });
       },
-      act: (action, target, label) => {
-        const diffToken = diff.data.diff_token;
-        if (!ACTIONS[state.scope].includes(action)) {
-          return;
-        } else if (action === "revert") {
-          const hunk = "hunk_ids" in target;
-          actions.askRevert({ source: "view", diffToken, target, path: label, hunk });
-        } else {
-          void actions.run({ action, diffToken, target, path: label });
-        }
-      },
+      act,
       comment: (draft) => addComment(ui, sessionId, draft),
     };
-    body = <View {...props} />;
+    body = <View {...view} />;
   }
 
   return (
     <div className="relative flex h-full flex-col">
-      <Header diff={diff.data} refresh={() => void diff.refetch()} />
+      <Header diff={diff.data} refresh={() => void diff.refetch()} {...props} />
       {(changed.length > 0 || (diff.data?.caveats.length ?? 0) > 0) && (
         <div className="flex flex-col gap-2 px-3 pb-2 [&>*]:max-w-none">
           {changed.length > 0 && (
@@ -133,7 +139,12 @@ function Review({ sessionId }: { sessionId: string }) {
           ))}
         </div>
       )}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-18">{body}</div>
+      <div className="flex min-h-0 flex-1">
+        {props.fileTree && diff.data && files.length > 0 && (
+          <FileTree sessionId={sessionId} scope={state.scope} diff={diff.data} act={act} />
+        )}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-18">{body}</div>
+      </div>
       {files.length > 0 && diff.data && (
         <BulkActions sessionId={sessionId} diff={diff.data} actions={actions} />
       )}
@@ -143,7 +154,13 @@ function Review({ sessionId }: { sessionId: string }) {
 }
 
 /** "查阅来源", the counts and the options menu (design 5.7.5). */
-function Header({ diff, refresh }: { diff?: GitDiffResult; refresh(): void }) {
+function Header(props: {
+  diff?: GitDiffResult;
+  refresh(): void;
+  fileTree: boolean;
+  onFileTree(): void;
+}) {
+  const { diff, refresh } = props;
   const t = useT();
   const state = useStore(useReviewStore());
   const views: DiffView[] = ["auto", "split", "unified"];
@@ -177,6 +194,14 @@ function Header({ diff, refresh }: { diff?: GitDiffResult; refresh(): void }) {
         </span>
       )}
       <div className="flex-1" />
+      <ToolbarButton
+        label={t(props.fileTree ? "review:hide_files" : "review:show_files")}
+        shortcut="⇧⌘E"
+        pressed={props.fileTree}
+        onClick={props.onFileTree}
+      >
+        <PaneIcon side="left" />
+      </ToolbarButton>
       <Menu
         trigger={
           <ToolbarButton label={t("review:options")}>
@@ -302,11 +327,21 @@ function Empty(props: { title: string; hint?: string; children?: ReactNode }) {
 }
 
 /** Until the review document (T131): each file with its counts, which the view replaces. */
-function FileList({ diff }: ReviewViewProps) {
+function FileList({ diff, focus }: ReviewViewProps) {
+  const rows = useRef(new Map<string, HTMLLIElement>());
+  useEffect(() => {
+    if (focus) rows.current.get(focus.path)?.scrollIntoView({ block: "start" });
+  }, [focus]);
   return (
     <ul className="px-2 text-sm">
       {diff.files.map((file) => (
-        <li key={file.path} className="flex h-7 items-center gap-2 rounded-lg px-2">
+        <li
+          key={file.path}
+          ref={(row) =>
+            void (row ? rows.current.set(file.path, row) : rows.current.delete(file.path))
+          }
+          className="flex h-7 items-center gap-2 rounded-lg px-2"
+        >
           <span className="min-w-0 flex-1 truncate">{file.path}</span>
           <span className="text-diff-add">+{file.additions}</span>
           <span className="text-diff-del">−{file.deletions}</span>
