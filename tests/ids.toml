@@ -927,6 +927,16 @@ IT-git-hunk = "pr"
 milestone = "M1b"
 IT-NFR9-failpoints-git = "pr"
 
+# unstaged 视图漏掉同一秒内同大小的改动
+[T234]
+milestone = "M1b"
+IT-git-racy-unstaged = "pr"
+
+# 暂存 LFS 指针时把对象放进用户仓库
+[T235]
+milestone = "M1b"
+IT-git-lfs-stage-objects = "pr"
+
 # Git 服务 V：提交与推送（用户档）与 Q23
 [T123]
 milestone = "M1b"
