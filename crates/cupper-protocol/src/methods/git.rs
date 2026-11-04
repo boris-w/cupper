@@ -254,7 +254,13 @@ method! {
         scope: Write,
         idempotency: Command,
         milestone: M1b,
-        errors: [Conflict / StaleDiff, Conflict / OutcomeUnknown, GitError, Forbidden],
+        errors: [
+            Conflict / StaleDiff,
+            Conflict / OutcomeUnknown,
+            GitError,
+            GitError / LfsObjectMissing,
+            Forbidden,
+        ],
     }
 }
 

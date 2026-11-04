@@ -347,7 +347,7 @@ export const zErrorCode = z.union([
 ]);
 
 /**
- * Open enum: unknown values must be accepted. Known: bad_nonce signature_invalid bad_key bad_proof scope lineage role already_initialized user_activation_required already_resolved turn_mismatch digest_mismatch too_early version_mismatch stale_diff outcome_unknown turn_running config_unconfirmed adapter_exited host_restarted not_a_repo cli_missing cli_not_logged_in cli_too_old runtime_installing runtime_failed adapter_starting adapter_crashed pending_upgrade quota_exhausted app_not_found snapshot_missing index_unmerged project_untrusted scan_failed hook_failed nothing_to_commit auth_failed rejected lock_held unsafe_repo_config repo_config_changed filter_unsupported signing_failed queue_full steer cancel upgrade user_quit idle
+ * Open enum: unknown values must be accepted. Known: bad_nonce signature_invalid bad_key bad_proof scope lineage role already_initialized user_activation_required already_resolved turn_mismatch digest_mismatch too_early version_mismatch stale_diff outcome_unknown turn_running config_unconfirmed adapter_exited host_restarted not_a_repo cli_missing cli_not_logged_in cli_too_old runtime_installing runtime_failed adapter_starting adapter_crashed pending_upgrade quota_exhausted app_not_found snapshot_missing index_unmerged project_untrusted scan_failed hook_failed nothing_to_commit auth_failed rejected lock_held unsafe_repo_config repo_config_changed filter_unsupported lfs_object_missing signing_failed queue_full steer cancel upgrade user_quit idle
  */
 export const zErrorReason = z.union([
   z.enum([
@@ -394,6 +394,7 @@ export const zErrorReason = z.union([
     "unsafe_repo_config",
     "repo_config_changed",
     "filter_unsupported",
+    "lfs_object_missing",
     "signing_failed",
     "queue_full",
     "steer",

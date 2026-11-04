@@ -38,7 +38,7 @@ use super::run::RunError;
 use super::snapshot::ShotError;
 use super::stamp::Layout;
 use super::{
-    GitCmd, GitError, GitTool, RepoNotice, RepoOp, User, UserOp, lfs, rules, snapshot, status, user,
+    GitCmd, GitError, GitTool, RepoNotice, RepoOp, User, UserOp, lfs, snapshot, status, user,
 };
 use crate::clock::{Clock, IdGen};
 use crate::durations::{DIFF_CACHE_TTL, Durations};
@@ -308,7 +308,8 @@ impl GitService {
                     "index.lock is held",
                 )
             }
-            GitError::Failed { .. } => {
+            // git apply's own refusal; past it git died, in a filter, say.
+            GitError::Failed { status, .. } if status.code() == Some(1) => {
                 notes_of(notes, session, &err);
                 stale("the patch does not apply")
             }
@@ -321,7 +322,7 @@ impl GitService {
     }
 
     /// The LFS objects of the pointers `op` writes with `patch`, from
-    /// cupper's store into the user's (T235).
+    /// cupper's store into the user's (T235); a revert's must all be there.
     async fn objects(
         &self,
         op: RepoOp,
@@ -335,25 +336,20 @@ impl GitService {
         }
         let (tool, writable) = (self.tool()?, self.writable().await?);
         let (clock, durations) = (&*self.deps.clock, &self.deps.durations);
-        let list = GitCmd::repo(RepoOp::ConfigList);
-        let listed = tool
-            .repo_tier(work_tree)
-            .run(clock, durations, &writable, list)
-            .await;
-        let listed = listed.map_err(|err| self.reported(Some(session), "lfs", err))?;
-        let entries = rules::parse(&listed.output.stdout, work_tree).map_err(internal)?;
-        let (dir, tree) = (tool.dir.clone(), work_tree.to_owned());
-        let copied = tokio::task::spawn_blocking(move || {
-            let layout = Layout::read(&tree.canonicalize()?)?;
-            let private = snapshot::private(&dir, &layout).1.join("lfs");
-            let (store, mode) = (lfs::store(&layout, &entries), lfs::shared(&entries));
-            lfs::supply(&private, &store, &oids, mode)
-        });
+        let stores = lfs::Stores::of(tool, work_tree, clock, durations, &writable).await;
+        let stores = stores.map_err(|err| self.reported(Some(session), "lfs", err))?;
+        let runs = stores.runs;
+        let copied = tokio::task::spawn_blocking(move || lfs::supply(&stores, &oids));
         let failed = |err: std::io::Error| {
             let message = format!("cannot copy an LFS object into the repository: {err}");
             error(ErrorCode::GitError, None, &message)
         };
-        copied.await.map_err(internal)?.map_err(failed)
+        let missing = copied.await.map_err(internal)?.map_err(failed)?;
+        // A revert's smudge would download what is missing (T237).
+        if op == RepoOp::Revert && runs {
+            lfs::none_missing(&missing)?;
+        }
+        Ok(())
     }
 
     /// `git/commit` (design 5.2.10, the user tier): `commit -F -`, the

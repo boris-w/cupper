@@ -22,7 +22,7 @@ use tokio::sync::mpsc;
 
 use super::service::{RepoLock, internal, writable};
 use super::stamp::Layout;
-use super::{Done, GitCmd, GitError, GitTool, Repo, RepoNotice, RepoOp};
+use super::{Done, GitCmd, GitError, GitTool, Repo, RepoNotice, RepoOp, lfs};
 use crate::clock::Clock;
 use crate::durations::{Durations, WORKTREE_REFRESH};
 use crate::gateway::AuditRecord;
@@ -194,8 +194,10 @@ impl Worktrees {
         failed: &impl Fn(GitError) -> RpcError,
         heard: &impl Fn(Heard),
     ) -> Result<(), RpcError> {
-        let (said, mut chunks) = mpsc::unbounded_channel();
         let (branch, base) = (plan.branch.as_ref(), plan.base_ref.as_ref());
+        let tree = if branched { branch } else { base };
+        self.lfs_objects(&plan.repo, writable, tree, failed).await?;
+        let (said, mut chunks) = mpsc::unbounded_channel();
         let args = match branched {
             true => vec![plan.path.as_os_str(), branch],
             false => vec![OsStr::new("-b"), branch, plan.path.as_os_str(), base],
@@ -231,6 +233,30 @@ impl Worktrees {
         };
         let tier = git.repo_tier(at);
         tier.run(&*self.clock, &self.durations, writable, cmd).await
+    }
+
+    /// Refused, `lfs_object_missing`, while the repository lacks an LFS
+    /// object of `tree`'s, which the checkout would download (T237).
+    async fn lfs_objects(
+        &self,
+        repo: &Path,
+        writable: &[PathBuf],
+        tree: &OsStr,
+        failed: &impl Fn(GitError) -> RpcError,
+    ) -> Result<(), RpcError> {
+        let Some(git) = &self.git else {
+            return Ok(());
+        };
+        let (clock, durations) = (&*self.clock, &self.durations);
+        let stores = lfs::Stores::of(git, repo, clock, durations, writable).await;
+        let stores = stores.map_err(failed)?;
+        if !stores.runs {
+            return Ok(());
+        }
+        let oids = lfs::pointers(&git.repo_tier(repo), tree, clock, durations, writable).await;
+        let oids = oids.map_err(failed)?;
+        let copied = tokio::task::spawn_blocking(move || lfs::supply(&stores, &oids)).await;
+        lfs::none_missing(&copied.map_err(internal)?.map_err(internal)?)
     }
 
     fn failed(&self, err: GitError) -> RpcError {

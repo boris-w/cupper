@@ -24,9 +24,9 @@ mod user;
 pub mod worktree;
 
 use std::ffi::{OsStr, OsString};
-use std::fs::DirBuilder;
+use std::fs::{self, DirBuilder, Permissions};
 use std::io;
-use std::os::unix::fs::DirBuilderExt;
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use cupper_sys::{Command, Env};
@@ -56,9 +56,11 @@ pub struct GitTool {
 
 impl GitTool {
     /// `git` and `git_lfs` come from `CliLocator::tool`, `trusted_path` from
-    /// `CliLocator::trusted_path` (T054). Creates `<data_dir>/git/`, the
-    /// empty hooks directory in it, mode 0700, and the empty global
-    /// configuration of the snapshot tier.
+    /// `CliLocator::trusted_path` (T054). Creates `<data_dir>/git/`, mode
+    /// 0700, the empty hooks directory in it, and the empty global
+    /// configuration of the snapshot tier. The hooks directory is read-only:
+    /// git-lfs installs its hooks where `core.hooksPath` points (T237), and
+    /// what an earlier run let in goes.
     pub fn new(
         git: PathBuf,
         git_lfs: Option<PathBuf>,
@@ -67,11 +69,21 @@ impl GitTool {
         ssh_auth_sock: Option<OsString>,
         data_dir: &Path,
     ) -> io::Result<Self> {
-        let dir = data_dir.join("git");
+        let (dir, mode) = (data_dir.join("git"), Permissions::from_mode);
+        let hooks = dir.join("empty-hooks");
         DirBuilder::new()
             .recursive(true)
             .mode(0o700)
-            .create(dir.join("empty-hooks"))?;
+            .create(&hooks)?;
+        fs::set_permissions(&hooks, mode(0o700))?;
+        for entry in fs::read_dir(&hooks)? {
+            let path = entry?.path();
+            match fs::symlink_metadata(&path)?.is_dir() {
+                true => fs::remove_dir_all(path)?,
+                false => fs::remove_file(path)?,
+            }
+        }
+        fs::set_permissions(&hooks, mode(0o500))?;
         std::fs::write(dir.join("empty-config"), "")?;
         let path = std::env::join_paths(trusted_path).map_err(io::Error::other)?;
         Ok(Self {

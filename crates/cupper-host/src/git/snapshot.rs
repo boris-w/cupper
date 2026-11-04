@@ -42,6 +42,7 @@ use super::stamp::{Fingerprint, Layout};
 use super::{GitCmd, GitTool, RepoOp, Snapshot, SnapshotOp, SnapshotTier};
 use crate::clock::Clock;
 use crate::durations::Durations;
+pub(super) use config::lfs_runs;
 
 /// Untracked files over this stay out.
 pub const TOO_LARGE: u64 = 50 << 20;
