@@ -85,6 +85,10 @@ pub enum RepoOp {
     BranchCurrent,
     /// `check-attr -z --stdin filter` of the paths given as input; runs nothing.
     CheckAttr,
+    /// `ls-tree -r -z`: a tree's files, as their sizes and object names.
+    LsTree,
+    /// `cat-file --batch` of the objects given as input.
+    CatFile,
     /// `apply --cached` of the patch given as input.
     Stage,
     /// `apply --cached -R`.
@@ -163,6 +167,11 @@ impl RepoOp {
             Self::BranchList => (&["branch", "--list"], true),
             Self::BranchCurrent => (&["branch", "--show-current"], true),
             Self::CheckAttr => (&["check-attr", "-z", "--stdin", "filter"], true),
+            Self::LsTree => (
+                &["ls-tree", "-rz", "--format=%(objectsize) %(objectname)"],
+                true,
+            ),
+            Self::CatFile => (&["cat-file", "--batch"], true),
             Self::Stage => (&["apply", "--whitespace=nowarn", "--cached"], false),
             Self::Unstage => (&["apply", "--whitespace=nowarn", "--cached", "-R"], false),
             Self::Revert => (&["apply", "--whitespace=nowarn", "-R"], false),

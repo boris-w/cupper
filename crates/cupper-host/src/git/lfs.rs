@@ -19,7 +19,7 @@ use sha2::{Digest, Sha256};
 use super::rules::{self, Entry, Origin, truthy};
 use super::snapshot::{self, unique};
 use super::stamp::Layout;
-use super::{GitCmd, GitError, GitTool, RepoOp};
+use super::{GitCmd, GitError, GitTool, RepoOp, RepoTier};
 use crate::clock::Clock;
 use crate::durations::Durations;
 
@@ -42,6 +42,53 @@ fn oids(text: &[u8], prefix: &[u8]) -> BTreeSet<String> {
     oids.filter(hex)
         .map(|oid| String::from_utf8_lossy(oid).into_owned())
         .collect()
+}
+
+/// The oids of the LFS pointers a checkout of `tree` smudges, as git-lfs
+/// finds pointers: blobs under 1024 bytes that are ones.
+pub async fn pointers(
+    tier: &RepoTier<'_>,
+    tree: &OsStr,
+    clock: &dyn Clock,
+    durations: &Durations,
+    writable: &[PathBuf],
+) -> Result<BTreeSet<String>, GitError> {
+    let list = GitCmd::repo(RepoOp::LsTree).args([tree]);
+    let listed = tier
+        .run(clock, durations, writable, list)
+        .await?
+        .output
+        .stdout;
+    // `<size> <oid>`; a submodule's size is `-`.
+    let small = listed.split(|b| *b == 0).filter_map(|record| {
+        let (size, oid) = record.split_at(record.iter().position(|b| *b == b' ')?);
+        let size: usize = std::str::from_utf8(size).ok()?.parse().ok()?;
+        (size < 1024).then(|| [&oid[1..], b"\n"].concat())
+    });
+    let small: Vec<u8> = small.flatten().collect();
+    if small.is_empty() {
+        return Ok(BTreeSet::new());
+    }
+    let read = GitCmd::repo(RepoOp::CatFile).input(small);
+    let read = tier
+        .run(clock, durations, writable, read)
+        .await?
+        .output
+        .stdout;
+    // `<oid> blob <size>\n<content>\n` each.
+    let (mut out, mut found) = (&read[..], BTreeSet::new());
+    while let Some(at) = out.iter().position(|b| *b == b'\n') {
+        let size = out[..at].rsplit(|b| *b == b' ').next().unwrap_or_default();
+        let Ok(size) = String::from_utf8_lossy(size).parse::<usize>() else {
+            break;
+        };
+        let blob = out.get(at + 1..at + 1 + size).unwrap_or_default();
+        if blob.starts_with(b"version https://git-lfs.github.com/spec/v1\n") {
+            found.extend(oids(blob, b"oid sha256:"));
+        }
+        out = out.get(at + 2 + size..).unwrap_or_default();
+    }
+    Ok(found)
 }
 
 /// `git_error` with `lfs_object_missing` unless `missing` is empty.
