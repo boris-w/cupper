@@ -1,20 +1,12 @@
 // @vitest-environment jsdom
-import { HostClient } from "@cupper/host-client";
-import { hostError, MockHost, type Reply } from "@cupper/host-client/mock";
+import { hostError, type Reply } from "@cupper/host-client/mock";
 import type { GitDiffResult } from "@cupper/protocol";
-import type { Handshake } from "@cupper/shell-api";
-import { createBrowserShell } from "@cupper/shell-api/browser-mock";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
 import { SlotsContext } from "../app/slots";
-import { TooltipProvider } from "../components/Tooltip";
-import { ToasterProvider } from "../feedback/toaster";
-import { DEFAULT_PREFS } from "../layout/layout";
-import { StateProvider, UiProvider } from "../state/provider";
-import { createUiStore } from "../state/ui";
 import { ReviewPanel } from "./ReviewPanel";
+import { mountOnHost } from "./test-harness";
 import type { ReviewViewProps } from "./view";
 
 beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }));
@@ -66,49 +58,22 @@ async function setup(
     diffs?: Record<string, GitDiffResult>;
   } = {},
 ) {
-  const mock = new MockHost([{ method: "initialize", params: {}, result: {} }]);
-  mock.handle("stream/subscribe", ({ params }) => {
-    const { stream } = params as { stream: string };
-    return { result: { stream, mode: "snapshot", at_seq: 0, head_seq: 0, epoch: 1 } };
-  });
-  mock.handle("git/diff", ({ params }) => {
-    const { scope } = params as { scope: string };
-    return opts.reply?.("git/diff") ?? { result: { ...DIFFS, ...opts.diffs }[scope] };
-  });
-  mock.handle("git/status", () => ({
-    result: { ahead: 0, behind: 0, files: [], ...opts.status },
-  }));
-  for (const method of ["git/stage", "git/unstage", "git/revert"]) {
-    mock.handle(method, () => opts.reply?.(method) ?? { result: {} });
-  }
-  const client = new HostClient();
-  const conn = mock.connect();
-  conn.initialized = true;
-  client.attach(conn.port(), {} as Handshake);
-  const { shell } = createBrowserShell();
-  const info = await shell.init();
-  const ui = createUiStore(
-    { prefs: DEFAULT_PREFS, overlayOpen: false },
-    { page: "session", sessionId: "s_1" },
-  );
-  render(
-    <ShellProvider api={shell} info={info}>
-      <I18nProvider locale="zh-CN">
-        <ToasterProvider>
-          <HostContext value={{ client, state: client.state, handshake: undefined }}>
-            <UiProvider ui={ui}>
-              <StateProvider>
-                <TooltipProvider>
-                  <SlotsContext value={{ reviewView: View }}>
-                    <ReviewPanel fileTree={false} onFileTree={() => undefined} active />
-                  </SlotsContext>
-                </TooltipProvider>
-              </StateProvider>
-            </UiProvider>
-          </HostContext>
-        </ToasterProvider>
-      </I18nProvider>
-    </ShellProvider>,
+  const { mock, ui } = await mountOnHost(
+    <SlotsContext value={{ reviewView: View }}>
+      <ReviewPanel fileTree={false} onFileTree={() => undefined} active />
+    </SlotsContext>,
+    (mock) => {
+      mock.handle("git/diff", ({ params }) => {
+        const { scope } = params as { scope: string };
+        return opts.reply?.("git/diff") ?? { result: { ...DIFFS, ...opts.diffs }[scope] };
+      });
+      mock.handle("git/status", () => ({
+        result: { ahead: 0, behind: 0, files: [], ...opts.status },
+      }));
+      for (const method of ["git/stage", "git/unstage", "git/revert"]) {
+        mock.handle(method, () => opts.reply?.(method) ?? { result: {} });
+      }
+    },
   );
   const settle = () => act(() => vi.advanceTimersByTimeAsync(0));
   await settle();

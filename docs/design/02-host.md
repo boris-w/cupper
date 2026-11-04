@@ -371,7 +371,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 | 档位 | 在哪里执行 | 用于 | 防护 |
 |---|---|---|---|
 | 快照档 | cupper 自己的 GIT_DIR，`GIT_WORK_TREE` 指向工作区 | 回合快照；`last_turn`、`turn:<id>`、`unstaged`、`staged` 四种范围的文件列表和补丁；`@` 引用的文件列表；`worktree/check` 中关于工作区内容的规则；`git/status` 的文件状态 | 不读仓库本地的配置和 hooks，配置只放行白名单；属性文件照常读取，但属性引用的过滤器和 diff 驱动都没有定义 |
-| 仓库档 | 用户仓库 | 只读引用类：`rev-parse`、`for-each-ref`、`rev-list`、`symbolic-ref`、`merge-base`、`check-ref-format`、`branch --list`、`branch --show-current`（T120：取 HEAD 时只用任何 HEAD 状态下都以 0 退出的命令，配置了 `required` 过滤器的仓库里非零退出会被判成 `unsafe_repo_config`）；会改动用户仓库的：`apply --cached`（暂存、取消暂存）、`apply -R`（还原）、`update-index --refresh`、`worktree add/lock/unlock/remove/prune/repair` | 每次调用前读配置并覆盖，调用后比对指纹，配置来源在工作区内时拒绝 |
+| 仓库档 | 用户仓库 | 只读引用类：`rev-parse`、`for-each-ref`、`rev-list`、`symbolic-ref`、`merge-base`、`check-ref-format`、`branch --list`、`branch --show-current`、`worktree list --porcelain -z`（T236）（T120：取 HEAD 时只用任何 HEAD 状态下都以 0 退出的命令，配置了 `required` 过滤器的仓库里非零退出会被判成 `unsafe_repo_config`）；会改动用户仓库的：`apply --cached`（暂存、取消暂存）、`apply -R`（还原）、`update-index --refresh`、`worktree add/lock/unlock/remove/prune/repair` | 每次调用前读配置并覆盖，调用后比对指纹，配置来源在工作区内时拒绝 |
 | 用户档 | 用户仓库 | 只用于用户在界面上点"提交""推送"：`commit`、`push` | 与在终端里执行一致：保留 hooks、签名、凭据助手。按钮旁注明"将运行仓库的 hooks"；本会话期间指纹变过时，确认文案带上这条提示 |
 
 **快照档：cupper 自己的 GIT_DIR**（纪要 D8 要求评估的方案。结论：采用；实验记录见 `docs/tasks/D02-design-revision/notes.md`）
@@ -508,7 +508,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 3. 数据目录和子目录建成 0700，并检查属主。
 4. 对 `host.lock` 加 `flock`；已被占用就以退出码 3 退出（UI 改为直接连接）。
 5. 打开数据库，必要时先备份再迁移（每个迁移脚本在自己的事务里同时更新 `schema_version`，[5.4.6](04-data-model.md#546-迁移)）；数据库版本比本程序新就以退出码 4 退出（不支持降级，NFR-10）；迁移失败以退出码 6 退出。按 [5.2.8](#528-事件存储) 的规则判定是否把 `data_epoch` 加 1，并记下这次的 `last_start_at` 和启动会话的 UUID。
-6. 崩溃恢复（NFR-9）：按 `adapters` 表的进程组和启动时间清理残留（SP-4a 的 `reap_group`），包括资源采样时记下的适配器后代的进程组（v1.6，Claude 的工具命令有自己的进程组，[5.6.8](06-agent-driver.md#568-资源回收)）；运行中的回合写 `turn.completed{status: interrupted}`；待处理的交互请求写 `expired`；账本里 `pending_external` 的记录保留，供重试时返回 `outcome_unknown`；`initial_prompt_json` 不为空、停在准备工作区阶段的会话，交给会话 actor 重新准备工作区（已登记的 worktree 直接复用），失败就写 `workspace.failed`，并把这条消息转成一条暂停中的排队消息，不丢弃。
+6. 崩溃恢复（NFR-9）：按 `adapters` 表的进程组和启动时间清理残留（SP-4a 的 `reap_group`），包括资源采样时记下的适配器后代的进程组（v1.6，Claude 的工具命令有自己的进程组，[5.6.8](06-agent-driver.md#568-资源回收)）；运行中的回合写 `turn.completed{status: interrupted}`；待处理的交互请求写 `expired`；账本里 `pending_external` 的记录保留，供重试时返回 `outcome_unknown`；`initial_prompt_json` 不为空、停在准备工作区阶段的会话，交给会话 actor 重新准备工作区（已登记的 worktree 直接复用），失败就写 `workspace.failed`，并把这条消息转成一条暂停中的排队消息，不丢弃。T236 落实：`Worktrees::add` 在 `RepoLock` 内先读 `worktree list`，新建和恢复走同一段代码：已登记且目录在就不再 add（已锁上的不再 lock），照常 refresh；已登记但目录已被删掉时写 `workspace.failed{not_found}`，不 `worktree prune`（会清掉用户自己的其他记录）、不 `--force`（会越过用户的锁）；未登记但分支已在就 `worktree add <路径> <分支>`，不带 `-b`；未登记、目录已存在且非空时 add 失败，写 `workspace.failed`。
 7. 加载索引流（检查点 + 其后的事件）。
 8. 绑定套接字：`run/host.sock`；路径超过 104 字节时退到每个用户自己的临时目录 `confstr(_CS_DARWIN_USER_TEMP_DIR)` 下的 `cupper-<数据目录哈希>/`（系统创建、权限 0700，别的用户无法抢先创建；客户端用同一个算法找到套接字），使用前检查属主和 0700；套接字文件 0600（安全建议 #18）。
 9. 启动 actor：`IndexActor`、`Supervisor`、`RuntimeInstaller`（后台校验）；`AgentRuntime` 按需启动。

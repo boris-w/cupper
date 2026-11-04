@@ -943,6 +943,11 @@ milestone = "M1b"
 IT-git-lfs-repo-config = "pr"
 UNIT-git-lfs-store = "pr"
 
+# 按文件在外部应用中打开
+[T239]
+milestone = "M1b"
+IT-workspace-open-path = "pr"
+
 # Git 服务 V：提交与推送（用户档）与 Q23
 [T123]
 milestone = "M1b"
@@ -962,6 +967,10 @@ IT-NFR9-failpoints-worktree = "pr"
 [T125]
 milestone = "M1b"
 IT-worktree-check-rules = "pr"
+
+# 会话归档、恢复、重命名与删除项目（v1.3.87 由 T125 拆出）
+[T240]
+milestone = "M1b"
 IT-session-archive-restore = "pr"
 
 # 文件搜索、提示内容映射与在外部应用打开

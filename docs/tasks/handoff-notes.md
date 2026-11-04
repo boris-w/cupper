@@ -542,3 +542,7 @@
 | 改 CI 或 setup 动作的任务 | setup 动作恢复的 downloads 缓存可能没有 `target/git-lfs/git-lfs`（先存下这个 key 的作业不跑 `xtask git-lfs`，key 存下后不再更新）；只有 rust 作业和 test-repeat（T235 之后）自己下载。按作业分键或在 setup 里补下载都行（T197 记过同一件事） | T235 |
 | T131 | 见 `docs/tasks/T104-review-iframe/report-q29.md` 第 6 节：`navigation.ts` 只放行一次 `app://cupper-review/index.html`；Virtualizer 必须就是滚动容器（外面套滚动 div 会全量进 DOM，约 800 MB）；`sendInputEvent` 走 inputGuard 但送不进进程外 iframe，DevTools 的 `Input.dispatchKeyEvent` 能送进 iframe 但不经 inputGuard，菜单加速键只能用真实按键验证；剪贴板写入后读回没对上，要用 e2e 带等待地核实；空闲时预加载 iframe、预热 Worker、只加载 diff 里出现的语言；@pierre/diffs 锁 1.6.4，worker 入口 `@pierre/diffs/worker/worker.js`。原型在 `spikes/T104-review-iframe/`，产品代码不依赖它 | T104 |
 | 本机跑会开窗口的检查的任务 | 先确认不会抢焦点、不会发真实按键、不会动剪贴板（T104 本机试跑时 `osascript` 把 App 抢到前台、发了一次 ⌘⇧P）；这类步骤只在 runner 上（`GITHUB_ACTIONS=true`）做 | T104 |
+| T131 | T232 的占位 `FileList` 在 `focus` 变化时滚到对应文件，这段随占位一起删掉，审查文档视图要自己响应 `focus`（`scroll_to`）；文件树是面板左侧一栏，固定宽 240，面板窄时怎么收起由 T131 一并定 | T232 |
+| T233 | 审查面板头部已有"显示文件"按钮（在"⋯"左边）；"Git 操作"菜单放在头部时避开它；菜单经指针关闭时不再把焦点送回触发按钮（`Menu.tsx`） | T232 |
+| T125 | `git/worktree.rs` 里有 `worktree list --porcelain` 的解析（`listed`，判断是否登记、是否锁上），归档、恢复时可以复用；`workspace.failed{not_found}`（worktree 目录被人删掉）的会话怎样恢复（重建 worktree 或转为只读）由 T125 定；恢复时第一条输入是 `Input::Restored`，闸门按 `restored.gate` 重设，另发 Gate 会被覆盖 | T236 |
+| T144 | `workspace.failed` 还有 `not_found`（worktree 目录被删，git 里的记录还在）：提示用户，并告诉他可以自己 `git worktree prune` | T236 |

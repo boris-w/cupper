@@ -22,6 +22,7 @@ import { useToasts } from "../feedback/toaster";
 import { useUi } from "../state/provider";
 import { useActions } from "./actions";
 import { FileTree } from "./FileTree";
+import { GitActions } from "./GitActions";
 import { ReviewFrame } from "./ReviewFrame";
 import { RevertConfirm } from "./RevertConfirm";
 import {
@@ -133,7 +134,12 @@ function Review(props: PanelProps & { sessionId?: string }) {
   return (
     <div className="relative flex h-full flex-col">
       {props.sessionId && (
-        <Header diff={diff.data} refresh={() => void diff.refetch()} {...props} />
+        <Header
+          diff={diff.data}
+          refresh={() => void diff.refetch()}
+          {...props}
+          sessionId={sessionId}
+        />
       )}
       {(changed.length > 0 || (diff.data?.caveats.length ?? 0) > 0) && (
         <div className="flex flex-col gap-2 px-3 pb-2 [&>*]:max-w-none">
@@ -172,10 +178,12 @@ function Review(props: PanelProps & { sessionId?: string }) {
 
 /** "查阅来源", the counts and the options menu (design 5.7.5). */
 function Header(props: {
+  sessionId: string;
   diff?: GitDiffResult;
   refresh(): void;
   fileTree: boolean;
   onFileTree(): void;
+  active: boolean;
 }) {
   const { diff, refresh } = props;
   const t = useT();
@@ -211,6 +219,7 @@ function Header(props: {
         </span>
       )}
       <div className="flex-1" />
+      <GitActions sessionId={props.sessionId} active={props.active} />
       <ToolbarButton
         label={t(props.fileTree ? "review:hide_files" : "review:show_files")}
         shortcut="⇧⌘E"
