@@ -259,7 +259,7 @@ fn open(
     after: &mut Vec<(&'static str, Value)>,
 ) -> Value {
     let persona = shared.config.persona;
-    let config = persona::config_options(persona);
+    let config = persona::config_options(&shared.config);
     // Codex's resume result carries no session id (s09).
     let shown = (!resumed || persona == Persona::Claude).then_some(id);
     let result = persona::session_result(persona, shown, &config);

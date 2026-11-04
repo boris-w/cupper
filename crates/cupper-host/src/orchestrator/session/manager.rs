@@ -394,8 +394,8 @@ impl SessionManager {
     }
 
     /// `project/remove` (design 5.3.4): `conflict` while one of its sessions
-    /// runs a turn; else each session archived, its worktree kept, then the
-    /// project off the index.
+    /// runs a turn or prepares its worktree, nothing archived; else each
+    /// session archived, its worktree kept, then the project off the index.
     async fn remove_project(self, call: Call) -> Outcome {
         let removed = self.removed(&call.params).await;
         let Some(ticket) = call.ticket else {
@@ -431,12 +431,14 @@ impl SessionManager {
         let found = sessions.await.map_err(internal)?;
         let sessions = found.ok_or_else(|| not_found("project"))?;
         let sessions: Vec<SessionId> = sessions.iter().filter_map(|id| id.parse().ok()).collect();
-        let running = {
-            let handles = self.sessions();
-            let mut loaded = sessions.iter().filter_map(|id| handles.get(id));
-            loaded.any(|handle| handle.running.load(Ordering::Relaxed))
-        };
-        if running {
+        // Every session asked first, and only once none is busy archived.
+        let mut busy = false;
+        for id in &sessions {
+            let (reply, answer) = oneshot::channel();
+            let _ = self.mailbox(id).send(Mail::Busy(reply));
+            busy |= answer.await.unwrap_or(true);
+        }
+        if busy {
             let running = RpcError::app(ErrorCode::Conflict, "a turn runs");
             return Err(running.with_reason(ErrorReason::TurnRunning));
         }
@@ -651,6 +653,7 @@ impl SessionManager {
                     let _ = done.send(Err(err.clone()));
                 }
                 Mail::Archive(done) => drop(done.send(Err(err.clone()))),
+                Mail::Busy(busy) => drop(busy.send(true)),
                 Mail::Notice(_) | Mail::ConfigChanged(_) => {}
             }
         }

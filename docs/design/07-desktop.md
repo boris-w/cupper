@@ -98,7 +98,7 @@ interface ShellAPI {
   onNavigate(cb: (target: NavigateTarget) => void): Unsubscribe; // 深链接、通知点击
   openExternal(url: string): void;            // 只接受 http/https，主进程再校验一次
   pickDirectory(): Promise<string | null>;    // 选择目录（如 worktree 根目录）
-  pathForFile(file: File): string | null;     // 拖入文件生成 @ 引用（M1b，CP-2），用 webUtils.getPathForFile
+  pathForFile(file: File): string | null;     // 拖入文件生成 @ 引用（M1b，CP-2），preload 里用 webUtils.getPathForFile（T142：它是渲染进程一侧的模块）
   saveFile(name: string, data: ArrayBuffer): Promise<boolean>;   // 诊断包（P1）
   system: { onThemeChange(cb: (t: 'light' | 'dark') => void): Unsubscribe };
   window: { onFocusChange(cb: (focused: boolean, at: number) => void): Unsubscribe };

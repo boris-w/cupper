@@ -1,17 +1,18 @@
-//! A session's archive and rename (design 5.2.6, 5.5.9), which the actor
-//! does as the one writer of the session's stream and row.
+//! A session's archive, restore and rename (design 5.2.6, 5.5.9, PS-3),
+//! which the actor does as the one writer of the session's stream and row.
 
 use std::path::PathBuf;
 
 use cupper_protocol::envelope::Cause;
 use cupper_protocol::error::{ErrorCode, ErrorReason, RpcError};
+use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::CommandId;
 use cupper_protocol::index::WorkspaceKind;
 use cupper_protocol::methods::interaction::InteractionRespond;
 use cupper_protocol::methods::session::{
-    ArchiveWorktree, SessionArchive, SessionArchiveParams, SessionArchiveResult,
-    SessionConfirmConfig, SessionInterrupt, SessionQueueResume, SessionRenameParams, SessionSend,
-    SessionSetConfig, WorktreeOutcome,
+    ArchiveWorktree, RestoreMode, SessionArchive, SessionArchiveParams, SessionArchiveResult,
+    SessionConfirmConfig, SessionInterrupt, SessionQueueResume, SessionRenameParams,
+    SessionRestoreResult, SessionSend, SessionSetConfig, WorktreeOutcome,
 };
 use cupper_protocol::rpc::Method;
 use serde_json::json;
@@ -19,11 +20,13 @@ use tokio::sync::oneshot;
 
 use super::{Command, Reply, SessionActor, Step};
 use crate::gateway::Call;
+use crate::git::worktree::Plan;
 use crate::ledger::{Outcome, Ticket};
 use crate::orchestrator::session::{internal, parse};
 use crate::orchestrator::turn;
 
-/// The calls that change a session, which an archived one refuses.
+/// The calls that change a session, which an archived or read-only one
+/// refuses.
 const WRITES: [&str; 6] = [
     SessionSend::NAME,
     SessionInterrupt::NAME,
@@ -35,11 +38,23 @@ const WRITES: [&str; 6] = [
 
 impl SessionActor {
     /// `unavailable` for a write to an archived session, archiving it again
-    /// too: `session/restore` brings it back first.
+    /// too, which `session/restore` brings back first; and for a write to a
+    /// read-only one (PS-3).
     pub(super) fn refused(&self, method: &str) -> Option<RpcError> {
-        let writes = WRITES.contains(&method) || method == SessionArchive::NAME;
-        let archived = RpcError::app(ErrorCode::Unavailable, "the session is archived");
-        (self.archived && writes).then(|| archived.with_reason(ErrorReason::SessionArchived))
+        let writes = WRITES.contains(&method);
+        let reason = match () {
+            _ if self.archived && (writes || method == SessionArchive::NAME) => {
+                ErrorReason::SessionArchived
+            }
+            _ if self.parts.configured.read_only && writes => ErrorReason::SessionReadOnly,
+            _ => return None,
+        };
+        Some(RpcError::app(ErrorCode::Unavailable, reason.to_string()).with_reason(reason))
+    }
+
+    /// A turn runs, or the worktree is still added: no archive now.
+    pub(super) fn busy(&self) -> bool {
+        self.parts.core.turn_id().is_some() || self.preparing.is_some()
     }
 
     /// `session/archive` (design 5.5.9).
@@ -66,10 +81,9 @@ impl SessionActor {
         reply: oneshot::Sender<Outcome>,
         cause: Option<Cause>,
     ) {
-        let busy = self.parts.core.turn_id().is_some() || self.preparing.is_some();
         let running = RpcError::app(ErrorCode::Conflict, "a turn runs");
         let archived = match worktree {
-            Ok(_) if busy => Err(running.with_reason(ErrorReason::TurnRunning)),
+            Ok(_) if self.busy() => Err(running.with_reason(ErrorReason::TurnRunning)),
             Ok(worktree) => {
                 let detach = turn::Input::Detach;
                 self.input(super::Input::Machine(detach), None, Step::default())
@@ -85,7 +99,7 @@ impl SessionActor {
         self.archived = true;
         let step = Step {
             reply: Some(Reply::Result(Ok(json!(archived)))),
-            archived: true,
+            archived: Some(true),
             ..Step::default()
         };
         let command = command(ticket, cause, reply);
@@ -113,6 +127,63 @@ impl SessionActor {
             worktree: outcome,
             blockers,
         })
+    }
+
+    /// `session/restore` (design 5.2.6, PS-3): an archived session back on
+    /// the index, a worktree session's worktree brought back with it, or
+    /// the session read-only once its branch is gone. One not archived
+    /// answers with what it is.
+    pub(super) async fn restore(&mut self, call: Call, reply: oneshot::Sender<Outcome>) {
+        let (was, cause, mut ticket) = (self.archived, cause(&call), call.ticket);
+        let read_only = self.parts.configured.read_only;
+        let worktree = self.parts.configured.workspace.kind == WorkspaceKind::Worktree;
+        let full = match was && worktree && !read_only {
+            true => self.rebuilt(&mut ticket).await,
+            false => Ok(!read_only),
+        };
+        let full = match full {
+            Ok(full) => full,
+            Err(err) => return refuse(ticket, reply, err),
+        };
+        let mut step = Step {
+            archived: Some(false),
+            ..Step::default()
+        };
+        if !full && !read_only {
+            self.parts.configured.read_only = true;
+            let configured = self.parts.configured.clone();
+            step.events.push(EventBody::SessionConfigured(configured));
+        }
+        let mode = match full {
+            true => RestoreMode::Full,
+            false => RestoreMode::ReadOnly,
+        };
+        step.reply = Some(Reply::Result(Ok(json!(SessionRestoreResult { mode }))));
+        self.archived = false;
+        self.commit(step, Some(command(ticket, cause, reply))).await;
+        if let (true, Ok((summary, _))) = (was, self.summary().await) {
+            self.parts.index.created(summary);
+        }
+    }
+
+    /// The session's worktree back from its branch; `false` without one.
+    async fn rebuilt(&mut self, ticket: &mut Option<Ticket>) -> Result<bool, RpcError> {
+        let workspace = &self.parts.configured.workspace;
+        let (branch, base_ref) = (workspace.branch.clone(), workspace.base_ref.clone());
+        let (Some(branch), Some(base_ref)) = (branch, base_ref) else {
+            return Ok(false);
+        };
+        let (repo, path) = (self.repo().await?, self.parts.cwd.clone());
+        let plan = Plan {
+            repo,
+            path,
+            branch,
+            base_ref,
+        };
+        if let Some(ticket) = ticket.as_mut() {
+            ticket.mark_external().await.map_err(internal)?;
+        }
+        self.parts.worktrees.restore(&plan, &self.parts.id).await
     }
 
     /// `session/rename`: the user's title, which the agent no longer sets.

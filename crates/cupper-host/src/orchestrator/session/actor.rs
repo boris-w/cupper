@@ -44,7 +44,7 @@ use cupper_protocol::methods::session::{
     SessionSend, SessionSendParams, SessionSendResult, SessionSetConfig, SessionSetConfigParams,
     SessionSetConfigResult,
 };
-use cupper_protocol::methods::session::{SessionArchive, SessionRename};
+use cupper_protocol::methods::session::{SessionArchive, SessionRename, SessionRestore};
 use cupper_protocol::rpc::Method;
 use cupper_protocol::session::{
     ConfirmationReason, ConfirmationRequired, PauseReason, ProjectConfig, SessionConfigured,
@@ -101,6 +101,9 @@ pub(super) enum Mail {
     ConfigChanged(oneshot::Sender<Vec<WirePath>>),
     /// `project/remove`'s archive, the worktree kept.
     Archive(oneshot::Sender<Outcome>),
+    /// Whether a turn runs or the worktree is being added, which archiving
+    /// waits for.
+    Busy(oneshot::Sender<bool>),
 }
 /// The host's exit, whether forced, and the reply once the session took it.
 pub(super) type Stop = (bool, oneshot::Sender<()>);
@@ -318,8 +321,8 @@ struct Step {
     /// The project's configuration stays out for good from now on.
     ignored: bool,
     audit: Vec<AuditRecord>,
-    /// Archived now.
-    archived: bool,
+    /// Archived now, or restored.
+    archived: Option<bool>,
     /// The user's title.
     title: Option<String>,
 }
@@ -414,6 +417,7 @@ impl SessionActor {
                 }
                 Next::Mail(Some(Mail::Notice(notice))) => actor.notice(notice).await,
                 Next::Mail(Some(Mail::Archive(done))) => actor.archive_kept(done).await,
+                Next::Mail(Some(Mail::Busy(reply))) => drop(reply.send(actor.busy())),
                 Next::Mail(Some(Mail::ConfigChanged(reply))) => {
                     let paths = actor.config_changed.iter().cloned().map(WirePath);
                     let _ = reply.send(paths.collect());
@@ -483,6 +487,7 @@ impl SessionActor {
         match call.method {
             SessionArchive::NAME => return self.archive(call, reply).await,
             SessionRename::NAME => return self.rename(call, reply).await,
+            SessionRestore::NAME => return self.restore(call, reply).await,
             _ => {}
         }
         if call.method == SessionSetConfig::NAME {
@@ -992,9 +997,9 @@ impl SessionActor {
             )
         });
         let mut notes = notes(first_seq, &events);
-        if archived {
-            changes.archived(&self.parts.id, at);
-            notes.push(Note::Archived);
+        if let Some(archived) = archived {
+            changes.archived(&self.parts.id, at, archived);
+            notes.extend(archived.then_some(Note::Archived));
         }
         if let Some(title) = title {
             changes.titled(&self.parts.id, at, &title);
@@ -1615,6 +1620,20 @@ impl SessionActor {
 
     /// `session/get`: the row, and the state its view and turn tell.
     async fn get(&self) -> Outcome {
+        let (summary, archived) = self.summary().await?;
+        let workspace = self.parts.configured.workspace.clone();
+        let archived_at = archived.map(TimestampMs);
+        let result = SessionGetResult {
+            summary,
+            workspace,
+            archived_at,
+        };
+        Ok(json!(result))
+    }
+
+    /// The session's summary, as `session/get` and the index show it, and
+    /// when it was archived.
+    async fn summary(&self) -> Result<(SessionSummary, Option<u64>), RpcError> {
         let id = self.parts.id.to_string();
         let row = self.parts.readers.read(move |conn| {
             conn.query_row(
@@ -1667,12 +1686,7 @@ impl SessionActor {
             last_activity_at: TimestampMs(active),
             read_only,
         };
-        let result = SessionGetResult {
-            summary,
-            workspace: configured.workspace.clone(),
-            archived_at: archived.map(TimestampMs),
-        };
-        Ok(json!(result))
+        Ok((summary, archived))
     }
 }
 

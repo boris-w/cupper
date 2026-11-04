@@ -14,14 +14,17 @@ export interface KeyLike {
   ctrlKey?: boolean;
 }
 
+/** Whether an input method composes, the key picking a candidate included (CP-1). */
+export const composing = (event: KeyLike) => Boolean(event.isComposing) || event.keyCode === 229;
+
 /**
  * Whether a key press in the text area sends. Never while an input method
- * composes, Enter picking a candidate included (CP-1: `isComposing`, or
- * keyCode 229). ⇧Enter and ⌥Enter keep their newline. M1a has no steer, so
- * ⌘Enter and ⌘⇧Enter, the queue keys, send as well: every send queues.
+ * composes (`composing`). ⇧Enter and ⌥Enter keep their newline. M1a has no
+ * steer, so ⌘Enter and ⌘⇧Enter, the queue keys, send as well: every send
+ * queues.
  */
 export function sends(event: KeyLike, sendKey: SendKey): boolean {
-  if (event.key !== "Enter" || event.isComposing || event.keyCode === 229) {
+  if (event.key !== "Enter" || composing(event)) {
     return false;
   }
   const mod = Boolean(event.metaKey || event.ctrlKey);

@@ -35,6 +35,8 @@ export interface BrowserShellControls {
   setUpdateState(state: UpdateState): void;
   /** What the next `pickDirectory` resolves to; `null`, the default, is a cancelled picker. */
   setPickedDirectory(path: string | null): void;
+  /** The path `pathForFile` gives a file of this name; other files have none. */
+  setFilePath(name: string, path: string): void;
   /** What `requestPrivileged` resolves to from now on; `cancelled` by default. */
   setPrivilegedResult(result: PrivilegedResult): void;
   /** The actions `requestPrivileged` took, in order. */
@@ -92,6 +94,7 @@ export function createBrowserShell(options: BrowserShellOptions = {}): BrowserSh
   const updateStates = new Listeners<[UpdateState]>();
   const openedUrls: string[] = [];
   let pickedDirectory: string | null = null;
+  const filePaths = new Map<string, string>();
   const privilegedActions: PrivilegedAction[] = [];
   let privilegedResult: PrivilegedResult = { status: "cancelled" };
   const host: ShellAPI["host"] = options.host ?? {
@@ -119,6 +122,7 @@ export function createBrowserShell(options: BrowserShellOptions = {}): BrowserSh
       }
     },
     pickDirectory: () => Promise.resolve(pickedDirectory),
+    pathForFile: (file) => filePaths.get(file.name) ?? null,
     system: { onThemeChange: (cb) => themes.add(cb) },
     window: { onFocusChange: (cb) => focus.add(cb) },
     prefs: {
@@ -159,6 +163,7 @@ export function createBrowserShell(options: BrowserShellOptions = {}): BrowserSh
     setPickedDirectory: (path) => {
       pickedDirectory = path;
     },
+    setFilePath: (name, path) => void filePaths.set(name, path),
     setPrivilegedResult: (result) => {
       privilegedResult = structuredClone(result);
     },

@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 
 pub const USAGE: &str =
     "usage: cupper-fake-agent [--persona claude|codex] [--auth logged-in|logged-out]
-                         [--fault <name>[@<segment>]]... [--segment <n>] [--segment-file <path>]
+                         [--fault <name>[@<segment>]]... [--without plan|thinking]...
+                         [--segment <n>] [--segment-file <path>]
                          [--replay <recording>]
 faults: exit_on_start, initialize_hang, set_config_error, resume_error, linger, no_steering";
 
@@ -63,6 +64,9 @@ pub struct Config {
     /// `--calls <file>`: every request and `session/cancel` it gets, one JSON
     /// line each, for tests to tell `session/resume` from `session/new` (K1, K6).
     pub calls: Option<PathBuf>,
+    /// `--without plan|thinking`: what the agent cannot do, its options gone
+    /// and the script's blocks of it not sent (IT-degrade-plan, -thinking).
+    without: Vec<String>,
 }
 
 impl Config {
@@ -74,6 +78,7 @@ impl Config {
             replay: None,
             faults: Vec::new(),
             calls: None,
+            without: Vec::new(),
         };
         let mut faults = Vec::new();
         let mut segment_file = None;
@@ -92,6 +97,7 @@ impl Config {
                 ("--segment-file", _) => segment_file = Some(PathBuf::from(value)),
                 ("--replay", _) => config.replay = Some(PathBuf::from(value)),
                 ("--calls", _) => config.calls = Some(PathBuf::from(value)),
+                ("--without", "plan" | "thinking") => config.without.push(value),
                 _ => return Err(ConfigError::Usage(format!("bad option `{flag} {value}`"))),
             }
         }
@@ -112,6 +118,10 @@ impl Config {
 
     pub fn fault(&self, name: &str) -> bool {
         self.faults.iter().any(|f| f == name)
+    }
+
+    pub fn without(&self, what: &str) -> bool {
+        self.without.iter().any(|w| w == what)
     }
 }
 

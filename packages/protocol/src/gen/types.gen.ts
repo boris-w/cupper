@@ -708,7 +708,7 @@ export type ErrorItem = {
 };
 
 /**
- * Open enum: unknown values must be accepted. Known: bad_nonce signature_invalid bad_key bad_proof scope lineage role already_initialized user_activation_required already_resolved turn_mismatch digest_mismatch too_early version_mismatch stale_diff outcome_unknown turn_running config_unconfirmed adapter_exited host_restarted not_a_repo cli_missing cli_not_logged_in cli_too_old runtime_installing runtime_failed adapter_starting adapter_crashed pending_upgrade quota_exhausted app_not_found snapshot_missing index_unmerged project_untrusted scan_failed hook_failed nothing_to_commit auth_failed rejected lock_held unsafe_repo_config repo_config_changed filter_unsupported lfs_object_missing signing_failed session_archived queue_full steer cancel upgrade user_quit idle
+ * Open enum: unknown values must be accepted. Known: bad_nonce signature_invalid bad_key bad_proof scope lineage role already_initialized user_activation_required already_resolved turn_mismatch digest_mismatch too_early version_mismatch stale_diff outcome_unknown turn_running config_unconfirmed adapter_exited host_restarted not_a_repo cli_missing cli_not_logged_in cli_too_old runtime_installing runtime_failed adapter_starting adapter_crashed pending_upgrade quota_exhausted app_not_found snapshot_missing index_unmerged project_untrusted scan_failed hook_failed nothing_to_commit auth_failed rejected lock_held unsafe_repo_config repo_config_changed filter_unsupported lfs_object_missing signing_failed session_read_only session_archived queue_full steer cancel upgrade user_quit idle
  */
 export type ErrorReason =
   | "bad_nonce"
@@ -756,6 +756,7 @@ export type ErrorReason =
   | "filter_unsupported"
   | "lfs_object_missing"
   | "signing_failed"
+  | "session_read_only"
   | "session_archived"
   | "queue_full"
   | "steer"
@@ -1032,6 +1033,10 @@ export type ExtractionCapabilities = {
   output_streaming: boolean;
   plan: PlanExtraction;
   run_state: RunStateSource;
+  /**
+   * The agent thinks aloud, as its options show (T243). For entry points
+   * only: thought items are extracted and shown however it is.
+   */
   thinking: boolean;
 };
 
@@ -1648,6 +1653,10 @@ export type IntentId = string;
 export type IntentReason = "needs_action" | "turn_completed" | "error" | (string & {});
 
 export type InteractionCapabilities = {
+  /**
+   * The agent can ask to confirm a plan, as its options show (T243). For
+   * entry points only: a `plan_confirm` request is shown however it is.
+   */
   plan_confirm: boolean;
   question_forms: boolean;
   /**

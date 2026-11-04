@@ -12,7 +12,7 @@ import {
   type ShellInfo,
   type Unsubscribe,
 } from "@cupper/shell-api";
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from "electron";
 
 import {
   COMMAND_CHANNEL,
@@ -82,6 +82,8 @@ const shell: ShellAPI = {
   onNavigate: (cb) => on(NAVIGATE, cb),
   openExternal: (url) => ipcRenderer.send(OPEN_EXTERNAL, url),
   pickDirectory: () => ipcRenderer.invoke(PICK_DIRECTORY) as Promise<string | null>,
+  // Electron's own path for a File the user dropped; one a page made has none.
+  pathForFile: (file) => webUtils.getPathForFile(file) || null,
   system: { onThemeChange: (cb) => on(THEME_CHANGED, cb) },
   window: { onFocusChange: (cb) => on(FOCUS_CHANGED, cb) },
   prefs: {

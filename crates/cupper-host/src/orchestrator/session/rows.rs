@@ -228,7 +228,9 @@ impl Rows {
                     }
                 }
                 EventBody::SessionConfigured(c) => {
-                    rows.session(session, at, "config_json = ?3", vec![json(&c.config)])
+                    let set = "config_json = ?3, read_only = ?4";
+                    let values = vec![json(&c.config), int(u64::from(c.read_only))];
+                    rows.session(session, at, set, values)
                 }
                 _ => {}
             }
@@ -242,9 +244,10 @@ impl Rows {
         self.session(session, at, "project_config_ignored = 1", Vec::new());
     }
 
-    /// Archived now.
-    pub(super) fn archived(&mut self, session: &SessionId, at: u64) {
-        self.session(session, at, "archived_at = ?2", Vec::new());
+    /// Archived now, or restored.
+    pub(super) fn archived(&mut self, session: &SessionId, at: u64, archived: bool) {
+        let set = "archived_at = CASE WHEN ?3 THEN ?2 END";
+        self.session(session, at, set, vec![int(u64::from(archived))]);
     }
 
     /// The user's title (`session/rename`).
