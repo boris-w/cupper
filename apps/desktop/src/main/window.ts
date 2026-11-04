@@ -4,7 +4,7 @@ import { isReleaseLike, type Flavor } from "../shared/flavor";
 
 export const MAIN_DOCUMENT_URL = "app://cupper/index.html";
 /** The review document (design 5.7.5), framed by the main document. */
-export const REVIEW_DOCUMENT_URL = "app://cupper-review/index.html";
+export const REVIEW_DOCUMENT_URL = "app://cupper-review/review.html";
 
 /** The hardened webPreferences of every window (design 5.7.8). */
 export function webPreferences(flavor: Flavor, preload: string): WebPreferences {

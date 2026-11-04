@@ -12,7 +12,7 @@ import { APP_SCHEME_PRIVILEGES, appProtocolHandler } from "./security/app-protoc
 import { hardenWebContents } from "./security/navigation";
 import { restrictPermissions } from "./security/permissions";
 import { enforceSwitchAllowlist } from "./security/switches";
-import { mainWindowOptions, webPreferences } from "./window";
+import { mainWindowOptions, REVIEW_DOCUMENT_URL, webPreferences } from "./window";
 
 const FLAVORS: Flavor[] = ["release", "local", "e2e", "dev"];
 
@@ -94,7 +94,7 @@ describe("UNIT-main-hardening", () => {
 
     it("lets a frame load the review document once, as its first navigation", () => {
       const { emit } = hardened();
-      const review = "app://cupper-review/index.html";
+      const review = REVIEW_DOCUMENT_URL;
       const frame = (url: string, id: number) => emit("will-frame-navigate", url, false, id);
       expect(frame(review, 2)).not.toHaveBeenCalled();
       expect(frame(review, 2)).toHaveBeenCalledOnce();
