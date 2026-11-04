@@ -445,7 +445,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 - 分支 `cupper/<短名>`，先 `check-ref-format --branch` 校验，冲突时加后缀。T124：短名取 `branch_hint`（只能是单段，不合格回 `invalid_params`），没有时用 `s-<会话 ID 末 8 位十六进制>`；分支和目录同名，后缀 `-2` 到 `-99`，用完回 `conflict`；名字在 `session/create` 里同步决定，之后被别人抢先建了同名分支时，add 失败、写 `workspace.failed`。项目不是 git 仓库（或不是工作树的顶层目录）时回 `unsupported/not_a_repo`；`base_ref` 不在创建时校验，写错的要等 add 失败。
 - 会话存续期间 `worktree lock --reason "cupper session <id>"`；建好后等 1 秒（`worktree_refresh`，经 `Clock`）执行一次 `update-index --refresh`；不用 `--relative-paths`。`RepoLock` 只覆盖 add 和 lock，等待期间不占，刷新前再拿；刷新失败不算失败。检出进度从 `worktree add` 的 stderr 边读边转发，按 `Updating files: n%` 写 `workspace.preparing{checkout, n}`（git 默认过 2 秒才开始写）。`RepoLock` 由 supervisor 建好，Git 服务和 worktree 共用。
 - `worktree add` 的检出不运行自定义过滤器和 post-checkout hook（仓库档的覆盖）。过滤器设了 `required` 时检出会失败，回 `workspace.failed{git_error, filter_unsupported}`，界面提示"这个仓库配置了自定义过滤器，cupper 不会代为运行；请在终端创建 worktree，或改用本地模式"。
-- `worktree/check` 按 ADR-10 的 7 条规则只读检查：第 1、2 条（修改、暂存、未跟踪）由快照档计算；第 3 条检查 git 目录里的标记文件；第 4 条检查锁文件；第 5、6 条用 `rev-list`；第 7 条检查子模块的 git 目录是否存在。返回阻止删除的原因和只提示不阻止的情况（被忽略文件的数量、只因大小写冲突显示为"脏"）。
+- `worktree/check` 按 ADR-10 的 7 条规则只读检查（T125 落实：不拿 `RepoLock`；本地会话回 `unsupported`；第 4 条以 `worktree list` 的锁原因判断，原因不是 `cupper session <id>` 的锁、没有原因的锁都算外来锁；第 5 条 `rev-list HEAD --not --exclude=<本分支> --branches --remotes --tags`；第 6 条以有没有远程跟踪分支判断"仓库有没有远程"；"仅大小写冲突"指脏文件都未暂存、并且各自与另一条已跟踪路径只差大小写，不处理 Unicode 规范化；被忽略文件由快照档 `ls-files --others --ignored --exclude-standard` 计数）：第 1、2 条（修改、暂存、未跟踪）由快照档计算；第 3 条检查 git 目录里的标记文件；第 4 条检查锁文件；第 5、6 条用 `rev-list`；第 7 条检查子模块的 git 目录是否存在。返回阻止删除的原因和只提示不阻止的情况（被忽略文件的数量、只因大小写冲突显示为"脏"）。
 - 删除用 `git worktree remove`，不加 `--force`；只有"仅大小写冲突"且用户确认时才加 `--force`；默认保留分支。
 
 **调用约定**（三档共用）

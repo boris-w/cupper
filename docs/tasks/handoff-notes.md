@@ -548,3 +548,6 @@
 | T144 | `workspace.failed` 还有 `not_found`（worktree 目录被删，git 里的记录还在）：提示用户，并告诉他可以自己 `git worktree prune` | T236 |
 | T131 | T233 合并后，review 的 8 张、review-tree 的 4 张、review-commit 的 3 张基线在 T131 merge main、换掉占位视图之后都要重新生成；审查面板头部现在有"Git 操作"（`review/GitActions.tsx`）和"显示文件"两个按钮；review 的单测用 `review/test-harness.tsx` | T233 |
 | T148 | 提交弹窗里的单选框和复选框用的是浏览器默认的系统强调色，没有接设计 token，可以用 `accent-color` 统一 | T233 |
+| T240 | `session/archive` 直接用 `git/cleanup.rs` 的 `check` 得到 blockers；删除前先 `worktree unlock`（加了锁的 worktree 不加 `-f -f` 删不掉）；`remove_case_only_dirty` 只在 `case_only_dirty` 为真且没有别的 blocker 时才加 `--force`；恢复 not_found 会话时用 `listed` 判断分支是否在别的 worktree 里检出；`listed` 现在返回锁的原因（`Option<Option<String>>`） | T125 |
+| T240、以后的性能任务 | `worktree/check` 的被忽略文件按文件计数，`node_modules` 这类大目录要全量列出，可能逼近只读命令 30 s 的超时；超时时应当只把这一项提示标为未知，不让整个检查失败（或改成 `--directory` 按目录计数） | T125 |
+| 以后改 `worktree/check` 的任务 | 仅大小写冲突不处理 Unicode 规范化：NFC 与 NFD 写法不同的同名路径不认作冲突；区分大小写的文件系统那一支没有实测（本机和 runner 都是不区分大小写的 APFS） | T125 |
