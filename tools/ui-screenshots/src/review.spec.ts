@@ -358,3 +358,42 @@ test("UI-review-commit with the configuration notice and a failure's guidance", 
   await page.mouse.move(400, 780);
   await expect(page).toHaveScreenshot("review-commit-failed.png");
 });
+
+test("UI-review-panel the review document's actions and comments", async ({ page }) => {
+  const LIB = "src/lib.rs";
+  await show(page, { diffs: { ...DIFFS, unstaged: diff("dt_u", [file(LIB, 2, 1)]) } });
+  const review = reviewFrame(page);
+  const sent = (method: string) =>
+    page.evaluate(
+      (method) =>
+        window.cupperHost.requests.filter((r) => r.method === method).map((r) => r.params),
+      method,
+    );
+  // A file's and a hunk's actions, by the scope, only ask the main document.
+  await review.getByRole("button", { name: "暂存" }).first().click();
+  await expect
+    .poll(() => sent("git/stage"))
+    .toEqual([expect.objectContaining({ target: { paths: [LIB] } })]);
+  await review.getByRole("button", { name: "暂存" }).nth(1).click();
+  await expect.poll(async () => (await sent("git/stage")).length).toBe(2);
+  expect((await sent("git/stage"))[1]).toMatchObject({
+    target: { hunk_ids: [`hk_${LIB.length}`] },
+  });
+  await review.getByRole("button", { name: "还原" }).nth(1).click();
+  await expect(page.getByRole("alertdialog", { name: "还原这个 hunk？" })).toBeVisible();
+  expect(await sent("git/revert")).toEqual([]);
+
+  // A comment under a line: Esc drops the box, ⌘Enter keeps the draft.
+  const plus = review.locator("[data-utility-button]");
+  await review.locator("[data-line]").nth(2).hover();
+  await plus.click();
+  const box = review.getByRole("textbox", { name: "写一条评论…" });
+  await box.press("Escape");
+  await expect(box).toHaveCount(0);
+  await review.locator("[data-line]").nth(2).hover();
+  await plus.click();
+  await box.fill("改成常量");
+  await box.press("Meta+Enter");
+  await expect(review.getByText("改成常量")).toBeVisible();
+  await expect(page.getByText("1 条评论")).toBeVisible();
+});
