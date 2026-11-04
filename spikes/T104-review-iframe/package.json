@@ -1,0 +1,19 @@
+{
+  "name": "t104-review-iframe",
+  "private": true,
+  "type": "module",
+  "description": "T104 (Q29, SP-6 scenario 9): the review document in a cross-origin iframe with @pierre/diffs, under the app's protocol and CSP. Electron is apps/desktop's.",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node build.mjs && ../../apps/desktop/node_modules/.bin/electron dist/main.cjs",
+    "measure": "node build.mjs && node measure.mjs"
+  },
+  "dependencies": {
+    "@pierre/diffs": "1.6.4",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}
