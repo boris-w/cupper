@@ -7,6 +7,7 @@ import type { BlobRef, PromptBlock } from "@cupper/protocol";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useT } from "../app/providers";
+import { ChevronDownIcon } from "../components/icons";
 import { useBlobText } from "../state/blob";
 import { useStreamActions } from "../stream/actions";
 import { UnsupportedRow } from "./registry";
@@ -51,8 +52,10 @@ function useElapsed(since: number, live: boolean): number {
   return Math.max(0, now - since);
 }
 
+/** "用时 {时长}" over a completed turn, which it folds (design 5.7.4); the others' outcome. */
 function TurnHeaderRow({ row }: { row: RowOf<"turn_header"> }) {
   const t = useT();
+  const { toggleTurn } = useStreamActions();
   const duration = useDuration();
   const running = row.status === "running";
   const elapsed = useElapsed(row.startedAt, running);
@@ -62,8 +65,27 @@ function TurnHeaderRow({ row }: { row: RowOf<"turn_header"> }) {
       ? t("stream:turn_cancelled", { duration: took })
       : row.status === "interrupted" || row.status === "failed"
         ? t(`stream:turn_${row.status}`)
-        : t("stream:turn_processed", { duration: took });
-  return <div className="border-b border-border pb-1 text-sm text-fg-secondary">{text}</div>;
+        : t(running ? "stream:turn_processed" : "stream:turn_took", { duration: took });
+  const line =
+    "flex w-full items-center gap-1 border-b border-border pb-1 text-sm text-fg-secondary";
+  if (row.folded === undefined) {
+    return <div className={line}>{text}</div>;
+  }
+  return (
+    <button
+      type="button"
+      aria-expanded={!row.folded}
+      onClick={() => toggleTurn(row.turnId)}
+      className={`${line} text-left outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-ring`}
+    >
+      <span
+        className={`shrink-0 transition-transform duration-150 [&>svg]:size-3.5 ${row.folded ? "-rotate-90" : ""}`}
+      >
+        <ChevronDownIcon />
+      </span>
+      {text}
+    </button>
+  );
 }
 
 function UserMessageRow({ row }: { row: RowOf<"user_message"> }) {

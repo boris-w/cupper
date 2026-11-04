@@ -12,13 +12,18 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useHost } from "../app/providers";
 import { flatten, type History } from "../rows/flatten";
 import { RowView } from "../rows/registry";
-import { streamRows } from "../rows/stream";
+import { streamRows, type StreamRow } from "../rows/stream";
 import "../rows";
 import { useStreams } from "../state/provider";
 import { useEntry, type StreamStore } from "../state/stream";
 import { StreamActions } from "./actions";
 import { ComposerOverlays, runningPlan } from "./ComposerOverlays";
 import { ScrollKeeper } from "./scroll";
+
+/** The row that shows `itemId`, alone or in its activity group. */
+const holds = (row: StreamRow, itemId: string) =>
+  ("itemId" in row && row.itemId === itemId) ||
+  (row.kind === "activity_group" && row.tools.some((tool) => tool.itemId === itemId));
 
 export function StreamList({ sessionId }: { sessionId: string }) {
   const store = useStreams().session(sessionId);
@@ -64,7 +69,9 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
   useEntry(view, "view");
   const json = view.toJSON();
   const history = useHistory(sessionId, store, json.turns[0]?.started.turn_no);
-  const rows = flatten(json, view.unknown, history.state);
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const [jump, setJump] = useState<string>();
+  const rows = flatten(json, view.unknown, history.state, open);
   const scroller = useRef<HTMLDivElement>(null);
   const keeper = useRef(new ScrollKeeper()).current;
   const [stuck, setStuck] = useState(true);
@@ -128,6 +135,28 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
     setStuck(true);
     virtualizer.scrollToOffset(total);
   };
+  const toggleTurn = (turnId: string) =>
+    setOpen((shown) => {
+      const next = new Set(shown);
+      if (!next.delete(turnId)) next.add(turnId);
+      return next;
+    });
+  const jumpTo = (itemId: string) => {
+    const turnId = json.items[itemId]?.item.turn_id;
+    if (turnId) setOpen((shown) => (shown.has(turnId) ? shown : new Set(shown).add(turnId)));
+    setJump(itemId);
+  };
+  // Once the item's turn is open, its row is there to scroll to.
+  useLayoutEffect(() => {
+    if (jump === undefined) return;
+    const index = rows.findIndex((row) => holds(row, jump));
+    if (index !== -1) {
+      keeper.stuck = false;
+      setStuck(false);
+      virtualizer.scrollToIndex(index, { align: "center" });
+    }
+    setJump(undefined);
+  }, [jump, rows, keeper, virtualizer]);
   const plan = runningPlan(rows);
   const toPlan = () => {
     const index = rows.findIndex((row) => row.key === plan?.key);
@@ -137,7 +166,7 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
   };
 
   return (
-    <StreamActions value={{ sessionId, loadEarlier }}>
+    <StreamActions value={{ sessionId, loadEarlier, toggleTurn, jumpTo }}>
       <div className="relative min-h-0 flex-1">
         <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto" data-stream-list>
           <div className="relative w-full" style={{ height: total }}>
