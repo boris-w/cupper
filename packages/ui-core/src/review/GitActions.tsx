@@ -49,9 +49,10 @@ function failureOf(error: unknown, staged: boolean): Failure {
   };
 }
 
-export function GitActions({ sessionId }: { sessionId: string }) {
+/** `active`: whether the panel is on screen; a hidden one asks the host for nothing. */
+export function GitActions({ sessionId, active = true }: { sessionId: string; active?: boolean }) {
   const t = useT();
-  const status = useStatus(sessionId).data;
+  const status = useStatus(sessionId, active).data;
   const [step, setStep] = useState<Step>();
   const trigger = useRef<HTMLButtonElement>(null);
   return (

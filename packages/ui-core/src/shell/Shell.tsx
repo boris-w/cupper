@@ -60,6 +60,17 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
     [api, narrow, store],
   );
 
+  // The side panel stays once it opened, or once the window was first idle:
+  // hidden, not unmounted, so that the review document and its Worker are
+  // ready when it opens (design 5.7.5, point 1).
+  const shown = layout.sidePanel.visible;
+  const [resident, setResident] = useState(shown);
+  if (shown && !resident) setResident(true);
+  useEffect(() => {
+    const idle = requestIdleCallback(() => setResident(true));
+    return () => cancelIdleCallback(idle);
+  }, []);
+
   const docked = layout.sidebar.visible && !narrow;
   return (
     <div className="flex h-full">
@@ -86,8 +97,9 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
         />
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
-      {layout.sidePanel.visible && (
+      {resident && (
         <aside
+          hidden={!shown}
           aria-label={t("shell:side_panel")}
           style={{ width: layout.sidePanel.width }}
           className="relative flex shrink-0 flex-col border-l border-border bg-surface"
@@ -106,7 +118,11 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
             </button>
           </div>
           <div role="tabpanel" className="min-h-0 flex-1">
-            <ReviewPanel fileTree={prefs.fileTreeOpen} onFileTree={() => store.toggleFileTree()} />
+            <ReviewPanel
+              fileTree={prefs.fileTreeOpen}
+              onFileTree={() => store.toggleFileTree()}
+              active={shown}
+            />
           </div>
           <Splitter
             label={t("shell:resize_side_panel")}

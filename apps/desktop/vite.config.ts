@@ -1,6 +1,7 @@
-// Builds the three entries of the app into `dist/` (design 5.1.3, 5.10.4):
-// the main process, the preload and the renderer's main document. Every
-// runtime dependency is bundled, so the app declares no `dependencies`.
+// Builds the entries of the app into `dist/` (design 5.1.3, 5.10.4): the
+// main process, the preload, the renderer's main document and the review
+// document with its Worker. Every runtime dependency is bundled, so the app
+// declares no `dependencies`.
 //
 // `vite build --mode <mode>` picks the build flavor (design 5.7.9). The
 // host's environment allowlist comes from the runtime manifest at build time,
@@ -42,11 +43,11 @@ export function hostEnvAllow(): string {
 
 /**
  * Writes the modules each environment's outputs hold, as paths relative to
- * the repository, to `dist/metafile/<environment>.json`: the license gate
- * reads them (T006, design 5.1.6). No package of the app takes that
- * directory up.
+ * the repository, to `dist/metafile/<environment>.json`, or `<name>.json`:
+ * the license gate reads them (T006, design 5.1.6). No package of the app
+ * takes that directory up.
  */
-function metafile(): Plugin {
+function metafile(name?: string): Plugin {
   const repo = at("../..");
   // A virtual module (`\0…`) is the bundler's own and has no path.
   const shown = (id: string) => (id.startsWith("\0") ? id : relative(repo, id));
@@ -59,7 +60,7 @@ function metafile(): Plugin {
           : [],
       );
       mkdirSync(at("dist/metafile"), { recursive: true });
-      const file = at(`dist/metafile/${this.environment.name}.json`);
+      const file = at(`dist/metafile/${name ?? this.environment.name}.json`);
       writeFileSync(file, `${JSON.stringify(outputs, null, 2)}\n`);
     },
   };
@@ -79,6 +80,9 @@ export default defineConfig(({ mode }) => {
     plugins: [tailwindcss(), metafile()],
     // Build every environment below with one `vite build`.
     builder: {},
+    // The review document's Worker (design 5.7.5), a module like the document.
+    // Vite bundles it on its own, as a "client" environment of its own.
+    worker: { format: "es", plugins: () => [metafile("review-worker")] },
     environments: {
       main: {
         consumer: "server",
@@ -116,9 +120,7 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
-      // The main document, served from app://cupper/. The review document
-      // (app://cupper-review/, design 5.7.5) joins in M1b as a second
-      // environment with its own root.
+      // The main document, served from app://cupper/.
       client: {
         build: {
           outDir: at("dist/renderer"),
@@ -127,9 +129,19 @@ export default defineConfig(({ mode }) => {
           rolldownOptions: { input: { index: at("src/renderer/index.html") } },
         },
       },
+      // The review document, served from app://cupper-review/ (design 5.7.5).
+      review: {
+        consumer: "client",
+        build: {
+          outDir: at("dist/review"),
+          emptyOutDir: true,
+          target: CHROME,
+          rolldownOptions: { input: { review: at("src/renderer/review.html") } },
+        },
+      },
     },
-    // The renderer's root, so that its files land at the top of
-    // `dist/renderer/`, the root that app://cupper/ serves.
+    // The renderers' root, so that their files land at the top of
+    // `dist/renderer/` and `dist/review/`, the roots the two hosts serve.
     root: at("src/renderer"),
   };
 });

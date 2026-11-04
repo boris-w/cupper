@@ -12,7 +12,7 @@ import { APP_SCHEME_PRIVILEGES, appProtocolHandler } from "./security/app-protoc
 import { hardenWebContents } from "./security/navigation";
 import { restrictPermissions } from "./security/permissions";
 import { enforceSwitchAllowlist } from "./security/switches";
-import { mainWindowOptions, webPreferences } from "./window";
+import { mainWindowOptions, REVIEW_DOCUMENT_URL, webPreferences } from "./window";
 
 const FLAVORS: Flavor[] = ["release", "local", "e2e", "dev"];
 
@@ -70,8 +70,8 @@ describe("UNIT-main-hardening", () => {
       };
       const openExternal = vi.fn();
       hardenWebContents(contents as unknown as WebContents, openExternal);
-      const emit = (name: string, url: string, isMainFrame = true) => {
-        const event = { url, isMainFrame, preventDefault: vi.fn() };
+      const emit = (name: string, url: string, isMainFrame = true, frameTreeNodeId = 1) => {
+        const event = { url, isMainFrame, frame: { frameTreeNodeId }, preventDefault: vi.fn() };
         contents.emit(name, event);
         return event.preventDefault;
       };
@@ -90,6 +90,18 @@ describe("UNIT-main-hardening", () => {
         expect(emit(name, "app://cupper/other.html"), name).toHaveBeenCalledOnce();
       }
       expect(openExternal).not.toHaveBeenCalled();
+    });
+
+    it("lets a frame load the review document once, as its first navigation", () => {
+      const { emit } = hardened();
+      const review = REVIEW_DOCUMENT_URL;
+      const frame = (url: string, id: number) => emit("will-frame-navigate", url, false, id);
+      expect(frame(review, 2)).not.toHaveBeenCalled();
+      expect(frame(review, 2)).toHaveBeenCalledOnce();
+      expect(frame("app://cupper-review/other.html", 3)).toHaveBeenCalledOnce();
+      expect(frame(review, 3)).toHaveBeenCalledOnce();
+      expect(emit("will-frame-navigate", review)).toHaveBeenCalledOnce();
+      expect(frame(review, 4)).not.toHaveBeenCalled();
     });
 
     it("hands http and https links of the main frame to the browser", () => {

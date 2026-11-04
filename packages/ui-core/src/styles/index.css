@@ -25,6 +25,13 @@
   }
 }
 
+/* The review document's diff (@pierre/diffs, design 5.7.5) in the tokens' fonts. */
+:root {
+  --diffs-font-family: var(--font-mono);
+  --diffs-header-font-family: var(--font-sans);
+  --diffs-font-size: var(--text-code);
+}
+
 /* The title bar moves the window; controls on it opt out. */
 @utility app-drag {
   -webkit-app-region: drag;

@@ -39,28 +39,68 @@ const TREE: Diffs = {
   ]),
 };
 
+type File = ReturnType<typeof file>;
+const lines = (n: number, sign: string, text: (i: number) => string) =>
+  Array.from({ length: n }, (_, i) => `${sign}${text(i)}`);
+/** What `git/file_diff` gives for `f`: one unit, its lines by the file's counts. */
+function fileDiff(f: File, text = (i: number) => `    let value_${i} = compute(${i});`) {
+  const [added, removed] = [lines(f.additions, "+", text), lines(f.deletions, "-", text)];
+  const hunk = (unit: string, header: string, body: string[]) => ({
+    path: f.path,
+    hunks: [{ hunk_id: `hk_${f.path.length}`, unit, header, lines: body }],
+  });
+  if (f.change === "add") {
+    return hunk("whole_file", `new file mode 100644\n@@ -0,0 +1,${f.additions} @@`, added);
+  }
+  if (f.change === "delete") {
+    return hunk("whole_file", `deleted file mode 100644\n@@ -1,${f.deletions} +0,0 @@`, removed);
+  }
+  const header = `@@ -10,${f.deletions + 2} +10,${f.additions + 2} @@ fn apply()`;
+  return hunk("hunk", header, [" fn apply() {", ...removed, ...added, " }"]);
+}
+
+/** The review document's frame in the page, to locate in and to evaluate in. */
+const reviewFrame = (page: Page) => page.frameLocator('iframe[title="变更详情"]');
+const reviewDocument = (page: Page) =>
+  page.frames().find((frame) => frame.url().startsWith("https://cupper-review.test/"));
+
 /** Session s_1 with the side panel open on `diffs`; `changed` paths make the configuration notice. */
 async function show(
   page: Page,
-  opts: { theme?: Theme; diffs?: Diffs; changed?: string[]; tree?: boolean; status?: object } = {},
+  opts: {
+    theme?: Theme;
+    diffs?: Diffs;
+    changed?: string[];
+    tree?: boolean;
+    status?: object;
+    text?: (i: number) => string;
+  } = {},
 ) {
   const { theme = "light", diffs = DIFFS, changed, tree = false, status: extra = {} } = opts;
   const prefs = { "layout.sidePanelOpen": true, "layout.fileTreeOpen": tree };
+  const files = Object.values(diffs).flatMap((d) => d.files);
+  const hunks = Object.fromEntries(files.map((f) => [f.path, fileDiff(f, opts.text)]));
   await open(page, { info: { theme, prefs } });
   await page.evaluate(
-    ([diffs, changed, extra]) => {
+    ([diffs, changed, extra, hunks]) => {
       window.cupperHost.handle("git/diff", ({ params }) => ({
         result: diffs[(params as { scope: string }).scope],
       }));
       const status = { ahead: 0, behind: 0, files: [], repo_config_changed: changed, ...extra };
       window.cupperHost.handle("git/status", () => ({ result: status }));
+      window.cupperHost.handle("git/file_diff", ({ params }) => ({
+        result: hunks[(params as { path: string }).path],
+      }));
       window.cupperShell.navigate({ kind: "session", session_id: "s_1" });
     },
-    [diffs, changed, extra] as const,
+    [diffs, changed, extra, hunks] as const,
   );
   // By its label, as an open menu hides the rest of the page from the accessibility tree.
   const panel = page.locator('aside[aria-label="侧边面板"]');
   await expect(panel.getByRole("button", { name: "查阅来源" })).toBeVisible();
+  if (diffs.unstaged?.files.length) {
+    await expect(reviewFrame(page).locator("[data-line]").first()).toBeVisible();
+  }
   await page.mouse.move(400, 780);
   return panel;
 }
@@ -212,6 +252,71 @@ test("UI-review-tree a file: the jump, its actions by scope, its right-click men
   const actions = readme.locator("..").getByRole("button");
   await expect(actions).toHaveCount(2);
   await expect(actions.nth(1)).toHaveAccessibleName("取消暂存");
+});
+
+const MARKUP = [
+  "<style data-injected>body { display: none }</style>",
+  "<img data-injected src=x onerror=alert(1)>",
+  '<a data-injected href="https://example.com/">a</a>',
+  '<base data-injected href="https://example.com/">',
+  '<link data-injected rel="stylesheet" href="https://example.com/x.css">',
+  '<meta data-injected http-equiv="refresh" content="0">',
+];
+
+test("UNIT-review-injection: markup in a file's name and lines shows as text", async ({ page }) => {
+  const name = "docs/<img data-injected src=x>.md";
+  const unstaged = diff("dt_u", [file(name, MARKUP.length, 0, "add")]);
+  await show(page, { diffs: { ...DIFFS, unstaged }, text: (i) => MARKUP[i] ?? "" });
+  const review = reviewDocument(page);
+  await expect(reviewFrame(page).getByText(name)).toBeVisible();
+  const found = await review?.evaluate(() => {
+    const all: Element[] = [];
+    const walk = (root: Document | ShadowRoot) =>
+      root.querySelectorAll("*").forEach((el) => {
+        all.push(el);
+        if (el.shadowRoot) walk(el.shadowRoot);
+      });
+    walk(document);
+    const shown = all.filter((el) => el.hasAttribute("data-line")).map((el) => el.textContent);
+    return { injected: all.filter((el) => el.hasAttribute("data-injected")).length, shown };
+  });
+  expect(found?.injected).toBe(0);
+  expect(found?.shown).toEqual(MARKUP);
+  expect(await page.locator("[data-injected]").count()).toBe(0);
+  expect(await violations(page)).toEqual([]);
+});
+
+test("UI-review-panel the review document: the fold, the jump, keys and the theme", async ({
+  page,
+}) => {
+  const panel = await show(page, { diffs: TREE, tree: true });
+  const review = reviewFrame(page);
+  // A fold goes up to the panel and comes back down as the file's state.
+  await review.getByRole("button", { name: "收起" }).first().click();
+  await expect(review.getByRole("button", { name: "展开" })).toHaveCount(1);
+  await page.getByRole("button", { name: "选项" }).click();
+  await page.getByRole("menuitem", { name: "收起全部" }).click();
+  await expect(review.getByRole("button", { name: "收起" })).toHaveCount(0);
+
+  // The tree's jump scrolls the review document to the file.
+  await page.getByRole("button", { name: "选项" }).click();
+  await page.getByRole("menuitem", { name: "展开全部" }).click();
+  await panel.getByRole("button", { name: "README.md" }).click();
+  await expect(review.getByTitle("README.md", { exact: true })).toBeInViewport();
+
+  // Its keys reach the main document, which owns the shortcuts.
+  await page.evaluate(() => {
+    const keys: string[] = ((window as unknown as { keys: string[] }).keys = []);
+    document.addEventListener("keydown", (event) => keys.push(event.key));
+  });
+  await review.getByRole("button", { name: "收起" }).first().press("k");
+  const keys = () => page.evaluate(() => (window as unknown as { keys: string[] }).keys);
+  await expect.poll(keys).toEqual(["k"]);
+
+  // The theme follows the main document's.
+  const theme = () => reviewDocument(page)?.evaluate(() => document.documentElement.dataset.theme);
+  await page.evaluate(() => window.cupperShell.setTheme("dark"));
+  await expect.poll(theme).toBe("dark");
 });
 
 const BRANCH = { branch: "cupper/fix-login", upstream: "origin/cupper/fix-login" };

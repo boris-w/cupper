@@ -25,8 +25,14 @@ const USAGE = `usage: license-gate [check | codex-notices]
 const root = resolve(import.meta.dirname, "../../..");
 const read = (path: string) => readFileSync(join(root, path), "utf8");
 
-/** The app's JS entries: the environments of `apps/desktop/vite.config.ts`. */
-const ENTRIES = { main: "main", preload: "preload", renderer: "client" };
+/** The app's JS entries: the environments of `apps/desktop/vite.config.ts`, and its Worker's bundle. */
+const ENTRIES = {
+  main: "main",
+  preload: "preload",
+  renderer: "client",
+  review: "review",
+  "review worker": "review-worker",
+};
 
 /** The runtime script imports nothing but Node's builtins: esbuild-wasm comes by path. */
 const SCRIPT = "runtime/bundle-claude-acp.mjs";

@@ -60,7 +60,7 @@ async function setup(
 ) {
   const { mock, ui } = await mountOnHost(
     <SlotsContext value={{ reviewView: View }}>
-      <ReviewPanel fileTree={false} onFileTree={() => undefined} />
+      <ReviewPanel fileTree={false} onFileTree={() => undefined} active />
     </SlotsContext>,
     (mock) => {
       mock.handle("git/diff", ({ params }) => {
