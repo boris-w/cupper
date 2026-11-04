@@ -28,14 +28,14 @@ fn create(n: u32, hint: &str) -> Value {
 }
 
 /// A repository on `main` with `a.txt` committed.
-async fn repo(name: &str) -> Case {
+pub(super) async fn repo(name: &str) -> Case {
     let c = Case::new(name).await;
     c.write("a.txt", "a\n");
     gits(&c, "checkout -q -b main\nadd -A\ncommit -qm base").await;
     c
 }
 
-async fn created(c: &Case, n: u32, hint: &str) -> SessionId {
+pub(super) async fn created(c: &Case, n: u32, hint: &str) -> SessionId {
     let created = c.f.ok("session/create", create(n, hint)).await;
     serde_json::from_value(created["session_id"].clone()).unwrap()
 }

@@ -24,10 +24,13 @@ use cupper_protocol::methods::git::{
 };
 use cupper_protocol::methods::handshake::{ClientPresence, Ping};
 use cupper_protocol::methods::interaction::{InteractionGet, InteractionRespond};
-use cupper_protocol::methods::project::{ProjectAdd, ProjectTrust, ProjectTrustInfo};
+use cupper_protocol::methods::project::{
+    ProjectAdd, ProjectRemove, ProjectTrust, ProjectTrustInfo,
+};
 use cupper_protocol::methods::session::{
-    SessionCapabilities, SessionConfirmConfig, SessionCreate, SessionGet, SessionInterrupt,
-    SessionMarkRead, SessionQueueResume, SessionSend, SessionSetConfig,
+    SessionArchive, SessionCapabilities, SessionConfirmConfig, SessionCreate, SessionGet,
+    SessionInterrupt, SessionListArchived, SessionMarkRead, SessionQueueResume, SessionRename,
+    SessionSend, SessionSetConfig,
 };
 use cupper_protocol::methods::stream::{
     BlobGet, BlobPut, HistoryPage, StreamSubscribe, StreamUnsubscribe,
@@ -171,6 +174,10 @@ impl Routes {
         self.add::<SessionSetConfig>(to());
         self.add::<SessionGet>(to());
         self.add::<SessionCapabilities>(to());
+        self.add::<SessionArchive>(to());
+        self.add::<SessionRename>(to());
+        self.add::<SessionListArchived>(to());
+        self.add::<ProjectRemove>(to());
         self.add::<InteractionRespond>(to());
         self.add::<InteractionGet>(to());
         self.insert::<PolicyDescribe>(Target::Describe(Arc::clone(&port)));

@@ -15,13 +15,14 @@ use cupper_protocol::index::{
     HostUpdated, PendingKind, ProjectRemoved, ProjectUpserted, RemovalReason, SessionRemoved,
     SessionStatus, SessionSummary,
 };
+use cupper_protocol::methods::session::ArchivedSession;
 use cupper_protocol::view::IndexView;
 use rusqlite::Error::FromSqlConversionFailure;
 use rusqlite::types::Type;
 use rusqlite::{Connection, Row};
 use serde::de::DeserializeOwned;
 
-use super::status::Loaded;
+use super::status::{Loaded, status_of};
 use crate::trust::{Manifest, Trust, Trusted, TrustedBy};
 
 /// A project as the index keeps it: its row.
@@ -71,17 +72,7 @@ pub(super) fn read(conn: &Connection) -> rusqlite::Result<Tables> {
         let project = project?;
         tables.projects.insert(project.id.clone(), project);
     }
-    let mut select = conn.prepare(
-        "SELECT session_id, project_id, agent, coalesce(title, ''), title_source,
-                workspace_kind, worktree_branch, state, last_turn_end_seq, last_read_seq,
-                updated_at, read_only, workspace_path,
-                (SELECT count(*) FROM interactions i
-                 WHERE i.session_id = s.session_id AND i.status = 'pending'),
-                (SELECT kind || ' ' || request_id FROM interactions i
-                 WHERE i.session_id = s.session_id AND i.status = 'pending'
-                 ORDER BY created_at LIMIT 1)
-         FROM sessions s WHERE archived_at IS NULL",
-    )?;
+    let mut select = conn.prepare(&format!("{SESSIONS} WHERE archived_at IS NULL"))?;
     for session in select.query_map([], |row| Ok((session(row)?, row.get(12)?)))? {
         let (session, workspace): (Loaded, String) = session?;
         tables.sessions.push(session);
@@ -116,6 +107,47 @@ fn project(row: &Row) -> rusqlite::Result<Project> {
             trusted,
         },
     })
+}
+
+/// Sessions' rows as [`session`] reads them, with `archived_at` last.
+const SESSIONS: &str = "SELECT session_id, project_id, agent, coalesce(title, ''), title_source,
+        workspace_kind, worktree_branch, state, last_turn_end_seq, last_read_seq,
+        updated_at, read_only, workspace_path,
+        (SELECT count(*) FROM interactions i
+         WHERE i.session_id = s.session_id AND i.status = 'pending'),
+        (SELECT kind || ' ' || request_id FROM interactions i
+         WHERE i.session_id = s.session_id AND i.status = 'pending'
+         ORDER BY created_at LIMIT 1),
+        archived_at
+    FROM sessions s";
+
+/// Up to `limit` archived sessions, the latest archived first, after
+/// `after` (`archived_at`, `session_id`), each summary as the index would
+/// show it.
+pub(crate) fn archived(
+    conn: &Connection,
+    after: Option<(u64, String)>,
+    limit: u32,
+) -> rusqlite::Result<Vec<ArchivedSession>> {
+    let page =
+        "WHERE archived_at IS NOT NULL AND (?1 IS NULL OR (archived_at, session_id) < (?1, ?2))
+        ORDER BY archived_at DESC, session_id DESC LIMIT ?3";
+    let mut select = conn.prepare(&format!("{SESSIONS} {page}"))?;
+    let (at, id) = after.unzip();
+    let rows = select.query_map(rusqlite::params![at, id, limit], |row| {
+        let (loaded, at) = (session(row)?, row.get(15)?);
+        let mut summary = loaded.summary;
+        summary.unread = loaded.ended > loaded.read;
+        let pending = summary.pending_interactions;
+        summary.status = status_of(pending, loaded.running, summary.unread, loaded.failed);
+        summary.pending_kind = loaded.oldest.map(|(kind, _)| kind);
+        let archived_at = TimestampMs(at);
+        Ok(ArchivedSession {
+            summary,
+            archived_at,
+        })
+    })?;
+    rows.collect()
 }
 
 /// A session as its row has it; the status core computes its status.

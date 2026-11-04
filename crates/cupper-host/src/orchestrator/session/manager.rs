@@ -13,7 +13,7 @@ use cupper_protocol::annotations::{TimestampMs, WirePath};
 use cupper_protocol::capabilities::{ConfigOptionId, SessionCapabilities};
 use cupper_protocol::domain::{AgentKind, Tier};
 use cupper_protocol::envelope::Cause;
-use cupper_protocol::error::{ErrorCode, RpcError};
+use cupper_protocol::error::{ErrorCode, ErrorReason, RpcError};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::SessionId;
 use cupper_protocol::index::{
@@ -21,8 +21,10 @@ use cupper_protocol::index::{
 };
 use cupper_protocol::interaction::{InteractionOutcome, InteractionRequest};
 use cupper_protocol::methods::handshake::Principal;
+use cupper_protocol::methods::project::{ProjectRemove, ProjectRemoveParams};
 use cupper_protocol::methods::session::{
-    SessionCreate, SessionCreateParams, SessionCreateResult, SessionSend, WorkspaceSpec,
+    ArchivedCursor, SessionCreate, SessionCreateParams, SessionCreateResult, SessionListArchived,
+    SessionListArchivedParams, SessionListArchivedResult, SessionSend, WorkspaceSpec,
 };
 use cupper_protocol::rpc::Method;
 use cupper_protocol::session::{
@@ -48,6 +50,7 @@ use crate::files::FileLists;
 use crate::gateway::{AuditRecord, Call, Port, Reply, SessionPort};
 use crate::git::worktree::{ADDING, Plan, Worktrees};
 use crate::git::{GitTool, RepoNotice, SessionNotes};
+use crate::index::archived;
 use crate::ledger::Outcome;
 use crate::orchestrator::queue::preview;
 use crate::orchestrator::turn::{self, SendMode, SendRequest};
@@ -58,6 +61,9 @@ use crate::store::{BlobStore, Durability, Readers};
 use crate::supervisor::power::Power;
 use crate::supervisor::watch::Admission;
 use crate::supervisor::{Activity, Part};
+
+/// The archived sessions `session/list_archived` sends at once.
+const PAGE: u32 = 50;
 
 /// The session actors in the quiescence barrier.
 pub const SESSION: ActorKind = ActorKind::new("session");
@@ -355,6 +361,7 @@ impl SessionManager {
             initial: true,
             config_changed: BTreeSet::new(),
             worktree,
+            archived: false,
         };
         let participant = deps.quiescence.enter(SESSION);
         let (actor, mail) = ((parts, start), handle.mail.clone());
@@ -367,6 +374,80 @@ impl SessionManager {
             completion.committed();
         }
         Ok(result)
+    }
+
+    /// `session/list_archived`: a page of archived sessions, the latest
+    /// archived first.
+    async fn list_archived(self, call: Call) -> Outcome {
+        let cursor = parse::<SessionListArchivedParams>(&call.params)?.cursor;
+        let after = cursor.map(|c| (c.archived_at.0, c.session_id.to_string()));
+        let page = (self.shared.deps.readers).read(move |c| archived(c, after, PAGE + 1));
+        let mut sessions = page.await.map_err(internal)?;
+        let more = sessions.len() > PAGE as usize;
+        sessions.truncate(PAGE as usize);
+        let next = sessions.last().filter(|_| more).map(|last| ArchivedCursor {
+            archived_at: last.archived_at,
+            session_id: last.summary.session_id.clone(),
+        });
+        Ok(json!(SessionListArchivedResult { sessions, next }))
+    }
+
+    /// `project/remove` (design 5.3.4): `conflict` while one of its sessions
+    /// runs a turn; else each session archived, its worktree kept, then the
+    /// project off the index.
+    async fn remove_project(self, call: Call) -> Outcome {
+        let removed = self.removed(&call.params).await;
+        let Some(ticket) = call.ticket else {
+            return removed;
+        };
+        match removed {
+            Ok(done) => {
+                let committed = ticket.complete(Ok(done.clone())).commit().await;
+                committed.map_err(internal).map(|()| done)
+            }
+            Err(err) => {
+                ticket.reject(err.clone());
+                Err(err)
+            }
+        }
+    }
+
+    async fn removed(&self, params: &serde_json::Value) -> Outcome {
+        let params: ProjectRemoveParams = parse(params)?;
+        let project = params.project_id.to_string();
+        let sessions = self.shared.deps.readers.read(move |conn| {
+            let exists = "SELECT 1 FROM projects WHERE project_id = ?1 AND removed_at IS NULL";
+            let exists = conn.query_row(exists, [&project], |_| Ok(())).optional()?;
+            if exists.is_none() {
+                return Ok(None);
+            }
+            let sql =
+                "SELECT session_id FROM sessions WHERE project_id = ?1 AND archived_at IS NULL";
+            let mut select = conn.prepare(sql)?;
+            let ids = select.query_map([&project], |r| r.get::<_, String>(0))?;
+            ids.collect::<rusqlite::Result<Vec<_>>>().map(Some)
+        });
+        let found = sessions.await.map_err(internal)?;
+        let sessions = found.ok_or_else(|| not_found("project"))?;
+        let sessions: Vec<SessionId> = sessions.iter().filter_map(|id| id.parse().ok()).collect();
+        let running = {
+            let handles = self.sessions();
+            let mut loaded = sessions.iter().filter_map(|id| handles.get(id));
+            loaded.any(|handle| handle.running.load(Ordering::Relaxed))
+        };
+        if running {
+            let running = RpcError::app(ErrorCode::Conflict, "a turn runs");
+            return Err(running.with_reason(ErrorReason::TurnRunning));
+        }
+        for id in &sessions {
+            let (done, archived) = oneshot::channel();
+            let _ = self.mailbox(id).send(Mail::Archive(done));
+            let stopped = || internal("the session stopped before it replied");
+            archived.await.map_err(|_| stopped())??;
+        }
+        let index = &self.shared.deps.index;
+        index.project_removed(&params.project_id).await?;
+        Ok(json!({}))
     }
 
     /// The checks before a session is created: the workspace, the agent,
@@ -568,6 +649,7 @@ impl SessionManager {
                 Mail::IgnoreProjectConfig(done) => {
                     let _ = done.send(Err(err.clone()));
                 }
+                Mail::Archive(done) => drop(done.send(Err(err.clone()))),
                 Mail::Notice(_) | Mail::ConfigChanged(_) => {}
             }
         }
@@ -664,8 +746,11 @@ impl Port for SessionManager {
         {
             return refuse(call, err);
         }
-        if call.method == SessionCreate::NAME {
-            return Box::pin(self.clone().create(call));
+        match call.method {
+            SessionCreate::NAME => return Box::pin(self.clone().create(call)),
+            SessionListArchived::NAME => return Box::pin(self.clone().list_archived(call)),
+            ProjectRemove::NAME => return Box::pin(self.clone().remove_project(call)),
+            _ => {}
         }
         let Ok(id) = parse::<SessionId>(&call.params["session_id"]) else {
             return refuse(call, not_found("session"));

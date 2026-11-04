@@ -166,7 +166,7 @@ impl Worktrees {
             .await?;
         }
         if !matches!(locked, Some(Some(_))) {
-            let reason = format!("cupper session {session}");
+            let reason = lock_reason(session);
             let args = [OsStr::new("--reason"), reason.as_ref(), path];
             let lock_it = GitCmd::repo(RepoOp::WorktreeLock).args(args);
             let locked = self.run(repo, &writable, lock_it).await;
@@ -221,7 +221,7 @@ impl Worktrees {
         Ok(())
     }
 
-    async fn run(
+    pub(super) async fn run(
         &self,
         at: &Path,
         writable: &[PathBuf],
@@ -259,7 +259,7 @@ impl Worktrees {
         lfs::none_missing(&copied.map_err(internal)?.map_err(internal)?)
     }
 
-    fn failed(&self, err: GitError) -> RpcError {
+    pub(super) fn failed(&self, err: GitError) -> RpcError {
         err.reported("worktree", &self.audit, &*self.clock)
     }
 
@@ -284,6 +284,11 @@ impl Worktrees {
         builder.create(&dir).map_err(internal)?;
         dir.canonicalize().map_err(internal)
     }
+}
+
+/// What a session's worktree is locked with (design 5.2.10).
+pub(super) fn lock_reason(session: &SessionId) -> String {
+    format!("cupper session {session}")
 }
 
 fn branch(name: &str) -> String {
