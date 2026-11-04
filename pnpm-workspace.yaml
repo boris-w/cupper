@@ -14,4 +14,4 @@ allowBuilds:
   electron-winstaller: false
 
 minimumReleaseAgeExclude:
-  - '@pierre/diffs@1.6.4'
+  - "@pierre/diffs@1.6.4"
