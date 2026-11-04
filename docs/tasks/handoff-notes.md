@@ -525,3 +525,7 @@
 | 以后改会话 attach 或配置的任务 | attach 已发出、还没返回时，会话算未连接，这期间的 `session/set_config` 要等下一次 attach 才应用，当前这次 attach 用的还是旧值；概率低，可作后续小修 | T141 |
 | T113 | 录到含重连的场景后：判断重试插在一段消息中间时消息被拆成两条（合并器开新条目会结束正在写的消息）是否需要处理；按 K18 补 GOLD-A | T230 |
 | T235、T127 | 快照档的 git-lfs 存储在 cupper 私有的 GIT_DIR 里（`<数据目录>/git/<仓库>/ws/<工作区>/lfs/objects/`）；经仓库档暂存的 LFS 指针，对象要等用户提交时 git-lfs 的 clean 重新算一遍才进用户仓库，工作区改过就不会进。T127 清除快照对象时不能删掉用户仓库还引用的 LFS 对象，T235 之前尤其如此 | T229 |
+| T130 | `Menu.tsx` 里 T231 加了受控的 `open`/`onOpenChange`、`MenuLabel`、`CheckIcon`；merge main 时 `CheckIcon`、`MenuLabel` 各留一个，统一用 T130 的 `checked`/`radio`，并改写 `composer/config.tsx` 的 `Choices`（UNIT-composer-config 按 role 找 `menuitem` 的地方随之改）；不改 `MenuItem` 自身的间距 | T231 |
+| T144 | 新建会话页还没有权限按钮和模型选择器：两个扩展拿不到会话流时不显示；第一条消息前显示缓存的能力时，一并接上 `composer/config.tsx` 的 `useOption`、`useSetOption` | T231 |
+| T148、T154 | 模型选择器的按钮直接显示 agent 给的名字，Claude 下是"Default (recommended) High"，偏长；要不要截断或用短名，在复刻度审阅里定 | T231 |
+| 以后改请求面板或错误条目的任务 | 错误条目的"换模型"打开的是输入框里的模型菜单；请求面板替换了输入框，或会话没有模型选项时，点了没有反应 | T231 |
