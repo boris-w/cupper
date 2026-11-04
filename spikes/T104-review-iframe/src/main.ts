@@ -84,6 +84,8 @@ async function run() {
   const review = main.frames[0];
   await until(() => js(review, "t104.seen.highlighted > 0"), "highlighted");
   const [mainSeen, reviewSeen] = [await js(main, "t104.seen"), await js(review, "t104.seen")];
+  // At the top, where the line with markup is (security (i)).
+  const injectedAsText = await js(review, "t104.shadow('[data-line]').some((el) => el.textContent.includes('<img src=x')) && t104.shadow('img').length === 0");
   const metrics = app.getAppMetrics();
   const memoryOf = (pid: number) => metrics.find((m) => m.pid === pid)?.memory;
   const scrollFrames: number[] = await js(review, "t104.scrollFrames()");
@@ -162,7 +164,7 @@ async function run() {
     rowsInDom: await js(review, "t104.shadow('[data-line]').length"),
     adoptedStyleSheets: await js(review, "[...document.querySelectorAll('*')].reduce((n, el) => n + (el.shadowRoot?.adoptedStyleSheets.length ?? 0), document.adoptedStyleSheets.length)"),
     styleElements: await js(review, "t104.shadow('style').length + document.querySelectorAll('style').length"),
-    injectedAsText: await js(review, "t104.shadow('[data-line]').some((el) => el.textContent.includes('<img src=x')) && t104.shadow('img').length === 0"),
+    injectedAsText,
     wasmInBundle: readdirSync(join(dist, "review")).filter((file) => file.endsWith(".wasm")),
     reviewUrlAfterNavigation: main.frames[0]?.url,
     blocked,
