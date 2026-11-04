@@ -30,6 +30,14 @@ export function ChevronDownIcon() {
   );
 }
 
+export function CheckIcon() {
+  return (
+    <svg {...svg} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.5 8.5l3 3 6-7" />
+    </svg>
+  );
+}
+
 export function FolderIcon() {
   return (
     <svg {...svg} stroke="currentColor" strokeLinejoin="round">
