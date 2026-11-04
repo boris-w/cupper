@@ -104,6 +104,11 @@ mod harness {
         GIT_BEFORE_APPLY = "git.before_apply";
         /// A git write's `git apply` has run; its outcome is not recorded.
         GIT_AFTER_APPLY = "git.after_apply";
+        /// A new session's `workspace.preparing` is on the disk; its
+        /// `worktree add` has not run (design 5.2.13).
+        WORKTREE_ADDING = "worktree.adding";
+        /// The `worktree add` has run; its lock and `workspace.ready` have not.
+        WORKTREE_ADDED = "worktree.added";
         /// The module's own tests.
         #[cfg(test)]
         TEST_PROBE = "test.probe";
