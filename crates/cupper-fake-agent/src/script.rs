@@ -261,6 +261,11 @@ impl Script {
         let arg = |i: usize| args.get(i).copied().unwrap_or("");
         let num = |i: usize| arg(i).parse::<u64>().unwrap_or(0);
         let p = self.persona;
+        let without = |what| lock(&self.state).config.without(what);
+        let plan = ["plan_update", "plan_confirm"].contains(&name);
+        if (plan && without("plan")) || (name == "think" && without("thinking")) {
+            return Ok(Flow::Next);
+        }
         match name {
             "say" => self.say(rest)?,
             "think" => self.update(chunk("agent_thought_chunk", rest))?,
