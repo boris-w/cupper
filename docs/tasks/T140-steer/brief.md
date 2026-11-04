@@ -37,9 +37,10 @@
      - `Injected`：在当前回合写一条 `steered: true` 的用户消息，回 `disposition: steered` 和这个回合的 `turn_id`；
      - `StartedNewTurn`：开一个 `origin: steer_new_turn` 的回合，回 `steered` 和新回合的 `turn_id`。原回合怎么结束，以设计和 SP-1 s06 为准；
      - `PromptRequired`、`Unsupported`、超时、`AgentError`：转为排队，回 `queued`，并带对应的 `fallback_reason`。
-   - **两件开工前先写进 `notes.md` 再动手的事，写好后告诉 `main`**：
-     1. 超时之后才到的应答怎么处理。例如超时之后又收到 `Injected`，消息就会同时出现在回合里和队列里。
-     2. 等驱动应答的这 5 s 里，回合结束或被中断时怎么处理。
+   - **开工前定下的时序**（2026-11-04，执行者在 `notes.md` 里提出，`main` 同意）：
+     1. 超时之后才到的应答：超时时已回的 `queued` 不再改。晚到的 `Injected`：排队的那一条还在队列里、目标回合也没完成，就把它取出，写成这个回合里 `steered: true` 的用户消息；已经出队的只记日志。晚到的 `StartedNewTurn`：还在队列里就取出，目标回合结束后开 `steer_new_turn` 回合。其余结果不处理。
+     2. 等应答的 5 s 里回合结束或被中断：回合照常 Settle、拍结束快照，`turn.completed` 推迟到插话有结果之后（最多 5 s）；`Injected` 的消息写在它之前，其余结果转为排队；中断不取消在途的插话；适配器退出按 `agent_error`。
+     3. 插话在途时又来一条 `steer`：转为排队，原因是附加的 `FallbackReason::steer_pending`（协议附加，补样例）。
    - 空闲时发送仍按"开新回合"处理，不受 `mode` 影响。
 2. **驱动**：`driver/runtime` 执行 `DriverCommand::Steer`：
    - 发 `_session/steering`，总是带 `idleBehavior: promptRequired`；
@@ -54,27 +55,28 @@
    - **PROP-steer-only-prompting**：纯核心的性质测试，只有在 `Prompting` 并且回合对得上时，才会发出 `Steer`；
    - **IT-K10-steer-explicit-only**：Claude 形态。回合运行中用 `mode: queue` 发送，宿主从不发 steering；只有明确要求 `steer` 时才发；
    - **IT-K11-steer-idle-queued**：Codex 形态。回合不在 `Prompting` 时发 `steer`，结果是排队，驱动收不到 steering；
-   - **IT-degrade-steering**：假 agent 关掉 steering 时，能力里是 `supported: false`，`steer` 转为排队，原因是 `unsupported`；
-   - **IT-degrade-plan**、**IT-degrade-thinking**：假 agent 分别关掉计划和思考能力时，宿主给出的能力和相关行为按 AG-4 降级。宿主这一层具体断言什么，先在 `notes.md` 里写出来，告诉 `main` 之后再写。
-   - 另外覆盖 `Injected`、`StartedNewTurn`、`PromptRequired`、超时（`steer_hang`，时间经 `Clock` 推进）、出错这几条路径，以及 `fallback_reason` 的六个值。
-   - 假 agent 需要的开关（关掉 steering、计划、思考，以及 `prompt_required` 的应答）按现有脚本命令的写法补上。
+   - **IT-degrade-steering**：假 agent 关掉 steering 时，能力里是 `supported: false`，`steer` 转为排队，原因是 `unsupported`。
+   - IT-degrade-plan、IT-degrade-thinking 在开工前拆到 T243（计划 v1.3.88）。
+   - 另外覆盖 `Injected`、`StartedNewTurn`、`PromptRequired`、超时（`steer_hang`，时间经 `Clock` 推进）、出错这几条路径，上面三条时序，以及 `fallback_reason` 的七个值。
+   - 假 agent 需要的开关（关掉 steering，以及 `prompt_required` 的应答）按现有脚本命令的写法补上。
 5. 事件经会话 actor 写，每条流只有一个写者；时间只经 `Clock`。
-6. 协议照 ADR-04，契约已冻结，只能附加，`schema-compat` 0 breaking。现有的类型应该已经够用，要附加字段时先告诉 `main`。
+6. 协议照 ADR-04，契约已冻结，只能附加，`schema-compat` 0 breaking。除 `steer_pending` 之外还要附加时，先告诉 `main`。
 
 **不做**：
 - 界面：Enter 默认插话、⌘Enter 排队，"已转为排队"的提示，偏好"跟进消息默认排队"，第一次插话时的副作用提示，"拒绝并附一条消息"的插话路径，E2E-composer-steer-default。这些都归 T242。
+- 计划与思考的能力降级（IT-degrade-plan、IT-degrade-thinking）：归 T243。
 - `session/queue_edit`：归 T149。
 
 ## 验收标准
 
-- [ ] 上面六个编号的用例、IT-cli-commands 的新增一条都通过。IT 在 runner 上连跑 10 次，由 `main` 触发 test-repeat。
+- [ ] 上面四个编号的用例、IT-cli-commands 的新增一条都通过。IT 在 runner 上连跑 10 次，由 `main` 触发 test-repeat。
 - [ ] 改动前后，`mode: queue` 的行为不变。
 - [ ] `schema-compat` 0 breaking；trace-ids 检查通过。
 - [ ] PR 上 GitHub CI 的 8 个检查都通过，汇报里写上 PR 和运行的链接（守则第 9 条）。
 
 ## 规模
 
-- 停止线：600；硬停止线：700。开工前在 `notes.md` 里按模块估行数，测试单独列一项，估完报给 `main`，可能再拆。
+- 停止线：650；硬停止线：720（2026-11-04 开工前估约 760，拆出 T243 后约 630；原为 600、700）。
 
 ## 参考资料
 
