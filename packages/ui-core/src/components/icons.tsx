@@ -30,14 +30,6 @@ export function ChevronDownIcon() {
   );
 }
 
-export function CheckIcon() {
-  return (
-    <svg {...svg} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3.5 8.5l3 3 6-7" />
-    </svg>
-  );
-}
-
 export function FolderIcon() {
   return (
     <svg {...svg} stroke="currentColor" strokeLinejoin="round">
@@ -145,6 +137,23 @@ export function StepIcon({ status }: { status: "pending" | "in_progress" | "comp
       <circle cx="8" cy="8" r="6" />
       {status === "in_progress" && <circle cx="8" cy="8" r="2.5" fill="currentColor" />}
       {status === "completed" && <path d="M5.5 8.2l1.7 1.7 3.3-3.6" />}
+    </svg>
+  );
+}
+
+/** A shield: the permission mode. */
+export function ShieldIcon() {
+  return (
+    <svg {...svg} stroke="currentColor" strokeLinejoin="round">
+      <path d="M8 1.5l5.5 2v4c0 3.2-2.3 5.8-5.5 7-3.2-1.2-5.5-3.8-5.5-7v-4z" />
+    </svg>
+  );
+}
+
+export function CheckIcon() {
+  return (
+    <svg {...svg} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.5 8.5l3 3 6-7" />
     </svg>
   );
 }

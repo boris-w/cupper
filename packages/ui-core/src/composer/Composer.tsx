@@ -13,6 +13,7 @@ import { Alert } from "../components/Alert";
 import { ArrowUpIcon, CloseIcon, StopIcon } from "../components/icons";
 import type { ComposerActivity } from "../request/RequestPanel";
 import { isComment } from "../review/view";
+import { TierHint } from "./config";
 import { useUi } from "../state/provider";
 import { EXTENSIONS, OverlayContext } from "./extensions";
 import { escapeAction, SEND_KEY_PREF, sends } from "./keys";
@@ -184,6 +185,7 @@ export function Composer(props: {
   return (
     <OverlayContext value={{ container, setClose: (close) => (closeOverlay.current = close) }}>
       <div ref={setContainer} className="relative" />
+      <TierHint sessionId={sessionId} />
       {armed && (
         <p role="status" className="pb-2 text-center text-sm text-fg-tertiary">
           {t("composer:esc_hint")}

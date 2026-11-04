@@ -76,11 +76,14 @@ pub struct GitService {
 /// One lock per repository, for what changes a user's index or work tree
 /// (design 5.2.10, "并发"); the snapshot tier and reads take none.
 #[derive(Debug, Default)]
-struct RepoLock(Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>);
+pub(super) struct RepoLock(Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>);
 
 impl RepoLock {
     /// The lock of the repository `work_tree` belongs to, by its common dir.
-    async fn hold(&self, work_tree: &Path) -> Result<tokio::sync::OwnedMutexGuard<()>, RpcError> {
+    pub(super) async fn hold(
+        &self,
+        work_tree: &Path,
+    ) -> Result<tokio::sync::OwnedMutexGuard<()>, RpcError> {
         let tree = work_tree.to_owned();
         let layout = tokio::task::spawn_blocking(move || Layout::read(&tree.canonicalize()?));
         let layout = layout.await.map_err(internal)?.map_err(internal)?;
@@ -248,10 +251,12 @@ impl GitService {
         if let Some(ticket) = ticket.as_mut() {
             ticket.mark_external().await.map_err(internal)?;
         }
+        crate::failpoint!(GIT_BEFORE_APPLY);
         let cmd = GitCmd::repo(op).input(patch);
         let (tier, writable) = (self.tool()?.repo_tier(&work_tree), self.writable().await?);
         let done = tier.run(&*self.deps.clock, &self.deps.durations, &writable, cmd);
         let done = done.await;
+        crate::failpoint!(GIT_AFTER_APPLY);
         drop(lock);
         let err = match done {
             Ok(done) => {

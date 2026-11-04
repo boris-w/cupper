@@ -99,6 +99,11 @@ mod harness {
         /// `session/create` has committed the session and its command, the
         /// first turn has not started (design 5.9.8).
         SESSION_CREATED = "session.created";
+        /// A git write is `pending_external` on disk; its `git apply` has
+        /// not run (design 5.2.5).
+        GIT_BEFORE_APPLY = "git.before_apply";
+        /// A git write's `git apply` has run; its outcome is not recorded.
+        GIT_AFTER_APPLY = "git.after_apply";
         /// The module's own tests.
         #[cfg(test)]
         TEST_PROBE = "test.probe";
