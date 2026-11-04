@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.86
+- 版本：v1.3.87
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -454,7 +454,9 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T125 | worktree 检查、归档、恢复与重命名 | feat | 5.2.10、5.2.6、5.5.9 | T222、T124 | 做：`worktree/check` 的 7 条规则、`session/archive`、`session/restore`、`session/rename`、`session/list_archived`、`project/remove` | IT-worktree-check-rules、IT-session-archive-restore | L | 否 | H.git、H.orch、H.idx |
 | T126 | 文件搜索、提示内容映射与在外部应用打开 | feat | 5.2.11（文件服务）、5.3.4 | T099 | 做：`files/search`（快照档 `ls-files`、非 git 目录遍历、缓存、模糊匹配、UTF-16 区间）；`image`、`file_ref`、`review_comment`、`text_blob` 映射为 ACP 内容块；`workspace/open` | 新增 IT-files-search、UNIT-prompt-mapping、IT-workspace-open | M | 否 | H.git、H.orch |
 | T127 | 存储用量与清除快照对象 | feat | 5.4.5、5.7.4（设置页"存储"）；P-6 | T099 | 前提：写 brief 时编排者按 P-6 补进设计。做：查询各类数据大小（scope read）、清除快照对象（scope privileged，经原生确认），均为附加式方法；清除后旧回合的 diff 返回 `snapshot_missing` | 新增 IT-snapshot-purge | S | 否 | H.git、H.store、P |
-| **T130** | 审查面板：主文档部分 | feat | 5.7.5（审查面板）、5.5.8、5.7.8（RP-11） | T121、T123、T126 | 做：在 T084 的侧边面板里按 Codex 样式实现"变更"标签：头部（"查阅来源"范围下拉、增删统计、文件树开关、选项菜单的 M1 项：换行、diff 视图、展开收起全部、刷新）、文件树（默认关闭、⌘⇧E、筛选、Git 状态图标、右键菜单）、hunk 与文件操作的图标按钮、底部整组操作的药丸（还原全部、暂存全部或取消暂存全部）、还原确认控件（真实输入、500 ms 待命期、不提供"不再询问"；由"还原全部"按钮触发时默认焦点在"确认"，由审查文档触发时不自动获得焦点、同一时间只显示一个，RP-11）、"Git 操作"菜单与提交弹窗（"包含未暂存的更改"，提交、提交并推送、推送，hooks 与指纹提示）、`caveats`、空状态；行内评论的草稿由主文档持有，进入输入框的附件条（GT-2）；为 diff 视图留接口 | 新增 UNIT-review-actions、UI-review（文件树开合、整组操作在三种范围下的状态、空状态） | L | 否 | T.ui |
+| **T130** | 审查面板：主文档部分 | feat | 5.7.5（审查面板）、5.5.8、5.7.8（RP-11） | T121、T126 | 做：在 T084 的侧边面板里按 Codex 样式实现"变更"标签：头部（"查阅来源"范围下拉、增删统计、文件树开关、选项菜单的 M1 项：换行、diff 视图、展开收起全部、刷新）、`git/status` 的 `repo_config_changed` 醒目提示、底部整组操作的药丸（还原全部、暂存全部或取消暂存全部）、还原确认控件（真实输入、500 ms 待命期、不提供"不再询问"；由"还原全部"按钮触发时默认焦点在"确认"，由审查文档触发时不自动获得焦点、同一时间只显示一个，RP-11）、`caveats`、空状态；行内评论的草稿由主文档持有，进入输入框的附件条（GT-2）；为 diff 视图留接口。文件树和文件行的操作在 T232，"Git 操作"菜单与提交弹窗在 T233（v1.3.87 拆出） | 新增 UNIT-review-actions、UI-review-panel（整组操作在三种范围下的状态、空状态） | L | 否 | T.ui |
+| T232 | 审查面板 II：文件树 | feat | 5.7.5（审查面板）、5.7.7（⌘⇧E） | T130 | 做：文件树（默认关闭、⌘⇧E、筛选、Git 状态图标、右键菜单）、hunk 与文件操作的图标按钮 | 新增 UI-review-tree（文件树开合） | M | 否 | T.ui |
+| T233 | 审查面板 III：Git 操作与提交弹窗 | feat | 5.7.5（审查面板）、5.2.10（用户档）、Q23 | T130、T123 | 做："Git 操作"菜单与提交弹窗（"包含未暂存的更改"即先暂存再提交；提交、提交并推送、推送与 `set_upstream`）；按钮旁注明"将运行仓库的 hooks"，`repo_config_changed` 时确认文案带上指纹提示；`signing_failed` 时给出改用图形版 pinentry 的指引；附复刻度审阅截图 | 新增 UNIT-review-commit、UI-review-commit | M | 否 | T.ui |
 | **T131** | 审查文档（独立源 iframe） | feat | 5.7.5（审查文档）、5.7.8 | T104、T130 | 前提：K9 通过。做：第二个渲染入口与 `app://cupper-review`、独立 CSP、iframe 的 sandbox 与导航限制、@pierre/diffs（`workerFactory`、`shiki-js`）、版本化 MessageChannel 协议（两侧 zod）、无状态视图、`reviewDocumentUrl`；hunk 和文件的还原只经主文档的确认控件（RP-11：不自动获得焦点，同一时间只显示一个，已有一个时忽略新的）；行内评论按 Codex 的交互（悬停行号出现"+"，评论框只写草稿，经 `draft_comment` 交给主文档的附件条）；浏览器 mock 下审查文档也从第二个源、按生产 CSP 加载；新入口接入许可证门禁第一层 | E2E-SEC-review-iso、E2E-review-comment（评论作为附件随下一条消息发出，用户消息显示"{n} 条评论"）；新增 UNIT-review-injection、E2E-SEC-revert-confirm（审查文档触发的还原确认不自动获得焦点、同一时间只有一个；按钮触发的默认焦点在"确认"） | L | 否 | D.main、T.ui |
 | T132 | 回合改动卡片与撤销 | feat | 5.7.4（回合改动卡片）、5.3.5（`snapshot.recorded`）、GT-3；F3 | T130、T146 | 做：回合结束且结束快照的 `stat` 有改动时，在最终回答之后显示改动卡片（标题行"{n} 个文件已更改 +a −b"、每个文件一行，文件列表来自 `git/diff` 的 `{turn: id}` 范围；点文件在侧边面板打开"变更"并滚动到该文件）；"撤销"经主文档的确认控件（真实输入、待命期）以该回合范围的 `diff_token` 调用 `git/revert`，补丁应用失败时给出提示和审查面板的入口；快照不完整时注明原因、不提供撤销；卡片显示在回合折叠之外 | 新增 UI-turn-changes、E2E-turn-changes-undo | M | 否 | T.ui |
 | T139 | （条件）审查面板后备：DiffHunksRenderer | feat | 5.7.5（后备方案） | T104、T130 | 触发：K9 不通过。做：`DiffHunksRenderer` 生成 HAST，在主文档用 React 渲染，自写虚拟滚动和 hunk 交互；hunk 和文件的还原确认沿用 RP-11 对审查文档触发的规则 | E2E-review-comment、E2E-SEC-revert-confirm；新增 UNIT-hast-render | L | 否 | T.ui |
@@ -491,7 +493,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T172 | M1b 端到端：NFR-2、NFR-9 与容量 | test | 5.9.4（NFR-2、NFR-9）、NFR-11 | T111、T121、T124 | 做：断线后同一 `command_id` 重发不重复执行、适配器和 CLI 崩溃后恢复、6 个会话同时运行；核对故障点的子编号全部通过 | E2E-NFR2-retry、E2E-NFR9-adapter-crash、E2E-NFR9-cli-crash、E2E-six-sessions、IT-NFR9-failpoints | M | 否 | D.main |
 | T173 | S1–S4 逐步检查表与人工证据格式 | docs | 5.12.3（退出标准 ①）、5.9.10 | T099 | 做：写 MAN-S1 至 MAN-S4 的检查表（步骤、通过条件、CLI 与适配器版本、日期）；定下全部 MAN 项证据的统一格式，与 trace-ids 的核对对齐 | 检查表与证据格式经编排者审阅 | S | 否 | Doc |
 | T174 | Q16 保留参数复核 | chore | 5.13 Q16 | T160 | 做：只读、只统计宿主日志里的订阅模式和游标落后量，据此调整窗口和保留参数，补边界性质测试；日志原文不进仓库也不进汇报 | 新增 PROP-retention-boundary | S | 是：授权读取作者自用一段时间后的本机日志 | H.store |
-| **T179** | M1b 退出验收 | chore | 5.12.3（退出标准） | T105、T108、T114、T154、T155、T156、T157、T161、T170、T171、T172、T173、T174、T228、T229 | 做：作者用自用构建、两种 agent 按检查表走完 S1–S4 并存档；在同一提交上 `xtask ci pr`、`xtask ci nightly` 各通过一次；核对 NFR-2、NFR-9 的用例、UNIT-unsupported-set、M1b 的待完成登记为空（按入库的逐编号结果清单复核）；写记录（含本机替代不了的缺口） | MAN-S1、MAN-S2、MAN-S3、MAN-S4；运行记录存档；缺口经用户确认；M1b 同步会纪要 | S | 是：作者亲自走 S1–S4（真实 CLI，消耗额度），确认缺口 | C |
+| **T179** | M1b 退出验收 | chore | 5.12.3（退出标准） | T105、T108、T114、T154、T155、T156、T157、T161、T170、T171、T172、T173、T174、T228、T229、T232、T233 | 做：作者用自用构建、两种 agent 按检查表走完 S1–S4 并存档；在同一提交上 `xtask ci pr`、`xtask ci nightly` 各通过一次；核对 NFR-2、NFR-9 的用例、UNIT-unsupported-set、M1b 的待完成登记为空（按入库的逐编号结果清单复核）；写记录（含本机替代不了的缺口） | MAN-S1、MAN-S2、MAN-S3、MAN-S4；运行记录存档；缺口经用户确认；M1b 同步会纪要 | S | 是：作者亲自走 S1–S4（真实 CLI，消耗额度），确认缺口 | C |
 
 **注**
 
@@ -515,7 +517,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 - **T124（L）**：worktree 添加、`session/create` 的 worktree 分支和崩溃恢复是同一个准备流程。
 - **T125（L）**：7 条规则的结论直接决定归档和恢复的行为。
 - **T127、T147**：方法名、ShellAPI 成员在写 brief 时由编排者按 P-6 的裁定补进设计。
-- **T130（L）**：面板各部分共用同一个 `diff_token` 和选择状态；右侧标签容器在 M1a 的 T084 就有，不再等 T152（桌面 #3）。v1.1：文件树替代文件列表，整组操作的药丸替代暂存栏，评论草稿改进输入框的附件条，规模不变。
+- **T130（L）**：面板各部分共用同一个 `diff_token` 和选择状态；右侧标签容器在 M1a 的 T084 就有，不再等 T152（桌面 #3）。v1.1：文件树替代文件列表，整组操作的药丸替代暂存栏，评论草稿改进输入框的附件条，规模不变。v1.3.87 开工前估算约 1,710 行，拆成 T130（主体，关键路径，约 1,080 行）、T232（文件树，约 350 行）、T233（Git 操作与提交弹窗，约 450 行，依赖 T123），T130 不再依赖 T123。
 - **T132**：F3 定为进 M1 的元素。"撤销"映射到 GT-3 的还原（`git/revert` 加回合范围的 `diff_token`），确认控件与审查面板共用（T130）。
 - **T131、T139（L）**：审查文档是一个完整的独立文档加消息协议，后备方案是整体替代，两者只做其一。
 - **T140（L）**：宿主、驱动、CLI 和界面要同时出现，否则宿主侧就是没人用的代码。IT-K11 用 codex 形态，所以排在 T111 之后。
@@ -1034,6 +1036,8 @@ flowchart LR
     T130["T130<br/>审查面板"]
     T131["T131<br/>审查文档 iframe"]
     T132["T132<br/>回合改动卡片"]
+    T232["T232<br/>文件树"]
+    T233["T233<br/>Git 操作与提交弹窗"]
     T139["T139<br/>DiffHunksRenderer（条件）"]
   end
   subgraph H4["输入框、消息流、设置页与复刻度"]
@@ -1107,8 +1111,10 @@ flowchart LR
   T099 --> T126
   T099 --> T127
   T121 --> T130
-  T123 --> T130
   T126 --> T130
+  T130 --> T232
+  T130 --> T233
+  T123 --> T233
   T104 --> T131
   T130 --> T131
   T130 --> T132
@@ -1255,7 +1261,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | B1 | T107、T111、**T120**、**T221**、T222、T124、T126、T127、T141、T143、T150、T156、T160、T173 | 界面任务按设计 5.7.10 直接开工，不等 T106；T107 先于 SP-6；T160 交付自用构建与"自用前须知" |
 | B2 | T103、T112、**T121**、T123、T125、T140、T142、T146、T161、T174 | T103 SP-6（K8）测场景 1–4、7、8，T152 等它 |
 | B3 | T108、T113、**T130**、T145、T149、T151、T152、T155、T172 | T152 先合并，T130、T145、T149、T151 再按新的取值重新生成各自新增的基线（1.5） |
-| B4 | **T131**、T132、T144、T147、T153、T157 | T131 与 T139 只做其一（K9） |
+| B4 | **T131**、T132、T144、T147、T153、T157、T232、T233 | T131 与 T139 只做其一（K9） |
 | B5 | **T148**、T170、T171 | T148 开始时作者做 MAN-ui6-full |
 | B6 | **T154** |  |
 | B7 | **T179** | M1b 退出（K10） |
@@ -1375,7 +1381,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | Git 与 worktree | git 服务全部方法（三档、Q32、LFS） | T120、T221、T222、T121、T228、T229、T123（快照档在 T061） |
 | | 新建 worktree（CP-5） | T124 |
 | | 归档、恢复与清理（PS-3、GT-5） | T125、T153 |
-| | 审查面板（GT-1 至 GT-4；文件树与整组操作；行内评论进输入框的附件条） | T130、T131 或 T139、T126（评论排成文本） |
+| | 审查面板（GT-1 至 GT-4；文件树与整组操作；行内评论进输入框的附件条） | T130、T232、T233、T131 或 T139、T126（评论排成文本） |
 | | "清除快照对象" | T127、T147 |
 | 输入框 | `@` 文件搜索、拖入文件 | T142、T126 |
 | | 图片粘贴、斜杠命令菜单、↑ 恢复、Enter/⌘Enter | T145、T126 |
@@ -1445,7 +1451,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | GT-1 | IT-git-diff-scopes → T120；IT-git-file-diff → T221；IT-git-status → T222；IT-git-snapshot-parity → T061；E2E-S3 → T171 |
 | GT-2 | E2E-review-comment → T131（K9 不通过时 T139） |
 | GT-3 | IT-git-stage → T121；IT-git-hunk → T228；E2E-turn-changes-undo → T132；E2E-SEC-revert-confirm → T131（K9 不通过时 T139） |
-| GT-4 | IT-git-commit-push → T123 |
+| GT-4 | IT-git-commit-push → T123；UI-review-commit → T233 |
 | GT-5 | IT-worktree-check-rules → T125 |
 | UI-0 | E2E-workspace-open → T153 |
 | UI-2 | UI-settings → T151（`-agents`）、T147（`-general`） |
@@ -1593,7 +1599,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | 排队消息的预览、编辑、插话 | 5.7.4 排队消息；5.3.4 `session/queue_edit` | T086（预览、暂停与继续）、T149（编辑与插话）、T140（插话的宿主路径） |
 | 计划药丸"第 n / m 步" | 5.7.4 计划 | T143 |
 | 回合末尾的改动卡片 | 5.7.4 回合改动卡片 | T132 |
-| 审查面板的文件树和底部的整组操作 | 5.7.5 审查面板 | T130 |
+| 审查面板的文件树和底部的整组操作 | 5.7.5 审查面板 | T232（文件树）、T130（整组操作） |
 | 窄窗口时的行为 | 5.7.4 三栏与尺寸 | T084 |
 | 半透明侧边栏 | 5.7.4 窗口与顶栏 | T152（`vibrancy` 与回退）、T147（设置项） |
 | toast 的位置 | 5.7.4 其他 | T081 |
@@ -1905,6 +1911,8 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T126 文件搜索、提示内容映射与在外部应用打开
 - [ ] T127 存储用量与清除快照对象
 - [ ] T130 审查面板：主文档部分
+- [ ] T232 审查面板 II：文件树
+- [ ] T233 审查面板 III：Git 操作与提交弹窗
 - [ ] T131 审查文档（独立源 iframe）
 - [ ] T132 回合改动卡片与撤销
 - [ ] T139 （条件）审查面板后备：DiffHunksRenderer
@@ -2048,3 +2056,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.84 | 2026-11-02 | M1a 同步会（`docs/meetings/2026-11-02-m1a-sync/`）：PERF 只记录、不卡闸门（D1）；IT-sys-peer-current 由 macOS 26 runner 代替、改为不适用（D2）；MAN-keyboard 不重做（D3）；真实兼容在 M1b 再跑（D4）；K4 通过（D5）。T099 打勾。新增 T219 落实 D1、D2，合并后打 `gate/m1a`，再派 M1b 第一波 |
 | v1.3.85 | 2026-11-02 | T219 合并：nightly 在托管 runner 上跑 `perf`、e2e 跑 PERF-bridge-gate，只记录（摘要的 `perf` 列表、结果 `measured`）；登记表新增 `record` 状态，9 个 PERF 编号改为只记录；IT-sys-peer-current 不适用。1.6、1.8、5.4、5.5、5.7、T155 随之改写。`gate/m1a` 候选 5da6f1c：`ci` 通过，nightly 的 e2e 里 PERF-bridge-gate 压力用例失败（`perf`、`differential` 被 fail-fast 取消），不打 tag；新增 T220，修好后换候选再验 |
 | v1.3.86 | 2026-11-03 | 派发 T220 与 M1b 第一波的 T160、T120、T111。T120 开工后越过硬停止线，拆出 T221（`DiffCache`、`git/file_diff` 与 hunk 切分）和 T222（`git/status`、`git/branches`、`cupper diff`），新增 IT-git-file-diff、IT-git-status；T121 改为依赖 T221，T123、T125 改为依赖 T222；M1b 关键路径由 17 增至 19。新增 T227（T199 修过的网关同步用例在 T222 的 PR 上又失败一次）。T121 开工前估算后拆成 T121（写操作，关键路径）、T228（SP-5 的 82 个用例，IT-git-hunk）、T229（Q32、LFS、故障点，IT-NFR9-failpoints-git）；T179 改为也依赖 T228、T229。T141 执行中推算会越过 1,000，按宿主与界面拆开：T141 只做宿主的 `session/set_config`，界面与 E2E-full-access-native 移到新增的 T231。新增 T230（T112 发现宿主从不写 `upstream_retry` notice，按设计 upsert 要改 `ItemPatch`，超出就地修的上限），IT-K18-upstream-retry 由 T112 移来。T228 合并：SP-5 的 82 个 hunk 用例改写成表驱动的 Rust 测试，走产品的写路径（79 行改写、3 行不适用）。T230 合并：回合里第一次重试时开一条 `upstream_retry` notice，之后用 `item.updated` 更新 attempt，回合结束时关闭，不改协议。T141 合并：宿主的 `session/set_config`，档位规则、`mode_set_by`、`full_access_confirmed_at`，带回复的 `AgentPort::set_config`，未连接时下次 attach 应用（02 补写）。T173 合并：`docs/manual/` 下的 MAN-S1–S4 检查表和统一的人工证据格式，trace-ids 加 `any` 精度。T112 合并：codex 形态的 K2、K3、K4、K7、K12、K17 进程级用例；就地修了 Codex 在会话打开时的登录错误没有做 K14 改判。T121 合并：三个写方法共用一条写路径，操作与范围对应，仓库档的 notice 经会话 actor 写；5.2.10 补写。T227 合并：原因是 T156 在回合开始时写的 `host.updated` 落进合并窗口、隔开了两条 delta；用例的 windowed 客户端只订阅会话流；修前 600 次败 54 次，修后 600/600。T126 合并：`files/search`、提示内容映射、`workspace/open`；匹配器改用 MIT 的 fuzzy-matcher（nucleo-matcher 是 MPL-2.0，5.2.11 改写）；合并时与 T160 在 `settings.rs` 冲突，由编排者解决。T160 合并：自用构建 Cupper Local（独立身份与数据目录、ad-hoc 签名加 hardened runtime、fuses 同发布只关 cookie 加密、不带 source map 和测试钩子），nightly 的 `selfuse` 作业在托管 runner 上构建并核对；用户文档在 `docs/user/`；runner 上的五轮查出 T225。T223 合并：已发布迁移脚本按 sha-256 锁定，每个表结构版本有宿主生成的样例库，IT-migrations-samples 守住（5.4.6 写明改表结构的步骤）。T226 合并：失败的回合在 Settle 之前写一条 `error` 条目（attach 被拒、prompt 失败、适配器意外退出带 stderr 尾部），`FailureCode` 到 `Guidance` 穷举映射，agent 的错误文本在会话入口脱敏；02、05、06 随之补写。T222 合并：`git/status`、`git/branches`、`cupper diff`；IT-git-status 查出取回代码里未合并路径被覆盖成 modified 的错误并已修。T225 合并：控制连接不可用时按 ⌘Q 或 SIGTERM，退出判定在 `before-quit` 里同步完成，嵌套的 `app.quit()` 被 Electron 撤回，App 关窗后留着；改为下一个回合再退出（07 的 `lifecycle` 补写），E2E-quit-during-reconnect 守住。T143 合并：代码高亮（JavaScript 正则引擎、固定 class）、计划与计划药丸、错误条目的恢复指引；截图页的等宽字体接上夹具里的中文子集。T221 合并：`DiffCache` 存 tree 对和文件列表，`git/file_diff` 按需重新生成补丁并切单位，大 hunk 转 blob（5.2.10 改写）。**`gate/m1a` 打在 1f972d2**：它的 `ci`（41597322966）和 nightly（41597345134）全部通过，`trace-ids verify --milestone M1a` 为 0 of 288 未完成（记录在 `docs/tasks/T099-m1a-exit/gate-1f972d2/`）。T224 合并：重启用例的两条路径各有确定性的用例，读时钟前先等运行时做完手头一步；修前 800 次败 50 次，修后 800/800。T220 合并：PERF-bridge-gate 先建会话、趁渲染进程空闲点开，再开始洪流，负载不变；托管 runner 上"没有流重置"也只记录（D1），e2e-repeat 同口径；修后三个用例各 20 次全过。`gate/m1a` 的新候选等 T224 合并。T156 合并：会话按回合和待处理请求计数，监护 actor 持有防休眠断言，`host.updated.power_assertion` 跟随，有序退出释放（5.2.13 补实现要点）。T120 合并（收窄后）：`git/diff` 的四种范围，HEAD 经仓库档 `branch --show-current` 取得（5.2.10 补进只读命令）；评审时 `DiffCache` 整个移给 T221（只写不读的缓存不进 main）。T111 合并：宿主按 agent 各起一个运行时，Codex 的 CLI 解析到原生二进制、codex-acp 从包内复制、未信任的项目在拉起适配器前拒绝（`FailureCode` 附加 `project_untrusted`）、空闲适配器回收（`AdapterExited` 加 `reclaimed`）、`agents/restart`；06、03 随之补写。新增 T226（T143 发现宿主从不写 `error` 条目：设计 5.5.2、06 的 K17、11 都要求写，计划漏了），E2E-error-guidance 由 T143 移到 T226，新增 IT-error-item，T112 改为也依赖 T226。T160 改为依赖 T225：E2E-selfuse-replace 要等包被换掉后能正常退出。新增 T225（T160 在 runner 上发现重连途中退出 App 会卡住，产品缺陷，新增 E2E-quit-during-reconnect；用户安装自用构建之前合并）。新增 T224（T111 加的重启用例在 T220 的 PR 上偶发失败，只改测试）。新增 T223（P-4 缺的样例库、通用迁移用例和已发布脚本的锁定，T160 发现；用户安装自用构建之前合并），新增 IT-migrations-samples。SP-6 改在 GitHub runner 上跑（`docs/meetings/2026-11-03-sp6-runner/`）：T103、T104、T108 的测量只记录，浸泡缩短到约 5 小时，场景 6 仍由作者手动做；设计 5.9.6、5.9.7 随之改写 |
+| v1.3.87 | 2026-11-04 | 派发 T123、T130、T229、T231。T123 开工前定下四项附加：`git/status` 的 `repo_config_changed`、`ErrorReason::signing_failed`、超时 `git_commit`（5 分钟）、推送不拿 `RepoLock`（设计在合并时补）。T130 开工前估算约 1,710 行，拆出 T232（文件树）和 T233（Git 操作与提交弹窗，依赖 T123）；审查面板的界面用例按三个任务拆成 UI-review-panel、UI-review-tree、UI-review-commit，T233 另有 UNIT-review-commit；T130 不再依赖 T123；T179 补依赖 T232、T233 |

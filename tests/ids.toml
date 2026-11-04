@@ -960,7 +960,18 @@ IT-snapshot-purge = "pr"
 [T130]
 milestone = "M1b"
 UNIT-review-actions = "pr"
-UI-review = "pr"
+UI-review-panel = "pr"
+
+# 审查面板 II：文件树
+[T232]
+milestone = "M1b"
+UI-review-tree = "pr"
+
+# 审查面板 III：Git 操作与提交弹窗
+[T233]
+milestone = "M1b"
+UNIT-review-commit = "pr"
+UI-review-commit = "pr"
 
 # 审查文档（独立源 iframe）
 [T131]
