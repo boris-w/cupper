@@ -100,7 +100,7 @@ async function setup(
               <StateProvider>
                 <TooltipProvider>
                   <SlotsContext value={{ reviewView: View }}>
-                    <ReviewPanel />
+                    <ReviewPanel fileTree={false} onFileTree={() => undefined} />
                   </SlotsContext>
                 </TooltipProvider>
               </StateProvider>
