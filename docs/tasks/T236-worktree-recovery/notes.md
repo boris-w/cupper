@@ -51,7 +51,11 @@
 | `actor.rs` | +8 |
 | `failpoint.rs`、`clock/manual.rs`、`cmd.rs` | +13 |
 
-## 没处理的情形（记在汇报里）
+## 边界情形（编排者 2026-11-04 的意见）
 
-- worktree 已登记、但目录不在了（`worktree list` 标为 prunable）：照"已登记"处理，refresh 会失败（不影响结果），然后写 `workspace.ready`，之后的 Attach 落在不存在的目录上。git 自己不会造成这种状态，除非有人手动删掉目录。
-- 没登记、但目录已经存在、非空：add 失败，写 `workspace.failed`。
+- **已登记、但目录被删掉了（prunable）**：
+  - `add` 回 `not_found`；actor 写 `workspace.failed{not_found}`，第一条消息转成以 `workspace_failed` 暂停的排队消息。
+  - 不执行 `worktree prune`（它会顺带清掉用户其他失效的 worktree 记录），也不加 `--force`；这条记录留给用户自己清理。
+  - 用例 `it_worktree_create_fails_once_the_worktree_a_crash_left_is_gone`。去掉这段检查做变异，用例会失败。
+- **没登记、但目录已经存在且非空**：add 失败，写 `workspace.failed`，按这样处理。
+- 加上这一条后，规模为 +271 −38，在硬停止线 300 以内。

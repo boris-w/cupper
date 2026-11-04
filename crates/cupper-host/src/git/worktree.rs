@@ -121,7 +121,8 @@ impl Worktrees {
     /// `required` filter, which the repo tier nulls, fails it
     /// `filter_unsupported`. What a crash left (design 5.2.13) is taken
     /// over: a worktree there is not added again, nor locked again once
-    /// locked, and a branch there is checked out without `-b`.
+    /// locked, and a branch there is checked out without `-b`; a worktree
+    /// whose directory is gone fails it `not_found`.
     pub async fn add(
         &self,
         plan: &Plan,
@@ -143,6 +144,14 @@ impl Worktrees {
         let list = GitCmd::repo(RepoOp::WorktreeList);
         let list = self.run(repo, &writable, list).await.map_err(failed)?;
         let locked = listed(&list.output.stdout, &plan.path);
+        // Registered, its directory gone (`prunable`): only the user prunes,
+        // which takes their other stale worktrees too.
+        if locked.is_some() && !plan.path.is_dir() {
+            return Err(RpcError::app(
+                ErrorCode::NotFound,
+                "the worktree's directory is gone",
+            ));
+        }
         if locked.is_none() {
             let heads = format!("refs/heads/{}", plan.branch);
             let heads = GitCmd::repo(RepoOp::ForEachRef).args(["--format=%(refname)", &heads]);
