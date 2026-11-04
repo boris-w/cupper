@@ -43,3 +43,13 @@
 - **基线**：
   - 每个文件头多了按钮，hunk 下多了一行按钮，review、review-tree、review-commit 的 15 张基线都会变。
   - 只用 `ui-baseline` 生成。
+
+## runner 上的验证（2026-11-04）
+
+- e2e-repeat 41794397923（E2E-review-comment × 10）：
+  - 评论用例 10 次全过；
+  - 剪贴板用例 10 次全过，带 `@focus`，单独一轮。
+  - 每次都先确认焦点在主文档时写入得到 `NotAllowedError`，再点进审查文档写入。主进程带等待地轮询 `clipboard.readText()`，10 次读回的都是 `"t238 copied"`，和写入的一致。
+  - T104 记下的"读回对不上"，原因落在第一种怀疑：读得太早，没等写入落到系统剪贴板，不是 runner 的剪贴板服务有问题。带等待地轮询之后就对上了。
+- e2e-repeat 41794402045（E2E-SEC-revert-confirm × 10）：10 次全过。
+- ui-baseline 41794406105：14 张基线变了，逐张核对后提交（2c4a651d）。
