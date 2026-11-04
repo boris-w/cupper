@@ -997,9 +997,12 @@ UI-review-commit = "pr"
 [T131]
 milestone = "M1b"
 E2E-SEC-review-iso = "pr"
-# E2E-review-comment、E2E-SEC-revert-confirm：K9 不通过时改由 T139 产出
-E2E-review-comment = "nightly"
 UNIT-review-injection = "pr"
+
+# 审查文档 II：hunk 按钮与行内评论（v1.3.87 由 T131 拆出；K9 已通过，T139 不触发）
+[T238]
+milestone = "M1b"
+E2E-review-comment = "nightly"
 E2E-SEC-revert-confirm = "nightly"
 
 # 回合改动卡片与撤销

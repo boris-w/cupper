@@ -1,9 +1,10 @@
-# T131 审查文档（独立源 iframe）
+# T131 审查文档 I：入口、协议与只读视图
 
 - 派发日期：2026-11-04
 - 执行者：子 agent（前端工程师，桌面与渲染进程安全）
 - 分支：`feat/T131-review-document`
-- 依赖：T104（K9 通过）、T130（审查面板主文档部分）。都已合并。T148 等 M1b 关键链依赖本任务
+- 依赖：T104（K9 通过）、T130（审查面板主文档部分）。都已合并。T238 和 M1b 关键链依赖本任务
+- **v1.3.87 拆分（2026-11-04，开工前估算约 1,320 行）**：下面第 5 项里的 hunk 按钮、行内评论（悬停"+"、评论框、Esc/⌘Enter、行上显示草稿）和第 6 项，连同用例 E2E-review-comment、E2E-SEC-revert-confirm 与剪贴板的 e2e 核实，拆到 T238。本任务做其余各项、按键转发、主文档对 `hunk_action`、`draft_comment` 的接收与 `hunk_ids` 校验；用例是 E2E-SEC-review-iso、UNIT-review-injection 和基线。许可证门禁改为对许可证标识不区分大小写（`@pierre/*` 写的是小写 `apache-2.0`）
 
 ## 背景
 
