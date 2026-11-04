@@ -34,7 +34,7 @@ pub async fn files(
     Ok((found?, operation))
 }
 
-async fn states(
+pub(super) async fn states(
     tool: &GitTool,
     opened: &Opened,
     commit: Option<&str>,

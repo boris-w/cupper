@@ -19,6 +19,7 @@ use cupper_protocol::methods::git::{
     GitBranchesResult, GitCommit, GitCommitParams, GitCommitResult, GitDiffParams, GitDiffResult,
     GitFileDiff, GitFileDiffParams, GitFileDiffResult, GitPush, GitPushParams, GitPushResult,
     GitRevert, GitStage, GitStatus, GitStatusParams, GitStatusResult, GitTarget, GitUnstage,
+    WorktreeCheck, WorktreeCheckParams, WorktreeCheckResult,
 };
 use cupper_protocol::rpc::Method;
 use cupper_protocol::sync::StreamId;
@@ -30,6 +31,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
+use super::cleanup::{self, CheckError};
 use super::diff::{self, DiffCache, Diffed, Range, turn_notes};
 use super::head::{self, Head};
 use super::run::RunError;
@@ -599,6 +601,25 @@ impl GitService {
             .ok_or_else(|| not_found("session"))
     }
 
+    /// `worktree/check` (design 5.2.10): the cleanup rules for the session's
+    /// worktree; `unsupported` for a session in its project.
+    async fn check(&self, params: WorktreeCheckParams) -> Result<WorktreeCheckResult, RpcError> {
+        let session = &params.session_id;
+        if self.local(session).await? {
+            let local = "a session in its project has no worktree";
+            return Err(RpcError::app(ErrorCode::Unsupported, local));
+        }
+        let (tool, work_tree) = (self.tool()?, self.workspace(session).await?);
+        let head = self.head(session, tool, &work_tree).await?;
+        let writable = self.writable().await?;
+        let on = (&*self.deps.clock, &self.deps.durations);
+        let checked = cleanup::check(tool, (&work_tree, &head), session, &writable, on).await;
+        checked.map_err(|err| match err {
+            CheckError::Shot(err) => shot(err),
+            CheckError::Git(err) => self.reported(Some(session), "worktree_check", err),
+        })
+    }
+
     /// Whether `session` works in its project, not in a worktree.
     async fn local(&self, session: &SessionId) -> Result<bool, RpcError> {
         let id = session.to_string();
@@ -651,6 +672,7 @@ impl Port for GitService {
                 GitRevert::NAME => service.write(RepoOp::Revert, call).await,
                 GitCommit::NAME => service.commit(call).await,
                 GitPush::NAME => service.push(call).await,
+                WorktreeCheck::NAME => Ok(json!(service.check(parse(&call.params)?).await?)),
                 _ => Ok(json!(service.diff(parse(&call.params)?).await?)),
             }
         }

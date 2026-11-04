@@ -165,7 +165,7 @@ impl Worktrees {
             )
             .await?;
         }
-        if locked != Some(true) {
+        if !matches!(locked, Some(Some(_))) {
             let reason = format!("cupper session {session}");
             let args = [OsStr::new("--reason"), reason.as_ref(), path];
             let lock_it = GitCmd::repo(RepoOp::WorktreeLock).args(args);
@@ -275,13 +275,16 @@ fn heard_notice(heard: &impl Fn(Heard), notice: Option<RepoNotice>) {
 }
 
 /// Whether `listed` (`worktree list --porcelain -z`) has the worktree at
-/// `path`, and then whether it is locked.
-fn listed(listed: &[u8], path: &Path) -> Option<bool> {
+/// `path`, and then its lock's reason, empty for a lock without one.
+pub(super) fn listed(listed: &[u8], path: &Path) -> Option<Option<String>> {
     let want = [b"worktree ", path.as_os_str().as_bytes()].concat();
     let fields: Vec<&[u8]> = listed.split(|b| *b == 0).collect();
     let mut records = fields.split(|field| field.is_empty());
     let record = records.find(|record| record.first() == Some(&want.as_slice()))?;
-    Some(record.iter().any(|field| field.starts_with(b"locked")))
+    let lock = record
+        .iter()
+        .find_map(|field| field.strip_prefix(b"locked"));
+    Some(lock.map(|reason| String::from_utf8_lossy(reason.trim_ascii_start()).into_owned()))
 }
 
 /// The percentage of the last `Updating files: n% (..)` among the whole

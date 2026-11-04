@@ -402,7 +402,6 @@ const ALLOWED: &[(&str, Why)] = {
         ("test/clock_advance", Builds(HARNESS)),
         ("test/run_maintenance", Builds(HARNESS)),
         ("test/seed", Builds(HARNESS)),
-        ("worktree/check", Later(M1b)),
     ]
 };
 

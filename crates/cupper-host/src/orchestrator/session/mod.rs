@@ -5,6 +5,8 @@
 
 mod actor;
 #[cfg(test)]
+mod cleanup_tests;
+#[cfg(test)]
 mod commit_tests;
 #[cfg(test)]
 mod config_tests;

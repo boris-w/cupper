@@ -111,6 +111,8 @@ pub enum SnapshotOp {
     LsFiles,
     /// The untracked files, nested repositories as `dir/`.
     Untracked,
+    /// The ignored files, which removing a worktree deletes.
+    Ignored,
     /// The untracked files with wholly untracked directories as `dir/`.
     UntrackedDirs,
     /// `check-attr -z --stdin filter` of the paths given as input.
@@ -202,6 +204,16 @@ impl SnapshotOp {
                 true,
             ),
             Self::Untracked => (OTHERS, true),
+            Self::Ignored => (
+                &[
+                    "ls-files",
+                    "-z",
+                    "--others",
+                    "--ignored",
+                    "--exclude-standard",
+                ],
+                true,
+            ),
             Self::UntrackedDirs => (
                 &[
                     "ls-files",

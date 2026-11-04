@@ -8,6 +8,7 @@
 //! Every call runs the absolute git that CLI discovery found, in
 //! `<data dir>/git/`, with a fixed environment; nothing is looked up on PATH.
 
+mod cleanup;
 mod cmd;
 pub mod diff;
 mod head;
