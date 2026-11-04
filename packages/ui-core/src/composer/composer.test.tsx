@@ -158,7 +158,10 @@ describe("the attachment strip", () => {
       ui.getState().setAttachments("s_1", [{ type: "file_ref", path: "README.md" }, comment]),
     );
     expect(screen.getByText("README.md")).toBeTruthy();
-    expect(screen.getByText("评论：src/a.ts 第 3 行")).toBeTruthy();
+    // Review comments go together, and open to each one's file, line and text.
+    fireEvent.click(screen.getByRole("button", { name: "1 条评论" }));
+    expect(screen.getByText("src/a.ts:3")).toBeTruthy();
+    expect(screen.getByText("改名")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: "移除" })[0] as HTMLElement);
     type(area, "看一下");
     await act(async () => void fireEvent.keyDown(area, { key: "Enter" }));
