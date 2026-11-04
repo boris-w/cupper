@@ -508,7 +508,13 @@ describe("images", () => {
     controls.setFilePath("a.ts", "/p/src/a.ts");
     const files = [png(), new File([], "a.ts")];
     const box = area.closest("[data-composer]") as HTMLElement;
+    // The overlay, while files are over the composer, which is positioned for it only then.
+    await act(async () => void fireEvent.dragEnter(box, { dataTransfer: { types: ["Files"] } }));
+    expect(screen.getByText("拖放到这里添加")).toBeTruthy();
+    expect(box.hasAttribute("data-dragging")).toBe(true);
     await act(async () => void fireEvent.drop(box, { dataTransfer: { files, types: ["Files"] } }));
+    expect(screen.queryByText("拖放到这里添加")).toBeNull();
+    expect(box.hasAttribute("data-dragging")).toBe(false);
     await waitFor(() => expect(ui.getState().attachments.s_1).toHaveLength(2));
     expect(
       ui

@@ -77,6 +77,11 @@ function Images({ sessionId }: { sessionId?: string }) {
 
   // Pasted images; dropped ones, while other files are T142's references.
   const box = area?.closest<HTMLElement>("[data-composer]");
+  // The composer holds the overlay only while files are over it: positioned
+  // for good, its shadow would paint over what follows it.
+  useEffect(() => {
+    box?.toggleAttribute("data-dragging", over);
+  }, [box, over]);
   useEffect(() => {
     if (!area || !box) return;
     const images = (list?: FileList | null) => [...(list ?? [])].filter(isImage);
