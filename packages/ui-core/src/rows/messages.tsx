@@ -10,6 +10,7 @@ import { useHost, useT } from "../app/providers";
 import { Alert } from "../components/Alert";
 import { codeOf, useSessionState } from "../composer/send";
 import { useToasts } from "../feedback/toaster";
+import { useUi } from "../state/provider";
 import { useStreamActions } from "../stream/actions";
 import { useDuration } from "./basic";
 import { Markdown } from "./markdown";
@@ -135,6 +136,17 @@ function LoginCommand() {
   );
 }
 
+/** "换模型": opens the composer's model menu (T143's entry). */
+function ChangeModel() {
+  const t = useT();
+  const ui = useUi();
+  return (
+    <button type="button" onClick={() => ui.getState().openMenu("model")} className={BUTTON}>
+      {t("stream:change_model")}
+    </button>
+  );
+}
+
 /** An error, the agent's own text under it, and what to do about it. */
 function ErrorRow({ row: { error, retry } }: { row: RowOf<"error"> }) {
   const t = useT();
@@ -142,7 +154,12 @@ function ErrorRow({ row: { error, retry } }: { row: RowOf<"error"> }) {
   const guidance = GUIDANCE.includes(error.guidance) ? error.guidance : undefined;
   const button = guidance === "retry" && retry;
   return (
-    <Alert tone="danger" action={button && <Retry content={button} />}>
+    <Alert
+      tone="danger"
+      action={
+        (button && <Retry content={button} />) || (guidance === "change_model" && <ChangeModel />)
+      }
+    >
       <div>{t(key)}</div>
       {error.raw && (
         <div className="mt-1 break-words text-fg-tertiary">{escapeInvisible(error.raw)}</div>

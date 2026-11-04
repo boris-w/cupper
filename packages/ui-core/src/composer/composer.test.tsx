@@ -4,6 +4,7 @@ import { hostError, MockHost } from "@cupper/host-client/mock";
 import type { Handshake } from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
@@ -37,14 +38,20 @@ async function setup(status = "idle", session: object[] = []) {
     conn.send({ jsonrpc: "2.0", method: "stream/snapshot", params: page });
     return undefined;
   });
-  for (const method of ["session/send", "session/interrupt", "session/queue_resume"]) {
+  const methods = [
+    "session/send",
+    "session/interrupt",
+    "session/queue_resume",
+    "session/set_config",
+  ];
+  for (const method of methods) {
     mock.handle(method, () => ({ result: { disposition: "queued" } }));
   }
   const client = new HostClient();
   const conn = mock.connect();
   conn.initialized = true;
   client.attach(conn.port(), {} as Handshake);
-  const { shell } = createBrowserShell();
+  const { shell, controls } = createBrowserShell();
   const info = await shell.init();
   const ui = createUiStore(
     { prefs: DEFAULT_PREFS, overlayOpen: false },
@@ -72,7 +79,7 @@ async function setup(status = "idle", session: object[] = []) {
   const area = screen.getByRole("textbox");
   const requests = (method: string) =>
     mock.requests.filter((request) => request.method === method).map((request) => request.params);
-  return { ui, area, requests, mock, conn };
+  return { ui, area, requests, mock, conn, controls };
 }
 
 const type = (area: HTMLElement, text: string) =>
@@ -233,5 +240,107 @@ describe("UNIT-composer-long-text", () => {
     await waitFor(() => expect(screen.getByText("消息没有发出（too_large）")).toBeTruthy());
     expect(requests("session/send")).toEqual([]);
     expect(ui.getState().drafts.s_1).toBe(long);
+  });
+});
+
+describe("UNIT-composer-config", () => {
+  const value = (value: string, name: string, risk = "normal") => ({ value, name, risk });
+  const option = (id: string, current: string, values: object[]) => ({
+    id,
+    agent_option_id: id,
+    current,
+    values,
+  });
+  const caps = {
+    type: "session.capabilities",
+    data: {
+      ...{
+        agent: "claude",
+        commands: [],
+        session: { resume: true, load_history: false, fork: false },
+      },
+      versions: { adapter: "1", cli: "1", cli_compat: "verified" },
+      prompt: { image: true, file_ref: true, max_image_bytes: 1 },
+      turn: {
+        ...{ queue: true, steer: { supported: false, side_effects: false } },
+        ...{ interrupt: true, interrupt_stops_commands: true },
+      },
+      interactions: { reject_ends_turn: false, question_forms: true, plan_confirm: true },
+      extraction: {
+        ...{ exit_code: true, output_streaming: false, diff: "per_file", thinking: true },
+        ...{ plan: "markdown_only", run_state: "inferred" },
+      },
+      config: [
+        option("permission_mode", "default", [
+          value("default", "Default"),
+          value("acceptEdits", "Accept edits", "elevated"),
+          value("bypassPermissions", "Bypass", "full_access"),
+        ]),
+        option("model", "opus", [value("opus", "Opus"), value("sonnet", "Sonnet")]),
+        option("reasoning_effort", "high", [value("high", "High"), value("max", "Max")]),
+      ],
+    },
+  };
+  const configured = (mode: string) => ({
+    type: "session.configured",
+    data: {
+      ...{ agent: "claude", project_config: "loaded", read_only: false },
+      workspace: { kind: "local", path: "/p" },
+      config: { permission_mode: mode, model: "opus", reasoning_effort: "high" },
+    },
+  });
+  const open = async (name: string) => {
+    screen.getByRole("button", { name }).focus();
+    await userEvent.keyboard("{Enter}");
+  };
+  const pick = (name: RegExp) =>
+    act(async () => void fireEvent.click(screen.getByRole("menuitem", { name })));
+
+  test("the permission menu sets a mode; full access goes through the native confirmation", async () => {
+    const { requests, controls } = await setup("idle", [caps, configured("default")]);
+    expect(screen.getByRole("button", { name: "权限" }).textContent).toBe("Default");
+    await open("权限");
+    expect(screen.getByText("agent 的操作要怎样批准？")).toBeTruthy();
+    expect(screen.getByText("由 agent 判断哪些操作需要你批准")).toBeTruthy();
+    await pick(/Accept edits/);
+    await open("权限");
+    await pick(/Bypass/);
+    const set = { session_id: "s_1", option: "permission_mode" };
+    expect(requests("session/set_config")).toEqual([
+      expect.objectContaining({ ...set, value: "acceptEdits" }),
+    ]);
+    expect(controls.privilegedActions).toEqual([
+      { kind: "set_config", ...set, value: "bypassPermissions" },
+    ]);
+  });
+
+  test("model and effort in one button; a refusal says why", async () => {
+    const { requests, mock, ui } = await setup("idle", [caps, configured("default")]);
+    expect(screen.getByRole("button", { name: "模型与推理强度" }).textContent).toBe("Opus High");
+    await open("模型与推理强度");
+    expect(screen.getByText("选择推理强度")).toBeTruthy();
+    await pick(/Sonnet/);
+    // "换模型" in an error opens the same menu.
+    act(() => ui.getState().openMenu("model"));
+    await pick(/Max/);
+    expect(requests("session/set_config")).toEqual([
+      expect.objectContaining({ option: "model", value: "sonnet" }),
+      expect.objectContaining({ option: "reasoning_effort", value: "max" }),
+    ]);
+    mock.handle("session/set_config", () => hostError("agent_error"));
+    await open("模型与推理强度");
+    await pick(/Sonnet/);
+    await waitFor(() => expect(screen.getByText("没有改成（agent_error）")).toBeTruthy());
+  });
+
+  test("above the composer: full access is on, or the low-interruption mode", async () => {
+    await setup("idle", [caps, configured("bypassPermissions")]);
+    expect(screen.getByText("完全访问权限已开启")).toBeTruthy();
+    cleanup();
+    await setup("idle", [caps, configured("acceptEdits")]);
+    expect(screen.getByRole("status").textContent).toContain("低打扰模式已开启");
+    cleanup();
+    await setup("idle", [configured("default")]);
+    expect(screen.queryByRole("button", { name: "权限" })).toBeNull();
   });
 });

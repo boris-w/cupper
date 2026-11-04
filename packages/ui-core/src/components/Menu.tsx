@@ -7,9 +7,12 @@ export function Menu(props: {
   children?: ReactNode;
   /** Where the menu lines up with its trigger; its end by default. */
   align?: "start" | "center" | "end";
+  /** Opened and closed from outside, too. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
-    <RadixMenu.Root>
+    <RadixMenu.Root open={props.open} onOpenChange={props.onOpenChange}>
       <RadixMenu.Trigger asChild>{props.trigger}</RadixMenu.Trigger>
       <RadixMenu.Portal>
         <RadixMenu.Content
@@ -41,3 +44,9 @@ export function MenuItem(props: {
 }
 
 export const MenuSeparator = () => <RadixMenu.Separator className="mx-2 my-1 h-px bg-border" />;
+
+export function MenuLabel({ children }: { children: ReactNode }) {
+  return (
+    <RadixMenu.Label className="px-2 py-1 text-xs text-fg-tertiary">{children}</RadixMenu.Label>
+  );
+}
