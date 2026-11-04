@@ -1,14 +1,14 @@
 // The turn's change card on the real app (design 5.7.4, 5.7.8; T132): the
 // agent changes a file, the card shows it, and "撤销" reverts the turn only
-// after the confirmation, whose key is real input through the main process's
-// guard. The key needs the window's focus: `@focus`.
+// after the confirmation, whose click is real input through the main
+// process's guard. The click needs the window's focus: `@focus`.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, test } from "./fixture";
 import { texts } from "./helpers";
-import { focusWindow, press } from "./input";
+import { click, focusWindow } from "./input";
 
 test(
   "E2E-turn-changes-undo: the card's undo asks first, then the turn's change is gone",
@@ -33,8 +33,10 @@ test(
     await expect(confirm).toHaveAttribute("data-ready", "true");
     // Nothing reverts before the confirmation.
     expect(readme()).toBe("changed\n");
-    // The focus is on "确认"; Enter is a key the input guard counts.
-    await press(cupper, "Enter");
+    // From the card's own button, the focus is on "确认" (RP-11); the click is real input.
+    const yes = confirm.getByRole("button", { name: t("review:confirm") });
+    await expect(yes).toBeFocused();
+    await click(cupper, yes);
     await expect.poll(readme, { message: "the turn's change is reverted" }).toBe("e2e\n");
     await expect(confirm).toBeHidden();
   },
