@@ -277,9 +277,12 @@ const TURN_DIFFS = {
   t_2: [file("data/sample.json", 1, 0)],
 };
 
-/** The stream of `CHANGES`, its turns' diffs answered, and `revert` for `git/revert`. */
+/**
+ * The stream of `CHANGES`, its turns' diffs answered, and `revert` for
+ * `git/revert`; the answers are set before the session page asks.
+ */
 async function showChanges(page: Page, theme: "light" | "dark", revert?: object) {
-  await show(page, CHANGES, theme);
+  await open(page, { info: { theme }, streams: { "session/s_1": CHANGES } });
   await page.evaluate(
     ([diffs, revert]) => {
       window.cupperHost.handle("git/diff", ({ params }) => {
@@ -290,6 +293,7 @@ async function showChanges(page: Page, theme: "light" | "dark", revert?: object)
         return { result: { caveats: [], diff_token: `dt_${JSON.stringify(scope)}`, files, stat } };
       });
       window.cupperHost.handle("git/revert", () => (revert ?? { result: {} }) as never);
+      window.cupperShell.navigate({ kind: "session", session_id: "s_1" });
     },
     [TURN_DIFFS, revert] as const,
   );
