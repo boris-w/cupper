@@ -47,9 +47,10 @@ use cupper_protocol::methods::session::{
 use cupper_protocol::rpc::Method;
 use cupper_protocol::session::{
     ConfirmationReason, ConfirmationRequired, PauseReason, ProjectConfig, SessionConfigured,
-    SnapshotPhase, SnapshotReason, SnapshotRecorded, SnapshotStatus, TurnStatus,
+    SnapshotPhase, SnapshotReason, SnapshotRecorded, SnapshotStatus, TurnStatus, WorkspaceFailed,
+    WorkspaceReady,
 };
-use cupper_protocol::view::SessionView;
+use cupper_protocol::view::{SessionView, WorkspaceView};
 use rusqlite::OptionalExtension;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
@@ -69,6 +70,7 @@ use crate::files::FileLists;
 use crate::gateway::{AuditEvent, AuditRecord, Call, ConfigState, TrustChange};
 use crate::git::snapshot::{self, ShotError, Taken};
 use crate::git::stamp::Fingerprint;
+use crate::git::worktree::{Heard, Plan, Worktrees};
 use crate::git::{GitTool, RepoNotice};
 use crate::index::{ScanContext, git_of, status_of};
 use crate::ledger::{Outcome, Ticket};
@@ -106,9 +108,23 @@ enum Next {
     Configured(Box<Setting>),
     Rescanned(Purpose, u64, Rescan),
     Snapshot(TurnId, SnapshotPhase, Result<Taken, ShotError>),
+    Adding(Adding),
     Stop(Stop),
     Alarm,
     Idle,
+}
+
+/// What the task adding the session's worktree sends back.
+enum Adding {
+    Heard(Heard),
+    Done(Result<(), RpcError>),
+}
+
+/// The first input, and the calls that came since, while the session's
+/// worktree is added (design 5.5.2).
+struct Preparing {
+    first: Input,
+    calls: Vec<(Input, Command, Step)>,
 }
 
 /// The actor's own timer: it leaves memory once idle this long.
@@ -155,6 +171,7 @@ pub(super) struct Parts {
     /// For what the agent says of its errors (`error` items' `raw`).
     pub redactor: Redactor,
     pub lists: FileLists,
+    pub worktrees: Worktrees,
 }
 
 /// What the actor starts with besides its parts: its first input, and what
@@ -172,6 +189,8 @@ pub(super) struct Start {
     pub initial: bool,
     /// The paths of the session's `repo_config_changed` notices in its log.
     pub config_changed: BTreeSet<String>,
+    /// The new worktree to add before the first input (design 5.5.2).
+    pub worktree: Option<Plan>,
 }
 
 pub(super) struct SessionActor {
@@ -214,6 +233,7 @@ pub(super) struct SessionActor {
     /// The row holds the first message until it leaves the machine's hold
     /// for a turn or the queue (design 5.2.6).
     initial: bool,
+    preparing: Option<Preparing>,
 }
 
 /// Why the project's trust range is rescanned (design 5.2.6).
@@ -310,6 +330,7 @@ impl SessionActor {
         let (configured, mut settings) = mpsc::unbounded_channel();
         let (rescanned, mut rescans) = mpsc::unbounded_channel();
         let (snapshots, mut shots) = mpsc::unbounded_channel();
+        let (adding, mut added) = mpsc::unbounded_channel();
         let alarm = Alarm::new(Arc::clone(&parts.clock));
         let idle = (TimerTable::new(), Alarm::new(Arc::clone(&parts.clock)));
         let Start {
@@ -319,6 +340,7 @@ impl SessionActor {
             ignore_for_good,
             initial,
             config_changed,
+            worktree,
         } = start;
         let load_wanted = parts.project_config == ProjectConfigPolicy::Load || project_gate;
         let mut actor = Self {
@@ -344,8 +366,12 @@ impl SessionActor {
             deferred: None,
             stopping: false,
             initial,
+            preparing: None,
         };
-        actor.input(first, None, Step::default()).await;
+        match worktree {
+            Some(plan) => actor.add(plan, first, adding),
+            None => actor.input(first, None, Step::default()).await,
+        }
         // Idle until a branch brings work, which runs once the others are
         // dropped.
         loop {
@@ -360,6 +386,7 @@ impl SessionActor {
                         Next::Rescanned(purpose, seq, found)
                     }
                     Some((turn, phase, taken)) = shots.recv() => Next::Snapshot(turn, phase, taken),
+                    Some(adding) = added.recv() => Next::Adding(adding),
                     Some(stop) = stops.recv() => Next::Stop(stop),
                     () = actor.alarm.rung() => Next::Alarm,
                     () = actor.idle.1.rung() => Next::Idle,
@@ -382,6 +409,7 @@ impl SessionActor {
                 Next::Configured(setting) => actor.configured(*setting).await,
                 Next::Rescanned(purpose, seq, found) => actor.trust(purpose, seq, found).await,
                 Next::Snapshot(turn, phase, taken) => actor.snapshotted(turn, phase, taken).await,
+                Next::Adding(adding) => actor.adding(adding).await,
                 Next::Stop((force, done)) => {
                     actor.stopping = true;
                     if force {
@@ -444,7 +472,13 @@ impl SessionActor {
                 let expected_turn = p.expected_turn_id;
                 Input::Machine(turn::Input::Interrupt { expected_turn })
             }),
-            SessionQueueResume::NAME => Ok(Input::Machine(turn::Input::QueueResume)),
+            // A failed worktree keeps the queue paused (design 5.5.2).
+            SessionQueueResume::NAME => match self.view(|v| v.workspace.clone()) {
+                Some(WorkspaceView::Failed(_)) => {
+                    Err(RpcError::app(ErrorCode::Unavailable, "no workspace"))
+                }
+                _ => Ok(Input::Machine(turn::Input::QueueResume)),
+            },
             SessionConfirmConfig::NAME => {
                 step.reply = Some(Reply::Done);
                 parse(&params).and_then(|p| self.confirm(p, &principal))
@@ -532,6 +566,10 @@ impl SessionActor {
             audit,
             deferrable,
         };
+        if let Some(preparing) = &mut self.preparing {
+            preparing.calls.push((input, command, step));
+            return;
+        }
         self.input(input, Some(command), step).await;
         if reopen && self.project_gate {
             self.rescan(Purpose::Reopen);
@@ -909,7 +947,7 @@ impl SessionActor {
         }
         // Queued, not run: the queue has it now, and a load must not run it
         // again.
-        if self.initial && !self.parts.core.holding() {
+        if self.initial && self.preparing.is_none() && !self.parts.core.holding() {
             self.initial = false;
             changes.first_taken(&self.parts.id, at);
         }
@@ -981,6 +1019,64 @@ impl SessionActor {
         }
         for (turn_id, phase) in snapshots {
             self.snapshot(turn_id, phase);
+        }
+    }
+
+    /// Adds the session's worktree in a task of its own, holding the
+    /// quiescence barrier; the first input waits for it (design 5.5.2).
+    fn add(&mut self, plan: Plan, first: Input, back: mpsc::UnboundedSender<Adding>) {
+        self.outstanding += 1;
+        let calls = Vec::new();
+        self.preparing = Some(Preparing { first, calls });
+        let (worktrees, id) = (self.parts.worktrees.clone(), self.parts.id.clone());
+        let hold = self.parts.quiescence.hold();
+        tokio::spawn(async move {
+            // The actor may have stopped.
+            let heard = |heard| drop(back.send(Adding::Heard(heard)));
+            let added = worktrees.add(&plan, &id, heard).await;
+            let _ = back.send(Adding::Done(added));
+            drop(hold);
+        });
+    }
+
+    /// The worktree task's progress and notices, then its end: the worktree
+    /// becomes the workspace, `workspace.ready`; or `workspace.failed`, the
+    /// gate shut, which queues the first message paused (design 5.2.13).
+    /// The first input, and the calls that came meanwhile, go in after.
+    async fn adding(&mut self, adding: Adding) {
+        let mut step = Step::default();
+        let done = match adding {
+            Adding::Heard(Heard::Notice(notice)) => return self.notice(notice).await,
+            Adding::Heard(Heard::Progress(progress)) => {
+                step.events.push(EventBody::WorkspacePreparing(progress));
+                return self.commit(step, None).await;
+            }
+            Adding::Done(done) => done,
+        };
+        self.outstanding -= 1;
+        let workspace = &self.parts.configured.workspace;
+        match done {
+            Ok(()) => {
+                self.parts.cwd = PathBuf::from(&workspace.path.0);
+                let (path, branch) = (workspace.path.clone(), workspace.branch.clone());
+                let ready = WorkspaceReady { path, branch };
+                step.events.push(EventBody::WorkspaceReady(ready));
+            }
+            Err(err) => {
+                let code = err.app_code().cloned().unwrap_or(ErrorCode::Internal);
+                let reason = err.reason().cloned();
+                step.events = vec![EventBody::WorkspaceFailed(WorkspaceFailed { code, reason })];
+                let (reason, shut) = (PauseReason::WorkspaceFailed, true);
+                let gate = Input::Machine(turn::Input::Gate { reason, shut });
+                self.input(gate, None, mem::take(&mut step)).await;
+            }
+        }
+        let Some(Preparing { first, calls }) = self.preparing.take() else {
+            return;
+        };
+        self.input(first, None, step).await;
+        for (input, command, step) in calls {
+            self.input(input, Some(command), step).await;
         }
     }
 

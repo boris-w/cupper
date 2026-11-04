@@ -36,6 +36,8 @@ mod rows;
 pub(super) mod tests;
 #[cfg(test)]
 mod trust_tests;
+#[cfg(test)]
+mod worktree_tests;
 
 use std::fmt;
 

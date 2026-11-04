@@ -5027,7 +5027,8 @@
             "turn_failed",
             "turn_interrupted",
             "config_unconfirmed",
-            "project_config_changed"
+            "project_config_changed",
+            "workspace_failed"
           ],
           "type": "string"
         },
@@ -5035,7 +5036,7 @@
           "type": "string"
         }
       ],
-      "description": "Open enum: unknown values must be accepted. Known: turn_cancelled turn_failed turn_interrupted config_unconfirmed project_config_changed "
+      "description": "Open enum: unknown values must be accepted. Known: turn_cancelled turn_failed turn_interrupted config_unconfirmed project_config_changed workspace_failed "
     },
     "PendingKind": {
       "anyOf": [

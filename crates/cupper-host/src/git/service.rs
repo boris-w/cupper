@@ -59,6 +59,8 @@ pub struct GitDeps {
     pub audit: mpsc::UnboundedSender<AuditRecord>,
     /// Where the repo tier's notices go.
     pub notes: Arc<dyn SessionNotes>,
+    /// Shared with the sessions' worktrees.
+    pub locks: Arc<RepoLock>,
 }
 
 /// The session streams, for notices of the repo tier (design 5.2.10, rules
@@ -74,13 +76,12 @@ pub trait SessionNotes: Send + Sync + std::fmt::Debug {
 pub struct GitService {
     deps: GitDeps,
     cache: Arc<Mutex<DiffCache<Diffed>>>,
-    locks: Arc<RepoLock>,
 }
 
 /// One lock per repository, for what changes a user's index or work tree
 /// (design 5.2.10, "并发"); the snapshot tier and reads take none.
 #[derive(Debug, Default)]
-pub(super) struct RepoLock(Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>);
+pub struct RepoLock(Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>);
 
 impl RepoLock {
     /// The lock of the repository `work_tree` belongs to, by its common dir.
@@ -103,8 +104,7 @@ impl GitService {
     pub fn new(deps: GitDeps) -> Self {
         let cache = DiffCache::new(deps.durations.get(DIFF_CACHE_TTL));
         let cache = Arc::new(Mutex::new(cache));
-        let locks = Arc::default();
-        Self { deps, cache, locks }
+        Self { deps, cache }
     }
 
     pub fn route(self, routes: &mut Routes) {
@@ -130,8 +130,12 @@ impl GitService {
         let diffed = diff::diff(tool, &work_tree, range, clock, durations).await;
         let diffed = diffed.map_err(shot)?;
         let mut caveats = Vec::new();
+        // A worktree has the session's changes only (GT-1).
+        let mixed = notes.is_some() && self.local(&params.session_id).await?;
         let snapshot = notes.map(|(mut snapshot, late)| {
-            caveats.push(DiffCaveat::MixedChanges);
+            if mixed {
+                caveats.push(DiffCaveat::MixedChanges);
+            }
             if late {
                 caveats.push(DiffCaveat::LateToolEffects);
             }
@@ -254,7 +258,7 @@ impl GitService {
             }
         };
         let (session, notes) = (&params.session_id, &self.deps.notes);
-        let lock = self.locks.hold(&work_tree).await?;
+        let lock = self.deps.locks.hold(&work_tree).await?;
         if let Some(ticket) = ticket.as_mut() {
             ticket.mark_external().await.map_err(internal)?;
         }
@@ -365,7 +369,7 @@ impl GitService {
     ) -> Result<(), RpcError> {
         let tier = self.tool()?.user_tier(work_tree);
         let lock = match op {
-            UserOp::Commit => Some(self.locks.hold(work_tree).await?),
+            UserOp::Commit => Some(self.deps.locks.hold(work_tree).await?),
             UserOp::Push => None,
         };
         if let Some(ticket) = ticket.as_mut() {
@@ -551,17 +555,16 @@ impl GitService {
             .ok_or_else(|| not_found("session"))
     }
 
-    /// Every project and session workspace, where the repo tier takes no
-    /// configuration from (design 5.2.10).
+    /// Whether `session` works in its project, not in a worktree.
+    async fn local(&self, session: &SessionId) -> Result<bool, RpcError> {
+        let id = session.to_string();
+        let sql = "SELECT workspace_kind = 'local' FROM sessions WHERE session_id = ?1";
+        let local = self.read(move |c| c.query_row(sql, [id], |r| r.get(0)).optional());
+        Ok(local.await?.unwrap_or(true))
+    }
+
     async fn writable(&self) -> Result<Vec<PathBuf>, RpcError> {
-        self.read(|c| {
-            let sql = "SELECT path FROM projects WHERE removed_at IS NULL
-                UNION SELECT workspace_path FROM sessions";
-            let mut select = c.prepare(sql)?;
-            let paths = select.query_map([], |r| r.get::<_, String>(0).map(PathBuf::from))?;
-            paths.collect()
-        })
-        .await
+        writable(&self.deps.readers).await
     }
 
     async fn read<T: Send + 'static>(
@@ -674,6 +677,19 @@ fn not_found(what: &str) -> RpcError {
     RpcError::app(ErrorCode::NotFound, format!("no such {what}"))
 }
 
-fn internal(err: impl std::fmt::Display) -> RpcError {
+/// Every project and session workspace, where the repo tier takes no
+/// configuration from (design 5.2.10).
+pub(super) async fn writable(readers: &Readers) -> Result<Vec<PathBuf>, RpcError> {
+    let read = readers.read(|c| {
+        let sql = "SELECT path FROM projects WHERE removed_at IS NULL
+            UNION SELECT workspace_path FROM sessions";
+        let mut select = c.prepare(sql)?;
+        let paths = select.query_map([], |r| r.get::<_, String>(0).map(PathBuf::from))?;
+        paths.collect()
+    });
+    read.await.map_err(internal)
+}
+
+pub(super) fn internal(err: impl std::fmt::Display) -> RpcError {
     RpcError::app(ErrorCode::Internal, err.to_string())
 }

@@ -19,6 +19,7 @@ pub mod snapshot;
 pub mod stamp;
 mod status;
 mod user;
+pub mod worktree;
 
 use std::ffi::{OsStr, OsString};
 use std::fs::DirBuilder;
@@ -30,8 +31,8 @@ use cupper_sys::{Command, Env};
 
 pub use cmd::{GitCmd, Repo, RepoOp, Snapshot, SnapshotOp, User, UserOp};
 pub use repo::{Done, GitError, RepoNotice};
-use run::{Output, RunError};
-pub use service::{GitDeps, GitService, SessionNotes};
+use run::{Heard, Output, RunError};
+pub use service::{GitDeps, GitService, RepoLock, SessionNotes};
 
 use crate::clock::Clock;
 use crate::durations::{DurationKey, Durations};
@@ -176,6 +177,7 @@ impl GitTool {
         Prepared {
             command,
             input,
+            heard: cmd.take_heard(),
             timeout,
             read_only,
         }
@@ -254,6 +256,7 @@ impl SnapshotTier<'_> {
 pub struct Prepared {
     pub command: Command,
     pub input: Option<Vec<u8>>,
+    pub heard: Option<Heard>,
     pub timeout: DurationKey,
     pub read_only: bool,
 }
@@ -261,7 +264,7 @@ pub struct Prepared {
 impl Prepared {
     pub async fn run(self, clock: &dyn Clock, durations: &Durations) -> Result<Output, RunError> {
         let limit = durations.get(self.timeout);
-        run::run(clock, self.command, self.input, limit).await
+        run::hearing(clock, self.command, self.input, self.heard, limit).await
     }
 }
 

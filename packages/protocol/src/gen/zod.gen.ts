@@ -829,7 +829,7 @@ export const zOutputState = z.union([
 ]);
 
 /**
- * Open enum: unknown values must be accepted. Known: turn_cancelled turn_failed turn_interrupted config_unconfirmed project_config_changed
+ * Open enum: unknown values must be accepted. Known: turn_cancelled turn_failed turn_interrupted config_unconfirmed project_config_changed workspace_failed
  */
 export const zPauseReason = z.union([
   z.enum([
@@ -838,6 +838,7 @@ export const zPauseReason = z.union([
     "turn_interrupted",
     "config_unconfirmed",
     "project_config_changed",
+    "workspace_failed",
   ]),
   z.string(),
 ]);
