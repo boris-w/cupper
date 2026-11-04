@@ -50,6 +50,11 @@ pub struct GitStatusResult {
     pub in_progress: Option<GitOperation>,
     /// Changed, staged, untracked and unmerged files; not ignored ones.
     pub files: Vec<GitStatusFile>,
+    /// The files of the repository's executable configuration that changed
+    /// during the session, as its `repo_config_changed` notices named them;
+    /// for the commit's confirmation (design 5.2.10). Absent when none did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo_config_changed: Option<Vec<WirePath>>,
 }
 
 open_enum! {
@@ -285,7 +290,12 @@ method! {
         scope: Write,
         idempotency: Command,
         milestone: M1b,
-        errors: [GitError / HookFailed, GitError / NothingToCommit, Conflict / OutcomeUnknown],
+        errors: [
+            GitError / HookFailed,
+            GitError / NothingToCommit,
+            GitError / SigningFailed,
+            Conflict / OutcomeUnknown,
+        ],
     }
 }
 
@@ -309,7 +319,7 @@ method! {
         scope: Write,
         idempotency: Command,
         milestone: M1b,
-        errors: [GitError / AuthFailed, GitError / Rejected],
+        errors: [GitError / AuthFailed, GitError / Rejected, Conflict / OutcomeUnknown],
     }
 }
 
@@ -509,7 +519,8 @@ pub(super) mod tests {
                     "ahead": 2, "behind": 0, "in_progress": "rebase", "files": [
                     {"path": "src/a.rs", "index": "modified", "worktree": "unmodified"},
                     {"path": "src/b.rs", "old_path": "src/c.rs", "index": "renamed", "worktree": "modified"},
-                    {"path": "notes.md", "index": "untracked", "worktree": "untracked"}]}),
+                    {"path": "notes.md", "index": "untracked", "worktree": "untracked"}],
+                    "repo_config_changed": ["/w/.git/config"]}),
             ),
             request::<GitStatus>(
                 session.clone(),

@@ -1651,6 +1651,7 @@
             "unsafe_repo_config",
             "repo_config_changed",
             "filter_unsupported",
+            "signing_failed",
             "queue_full",
             "steer",
             "cancel",
@@ -1664,7 +1665,7 @@
           "type": "string"
         }
       ],
-      "description": "Open enum: unknown values must be accepted. Known: bad_nonce signature_invalid bad_key bad_proof scope lineage role already_initialized user_activation_required already_resolved turn_mismatch digest_mismatch too_early version_mismatch stale_diff outcome_unknown turn_running config_unconfirmed adapter_exited host_restarted not_a_repo cli_missing cli_not_logged_in cli_too_old runtime_installing runtime_failed adapter_starting adapter_crashed pending_upgrade quota_exhausted app_not_found snapshot_missing index_unmerged project_untrusted scan_failed hook_failed nothing_to_commit auth_failed rejected lock_held unsafe_repo_config repo_config_changed filter_unsupported queue_full steer cancel upgrade user_quit idle "
+      "description": "Open enum: unknown values must be accepted. Known: bad_nonce signature_invalid bad_key bad_proof scope lineage role already_initialized user_activation_required already_resolved turn_mismatch digest_mismatch too_early version_mismatch stale_diff outcome_unknown turn_running config_unconfirmed adapter_exited host_restarted not_a_repo cli_missing cli_not_logged_in cli_too_old runtime_installing runtime_failed adapter_starting adapter_crashed pending_upgrade quota_exhausted app_not_found snapshot_missing index_unmerged project_untrusted scan_failed hook_failed nothing_to_commit auth_failed rejected lock_held unsafe_repo_config repo_config_changed filter_unsupported signing_failed queue_full steer cancel upgrade user_quit idle "
     },
     "Event": {
       "anyOf": [
@@ -3255,6 +3256,13 @@
         },
         "in_progress": {
           "$ref": "#/$defs/GitOperation"
+        },
+        "repo_config_changed": {
+          "description": "The files of the repository's executable configuration that changed\nduring the session, as its `repo_config_changed` notices named them;\nfor the commit's confirmation (design 5.2.10). Absent when none did.",
+          "items": {
+            "$ref": "#/$defs/WirePath"
+          },
+          "type": "array"
         },
         "upstream": {
           "description": "E.g. `origin/main`.",
@@ -8638,6 +8646,7 @@
         "x-errors": [
           "git_error/hook_failed",
           "git_error/nothing_to_commit",
+          "git_error/signing_failed",
           "conflict/outcome_unknown"
         ],
         "x-idempotent": "command",
@@ -8689,7 +8698,8 @@
         },
         "x-errors": [
           "git_error/auth_failed",
-          "git_error/rejected"
+          "git_error/rejected",
+          "conflict/outcome_unknown"
         ],
         "x-idempotent": "command",
         "x-milestone": "M1b",

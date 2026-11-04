@@ -28,6 +28,7 @@ use std::ffi::OsString;
 use std::marker::PhantomData;
 
 use crate::durations::{DurationKey, GIT_COMMAND, GIT_SNAPSHOT, GIT_WORKTREE_ADD};
+use crate::durations::{GIT_COMMIT, GIT_PUSH};
 
 /// The repo tier: git runs in the user's repository, checked and overridden
 /// on every call (T097, T098).
@@ -37,6 +38,33 @@ pub enum Repo {}
 /// The snapshot tier: git runs on cupper's own GIT_DIR (T061).
 #[derive(Debug)]
 pub enum Snapshot {}
+
+/// The user tier: the user's own commit and push, as in a terminal (T123).
+#[derive(Debug)]
+pub enum User {}
+
+/// The user tier's commands (design 5.2.10, "提交与推送").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserOp {
+    /// `commit -F -`: the message on stdin; the repository's hooks run.
+    Commit,
+    Push,
+}
+
+impl UserOp {
+    fn spec(self) -> Spec {
+        let (words, timeout): (&'static [&'static str], _) = match self {
+            Self::Commit => (&["commit", "-F", "-"], GIT_COMMIT),
+            Self::Push => (&["push"], GIT_PUSH),
+        };
+        let read_only = false;
+        Spec {
+            words,
+            read_only,
+            timeout,
+        }
+    }
+}
 
 /// The repo tier's commands (design 5.2.10): reading refs and config, and
 /// writing the user's index and worktrees.
@@ -272,6 +300,12 @@ impl GitCmd<Repo> {
 
 impl GitCmd<Snapshot> {
     pub fn snapshot(op: SnapshotOp) -> Self {
+        Self::new(op.spec())
+    }
+}
+
+impl GitCmd<User> {
+    pub fn user(op: UserOp) -> Self {
         Self::new(op.spec())
     }
 }

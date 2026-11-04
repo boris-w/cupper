@@ -97,16 +97,16 @@ macro_rules! steps {
 }
 
 /// A repository of its own, with a session once it [`start`](Self::start)s.
-struct Case {
-    f: Fixture,
-    home: TempDir,
+pub(super) struct Case {
+    pub(super) f: Fixture,
+    pub(super) home: TempDir,
     git: PathBuf,
     session: Option<SessionId>,
     commands: u32,
 }
 
 impl Case {
-    async fn new(name: &str) -> Self {
+    pub(super) async fn new(name: &str) -> Self {
         let (f, home) = git_project(name).await;
         let path = std::env::var_os("PATH").unwrap();
         let mut found = std::env::split_paths(&path).map(|dir| dir.join("git"));
@@ -122,33 +122,33 @@ impl Case {
     }
 
     /// Commits the work tree, then starts the session.
-    async fn start(&mut self) {
+    pub(super) async fn start(&mut self) {
         self.git(&["add", "-A"], None).await;
         self.git(&["commit", "-qm", "base"], None).await;
         self.session = Some(self.f.started().await);
     }
 
-    fn session(&self) -> &SessionId {
+    pub(super) fn session(&self) -> &SessionId {
         self.session.as_ref().expect("started")
     }
 
-    fn path(&self, path: &str) -> PathBuf {
+    pub(super) fn path(&self, path: &str) -> PathBuf {
         self.f.project().join(path)
     }
 
-    fn write(&self, path: &str, bytes: impl AsRef<[u8]>) {
+    pub(super) fn write(&self, path: &str, bytes: impl AsRef<[u8]>) {
         let path = self.path(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, bytes).unwrap();
     }
 
-    fn chmod(&self, path: &str, mode: u32) {
+    pub(super) fn chmod(&self, path: &str, mode: u32) {
         let mode = fs::Permissions::from_mode(mode);
         fs::set_permissions(self.path(path), mode).unwrap();
     }
 
     /// The user's `git <args>` in the project, `input` on stdin; its stdout.
-    async fn git(&self, args: &[&str], input: Option<&[u8]>) -> Vec<u8> {
+    pub(super) async fn git(&self, args: &[&str], input: Option<&[u8]>) -> Vec<u8> {
         let mut env = Env::new();
         env.set("HOME", self.home.path()).unwrap();
         env.set("GIT_CONFIG_NOSYSTEM", "1").unwrap();
