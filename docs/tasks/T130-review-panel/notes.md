@@ -97,7 +97,7 @@ export type ReviewViewComponent = ComponentType<ReviewViewProps>;
 
 ## 实现中的取舍
 
-- 整组"暂存全部"在"最近一轮"里：宿主只接受未暂存的令牌，所以先取"未暂存"的 diff，取它与本轮文件的交集，按路径暂存；交集为空时提示"没有可以暂存的更改"。
+- 整组"暂存全部"在"最近一轮"里：宿主只接受未暂存的令牌，所以先取"未暂存"的 diff，取它与本轮文件的交集，按路径暂存；交集为空时提示"没有可以暂存的更改"。同一文件里用户自己的改动会一并暂存（git 按文件暂存，分不出是谁改的）；头部已有 `mixed_changes` 的提示。
 - 每次操作之后，不论成败，都让 `["session", id]` 下的查询失效（GT-1：以仓库为准），`stale_diff`、`outcome_unknown` 因此不需要单独刷新。
 - 菜单的勾选项：`MenuItem` 加了 `checked`、`radio`，范围与视图用 `menuitemradio`，换行用 `menuitemcheckbox`，都带 `aria-checked`。
 - 还原确认里，点击只在按下发生在就绪之后才算数（就绪前按下、就绪后松开不算）；键盘的点击（`detail === 0`）在就绪后算数。
