@@ -943,6 +943,11 @@ milestone = "M1b"
 IT-git-lfs-repo-config = "pr"
 UNIT-git-lfs-store = "pr"
 
+# 按文件在外部应用中打开
+[T239]
+milestone = "M1b"
+IT-workspace-open-path = "pr"
+
 # Git 服务 V：提交与推送（用户档）与 Q23
 [T123]
 milestone = "M1b"
