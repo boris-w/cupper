@@ -174,6 +174,8 @@ durations! {
     GIT_WORKTREE_ADD = "git_worktree_add", Duration::from_secs(600);
     /// `git push` in the user tier (design 5.2.10).
     GIT_PUSH = "git_push", Duration::from_secs(300);
+    /// `git commit` in the user tier, its hooks with it (T123).
+    GIT_COMMIT = "git_commit", Duration::from_secs(300);
     /// How long a `diff_token` names its diff (design 5.2.10).
     DIFF_CACHE_TTL = "diff_cache_ttl", Duration::from_secs(600);
     /// How long `files/search` keeps a workspace's file list (design 5.2.11).

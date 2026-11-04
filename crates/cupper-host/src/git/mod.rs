@@ -18,6 +18,7 @@ mod service;
 pub mod snapshot;
 pub mod stamp;
 mod status;
+mod user;
 
 use std::ffi::{OsStr, OsString};
 use std::fs::DirBuilder;
@@ -27,7 +28,7 @@ use std::path::{Path, PathBuf};
 
 use cupper_sys::{Command, Env};
 
-pub use cmd::{GitCmd, Repo, RepoOp, Snapshot, SnapshotOp};
+pub use cmd::{GitCmd, Repo, RepoOp, Snapshot, SnapshotOp, User, UserOp};
 pub use repo::{Done, GitError, RepoNotice};
 use run::{Output, RunError};
 pub use service::{GitDeps, GitService, SessionNotes};
@@ -102,6 +103,13 @@ impl GitTool {
         }
     }
 
+    pub fn user_tier(&self, repo: &Path) -> UserTier<'_> {
+        UserTier {
+            tool: self,
+            repo: repo.into(),
+        }
+    }
+
     pub fn snapshot_tier<'a>(&'a self, place: &'a snapshot::Place) -> SnapshotTier<'a> {
         SnapshotTier { tool: self, place }
     }
@@ -133,12 +141,16 @@ impl GitTool {
         env
     }
 
-    /// The `-c`s both the repo and the snapshot tier always pass: no
-    /// fsmonitor, and hooks from an empty directory.
+    /// The `-c`s both the repo and the snapshot tier always pass: paths
+    /// unquoted for the host to parse, no fsmonitor, and hooks from an empty
+    /// directory. The user tier passes none, so hooks see git as in a
+    /// terminal.
     fn overrides(&self) -> Vec<OsString> {
         let mut hooks = OsString::from("core.hooksPath=");
         hooks.push(self.dir.join("empty-hooks"));
         [
+            "-c".into(),
+            "core.quotepath=false".into(),
             "-c".into(),
             "core.fsmonitor=false".into(),
             "-c".into(),
@@ -147,10 +159,17 @@ impl GitTool {
         .into()
     }
 
-    fn prepare<T>(&self, mut cmd: GitCmd<T>, target: &[OsString], env: Env) -> Prepared {
+    /// `cmd` after the tier's `fixed` arguments and its `target`.
+    fn prepare<T>(
+        &self,
+        mut cmd: GitCmd<T>,
+        fixed: &[OsString],
+        target: &[OsString],
+        env: Env,
+    ) -> Prepared {
         let mut command = Command::new(&self.git);
         command
-            .args(cmd.line(&self.overrides(), target))
+            .args(cmd.line(fixed, target))
             .env(env)
             .current_dir(&self.dir);
         let (input, timeout, read_only) = (cmd.take_input(), cmd.timeout(), cmd.is_read_only());
@@ -175,7 +194,24 @@ impl RepoTier<'_> {
     /// repo tier's `run` (T098), which does them, uses it.
     pub fn prepare(&self, cmd: GitCmd<Repo>) -> Prepared {
         let target = ["-C".into(), self.repo.clone().into()];
-        self.tool.prepare(cmd, &target, self.tool.env(true))
+        self.tool
+            .prepare(cmd, &self.tool.overrides(), &target, self.tool.env(true))
+    }
+}
+
+/// git in the user's repository as the user runs it in a terminal: with
+/// `HOME`, the ssh agent, and no override, so hooks, signing and
+/// credential helpers run (design 5.2.10, the user tier).
+#[derive(Debug)]
+pub struct UserTier<'a> {
+    tool: &'a GitTool,
+    repo: PathBuf,
+}
+
+impl UserTier<'_> {
+    pub fn prepare(&self, cmd: GitCmd<User>) -> Prepared {
+        let target = ["-C".into(), self.repo.clone().into()];
+        self.tool.prepare(cmd, &[], &target, self.tool.env(true))
     }
 }
 
@@ -204,7 +240,7 @@ impl SnapshotTier<'_> {
             "GIT_CONFIG_GLOBAL",
             self.tool.dir.join("empty-config").as_os_str(),
         );
-        self.tool.prepare(cmd, &[], env)
+        self.tool.prepare(cmd, &self.tool.overrides(), &[], env)
     }
 }
 
@@ -280,7 +316,7 @@ mod tests {
         assert!(prepared.read_only && prepared.timeout == GIT_COMMAND);
         prepared.run(&clock, &durations).await.expect("runs");
         let args = format!(
-            "--no-pager --no-optional-locks -c core.quotepath=false -c filter.x.clean= \
+            "--no-pager --no-optional-locks -c filter.x.clean= -c core.quotepath=false \
              -c core.fsmonitor=false -c {hooks} -C /repo rev-parse HEAD"
         );
         let env = format!("{base} HOME=/home/user LC_ALL=C {path}");
@@ -327,6 +363,17 @@ mod tests {
              -c {hooks} ls-files -z --cached --others --exclude-standard"
         );
         assert_eq!(args, want);
+
+        // The user tier: the environment of the repo tier, no override; the
+        // message on stdin.
+        let cmd = GitCmd::user(UserOp::Commit).input(b"Fix".to_vec());
+        let prepared = tool.user_tier(Path::new("/repo")).prepare(cmd);
+        assert_eq!(prepared.timeout, crate::durations::GIT_COMMIT);
+        prepared.run(&clock, &durations).await.expect("runs");
+        let [env, args, stdin, _] = recorded(dir.path());
+        let want = format!("{base} HOME=/home/user LC_ALL=C {path}");
+        let line = "--no-pager -C /repo commit -F -";
+        assert_eq!((env, args.as_str(), stdin.as_str()), (want, line, "Fix"));
 
         // `worktree add` gets the long timeout; reads have `-z` where git has it.
         let add = GitCmd::repo(RepoOp::WorktreeAdd);

@@ -19,6 +19,8 @@ pub struct Head {
     /// Absent before the first commit.
     pub commit: Option<String>,
     pub upstream: Option<String>,
+    /// The upstream's remote, whose name may have a `/` as well.
+    pub remote: Option<String>,
     /// Commits ahead of and behind the upstream.
     pub ahead: u32,
     pub behind: u32,
@@ -47,8 +49,10 @@ pub async fn head(
         });
     }
     let refname = format!("refs/heads/{branch}");
-    let format =
-        "--format=%(refname)%00%(objectname)%00%(upstream:short)%00%(upstream:track,nobracket)";
+    let format = concat!(
+        "--format=%(refname)%00%(objectname)%00%(upstream:short)",
+        "%00%(upstream:track,nobracket)%00%(upstream:remotename)"
+    );
     let found = read(GitCmd::repo(RepoOp::ForEachRef).args([format, &refname])).await?;
     // The pattern matches `refs/heads/<branch>/...` too; the branch itself
     // is missing before the first commit.
@@ -61,15 +65,17 @@ pub async fn head(
     })
 }
 
-/// `<commit>\0<upstream>\0<track>` of a branch: `track` is `ahead 2,
-/// behind 1`, either part alone, `gone`, or nothing.
+/// `<commit>\0<upstream>\0<track>\0<remote>` of a branch: `track` is
+/// `ahead 2, behind 1`, either part alone, `gone`, or nothing.
 fn tracked(fields: &str) -> Head {
     let mut fields = fields.split('\0');
     let mut field = || Some(fields.next()?.to_owned()).filter(|f| !f.is_empty());
     let (commit, upstream, track) = (field(), field(), field().unwrap_or_default());
+    let remote = field();
     let mut head = Head {
         commit,
         upstream,
+        remote,
         ..Head::default()
     };
     for part in track.split(", ") {
@@ -89,26 +95,27 @@ mod tests {
     #[test]
     fn unit_git_status_head_reads_the_upstream_and_how_far_apart() {
         let head = |commit: &str, upstream: Option<&str>, ahead, behind| Head {
-            branch: None,
             commit: Some(commit.into()),
             upstream: upstream.map(Into::into),
+            remote: upstream.map(|_| "origin".into()),
             ahead,
             behind,
+            ..Head::default()
         };
         let cases = [
             (
-                "c1\0origin/main\0ahead 2, behind 1",
+                "c1\0origin/main\0ahead 2, behind 1\0origin",
                 head("c1", Some("origin/main"), 2, 1),
             ),
             (
-                "c2\0origin/main\0behind 3",
+                "c2\0origin/main\0behind 3\0origin",
                 head("c2", Some("origin/main"), 0, 3),
             ),
             (
-                "c3\0origin/gone\0gone",
+                "c3\0origin/gone\0gone\0origin",
                 head("c3", Some("origin/gone"), 0, 0),
             ),
-            ("c4\0\0", head("c4", None, 0, 0)),
+            ("c4\0\0\0", head("c4", None, 0, 0)),
         ];
         for (fields, want) in cases {
             assert_eq!(tracked(fields), want, "{fields:?}");

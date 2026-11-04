@@ -12,7 +12,7 @@
 //! step's turns, requests, branch and read-only state; the audit channel of
 //! answers from the CLI and the test harness (design 5.8.6).
 
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::mem;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -31,7 +31,7 @@ use cupper_protocol::ids::{CommandId, PrincipalId, ProjectId, QueueId, SessionId
 use cupper_protocol::ids::{Digest, RequestId};
 use cupper_protocol::index::{PendingKind, SessionStatus, SessionSummary, TrustState};
 use cupper_protocol::interaction::{InteractionOption, InteractionOutcome, InteractionRequest};
-use cupper_protocol::item::{NoticeCode, NoticeParams};
+use cupper_protocol::item::{Item, NoticeCode, NoticeParams};
 use cupper_protocol::methods::handshake::Principal;
 use cupper_protocol::methods::interaction::{
     InteractionGet, InteractionGetParams, InteractionGetResult, InteractionRespond,
@@ -92,6 +92,8 @@ pub(super) enum Mail {
     IgnoreProjectConfig(oneshot::Sender<Result<(), RpcError>>),
     /// A notice of the git service (design 5.2.10), which writes no stream.
     Notice(RepoNotice),
+    /// The paths of the session's `repo_config_changed` notices so far.
+    ConfigChanged(oneshot::Sender<Vec<WirePath>>),
 }
 /// The host's exit, whether forced, and the reply once the session took it.
 pub(super) type Stop = (bool, oneshot::Sender<()>);
@@ -168,6 +170,8 @@ pub(super) struct Start {
     pub ignore_for_good: bool,
     /// The row still holds the first message, which has not started a turn.
     pub initial: bool,
+    /// The paths of the session's `repo_config_changed` notices in its log.
+    pub config_changed: BTreeSet<String>,
 }
 
 pub(super) struct SessionActor {
@@ -198,6 +202,10 @@ pub(super) struct SessionActor {
     project_gate: bool,
     /// "不加载项目配置继续": the project's configuration stays out.
     ignore_for_good: bool,
+    /// The paths of the session's `repo_config_changed` notices, for
+    /// `git/status` (T123): from the log as the session loaded, then from
+    /// each notice the actor writes.
+    config_changed: BTreeSet<String>,
     /// A `session/send` whose reply waits for the check before its turn.
     deferred: Option<Command>,
     /// The host exits: the adapter is stopped next, which is no crash to
@@ -310,6 +318,7 @@ impl SessionActor {
             project_gate,
             ignore_for_good,
             initial,
+            config_changed,
         } = start;
         let load_wanted = parts.project_config == ProjectConfigPolicy::Load || project_gate;
         let mut actor = Self {
@@ -331,6 +340,7 @@ impl SessionActor {
             load_wanted: load_wanted && !ignore_for_good,
             project_gate,
             ignore_for_good,
+            config_changed,
             deferred: None,
             stopping: false,
             initial,
@@ -362,6 +372,10 @@ impl SessionActor {
                     let _ = done.send(Ok(()));
                 }
                 Next::Mail(Some(Mail::Notice(notice))) => actor.notice(notice).await,
+                Next::Mail(Some(Mail::ConfigChanged(reply))) => {
+                    let paths = actor.config_changed.iter().cloned().map(WirePath);
+                    let _ = reply.send(paths.collect());
+                }
                 Next::Mail(None) => return None,
                 Next::Agent(event) => actor.agent(event).await,
                 Next::Attached(result) => actor.attach_done(result).await,
@@ -849,6 +863,8 @@ impl SessionActor {
         let turn_ended = events
             .iter()
             .any(|b| matches!(b, EventBody::TurnCompleted(_)));
+        self.config_changed
+            .extend(events.iter().flat_map(changed_paths));
         // Before anyone can see the turn's end (design 5.2.11).
         if turn_ended {
             self.parts.lists.forget(&self.parts.cwd);
@@ -1613,6 +1629,20 @@ fn project_config(policy: ProjectConfigPolicy) -> ProjectConfig {
 /// What `session/confirm_config` echoes back: the digest of the options.
 fn config_digest(configured: &SessionConfigured) -> Digest {
     canonical::digest(&configured.config).expect("a map of strings has a canonical form")
+}
+
+/// The paths of `body` if it starts a `repo_config_changed` notice.
+fn changed_paths(body: &EventBody) -> Vec<String> {
+    let EventBody::ItemStarted(started) = body else {
+        return Vec::new();
+    };
+    match &started.item {
+        Item::Notice(notice) if notice.code == NoticeCode::RepoConfigChanged => {
+            let paths = notice.params.paths.iter().flatten();
+            paths.map(|path| path.0.clone()).collect()
+        }
+        _ => Vec::new(),
+    }
 }
 
 /// A snapshot without a git: `skipped`, without a reason (design 5.2.6).

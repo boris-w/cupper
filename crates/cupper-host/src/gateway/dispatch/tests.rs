@@ -390,8 +390,6 @@ const ALLOWED: &[(&str, Why)] = {
             "diag/recording_export",
             Builds(HARNESS || cfg!(feature = "dev-auth")),
         ),
-        ("git/commit", Later(M1b)),
-        ("git/push", Later(M1b)),
         ("host/prepare_upgrade", Until("T183")),
         ("project/remove", Later(M1b)),
         ("session/archive", Later(M1b)),

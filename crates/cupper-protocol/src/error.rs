@@ -87,6 +87,8 @@ open_enum! {
         UnsafeRepoConfig => "unsafe_repo_config",
         RepoConfigChanged => "repo_config_changed",
         FilterUnsupported => "filter_unsupported",
+        /// `git/commit`: signing the commit failed, by gpg, ssh or x509 (Q23).
+        SigningFailed => "signing_failed",
         /// The session's queue holds its limit of messages (design 5.3.9).
         QueueFull => "queue_full",
         Steer => "steer",
@@ -140,7 +142,8 @@ impl ErrorReason {
             | R::LockHeld
             | R::UnsafeRepoConfig
             | R::RepoConfigChanged
-            | R::FilterUnsupported => ErrorCode::GitError,
+            | R::FilterUnsupported
+            | R::SigningFailed => ErrorCode::GitError,
             R::QueueFull => ErrorCode::TooLarge,
             R::Steer | R::Cancel => ErrorCode::Timeout,
             R::Upgrade | R::UserQuit | R::Idle => ErrorCode::ShuttingDown,
