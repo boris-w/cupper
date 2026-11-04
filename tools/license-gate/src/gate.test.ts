@@ -70,6 +70,9 @@ describe("UNIT-license-gate-negative", () => {
     expect(allowedLicense("MIT AND ISC", ALLOW)).toBe(true);
     expect(allowedLicense("MIT AND MPL-2.0", ALLOW)).toBe(false);
     expect(allowedLicense("Python-2.0", ALLOW)).toBe(false);
+    // Case does not matter in SPDX (`@pierre/diffs` writes `apache-2.0`).
+    expect(allowedLicense("apache-2.0", ALLOW)).toBe(true);
+    expect(allowedLicense("mit OR gpl-3.0", ALLOW)).toBe(true);
   });
 
   test("a runtime component without its license text fails, and so do stale codex-acp notices", () => {
