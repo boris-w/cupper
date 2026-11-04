@@ -1,18 +1,10 @@
 // @vitest-environment jsdom
-import { HostClient } from "@cupper/host-client";
-import { hostError, MockHost, type Reply } from "@cupper/host-client/mock";
-import type { Handshake } from "@cupper/shell-api";
-import { createBrowserShell } from "@cupper/shell-api/browser-mock";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { hostError, type Reply } from "@cupper/host-client/mock";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
-import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
-import { TooltipProvider } from "../components/Tooltip";
-import { ToasterProvider } from "../feedback/toaster";
-import { DEFAULT_PREFS } from "../layout/layout";
-import { StateProvider, UiProvider } from "../state/provider";
-import { createUiStore } from "../state/ui";
 import { GitActions } from "./GitActions";
+import { mountOnHost } from "./test-harness";
 
 // jsdom has no modal dialogs.
 beforeAll(() => {
@@ -31,48 +23,23 @@ async function setup(
   status: object = BRANCH,
   reply: (method: string) => Reply | undefined = () => undefined,
 ) {
-  const mock = new MockHost([{ method: "initialize", params: {}, result: {} }]);
-  mock.handle("stream/subscribe", ({ params }) => {
-    const { stream } = params as { stream: string };
-    return { result: { stream, mode: "snapshot", at_seq: 0, head_seq: 0, epoch: 1 } };
+  const { mock } = await mountOnHost(<GitActions sessionId="s_1" />, (mock) => {
+    mock.handle("git/status", () => ({ result: { ahead: 0, behind: 0, files: [], ...status } }));
+    const files = [{ path: "a.rs", additions: 1, deletions: 0, binary: false, change: "update" }];
+    const diff = {
+      caveats: [],
+      diff_token: "dt_u",
+      files,
+      stat: { added: 1, removed: 0, files: 1 },
+    };
+    mock.handle("git/diff", () => ({ result: diff }));
+    for (const method of ["git/stage", "git/commit", "git/push"]) {
+      mock.handle(
+        method,
+        () => reply(method) ?? { result: method === "git/commit" ? { oid: "ab" } : {} },
+      );
+    }
   });
-  mock.handle("git/status", () => ({ result: { ahead: 0, behind: 0, files: [], ...status } }));
-  const files = [{ path: "a.rs", additions: 1, deletions: 0, binary: false, change: "update" }];
-  const diff = { caveats: [], diff_token: "dt_u", files, stat: { added: 1, removed: 0, files: 1 } };
-  mock.handle("git/diff", () => ({ result: diff }));
-  for (const method of ["git/stage", "git/commit", "git/push"]) {
-    mock.handle(
-      method,
-      () => reply(method) ?? { result: method === "git/commit" ? { oid: "ab" } : {} },
-    );
-  }
-  const client = new HostClient();
-  const conn = mock.connect();
-  conn.initialized = true;
-  client.attach(conn.port(), {} as Handshake);
-  const { shell } = createBrowserShell();
-  const info = await shell.init();
-  const ui = createUiStore(
-    { prefs: DEFAULT_PREFS, overlayOpen: false },
-    { page: "session", sessionId: "s_1" },
-  );
-  render(
-    <ShellProvider api={shell} info={info}>
-      <I18nProvider locale="zh-CN">
-        <ToasterProvider>
-          <HostContext value={{ client, state: client.state, handshake: undefined }}>
-            <UiProvider ui={ui}>
-              <StateProvider>
-                <TooltipProvider>
-                  <GitActions sessionId="s_1" />
-                </TooltipProvider>
-              </StateProvider>
-            </UiProvider>
-          </HostContext>
-        </ToasterProvider>
-      </I18nProvider>
-    </ShellProvider>,
-  );
   const settle = () => act(() => new Promise((done) => setTimeout(done, 0)));
   await settle();
   const sent = () =>
