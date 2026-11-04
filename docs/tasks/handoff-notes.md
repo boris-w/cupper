@@ -531,3 +531,5 @@
 | 以后改请求面板或错误条目的任务 | 错误条目的"换模型"打开的是输入框里的模型菜单；请求面板替换了输入框，或会话没有模型选项时，点了没有反应 | T231 |
 | T233 | 提交与推送的界面指引按语义码给：`signing_failed` 给改用 pinentry-mac 的指引；`auth_failed` 提示检查 ssh agent（只在 shell 配置里 export 的 `SSH_AUTH_SOCK` 从 GUI 启动时看不到）或凭据；没有上游时直接 `git/push` 回的是不带 reason 的 `git_error`（"has no upstream branch"），所以 `git/status` 没有 `upstream` 时默认带 `set_upstream`。失败的 git 输出在 `data.stderr`（末尾 2 KiB，已脱敏） | T123 |
 | 以后改用户档的任务 | 用户档不加任何 `-c`（`core.quotepath` 也不加），新加的固定覆盖只能进仓库档和快照档的 `overrides()`；失败分类读 `LC_ALL=C` 下的英文措辞，表驱动用例在 `git/user.rs` | T123 |
+| T144、T125 | 会话工作区是某个仓库的子目录时，`Layout::read` 找不到 `.git`，快照记为 `skipped/not_a_repo`，diff 不可用（与 5.2.11"git 仓库的子目录按非 git 目录处理"一致）；新建会话页或项目添加如果允许选仓库的子目录，要给出提示 | T234 |
+| 以后改快照档的任务 | 快照档的 git 在工作区顶层运行（`SnapshotTier::prepare` 设 `current_dir`），不能改回 cupper 的目录，原因见 5.2.10"工作目录"；IT-git-racy-unstaged 用 `set_times` 加 `core.trustctime=false` 构造同一秒 | T234 |

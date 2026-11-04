@@ -134,7 +134,7 @@
 - **登记表加自动推导**（测试 #5；设计 v1.3 的 5.9.10 已改为这套机制）：
   - `tests/ids.toml` 列出设计和本计划里的全部编号，每个编号带：里程碑、产出任务、所属套件（PR、每晚、发布、人工）、状态。
   - 一个编号分几次完成时，登记成若干子编号，全部子编号通过才算通过。本计划用到的有：
-    - IT-NFR9-failpoints = `-core`（T069）+ `-git`（T121）+ `-worktree`（T124）；
+    - IT-NFR9-failpoints = `-core`（T069）+ `-git`（T229）+ `-worktree`（T236）；
     - UNIT-cli-resolver、UNIT-option-map、GOLD-A-option-map、GOLD-A-tool-fields = `-claude`（T053、T054、T095）+ `-codex`（T110、T111）；
     - E2E-new-session-agent、MAN-compat、COMPAT-untrusted-project = `-claude` + `-codex`；
     - MAN-notification = `-spike`（T101）+ `-product`（T150）；
@@ -452,8 +452,9 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T234 | unstaged 视图漏掉同一秒内同大小的改动 | fix | 5.2.10（快照档、racy 检测）、5.9.8 | T229（发现） | 做：用户仓库刚提交或暂存后的同一秒内，把文件改成大小相同的新内容，`git/diff`（`unstaged`）返回空列表，`git/stage` 随之报 `stale_diff`；用户自己的 `git diff` 能看到。T229 在进程级宿主上可确定性复现，进程内的会话夹具复现不了，换 Homebrew 的 git 照样漏。先查清漏点（DiffCache 或 stamp 按 stat 判"没变"、临时 index 的 racy 判定、完整宿主里另外跑的命令如索引刷新），报给编排者再修；修好后去掉 T229 用例里的绕法 | 新增 IT-git-racy-unstaged | S | 否 | H.git |
 | T235 | 暂存 LFS 指针时把对象放进用户仓库 | fix | 5.2.10（快照档、仓库档、LFS） | T229（发现） | 做：快照档用 cupper 私有 GIT_DIR 里的 git-lfs 存储，经仓库档暂存（`apply --cached`）LFS 指针后，对象只在 `<数据目录>/git/<仓库>/ws/<工作区>/lfs/objects/`；用户提交前又改了这个文件时，提交里的指针在用户仓库里没有对象（推送报找不到对象），清除快照对象（T127）后这份对象还会丢。暂存前把补丁引用的 LFS 对象放进用户仓库的 LFS 存储（按内容寻址，校验 oid），或给出更好的做法；写进 5.2.10 | 新增 IT-git-lfs-stage-objects | S | 否 | H.git |
 | T123 | Git 服务 V：提交与推送（用户档）与 Q23 | feat | 5.2.10（用户档）、Q23 | T222 | 做：`commit -F -`、`push --set-upstream`、错误映射与脱敏的 stderr 尾部、指纹变化的确认参数；Q23（SSH agent、GPG、凭据助手）的验证与恢复指引 | IT-git-commit-push（本地裸仓库） | M | 可选：用作者的 SSH 和 GPG 配置手动验证 Q23 | H.git |
-| T124 | worktree 创建（CP-5） | feat | 5.2.10（worktree）、5.5.2、5.2.13 | T099 | 做：`worktree add`（位置与权限、分支名校验与后缀、lock、1 秒后 refresh、进度、required 过滤器的提示）、`session/create` 的 worktree 分支、崩溃后复用已登记的 worktree；在 T069 的夹具上登记"worktree add 进行中"故障点 | IT-worktree-create、IT-NFR9-failpoints-worktree | L | 否 | H.git、H.orch |
-| T125 | worktree 检查、归档、恢复与重命名 | feat | 5.2.10、5.2.6、5.5.9 | T222、T124 | 做：`worktree/check` 的 7 条规则、`session/archive`、`session/restore`、`session/rename`、`session/list_archived`、`project/remove` | IT-worktree-check-rules、IT-session-archive-restore | L | 否 | H.git、H.orch、H.idx |
+| T124 | worktree 创建（CP-5） | feat | 5.2.10（worktree）、5.5.2、5.2.13 | T099 | 做：`worktree add`（位置与权限、分支名校验与后缀、lock、1 秒后 refresh、进度、required 过滤器的提示）、`session/create` 的 worktree 分支（`workspace.preparing` 那一批 FULL 落盘作为在途标记；失败时写 `workspace.failed`，第一条消息转成暂停的排队消息）、GT-1 的 `mixed_changes` 只在本地模式下加。崩溃后复用与故障点在 T236（v1.3.87 拆出） | IT-worktree-create | L | 否 | H.git、H.orch |
+| T236 | worktree 创建 II：崩溃恢复与故障点 | feat | 5.2.10（worktree）、5.2.13、5.9.8 | T124 | 做：宿主在 `worktree add` 之前或之后崩溃，重启后按"视图停在 Preparing、worktree 是否已登记"重做或复用（分支已在时不带 `-b` 再 add），不重复创建、不留孤儿；在 T069 的夹具上登记 `worktree.adding`、`worktree.added` 两个故障点，按 5.9.8 断言；IT-worktree-create 的崩溃复用一条 | IT-NFR9-failpoints-worktree | M | 否 | H.git、H.orch |
+| T125 | worktree 检查、归档、恢复与重命名 | feat | 5.2.10、5.2.6、5.5.9 | T222、T124、T236 | 做：`worktree/check` 的 7 条规则、`session/archive`、`session/restore`、`session/rename`、`session/list_archived`、`project/remove` | IT-worktree-check-rules、IT-session-archive-restore | L | 否 | H.git、H.orch、H.idx |
 | T126 | 文件搜索、提示内容映射与在外部应用打开 | feat | 5.2.11（文件服务）、5.3.4 | T099 | 做：`files/search`（快照档 `ls-files`、非 git 目录遍历、缓存、模糊匹配、UTF-16 区间）；`image`、`file_ref`、`review_comment`、`text_blob` 映射为 ACP 内容块；`workspace/open` | 新增 IT-files-search、UNIT-prompt-mapping、IT-workspace-open | M | 否 | H.git、H.orch |
 | T127 | 存储用量与清除快照对象 | feat | 5.4.5、5.7.4（设置页"存储"）；P-6 | T099 | 前提：写 brief 时编排者按 P-6 补进设计。做：查询各类数据大小（scope read）、清除快照对象（scope privileged，经原生确认），均为附加式方法；清除后旧回合的 diff 返回 `snapshot_missing` | 新增 IT-snapshot-purge | S | 否 | H.git、H.store、P |
 | **T130** | 审查面板：主文档部分 | feat | 5.7.5（审查面板）、5.5.8、5.7.8（RP-11） | T121、T126 | 做：在 T084 的侧边面板里按 Codex 样式实现"变更"标签：头部（"查阅来源"范围下拉、增删统计、文件树开关、选项菜单的 M1 项：换行、diff 视图、展开收起全部、刷新）、`git/status` 的 `repo_config_changed` 醒目提示、底部整组操作的药丸（还原全部、暂存全部或取消暂存全部）、还原确认控件（真实输入、500 ms 待命期、不提供"不再询问"；由"还原全部"按钮触发时默认焦点在"确认"，由审查文档触发时不自动获得焦点、同一时间只显示一个，RP-11）、`caveats`、空状态；行内评论的草稿由主文档持有，进入输入框的附件条（GT-2）；为 diff 视图留接口。文件树和文件行的操作在 T232，"Git 操作"菜单与提交弹窗在 T233（v1.3.87 拆出） | 新增 UNIT-review-actions、UI-review-panel（整组操作在三种范围下的状态、空状态） | L | 否 | T.ui |
@@ -492,7 +493,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | T162 | （条件）本机签名构建 | feat | 5.13 Q35、5.8.1、5.7.9、ADR-05 | T105、T160 | 触发：K7 通过。前提：编排者补设计和 ADR-05（私钥放在哪里、签名要求串、负面矩阵），交用户确认。做：本机构建配置（不进仓库）注入签名要求，宿主、原生扩展、CLI 按它校验，自用构建改走 `codesign` 认证，身份和数据目录沿用 T160 | 新增 MAN-local-signed（UI 被杀后新 UI 接上旧宿主、CLI 只读接入、`weak_auth` 为 false、负面矩阵） | L | 是：需要作者本机的签名身份与钥匙串密码 | H.sys、D.nat、D.main、H.xt |
 | T170 | M1b 端到端：S1 与 S2 | test | 5.9.4（M1b 的端到端） | T144、T150 | 做：用假 agent 跑 S1（claude 与 codex 两种 persona 各一个会话，各在一个 worktree，侧边栏状态）、S2（请求面板上的审批和提问、通知意图的记录） | E2E-S1、E2E-S2 | M | 否 | D.main、T.ui |
 | T171 | M1b 端到端：S3 与 S4 | test | 5.9.4（M1b 的端到端） | T131、T149 | 做：用假 agent 跑 S3（审查、行内评论作为附件发出、按 hunk 暂存、提交）、S4（默认插话、⌘Enter 排队、编辑排队消息、两次 Esc 中断）；K9 不通过时 S3 走 T139 的视图 | E2E-S3、E2E-S4 | M | 否 | D.main、T.ui |
-| T172 | M1b 端到端：NFR-2、NFR-9 与容量 | test | 5.9.4（NFR-2、NFR-9）、NFR-11 | T111、T121、T124 | 做：断线后同一 `command_id` 重发不重复执行、适配器和 CLI 崩溃后恢复、6 个会话同时运行；核对故障点的子编号全部通过 | E2E-NFR2-retry、E2E-NFR9-adapter-crash、E2E-NFR9-cli-crash、E2E-six-sessions、IT-NFR9-failpoints | M | 否 | D.main |
+| T172 | M1b 端到端：NFR-2、NFR-9 与容量 | test | 5.9.4（NFR-2、NFR-9）、NFR-11 | T111、T121、T124、T236 | 做：断线后同一 `command_id` 重发不重复执行、适配器和 CLI 崩溃后恢复、6 个会话同时运行；核对故障点的子编号全部通过 | E2E-NFR2-retry、E2E-NFR9-adapter-crash、E2E-NFR9-cli-crash、E2E-six-sessions、IT-NFR9-failpoints | M | 否 | D.main |
 | T173 | S1–S4 逐步检查表与人工证据格式 | docs | 5.12.3（退出标准 ①）、5.9.10 | T099 | 做：写 MAN-S1 至 MAN-S4 的检查表（步骤、通过条件、CLI 与适配器版本、日期）；定下全部 MAN 项证据的统一格式，与 trace-ids 的核对对齐 | 检查表与证据格式经编排者审阅 | S | 否 | Doc |
 | T174 | Q16 保留参数复核 | chore | 5.13 Q16 | T160 | 做：只读、只统计宿主日志里的订阅模式和游标落后量，据此调整窗口和保留参数，补边界性质测试；日志原文不进仓库也不进汇报 | 新增 PROP-retention-boundary | S | 是：授权读取作者自用一段时间后的本机日志 | H.store |
 | **T179** | M1b 退出验收 | chore | 5.12.3（退出标准） | T105、T108、T114、T154、T155、T156、T157、T161、T170、T171、T172、T173、T174、T228、T229、T232、T233、T234、T235 | 做：作者用自用构建、两种 agent 按检查表走完 S1–S4 并存档；在同一提交上 `xtask ci pr`、`xtask ci nightly` 各通过一次；核对 NFR-2、NFR-9 的用例、UNIT-unsupported-set、M1b 的待完成登记为空（按入库的逐编号结果清单复核）；写记录（含本机替代不了的缺口） | MAN-S1、MAN-S2、MAN-S3、MAN-S4；运行记录存档；缺口经用户确认；M1b 同步会纪要 | S | 是：作者亲自走 S1–S4（真实 CLI，消耗额度），确认缺口 | C |
@@ -516,7 +517,7 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 - **T111（L）**：发现、运行时复制和回收都作用于 Codex 的 AgentRuntime，IT-K20-reclaim 需要完整路径。
 - **T120（L）**：四种范围共用 `diff_token` 与 `DiffCache`。v1.3.86 开工后实现部分就越过硬停止线（估约 935 行，做完约 1,650 行），拆出 T221（`DiffCache`、`git/file_diff` 与 hunk 切分，T121 改为依赖它）和 T222（`git/status`、`git/branches`、`cupper diff`，T123、T125 改为依赖它）。
 - **T121（L）**：并入原 T122（测试 #17）：82 个用例本来就是暂存操作的验收，分开后 T121 合并时只剩 IT-git-stage。v1.3.86 开工前估算约 1,060–1,100 行，按 T120、T222 的偏差会到 1,250 以上，拆成 T121（写操作本身，关键路径）、T228（82 个用例）、T229（Q32、LFS、故障点）。
-- **T124（L）**：worktree 添加、`session/create` 的 worktree 分支和崩溃恢复是同一个准备流程。
+- **T124（L）**：worktree 添加、`session/create` 的 worktree 分支和崩溃恢复是同一个准备流程。v1.3.87 开工前估算约 830 行，拆成 T124（约 630 行）和 T236（崩溃恢复与故障点，约 200 行）；T125、T172 改为依赖 T236。
 - **T125（L）**：7 条规则的结论直接决定归档和恢复的行为。
 - **T127、T147**：方法名、ShellAPI 成员在写 brief 时由编排者按 P-6 的裁定补进设计。
 - **T130（L）**：面板各部分共用同一个 `diff_token` 和选择状态；右侧标签容器在 M1a 的 T084 就有，不再等 T152（桌面 #3）。v1.1：文件树替代文件列表，整组操作的药丸替代暂存栏，评论草稿改进输入框的附件条，规模不变。v1.3.87 开工前估算约 1,710 行，拆成 T130（主体，关键路径，约 1,080 行）、T232（文件树，约 350 行）、T233（Git 操作与提交弹窗，约 450 行，依赖 T123），T130 不再依赖 T123。
@@ -1030,6 +1031,7 @@ flowchart LR
     T229["T229<br/>Q32、LFS 与故障点"]
     T123["T123<br/>提交与推送"]
     T124["T124<br/>worktree 创建"]
+    T236["T236<br/>worktree 崩溃恢复"]
     T125["T125<br/>归档与恢复"]
     T126["T126<br/>文件搜索与打开"]
     T127["T127<br/>存储与清除快照"]
@@ -1109,7 +1111,9 @@ flowchart LR
   T222 --> T123
   T099 --> T124
   T222 --> T125
-  T124 --> T125
+  T124 --> T236
+  T236 --> T125
+  T236 --> T172
   T099 --> T126
   T099 --> T127
   T121 --> T130
@@ -1907,10 +1911,11 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [x] T121 Git 服务 IV：暂存、取消暂存与还原
 - [x] T228 Git 服务 IV-b：SP-5 的 82 个 hunk 用例
 - [x] T229 Git 服务 IV-c：Q32、LFS 与写操作的故障点
-- [ ] T234 unstaged 视图漏掉同一秒内同大小的改动
+- [x] T234 unstaged 视图漏掉同一秒内同大小的改动
 - [ ] T235 暂存 LFS 指针时把对象放进用户仓库
 - [x] T123 Git 服务 V：提交与推送（用户档）与 Q23
 - [ ] T124 worktree 创建（CP-5）
+- [ ] T236 worktree 创建 II：崩溃恢复与故障点
 - [ ] T125 worktree 检查、归档、恢复与重命名
 - [x] T126 文件搜索、提示内容映射与在外部应用打开
 - [ ] T127 存储用量与清除快照对象
@@ -2060,4 +2065,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.84 | 2026-11-02 | M1a 同步会（`docs/meetings/2026-11-02-m1a-sync/`）：PERF 只记录、不卡闸门（D1）；IT-sys-peer-current 由 macOS 26 runner 代替、改为不适用（D2）；MAN-keyboard 不重做（D3）；真实兼容在 M1b 再跑（D4）；K4 通过（D5）。T099 打勾。新增 T219 落实 D1、D2，合并后打 `gate/m1a`，再派 M1b 第一波 |
 | v1.3.85 | 2026-11-02 | T219 合并：nightly 在托管 runner 上跑 `perf`、e2e 跑 PERF-bridge-gate，只记录（摘要的 `perf` 列表、结果 `measured`）；登记表新增 `record` 状态，9 个 PERF 编号改为只记录；IT-sys-peer-current 不适用。1.6、1.8、5.4、5.5、5.7、T155 随之改写。`gate/m1a` 候选 5da6f1c：`ci` 通过，nightly 的 e2e 里 PERF-bridge-gate 压力用例失败（`perf`、`differential` 被 fail-fast 取消），不打 tag；新增 T220，修好后换候选再验 |
 | v1.3.86 | 2026-11-03 | 派发 T220 与 M1b 第一波的 T160、T120、T111。T120 开工后越过硬停止线，拆出 T221（`DiffCache`、`git/file_diff` 与 hunk 切分）和 T222（`git/status`、`git/branches`、`cupper diff`），新增 IT-git-file-diff、IT-git-status；T121 改为依赖 T221，T123、T125 改为依赖 T222；M1b 关键路径由 17 增至 19。新增 T227（T199 修过的网关同步用例在 T222 的 PR 上又失败一次）。T121 开工前估算后拆成 T121（写操作，关键路径）、T228（SP-5 的 82 个用例，IT-git-hunk）、T229（Q32、LFS、故障点，IT-NFR9-failpoints-git）；T179 改为也依赖 T228、T229。T141 执行中推算会越过 1,000，按宿主与界面拆开：T141 只做宿主的 `session/set_config`，界面与 E2E-full-access-native 移到新增的 T231。新增 T230（T112 发现宿主从不写 `upstream_retry` notice，按设计 upsert 要改 `ItemPatch`，超出就地修的上限），IT-K18-upstream-retry 由 T112 移来。T228 合并：SP-5 的 82 个 hunk 用例改写成表驱动的 Rust 测试，走产品的写路径（79 行改写、3 行不适用）。T230 合并：回合里第一次重试时开一条 `upstream_retry` notice，之后用 `item.updated` 更新 attempt，回合结束时关闭，不改协议。T141 合并：宿主的 `session/set_config`，档位规则、`mode_set_by`、`full_access_confirmed_at`，带回复的 `AgentPort::set_config`，未连接时下次 attach 应用（02 补写）。T173 合并：`docs/manual/` 下的 MAN-S1–S4 检查表和统一的人工证据格式，trace-ids 加 `any` 精度。T112 合并：codex 形态的 K2、K3、K4、K7、K12、K17 进程级用例；就地修了 Codex 在会话打开时的登录错误没有做 K14 改判。T121 合并：三个写方法共用一条写路径，操作与范围对应，仓库档的 notice 经会话 actor 写；5.2.10 补写。T227 合并：原因是 T156 在回合开始时写的 `host.updated` 落进合并窗口、隔开了两条 delta；用例的 windowed 客户端只订阅会话流；修前 600 次败 54 次，修后 600/600。T126 合并：`files/search`、提示内容映射、`workspace/open`；匹配器改用 MIT 的 fuzzy-matcher（nucleo-matcher 是 MPL-2.0，5.2.11 改写）；合并时与 T160 在 `settings.rs` 冲突，由编排者解决。T160 合并：自用构建 Cupper Local（独立身份与数据目录、ad-hoc 签名加 hardened runtime、fuses 同发布只关 cookie 加密、不带 source map 和测试钩子），nightly 的 `selfuse` 作业在托管 runner 上构建并核对；用户文档在 `docs/user/`；runner 上的五轮查出 T225。T223 合并：已发布迁移脚本按 sha-256 锁定，每个表结构版本有宿主生成的样例库，IT-migrations-samples 守住（5.4.6 写明改表结构的步骤）。T226 合并：失败的回合在 Settle 之前写一条 `error` 条目（attach 被拒、prompt 失败、适配器意外退出带 stderr 尾部），`FailureCode` 到 `Guidance` 穷举映射，agent 的错误文本在会话入口脱敏；02、05、06 随之补写。T222 合并：`git/status`、`git/branches`、`cupper diff`；IT-git-status 查出取回代码里未合并路径被覆盖成 modified 的错误并已修。T225 合并：控制连接不可用时按 ⌘Q 或 SIGTERM，退出判定在 `before-quit` 里同步完成，嵌套的 `app.quit()` 被 Electron 撤回，App 关窗后留着；改为下一个回合再退出（07 的 `lifecycle` 补写），E2E-quit-during-reconnect 守住。T143 合并：代码高亮（JavaScript 正则引擎、固定 class）、计划与计划药丸、错误条目的恢复指引；截图页的等宽字体接上夹具里的中文子集。T221 合并：`DiffCache` 存 tree 对和文件列表，`git/file_diff` 按需重新生成补丁并切单位，大 hunk 转 blob（5.2.10 改写）。**`gate/m1a` 打在 1f972d2**：它的 `ci`（41597322966）和 nightly（41597345134）全部通过，`trace-ids verify --milestone M1a` 为 0 of 288 未完成（记录在 `docs/tasks/T099-m1a-exit/gate-1f972d2/`）。T224 合并：重启用例的两条路径各有确定性的用例，读时钟前先等运行时做完手头一步；修前 800 次败 50 次，修后 800/800。T220 合并：PERF-bridge-gate 先建会话、趁渲染进程空闲点开，再开始洪流，负载不变；托管 runner 上"没有流重置"也只记录（D1），e2e-repeat 同口径；修后三个用例各 20 次全过。`gate/m1a` 的新候选等 T224 合并。T156 合并：会话按回合和待处理请求计数，监护 actor 持有防休眠断言，`host.updated.power_assertion` 跟随，有序退出释放（5.2.13 补实现要点）。T120 合并（收窄后）：`git/diff` 的四种范围，HEAD 经仓库档 `branch --show-current` 取得（5.2.10 补进只读命令）；评审时 `DiffCache` 整个移给 T221（只写不读的缓存不进 main）。T111 合并：宿主按 agent 各起一个运行时，Codex 的 CLI 解析到原生二进制、codex-acp 从包内复制、未信任的项目在拉起适配器前拒绝（`FailureCode` 附加 `project_untrusted`）、空闲适配器回收（`AdapterExited` 加 `reclaimed`）、`agents/restart`；06、03 随之补写。新增 T226（T143 发现宿主从不写 `error` 条目：设计 5.5.2、06 的 K17、11 都要求写，计划漏了），E2E-error-guidance 由 T143 移到 T226，新增 IT-error-item，T112 改为也依赖 T226。T160 改为依赖 T225：E2E-selfuse-replace 要等包被换掉后能正常退出。新增 T225（T160 在 runner 上发现重连途中退出 App 会卡住，产品缺陷，新增 E2E-quit-during-reconnect；用户安装自用构建之前合并）。新增 T224（T111 加的重启用例在 T220 的 PR 上偶发失败，只改测试）。新增 T223（P-4 缺的样例库、通用迁移用例和已发布脚本的锁定，T160 发现；用户安装自用构建之前合并），新增 IT-migrations-samples。SP-6 改在 GitHub runner 上跑（`docs/meetings/2026-11-03-sp6-runner/`）：T103、T104、T108 的测量只记录，浸泡缩短到约 5 小时，场景 6 仍由作者手动做；设计 5.9.6、5.9.7 随之改写 |
-| v1.3.87 | 2026-11-04 | 派发 T123、T130、T229、T231。T123 开工前定下四项附加：`git/status` 的 `repo_config_changed`、`ErrorReason::signing_failed`、超时 `git_commit`（5 分钟）、推送不拿 `RepoLock`（设计在合并时补）。T130 开工前估算约 1,710 行，拆出 T232（文件树）和 T233（Git 操作与提交弹窗，依赖 T123）；审查面板的界面用例按三个任务拆成 UI-review-panel、UI-review-tree、UI-review-commit，T233 另有 UNIT-review-commit；T130 不再依赖 T123；T179 补依赖 T232、T233。新增 T234（T229 发现：unstaged 视图漏掉同一秒内同大小的改动），T179 补依赖 T234。T229 合并（PR #61）：Q32 对仓库档写操作确认有效，LFS 写操作正常，登记故障点 `git.before_apply`、`git.after_apply`；评审时新增 T235（经 cupper 暂存的 LFS 对象只在 cupper 的私有目录里），T179 补依赖 T235。T231 合并（PR #60）：权限按钮与"{模型} {强度} ⌄"选择器，完全访问只经原生确认，E2E-full-access-native 连跑 10 次全过；`Menu.tsx` 的两种勾选写法由 T130 统一。T123 合并（PR #63）：用户档的 `git/commit`、`git/push`，附加 `git/status.repo_config_changed` 与 `signing_failed`，Q23 自动验证三项、其余写成作者可选的手动说明（卷宗 notes）；设计 5.2.10、5.3.4 随之补充 |
+| v1.3.87 | 2026-11-04 | 派发 T123、T130、T229、T231。T123 开工前定下四项附加：`git/status` 的 `repo_config_changed`、`ErrorReason::signing_failed`、超时 `git_commit`（5 分钟）、推送不拿 `RepoLock`（设计在合并时补）。T130 开工前估算约 1,710 行，拆出 T232（文件树）和 T233（Git 操作与提交弹窗，依赖 T123）；审查面板的界面用例按三个任务拆成 UI-review-panel、UI-review-tree、UI-review-commit，T233 另有 UNIT-review-commit；T130 不再依赖 T123；T179 补依赖 T232、T233。新增 T234（T229 发现：unstaged 视图漏掉同一秒内同大小的改动），T179 补依赖 T234。T229 合并（PR #61）：Q32 对仓库档写操作确认有效，LFS 写操作正常，登记故障点 `git.before_apply`、`git.after_apply`；评审时新增 T235（经 cupper 暂存的 LFS 对象只在 cupper 的私有目录里），T179 补依赖 T235。T231 合并（PR #60）：权限按钮与"{模型} {强度} ⌄"选择器，完全访问只经原生确认，E2E-full-access-native 连跑 10 次全过；`Menu.tsx` 的两种勾选写法由 T130 统一。T123 合并（PR #63）：用户档的 `git/commit`、`git/push`，附加 `git/status.repo_config_changed` 与 `signing_failed`，Q23 自动验证三项、其余写成作者可选的手动说明（卷宗 notes）；设计 5.2.10、5.3.4 随之补充。T234 合并（PR #64）：快照档的 git 改在工作区顶层运行（`write-tree` 回写 index 时按相对路径 lstat，在工作区外漏掉 racy 条目的 smudge），新增 IT-git-racy-unstaged，T229 的绕法去掉；设计 5.2.10、5.8.5 随之修改。T124 开工前估算约 830 行，拆出 T236（崩溃恢复与故障点，IT-NFR9-failpoints-worktree 移过去），T125、T172 改为依赖 T236 |

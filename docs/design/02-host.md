@@ -453,7 +453,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 - `GitCmd` 构造器：每类命令一组固定参数，统一 `-z`；只读命令加 `--no-optional-locks`；仓库档和快照档固定加 `-c core.quotepath=false`，用户档不加（T123：经 `GIT_CONFIG_PARAMETERS` 会带进 hooks 里调用的 git，输出就和终端不一样了）。
 - **程序的路径**（安全核对 2）：宿主启动时（以及 `agents/refresh` 时）把 `git` 和 `git-lfs` 解析成绝对路径，之后只用这两个绝对路径，不在每次调用时按 PATH 查找。解析时只看登录 shell 的 PATH 里的**可信条目**：是绝对路径，并且不在任何项目、工作区、worktree 根目录下，也不在临时目录（`$TMPDIR`、`/tmp`、`/private/var/folders`）下。解析结果和来源目录写进索引流的 `agents` 状态。
 - **环境**：git 子进程的 PATH 只保留上述可信条目（git 自己再拉起的 `ssh`、`gpg` 等也只能从这些目录里找到）；`LC_ALL=C`，便于解析报错；`GIT_TERMINAL_PROMPT=0`；继承 `SSH_AUTH_SOCK`。仓库档和用户档还带 `HOME`，让 git 读到用户的全局配置（`core.autocrlf`、`user.name` 等）：全局配置和其他来源一样过第 2 条的来源检查和第 4 条的置空，所以读它是安全的（T060 发现）。快照档用自己的白名单配置，是否带 `HOME` 由 T061 定。
-- **工作目录**：git 子进程的工作目录设为 cupper 自己的目录（`<数据目录>/git/`），目标仓库经 `-C <路径>`（仓库档、用户档）或 `GIT_DIR`、`GIT_WORK_TREE`（快照档）指定。
+- **工作目录**：仓库档、用户档的 git 子进程工作目录设为 cupper 自己的目录（`<数据目录>/git/`），目标仓库经 `-C <路径>` 指定。快照档经 `GIT_DIR`、`GIT_WORK_TREE` 指定仓库，工作目录设为**工作区顶层**（T234）：`write-tree` 这类不需要工作区的命令回写 index 时，按相对当前目录的路径 lstat 来决定是否 smudge racy 条目，当前目录不在工作区时 lstat 失败、漏掉 smudge，回写后 index 的时间戳变新，之后的 `add -A` 就看不到同一秒内同大小的改动。必须正好是顶层（子目录会给 pathspec 加上前缀）。工作区在调用前一刻消失时，spawn 的 chdir 失败，对外是 `git_error`，回合快照记 `failed/git_failed`。
 - 所有 git 子进程都经 `cupper-sys::spawn` 拉起（[5.8.5](08-security.md#585-进程卫生)）。
 - 超时：只读命令 30 s；快照 60 s；`worktree add` 10 分钟（输出进度事件）；`commit`（会运行 hooks）、`push` 各 5 分钟。
 - 启动时检测 git 版本（暂定最低 2.39）和 git-lfs，结果放进索引流的 `agents` 状态里一起显示。解析出的 git 是 `/usr/bin/git` 时，它可能只是 xcode-select 的占位程序，没装命令行工具时一运行就弹安装对话框：先用 `xcode-select -p` 确认开发者目录存在、且其下的 `usr/bin/git` 存在，才运行它；否则判为 git 缺失并提示安装命令行工具，绝不运行占位程序（T054 发现，2026-10-20）。

@@ -946,6 +946,10 @@ IT-git-commit-push = "pr"
 [T124]
 milestone = "M1b"
 IT-worktree-create = "pr"
+
+# worktree 创建 II：崩溃恢复与故障点
+[T236]
+milestone = "M1b"
 IT-NFR9-failpoints-worktree = "pr"
 
 # worktree 检查、归档、恢复与重命名
