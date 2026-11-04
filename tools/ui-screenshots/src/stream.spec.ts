@@ -459,7 +459,8 @@ test("UI-turn-changes undo asks first; a stale patch says so and leads to the re
   const confirm = card.getByRole("alertdialog", { name: "是否还原更改？" });
   await expect(confirm).toHaveAttribute("data-ready", "true");
   await expect(confirm.getByRole("button", { name: "确认" })).toBeFocused();
-  await card.scrollIntoViewIfNeeded();
+  // Where the list stands after the card grew depends on timing; the shot starts at the card.
+  await card.evaluate((element) => element.scrollIntoView({ block: "start" }));
   await page.mouse.move(400, 780);
   await expect(page).toHaveScreenshot("stream-changes-undo.png");
   await confirm.getByRole("button", { name: "确认" }).click();
