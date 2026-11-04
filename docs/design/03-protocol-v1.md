@@ -587,7 +587,7 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 - `findings` 条目：`{kind, path, target?, outside_workspace, detail}`。`kind` 是开放枚举：`hook`、`env`、`api_key_helper`、`status_line`、`mcp_server`、`skill`、`agent`、`command`、`codex_config`、`unparsed`（解析不了的文件，`detail` 写原因；它的完整内容照样计入摘要，T096）。
 - `project/trust_info.diff_from_trusted`：按文件列出 `{path, change}`，`change` 复用 `DiffChange`（`add`、`update`、`delete`）。为此 T035 在信任时另存每个文件的哈希清单，按 P-4 写进 `0001` 的 `projects` 表。
 - 帧上限（T034 的裁定）：结果里的 findings 和差异合计不超过 48,000 字节。单条 `detail` 先按字符边界截到 2,000 字节，末尾加 `…`，再按顺序装入，装不下就停；`findings_omitted`、`diff_omitted` 给出没装下的条数，确认框据此写"另有 N 项未列出"。摘要仍覆盖全部内容。
-- `fallback_reason`（插话退回排队的原因，5.2.6）：`unsupported`、`turn_mismatch`、`not_prompting`、`prompt_required`、`timeout`、`agent_error`。
+- `fallback_reason`（插话退回排队的原因，5.2.6）：`unsupported`、`turn_mismatch`、`not_prompting`、`steer_pending`（T140：已有一个插话在途）、`prompt_required`、`timeout`、`agent_error`。
 - `session/archive.blockers`：ADR-10 的 7 条规则各一个取值；T013 的 `worktree/check` 复用同一个枚举。
 - `host/status.clients`：`ClientInfo` 的列表（与 `clients.updated` 相同），不只是个数。
 - 补充错误码：
