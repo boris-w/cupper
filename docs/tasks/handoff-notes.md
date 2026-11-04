@@ -16,7 +16,7 @@
 | T045 | CLI 在客户端生成 UUIDv7 的 `command_id`（5.3、5.7），而工作区禁用了 `now_v7`。需要一个带 reason 的豁免，或者用自己的生成器 | T022（已写入 brief） |
 | T047 | 屏障：actor 在 poll 自己的等待点之前先标记为忙，只有等待的 future 返回 Pending 时才算空闲（例如给 `Participant` 加一个 `idle(fut)` 包装）。统计在途的消息和已触发、尚未被消费的定时器。逐个到期时间推进用 `ManualClock::next_deadline` 加 `advance_to`。存储写线程和 `spawn_blocking` 也作为参与者登记 | T022 |
 | tokio、uuid、getrandom | 目前写在 `cupper-host` 自己的 `Cargo.toml` 里。出现第二个使用方时，提到 `[workspace.dependencies]` | T022 |
-| `pathForFile`、`saveFile` | ShellAPI 冻结以后，以附加方式加入（M1b 的 T142 等） | T070 |
+| `pathForFile`、`saveFile` | ShellAPI 冻结以后，以附加方式加入（M1b 的 T142 等） | T070（`pathForFile` 已由 T142 加入） |
 | T074、T154 | i18n 已有 `command`、`update` 两个命名空间。措辞按 Codex 的中文译文核对 | T070 |
 | T021 | `PROC_PIDTBSDINFO` 读不了其他用户的进程；`PROC_PIDT_SHORTBSDINFO` 和 `PROC_PIDUNIQIDENTIFIERINFO`（flavor 17，56 字节）对 root 进程也能读（实测 pid 1 可以）。libc 0.2.191 没有定义 `POSIX_SPAWN_SETSID` 和 `proc_bsdinfowithuniqid`，需要自己声明 | T020 |
 | T037、T055 | 关闭顺序：先用 `child.group().with_descendants()` 记下所有进程组，再逐组 `signal(Term)`，用 `Clock` 限时等待并用 `is_alive()` 核对，最后对还在的组 `signal(Kill)`。持久化时存 `pgid` 和 `start.as_micros()`。适配器自己先退出时，后代已无从枚举，只能靠资源采样时记下的组 | T020（已写入 T037 的 brief） |
@@ -558,3 +558,5 @@
 | 以后改请求记录行的任务 | T165 交接里的"已询问 n 个问题"可以展开看回答，还没做 | T146 |
 | T153、M2 候选 | `project/remove` 先问遍所有会话再逐个归档，问完到归档之间仍有很小的窗口：某个会话恰好开始回合时，排在它前面的会话可能已经归档。界面收到 `conflict/turn_running` 时提示重试；彻底消除要让会话在被问时进入"不接新回合"的状态 | T241 |
 | T153 | worktree 会话恢复时复用新建的 `add`，actor 要等 1 秒 refresh；恢复入口要显示进行中的状态 | T241 |
+| T145 | 与 T142 共用 `@` 的弹出层：拖入的图片目前按文件引用处理，要区分出来作为图片附件；设计里"拖放时显示覆盖层"归 T145；斜杠命令照 T142 的做法，从 `OverlayContext.area` 取文字区、加原生 keydown 监听，开头先判断 `keys.ts` 的 `composing()` | T142 |
+| 支持经符号链接的工作区时 | 拖入文件按字符串前缀判断是否在工作区内，经符号链接或大小写不同的路径会被误判为在外面（只多一次提示）；要支持就由宿主做真实路径的比较，需要附加协议 | T142 |
