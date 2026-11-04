@@ -118,6 +118,8 @@
 | `ping` | 请求 | — | `{}` | — | 天然 | 无 | M1a |
 | `client/presence` | 通知 客户端→宿主 | `{foreground, session_id?}` | — | — | 天然 | read | M1a |
 | `host/status` | 请求 | — | `{version, pending_upgrade, running_turns, pending_interactions, clients}`；test-harness 构建另带 `pid` | — | 天然 | read | M1a |
+| `host/storage` | 请求 | — | `{host_db, raw_db, blobs, snapshots, worktrees, partial, measured_at}`：各类数据的字节数（5.4.5）；`worktrees` 只算 cupper 自己建的 worktree，遍历有时限，超时时 `partial: true`，已算到的照样返回（T127） | — | 天然 | read | M1b |
+| `host/purge_snapshots` | 请求 | `{command_id}` | `{freed_bytes}`：清除所有仓库的快照对象库，旧回合的 diff、回合范围的还原之后回 `unavailable/snapshot_missing`（5.2.10，T127） | `conflict/turn_running`（有回合在运行或在准备，什么都不清） | 命令 | privileged（只能经原生确认） | M1b |
 | `host/prepare_upgrade` | 请求 | `{command_id, mode: wait\|force}` | `{state: waiting\|exiting, running_turns}` | `forbidden` | 命令 | privileged | M1b |
 | `host/exit` | 请求 | `{command_id, force}` | `{}`，随后宿主退出 | `conflict`（有运行中的回合且未 force） | 命令 | privileged | M1a |
 | `host/shutdown` | 通知 宿主→客户端 | `{reason: user_quit\|upgrade\|idle, restart_expected}` | — | — | — | — | M1a |
@@ -649,7 +651,7 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 - 设置：
   - 用 5.2.11 的点号扁平键，`agents.<agent>.cli_path` 按 agent 展开；
   - patch 里的 `null` 只用来清空可为空的键。
-- `policy/describe.action` 是开放枚举，7 个取值与 5.8.3 的"原生确认"格子一一对应；`details` 是不带文案的语义参数，每种 `action` 带哪些键归 T031。
+- `policy/describe.action` 是开放枚举，取值与 5.8.3 的"原生确认"格子一一对应（原为 7 个，T127 加 `purge_snapshots`）；`details` 是不带文案的语义参数，每种 `action` 带哪些键归 T031。
 - `test/*` 的参数：`clock_advance {ms}`、`run_maintenance {task}`、`seed {profile}`，T047 可以细化。
 - 权限矩阵的新格子：
   - `Input`：window 的请求必须带 `input`；
@@ -722,6 +724,7 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
   - `privileged_option`：`{session_id, request_id, option_id, kind, effect}`；
   - `security_setting`：`{settings}`，只含安全相关的键和新值；
   - `grant_elevation`：`{elevation_id, scopes}`；
+  - `purge_snapshots`：`{snapshot_bytes}`，取 describe 那一刻快照对象库的大小（T127，P-6）；
   - `interrupt_turns`：`{running_turns}`。只有 `host/exit` 带 `force`、`host/prepare_upgrade` 为 `mode: force`，并且确实有运行中的回合时，才是这个 action；
   - 这个形式下不需要确认的命令，返回 invalid params。
 

@@ -1725,7 +1725,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | P-3 | 用例编号不规整 | 设计里的编号统一成完整写法（设计 v1.2 已改），trace-ids 只做精确匹配；截图回归用 `UI-` 前缀 | 1.6、T002；设计 5.6.9、5.9.4、5.9.10、5.10.7、5.12.2、5.12.3、5.12.4 |
 | P-4 | 首次发布前表结构怎样变 | T160 之前只改 `0001`；迁移框架允许测试注入脚本；T160 之后每次改表结构都附样例数据库和迁移用例。v1.3.86：样例库、通用用例和已发布脚本的锁定由 T223 补，用户安装自用构建之前合并 | T025、T160 的注、T223 |
 | P-5 | 自用构建的种类 | 单独一套身份与数据目录（`dev.cupper.app.local`、`cupper-local/`、`cupper-local://`），`dev-auth` 开、`test-harness` 关，打包与 fuses 同发布，ad-hoc 签名并开启 hardened runtime，只加 `disable-library-validation`；设计 5.7.9 已加一列，5.12.3 已同步 | T160、T161；设计 5.7.9 |
-| P-6 | 设置页"存储"和"安装命令行工具"没有接口 | 附加式实现：`install_cli` 放进 `PrivilegedAction`，默认 `~/.local/bin`，先检查 App 在"应用程序"文件夹里；第 2 轮更正：退化模式下 CLI 照常按 uid 只读接入，入口不隐藏；存储用量 scope 为 read；清除快照对象 scope 为 privileged 并经原生确认。具体名字在写 T127、T147 的 brief 时补进设计 | T127、T147 |
+| P-6 | 设置页"存储"和"安装命令行工具"没有接口 | 附加式实现：`install_cli` 放进 `PrivilegedAction`，默认 `~/.local/bin`，先检查 App 在"应用程序"文件夹里；第 2 轮更正：退化模式下 CLI 照常按 uid 只读接入，入口不隐藏；存储用量 scope 为 read；清除快照对象 scope 为 privileged 并经原生确认。具体名字在写 T127、T147 的 brief 时补进设计（v1.3.88 写 T127 的 brief 时补上：`host/storage`、`host/purge_snapshots`、`policy/describe` 的 `purge_snapshots`、`PrivilegedAction` 的 `purge_snapshots`） | T127、T147 |
 | P-7 | Q8 后备与"没人用的代码" | 做成条件任务；trace-ids 支持"不适用（Kx 已通过）" | 1.6、1.7、T057、T119 |
 | P-8 | 几项工作没有落到里程碑 | 维持 v0.1 的归属：`xtask host-bundle` 在 T005，`codex-drift` 在 T114，`tools/rec-shape-diff` 在 T064 | T005、T064、T114 |
 | P-9 | `--test-config` 的写法 | 只经 stdin 的启动载荷传入 | T023 |
