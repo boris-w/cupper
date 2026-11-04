@@ -297,7 +297,7 @@ describe("UNIT-composer-config", () => {
     await userEvent.keyboard("{Enter}");
   };
   const pick = (name: RegExp) =>
-    act(async () => void fireEvent.click(screen.getByRole("menuitem", { name })));
+    act(async () => void fireEvent.click(screen.getByRole("menuitemradio", { name })));
 
   test("the permission menu sets a mode; full access goes through the native confirmation", async () => {
     const { requests, controls } = await setup("idle", [caps, configured("default")]);
@@ -305,6 +305,7 @@ describe("UNIT-composer-config", () => {
     await open("权限");
     expect(screen.getByText("agent 的操作要怎样批准？")).toBeTruthy();
     expect(screen.getByText("由 agent 判断哪些操作需要你批准")).toBeTruthy();
+    expect(screen.getByRole("menuitemradio", { checked: true }).textContent).toMatch(/^Default/);
     await pick(/Accept edits/);
     await open("权限");
     await pick(/Bypass/);
