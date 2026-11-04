@@ -324,7 +324,7 @@ async fn crash_in_git(point: &str, applied: bool) {
     let dir = TempDir::new("failpoint-git");
     let (data_dir, app) = (dir.path().join("data"), dir.path().join("app"));
     // The change has another size than the file had: one of the same size
-    // within the commit's second goes unseen (T229's notes).
+    // within the commit's second goes unseen until T234.
     git_sh(
         dir.path(),
         "git init -q -b main app; cd app; printf 'a\\n' > a.txt; git add a.txt
