@@ -16,6 +16,7 @@ import { useRouter } from "../../app/router";
 import { useToasts } from "../../feedback/toaster";
 import { useStreams, useUi } from "../../state/provider";
 import { OverlayContext, type ComposerExtension } from "../extensions";
+import { composing } from "../keys";
 import { NEW_DRAFT, useSessionState } from "../send";
 
 const LIMIT = 20;
@@ -113,9 +114,11 @@ function FileRefs({ sessionId }: { sessionId?: string }) {
     if (!area || !open) return;
     setClose(() => setClosedAt(word?.start));
     const onKey = (event: KeyboardEvent) => {
+      // An input method's keys are its own, the list's included.
+      if (composing(event)) return;
       const { results, selected, take } = latest.current;
       const move = { ArrowDown: 1, ArrowUp: -1 }[event.key];
-      const pick = (event.key === "Enter" || event.key === "Tab") && !event.isComposing;
+      const pick = event.key === "Enter" || event.key === "Tab";
       if ((move === undefined && !pick) || results.length === 0) return;
       event.preventDefault();
       event.stopPropagation();

@@ -385,6 +385,26 @@ describe("file references", () => {
     expect(screen.queryByRole("listbox")).toBeNull();
   });
 
+  test("while an input method composes, the list leaves its keys alone (CP-1)", async () => {
+    const { area, requests, mock, ui } = await setup("idle", [configured]);
+    mock.handle("files/search", () => ({ result: { results } }));
+    await act(async () => void fireEvent.input(area, { target: { value: "see @rev" } }));
+    const options = within(await screen.findByRole("listbox")).getAllByRole("option");
+    const keys = [
+      { key: "ArrowDown", isComposing: true },
+      { key: "Enter", isComposing: true },
+      { key: "Enter", keyCode: 229 },
+    ];
+    for (const key of keys) {
+      const untouched = await act(async () => fireEvent.keyDown(area, key));
+      expect(untouched).toBe(true);
+    }
+    expect(options[0]?.getAttribute("aria-selected")).toBe("true");
+    expect(ui.getState().attachments.s_1).toBeUndefined();
+    expect(ui.getState().drafts.s_1).toBe("see @rev");
+    expect(requests("session/send")).toEqual([]);
+  });
+
   test("a dropped file in the workspace becomes a file_ref; one outside says so", async () => {
     const { area, controls, ui } = await setup("idle", [configured]);
     controls.setFilePath("a.ts", "/p/src/a.ts");
