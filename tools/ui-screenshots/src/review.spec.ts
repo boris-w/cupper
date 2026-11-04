@@ -21,6 +21,7 @@ const FILES = [
   file("README.md", 2, 2),
 ];
 type Diffs = Record<string, ReturnType<typeof diff>>;
+type Theme = "light" | "dark";
 const DIFFS: Diffs = {
   last_turn: diff("dt_t", FILES.slice(0, 2), ["mixed_changes"]),
   unstaged: diff("dt_u", FILES),
@@ -41,21 +42,21 @@ const TREE: Diffs = {
 /** Session s_1 with the side panel open on `diffs`; `changed` paths make the configuration notice. */
 async function show(
   page: Page,
-  opts: { theme?: "light" | "dark"; diffs?: Diffs; changed?: string[]; tree?: boolean } = {},
+  opts: { theme?: Theme; diffs?: Diffs; changed?: string[]; tree?: boolean; status?: object } = {},
 ) {
-  const { theme = "light", diffs = DIFFS, changed, tree = false } = opts;
+  const { theme = "light", diffs = DIFFS, changed, tree = false, status: extra = {} } = opts;
   const prefs = { "layout.sidePanelOpen": true, "layout.fileTreeOpen": tree };
   await open(page, { info: { theme, prefs } });
   await page.evaluate(
-    ([diffs, changed]) => {
+    ([diffs, changed, extra]) => {
       window.cupperHost.handle("git/diff", ({ params }) => ({
         result: diffs[(params as { scope: string }).scope],
       }));
-      const status = { ahead: 0, behind: 0, files: [], repo_config_changed: changed };
+      const status = { ahead: 0, behind: 0, files: [], repo_config_changed: changed, ...extra };
       window.cupperHost.handle("git/status", () => ({ result: status }));
       window.cupperShell.navigate({ kind: "session", session_id: "s_1" });
     },
-    [diffs, changed] as const,
+    [diffs, changed, extra] as const,
   );
   // By its label, as an open menu hides the rest of the page from the accessibility tree.
   const panel = page.locator('aside[aria-label="侧边面板"]');
@@ -211,4 +212,44 @@ test("UI-review-tree a file: the jump, its actions by scope, its right-click men
   const actions = readme.locator("..").getByRole("button");
   await expect(actions).toHaveCount(2);
   await expect(actions.nth(1)).toHaveAccessibleName("取消暂存");
+});
+
+const BRANCH = { branch: "cupper/fix-login", upstream: "origin/cupper/fix-login" };
+
+async function commitDialog(page: Page) {
+  await page.getByRole("button", { name: "Git 操作" }).click();
+  await page.getByRole("menuitem", { name: "提交…" }).click();
+  const dialog = page.getByRole("dialog", { name: "提交或推送" });
+  await dialog.getByRole("textbox", { name: "提交信息" }).fill("修复登录时的空指针");
+  return dialog;
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test(`UI-review-commit ${theme}: the dialog`, async ({ page }) => {
+    await show(page, { theme, status: BRANCH });
+    await commitDialog(page);
+    await expect(page).toHaveScreenshot(`review-commit-${theme}.png`);
+    expect(await violations(page)).toEqual([]);
+  });
+}
+
+test("UI-review-commit with the configuration notice and a failure's guidance", async ({
+  page,
+}) => {
+  await show(page, { status: BRANCH, changed: [".git/hooks/pre-commit"] });
+  await page.evaluate(() => {
+    const data = {
+      code: "git_error",
+      reason: "signing_failed",
+      stderr: "error: gpg failed to sign the data",
+    };
+    const error = { code: -32000, message: "git_error/signing_failed", data };
+    window.cupperHost.handle("git/commit", () => ({ error }));
+  });
+  const dialog = await commitDialog(page);
+  await dialog.getByRole("button", { name: "继续" }).click();
+  await dialog.getByText("git 的输出").click();
+  await expect(dialog.getByText("error: gpg failed to sign the data")).toBeVisible();
+  await page.mouse.move(400, 780);
+  await expect(page).toHaveScreenshot("review-commit-failed.png");
 });

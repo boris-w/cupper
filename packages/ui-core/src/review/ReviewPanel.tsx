@@ -20,6 +20,7 @@ import { useToasts } from "../feedback/toaster";
 import { useUi } from "../state/provider";
 import { useActions } from "./actions";
 import { FileTree } from "./FileTree";
+import { GitActions } from "./GitActions";
 import { RevertConfirm } from "./RevertConfirm";
 import {
   createReviewStore,
@@ -155,6 +156,7 @@ function Review(props: { sessionId: string; fileTree: boolean; onFileTree(): voi
 
 /** "查阅来源", the counts and the options menu (design 5.7.5). */
 function Header(props: {
+  sessionId: string;
   diff?: GitDiffResult;
   refresh(): void;
   fileTree: boolean;
@@ -194,6 +196,7 @@ function Header(props: {
         </span>
       )}
       <div className="flex-1" />
+      <GitActions sessionId={props.sessionId} />
       <ToolbarButton
         label={t(props.fileTree ? "review:hide_files" : "review:show_files")}
         shortcut="⇧⌘E"
