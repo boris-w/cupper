@@ -44,6 +44,11 @@ export interface ShellAPI {
   openExternal(url: string): void;
   /** Asks the user for a directory, e.g. the worktree root; `null` when cancelled. */
   pickDirectory(): Promise<string | null>;
+  /**
+   * The path of a file dropped on the window (M1b, CP-2), as the shell knows
+   * it; `null` for a file with none, such as one a page made up.
+   */
+  pathForFile(file: File): string | null;
   system: {
     /** The system appearance changed; the setting may pin the UI to one theme instead. */
     onThemeChange(cb: (theme: Theme) => void): Unsubscribe;

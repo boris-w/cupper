@@ -22,11 +22,14 @@ export const EXTENSIONS = Object.values(found).toSorted((a, b) => a.order - b.or
 export interface ComposerOverlays {
   /** Where popovers mount, just above the composer. */
   container: HTMLElement | null;
+  /** The text area, whose caret and keys an overlay follows. */
+  area: HTMLTextAreaElement | null;
   /** The open overlay's close, set while it is open: Esc calls it first. */
   setClose(close: (() => void) | null): void;
 }
 
 export const OverlayContext = createContext<ComposerOverlays>({
   container: null,
+  area: null,
   setClose: () => undefined,
 });
