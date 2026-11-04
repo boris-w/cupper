@@ -11,6 +11,7 @@
 mod cmd;
 pub mod diff;
 mod head;
+mod lfs;
 mod repo;
 pub mod rules;
 pub mod run;

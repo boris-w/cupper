@@ -35,7 +35,9 @@ use super::head::{self, Head};
 use super::run::RunError;
 use super::snapshot::ShotError;
 use super::stamp::Layout;
-use super::{GitCmd, GitError, GitTool, RepoNotice, RepoOp, User, UserOp, snapshot, status, user};
+use super::{
+    GitCmd, GitError, GitTool, RepoNotice, RepoOp, User, UserOp, lfs, rules, snapshot, status, user,
+};
 use crate::clock::{Clock, IdGen};
 use crate::durations::{DIFF_CACHE_TTL, Durations};
 use crate::gateway::{AuditRecord, Call, Port, Reply, Routes};
@@ -259,6 +261,12 @@ impl GitService {
         };
         let (session, notes) = (&params.session_id, &self.deps.notes);
         let lock = self.deps.locks.hold(&work_tree).await?;
+        if let Err(err) = self.objects(op, session, &work_tree, &patch).await {
+            if let Some(ticket) = ticket {
+                ticket.reject(err.clone());
+            }
+            return Err(err);
+        }
         if let Some(ticket) = ticket.as_mut() {
             ticket.mark_external().await.map_err(internal)?;
         }
@@ -308,6 +316,42 @@ impl GitService {
             ticket.reject(err.clone());
         }
         Err(err)
+    }
+
+    /// The LFS objects of the pointers `op` writes with `patch`, from
+    /// cupper's store into the user's (T235).
+    async fn objects(
+        &self,
+        op: RepoOp,
+        session: &SessionId,
+        work_tree: &Path,
+        patch: &[u8],
+    ) -> Result<(), RpcError> {
+        let oids = lfs::wanted(patch, op);
+        if oids.is_empty() {
+            return Ok(());
+        }
+        let (tool, writable) = (self.tool()?, self.writable().await?);
+        let (clock, durations) = (&*self.deps.clock, &self.deps.durations);
+        let list = GitCmd::repo(RepoOp::ConfigList);
+        let listed = tool
+            .repo_tier(work_tree)
+            .run(clock, durations, &writable, list)
+            .await;
+        let listed = listed.map_err(|err| self.reported(Some(session), "lfs", err))?;
+        let entries = rules::parse(&listed.output.stdout, work_tree).map_err(internal)?;
+        let (dir, tree) = (tool.dir.clone(), work_tree.to_owned());
+        let copied = tokio::task::spawn_blocking(move || {
+            let layout = Layout::read(&tree.canonicalize()?)?;
+            let private = snapshot::private(&dir, &layout).1.join("lfs");
+            let (store, mode) = (lfs::store(&layout, &entries), lfs::shared(&entries));
+            lfs::supply(&private, &store, &oids, mode)
+        });
+        let failed = |err: std::io::Error| {
+            let message = format!("cannot copy an LFS object into the repository: {err}");
+            error(ErrorCode::GitError, None, &message)
+        };
+        copied.await.map_err(internal)?.map_err(failed)
     }
 
     /// `git/commit` (design 5.2.10, the user tier): `commit -F -`, the

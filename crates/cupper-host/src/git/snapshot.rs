@@ -194,8 +194,9 @@ impl Opened {
     }
 }
 
-/// The GIT_DIR of `layout`'s work tree, with a fresh copy of its index.
-fn prepare(dir: &Path, layout: &Layout, config: &[u8]) -> Result<Place, ShotError> {
+/// cupper's directory for `layout`'s repository in `dir`, and in it the
+/// GIT_DIR of `layout`'s work tree.
+pub(super) fn private(dir: &Path, layout: &Layout) -> (PathBuf, PathBuf) {
     let key = |path: &Path| {
         let hash = Sha256::digest(path.as_os_str().as_bytes());
         hash[..8]
@@ -205,6 +206,12 @@ fn prepare(dir: &Path, layout: &Layout, config: &[u8]) -> Result<Place, ShotErro
     };
     let repo = dir.join(key(&layout.common_dir));
     let git_dir = repo.join("ws").join(key(&layout.work_tree));
+    (repo, git_dir)
+}
+
+/// The GIT_DIR of `layout`'s work tree, with a fresh copy of its index.
+fn prepare(dir: &Path, layout: &Layout, config: &[u8]) -> Result<Place, ShotError> {
+    let (repo, git_dir) = private(dir, layout);
     let mut mkdir = DirBuilder::new();
     mkdir.recursive(true).mode(0o700);
     for sub in [
@@ -266,7 +273,7 @@ fn prepare(dir: &Path, layout: &Layout, config: &[u8]) -> Result<Place, ShotErro
 }
 
 /// A name no other snapshot of this host uses at the same time.
-fn unique() -> String {
+pub(super) fn unique() -> String {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     format!(
         "{}.{}",
