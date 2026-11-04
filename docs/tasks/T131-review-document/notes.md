@@ -38,6 +38,54 @@
 
 ## 实现记录
 
+### 结构
+
+- **审查文档**（`packages/ui-core/src/review/document/`，经 `@cupper/ui-core/review-document` 导出）：
+  - `index.ts`：只认第一个端口：`event.source` 是父窗口，`event.origin` 等于 `location.ancestorOrigins[0]`，并且带着一个端口、内容是合法的 `init`。收下之后就移除 `window` 上的监听。每条消息都用 zod 解析，不合格的丢掉。全部按键经 `key_forward` 转给主文档。
+  - `ReviewDocument.tsx`：用 pierre 的 `CodeView`，不用 T104 原型里的 `Virtualizer` 加 `MultiFileDiff`。`CodeView` 是 pierre 自带的多文件虚拟列表，它自己的 div 就是滚动容器（满足 report-q29 第 6 节第 2 条），按文件给条目，自带按文件折叠、滚到文件或行、吸顶的文件头。
+    - 文件头由我们自己渲染（`renderCustomHeader`），包括折叠按钮、状态图标、路径、增删行数，以及二进制、文件模式的说明。文件头只在文件进入渲染窗口时才渲染，渲染时再发 `need_file`，这就是懒加载。
+    - 还没取到 hunk 的文件先给空 diff。只有带行的 diff 才设 `cacheKey`：pierre 按 `cacheKey` 缓存布局，空 diff 和后来的 diff 如果用同一个键，后者不会重新排版（实测踩到）。
+    - `WorkerPoolContextProvider` 随文档挂载，不等第一个 diff，所以预加载的同时也预热了 Worker。`langs: []`，语言在第一次高亮某种语言的文件时才解析加载，所以只加载 diff 里出现的语言。
+    - hunk 之间的分隔用 `simple`：pierre 默认的 `line-info` 会显示英文的 "N unmodified lines"，不能走 i18n。
+    - `auto` 视图的阈值：iframe 宽度不小于 800 时分栏，小于 800 时统一视图。
+  - `worker.ts`：`import "@pierre/diffs/worker/worker.js"`，由 `workerFactory` 以 module Worker 从审查源启动。
+- **主文档一侧**（`ReviewFrame.tsx`）：
+  - iframe：`sandbox="allow-scripts allow-same-origin"`，`allow="clipboard-write"`。每次加载都新建一个 `MessageChannel`，只听自己建的 `port1`。
+  - props 译成 `files`（文件、折叠、视图、换行）、`render`（回应 `need_file`）、`scroll_to`；`theme_changed` 跟随 `onThemeChange`。
+  - 取 `git/file_diff` 用 T130 约定的查询键，`lines_blob` 先取 blob。按自己取到的 hunk ID 校验 `hunk_action`，同时要求令牌一致、操作在范围之内；不带 `hunk_ids` 表示整个文件。
+  - `draft_comment` 要求令牌一致、路径在 diff 里、行范围有效、正文不为空。
+  - `key_forward` 在 iframe 元素上派发一个合成的 `keydown`，可以冒泡。
+- **常驻**：
+  - 侧边面板第一次打开之后、或者窗口第一次空闲时（`requestIdleCallback`）挂载，之后只隐藏、不卸载。
+  - `ReviewPanel` 里的 `Review` 不再按会话加 `key`，iframe 因此跨会话保留；没有会话、没有改动时，iframe 也只是隐藏。会话相关的状态单独重置：文件树按会话加 `key`，`useActions` 换会话时清掉待确认的还原。
+  - 面板隐藏或没有会话时，`git/diff`、`git/status` 不发请求（`enabled`）。
+- **入口**：
+  - vite 新增 `review` 环境（`consumer: "client"`）：不加的话，非 `client` 名字的环境默认按 server 构建，`new Worker(new URL(...))` 不会被处理。输出到 `dist/review/review.html`。
+  - Worker 是 vite 单独打的包，环境名是 `client`；元数据插件按名字 `review-worker` 写，否则会覆盖主文档的 `client.json`。
+  - 许可证门禁登记 `review` 和 `review worker` 两项，本机核对 36 个和 31 个 npm 包，没有问题。
+- **截图工具**：
+  - 审查文档从第二个源 `https://cupper-review.test` 加载，两个文档各按生产 CSP（`mainDocumentCsp(审查源)`、`reviewDocumentCsp(主源)`）。
+  - 违规收集覆盖所有 frame。截图用例给 `git/file_diff` 夹具，并等 diff 出行。
+
+### 与设计 5.7.5 消息表的差异（汇报里列出）
+
+- `render {diff_token, path, hunks, drafts, expanded}` 拆成两条：
+  - `files {diff_token, files, collapsed, view, wrap}`：整个 diff 的文件和视图状态；
+  - `render {diff_token, path, hunks}`：一个文件的 hunk。
+  - 草稿要到 T238 才在行上显示，所以 T131 不下发草稿（不留没人用的字段）。
+- `need_file`、`hunk_action`、`draft_comment` 都带 `diff_token`，主文档按令牌丢掉过期的消息。
+- `hunk_action` 带 `path`，`hunk_ids` 可以不带，不带表示整个文件（文件级按钮在 T238）。
+- `draft_comment` 直接用协议里的 `ReviewComment`。`key_forward` 的修饰键拆成四个布尔值。
+- 没有 `locale_changed`：外壳没有运行时切换语言的事件，加了也不会有人发。
+- `init` 不带缩放：页面缩放（菜单的放大、缩小）由 Chromium 传给进程外 iframe。E2E-SEC-review-iso 里核对两个文档的 `devicePixelRatio` 一致。
+- 地址是 `app://cupper-review/review.html`，不是 `index.html`：vite 的 `root` 是全局的，两个入口在同一个根目录下，文件名不能重复。
+- 审查文档认的源是 `location.ancestorOrigins[0]`，也就是实际嵌入它的文档的源。生产里由 CSP 的 `frame-ancestors app://cupper` 保证这个源只能是 `app://cupper`；mock 下则是截图页的源。
+
+### 体积
+
+- `dist/review` 约 17 MB，主要是 shiki 的语法和主题，每种一个 chunk，按需加载。
+- Worker 包里又带了一份语法：pierre 的 worker 代码里有动态 import。实际上语言由主线程解析后发给 Worker，Worker 里那份不会加载。
+
 ## 依赖
 
 - `@pierre/diffs` 1.6.4，2026-11-04 00:39 UTC 发布，当天加入，没过 pnpm 12 默认的最短发布时间（1 天）。`pnpm add` 自动在 `pnpm-workspace.yaml` 加了 `minimumReleaseAgeExclude: ['@pierre/diffs@1.6.4']`。编排者裁定（选项 (a)）：开发期间保留这条临时例外，最终推送的提交里去掉；合并以 2026-11-05 00:39 UTC 之后、去掉例外的那次 CI 为准。
