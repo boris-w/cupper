@@ -14,9 +14,9 @@ test(
   "E2E-turn-changes-undo: the card's undo asks first, then the turn's change is gone",
   { tag: "@focus" },
   async ({ cupper }) => {
-    const t = await texts(cupper);
     await cupper.launch();
     await cupper.connected();
+    const t = await texts(cupper);
     const readme = () => readFileSync(join(cupper.repo, "README.md"), "utf8");
     const script = "write_file README.md changed\\n; say 改好了";
     await cupper.cli.ok(["new", "--agent", "claude", "--project", cupper.repo, script]);
