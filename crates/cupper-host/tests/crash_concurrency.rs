@@ -1,7 +1,7 @@
 //! Crash consistency, concurrency and egress on a host process (design
-//! 5.9.1, 5.9.8): IT-NFR9-failpoints-core, IT-NFR9-crash-under-load,
-//! IT-six-sessions-shared-adapter and IT-host-egress-seatbelt. The agent is
-//! the claude-shaped fake agent.
+//! 5.9.1, 5.9.8): IT-NFR9-failpoints-core, IT-NFR9-failpoints-git,
+//! IT-NFR9-crash-under-load, IT-six-sessions-shared-adapter and
+//! IT-host-egress-seatbelt. The agent is the claude-shaped fake agent.
 //!
 //! After every crash the host starts again and [`check`] asks of what is
 //! left: the store passes `PRAGMA integrity_check`; each stream's seqs are
@@ -21,6 +21,7 @@ use cupper_cli::client::{self, Client, ClientAuth, Incoming, Options};
 use cupper_cli::harness::HarnessKey;
 use cupper_host::clock::{Clock, SystemClock};
 use cupper_host::gateway::testkit::{KEY, TempDir};
+use cupper_protocol::methods::git::{GitDiff, GitStage};
 use cupper_protocol::methods::project::ProjectAdd;
 use cupper_protocol::methods::session::{SessionCreate, SessionSend};
 use cupper_protocol::methods::stream::StreamSubscribeParams;
@@ -136,6 +137,8 @@ async fn request(
             ProjectAdd::NAME => client.request::<Raw<ProjectAdd>>(params).await,
             SessionCreate::NAME => client.request::<Raw<SessionCreate>>(params).await,
             SessionSend::NAME => client.request::<Raw<SessionSend>>(params).await,
+            GitDiff::NAME => client.request::<Raw<GitDiff>>(params).await,
+            GitStage::NAME => client.request::<Raw<GitStage>>(params).await,
             other => panic!("not in the scenario: {other}"),
         }
     };
@@ -293,6 +296,80 @@ async fn it_nfr9_failpoints_core_amid_a_turn_snapshot() {
 #[tokio::test(flavor = "multi_thread")]
 async fn it_nfr9_failpoints_core_before_the_first_turn() {
     crash_at("session.created").await;
+}
+
+/// `script` in `dir`, with git's home there and no system configuration;
+/// what it prints.
+fn git_sh(dir: &Path, script: &str) -> String {
+    let out = Command::new("/bin/sh")
+        .args(["-c", &format!("set -e\n{script}")])
+        .current_dir(dir)
+        .env("HOME", dir)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8(out.stdout).unwrap().trim().to_owned()
+}
+
+/// IT-NFR9-failpoints-git: `git/stage` of a project's change crashes at
+/// `point`, its command `pending_external` on disk (design 5.2.5). Started
+/// again, the store passes the checks, a retry with the command's ID gets
+/// `outcome_unknown`, and the index holds the change only if git applied it.
+async fn crash_in_git(point: &str, applied: bool) {
+    let dir = TempDir::new("failpoint-git");
+    let (data_dir, app) = (dir.path().join("data"), dir.path().join("app"));
+    // The change has another size than the file had: one of the same size
+    // within the commit's second goes unseen until T234.
+    git_sh(
+        dir.path(),
+        "git init -q -b main app; cd app; printf 'a\\n' > a.txt; git add a.txt
+        git -c user.name=t -c user.email=t@example.invalid commit -qm init; printf 'changed\\n' > a.txt",
+    );
+    let launch = |failpoints| {
+        let config = json!({"failpoints": failpoints, "login_env": {"PATH": "/usr/bin:/bin"}});
+        Running(spawn_with(&data_dir, fake_agent_config(config)))
+    };
+    let mut host = launch(json!([{"name": point}]));
+    let watching = watch(reach(&data_dir, &mut host).await.unwrap());
+    let client = reach(&data_dir, &mut host).await.unwrap();
+    let add = json!({"command_id": client::command_id(), "path": app});
+    let project = request(&client, ProjectAdd::NAME, add).await.unwrap();
+    let session = start(&client, &project["project_id"], FIRST).await;
+    assert!(ended(&data_dir, &mut host, 1).await);
+    let diff = json!({"session_id": session, "scope": "unstaged"});
+    let diff = request(&client, GitDiff::NAME, diff).await.unwrap();
+    let stage = json!({"command_id": client::command_id(), "session_id": session,
+        "diff_token": diff["diff_token"], "target": {"all": true}});
+    let crashed = request(&client, GitStage::NAME, stage.clone()).await;
+    assert!(crashed.is_err(), "{crashed:?}");
+    assert_eq!(exit_code(&mut host.0).await, 99, "{point}");
+
+    let seen = watching.await.unwrap();
+    let mut host = launch(json!([]));
+    let client = connect(&data_dir).await;
+    consistent(&data_dir, &seen);
+    let again = request(&client, GitStage::NAME, stage).await;
+    let unknown = ("conflict".to_owned(), "outcome_unknown".to_owned());
+    assert_eq!(refused(again), unknown, "{point}");
+    let staged = git_sh(&app, "git diff --cached --name-only");
+    assert_eq!(staged, if applied { "a.txt" } else { "" }, "{point}");
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn it_nfr9_failpoints_git_before_apply() {
+    crash_in_git("git.before_apply", false).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn it_nfr9_failpoints_git_after_apply() {
+    crash_in_git("git.after_apply", true).await;
 }
 
 /// A host on a new data directory with its project added; the client.

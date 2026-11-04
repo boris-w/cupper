@@ -271,6 +271,56 @@ async fn it_git_lfs_snapshot_runs_the_hosts_git_lfs() {
     );
 }
 
+/// Q32's LFS, for the writes: with the user's standard git-lfs filters, the
+/// unstaged diff's patch stages, unstages and reverts in the repo tier,
+/// which runs the host's git-lfs; the user's git agrees with what it wrote.
+#[tokio::test]
+async fn it_git_lfs_writes_stage_unstage_and_revert() {
+    let lfs = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/git-lfs/git-lfs");
+    let Ok(lfs) = lfs.canonicalize() else {
+        eprintln!("skipped: no git-lfs; `cargo xtask git-lfs` downloads the pinned one");
+        return;
+    };
+    let path = format!(
+        "export PATH='{}':$PATH",
+        lfs.parent().expect("a dir").display()
+    );
+    let setup = format!(
+        "{path}; mk lfs && cd lfs && git lfs install --local > /dev/null &&
+        printf '*.bin filter=lfs diff=lfs merge=lfs -text\\n' > .gitattributes &&
+        printf 'one\\n' > a.bin && git add -A && git commit -qm init && printf 'two\\n' > a.bin"
+    );
+    let fx = Repos::new("writes-lfs", &setup, Some(lfs)).await;
+    let (work_tree, durations) = (fx.dir.path().join("lfs"), Durations::default());
+    let diffed = crate::git::diff::diff(
+        &fx.tool,
+        &work_tree,
+        crate::git::diff::Range::Unstaged,
+        &fx.clock,
+        &durations,
+    );
+    let diffed = diffed.await.expect("a diff");
+    let patch = crate::git::diff::patch(&fx.tool, &diffed, None, &fx.clock, &durations);
+    let patch = patch.await.expect("a patch");
+    let apply = async |op| {
+        let (tier, cmd) = (
+            fx.tool.repo_tier(&work_tree),
+            GitCmd::repo(op).input(patch.clone()),
+        );
+        let done = tier.run(&fx.clock, &durations, std::slice::from_ref(&work_tree), cmd);
+        done.await.expect("applied");
+    };
+    let user = async |args: &str| fx.sh(&format!("{path}; cd lfs && git {args}")).await;
+    apply(RepoOp::Stage).await;
+    let pointer = user("hash-object --path=a.bin a.bin").await;
+    assert_eq!(user("rev-parse :a.bin").await, pointer);
+    apply(RepoOp::Unstage).await;
+    assert_eq!(user("diff --cached --name-only").await, "");
+    apply(RepoOp::Revert).await;
+    assert_eq!(fs::read(work_tree.join("a.bin")).expect("a.bin"), b"one\n");
+    assert_eq!(user("status --porcelain").await, "");
+}
+
 /// PERF-snapshot: a synthetic repository of 10,000 files, snapshotted with
 /// no change and with 10 files changed; 30 samples of each (design 5.9.6),
 /// whose median is judged.

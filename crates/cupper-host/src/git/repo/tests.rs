@@ -228,6 +228,63 @@ async fn it_git_repo_tier_malicious_no_program_of_the_repository_runs() {
     assert_eq!(fx.markers("markers"), Vec::<String>::new());
 }
 
+/// Q32 for the writes: staging (with its `check-attr`), unstaging and
+/// reverting apply a patch in the repo tier, and no program of the
+/// repository runs, filters and `post-index-change` included.
+#[tokio::test]
+async fn it_git_repo_tier_malicious_writes_run_no_program_of_the_repository() {
+    let fx = Fixture::new().await;
+    let patch = "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a\n+c\n";
+    let apply = async |op, input: &[u8]| {
+        let (repo, durations) = (fx.path("evil"), Durations::default());
+        let cmd = GitCmd::repo(op).input(input.to_vec());
+        let tier = fx.tool.repo_tier(&repo);
+        tier.run(&fx.clock, &durations, std::slice::from_ref(&repo), cmd)
+            .await
+    };
+    let attrs = apply(RepoOp::CheckAttr, b"a.txt\0")
+        .await
+        .expect("check-attr");
+    assert_eq!(attrs.output.stdout, b"a.txt\0filter\0evil\0");
+    apply(RepoOp::Stage, patch.as_bytes())
+        .await
+        .expect("staged");
+    apply(RepoOp::Unstage, patch.as_bytes())
+        .await
+        .expect("unstaged");
+    fs::write(fx.path("evil/a.txt"), "c\n").expect("changed");
+    apply(RepoOp::Revert, patch.as_bytes())
+        .await
+        .expect("reverted");
+    assert_eq!(fs::read(fx.path("evil/a.txt")).expect("a.txt"), b"a\n");
+    assert_eq!(fx.markers("markers"), Vec::<String>::new());
+}
+
+/// `RepoLock` (T121): one write at a time per repository, its worktrees
+/// included, by the common dir; another repository does not wait.
+#[tokio::test]
+async fn repo_lock_one_write_at_a_time_per_repository() {
+    let fx = Fixture::new().await;
+    let worktree = fx.path("lock-worktree");
+    let args = [worktree.to_str().expect("a path"), "-b", "locked"];
+    fx.call("evil", RepoOp::WorktreeAdd, &args)
+        .await
+        .expect("a worktree");
+    let locks = std::sync::Arc::new(crate::git::service::RepoLock::default());
+    let held = locks.hold(&fx.path("evil")).await.expect("held");
+    let waiting = {
+        let locks = std::sync::Arc::clone(&locks);
+        tokio::spawn(async move { locks.hold(&worktree).await.map(drop) })
+    };
+    locks
+        .hold(&fx.path("eq"))
+        .await
+        .expect("another repository");
+    assert!(!waiting.is_finished(), "the worktree's write did not wait");
+    drop(held);
+    waiting.await.expect("joined").expect("its turn");
+}
+
 #[tokio::test]
 async fn it_git_repo_tier_malicious_config_changed_during_the_call() {
     let mut fx = Fixture::new().await;
