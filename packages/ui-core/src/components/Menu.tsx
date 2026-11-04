@@ -1,5 +1,5 @@
 import * as RadixMenu from "@radix-ui/react-dropdown-menu";
-import type { ReactElement, ReactNode } from "react";
+import { useRef, type ReactElement, type ReactNode } from "react";
 
 import { CheckIcon } from "./icons";
 
@@ -13,11 +13,22 @@ export function Menu(props: {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
+  // Closed by a key, the menu gives the focus back to its trigger; closed by
+  // the pointer, it does not, or the trigger's tooltip and focus ring would
+  // show after a click.
+  const pointer = useRef(false);
   return (
     <RadixMenu.Root open={props.open} onOpenChange={props.onOpenChange}>
       <RadixMenu.Trigger asChild>{props.trigger}</RadixMenu.Trigger>
       <RadixMenu.Portal>
         <RadixMenu.Content
+          onPointerDown={() => (pointer.current = true)}
+          onPointerDownOutside={() => (pointer.current = true)}
+          onKeyDown={() => (pointer.current = false)}
+          onCloseAutoFocus={(event) => {
+            if (pointer.current) event.preventDefault();
+            pointer.current = false;
+          }}
           align={props.align ?? "end"}
           sideOffset={4}
           className="z-50 min-w-40 rounded-xl bg-surface-elevated p-1 text-sm shadow-menu"

@@ -55,11 +55,7 @@ async function show(
 async function scope(page: Page, name: string) {
   await page.getByRole("button", { name: "查阅来源" }).click();
   await page.getByRole("menuitemradio", { name }).click();
-  // The menu gives the focus back to its trigger, whose tooltip opens; a click on the
-  // panel's empty part takes it away, as the user's next click does.
   await expect(page.getByRole("menu")).toBeHidden();
-  await page.locator('aside[aria-label="侧边面板"]').click({ position: { x: 300, y: 600 } });
-  await expect(page.getByRole("tooltip")).toBeHidden();
 }
 
 for (const theme of ["light", "dark"] as const) {
