@@ -333,8 +333,7 @@ impl GitService {
             let head = self.head(&params.session_id, tool, &work_tree).await?;
             let detached = || RpcError::app(ErrorCode::GitError, "HEAD is detached");
             let branch = head.branch.ok_or_else(detached)?;
-            let remote = head.upstream.as_deref().and_then(|up| up.split_once('/'));
-            let remote = remote.map_or("origin", |(remote, _)| remote).to_owned();
+            let remote = head.remote.unwrap_or_else(|| "origin".into());
             Ok((params, work_tree, branch, remote))
         };
         let (params, work_tree, branch, remote) = refuse(asked.await, &mut ticket)?;

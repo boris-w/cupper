@@ -361,15 +361,14 @@ impl<T> GitCmd<T> {
         self.input.take()
     }
 
-    /// The arguments after the program: global options, `-c core.quotepath`,
-    /// the caller's `-c`s, the tier's `fixed` ones, the `target` (`-C
-    /// <repo>`), the command's words and the caller's arguments.
+    /// The arguments after the program: global options, the caller's `-c`s,
+    /// the tier's `fixed` ones, the `target` (`-C <repo>`), the command's
+    /// words and the caller's arguments.
     pub(super) fn line(&self, fixed: &[OsString], target: &[OsString]) -> Vec<OsString> {
         let mut line: Vec<OsString> = vec!["--no-pager".into()];
         if self.spec.read_only {
             line.push("--no-optional-locks".into());
         }
-        line.extend(["-c".into(), "core.quotepath=false".into()]);
         line.extend(self.global.iter().chain(fixed).chain(target).cloned());
         line.extend(self.spec.words.iter().map(OsString::from));
         line.extend(self.args.iter().cloned());

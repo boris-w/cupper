@@ -26,7 +26,8 @@
 
 ## 实现要点
 
-- 用户档：`GitCmd<User>`、`UserOp::{Commit, Push}`、`GitTool::user_tier(repo)`。环境与仓库档相同，不带仓库档和快照档的 `-c` 覆盖；固定参数只有每档都有的 `--no-pager -c core.quotepath=false`，再加 `-C <repo>`。
+- 用户档：`GitCmd<User>`、`UserOp::{Commit, Push}`、`GitTool::user_tier(repo)`。环境与仓库档相同，不带任何 `-c`；参数只有 `--no-pager -C <repo>`。
+  - `-c core.quotepath=false` 原本由 `GitCmd` 给每档都加（设计 5.2.10 的 `GitCmd` 构造器一条），现在移进仓库档和快照档的固定覆盖。它经 `GIT_CONFIG_PARAMETERS` 会传进 hook 里调用的 git，改变 hook 拿到的路径写法（编排者 2026-11-04 的修改意见 1）。
 - 写路径：取工作区，提交时拿 `RepoLock`，`mark_external`（FULL fsync），然后执行。
   - git 正常退出但失败：按 stderr 分类后拒绝命令。
   - 超时被杀，或子进程没起来：丢弃票据，结果留在 Unknown，回复 `conflict/outcome_unknown`，与崩溃后的重试一致。
@@ -35,7 +36,8 @@
   - 提交比对 HEAD 时，hook 也可能改了 HEAD，比对并不可靠。
 - 提交的 `oid`：提交成功后经仓库档读 HEAD。这次读取失败时票据留在 Unknown，重试得到 `outcome_unknown`；提交本身已经落地。
 - 推送：
-  - remote 取上游名在第一个 `/` 之前的部分；没有上游时用 `origin`。
+  - remote 取 HEAD 所在分支的 `%(upstream:remotename)`，remote 名里可以带 `/`。它加在 `head()` 原有那条仓库档 `for-each-ref refs/heads/<分支>` 的格式里，不多跑一次 git（编排者修改意见 2；git 2.16 起支持，最低 2.39）。没有上游时用 `origin`。
+  - 结果里的 `branch` 是本地分支名，没有读 `%(upstream:remoteref)`。默认的 `push.default=simple` 下两者同名。
   - 带 `set_upstream` 时执行 `push --set-upstream <remote> HEAD`，否则执行不带参数的 `git push`，由用户的 `push.default` 决定推到哪里。
   - detached HEAD 时回 `git_error`，不带 reason。
 - 失败分类（`git/user.rs`，读 `LC_ALL=C` 下 git 的英文输出和退出码）：
@@ -59,7 +61,7 @@
 ## LC_ALL=C 的实测
 
 - 含中文的提交信息（`Add b\n\n加上 b，写在 LC_ALL=C 下。`）经 `commit -F -` 后字节原样落地（IT 第 2 步核对了 `git log -1 --format=%H%n%B`）。
-- 含非 ASCII 路径的 hook：`-c core.quotepath=false` 经 `GIT_CONFIG_PARAMETERS` 传给 hook 里调用的 git，所以 hook 看到的是原始 UTF-8 路径。
+- 含非 ASCII 路径的 hook：用户档不再带 `-c core.quotepath=false`，hook 里调用的 git 按用户自己的配置输出路径，与终端一致。
 - Python 写的 hook（如 pre-commit 框架）：按 PEP 540，Python 3.7 起在 C locale 下自动进入 UTF-8 模式。这一点没有用真实框架实测。
 - 没有发现 `LC_ALL=C` 让常见 hook 出问题的情形。
 
@@ -90,7 +92,7 @@
 
 ## 实际规模
 
-`cargo xtask size`：+525 −36（不含 docs、生成物）。超过停止线 500，但在硬停止线 600 以内。
+`cargo xtask size`：第一次提交时 +525 −36（不含 docs、生成物），编排者接受，硬停止线仍为 600。按修改意见改完后为 +557 −52：quotepath 移位约 +11，remote 名改读 `%(upstream:remotename)` 约 +16，带 `/` 的 remote 用例约 +18。
 
 | 模块 | 估计 | 实际 |
 |---|---|---|

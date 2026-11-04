@@ -141,12 +141,16 @@ impl GitTool {
         env
     }
 
-    /// The `-c`s both the repo and the snapshot tier always pass: no
-    /// fsmonitor, and hooks from an empty directory.
+    /// The `-c`s both the repo and the snapshot tier always pass: paths
+    /// unquoted for the host to parse, no fsmonitor, and hooks from an empty
+    /// directory. The user tier passes none, so hooks see git as in a
+    /// terminal.
     fn overrides(&self) -> Vec<OsString> {
         let mut hooks = OsString::from("core.hooksPath=");
         hooks.push(self.dir.join("empty-hooks"));
         [
+            "-c".into(),
+            "core.quotepath=false".into(),
             "-c".into(),
             "core.fsmonitor=false".into(),
             "-c".into(),
@@ -312,7 +316,7 @@ mod tests {
         assert!(prepared.read_only && prepared.timeout == GIT_COMMAND);
         prepared.run(&clock, &durations).await.expect("runs");
         let args = format!(
-            "--no-pager --no-optional-locks -c core.quotepath=false -c filter.x.clean= \
+            "--no-pager --no-optional-locks -c filter.x.clean= -c core.quotepath=false \
              -c core.fsmonitor=false -c {hooks} -C /repo rev-parse HEAD"
         );
         let env = format!("{base} HOME=/home/user LC_ALL=C {path}");
@@ -368,7 +372,7 @@ mod tests {
         prepared.run(&clock, &durations).await.expect("runs");
         let [env, args, stdin, _] = recorded(dir.path());
         let want = format!("{base} HOME=/home/user LC_ALL=C {path}");
-        let line = "--no-pager -c core.quotepath=false -C /repo commit -F -";
+        let line = "--no-pager -C /repo commit -F -";
         assert_eq!((env, args.as_str(), stdin.as_str()), (want, line, "Fix"));
 
         // `worktree add` gets the long timeout; reads have `-z` where git has it.

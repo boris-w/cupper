@@ -1,10 +1,11 @@
 //! IT-git-commit-push: `git/commit` and `git/push` in the user tier (design
 //! 5.2.10) on a session's repository and a local bare remote: what a commit
 //! leaves, a hook's refusal with its stderr redacted, nothing to commit, a
-//! signing program that fails, a push with `--set-upstream`, a push the
-//! remote rejects, an ssh remote that refuses the key; and `git/status`
-//! naming the configuration the session saw change, after a restart too.
-//! Nothing leaves the machine: the ssh "remote" is a script.
+//! signing program that fails, a push with `--set-upstream`, also to a
+//! remote whose name has a `/`, a push the remote rejects, an ssh remote
+//! that refuses the key; and `git/status` naming the configuration the
+//! session saw change, after a restart too. Nothing leaves the machine: the
+//! ssh "remote" is a script.
 
 use cupper_protocol::session::StopReason;
 use serde_json::{Value, json};
@@ -84,31 +85,37 @@ async fn it_git_commit_push_runs_as_the_user_does() {
     gits(&c, "config commit.gpgsign false").await;
     call(&c, "git/commit", 5, commit("Add c")).await.unwrap();
 
-    // A new upstream, then one the remote is ahead of.
+    // A new upstream; then a remote whose name has a `/`, as its
+    // upstream's does; then one the remote is ahead of.
     let pushed = call(&c, "git/push", 6, json!({"set_upstream": true})).await;
     assert_eq!(pushed, Ok(json!({"remote": "origin", "branch": "main"})));
     let session = json!({"session_id": c.session()});
     let status = c.f.ok("git/status", session.clone()).await;
     let tracked = (&status["upstream"], &status["ahead"]);
     assert_eq!(tracked, (&json!("origin/main"), &json!(0)), "upstream");
+    c.write("d.txt", "d\n");
+    gits(&c, "remote rename origin my/fork\nadd d.txt").await;
+    call(&c, "git/commit", 7, commit("Add d")).await.unwrap();
+    let pushed = call(&c, "git/push", 8, json!({"set_upstream": true})).await;
+    assert_eq!(pushed, Ok(json!({"remote": "my/fork", "branch": "main"})));
     let theirs = format!(
         "clone -q -b main {remote} {other}
         -C {other} commit -q --allow-empty -m theirs
         -C {other} push -q"
     );
     gits(&c, &theirs).await;
-    c.write("d.txt", "d\n");
-    gits(&c, "add d.txt").await;
-    call(&c, "git/commit", 7, commit("Add d")).await.unwrap();
-    let rejected = call(&c, "git/push", 8, json!({})).await;
+    c.write("e.txt", "e\n");
+    gits(&c, "add e.txt").await;
+    call(&c, "git/commit", 9, commit("Add e")).await.unwrap();
+    let rejected = call(&c, "git/push", 10, json!({})).await;
     assert_eq!(refused(rejected), "git_error rejected");
     // An ssh remote that refuses the key.
     let said = "git@example.invalid: Permission denied (publickey).";
     let ssh = script(&c, "ssh", said, 255);
     let url = "ssh://example.invalid/x.git";
-    let via = format!("config core.sshCommand {ssh}\nremote set-url origin {url}");
+    let via = format!("config core.sshCommand {ssh}\nremote set-url my/fork {url}");
     gits(&c, &via).await;
-    let denied = call(&c, "git/push", 9, json!({})).await;
+    let denied = call(&c, "git/push", 11, json!({})).await;
     assert_eq!(refused(denied), "git_error auth_failed");
 
     // The turn changed the repository's configuration: its notice, and
