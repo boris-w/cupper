@@ -1,8 +1,9 @@
 //! IT-worktree-check-rules: `worktree/check` (design 5.2.10, ADR-10's
 //! cleanup rules) on a session's worktree, each rule kept by one change to
 //! it and let go once the change is undone; the ignored files and the files
-//! dirty only by case are worth a warning, no more. The file system is
-//! taken to be case-insensitive, as macOS's is.
+//! dirty only by case are worth a warning, no more. Paths that differ in
+//! case alone collide only on a case-insensitive file system: on another,
+//! that change leaves the worktree clean.
 
 use std::path::Path;
 use std::time::Duration;
@@ -61,9 +62,19 @@ async fn it_worktree_check_rules_keep_a_worktree_with_work_in_it() {
             }
         }
     };
+    let probe = Path::new(&wt).join("Case-Probe");
+    std::fs::write(&probe, "").unwrap();
+    let insensitive = Path::new(&wt).join("case-probe").exists();
+    std::fs::remove_file(probe).unwrap();
+    if !insensitive {
+        eprintln!("a case-sensitive file system: the case only row is clean");
+    }
     let check = json!({"session_id": session});
     for case in CASES.trim().lines() {
-        let fields: Vec<&str> = case.split('|').map(str::trim).collect();
+        let mut fields: Vec<&str> = case.split('|').map(str::trim).collect();
+        if fields[0] == "case only" && !insensitive {
+            fields[2] = "- 0 false";
+        }
         run(fields[1]).await;
         let got = c.f.ok("worktree/check", check.clone()).await;
         let blockers = got["blockers"].as_array().unwrap().iter();
