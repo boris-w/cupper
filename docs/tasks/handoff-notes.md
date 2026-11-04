@@ -553,3 +553,6 @@
 | 以后改 `worktree/check` 的任务 | 仅大小写冲突不处理 Unicode 规范化：NFC 与 NFD 写法不同的同名路径不认作冲突；区分大小写的文件系统那一支没有实测（本机和 runner 都是不区分大小写的 APFS） | T125 |
 | T144、T238 | `lfs_object_missing`：还原（审查面板、T132 的撤销）和新建 worktree 时宿主不下载本地没有的 LFS 对象，界面提示"在终端里运行 `git lfs fetch`" | T237 |
 | 以后改 git LFS 的任务 | worktree 预检只看用户存储和 cupper 私有存储，没看 alternates 的 LFS 目录（可能误拒，少见）；超大仓库的 `ls-tree` 输出可能超过 64 MB 的 stdout 上限，worktree add 会失败；`.lfsconfig` 里写 `lfs.extension.*` 虽不会被执行，但会让 clean 失败，agent 可以借此让快照记为 `git_failed`（只是让功能失效）；revert 退出码 128 时可能已写了部分文件，仍按"没有改动"处理（原有行为） | T237 |
+| T132 | 改动卡片的行类型加进 `rows/flatten.ts` 的 `ALWAYS`，放在最终回答之后；列表有 `jumpTo(itemId)`（先展开条目所在回合再滚过去） | T146 |
+| T148 | 以工具调用收尾的回合 `final_item_ids` 为空，折叠后只显示标题（工具之前的说明一起收起）；跳到某条目后没有短暂高亮；这两处和本机 Codex 比对后再定 | T146 |
+| 以后改请求记录行的任务 | T165 交接里的"已询问 n 个问题"可以展开看回答，还没做 | T146 |
