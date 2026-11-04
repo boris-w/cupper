@@ -24,7 +24,7 @@ use super::tests::{Fixture, code, done, harness};
 use super::trust_tests::git_project_with;
 use crate::clock::ManualClock;
 use crate::driver::api::PromptTag;
-use crate::git::run::run;
+use crate::git::run::{Output, run};
 use crate::store::testutil::TempDir;
 
 /// `n` lines `line NN` ending in `eol`.
@@ -157,11 +157,20 @@ impl Case {
 
     /// The user's `git <args>` in the project, `input` on stdin; its stdout.
     pub(super) async fn git(&self, args: &[&str], input: Option<&[u8]>) -> Vec<u8> {
+        let out = self.try_git(args, input).await;
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(out.status.success(), "git {args:?}: {err}");
+        out.stdout
+    }
+
+    /// The user's `git <args>`, which may fail.
+    pub(super) async fn try_git(&self, args: &[&str], input: Option<&[u8]>) -> Output {
         let mut env = Env::new();
         env.set("HOME", self.home.path()).unwrap();
         env.set("GIT_CONFIG_NOSYSTEM", "1").unwrap();
         if let Some(lfs) = &self.lfs {
-            let path = [lfs.parent().unwrap(), self.git.parent().unwrap()];
+            let (lfs, git) = (lfs.parent().unwrap(), self.git.parent().unwrap());
+            let path = [lfs, git, "/usr/bin".as_ref(), "/bin".as_ref()];
             env.set("PATH", std::env::join_paths(path).unwrap())
                 .unwrap();
         }
@@ -173,10 +182,7 @@ impl Case {
             .env(env);
         let input = input.map(<[u8]>::to_vec);
         let out = run(&ManualClock::new(), git, input, Duration::from_secs(30)).await;
-        let out = out.unwrap();
-        let err = String::from_utf8_lossy(&out.stderr);
-        assert!(out.status.success(), "git {args:?}: {err}");
-        out.stdout
+        out.unwrap()
     }
 
     /// The index's blob and mode of `path`.

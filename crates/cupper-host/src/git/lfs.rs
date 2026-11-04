@@ -237,3 +237,49 @@ fn mkdir(dir: &Path, mode: Option<u32>) -> io::Result<()> {
     let dir_mode = |mode: u32| Permissions::from_mode(mode | (mode & 0o444) >> 2);
     mode.map_or(Ok(()), |mode| fs::set_permissions(dir, dir_mode(mode)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unit_git_lfs_store_where_objects_go_and_their_mode() {
+        let entry = |key: &str, value: Option<&str>| Entry {
+            origin: Origin::File("/r/.git/config".into()),
+            key: key.as_bytes().to_vec(),
+            value: value.map(|v| v.as_bytes().to_vec()),
+        };
+        let (work_tree, git_dir) = ("/r/wt".into(), "/r/.git/worktrees/wt".into());
+        let layout = Layout {
+            work_tree,
+            git_dir,
+            common_dir: "/r/.git".into(),
+        };
+        assert_eq!(store(&layout, &[]), Path::new("/r/.git/lfs"));
+        // `lfs.storage` as set, then where git-lfs keeps objects: its last value counts.
+        let stores =
+            "elsewhere>/r/.git/elsewhere /abs/lfs>/abs/lfs ~/lfs>/r/.git/~/lfs >/r/.git/lfs";
+        for (set, at) in stores.split(' ').filter_map(|pair| pair.split_once('>')) {
+            let entries = [
+                entry("lfs.storage", Some("x")),
+                entry("lfs.storage", Some(set)),
+            ];
+            assert_eq!(store(&layout, &entries), Path::new(at), "{set}");
+        }
+        // `core.sharedRepository` as set, then the mode; `-`: the umask's.
+        assert_eq!(
+            (shared(&[]), shared(&[entry("core.sharedrepository", None)])),
+            (None, Some(0o660))
+        );
+        let modes = "group=660 true=660 1=660 all=664 world=664 everybody=664 2=664 \
+            0640=640 0777=666 0440=- umask=- false=- 0=-";
+        for (set, mode) in modes
+            .split_whitespace()
+            .filter_map(|pair| pair.split_once('='))
+        {
+            let mode = u32::from_str_radix(mode, 8).ok();
+            let entries = [entry("core.sharedrepository", Some(set))];
+            assert_eq!(shared(&entries), mode, "{set}");
+        }
+    }
+}
