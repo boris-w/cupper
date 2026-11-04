@@ -546,3 +546,5 @@
 | T233 | 审查面板头部已有"显示文件"按钮（在"⋯"左边）；"Git 操作"菜单放在头部时避开它；菜单经指针关闭时不再把焦点送回触发按钮（`Menu.tsx`） | T232 |
 | T125 | `git/worktree.rs` 里有 `worktree list --porcelain` 的解析（`listed`，判断是否登记、是否锁上），归档、恢复时可以复用；`workspace.failed{not_found}`（worktree 目录被人删掉）的会话怎样恢复（重建 worktree 或转为只读）由 T125 定；恢复时第一条输入是 `Input::Restored`，闸门按 `restored.gate` 重设，另发 Gate 会被覆盖 | T236 |
 | T144 | `workspace.failed` 还有 `not_found`（worktree 目录被删，git 里的记录还在）：提示用户，并告诉他可以自己 `git worktree prune` | T236 |
+| T131 | T233 合并后，review 的 8 张、review-tree 的 4 张、review-commit 的 3 张基线在 T131 merge main、换掉占位视图之后都要重新生成；审查面板头部现在有"Git 操作"（`review/GitActions.tsx`）和"显示文件"两个按钮；review 的单测用 `review/test-harness.tsx` | T233 |
+| T148 | 提交弹窗里的单选框和复选框用的是浏览器默认的系统强调色，没有接设计 token，可以用 `accent-color` 统一 | T233 |
