@@ -59,6 +59,11 @@ fn runs_lfs(last: &BTreeMap<&[u8], Option<&[u8]>>, lfs: Option<&Path>) -> bool {
     lfs.is_some() && LFS.iter().all(|key| standard(key)) && !programs
 }
 
+/// Whether the host runs git-lfs's filters for `entries`.
+pub(in crate::git) fn lfs_runs(entries: &[Entry], lfs: Option<&Path>) -> bool {
+    runs_lfs(&last(entries), lfs)
+}
+
 /// The `config` file for `entries`, the user's effective configuration.
 pub(in crate::git) fn text(entries: &[Entry], lfs: Option<&Path>) -> Vec<u8> {
     let last = last(entries);

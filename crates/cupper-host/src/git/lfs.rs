@@ -2,7 +2,8 @@
 //! snapshot tier's git-lfs keeps the objects of what it cleans in cupper's
 //! GIT_DIR; a pointer that a write puts in the user's index or work tree
 //! needs its object in the user's store too, or a commit of it has none,
-//! and a smudge goes to the LFS server for it.
+//! and a smudge goes to the LFS server for it. A revert or a worktree add
+//! that would smudge an object the user lacks is refused (T237).
 
 use std::collections::BTreeSet;
 use std::ffi::OsStr;
@@ -12,28 +13,85 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
+use cupper_protocol::error::{ErrorCode, ErrorReason, RpcError};
 use sha2::{Digest, Sha256};
 
-use super::RepoOp;
-use super::rules::{Entry, truthy};
-use super::snapshot::unique;
+use super::rules::{self, Entry, Origin, truthy};
+use super::snapshot::{self, unique};
 use super::stamp::Layout;
+use super::{GitCmd, GitError, GitTool, RepoOp};
+use crate::clock::Clock;
+use crate::durations::Durations;
 
 /// The oids of the pointers `op` writes with `patch`: those of its added
 /// lines when staging, else those of its removed ones, as `-R` applies it.
 pub fn wanted(patch: &[u8], op: RepoOp) -> BTreeSet<String> {
-    let side: &[u8] = match op {
-        RepoOp::Stage => b"+oid sha256:",
-        _ => b"-oid sha256:",
-    };
-    let oids = patch
+    match op {
+        RepoOp::Stage => oids(patch, b"+oid sha256:"),
+        _ => oids(patch, b"-oid sha256:"),
+    }
+}
+
+/// The oids of the lines of `text` that are `prefix` and an oid.
+fn oids(text: &[u8], prefix: &[u8]) -> BTreeSet<String> {
+    let oids = text
         .split(|b| *b == b'\n')
-        .filter_map(|line| line.strip_prefix(side));
+        .filter_map(|line| line.strip_prefix(prefix));
     let hex =
         |oid: &&[u8]| oid.len() == 64 && oid.iter().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
     oids.filter(hex)
         .map(|oid| String::from_utf8_lossy(oid).into_owned())
         .collect()
+}
+
+/// `git_error` with `lfs_object_missing` unless `missing` is empty.
+pub fn none_missing(missing: &BTreeSet<String>) -> Result<(), RpcError> {
+    let Some(first) = missing.first() else {
+        return Ok(());
+    };
+    let more = missing.len() - 1;
+    let message = format!("LFS object {first} and {more} more missing: `git lfs fetch` gets them");
+    let error = RpcError::app(ErrorCode::GitError, message);
+    Err(error.with_reason(ErrorReason::LfsObjectMissing))
+}
+
+/// Where a repository's LFS objects are, as its configuration has it.
+#[derive(Debug, Clone)]
+pub struct Stores {
+    /// The user's store.
+    user: PathBuf,
+    /// cupper's, of the work tree's snapshots.
+    private: PathBuf,
+    /// The mode of what goes in the user's.
+    mode: Option<u32>,
+    /// The host runs git-lfs in the repository.
+    pub runs: bool,
+}
+
+impl Stores {
+    /// `work_tree`'s, its configuration read through the repo tier.
+    pub async fn of(
+        tool: &GitTool,
+        work_tree: &Path,
+        clock: &dyn Clock,
+        durations: &Durations,
+        writable: &[PathBuf],
+    ) -> Result<Self, GitError> {
+        let (tier, list) = (tool.repo_tier(work_tree), GitCmd::repo(RepoOp::ConfigList));
+        let listed = tier.run(clock, durations, writable, list).await?;
+        let mut entries = rules::parse(&listed.output.stdout, work_tree)?;
+        // The repo tier's own `-c` overrides are not the repository's.
+        entries.retain(|entry| entry.origin != Origin::CommandLine);
+        let not_a_repo = |err| GitError::NotARepo(work_tree.to_owned(), err);
+        let tree = work_tree.canonicalize().map_err(not_a_repo)?;
+        let layout = Layout::read(&tree).map_err(not_a_repo)?;
+        Ok(Self {
+            user: store(&layout, &entries),
+            private: snapshot::private(&tool.dir, &layout).1.join("lfs"),
+            mode: shared(&entries),
+            runs: snapshot::lfs_runs(&entries, tool.git_lfs()),
+        })
+    }
 }
 
 /// The user's LFS store as git-lfs finds it: `lfs.storage` of the git
@@ -71,15 +129,11 @@ pub fn shared(entries: &[Entry]) -> Option<u32> {
     }
 }
 
-/// Copies each of `oids` that `store` lacks from cupper's `private` store,
-/// written aside in `<store>/tmp` and renamed into place once its sha256 is
-/// its oid. One cupper does not have is left to the user's git-lfs.
-pub fn supply(
-    private: &Path,
-    store: &Path,
-    oids: &BTreeSet<String>,
-    mode: Option<u32>,
-) -> io::Result<()> {
+/// Copies each of `oids` that the user's store lacks from cupper's,
+/// written aside in `<store>/tmp` and renamed into place once its
+/// sha256 is its oid. The oids neither store has.
+pub fn supply(stores: &Stores, oids: &BTreeSet<String>) -> io::Result<BTreeSet<String>> {
+    let (store, mode, mut missing) = (&stores.user, stores.mode, BTreeSet::new());
     for oid in oids {
         let object = |root: &Path| {
             root.join("objects")
@@ -87,8 +141,12 @@ pub fn supply(
                 .join(&oid[2..4])
                 .join(oid)
         };
-        let (from, to) = (object(private), object(store));
-        if to.exists() || !from.exists() {
+        let (from, to) = (object(&stores.private), object(store));
+        if to.exists() {
+            continue;
+        }
+        if !from.exists() {
+            missing.insert(oid.clone());
             continue;
         }
         let tmp = store.join("tmp").join(format!("{oid}.{}", unique()));
@@ -100,7 +158,7 @@ pub fn supply(
         }
         placed?;
     }
-    Ok(())
+    Ok(missing)
 }
 
 /// Copies `from` to `tmp`, on disk with `mode`, if what it copied is `oid`.
