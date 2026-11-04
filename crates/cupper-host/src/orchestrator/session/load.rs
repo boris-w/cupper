@@ -131,6 +131,10 @@ pub(super) async fn load(
     let gate = [
         (project_gate, PauseReason::ProjectConfigChanged),
         (unconfirmed.is_some(), PauseReason::ConfigUnconfirmed),
+        (
+            paused == Some(PauseReason::WorkspaceFailed),
+            PauseReason::WorkspaceFailed,
+        ),
     ];
     let gate = gate.into_iter().filter(|(shut, _)| *shut).map(|(_, r)| r);
     // The mode as last configured, by a mapping that has the option.
@@ -225,6 +229,7 @@ pub(super) async fn load(
         power: deps.power.share(),
         redactor: deps.redactor.clone(),
         lists: deps.lists.clone(),
+        worktrees: deps.worktrees.clone(),
     };
     let start = Start {
         first: Input::Restored(Box::new(restored)),
@@ -233,6 +238,7 @@ pub(super) async fn load(
         ignore_for_good: stored.ignored,
         initial,
         config_changed: stored.changed,
+        worktree: None,
     };
     Ok((parts, start))
 }

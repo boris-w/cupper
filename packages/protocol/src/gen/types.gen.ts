@@ -2160,7 +2160,7 @@ export type OptionKind =
 export type OutputState = "none" | "streaming" | "truncated" | "complete" | (string & {});
 
 /**
- * Open enum: unknown values must be accepted. Known: turn_cancelled turn_failed turn_interrupted config_unconfirmed project_config_changed
+ * Open enum: unknown values must be accepted. Known: turn_cancelled turn_failed turn_interrupted config_unconfirmed project_config_changed workspace_failed
  */
 export type PauseReason =
   | "turn_cancelled"
@@ -2168,6 +2168,7 @@ export type PauseReason =
   | "turn_interrupted"
   | "config_unconfirmed"
   | "project_config_changed"
+  | "workspace_failed"
   | (string & {});
 
 /**

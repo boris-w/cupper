@@ -196,6 +196,8 @@ open_enum! {
         TurnInterrupted => "turn_interrupted",
         ConfigUnconfirmed => "config_unconfirmed",
         ProjectConfigChanged => "project_config_changed",
+        /// The session's new worktree could not be added (design 5.5.2).
+        WorkspaceFailed => "workspace_failed",
     }
 }
 

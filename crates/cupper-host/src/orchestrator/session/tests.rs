@@ -34,7 +34,8 @@ use crate::durations::Durations;
 use crate::files::{FileLists, FilesDeps, FilesService};
 use crate::gateway::testkit::Peer;
 use crate::gateway::{AuditRecord, Routes};
-use crate::git::{GitDeps, GitService, GitTool};
+use crate::git::worktree::Worktrees;
+use crate::git::{GitDeps, GitService, GitTool, RepoLock};
 use crate::ledger::Ledger;
 use crate::orchestrator::testkit::text;
 use crate::quiescence::Quiescence;
@@ -289,6 +290,26 @@ impl Fixture {
         let agent = Arc::new(Agent(agent)) as Arc<dyn AgentPort>;
         let ((records, audit), index) = (mpsc::unbounded_channel(), Arc::new(Index::default()));
         let blobs = BlobStore::new(dir.path(), writer.clone(), Arc::clone(&shared));
+        let conn = open_reader(&dir.host_db()).unwrap();
+        let home = dir.path().join("home");
+        let settings = SettingsHandle::load(
+            &conn,
+            writer.clone(),
+            Arc::clone(&shared),
+            &home,
+            dir.path(),
+        )
+        .unwrap();
+        let locks = Arc::<RepoLock>::default();
+        let worktrees = Worktrees {
+            git: git.clone(),
+            readers: readers.clone(),
+            clock: Arc::clone(&shared),
+            durations: durations.clone(),
+            audit: records.clone(),
+            settings: settings.clone(),
+            locks: Arc::clone(&locks),
+        };
         let deps = SessionDeps {
             streams: streams.clone(),
             readers: readers.clone(),
@@ -305,22 +326,14 @@ impl Fixture {
             power: Power::new().0,
             redactor: Redactor::new(Some(HOME), None),
             lists: FileLists::default(),
+            worktrees,
         };
-        let conn = open_reader(&dir.host_db()).unwrap();
-        let home = dir.path().join("home");
-        let settings = SettingsHandle::load(
-            &conn,
-            writer.clone(),
-            Arc::clone(&shared),
-            &home,
-            dir.path(),
-        );
         let files = FilesDeps {
             git: git.clone(),
             readers: readers.clone(),
             clock: Arc::clone(&shared),
             durations: durations.clone(),
-            settings: settings.unwrap(),
+            settings,
             lists: deps.lists.clone(),
             opener: dir.path().join("open"),
         };
@@ -338,6 +351,7 @@ impl Fixture {
             blobs: blobs.clone(),
             audit: records,
             notes: Arc::new(manager.clone()),
+            locks,
         })
         .route(&mut routes);
         FilesService::new(files).route(&mut routes);
@@ -692,7 +706,7 @@ async fn it_orch_lifecycle_create_checks_workspace_agent_project_and_tier() {
         (
             "workspace",
             json!({"kind": "worktree", "base_ref": "main"}),
-            "unsupported ",
+            "unsupported not_a_repo",
         ),
         ("agent", json!("codex"), "unavailable "),
     ];

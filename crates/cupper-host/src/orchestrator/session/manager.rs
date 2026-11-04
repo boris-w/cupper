@@ -5,7 +5,7 @@
 //! session has one actor however many calls come at once.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -46,6 +46,7 @@ use crate::driver::api::{AgentPort, ProjectConfigPolicy};
 use crate::durations::Durations;
 use crate::files::FileLists;
 use crate::gateway::{AuditRecord, Call, Port, Reply, SessionPort};
+use crate::git::worktree::{ADDING, Plan, Worktrees};
 use crate::git::{GitTool, RepoNotice, SessionNotes};
 use crate::ledger::Outcome;
 use crate::orchestrator::queue::preview;
@@ -85,6 +86,7 @@ pub struct SessionDeps {
     pub redactor: Redactor,
     /// `files/search`'s lists, which a turn's end makes stale.
     pub lists: FileLists,
+    pub worktrees: Worktrees,
 }
 
 /// The session manager. Clones share it; the host has one.
@@ -157,10 +159,12 @@ impl SessionManager {
             .unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// `session/create` (design 5.2.6, 5.5.2, local workspaces): the session
-    /// row with its first message, `session.configured`, `workspace.ready`
-    /// and the command's result in one transaction; then its actor starts
-    /// the first turn.
+    /// `session/create` (design 5.2.6, 5.5.2): the session row with its
+    /// first message, `session.configured`, `workspace.ready` (in the
+    /// project) or `workspace.preparing` (a new worktree) and the command's
+    /// result in one transaction, on the disk itself for a worktree, whose
+    /// add runs next; then its actor starts the first turn, once the
+    /// worktree is ready.
     async fn create(self, call: Call) -> Outcome {
         let Call {
             principal,
@@ -186,20 +190,23 @@ impl SessionManager {
             config,
             cached,
             confirmed,
+            id,
+            worktree,
         } = accepted;
         let deps = &self.shared.deps;
         // In full access, which only `privileged` may set (design 5.8.6).
         let executed = confirmed.then(|| Confirmable::Create(params.clone()));
-        let id = SessionId::from_uuid(deps.ids.new_id().as_u128());
         let stream_id = StreamId::Session(id.clone());
         let stream = deps.streams.open(&stream_id).await.map_err(internal)?;
         let mut writer = stream.writer().map_err(internal)?;
+        let planned = worktree.as_ref();
         let workspace = SessionWorkspace {
-            kind: WorkspaceKind::Local,
-            path: WirePath(path.clone()),
-            branch: None,
-            base_ref: None,
+            kind: planned.map_or(WorkspaceKind::Local, |_| WorkspaceKind::Worktree),
+            path: WirePath(planned.map_or(path.clone(), |p| p.path.display().to_string())),
+            branch: planned.map(|p| p.branch.clone()),
+            base_ref: planned.map(|p| p.base_ref.clone()),
         };
+        let cwd = workspace.path.0.clone();
         let mut current: BTreeMap<String, String> = (cached.iter())
             .flat_map(|caps| caps.config.iter())
             .map(|o| (o.id.to_string(), o.current.clone()))
@@ -222,7 +229,7 @@ impl SessionManager {
                 id.to_string(),
                 params.project_id.to_string(),
                 params.agent.to_string(),
-                path.clone(),
+                cwd.clone(),
                 json!(configured.config).to_string(),
                 json!(params.message).to_string(),
                 title.clone(),
@@ -233,25 +240,31 @@ impl SessionManager {
         if confirmed {
             row.set_by(&id, at, &principal.id, true);
         }
+        if let Some(plan) = &worktree {
+            row.worktree(&id, at, &plan.branch, &plan.base_ref);
+        }
         let result = json!(SessionCreateResult {
             session_id: id.clone()
         });
         let completion = ticket.map(|ticket| ticket.complete(Ok(result.clone())));
         let record = completion.as_ref().map(|c| c.row());
-        let ready = WorkspaceReady {
-            path: WirePath(path.clone()),
-            branch: None,
+        // A worktree's add runs once its session is on the disk itself, which
+        // a crash then finds preparing (design 5.2.5).
+        let (workspace, durability) = match &worktree {
+            Some(_) => (EventBody::WorkspacePreparing(ADDING), Durability::Full),
+            None => {
+                let path = WirePath(path.clone());
+                let ready = WorkspaceReady { path, branch: None };
+                (EventBody::WorkspaceReady(ready), Durability::Normal)
+            }
         };
         let batch = Batch {
-            bodies: vec![
-                EventBody::SessionConfigured(configured.clone()),
-                EventBody::WorkspaceReady(ready),
-            ],
+            bodies: vec![EventBody::SessionConfigured(configured.clone()), workspace],
             cause: Some(Cause {
                 command_id: params.command_id.clone(),
                 principal: principal.id.clone(),
             }),
-            durability: Durability::Normal,
+            durability,
             with: Some(Box::new(move |conn| {
                 row.write(conn)?;
                 record.map_or(Ok(()), |record| record(conn))
@@ -279,8 +292,8 @@ impl SessionManager {
                 TitleSource::Prompt
             },
             title,
-            workspace_kind: WorkspaceKind::Local,
-            branch: None,
+            workspace_kind: configured.workspace.kind.clone(),
+            branch: configured.workspace.branch.clone(),
             status: SessionStatus::Idle,
             unread: false,
             pending_interactions: 0,
@@ -308,7 +321,7 @@ impl SessionManager {
             writer,
             readers: deps.readers.clone(),
             agent,
-            cwd: PathBuf::from(path),
+            cwd: PathBuf::from(cwd),
             config,
             project_config,
             configured,
@@ -326,6 +339,7 @@ impl SessionManager {
             power: deps.power.share(),
             redactor: deps.redactor.clone(),
             lists: deps.lists.clone(),
+            worktrees: deps.worktrees.clone(),
         };
         let first = SendRequest {
             content: params.message,
@@ -340,6 +354,7 @@ impl SessionManager {
             ignore_for_good: false,
             initial: true,
             config_changed: BTreeSet::new(),
+            worktree,
         };
         let participant = deps.quiescence.enter(SESSION);
         let (actor, mail) = ((parts, start), handle.mail.clone());
@@ -362,10 +377,6 @@ impl SessionManager {
         params: &serde_json::Value,
     ) -> Result<Accepted, RpcError> {
         let params: SessionCreateParams = parse(params)?;
-        if !matches!(params.workspace, WorkspaceSpec::Local) {
-            let message = "only local workspaces before M1b";
-            return Err(RpcError::app(ErrorCode::Unsupported, message));
-        }
         let deps = &self.shared.deps;
         let agent = deps.agents.get(&params.agent).cloned();
         let agent = agent.ok_or_else(|| RpcError::app(ErrorCode::Unavailable, "no such agent"))?;
@@ -404,6 +415,16 @@ impl SessionManager {
         let config = (config.into_iter())
             .filter_map(|(id, value)| Some((id.to_string(), value?)))
             .collect();
+        let id = SessionId::from_uuid(deps.ids.new_id().as_u128());
+        let worktree = match &params.workspace {
+            WorkspaceSpec::Worktree(new) => {
+                let shown = id.to_string();
+                let fallback = format!("s-{}", &shown[shown.len() - 8..]);
+                let plan = deps.worktrees.plan(Path::new(&path), new, &fallback);
+                Some(plan.await?)
+            }
+            _ => None,
+        };
         Ok(Accepted {
             params,
             agent,
@@ -412,6 +433,8 @@ impl SessionManager {
             config,
             cached,
             confirmed,
+            id,
+            worktree,
         })
     }
 
@@ -569,6 +592,9 @@ struct Accepted {
     cached: Option<SessionCapabilities>,
     /// Created in full access, which the native confirmation allowed.
     confirmed: bool,
+    id: SessionId,
+    /// Where its new worktree goes.
+    worktree: Option<Plan>,
 }
 
 /// The agent's capabilities in the host's cache (design 5.6.7), if any.

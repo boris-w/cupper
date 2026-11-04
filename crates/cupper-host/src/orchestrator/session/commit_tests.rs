@@ -22,7 +22,7 @@ async fn call(c: &Case, method: &str, n: u32, mut params: Value) -> Result<Value
 }
 
 /// The user's git, a command per line of `lines`, its words split at blanks.
-async fn gits(c: &Case, lines: &str) {
+pub(super) async fn gits(c: &Case, lines: &str) {
     for line in lines.lines().filter(|line| !line.trim().is_empty()) {
         let words: Vec<&str> = line.split_whitespace().collect();
         c.git(&words, None).await;

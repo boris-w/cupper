@@ -13,6 +13,7 @@ use std::time::Duration;
 use cupper_sys::{Command, Signal, Stdio};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::unix::pipe;
+use tokio::sync::mpsc;
 
 use crate::clock::Clock;
 
@@ -20,6 +21,9 @@ use crate::clock::Clock;
 pub const STDOUT_LIMIT: usize = 64 << 20;
 /// Only the start of stderr is kept; the rest is read and dropped.
 pub const STDERR_KEPT: usize = 64 << 10;
+
+/// Where stderr goes as git writes it, all of it: `worktree add`'s progress.
+pub type Heard = mpsc::UnboundedSender<Vec<u8>>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunError {
@@ -46,8 +50,19 @@ pub struct Output {
 /// Runs `command` to its end, or kills it once `limit` has passed.
 pub async fn run(
     clock: &dyn Clock,
+    command: Command,
+    input: Option<Vec<u8>>,
+    limit: Duration,
+) -> Result<Output, RunError> {
+    hearing(clock, command, input, None, limit).await
+}
+
+/// [`run`], its stderr to `heard` too as git writes it.
+pub async fn hearing(
+    clock: &dyn Clock,
     mut command: Command,
     input: Option<Vec<u8>>,
+    heard: Option<Heard>,
     limit: Duration,
 ) -> Result<Output, RunError> {
     let stdin = input.as_ref().map_or(Stdio::Null, |_| Stdio::Pipe);
@@ -61,8 +76,8 @@ pub async fn run(
     let talk = async {
         let (written, stdout, stderr) = tokio::join!(
             write(stdin, input),
-            read(stdout, STDOUT_LIMIT, false),
-            read(stderr, STDERR_KEPT, true),
+            read(stdout, STDOUT_LIMIT, false, None),
+            read(stderr, STDERR_KEPT, true, heard),
         );
         written?;
         Ok((stdout?, stderr?))
@@ -113,7 +128,13 @@ async fn write(stdin: Option<OwnedFd>, input: Option<Vec<u8>>) -> Result<(), Run
 
 /// Reads to the end, keeping at most `limit` bytes; past it, either fails
 /// with [`RunError::TooMuchOutput`] or, when `drop_rest`, drops the rest.
-async fn read(fd: OwnedFd, limit: usize, drop_rest: bool) -> Result<Vec<u8>, RunError> {
+/// What it reads goes to `heard` too.
+async fn read(
+    fd: OwnedFd,
+    limit: usize,
+    drop_rest: bool,
+    heard: Option<Heard>,
+) -> Result<Vec<u8>, RunError> {
     let mut reader = pipe::Receiver::from_owned_fd(fd).map_err(RunError::Io)?;
     let mut kept = Vec::new();
     let mut chunk = vec![0; 64 << 10];
@@ -121,6 +142,10 @@ async fn read(fd: OwnedFd, limit: usize, drop_rest: bool) -> Result<Vec<u8>, Run
         let n = reader.read(&mut chunk).await.map_err(RunError::Io)?;
         if n == 0 {
             return Ok(kept);
+        }
+        if let Some(heard) = &heard {
+            // Nobody listening is the receiver's choice.
+            let _ = heard.send(chunk[..n].to_vec());
         }
         let room = limit - kept.len();
         if n > room && !drop_rest {

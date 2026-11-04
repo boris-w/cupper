@@ -172,6 +172,9 @@ durations! {
     GIT_SNAPSHOT = "git_snapshot", Duration::from_secs(60);
     /// `git worktree add`, which checks out the whole tree (design 5.2.10).
     GIT_WORKTREE_ADD = "git_worktree_add", Duration::from_secs(600);
+    /// From a new worktree's checkout to its `update-index --refresh`, past
+    /// the second its files were written in (design 5.2.10).
+    WORKTREE_REFRESH = "worktree_refresh", Duration::from_secs(1);
     /// `git push` in the user tier (design 5.2.10).
     GIT_PUSH = "git_push", Duration::from_secs(300);
     /// `git commit` in the user tier, its hooks with it (T123).

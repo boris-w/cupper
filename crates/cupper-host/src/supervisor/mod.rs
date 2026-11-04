@@ -60,7 +60,8 @@ use crate::exit::HostExit;
 use crate::files::{FileLists, FilesDeps, FilesService};
 use crate::gateway::listen::{HostLock, ListenError};
 use crate::gateway::{AuditEvent, AuditRecord, Gateway, GatewayConfig, HostEvent, Port, Routes};
-use crate::git::{GitDeps, GitService, GitTool};
+use crate::git::worktree::Worktrees;
+use crate::git::{GitDeps, GitService, GitTool, RepoLock};
 use crate::index::{INDEX, IndexDeps, IndexError, IndexHandle};
 use crate::ledger::{Ledger, LedgerError, SWEEPER};
 use crate::manifest;
@@ -392,6 +393,16 @@ impl Host {
             (agent.kind(), port)
         });
         let lists = FileLists::default();
+        let locks = Arc::<RepoLock>::default();
+        let worktrees = Worktrees {
+            git: git.clone(),
+            readers: readers.clone(),
+            clock: clock.clone(),
+            durations: durations.clone(),
+            audit: records.clone(),
+            settings: settings.clone(),
+            locks: Arc::clone(&locks),
+        };
         let sessions = SessionManager::new(SessionDeps {
             streams: streams.clone(),
             readers: readers.clone(),
@@ -408,6 +419,7 @@ impl Host {
             power: power.clone(),
             redactor: Redactor::for_this_machine(),
             lists: lists.clone(),
+            worktrees,
         });
         sessions.reopen().await;
         let mut parts: Vec<Arc<dyn Part>> = vec![Arc::new(sessions.clone())];
@@ -449,6 +461,7 @@ impl Host {
             blobs: blobs.clone(),
             audit: records.clone(),
             notes: Arc::new(sessions.clone()),
+            locks,
         })
         .route(&mut routes);
         #[cfg(feature = "test-harness")]

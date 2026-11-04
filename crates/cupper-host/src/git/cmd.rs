@@ -27,6 +27,7 @@
 use std::ffi::OsString;
 use std::marker::PhantomData;
 
+use super::run::Heard;
 use crate::durations::{DurationKey, GIT_COMMAND, GIT_SNAPSHOT, GIT_WORKTREE_ADD};
 use crate::durations::{GIT_COMMIT, GIT_PUSH};
 
@@ -289,6 +290,7 @@ pub struct GitCmd<T> {
     global: Vec<OsString>,
     args: Vec<OsString>,
     input: Option<Vec<u8>>,
+    heard: Option<Heard>,
     tier: PhantomData<fn() -> T>,
 }
 
@@ -312,13 +314,14 @@ impl GitCmd<User> {
 
 impl<T> GitCmd<T> {
     fn new(spec: Spec) -> Self {
-        let (global, args, input) = (Vec::new(), Vec::new(), None);
+        let (global, args, input, heard) = (Vec::new(), Vec::new(), None, None);
         let tier = PhantomData;
         Self {
             spec,
             global,
             args,
             input,
+            heard,
             tier,
         }
     }
@@ -349,6 +352,12 @@ impl<T> GitCmd<T> {
         self
     }
 
+    /// Where stderr goes as git writes it.
+    pub fn heard(mut self, heard: Heard) -> Self {
+        self.heard = Some(heard);
+        self
+    }
+
     pub fn is_read_only(&self) -> bool {
         self.spec.read_only
     }
@@ -359,6 +368,10 @@ impl<T> GitCmd<T> {
 
     pub(super) fn take_input(&mut self) -> Option<Vec<u8>> {
         self.input.take()
+    }
+
+    pub(super) fn take_heard(&mut self) -> Option<Heard> {
+        self.heard.take()
     }
 
     /// The arguments after the program: global options, the caller's `-c`s,

@@ -64,6 +64,12 @@ impl Rows {
         rows
     }
 
+    /// A session in a new worktree (design 5.5.2): its branch and base.
+    pub(super) fn worktree(&mut self, session: &SessionId, at: u64, branch: &str, base: &str) {
+        let set = "workspace_kind = 'worktree', worktree_branch = ?3, base_ref = ?4";
+        self.session(session, at, set, vec![text(branch), text(base)]);
+    }
+
     /// Who set the session's tier, and, when `confirmed`, that full access
     /// was confirmed now (design 5.2.6).
     pub(super) fn set_by(
