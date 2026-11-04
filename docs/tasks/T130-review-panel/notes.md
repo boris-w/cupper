@@ -93,14 +93,22 @@ export type ReviewViewComponent = ComponentType<ReviewViewProps>;
 - **暂存与取消暂存**：直接执行，结果提示与失败提示由面板负责。
 - **评论**：`comment` 把草稿追加到本会话输入框的附件（`{type: "review_comment", ...draft}`），附件条合成"{n} 条评论"，展开后逐条列出 `{path}:{line}`、正文，可以逐条删除；视图从 `drafts` 读回，画在对应的行上。发给 agent 只经输入框的发送。
 - **滚动**：`focus` 由文件树（T232）和消息流的跳转设置，T130 里还没有设置它的地方；视图在 `seq` 变化时滚到 `path`（和 `line`）。设置方式是 `store.set({ focus: { path, line, seq: (focus?.seq ?? 0) + 1 } })`。
-- **`wrap`、`view`**：来自头部选项菜单，视图照着渲染；`auto` 按面板宽度在分栏与统一之间选，阈值由 T131 定。
+- **`wrap`、`view`**：来自头部选项菜单，视图照着渲染；`auto` 按 ui-spec 4.6：同时有增删时用分栏，面板窄或只有增或删时用统一视图，"窄"的阈值由 T131 定。
 
 ## 实现中的取舍
 
 - 整组"暂存全部"在"最近一轮"里：宿主只接受未暂存的令牌，所以先取"未暂存"的 diff，取它与本轮文件的交集，按路径暂存；交集为空时提示"没有可以暂存的更改"。
 - 每次操作之后，不论成败，都让 `["session", id]` 下的查询失效（GT-1：以仓库为准），`stale_diff`、`outcome_unknown` 因此不需要单独刷新。
-- 菜单的勾选项：`MenuItem` 加了 `checked`，范围与视图用 `menuitemradio`，换行用 `menuitemcheckbox`，不勾选的项留出勾的位置对齐。
+- 菜单的勾选项：`MenuItem` 加了 `checked`、`radio`，范围与视图用 `menuitemradio`，换行用 `menuitemcheckbox`，都带 `aria-checked`。
 - 还原确认里，点击只在按下发生在就绪之后才算数（就绪前按下、就绪后松开不算）；键盘的点击（`detail === 0`）在就绪后算数。
+
+## 与 T231 的菜单统一（merge main 之后）
+
+T231 与本任务同时给 `Menu.tsx`、`icons.tsx` 加了 `CheckIcon`、`MenuLabel`，T231 的 `Choices` 手工把勾放在右边、用普通 `menuitem`。merge main 后按编排者的要求统一：
+
+- `CheckIcon`、`MenuLabel` 各留一个（`icons.tsx` 与 main 相同）。
+- `MenuItem` 的 `checked`、`radio` 也给 T231 用：`Choices` 去掉手工的勾，改成 `radio` + `checked`；UNIT-composer-config 按 role 找的地方改成 `menuitemradio`，并加了一条"当前模式是勾选项"的断言；e2e 的 `config.spec.ts` 同样改了一处。
+- 勾放在条目末尾：ui-spec 没有记录勾的位置，ChatGPT 系的菜单（Codex 的权限、模型下拉）把勾放在右侧，T231 也是这样。勾有自己的槽（宽 32、右对齐，不勾时留空，宽度不跳），`MenuItem` 自身不加间距，没有勾选项的菜单布局不变；本机跑 UI-new-session 的 8 张基线都通过。
 
 ## 发现的范围外问题
 
@@ -108,4 +116,4 @@ export type ReviewViewComponent = ComponentType<ReviewViewProps>;
 
 ## 实际规模
 
-`cargo xtask size`：+1,145 −29（净 +1,116），停止线 1,250 以内。分布：ui-core +977（实现约 730，单测约 250），i18n +54，截图用例 +114。比开工前的估计（约 1,080）多 6%。
+`cargo xtask size`（merge main 并统一菜单之后）：+1,138 −35（净 +1,103），停止线 1,250 以内。分布：ui-core +969（实现约 720，单测约 250），i18n +54，截图用例 +114，e2e +1。比开工前的估计（约 1,080）多 2%。
