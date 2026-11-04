@@ -166,7 +166,7 @@
 | `session/mark_read` | 请求 | `{session_id, up_to_seq}` | `{}` | — | 天然（只前移） | read | M1a |
 | `session/get` | 请求 | `{session_id}` | 完整摘要和工作区信息 | `not_found` | 天然 | read | M1a |
 | `session/capabilities` | 请求 | `{session_id}` | 能力描述 | `not_found` | 天然 | read | M1a |
-| `session/list_archived` | 请求 | `{cursor?}` | `{sessions, next?}` | — | 天然 | read | M1b |
+| `session/list_archived` | 请求 | `{cursor?}` | `{sessions, next?}`（每页 50，按 `(archived_at, session_id)` 倒序，T240） | — | 天然 | read | M1b |
 
 `PromptContent` 是内容块数组：`text {text}`、`image {blob}`、`file_ref {path}`（`@` 引用，相对工作区）、`review_comment {path, line_start, line_end, side, quote, comment}`（GT-2，宿主负责把评论排成给 agent 的文本）。单个 `text` 块超过帧预算时，客户端先 `blob/put`，再用 `text_blob {blob}` 引用。v1.4 起，桌面端把行内评论作为输入框的附件，随下一条消息以 `review_comment` 块发出（GT-2 v1.3，[5.7.4](07-desktop.md#574-窗口与布局)）。
 
@@ -200,7 +200,7 @@
 | `git/branches` | 请求 | `{project_id}` | `{current, local, remote}` | — | 天然 | read |
 | `worktree/check` | 请求 | `{session_id}` | `{removable, blockers: [rule], warnings: {ignored_files, case_only_dirty}}` | — | 天然 | read |
 | `files/search` | 请求 | `{session_id \| project_id, query, limit?}` | `{results: [{path, score, ranges_utf16}]}` | — | 天然 | read |
-| `workspace/open` | 请求 | `{session_id, target: terminal\|editor\|finder}` | `{}` | `unavailable/app_not_found` | 天然 | ui_local |
+| `workspace/open` | 请求 | `{session_id, target: terminal\|editor\|finder, path?}`（`path` 是工作区内的相对路径，T239） | `{}` | `unavailable/app_not_found` | 天然 | ui_local |
 
 `git/diff` 的 `caveats`：
 
@@ -424,7 +424,7 @@ ConfigOption {
 | `conflict` | `already_resolved`、`turn_mismatch`、`digest_mismatch`、`too_early`、`version_mismatch`、`stale_diff`、`outcome_unknown`、`turn_running`、`config_unconfirmed` | 否 | 收起或刷新；`already_resolved` 显示"已在别处处理"（AP-4） |
 | `expired` | `adapter_exited`、`host_restarted` | 否 | 收起请求面板 |
 | `unsupported` | `data.capability` 指出能力；`not_a_repo` | 否 | 隐藏功能 |
-| `unavailable` | `cli_missing`、`cli_not_logged_in`、`cli_too_old`、`runtime_installing`、`runtime_failed`、`adapter_starting`、`adapter_crashed`、`pending_upgrade`、`quota_exhausted`、`app_not_found`、`snapshot_missing`、`index_unmerged`、`project_untrusted`、`scan_failed` | 视 reason | 显示恢复指引（AG-2、MS-5） |
+| `unavailable` | `cli_missing`、`cli_not_logged_in`、`cli_too_old`、`runtime_installing`、`runtime_failed`、`adapter_starting`、`adapter_crashed`、`pending_upgrade`、`quota_exhausted`、`app_not_found`、`snapshot_missing`、`index_unmerged`、`project_untrusted`、`scan_failed`、`session_archived`（T240：已归档会话的写调用） | 视 reason | 显示恢复指引（AG-2、MS-5） |
 | `agent_error` | `data.agent_code`、`data.agent_message`（截断、脱敏） | 否 | 显示 |
 | `git_error` | `hook_failed`、`nothing_to_commit`、`signing_failed`（T123：gpg、ssh、x509 签名失败，界面给出改用图形版 pinentry 的指引）、`auth_failed`、`rejected`、`lock_held`、`unsafe_repo_config`、`repo_config_changed`、`filter_unsupported`、`lfs_object_missing`（T237：宿主不下载本地没有的 LFS 对象，界面提示在终端里运行 `git lfs fetch`） | 视 reason | 显示 stderr 摘要或原因 |
 | `idempotency_mismatch` | — | 否 | 程序错误 |

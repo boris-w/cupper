@@ -163,7 +163,7 @@ flowchart TB
 
 - `HashMap<SessionId, SessionHandle>`，actor 按需启动，空闲（没有回合、没有排队、没有待处理请求）10 分钟后退出，退出前对 agent 会话调用 `session/close`，释放 Claude 的 CLI 进程（ADR-09）。
 - **新建**（`session/create`，详细时序见 [5.5.2](05-flows.md#552-新建会话含新建-worktree)）：校验项目和 agent → 生成 `session_id` → 一个事务写入：`sessions` 行（**第一条消息写进 `initial_prompt_json`**）、会话流的首批事件（`session.configured`、`workspace.preparing`）、命令结果 → 回复 `session_id` → 启动 actor，由它异步准备工作区、连接 agent、发出第一个回合。第一个回合开始时，`turn.started`、用户消息和清空 `initial_prompt_json` 在同一个事务里提交。这样宿主在准备工作区期间（`worktree add` 可能要几分钟）崩溃，已受理的消息也不会丢（测试 #10）。新建 worktree 时，这一批用 `synchronous=FULL` 加 `fullfsync` 提交，`workspace.preparing` 就是 `worktree add` 的在途标记，代替账本的 `pending_external`（命令结果已经和它一起提交，账本里没有在途的命令；T124）。准备期间，会进状态机的调用（send、interrupt、queue_resume 等）先排着，就绪或失败后按原顺序补上，只读调用照常回答。worktree 准备失败时会话状态不进 `error`：界面凭工作区视图的 `Failed{code, reason}` 和以 `workspace_failed` 暂停的队列显示失败，`queue_resume` 回 `unavailable`。按 ADR-09，**会话总是和第一条消息一起创建**，不存在没有消息的空会话。
-- **归档**：先由客户端调用 `worktree/check` 取得能否清理的结论；`session/archive` 关闭 agent 会话，按参数保留或删除 worktree（规则见 [5.2.10](#5210-git-与-worktree-服务)），会话从索引流移除。
+- **归档**：先由客户端调用 `worktree/check` 取得能否清理的结论；`session/archive` 关闭 agent 会话，按参数保留或删除 worktree（规则见 [5.2.10](#5210-git-与-worktree-服务)），会话从索引流移除。 T240 落实：归档在会话 actor 里按顺序执行，`archived_at`、账本和给索引的 `Note::Archived` 在同一次提交里；有运行中的回合或正在准备工作区时回 `conflict/turn_running`；删除 worktree 前在 `RepoLock` 内先读 `worktree list`（没登记回 `removed`，已登记但目录不在回 `kept`），再 `cleanup::check`（不数被忽略文件），通过后先写 `pending_external`，再在项目目录下 `unlock`、`remove`，只有确认过的大小写冲突才 `--force`，未确认的算 `blocked [modified_files]`；已归档会话的写调用（含再次归档）回 `unavailable{session_archived}`；`project/remove` 经各会话的 actor 逐个归档，worktree 一律保留，最后索引写 `projects.removed_at` 和 `project.removed`。
 - **恢复**：分支还在就重建 worktree；分支不在就把会话标为只读（PS-3）。
 
 ### SessionActor 的状态
@@ -466,7 +466,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 - git 仓库：在快照档（[5.2.10](#5210-git-与-worktree-服务)）执行 `git ls-files -z --cached --others --exclude-standard` 得到文件列表；非 git 目录（包括 git 仓库的子目录），以及快照档失败时：用 `ignore` crate 遍历（遵守 `.gitignore`，不进 `.git`，不跟随符号链接），最多 20 万个文件。
 - 列表按工作区缓存 5 秒（`file_list_ttl`），回合结束时失效：会话 actor 在提交含 `turn.completed` 的那一批之前丢掉自己工作区的列表；用 fuzzy-matcher（MIT，SkimMatcherV2；原定的 nucleo-matcher 是 MPL-2.0，不在 ADR-11 的白名单里，T126 改用）做模糊匹配，返回相对路径、分数和匹配区间（UTF-16 偏移，方便 JS 高亮）。
-- `workspace/open`：应用只能取内置清单里的名字（终端：Terminal、iTerm、Ghostty、Warp、WezTerm、kitty、Alacritty；编辑器：TextEdit、Visual Studio Code、Cursor、Zed、Sublime Text、Xcode、Nova、BBEdit；`finder` 用 Finder），设置更新和打开前都核对；执行 `/usr/bin/open -a <应用> <工作区>`，经 `cupper-sys::spawn`、不经 shell、环境为空，超时 `app_open`（30 s）；`open` 退出码非 0 时返回 `unavailable/app_not_found`（T126）。
+- `workspace/open`：应用只能取内置清单里的名字（终端：Terminal、iTerm、Ghostty、Warp、WezTerm、kitty、Alacritty；编辑器：TextEdit、Visual Studio Code、Cursor、Zed、Sublime Text、Xcode、Nova、BBEdit；`finder` 用 Finder），设置更新和打开前都核对；执行 `/usr/bin/open -a <应用> <工作区>`，经 `cupper-sys::spawn`、不经 shell、环境为空，超时 `app_open`（30 s）；`open` 退出码非 0 时返回 `unavailable/app_not_found`（T126）。 T239：可选的 `path` 是工作区内的相对路径（文件或目录），空路径、绝对路径、含 `..` 的一律回 `invalid_params`，canonicalize 后必须存在且在工作区的 realpath 之内；editor 执行 `open -a <编辑器> <realpath>`（不调编辑器自带的 CLI，它不在清单里），terminal 打开所在的目录（交给终端的文件会被当成脚本执行），finder 用 `open -R` 选中；传给 `open` 的就是核对过的 realpath。
 - 发送时，`@` 引用作为 `resource_link` 内容块传给 agent（ACP 基础能力）。
 
 **设置**
