@@ -407,6 +407,7 @@ ConfigOption {
 
 - 不支持的功能不出现（AG-4）：例如 `steer.supported` 为 false 时，界面不显示"插话"。
 - `steer.side_effects` 为 true（Claude）时，界面仍默认插话（v1.4：PRD CP-6 v1.3 与用户决定 F5），副作用在设置"跟进消息默认排队"的说明里和第一次插话时提示；用户可以把默认行为改成排队（[5.7.4](07-desktop.md#574-窗口与布局)）。宿主只在客户端明确要求 `steer` 时插话（ADR-07）。
+- `interactions.plan_confirm` 和 `extraction.thinking` 由 agent 给出的选项推断（T243）：Claude 看 `permission_mode` 有没有 `plan` 值，Codex 看有没有 `plan_mode`；思考看有没有 `reasoning_effort`。agent 还没报告任何选项时（`initialize` 之后、`session/new` 之前）视为可用。这两个字段**只决定入口**（选择器、开关）：宿主照旧提取所有计划确认和思考块，界面收到计划确认请求或思考条目时照样显示，不按它们隐藏，否则请求没人能答，回合会卡到交互超时。选项整个不在时，`session/set_config` 回 `unsupported`（带 `data.capability`）；选项在、值不在时回 `invalid_params`。
 - `turn.interrupt_stops_commands` 为 false（Codex，K3）时，中断后还在运行的命令记为 `abandoned` 加 `may_still_run`，界面立刻提示"命令可能仍在运行"（纪要 D4）。
 - `risk` 由宿主按配置项映射表给出（[5.6.5](06-agent-driver.md#565-配置项映射)），档位有序：`normal` < `elevated` < `full_access`。谁能放宽到哪一档见 [5.8.2](08-security.md#582-principal角色与-scope)。
 
