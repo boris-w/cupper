@@ -2,9 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { open, violations } from "./serve";
 
-const file = (path: string, additions: number, deletions: number) => ({
+const file = (path: string, additions: number, deletions: number, change = "update") => ({
   ...{ path, additions, deletions },
-  ...{ binary: false, change: "update" },
+  ...{ binary: false, change },
 });
 const diff = (diff_token: string, files: ReturnType<typeof file>[], caveats: string[] = []) => ({
   ...{ caveats, diff_token, files },
@@ -14,8 +14,9 @@ const diff = (diff_token: string, files: ReturnType<typeof file>[], caveats: str
     files: files.length,
   },
 });
+const APPLY = "crates/host/src/git/apply.rs";
 const FILES = [
-  file("crates/host/src/git/apply.rs", 42, 7),
+  file(APPLY, 42, 7),
   file("packages/ui-core/src/review/ReviewPanel.tsx", 120, 0),
   file("README.md", 2, 2),
 ];
@@ -26,14 +27,25 @@ const DIFFS: Diffs = {
   staged: diff("dt_s", FILES.slice(2)),
 };
 const EMPTY: Diffs = { ...DIFFS, unstaged: diff("dt_u", []) };
+const TREE: Diffs = {
+  ...DIFFS,
+  unstaged: diff("dt_u", [
+    ...FILES.slice(0, 1),
+    file("crates/host/src/git/diff.rs", 3, 1),
+    file("crates/host/src/git/a_rather_long_name_cut_in_the_middle_by_the_tree.rs", 10, 0, "add"),
+    file("docs/old-notes.md", 0, 30, "delete"),
+    ...FILES.slice(1),
+  ]),
+};
 
 /** Session s_1 with the side panel open on `diffs`; `changed` paths make the configuration notice. */
 async function show(
   page: Page,
-  opts: { theme?: "light" | "dark"; diffs?: Diffs; changed?: string[] } = {},
+  opts: { theme?: "light" | "dark"; diffs?: Diffs; changed?: string[]; tree?: boolean } = {},
 ) {
-  const { theme = "light", diffs = DIFFS, changed } = opts;
-  await open(page, { info: { theme, prefs: { "layout.sidePanelOpen": true } } });
+  const { theme = "light", diffs = DIFFS, changed, tree = false } = opts;
+  const prefs = { "layout.sidePanelOpen": true, "layout.fileTreeOpen": tree };
+  await open(page, { info: { theme, prefs } });
   await page.evaluate(
     ([diffs, changed]) => {
       window.cupperHost.handle("git/diff", ({ params }) => ({
@@ -107,4 +119,96 @@ test("UI-review-panel empty: nothing unstaged, no pill", async ({ page }) => {
   await expect(panel.getByText("没有未暂存的更改")).toBeVisible();
   await expect(panel.getByRole("button", { name: "暂存全部" })).toBeHidden();
   await expect(panel).toHaveScreenshot("review-empty.png");
+});
+
+for (const theme of ["light", "dark"] as const) {
+  test(`UI-review-tree ${theme}: directories, status icons and a long name`, async ({ page }) => {
+    const panel = await show(page, { theme, diffs: TREE, tree: true });
+    await expect(panel.getByRole("navigation", { name: "文件" })).toBeVisible();
+    await expect(panel).toHaveScreenshot(`review-tree-${theme}.png`);
+    expect(await violations(page)).toEqual([]);
+  });
+}
+
+test("UI-review-tree opens from the header and closes with ⌘⇧E", async ({ page }) => {
+  const panel = await show(page, { diffs: TREE });
+  const tree = panel.getByRole("navigation", { name: "文件" });
+  await expect(tree).toBeHidden();
+  await panel.getByRole("button", { name: "显示文件" }).click();
+  await expect(tree).toBeVisible();
+  await expect(panel.getByRole("button", { name: "隐藏文件" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.evaluate(() => window.cupperShell.command({ id: "toggle_file_tree" }));
+  await expect(tree).toBeHidden();
+});
+
+test("UI-review-tree filter", async ({ page }) => {
+  const panel = await show(page, { diffs: TREE, tree: true });
+  const filter = panel.getByRole("textbox", { name: "筛选文件…" });
+  await filter.fill("git/");
+  await expect(panel.getByRole("button", { name: "README.md" })).toBeHidden();
+  await page.mouse.move(400, 780);
+  await expect(panel).toHaveScreenshot("review-tree-filter.png");
+  await filter.fill("nothing like it");
+  await expect(panel.getByText("没有匹配的文件")).toBeVisible();
+});
+
+test("UI-review-tree a file: the jump, its actions by scope, its right-click menu", async ({
+  page,
+}) => {
+  const panel = await show(page, { diffs: TREE, tree: true });
+  const sent = (method: string) =>
+    page.evaluate(
+      (method) =>
+        window.cupperHost.requests.filter((r) => r.method === method).map((r) => r.params),
+      method,
+    );
+  const apply = panel.getByRole("button", { name: "apply.rs" });
+  await apply.click();
+  await expect(apply).toHaveAttribute("aria-current", "true");
+
+  // The menu copies the path, without the system clipboard, and opens the workspace.
+  await page.evaluate(() => {
+    const copied: string[] = ((window as unknown as { copied: string[] }).copied = []);
+    const writeText = (text: string) => Promise.resolve(void copied.push(text));
+    Object.defineProperty(navigator, "clipboard", { value: { writeText } });
+  });
+  await panel.getByRole("button", { name: "README.md" }).click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: "在外部应用中打开" })).toBeVisible();
+  await expect(panel).toHaveScreenshot("review-tree-menu.png");
+  await page.getByRole("menuitem", { name: "复制路径" }).click();
+  expect(await page.evaluate(() => (window as unknown as { copied: string[] }).copied)).toEqual([
+    "README.md",
+  ]);
+  await panel.getByRole("button", { name: "README.md" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "在外部应用中打开" }).click();
+  await expect
+    .poll(() => sent("workspace/open"))
+    .toEqual([{ session_id: "s_1", target: "editor" }]);
+
+  // Unstaged: stage and revert; a revert asks first and takes no focus.
+  const row = apply.locator("..");
+  await apply.hover();
+  await row.getByRole("button", { name: "暂存" }).click();
+  await expect
+    .poll(() => sent("git/stage"))
+    .toEqual([expect.objectContaining({ diff_token: "dt_u", target: { paths: [APPLY] } })]);
+  await row.getByRole("button", { name: "还原" }).click();
+  const confirm = panel.getByRole("alertdialog", { name: `是否还原 ${APPLY}？` });
+  await expect(confirm).toBeVisible();
+  expect(await confirm.evaluate((el) => el.contains(document.activeElement))).toBe(false);
+  expect(await sent("git/revert")).toEqual([]);
+
+  // Staged: unstage only.
+  await expect(confirm).toHaveAttribute("data-ready", "true");
+  await page.getByRole("button", { name: "取消" }).click();
+  await expect(confirm).toBeHidden();
+  await scope(page, "已暂存");
+  const readme = panel.getByRole("button", { name: "README.md" });
+  await readme.hover();
+  const actions = readme.locator("..").getByRole("button");
+  await expect(actions).toHaveCount(2);
+  await expect(actions.nth(1)).toHaveAccessibleName("取消暂存");
 });
