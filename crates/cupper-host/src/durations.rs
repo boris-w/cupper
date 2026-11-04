@@ -75,6 +75,9 @@ durations! {
     /// After an interrupt, how long the host waits for the prompt to return
     /// before it ends the turn as `host_timeout` (design 5.2.6, 5.3.9).
     INTERRUPT_FALLBACK = "interrupt_fallback", Duration::from_millis(V1.interrupt_fallback_ms);
+    /// How long a steer waits for the agent's answer before its message is
+    /// queued (design 5.2.6).
+    STEER_TIMEOUT = "steer_timeout", Duration::from_millis(V1.steer_timeout_ms);
     /// How long an item's later text fragments wait to be written as one
     /// delta (design 5.2.16, ADR-06).
     ITEM_COALESCE = "item_coalesce", Duration::from_millis(40);

@@ -101,3 +101,7 @@
 ### 实现上的一处取舍
 
 `Steer` 的结果不另开回复的 future，而是像 `Prompt` 一样以驱动事件回到会话（`SteerDone`、`SteerFailed`）：每个会话同时只有一个插话在途，晚到的结果按"晚到"判，不需要再对号；actor 也不必再开一个 channel。适配器退出时不等 SDK 的错误，由核心在 `AdapterExited` 时把在途的插话当作 `agent_error`。
+
+## 5. 越线之后（2026-11-04，main）
+
+做到 +730 时越过硬停止线 720，停下来报告。main 决定剩下的部分（CLI `--steer`、IT-cli-commands 的一条、IT-K10、IT-K11、IT-degrade-steering）全部在本任务做完，不拆；硬停止线放到 880。测试可以为了好读而整理（表驱动、共用助手），不为压行数挤断言。

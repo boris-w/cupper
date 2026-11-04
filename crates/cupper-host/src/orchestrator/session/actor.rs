@@ -808,6 +808,7 @@ impl SessionActor {
                 methods::SendMode::Steer => SendMode::Steer,
                 _ => SendMode::Queue,
             },
+            expected_turn: p.expected_turn_id,
             by: by.clone(),
             reply_to: p.reply_to,
         })))
@@ -865,6 +866,9 @@ impl SessionActor {
                     }
                     Action::Machine(turn::Action::Reply(reply)) => {
                         step.reply = Some(Reply::Turn(reply))
+                    }
+                    Action::Machine(turn::Action::Log(what)) => {
+                        tracing::info!("session {}: {what}", self.parts.id)
                     }
                     // The core keeps the machine's other actions.
                     Action::Machine(_) => {}
@@ -1219,12 +1223,19 @@ impl SessionActor {
                     disposition: match sent.disposition {
                         Disposition::Started => Wire::Started,
                         Disposition::Queued => Wire::Queued,
+                        Disposition::Steered => Wire::Steered,
                     },
                     turn_id: sent.turn_id,
                     queue_id: sent.queue_id,
-                    fallback_reason: sent
-                        .fallback
-                        .map(|SteerFallback::Unsupported| { FallbackReason::Unsupported }),
+                    fallback_reason: sent.fallback.map(|fallback| match fallback {
+                        SteerFallback::Unsupported => FallbackReason::Unsupported,
+                        SteerFallback::TurnMismatch => FallbackReason::TurnMismatch,
+                        SteerFallback::NotPrompting => FallbackReason::NotPrompting,
+                        SteerFallback::PromptRequired => FallbackReason::PromptRequired,
+                        SteerFallback::Timeout => FallbackReason::Timeout,
+                        SteerFallback::AgentError => FallbackReason::AgentError,
+                        SteerFallback::SteerPending => FallbackReason::SteerPending,
+                    }),
                 })
             }
             turn::Reply::Send(Err(full)) => {
