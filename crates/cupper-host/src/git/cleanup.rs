@@ -8,17 +8,21 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use cupper_protocol::error::RpcError;
 use cupper_protocol::ids::SessionId;
 use cupper_protocol::methods::git::{
     GitFileStatus, GitStatusFile, WorktreeBlocker, WorktreeCheckResult, WorktreeWarnings,
 };
+use cupper_protocol::methods::session::WorktreeOutcome;
 
-use super::head::Head;
+use super::head::{self, Head};
+use super::service::{internal, shot, writable};
 use super::snapshot::{self, ShotError, blocking, output, split};
-use super::worktree::listed;
+use super::worktree::{Worktrees, listed, lock_reason};
 use super::{GitCmd, GitError, GitTool, RepoOp, SnapshotOp, status};
 use crate::clock::Clock;
 use crate::durations::Durations;
+use crate::ledger::Ticket;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CheckError {
@@ -36,13 +40,20 @@ pub async fn check(
     session: &SessionId,
     writable: &[PathBuf],
     (clock, durations): (&dyn Clock, &Durations),
+    count_ignored: bool,
 ) -> Result<WorktreeCheckResult, CheckError> {
     let opened = snapshot::open(tool, work_tree, clock, durations).await?;
     let tier = tool.snapshot_tier(&opened.place);
     let commit = head.commit.as_deref();
     let files = status::states(tool, &opened, commit, clock, durations).await;
     let ls = |op| output(&tier, GitCmd::snapshot(op), "ls-files", clock, durations);
-    let (tracked, ignored) = (ls(SnapshotOp::LsFiles).await, ls(SnapshotOp::Ignored).await);
+    let tracked = ls(SnapshotOp::LsFiles).await;
+    // Every ignored file, which a large one such as `node_modules` holds
+    // many of: archiving does without.
+    let ignored = match count_ignored {
+        true => ls(SnapshotOp::Ignored).await,
+        false => Ok(Vec::new()),
+    };
     let git_dir = opened.layout.git_dir.clone();
     opened.close().await;
     let (files, tracked, ignored) = (files?, tracked?, ignored?);
@@ -88,7 +99,7 @@ pub async fn check(
     let list = GitCmd::repo(RepoOp::WorktreeList);
     let list = tier.run(clock, durations, writable, list).await?;
     let lock = listed(&list.output.stdout, work_tree).flatten();
-    let ours = format!("cupper session {session}");
+    let ours = lock_reason(session);
 
     let modified = !case_only_dirty && !dirty.is_empty();
     let added = files.iter().any(|f| untracked(&f.worktree));
@@ -115,4 +126,67 @@ pub async fn check(
             case_only_dirty,
         },
     })
+}
+
+impl Worktrees {
+    /// Removes `session`'s worktree at `path` of the repository at `repo`
+    /// (design 5.5.9), unless a cleanup rule keeps it: unlocked, then
+    /// `worktree remove`, with `--force` only when `case_only` was asked and
+    /// case alone dirties it. One git does not list is `removed`; one whose
+    /// directory is gone `kept`, for the user to prune. `ticket` goes
+    /// `pending_external` before git changes anything.
+    pub async fn remove(
+        &self,
+        (repo, path): (&Path, &Path),
+        session: &SessionId,
+        case_only: bool,
+        ticket: &mut Option<Ticket>,
+    ) -> Result<(WorktreeOutcome, Vec<WorktreeBlocker>), RpcError> {
+        let writable = writable(&self.readers).await?;
+        let failed = |err| self.failed(err);
+        let _lock = self.locks.hold(repo).await?;
+        let list = GitCmd::repo(RepoOp::WorktreeList);
+        let list = self.run(repo, &writable, list).await.map_err(failed)?;
+        match listed(&list.output.stdout, path) {
+            None => return Ok((WorktreeOutcome::Removed, Vec::new())),
+            Some(_) if !path.is_dir() => return Ok((WorktreeOutcome::Kept, Vec::new())),
+            Some(_) => {}
+        }
+        let git = self.git.as_ref().ok_or_else(|| internal("no git to run"))?;
+        let (clock, durations) = (&*self.clock, &self.durations);
+        let head = head::head(&git.repo_tier(path), clock, durations, &writable).await;
+        let head = head.map_err(failed)?;
+        let checked = check(
+            git,
+            (path, &head),
+            session,
+            &writable,
+            (clock, durations),
+            false,
+        );
+        let checked = checked.await.map_err(|err| match err {
+            CheckError::Shot(err) => shot(err),
+            CheckError::Git(err) => failed(err),
+        })?;
+        let mut blockers = checked.blockers;
+        let force = checked.warnings.case_only_dirty;
+        if force && !case_only {
+            blockers.insert(0, WorktreeBlocker::ModifiedFiles);
+        }
+        if !blockers.is_empty() {
+            return Ok((WorktreeOutcome::Blocked, blockers));
+        }
+        if let Some(ticket) = ticket.as_mut() {
+            ticket.mark_external().await.map_err(internal)?;
+        }
+        let unlock = GitCmd::repo(RepoOp::WorktreeUnlock).args([path]);
+        let _ = self.run(repo, &writable, unlock).await;
+        let mut remove = GitCmd::repo(RepoOp::WorktreeRemove);
+        if force {
+            remove = remove.args(["--force"]);
+        }
+        let remove = remove.args([path]);
+        self.run(repo, &writable, remove).await.map_err(failed)?;
+        Ok((WorktreeOutcome::Removed, Vec::new()))
+    }
 }

@@ -609,7 +609,8 @@ impl GitService {
         let head = self.head(session, tool, &work_tree).await?;
         let writable = self.writable().await?;
         let on = (&*self.deps.clock, &self.deps.durations);
-        let checked = cleanup::check(tool, (&work_tree, &head), session, &writable, on).await;
+        let checked = cleanup::check(tool, (&work_tree, &head), session, &writable, on, true);
+        let checked = checked.await;
         checked.map_err(|err| match err {
             CheckError::Shot(err) => shot(err),
             CheckError::Git(err) => self.reported(Some(session), "worktree_check", err),
@@ -686,7 +687,7 @@ fn size(value: &impl serde::Serialize) -> usize {
 }
 
 /// A snapshot tier failure as the protocol has it.
-fn shot(err: ShotError) -> RpcError {
+pub(super) fn shot(err: ShotError) -> RpcError {
     let (code, reason) = match &err {
         ShotError::NotARepo(_) => (ErrorCode::Unsupported, Some(ErrorReason::NotARepo)),
         ShotError::Unmerged => (ErrorCode::Unavailable, Some(ErrorReason::IndexUnmerged)),

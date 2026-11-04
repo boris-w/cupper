@@ -242,6 +242,17 @@ impl Rows {
         self.session(session, at, "project_config_ignored = 1", Vec::new());
     }
 
+    /// Archived now.
+    pub(super) fn archived(&mut self, session: &SessionId, at: u64) {
+        self.session(session, at, "archived_at = ?2", Vec::new());
+    }
+
+    /// The user's title (`session/rename`).
+    pub(super) fn titled(&mut self, session: &SessionId, at: u64, title: &str) {
+        let set = "title = ?3, title_source = 'user'";
+        self.session(session, at, set, vec![text(title)]);
+    }
+
     /// The first message left the machine's hold for a turn or the queue.
     pub(super) fn first_taken(&mut self, session: &SessionId, at: u64) {
         self.session(session, at, "initial_prompt_json = NULL", Vec::new());

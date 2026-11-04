@@ -58,6 +58,7 @@ struct Stored {
     trusted: bool,
     /// The project's path.
     repo: Option<String>,
+    archived: bool,
     /// The first message, until it starts a turn or is queued.
     first: Option<String>,
     /// Each queued message, and the command that queued it.
@@ -253,6 +254,7 @@ pub(super) async fn load(
         initial,
         config_changed: stored.changed,
         worktree,
+        archived: stored.archived,
     };
     Ok((parts, start))
 }
@@ -327,7 +329,8 @@ fn read(conn: &Connection, session: &str) -> rusqlite::Result<Option<Stored>> {
              (SELECT trust_state = 'trusted' FROM projects p
               WHERE p.project_id = sessions.project_id),
              initial_prompt_json,
-             (SELECT path FROM projects p WHERE p.project_id = sessions.project_id)
+             (SELECT path FROM projects p WHERE p.project_id = sessions.project_id),
+             archived_at IS NOT NULL
          FROM sessions WHERE session_id = ?1",
         [session],
         |r| {
@@ -346,6 +349,7 @@ fn read(conn: &Connection, session: &str) -> rusqlite::Result<Option<Stored>> {
                 trusted: r.get::<_, Option<bool>>(14)?.unwrap_or(false),
                 first: r.get(15)?,
                 repo: r.get(16)?,
+                archived: r.get(17)?,
                 queue: Vec::new(),
                 last_turn: None,
                 ended: Vec::new(),
