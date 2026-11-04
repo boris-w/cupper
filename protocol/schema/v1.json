@@ -8153,6 +8153,10 @@
     },
     "WorkspaceOpenParams": {
       "properties": {
+        "path": {
+          "$ref": "#/$defs/WirePath",
+          "description": "A file or directory of the workspace, relative to it, instead of the\nworkspace: the editor opens it, the terminal its directory, Finder\nselects it."
+        },
         "session_id": {
           "$ref": "#/$defs/SessionId"
         },

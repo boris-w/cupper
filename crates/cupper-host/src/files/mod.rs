@@ -2,11 +2,12 @@
 //! files for `@` references ([`search`]); `workspace/open` hands a session's
 //! workspace to the terminal or the editor its settings name, from the
 //! built-in lists, or to Finder (UI-0), through `open -a`, its arguments
-//! passed as they are.
+//! passed as they are; or one of its files or directories (T239).
 
 pub mod search;
 
-use std::path::PathBuf;
+use std::ffi::OsStr;
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
@@ -84,7 +85,9 @@ impl FilesService {
         Ok(FilesSearchResult { results })
     }
 
-    /// `open -a <app> <workspace>`; `open` fails when the app is not there.
+    /// `open -a <app> <workspace>`, or of `path` in it, which the editor
+    /// opens, the terminal at its directory, and Finder selects (`open -R`);
+    /// `open` fails when the app is not there.
     async fn open(&self, params: WorkspaceOpenParams) -> Result<Value, RpcError> {
         let sql = "SELECT workspace_path FROM sessions WHERE session_id = ?1";
         let workspace = self.path(sql, params.session_id.to_string()).await?;
@@ -105,8 +108,21 @@ impl FilesService {
         if !workspace.is_dir() {
             return Err(RpcError::app(ErrorCode::NotFound, "the workspace is gone"));
         }
+        let at = match &params.path {
+            Some(path) => inside(&workspace, &path.0)?,
+            None => workspace,
+        };
         let mut command = cupper_sys::Command::new(&self.0.opener);
-        command.args(["-a".as_ref(), app.as_ref(), workspace.as_os_str()]);
+        let app: &OsStr = app.as_ref();
+        match (&params.target, params.path.is_some()) {
+            (OpenTarget::Finder, true) => command.args(["-R".as_ref(), at.as_os_str()]),
+            // Its directory: a terminal runs a file it is given as a script.
+            (OpenTarget::Terminal, true) if !at.is_dir() => {
+                let dir = at.parent().unwrap_or(&at);
+                command.args(["-a".as_ref(), app, dir.as_os_str()])
+            }
+            _ => command.args(["-a".as_ref(), app, at.as_os_str()]),
+        };
         let limit = self.0.durations.get(APP_OPEN);
         let output = run(&*self.0.clock, command, None, limit).await;
         match output.map_err(internal)?.status.success() {
@@ -136,6 +152,26 @@ impl Port for FilesService {
             }
         }
         .boxed()
+    }
+}
+
+/// `path` of `workspace` as a real path, when it is there and inside it:
+/// relative, without `..`, and its links resolved, still in the workspace.
+fn inside(workspace: &Path, path: &str) -> Result<PathBuf, RpcError> {
+    let invalid = |why: &str| RpcError::new(INVALID_PARAMS, format!("path {path:?} {why}"));
+    let relative = Path::new(path);
+    let up = relative
+        .components()
+        .any(|part| part == Component::ParentDir);
+    if path.is_empty() || relative.is_absolute() || up {
+        return Err(invalid("is not one in the workspace"));
+    }
+    let root = workspace.canonicalize().map_err(internal)?;
+    let real = workspace.join(relative).canonicalize();
+    let real = real.map_err(|_| invalid("is not there"))?;
+    match real.starts_with(&root) {
+        true => Ok(real),
+        false => Err(invalid("leads out of the workspace")),
     }
 }
 

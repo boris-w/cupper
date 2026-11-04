@@ -2699,6 +2699,7 @@ export const zSessionGetResult = z.object({
 });
 
 export const zWorkspaceOpenParams = z.object({
+  path: zWirePath.optional(),
   session_id: zSessionId,
   target: zOpenTarget,
 });
