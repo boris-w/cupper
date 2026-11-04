@@ -53,5 +53,11 @@
   "stale": "变更已经更新，请再操作一次",
   "outcome_unknown": "不确定这次操作是否完成，已刷新变更",
   "activation": "请直接点击“确认”",
-  "failed": "操作没有完成（{{code}}）"
+  "failed": "操作没有完成（{{code}}）",
+  "doc_title": "变更详情",
+  "doc_fold": "收起",
+  "doc_unfold": "展开",
+  "doc_binary": "二进制文件，不显示内容",
+  "doc_mode": "文件模式",
+  "doc_loading": "正在加载…"
 }

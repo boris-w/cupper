@@ -4,13 +4,19 @@
 // with these schemas and drop one that does not fit. The main document
 // holds every state; the review document is a view of it.
 //
-// Down: `init`, `theme_changed`, `locale_changed`; `files` (the diff's files,
-// what is folded, the drafts and the actions of the scope); `render` (one
+// Down: `init`, `theme_changed`; `files` (the diff's files,
+// what is folded, how they show); `render` (one
 // file's hunks, the answer to `need_file`); `scroll_to`; `clear`.
 // Up: `ready`, `need_file`, `set_collapsed`, `hunk_action`, `draft_comment`,
 // `key_forward`.
 
-import { zGitDiffFile, zHunkId, zReviewComment, zWirePath } from "@cupper/protocol";
+import {
+  zGitDiffFile,
+  zHunkId,
+  zReviewComment,
+  zWirePath,
+  type GitDiffFile,
+} from "@cupper/protocol";
 import { z } from "zod";
 
 export const REVIEW_PROTOCOL = 1;
@@ -36,7 +42,6 @@ export const zToReview = z.discriminatedUnion("type", [
     strings: zStrings,
   }),
   z.object({ type: z.literal("theme_changed"), theme: zTheme }),
-  z.object({ type: z.literal("locale_changed"), locale: z.string().max(35), strings: zStrings }),
   z.object({
     type: z.literal("files"),
     diff_token: zToken,
@@ -44,8 +49,6 @@ export const zToReview = z.discriminatedUnion("type", [
     collapsed: z.array(zWirePath),
     view: z.enum(["auto", "split", "unified"]),
     wrap: z.boolean(),
-    actions: z.array(zAction),
-    drafts: z.array(zReviewComment),
   }),
   z.object({
     type: z.literal("render"),
@@ -92,12 +95,38 @@ export function parse<T>(schema: z.ZodType<T>, data: unknown): T | undefined {
 }
 
 /**
- * One file's unified patch for @pierre/diffs, from the host's hunks: the
- * text of the lines as it is, which pierre shows as text (design 5.7.8 (i)).
+ * One file's patch for @pierre/diffs, from the units of the host that carry
+ * lines (`hunk` and `whole_file`): their text as it is, which pierre shows as
+ * text (design 5.7.8 (i)).
  */
-export function patchOf(path: string, oldPath: string | undefined, hunks: readonly ReviewHunk[]) {
+export function patchOf(file: GitDiffFile, hunks: readonly ReviewHunk[]): string {
+  const from = file.change === "add" ? "/dev/null" : `a/${file.old_path ?? file.path}`;
+  const to = file.change === "delete" ? "/dev/null" : `b/${file.path}`;
   const body = hunks
-    .filter((hunk) => hunk.header.startsWith("@@"))
-    .flatMap((hunk) => [hunk.header, ...hunk.lines]);
-  return [`--- a/${oldPath ?? path}`, `+++ b/${path}`, ...body, ""].join("\n");
+    .filter((hunk) => hunk.unit !== "mode")
+    .flatMap(({ header, lines }) => under(header.split("\n").filter(isHead), lines));
+  return [`--- ${from}`, `+++ ${to}`, ...body, ""].join("\n");
+}
+
+const isHead = (line: string) => line.startsWith("@@ ");
+
+/** A whole file's lines under its `@@` lines, by the counts each one gives. */
+function under(heads: string[], lines: readonly string[]): string[] {
+  if (heads.length < 2) return [...heads, ...lines];
+  const out: string[] = [];
+  let at = 0;
+  for (const head of heads) {
+    const [, old = "1", now = "1"] = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(head) ?? [];
+    let [left, right] = [Number(old), Number(now)];
+    out.push(head);
+    for (; at < lines.length; at++) {
+      const line = lines[at] ?? "";
+      const sign = line[0];
+      if (left <= 0 && right <= 0 && sign !== "\\") break;
+      out.push(line);
+      if (sign !== "+" && sign !== "\\") left--;
+      if (sign !== "-" && sign !== "\\") right--;
+    }
+  }
+  return out;
 }

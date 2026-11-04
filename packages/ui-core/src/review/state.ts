@@ -47,19 +47,21 @@ export const diffKey = (sessionId: string, scope: ReviewScope) =>
   ["session", sessionId, "git/diff", scope] as const;
 export const statusKey = (sessionId: string) => ["session", sessionId, "git/status"] as const;
 
-export function useDiff(sessionId: string, scope: ReviewScope) {
+export function useDiff(sessionId: string, scope: ReviewScope, enabled = true) {
   const { client } = useHost();
   return useQuery({
     queryKey: diffKey(sessionId, scope),
     queryFn: () => client.request<GitDiffResult>("git/diff", { session_id: sessionId, scope }),
+    enabled,
   });
 }
 
 /** `git/status`, with the paths whose executable configuration changed this session. */
-export function useStatus(sessionId: string) {
+export function useStatus(sessionId: string, enabled = true) {
   const { client } = useHost();
   return useQuery({
     queryKey: statusKey(sessionId),
     queryFn: () => client.request<GitStatusResult>("git/status", { session_id: sessionId }),
+    enabled,
   });
 }
