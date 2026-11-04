@@ -67,3 +67,9 @@ T235 之后，快照档的 git-lfs 把它 clean 过的文件内容放在 `ws/<�
 - 不拆：`host/storage` 和清除同属设置页"存储"。停止线 470，硬停止线 550。
 - 互斥按第 2 节做；两点要有用例：拿锁之后才开的回合，起始快照进新的空库，回合的 diff 正常；清除等在途的快照做完才动手（故障点或可控的延迟让快照停在锁里）。
 - 私有 LFS 存储一起清：改名加删除，大小算进 `snapshots`，启动清理也覆盖；清除之后 `lfs_object_missing` 的行为是对的。设计 5.2.10 由 main 在合并时补。
+
+## 4. 进度（2026-11-04 收工）
+
+- 已提交：本 notes（估算、互斥方案、main 的决定）。产品代码还没开始写，工作区干净。
+- 下次从协议开始：`handshake.rs` 加 `host/storage`（`Empty` → `HostStorageResult`，`read`、天然）和 `host/purge_snapshots`（`{command_id}` → `{freed_bytes}`，`privileged`、命令、`conflict/turn_running`），`admin.rs` 的 `ConfirmAction::PurgeSnapshots`，`catalog.rs` 的分组与矩阵两行，样例，`pnpm gen`。
+- 之后按第 1 节的模块顺序：闸（`GitTool` 里的仓库读写锁，`snapshot::open` 与 `diff::patch` 取读锁）→ `snapshot_missing` → `host/storage` → `host/purge_snapshots`（含私有 LFS 存储）→ 启动清理 → 路由与 `policy/describe` → 用例（含"拿锁之后开的回合"和"清除等在途快照"两条）。
