@@ -18,7 +18,7 @@ commands:
   diff <session> [--scope <scope>]         the diff, file by file; scope: last-turn
                                            (default), unstaged, staged or a turn ID
   new --agent <agent> --project <path> <message>
-  send <session> <text> [--wait]
+  send <session> <text> [--steer] [--wait]
   interrupt <session>
   pending [<session>]                      requests waiting for an answer
   approve|reject <session> <request> [--option <id>]
@@ -63,6 +63,7 @@ pub enum Command {
         session: SessionId,
         text: String,
         wait: bool,
+        steer: bool,
     },
     Interrupt(SessionId),
     Pending(Option<SessionId>),
@@ -158,6 +159,7 @@ pub fn command(words: &[String]) -> Result<Command, UsageError> {
             session: flags.id(0)?,
             text: flags.text(1)?,
             wait: flags.switch("--wait"),
+            steer: flags.switch("--steer"),
         },
         "interrupt" => Command::Interrupt(flags.id(0)?),
         "pending" if flags.positional.is_empty() => Command::Pending(None),
@@ -230,7 +232,7 @@ struct Flags {
 }
 
 /// Flags that take no value.
-const SWITCHES: &[&str] = &["--watch", "--wait"];
+const SWITCHES: &[&str] = &["--watch", "--wait", "--steer"];
 
 impl Flags {
     fn split(args: &[String]) -> Result<Self, UsageError> {
@@ -367,13 +369,18 @@ mod tests {
             (Some("/d".into()), true, Command::Status)
         );
         assert_eq!(parse(&words("--build-info")).unwrap().1, Command::BuildInfo);
-        let send = command(&words(&format!("send {} \"two words\" --wait", s()))).unwrap();
+        let send = command(&words(&format!(
+            "send {} \"two words\" --wait --steer",
+            s()
+        )))
+        .unwrap();
         assert_eq!(
             send,
             Command::Send {
                 session: s(),
                 text: "two words".into(),
-                wait: true
+                wait: true,
+                steer: true,
             }
         );
         let new = command(&words("new --project /p --agent claude hello")).unwrap();
