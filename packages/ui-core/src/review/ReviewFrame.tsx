@@ -85,8 +85,10 @@ export function ReviewFrame({ view }: { view?: ReviewViewProps }) {
         return current.setCollapsed(file.path, message.collapsed);
       case "need_file":
         if (message.diff_token !== diff.diff_token) return;
-        return void hunksOf(current, file.path).then((hunks) =>
-          send({ type: "render", diff_token: diff.diff_token, path: file.path, hunks }),
+        // A file whose hunks fail to come stays loading until the diff is new.
+        return void hunksOf(current, file.path).then(
+          (hunks) => send({ type: "render", diff_token: diff.diff_token, path: file.path, hunks }),
+          () => undefined,
         );
       case "hunk_action": {
         const known = fetched.current.get(file.path);
