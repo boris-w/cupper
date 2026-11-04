@@ -29,4 +29,15 @@
 
 ## 实际规模
 
-`cargo xtask size`：+549 −6（净 +543），超过停止线 500 共 49 行，在硬停止线 600 以内，已报编排者等决定。GitActions.tsx 263（估 200），UNIT-review-commit 208（估 150，其中约 60 行是与 review.test 相同的 provider 样板），UI-review-commit +46，文案 +29，ReviewPanel +3。
+编排者接受超过停止线（硬停止线 600 不变），并要求把两份单测相同的 provider 样板抽成共用的 `review/test-harness.tsx`，`review.test.tsx` 也改用它，用例一条不砍。抽完后 `cargo xtask size`：+587 −60（净 +527），离硬停止线 600 还有 13 行；加数里含 `review.test.tsx` 改用共用辅助时重写的 19 行。
+
+| 部分 | 估 | 实际 |
+|---|---|---|
+| GitActions.tsx（菜单、弹窗、执行、失败指引） | 200 | 263 |
+| 文案 | 32 | +29 −1 |
+| ReviewPanel 接线 | 5 | +3 |
+| UNIT-review-commit | 150 | 175 |
+| 共用的测试辅助 `test-harness.tsx`，`review.test.tsx` 改用它 | — | +52；+19 −54 |
+| UI-review-commit | 50 | +46 −5 |
+
+GitActions 超出估计，主要是弹窗的状态比估计的多（下一步、提交信息、包含未暂存、忙碌、失败、关闭方式）和说明注释。
