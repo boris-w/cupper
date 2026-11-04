@@ -47,3 +47,23 @@
 - **新任务 斜杠命令、↑ 恢复与发送快捷键**：B、C、D，约 340，上浮后约 400。三块都是按键和文字区的事，E2E-slash-commands 和 E2E-send-key-setting 也在一起。
 
 也可以反过来：本任务做 B、C、D，图片拆出去。图片和 T142 的拖入关系更近，放在先做的这一个里更顺。
+
+## 实现记录（拆分后只做图片）
+
+- **`composer/extensions/image.tsx`**：
+  - 底栏左侧最前面是"+"（`order: 1`），点开一个隐藏的 `input type=file`，`accept` 限这四种类型；
+  - 文字区的 `paste`：取剪贴板里 `image/*` 的文件。类型不在四种之内的给提示；
+  - 输入框上的 `drop`：只取这四种类型的图片。其他文件，包括别的图片类型，仍归 T142 的文件引用：`fileref.tsx` 跳过图片。
+  - 拖入时显示覆盖层：`dragenter`、`dragover` 打开，离开输入框或 `drop` 时关闭。Composer 的输入框容器为此加了 `relative`。
+  - 检查：类型；会话能力的 `prompt.image`、`prompt.max_image_bytes`。新会话页还没有能力（取能力要带上 agent，归 T244），这时只查类型，大小和"agent 不接受图片"由宿主在发送时把关。
+  - 上传：`putBlob(bytes, type)` 之后生成 `{type: "image", blob}` 附件；失败时给提示，带语义码。
+- **缩略图（`composer/thumbnails.ts`）**：
+  - 按 blob 的 hash 记本地 File 的 object URL，附件条的图片附件显示缩略图，没有 URL 时退回"图片"二字。
+  - 释放：附件变化时，不在附件里的 hash 释放；扩展卸载时全部释放。请求面板占据输入框位置时 Composer 卸载，缩略图会退回文字；这是"卸载时释放"的代价。
+- **E2E-image-paste**：
+  - 合成的 `ClipboardEvent("paste")`，`clipboardData` 里放一个 PNG；
+  - 用 `setInputFiles` 加合成 drop，拖入一个 PNG 和一个文本文件；
+  - 用 `setInputFiles` 选"+"的输入框。
+  - 断言附件条有 3 张缩略图、文本文件仍是引用，下一条消息带 3 个 `image` 块。
+  - 不碰系统剪贴板，不需要焦点。本机后台单份跑过，通过；E2E-file-ref 同时重跑，通过。
+- **基线**：底栏多了"+"，所有拍到输入框的截图都会变，要由 `ui-baseline` 重新生成。没有新增截图用例。
