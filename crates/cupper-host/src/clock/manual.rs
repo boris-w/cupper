@@ -69,6 +69,11 @@ impl ManualClock {
         });
     }
 
+    /// How many timers have not fired or been dropped.
+    pub fn pending(&self) -> usize {
+        lock(&self.shared).pending.len()
+    }
+
     /// The earliest deadline of a timer that has not fired or been dropped.
     pub fn next_deadline(&self) -> Option<MonoTime> {
         lock(&self.shared)

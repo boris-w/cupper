@@ -119,7 +119,10 @@ impl Worktrees {
     /// session's ID; `update-index --refresh` in it a second later. `heard`
     /// gets the checkout's progress and the repo tier's notices. A
     /// `required` filter, which the repo tier nulls, fails it
-    /// `filter_unsupported`.
+    /// `filter_unsupported`. What a crash left (design 5.2.13) is taken
+    /// over: a worktree there is not added again, nor locked again once
+    /// locked, and a branch there is checked out without `-b`; a worktree
+    /// whose directory is gone fails it `not_found`.
     pub async fn add(
         &self,
         plan: &Plan,
@@ -129,22 +132,6 @@ impl Worktrees {
         let writable = writable(&self.readers).await?;
         let (repo, path) = (&plan.repo, plan.path.as_os_str());
         let lock = self.locks.hold(repo).await?;
-        let (said, mut chunks) = mpsc::unbounded_channel();
-        let (branch, base) = (plan.branch.as_ref(), plan.base_ref.as_ref());
-        let args = [OsStr::new("-b"), branch, path, base];
-        let add = GitCmd::repo(RepoOp::WorktreeAdd).args(args).heard(said);
-        let follow = async {
-            let (mut said, mut last) = (Vec::new(), None);
-            while let Some(chunk) = chunks.recv().await {
-                said.extend(chunk);
-                let changed = checkout(&mut said).filter(|n| last != Some(*n));
-                if let Some(n) = changed {
-                    last = Some(n);
-                    heard(progress(WorkspacePhase::Checkout, Some(n)));
-                }
-            }
-        };
-        let (added, ()) = tokio::join!(self.run(repo, &writable, add), follow);
         let failed = |err| {
             let required = matches!(err, GitError::RequiredFilter(_));
             heard_notice(&heard, err.notice());
@@ -154,12 +141,37 @@ impl Worktrees {
                 false => err,
             }
         };
-        heard_notice(&heard, added.map_err(failed)?.notice);
-        let reason = format!("cupper session {session}");
-        let args = [OsStr::new("--reason"), reason.as_ref(), path];
-        let lock_it = GitCmd::repo(RepoOp::WorktreeLock).args(args);
-        let locked = self.run(repo, &writable, lock_it).await;
-        heard_notice(&heard, locked.map_err(failed)?.notice);
+        let list = GitCmd::repo(RepoOp::WorktreeList);
+        let list = self.run(repo, &writable, list).await.map_err(failed)?;
+        let locked = listed(&list.output.stdout, &plan.path);
+        // Registered, its directory gone (`prunable`): only the user prunes,
+        // which takes their other stale worktrees too.
+        if locked.is_some() && !plan.path.is_dir() {
+            return Err(RpcError::app(
+                ErrorCode::NotFound,
+                "the worktree's directory is gone",
+            ));
+        }
+        if locked.is_none() {
+            let heads = format!("refs/heads/{}", plan.branch);
+            let heads = GitCmd::repo(RepoOp::ForEachRef).args(["--format=%(refname)", &heads]);
+            let heads = self.run(repo, &writable, heads).await.map_err(failed)?;
+            self.checkout(
+                plan,
+                &writable,
+                !heads.output.stdout.is_empty(),
+                &failed,
+                &heard,
+            )
+            .await?;
+        }
+        if locked != Some(true) {
+            let reason = format!("cupper session {session}");
+            let args = [OsStr::new("--reason"), reason.as_ref(), path];
+            let lock_it = GitCmd::repo(RepoOp::WorktreeLock).args(args);
+            let locked = self.run(repo, &writable, lock_it).await;
+            heard_notice(&heard, locked.map_err(failed)?.notice);
+        }
         drop(lock);
         heard(progress(WorkspacePhase::Refresh, None));
         let delay = self.durations.get(WORKTREE_REFRESH);
@@ -169,6 +181,41 @@ impl Worktrees {
         // failure fails nothing.
         let refresh = GitCmd::repo(RepoOp::RefreshIndex);
         let _ = self.run(&plan.path, &writable, refresh).await;
+        Ok(())
+    }
+
+    /// `worktree add` of `plan`, of its new branch unless `branched`, the
+    /// checkout's progress to `heard`.
+    async fn checkout(
+        &self,
+        plan: &Plan,
+        writable: &[PathBuf],
+        branched: bool,
+        failed: &impl Fn(GitError) -> RpcError,
+        heard: &impl Fn(Heard),
+    ) -> Result<(), RpcError> {
+        let (said, mut chunks) = mpsc::unbounded_channel();
+        let (branch, base) = (plan.branch.as_ref(), plan.base_ref.as_ref());
+        let args = match branched {
+            true => vec![plan.path.as_os_str(), branch],
+            false => vec![OsStr::new("-b"), branch, plan.path.as_os_str(), base],
+        };
+        let add = GitCmd::repo(RepoOp::WorktreeAdd).args(args).heard(said);
+        let follow = async {
+            let (mut said, mut last) = (Vec::new(), None);
+            while let Some(chunk) = chunks.recv().await {
+                said.extend(chunk);
+                let changed = percent(&mut said).filter(|n| last != Some(*n));
+                if let Some(n) = changed {
+                    last = Some(n);
+                    heard(progress(WorkspacePhase::Checkout, Some(n)));
+                }
+            }
+        };
+        crate::failpoint!(WORKTREE_ADDING);
+        let (added, ()) = tokio::join!(self.run(&plan.repo, writable, add), follow);
+        heard_notice(heard, added.map_err(failed)?.notice);
+        crate::failpoint!(WORKTREE_ADDED);
         Ok(())
     }
 
@@ -227,9 +274,19 @@ fn heard_notice(heard: &impl Fn(Heard), notice: Option<RepoNotice>) {
     }
 }
 
+/// Whether `listed` (`worktree list --porcelain -z`) has the worktree at
+/// `path`, and then whether it is locked.
+fn listed(listed: &[u8], path: &Path) -> Option<bool> {
+    let want = [b"worktree ", path.as_os_str().as_bytes()].concat();
+    let fields: Vec<&[u8]> = listed.split(|b| *b == 0).collect();
+    let mut records = fields.split(|field| field.is_empty());
+    let record = records.find(|record| record.first() == Some(&want.as_slice()))?;
+    Some(record.iter().any(|field| field.starts_with(b"locked")))
+}
+
 /// The percentage of the last `Updating files: n% (..)` among the whole
 /// lines of what git `said`, which it takes out of `said`.
-fn checkout(said: &mut Vec<u8>) -> Option<u8> {
+fn percent(said: &mut Vec<u8>) -> Option<u8> {
     let end = said.iter().rposition(|b| matches!(b, b'\r' | b'\n'))?;
     let whole: Vec<u8> = said.drain(..=end).collect();
     let whole = String::from_utf8_lossy(&whole);
@@ -246,13 +303,13 @@ mod tests {
     #[test]
     fn unit_git_worktree_progress_is_the_last_whole_line_of_the_checkout() {
         let mut said = b"Preparing worktree (new branch 'cupper/x')\nUpdating files:".to_vec();
-        assert_eq!(checkout(&mut said), None);
+        assert_eq!(percent(&mut said), None);
         assert_eq!(said, b"Updating files:");
         said.extend(b"  1% (20/2000)\rUpdating files:  2% (40/2000)\rUpdating files:  3");
-        assert_eq!(checkout(&mut said), Some(2));
+        assert_eq!(percent(&mut said), Some(2));
         said.extend(b"% (60/2000)\rUpdating files: 100% (2000/2000), done.\n");
-        assert_eq!((checkout(&mut said), said.len()), (Some(100), 0));
+        assert_eq!((percent(&mut said), said.len()), (Some(100), 0));
         said.extend(b"HEAD is now at c31b134 init\n");
-        assert_eq!(checkout(&mut said), None);
+        assert_eq!(percent(&mut said), None);
     }
 }
