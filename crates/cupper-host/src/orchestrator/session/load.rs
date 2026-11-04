@@ -182,6 +182,7 @@ pub(super) async fn load(
     let first = first.map(|content| SendRequest {
         content,
         mode: SendMode::Queue,
+        expected_turn: None,
         by: setter.id.clone(),
         reply_to: None,
     });

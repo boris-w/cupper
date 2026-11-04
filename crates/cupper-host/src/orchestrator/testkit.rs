@@ -29,20 +29,35 @@ pub fn text(text: &str) -> PromptContent {
 }
 
 pub fn send(message: &str, mode: SendMode) -> Input {
+    steer_into(message, mode, None)
+}
+
+/// `message` sent as `mode`, naming `turn` as the one the client saw running.
+pub fn steer_into(message: &str, mode: SendMode, turn: Option<&TurnId>) -> Input {
     Input::Send(SendRequest {
         content: text(message),
         mode,
+        expected_turn: turn.cloned(),
         by: "pr_test".parse().unwrap(),
         reply_to: None,
     })
 }
 
 pub fn attached(instance: u128) -> Input {
+    attached_with(instance, false)
+}
+
+/// [`attached`] to an agent that steers.
+pub fn attached_steering(instance: u128) -> Input {
+    attached_with(instance, true)
+}
+
+fn attached_with(instance: u128, steer: bool) -> Input {
     let capabilities = serde_json::from_value(serde_json::json!({
         "agent": "claude",
         "versions": {"adapter": "1", "cli": "1", "cli_compat": "verified"},
         "prompt": {"image": true, "file_ref": true, "max_image_bytes": 1},
-        "turn": {"queue": true, "steer": {"supported": false, "side_effects": false},
+        "turn": {"queue": true, "steer": {"supported": steer, "side_effects": false},
                  "interrupt": true, "interrupt_stops_commands": true},
         "session": {"resume": true, "load_history": false, "fork": false},
         "config": [], "commands": [],
@@ -104,6 +119,7 @@ pub fn kinds(actions: &[Action]) -> Vec<&str> {
             Action::Driver(DriverCommand::Prompt { .. }) => "prompt",
             Action::Driver(DriverCommand::Cancel { .. }) => "cancel",
             Action::Driver(DriverCommand::Close { .. }) => "close",
+            Action::Driver(DriverCommand::Steer { .. }) => "steer",
             Action::Driver(_) => "driver",
             Action::Attach(AttachTarget::New) => "attach",
             Action::Attach(AttachTarget::Resume(_)) => "resume",
@@ -115,6 +131,7 @@ pub fn kinds(actions: &[Action]) -> Vec<&str> {
             Action::Timer(TimerRequest::Cancel(_)) => "untimer",
             Action::Reply(_) => "reply",
             Action::Check => "check",
+            Action::Log(_) => "log",
         })
         .collect()
 }

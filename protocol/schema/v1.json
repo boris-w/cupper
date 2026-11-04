@@ -2710,7 +2710,8 @@
             "not_prompting",
             "prompt_required",
             "timeout",
-            "agent_error"
+            "agent_error",
+            "steer_pending"
           ],
           "type": "string"
         },
@@ -2718,7 +2719,7 @@
           "type": "string"
         }
       ],
-      "description": "Open enum: unknown values must be accepted. Known: unsupported turn_mismatch not_prompting prompt_required timeout agent_error "
+      "description": "Open enum: unknown values must be accepted. Known: unsupported turn_mismatch not_prompting prompt_required timeout agent_error steer_pending "
     },
     "Feature": {
       "anyOf": [

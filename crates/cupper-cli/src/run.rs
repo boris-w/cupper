@@ -232,11 +232,24 @@ impl Cli {
                 session,
                 text: message,
                 wait,
+                steer,
             } => {
-                let send = json!({"command_id": command_id(), "session_id": session, "mode": "queue",
+                let mut send = json!({"command_id": command_id(), "session_id": session, "mode": "queue",
                     "content": text(&message)});
+                if steer {
+                    // The turn the session's view has running.
+                    let view = self.session(&session).await?;
+                    let running = view.running_turn().map(|turn| &turn.started.turn_id);
+                    (send["mode"], send["expected_turn_id"]) = (json!("steer"), json!(running));
+                }
                 let sent = self.call::<SessionSend>(send).await?;
-                out.emit(json!(sent), || format!("{}", json!(sent.disposition)));
+                let reason = sent
+                    .fallback_reason
+                    .as_ref()
+                    .map(|r| format!(" {}", json!(r)));
+                out.emit(json!(sent), || {
+                    format!("{}{}", json!(sent.disposition), reason.unwrap_or_default())
+                });
                 if wait {
                     self.wait(session, sent.turn_id, sent.queue_id).await?;
                 }

@@ -1083,7 +1083,7 @@ export type Fallback = {
 export type FallbackKind = "item" | "hidden" | (string & {});
 
 /**
- * Open enum: unknown values must be accepted. Known: unsupported turn_mismatch not_prompting prompt_required timeout agent_error
+ * Open enum: unknown values must be accepted. Known: unsupported turn_mismatch not_prompting prompt_required timeout agent_error steer_pending
  */
 export type FallbackReason =
   | "unsupported"
@@ -1092,6 +1092,7 @@ export type FallbackReason =
   | "prompt_required"
   | "timeout"
   | "agent_error"
+  | "steer_pending"
   | (string & {});
 
 /**

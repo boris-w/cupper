@@ -90,6 +90,13 @@ impl QueueCore {
         Some((entry, self.updated()))
     }
 
+    /// Takes the entry `queue_id` out, wherever it is.
+    pub fn take(&mut self, queue_id: &QueueId) -> Option<(QueueEntry, QueueUpdated)> {
+        let at = self.entries.iter().position(|e| e.queue_id == *queue_id)?;
+        let entry = self.entries.remove(at)?;
+        Some((entry, self.updated()))
+    }
+
     /// Holds the queue back. Nothing changes when it is already paused, or
     /// empty: no message would wait.
     pub fn pause(&mut self, reason: PauseReason) -> Option<QueueUpdated> {

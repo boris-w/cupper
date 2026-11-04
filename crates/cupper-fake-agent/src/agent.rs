@@ -64,6 +64,8 @@ pub enum Steer {
     Persona,
     Inject,
     NewTurn,
+    PromptRequired,
+    Error,
     Hang,
 }
 
@@ -192,7 +194,11 @@ fn answer(
                 "_auth/status_update",
                 persona::auth_status(persona, shared.config.logged_in),
             ));
-            Ok(persona::initialize(persona))
+            let mut init = persona::initialize(persona);
+            if shared.config.fault("no_steering") {
+                init["_meta"]["steering"]["supported"] = json!(false);
+            }
+            Ok(init)
         }
         "session/new" => {
             NewSessionRequest::parse_message(method, params)?;
@@ -351,6 +357,8 @@ fn steering(
         Steer::Hang => return Ok(()),
         Steer::Inject => "injected",
         Steer::NewTurn => "startedNewTurn",
+        Steer::PromptRequired => "promptRequired",
+        Steer::Error => return responder.respond_with_error(Error::internal_error()),
         Steer::Persona if session.inflight.is_some() => "injected",
         // Codex ignores `idleBehavior` (K11).
         Steer::Persona if persona == Persona::Claude && prompt_required => "promptRequired",
