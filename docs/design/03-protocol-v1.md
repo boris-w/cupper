@@ -144,7 +144,7 @@
 | `project/add` | 请求 | `{command_id, path}` | `{project_id, trust: {state, findings, findings_omitted?, trust_digest}}`（同一路径重复添加返回已有的 ID；扫描范围里没有文件时直接为 `trusted`，否则为 `untrusted`） | `not_found`（路径不存在） | 命令 | write | M1a |
 | `project/trust` | 请求 | `{command_id, project_id, trust_digest}` | `{trust_state}` | `conflict/digest_mismatch`（确认之后项目配置又变了）、`unavailable/scan_failed` | 命令 | privileged（只能经原生确认，[5.2.6](02-host.md#项目信任)） | M1a |
 | `project/trust_info` | 请求 | `{project_id}` | `{path, state, findings, findings_omitted?, trust_digest, diff_from_trusted?, diff_omitted?}`：重新扫描，供主进程弹原生确认框；`path` 是添加项目时解析出的目录（T135），确认框据此显示是哪个项目 | `not_found` | 天然 | read | M1a |
-| `project/remove` | 请求 | `{command_id, project_id}` | `{}`（项目下的会话一并归档） | `conflict`（有运行中的回合） | 命令 | write | M1b |
+| `project/remove` | 请求 | `{command_id, project_id}` | `{}`（项目下的会话一并归档；T241：先问遍所有会话，全部空闲才动手） | `conflict`（有运行中的回合或正在准备工作区，什么都不改） | 命令 | write | M1b |
 | `agents/capabilities` | 请求 | `{agent}` | 该 agent 最近一次的能力描述（[5.3.7](#537-会话能力描述)）及其采集时间 | `unavailable`（CLI 或运行时不可用，带 `reason`） | 天然 | read | M1a |
 | `agents/refresh` | 请求 | `{agent}` | `{status}`：重新发现 CLI、检查版本；能力缓存为空时做一次探测 | `unavailable` | 天然 | write | M1a |
 | `agents/restart` | 请求 | `{command_id, agent}` | `{}`：重启该 agent 的适配器，影响它的所有会话 | — | 命令 | write | M1b |
@@ -424,7 +424,7 @@ ConfigOption {
 | `conflict` | `already_resolved`、`turn_mismatch`、`digest_mismatch`、`too_early`、`version_mismatch`、`stale_diff`、`outcome_unknown`、`turn_running`、`config_unconfirmed` | 否 | 收起或刷新；`already_resolved` 显示"已在别处处理"（AP-4） |
 | `expired` | `adapter_exited`、`host_restarted` | 否 | 收起请求面板 |
 | `unsupported` | `data.capability` 指出能力；`not_a_repo` | 否 | 隐藏功能 |
-| `unavailable` | `cli_missing`、`cli_not_logged_in`、`cli_too_old`、`runtime_installing`、`runtime_failed`、`adapter_starting`、`adapter_crashed`、`pending_upgrade`、`quota_exhausted`、`app_not_found`、`snapshot_missing`、`index_unmerged`、`project_untrusted`、`scan_failed`、`session_archived`（T240：已归档会话的写调用） | 视 reason | 显示恢复指引（AG-2、MS-5） |
+| `unavailable` | `cli_missing`、`cli_not_logged_in`、`cli_too_old`、`runtime_installing`、`runtime_failed`、`adapter_starting`、`adapter_crashed`、`pending_upgrade`、`quota_exhausted`、`app_not_found`、`snapshot_missing`、`index_unmerged`、`project_untrusted`、`scan_failed`、`session_archived`（T240：已归档会话的写调用）、`session_read_only`（T241：只读会话的写调用） | 视 reason | 显示恢复指引（AG-2、MS-5） |
 | `agent_error` | `data.agent_code`、`data.agent_message`（截断、脱敏） | 否 | 显示 |
 | `git_error` | `hook_failed`、`nothing_to_commit`、`signing_failed`（T123：gpg、ssh、x509 签名失败，界面给出改用图形版 pinentry 的指引）、`auth_failed`、`rejected`、`lock_held`、`unsafe_repo_config`、`repo_config_changed`、`filter_unsupported`、`lfs_object_missing`（T237：宿主不下载本地没有的 LFS 对象，界面提示在终端里运行 `git lfs fetch`） | 视 reason | 显示 stderr 摘要或原因 |
 | `idempotency_mismatch` | — | 否 | 程序错误 |
