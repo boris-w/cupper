@@ -109,3 +109,17 @@ T235 之后，快照档的 git-lfs 把它 clean 过的文件内容放在 `ws/<�
 - `worktrees`：sessions 表里 `workspace_kind = 'worktree'` 的路径，只算 worktree 根目录下的。
 - 启动清理在阻塞线程池里跑。名字带本进程 pid 的跳过，免得和这次运行刚开始的清除抢着删同一个目录。
 - 没有 git 时：清除照样改名（这时没有快照会跑，也就不用拿闸）；describe 的 `snapshot_bytes` 回 0。
+
+### 4.4 2026-11-09：用例写完（main 把硬停止线放到 640）
+
+- `4b409456`：用例里查出来的两处。
+  - 快照在 git 工具的目录里，清除和 `host/storage` 原先用的是 `<数据目录>/git`。生产环境里两者相同，但会话夹具的 git 工具另有目录。现在清除连同闸都从 git 工具取，没有 git 时回 `tool()` 的错误。
+  - worktree 根目录先取真实路径再比较：sessions 表里记的是 worktree 的真实路径。
+- `566d4fb4`：两条用例，`cargo xtask size` 最终 `+624 −13`。
+  - `it_snapshot_purge_frees_the_snapshots_and_old_turns_go_missing`（会话夹具）。
+  - `it_snapshot_purge_waits_for_snapshots_and_the_next_go_to_the_new_store`（快照档）。验证过：把 `open` 里的共享锁换成一把无关的锁，这条用例会在"the purge waits"处失败。
+- "有回合"标记那 3 行没有确定性的用例。原因：
+  - 回合快照是在 `commit()` 末尾、写库完成之后才派出去的，标记在 `input()` 末尾写。两者之间没有 await，除非同一批里还有后续输入（只有 coalescer 的 `Input::Spilled`）。
+  - 所以这个窗口只在两种情况下打开：多线程运行时上，快照任务在另一个线程里抢先做完；或者同一批里接着处理一个 spill，它的写库要等。
+  - 我先试了"让写库停住"的办法，但停住的是快照派出之前的那次写库，所以用例超时，证明不了什么。要确定性地覆盖，得在派出和写标记之间加一个只给测试用的钩子，我没有加。
+  - 这比 4.3 节里写的窗口窄。改动本身照旧能把它关上。
