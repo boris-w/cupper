@@ -7,7 +7,7 @@
 // the rows of `ALWAYS`.
 
 import type { Placeholder, SessionView } from "@cupper/host-client";
-import type { Entry, ItemView, PromptBlock } from "@cupper/protocol";
+import type { Entry, ItemView, PromptBlock, SnapshotRecorded } from "@cupper/protocol";
 
 import type { StreamRow, ToolData } from "./stream";
 
@@ -16,10 +16,20 @@ type ViewJson = ReturnType<SessionView["toJSON"]>;
 /** Where the history before the window stands. */
 export type History = "none" | "more" | "loading" | "failed";
 
-/** What a folded turn still shows besides its final answer (design 5.7.4); T132's change card joins. */
+/** What a folded turn still shows besides its final answer (design 5.7.4). */
 export const ALWAYS: ReadonlySet<string> = new Set([
-  ...["plan", "error", "notice", "late_tool_output", "request"],
+  ...["plan", "error", "notice", "late_tool_output", "request", "turn_changes"],
 ]);
+
+/**
+ * Whether a turn's end snapshot makes a change card (T132): one recorded
+ * with changes, or one that could not be recorded, but not in a folder that
+ * is no git repository, where every turn would have one.
+ */
+function hasChanges({ status, stat, reason }: SnapshotRecorded): boolean {
+  if (status === "ok" || status === "partial") return (stat?.files ?? 0) > 0;
+  return !(status === "skipped" && reason === "not_a_repo");
+}
 
 /** Steered messages show in a folded turn; the others open it, above its header. */
 const opening = (row: StreamRow) => row.kind === "user_message" && !row.steered;
@@ -39,6 +49,11 @@ export function flatten(
     const folded = folds && !open.has(turn_id);
     const body: StreamRow[] = [];
     entries(view, turn.entries, body, n === view.turns.length - 1);
+    const end = turn.snapshots.find((snapshot) => snapshot.phase === "end");
+    if (end && hasChanges(end)) {
+      const key = `changes:${turn_id}`;
+      body.push({ kind: "turn_changes", key, turnId: turn_id, turnNo: turn_no, snapshot: end });
+    }
     const lead = body.findIndex((row) => !opening(row));
     const work = lead === -1 ? [] : body.splice(lead);
     const final = new Set(completed?.final_item_ids);

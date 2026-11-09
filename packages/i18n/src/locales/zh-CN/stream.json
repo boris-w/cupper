@@ -101,5 +101,16 @@
   "to_bottom": "回到底部",
   "reply_to": "附于对「{{title}}」的拒绝",
   "reply_to_other": "附于一次拒绝",
-  "change_model": "换模型"
+  "change_model": "换模型",
+  "changes_title": "{{count}} 个文件已更改",
+  "changes_undo": "撤销",
+  "changes_partial": "有 {{count}} 个文件没有记录下来，不能撤销",
+  "changes_unrecorded": "这一轮的改动没能记录",
+  "changes_reason_timeout": "记录超时了，不能撤销",
+  "changes_reason_unsafe_repo_config": "仓库的配置不安全，没有记录，不能撤销",
+  "changes_reason_git_failed": "git 出错了，不能撤销",
+  "changes_reason_other": "没有记录（{{reason}}），不能撤销",
+  "changes_stale": "之后已有新的改动，无法自动撤销",
+  "changes_open_review": "打开审查面板",
+  "changes_lfs": "有 LFS 对象不在本地。请在终端里运行 git lfs fetch，再撤销。"
 }
