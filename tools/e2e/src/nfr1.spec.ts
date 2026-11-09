@@ -226,7 +226,11 @@ test(
     const main = cupper.window.locator("main");
     // The window's first turn, at the top of the list.
     await expect(main.getByText("say t23", { exact: true })).toBeVisible();
-    await main.locator("[data-stream-list]").evaluate((list) => (list.scrollTop = 0));
+    // The user's wheel, then the top: only the user takes the list from its end (T245).
+    await main.locator("[data-stream-list]").evaluate((list) => {
+      list.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -1000 }));
+      list.scrollTop = 0;
+    });
     const anchor = main.getByText("say t4", { exact: true });
     await expect(anchor).toBeVisible();
     await expect(main.getByText("say t3", { exact: true })).toHaveCount(0);
