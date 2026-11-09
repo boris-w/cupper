@@ -212,7 +212,7 @@ stateDiagram-v2
 |---|---|
 | 空闲时发送 | 开新回合 |
 | 回合进行中（含 `Autonomous`）发送，`mode: queue` | 追加到队列，写 `queue.updated`；回复 `disposition: queued` |
-| 回合进行中发送，`mode: steer` | 前提：能力里有 `steer`、`expected_turn_id` 等于当前回合、处于 `Prompting`。调用驱动的 steer（超时 5 s）：`injected` → 在当前回合写一条 `steered: true` 的用户消息；`started_new_turn` → 开一个 `origin: steer_new_turn` 的回合；`prompt_required`、不支持、超时、出错 → **自动转为排队**，回复里带原因 |
+| 回合进行中发送，`mode: steer` | 前提：能力里有 `steer`、`expected_turn_id` 等于当前回合、处于 `Prompting`。调用驱动的 steer（超时 5 s）：`injected` → 在当前回合写一条 `steered: true` 的用户消息；`started_new_turn` → 开一个 `origin: steer_new_turn` 的回合；`prompt_required`、不支持、超时、出错 → **自动转为排队**，回复里带原因。T140 落实：同一会话同时只有一个插话在途，再来的 `steer` 排队（`steer_pending`）；插话在途时回合结束，照常 Settle、拍结束快照，`turn.completed` 推迟到插话有结果之后（最多 5 s），`injected` 的消息写在它之前；中断不取消在途的插话；适配器退出、宿主强制退出按 `agent_error`；超时之后晚到的 `injected`、`started_new_turn`：那一条还在队列里、目标回合也没完成，就取出来按应答处理（写 `queue.updated`），已经出队的只记日志；`started_new_turn` 在原回合以它自己的 prompt 响应结束之后再开 `steer_new_turn` 回合，这个回合没有 prompt，按自发回合的规则结束 |
 | 回合正常结束 | 队列未暂停就取出队首，开 `origin: queued` 的新回合 |
 | 回合被取消、失败或中断 | 队列暂停（`queue.paused`），等用户发新消息或调用 `session/queue_resume`。Codex 拒绝审批导致的取消（#556）不暂停，因为这是用户主动拒绝，后面排着的消息正是"换个做法" |
 | 中断 | 发 `session/cancel`；把挂着的交互请求标为 `cancelled`，对 ACP 回复 `Cancelled`（Codex 不会自己撤回）；进入 `Cancelling`，截止 10 s。截止后宿主把回合标为 `cancelled`（`stop_reason: host_timeout`），之后这个 prompt 的响应直接忽略 |
@@ -395,6 +395,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 - **复制 index 时保留 mtime**（等价 `cp -p`）。实验发现：换成新的 mtime 后，同一秒内改过、大小又没变的文件会被当成未修改，快照里留下旧内容（git 的 racy 检测失效）。SP-5 的临时 index 方案同样受影响，这里一并改正。
 - **快照**：预检排除超过 50 MB 的未跟踪文件、嵌套仓库、超大未跟踪目录 → `add -A --ignore-errors -- <排除用的 pathspec>`（固定加 `-c core.safecrlf=false -c advice.addEmbeddedRepo=false`）→ `write-tree`。tree id 写进 `turns` 表，排除的路径写进 `snapshot.recorded` 事件。
   - **快照档的两处细节**（T061，2026-10-26）："超大未跟踪目录"暂定为整个未跟踪目录里文件超过 10,000 个；快照档也带 `HOME`，只为让 git 找到默认的全局忽略文件与属性文件（否则快照与用户的 git 结果不同、属性里的过滤器会漏检），全局配置由 `GIT_CONFIG_GLOBAL` 指向 cupper 的空文件代替，不会读到 `~/.gitconfig` 和 XDG 的 `git/config`。快照档不执行用户配置里的程序，所以不发 `git.unsafe_repo_config`；读不出配置时快照记 `failed/git_failed`。
+- **清除快照对象**（P-6，T127）：`host/purge_snapshots` 清除所有仓库的私有对象库 `<数据目录>/git/<repo_key>/objects/`。有回合在运行或在准备时回 `conflict/turn_running`，什么都不清，因为它的起始快照会被删掉。快照档的调用不拿 `RepoLock`，所以清除与快照之间要另有互斥（每个仓库一道闸：快照共享、清除独占，具体做法 T127 开工时定），不能出现"一棵 tree 指向已被删掉的 blob"。先把对象库改名到同目录下的临时名、建一个空库，再删旧库，中途崩溃时启动清理会删掉残留的临时库。清除后清空这些仓库的 `DiffCache`；`turns` 表里的 tree id 保留，用到它们的 `git/diff`、`git/file_diff`、回合范围的 `git/revert` 回 `unavailable/snapshot_missing`。`host/storage` 的各项大小在阻塞线程池里计算，不在 actor 里做。
 - **与 SP-5 的关系**：仍然是"从用户 index 播种的临时 index + 私有对象库 + alternates"，只是 GIT_DIR 换成了 cupper 自己的。SP-5 否决的"影子仓库"是空 index 起步、没有 alternates，所以首次要 72 s、占 360 MB，还漏掉"被忽略但已跟踪"的文件；这里播种了 index、读仓库原有的对象，这三个问题都不存在（实验验证）。
 - **性能**（实验，合成仓库，热缓存）：`add -A` 加 `write-tree` 本身与 SP-5 方案相当；额外开销是每次重新生成配置，读一次有效配置约 10 ms，加一次 `rev-parse`，预计每次多 15–25 ms，远在 [5.9.6](09-testing.md#596-性能预算) 的预算之内。
 
@@ -561,7 +562,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 | `cupper watch <session>` | 订阅会话流，持续输出 | read |
 | `cupper history <session>` | `history/page` | read |
 | `cupper new --agent <a> --project <path> [--worktree --base <ref>] <message>` | `project/add`、`session/create` | write |
-| `cupper send <session> <text> [--steer] [--wait]` | `session/send` | write |
+| `cupper send <session> <text> [--steer] [--wait]` | `session/send`（`--steer` 的 `expected_turn_id` 取会话视图里正在运行的回合，T140） | write |
 | `cupper interrupt <session>` | `session/interrupt` | write |
 | `cupper pending [<session>]` | 读视图 | read |
 | `cupper approve <session> <request> [--option <id>]` / `reject` | `interaction/respond` | approve |

@@ -103,7 +103,7 @@ bundle identifier 的前缀定为 `dev.cupper`（Q5，已定（2026-10-16），�
 | `read` | 订阅、查询、历史、blob 下载、在场、标记已读 |
 | `write` | 会改变会话、项目、工作区或设置的普通操作 |
 | `approve` | 回答审批和提问（不含 `allow_always` 类选项）；把会话放宽到 `elevated` 档位也要求它 |
-| `privileged` | 持久或大幅扩大权限的操作：`allow_always` 类选项、切到 `full_access`、确认会话档位、信任项目、安全相关的设置、提权决定、宿主退出和升级 |
+| `privileged` | 持久或大幅扩大权限的操作：`allow_always` 类选项、切到 `full_access`、确认会话档位、信任项目、安全相关的设置、提权决定、宿主退出和升级；另有不可撤销的清除快照对象（`host/purge_snapshots`，P-6） |
 | `ui_local` | 只对本机桌面界面有意义的操作：在外部应用中打开工作区、导出诊断包 |
 | `test` | 测试专用方法（`test/*`），只在 `test-harness` 构建中存在 |
 

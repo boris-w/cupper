@@ -2628,6 +2628,7 @@
           "$ref": "#/$defs/RunStateSource"
         },
         "thinking": {
+          "description": "The agent thinks aloud, as its options show (T243). For entry points\nonly: thought items are extracted and shown however it is.",
           "type": "boolean"
         }
       },
@@ -2709,7 +2710,8 @@
             "not_prompting",
             "prompt_required",
             "timeout",
-            "agent_error"
+            "agent_error",
+            "steer_pending"
           ],
           "type": "string"
         },
@@ -2717,7 +2719,7 @@
           "type": "string"
         }
       ],
-      "description": "Open enum: unknown values must be accepted. Known: unsupported turn_mismatch not_prompting prompt_required timeout agent_error "
+      "description": "Open enum: unknown values must be accepted. Known: unsupported turn_mismatch not_prompting prompt_required timeout agent_error steer_pending "
     },
     "Feature": {
       "anyOf": [
@@ -3848,6 +3850,7 @@
     "InteractionCapabilities": {
       "properties": {
         "plan_confirm": {
+          "description": "The agent can ask to confirm a plan, as its options show (T243). For\nentry points only: a `plan_confirm` request is shown however it is.",
           "type": "boolean"
         },
         "question_forms": {

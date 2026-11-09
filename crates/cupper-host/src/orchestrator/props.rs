@@ -5,7 +5,9 @@
 //! of the agent session and the actor's ports that answers the machine's
 //! actions and checks each one as it comes. Every run ends by answering
 //! everything until the session is idle. Each property asserts its own rules
-//! on top of the well-formedness every run checks.
+//! on top of the well-formedness every run checks. PROP-steer-only-prompting
+//! adds steers, naming the running turn or another, and their answers, on
+//! an agent that steers.
 
 use std::collections::{HashMap, HashSet};
 use std::os::unix::process::ExitStatusExt;
@@ -22,10 +24,12 @@ use cupper_protocol::session::{
 };
 use proptest::prelude::*;
 
-use super::testkit::{agent_error, attached, machine, send, snapshot};
+use super::testkit::{
+    agent_error, attached, attached_steering, machine, send, snapshot, steer_into,
+};
 use super::turn::{Action, Disposition, Input, Reply, SendMode, TurnEnd, TurnMachine};
 use crate::clock::MonoTime;
-use crate::driver::api::{DriverCommand, DriverEvent, PromptTag, RunState};
+use crate::driver::api::{DriverCommand, DriverEvent, PromptTag, RunState, SteerOutcome};
 use crate::pure::{CoreDriver, Step};
 
 #[derive(Debug, Clone)]
@@ -47,6 +51,10 @@ enum Op {
     Attach(bool),
     Exit,
     Advance(u64),
+    /// A steer naming the running turn, or another.
+    Steer(bool),
+    /// The agent's answer to the latest steer, in time or late.
+    SteerAnswer(u8),
 }
 
 /// Whose rules a run asserts.
@@ -61,6 +69,8 @@ enum Prop {
     K1,
     /// PROP-prompt-inflight-no-end.
     NoEnd,
+    /// PROP-steer-only-prompting.
+    Steer,
 }
 use Prop::{Deadline, Fifo, K1, NoEnd};
 
@@ -94,6 +104,9 @@ fn ops() -> impl Strategy<Value = Vec<Op>> {
         3 => prop_oneof![4 => Just(true), 1 => Just(false)].prop_map(Op::Attach),
         1 => Just(Op::Exit),
         4 => prop_oneof![0..500_u64, 2_500..3_500_u64, 9_000..12_000_u64].prop_map(Op::Advance),
+        // Steers only where the agent steers: PROP-steer-only-prompting.
+        4 => any::<bool>().prop_map(Op::Steer),
+        3 => any::<u8>().prop_map(Op::SteerAnswer),
     ];
     prop::collection::vec(op, 0..100)
 }
@@ -141,6 +154,8 @@ struct World {
     /// Within a step: the pause the turn that just completed calls for, and
     /// whether messages were waiting then.
     pause_due: Option<(Option<PauseReason>, bool)>,
+    /// The deadline of the steer the agent has not answered.
+    steer_due: Option<MonoTime>,
 }
 
 impl World {
@@ -206,12 +221,17 @@ impl World {
             Op::Attach(ok) => {
                 self.attaching = false;
                 let failed = Input::Attached(Err(agent_error()));
-                if ok { attached(self.instance) } else { failed }
+                match (ok, self.prop) {
+                    (true, Prop::Steer) => attached_steering(self.instance),
+                    (true, _) => attached(self.instance),
+                    (false, _) => failed,
+                }
             }
             Op::Exit => {
                 // A dead adapter answers nothing; the runtime starts another.
                 self.running.clear();
                 self.answerable.clear();
+                self.steer_due = None;
                 self.instance += 1;
                 Input::Driver(DriverEvent::AdapterExited {
                     instance: AdapterInstanceId::from_uuid(self.instance - 1),
@@ -223,6 +243,45 @@ impl World {
             Op::Advance(ms) => {
                 self.feed(Step::Advance(Duration::from_millis(ms)), None);
                 return;
+            }
+            Op::Steer(_) | Op::SteerAnswer(_) if self.prop != Prop::Steer => return,
+            Op::Steer(named) => {
+                let other = TurnId::from_uuid(u128::MAX);
+                let turn = before.clone().filter(|_| named).unwrap_or(other);
+                let tag = |tag: &PromptTag| self.prompt_turn.get(tag) == Some(&turn);
+                let prompting = self.running.iter().any(tag)
+                    && !self.interrupted.contains(&turn)
+                    && !self.settled.contains(&turn);
+                let free = self.steer_due.is_none_or(|due| self.m.0.now().mono >= due);
+                let actions = self.feed(
+                    Step::Input(steer_into("s", SendMode::Steer, Some(&turn))),
+                    None,
+                );
+                let steered = actions
+                    .iter()
+                    .any(|a| matches!(a, Action::Driver(DriverCommand::Steer { .. })));
+                let ok = steered == (named && prompting && free);
+                self.must(
+                    Prop::Steer,
+                    ok,
+                    "a steer goes only into a prompting turn it names",
+                );
+                if steered {
+                    self.steer_due = Some(self.m.0.now().mono + Duration::from_secs(5));
+                }
+                return;
+            }
+            Op::SteerAnswer(n) => {
+                if self.steer_due.is_some_and(|due| self.m.0.now().mono < due) {
+                    self.steer_due = None;
+                }
+                Input::Driver(match n % 5 {
+                    0 => DriverEvent::SteerDone(SteerOutcome::Injected),
+                    1 => DriverEvent::SteerDone(SteerOutcome::StartedNewTurn),
+                    2 => DriverEvent::SteerDone(SteerOutcome::PromptRequired),
+                    3 => DriverEvent::SteerDone(SteerOutcome::Unsupported),
+                    _ => DriverEvent::SteerFailed(agent_error()),
+                })
             }
         };
         let actions = self.feed(Step::Input(input), answered);
@@ -373,6 +432,12 @@ impl World {
             Action::Settle { end, asks } => self.settle(at, end, asks, answered),
             Action::Complete(end) => {
                 let turn = &end.turn_id;
+                let ok = self.steer_due.is_none_or(|due| at >= due);
+                self.must(
+                    Prop::Steer,
+                    ok,
+                    "turn.completed waits for a steer in flight",
+                );
                 assert!(
                     self.settled.contains(turn),
                     "a turn settles, then completes"
@@ -481,7 +546,10 @@ impl World {
             while !self.snapshots.is_empty() {
                 self.apply(Op::Snapshot(0));
             }
-            if matches!(self.current, Some((_, TurnOrigin::Autonomous))) {
+            if matches!(
+                self.current,
+                Some((_, TurnOrigin::Autonomous | TurnOrigin::SteerNewTurn))
+            ) {
                 self.apply(Op::Plain(Box::new(Input::AutonomousEnded)));
             }
             if self.current.is_none() {
@@ -537,5 +605,10 @@ proptest! {
     #[test]
     fn prop_prompt_inflight_no_end_turn_waits_for_its_prompt(ops in ops()) {
         run(NoEnd, ops);
+    }
+
+    #[test]
+    fn prop_steer_only_prompting_a_steer_needs_the_prompting_turn_it_names(ops in ops()) {
+        run(Prop::Steer, ops);
     }
 }

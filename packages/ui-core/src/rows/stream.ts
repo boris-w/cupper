@@ -17,6 +17,7 @@ import type {
   Plan,
   PromptBlock,
   RequestView,
+  SnapshotRecorded,
   ToolCall,
   TurnStatus,
 } from "@cupper/protocol";
@@ -95,6 +96,14 @@ export type StreamRow =
       output: LateToolOutput;
       /** The output streamed so far. */
       text: string;
+    }
+  /** A finished turn's changes by its end snapshot (T132), after its final answer. */
+  | {
+      kind: "turn_changes";
+      key: string;
+      turnId: string;
+      turnNo: number;
+      snapshot: SnapshotRecorded;
     }
   /** An interaction request's place in the stream (T165). */
   | { kind: "request"; key: string; requestId: string; request?: RequestView }

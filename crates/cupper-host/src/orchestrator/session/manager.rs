@@ -350,6 +350,7 @@ impl SessionManager {
         let first = SendRequest {
             content: params.message,
             mode: SendMode::Queue,
+            expected_turn: None,
             by: principal.id,
             reply_to: None,
         };

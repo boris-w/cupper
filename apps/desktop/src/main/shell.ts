@@ -28,9 +28,9 @@ import { isMainDocument } from "./bridge/bridges";
 import { guardOf } from "./input";
 import type { Prefs } from "./prefs";
 import type { Privileged, PrivilegedUi } from "./privileged";
+import { REVIEW_DOCUMENT_URL } from "./window";
 
 /** Where the review document loads from (M1b, design 5.7.5). */
-const REVIEW_DOCUMENT_URL = "app://cupper-review/index.html";
 
 const fromMainDocument = (event: IpcMainEvent | IpcMainInvokeEvent) =>
   event.senderFrame !== null &&

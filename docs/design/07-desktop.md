@@ -136,7 +136,8 @@ type PrivilegedAction =
   | { kind: 'add_project' }                   // 选目录、project/add、信任确认一次完成
   | { kind: 'trust_project'; project_id: string }
   | { kind: 'elevation'; elevation_id: string }
-  | { kind: 'settings'; patch: SettingsPatch };
+  | { kind: 'settings'; patch: SettingsPatch }
+  | { kind: 'purge_snapshots' };              // 设置页"存储"的清除快照对象（T127 宿主、T147 界面）
 type PrivilegedResult =
   | { status: 'confirmed'; result?: unknown }  // create_session 带 session_id，add_project 带 project_id
   | { status: 'cancelled' } | { status: 'busy' } | { status: 'cooldown'; retry_after_ms: number }
@@ -513,8 +514,8 @@ v1.4 按用户决定 F1–F6（`docs/meetings/2026-10-19-ui-fidelity/minutes.md`
 
 | 方向 | 消息 |
 |---|---|
-| 主文档 → 审查文档 | `init {v, theme, locale, strings, zoom}`；`theme_changed`、`locale_changed`；`render {diff_token, path, hunks, drafts, expanded}`；`scroll_to {path, line?}`；`clear` |
-| 审查文档 → 主文档 | `ready {v}`；`need_file {path}`（懒加载）；`hunk_action {action: stage\|unstage\|revert, hunk_ids}`；`draft_comment {path, range, side, text}`；`key_forward {key, modifiers}` |
+| 主文档 → 审查文档 | `init {v, theme, locale, strings}`（T131：不带 `zoom`，页面缩放由 Chromium 传给进程外 iframe）；`theme_changed`（T131：没有 `locale_changed`，外壳没有运行时切换语言的事件）；`files {diff_token, files, collapsed, view, wrap}`（整个 diff 的文件和视图状态）与 `render {diff_token, path, hunks}`（一个文件的 hunk），草稿和范围操作由 T238 下发；`scroll_to {path, line?}`；`clear` |
+| 审查文档 → 主文档 | `ready {v}`；`need_file {diff_token, path}`（懒加载）；`set_collapsed`；`hunk_action {diff_token, path, action: stage\|unstage\|revert, hunk_ids?}`（不带 `hunk_ids` 表示整个文件）；`draft_comment {diff_token, comment: ReviewComment}`；`key_forward {key, meta, ctrl, alt, shift}`。T131：两侧共用一份 zod schema，主文档按令牌丢掉过期的消息 |
 
 - 主文档按持有的 `diff_token` 校验 `hunk_ids`，暂存和取消暂存直接执行。
 - **还原会丢掉用户的改动**：iframe 发来的 `revert` 只会在主文档里弹出一个确认控件（"还原这个 hunk？"；不自动获得焦点，同一时间只显示一个，[5.7.8](#578-安全加固的落点) 的 RP-11），只有在主文档里点这个控件（主进程记录到的、主框架上的真实输入）才发出 `git/revert`，不能凭 iframe 的一条消息就执行（安全确认 (iii)）。

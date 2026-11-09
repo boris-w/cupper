@@ -1033,6 +1033,10 @@ export type ExtractionCapabilities = {
   output_streaming: boolean;
   plan: PlanExtraction;
   run_state: RunStateSource;
+  /**
+   * The agent thinks aloud, as its options show (T243). For entry points
+   * only: thought items are extracted and shown however it is.
+   */
   thinking: boolean;
 };
 
@@ -1079,7 +1083,7 @@ export type Fallback = {
 export type FallbackKind = "item" | "hidden" | (string & {});
 
 /**
- * Open enum: unknown values must be accepted. Known: unsupported turn_mismatch not_prompting prompt_required timeout agent_error
+ * Open enum: unknown values must be accepted. Known: unsupported turn_mismatch not_prompting prompt_required timeout agent_error steer_pending
  */
 export type FallbackReason =
   | "unsupported"
@@ -1088,6 +1092,7 @@ export type FallbackReason =
   | "prompt_required"
   | "timeout"
   | "agent_error"
+  | "steer_pending"
   | (string & {});
 
 /**
@@ -1648,6 +1653,10 @@ export type IntentId = string;
 export type IntentReason = "needs_action" | "turn_completed" | "error" | (string & {});
 
 export type InteractionCapabilities = {
+  /**
+   * The agent can ask to confirm a plan, as its options show (T243). For
+   * entry points only: a `plan_confirm` request is shown however it is.
+   */
   plan_confirm: boolean;
   question_forms: boolean;
   /**

@@ -1025,6 +1025,11 @@ milestone = "M1b"
 UI-turn-changes = "pr"
 E2E-turn-changes-undo = "nightly"
 
+# 消息流贴底跟随的修正
+[T245]
+milestone = "M1b"
+UNIT-stream-follow = "pr"
+
 # （条件）审查面板后备：DiffHunksRenderer
 [T139]
 milestone = "M1b"

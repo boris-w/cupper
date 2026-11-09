@@ -52,7 +52,10 @@ function path(entry: Entry, parent: Map<string, string>, target: string): string
   return steps.map((node) => packageOf(node)?.name ?? node);
 }
 
-/** Whether an SPDX expression's licenses are allowed: any side of `OR`, both of `AND`. */
+/**
+ * Whether an SPDX expression's licenses are allowed: any side of `OR`, both
+ * of `AND`. SPDX identifiers match whatever their case (`apache-2.0`).
+ */
 export function allowedLicense(expression: string, allow: Set<string>): boolean {
   const text = expression.trim().replace(/^\((.*)\)$/, "$1");
   const either = text.split(/\s+OR\s+/);
@@ -63,7 +66,8 @@ export function allowedLicense(expression: string, allow: Set<string>): boolean 
   if (both.length > 1) {
     return both.every((part) => allowedLicense(part, allow));
   }
-  return allow.has(text);
+  const lower = text.toLowerCase();
+  return [...allow].some((id) => id.toLowerCase() === lower);
 }
 
 /** The entry's problems: forbidden packages with their path, and licenses outside the allowlist. */

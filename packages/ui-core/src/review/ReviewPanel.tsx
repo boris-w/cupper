@@ -1,13 +1,15 @@
 // The "变更" tab of the side panel (design 5.7.5, GT-1 to GT-3, Codex's style,
 // ui-spec 4.6): the header with the scope, the counts and the options; the
-// caveats and the notice of a changed repository configuration; the diff view
-// (T131), or an empty state; the bulk actions' pill; and the revert
-// confirmation. The file tree (T232) and the Git actions (T233) join later.
+// caveats and the notice of a changed repository configuration; the file
+// tree (T232) beside the diff view, or an empty state; the Git actions
+// (T233); the bulk actions' pill; and the revert confirmation. The diff view,
+// the review document, stays loaded from one session to the next and while
+// there is nothing to show.
 
 import { RpcFailure } from "@cupper/host-client";
 import type { GitDiffResult } from "@cupper/protocol";
 import { useQueryClient } from "@tanstack/react-query";
-import { use, useEffect, useRef, useState, type ReactNode } from "react";
+import { use, useEffect, useMemo, type ReactNode } from "react";
 import { useStore } from "zustand";
 
 import { useHost, useT } from "../app/providers";
@@ -21,11 +23,11 @@ import { useUi } from "../state/provider";
 import { useActions } from "./actions";
 import { FileTree } from "./FileTree";
 import { GitActions } from "./GitActions";
+import { ReviewFrame } from "./ReviewFrame";
 import { RevertConfirm } from "./RevertConfirm";
 import {
-  createReviewStore,
   diffKey,
-  ReviewContext,
+  diffScope,
   SCOPES,
   useDiff,
   useReviewStore,
@@ -34,39 +36,43 @@ import {
 } from "./state";
 import { ACTIONS, addComment, commentsOf, type ReviewViewProps } from "./view";
 
-/** `fileTree` and `onFileTree`: the file tree's preference (⌘⇧E), which the shell keeps. */
-export function ReviewPanel(props: { fileTree: boolean; onFileTree(): void }) {
-  const t = useT();
+interface PanelProps {
+  /** The file tree's preference (⌘⇧E), which the shell keeps. */
+  fileTree: boolean;
+  onFileTree(): void;
+  /** Whether the panel is on screen; a hidden one asks the host for nothing. */
+  active: boolean;
+}
+
+export function ReviewPanel(props: PanelProps) {
   const ui = useUi();
   const sessionId = useStore(ui, ({ route }) =>
     route.page === "session" ? route.sessionId : undefined,
   );
-  const [store] = useState(createReviewStore);
-  if (sessionId === undefined) {
-    return (
-      <div className="flex h-full flex-col">
-        <Empty title={t("review:no_session")} />
-      </div>
-    );
-  }
-  return (
-    <ReviewContext value={store}>
-      <Review key={sessionId} sessionId={sessionId} {...props} />
-    </ReviewContext>
-  );
+  const store = useReviewStore();
+  const turn = useStore(store, (state) => state.turn);
+  // Another session's turn is no scope here.
+  useEffect(() => {
+    if (turn && turn.sessionId !== sessionId)
+      store.getState().set({ scope: "unstaged", turn: undefined });
+  }, [store, turn, sessionId]);
+  return <Review sessionId={sessionId} {...props} />;
 }
 
-function Review(props: { sessionId: string; fileTree: boolean; onFileTree(): void }) {
-  const { sessionId } = props;
+function Review(props: PanelProps & { sessionId?: string }) {
+  const sessionId = props.sessionId ?? "";
+  // A hidden panel, or one with no session, asks the host for nothing.
+  const enabled = props.active && props.sessionId !== undefined;
   const t = useT();
   const ui = useUi();
   const store = useReviewStore();
   const state = useStore(store);
-  const diff = useDiff(sessionId, state.scope);
-  const status = useStatus(sessionId);
+  const diff = useDiff(sessionId, diffScope(state), enabled);
+  const status = useStatus(sessionId, enabled);
   const actions = useActions(sessionId);
-  const View = use(SlotsContext).reviewView ?? FileList;
+  const Slot = use(SlotsContext).reviewView;
   const attachments = useStore(ui, (ui) => ui.attachments[sessionId]);
+  const drafts = useMemo(() => commentsOf(attachments), [attachments]);
   const changed = status.data?.repo_config_changed ?? [];
   const files = diff.data?.files ?? [];
   // The diff view's and the file tree's actions, within what the scope offers.
@@ -84,7 +90,10 @@ function Review(props: { sessionId: string; fileTree: boolean; onFileTree(): voi
   };
 
   let body: ReactNode;
-  if (diff.isPending) {
+  let view: ReviewViewProps | undefined;
+  if (!props.sessionId) {
+    body = <Empty title={t("review:no_session")} />;
+  } else if (diff.isPending) {
     body = <Spinner className="m-auto" />;
   } else if (diff.isError) {
     const data = diff.error instanceof RpcFailure ? diff.error.error.data : undefined;
@@ -99,10 +108,11 @@ function Review(props: { sessionId: string; fileTree: boolean; onFileTree(): voi
         </Empty>
       );
   } else if (files.length === 0) {
-    const scope = state.scope;
+    // One turn's changes are empty as the last turn's are.
+    const scope = state.scope === "turn" ? "last_turn" : state.scope;
     body = <Empty title={t(`review:empty_${scope}`)} hint={t(`review:empty_${scope}_hint`)} />;
   } else {
-    const view: ReviewViewProps = {
+    view = {
       sessionId,
       scope: state.scope,
       diff: diff.data,
@@ -110,7 +120,7 @@ function Review(props: { sessionId: string; fileTree: boolean; onFileTree(): voi
       view: state.view,
       collapsed: state.collapsed,
       focus: state.focus,
-      drafts: commentsOf(attachments),
+      drafts,
       setCollapsed: (path, folded) => {
         const collapsed = new Set(state.collapsed);
         if (folded) collapsed.add(path);
@@ -120,12 +130,19 @@ function Review(props: { sessionId: string; fileTree: boolean; onFileTree(): voi
       act,
       comment: (draft) => addComment(ui, sessionId, draft),
     };
-    body = <View {...view} />;
   }
+  const shown = view && diff.data;
 
   return (
     <div className="relative flex h-full flex-col">
-      <Header diff={diff.data} refresh={() => void diff.refetch()} {...props} />
+      {props.sessionId && (
+        <Header
+          diff={diff.data}
+          refresh={() => void diff.refetch()}
+          {...props}
+          sessionId={sessionId}
+        />
+      )}
       {(changed.length > 0 || (diff.data?.caveats.length ?? 0) > 0) && (
         <div className="flex flex-col gap-2 px-3 pb-2 [&>*]:max-w-none">
           {changed.length > 0 && (
@@ -141,14 +158,21 @@ function Review(props: { sessionId: string; fileTree: boolean; onFileTree(): voi
         </div>
       )}
       <div className="flex min-h-0 flex-1">
-        {props.fileTree && diff.data && files.length > 0 && (
-          <FileTree sessionId={sessionId} scope={state.scope} diff={diff.data} act={act} />
+        {props.fileTree && shown && (
+          <FileTree
+            key={sessionId}
+            sessionId={sessionId}
+            scope={state.scope}
+            diff={shown}
+            act={act}
+          />
         )}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-18">{body}</div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {Slot ? view && <Slot {...view} /> : <ReviewFrame view={view} />}
+          {body}
+        </div>
       </div>
-      {files.length > 0 && diff.data && (
-        <BulkActions sessionId={sessionId} diff={diff.data} actions={actions} />
-      )}
+      {shown && <BulkActions sessionId={sessionId} diff={shown} actions={actions} />}
       {actions.pending && <RevertConfirm pending={actions.pending} settle={actions.settle} />}
     </div>
   );
@@ -161,6 +185,7 @@ function Header(props: {
   refresh(): void;
   fileTree: boolean;
   onFileTree(): void;
+  active: boolean;
 }) {
   const { diff, refresh } = props;
   const t = useT();
@@ -172,7 +197,11 @@ function Header(props: {
         align="start"
         trigger={
           <ToolbarButton label={t("review:source")}>
-            <span className="text-fg">{t(`review:scope_${state.scope}`)}</span>
+            <span className="text-fg">
+              {state.scope === "turn"
+                ? t("review:scope_turn", { no: state.turn?.no })
+                : t(`review:scope_${state.scope}`)}
+            </span>
             <ChevronDownIcon />
           </ToolbarButton>
         }
@@ -196,7 +225,7 @@ function Header(props: {
         </span>
       )}
       <div className="flex-1" />
-      <GitActions sessionId={props.sessionId} />
+      <GitActions sessionId={props.sessionId} active={props.active} />
       <ToolbarButton
         label={t(props.fileTree ? "review:hide_files" : "review:show_files")}
         shortcut="⇧⌘E"
@@ -265,7 +294,7 @@ function BulkActions(props: {
   const diffToken = diff.diff_token;
 
   const stageAll = async () => {
-    if (scope !== "last_turn") {
+    if (scope !== "last_turn" && scope !== "turn") {
       return actions.run({ action: "stage", diffToken, target: { all: true } });
     }
     const unstaged = await query.fetchQuery({
@@ -326,30 +355,5 @@ function Empty(props: { title: string; hint?: string; children?: ReactNode }) {
       {props.hint && <p className="text-sm text-fg-tertiary">{props.hint}</p>}
       {props.children && <div className="mt-2">{props.children}</div>}
     </div>
-  );
-}
-
-/** Until the review document (T131): each file with its counts, which the view replaces. */
-function FileList({ diff, focus }: ReviewViewProps) {
-  const rows = useRef(new Map<string, HTMLLIElement>());
-  useEffect(() => {
-    if (focus) rows.current.get(focus.path)?.scrollIntoView({ block: "start" });
-  }, [focus]);
-  return (
-    <ul className="px-2 text-sm">
-      {diff.files.map((file) => (
-        <li
-          key={file.path}
-          ref={(row) =>
-            void (row ? rows.current.set(file.path, row) : rows.current.delete(file.path))
-          }
-          className="flex h-7 items-center gap-2 rounded-lg px-2"
-        >
-          <span className="min-w-0 flex-1 truncate">{file.path}</span>
-          <span className="text-diff-add">+{file.additions}</span>
-          <span className="text-diff-del">−{file.deletions}</span>
-        </li>
-      ))}
-    </ul>
   );
 }

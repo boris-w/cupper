@@ -3,7 +3,7 @@
 // reach the DOM as inline `width`, never as CSS custom properties.
 
 import { commandHandler } from "@cupper/shell-api";
-import { use, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { use, useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { SlotsContext } from "../app/slots";
 import { useHost, useShell, useT } from "../app/providers";
@@ -14,6 +14,7 @@ import { ConnectionToast } from "../feedback/ConnectionToast";
 import { SidebarFooter, SidebarHeader, SidebarList } from "../sidebar";
 import { computeLayout, ratioOf, type Layout, type Viewport } from "../layout/layout";
 import { ReviewPanel } from "../review/ReviewPanel";
+import { createReviewStore, OpenReview, ReviewContext, type ReviewTarget } from "../review/state";
 import type { LayoutStore } from "../layout/store";
 import { Splitter } from "./Splitter";
 
@@ -29,6 +30,25 @@ function useViewport(): Viewport {
 }
 
 export function Shell({ store, children }: { store: LayoutStore; children: ReactNode }) {
+  // The review panel's state, shared with the stream's change cards (T132).
+  const [review] = useState(createReviewStore);
+  const openReview = useCallback(
+    (target: ReviewTarget) => {
+      review.getState().show(target);
+      store.set("sidePanelOpen", true);
+    },
+    [review, store],
+  );
+  return (
+    <ReviewContext value={review}>
+      <OpenReview value={openReview}>
+        <Frame store={store}>{children}</Frame>
+      </OpenReview>
+    </ReviewContext>
+  );
+}
+
+function Frame({ store, children }: { store: LayoutStore; children: ReactNode }) {
   const { api } = useShell();
   const { state } = useHost();
   const t = useT();
@@ -60,6 +80,17 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
     [api, narrow, store],
   );
 
+  // The side panel stays once it opened, or once the window was first idle:
+  // hidden, not unmounted, so that the review document and its Worker are
+  // ready when it opens (design 5.7.5, point 1).
+  const shown = layout.sidePanel.visible;
+  const [resident, setResident] = useState(shown);
+  if (shown && !resident) setResident(true);
+  useEffect(() => {
+    const idle = requestIdleCallback(() => setResident(true));
+    return () => cancelIdleCallback(idle);
+  }, []);
+
   const docked = layout.sidebar.visible && !narrow;
   return (
     <div className="flex h-full">
@@ -86,8 +117,9 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
         />
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
-      {layout.sidePanel.visible && (
+      {resident && (
         <aside
+          hidden={!shown}
           aria-label={t("shell:side_panel")}
           style={{ width: layout.sidePanel.width }}
           className="relative flex shrink-0 flex-col border-l border-border bg-surface"
@@ -106,7 +138,11 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
             </button>
           </div>
           <div role="tabpanel" className="min-h-0 flex-1">
-            <ReviewPanel fileTree={prefs.fileTreeOpen} onFileTree={() => store.toggleFileTree()} />
+            <ReviewPanel
+              fileTree={prefs.fileTreeOpen}
+              onFileTree={() => store.toggleFileTree()}
+              active={shown}
+            />
           </div>
           <Splitter
             label={t("shell:resize_side_panel")}

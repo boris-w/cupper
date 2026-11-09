@@ -64,6 +64,8 @@ pub enum Steer {
     Persona,
     Inject,
     NewTurn,
+    PromptRequired,
+    Error,
     Hang,
 }
 
@@ -192,7 +194,11 @@ fn answer(
                 "_auth/status_update",
                 persona::auth_status(persona, shared.config.logged_in),
             ));
-            Ok(persona::initialize(persona))
+            let mut init = persona::initialize(persona);
+            if shared.config.fault("no_steering") {
+                init["_meta"]["steering"]["supported"] = json!(false);
+            }
+            Ok(init)
         }
         "session/new" => {
             NewSessionRequest::parse_message(method, params)?;
@@ -253,7 +259,7 @@ fn open(
     after: &mut Vec<(&'static str, Value)>,
 ) -> Value {
     let persona = shared.config.persona;
-    let config = persona::config_options(persona);
+    let config = persona::config_options(&shared.config);
     // Codex's resume result carries no session id (s09).
     let shown = (!resumed || persona == Persona::Claude).then_some(id);
     let result = persona::session_result(persona, shown, &config);
@@ -351,6 +357,8 @@ fn steering(
         Steer::Hang => return Ok(()),
         Steer::Inject => "injected",
         Steer::NewTurn => "startedNewTurn",
+        Steer::PromptRequired => "promptRequired",
+        Steer::Error => return responder.respond_with_error(Error::internal_error()),
         Steer::Persona if session.inflight.is_some() => "injected",
         // Codex ignores `idleBehavior` (K11).
         Steer::Persona if persona == Persona::Claude && prompt_required => "promptRequired",
