@@ -36,7 +36,7 @@
 | T152 | 窗口外观：菜单缩放后，交通灯的 y 坐标不会按 `(44 × 缩放 − 14) / 2` 重新计算；vibrancy 还没设 | T074 |
 | T153、T154 | 菜单顶层标题和角色项（撤销、复制、退出等）是 Electron 自带的英文，需要给 `@cupper/i18n` 加 `menu` 命名空间；菜单分组是 T074 暂定的，按 Codex 定稿 | T074 |
 | T160、T180 | Electron 自带的 Info.plist 有 5 条用途说明（相机、麦克风、两条蓝牙、音频采集），electron-builder 的 `extendInfo` 删不掉。自用构建和发布构建要在打包后删除，例如用 `afterPack` 钩子（设计 5.10.1、5.10.2） | T074 |
-| T161 | Electron 44 有第 9 个 fuse，@electron/fuses 1.8.0 不认识，读出来是 `undefined`，逐项断言时要处理 | T074 |
+| T161 | Electron 44 有第 9 个 fuse，@electron/fuses 1.8.0 不认识，读出来是 `undefined`，逐项断言时要处理 | T074（已写入 T161 的 brief） |
 | T012 | `stream/events`、`stream/snapshot`、`history/page` 的参数若整体用派生的 `Deserialize`，一个残缺事件就会让整条通知解析失败。参数类型要让客户端能逐个事件调用 `Event::decode`、`EventBody::decode`（宽容模式） | T011（已写入 brief） |
 | T015 | `Event<EventBody>` 的 schema 名是 `Event`；`UnknownMember` 的 schema 是任意对象，后处理时用 `.loose()` | T011（已写入 brief） |
 | T017 | 在 `EventBody` 里加会话流的变体，`stream_kind()` 是穷尽 `match`，会强制给新变体分类；`item.delta` 变体上标 `#[schemars(extend("x-mergeable" = true))]`，并为 `EventBody` 实现 `Mergeable`；条目联合用 `open_union!` 的 `in tag "kind"` 形式；测试复用 `testutil::{roundtrip, open_values}` | T011 |
@@ -46,7 +46,7 @@
 | T030 | 密钥取 `payload.dev_key`、`payload.harness_key` 的 `SecretKey::expose()`；`dev_key` 只接受拉起宿主的进程（5.8.1，`p_puniqueid`，见 T021） | T023（已写入 brief） |
 | T045、T075 | 启动载荷是一行 JSON 加换行，写完立即关闭 stdin；两种密钥都是 64 位十六进制；出现未知的键时宿主以退出码 1 退出。CLI 的 `--harness-key-fd` 用同样的密钥格式 | T023（已写入 T045 的 brief） |
 | T056 | `--self-test` 还没加，现在会被当作未知参数，以退出码 1 退出 | T023（已由 T056 实现） |
-| T161 | `--build-info` 输出一行 JSON：`{"debug_assertions","features","name","version"}` | T023 |
+| T161 | `--build-info` 输出一行 JSON：`{"debug_assertions","features","name","version"}` | T023（已写入 T161 的 brief） |
 | 新增定时器或故障点的任务 | 定时器的时长登记到 `crates/cupper-host/src/durations.rs`（`DurationKey` 加入 `ALL`）；故障点用 `failpoint!(NAME)`，名字登记到 `failpoint.rs` 的 `ALL`，格式为 `<模块>.<位置>`；故障点的用例断言退出码为 99 | T023 |
 | T030、T045、T073 | 读 cupper 套接字一律用 `cupper_sys::recv_closing_fds`：普通读取会装入 `SCM_RIGHTS` 传来的 fd。网关的用法是 `stream.try_io(Interest::READABLE, \|\| recv_closing_fds(&stream, buf))`，`closed_fds > 0` 时断开连接并记审计（设计 5.8.5 v1.8） | T021（已写入 T030 的 brief）（已写入 T045 的 brief） |
 | T030、T073 | `LOCAL_PEERPID` 在最后一次做 I/O 的进程退出后，仍返回它的旧 pid，这个 pid 可能已经被复用，所以 `dev_key` 证明里的 `pid_c` 取固定令牌的 `pid()`。固定令牌只反映最后一次 I/O，比对要跟在每一次 read 之后。判断"启动时父进程已退出"用 `process_info(自己).ppid == 1`，`p_puniqueid` 只用来比对对端 | T021（已写入 T030 的 brief） |
@@ -177,7 +177,7 @@
 | T110 | 裁判把 thread 状态当作"最近一次报告"：只有 Codex 会报告，Claude 一直是未知，只按静默规则判断。Codex 提取层提供 `threadStatus` 时，要有 idle。工具结束之后又来不带结束状态的更新时，裁判会把它重新记为运行中，回合不会因静默而结束，录制金样例时留意 | T058 |
 | T075 | 原生扩展与 host-client 的胶水：`auth: (hello) => conn.auth(hello.nonce)`（返回协议 `Auth` 的 `dev_key` 分支）；`verifyHostProof: (proof) => conn.verifyHostProof(proof)`，信道由扩展记着；`host_proof` 缺失时 host-client 不调用 `verifyHostProof`、直接报 `host_unverified`，这条路径扩展不会自己断开，T075 要在握手失败时调用 `conn.close()`。`connectHost` 抛出的 `code`（`peer_exited`、`peer_execed`、`code_changed`、`unverifiable`、`not_the_host`、`other_user`、`no_requirement`、`connect_failed`）并入 `ConnectionState` 的 `failed.reason`。宿主被杀后重新拉起时复用同一个 `HostKey`。用 `buildInfo()` 核对扩展的构建种类与 App 的 flavor 一致。宿主写完立刻退出时令牌读不到，那批数据会丢弃并记为 `token_changed`（例如最后一条 `host/shutdown`），UI 不要把 `token_changed` 一律当作攻击提示 | T073 |
 | T076 | 原生扩展用 socketpair 转发，每条连接两个线程加一次拷贝；macOS 上 socketpair 和本机套接字的默认缓冲区只有 8 KB，转发会分成很多小块。测量闸门不达标时，在 `cupper-sys` 里加 `setsockopt(SO_SNDBUF/SO_RCVBUF)` | T073 |
-| T161 | `release-config` 可以断言扩展发布构建的 `buildInfo().features` 为空 | T073 |
+| T161 | `release-config` 可以断言扩展发布构建的 `buildInfo().features` 为空 | T073（已写入 T161 的 brief） |
 | 下一个改 Rust 依赖的任务 | `getrandom 0.4.3` 已有三个使用方（cupper-host、cupper-cli、cupper-desktop-native），按惯例提到 `[workspace.dependencies]` | T073 |
 | T080 | `client.counters` 是全部流的计数之和，E2E 的 `window.__cupperTest` 可以直接导出。`StreamSink` 的约定见 T072 的任务书。"生产构建只校验非 delta 事件"仍未做，目前每个事件都用 zod 解析 | T087 |
 | T080 | 视图：每帧调用一次 `versions.flush()`；组件用 `versions.subscribe(key, cb)` 和 `versions.of(key)` 订阅（键如 `item:<id>`、`turn:<id>`、`tail`、`session`，`view` 随每次变化）；`complete` 用来显示"加载中"，`error` 显示订阅失败 | T072 |
@@ -202,10 +202,10 @@
 | T005 | `cargo xtask runtime-pack` 的暂存目录是 `target/runtime-pack/Contents/`，布局与 5.10.1 一致（`Helpers/node`、`Resources/runtime/…`），可以直接拷进 `CupperHost.app/Contents`。esbuild-wasm 整包随附，含用不到的浏览器版文件，每个文件都记了哈希；要精简由本任务定 | T004 |
 | T056 | 拉起 claude-agent-acp 的打包脚本时，`PATH` 只放随包 Node 所在的目录，其余环境变量清空：esbuild-wasm 按 `node` 这个名字从 PATH 拉起服务进程，否则会找不到或用到别的 node | T004 |
 | T006（license-gate） | codex-acp 内联依赖的许可证声明，按上游 v2.2.2 标签的 `package-lock.json` 生成；SP-2 的锁文件是按版本范围自己解析的，与上游实际内联的版本不同（例如 `@agentclientprotocol/sdk` 1.5.0 对 1.8.0），明细见 `docs/tasks/T004-runtime-pack/notes.md` | T004 |
-| T161、T180 | 5.10.7 第 2 步的 Node GPG 核对还是手工做的，自动化需要 `gpgv` 和锁定的 Node 发布公钥环。清单里 Node 的 sha-256 和 cdhash 是 ad-hoc 签名的值，Developer ID 签名后都会变：发布流水线要按发布身份重新生成并内嵌清单，设计里要写明每种构建内嵌哪一份 | T004 |
+| T161、T180 | 5.10.7 第 2 步的 Node GPG 核对还是手工做的，自动化需要 `gpgv` 和锁定的 Node 发布公钥环。清单里 Node 的 sha-256 和 cdhash 是 ad-hoc 签名的值，Developer ID 签名后都会变：发布流水线要按发布身份重新生成并内嵌清单，设计里要写明每种构建内嵌哪一份 | T004（已写入 T161 的 brief） |
 | T188、T066 | 清单里还没有"已验证 CLI 范围"（5.10.3，由兼容报告生成）。T066 升级适配器时，重新评估静态扫描对 SDK 动态读取环境变量的覆盖（5.6.6 的已知局限） | T004 |
 | T110 | 出队保护放开之后，空闲时 Codex 报 thread active 不会挡住出队：`queue_resume` 或排队消息会把 prompt 发给 thread 仍在运行的 Codex 会话。这符合 5.2.6（threadStatus 只用于显示运行状态和界定自发回合）和 T058 的决定；Claude 再工作一定有输出，输出会开自发回合挡住出队，所以只有 Codex 有这个空隙。接入 Codex 时评估是否要让空闲时的 thread active 也挡住出队 | T058 修复第 1 轮 |
-| 组装 `Cupper.app` 的任务、T161 | 5.10.2 要求两个 Info.plist 都不含用途说明：`host-bundle` 只产出宿主的那一份（CLI 没有 Info.plist），`Cupper.app` 的那一份由 electron-builder 产出，要由组装它的任务断言，T161 的 `release-config` 每晚复核 | T005 |
+| 组装 `Cupper.app` 的任务、T161 | 5.10.2 要求两个 Info.plist 都不含用途说明：`host-bundle` 只产出宿主的那一份（CLI 没有 Info.plist），`Cupper.app` 的那一份由 electron-builder 产出，要由组装它的任务断言，T161 的 `release-config` 每晚复核 | T005（已写入 T161 的 brief） |
 | T075、T180 | 宿主的 cdhash 随 Info.plist、运行时文件和二进制变化，自用构建的 CLI 必须与同一次 `cargo xtask host-bundle` 产出的 `CupperHost.app` 配套分发。Developer ID 签名之后 Node 和宿主都按发布身份重签，清单里 Node 的 sha-256 和 cdhash 要重算（另见 T004 的交接）。产物在 `target/host-bundle/<kind>/`，编译中间目录是 `target/host-bundle/build/`（每个 worktree 约 1.2 GB） | T005 |
 | 改 5.7.9 构建身份的任务 | IT-host-bundle-layout 直接读设计 5.7.9 的"宿主的 bundle id""CLI 的 identifier"两行与 `crates/xtask/src/host_bundle.rs` 的 `KINDS` 比对，改一边要同步另一边 | T005 |
 | T055 | 接 T094 的 `driver/probe`：登录 shell 要保留的名字传内嵌清单的 `env.allow` 加放行名单；初始环境建议取宿主自己的 `HOME`、`USER`、`LOGNAME`、`SHELL`、`TMPDIR`、`LANG`、`LC_*`、`PATH`；`TestConfig.login_env` 有值时直接构造 `LoginEnv { vars, failure: None }`，不运行 shell；`SHELL` 为空时用 `LoginEnv::fallback(Failure::ShellMissing)`；`xcode-select -p` 和 `--version` 用同一份白名单环境；版本范围从内嵌清单取版本号字符串；语义码到协议字段的映射归 T055、T034 | T094 |
@@ -363,7 +363,7 @@
 | T093、T092 | 请求面板的截断内容（T168）：命令、详情是 blob 时显示在 `ContentBox` 里，收起时显示预览、展开才下载；每个 blob 都展开且载入完成（哈希核对通过）后允许类选项才放开，收起任一个或下载失败回到只能拒绝；提示为"已截断：展开看到全文后才能允许"。用户气泡里的 `text_blob` 显示"长文本（N KB）"，点"显示更多"才下载 | T168 |
 | e2e（T091–T093） | T167 的辅助：`tools/e2e/src/helpers.ts`（`hostClient`、`disconnectWindow`、`advanceClock`、`events`/`untilEvent` 只读打开 `host.db`、`untilSession` 用 `sessions --watch`、`killHost`、`elevate`、`sampleNetwork`、`texts`）、`input.ts`（`focusWindow`、`press`、`type` 经 `sendInputEvent`；`requestPanel`、`panelReady`、`activatePanel`、`pressDigit`）、`cli.ts`（`repl`、`watch` 的 `until`/`stop`、`cli` 身份）、`dialogs.ts`（`showMessageBoxSync` 立即回 `cancelId`；`showOpenDialog` 挂起到 `choose`）。**凡是靠按键或点击算真实输入的用例都要打 `@focus`**（单 worker、排在最后跑），否则并行下另一个 App 会抢焦点而偶发失败。`__cupperTest` 目前只有 `counters()`、`state()`，其余导出加在渲染进程入口的 e2e 分支里，`apps/desktop/src/flavors.test.ts` 会检查它不进非 e2e 构建。夹具的 `login_env.PATH` 只含系统目录；e2e 要求本机有 Xcode 或命令行工具 | T167 |
 | 动 preload、`contextBridge`、渲染进程入口或 host-client 连接的任务 | `contextBridge` 只复制对象自身的属性，经它交给主世界的对象不能是类实例、方法不能在原型上（T076 的 HostPort 曾因此是空对象）；浏览器原生函数（`requestAnimationFrame`、`setTimeout`、`performance.now` 等）不要存成属性或默认值再以别的 `this` 调用（T080 的 `Frames` 曾因此抛 Illegal invocation）。单元测试和截图回归都覆盖不到真实 Electron 的数据链路，守门的是 `ci pr` 里的 `@smoke`（渲染进程一侧断言侧边栏看到数据） | T167 |
-| T160、T161（自用构建） | `vite build --mode local` 会失败：Vite 不接受 `local` 作 mode 名（与 `.env.local` 冲突）。换 mode 名，或者把 flavor 与 Vite mode 分开映射；`flavors.test.ts` 目前只检查 release、dev | T167 |
+| T160、T161（自用构建） | `vite build --mode local` 会失败：Vite 不接受 `local` 作 mode 名（与 `.env.local` 冲突）。换 mode 名，或者把 flavor 与 Vite mode 分开映射；`flavors.test.ts` 目前只检查 release、dev | T167（已写入 T161 的 brief） |
 | T169、T175 | 会话的载入（T089）：`orchestrator/session/load.rs` 读 `sessions`、`queue_entries`、最后一个回合、已结束的 `interactions` 和会话视图，组成 `Parts` 与首个输入 `Input::Restored`；管理器先把邮箱放进表再起载入任务，同一会话只起一个 actor，`forget` 只在邮箱匹配时才从表里撤出（空闲退出用它）。测试里模拟重启用 `Fixture::restart`，启动清理是 `supervisor::recover::end_previous_run`。视图里缺配置时载入现在回内部错误，由 T169 改为重建 | T089 |
 | T091、T069 | 宿主重启后（T089）：旧会话在第一次调用时按需载入；待处理请求补写 `interaction.resolved{expired, host_restarted}`，运行中回合补写 `turn.completed{interrupted}`；队列里有消息的一律以 `turn_interrupted` 暂停，要用户操作（例如 `queue/resume` 或新的 `send`）才继续。设定者按 `mode_set_by` 找回，来源不明或 CLI 设定的档位重启后可能进入 `config_unconfirmed`，要 `session/confirm_config` | T089 |
 | 动 `policy/describe` 的任务 | `SessionPort::facts`（只供 `policy/describe` 用）仍要求会话已在内存里；会话未载入时描述里不带所选选项的信息（T089 没有改，重启后待处理请求都已过期，影响小） | T089 |
@@ -512,8 +512,8 @@
 | 以后改适配器生命周期的任务 | 实例结束时 `end()` 取 stderr 的 `Tail::text()`，不等读取任务读到 EOF（`AdapterLog::read` 的 JoinHandle 被丢掉），进程写完就退出时可能漏掉最后几行；可以限时等读到 EOF（防孙进程一直占着 stderr）。attach 途中适配器退出时，`raw` 里没有 stderr 尾部 | T226 |
 | T112 | K17 识别出的文字错误交给回合机，作为这个回合的 `Failure`，由 `end()` 统一写，保持每个回合一条；可复用 `failure::guidance()` 和 `orchestrator::instant()` | T226 |
 | 以后改消息流界面的任务 | 错误条目的警告框整段显示 `raw`，适配器退出时是最多约 2,000 个字符的 stderr 尾部，可以考虑折叠 | T226 |
-| T161、T180 或安全工程师 | Info.plist 带着 Electron 默认的摄像头、麦克风、蓝牙（两项）、音频采集用途说明，agent 触发这类授权时会显示成 Cupper；要不要在打包时删掉（需要 `afterPack` 钩子）待定，"自用前须知"里已写一律拒绝 | T160 |
-| T161 | 复用 `apps/desktop/src/test-entry-points.ts` 和 `apps/desktop/selfuse/build.test.ts` 里逐个 Mach-O 检查 entitlements、读 fuse 线的做法；`electron-builder.release.yml` 至今没有真正构建过；5.10.2 可补：库不带 entitlements，`chrome_crashpad_handler`、`app_shim_loader`、`ShipIt` 拿 `entitlementsInherit`，helper 的 identifier 是 `<appId>.helper`、`.helper.Renderer`、`.helper.GPU`、`.helper.Plugin` | T160 |
+| T161、T180 或安全工程师 | Info.plist 带着 Electron 默认的摄像头、麦克风、蓝牙（两项）、音频采集用途说明，agent 触发这类授权时会显示成 Cupper；要不要在打包时删掉（需要 `afterPack` 钩子）待定，"自用前须知"里已写一律拒绝 | T160（已写入 T161 的 brief） |
+| T161 | 复用 `apps/desktop/src/test-entry-points.ts` 和 `apps/desktop/selfuse/build.test.ts` 里逐个 Mach-O 检查 entitlements、读 fuse 线的做法；`electron-builder.release.yml` 至今没有真正构建过；5.10.2 可补：库不带 entitlements，`chrome_crashpad_handler`、`app_shim_loader`、`ShipIt` 拿 `entitlementsInherit`，helper 的 identifier 是 `<appId>.helper`、`.helper.Renderer`、`.helper.GPU`、`.helper.Plugin` | T160（已写入 T161 的 brief） |
 | 以后改升级流程的任务（5.5.7、T129、T180） | keyed 构建（自用、开发、e2e）里宿主因待升级退出后，旧界面会自动从磁盘拉起新宿主，新旧两版混用；可以考虑收到 `host/shutdown(upgrade)` 后不再拉起，改为提示重启 App | T160 |
 | T147 | 设置页"安装命令行工具"还没做，自用构建的安装说明暂时让用户 `ln -s` | T160 |
 | T151、T153 | 默认编辑器是 TextEdit（T036 定的），`open -a TextEdit <目录>` 打不开文件夹；改成清单里第一个已安装的编辑器，或由界面引导用户选一个 | T126 |
