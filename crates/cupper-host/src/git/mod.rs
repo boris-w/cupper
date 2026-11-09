@@ -13,6 +13,7 @@ mod cmd;
 pub mod diff;
 mod head;
 mod lfs;
+pub mod purge;
 mod repo;
 pub mod rules;
 pub mod run;
@@ -130,6 +131,11 @@ impl GitTool {
     pub(crate) fn with_test_env(mut self, name: &'static str, value: &str) -> Self {
         self.test_env.push((name, value.into()));
         self
+    }
+
+    /// `<data dir>/git/`, where the snapshots are.
+    pub fn dir(&self) -> &Path {
+        &self.dir
     }
 
     /// Shared by every clone.

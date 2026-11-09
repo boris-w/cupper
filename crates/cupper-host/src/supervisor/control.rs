@@ -104,7 +104,7 @@ impl Port for Control {
 
 /// `host/exit` without `force` while turns run is `conflict/turn_running`;
 /// the desktop confirms with the user and sends it again with `force`.
-fn refuse_running(force: bool, running_turns: u32) -> Result<bool, RpcError> {
+pub(crate) fn refuse_running(force: bool, running_turns: u32) -> Result<bool, RpcError> {
     if force || running_turns == 0 {
         return Ok(force);
     }

@@ -264,6 +264,9 @@ impl Host {
         // agents' launches all take this result.
         let found = finders[0].discover(project_roots(&reader)?).await;
         let git = git_tool(&found, &data_dir)?;
+        // What a purge cut short left aside (T127).
+        let snapshots = data_dir.join("git");
+        tokio::task::spawn_blocking(move || crate::git::purge::leftovers(&snapshots));
         let home = PathBuf::from(found.host.get("HOME").cloned().unwrap_or_default());
         let settings =
             SettingsHandle::load(&reader, writer.clone(), clock.clone(), &home, &data_dir)?;
@@ -462,6 +465,9 @@ impl Host {
             audit: records.clone(),
             notes: Arc::new(sessions.clone()),
             locks,
+            data_dir: data_dir.clone(),
+            settings: settings.clone(),
+            parts: Arc::clone(&parts),
         })
         .route(&mut routes);
         #[cfg(feature = "test-harness")]

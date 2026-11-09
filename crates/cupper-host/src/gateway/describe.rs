@@ -23,7 +23,8 @@ pub(super) fn describe(sessions: &dyn SessionPort, params: &Value) -> Reply {
         | Confirmable::SetConfig(_)
         | Confirmable::Respond(_)
         | Confirmable::Exit(_)
-        | Confirmable::Upgrade(_) => sessions.facts(&command),
+        | Confirmable::Upgrade(_)
+        | Confirmable::Purge(_) => sessions.facts(&command),
         _ => Box::pin(future::ready(Ok(Facts::default()))),
     };
     Box::pin(async move {
