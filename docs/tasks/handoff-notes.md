@@ -566,3 +566,6 @@
 | 写 e2e 用例的任务（T172、T242、T244 等） | 共用的 `press(cupper, "Enter")` 只发 keyDown、keyUp，不发 `char`，激活不了原生按钮；要点按钮用 T132 加的 `click(cupper, locator)`（经 `sendInputEvent` 发 mouseDown、mouseUp），或者让按钮自己处理 keyDown。产品不受影响 | T132 |
 | T131、T238 | T132 改了审查面板：`ReviewScope` 多了隐藏的 `turn`（`ACTIONS.turn` 只有 `revert`），`ReviewState` 多了 `turn` 和 `show(target)`，store 由 `Shell` 经 `ReviewContext` 提供（测试里要自己包一层）；`ReviewPanel.tsx`、`state.ts`、`view.ts` 与两条分支冲突，merge main 时解决，并重新生成受影响的基线（含 `stream-changes-review`） | T132 |
 | T245 | T132 在 UI-turn-changes 的截图前固定了消息流的位置，注释里写着 T245；贴底跟随修好后去掉 | T132 |
+| T238、T145 | T131 合并后各自 merge main，重新生成受影响的基线：T238 的 review 系列和 `stream-changes-review`（`turn` 范围只有还原按钮），T145 的"+"连同 T132、T131 带来的 `stream-changes-*` 变化 | T131 |
+| 做消息流跳到行号的任务 | 审查文档的 `scroll_to` 已支持 `line`（交给 `CodeView.scrollTo({type: "line"})`），主文档目前只有文件树设 `focus` 且只带路径；带行号的跳转（例如编辑条目）由以后的任务来设 | T131 |
+| 体积优化（可选） | `dist/review` 约 17 MB；Worker 包里多带了一份 shiki 语法（pierre 的 worker 有动态 import，实际不加载），要去掉需要 pierre 提供不带动态 import 的 worker 入口或自建精简 worker | T131 |
