@@ -1098,7 +1098,7 @@ UI-late-output = "pr"
 [T147]
 milestone = "M1b"
 UI-settings-general = "pr"
-UI-settings = { parts = ["UI-settings-agents", "UI-settings-general"] }
+UI-settings = { parts = ["UI-settings-agents", "UI-settings-archived", "UI-settings-general"] }
 
 # 复刻度修正
 [T148]
@@ -1122,10 +1122,15 @@ UNIT-notifier-no-actions = "pr"
 E2E-notification-navigate = "nightly"
 MAN-notification = { parts = ["MAN-notification-spike", "MAN-notification-product"] }
 
-# 设置页 I：agent 状态、连接与已归档会话
+# 设置页 I：agent 状态
 [T151]
 milestone = "M1b"
 UI-settings-agents = "pr"
+
+# 设置页 I-b：连接与已归档会话
+[T248]
+milestone = "M1b"
+UI-settings-archived = "pr"
 
 # 视觉调整：暗色核对结果、半透明侧边栏与窗口外观
 [T152]
