@@ -576,3 +576,5 @@
 | T021 的后续或维护者 | `trace-ids status` 报 IT-sys-peer-macos15 "ran only in pr, not in its suite nightly"（与 T172 无关，T172 核对时发现） | T172 |
 | T180 | release-config 只为不签名的每晚构建对 Electron Framework 补 ad-hoc 签名（写 fuse 使它的签名失效）；用 Developer ID 签名时 electron-builder 会重签 framework，发布流水线不需要这一步 | T161 |
 | T180 或安全评审 | `Cupper.app` 的 Info.plist 带着 Electron 默认的 5 项用途说明（音频采集、蓝牙两项、摄像头、麦克风），release-config 每晚列出、不判失败；删不删、怎么删（`afterPack` 钩子）待定 | T161 |
+| 无障碍或复刻度修正（T148 等） | 审查文档里 pierre 自带的行号"+"没有可访问名称（库在 shadow DOM 里渲染）；要补就用 `renderGutterUtility` 自己渲染带 `aria-label` 的按钮，代价是自己处理拖选多行。长 hunk 的按钮在末行下面，pierre 支持自定义分隔符后可以挪到分隔符里 | T238 |
+| T145、T151 | T238 合并后各自 merge main，核对重叠的 `stream-changes-review` 和 review-commit 三张基线 | T238 |
