@@ -77,6 +77,7 @@ async fn unit_settings_update_writes_its_keys_and_finds_the_agents_again() {
     let load =
         || SettingsHandle::load(&conn, writer.clone(), Arc::clone(&shared), home, dir.path());
     let settings = load().unwrap();
+    let mut changes = settings.subscribe();
     let found = Arc::new(AtomicUsize::new(0));
     let rediscover: Rediscover = {
         let found = Arc::clone(&found);
@@ -111,6 +112,9 @@ async fn unit_settings_update_writes_its_keys_and_finds_the_agents_again() {
         .await;
     assert_eq!(done.unwrap()["settings"]["notifications.error"], false);
     assert_eq!(found.load(Ordering::Relaxed), 0);
+    // What the index follows for `settings.updated` (T151).
+    assert!(changes.has_changed().unwrap());
+    assert!(!changes.borrow_and_update().notify_error);
     // A security-related key, from the privileged control connection: the
     // agents are found again before the reply.
     let passthrough = update("c-2", json!({"agents.env_passthrough": ["API_KEY"]}));
@@ -123,11 +127,13 @@ async fn unit_settings_update_writes_its_keys_and_finds_the_agents_again() {
     );
     assert_eq!(found.load(Ordering::Relaxed), 1);
     // A patch the checks refuse changes nothing.
+    changes.borrow_and_update();
     let relative = update("c-3", json!({"agents.codex.cli_path": "codex"}));
     let refused = Peer::new(control.clone())
         .call(&routes, "settings/update", relative)
         .await;
     assert_eq!(refused.unwrap_err()["code"], INVALID_PARAMS);
+    assert!(!changes.has_changed().unwrap(), "no change to follow");
     let got = Peer::new(control)
         .call(&routes, "settings/get", json!({}))
         .await;

@@ -32,6 +32,7 @@ use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
+use cupper_protocol::index::GitTools;
 use cupper_sys::{Command, Env};
 use tokio::sync::{OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 
@@ -41,6 +42,7 @@ use run::{Heard, Output, RunError};
 pub use service::{GitDeps, GitService, RepoLock, SessionNotes};
 
 use crate::clock::Clock;
+use crate::driver::probe::git::{Stub, detect};
 use crate::durations::{DurationKey, Durations};
 
 /// The git the host runs and what every call of it gets.
@@ -146,6 +148,17 @@ impl GitTool {
     /// git-lfs, for the standard LFS filters (T097).
     pub fn git_lfs(&self) -> Option<&Path> {
         self.git_lfs.as_deref()
+    }
+
+    /// The versions of git and git-lfs (T094), for `agents.updated`.
+    pub async fn versions(&self, clock: &dyn Clock, durations: &Durations) -> GitTools {
+        let (git, lfs, stub) = (
+            Some(self.git.as_path()),
+            self.git_lfs.as_deref(),
+            Stub::system(),
+        );
+        let report = detect(clock, durations, git, lfs, &stub, &self.env(false)).await;
+        report.tools()
     }
 
     pub fn repo_tier(&self, repo: &Path) -> RepoTier<'_> {
