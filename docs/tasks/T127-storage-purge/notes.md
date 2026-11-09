@@ -68,8 +68,44 @@ T235 之后，快照档的 git-lfs 把它 clean 过的文件内容放在 `ws/<�
 - 互斥按第 2 节做；两点要有用例：拿锁之后才开的回合，起始快照进新的空库，回合的 diff 正常；清除等在途的快照做完才动手（故障点或可控的延迟让快照停在锁里）。
 - 私有 LFS 存储一起清：改名加删除，大小算进 `snapshots`，启动清理也覆盖；清除之后 `lfs_object_missing` 的行为是对的。设计 5.2.10 由 main 在合并时补。
 
-## 4. 进度（2026-11-04 收工）
+## 4. 进度
 
-- 已提交：本 notes（估算、互斥方案、main 的决定）。产品代码还没开始写，工作区干净。
-- 下次从协议开始：`handshake.rs` 加 `host/storage`（`Empty` → `HostStorageResult`，`read`、天然）和 `host/purge_snapshots`（`{command_id}` → `{freed_bytes}`，`privileged`、命令、`conflict/turn_running`），`admin.rs` 的 `ConfirmAction::PurgeSnapshots`，`catalog.rs` 的分组与矩阵两行，样例，`pnpm gen`。
-- 之后按第 1 节的模块顺序：闸（`GitTool` 里的仓库读写锁，`snapshot::open` 与 `diff::patch` 取读锁）→ `snapshot_missing` → `host/storage` → `host/purge_snapshots`（含私有 LFS 存储）→ 启动清理 → 路由与 `policy/describe` → 用例（含"拿锁之后开的回合"和"清除等在途快照"两条）。
+### 4.1 2026-11-04 收工
+
+- 已提交本 notes（估算、互斥方案、main 的决定），产品代码还没开始写。
+
+### 4.2 2026-11-09：产品代码写完，预计超过硬停止线，停下汇报
+
+已提交（`cargo xtask size` 按合并基点计，`+436 −11`）：
+
+| 提交 | 模块 | 实际 | 估计 |
+|---|---|---|---|
+| `5d84ec0e` | 协议（两个方法、`ConfirmAction`、catalog、样例、gen，宿主的矩阵与 describe 分支） | 86 | 60 |
+| `e898d996` | 闸：`GitTool` 里每个仓库一把 `RwLock`，`snapshot::open`、`diff::patch` 取共享锁；actor 在快照开始前就把会话标成"有回合" | 45 | 35 |
+| `2cae39f1` | `snapshot_missing`：`diff-tree` 失败后用 `cat-file -e` 查两棵 tree | 40 | 20 |
+| `e5102af4` | `host/storage`、`host/purge_snapshots`、启动清理、路由、`policy/describe` 的 `snapshot_bytes` | 250 | 180 |
+
+本机：host lib 506 个通过，clippy、fmt 干净。
+
+还没写的是全部用例，估约 180 行：
+
+- IT-snapshot-purge（会话夹具），约 100 行：
+  - 清除前后的大小、`freed_bytes`；
+  - 旧回合的 diff 回 `snapshot_missing`，旧 token 的还原回 `stale_diff`；
+  - 新回合照常有 diff；
+  - 回合运行时被拒；window、cli 被拒；
+  - 构造残留后启动清理删掉；
+  - describe 的 `snapshot_bytes`。
+- 两条互斥用例（git 层），约 45 行：拿锁之后开始的快照进新的空库，diff 正常；清除等在途快照做完。
+- `host/storage`，约 35 行：各项大小与构造的数据相符；截止时间已到时 `partial: true`。
+
+合计约 615，超过硬停止线 550。
+
+### 4.3 实现里与第 2 节不同或补充的地方
+
+- 快照与"有回合"标记的顺序：回合的起始快照在 actor 的一步里派出去，"有回合"这个标记却要到这一步结束时才写。如果快照先做完、放开了读锁，清除恰好在这时拿齐写锁，它会看到"没有回合"，把刚拍的起始 tree 清掉。所以 actor 在派出快照之前就先写标记（3 行）。
+- 私有 LFS 存储：整个 `ws/<工作区>/lfs` 改名，`tmp/` 也一起清掉；不重建，git-lfs 用到时自己建，和全新的 GIT_DIR 一样。对象库则建一个空的 `objects`（0700）。
+- `snapshots` 和 `snapshot_bytes` 都按整个 `<数据目录>/git/` 算：对象库、LFS 存储、临时 index，以及残留。
+- `worktrees`：sessions 表里 `workspace_kind = 'worktree'` 的路径，只算 worktree 根目录下的。
+- 启动清理在阻塞线程池里跑。名字带本进程 pid 的跳过，免得和这次运行刚开始的清除抢着删同一个目录。
+- 没有 git 时：清除照样改名（这时没有快照会跑，也就不用拿闸）；describe 的 `snapshot_bytes` 回 0。
