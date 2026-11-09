@@ -166,6 +166,26 @@ export function MinusIcon() {
   );
 }
 
+/** A gear: the settings. */
+export function SettingsIcon() {
+  return (
+    <svg {...svg} stroke="currentColor">
+      <circle cx="8" cy="8" r="5.5" strokeWidth="2.5" strokeDasharray="1.75 2.57" />
+      <circle cx="8" cy="8" r="4.25" />
+      <circle cx="8" cy="8" r="1.75" />
+    </svg>
+  );
+}
+
+/** An arrow to the left: back. */
+export function BackIcon() {
+  return (
+    <svg {...svg} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13 8H3M7 4L3 8l4 4" />
+    </svg>
+  );
+}
+
 /** An arrow turning back: revert. */
 export function UndoIcon() {
   return (

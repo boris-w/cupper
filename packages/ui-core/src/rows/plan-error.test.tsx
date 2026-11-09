@@ -93,8 +93,9 @@ async function setup(ops: object[], agent = "claude") {
     </ShellProvider>,
   );
   await act(() => new Promise((done) => requestAnimationFrame(() => done(undefined))));
-  return (method: string) =>
+  const requests = (method: string) =>
     mock.requests.filter((request) => request.method === method).map((request) => request.params);
+  return Object.assign(requests, { ui });
 }
 
 const steps = (...statuses: string[]) => ({
@@ -174,7 +175,7 @@ describe("UI-error", () => {
   ];
 
   test("each step says what to do; none, and a step this build does not know, add nothing", async () => {
-    await setup(OPS, "codex");
+    const { ui } = await setup(OPS, "codex");
     const shown = [...document.querySelectorAll("[data-guidance]")];
     expect(shown.map((box) => box.getAttribute("data-guidance"))).toEqual(["retry", ...KNOWN]);
     expect(shown.map((box) => box.firstChild?.textContent)).toEqual([
@@ -189,6 +190,14 @@ describe("UI-error", () => {
     expect(document.querySelectorAll("[role=alert]")).toHaveLength(10);
     // `change_model` opens the composer's model menu (T231).
     expect(screen.getAllByRole("button", { name: "换模型" })).toHaveLength(1);
+    // The CLI's and the agent's steps open the agent's card on the settings page (T151).
+    const status = screen.getAllByRole("button", { name: "查看 agent 状态" });
+    expect(status).toHaveLength(3);
+    fireEvent.click(status[2] as HTMLElement);
+    expect(ui.getState().route).toEqual({
+      ...{ page: "settings", section: "agents", focus: "codex" },
+      from: { page: "session", sessionId: "s_1" },
+    });
   });
 
   test("login: the agent's command, to copy into a terminal", async () => {

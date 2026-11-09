@@ -7,8 +7,21 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 
 import type { LayoutPrefs } from "../layout/layout";
 
-/** The page in the main area; T084's shape. */
-export type Route = { page: "new"; projectId?: string } | { page: "session"; sessionId: string };
+/** A page of the app proper: a new session, or a session. */
+export type AppRoute = { page: "new"; projectId?: string } | { page: "session"; sessionId: string };
+
+/**
+ * The page in the main area; T084's shape. The settings page names its
+ * section (the first when absent), an item of it to bring into view, and the
+ * page "返回应用" goes back to (T151).
+ */
+export type Route =
+  AppRoute | { page: "settings"; section?: string; focus?: string; from: AppRoute };
+
+/** The settings page at `section` from `route`, coming from where `route` came from. */
+export function toSettings(route: Route, section?: string, focus?: string): Route {
+  return { page: "settings", section, focus, from: route.page === "settings" ? route.from : route };
+}
 
 export interface LayoutState {
   prefs: LayoutPrefs;
