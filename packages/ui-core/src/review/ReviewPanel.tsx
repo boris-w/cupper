@@ -7,7 +7,7 @@
 import { RpcFailure } from "@cupper/host-client";
 import type { GitDiffResult } from "@cupper/protocol";
 import { useQueryClient } from "@tanstack/react-query";
-import { use, useEffect, useRef, useState, type ReactNode } from "react";
+import { use, useEffect, useRef, type ReactNode } from "react";
 import { useStore } from "zustand";
 
 import { useHost, useT } from "../app/providers";
@@ -23,9 +23,8 @@ import { FileTree } from "./FileTree";
 import { GitActions } from "./GitActions";
 import { RevertConfirm } from "./RevertConfirm";
 import {
-  createReviewStore,
   diffKey,
-  ReviewContext,
+  diffScope,
   SCOPES,
   useDiff,
   useReviewStore,
@@ -41,7 +40,13 @@ export function ReviewPanel(props: { fileTree: boolean; onFileTree(): void }) {
   const sessionId = useStore(ui, ({ route }) =>
     route.page === "session" ? route.sessionId : undefined,
   );
-  const [store] = useState(createReviewStore);
+  const store = useReviewStore();
+  const turn = useStore(store, (state) => state.turn);
+  // Another session's turn is no scope here.
+  useEffect(() => {
+    if (turn && turn.sessionId !== sessionId)
+      store.getState().set({ scope: "unstaged", turn: undefined });
+  }, [store, turn, sessionId]);
   if (sessionId === undefined) {
     return (
       <div className="flex h-full flex-col">
@@ -49,11 +54,7 @@ export function ReviewPanel(props: { fileTree: boolean; onFileTree(): void }) {
       </div>
     );
   }
-  return (
-    <ReviewContext value={store}>
-      <Review key={sessionId} sessionId={sessionId} {...props} />
-    </ReviewContext>
-  );
+  return <Review key={sessionId} sessionId={sessionId} {...props} />;
 }
 
 function Review(props: { sessionId: string; fileTree: boolean; onFileTree(): void }) {
@@ -62,7 +63,7 @@ function Review(props: { sessionId: string; fileTree: boolean; onFileTree(): voi
   const ui = useUi();
   const store = useReviewStore();
   const state = useStore(store);
-  const diff = useDiff(sessionId, state.scope);
+  const diff = useDiff(sessionId, diffScope(state));
   const status = useStatus(sessionId);
   const actions = useActions(sessionId);
   const View = use(SlotsContext).reviewView ?? FileList;
@@ -99,7 +100,8 @@ function Review(props: { sessionId: string; fileTree: boolean; onFileTree(): voi
         </Empty>
       );
   } else if (files.length === 0) {
-    const scope = state.scope;
+    // One turn's changes are empty as the last turn's are.
+    const scope = state.scope === "turn" ? "last_turn" : state.scope;
     body = <Empty title={t(`review:empty_${scope}`)} hint={t(`review:empty_${scope}_hint`)} />;
   } else {
     const view: ReviewViewProps = {
@@ -172,7 +174,11 @@ function Header(props: {
         align="start"
         trigger={
           <ToolbarButton label={t("review:source")}>
-            <span className="text-fg">{t(`review:scope_${state.scope}`)}</span>
+            <span className="text-fg">
+              {state.scope === "turn"
+                ? t("review:scope_turn", { no: state.turn?.no })
+                : t(`review:scope_${state.scope}`)}
+            </span>
             <ChevronDownIcon />
           </ToolbarButton>
         }
@@ -265,7 +271,7 @@ function BulkActions(props: {
   const diffToken = diff.diff_token;
 
   const stageAll = async () => {
-    if (scope !== "last_turn") {
+    if (scope !== "last_turn" && scope !== "turn") {
       return actions.run({ action: "stage", diffToken, target: { all: true } });
     }
     const unstaged = await query.fetchQuery({

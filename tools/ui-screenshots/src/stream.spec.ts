@@ -235,6 +235,78 @@ const LATE = [
   done("i_2"),
 ] as EventBody[];
 
+const snapshot = (turn_id: string, status: string, more: object = {}) => ({
+  type: "snapshot.recorded",
+  data: { turn_id, phase: "end", status, excluded: [], ...more },
+});
+const in3 = { turn_id: "t_3" };
+/** Three finished turns: changes recorded, recorded in part, and not recorded at all. */
+const CHANGES = [
+  ...header,
+  tool("i_1", "edit", { paths: ["README.md"] }),
+  done("i_1"),
+  tool("i_2", "edit", { paths: ["src/lib.rs"] }),
+  done("i_2"),
+  started("i_3", "agent_message"),
+  delta("i_3", "README 和 `src/lib.rs` 都改好了。"),
+  done("i_3"),
+  completed("t_1", "completed", ["i_3"]),
+  snapshot("t_1", "ok", { stat: { files: 2, added: 12, removed: 3 } }),
+  ...opens(2, "把样例数据也更新一下"),
+  started("i_4", "agent_message", in2),
+  delta("i_4", "样例数据更新了。"),
+  done("i_4"),
+  completed("t_2", "completed", ["i_4"]),
+  snapshot("t_2", "partial", {
+    stat: { files: 1, added: 1, removed: 0 },
+    excluded: [{ path: "data/sample.bin", reason: "too_large" }],
+  }),
+  ...opens(3, "再整理一下目录"),
+  started("i_5", "agent_message", in3),
+  delta("i_5", "目录整理好了。"),
+  done("i_5"),
+  completed("t_3", "completed", ["i_5"]),
+  snapshot("t_3", "failed", { reason: "timeout" }),
+] as EventBody[];
+const file = (path: string, additions: number, deletions: number) => ({
+  ...{ path, additions, deletions, binary: false, change: "update" },
+});
+/** Each turn's `git/diff`, by its `{turn}` scope. */
+const TURN_DIFFS = {
+  t_1: [file("README.md", 8, 3), file("src/lib.rs", 4, 0)],
+  t_2: [file("data/sample.json", 1, 0)],
+};
+
+/**
+ * The stream scrolled to its end before a shot. After a layout change the
+ * stream may stop following its end on a runner (T245); until T245, the shots
+ * of UI-turn-changes put it where they expect it.
+ */
+const toEnd = (page: Page) =>
+  page.locator("[data-stream-list]").evaluate((list) => list.scrollTo({ top: list.scrollHeight }));
+
+/**
+ * The stream of `CHANGES`, its turns' diffs answered, and `revert` for
+ * `git/revert`; the answers are set before the session page asks.
+ */
+async function showChanges(page: Page, theme: "light" | "dark", revert?: object) {
+  await open(page, { info: { theme }, streams: { "session/s_1": CHANGES } });
+  await page.evaluate(
+    ([diffs, revert]) => {
+      window.cupperHost.handle("git/diff", ({ params }) => {
+        const scope = (params as { scope: string | { turn: string } }).scope;
+        const files = typeof scope === "object" ? (diffs[scope.turn as "t_1"] ?? []) : [];
+        const sum = (key: "additions" | "deletions") => files.reduce((n, f) => n + f[key], 0);
+        const stat = { added: sum("additions"), removed: sum("deletions"), files: files.length };
+        return { result: { caveats: [], diff_token: `dt_${JSON.stringify(scope)}`, files, stat } };
+      });
+      window.cupperHost.handle("git/revert", () => (revert ?? { result: {} }) as never);
+      window.cupperShell.navigate({ kind: "session", session_id: "s_1" });
+    },
+    [TURN_DIFFS, revert] as const,
+  );
+}
+
 async function show(page: Page, stream: EventBody[], theme: "light" | "dark") {
   await open(page, { info: { theme }, streams: { "session/s_1": stream } });
   await page.evaluate(() => window.cupperShell.navigate({ kind: "session", session_id: "s_1" }));
@@ -345,4 +417,67 @@ test("UI-late-output folded, the jumps both ways and the final exit code", async
   await expect(page.getByText("test result: ok. 412 passed; 0 failed")).toBeVisible();
   await page.mouse.move(400, 780);
   await expect(page).toHaveScreenshot("stream-late-output.png");
+});
+
+for (const theme of ["light", "dark"] as const) {
+  test(`UI-turn-changes ${theme}: the cards of folded turns, whole, in part and not recorded`, async ({
+    page,
+  }) => {
+    await showChanges(page, theme);
+    const cards = page.locator("[data-turn-changes]");
+    await expect(cards).toHaveCount(3);
+    await expect(cards.nth(0).getByText("README.md")).toBeVisible();
+    await expect(cards.nth(0).getByRole("button", { name: "撤销" })).toBeVisible();
+    await expect(page.getByText("有 1 个文件没有记录下来，不能撤销")).toBeVisible();
+    await expect(page.getByText("这一轮的改动没能记录")).toBeVisible();
+    await expect(page.getByRole("button", { name: "撤销" })).toHaveCount(1);
+    await toEnd(page);
+    await page.mouse.move(400, 780);
+    await expect(page).toHaveScreenshot(`stream-changes-${theme}.png`);
+    expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
+  });
+}
+
+test("UI-turn-changes a file opens the review panel on its turn", async ({ page }) => {
+  await showChanges(page, "light");
+  await page
+    .locator("[data-turn-changes]")
+    .first()
+    .getByRole("button", { name: /src\/lib\.rs/ })
+    .click();
+  const panel = page.locator('aside[aria-label="侧边面板"]');
+  await expect(panel.getByRole("button", { name: "查阅来源" })).toHaveText(/第 1 轮/);
+  await expect(panel.getByText("src/lib.rs")).toBeVisible();
+  await expect(panel.getByText("+12")).toBeVisible();
+  // The panel narrows the stream, which lays out again: the shot is at its end (T245).
+  await toEnd(page);
+  await page.mouse.move(400, 780);
+  await expect(page).toHaveScreenshot("stream-changes-review.png");
+});
+
+test("UI-turn-changes undo asks first; a stale patch says so and leads to the review panel", async ({
+  page,
+}) => {
+  const stale = {
+    error: {
+      code: -32000,
+      message: "conflict/stale_diff",
+      data: { code: "conflict", reason: "stale_diff" },
+    },
+  };
+  await showChanges(page, "light", stale);
+  const card = page.locator("[data-turn-changes]").first();
+  await card.getByRole("button", { name: "撤销" }).click();
+  const confirm = card.getByRole("alertdialog", { name: "是否还原更改？" });
+  await expect(confirm).toHaveAttribute("data-ready", "true");
+  await expect(confirm.getByRole("button", { name: "确认" })).toBeFocused();
+  // Where the list stands after the card grew depends on timing (T245); the shot starts at the card.
+  await card.evaluate((element) => element.scrollIntoView({ block: "start" }));
+  await page.mouse.move(400, 780);
+  await expect(page).toHaveScreenshot("stream-changes-undo.png");
+  await confirm.getByRole("button", { name: "确认" }).click();
+  await expect(card.getByText("之后已有新的改动，无法自动撤销")).toBeVisible();
+  await card.getByRole("button", { name: "打开审查面板" }).click();
+  const panel = page.locator('aside[aria-label="侧边面板"]');
+  await expect(panel.getByRole("button", { name: "查阅来源" })).toHaveText(/第 1 轮/);
 });
