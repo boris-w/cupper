@@ -60,3 +60,31 @@
    - **B**：不改产品代码。发命令后立即 `disconnectWindow`，靠竞态。断言"只执行一次"仍然成立，但不一定真的走到了重发的路径，用例偏弱。
 2. **E2E-NFR9 的两条**：结束状态和原因码以实测为准，与设计（5.6.9、5.2.12）不符时先报给你，不顺手修。
 3. **本机怎么跑**：只单份跑 NFR2、NFR9 三条，不跑 six-sessions。四条都不加 `@focus`，在后台窗口里跑。
+
+## 编排者的决定（2026-11-04，2026-11-09 开工）
+
+1. **E2E-NFR2-retry 取 A**：在窗口桥里加一个只在 e2e 构建里有的钩子，编进构建的方式照 T078 的 `disconnectWindow`。发布构建里不能有它（T161 会扫描测试钩子的标记）。钩子只按 `command_id` 拦一次，拦完即失效。
+2. **两条 NFR9 的结束状态和原因码以实测为准**：跟设计不符时先报给 `main`，不顺手修。
+3. **本机运行**：只单份跑 NFR2 和两条 NFR9；six-sessions 只在 runner 上跑；都不加 `@focus`。
+
+## 实现与本机实测（2026-11-09）
+
+- **窗口桥的钩子**：
+  - `WindowBridge::dropReplyTo(command)` 先记下这个 `command_id`。窗口带着它发出请求时，记下请求的 `id`。宿主对这个 `id` 的回复到达主进程时，清掉还没转给窗口的那一批字节（回复在其中），然后断开连接；钩子同时失效。
+  - 经 `bridges.dropReplyTo(webContentsId, command)` 和 e2e 构建专有的 `__cupperE2E.dropReplyTo` 调用，与 `disconnectWindow` 在同一处，发布构建里没有这个全局。
+  - 单元用例：钩子吞掉一次回复并重连，同一 `command_id` 再发一次时，回复照常到达窗口。
+- **E2E-NFR2-retry**：
+  - 窗口经 `__cupperTest.command` 发 `session/send`，宿主的回复被钩子吞掉。重连后窗口的 client 用同一 `command_id` 重发，账本回 `replayed: true`。
+  - 会话里只有两条用户消息，没有重复的条目；`--calls` 里 `say once` 的 prompt 只有一次；界面上 `once` 和 `say once` 各出现一次。
+- **E2E-NFR9-adapter-crash**：`say working; sleep 100; exit 3`。实测与设计一致：
+  - 回合为 `failed`，原因码 `adapter_exited`；
+  - 界面的提示框有"重试"；
+  - 下一条消息由新的适配器经 `session/resume` 完成，`--calls` 里的 resume 只有一次；
+  - 历史里三条用户消息，没有重复。
+- **E2E-NFR9-cli-crash**：`crash_cli`。实测与设计一致：
+  - 回合为 `failed`，原因码 `process_exited`，提示框有"重试"；
+  - 下一条消息先报 "Session not found"，经 resume 后再发一次：resume 1 次，`say again` 的 prompt 2 次，`crash_cli` 的 prompt 1 次（K6）；
+  - 历史没有重复。
+- **本机运行**：只单份跑了 `nfr2-nfr9.spec.ts`（`test:e2e:one`，后台，不抢焦点），3 条通过。`six-sessions.spec.ts` 没在本机跑，只做了类型检查。
+- **假 agent 记录调用**：测试在 App 启动前改写根目录里的 `test_config.json`，给假 agent 加上 `--calls`。没有改共用的夹具。
+- **规模**：`cargo xtask size` 为 +230，在停止线 450 以内。

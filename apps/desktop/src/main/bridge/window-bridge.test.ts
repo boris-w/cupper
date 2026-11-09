@@ -226,6 +226,26 @@ describe("UNIT-bridge-lifecycle", () => {
     await until(() => expect(posted.at(-1)).toEqual(failed));
   });
 
+  test("dropReplyTo drops the connection with the command's reply, once (e2e, NFR-2)", async () => {
+    const host = new MockHost(fixtures);
+    host.handle("session/send", () => ({ result: { disposition: "queued" } }));
+    const { bridge, send, flush, conns, messages } = bridged(host);
+    await bridge.open();
+    const params = { command_id: "c_1", session_id: "s_1", mode: "queue", content: [] };
+    const sent = (id: number) => ({
+      type: "send",
+      json: JSON.stringify({ jsonrpc: "2.0", id, method: "session/send", params }),
+    });
+    bridge.dropReplyTo("c_1");
+    send(sent(1));
+    flush();
+    await until(() => expect(conns).toHaveLength(2));
+    expect(messages()).toEqual([]);
+    send(sent(2));
+    flush();
+    expect(messages()).toMatchObject([{ id: 2, result: { disposition: "queued" } }]);
+  });
+
   test("disconnect drops the connection and the bridge makes another; close ends it for good", async () => {
     const host = new MockHost(fixtures);
     const { shell, bridges } = wired(host);

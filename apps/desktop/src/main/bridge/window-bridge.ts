@@ -122,6 +122,8 @@ export class WindowBridge {
   readonly #awaiting = new Map<unknown, string>();
   /** Follows the inbound frames to see those answers; the bytes go on as they came. */
   #frames = new FrameDecoder();
+  /** e2e: the `command_id` whose reply drops the connection, and the request `id` it went with. */
+  #dropOn: { command?: string; id?: unknown } = {};
 
   constructor(window: WindowPort, deps: BridgeDeps) {
     this.#window = window;
@@ -151,6 +153,14 @@ export class WindowBridge {
   /** Drops the connection as a host would; the bridge reconnects (e2e). */
   disconnect(): void {
     this.#conn?.port.close();
+  }
+
+  /**
+   * Drops the connection once the host's reply to `command` comes, and the
+   * reply with it, as if the connection had gone first (e2e, NFR-2). Once.
+   */
+  dropReplyTo(command: string): void {
+    this.#dropOn = { command };
   }
 
   #use(conn: DataConnection): void {
@@ -212,11 +222,16 @@ export class WindowBridge {
     try {
       this.#frames.push(bytes);
       for (let frame = this.#frames.next(); frame; frame = this.#frames.next()) {
-        if (frame.type !== FRAME_JSON || this.#awaiting.size === 0) {
+        const dropping = this.#dropOn.id !== undefined;
+        if (frame.type !== FRAME_JSON || (this.#awaiting.size === 0 && !dropping)) {
           continue;
         }
         const reply: unknown = JSON.parse(new TextDecoder().decode(frame.payload));
         const id = isRecord(reply) && !("method" in reply) ? reply.id : undefined;
+        if (dropping && id === this.#dropOn.id) {
+          [this.#dropOn, this.#batch, this.#batchBytes] = [{}, [], 0];
+          return this.disconnect();
+        }
         const command = this.#awaiting.get(id);
         if (command !== undefined) {
           this.#awaiting.delete(id);
@@ -290,6 +305,10 @@ export class WindowBridge {
     }
     const { method } = message;
     const request = "id" in message;
+    const commandId = isRecord(message.params) ? message.params.command_id : undefined;
+    if (request && commandId !== undefined && commandId === this.#dropOn.command) {
+      this.#dropOn = { id: message.id };
+    }
     const refuse = (reason?: string) => {
       if (request) {
         const reply = { jsonrpc: "2.0", id: message.id, error: error("forbidden", reason) };

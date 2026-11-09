@@ -219,7 +219,11 @@ function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
     // and a socket destroyed while Node hands over its data throws there (T200).
     const disconnectWindow = (webContentsId: number) =>
       void setImmediate(() => bridges.disconnect(webContentsId));
-    Object.assign(globalThis, { __cupperE2E: { disconnectWindow } });
+    // The window loses its connection as the host's reply to a command
+    // comes, before the window sees it (E2E-NFR2-retry).
+    const dropReplyTo = (webContentsId: number, command: string) =>
+      bridges.dropReplyTo(webContentsId, command);
+    Object.assign(globalThis, { __cupperE2E: { disconnectWindow, dropReplyTo } });
   }
 }
 
