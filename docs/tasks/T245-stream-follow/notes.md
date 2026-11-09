@@ -37,3 +37,4 @@
 
 - **stream-changes-undo 的基线要变**：去掉固定位置后，用户停在底部点"撤销"，卡片变高，按新规则只有用户才能取消贴底，列表继续贴底，确认控件仍在画面里。旧基线是旧代码在 runner 上碰巧拍下的位置（Playwright 的程序化滚动把贴底取消了，正是本任务要消除的情况）。由 ui-baseline 重新生成这一张。
 - **plan-error.test 要改**：它也挂载 `StreamList`，消息流现在用 ResizeObserver，jsdom 里没有，5 个用例因此失败；和 stream.test 共用 `stream/test-resize.ts` 里的替身。
+- **E2E-NFR1-4 的"往前补历史"用例要补用户的滚动**：它用 `list.scrollTop = 0` 模拟用户滚到顶，这一步没有用户意图，新规则不认它，列表又回到底部，`say t4` 等不到（PR #86 的 e2e）。和 T208 的两条单测一样，补的是用例的输入：在同一次 `evaluate` 里先在列表上派发 `WheelEvent`（冒泡，`deltaY` 为负），再设 `scrollTop = 0`。选这种而不是 `sendInputEvent` 的 mouseWheel，是因为意图监听是 React 的 `onWheel`，不看 `isTrusted`；不可信的 wheel 没有默认动作，不会自己滚动，位置仍由 `scrollTop` 决定，断言不变。两步在同一个任务里，scroll 事件在下一帧到，离 500 ms 的窗口很远。
