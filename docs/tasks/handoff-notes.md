@@ -580,3 +580,4 @@
 | T145、T151 | T238 合并后各自 merge main，核对重叠的 `stream-changes-review` 和 review-commit 三张基线 | T238 |
 | T113 | codex-acp 2.2.2 的 `userInputToContentBlocks` 处理音频时不区分 `fileId`（同一函数里图片已区分），`session/load` 回放 fileId 形式的音频会显示成 `[@audio](undefined)`；2.6.0 仍未修。升级适配器或用 `write` 重写基线时一并看，重写后 0.165.0–0.167.0 三条记录都会失效 | T246 |
 | 维护 codex-drift 工具时 | `facets` 看不到变体里再嵌一层的 `anyOf`，"改成二选一"会显示成"去掉了必填字段"（T209、T246 都遇到）；不会漏报，但描述会误导 | T246 |
+| 写消息流跳转用例的任务 | jsdom 里 TanStack Virtual 的 `scrollToIndex` 会一直对齐下去、跑满 CPU，跳转类的用例放 Playwright（截图套件）里测；用程序化滚动模拟用户时，先派发一次 wheel 等用户输入（T245 的规则：只有用户的操作能离开底部） | T245 |
