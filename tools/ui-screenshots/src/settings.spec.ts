@@ -3,7 +3,11 @@ import { expect, test } from "@playwright/test";
 
 import { open, violations } from "./serve";
 
-/** Claude running, Codex without its CLI; a client on weak authentication; a project. */
+/**
+ * The index the pages show: Claude running; Codex without its CLI and logged
+ * out; git without git-lfs; the desktop window and the CLI, the CLI on weak
+ * authentication; the project of the archived session `methods.json` lists.
+ */
 const INDEX = [
   {
     type: "agents.updated",
@@ -33,16 +37,36 @@ const INDEX = [
     type: "clients.updated",
     data: {
       clients: [
-        { conn_id: "c_1", principal_kind: "desktop_ui", role: "window", auth: "verified" },
-        { conn_id: "c_2", principal_kind: "cli", auth: "weak" },
-      ].map((c) => ({ ...c, client_name: "cupper", client_version: "0.1.0", since: 1 })),
+        {
+          conn_id: "c_1",
+          principal_kind: "desktop_ui",
+          role: "window",
+          client_name: "Cupper",
+          client_version: "0.1.0",
+          since: 1,
+          auth: "verified",
+        },
+        {
+          conn_id: "c_2",
+          principal_kind: "cli",
+          client_name: "cupper-cli",
+          client_version: "0.1.0",
+          since: 1,
+          auth: "weak",
+        },
+      ],
     },
   },
   {
     type: "project.upserted",
     data: {
-      ...{ project_id: "p_1", name: "cupper", path: "/work/cupper", position: 0 },
-      ...{ trust_state: "trusted", is_git: true, added_at: 1 },
+      project_id: "p_1",
+      name: "cupper",
+      path: "/work/cupper",
+      is_git: true,
+      added_at: 1,
+      position: 0,
+      trust_state: "trusted",
     },
   },
 ];

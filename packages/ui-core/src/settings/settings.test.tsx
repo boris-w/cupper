@@ -48,26 +48,38 @@ const CLIENTS = {
   type: "clients.updated",
   data: {
     clients: [
-      { conn_id: "c_1", principal_kind: "desktop_ui", role: "window", auth: "verified" },
+      {
+        conn_id: "c_1",
+        principal_kind: "desktop_ui",
+        role: "window",
+        client_name: "Cupper",
+        client_version: "0.1.0",
+        since: 1,
+        auth: "verified",
+      },
       {
         conn_id: "c_2",
         principal_kind: "cli",
+        client_name: "cupper-cli",
+        client_version: "0.1.0",
+        since: 1,
         auth: "weak",
         elevated: { scopes: [], expires_at: 9 },
       },
-    ].map((c, n) => ({
-      client_name: ["Cupper", "cupper-cli"][n],
-      client_version: "0.1.0",
-      since: 1,
-      ...c,
-    })),
+    ],
   },
 };
+/** The archived sessions' project. */
 const PROJECT = {
   type: "project.upserted",
   data: {
-    ...{ project_id: "p_1", name: "cupper", path: "/w/cupper", position: 0 },
-    ...{ trust_state: "trusted", is_git: true, added_at: 1 },
+    project_id: "p_1",
+    name: "cupper",
+    path: "/w/cupper",
+    is_git: true,
+    added_at: 1,
+    position: 0,
+    trust_state: "trusted",
   },
 };
 const archived = (n: number, title: string) => ({
