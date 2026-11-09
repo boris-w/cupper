@@ -1,18 +1,19 @@
 //! IT-files-search and IT-workspace-open: `files/search` and
 //! `workspace/open` (design 5.2.11) through the gateway, on the session
-//! fixture. A plain directory is walked and a git work tree listed in the
-//! snapshot tier; a list holds 5 s, unless a turn ends; `open` is a stand-in
-//! that records what it was asked.
+//! fixture, and IT-workspace-open-path. A plain directory is walked and a
+//! git work tree listed in the snapshot tier; a list holds 5 s, unless a
+//! turn ends; `open` is a stand-in that records what it was asked.
 
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
+use cupper_protocol::error::INVALID_PARAMS;
 use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::session::StopReason;
 use serde_json::{Value, json};
 
-use super::tests::{Fixture, done};
+use super::tests::{Fixture, done, harness};
 use super::trust_tests::git_project;
 use crate::driver::api::PromptTag;
 use crate::driver::probe::testkit::script;
@@ -115,4 +116,54 @@ async fn it_workspace_open_hands_the_workspace_to_the_app_of_the_setting() {
     assert_eq!(f.err("workspace/open", other).await, "not_found ");
     fs::remove_dir_all(&app).unwrap();
     assert_eq!(f.err("workspace/open", open("finder")).await, "not_found ");
+}
+
+#[tokio::test]
+async fn it_workspace_open_path_opens_a_file_inside_the_workspace_only() {
+    let mut f = Fixture::new("open-path").await;
+    let session = f.started().await;
+    let (app, dir) = (f.project(), f.project().parent().unwrap().to_owned());
+    script(
+        &dir,
+        "open",
+        r#"printf '%s|' "$@" >> "$0.log"; echo >> "$0.log""#,
+    );
+    write(&app, "src/a.rs");
+    write(&dir, "secret");
+    std::os::unix::fs::symlink(dir.join("secret"), app.join("out")).unwrap();
+    std::os::unix::fs::symlink("src/a.rs", app.join("link.rs")).unwrap();
+    let open =
+        |target: &str, path: &str| json!({"session_id": session, "target": target, "path": path});
+    for (target, path) in [
+        ("editor", "link.rs"),
+        ("terminal", "src/a.rs"),
+        ("finder", "src/a.rs"),
+        ("terminal", "src"),
+    ] {
+        assert_eq!(
+            f.ok("workspace/open", open(target, path)).await,
+            json!({}),
+            "{target} {path}"
+        );
+    }
+    let outside = dir.join("secret").display().to_string();
+    for path in [
+        outside.as_str(),
+        "../secret",
+        "src/../../secret",
+        "out",
+        "missing.rs",
+        "",
+    ] {
+        let refused = f
+            .call(harness(), "workspace/open", open("editor", path))
+            .await;
+        assert_eq!(refused.unwrap_err()["code"], INVALID_PARAMS, "{path:?}");
+    }
+    let asked = fs::read_to_string(dir.join("open.log")).unwrap();
+    let ws = app.display();
+    let expected = format!(
+        "-a|TextEdit|{ws}/src/a.rs|\n-a|Terminal|{ws}/src|\n-R|{ws}/src/a.rs|\n-a|Terminal|{ws}/src|\n"
+    );
+    assert_eq!(asked, expected);
 }

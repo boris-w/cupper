@@ -12,6 +12,3 @@ allowBuilds:
   # Picks the 7-Zip binary for building Windows installers (electron-builder's
   # Squirrel.Windows target). Cupper ships for macOS only.
   electron-winstaller: false
-
-minimumReleaseAgeExclude:
-  - "@pierre/diffs@1.6.4"

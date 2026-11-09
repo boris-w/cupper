@@ -13,6 +13,7 @@ use std::sync::LazyLock;
 use agent_client_protocol::Error;
 use serde_json::{Value, json};
 
+use crate::config::Config;
 use crate::config::Persona::{self, Claude, Codex};
 
 static CLAUDE: LazyLock<Value> = LazyLock::new(|| load(include_str!("../personas/claude.json")));
@@ -45,12 +46,24 @@ pub fn auth_status(p: Persona, logged_in: bool) -> Value {
     json!({"authStatus": status})
 }
 
-/// The session's config options as `session/new` returns them (s01).
-pub fn config_options(p: Persona) -> Vec<Value> {
-    data(p)["configOptions"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default()
+/// The session's config options as `session/new` returns them (s01), less
+/// what `--without` takes away: Claude's `plan` mode and Codex's
+/// `collaboration_mode`, the `thought_level` option.
+pub fn config_options(config: &Config) -> Vec<Value> {
+    let options = data(config.persona)["configOptions"].as_array();
+    let mut options = options.cloned().unwrap_or_default();
+    if config.without("thinking") {
+        options.retain(|o| o["category"] != "thought_level");
+    }
+    if config.without("plan") {
+        options.retain(|o| o["id"] != "collaboration_mode");
+        let mode = options.iter_mut().find(|o| o["id"] == "mode");
+        let values = mode.and_then(|mode| mode["options"].as_array_mut());
+        values
+            .into_iter()
+            .for_each(|values| values.retain(|v| v["value"] != "plan"));
+    }
+    options
 }
 
 /// The result of `session/new`, `session/resume` and `session/load` (s01,

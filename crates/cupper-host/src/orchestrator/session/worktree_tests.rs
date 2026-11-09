@@ -28,14 +28,14 @@ fn create(n: u32, hint: &str) -> Value {
 }
 
 /// A repository on `main` with `a.txt` committed.
-async fn repo(name: &str) -> Case {
+pub(super) async fn repo(name: &str) -> Case {
     let c = Case::new(name).await;
     c.write("a.txt", "a\n");
     gits(&c, "checkout -q -b main\nadd -A\ncommit -qm base").await;
     c
 }
 
-async fn created(c: &Case, n: u32, hint: &str) -> SessionId {
+pub(super) async fn created(c: &Case, n: u32, hint: &str) -> SessionId {
     let created = c.f.ok("session/create", create(n, hint)).await;
     serde_json::from_value(created["session_id"].clone()).unwrap()
 }
@@ -181,7 +181,7 @@ async fn taken_over(branch_only: bool) {
 
 /// A session whose worktree is added and locked, as it waits to refresh it;
 /// the worktree's path.
-async fn waiting(name: &str) -> (Case, SessionId, String) {
+pub(super) async fn waiting(name: &str) -> (Case, SessionId, String) {
     let c = repo(name).await;
     let session = created(&c, 1, "x").await;
     c.f.events(&session, "workspace.preparing", 2).await;

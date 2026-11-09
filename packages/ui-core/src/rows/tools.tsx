@@ -10,6 +10,7 @@ import { useState } from "react";
 
 import { useT, type Translate } from "../app/providers";
 import { ChevronDownIcon, ToolIcon } from "../components/icons";
+import { useStreamActions } from "../stream/actions";
 import { AnsiText } from "./ansi";
 import { registerRow, type RowOf, type ToolData } from "./stream";
 
@@ -56,28 +57,46 @@ function outputOf({ output, call }: ToolData): string {
 
 function ToolLine({ tool }: { tool: ToolData }) {
   const t = useT();
+  const { jumpTo } = useStreamActions();
   const [open, setOpen] = useState(false);
   const output = outputOf(tool);
   const expandable = tool.call.tool_kind === "execute" && output !== "";
+  const { late } = tool;
   return (
     <div className="text-chat-sm">
-      <button
-        type="button"
-        disabled={!expandable}
-        aria-expanded={expandable ? open : undefined}
-        onClick={() => setOpen(!open)}
-        className="flex w-full min-w-0 items-center gap-2 text-left text-fg-tertiary/80"
-      >
-        <span className="shrink-0 text-icon-tertiary">
-          <ToolIcon kind={kindOf(tool.call)} />
-        </span>
-        <span className={`truncate ${tool.running ? "shimmer" : ""}`}>
-          {toolText(t, tool.call, tool.running)}
-        </span>
-        {tool.end?.status === "failed" && (
-          <span className="shrink-0 text-danger">{t("stream:tool_failed")}</span>
+      <div className="flex min-w-0 items-center gap-2 text-fg-tertiary/80">
+        <button
+          type="button"
+          disabled={!expandable}
+          aria-expanded={expandable ? open : undefined}
+          onClick={() => setOpen(!open)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <span className="shrink-0 text-icon-tertiary">
+            <ToolIcon kind={kindOf(tool.call)} />
+          </span>
+          <span className={`truncate ${tool.running ? "shimmer" : ""}`}>
+            {toolText(t, tool.call, tool.running)}
+          </span>
+          {tool.end?.status === "failed" && (
+            <span className="shrink-0 text-danger">{t("stream:tool_failed")}</span>
+          )}
+          {tool.end?.may_still_run && (
+            <span className="shrink-0 text-warning">{t("stream:may_still_run")}</span>
+          )}
+        </button>
+        {late && (
+          <button
+            type="button"
+            onClick={() => jumpTo(late.itemId)}
+            className="shrink-0 hover:text-fg-secondary"
+          >
+            {late.exitCode === undefined
+              ? t("stream:late_view")
+              : t("stream:final_exit_code", { code: late.exitCode })}
+          </button>
         )}
-      </button>
+      </div>
       {open && <OutputBlock tool={tool} output={output} />}
     </div>
   );
@@ -134,5 +153,53 @@ function ActivityGroupRow({ row: { tools, running } }: { row: RowOf<"activity_gr
   );
 }
 
+/**
+ * A command that ran on after its turn was cancelled (design 5.7.4): folded to
+ * "取消后仍在运行" with its command and exit code, its output on demand, and
+ * a way to the call it belongs to.
+ */
+function LateOutputRow({ row }: { row: RowOf<"late_tool_output"> }) {
+  const t = useT();
+  const { jumpTo } = useStreamActions();
+  const [open, setOpen] = useState(false);
+  const { ref, exit_code: code, output_tail: tail } = row.output;
+  const inline =
+    row.output.output?.type === "text" ? (row.output.output as { text: string }).text : "";
+  const output = row.text || inline || (tail ?? "");
+  return (
+    <div className="text-chat-sm">
+      <div className="flex min-w-0 items-center gap-2 text-fg-tertiary/80">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <span className="shrink-0 text-icon-tertiary">
+            <ToolIcon kind="execute" />
+          </span>
+          <span className="truncate">
+            {t("stream:late_output", { command: escapeInvisible(ref.command ?? ref.title) })}
+          </span>
+          {code != null && <span className="shrink-0">{t("stream:exit_code", { code })}</span>}
+        </button>
+        <button
+          type="button"
+          onClick={() => jumpTo(ref.item_id)}
+          className="shrink-0 hover:text-fg-secondary"
+        >
+          {t("stream:late_jump")}
+        </button>
+      </div>
+      {open && (
+        <pre className="mt-1 max-h-60 overflow-auto rounded-lg border border-border bg-surface-code px-3 py-2 font-mono text-code whitespace-pre-wrap">
+          <AnsiText text={output} />
+        </pre>
+      )}
+    </div>
+  );
+}
+
 registerRow("tool", ({ row }) => <ToolLine tool={row} />);
+registerRow("late_tool_output", LateOutputRow);
 registerRow("activity_group", ActivityGroupRow);

@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use cupper_protocol::capabilities::{SessionCapabilities, SlashCommand};
 use cupper_protocol::domain::{AgentKind, PrincipalKind, PromptContent};
+use cupper_protocol::error::RpcError;
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{AdapterInstanceId, Digest, ProjectId, SessionId, TurnId};
 use cupper_protocol::index::SessionSummary;
@@ -201,6 +202,10 @@ impl IndexNotes for Index {
 
     fn rescanned(&self, _: &ProjectId, scan: Scan) {
         self.1.lock().unwrap().push(scan.digest);
+    }
+
+    fn project_removed(&self, _: &ProjectId) -> BoxFuture<'static, Result<(), RpcError>> {
+        Box::pin(async { Ok(()) })
     }
 }
 

@@ -42,7 +42,8 @@ export function failureText(error: unknown): { key: string; code?: string } {
   }
 }
 
-export function useActions(sessionId: string) {
+/** `onFailure` says why an action failed in place of the toast, as the turn card does (T132). */
+export function useActions(sessionId: string, onFailure?: (error: unknown) => void) {
   const { client } = useHost();
   const query = useQueryClient();
   const { show } = useToasts();
@@ -72,14 +73,15 @@ export function useActions(sessionId: string) {
         show({ id: "review", text });
       } catch (error) {
         const { key, code } = failureText(error);
-        show({ id: "review", text: t(key, { code }) });
+        if (onFailure) onFailure(error);
+        else show({ id: "review", text: t(key, { code }) });
       } finally {
         setBusy(false);
         // Whatever happened, the repository is what counts (GT-1).
         void query.invalidateQueries({ queryKey: ["session", sessionId] });
       }
     },
-    [client, query, sessionId, show, t],
+    [client, query, sessionId, show, t, onFailure],
   );
 
   /** One confirmation at a time: another revert asked for while one waits is ignored (RP-11). */

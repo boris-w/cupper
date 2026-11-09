@@ -19,6 +19,7 @@ export type HunkAction = "stage" | "unstage" | "revert";
  */
 export const ACTIONS: Readonly<Record<ReviewScope, readonly HunkAction[]>> = {
   last_turn: ["revert"],
+  turn: ["revert"],
   unstaged: ["stage", "revert"],
   staged: ["unstage"],
 };

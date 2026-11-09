@@ -22,7 +22,7 @@ use tokio::sync::mpsc;
 
 use super::service::{RepoLock, internal, writable};
 use super::stamp::Layout;
-use super::{Done, GitCmd, GitError, GitTool, Repo, RepoNotice, RepoOp};
+use super::{Done, GitCmd, GitError, GitTool, Repo, RepoNotice, RepoOp, lfs};
 use crate::clock::Clock;
 use crate::durations::{Durations, WORKTREE_REFRESH};
 use crate::gateway::AuditRecord;
@@ -165,8 +165,8 @@ impl Worktrees {
             )
             .await?;
         }
-        if locked != Some(true) {
-            let reason = format!("cupper session {session}");
+        if !matches!(locked, Some(Some(_))) {
+            let reason = lock_reason(session);
             let args = [OsStr::new("--reason"), reason.as_ref(), path];
             let lock_it = GitCmd::repo(RepoOp::WorktreeLock).args(args);
             let locked = self.run(repo, &writable, lock_it).await;
@@ -194,8 +194,10 @@ impl Worktrees {
         failed: &impl Fn(GitError) -> RpcError,
         heard: &impl Fn(Heard),
     ) -> Result<(), RpcError> {
-        let (said, mut chunks) = mpsc::unbounded_channel();
         let (branch, base) = (plan.branch.as_ref(), plan.base_ref.as_ref());
+        let tree = if branched { branch } else { base };
+        self.lfs_objects(&plan.repo, writable, tree, failed).await?;
+        let (said, mut chunks) = mpsc::unbounded_channel();
         let args = match branched {
             true => vec![plan.path.as_os_str(), branch],
             false => vec![OsStr::new("-b"), branch, plan.path.as_os_str(), base],
@@ -219,7 +221,7 @@ impl Worktrees {
         Ok(())
     }
 
-    async fn run(
+    pub(super) async fn run(
         &self,
         at: &Path,
         writable: &[PathBuf],
@@ -233,7 +235,31 @@ impl Worktrees {
         tier.run(&*self.clock, &self.durations, writable, cmd).await
     }
 
-    fn failed(&self, err: GitError) -> RpcError {
+    /// Refused, `lfs_object_missing`, while the repository lacks an LFS
+    /// object of `tree`'s, which the checkout would download (T237).
+    async fn lfs_objects(
+        &self,
+        repo: &Path,
+        writable: &[PathBuf],
+        tree: &OsStr,
+        failed: &impl Fn(GitError) -> RpcError,
+    ) -> Result<(), RpcError> {
+        let Some(git) = &self.git else {
+            return Ok(());
+        };
+        let (clock, durations) = (&*self.clock, &self.durations);
+        let stores = lfs::Stores::of(git, repo, clock, durations, writable).await;
+        let stores = stores.map_err(failed)?;
+        if !stores.runs {
+            return Ok(());
+        }
+        let oids = lfs::pointers(&git.repo_tier(repo), tree, clock, durations, writable).await;
+        let oids = oids.map_err(failed)?;
+        let copied = tokio::task::spawn_blocking(move || lfs::supply(&stores, &oids)).await;
+        lfs::none_missing(&copied.map_err(internal)?.map_err(internal)?)
+    }
+
+    pub(super) fn failed(&self, err: GitError) -> RpcError {
         err.reported("worktree", &self.audit, &*self.clock)
     }
 
@@ -260,6 +286,11 @@ impl Worktrees {
     }
 }
 
+/// What a session's worktree is locked with (design 5.2.10).
+pub(super) fn lock_reason(session: &SessionId) -> String {
+    format!("cupper session {session}")
+}
+
 fn branch(name: &str) -> String {
     format!("cupper/{name}")
 }
@@ -275,13 +306,16 @@ fn heard_notice(heard: &impl Fn(Heard), notice: Option<RepoNotice>) {
 }
 
 /// Whether `listed` (`worktree list --porcelain -z`) has the worktree at
-/// `path`, and then whether it is locked.
-fn listed(listed: &[u8], path: &Path) -> Option<bool> {
+/// `path`, and then its lock's reason, empty for a lock without one.
+pub(super) fn listed(listed: &[u8], path: &Path) -> Option<Option<String>> {
     let want = [b"worktree ", path.as_os_str().as_bytes()].concat();
     let fields: Vec<&[u8]> = listed.split(|b| *b == 0).collect();
     let mut records = fields.split(|field| field.is_empty());
     let record = records.find(|record| record.first() == Some(&want.as_slice()))?;
-    Some(record.iter().any(|field| field.starts_with(b"locked")))
+    let lock = record
+        .iter()
+        .find_map(|field| field.strip_prefix(b"locked"));
+    Some(lock.map(|reason| String::from_utf8_lossy(reason.trim_ascii_start()).into_owned()))
 }
 
 /// The percentage of the last `Updating files: n% (..)` among the whole

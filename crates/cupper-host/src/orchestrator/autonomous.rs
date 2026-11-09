@@ -146,8 +146,9 @@ impl AutonomousJudge {
 
     fn turn(&mut self, signal: TurnSignal, now: Now, out: &mut Vec<Action>) {
         match signal {
+            // The agent runs a steer's own turn without a prompt, too.
             TurnSignal::Started {
-                origin: TurnOrigin::Autonomous,
+                origin: TurnOrigin::Autonomous | TurnOrigin::SteerNewTurn,
                 ..
             } => {
                 self.phase = Phase::Autonomous;

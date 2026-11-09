@@ -254,7 +254,13 @@ method! {
         scope: Write,
         idempotency: Command,
         milestone: M1b,
-        errors: [Conflict / StaleDiff, Conflict / OutcomeUnknown, GitError, Forbidden],
+        errors: [
+            Conflict / StaleDiff,
+            Conflict / OutcomeUnknown,
+            GitError,
+            GitError / LfsObjectMissing,
+            Forbidden,
+        ],
     }
 }
 
@@ -471,6 +477,11 @@ method! {
 pub struct WorkspaceOpenParams {
     pub session_id: SessionId,
     pub target: OpenTarget,
+    /// A file or directory of the workspace, relative to it, instead of the
+    /// workspace: the editor opens it, the terminal its directory, Finder
+    /// selects it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<WirePath>,
 }
 
 open_enum! {
@@ -601,6 +612,10 @@ pub(super) mod tests {
                 json!({"results": []}),
             ),
             request::<WorkspaceOpen>(json!({"session_id": "s_1", "target": "editor"}), json!({})),
+            request::<WorkspaceOpen>(
+                json!({"session_id": "s_1", "target": "finder", "path": "src/login.rs"}),
+                json!({}),
+            ),
         ]
     }
 

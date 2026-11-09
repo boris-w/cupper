@@ -139,9 +139,10 @@ pub struct Overrides {
     pub required: Vec<String>,
 }
 
-/// The overrides for `entries`: the hooks and fsmonitor off, and every key
-/// that names a program emptied, except git-lfs's standard values, whose
-/// program becomes the host's git-lfs.
+/// The overrides for `entries`: the hooks and fsmonitor off, git-lfs's
+/// smudge on content, and every key that names a program emptied, except
+/// git-lfs's standard values, whose program becomes the host's git-lfs
+/// unless git-lfs would run programs of its own.
 pub fn overrides(entries: &[Entry], setup: &Setup<'_>) -> Result<Overrides, Unsafe> {
     // The last value of a key is the one in effect.
     let last: BTreeMap<&[u8], Option<&[u8]>> = (entries.iter())
@@ -154,6 +155,14 @@ pub fn overrides(entries: &[Entry], setup: &Setup<'_>) -> Result<Overrides, Unsa
     };
     set(b"core.fsmonitor", b"false");
     set(b"core.hooksPath", setup.hooks.as_os_str().as_bytes());
+    // git-lfs's smudge writes the pointer for a path these leave out, and
+    // after a failed download: a write checks out the content, or fails.
+    set(b"lfs.fetchinclude", b"");
+    set(b"lfs.fetchexclude", b"");
+    set(b"lfs.skipdownloaderrors", b"false");
+    let lfs = setup
+        .lfs
+        .filter(|_| !lfs_runs_programs(last.keys().copied()));
     let mut emptied = BTreeSet::new();
     for (&key, &value) in &last {
         let Some((section, sub, name)) = split(key) else {
@@ -167,7 +176,7 @@ pub fn overrides(entries: &[Entry], setup: &Setup<'_>) -> Result<Overrides, Unsa
                 String::from_utf8_lossy(key).into_owned(),
             ));
         }
-        match (setup.lfs, lfs_arguments(key, value)) {
+        match (lfs, lfs_arguments(key, value)) {
             (Some(lfs), Some(arguments)) => set(key, &[quote(lfs), arguments.to_vec()].concat()),
             _ => {
                 set(key, b"");
@@ -230,6 +239,19 @@ fn names_program(section: &[u8], sub: Option<&[u8]>, name: &[u8]) -> bool {
             | (b"submodule", true, b"update")
             | (b"pager", false, _)
     )
+}
+
+/// Whether the configuration has git-lfs run programs beside its filters:
+/// extensions, on a clean and a smudge, and transfer agents, to download.
+/// The host then runs no git-lfs: LFS is a filter it does not support
+/// (T237). git-lfs takes none of these from `.lfsconfig`.
+pub(super) fn lfs_runs_programs<'a>(mut keys: impl Iterator<Item = &'a [u8]>) -> bool {
+    keys.any(|key| {
+        let key = key.to_ascii_lowercase();
+        key.starts_with(b"lfs.extension.")
+            || key.starts_with(b"lfs.customtransfer.")
+            || key == b"lfs.standalonetransferagent"
+    })
 }
 
 /// The arguments after the program in git-lfs's standard value for `key`,

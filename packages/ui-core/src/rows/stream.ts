@@ -5,8 +5,8 @@
 //
 // T082 registers `history`, `turn_header`, `user_message` and `unknown`;
 // T166 `agent_message`, `thought`, `tool`, `activity_group`, `notice` and
-// `error`; T165 `request`; T143 `plan`. `late_tool_output` waits for T146;
-// until a kind is registered its rows show the placeholder of `RowRegistry`.
+// `error`; T165 `request`; T143 `plan`; T146 `late_tool_output`. Until a kind
+// is registered its rows show the placeholder of `RowRegistry`.
 
 import type {
   ErrorItem,
@@ -17,6 +17,7 @@ import type {
   Plan,
   PromptBlock,
   RequestView,
+  SnapshotRecorded,
   ToolCall,
   TurnStatus,
 } from "@cupper/protocol";
@@ -33,6 +34,8 @@ export interface ToolData {
   /** Until `item.completed`. */
   running: boolean;
   end?: ItemEnd;
+  /** The output that came after its turn was cancelled (`late_tool_output`), by the view's index. */
+  late?: { itemId: string; exitCode?: number };
 }
 
 /** Every row has a `key`, unique and stable in the list. */
@@ -48,6 +51,8 @@ export type StreamRow =
       status: "running" | TurnStatus;
       startedAt: number;
       durationMs?: number;
+      /** A completed turn folds to its header; absent while running and for other outcomes. */
+      folded?: boolean;
     }
   | {
       kind: "user_message";
@@ -89,7 +94,16 @@ export type StreamRow =
       key: string;
       itemId: string;
       output: LateToolOutput;
+      /** The output streamed so far. */
       text: string;
+    }
+  /** A finished turn's changes by its end snapshot (T132), after its final answer. */
+  | {
+      kind: "turn_changes";
+      key: string;
+      turnId: string;
+      turnNo: number;
+      snapshot: SnapshotRecorded;
     }
   /** An interaction request's place in the stream (T165). */
   | { kind: "request"; key: string; requestId: string; request?: RequestView }

@@ -38,7 +38,8 @@ use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{ConnId, IntentId, ProjectId, SessionId};
 use cupper_protocol::index::{
     AgentStatus, AgentsUpdated, ClientsUpdated, GitTools, HostUpdated, NotificationIntent,
-    RuntimeFailure, RuntimeState, SessionSummary, TrustState,
+    ProjectRemoved, RemovalReason, RuntimeFailure, RuntimeState, SessionRemoved, SessionSummary,
+    TrustState,
 };
 use cupper_protocol::methods::handshake::{ClientPresence, ClientPresenceParams};
 use cupper_protocol::methods::project::{
@@ -77,6 +78,7 @@ use crate::trust::{Scan, Trust};
 
 pub use self::budget::{BUDGET, DETAIL_MAX};
 pub(crate) use self::projects::{Context as ScanContext, git_of};
+pub(crate) use self::rows::archived;
 pub(crate) use self::status::status_of;
 
 /// The index actor's kind in the quiescence barrier.
@@ -126,6 +128,8 @@ enum Mail {
     Examined(Box<(Ask, Asking)>),
     Status(Input),
     Rescanned(ProjectId, Scan),
+    /// `project/remove`, its sessions archived.
+    ProjectRemoved(ProjectId, oneshot::Sender<Result<(), RpcError>>),
     Agent(Box<AgentStatus>),
     /// The self-check found the code on disk changed.
     PendingUpgrade,
@@ -260,6 +264,12 @@ impl IndexNotes for IndexHandle {
     fn rescanned(&self, project: &ProjectId, scan: Scan) {
         let _ = self.mail.send(Mail::Rescanned(project.clone(), scan));
     }
+
+    fn project_removed(&self, project: &ProjectId) -> BoxFuture<'static, Result<(), RpcError>> {
+        let (done, removed) = oneshot::channel();
+        let _ = self.mail.send(Mail::ProjectRemoved(project.clone(), done));
+        Box::pin(removed.map(|removed| removed.unwrap_or_else(|_| Err(stopped()))))
+    }
 }
 
 impl AgentNotes for IndexHandle {
@@ -360,6 +370,9 @@ impl IndexActor {
                     let _ = self.step(input).await;
                 }
                 Mail::Rescanned(project, scan) => self.rescanned(project, scan).await,
+                Mail::ProjectRemoved(project, done) => {
+                    let _ = done.send(self.remove_project(project).await);
+                }
                 Mail::Agent(status) => self.agent(*status).await,
                 Mail::Runtime(agent, state, failure) => {
                     self.runtime.insert(agent.clone(), (state, failure));
@@ -645,6 +658,13 @@ impl IndexActor {
         for action in actions {
             match action {
                 Action::Upsert(summary) => bodies.push(EventBody::SessionUpserted(*summary)),
+                Action::Remove(session_id) => {
+                    let reason = RemovalReason::Archived;
+                    bodies.push(EventBody::SessionRemoved(SessionRemoved {
+                        session_id,
+                        reason,
+                    }));
+                }
                 Action::Intent(intent) => {
                     let id = self.deps.ids.new_id().as_u128();
                     bodies.push(EventBody::NotificationIntent(NotificationIntent {
@@ -747,6 +767,27 @@ impl IndexActor {
                 self.audit_trust(None, id, change);
             }
         }
+    }
+
+    /// A project off the tables and the index stream, `removed_at` in its row.
+    async fn remove_project(&mut self, project: ProjectId) -> Result<(), RpcError> {
+        self.tables.projects.remove(&project);
+        let (key, at) = (project.to_string(), self.deps.clock.now_wall_ms());
+        let removed = move |conn: &rusqlite::Connection| {
+            let sql = "UPDATE projects SET removed_at = ?2 WHERE project_id = ?1";
+            conn.execute(sql, rusqlite::params![key, at]).map(drop)
+        };
+        let batch = Batch {
+            bodies: vec![EventBody::ProjectRemoved(ProjectRemoved {
+                project_id: project,
+            })],
+            with: Some(Box::new(removed)),
+            ..Batch::default()
+        };
+        let appended = self.writer.append(batch).await;
+        appended
+            .map(drop)
+            .map_err(|err| RpcError::app(ErrorCode::Internal, err.to_string()))
     }
 
     async fn append(&mut self, body: EventBody) {

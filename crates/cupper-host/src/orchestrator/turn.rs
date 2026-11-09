@@ -31,6 +31,14 @@
 //!   `agent_restarted` notice (K7).
 //! - A failed turn gets its `error` item (MS-5) before its end settles: the
 //!   attach's error, the prompt's, or the exited adapter's stderr.
+//! - A `steer` goes to the agent only when it can steer, the message names
+//!   the running turn and that turn waits on its prompt (K10, K11), and only
+//!   one at a time; otherwise it is queued, with the reason. The agent has
+//!   5 s: `Injected` writes the message into the turn as `steered`,
+//!   `StartedNewTurn` opens a `steer_new_turn` turn once this one completes,
+//!   anything else queues it. A turn's `turn.completed` waits for a steer in
+//!   flight. A late `Injected` or `StartedNewTurn` takes the message out of
+//!   the queue while it is still there (design 5.2.6, T140).
 
 use std::mem;
 use std::sync::Arc;
@@ -55,9 +63,9 @@ use super::queue::{QueueCore, QueueEditError, QueueFull, QueueOp, preview};
 use crate::clock::{IdGen, Now};
 use crate::driver::api::{
     AgentError, AgentErrorClass, AgentSessionId, AttachInfo, AttachTarget, DriverCommand,
-    DriverEvent, PromptTag,
+    DriverEvent, PromptTag, SteerOutcome,
 };
-use crate::durations::{Durations, INTERRUPT_FALLBACK, TURN_PREPARE};
+use crate::durations::{Durations, INTERRUPT_FALLBACK, STEER_TIMEOUT, TURN_PREPARE};
 use crate::orchestrator::{instant, notice};
 use crate::pure::{Core, TimerRequest};
 
@@ -66,6 +74,7 @@ pub struct TurnMachine {
     ids: Arc<IdGen>,
     prepare_for: Duration,
     cancel_for: Duration,
+    steer_for: Duration,
     link: Link,
     /// The prompt the agent session has not answered. It outlives its turn
     /// when the turn ended at the interrupt deadline.
@@ -83,6 +92,33 @@ pub struct TurnMachine {
     check: Check,
     /// A message sent while idle, waiting for its check.
     held: Option<(SendRequest, Option<SteerFallback>)>,
+    /// Whether the agent steers, once an attach told.
+    steerable: Option<bool>,
+    /// The steer the agent has not answered.
+    steering: Option<Steering>,
+    /// A steer given up on at its deadline, its message queued.
+    late: Option<Late>,
+    /// A message the agent started a turn for: it opens once no turn runs.
+    steer_turn: Option<SteerTurn>,
+}
+
+#[derive(Debug)]
+struct Steering {
+    turn_id: TurnId,
+    send: SendRequest,
+}
+
+#[derive(Debug)]
+struct Late {
+    turn_id: TurnId,
+    queue_id: QueueId,
+}
+
+#[derive(Debug)]
+struct SteerTurn {
+    message: Message,
+    /// The `send` still waits for its reply.
+    reply: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,10 +160,11 @@ enum Phase {
     Cancelling(PromptTag),
     /// Updates outside any prompt (K9); T041 decides when it starts and ends.
     Autonomous,
-    /// Decided; waiting for the end snapshot.
+    /// Decided; waiting for the end snapshot, and for a steer in flight.
     Ending {
         end: TurnEnd,
         pause: Option<PauseReason>,
+        shot: bool,
     },
 }
 
@@ -177,6 +214,8 @@ pub enum Input {
 pub struct SendRequest {
     pub content: PromptContent,
     pub mode: SendMode,
+    /// A steer's: the turn the client saw running.
+    pub expected_turn: Option<TurnId>,
     pub by: PrincipalId,
     pub reply_to: Option<RequestId>,
 }
@@ -184,8 +223,7 @@ pub struct SendRequest {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SendMode {
     Queue,
-    /// Sent as `Queue` until T140 brings steering, with
-    /// [`SteerFallback::Unsupported`] in the reply.
+    /// Into the running turn, when it can (design 5.2.6).
     Steer,
 }
 
@@ -226,6 +264,8 @@ pub enum Action {
     Timer(TimerRequest<TurnTimer>),
     /// The reply to the command input of this step.
     Reply(Reply),
+    /// For the host's log: what the machine let go.
+    Log(&'static str),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -274,6 +314,8 @@ pub enum TurnTimer {
     Prepare(TurnId),
     /// The interrupt's 10 s.
     CancelDeadline(TurnId),
+    /// A steer's 5 s.
+    Steer(TurnId),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -296,12 +338,19 @@ pub struct Sent {
 pub enum Disposition {
     Started,
     Queued,
+    Steered,
 }
 
 /// Why a steer went to the queue instead (`fallback_reason`, design 5.3.11).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SteerFallback {
     Unsupported,
+    TurnMismatch,
+    NotPrompting,
+    PromptRequired,
+    Timeout,
+    AgentError,
+    SteerPending,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -342,6 +391,7 @@ impl Outcome {
     }
 }
 
+#[derive(Debug)]
 struct Message {
     content: PromptContent,
     queue_id: Option<QueueId>,
@@ -354,6 +404,7 @@ impl TurnMachine {
             ids,
             prepare_for: durations.get(TURN_PREPARE),
             cancel_for: durations.get(INTERRUPT_FALLBACK),
+            steer_for: durations.get(STEER_TIMEOUT),
             link: Link::Detached(None),
             inflight: None,
             last_tag: 0,
@@ -365,6 +416,10 @@ impl TurnMachine {
             checks: false,
             check: Check::None,
             held: None,
+            steerable: None,
+            steering: None,
+            late: None,
+            steer_turn: None,
         }
     }
 
@@ -445,7 +500,7 @@ impl TurnMachine {
             Some((send, fallback)) if passed && self.turn.is_none() => {
                 self.start_sent(send, fallback, now, out)
             }
-            Some((send, fallback)) => self.enqueue(send, fallback, now, out),
+            Some((send, fallback)) => drop(self.enqueue(send, fallback, now, out)),
             None if passed => self.check = Check::Passed,
             None => {}
         }
@@ -459,19 +514,160 @@ impl TurnMachine {
     }
 
     fn send(&mut self, send: SendRequest, now: Now, out: &mut Vec<Action>) {
-        let fallback = (send.mode == SendMode::Steer).then_some(SteerFallback::Unsupported);
         if self.turn.is_none() && self.gate.is_empty() && self.held.is_none() {
             // A new message ends a pause the last turn left (design 5.2.6).
             if let Some(update) = self.queue.resume() {
                 out.push(Action::Event(EventBody::QueueUpdated(update)));
             }
             if self.checks {
-                self.held = Some((send, fallback));
+                self.held = Some((send, None));
                 return self.request_check(out);
             }
-            return self.start_sent(send, fallback, now, out);
+            return self.start_sent(send, None, now, out);
         }
+        let fallback = match send.mode {
+            SendMode::Queue => None,
+            SendMode::Steer => match self.unsteerable(&send) {
+                None => return self.steer(send, now, out),
+                reason => reason,
+            },
+        };
         self.enqueue(send, fallback, now, out);
+    }
+
+    /// Why `send` cannot steer the running turn now, if it cannot.
+    fn unsteerable(&self, send: &SendRequest) -> Option<SteerFallback> {
+        let turn = self.turn.as_ref();
+        if self.steerable == Some(false) {
+            Some(SteerFallback::Unsupported)
+        } else if send.expected_turn.as_ref() != turn.map(|turn| &turn.id) {
+            Some(SteerFallback::TurnMismatch)
+        } else if !matches!(turn.map(|turn| &turn.phase), Some(Phase::Prompting(_))) {
+            Some(SteerFallback::NotPrompting)
+        } else if self.steering.is_some() {
+            Some(SteerFallback::SteerPending)
+        } else {
+            None
+        }
+    }
+
+    /// Sends the steer; its reply comes with the agent's answer, or with
+    /// its deadline.
+    fn steer(&mut self, send: SendRequest, now: Now, out: &mut Vec<Action>) {
+        let (Some(turn), Link::Attached { session, .. }) = (&self.turn, &self.link) else {
+            return drop(self.enqueue(send, Some(SteerFallback::NotPrompting), now, out));
+        };
+        let (session, content) = (session.clone(), send.content.clone());
+        out.push(Action::Driver(DriverCommand::Steer { session, content }));
+        out.push(Action::Timer(TimerRequest::Set {
+            key: TurnTimer::Steer(turn.id.clone()),
+            at: now.mono + self.steer_for,
+        }));
+        let turn_id = turn.id.clone();
+        self.steering = Some(Steering { turn_id, send });
+    }
+
+    /// The agent's answer to the steer in flight, `None` for a failure; or
+    /// to one given up on, whose message may still be in the queue.
+    fn steered(&mut self, outcome: Option<SteerOutcome>, now: Now, out: &mut Vec<Action>) {
+        let Some(Steering { turn_id, send }) = self.steering.take() else {
+            return self.steered_late(outcome, now, out);
+        };
+        out.push(Action::Timer(TimerRequest::Cancel(TurnTimer::Steer(
+            turn_id.clone(),
+        ))));
+        let message = Message {
+            content: send.content.clone(),
+            queue_id: None,
+            reply_to: send.reply_to.clone(),
+        };
+        let fallback = match outcome {
+            Some(SteerOutcome::Injected) => {
+                self.user_message(&turn_id, &message, true, now, out);
+                out.push(Action::Reply(Reply::Send(Ok(Sent {
+                    disposition: Disposition::Steered,
+                    turn_id: Some(turn_id),
+                    queue_id: None,
+                    fallback: None,
+                }))));
+                None
+            }
+            Some(SteerOutcome::StartedNewTurn) => {
+                let reply = true;
+                self.steer_turn = Some(SteerTurn { message, reply });
+                None
+            }
+            Some(SteerOutcome::PromptRequired) => Some(SteerFallback::PromptRequired),
+            Some(SteerOutcome::Unsupported) => Some(SteerFallback::Unsupported),
+            None => Some(SteerFallback::AgentError),
+        };
+        if fallback.is_some() {
+            self.enqueue(send, fallback, now, out);
+        }
+        self.try_complete(now, out);
+    }
+
+    /// A late `Injected` or `StartedNewTurn` takes the message out of the
+    /// queue while it is there: for the turn it went into, if that has not
+    /// completed, or the turn the agent started.
+    fn steered_late(&mut self, outcome: Option<SteerOutcome>, now: Now, out: &mut Vec<Action>) {
+        let Some(late) = self.late.take() else {
+            return;
+        };
+        let into = self
+            .turn
+            .as_ref()
+            .is_some_and(|turn| turn.id == late.turn_id);
+        let wanted = match outcome {
+            Some(SteerOutcome::Injected) => into,
+            Some(SteerOutcome::StartedNewTurn) => true,
+            _ => return,
+        };
+        let taken = wanted.then(|| self.queue.take(&late.queue_id)).flatten();
+        let Some((entry, update)) = taken else {
+            return out.push(Action::Log("a late steer's message already left the queue"));
+        };
+        out.push(Action::Event(EventBody::QueueUpdated(update)));
+        let message = Message {
+            content: entry.content,
+            queue_id: Some(entry.queue_id),
+            reply_to: entry.reply_to,
+        };
+        if outcome == Some(SteerOutcome::Injected) {
+            return self.user_message(&late.turn_id, &message, true, now, out);
+        }
+        let reply = false;
+        self.steer_turn = Some(SteerTurn { message, reply });
+        self.start_steer_turn(now, out);
+    }
+
+    /// The steer's 5 s passed: its message is queued.
+    fn steer_expired(&mut self, turn_id: TurnId, now: Now, out: &mut Vec<Action>) {
+        let Some(steering) = self.steering.take_if(|s| s.turn_id == turn_id) else {
+            return;
+        };
+        let queued = self.enqueue(steering.send, Some(SteerFallback::Timeout), now, out);
+        self.late = queued.map(|queue_id| Late { turn_id, queue_id });
+        self.try_complete(now, out);
+    }
+
+    /// The turn the agent started for a steer, once no turn runs.
+    fn start_steer_turn(&mut self, now: Now, out: &mut Vec<Action>) {
+        if self.turn.is_some() {
+            return;
+        }
+        let Some(SteerTurn { message, reply }) = self.steer_turn.take() else {
+            return;
+        };
+        let turn_id = self.start(TurnOrigin::SteerNewTurn, Some(message), now, out);
+        if reply {
+            out.push(Action::Reply(Reply::Send(Ok(Sent {
+                disposition: Disposition::Steered,
+                turn_id: Some(turn_id),
+                queue_id: None,
+                fallback: None,
+            }))));
+        }
     }
 
     /// A turn for a message sent while idle, and the reply.
@@ -502,7 +698,7 @@ impl TurnMachine {
         fallback: Option<SteerFallback>,
         now: Now,
         out: &mut Vec<Action>,
-    ) {
+    ) -> Option<QueueId> {
         let queue_id = QueueId::from_uuid(self.ids.new_id_at(now.wall_ms).as_u128());
         let entry = QueueEntry {
             queue_id: queue_id.clone(),
@@ -523,7 +719,9 @@ impl TurnMachine {
                 fallback,
             }
         });
+        let queued = sent.as_ref().ok().and_then(|sent| sent.queue_id.clone());
         out.push(Action::Reply(Reply::Send(sent)));
+        queued
     }
 
     /// Writes `turn.started` and, for a message, the user message; asks for
@@ -540,6 +738,8 @@ impl TurnMachine {
         self.last_turn_no += 1;
         // A check counts for one turn.
         self.check = Check::None;
+        // The agent runs it already: no snapshot, no prompt.
+        let steered = origin == TurnOrigin::SteerNewTurn;
         out.push(Action::Event(EventBody::TurnStarted(TurnStarted {
             turn_id: id.clone(),
             turn_no: self.last_turn_no,
@@ -548,28 +748,12 @@ impl TurnMachine {
         })));
         let phase = match message {
             None => Phase::Autonomous,
+            Some(message) if steered => {
+                self.user_message(&id, &message, true, now, out);
+                Phase::Autonomous
+            }
             Some(message) => {
-                let item_id = ItemId::from_uuid(self.ids.new_id_at(now.wall_ms).as_u128());
-                out.push(Action::Event(EventBody::ItemStarted(ItemStarted {
-                    item_id: item_id.clone(),
-                    turn_id: Some(id.clone()),
-                    started_at: at,
-                    group_id: None,
-                    item: Item::UserMessage(UserMessage {
-                        content: message.content.clone(),
-                        steered: false,
-                        queue_id: message.queue_id,
-                        reply_to: message.reply_to,
-                    }),
-                })));
-                out.push(Action::Event(EventBody::ItemCompleted(ItemCompleted {
-                    item_id,
-                    status: ItemStatus::Completed,
-                    ended_at: at,
-                    duration_ms: DurationMs(0),
-                    may_still_run: false,
-                    patch: ItemPatch::default(),
-                })));
+                self.user_message(&id, &message, false, now, out);
                 out.push(Action::Snapshot {
                     turn_id: id.clone(),
                     phase: SnapshotPhase::Start,
@@ -592,6 +776,39 @@ impl TurnMachine {
             resent: false,
         });
         id
+    }
+
+    /// `message` as a user message of `turn_id`, started and completed at once.
+    fn user_message(
+        &self,
+        turn_id: &TurnId,
+        message: &Message,
+        steered: bool,
+        now: Now,
+        out: &mut Vec<Action>,
+    ) {
+        let at = TimestampMs(now.wall_ms);
+        let item_id = ItemId::from_uuid(self.ids.new_id_at(now.wall_ms).as_u128());
+        out.push(Action::Event(EventBody::ItemStarted(ItemStarted {
+            item_id: item_id.clone(),
+            turn_id: Some(turn_id.clone()),
+            started_at: at,
+            group_id: None,
+            item: Item::UserMessage(UserMessage {
+                content: message.content.clone(),
+                steered,
+                queue_id: message.queue_id.clone(),
+                reply_to: message.reply_to.clone(),
+            }),
+        })));
+        out.push(Action::Event(EventBody::ItemCompleted(ItemCompleted {
+            item_id,
+            status: ItemStatus::Completed,
+            ended_at: at,
+            duration_ms: DurationMs(0),
+            may_still_run: false,
+            patch: ItemPatch::default(),
+        })));
     }
 
     /// Moves things along after every step: an idle session takes the next
@@ -708,6 +925,7 @@ impl TurnMachine {
         };
         match result {
             Ok(info) => {
+                self.steerable = Some(info.capabilities.turn.steer.supported);
                 self.link = Link::Attached {
                     session: info.session,
                     instance: info.instance,
@@ -726,7 +944,7 @@ impl TurnMachine {
         }
     }
 
-    fn snapshot(&mut self, snapshot: SnapshotRecorded, out: &mut Vec<Action>) {
+    fn snapshot(&mut self, snapshot: SnapshotRecorded, now: Now, out: &mut Vec<Action>) {
         let Some(turn) = &mut self.turn else {
             return;
         };
@@ -741,15 +959,10 @@ impl TurnMachine {
                 ))));
                 out.push(Action::Event(EventBody::SnapshotRecorded(snapshot)));
             }
-            (Phase::Ending { .. }, SnapshotPhase::End) => {
+            (Phase::Ending { shot, .. }, SnapshotPhase::End) if !*shot => {
+                *shot = true;
                 out.push(Action::Event(EventBody::SnapshotRecorded(snapshot)));
-                if let Some(Turn {
-                    phase: Phase::Ending { end, pause },
-                    ..
-                }) = self.turn.take()
-                {
-                    self.complete(end, pause, out);
-                }
+                self.try_complete(now, out);
             }
             _ => {}
         }
@@ -859,6 +1072,10 @@ impl TurnMachine {
         }
         self.link = Link::Detached(Some(session.clone()));
         self.inflight = None;
+        // Its answer will not come.
+        if self.steering.is_some() {
+            self.steered(None, now, out);
+        }
         let running = matches!(
             self.turn,
             Some(Turn {
@@ -875,6 +1092,9 @@ impl TurnMachine {
     }
 
     fn expired(&mut self, timer: TurnTimer, now: Now, out: &mut Vec<Action>) {
+        if let TurnTimer::Steer(turn_id) = timer {
+            return self.steer_expired(turn_id, now, out);
+        }
         let Some(turn) = &mut self.turn else {
             return;
         };
@@ -960,18 +1180,48 @@ impl TurnMachine {
             turn.phase = Phase::Ending {
                 end,
                 pause: outcome.pause,
+                shot: false,
             };
         } else {
             self.turn = None;
-            self.complete(end, outcome.pause, out);
+            self.complete(end, outcome.pause, now, out);
         }
     }
 
-    fn complete(&mut self, end: TurnEnd, pause: Option<PauseReason>, out: &mut Vec<Action>) {
+    /// Completes the ending turn once its end snapshot is in and no steer
+    /// waits for the agent's answer.
+    fn try_complete(&mut self, now: Now, out: &mut Vec<Action>) {
+        let ready = matches!(
+            self.turn,
+            Some(Turn {
+                phase: Phase::Ending { shot: true, .. },
+                ..
+            })
+        );
+        if !ready || self.steering.is_some() {
+            return;
+        }
+        if let Some(Turn {
+            phase: Phase::Ending { end, pause, .. },
+            ..
+        }) = self.turn.take()
+        {
+            self.complete(end, pause, now, out);
+        }
+    }
+
+    fn complete(
+        &mut self,
+        end: TurnEnd,
+        pause: Option<PauseReason>,
+        now: Now,
+        out: &mut Vec<Action>,
+    ) {
         out.push(Action::Complete(end));
         if let Some(update) = pause.and_then(|reason| self.queue.pause(reason)) {
             out.push(Action::Event(EventBody::QueueUpdated(update)));
         }
+        self.start_steer_turn(now, out);
     }
 }
 
@@ -1008,7 +1258,7 @@ impl Core for TurnMachine {
                 out.push(Action::Reply(Reply::QueueEdit(edited)));
             }
             Input::Attached(result) => self.attached(result, now, &mut out),
-            Input::Snapshot(snapshot) => self.snapshot(snapshot, &mut out),
+            Input::Snapshot(snapshot) => self.snapshot(snapshot, now, &mut out),
             Input::Driver(DriverEvent::PromptDone {
                 tag,
                 stop_reason,
@@ -1017,6 +1267,10 @@ impl Core for TurnMachine {
             Input::Driver(DriverEvent::PromptFailed { tag, error }) => {
                 self.prompt_returned(tag, Err(error), now, &mut out)
             }
+            Input::Driver(DriverEvent::SteerDone(outcome)) => {
+                self.steered(Some(outcome), now, &mut out)
+            }
+            Input::Driver(DriverEvent::SteerFailed(_)) => self.steered(None, now, &mut out),
             Input::Driver(DriverEvent::AdapterExited {
                 instance,
                 reclaimed,
@@ -1059,6 +1313,10 @@ impl Core for TurnMachine {
             Input::Expired(timer) => self.expired(timer, now, &mut out),
             Input::HostExit => {
                 self.hold = true;
+                if self.steering.is_some() {
+                    self.steered(None, now, &mut out);
+                }
+                self.steer_turn = None;
                 let interrupted = Some(PauseReason::TurnInterrupted);
                 let outcome = Outcome::new(TurnStatus::Interrupted, interrupted);
                 self.end(outcome, now, &mut out);
@@ -1082,10 +1340,13 @@ impl Core for TurnMachine {
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::ExitStatus;
     use std::time::Duration;
 
     use super::*;
     use crate::orchestrator::testkit::*;
+    use crate::pure::CoreDriver;
 
     #[test]
     fn turn_machine_runs_a_turn_from_send_to_completed() {
@@ -1213,5 +1474,216 @@ mod tests {
             (&TurnStatus::Interrupted, &ResolutionReason::HostRestarted)
         );
         assert!(m.input(Input::HostExit).is_empty());
+    }
+    /// A turn of `m` waiting on its prompt (tag 1), on an agent that steers.
+    fn prompting(m: &mut CoreDriver<TurnMachine>) -> TurnId {
+        let turn = started(&m.input(send("a", SendMode::Queue)));
+        m.input(attached_steering(1));
+        m.input(snapshot(&turn, SnapshotPhase::Start));
+        turn
+    }
+
+    fn steer(message: &str, turn: &TurnId) -> Input {
+        steer_into(message, SendMode::Steer, Some(turn))
+    }
+
+    fn answer(outcome: SteerOutcome) -> Input {
+        Input::Driver(DriverEvent::SteerDone(outcome))
+    }
+
+    /// The reply among `actions`: its disposition, reason and turn.
+    fn sent(actions: &[Action]) -> (Disposition, Option<SteerFallback>, Option<TurnId>) {
+        let reply = actions.iter().find_map(|action| match action {
+            Action::Reply(Reply::Send(Ok(sent))) => Some(sent.clone()),
+            _ => None,
+        });
+        let sent = reply.expect("a reply");
+        (sent.disposition, sent.fallback, sent.turn_id)
+    }
+
+    /// Whether `actions` write a steered user message into `turn`.
+    fn steered_into(actions: &[Action], turn: &TurnId) -> bool {
+        actions.iter().any(|action| {
+            matches!(action, Action::Event(EventBody::ItemStarted(item))
+                if item.turn_id.as_ref() == Some(turn)
+                    && matches!(&item.item, Item::UserMessage(m) if m.steered))
+        })
+    }
+
+    #[test]
+    fn turn_machine_steer_goes_only_into_a_prompting_turn_it_names() {
+        let mut m = machine();
+        let turn = started(&m.input(send("a", SendMode::Queue)));
+        m.input(attached_steering(1));
+        let queued = |actions: &[Action]| sent(actions).1;
+        // Preparing, then another turn named.
+        let early = m.input(steer("b", &turn));
+        assert_eq!(queued(&early), Some(SteerFallback::NotPrompting));
+        m.input(snapshot(&turn, SnapshotPhase::Start));
+        let other = TurnId::from_uuid(7);
+        assert_eq!(
+            queued(&m.input(steer("c", &other))),
+            Some(SteerFallback::TurnMismatch)
+        );
+        let out = m.input(steer("d", &turn));
+        assert_eq!(kinds(&out), ["steer", "timer"]);
+        let pending = m.input(steer("e", &turn));
+        assert_eq!(queued(&pending), Some(SteerFallback::SteerPending));
+        // `queue` never steers (K10).
+        assert_eq!(
+            kinds(&m.input(send("f", SendMode::Queue))),
+            ["queue.updated", "reply"]
+        );
+        let injected = m.input(answer(SteerOutcome::Injected));
+        assert_eq!(
+            kinds(&injected),
+            ["untimer", "item.started", "item.completed", "reply"]
+        );
+        assert!(steered_into(&injected, &turn));
+        assert_eq!(
+            sent(&injected),
+            (Disposition::Steered, None, Some(turn.clone()))
+        );
+        for (outcome, reason) in [
+            (
+                Some(SteerOutcome::PromptRequired),
+                SteerFallback::PromptRequired,
+            ),
+            (Some(SteerOutcome::Unsupported), SteerFallback::Unsupported),
+            (None, SteerFallback::AgentError),
+        ] {
+            m.input(steer("g", &turn));
+            let input = match outcome {
+                Some(outcome) => answer(outcome),
+                None => Input::Driver(DriverEvent::SteerFailed(agent_error())),
+            };
+            let out = m.input(input);
+            assert_eq!(sent(&out), (Disposition::Queued, Some(reason), None));
+        }
+        // An agent that cannot steer.
+        let mut m = machine();
+        let turn = started(&m.input(send("a", SendMode::Queue)));
+        m.input(attached(1));
+        m.input(snapshot(&turn, SnapshotPhase::Start));
+        assert_eq!(
+            queued(&m.input(steer("b", &turn))),
+            Some(SteerFallback::Unsupported)
+        );
+    }
+
+    #[test]
+    fn turn_machine_steer_turn_completes_after_the_answer() {
+        // The prompt returns while the steer waits: `turn.completed` waits too.
+        let mut m = machine();
+        let turn = prompting(&mut m);
+        m.input(steer("b", &turn));
+        assert_eq!(
+            kinds(&m.input(done(1, StopReason::EndTurn))),
+            ["settle", "snapshot"]
+        );
+        let end = m.input(snapshot(&turn, SnapshotPhase::End));
+        assert_eq!(kinds(&end), ["snapshot.recorded"]);
+        let injected = m.input(answer(SteerOutcome::Injected));
+        assert!(steered_into(&injected, &turn));
+        assert_eq!(kinds(&injected)[3..], ["reply", "complete"]);
+        // Or for the deadline, after an interrupt, which leaves the steer be.
+        let mut m = machine();
+        let turn = prompting(&mut m);
+        m.input(steer("b", &turn));
+        let interrupt = Input::Interrupt {
+            expected_turn: None,
+        };
+        assert_eq!(
+            kinds(&m.input(interrupt)),
+            ["cancel", "cancel_asks", "timer", "reply"]
+        );
+        m.input(done(1, StopReason::Cancelled));
+        assert_eq!(
+            kinds(&m.input(snapshot(&turn, SnapshotPhase::End))),
+            ["snapshot.recorded"]
+        );
+        let expired = m.advance(Duration::from_secs(5));
+        assert_eq!(sent(&expired).1, Some(SteerFallback::Timeout));
+        assert_eq!(kinds(&expired)[1..], ["reply", "complete", "queue.updated"]);
+    }
+
+    #[test]
+    fn turn_machine_steer_started_new_turn_follows_the_turn() {
+        let mut m = machine();
+        let turn = prompting(&mut m);
+        m.input(steer("b", &turn));
+        assert_eq!(
+            kinds(&m.input(answer(SteerOutcome::StartedNewTurn))),
+            ["untimer"]
+        );
+        m.input(done(1, StopReason::EndTurn));
+        let end = m.input(snapshot(&turn, SnapshotPhase::End));
+        let next = started(&end);
+        assert_eq!(
+            kinds(&end)[..3],
+            ["snapshot.recorded", "complete", "turn.started"]
+        );
+        assert!(steered_into(&end, &next));
+        assert_eq!(sent(&end), (Disposition::Steered, None, Some(next)));
+        let Some(Action::Event(EventBody::TurnStarted(started))) = end.get(2) else {
+            panic!("{end:?}")
+        };
+        assert_eq!(started.origin, TurnOrigin::SteerNewTurn);
+        // The agent runs it: no prompt; it ends as an autonomous turn does.
+        assert_eq!(
+            kinds(&m.input(Input::AutonomousEnded)),
+            ["settle", "complete"]
+        );
+    }
+
+    #[test]
+    fn turn_machine_steer_late_answers_take_the_message_while_queued() {
+        let mut m = machine();
+        let turn = prompting(&mut m);
+        m.input(steer("b", &turn));
+        let expired = m.advance(Duration::from_secs(5));
+        assert_eq!(
+            sent(&expired),
+            (Disposition::Queued, Some(SteerFallback::Timeout), None)
+        );
+        let late = m.input(answer(SteerOutcome::Injected));
+        assert_eq!(
+            kinds(&late),
+            ["queue.updated", "item.started", "item.completed"]
+        );
+        assert!(steered_into(&late, &turn));
+        // Late and already run: only the log hears of it.
+        m.input(steer("c", &turn));
+        m.advance(Duration::from_secs(5));
+        m.input(done(1, StopReason::EndTurn));
+        let end = m.input(snapshot(&turn, SnapshotPhase::End));
+        let queued = started(&end);
+        assert_eq!(kinds(&m.input(answer(SteerOutcome::Injected))), ["log"]);
+        // A late new turn opens once the running one completes.
+        m.input(snapshot(&queued, SnapshotPhase::Start));
+        m.input(steer("d", &queued));
+        m.advance(Duration::from_secs(5));
+        assert_eq!(
+            kinds(&m.input(answer(SteerOutcome::StartedNewTurn))),
+            ["queue.updated"]
+        );
+        m.input(done(2, StopReason::EndTurn));
+        let end = m.input(snapshot(&queued, SnapshotPhase::End));
+        assert_eq!(
+            kinds(&end)[..3],
+            ["snapshot.recorded", "complete", "turn.started"]
+        );
+        assert!(!kinds(&end).contains(&"reply"));
+        // An exited adapter answers nothing: the steer is queued.
+        let mut m = machine();
+        let turn = prompting(&mut m);
+        m.input(steer("b", &turn));
+        let exited = m.input(Input::Driver(DriverEvent::AdapterExited {
+            instance: AdapterInstanceId::from_uuid(1),
+            status: ExitStatus::from_raw(9),
+            stderr: String::new(),
+            reclaimed: false,
+        }));
+        assert_eq!(sent(&exited).1, Some(SteerFallback::AgentError));
     }
 }

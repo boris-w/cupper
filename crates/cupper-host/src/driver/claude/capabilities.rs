@@ -5,9 +5,9 @@
 
 use agent_client_protocol::schema::v1::{InitializeResponse, SessionConfigOption};
 use cupper_protocol::capabilities::{
-    ConfigOption, DiffExtraction, ExtractionCapabilities, InteractionCapabilities, PlanExtraction,
-    PromptCapabilities, RunStateSource, SessionCapabilities, SessionLifecycle, SlashCommand,
-    SteerCapability, TurnCapabilities, Versions,
+    ConfigOption, ConfigOptionId, DiffExtraction, ExtractionCapabilities, InteractionCapabilities,
+    PlanExtraction, PromptCapabilities, RunStateSource, SessionCapabilities, SessionLifecycle,
+    SlashCommand, SteerCapability, TurnCapabilities, Versions,
 };
 use cupper_protocol::domain::{AgentKind, Tier};
 use cupper_protocol::limits;
@@ -30,6 +30,9 @@ pub fn capabilities(
     // At the top of the response, not under `agentCapabilities` (T003).
     let steering = init.meta.as_ref().and_then(|meta| meta.get("steering"));
     let steer = steering.and_then(|steering| steering.get("supported"));
+    // The plan mode and the thinking as the options offer them (T243).
+    let plan = extract::offers(&config, ConfigOptionId::PermissionMode, Some("plan"));
+    let thinking = extract::offers(&config, ConfigOptionId::ReasoningEffort, None);
     SessionCapabilities {
         agent: AgentKind::Claude,
         versions,
@@ -59,13 +62,13 @@ pub fn capabilities(
         interactions: InteractionCapabilities {
             reject_ends_turn: false,
             question_forms: true,
-            plan_confirm: true,
+            plan_confirm: plan,
         },
         extraction: ExtractionCapabilities {
             exit_code: true,
             output_streaming: false,
             diff: DiffExtraction::Fragment,
-            thinking: true,
+            thinking,
             plan: PlanExtraction::MarkdownOnly,
             run_state: RunStateSource::Inferred,
         },
@@ -145,9 +148,15 @@ mod tests {
         assert!(risks(&caps.config[1]).iter().all(|r| *r == Normal));
         assert_eq!(tier("someNewMode"), FullAccess);
 
+        assert!(caps.interactions.plan_confirm && caps.extraction.thinking);
         let mut config = caps.config;
         assert!(set_mode(&mut config, "plan") && !set_mode(&mut config, "plan"));
         assert_eq!(config[0].current, "plan");
+        // Without the plan mode, and without the effort option (T243).
+        config[0].values.retain(|v| v.value != "plan");
+        config.retain(|o| o.id != Id::ReasoningEffort);
+        let caps = capabilities(&init, versions(), config, Vec::new());
+        assert!(!caps.interactions.plan_confirm && !caps.extraction.thinking);
     }
 
     /// K25: TodoWrite is not available in SDK sessions, so Claude's plan is
@@ -157,6 +166,8 @@ mod tests {
         let (init, _) = s01();
         let caps = capabilities(&init, versions(), Vec::new(), Vec::new());
         assert_eq!(caps.extraction.plan, PlanExtraction::MarkdownOnly);
+        // No option known yet is no option missing (T243).
+        assert!(caps.interactions.plan_confirm && caps.extraction.thinking);
         for scenario in ["s02c-plan-tasks-enabled", "s02b-plan", "s05-questions"] {
             for (_, recording) in recordings(&CLAUDE, Some(scenario)) {
                 let plans: Vec<Value> = (extract(&recording).iter())
