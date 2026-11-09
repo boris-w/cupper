@@ -22,7 +22,7 @@ describe("E2E-selfuse-coexist", () => {
       });
       expect(dev.host()).toMatchObject({ exe: join(dev.path, HOST) });
       expect(dev.host().pid).not.toBe(host.pid);
-      // Electron 44 runs the GPU process in the plain helper, as it does
+      // Electron 45 runs the GPU process in the plain helper, as it does
       // the network service: its GPU and Plugin helpers never start, and
       // IT-selfuse-build checks their signatures.
       const helpers = ["", " (Renderer)"].map(helper);

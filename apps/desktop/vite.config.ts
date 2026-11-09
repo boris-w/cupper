@@ -16,8 +16,8 @@ import { defineConfig, type Plugin } from "vite";
 
 import type { Flavor } from "./src/shared/flavor.ts";
 
-// Electron 44.9.0 runs Chromium 152 and Node 24.22.
-const CHROME = "chrome152";
+// Electron 45.2.3 runs Chromium 156 and Node 24.22.
+const CHROME = "chrome156";
 const NODE = "node24";
 
 /**
