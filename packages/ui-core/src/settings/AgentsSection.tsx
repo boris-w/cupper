@@ -3,44 +3,19 @@
 // the git tools. Paths, versions and plan names are only ever text.
 
 import type { AgentStatus } from "@cupper/protocol";
-import { useState } from "react";
 
 import { useHost, useT } from "../app/providers";
-import { codeOf } from "../composer/send";
-import { useToasts } from "../feedback/toaster";
 import { unavailable } from "../newsession/NewSessionPage";
 import { LOGIN } from "../rows/messages";
 import { useStreams } from "../state/provider";
 import { useEntry } from "../state/stream";
-import { known, Row, Section } from "./parts";
-
-const BUTTON =
-  "shrink-0 rounded-lg bg-btn-secondary px-2.5 py-1 text-sm outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
-
-/** `agents/restart`; the card shows the state it goes through. */
-function Restart({ agent }: { agent: string }) {
-  const t = useT();
-  const { client } = useHost();
-  const { show } = useToasts();
-  const [busy, setBusy] = useState(false);
-  const restart = () => {
-    setBusy(true);
-    client
-      .command("agents/restart", { agent })
-      .catch((error: unknown) =>
-        show({ id: "restart", text: t("settings:restart_failed", { code: codeOf(error) }) }),
-      )
-      .finally(() => setBusy(false));
-  };
-  return (
-    <button type="button" disabled={busy} onClick={restart} className={BUTTON}>
-      {t(busy ? "settings:restarting" : "settings:restart")}
-    </button>
-  );
-}
+import { CommandButton, known, Row, Section } from "./parts";
 
 function AgentCard({ status, focused }: { status: AgentStatus; focused: boolean }) {
   const t = useT();
+  const { client } = useHost();
+  // The card shows the states a restart goes through.
+  const restart = () => client.command("agents/restart", { agent: status.agent });
   const { cli, adapter, auth } = status;
   const state = known(t, `settings:state_${status.state}`);
   const reason = unavailable(status);
@@ -52,7 +27,7 @@ function AgentCard({ status, focused }: { status: AgentStatus; focused: boolean 
   return (
     <Section
       title={t(`sidebar:agent_${status.agent}`)}
-      action={<Restart agent={status.agent} />}
+      action={<CommandButton name="restart" run={restart} />}
       focused={focused}
     >
       <Row
