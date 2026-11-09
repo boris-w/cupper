@@ -351,3 +351,62 @@ async fn perf_snapshot_ten_thousand_files() {
         assert!(runs[15] < Duration::from_secs(2), "{case}: {runs:?}");
     }
 }
+
+/// IT-snapshot-purge, the gates (T127): a purge waits for the snapshot in
+/// flight; one that starts while the purge holds the gates waits for them,
+/// then goes whole into the new empty store. The work trees' LFS stores go
+/// aside too. The next start removes what a crash left aside.
+#[tokio::test]
+async fn it_snapshot_purge_waits_for_snapshots_and_the_next_go_to_the_new_store() {
+    let fx = Repos::new("purge-gates", "mk r && printf 'a\\n' > r/a", None).await;
+    let (work_tree, durations) = (fx.dir.path().join("r"), Durations::default());
+    let opened = open(&fx.tool, &work_tree, &fx.clock, &durations).await;
+    let opened = opened.expect("opens");
+    let place = opened.place.clone();
+    fs::create_dir_all(place.git_dir.join("lfs/objects")).unwrap();
+    let mut purge = Box::pin(crate::git::purge::hold(&fx.tool));
+    assert!(futures::poll!(&mut purge).is_pending(), "the purge waits");
+    opened.close().await;
+    let held = purge.await;
+
+    let (tool, tree, clock) = (fx.tool.clone(), work_tree.clone(), fx.clock.clone());
+    let next = tokio::spawn(async move { take(&tool, &tree, None, &clock, &durations).await });
+    let real = SystemClock::new();
+    real.timer_at(real.now_mono() + Duration::from_millis(100))
+        .await;
+    assert!(!next.is_finished(), "the snapshot waits");
+    let aside = held.aside().expect("goes aside");
+    let name = |p: &PathBuf| p.file_name().unwrap().to_string_lossy().into_owned();
+    let names: Vec<String> = aside.iter().map(name).collect();
+    let stores: Vec<&str> = names
+        .iter()
+        .filter_map(|n| n.split(".purge-").next())
+        .collect();
+    assert_eq!(stores, ["objects", "lfs"]);
+    for path in &aside {
+        crate::git::purge::remove(path).expect("removed");
+    }
+    let start = next.await.expect("joins").expect("a snapshot");
+    fs::write(work_tree.join("a"), "a2\n").unwrap();
+    let end = fx.take("r", Some(&start.tree)).await;
+    let stat = DiffStat {
+        files: 1,
+        added: 1,
+        removed: 1,
+    };
+    assert_eq!(end.stat, Some(stat));
+
+    // Another run's purge cut short; this run's own is not touched.
+    let repo = place.objects.parent().unwrap();
+    let ours = repo.join(format!("objects.purge-{}.9", std::process::id()));
+    let left = [
+        repo.join("objects.purge-1.0"),
+        place.git_dir.join("lfs.purge-1.0"),
+        ours,
+    ];
+    for dir in &left {
+        fs::create_dir_all(dir.join("x")).unwrap();
+    }
+    crate::git::purge::leftovers(fx.tool.dir());
+    assert_eq!(left.map(|dir| dir.exists()), [false, false, true]);
+}
