@@ -24,7 +24,7 @@ fn setup(lfs: Option<&Path>, patch: bool) -> Setup<'_> {
 /// The `-c` values of `overrides`, past the unconditional ones.
 fn emptied(entries: &[Entry], lfs: Option<&Path>) -> Result<Vec<String>, Unsafe> {
     let overrides = overrides(entries, &setup(lfs, false))?;
-    let args = overrides.global[5..].iter().skip(1).step_by(2);
+    let args = overrides.global[11..].iter().skip(1).step_by(2);
     Ok(args.map(|arg| arg.to_string_lossy().into_owned()).collect())
 }
 
@@ -133,6 +133,13 @@ fn unit_git_repo_rules_overrides_empty_every_program() {
     let global = ["--no-pager", "-c", "core.fsmonitor=false", "-c"].map(OsString::from);
     assert_eq!(all.global[..4], global);
     assert_eq!(all.global[4], "core.hooksPath=/data/git/empty-hooks");
+    let offline = [
+        "lfs.fetchinclude=",
+        "lfs.fetchexclude=",
+        "lfs.skipdownloaderrors=false",
+    ];
+    let set: Vec<_> = all.global[5..11].iter().skip(1).step_by(2).collect();
+    assert_eq!(set, offline);
     assert_eq!(
         all.command,
         ["--no-ext-diff", "--no-textconv"].map(OsString::from)
@@ -162,6 +169,22 @@ fn unit_git_repo_rules_overrides_keep_only_standard_lfs_and_refuse_equals() {
         "filter.lfs.smudge=",
     ];
     assert_eq!(emptied(&standard, None).unwrap(), gone);
+    // Nor when git-lfs would run an extension or a transfer agent (T237).
+    for key in [
+        "lfs.extension.x.clean",
+        "lfs.customtransfer.x.path",
+        "lfs.standalonetransferagent",
+    ] {
+        let mut with = standard.to_vec();
+        with.push(entry(file("/repo/.git/config"), key, Some("x")));
+        let overrides = overrides(&with, &setup(Some(program), false)).unwrap();
+        let mut args = overrides.global[11..].iter().skip(1).step_by(2);
+        assert!(
+            args.all(|arg| !arg.to_string_lossy().contains("git-lfs")),
+            "{key}"
+        );
+        assert_eq!(overrides.required, ["lfs"], "{key}");
+    }
     let mut changed = standard.to_vec();
     let own = Some("git-lfs clean -- %f; x");
     changed.push(entry(file("/repo/.git/config"), "filter.lfs.clean", own));

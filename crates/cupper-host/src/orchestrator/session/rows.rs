@@ -228,7 +228,9 @@ impl Rows {
                     }
                 }
                 EventBody::SessionConfigured(c) => {
-                    rows.session(session, at, "config_json = ?3", vec![json(&c.config)])
+                    let set = "config_json = ?3, read_only = ?4";
+                    let values = vec![json(&c.config), int(u64::from(c.read_only))];
+                    rows.session(session, at, set, values)
                 }
                 _ => {}
             }
@@ -240,6 +242,18 @@ impl Rows {
     /// out for good, across restarts too.
     pub(super) fn ignored(&mut self, session: &SessionId, at: u64) {
         self.session(session, at, "project_config_ignored = 1", Vec::new());
+    }
+
+    /// Archived now, or restored.
+    pub(super) fn archived(&mut self, session: &SessionId, at: u64, archived: bool) {
+        let set = "archived_at = CASE WHEN ?3 THEN ?2 END";
+        self.session(session, at, set, vec![int(u64::from(archived))]);
+    }
+
+    /// The user's title (`session/rename`).
+    pub(super) fn titled(&mut self, session: &SessionId, at: u64, title: &str) {
+        let set = "title = ?3, title_source = 'user'";
+        self.session(session, at, set, vec![text(title)]);
     }
 
     /// The first message left the machine's hold for a turn or the queue.

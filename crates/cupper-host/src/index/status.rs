@@ -21,7 +21,9 @@ use std::time::Duration;
 use cupper_protocol::annotations::TimestampMs;
 use cupper_protocol::domain::{FailureCode, PrincipalKind};
 use cupper_protocol::ids::{ConnId, RequestId, SessionId};
-use cupper_protocol::index::{IntentReason, PendingKind, SessionStatus, SessionSummary};
+use cupper_protocol::index::{
+    IntentReason, PendingKind, SessionStatus, SessionSummary, TitleSource,
+};
 use cupper_protocol::session::TurnStatus;
 
 use crate::clock::Now;
@@ -57,6 +59,8 @@ pub(super) enum Input {
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Action {
     Upsert(Box<SessionSummary>),
+    /// `session.removed{archived}`.
+    Remove(SessionId),
     Intent(Intent),
     /// Store the session's read mark (`sessions.last_read_seq`).
     Read(SessionId, u64),
@@ -152,6 +156,12 @@ impl Entry {
                 self.base.read_only = read_only;
                 return None;
             }
+            Note::Title(title) => {
+                (self.base.title, self.base.title_source) = (title, TitleSource::User);
+                return None;
+            }
+            // Taken off by `notes`.
+            Note::Archived => return None,
         };
         let session = id.clone();
         Some(Intent {
@@ -199,6 +209,8 @@ pub(super) struct Status {
     watching: HashMap<ConnId, SessionId>,
     changed: BTreeSet<SessionId>,
     intents: Vec<Intent>,
+    /// Archived since the last flush.
+    removed: Vec<SessionId>,
     armed: bool,
 }
 
@@ -241,6 +253,11 @@ impl Status {
 
     /// A session the index does not know hears nothing: it was archived.
     fn notes(&mut self, id: SessionId, at: u64, notes: Vec<Note>) {
+        if notes.contains(&Note::Archived) && self.sessions.remove(&id).is_some() {
+            self.changed.remove(&id);
+            self.removed.push(id);
+            return;
+        }
         let Some(entry) = self.sessions.get_mut(&id) else {
             return;
         };
@@ -254,7 +271,8 @@ impl Status {
 
     fn flush(&mut self) -> Vec<Action> {
         self.armed = false;
-        let mut actions = Vec::new();
+        let removed = std::mem::take(&mut self.removed);
+        let mut actions: Vec<_> = removed.into_iter().map(Action::Remove).collect();
         for id in std::mem::take(&mut self.changed) {
             let Some(entry) = self.sessions.get_mut(&id) else {
                 continue;
@@ -313,7 +331,7 @@ impl Core for Status {
             Input::Closed(conn) => drop(self.watching.remove(&conn)),
             Input::Flush => return self.flush(),
         }
-        let due = !self.changed.is_empty() || !self.intents.is_empty();
+        let due = !self.changed.is_empty() || !self.intents.is_empty() || !self.removed.is_empty();
         if due && !self.armed {
             self.armed = true;
             let at = now.mono + COALESCE;
@@ -408,6 +426,21 @@ mod tests {
             _ => None,
         });
         reads.collect()
+    }
+
+    #[test]
+    fn unit_index_status_takes_a_title_and_lets_an_archived_session_go() {
+        let mut d = CoreDriver::new(Status::default());
+        d.input(Input::Created(Box::new(summary(1))));
+        d.input(notes(vec![Note::Title("Mine".into())]));
+        let titled = summary(1).title_source;
+        let actions = d.advance(COALESCE);
+        let upserted = |a: &Action| matches!(a, Action::Upsert(s) if s.title == "Mine" && s.title_source != titled);
+        assert!(actions.iter().any(upserted), "{actions:?}");
+        d.input(notes(vec![Note::Archived]));
+        assert_eq!(d.advance(COALESCE), [Action::Remove(id(1))]);
+        d.input(notes(vec![Note::TurnStarted]));
+        assert_eq!(d.advance(COALESCE), []);
     }
 
     #[test]

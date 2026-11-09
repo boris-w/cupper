@@ -24,6 +24,7 @@ const SHELL_API_MEMBERS: Members<ShellAPI> = {
   onNavigate: "function",
   openExternal: "function",
   pickDirectory: "function",
+  pathForFile: "function",
   system: { onThemeChange: "function" },
   window: { onFocusChange: "function" },
   prefs: { set: "function", onChange: "function" },
@@ -165,6 +166,13 @@ describe("UNIT-shell-mock", () => {
     expect(await shell.pickDirectory()).toBeNull();
     controls.setPickedDirectory("/work/repo");
     expect(await shell.pickDirectory()).toBe("/work/repo");
+  });
+
+  test("pathForFile gives the path set for a file's name, null for any other", () => {
+    const { shell, controls } = createBrowserShell();
+    controls.setFilePath("a.ts", "/work/repo/src/a.ts");
+    expect(shell.pathForFile(new File([], "a.ts"))).toBe("/work/repo/src/a.ts");
+    expect(shell.pathForFile(new File([], "b.ts"))).toBeNull();
   });
 
   test("system.onThemeChange follows the system theme, and init sees it", async () => {

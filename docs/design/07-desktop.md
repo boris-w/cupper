@@ -98,7 +98,7 @@ interface ShellAPI {
   onNavigate(cb: (target: NavigateTarget) => void): Unsubscribe; // 深链接、通知点击
   openExternal(url: string): void;            // 只接受 http/https，主进程再校验一次
   pickDirectory(): Promise<string | null>;    // 选择目录（如 worktree 根目录）
-  pathForFile(file: File): string | null;     // 拖入文件生成 @ 引用（M1b，CP-2），用 webUtils.getPathForFile
+  pathForFile(file: File): string | null;     // 拖入文件生成 @ 引用（M1b，CP-2），preload 里用 webUtils.getPathForFile（T142：它是渲染进程一侧的模块）
   saveFile(name: string, data: ArrayBuffer): Promise<boolean>;   // 诊断包（P1）
   system: { onThemeChange(cb: (t: 'light' | 'dark') => void): Unsubscribe };
   window: { onFocusChange(cb: (focused: boolean, at: number) => void): Unsubscribe };
@@ -136,7 +136,8 @@ type PrivilegedAction =
   | { kind: 'add_project' }                   // 选目录、project/add、信任确认一次完成
   | { kind: 'trust_project'; project_id: string }
   | { kind: 'elevation'; elevation_id: string }
-  | { kind: 'settings'; patch: SettingsPatch };
+  | { kind: 'settings'; patch: SettingsPatch }
+  | { kind: 'purge_snapshots' };              // 设置页"存储"的清除快照对象（T127 宿主、T147 界面）
 type PrivilegedResult =
   | { status: 'confirmed'; result?: unknown }  // create_session 带 session_id，add_project 带 project_id
   | { status: 'cancelled' } | { status: 'busy' } | { status: 'cooldown'; retry_after_ms: number }
@@ -490,7 +491,7 @@ v1.4 按用户决定 F1–F6（`docs/meetings/2026-10-19-ui-fidelity/minutes.md`
   - **提交**：
     - 入口是"Git 操作"菜单，里面有"提交""推送"。Codex 的"创建分支""切换分支""创建 PR"是 P1。
     - 提交弹窗：宽 420，标题"提交或推送"，写明"提交到 {分支}"；提交信息框高 80；下一步三选一：提交、提交并推送、推送。
-    - 提交会运行仓库的 hooks，并显示指纹提示。
+    - 提交会运行仓库的 hooks，并显示指纹提示。"将运行仓库的 hooks"在推送时也显示（pre-push）；没有上游时默认带 `set_upstream` 并说明；detached HEAD 时只能提交。弹窗用原生 `<dialog>` 的 `showModal()`；失败按语义码给出指引（`signing_failed` 改用 pinentry-mac，`auth_failed` 检查 ssh agent 或凭据），git 的输出折叠显示、只作为文本渲染（T233）。
     - 复选框"包含未暂存的更改"：勾选时先对"未暂存"范围执行 `git/stage`（目标为全部），再 `git/commit`，两条命令；暂存成功而提交失败时，改动留在已暂存里，与用户自己先暂存再提交的结果相同。
     - Codex 的"留空自动生成提交信息"是 P1。
   - **空状态和结果提示**：文案按 ui-spec 第 4.6 节翻译成中文，例如"尚无文件更改""已暂存""已还原 {path}"。

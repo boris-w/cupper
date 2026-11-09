@@ -122,6 +122,8 @@ pub struct InteractionCapabilities {
     /// Rejecting a permission ends the turn (Codex #556).
     pub reject_ends_turn: bool,
     pub question_forms: bool,
+    /// The agent can ask to confirm a plan, as its options show (T243). For
+    /// entry points only: a `plan_confirm` request is shown however it is.
     pub plan_confirm: bool,
 }
 
@@ -132,6 +134,8 @@ pub struct ExtractionCapabilities {
     pub exit_code: bool,
     pub output_streaming: bool,
     pub diff: DiffExtraction,
+    /// The agent thinks aloud, as its options show (T243). For entry points
+    /// only: thought items are extracted and shown however it is.
     pub thinking: bool,
     pub plan: PlanExtraction,
     pub run_state: RunStateSource,

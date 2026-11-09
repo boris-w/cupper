@@ -136,7 +136,11 @@ function FileRow(props: TreeProps & { file: GitDiffFile; indent: { paddingLeft: 
   const name = file.path.slice(file.path.lastIndexOf("/") + 1);
   const open = () =>
     client
-      .request("workspace/open", { session_id: props.sessionId, target: "editor" })
+      .request("workspace/open", {
+        session_id: props.sessionId,
+        target: "editor",
+        path: file.path,
+      })
       .catch((error: unknown) => {
         const { key, code } = failureText(error);
         show({ id: "review", text: t(key, { code }) });

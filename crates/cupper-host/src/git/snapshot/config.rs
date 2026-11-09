@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use super::super::rules::{Entry, lfs_arguments, quote, truthy};
+use super::super::rules::{Entry, lfs_arguments, lfs_runs_programs, quote, truthy};
 
 /// The whitelist, as git prints the keys.
 const KEYS: &[&str] = &[
@@ -48,14 +48,20 @@ fn last(entries: &[Entry]) -> BTreeMap<&[u8], Option<&[u8]>> {
         .collect()
 }
 
-/// The host runs git-lfs's filters: they are its standard values, and the
-/// host has git-lfs.
+/// The host runs git-lfs's filters: they are its standard values, the
+/// host has git-lfs, and git-lfs would run no other program.
 fn runs_lfs(last: &BTreeMap<&[u8], Option<&[u8]>>, lfs: Option<&Path>) -> bool {
     let standard = |key: &str| {
         let value = last.get(key.as_bytes()).copied().flatten();
         lfs_arguments(key.as_bytes(), value).is_some()
     };
-    lfs.is_some() && LFS.iter().all(|key| standard(key))
+    let programs = lfs_runs_programs(last.keys().copied());
+    lfs.is_some() && LFS.iter().all(|key| standard(key)) && !programs
+}
+
+/// Whether the host runs git-lfs's filters for `entries`.
+pub(in crate::git) fn lfs_runs(entries: &[Entry], lfs: Option<&Path>) -> bool {
+    runs_lfs(&last(entries), lfs)
 }
 
 /// The `config` file for `entries`, the user's effective configuration.
@@ -170,6 +176,14 @@ mod tests {
         assert_eq!(unrun(Some(lfs)), [b"crypt".to_vec()]);
         // Without the host's git-lfs, or with other values, LFS stays out.
         assert_eq!(unrun(None), [b"crypt".to_vec(), b"lfs".to_vec()]);
+        // Nor when git-lfs would run a program of its own (T237).
+        let mut extended = user.clone();
+        extended.push(("lfs.extension.x.clean", Some("x")));
+        let unrun = super::unrun(&entries(&extended), Some(lfs)).into_iter();
+        assert_eq!(
+            unrun.collect::<Vec<_>>(),
+            [b"crypt".to_vec(), b"lfs".to_vec()]
+        );
         user[9].1 = Some("/elsewhere/git-lfs clean -- %f");
         assert!(
             !String::from_utf8(text(&entries(&user), Some(lfs)))

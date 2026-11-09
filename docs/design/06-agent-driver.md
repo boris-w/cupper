@@ -41,7 +41,7 @@ flowchart LR
 |---|---|---|---|
 | `Attach`（请求） | `session_id`、`New {cwd, config}` 或 `Resume {agent_session_id, cwd, config}`、`project_config: load \| ignore`、事件发送端 | `AttachInfo {agent_session_id, instance_id, config_options, commands, caps}` | 需要时先拉起适配器（等待运行时就绪）；`New` 对应 `session/new`，`Resume` 对应 `session/resume`；之后立即应用 `config`（SP-4a 的 `apply_prefs`，resume 后也要重新应用）。`project_config` 由项目信任决定（[5.2.6](02-host.md#项目信任)）：Claude 为 `ignore` 时在 `_meta.claudeCode.options` 里传 `settingSources: ["user"]`；Codex 为 `ignore` 时直接返回 `unavailable`（`project_untrusted`） |
 | `Prompt` | `agent_session_id`、`content: [PromptBlock]` | 之后发 `PromptDone` 或 `PromptFailed` | 文本、图片（base64）、`resource_link`；评论块由宿主排成文本 |
-| `Steer`（请求） | `agent_session_id`、`content` | `SteerOutcome: Injected \| StartedNewTurn \| PromptRequired \| Unsupported`，5 s 超时 | 走 `_session/steering` 扩展；总是带 `idleBehavior: promptRequired`（Codex 会忽略它，见规避清单） |
+| `Steer`（请求） | `agent_session_id`、`content` | `SteerOutcome: Injected \| StartedNewTurn \| PromptRequired \| Unsupported`，5 s 超时 | 走 `_session/steering` 扩展；总是带 `idleBehavior: promptRequired`（Codex 会忽略它，见规避清单）。T140：结果以 `DriverEvent::SteerDone`、`SteerFailed` 交回会话，和 `Prompt` 一样不走请求的回复；5 s 由会话侧经 `Clock` 计时（时长键 `steer_timeout`） |
 | `Cancel` | `agent_session_id` | — | `session/cancel` 通知 |
 | `SetConfig`（请求） | `agent_session_id`、`option`、`value` | 最新的 `config_options` | `session/set_config_option` |
 | `Close` | `agent_session_id` | — | `session/close`；从路由表删除 |

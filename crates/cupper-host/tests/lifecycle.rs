@@ -1080,7 +1080,7 @@ async fn it_cli_commands_read_elevate_write_and_answer() {
         until(&data_dir, "host.db", running, &["0"]).await;
     }
 
-    // A new session, a message waited for, and an interrupt.
+    // A new session, a message waited for, a steer, and an interrupt.
     let project = dir.path().display().to_string();
     let (created, code) = repl
         .run(&format!(
@@ -1093,8 +1093,19 @@ async fn it_cli_commands_read_elevate_write_and_answer() {
         .run(&format!("send {other} \"say again\" --wait"))
         .await;
     assert_eq!((code, &waited[1]["status"]), (0, &json!("completed")));
-    repl.send(&format!("send {s} wait_cancel"));
+    repl.send(&format!("send {s} \"say waiting; wait_cancel\""));
     repl.output().await;
+    // Once the prompt is in flight, a steer goes into its turn.
+    let waiting = format!(
+        "SELECT 'waiting' FROM events WHERE stream = 'session/{s}' AND json LIKE '%waiting%' LIMIT 1"
+    );
+    until(&data_dir, "host.db", &waiting, &["waiting"]).await;
+    let (steered, code) = repl.run(&format!("send {s} \"also this\" --steer")).await;
+    let disposition = (
+        &steered[0]["disposition"],
+        steered[0]["turn_id"].is_string(),
+    );
+    assert_eq!((code, disposition), (0, (&json!("steered"), true)));
     let (interrupted, code) = repl.run(&format!("interrupt {s}")).await;
     assert_eq!((code, interrupted[0]["turn_id"].is_string()), (0, true));
     repl.send("exit");

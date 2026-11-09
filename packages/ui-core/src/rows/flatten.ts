@@ -1,11 +1,13 @@
-// The session view as the stream's rows (design 5.7.6): each turn's header,
-// then its entries; the tail after the last turn; the events of types this
-// build does not know at the end. A tool call starts an activity group with
-// the tool calls right after it that share its `group_id`; a group of one is
-// a plain tool row.
+// The session view as the stream's rows (design 5.7.6): each turn's opening
+// messages, its header, then the rest of its entries; the tail after the last
+// turn; the events of types this build does not know at the end. A tool call
+// starts an activity group with the tool calls right after it that share its
+// `group_id`; a group of one is a plain tool row. A completed turn folds to
+// its header unless open (design 5.7.4), and still shows its final answer and
+// the rows of `ALWAYS`.
 
 import type { Placeholder, SessionView } from "@cupper/host-client";
-import type { Entry, ItemView, PromptBlock } from "@cupper/protocol";
+import type { Entry, ItemView, PromptBlock, SnapshotRecorded } from "@cupper/protocol";
 
 import type { StreamRow, ToolData } from "./stream";
 
@@ -14,13 +16,53 @@ type ViewJson = ReturnType<SessionView["toJSON"]>;
 /** Where the history before the window stands. */
 export type History = "none" | "more" | "loading" | "failed";
 
-export function flatten(view: ViewJson, unknown: Placeholder[], history: History): StreamRow[] {
+/** What a folded turn still shows besides its final answer (design 5.7.4). */
+export const ALWAYS: ReadonlySet<string> = new Set([
+  ...["plan", "error", "notice", "late_tool_output", "request", "turn_changes"],
+]);
+
+/**
+ * Whether a turn's end snapshot makes a change card (T132): one recorded
+ * with changes, or one that could not be recorded, but not in a folder that
+ * is no git repository, where every turn would have one.
+ */
+function hasChanges({ status, stat, reason }: SnapshotRecorded): boolean {
+  if (status === "ok" || status === "partial") return (stat?.files ?? 0) > 0;
+  return !(status === "skipped" && reason === "not_a_repo");
+}
+
+/** Steered messages show in a folded turn; the others open it, above its header. */
+const opening = (row: StreamRow) => row.kind === "user_message" && !row.steered;
+
+export function flatten(
+  view: ViewJson,
+  unknown: Placeholder[],
+  history: History,
+  open: ReadonlySet<string> = new Set(),
+): StreamRow[] {
   const rows: StreamRow[] =
     history === "none" ? [] : [{ kind: "history", key: "history", state: history }];
   for (const [n, turn] of view.turns.entries()) {
     const { turn_id, turn_no, started_at } = turn.started;
     const completed = turn.completed ?? undefined;
-    rows.push({
+    const folds = completed?.status === "completed";
+    const folded = folds && !open.has(turn_id);
+    const body: StreamRow[] = [];
+    entries(view, turn.entries, body, n === view.turns.length - 1);
+    const end = turn.snapshots.find((snapshot) => snapshot.phase === "end");
+    if (end && hasChanges(end)) {
+      const key = `changes:${turn_id}`;
+      body.push({ kind: "turn_changes", key, turnId: turn_id, turnNo: turn_no, snapshot: end });
+    }
+    const lead = body.findIndex((row) => !opening(row));
+    const work = lead === -1 ? [] : body.splice(lead);
+    const final = new Set(completed?.final_item_ids);
+    const shown = (row: StreamRow) =>
+      !folded ||
+      ALWAYS.has(row.kind) ||
+      row.kind === "user_message" ||
+      ("itemId" in row && final.has(row.itemId));
+    rows.push(...body, {
       kind: "turn_header",
       key: `turn:${turn_id}`,
       turnId: turn_id,
@@ -28,8 +70,9 @@ export function flatten(view: ViewJson, unknown: Placeholder[], history: History
       status: completed?.status ?? "running",
       startedAt: started_at,
       ...(completed ? { durationMs: completed.duration_ms } : {}),
+      ...(folds ? { folded } : {}),
     });
-    entries(view, turn.entries, rows, n === view.turns.length - 1);
+    rows.push(...work.filter(shown));
   }
   entries(view, view.tail, rows, false);
   unknown.forEach(({ body }, n) =>
@@ -74,7 +117,7 @@ function entries(view: ViewJson, list: Entry[], rows: StreamRow[], last: boolean
     }
     const item = view.items[entry.item];
     if (item?.item.kind === "tool_call") {
-      const tool = toolData(item);
+      const tool = toolData(view, item);
       const id = item.item.group_id ?? undefined;
       if (group === undefined || id === undefined || id !== group.id) {
         close();
@@ -125,12 +168,18 @@ function fields<K extends Known>(item: Started): Fields<K> {
   return Object.fromEntries(rest) as Fields<K>;
 }
 
-function toolData({ item, output, end }: ItemView): ToolData {
+function toolData(view: ViewJson, { item, output, end }: ItemView): ToolData {
   const call = fields<"tool_call">(item);
-  return { itemId: item.item_id, call, output, running: !end, ...(end ? { end } : {}) };
+  const lateId = view.late_by_ref[item.item_id];
+  const late = lateId === undefined ? undefined : view.items[lateId]?.item;
+  const code = (late as { exit_code?: number } | undefined)?.exit_code;
+  return {
+    ...{ itemId: item.item_id, call, output, running: !end, ...(end ? { end } : {}) },
+    ...(lateId ? { late: { itemId: lateId, ...(code != null ? { exitCode: code } : {}) } } : {}),
+  };
 }
 
-function itemRow({ item, text, end }: ItemView): StreamRow | undefined {
+function itemRow({ item, text, output, end }: ItemView): StreamRow | undefined {
   const key = `item:${item.item_id}`;
   const itemId = item.item_id;
   switch (item.kind) {
@@ -163,7 +212,8 @@ function itemRow({ item, text, end }: ItemView): StreamRow | undefined {
         key,
         itemId,
         output: fields<"late_tool_output">(item),
-        text,
+        // Its output streams as a tool call's does (`field: output`).
+        text: output,
       };
     default:
       return { kind: "unknown", key, type: String(item.kind) };

@@ -148,6 +148,8 @@ open_enum! {
         /// The agent did not take it within 5 s.
         Timeout => "timeout",
         AgentError => "agent_error",
+        /// Another steer of the session waits for the agent's answer.
+        SteerPending => "steer_pending",
     }
 }
 
@@ -542,6 +544,11 @@ pub(super) mod tests {
             request::<SessionSend>(
                 json!({"command_id": "c-5", "session_id": "s_1", "content": text("next"), "mode": "steer"}),
                 json!({"disposition": "steered", "turn_id": "t_1"}),
+            ),
+            request::<SessionSend>(
+                json!({"command_id": "c-22", "session_id": "s_1", "content": text("and tests"),
+                    "mode": "steer", "expected_turn_id": "t_1"}),
+                json!({"disposition": "queued", "queue_id": "q_3", "fallback_reason": "steer_pending"}),
             ),
             request::<SessionInterrupt>(
                 json!({"command_id": "c-6", "session_id": "s_1", "expected_turn_id": "t_1"}),

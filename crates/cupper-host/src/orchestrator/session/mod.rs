@@ -5,6 +5,10 @@
 
 mod actor;
 #[cfg(test)]
+mod archive_tests;
+#[cfg(test)]
+mod cleanup_tests;
+#[cfg(test)]
 mod commit_tests;
 #[cfg(test)]
 mod config_tests;
@@ -33,6 +37,8 @@ mod output_tests;
 mod rebuild_tests;
 #[cfg(test)]
 mod recovery_tests;
+#[cfg(test)]
+mod restore_tests;
 mod rows;
 #[cfg(test)]
 pub(super) mod tests;
@@ -53,6 +59,7 @@ use cupper_protocol::methods::interaction::InteractionRespond;
 use cupper_protocol::methods::session::{SessionCreate, SessionSetConfig};
 use cupper_protocol::rpc::Method;
 use cupper_protocol::session::TurnStatus;
+use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -74,6 +81,8 @@ pub trait IndexNotes: Send + Sync + fmt::Debug {
     /// A session rescanned its project's trust range (design 5.2.6); the
     /// index records a trusted project that became `stale`.
     fn rescanned(&self, project: &ProjectId, scan: Scan);
+    /// `project/remove`: the project off the index, its sessions archived.
+    fn project_removed(&self, project: &ProjectId) -> BoxFuture<'static, Result<(), RpcError>>;
 }
 
 /// One change of a session the index computes its status from.
@@ -94,6 +103,10 @@ pub enum Note {
     },
     /// `workspace.ready`'s branch.
     Branch(Option<String>),
+    /// `session/rename`'s title.
+    Title(String),
+    /// Archived: off the index.
+    Archived,
     /// `session.configured`'s `read_only`.
     ReadOnly(bool),
 }

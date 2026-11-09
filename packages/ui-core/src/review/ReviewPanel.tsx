@@ -1,15 +1,15 @@
 // The "变更" tab of the side panel (design 5.7.5, GT-1 to GT-3, Codex's style,
 // ui-spec 4.6): the header with the scope, the counts and the options; the
 // caveats and the notice of a changed repository configuration; the file
-// tree (T232) beside the diff view, or an empty state; the bulk actions'
-// pill; and the revert confirmation. The Git actions (T233) join later. The
-// diff view, the review document, stays loaded from one session to the next
-// and while there is nothing to show.
+// tree (T232) beside the diff view, or an empty state; the Git actions
+// (T233); the bulk actions' pill; and the revert confirmation. The diff view,
+// the review document, stays loaded from one session to the next and while
+// there is nothing to show.
 
 import { RpcFailure } from "@cupper/host-client";
 import type { GitDiffResult } from "@cupper/protocol";
 import { useQueryClient } from "@tanstack/react-query";
-import { use, useMemo, useState, type ReactNode } from "react";
+import { use, useEffect, useMemo, type ReactNode } from "react";
 import { useStore } from "zustand";
 
 import { useHost, useT } from "../app/providers";
@@ -26,9 +26,8 @@ import { GitActions } from "./GitActions";
 import { ReviewFrame } from "./ReviewFrame";
 import { RevertConfirm } from "./RevertConfirm";
 import {
-  createReviewStore,
   diffKey,
-  ReviewContext,
+  diffScope,
   SCOPES,
   useDiff,
   useReviewStore,
@@ -50,12 +49,14 @@ export function ReviewPanel(props: PanelProps) {
   const sessionId = useStore(ui, ({ route }) =>
     route.page === "session" ? route.sessionId : undefined,
   );
-  const [store] = useState(createReviewStore);
-  return (
-    <ReviewContext value={store}>
-      <Review sessionId={sessionId} {...props} />
-    </ReviewContext>
-  );
+  const store = useReviewStore();
+  const turn = useStore(store, (state) => state.turn);
+  // Another session's turn is no scope here.
+  useEffect(() => {
+    if (turn && turn.sessionId !== sessionId)
+      store.getState().set({ scope: "unstaged", turn: undefined });
+  }, [store, turn, sessionId]);
+  return <Review sessionId={sessionId} {...props} />;
 }
 
 function Review(props: PanelProps & { sessionId?: string }) {
@@ -66,7 +67,7 @@ function Review(props: PanelProps & { sessionId?: string }) {
   const ui = useUi();
   const store = useReviewStore();
   const state = useStore(store);
-  const diff = useDiff(sessionId, state.scope, enabled);
+  const diff = useDiff(sessionId, diffScope(state), enabled);
   const status = useStatus(sessionId, enabled);
   const actions = useActions(sessionId);
   const Slot = use(SlotsContext).reviewView;
@@ -107,7 +108,8 @@ function Review(props: PanelProps & { sessionId?: string }) {
         </Empty>
       );
   } else if (files.length === 0) {
-    const scope = state.scope;
+    // One turn's changes are empty as the last turn's are.
+    const scope = state.scope === "turn" ? "last_turn" : state.scope;
     body = <Empty title={t(`review:empty_${scope}`)} hint={t(`review:empty_${scope}_hint`)} />;
   } else {
     view = {
@@ -195,7 +197,11 @@ function Header(props: {
         align="start"
         trigger={
           <ToolbarButton label={t("review:source")}>
-            <span className="text-fg">{t(`review:scope_${state.scope}`)}</span>
+            <span className="text-fg">
+              {state.scope === "turn"
+                ? t("review:scope_turn", { no: state.turn?.no })
+                : t(`review:scope_${state.scope}`)}
+            </span>
             <ChevronDownIcon />
           </ToolbarButton>
         }
@@ -288,7 +294,7 @@ function BulkActions(props: {
   const diffToken = diff.diff_token;
 
   const stageAll = async () => {
-    if (scope !== "last_turn") {
+    if (scope !== "last_turn" && scope !== "turn") {
       return actions.run({ action: "stage", diffToken, target: { all: true } });
     }
     const unstaged = await query.fetchQuery({

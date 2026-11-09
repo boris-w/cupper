@@ -971,7 +971,12 @@ IT-worktree-check-rules = "pr"
 # 会话归档、恢复、重命名与删除项目（v1.3.87 由 T125 拆出）
 [T240]
 milestone = "M1b"
-IT-session-archive-restore = "pr"
+IT-session-archive = "pr"
+
+# 会话恢复（v1.3.87 由 T240 拆出）
+[T241]
+milestone = "M1b"
+IT-session-restore = "pr"
 
 # 文件搜索、提示内容映射与在外部应用打开
 [T126]
@@ -1019,6 +1024,11 @@ E2E-SEC-revert-confirm = "nightly"
 milestone = "M1b"
 UI-turn-changes = "pr"
 E2E-turn-changes-undo = "nightly"
+
+# 消息流贴底跟随的修正
+[T245]
+milestone = "M1b"
+UNIT-stream-follow = "pr"
 
 # （条件）审查面板后备：DiffHunksRenderer
 [T139]

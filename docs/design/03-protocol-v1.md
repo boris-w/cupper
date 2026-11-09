@@ -118,6 +118,8 @@
 | `ping` | 请求 | — | `{}` | — | 天然 | 无 | M1a |
 | `client/presence` | 通知 客户端→宿主 | `{foreground, session_id?}` | — | — | 天然 | read | M1a |
 | `host/status` | 请求 | — | `{version, pending_upgrade, running_turns, pending_interactions, clients}`；test-harness 构建另带 `pid` | — | 天然 | read | M1a |
+| `host/storage` | 请求 | — | `{host_db, raw_db, blobs, snapshots, worktrees, partial, measured_at}`：各类数据的字节数（5.4.5）；`worktrees` 只算 cupper 自己建的 worktree，遍历有时限，超时时 `partial: true`，已算到的照样返回（T127） | — | 天然 | read | M1b |
+| `host/purge_snapshots` | 请求 | `{command_id}` | `{freed_bytes}`：清除所有仓库的快照对象库，旧回合的 diff、回合范围的还原之后回 `unavailable/snapshot_missing`（5.2.10，T127） | `conflict/turn_running`（有回合在运行或在准备，什么都不清） | 命令 | privileged（只能经原生确认） | M1b |
 | `host/prepare_upgrade` | 请求 | `{command_id, mode: wait\|force}` | `{state: waiting\|exiting, running_turns}` | `forbidden` | 命令 | privileged | M1b |
 | `host/exit` | 请求 | `{command_id, force}` | `{}`，随后宿主退出 | `conflict`（有运行中的回合且未 force） | 命令 | privileged | M1a |
 | `host/shutdown` | 通知 宿主→客户端 | `{reason: user_quit\|upgrade\|idle, restart_expected}` | — | — | — | — | M1a |
@@ -144,7 +146,7 @@
 | `project/add` | 请求 | `{command_id, path}` | `{project_id, trust: {state, findings, findings_omitted?, trust_digest}}`（同一路径重复添加返回已有的 ID；扫描范围里没有文件时直接为 `trusted`，否则为 `untrusted`） | `not_found`（路径不存在） | 命令 | write | M1a |
 | `project/trust` | 请求 | `{command_id, project_id, trust_digest}` | `{trust_state}` | `conflict/digest_mismatch`（确认之后项目配置又变了）、`unavailable/scan_failed` | 命令 | privileged（只能经原生确认，[5.2.6](02-host.md#项目信任)） | M1a |
 | `project/trust_info` | 请求 | `{project_id}` | `{path, state, findings, findings_omitted?, trust_digest, diff_from_trusted?, diff_omitted?}`：重新扫描，供主进程弹原生确认框；`path` 是添加项目时解析出的目录（T135），确认框据此显示是哪个项目 | `not_found` | 天然 | read | M1a |
-| `project/remove` | 请求 | `{command_id, project_id}` | `{}`（项目下的会话一并归档） | `conflict`（有运行中的回合） | 命令 | write | M1b |
+| `project/remove` | 请求 | `{command_id, project_id}` | `{}`（项目下的会话一并归档；T241：先问遍所有会话，全部空闲才动手） | `conflict`（有运行中的回合或正在准备工作区，什么都不改） | 命令 | write | M1b |
 | `agents/capabilities` | 请求 | `{agent}` | 该 agent 最近一次的能力描述（[5.3.7](#537-会话能力描述)）及其采集时间 | `unavailable`（CLI 或运行时不可用，带 `reason`） | 天然 | read | M1a |
 | `agents/refresh` | 请求 | `{agent}` | `{status}`：重新发现 CLI、检查版本；能力缓存为空时做一次探测 | `unavailable` | 天然 | write | M1a |
 | `agents/restart` | 请求 | `{command_id, agent}` | `{}`：重启该 agent 的适配器，影响它的所有会话 | — | 命令 | write | M1b |
@@ -166,7 +168,7 @@
 | `session/mark_read` | 请求 | `{session_id, up_to_seq}` | `{}` | — | 天然（只前移） | read | M1a |
 | `session/get` | 请求 | `{session_id}` | 完整摘要和工作区信息 | `not_found` | 天然 | read | M1a |
 | `session/capabilities` | 请求 | `{session_id}` | 能力描述 | `not_found` | 天然 | read | M1a |
-| `session/list_archived` | 请求 | `{cursor?}` | `{sessions, next?}` | — | 天然 | read | M1b |
+| `session/list_archived` | 请求 | `{cursor?}` | `{sessions, next?}`（每页 50，按 `(archived_at, session_id)` 倒序，T240） | — | 天然 | read | M1b |
 
 `PromptContent` 是内容块数组：`text {text}`、`image {blob}`、`file_ref {path}`（`@` 引用，相对工作区）、`review_comment {path, line_start, line_end, side, quote, comment}`（GT-2，宿主负责把评论排成给 agent 的文本）。单个 `text` 块超过帧预算时，客户端先 `blob/put`，再用 `text_blob {blob}` 引用。v1.4 起，桌面端把行内评论作为输入框的附件，随下一条消息以 `review_comment` 块发出（GT-2 v1.3，[5.7.4](07-desktop.md#574-窗口与布局)）。
 
@@ -194,13 +196,13 @@
 | `git/status` | 请求 | `{session_id}` | `{branch, upstream?, ahead, behind, in_progress?, files: [{path, index, worktree}], repo_config_changed?: [path]}`（T123：本会话期间指纹变过的配置文件，供提交确认和面板提示） | `unsupported/not_a_repo`、`git_error/unsafe_repo_config` | 天然 | read |
 | `git/diff` | 请求 | `{session_id, scope: unstaged\|staged\|last_turn\|{turn: id}}` | `{diff_token, files: [{path, old_path?, change, additions, deletions, binary, filter_unsupported?}], snapshot?: {status, excluded}, stat: {files, added, removed}, caveats: [mixed_changes\|late_tool_effects]}` | `unavailable`（`snapshot_missing`、`index_unmerged`） | 天然 | read |
 | `git/file_diff` | 请求 | `{session_id, diff_token, path}` | `{path, hunks: [{hunk_id, unit: hunk\|mode\|whole_file, header, lines \| lines_blob}]}`；`filter_unsupported` 的路径没有可操作的 hunk | `conflict/stale_diff` | 天然 | read |
-| `git/stage`、`git/unstage`、`git/revert` | 请求 | `{command_id, session_id, diff_token, target: {all} \| {paths} \| {hunk_ids}, input?}`；`git/revert` 来自 window 角色时必须带 `input`（同 `interaction/respond`） | `{}` | `conflict/stale_diff`、`conflict/outcome_unknown`、`git_error`（含 `unsafe_repo_config`、`filter_unsupported`）、`forbidden`（含 `user_activation_required`） | 命令 | write |
+| `git/stage`、`git/unstage`、`git/revert` | 请求 | `{command_id, session_id, diff_token, target: {all} \| {paths} \| {hunk_ids}, input?}`；`git/revert` 来自 window 角色时必须带 `input`（同 `interaction/respond`） | `{}` | `conflict/stale_diff`、`conflict/outcome_unknown`、`git_error`（含 `unsafe_repo_config`、`filter_unsupported`；`git/revert` 另有 `lfs_object_missing`，T237）、`forbidden`（含 `user_activation_required`） | 命令 | write |
 | `git/commit` | 请求 | `{command_id, session_id, message}` | `{oid}` | `git_error`（`hook_failed`、`nothing_to_commit`、`signing_failed`）、`conflict/outcome_unknown` | 命令 | write |
 | `git/push` | 请求 | `{command_id, session_id, set_upstream?}` | `{remote, branch}` | `git_error`（`auth_failed`、`rejected`）、`conflict/outcome_unknown`（T123） | 命令 | write |
 | `git/branches` | 请求 | `{project_id}` | `{current, local, remote}` | — | 天然 | read |
 | `worktree/check` | 请求 | `{session_id}` | `{removable, blockers: [rule], warnings: {ignored_files, case_only_dirty}}` | — | 天然 | read |
 | `files/search` | 请求 | `{session_id \| project_id, query, limit?}` | `{results: [{path, score, ranges_utf16}]}` | — | 天然 | read |
-| `workspace/open` | 请求 | `{session_id, target: terminal\|editor\|finder}` | `{}` | `unavailable/app_not_found` | 天然 | ui_local |
+| `workspace/open` | 请求 | `{session_id, target: terminal\|editor\|finder, path?}`（`path` 是工作区内的相对路径，T239） | `{}` | `unavailable/app_not_found` | 天然 | ui_local |
 
 `git/diff` 的 `caveats`：
 
@@ -407,6 +409,7 @@ ConfigOption {
 
 - 不支持的功能不出现（AG-4）：例如 `steer.supported` 为 false 时，界面不显示"插话"。
 - `steer.side_effects` 为 true（Claude）时，界面仍默认插话（v1.4：PRD CP-6 v1.3 与用户决定 F5），副作用在设置"跟进消息默认排队"的说明里和第一次插话时提示；用户可以把默认行为改成排队（[5.7.4](07-desktop.md#574-窗口与布局)）。宿主只在客户端明确要求 `steer` 时插话（ADR-07）。
+- `interactions.plan_confirm` 和 `extraction.thinking` 由 agent 给出的选项推断（T243）：Claude 看 `permission_mode` 有没有 `plan` 值，Codex 看有没有 `plan_mode`；思考看有没有 `reasoning_effort`。agent 还没报告任何选项时（`initialize` 之后、`session/new` 之前）视为可用。这两个字段**只决定入口**（选择器、开关）：宿主照旧提取所有计划确认和思考块，界面收到计划确认请求或思考条目时照样显示，不按它们隐藏，否则请求没人能答，回合会卡到交互超时。选项整个不在时，`session/set_config` 回 `unsupported`（带 `data.capability`）；选项在、值不在时回 `invalid_params`。
 - `turn.interrupt_stops_commands` 为 false（Codex，K3）时，中断后还在运行的命令记为 `abandoned` 加 `may_still_run`，界面立刻提示"命令可能仍在运行"（纪要 D4）。
 - `risk` 由宿主按配置项映射表给出（[5.6.5](06-agent-driver.md#565-配置项映射)），档位有序：`normal` < `elevated` < `full_access`。谁能放宽到哪一档见 [5.8.2](08-security.md#582-principal角色与-scope)。
 
@@ -424,9 +427,9 @@ ConfigOption {
 | `conflict` | `already_resolved`、`turn_mismatch`、`digest_mismatch`、`too_early`、`version_mismatch`、`stale_diff`、`outcome_unknown`、`turn_running`、`config_unconfirmed` | 否 | 收起或刷新；`already_resolved` 显示"已在别处处理"（AP-4） |
 | `expired` | `adapter_exited`、`host_restarted` | 否 | 收起请求面板 |
 | `unsupported` | `data.capability` 指出能力；`not_a_repo` | 否 | 隐藏功能 |
-| `unavailable` | `cli_missing`、`cli_not_logged_in`、`cli_too_old`、`runtime_installing`、`runtime_failed`、`adapter_starting`、`adapter_crashed`、`pending_upgrade`、`quota_exhausted`、`app_not_found`、`snapshot_missing`、`index_unmerged`、`project_untrusted`、`scan_failed` | 视 reason | 显示恢复指引（AG-2、MS-5） |
+| `unavailable` | `cli_missing`、`cli_not_logged_in`、`cli_too_old`、`runtime_installing`、`runtime_failed`、`adapter_starting`、`adapter_crashed`、`pending_upgrade`、`quota_exhausted`、`app_not_found`、`snapshot_missing`、`index_unmerged`、`project_untrusted`、`scan_failed`、`session_archived`（T240：已归档会话的写调用）、`session_read_only`（T241：只读会话的写调用） | 视 reason | 显示恢复指引（AG-2、MS-5） |
 | `agent_error` | `data.agent_code`、`data.agent_message`（截断、脱敏） | 否 | 显示 |
-| `git_error` | `hook_failed`、`nothing_to_commit`、`signing_failed`（T123：gpg、ssh、x509 签名失败，界面给出改用图形版 pinentry 的指引）、`auth_failed`、`rejected`、`lock_held`、`unsafe_repo_config`、`repo_config_changed`、`filter_unsupported` | 视 reason | 显示 stderr 摘要或原因 |
+| `git_error` | `hook_failed`、`nothing_to_commit`、`signing_failed`（T123：gpg、ssh、x509 签名失败，界面给出改用图形版 pinentry 的指引）、`auth_failed`、`rejected`、`lock_held`、`unsafe_repo_config`、`repo_config_changed`、`filter_unsupported`、`lfs_object_missing`（T237：宿主不下载本地没有的 LFS 对象，界面提示在终端里运行 `git lfs fetch`） | 视 reason | 显示 stderr 摘要或原因 |
 | `idempotency_mismatch` | — | 否 | 程序错误 |
 | `too_large` | — | 否 | 改用 blob |
 | `rate_limited` | 带 `retry_after_ms` | 是 | 退避 |
@@ -586,7 +589,7 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 - `findings` 条目：`{kind, path, target?, outside_workspace, detail}`。`kind` 是开放枚举：`hook`、`env`、`api_key_helper`、`status_line`、`mcp_server`、`skill`、`agent`、`command`、`codex_config`、`unparsed`（解析不了的文件，`detail` 写原因；它的完整内容照样计入摘要，T096）。
 - `project/trust_info.diff_from_trusted`：按文件列出 `{path, change}`，`change` 复用 `DiffChange`（`add`、`update`、`delete`）。为此 T035 在信任时另存每个文件的哈希清单，按 P-4 写进 `0001` 的 `projects` 表。
 - 帧上限（T034 的裁定）：结果里的 findings 和差异合计不超过 48,000 字节。单条 `detail` 先按字符边界截到 2,000 字节，末尾加 `…`，再按顺序装入，装不下就停；`findings_omitted`、`diff_omitted` 给出没装下的条数，确认框据此写"另有 N 项未列出"。摘要仍覆盖全部内容。
-- `fallback_reason`（插话退回排队的原因，5.2.6）：`unsupported`、`turn_mismatch`、`not_prompting`、`prompt_required`、`timeout`、`agent_error`。
+- `fallback_reason`（插话退回排队的原因，5.2.6）：`unsupported`、`turn_mismatch`、`not_prompting`、`steer_pending`（T140：已有一个插话在途）、`prompt_required`、`timeout`、`agent_error`。
 - `session/archive.blockers`：ADR-10 的 7 条规则各一个取值；T013 的 `worktree/check` 复用同一个枚举。
 - `host/status.clients`：`ClientInfo` 的列表（与 `clients.updated` 相同），不只是个数。
 - 补充错误码：
@@ -648,7 +651,7 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
 - 设置：
   - 用 5.2.11 的点号扁平键，`agents.<agent>.cli_path` 按 agent 展开；
   - patch 里的 `null` 只用来清空可为空的键。
-- `policy/describe.action` 是开放枚举，7 个取值与 5.8.3 的"原生确认"格子一一对应；`details` 是不带文案的语义参数，每种 `action` 带哪些键归 T031。
+- `policy/describe.action` 是开放枚举，取值与 5.8.3 的"原生确认"格子一一对应（原为 7 个，T127 加 `purge_snapshots`）；`details` 是不带文案的语义参数，每种 `action` 带哪些键归 T031。
 - `test/*` 的参数：`clock_advance {ms}`、`run_maintenance {task}`、`seed {profile}`，T047 可以细化。
 - 权限矩阵的新格子：
   - `Input`：window 的请求必须带 `input`；
@@ -721,6 +724,7 @@ T011 开工前做规划时，发现 5.3.5–5.3.7 有几处没有写定。下面
   - `privileged_option`：`{session_id, request_id, option_id, kind, effect}`；
   - `security_setting`：`{settings}`，只含安全相关的键和新值；
   - `grant_elevation`：`{elevation_id, scopes}`；
+  - `purge_snapshots`：`{snapshot_bytes}`，取 describe 那一刻快照对象库的大小（T127，P-6）；
   - `interrupt_turns`：`{running_turns}`。只有 `host/exit` 带 `force`、`host/prepare_upgrade` 为 `mode: force`，并且确实有运行中的回合时，才是这个 action；
   - 这个形式下不需要确认的命令，返回 invalid params。
 

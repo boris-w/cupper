@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { SlotsContext } from "../app/slots";
 import { ReviewPanel } from "./ReviewPanel";
+import { createReviewStore, ReviewContext } from "./state";
 import { mountOnHost } from "./test-harness";
 import type { ReviewViewProps } from "./view";
 
@@ -59,9 +60,11 @@ async function setup(
   } = {},
 ) {
   const { mock, ui } = await mountOnHost(
-    <SlotsContext value={{ reviewView: View }}>
-      <ReviewPanel fileTree={false} onFileTree={() => undefined} active />
-    </SlotsContext>,
+    <ReviewContext value={createReviewStore()}>
+      <SlotsContext value={{ reviewView: View }}>
+        <ReviewPanel fileTree={false} onFileTree={() => undefined} active />
+      </SlotsContext>
+    </ReviewContext>,
     (mock) => {
       mock.handle("git/diff", ({ params }) => {
         const { scope } = params as { scope: string };

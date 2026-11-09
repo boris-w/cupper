@@ -3,9 +3,9 @@
 
 use agent_client_protocol::schema::v1::{InitializeResponse, SessionConfigOption};
 use cupper_protocol::capabilities::{
-    ConfigOption, DiffExtraction, ExtractionCapabilities, InteractionCapabilities, PlanExtraction,
-    PromptCapabilities, RunStateSource, SessionCapabilities, SessionLifecycle, SlashCommand,
-    SteerCapability, TurnCapabilities, Versions,
+    ConfigOption, ConfigOptionId, DiffExtraction, ExtractionCapabilities, InteractionCapabilities,
+    PlanExtraction, PromptCapabilities, RunStateSource, SessionCapabilities, SessionLifecycle,
+    SlashCommand, SteerCapability, TurnCapabilities, Versions,
 };
 use cupper_protocol::domain::{AgentKind, Tier};
 use cupper_protocol::limits;
@@ -28,6 +28,9 @@ pub fn capabilities(
     let agent = &init.agent_capabilities;
     let steering = init.meta.as_ref().and_then(|meta| meta.get("steering"));
     let steer = steering.and_then(|steering| steering.get("supported"));
+    // The plan mode and the thinking as the options offer them (T243).
+    let plan = extract::offers(&config, ConfigOptionId::PlanMode, None);
+    let thinking = extract::offers(&config, ConfigOptionId::ReasoningEffort, None);
     SessionCapabilities {
         agent: AgentKind::Codex,
         versions,
@@ -55,13 +58,13 @@ pub fn capabilities(
         interactions: InteractionCapabilities {
             reject_ends_turn: true,
             question_forms: true,
-            plan_confirm: true,
+            plan_confirm: plan,
         },
         extraction: ExtractionCapabilities {
             exit_code: true,
             output_streaming: true,
             diff: DiffExtraction::PerHunk,
-            thinking: true,
+            thinking,
             plan: PlanExtraction::Entries,
             run_state: RunStateSource::AgentReported,
         },
@@ -125,5 +128,12 @@ mod tests {
         );
         assert_eq!(risks(&caps.config[1]), [Normal, Normal]);
         assert_eq!(extract::tier(TIERS, "danger"), FullAccess);
+        assert!(caps.interactions.plan_confirm && caps.extraction.thinking);
+        // Without the collaboration mode and the effort (T243).
+        let (versions, mut config) = (caps.versions, caps.config);
+        let gone = [ConfigOptionId::PlanMode, ConfigOptionId::ReasoningEffort];
+        config.retain(|o| !gone.contains(&o.id));
+        let caps = capabilities(&init, versions, config, Vec::new());
+        assert!(!caps.interactions.plan_confirm && !caps.extraction.thinking);
     }
 }

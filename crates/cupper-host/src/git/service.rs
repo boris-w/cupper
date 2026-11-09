@@ -19,6 +19,7 @@ use cupper_protocol::methods::git::{
     GitBranchesResult, GitCommit, GitCommitParams, GitCommitResult, GitDiffParams, GitDiffResult,
     GitFileDiff, GitFileDiffParams, GitFileDiffResult, GitPush, GitPushParams, GitPushResult,
     GitRevert, GitStage, GitStatus, GitStatusParams, GitStatusResult, GitTarget, GitUnstage,
+    WorktreeCheck, WorktreeCheckParams, WorktreeCheckResult,
 };
 use cupper_protocol::rpc::Method;
 use cupper_protocol::sync::StreamId;
@@ -30,13 +31,14 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
+use super::cleanup::{self, CheckError};
 use super::diff::{self, DiffCache, Diffed, Range, turn_notes};
 use super::head::{self, Head};
 use super::run::RunError;
 use super::snapshot::ShotError;
 use super::stamp::Layout;
 use super::{
-    GitCmd, GitError, GitTool, RepoNotice, RepoOp, User, UserOp, lfs, rules, snapshot, status, user,
+    GitCmd, GitError, GitTool, RepoNotice, RepoOp, User, UserOp, lfs, snapshot, status, user,
 };
 use crate::clock::{Clock, IdGen};
 use crate::durations::{DIFF_CACHE_TTL, Durations};
@@ -306,7 +308,8 @@ impl GitService {
                     "index.lock is held",
                 )
             }
-            GitError::Failed { .. } => {
+            // git apply's own refusal; past it git died, in a filter, say.
+            GitError::Failed { status, .. } if status.code() == Some(1) => {
                 notes_of(notes, session, &err);
                 stale("the patch does not apply")
             }
@@ -319,7 +322,7 @@ impl GitService {
     }
 
     /// The LFS objects of the pointers `op` writes with `patch`, from
-    /// cupper's store into the user's (T235).
+    /// cupper's store into the user's (T235); a revert's must all be there.
     async fn objects(
         &self,
         op: RepoOp,
@@ -333,25 +336,20 @@ impl GitService {
         }
         let (tool, writable) = (self.tool()?, self.writable().await?);
         let (clock, durations) = (&*self.deps.clock, &self.deps.durations);
-        let list = GitCmd::repo(RepoOp::ConfigList);
-        let listed = tool
-            .repo_tier(work_tree)
-            .run(clock, durations, &writable, list)
-            .await;
-        let listed = listed.map_err(|err| self.reported(Some(session), "lfs", err))?;
-        let entries = rules::parse(&listed.output.stdout, work_tree).map_err(internal)?;
-        let (dir, tree) = (tool.dir.clone(), work_tree.to_owned());
-        let copied = tokio::task::spawn_blocking(move || {
-            let layout = Layout::read(&tree.canonicalize()?)?;
-            let private = snapshot::private(&dir, &layout).1.join("lfs");
-            let (store, mode) = (lfs::store(&layout, &entries), lfs::shared(&entries));
-            lfs::supply(&private, &store, &oids, mode)
-        });
+        let stores = lfs::Stores::of(tool, work_tree, clock, durations, &writable).await;
+        let stores = stores.map_err(|err| self.reported(Some(session), "lfs", err))?;
+        let runs = stores.runs;
+        let copied = tokio::task::spawn_blocking(move || lfs::supply(&stores, &oids));
         let failed = |err: std::io::Error| {
             let message = format!("cannot copy an LFS object into the repository: {err}");
             error(ErrorCode::GitError, None, &message)
         };
-        copied.await.map_err(internal)?.map_err(failed)
+        let missing = copied.await.map_err(internal)?.map_err(failed)?;
+        // A revert's smudge would download what is missing (T237).
+        if op == RepoOp::Revert && runs {
+            lfs::none_missing(&missing)?;
+        }
+        Ok(())
     }
 
     /// `git/commit` (design 5.2.10, the user tier): `commit -F -`, the
@@ -599,6 +597,26 @@ impl GitService {
             .ok_or_else(|| not_found("session"))
     }
 
+    /// `worktree/check` (design 5.2.10): the cleanup rules for the session's
+    /// worktree; `unsupported` for a session in its project.
+    async fn check(&self, params: WorktreeCheckParams) -> Result<WorktreeCheckResult, RpcError> {
+        let session = &params.session_id;
+        if self.local(session).await? {
+            let local = "a session in its project has no worktree";
+            return Err(RpcError::app(ErrorCode::Unsupported, local));
+        }
+        let (tool, work_tree) = (self.tool()?, self.workspace(session).await?);
+        let head = self.head(session, tool, &work_tree).await?;
+        let writable = self.writable().await?;
+        let on = (&*self.deps.clock, &self.deps.durations);
+        let checked = cleanup::check(tool, (&work_tree, &head), session, &writable, on, true);
+        let checked = checked.await;
+        checked.map_err(|err| match err {
+            CheckError::Shot(err) => shot(err),
+            CheckError::Git(err) => self.reported(Some(session), "worktree_check", err),
+        })
+    }
+
     /// Whether `session` works in its project, not in a worktree.
     async fn local(&self, session: &SessionId) -> Result<bool, RpcError> {
         let id = session.to_string();
@@ -651,6 +669,7 @@ impl Port for GitService {
                 GitRevert::NAME => service.write(RepoOp::Revert, call).await,
                 GitCommit::NAME => service.commit(call).await,
                 GitPush::NAME => service.push(call).await,
+                WorktreeCheck::NAME => Ok(json!(service.check(parse(&call.params)?).await?)),
                 _ => Ok(json!(service.diff(parse(&call.params)?).await?)),
             }
         }
@@ -668,7 +687,7 @@ fn size(value: &impl serde::Serialize) -> usize {
 }
 
 /// A snapshot tier failure as the protocol has it.
-fn shot(err: ShotError) -> RpcError {
+pub(super) fn shot(err: ShotError) -> RpcError {
     let (code, reason) = match &err {
         ShotError::NotARepo(_) => (ErrorCode::Unsupported, Some(ErrorReason::NotARepo)),
         ShotError::Unmerged => (ErrorCode::Unavailable, Some(ErrorReason::IndexUnmerged)),

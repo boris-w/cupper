@@ -87,8 +87,15 @@ open_enum! {
         UnsafeRepoConfig => "unsafe_repo_config",
         RepoConfigChanged => "repo_config_changed",
         FilterUnsupported => "filter_unsupported",
+        /// An LFS object the call would check out is not in the repository,
+        /// and the host does not download it (`git lfs fetch` does).
+        LfsObjectMissing => "lfs_object_missing",
         /// `git/commit`: signing the commit failed, by gpg, ssh or x509 (Q23).
         SigningFailed => "signing_failed",
+        /// A write to a session restored without its worktree's branch (PS-3).
+        SessionReadOnly => "session_read_only",
+        /// A write to an archived session, which `session/restore` brings back.
+        SessionArchived => "session_archived",
         /// The session's queue holds its limit of messages (design 5.3.9).
         QueueFull => "queue_full",
         Steer => "steer",
@@ -134,7 +141,9 @@ impl ErrorReason {
             | R::SnapshotMissing
             | R::IndexUnmerged
             | R::ProjectUntrusted
-            | R::ScanFailed => ErrorCode::Unavailable,
+            | R::ScanFailed
+            | R::SessionReadOnly
+            | R::SessionArchived => ErrorCode::Unavailable,
             R::HookFailed
             | R::NothingToCommit
             | R::AuthFailed
@@ -143,6 +152,7 @@ impl ErrorReason {
             | R::UnsafeRepoConfig
             | R::RepoConfigChanged
             | R::FilterUnsupported
+            | R::LfsObjectMissing
             | R::SigningFailed => ErrorCode::GitError,
             R::QueueFull => ErrorCode::TooLarge,
             R::Steer | R::Cancel => ErrorCode::Timeout,

@@ -50,7 +50,9 @@
 //!   its options and its command list (waited for a while), then closed.
 //! - The login state the agent reports, and a prompt failing on it, go into
 //!   the agent's status for the index (`status`).
-//! - Steering (T140) is not served yet; its commands are dropped.
+//! - **Steering** (T140): `_session/steering`, always with
+//!   `idleBehavior: promptRequired` (Codex ignores it, K11); the answer goes
+//!   to the session as `SteerDone` or `SteerFailed`.
 
 pub mod agent;
 pub mod agents;
@@ -95,11 +97,11 @@ use self::agent::{Agent, Extractor};
 use self::launch::{Context, Instance, Launch};
 use self::lifecycle::{Resources, Restarts};
 use self::status::{AgentNotes, Running};
-use super::acp::{AcpConnection, FromAgent};
+use super::acp::{AcpConnection, FromAgent, SteeringRequest, SteeringResponse};
 use super::api::{
     AgentError, AgentErrorClass, AgentErrorForm, AgentPort, AgentSessionId, AskAnswer, AskId,
     AskRequest, Attach, AttachInfo, AttachTarget, ConfigResult, DriverCommand, DriverEvent,
-    ProjectConfigPolicy,
+    ProjectConfigPolicy, SteerOutcome,
 };
 use super::extract;
 use crate::clock::IdGen;
@@ -185,6 +187,7 @@ enum Wire {
         Option<oneshot::Sender<ConfigResult>>,
     ),
     Prompted(String, super::api::PromptTag, Result<PromptResponse, Error>),
+    Steered(String, Result<SteeringResponse, Error>),
     /// A stop's `session/close` was answered.
     SessionClosed,
 }
@@ -981,6 +984,21 @@ impl Actor {
                 };
                 self.to_session(&session, event);
             }
+            Wire::Steered(session, result) => {
+                let event = match result {
+                    Ok(answer) => DriverEvent::SteerDone(match answer.outcome.as_str() {
+                        "injected" => SteerOutcome::Injected,
+                        "startedNewTurn" => SteerOutcome::StartedNewTurn,
+                        "promptRequired" => SteerOutcome::PromptRequired,
+                        _ => SteerOutcome::Unsupported,
+                    }),
+                    Err(err) => {
+                        let error = self.agent().error(&err);
+                        DriverEvent::SteerFailed(self.judged(error))
+                    }
+                };
+                self.to_session(&session, event);
+            }
         }
     }
 
@@ -1187,7 +1205,39 @@ impl Actor {
                 });
                 drop(sent);
             }
-            DriverCommand::Attach(_) | DriverCommand::Steer { .. } => {}
+            DriverCommand::Steer { session, content } => {
+                let AgentSessionId(id) = session;
+                let Some(route) = self.sessions.get(&id) else {
+                    return;
+                };
+                let prompt = self.cached.as_ref().map(|caps| caps.prompt.clone());
+                let prompt = prompt.unwrap_or(PromptCapabilities {
+                    image: false,
+                    file_ref: true,
+                    max_image_bytes: 0,
+                });
+                let blocks = content::blocks(&content, &route.cwd, &prompt, &self.deps.blobs).await;
+                let blocks = match blocks {
+                    Ok(blocks) => blocks,
+                    Err(message) => {
+                        let error = error(AgentErrorClass::Other, message);
+                        return self.to_session(&id, DriverEvent::SteerFailed(error));
+                    }
+                };
+                let steering = json!({"idleBehavior": "promptRequired"});
+                let meta = Meta::from_iter([("steering".to_owned(), steering)]);
+                let request = SteeringRequest {
+                    session_id: id.clone().into(),
+                    prompt: blocks,
+                    meta: Some(meta),
+                };
+                let wire = wire.clone();
+                let sent = conn.request(request, move |result| {
+                    let _ = wire.send(Wire::Steered(id, result));
+                });
+                drop(sent);
+            }
+            DriverCommand::Attach(_) => {}
         }
     }
 

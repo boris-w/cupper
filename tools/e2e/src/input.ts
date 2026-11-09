@@ -4,6 +4,8 @@
 // guard sees like the user's. Also the request panel's helpers (T083): wait
 // until it takes keys, activate it with Tab, answer with a digit.
 
+import type { Locator } from "@playwright/test";
+
 import { expect, type Cupper } from "./fixture";
 
 /** Modifier names of `sendInputEvent`. */
@@ -48,6 +50,26 @@ export async function press(cupper: Cupper, key: string, modifiers: Modifier[] =
     },
     [key, modifiers] as const,
   );
+}
+
+/**
+ * Clicks the middle of `target` with the mouse through `sendInputEvent`,
+ * which the guard counts as a click (mouseDown, then mouseUp). A native
+ * button's Enter needs a `char` event besides the keys `press` sends, so a
+ * button without its own key handling is clicked, not pressed.
+ */
+export async function click(cupper: Cupper, target: Locator) {
+  const box = await target.boundingBox();
+  if (!box) {
+    throw new Error("nothing to click: the target is not on screen");
+  }
+  const at = { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) };
+  const window = await cupper.app.browserWindow(cupper.window);
+  await window.evaluate((w, at) => {
+    for (const type of ["mouseDown", "mouseUp"] as const) {
+      w.webContents.sendInputEvent({ type, ...at, button: "left", clickCount: 1 });
+    }
+  }, at);
 }
 
 /** Types `text` key by key. */

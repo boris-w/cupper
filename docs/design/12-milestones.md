@@ -59,7 +59,7 @@
 | AG-5 | 显示 CLI 和适配器版本，超出已验证范围时提示 | CLI 发现与版本检查、清单里的已验证范围 | `agents.updated` | M1b | UNIT-version-classify〔PR〕；`testdata-scan` 的范围比对〔PR〕 |
 | PS-1 | 三栏布局，可隐藏 | 桌面端布局 | — | M1b | UI-layout〔PR〕 |
 | PS-2 | 添加、移除项目，会话按项目分组；添加时确认是否信任项目配置（PRD v1.2） | `IndexActor`、`projects` 表、`trust` 模块、侧边栏 | `project/add`、`project/trust`、`project/remove`、`project.*` | 添加与信任 M1a；移除 M1b | E2E-project-add-trust〔PR〕；IT-trust-stale、IT-trust-rescan-before-prompt、IT-trust-settingsources〔PR〕；COMPAT-untrusted-project〔人〕 |
-| PS-3 | 新建、重命名、归档、恢复；worktree 会话的恢复规则 | 会话编排、git 服务 | `session/rename`、`session/archive`、`session/restore`、`worktree/check` | 新建 M1a；其余 M1b | IT-session-archive-restore〔PR〕；E2E-archive-cleanup〔晚〕 |
+| PS-3 | 新建、重命名、归档、恢复；worktree 会话的恢复规则 | 会话编排、git 服务 | `session/rename`、`session/archive`、`session/restore`、`worktree/check` | 新建 M1a；其余 M1b | IT-session-archive、IT-session-restore〔PR〕；E2E-archive-cleanup〔晚〕 |
 | PS-4 | 状态指示、跳到下一个需要处理的会话 | `IndexActor` 的状态计算、侧边栏（转圈、蓝点、文字标签，v1.4） | `SessionSummary.status/unread/pending_kind` | 状态 M1a；跳转 M1b | UNIT-index-status〔PR〕；UI-sidebar〔PR〕；E2E-next-needs-action〔晚〕 |
 | PS-8 | 重启后可以继续对话，历史以 cupper 的记录为准 | 事件存储（回合快照）、会话编排（resume） | `history/page`、`stream/subscribe` | M1a | E2E-NFR1-5〔PR〕；IT-history-from-host〔PR〕 |
 | CP-1 | 多行输入，Enter/⌘Enter 可设置，↑ 恢复 | 输入框、界面偏好 | — | 基本 M1a；设置与 ↑ M1b | UNIT-composer-ime（`isComposing`、keyCode 229）〔PR〕；E2E-send-key-setting〔晚〕；MAN-ime〔人〕 |

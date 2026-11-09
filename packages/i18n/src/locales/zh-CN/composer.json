@@ -39,5 +39,11 @@
   "effort_title": "选择推理强度",
   "config_failed": "没有改成（{{code}}）",
   "full_access_on": "完全访问权限已开启",
-  "elevated_on": "低打扰模式已开启：agent 会自行批准它判断为安全的操作"
+  "elevated_on": "低打扰模式已开启：agent 会自行批准它判断为安全的操作",
+  "file_ref": "引用文件",
+  "file_searching": "正在搜索…",
+  "file_none": "没有匹配的文件",
+  "file_failed": "搜索文件失败",
+  "file_walk": "不是 Git 仓库，文件按目录列出",
+  "file_outside": "只能引用工作区里的文件"
 }

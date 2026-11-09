@@ -44,6 +44,7 @@ use cupper_protocol::methods::session::{
     SessionSend, SessionSendParams, SessionSendResult, SessionSetConfig, SessionSetConfigParams,
     SessionSetConfigResult,
 };
+use cupper_protocol::methods::session::{SessionArchive, SessionRename, SessionRestore};
 use cupper_protocol::rpc::Method;
 use cupper_protocol::session::{
     ConfirmationReason, ConfirmationRequired, PauseReason, ProjectConfig, SessionConfigured,
@@ -86,6 +87,8 @@ use crate::store::{BlobStore, Durability, Readers};
 use crate::supervisor::power::Share;
 use crate::trust::{self, Scan};
 
+mod lifecycle;
+
 /// A call and where its reply goes.
 pub(super) enum Mail {
     Call(Box<Call>, oneshot::Sender<Outcome>),
@@ -96,6 +99,11 @@ pub(super) enum Mail {
     Notice(RepoNotice),
     /// The paths of the session's `repo_config_changed` notices so far.
     ConfigChanged(oneshot::Sender<Vec<WirePath>>),
+    /// `project/remove`'s archive, the worktree kept.
+    Archive(oneshot::Sender<Outcome>),
+    /// Whether a turn runs or the worktree is being added, which archiving
+    /// waits for.
+    Busy(oneshot::Sender<bool>),
 }
 /// The host's exit, whether forced, and the reply once the session took it.
 pub(super) type Stop = (bool, oneshot::Sender<()>);
@@ -191,6 +199,7 @@ pub(super) struct Start {
     pub config_changed: BTreeSet<String>,
     /// The new worktree to add before the first input (design 5.5.2).
     pub worktree: Option<Plan>,
+    pub archived: bool,
 }
 
 pub(super) struct SessionActor {
@@ -234,6 +243,8 @@ pub(super) struct SessionActor {
     /// for a turn or the queue (design 5.2.6).
     initial: bool,
     preparing: Option<Preparing>,
+    /// Archived: no writes until restored.
+    archived: bool,
 }
 
 /// Why the project's trust range is rescanned (design 5.2.6).
@@ -284,8 +295,8 @@ struct Setting {
 enum Reply {
     Turn(turn::Reply),
     Interaction(interaction::Reply),
-    /// `session/set_config`'s.
-    Config(Outcome),
+    /// `session/set_config`'s, and those of the session's lifecycle.
+    Result(Outcome),
     /// `{}`.
     Done,
 }
@@ -310,6 +321,10 @@ struct Step {
     /// The project's configuration stays out for good from now on.
     ignored: bool,
     audit: Vec<AuditRecord>,
+    /// Archived now, or restored.
+    archived: Option<bool>,
+    /// The user's title.
+    title: Option<String>,
 }
 
 impl SessionActor {
@@ -341,6 +356,7 @@ impl SessionActor {
             initial,
             config_changed,
             worktree,
+            archived,
         } = start;
         let load_wanted = parts.project_config == ProjectConfigPolicy::Load || project_gate;
         let mut actor = Self {
@@ -367,6 +383,7 @@ impl SessionActor {
             stopping: false,
             initial,
             preparing: None,
+            archived,
         };
         match worktree {
             Some(plan) => actor.add(plan, first, adding),
@@ -399,6 +416,8 @@ impl SessionActor {
                     let _ = done.send(Ok(()));
                 }
                 Next::Mail(Some(Mail::Notice(notice))) => actor.notice(notice).await,
+                Next::Mail(Some(Mail::Archive(done))) => actor.archive_kept(done).await,
+                Next::Mail(Some(Mail::Busy(reply))) => drop(reply.send(actor.busy())),
                 Next::Mail(Some(Mail::ConfigChanged(reply))) => {
                     let paths = actor.config_changed.iter().cloned().map(WirePath);
                     let _ = reply.send(paths.collect());
@@ -458,6 +477,19 @@ impl SessionActor {
     }
 
     async fn call(&mut self, call: Call, reply: oneshot::Sender<Outcome>) {
+        if let Some(err) = self.refused(call.method) {
+            if let Some(ticket) = call.ticket {
+                ticket.reject(err.clone());
+            }
+            let _ = reply.send(Err(err));
+            return;
+        }
+        match call.method {
+            SessionArchive::NAME => return self.archive(call, reply).await,
+            SessionRename::NAME => return self.rename(call, reply).await,
+            SessionRestore::NAME => return self.restore(call, reply).await,
+            _ => {}
+        }
         if call.method == SessionSetConfig::NAME {
             return self.set_config(call, reply).await;
         }
@@ -638,7 +670,7 @@ impl SessionActor {
             let mut step = Step::default();
             let configured = self.parts.configured.clone();
             step.events.push(EventBody::SessionConfigured(configured));
-            step.reply = Some(Reply::Config(Ok(json!(SessionSetConfigResult { config }))));
+            step.reply = Some(Reply::Result(Ok(json!(SessionSetConfigResult { config }))));
             return self.commit(step, Some(command)).await;
         };
         self.outstanding += 1;
@@ -706,7 +738,7 @@ impl SessionActor {
                 let config = config.collect();
                 let config = Ok(json!(SessionSetConfigResult { config }));
                 let step = Step {
-                    reply: Some(Reply::Config(config)),
+                    reply: Some(Reply::Result(config)),
                     ..Step::default()
                 };
                 return self.options(options, step, Some(command)).await;
@@ -724,7 +756,7 @@ impl SessionActor {
             }
         };
         let step = Step {
-            reply: Some(Reply::Config(outcome)),
+            reply: Some(Reply::Result(outcome)),
             ..Step::default()
         };
         self.commit(step, Some(command)).await;
@@ -781,6 +813,7 @@ impl SessionActor {
                 methods::SendMode::Steer => SendMode::Steer,
                 _ => SendMode::Queue,
             },
+            expected_turn: p.expected_turn_id,
             by: by.clone(),
             reply_to: p.reply_to,
         })))
@@ -839,6 +872,9 @@ impl SessionActor {
                     Action::Machine(turn::Action::Reply(reply)) => {
                         step.reply = Some(Reply::Turn(reply))
                     }
+                    Action::Machine(turn::Action::Log(what)) => {
+                        tracing::info!("session {}: {what}", self.parts.id)
+                    }
                     // The core keeps the machine's other actions.
                     Action::Machine(_) => {}
                     Action::Tier(tier_guard::Action::Unconfirmed(reason)) => {
@@ -884,6 +920,8 @@ impl SessionActor {
             set_by,
             ignored,
             audit: records,
+            archived,
+            title,
         } = step;
         let mut answer = None;
         let mut audit = Vec::new();
@@ -912,7 +950,7 @@ impl SessionActor {
                 Some(Reply::Turn(reply)) => self.outcome(reply, command.cause.as_ref()),
                 Some(Reply::Interaction(reply)) => reply.map(|r| json!(r)).map_err(RpcError::from),
                 Some(Reply::Done) => Ok(json!({})),
-                Some(Reply::Config(outcome)) => outcome,
+                Some(Reply::Result(outcome)) => outcome,
                 None => Err(internal("the command had no reply")),
             };
             if outcome.is_ok() {
@@ -959,6 +997,14 @@ impl SessionActor {
             )
         });
         let mut notes = notes(first_seq, &events);
+        if let Some(archived) = archived {
+            changes.archived(&self.parts.id, at, archived);
+            notes.extend(archived.then_some(Note::Archived));
+        }
+        if let Some(title) = title {
+            changes.titled(&self.parts.id, at, &title);
+            notes.push(Note::Title(title));
+        }
         let idle = changes.is_empty() && completion.is_none();
         let record = completion.as_ref().map(|c| c.row());
         let with = move |conn: &rusqlite::Connection| {
@@ -1182,12 +1228,19 @@ impl SessionActor {
                     disposition: match sent.disposition {
                         Disposition::Started => Wire::Started,
                         Disposition::Queued => Wire::Queued,
+                        Disposition::Steered => Wire::Steered,
                     },
                     turn_id: sent.turn_id,
                     queue_id: sent.queue_id,
-                    fallback_reason: sent
-                        .fallback
-                        .map(|SteerFallback::Unsupported| { FallbackReason::Unsupported }),
+                    fallback_reason: sent.fallback.map(|fallback| match fallback {
+                        SteerFallback::Unsupported => FallbackReason::Unsupported,
+                        SteerFallback::TurnMismatch => FallbackReason::TurnMismatch,
+                        SteerFallback::NotPrompting => FallbackReason::NotPrompting,
+                        SteerFallback::PromptRequired => FallbackReason::PromptRequired,
+                        SteerFallback::Timeout => FallbackReason::Timeout,
+                        SteerFallback::AgentError => FallbackReason::AgentError,
+                        SteerFallback::SteerPending => FallbackReason::SteerPending,
+                    }),
                 })
             }
             turn::Reply::Send(Err(full)) => {
@@ -1567,6 +1620,20 @@ impl SessionActor {
 
     /// `session/get`: the row, and the state its view and turn tell.
     async fn get(&self) -> Outcome {
+        let (summary, archived) = self.summary().await?;
+        let workspace = self.parts.configured.workspace.clone();
+        let archived_at = archived.map(TimestampMs);
+        let result = SessionGetResult {
+            summary,
+            workspace,
+            archived_at,
+        };
+        Ok(json!(result))
+    }
+
+    /// The session's summary, as `session/get` and the index show it, and
+    /// when it was archived.
+    async fn summary(&self) -> Result<(SessionSummary, Option<u64>), RpcError> {
         let id = self.parts.id.to_string();
         let row = self.parts.readers.read(move |conn| {
             conn.query_row(
@@ -1619,12 +1686,7 @@ impl SessionActor {
             last_activity_at: TimestampMs(active),
             read_only,
         };
-        let result = SessionGetResult {
-            summary,
-            workspace: configured.workspace.clone(),
-            archived_at: archived.map(TimestampMs),
-        };
-        Ok(json!(result))
+        Ok((summary, archived))
     }
 }
 

@@ -227,7 +227,7 @@ test("UI-review-tree a file: the jump, its actions by scope, its right-click men
   await page.getByRole("menuitem", { name: "在外部应用中打开" }).click();
   await expect
     .poll(() => sent("workspace/open"))
-    .toEqual([{ session_id: "s_1", target: "editor" }]);
+    .toEqual([{ session_id: "s_1", target: "editor", path: "README.md" }]);
 
   // Unstaged: stage and revert; a revert asks first and takes no focus.
   const row = apply.locator("..");
