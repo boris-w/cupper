@@ -572,3 +572,5 @@
 | T147 | 设置页"存储"用 `host/storage`（`partial` 为 true 时注明"未统计完"）和 `PrivilegedAction` 的 `purge_snapshots`（`policy/describe` 的 `details` 是 `{snapshot_bytes}`）；有回合在运行或准备时宿主回 `conflict/turn_running`，界面提示先停下回合 | T127 |
 | T147 或之后显示 git 错误的界面任务 | 清除快照之后，暂存或还原一个只在私有存储里有对象的 LFS 指针会回 `lfs_object_missing`，界面提示用户运行 `git lfs fetch` | T127 |
 | 以后改 LFS 复制的任务 | `lfs::supply` 从私有 LFS 存储往用户仓库复制对象时不拿快照闸；清除恰好改名时复制会失败（回 `git_error` 或 `lfs_object_missing`），不会写进不完整的对象（先写临时文件、核对 sha256 再改名），目前没有为它加锁 | T127 |
+| 写 e2e 用例的任务 | 假 agent 同一回合里的多条 `say`（以及 flood）属于同一条消息，界面拼成一个段落；`getByText(..., { exact: true })` 找其中一段会落空，要按整段或用正则匹配。项目默认只列 5 个会话（`SHOWN_SESSIONS`），第 6 个起要先点"展开显示" | T172 |
+| T021 的后续或维护者 | `trace-ids status` 报 IT-sys-peer-macos15 "ran only in pr, not in its suite nightly"（与 T172 无关，T172 核对时发现） | T172 |
