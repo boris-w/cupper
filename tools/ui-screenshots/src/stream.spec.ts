@@ -278,14 +278,6 @@ const TURN_DIFFS = {
 };
 
 /**
- * The stream scrolled to its end before a shot. After a layout change the
- * stream may stop following its end on a runner (T245); until T245, the shots
- * of UI-turn-changes put it where they expect it.
- */
-const toEnd = (page: Page) =>
-  page.locator("[data-stream-list]").evaluate((list) => list.scrollTo({ top: list.scrollHeight }));
-
-/**
  * The stream of `CHANGES`, its turns' diffs answered, and `revert` for
  * `git/revert`; the answers are set before the session page asks.
  */
@@ -419,6 +411,28 @@ test("UI-late-output folded, the jumps both ways and the final exit code", async
   await expect(page).toHaveScreenshot("stream-late-output.png");
 });
 
+test("UI-late-output a jump stays where it went while the turn streams on (T245)", async ({
+  page,
+}) => {
+  await show(page, LATE, "light");
+  await page.getByRole("button", { name: "跳到原条目" }).click();
+  const original = page.getByText("命令可能仍在运行");
+  await expect(original).toBeInViewport();
+  // The running turn streams on below: the list grows, and the jump is no reason to follow it.
+  await page.evaluate(() => {
+    const turn = { turn_id: "t_2", started_at: 1 };
+    const start = { item_id: "i_s", kind: "agent_message", ...turn };
+    const text = Array.from({ length: 40 }, (_, n) => `第 ${n + 1} 行输出`).join("\n\n");
+    const events = [
+      { seq: 1, v: 1, ts: 1, type: "item.started", data: start },
+      { seq: 2, v: 1, ts: 1, type: "item.delta", data: { item_id: "i_s", field: "text", text } },
+    ];
+    window.cupperHost.notify("stream/events", { stream: "session/s_1", events });
+  });
+  await expect(page.getByText("第 40 行输出")).toBeAttached();
+  await expect(original).toBeInViewport();
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`UI-turn-changes ${theme}: the cards of folded turns, whole, in part and not recorded`, async ({
     page,
@@ -431,7 +445,6 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByText("有 1 个文件没有记录下来，不能撤销")).toBeVisible();
     await expect(page.getByText("这一轮的改动没能记录")).toBeVisible();
     await expect(page.getByRole("button", { name: "撤销" })).toHaveCount(1);
-    await toEnd(page);
     await page.mouse.move(400, 780);
     await expect(page).toHaveScreenshot(`stream-changes-${theme}.png`);
     expect(await page.evaluate(() => window.cupperViolations)).toEqual([]);
@@ -449,8 +462,6 @@ test("UI-turn-changes a file opens the review panel on its turn", async ({ page 
   await expect(panel.getByRole("button", { name: "查阅来源" })).toHaveText(/第 1 轮/);
   await expect(panel.getByText("src/lib.rs")).toBeVisible();
   await expect(panel.getByText("+12")).toBeVisible();
-  // The panel narrows the stream, which lays out again: the shot is at its end (T245).
-  await toEnd(page);
   await page.mouse.move(400, 780);
   await expect(page).toHaveScreenshot("stream-changes-review.png");
 });
@@ -471,8 +482,6 @@ test("UI-turn-changes undo asks first; a stale patch says so and leads to the re
   const confirm = card.getByRole("alertdialog", { name: "是否还原更改？" });
   await expect(confirm).toHaveAttribute("data-ready", "true");
   await expect(confirm.getByRole("button", { name: "确认" })).toBeFocused();
-  // Where the list stands after the card grew depends on timing (T245); the shot starts at the card.
-  await card.evaluate((element) => element.scrollIntoView({ block: "start" }));
   await page.mouse.move(400, 780);
   await expect(page).toHaveScreenshot("stream-changes-undo.png");
   await confirm.getByRole("button", { name: "确认" }).click();
