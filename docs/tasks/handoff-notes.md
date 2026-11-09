@@ -569,3 +569,6 @@
 | T238、T145 | T131 合并后各自 merge main，重新生成受影响的基线：T238 的 review 系列和 `stream-changes-review`（`turn` 范围只有还原按钮），T145 的"+"连同 T132、T131 带来的 `stream-changes-*` 变化 | T131 |
 | 做消息流跳到行号的任务 | 审查文档的 `scroll_to` 已支持 `line`（交给 `CodeView.scrollTo({type: "line"})`），主文档目前只有文件树设 `focus` 且只带路径；带行号的跳转（例如编辑条目）由以后的任务来设 | T131 |
 | 体积优化（可选） | `dist/review` 约 17 MB；Worker 包里多带了一份 shiki 语法（pierre 的 worker 有动态 import，实际不加载），要去掉需要 pierre 提供不带动态 import 的 worker 入口或自建精简 worker | T131 |
+| T147 | 设置页"存储"用 `host/storage`（`partial` 为 true 时注明"未统计完"）和 `PrivilegedAction` 的 `purge_snapshots`（`policy/describe` 的 `details` 是 `{snapshot_bytes}`）；有回合在运行或准备时宿主回 `conflict/turn_running`，界面提示先停下回合 | T127 |
+| T147 或之后显示 git 错误的界面任务 | 清除快照之后，暂存或还原一个只在私有存储里有对象的 LFS 指针会回 `lfs_object_missing`，界面提示用户运行 `git lfs fetch` | T127 |
+| 以后改 LFS 复制的任务 | `lfs::supply` 从私有 LFS 存储往用户仓库复制对象时不拿快照闸；清除恰好改名时复制会失败（回 `git_error` 或 `lfs_object_missing`），不会写进不完整的对象（先写临时文件、核对 sha256 再改名），目前没有为它加锁 | T127 |
