@@ -23,7 +23,7 @@ pub use hunks::{pick, units};
 
 use super::snapshot::{self, Opened, Place, ShotError, Taken, output, shoot};
 use super::stamp::Fingerprint;
-use super::{GitCmd, GitTool, SnapshotOp};
+use super::{GitCmd, GitTool, SnapshotOp, SnapshotTier};
 use crate::clock::Clock;
 use crate::durations::Durations;
 
@@ -109,7 +109,8 @@ async fn make(
         }
     };
     let list = GitCmd::snapshot(SnapshotOp::DiffList).args([&old, &new]);
-    let mut files = files(&out(list, "diff-tree").await?);
+    let listed = out(list, "diff-tree").await;
+    let mut files = files(&gone(&tier, [&old, &new], listed, clock, durations).await?);
     if !opened.unrun.is_empty() && !files.is_empty() {
         let paths = files
             .iter()
@@ -215,7 +216,42 @@ pub async fn patch(
     }
     let cmd = GitCmd::snapshot(SnapshotOp::DiffPatch).args(args);
     let tier = tool.snapshot_tier(&diffed.place);
-    output(&tier, cmd, "diff-tree", clock, durations).await
+    let repo = diffed
+        .place
+        .objects
+        .parent()
+        .unwrap_or(&diffed.place.objects);
+    let _share = tool.gates().share(repo).await;
+    let made = output(&tier, cmd, "diff-tree", clock, durations).await;
+    let trees = [diffed.old.as_str(), diffed.new.as_str()];
+    gone(&tier, trees, made, clock, durations).await
+}
+
+/// `made`, or [`ShotError::Missing`] when it failed and a tree it compared
+/// is not there: a purge took the snapshots (T127).
+async fn gone(
+    tier: &SnapshotTier<'_>,
+    trees: [&str; 2],
+    made: Result<Vec<u8>, ShotError>,
+    clock: &dyn Clock,
+    durations: &Durations,
+) -> Result<Vec<u8>, ShotError> {
+    let Err(ShotError::Failed(..)) = &made else {
+        return made;
+    };
+    for tree in trees {
+        let exists = GitCmd::snapshot(SnapshotOp::Exists).args([tree]);
+        if !tier
+            .prepare(exists)
+            .run(clock, durations)
+            .await?
+            .status
+            .success()
+        {
+            return Err(ShotError::Missing);
+        }
+    }
+    made
 }
 
 /// A file's path, and a rename's source.

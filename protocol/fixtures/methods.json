@@ -125,6 +125,24 @@
     "params": { "command_id": "c-1", "mode": "wait" },
     "result": { "running_turns": 1, "state": "waiting" }
   },
+  {
+    "method": "host/storage",
+    "params": {},
+    "result": {
+      "blobs": 2048,
+      "host_db": 1048576,
+      "measured_at": 1700000000000,
+      "partial": false,
+      "raw_db": 524288,
+      "snapshots": 4096,
+      "worktrees": 0
+    }
+  },
+  {
+    "method": "host/purge_snapshots",
+    "params": { "command_id": "c-9" },
+    "result": { "freed_bytes": 4096 }
+  },
   { "method": "host/exit", "params": { "command_id": "c-2", "force": true }, "result": {} },
   { "method": "host/shutdown", "params": { "reason": "upgrade", "restart_expected": true } },
   { "method": "ui/navigate", "params": { "request_id": "r_1", "session_id": "s_1" } },

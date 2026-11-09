@@ -10,7 +10,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use cupper_protocol::annotations::WirePath;
+use cupper_protocol::annotations::{TimestampMs, WirePath};
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::ids::{DiffToken, SessionId, TurnId};
 use cupper_protocol::limits::V1;
@@ -20,6 +20,9 @@ use cupper_protocol::methods::git::{
     GitFileDiff, GitFileDiffParams, GitFileDiffResult, GitPush, GitPushParams, GitPushResult,
     GitRevert, GitStage, GitStatus, GitStatusParams, GitStatusResult, GitTarget, GitUnstage,
     WorktreeCheck, WorktreeCheckParams, WorktreeCheckResult,
+};
+use cupper_protocol::methods::handshake::{
+    HostPurgeSnapshots, HostPurgeSnapshotsResult, HostStorage, HostStorageResult,
 };
 use cupper_protocol::rpc::Method;
 use cupper_protocol::sync::StreamId;
@@ -34,6 +37,7 @@ use tokio::sync::mpsc;
 use super::cleanup::{self, CheckError};
 use super::diff::{self, DiffCache, Diffed, Range, turn_notes};
 use super::head::{self, Head};
+use super::purge::{self, Tally};
 use super::run::RunError;
 use super::snapshot::ShotError;
 use super::stamp::Layout;
@@ -41,11 +45,14 @@ use super::{
     GitCmd, GitError, GitTool, RepoNotice, RepoOp, User, UserOp, lfs, snapshot, status, user,
 };
 use crate::clock::{Clock, IdGen};
-use crate::durations::{DIFF_CACHE_TTL, Durations};
+use crate::durations::{DIFF_CACHE_TTL, Durations, STORAGE_WALK};
 use crate::gateway::{AuditRecord, Call, Port, Reply, Routes};
 use crate::ledger::{Outcome, Ticket};
+use crate::settings::SettingsHandle;
 use crate::store::streams::{StreamView, Streams};
 use crate::store::{BlobStore, Readers, log};
+use crate::supervisor::control::refuse_running;
+use crate::supervisor::{Activity, Part};
 
 /// What the git service needs of the host.
 #[derive(Debug, Clone)]
@@ -65,6 +72,12 @@ pub struct GitDeps {
     pub notes: Arc<dyn SessionNotes>,
     /// Shared with the sessions' worktrees.
     pub locks: Arc<RepoLock>,
+    /// Whose storage `host/storage` measures.
+    pub data_dir: PathBuf,
+    /// The worktree root.
+    pub settings: SettingsHandle,
+    /// Their turns, which a purge waits for (design 5.2.13).
+    pub parts: Arc<[Arc<dyn Part>]>,
 }
 
 /// The session streams, for notices of the repo tier (design 5.2.10, rules
@@ -648,6 +661,75 @@ impl GitService {
     fn cache(&self) -> MutexGuard<'_, DiffCache<Diffed>> {
         self.cache.lock().unwrap_or_else(PoisonError::into_inner)
     }
+
+    /// `host/storage` (design 5.4.5), walked in the blocking pool until
+    /// `storage_walk` has passed. cupper's worktrees are its sessions' under
+    /// the worktree root.
+    async fn storage(&self) -> Result<HostStorageResult, RpcError> {
+        let root = PathBuf::from(self.deps.settings.current().worktrees_root.0);
+        // Worktrees are added under its real path.
+        let root = root.canonicalize().unwrap_or(root);
+        let paths = self.read(|c| {
+            let sql =
+                "SELECT DISTINCT workspace_path FROM sessions WHERE workspace_kind = 'worktree'";
+            let mut select = c.prepare(sql)?;
+            let paths = select.query_map([], |r| r.get::<_, String>(0).map(PathBuf::from))?;
+            paths.collect::<rusqlite::Result<Vec<_>>>()
+        });
+        let mut worktrees = paths.await?;
+        worktrees.retain(|path| path.starts_with(&root));
+        let (data, clock) = (self.deps.data_dir.clone(), Arc::clone(&self.deps.clock));
+        let snapshots = self.deps.git.as_ref().map(|git| git.dir().to_owned());
+        let deadline = clock.now_mono() + self.deps.durations.get(STORAGE_WALK);
+        let measured = tokio::task::spawn_blocking(move || {
+            let mut tally = Tally {
+                clock: &*clock,
+                deadline,
+                partial: false,
+            };
+            let db = |name: &str| ["", "-wal", "-shm"].map(|end| data.join(format!("{name}{end}")));
+            HostStorageResult {
+                host_db: tally.bytes(db("host.db")),
+                raw_db: tally.bytes(db("raw.db")),
+                blobs: tally.bytes([data.join("blobs")]),
+                snapshots: tally.bytes(snapshots),
+                worktrees: tally.bytes(worktrees),
+                partial: tally.partial,
+                measured_at: TimestampMs(clock.now_wall_ms()),
+            }
+        });
+        measured.await.map_err(internal)
+    }
+
+    /// `host/purge_snapshots` (design 5.2.10). Every repository's gate is
+    /// held before it looks for turns, so one that starts meanwhile
+    /// snapshots into the new empty stores; the stores go aside once the
+    /// command is `pending_external`, and are removed once the gates are free.
+    async fn purge(&self, call: Call) -> Outcome {
+        let mut ticket = call.ticket;
+        let asked = async {
+            let held = purge::hold(self.tool()?).await;
+            let activity: Activity = self.deps.parts.iter().map(|part| part.activity()).sum();
+            refuse_running(false, activity.running_turns).map(|_| held)
+        };
+        let held = refuse(asked.await, &mut ticket)?;
+        let mut ticket = ticket.expect("host/purge_snapshots is a command");
+        ticket.mark_external().await.map_err(internal)?;
+        let aside = tokio::task::spawn_blocking(move || held.aside());
+        let aside = aside.await.map_err(internal)?;
+        *self.cache() = DiffCache::new(self.deps.durations.get(DIFF_CACHE_TTL));
+        let removed = tokio::task::spawn_blocking(move || {
+            let mut aside = aside?.into_iter();
+            aside.try_fold(0, |freed, path| {
+                Ok::<_, std::io::Error>(freed + purge::remove(&path)?)
+            })
+        });
+        let outcome = match removed.await.map_err(internal)? {
+            Ok(freed_bytes) => Ok(json!(HostPurgeSnapshotsResult { freed_bytes })),
+            Err(err) => Err(internal(err)),
+        };
+        settle(Some(ticket), outcome).await
+    }
 }
 
 /// A `turns` row: ID, number, status, start and end trees.
@@ -670,6 +752,8 @@ impl Port for GitService {
                 GitCommit::NAME => service.commit(call).await,
                 GitPush::NAME => service.push(call).await,
                 WorktreeCheck::NAME => Ok(json!(service.check(parse(&call.params)?).await?)),
+                HostStorage::NAME => Ok(json!(service.storage().await?)),
+                HostPurgeSnapshots::NAME => service.purge(call).await,
                 _ => Ok(json!(service.diff(parse(&call.params)?).await?)),
             }
         }
@@ -691,6 +775,7 @@ pub(super) fn shot(err: ShotError) -> RpcError {
     let (code, reason) = match &err {
         ShotError::NotARepo(_) => (ErrorCode::Unsupported, Some(ErrorReason::NotARepo)),
         ShotError::Unmerged => (ErrorCode::Unavailable, Some(ErrorReason::IndexUnmerged)),
+        ShotError::Missing => (ErrorCode::Unavailable, Some(ErrorReason::SnapshotMissing)),
         ShotError::Run(RunError::Timeout) => (ErrorCode::Timeout, None),
         _ => (ErrorCode::GitError, None),
     };

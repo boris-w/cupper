@@ -38,7 +38,11 @@ const MATRIX: &[(&str, &str)] = &[
         "YYYYYYY",
     ),
     ("blob/put", "YYNYNYY"),
-    ("host/prepare_upgrade host/exit", "CNNNNYN"),
+    (
+        "host/prepare_upgrade host/exit host/purge_snapshots",
+        "CNNNNYN",
+    ),
+    ("host/storage", "YYYYYYY"),
     (
         "settings/get git/status git/diff git/file_diff git/branches worktree/check files/search",
         "YYYYYYY",

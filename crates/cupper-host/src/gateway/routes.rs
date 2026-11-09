@@ -22,7 +22,7 @@ use cupper_protocol::methods::git::{
     FilesSearch, GitBranches, GitCommit, GitDiff, GitFileDiff, GitPush, GitRevert, GitStage,
     GitStatus, GitUnstage, WorkspaceOpen, WorktreeCheck,
 };
-use cupper_protocol::methods::handshake::{ClientPresence, Ping};
+use cupper_protocol::methods::handshake::{ClientPresence, HostPurgeSnapshots, HostStorage, Ping};
 use cupper_protocol::methods::interaction::{InteractionGet, InteractionRespond};
 use cupper_protocol::methods::project::{
     ProjectAdd, ProjectRemove, ProjectTrust, ProjectTrustInfo,
@@ -215,6 +215,8 @@ impl Routes {
         self.add::<GitRevert>(Arc::clone(&port));
         self.add::<GitCommit>(Arc::clone(&port));
         self.add::<GitPush>(Arc::clone(&port));
+        self.add::<HostStorage>(Arc::clone(&port));
+        self.add::<HostPurgeSnapshots>(Arc::clone(&port));
         self.add::<WorktreeCheck>(port);
     }
 

@@ -376,7 +376,7 @@ export type ConfigValue = {
 };
 
 /**
- * Open enum: unknown values must be accepted. Known: trust_project confirm_config full_access privileged_option security_setting grant_elevation interrupt_turns
+ * Open enum: unknown values must be accepted. Known: trust_project confirm_config full_access privileged_option security_setting grant_elevation interrupt_turns purge_snapshots
  */
 export type ConfirmAction =
   | "trust_project"
@@ -386,6 +386,7 @@ export type ConfirmAction =
   | "security_setting"
   | "grant_elevation"
   | "interrupt_turns"
+  | "purge_snapshots"
   | (string & {});
 
 /**
@@ -1498,6 +1499,14 @@ export type HostPrepareUpgradeResult = {
   state: UpgradeState;
 };
 
+export type HostPurgeSnapshotsParams = {
+  command_id: CommandId;
+};
+
+export type HostPurgeSnapshotsResult = {
+  freed_bytes: number;
+};
+
 export type HostShutdownParams = {
   reason: ShutdownReason;
   /**
@@ -1519,6 +1528,25 @@ export type HostStatusResult = {
   pid?: number;
   running_turns: number;
   version: string;
+};
+
+export type HostStorageResult = {
+  blobs: number;
+  host_db: number;
+  measured_at: TimestampMs;
+  /**
+   * The walk ran out of time: the sizes are what it counted so far.
+   */
+  partial: boolean;
+  raw_db: number;
+  /**
+   * The snapshots' object stores and LFS stores.
+   */
+  snapshots: number;
+  /**
+   * The worktrees cupper added, under its worktree root.
+   */
+  worktrees: number;
 };
 
 /**

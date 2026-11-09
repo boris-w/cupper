@@ -346,6 +346,7 @@ impl Fixture {
         let mut routes = Routes::new(ledger);
         let clock = Arc::clone(&deps.clock);
         let manager = SessionManager::new(deps);
+        let parts: Arc<[Arc<dyn Part>]> = Arc::new([Arc::new(manager.clone()) as Arc<dyn Part>]);
         GitService::new(GitDeps {
             git,
             readers: readers.clone(),
@@ -357,6 +358,9 @@ impl Fixture {
             audit: records,
             notes: Arc::new(manager.clone()),
             locks,
+            data_dir: dir.path().into(),
+            settings: files.settings.clone(),
+            parts,
         })
         .route(&mut routes);
         FilesService::new(files).route(&mut routes);

@@ -171,7 +171,7 @@ export const zConfigOptionId = z.union([
 ]);
 
 /**
- * Open enum: unknown values must be accepted. Known: trust_project confirm_config full_access privileged_option security_setting grant_elevation interrupt_turns
+ * Open enum: unknown values must be accepted. Known: trust_project confirm_config full_access privileged_option security_setting grant_elevation interrupt_turns purge_snapshots
  */
 export const zConfirmAction = z.union([
   z.enum([
@@ -182,6 +182,7 @@ export const zConfirmAction = z.union([
     "security_setting",
     "grant_elevation",
     "interrupt_turns",
+    "purge_snapshots",
   ]),
   z.string(),
 ]);
@@ -629,6 +630,14 @@ export const zHostIdentity = z.object({
   host_id: zHostId,
   version: z.string(),
   weak_auth: z.boolean(),
+});
+
+export const zHostPurgeSnapshotsParams = z.object({
+  command_id: zCommandId,
+});
+
+export const zHostPurgeSnapshotsResult = z.object({
+  freed_bytes: z.int().gte(0).lte(9007199254740991),
 });
 
 /**
@@ -1541,6 +1550,16 @@ export const zHostStatusResult = z.object({
   pid: z.int().gte(0).lte(4294967295).optional(),
   running_turns: z.int().gte(0).lte(4294967295),
   version: z.string(),
+});
+
+export const zHostStorageResult = z.object({
+  blobs: z.int().gte(0).lte(9007199254740991),
+  host_db: z.int().gte(0).lte(9007199254740991),
+  measured_at: zTimestampMs,
+  partial: z.boolean(),
+  raw_db: z.int().gte(0).lte(9007199254740991),
+  snapshots: z.int().gte(0).lte(9007199254740991),
+  worktrees: z.int().gte(0).lte(9007199254740991),
 });
 
 /**
