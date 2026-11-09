@@ -13,12 +13,14 @@ import { StateProvider, UiProvider } from "../state/provider";
 import { createUiStore } from "../state/ui";
 import { runningPlan } from "../stream/ComposerOverlays";
 import { StreamList } from "../stream/StreamList";
+import { installResizeObserver } from "../stream/test-resize";
 import type { StreamRow } from "./stream";
 
 afterEach(cleanup);
 
 // jsdom lays nothing out: the list is 800 px high, a row 40.
 beforeAll(() => {
+  installResizeObserver();
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     configurable: true,
     get(this: HTMLElement) {
