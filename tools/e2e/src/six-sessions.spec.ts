@@ -4,7 +4,7 @@
 // runners, not the author's machine (CLAUDE.md rule 10).
 
 import { expect, test } from "./fixture";
-import { events, untilEvent } from "./helpers";
+import { events, texts, untilEvent } from "./helpers";
 import { openSession, session } from "./nfr1";
 import { tree } from "./procs";
 
@@ -31,13 +31,16 @@ test("E2E-six-sessions: six turns at once, each its own output, on one adapter",
   const host = cupper.host();
   const agents = tree(host?.pid ?? 0).filter((proc) => proc.args.includes("cupper-fake-agent"));
   expect(agents).toHaveLength(1);
+  // A project lists five sessions before "show more".
+  const t = await texts(cupper);
+  await cupper.window.getByRole("button", { name: t("sidebar:show_more") }).click();
   const main = cupper.window.locator("main");
   for (const n of SIX) {
     await openSession(cupper, `say start-${n};`);
-    await expect(main.getByText(`end-${n}`, { exact: true })).toBeVisible();
-    const others = SIX.filter((m) => m !== n).map((m) =>
-      main.getByText(`end-${m}`, { exact: true }),
-    );
+    // The agent's one message: its two lines and the flood's letters between.
+    await expect(main.getByText(new RegExp(`^start-${n}[a-z]*end-${n}$`))).toBeVisible();
+    // The user's message ends with its own session's mark only.
+    const others = SIX.filter((m) => m !== n).map((m) => main.getByText(new RegExp(`end-${m}$`)));
     for (const other of others) {
       await expect(other).toHaveCount(0);
     }
