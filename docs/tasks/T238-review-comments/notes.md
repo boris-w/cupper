@@ -53,3 +53,13 @@
   - T104 记下的"读回对不上"，原因落在第一种怀疑：读得太早，没等写入落到系统剪贴板，不是 runner 的剪贴板服务有问题。带等待地轮询之后就对上了。
 - e2e-repeat 41794402045（E2E-SEC-revert-confirm × 10）：10 次全过。
 - ui-baseline 41794406105：14 张基线变了，逐张核对后提交（2c4a651d）。
+
+## merge T131 分支（2026-11-09，含 main ad61061d 与 T132）
+
+- 没有冲突：T132 改的是 `ReviewPanel.tsx`、`state.ts`、`view.ts`，T131 分支已经解决过；T238 只改审查文档和 `ReviewFrame` 下发的 `files`。
+- **`turn` 范围（T132：某一轮的改动，由改动卡片打开）**：
+  - 按钮：仍取 `ACTIONS[scope]`，`turn` 只有还原。文件头和 hunk 末尾只出现还原按钮，不出现暂存、取消暂存。还原照样经主文档的确认控件，令牌是这一轮 diff 的令牌，宿主按它校验。
+  - 行内评论：`turn` 范围也允许写。行号和引用的行文都来自这一轮的 diff；如果文件后来又改了，行号可能对不上，这时引用的行文仍能让 agent 认出说的是哪一行。不为 `turn` 单独禁用评论。
+  - 本机无头跑了截图工具里 T132 的"改动卡片打开审查面板"：面板是"第 1 轮"，文件头和 hunk 末尾只有还原按钮。
+- 合并后本机：tsc（ui-core、desktop、ui-screenshots、e2e）、ui-core 的 vitest（121 个）、全仓 eslint 和 prettier 都通过；截图工具用临时配置在无头 Chromium 里跑了 review 和 stream 两个 spec，39 个全过。
+- 基线：`stream-changes-review.png` 在 T131 上是没有按钮的版本，到 T238 上会再变；T238 自己的 14 张也要在 merge main 之后重新核对。等 T131 合并、merge main 之后，由编排者跑 ui-baseline。
