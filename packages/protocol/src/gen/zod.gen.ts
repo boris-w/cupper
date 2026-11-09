@@ -2409,6 +2409,14 @@ export const zSettingsUpdateParams = z.object({
 });
 
 /**
+ * `settings.updated`: every setting, as `settings/get` returns them; at
+ * start and after each `settings/update` (T151).
+ */
+export const zSettingsUpdated = z.object({
+  settings: zSettings,
+});
+
+/**
  * `snapshot.recorded`: a turn's start or end snapshot was taken. The tree
  * ID stays in the host.
  */
@@ -2686,6 +2694,7 @@ export const zIndexView = z.object({
   host: zHostUpdated.optional(),
   projects: z.record(z.string(), zProjectUpserted),
   sessions: z.record(z.string(), zSessionSummary),
+  settings: zSettingsUpdated.optional(),
 });
 
 export const zSessionListArchivedResult = z.object({
@@ -2774,6 +2783,10 @@ export const zEvent = z.intersection(
     z.object({
       data: zHostUpdated,
       type: z.literal("host.updated"),
+    }),
+    z.object({
+      data: zSettingsUpdated,
+      type: z.literal("settings.updated"),
     }),
     z.object({
       data: zClientsUpdated,
@@ -2895,6 +2908,10 @@ export const zEventBody = z.union([
   z.object({
     data: zHostUpdated,
     type: z.literal("host.updated"),
+  }),
+  z.object({
+    data: zSettingsUpdated,
+    type: z.literal("settings.updated"),
   }),
   z.object({
     data: zClientsUpdated,

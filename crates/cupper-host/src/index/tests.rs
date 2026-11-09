@@ -94,7 +94,7 @@ impl Fx {
     async fn view(&self) -> (IndexView, u64) {
         let handle = self.streams().open(&StreamId::Index).await.unwrap();
         handle.read(|view, head| match view {
-            StreamView::Index(view) => (view.clone(), head),
+            StreamView::Index(view) => (IndexView::clone(view), head),
             StreamView::Session(_) => unreachable!(),
         })
     }
