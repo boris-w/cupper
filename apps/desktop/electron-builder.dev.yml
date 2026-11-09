@@ -9,6 +9,7 @@ files:
   - dist/main/**
   - dist/preload/**
   - dist/renderer/**
+  - dist/review/**
 npmRebuild: false
 # The native extension, outside the asar, and the host bundle in Helpers
 # (design 5.10.1); `build:dev` builds both first.

@@ -301,6 +301,20 @@ async function showChanges(page: Page, theme: "light" | "dark", revert?: object)
         return { result: { caveats: [], diff_token: `dt_${JSON.stringify(scope)}`, files, stat } };
       });
       window.cupperHost.handle("git/revert", () => (revert ?? { result: {} }) as never);
+      // Each file one hunk, by its counts, for the review document.
+      window.cupperHost.handle("git/file_diff", ({ params }) => {
+        const { path } = params as { path: string };
+        const file = Object.values(diffs)
+          .flat()
+          .find((f) => f.path === path);
+        const lines = (n: number, sign: string) =>
+          Array.from({ length: n }, (_, i) => `${sign}  step(${i});`);
+        const [add, del] = [file?.additions ?? 0, file?.deletions ?? 0];
+        const hunk = { hunk_id: "hk_1", unit: "hunk", header: `@@ -1,${del} +1,${add} @@` };
+        return {
+          result: { path, hunks: [{ ...hunk, lines: [...lines(del, "-"), ...lines(add, "+")] }] },
+        };
+      });
       window.cupperShell.navigate({ kind: "session", session_id: "s_1" });
     },
     [TURN_DIFFS, revert] as const,
@@ -447,7 +461,9 @@ test("UI-turn-changes a file opens the review panel on its turn", async ({ page 
     .click();
   const panel = page.locator('aside[aria-label="侧边面板"]');
   await expect(panel.getByRole("button", { name: "查阅来源" })).toHaveText(/第 1 轮/);
-  await expect(panel.getByText("src/lib.rs")).toBeVisible();
+  const review = page.frameLocator('iframe[title="变更详情"]');
+  await expect(review.getByTitle("src/lib.rs", { exact: true })).toBeVisible();
+  await expect(review.locator("[data-line]").first()).toBeVisible();
   await expect(panel.getByText("+12")).toBeVisible();
   // The panel narrows the stream, which lays out again: the shot is at its end (T245).
   await toEnd(page);

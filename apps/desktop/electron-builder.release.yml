@@ -14,6 +14,7 @@ files:
   - dist/main/**
   - dist/preload/**
   - dist/renderer/**
+  - dist/review/**
   # No source maps: nothing reads them, and the main process's holds the
   # source of the e2e-only code it left out (IT-selfuse-build, T160).
   - "!**/*.map"

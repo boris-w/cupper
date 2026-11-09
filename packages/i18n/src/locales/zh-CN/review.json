@@ -82,5 +82,11 @@
   "git_nothing_to_commit": "没有可以提交的更改。请先暂存改动，或勾选“包含未暂存的更改”。",
   "git_rejected": "远端拒绝了推送。请先拉取远端的新提交，再推送。",
   "git_lock_held": "仓库正被另一个 git 进程占用，请稍后再试。",
-  "git_outcome_unknown": "不确定这次操作是否完成，已刷新状态。请查看提交记录后再决定是否重试。"
+  "git_outcome_unknown": "不确定这次操作是否完成，已刷新状态。请查看提交记录后再决定是否重试。",
+  "doc_title": "变更详情",
+  "doc_fold": "收起",
+  "doc_unfold": "展开",
+  "doc_binary": "二进制文件，不显示内容",
+  "doc_mode": "文件模式",
+  "doc_loading": "正在加载…"
 }
