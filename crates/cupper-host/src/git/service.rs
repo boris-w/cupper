@@ -667,6 +667,8 @@ impl GitService {
     /// the worktree root.
     async fn storage(&self) -> Result<HostStorageResult, RpcError> {
         let root = PathBuf::from(self.deps.settings.current().worktrees_root.0);
+        // Worktrees are added under its real path.
+        let root = root.canonicalize().unwrap_or(root);
         let paths = self.read(|c| {
             let sql =
                 "SELECT DISTINCT workspace_path FROM sessions WHERE workspace_kind = 'worktree'";
@@ -677,6 +679,7 @@ impl GitService {
         let mut worktrees = paths.await?;
         worktrees.retain(|path| path.starts_with(&root));
         let (data, clock) = (self.deps.data_dir.clone(), Arc::clone(&self.deps.clock));
+        let snapshots = self.deps.git.as_ref().map(|git| git.dir().to_owned());
         let deadline = clock.now_mono() + self.deps.durations.get(STORAGE_WALK);
         let measured = tokio::task::spawn_blocking(move || {
             let mut tally = Tally {
@@ -689,7 +692,7 @@ impl GitService {
                 host_db: tally.bytes(db("host.db")),
                 raw_db: tally.bytes(db("raw.db")),
                 blobs: tally.bytes([data.join("blobs")]),
-                snapshots: tally.bytes([data.join("git")]),
+                snapshots: tally.bytes(snapshots),
                 worktrees: tally.bytes(worktrees),
                 partial: tally.partial,
                 measured_at: TimestampMs(clock.now_wall_ms()),
@@ -703,14 +706,14 @@ impl GitService {
     /// snapshots into the new empty stores; the stores go aside once the
     /// command is `pending_external`, and are removed once the gates are free.
     async fn purge(&self, call: Call) -> Outcome {
-        let mut ticket = call.ticket.expect("host/purge_snapshots is a command");
-        let dir = self.deps.data_dir.join("git");
-        let held = purge::hold(&dir, self.deps.git.as_ref().map(GitTool::gates)).await;
-        let activity: Activity = self.deps.parts.iter().map(|part| part.activity()).sum();
-        if let Err(err) = refuse_running(false, activity.running_turns) {
-            ticket.reject(err.clone());
-            return Err(err);
-        }
+        let mut ticket = call.ticket;
+        let asked = async {
+            let held = purge::hold(self.tool()?).await;
+            let activity: Activity = self.deps.parts.iter().map(|part| part.activity()).sum();
+            refuse_running(false, activity.running_turns).map(|_| held)
+        };
+        let held = refuse(asked.await, &mut ticket)?;
+        let mut ticket = ticket.expect("host/purge_snapshots is a command");
         ticket.mark_external().await.map_err(internal)?;
         let aside = tokio::task::spawn_blocking(move || held.aside());
         let aside = aside.await.map_err(internal)?;

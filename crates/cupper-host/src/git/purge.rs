@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use tokio::sync::OwnedRwLockWriteGuard;
 
-use super::Gates;
+use super::GitTool;
 use super::snapshot::unique;
 use crate::clock::{Clock, MonoTime};
 
@@ -46,18 +46,16 @@ pub struct Held {
     _gates: Vec<OwnedRwLockWriteGuard<()>>,
 }
 
-/// Takes the gates of the repositories in `dir` one by one, in the order of
+/// Takes the gates of `tool`'s repositories one by one, in the order of
 /// their names. Only a purge holds more than one, so none waits on another.
-pub async fn hold(dir: &Path, gates: Option<&Gates>) -> Held {
-    let mut repos: Vec<PathBuf> = entries(dir)
+pub async fn hold(tool: &GitTool) -> Held {
+    let mut repos: Vec<PathBuf> = entries(&tool.dir)
         .filter(|r| r.join("objects").is_dir())
         .collect();
     repos.sort();
     let mut held = Vec::new();
-    if let Some(gates) = gates {
-        for repo in &repos {
-            held.push(gates.hold(repo).await);
-        }
+    for repo in &repos {
+        held.push(tool.gates.hold(repo).await);
     }
     Held {
         repos,
