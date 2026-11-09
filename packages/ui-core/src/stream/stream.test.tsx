@@ -12,11 +12,13 @@ import { StateProvider, UiProvider } from "../state/provider";
 import { createUiStore } from "../state/ui";
 import { ScrollKeeper } from "./scroll";
 import { StreamList } from "./StreamList";
+import { installResizeObserver, observed } from "./test-resize";
 
 afterEach(cleanup);
 
 // jsdom lays nothing out: the list is 800 px high, a row 40.
 beforeAll(() => {
+  installResizeObserver();
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     configurable: true,
     get(this: HTMLElement) {
@@ -51,7 +53,14 @@ async function setup() {
     conn.send({
       jsonrpc: "2.0",
       method: "stream/snapshot",
-      params: { stream, at_seq: 1, epoch: 1, page: 0, last: true, ops },
+      params: {
+        stream,
+        at_seq: 1,
+        epoch: 1,
+        page: 0,
+        last: true,
+        ops: stream === "index" ? [] : ops,
+      },
     });
     return undefined;
   });
@@ -102,15 +111,18 @@ describe("UNIT-stream-anchor", () => {
 
   test("at the bottom within 24 px it follows; above, it does not", () => {
     const keeper = new ScrollKeeper();
-    expect(keeper.scrolled(776, 1000, 200)).toBe(true);
-    expect(keeper.scrolled(775, 1000, 200)).toBe(false);
+    // The user's wheel at 0 (T245).
+    keeper.intend(0);
+    expect(keeper.scrolled(776, 1000, 200, 0)).toBe(true);
+    expect(keeper.scrolled(775, 1000, 200, 0)).toBe(false);
   });
 
   test("a list not where it was put was scrolled, whether or not its event came", () => {
     const keeper = new ScrollKeeper();
     keeper.put(800);
-    expect(keeper.follows(800, 1400, 200), "grown, not moved").toBe(true);
-    expect(keeper.follows(0, 1400, 200), "moved to the top").toBe(false);
+    expect(keeper.follows(800, 1400, 200, 0), "grown, not moved").toBe(true);
+    keeper.intend(0);
+    expect(keeper.follows(0, 1400, 200, 0), "moved to the top by the user").toBe(false);
   });
 
   test("earlier history comes in front on request, from the first turn's cursor", async () => {
@@ -132,7 +144,9 @@ describe("UNIT-stream-anchor", () => {
     list.scrollTop = 800;
     fireEvent.scroll(list);
     // Scrolled to the top between frames: the virtualizer's end of scrolling,
-    // 150 ms after the last scroll event, reads it and renders first.
+    // 150 ms after the last scroll event, reads it and renders first. The
+    // user's wheel came first, as it always does (T245).
+    fireEvent.wheel(list);
     list.scrollTop = 0;
     await act(() => new Promise((done) => setTimeout(done, 300)));
     expect(list.scrollTop).toBe(0);
@@ -157,10 +171,90 @@ describe("UNIT-stream-anchor", () => {
     await setup();
     const list = document.querySelector("[data-stream-list]") as HTMLElement;
     Object.defineProperties(list, { scrollHeight: { value: 1000 }, clientHeight: { value: 200 } });
+    fireEvent.wheel(list);
     list.scrollTop = 100;
     fireEvent.scroll(list);
     const down = screen.getByRole("button", { name: "回到底部" });
     fireEvent.click(down);
     expect(screen.queryByRole("button", { name: "回到底部" })).toBeNull();
+  });
+});
+
+describe("UNIT-stream-follow", () => {
+  test("a scroll no user made, as the browser's scroll anchoring makes, keeps it at the bottom", async () => {
+    await setup();
+    const list = document.querySelector("[data-stream-list]") as HTMLElement;
+    let height = 1000;
+    Object.defineProperties(list, {
+      scrollHeight: { get: () => height },
+      clientHeight: { value: 200 },
+    });
+    list.scrollTop = 800;
+    fireEvent.scroll(list);
+    // Rows re-wrap in a narrower list: they grow, and the browser moves the
+    // scroll top to keep a row in place, with no wheel, key or touch.
+    height = 1400;
+    list.scrollTop = 850;
+    fireEvent.scroll(list);
+    await act(() => new Promise((done) => setTimeout(done, 300)));
+    expect(list.scrollTop).toBe(1400);
+  });
+
+  test("only the user leaves the bottom: within 500 ms of a wheel, touch or key, or holding the scrollbar", () => {
+    const keeper = new ScrollKeeper();
+    expect(keeper.scrolled(500, 1000, 200, 1000), "no user").toBe(true);
+    keeper.intend(1000);
+    expect(keeper.scrolled(500, 1000, 200, 1500), "500 ms after the wheel").toBe(false);
+    expect(keeper.scrolled(800, 1000, 200, 9000), "back at the bottom, by anything").toBe(true);
+    expect(keeper.scrolled(500, 1000, 200, 9000), "a wheel long ago").toBe(true);
+    keeper.intend(9000, true);
+    expect(keeper.scrolled(500, 1000, 200, 60000), "the scrollbar held").toBe(false);
+    keeper.scrolled(800, 1000, 200, 60000);
+    keeper.letGo(60000);
+    expect(keeper.scrolled(500, 1000, 200, 60600), "let go 600 ms ago").toBe(true);
+    keeper.leave();
+    expect(keeper.follows(500, 1400, 200, 60600), "the app's jump").toBe(false);
+  });
+
+  test("keys and the scrollbar leave the bottom; a press on a row does not", async () => {
+    await setup();
+    const list = document.querySelector("[data-stream-list]") as HTMLElement;
+    Object.defineProperties(list, { scrollHeight: { value: 1000 }, clientHeight: { value: 200 } });
+    const away = (before: () => void) => {
+      list.scrollTop = 800;
+      fireEvent.scroll(list);
+      before();
+      list.scrollTop = 100;
+      fireEvent.scroll(list);
+      return screen.queryByRole("button", { name: "回到底部" }) !== null;
+    };
+    expect(
+      away(() => fireEvent.pointerDown(screen.getByText("第二个"))),
+      "a row",
+    ).toBe(false);
+    expect(
+      away(() => fireEvent.keyDown(list, { key: "PageUp" })),
+      "a key",
+    ).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "回到底部" }));
+    expect(
+      away(() => fireEvent.pointerDown(list)),
+      "the scrollbar",
+    ).toBe(true);
+  });
+
+  test("at the bottom, a list of another size goes back to the bottom", async () => {
+    await setup();
+    const list = document.querySelector("[data-stream-list]") as HTMLElement;
+    let height = 1000;
+    Object.defineProperties(list, {
+      scrollHeight: { get: () => height },
+      clientHeight: { value: 200 },
+    });
+    list.scrollTop = 800;
+    fireEvent.scroll(list);
+    height = 1600;
+    act(() => observed.filter((o) => o.target === list).forEach((o) => o.resize()));
+    expect(list.scrollTop).toBe(1600);
   });
 });
