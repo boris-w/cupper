@@ -40,7 +40,7 @@ ignore = "=0.4.34"
 # The runtime installer's downloads (design 5.2.12): rustls with `ring` and the
 # system's roots; no default features, so no system or environment proxy.
 reqwest = { version = "=0.12.28", default-features = false, features = ["rustls-tls-native-roots"] }
-rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled", "fallible_uint"] }
+rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled", "fallible_uint"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true
