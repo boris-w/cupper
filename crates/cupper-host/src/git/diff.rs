@@ -215,6 +215,12 @@ pub async fn patch(
     }
     let cmd = GitCmd::snapshot(SnapshotOp::DiffPatch).args(args);
     let tier = tool.snapshot_tier(&diffed.place);
+    let repo = diffed
+        .place
+        .objects
+        .parent()
+        .unwrap_or(&diffed.place.objects);
+    let _share = tool.gates().share(repo).await;
     output(&tier, cmd, "diff-tree", clock, durations).await
 }
 

@@ -34,6 +34,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use cupper_protocol::annotations::WirePath;
 use cupper_protocol::session::{DiffStat, ExcludedPath, ExclusionReason};
 use sha2::{Digest, Sha256};
+use tokio::sync::OwnedRwLockReadGuard;
 
 use super::repo::expand_home;
 use super::rules::{self, Entry, Unsafe};
@@ -138,6 +139,8 @@ pub struct Opened {
     pub unrun: BTreeSet<Vec<u8>>,
     /// The effective configuration.
     pub entries: Vec<Entry>,
+    /// The repository's gate, shared until it closes.
+    _share: OwnedRwLockReadGuard<()>,
 }
 
 /// Opens cupper's GIT_DIR for `work_tree`; [`Opened::close`] it after use.
@@ -166,6 +169,7 @@ pub async fn open(
         config::unrun(&entries, tool.git_lfs()),
     );
     expand_home(&mut entries, tool.home.as_deref());
+    let share = tool.gates.share(&private(&tool.dir, &layout).0).await;
     let (dir, at) = (tool.dir.clone(), layout.clone());
     let place = blocking(move || prepare(&dir, &at, &text)).await?;
     Ok(Opened {
@@ -173,6 +177,7 @@ pub async fn open(
         layout,
         unrun,
         entries,
+        _share: share,
     })
 }
 
