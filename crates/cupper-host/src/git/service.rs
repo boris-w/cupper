@@ -691,6 +691,7 @@ pub(super) fn shot(err: ShotError) -> RpcError {
     let (code, reason) = match &err {
         ShotError::NotARepo(_) => (ErrorCode::Unsupported, Some(ErrorReason::NotARepo)),
         ShotError::Unmerged => (ErrorCode::Unavailable, Some(ErrorReason::IndexUnmerged)),
+        ShotError::Missing => (ErrorCode::Unavailable, Some(ErrorReason::SnapshotMissing)),
         ShotError::Run(RunError::Timeout) => (ErrorCode::Timeout, None),
         _ => (ErrorCode::GitError, None),
     };

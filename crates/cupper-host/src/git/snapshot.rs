@@ -90,6 +90,9 @@ pub enum ShotError {
     /// A merge conflict is unresolved (design 5.2.10).
     #[error("the index has unmerged entries")]
     Unmerged,
+    /// A purge took the snapshot's objects (T127).
+    #[error("the snapshot is gone")]
+    Missing,
 }
 
 /// Takes a snapshot of `work_tree`; with `start`, the lines changed since

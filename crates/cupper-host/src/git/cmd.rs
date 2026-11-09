@@ -143,6 +143,8 @@ pub enum SnapshotOp {
     DiffIndex,
     /// The work tree against the index.
     DiffFiles,
+    /// Whether the object named is in the store.
+    Exists,
 }
 
 /// A command's fixed words, with `-z` where the command has it.
@@ -293,6 +295,7 @@ impl SnapshotOp {
                 true,
             ),
             Self::DiffFiles => (&["diff-files", "-z", "--name-status"], true),
+            Self::Exists => (&["cat-file", "-e"], true),
         };
         let timeout = match self {
             Self::AddAll | Self::WriteTree | Self::Refresh => GIT_SNAPSHOT,
