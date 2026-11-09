@@ -578,3 +578,5 @@
 | T180 或安全评审 | `Cupper.app` 的 Info.plist 带着 Electron 默认的 5 项用途说明（音频采集、蓝牙两项、摄像头、麦克风），release-config 每晚列出、不判失败；删不删、怎么删（`afterPack` 钩子）待定 | T161 |
 | 无障碍或复刻度修正（T148 等） | 审查文档里 pierre 自带的行号"+"没有可访问名称（库在 shadow DOM 里渲染）；要补就用 `renderGutterUtility` 自己渲染带 `aria-label` 的按钮，代价是自己处理拖选多行。长 hunk 的按钮在末行下面，pierre 支持自定义分隔符后可以挪到分隔符里 | T238 |
 | T145、T151 | T238 合并后各自 merge main，核对重叠的 `stream-changes-review` 和 review-commit 三张基线 | T238 |
+| T113 | codex-acp 2.2.2 的 `userInputToContentBlocks` 处理音频时不区分 `fileId`（同一函数里图片已区分），`session/load` 回放 fileId 形式的音频会显示成 `[@audio](undefined)`；2.6.0 仍未修。升级适配器或用 `write` 重写基线时一并看，重写后 0.165.0–0.167.0 三条记录都会失效 | T246 |
+| 维护 codex-drift 工具时 | `facets` 看不到变体里再嵌一层的 `anyOf`，"改成二选一"会显示成"去掉了必填字段"（T209、T246 都遇到）；不会漏报，但描述会误导 | T246 |
