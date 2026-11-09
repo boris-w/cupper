@@ -410,8 +410,8 @@
 | 会话 actor 的测试 | `actor::held`（只在单元测试里编译，按项目路径登记）能让某次重扫停住，用来把配置变化放进"回合已开始、附加前的重扫还没做"这类窗口（T069）；会话夹具的 `events`、`attach`、`command` 等待都有 30 s 超时，超时时报出在等什么 | T069 |
 | 读设置的宿主任务 | 设置（T036）在 `crates/cupper-host/src/settings.rs`：宿主内部经 `SettingsHandle::current()` 取；默认值是 `worktrees.root` 为 `~/.cupper/worktrees`、三个通知开关开、新会话默认 Claude、`host.idle_exit_minutes` 为 10、`diagnostics.verbose` 关、不额外放行环境变量、CLI 路径为空（自动发现）。`cli_path`、`env_passthrough` 变了会先重新发现 agent 再回复；其余键 M1a 不推送 | T036 |
 | T126 | `apps.terminal`、`apps.editor` 的内置应用清单仍没有设计（T013 的交接），T036 的默认值暂用 macOS 自带的 Terminal 和 TextEdit | T036 |
-| 改协议或 ShellAPI 的任务（T151、T147 等） | 契约已冻结（T016），只能附加，`ci protocol` 的 `schema-compat`、`shell-api-m1a` 会判。新加的 `Option` 字段必须带 `skip_serializing_if = "Option::is_none"`，否则宿主发出 `null` 而 schema 不允许（T190 补守卫前没有检查）；值本身可以为 `null` 的做成具名定义，照 `CliPath`。改完跑 `pnpm gen`。`schema-compat` 不比较描述、数值界的放宽、`x-errors`、`x-milestone` | T016 |
-| T151 | `settings.updated` 事件与 `IndexView.settings` 在 `schema-compat` 下按附加通过（T016 用冻结副本演示过） | T016 |
+| 改协议或 ShellAPI 的任务（T151、T147 等） | 契约已冻结（T016），只能附加，`ci protocol` 的 `schema-compat`、`shell-api-m1a` 会判。新加的 `Option` 字段必须带 `skip_serializing_if = "Option::is_none"`，否则宿主发出 `null` 而 schema 不允许（T190 补守卫前没有检查）；值本身可以为 `null` 的做成具名定义，照 `CliPath`。改完跑 `pnpm gen`。`schema-compat` 不比较描述、数值界的放宽、`x-errors`、`x-milestone` | T016（已写入 T151 的 brief） |
+| T151 | `settings.updated` 事件与 `IndexView.settings` 在 `schema-compat` 下按附加通过（T016 用冻结副本演示过） | T016（已写入 T151 的 brief） |
 | T190 | 守卫的做法：序列化金样例与夹具后，断言 schema 里的非必填属性上没有 `null`；`CliPath` 这类值本身可为 `null` 的具名定义除外。导出时的变换是 `cupper-protocol/src/schema.rs` 的 `absent_not_null` | T016 |
 | T191 | PERF-snapshot 在 `git/snapshot/tests.rs`，每种情况现为 5 个样本；样本经 `cupper_host::perf::record` 写到 `CUPPER_PERF_OUT`。PERF-bridge-gate 进历史的做法写在 `docs/tasks/T117-host-perf/notes.md`：`gate.spec.ts` 也写 `CUPPER_PERF_OUT`，`ci/jobs/perf.rs` 的统计、追加、判定抽成共用函数给 e2e 作业调用 | T117 |
 | 要提高条目吞吐的任务（M1b 之后） | `flood_mixed` 经宿主约 2.6 ms 一个条目：会话 actor 把不能合并的事件逐个提交，约 0.87 ms 一个。提速的方向是同一步里攒批追加。现在达标，没有做（数字在 `docs/tasks/T117-host-perf/notes.md`） | T117 |
@@ -489,7 +489,7 @@
 | 以后查 e2e 偶发失败的任务 | Radix 的菜单、对话框关掉后，FocusScope 用 `setTimeout(0)` 把焦点还给触发按钮。e2e 用例在关掉菜单后立即移焦点的，焦点可能被拿回去：先 `await expect(<触发按钮>).toBeFocused()` 再移。T217 只修了 E2E-SEC-panel-arming 一处 | T217 |
 | M1b B2 之前（T103 SP-6、T108 浸泡、K8） | SP-6 的场景、8 小时浸泡和 K8 的判定原定在作者机器上压测（设计 5.9.7"判定以作者的机器为准"、计划第 6 节第 15、16 行）。2026-11-02 用户决定不在自己的电脑上跑压测（`docs/meetings/2026-11-02-perf-local/`、`2026-11-02-m1a-sync/` D1），两者冲突，派 T103 之前要请用户再定；R8 的描述随之改。**2026-11-03 已定**：改在 GitHub runner 上跑，只记录，浸泡约 5 小时（`docs/meetings/2026-11-03-sp6-runner/`，计划 v1.3.86） | T219 |
 | 以后看性能趋势的任务 | 托管 runner 上的 PERF 数值只在 nightly 摘要的 `perf` 列表里，构件按保留期过期、不入库。要长期看趋势，需要定期把这些行汇总入库（格式与 `history.jsonl` 相同，机型泛称是 "Apple Virtual Machine 1 (Apple M1 (Virtual))"，不能和真机的历史混在一起判） | T219 |
-| T144、T151 或补 i18n 的界面任务 | `stream` 命名空间没有 `error_project_untrusted` 的文案，Codex 在未信任项目里的错误现在显示为"其他错误"；新建会话页和设置页会看到 Codex 的状态（没装 CLI 时为 `unavailable`） | T111 |
+| T144、T151 或补 i18n 的界面任务 | `stream` 命名空间没有 `error_project_untrusted` 的文案，Codex 在未信任项目里的错误现在显示为"其他错误"；新建会话页和设置页会看到 Codex 的状态（没装 CLI 时为 `unavailable`） | T111（已写入 T151 的 brief） |
 | T113 或维护者手动 | 长时间运行下 Codex 的 MCP 进程数和内存（T102 交接），核对 5.6.8 的回收阈值和 NFR-11 的估算，要用真实 Codex | T111 |
 | 以后在本机跑宿主集成测试的任务 | lifecycle 里的 `it_cli_commands_*`、`it_elevate_lineage_*` 要先 `cargo build -p cupper-cli --features test-harness`（CI 的 `cli-e2e` 一步会做），否则本机会失败 | T111 |
 | 以后改快照档或项目登记的任务 | 项目是仓库的子目录时（monorepo），`Layout::read` 要求工作区目录里就有 `.git`，回合快照记成 `skipped/not_a_repo`，`git/diff` 也拿不到结果；T061 起就是这样 | T120 |
@@ -504,7 +504,7 @@
 | T121 | 暂存时按 `diff_token` 取出 `Diffed`，用 `diff::patch` 重新生成文件的补丁，再用 `diff::units` 按 `hunk_id` 找单位；缓存没有 `hunk_id` 到路径的索引，目标是 `{hunk_ids}` 时要么由 T121 加索引，要么逐个文件重新生成补丁去找 | T221 |
 | T148 | "回到底部"按钮（T082 起）用的 `bg-bg` 没有对应 token，背景是透明的，应为 `bg-surface` 一类；尺寸是 32，设计是 28 | T143 |
 | T152 或以后统一更新截图基线的任务 | 截图页的字体栈要整套固定：无衬线和等宽都要接上夹具里的中文子集，否则代码里的中文会退到系统字体，基线随 runner 的 macOS 小版本变（T143 只改了等宽）；基线只由 `ui-baseline` workflow 生成 | T143 |
-| T141、T151、T153 | 错误条目的恢复指引：`change_model` 的入口在 T141（模型选择器），`upgrade_cli`、`install_cli`、`restart_agent` 在 T151（设置页 agent 状态、`agents/restart`），`run_login_in_terminal` 的"打开终端"在 T153；T143 现在只给文字和可复制的命令 | T143 |
+| T141、T151、T153 | 错误条目的恢复指引：`change_model` 的入口在 T141（模型选择器），`upgrade_cli`、`install_cli`、`restart_agent` 在 T151（设置页 agent 状态、`agents/restart`），`run_login_in_terminal` 的"打开终端"在 T153；T143 现在只给文字和可复制的命令 | T143（已写入 T151 的 brief） |
 | 以后改桌面退出流程的任务 | 退出判定之前就开始的重连所拉起的宿主，连接会被关掉，进程本身靠宿主自己的规则退出：开发、自用构建按孤立规则约 1 s，发布构建要等 10 分钟空闲（T214 已记）；退出中收到 `second-instance` 不建窗口，只由 `quitting` 标记守住，没有专门的用例 | T225 |
 | T125 | `git::status::in_progress(git_dir)` 可以直接用于 ADR-10 的第 3 条规则（有进行中的合并、rebase 等时不删 worktree） | T222 |
 | 界面要频繁查 `git/status` 的任务（审查面板等） | 一次 status 要两次仓库档调用，每次前后各遍历一遍工作区（指纹），加上快照档的 refresh；带大 `node_modules` 的仓库会慢到秒级，频繁轮询之前要缓存（T120 汇报第 5 条同一件事） | T222 |
@@ -516,7 +516,7 @@
 | T161 | 复用 `apps/desktop/src/test-entry-points.ts` 和 `apps/desktop/selfuse/build.test.ts` 里逐个 Mach-O 检查 entitlements、读 fuse 线的做法；`electron-builder.release.yml` 至今没有真正构建过；5.10.2 可补：库不带 entitlements，`chrome_crashpad_handler`、`app_shim_loader`、`ShipIt` 拿 `entitlementsInherit`，helper 的 identifier 是 `<appId>.helper`、`.helper.Renderer`、`.helper.GPU`、`.helper.Plugin` | T160（已写入 T161 的 brief） |
 | 以后改升级流程的任务（5.5.7、T129、T180） | keyed 构建（自用、开发、e2e）里宿主因待升级退出后，旧界面会自动从磁盘拉起新宿主，新旧两版混用；可以考虑收到 `host/shutdown(upgrade)` 后不再拉起，改为提示重启 App | T160 |
 | T147 | 设置页"安装命令行工具"还没做，自用构建的安装说明暂时让用户 `ln -s` | T160 |
-| T151、T153 | 默认编辑器是 TextEdit（T036 定的），`open -a TextEdit <目录>` 打不开文件夹；改成清单里第一个已安装的编辑器，或由界面引导用户选一个 | T126 |
+| T151、T153 | 默认编辑器是 TextEdit（T036 定的），`open -a TextEdit <目录>` 打不开文件夹；改成清单里第一个已安装的编辑器，或由界面引导用户选一个 | T126（已写入 T151 的 brief） |
 | COMPAT 运行或真机验证（T113 等） | 提示里 `file_ref` 映射成的 `resource_link`，`file://` uri 没有百分号编码，路径里有空格、`#`、`%` 时不合法；要不要编码看两个适配器怎么解析 | T126 |
 | 以后改输入框或 `session/send` 的任务 | 图片超限、agent 不收图片、越出工作区的 `file_ref`，现在要到 prompt 时才失败（由 error 条目显示）；可以在 `session/send` 按能力提前校验 | T126 |
 | M3 远程客户端或改合并窗口的任务（5.3.3、5.2.4） | 合并窗口（`coalesce_ms` 不为 0）里不按流分组：别的流的事件插进来，同一个 item 的 delta 就不能跨帧合并，多会话时帧数可能翻倍；只影响开了窗口、同时订阅索引和会话的客户端，桌面端和 CLI 默认不开。可以先按流分组再合并，前提是协议不保证跨流的到达顺序（先在 5.3.3 确认） | T227 |
@@ -560,7 +560,7 @@
 | T153 | worktree 会话恢复时复用新建的 `add`，actor 要等 1 秒 refresh；恢复入口要显示进行中的状态 | T241 |
 | T145 | 与 T142 共用 `@` 的弹出层：拖入的图片目前按文件引用处理，要区分出来作为图片附件；设计里"拖放时显示覆盖层"归 T145；斜杠命令照 T142 的做法，从 `OverlayContext.area` 取文字区、加原生 keydown 监听，开头先判断 `keys.ts` 的 `composing()` | T142（已写入 T145 的 brief） |
 | 支持经符号链接的工作区时 | 拖入文件按字符串前缀判断是否在工作区内，经符号链接或大小写不同的路径会被误判为在外面（只多一次提示）；要支持就由宿主做真实路径的比较，需要附加协议 | T142 |
-| T242、T244、T151 及按能力隐藏入口的界面任务 | `interactions.plan_confirm`、`extraction.thinking` 由选项推断（T243），只用来决定入口；收到的计划确认请求和思考条目照样显示，不按这两个字段隐藏（5.3.7） | T243 |
+| T242、T244、T151 及按能力隐藏入口的界面任务 | `interactions.plan_confirm`、`extraction.thinking` 由选项推断（T243），只用来决定入口；收到的计划确认请求和思考条目照样显示，不按这两个字段隐藏（5.3.7） | T243（已写入 T151 的 brief） |
 | T242 | `started_new_turn` 之后，如果原回合的 prompt 一直不返回（K1 那类挂起），这次 `steer` 的回复会一直等着；界面要能承受迟迟没有回复（发送按钮的状态、超时提示）。在原回合的 prompt 响应到达之前，新回合的早期输出记在原回合里，界面不用特殊处理 | T140 |
 | T149 | `queue_edit` 的 `steer` 复用 T140 的纯核心判定和七个回退原因（含 `steer_pending`）；晚到应答按 `queue_id` 取出的逻辑（`QueueCore::take`）已在 | T140 |
 | 写 e2e 用例的任务（T172、T242、T244 等） | 共用的 `press(cupper, "Enter")` 只发 keyDown、keyUp，不发 `char`，激活不了原生按钮；要点按钮用 T132 加的 `click(cupper, locator)`（经 `sendInputEvent` 发 mouseDown、mouseUp），或者让按钮自己处理 keyDown。产品不受影响 | T132 |
