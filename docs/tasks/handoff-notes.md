@@ -574,3 +574,5 @@
 | 以后改 LFS 复制的任务 | `lfs::supply` 从私有 LFS 存储往用户仓库复制对象时不拿快照闸；清除恰好改名时复制会失败（回 `git_error` 或 `lfs_object_missing`），不会写进不完整的对象（先写临时文件、核对 sha256 再改名），目前没有为它加锁 | T127 |
 | 写 e2e 用例的任务 | 假 agent 同一回合里的多条 `say`（以及 flood）属于同一条消息，界面拼成一个段落；`getByText(..., { exact: true })` 找其中一段会落空，要按整段或用正则匹配。项目默认只列 5 个会话（`SHOWN_SESSIONS`），第 6 个起要先点"展开显示" | T172 |
 | T021 的后续或维护者 | `trace-ids status` 报 IT-sys-peer-macos15 "ran only in pr, not in its suite nightly"（与 T172 无关，T172 核对时发现） | T172 |
+| T180 | release-config 只为不签名的每晚构建对 Electron Framework 补 ad-hoc 签名（写 fuse 使它的签名失效）；用 Developer ID 签名时 electron-builder 会重签 framework，发布流水线不需要这一步 | T161 |
+| T180 或安全评审 | `Cupper.app` 的 Info.plist 带着 Electron 默认的 5 项用途说明（音频采集、蓝牙两项、摄像头、麦克风），release-config 每晚列出、不判失败；删不删、怎么删（`afterPack` 钩子）待定 | T161 |
