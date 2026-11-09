@@ -32,7 +32,8 @@ use cupper_protocol::methods::admin::{
     PolicyDescribeParams, PolicyDescribeResult, SettingsUpdate, SettingsUpdateParams,
 };
 use cupper_protocol::methods::handshake::{
-    HostExit, HostExitParams, HostPrepareUpgrade, HostPrepareUpgradeParams, UpgradeMode,
+    HostExit, HostExitParams, HostPrepareUpgrade, HostPrepareUpgradeParams, HostPurgeSnapshots,
+    HostPurgeSnapshotsParams, UpgradeMode,
 };
 use cupper_protocol::methods::interaction::{InteractionRespond, InteractionRespondParams};
 use cupper_protocol::methods::project::{ProjectTrust, ProjectTrustParams};
@@ -62,6 +63,7 @@ pub enum Confirmable {
     Elevation(AuthElevationRespondParams),
     Exit(HostExitParams),
     Upgrade(HostPrepareUpgradeParams),
+    Purge(HostPurgeSnapshotsParams),
 }
 
 impl Confirmable {
@@ -80,6 +82,7 @@ impl Confirmable {
             AuthElevationRespond::NAME => Self::Elevation(typed(params)?),
             HostExit::NAME => Self::Exit(typed(params)?),
             HostPrepareUpgrade::NAME => Self::Upgrade(typed(params)?),
+            HostPurgeSnapshots::NAME => Self::Purge(typed(params)?),
             _ => return Err(DescribeError::NotConfirmable),
         })
     }
@@ -100,6 +103,8 @@ pub struct Facts {
     pub project_path: Option<WirePath>,
     /// `host/exit`, `host/prepare_upgrade`.
     pub running_turns: u32,
+    /// `host/purge_snapshots`: the snapshot stores' size now.
+    pub snapshot_bytes: u64,
 }
 
 /// Why `policy/describe` has no description; invalid params on the wire.
@@ -183,6 +188,10 @@ pub fn describe(
         }) if facts.running_turns > 0 => (
             A::InterruptTurns,
             map([("running_turns", json!(facts.running_turns))]),
+        ),
+        C::Purge(_) => (
+            A::PurgeSnapshots,
+            map([("snapshot_bytes", json!(facts.snapshot_bytes))]),
         ),
         _ => return Err(DescribeError::NotConfirmable),
     };

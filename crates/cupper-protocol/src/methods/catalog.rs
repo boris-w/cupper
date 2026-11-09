@@ -169,6 +169,12 @@ mod tests {
             [Y; 7],
         ),
         ("blob/put", &["blob/put"], [Y, Y, N, Y, N, Y, Y]),
+        ("host/storage", &["host/storage"], [Y; 7]),
+        (
+            "host/purge_snapshots",
+            &["host/purge_snapshots"],
+            [Native, N, N, N, N, Y, N],
+        ),
         (
             "host/prepare_upgrade、host/exit（有运行中的回合时原生确认）",
             &["host/prepare_upgrade", "host/exit"],

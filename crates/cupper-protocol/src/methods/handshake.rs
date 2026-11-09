@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::Empty;
 use super::catalog::Catalog;
+use crate::annotations::TimestampMs;
 use crate::domain::{ClientKind, ClientRole, PrincipalKind};
 use crate::ids::{CommandId, HostId, PrincipalId, RequestId, SessionId};
 use crate::index::ClientInfo;
@@ -207,6 +208,53 @@ pub struct HostStatusResult {
 }
 
 method! {
+    /// `host/storage`: how many bytes each kind of the host's data takes
+    /// (design 5.4.5).
+    request HostStorage = "host/storage" (Empty) -> HostStorageResult {
+        scope: Read,
+        idempotency: Natural,
+        milestone: M1b,
+        errors: [],
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct HostStorageResult {
+    pub host_db: u64,
+    pub raw_db: u64,
+    pub blobs: u64,
+    /// The snapshots' object stores and LFS stores.
+    pub snapshots: u64,
+    /// The worktrees cupper added, under its worktree root.
+    pub worktrees: u64,
+    /// The walk ran out of time: the sizes are what it counted so far.
+    pub partial: bool,
+    pub measured_at: TimestampMs,
+}
+
+method! {
+    /// `host/purge_snapshots`: empties every repository's snapshot stores;
+    /// a turn range needing them is `unavailable/snapshot_missing` after it
+    /// (design 5.2.10).
+    request HostPurgeSnapshots = "host/purge_snapshots" (HostPurgeSnapshotsParams) -> HostPurgeSnapshotsResult {
+        scope: Privileged,
+        idempotency: Command,
+        milestone: M1b,
+        errors: [Conflict / TurnRunning],
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct HostPurgeSnapshotsParams {
+    pub command_id: CommandId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct HostPurgeSnapshotsResult {
+    pub freed_bytes: u64,
+}
+
+method! {
     /// `host/prepare_upgrade`: stop taking turns and exit for an update.
     request HostPrepareUpgrade = "host/prepare_upgrade" (HostPrepareUpgradeParams) -> HostPrepareUpgradeResult {
         scope: Privileged,
@@ -300,6 +348,8 @@ pub fn register(c: &mut Catalog, g: &mut SchemaGenerator) {
     c.request::<Ping>(g);
     c.client_notification::<ClientPresence>(g);
     c.request::<HostStatus>(g);
+    c.request::<HostStorage>(g);
+    c.request::<HostPurgeSnapshots>(g);
     c.request::<HostPrepareUpgrade>(g);
     c.request::<HostExit>(g);
     c.host_notification::<HostShutdown>(g);
@@ -352,6 +402,15 @@ pub(super) mod tests {
                     "pending_interactions": 1, "pid": 4242, "clients": [{"conn_id": "c_1",
                     "principal_kind": "desktop_ui", "role": "control", "client_name": "Cupper",
                     "client_version": "0.1.0", "since": 3, "auth": "verified"}]}),
+            ),
+            request::<HostStorage>(
+                json!({}),
+                json!({"host_db": 1_048_576, "raw_db": 524_288, "blobs": 2048, "snapshots": 4096,
+                    "worktrees": 0, "partial": false, "measured_at": 1700000000000_u64}),
+            ),
+            request::<HostPurgeSnapshots>(
+                json!({"command_id": "c-9"}),
+                json!({"freed_bytes": 4096}),
             ),
             request::<HostPrepareUpgrade>(
                 json!({"command_id": "c-1", "mode": "wait"}),

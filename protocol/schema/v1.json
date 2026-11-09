@@ -968,7 +968,8 @@
             "privileged_option",
             "security_setting",
             "grant_elevation",
-            "interrupt_turns"
+            "interrupt_turns",
+            "purge_snapshots"
           ],
           "type": "string"
         },
@@ -976,7 +977,7 @@
           "type": "string"
         }
       ],
-      "description": "Open enum: unknown values must be accepted. Known: trust_project confirm_config full_access privileged_option security_setting grant_elevation interrupt_turns "
+      "description": "Open enum: unknown values must be accepted. Known: trust_project confirm_config full_access privileged_option security_setting grant_elevation interrupt_turns purge_snapshots "
     },
     "ConfirmationReason": {
       "anyOf": [
@@ -3528,6 +3529,30 @@
       ],
       "type": "object"
     },
+    "HostPurgeSnapshotsParams": {
+      "properties": {
+        "command_id": {
+          "$ref": "#/$defs/CommandId"
+        }
+      },
+      "required": [
+        "command_id"
+      ],
+      "type": "object"
+    },
+    "HostPurgeSnapshotsResult": {
+      "properties": {
+        "freed_bytes": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "freed_bytes"
+      ],
+      "type": "object"
+    },
     "HostShutdownParams": {
       "properties": {
         "reason": {
@@ -3582,6 +3607,54 @@
         "running_turns",
         "pending_interactions",
         "clients"
+      ],
+      "type": "object"
+    },
+    "HostStorageResult": {
+      "properties": {
+        "blobs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "host_db": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "measured_at": {
+          "$ref": "#/$defs/TimestampMs"
+        },
+        "partial": {
+          "description": "The walk ran out of time: the sizes are what it counted so far.",
+          "type": "boolean"
+        },
+        "raw_db": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "snapshots": {
+          "description": "The snapshots' object stores and LFS stores.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "worktrees": {
+          "description": "The worktrees cupper added, under its worktree root.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "host_db",
+        "raw_db",
+        "blobs",
+        "snapshots",
+        "worktrees",
+        "partial",
+        "measured_at"
       ],
       "type": "object"
     },
@@ -8860,6 +8933,27 @@
         "x-milestone": "M1b",
         "x-scope": "privileged"
       },
+      "host/purge_snapshots": {
+        "params": {
+          "$ref": "#/$defs/HostPurgeSnapshotsParams"
+        },
+        "result": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/HostPurgeSnapshotsResult"
+            },
+            {
+              "$ref": "#/$defs/Replayed"
+            }
+          ]
+        },
+        "x-errors": [
+          "conflict/turn_running"
+        ],
+        "x-idempotent": "command",
+        "x-milestone": "M1b",
+        "x-scope": "privileged"
+      },
       "host/status": {
         "params": {
           "$ref": "#/$defs/Empty"
@@ -8870,6 +8964,18 @@
         "x-errors": [],
         "x-idempotent": "natural",
         "x-milestone": "M1a",
+        "x-scope": "read"
+      },
+      "host/storage": {
+        "params": {
+          "$ref": "#/$defs/Empty"
+        },
+        "result": {
+          "$ref": "#/$defs/HostStorageResult"
+        },
+        "x-errors": [],
+        "x-idempotent": "natural",
+        "x-milestone": "M1b",
         "x-scope": "read"
       },
       "initialize": {
