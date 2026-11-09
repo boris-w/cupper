@@ -89,10 +89,11 @@ export function useDiff(sessionId: string, scope: DiffScope, enabled = true) {
 }
 
 /** `git/status`, with the paths whose executable configuration changed this session. */
-export function useStatus(sessionId: string) {
+export function useStatus(sessionId: string, enabled = true) {
   const { client } = useHost();
   return useQuery({
     queryKey: statusKey(sessionId),
     queryFn: () => client.request<GitStatusResult>("git/status", { session_id: sessionId }),
+    enabled,
   });
 }

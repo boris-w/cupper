@@ -62,7 +62,7 @@ async function setup(
   const { mock, ui } = await mountOnHost(
     <ReviewContext value={createReviewStore()}>
       <SlotsContext value={{ reviewView: View }}>
-        <ReviewPanel fileTree={false} onFileTree={() => undefined} />
+        <ReviewPanel fileTree={false} onFileTree={() => undefined} active />
       </SlotsContext>
     </ReviewContext>,
     (mock) => {

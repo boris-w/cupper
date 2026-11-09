@@ -134,6 +134,7 @@ macro_rules! each_method {
         check_method!($check($ctx); $case;
             requests: [
                 handshake::Initialize, handshake::Ping, handshake::HostStatus,
+                handshake::HostStorage, handshake::HostPurgeSnapshots,
                 handshake::HostPrepareUpgrade, handshake::HostExit,
                 stream::StreamSubscribe, stream::StreamUnsubscribe, stream::HistoryPage,
                 stream::BlobGet, stream::BlobPut,

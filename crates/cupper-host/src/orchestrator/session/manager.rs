@@ -45,9 +45,10 @@ use super::{IndexNotes, internal, not_found, parse, privileged, tier_of};
 use crate::clock::{Clock, IdGen};
 use crate::diag::full::Redactor;
 use crate::driver::api::{AgentPort, ProjectConfigPolicy};
-use crate::durations::Durations;
+use crate::durations::{Durations, STORAGE_WALK};
 use crate::files::FileLists;
 use crate::gateway::{AuditRecord, Call, Port, Reply, SessionPort};
+use crate::git::purge::Tally;
 use crate::git::worktree::{ADDING, Plan, Worktrees};
 use crate::git::{GitTool, RepoNotice, SessionNotes};
 use crate::index::archived;
@@ -864,6 +865,21 @@ impl SessionPort for SessionManager {
                     Ok(facts)
                 })
             }
+            // What the purge would free, as far as the walk gets.
+            Confirmable::Purge(_) => Box::pin(async move {
+                let (clock, dir) = (deps.clock, deps.git.map(|git| git.dir().to_owned()));
+                let deadline = clock.now_mono() + deps.durations.get(STORAGE_WALK);
+                let walk = move || {
+                    let mut tally = Tally {
+                        clock: &*clock,
+                        deadline,
+                        partial: false,
+                    };
+                    tally.bytes(dir)
+                };
+                facts.snapshot_bytes = tokio::task::spawn_blocking(walk).await.map_err(internal)?;
+                Ok(facts)
+            }),
             _ => Box::pin(future::ready(Ok(facts))),
         }
     }

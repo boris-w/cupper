@@ -270,6 +270,8 @@ open_enum! {
         GrantElevation => "grant_elevation",
         /// `host/exit` or `host/prepare_upgrade` while turns run.
         InterruptTurns => "interrupt_turns",
+        /// `host/purge_snapshots`.
+        PurgeSnapshots => "purge_snapshots",
     }
 }
 

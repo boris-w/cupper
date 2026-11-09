@@ -86,6 +86,11 @@ export class WindowBridges {
     this.#bridges.get(id)?.disconnect();
   }
 
+  /** e2e: drops a window's connection when the host's reply to `command` comes, once. */
+  dropReplyTo(id: number, command: string): void {
+    this.#bridges.get(id)?.dropReplyTo(command);
+  }
+
   #bind(contents: WebContents): void {
     if (this.#bound.has(contents)) {
       return;

@@ -1145,6 +1145,9 @@ impl SessionActor {
         let (cwd, back) = (self.parts.cwd.clone(), self.snapshots.clone());
         let (clock, durations) = (Arc::clone(&self.parts.clock), self.parts.durations.clone());
         let hold = self.parts.quiescence.hold();
+        // Before the step ends: a purge that sees no turn running cannot
+        // take this snapshot's objects away (T127).
+        self.parts.running.store(true, Ordering::Relaxed);
         tokio::spawn(async move {
             let taken = snapshot::take(&git, &cwd, start.as_deref(), &*clock, &durations).await;
             // The actor may have stopped.

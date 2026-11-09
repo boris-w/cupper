@@ -13,6 +13,7 @@ mod cmd;
 pub mod diff;
 mod head;
 mod lfs;
+pub mod purge;
 mod repo;
 pub mod rules;
 pub mod run;
@@ -23,13 +24,16 @@ mod status;
 mod user;
 pub mod worktree;
 
+use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, DirBuilder, Permissions};
 use std::io;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use cupper_sys::{Command, Env};
+use tokio::sync::{OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 
 pub use cmd::{GitCmd, Repo, RepoOp, Snapshot, SnapshotOp, User, UserOp};
 pub use repo::{Done, GitError, RepoNotice};
@@ -49,9 +53,31 @@ pub struct GitTool {
     ssh_auth_sock: Option<OsString>,
     /// `<data dir>/git/`, git's working directory.
     dir: PathBuf,
+    gates: Arc<Gates>,
     /// Tests keep git off the machine's system configuration.
     #[cfg(test)]
     test_env: Vec<(&'static str, OsString)>,
+}
+
+/// One gate per repository's directory in `<data dir>/git/`: the snapshot
+/// tier's calls share it from their first write to their last read, a purge
+/// of the snapshots holds it alone (T127), so no tree outlives its blobs.
+#[derive(Debug, Default)]
+pub struct Gates(Mutex<HashMap<PathBuf, Arc<RwLock<()>>>>);
+
+impl Gates {
+    fn of(&self, repo: &Path) -> Arc<RwLock<()>> {
+        let mut gates = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        Arc::clone(gates.entry(repo.to_owned()).or_default())
+    }
+
+    pub async fn share(&self, repo: &Path) -> OwnedRwLockReadGuard<()> {
+        self.of(repo).read_owned().await
+    }
+
+    pub async fn hold(&self, repo: &Path) -> OwnedRwLockWriteGuard<()> {
+        self.of(repo).write_owned().await
+    }
 }
 
 impl GitTool {
@@ -93,6 +119,7 @@ impl GitTool {
             home,
             ssh_auth_sock,
             dir,
+            gates: Arc::default(),
             #[cfg(test)]
             test_env: Vec::new(),
         })
@@ -104,6 +131,16 @@ impl GitTool {
     pub(crate) fn with_test_env(mut self, name: &'static str, value: &str) -> Self {
         self.test_env.push((name, value.into()));
         self
+    }
+
+    /// `<data dir>/git/`, where the snapshots are.
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    /// Shared by every clone.
+    pub fn gates(&self) -> &Gates {
+        &self.gates
     }
 
     /// git-lfs, for the standard LFS filters (T097).

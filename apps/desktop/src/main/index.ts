@@ -8,7 +8,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { createI18n } from "@cupper/i18n";
-import { MAIN_DOCUMENT_CSP } from "@cupper/shell-api";
+import { MAIN_DOCUMENT_CSP, REVIEW_DOCUMENT_CSP } from "@cupper/shell-api";
 import {
   app,
   autoUpdater,
@@ -157,10 +157,14 @@ async function ready() {
       t: (key, values) => t(`privileged:${key}`, values),
     });
   serveShell({ flavor, prefs, openExternal, ...(privileged ? { privileged } : {}) });
-  const renderer = join(import.meta.dirname, "../renderer");
+  // The main document and, on an origin of its own, the review document (design 5.7.5).
+  const root = (dir: string) => join(import.meta.dirname, "..", dir);
   protocol.handle(
     APP_SCHEME,
-    appProtocolHandler({ cupper: { root: renderer, csp: MAIN_DOCUMENT_CSP } }),
+    appProtocolHandler({
+      cupper: { root: root("renderer"), csp: MAIN_DOCUMENT_CSP },
+      "cupper-review": { root: root("review"), csp: REVIEW_DOCUMENT_CSP },
+    }),
   );
   // Shutdown, logout and installing an update quit without asking (design 5.7.1).
   powerMonitor.on("shutdown", () => quit.skip());
@@ -219,7 +223,11 @@ function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
     // and a socket destroyed while Node hands over its data throws there (T200).
     const disconnectWindow = (webContentsId: number) =>
       void setImmediate(() => bridges.disconnect(webContentsId));
-    Object.assign(globalThis, { __cupperE2E: { disconnectWindow } });
+    // The window loses its connection as the host's reply to a command
+    // comes, before the window sees it (E2E-NFR2-retry).
+    const dropReplyTo = (webContentsId: number, command: string) =>
+      bridges.dropReplyTo(webContentsId, command);
+    Object.assign(globalThis, { __cupperE2E: { disconnectWindow, dropReplyTo } });
   }
 }
 

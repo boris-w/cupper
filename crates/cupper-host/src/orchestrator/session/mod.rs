@@ -34,6 +34,8 @@ mod manager;
 #[cfg(test)]
 mod output_tests;
 #[cfg(test)]
+mod purge_tests;
+#[cfg(test)]
 mod rebuild_tests;
 #[cfg(test)]
 mod recovery_tests;

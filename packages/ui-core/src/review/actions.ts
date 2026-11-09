@@ -50,6 +50,12 @@ export function useActions(sessionId: string, onFailure?: (error: unknown) => vo
   const t = useT();
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingRevert>();
+  // Another session's panel: its revert waits no more (the panel stays mounted).
+  const [owner, setOwner] = useState(sessionId);
+  if (owner !== sessionId) {
+    setOwner(sessionId);
+    setPending(undefined);
+  }
 
   const run = useCallback(
     async ({ action, diffToken, target, path }: Action) => {
