@@ -259,7 +259,7 @@ describe("UI-settings-archived", () => {
   });
 });
 
-describe("UNIT-install-cli", () => {
+describe("UI-settings-cli", () => {
   test("the page asks the shell to install, then says where the link is, or why there is none", async () => {
     const { controls, ui } = await setup();
     act(() => ui.getState().navigate(toSettings(ui.getState().route, "cli")));
