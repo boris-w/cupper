@@ -9,6 +9,7 @@ mod e2e;
 mod license;
 mod perf;
 mod protocol;
+mod release_config;
 mod rust;
 mod security;
 mod selfuse;
@@ -56,7 +57,7 @@ pub const JOBS: &[Job] = &[
     locked("perf", Some(perf::run)),
     job("security-peer", Some(security::run)),
     job("compat-framework", Some(compat_framework::run)),
-    job("release-config", None),
+    job("release-config", Some(release_config::run)),
     job("codex-drift", Some(codex_drift::run)),
     job("release", None),
 ];

@@ -448,7 +448,7 @@
 | T113 | 真实配置下，模型会绕开 apply_patch 改用用户配置的 MCP 工具写文件（被 read-only 沙箱拒绝），所以剧本的 prompt 要点名使用哪个工具。所有 MCP 调用是否都受沙箱约束，交安全工程师确认。另外加一个 Codex 版的"关闭时有命令正在运行" | T102 |
 | T113 | 2026-10-28 的最新版本：codex-acp 2.3.0（换用 ACP TS SDK 2.0，依赖 `@openai/codex ^0.164.0`），codex CLI 0.165.0（超出已验证上限 0.163.0）。升级适配器之前重跑 Q8、Q31。复用 T102 的 `config-hash.ts` 时，换成真正的 TOML 解析 | T102 |
 | T150 | 第一条验收（T101 没验证的缺口）：宿主改跑 NSApplication 之后，"宿主在、UI 已退出时重复拉起宿主"和 Finder 的"…is not open anymore"对话框是否消失。测法见 T101 汇报的遗留第 1 条；消除不了时，考虑改由 LaunchServices 拉起宿主（影响 ADR-01、Q21），或者启用 T158 | T101 |
-| T150 | 写任务书之前，编排者把 T101 汇报里"设计 5.2.9 要补的规则"6 条补进设计：宿主 bundle 先在 LaunchServices 登记（`LSRegisterURL`，在宿主进程启动之前）、主线程改跑 NSApplication、系统单独拉起的宿主只转交点击后退出（排在读 stdin 载荷之前）、有序退出时清掉通知、上报授权状态、宿主带图标和显示名称 | T101 |
+| T150 | 写任务书之前，编排者把 T101 汇报里"设计 5.2.9 要补的规则"6 条补进设计：宿主 bundle 先在 LaunchServices 登记（`LSRegisterURL`，在宿主进程启动之前）、主线程改跑 NSApplication、系统单独拉起的宿主只转交点击后退出（排在读 stdin 载荷之前）、有序退出时清掉通知、上报授权状态、宿主带图标和显示名称 | T101（已写入设计 5.2.3、5.2.9、5.2.13、5.7.2、5.10.1，2026-11-10） |
 | T150 | Info.plist：`CFBundleDisplayName`、`CFBundleName` 写构建种类的显示名称，图标复制进 `CupperHost.app/Contents/Resources`；交 URL 用 `NSWorkspace.open([URL], withApplicationAt:)`，目标 App 按宿主路径往上三级找再核对身份（同一个 bundle id 可能登记着好几份）；授权被拒后界面提示去系统设置打开；没测的有 macOS 14 和 15、Developer ID 签名、从 DMG 拖入时嵌套 helper 的登记 | T101 |
 | T160 | 自用构建是第一个申请通知授权的构建，系统只在第一次登记时取名称和图标：宿主的 `CFBundleDisplayName`、`CFBundleName` 和图标要在第一次申请授权之前写对 | T101 |
 | T160 | Vite 保留了 `local` 这个 mode 名（与 `.env.local` 冲突），`vite build --mode local` 直接报错，自用构建现在构建不出来；T105 在临时副本里改成用 `self-use` 映射到 local | T105（进行中的发现） |
@@ -574,3 +574,12 @@
 | 以后改 LFS 复制的任务 | `lfs::supply` 从私有 LFS 存储往用户仓库复制对象时不拿快照闸；清除恰好改名时复制会失败（回 `git_error` 或 `lfs_object_missing`），不会写进不完整的对象（先写临时文件、核对 sha256 再改名），目前没有为它加锁 | T127 |
 | 写 e2e 用例的任务 | 假 agent 同一回合里的多条 `say`（以及 flood）属于同一条消息，界面拼成一个段落；`getByText(..., { exact: true })` 找其中一段会落空，要按整段或用正则匹配。项目默认只列 5 个会话（`SHOWN_SESSIONS`），第 6 个起要先点"展开显示" | T172 |
 | T021 的后续或维护者 | `trace-ids status` 报 IT-sys-peer-macos15 "ran only in pr, not in its suite nightly"（与 T172 无关，T172 核对时发现） | T172 |
+| T180 | release-config 只为不签名的每晚构建对 Electron Framework 补 ad-hoc 签名（写 fuse 使它的签名失效）；用 Developer ID 签名时 electron-builder 会重签 framework，发布流水线不需要这一步 | T161 |
+| T180 或安全评审 | `Cupper.app` 的 Info.plist 带着 Electron 默认的 5 项用途说明（音频采集、蓝牙两项、摄像头、麦克风），release-config 每晚列出、不判失败；删不删、怎么删（`afterPack` 钩子）待定 | T161 |
+| 无障碍或复刻度修正（T148 等） | 审查文档里 pierre 自带的行号"+"没有可访问名称（库在 shadow DOM 里渲染）；要补就用 `renderGutterUtility` 自己渲染带 `aria-label` 的按钮，代价是自己处理拖选多行。长 hunk 的按钮在末行下面，pierre 支持自定义分隔符后可以挪到分隔符里 | T238 |
+| T145、T151 | T238 合并后各自 merge main，核对重叠的 `stream-changes-review` 和 review-commit 三张基线 | T238 |
+| T113 | codex-acp 2.2.2 的 `userInputToContentBlocks` 处理音频时不区分 `fileId`（同一函数里图片已区分），`session/load` 回放 fileId 形式的音频会显示成 `[@audio](undefined)`；2.6.0 仍未修。升级适配器或用 `write` 重写基线时一并看，重写后 0.165.0–0.167.0 三条记录都会失效 | T246 |
+| 维护 codex-drift 工具时 | `facets` 看不到变体里再嵌一层的 `anyOf`，"改成二选一"会显示成"去掉了必填字段"（T209、T246 都遇到）；不会漏报，但描述会误导 | T246 |
+| 写消息流跳转用例的任务 | jsdom 里 TanStack Virtual 的 `scrollToIndex` 会一直对齐下去、跑满 CPU，跳转类的用例放 Playwright（截图套件）里测；用程序化滚动模拟用户时，先派发一次 wheel 等用户输入（T245 的规则：只有用户的操作能离开底部） | T245 |
+| T244 | 新会话页能取能力（扩展点带上 agent）之后，图片附件在新会话页也可以查 `prompt.image` 和 `max_image_bytes`；目前新会话页只查类型，其余由宿主在发送时把关 | T145 |
+| 改输入框样式的任务 | 给输入框容器加常驻的定位类样式（如 `relative`）会改变阴影的绘制顺序，盖到相邻的动作条和计划药丸上；加之前先跑一轮 ui-baseline 比对（T145 改为拖入时才定位） | T145 |

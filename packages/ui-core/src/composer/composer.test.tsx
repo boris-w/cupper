@@ -5,7 +5,7 @@ import type { Handshake } from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
 import { RouterProvider } from "../app/router";
@@ -414,5 +414,113 @@ describe("file references", () => {
     await act(async () => void fireEvent.drop(box, { dataTransfer: { files, types: ["Files"] } }));
     expect(ui.getState().attachments.s_1).toEqual([{ type: "file_ref", path: "src/a.ts" }]);
     expect(screen.getByText("只能引用工作区里的文件")).toBeTruthy();
+  });
+});
+
+describe("images", () => {
+  const caps = (image: boolean) => ({
+    type: "session.capabilities",
+    data: {
+      ...{ agent: "claude", commands: [], config: [] },
+      prompt: { image, file_ref: true, max_image_bytes: 1024 * 1024 },
+      session: { resume: true, load_history: false, fork: false },
+      turn: {
+        ...{ queue: true, steer: { supported: false, side_effects: false } },
+        ...{ interrupt: true, interrupt_stops_commands: true },
+      },
+      interactions: { reject_ends_turn: false, question_forms: true, plan_confirm: true },
+      extraction: {
+        ...{ exit_code: true, output_streaming: false, diff: "per_file", thinking: true },
+        ...{ plan: "markdown_only", run_state: "inferred" },
+      },
+      versions: { adapter: "1", cli: "1", cli_compat: "verified" },
+    },
+  });
+  const png = (name = "shot.png", size = 4) =>
+    new File([new Uint8Array(size)], name, { type: "image/png" });
+  let urls = 0;
+  beforeEach(() => {
+    urls = 0;
+    URL.createObjectURL = vi.fn(() => `blob:t/${++urls}`);
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  test("a pasted or picked image goes up as a blob and attaches with its thumbnail", async () => {
+    const { area, mock, ui, requests } = await setup("idle", [caps(true)]);
+    mock.handle("blob/put", () => ({ result: {} }));
+    await act(async () => void fireEvent.paste(area, { clipboardData: { files: [png()] } }));
+    await waitFor(() => expect(ui.getState().attachments.s_1).toHaveLength(1));
+    const [put] = requests("blob/put");
+    expect(put).toEqual({ hash: expect.any(String), size: 4, media_type: "image/png" });
+    expect(ui.getState().attachments.s_1).toEqual([{ type: "image", blob: put }]);
+    expect(screen.getByRole("img", { name: "图片" }).getAttribute("src")).toBe("blob:t/1");
+
+    const picker = document.querySelector<HTMLInputElement>("input[type=file]");
+    const picked = [
+      png("a.webp", 2),
+      new File([new Uint8Array(3)], "b.gif", { type: "image/gif" }),
+    ];
+    await act(
+      async () => void fireEvent.change(picker as HTMLElement, { target: { files: picked } }),
+    );
+    await waitFor(() => expect(ui.getState().attachments.s_1).toHaveLength(3));
+
+    // Removed, an image lets its thumbnail go.
+    await act(
+      async () =>
+        void fireEvent.click(screen.getAllByRole("button", { name: "移除" })[0] as HTMLElement),
+    );
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:t/1");
+    // Gone, the composer lets the others go.
+    cleanup();
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(3);
+  });
+
+  test("another type, a size past the agent's, an agent without images, a failed upload: each says so", async () => {
+    const { area, mock, ui } = await setup("idle", [caps(true)]);
+    mock.handle("blob/put", () => hostError("too_large"));
+    const bmp = new File([new Uint8Array(2)], "a.bmp", { type: "image/bmp" });
+    await act(async () => void fireEvent.paste(area, { clipboardData: { files: [bmp] } }));
+    expect(screen.getByText("只能添加 PNG、JPEG、GIF 或 WebP 图片")).toBeTruthy();
+    const big = png("big.png", 1024 * 1024 + 1);
+    await act(async () => void fireEvent.paste(area, { clipboardData: { files: [big] } }));
+    expect(screen.getByText("图片不能超过 1 MB")).toBeTruthy();
+    await act(async () => void fireEvent.paste(area, { clipboardData: { files: [png()] } }));
+    await waitFor(() => expect(screen.getByText("图片没有上传成功（too_large）")).toBeTruthy());
+    expect(ui.getState().attachments.s_1).toBeUndefined();
+  });
+
+  test("an agent without images refuses one; a dropped image attaches, a dropped file is a reference", async () => {
+    const configured = {
+      type: "session.configured",
+      data: {
+        ...{ agent: "claude", project_config: "loaded", read_only: false, config: {} },
+        workspace: { kind: "local", path: "/p" },
+      },
+    };
+    const first = await setup("idle", [caps(false)]);
+    await act(async () => void fireEvent.paste(first.area, { clipboardData: { files: [png()] } }));
+    expect(screen.getByText("这个 agent 不接受图片")).toBeTruthy();
+    cleanup();
+
+    const { area, mock, ui, controls } = await setup("idle", [caps(true), configured]);
+    mock.handle("blob/put", () => ({ result: {} }));
+    controls.setFilePath("a.ts", "/p/src/a.ts");
+    const files = [png(), new File([], "a.ts")];
+    const box = area.closest("[data-composer]") as HTMLElement;
+    // The overlay, while files are over the composer, which is positioned for it only then.
+    await act(async () => void fireEvent.dragEnter(box, { dataTransfer: { types: ["Files"] } }));
+    expect(screen.getByText("拖放到这里添加")).toBeTruthy();
+    expect(box.hasAttribute("data-dragging")).toBe(true);
+    await act(async () => void fireEvent.drop(box, { dataTransfer: { files, types: ["Files"] } }));
+    expect(screen.queryByText("拖放到这里添加")).toBeNull();
+    expect(box.hasAttribute("data-dragging")).toBe(false);
+    await waitFor(() => expect(ui.getState().attachments.s_1).toHaveLength(2));
+    expect(
+      ui
+        .getState()
+        .attachments.s_1?.map((b) => b.type)
+        .toSorted(),
+    ).toEqual(["file_ref", "image"]);
   });
 });

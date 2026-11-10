@@ -7,7 +7,14 @@
 import type { SessionView } from "@cupper/host-client";
 import type { HistoryCursor } from "@cupper/protocol";
 import { elementScroll, useVirtualizer } from "@tanstack/react-virtual";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+} from "react";
 
 import { useHost } from "../app/providers";
 import { flatten, type History } from "../rows/flatten";
@@ -19,6 +26,9 @@ import { useEntry, type StreamStore } from "../state/stream";
 import { StreamActions } from "./actions";
 import { ComposerOverlays, runningPlan } from "./ComposerOverlays";
 import { ScrollKeeper } from "./scroll";
+
+/** The keys that scroll the list it has the focus in. */
+const SCROLL_KEYS = new Set(["PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown", " "]);
 
 /** The row that shows `itemId`, alone or in its activity group. */
 const holds = (row: StreamRow, itemId: string) =>
@@ -103,7 +113,7 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
     const { scrollTop, scrollHeight, clientHeight } = element;
     if (restored !== undefined) {
       element.scrollTop = restored;
-    } else if (keeper.follows(scrollTop, scrollHeight, clientHeight)) {
+    } else if (keeper.follows(scrollTop, scrollHeight, clientHeight, performance.now())) {
       element.scrollTop = scrollHeight;
     } else {
       return;
@@ -127,9 +137,31 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
   const onScroll = () => {
     const element = scroller.current;
     if (element) {
-      setStuck(keeper.scrolled(element.scrollTop, element.scrollHeight, element.clientHeight));
+      const { scrollTop, scrollHeight, clientHeight } = element;
+      setStuck(keeper.scrolled(scrollTop, scrollHeight, clientHeight, performance.now()));
     }
   };
+  const intend = () => keeper.intend(performance.now());
+  // A press on the list itself, not on a row, is on its scrollbar: held until let go.
+  const hold = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    keeper.intend(performance.now(), true);
+    const letGo = () => keeper.letGo(performance.now());
+    window.addEventListener("pointerup", letGo, { once: true });
+    window.addEventListener("pointercancel", letGo, { once: true });
+  };
+  // At the bottom, a list of another size goes back to it once laid out.
+  useEffect(() => {
+    const element = scroller.current;
+    if (!element) return undefined;
+    const observer = new ResizeObserver(() => {
+      if (!keeper.stuck) return;
+      element.scrollTop = element.scrollHeight;
+      keeper.put(element.scrollTop);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [keeper]);
   const toBottom = () => {
     keeper.stuck = true;
     setStuck(true);
@@ -151,7 +183,7 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
     if (jump === undefined) return;
     const index = rows.findIndex((row) => holds(row, jump));
     if (index !== -1) {
-      keeper.stuck = false;
+      keeper.leave();
       setStuck(false);
       virtualizer.scrollToIndex(index, { align: "center" });
     }
@@ -160,7 +192,7 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
   const plan = runningPlan(rows);
   const toPlan = () => {
     const index = rows.findIndex((row) => row.key === plan?.key);
-    keeper.stuck = false;
+    keeper.leave();
     setStuck(false);
     virtualizer.scrollToIndex(index, { align: "start" });
   };
@@ -168,7 +200,16 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
   return (
     <StreamActions value={{ sessionId, loadEarlier, toggleTurn, jumpTo }}>
       <div className="relative min-h-0 flex-1">
-        <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto" data-stream-list>
+        <div
+          ref={scroller}
+          onScroll={onScroll}
+          onWheel={intend}
+          onTouchMove={intend}
+          onKeyDown={(event) => SCROLL_KEYS.has(event.key) && intend()}
+          onPointerDown={hold}
+          className="h-full overflow-y-auto [overflow-anchor:none]"
+          data-stream-list
+        >
           <div className="relative w-full" style={{ height: total }}>
             {virtualizer.getVirtualItems().map((item) => {
               const row = rows[item.index];
