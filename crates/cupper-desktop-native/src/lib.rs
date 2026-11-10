@@ -102,6 +102,23 @@ pub fn file_cdhash(path: String) -> napi::Result<String, Code> {
     Ok(cdhash.to_string())
 }
 
+/// Makes sure LaunchServices has the host bundle at `bundle` registered, so
+/// that the notification service accepts it (design 5.2.9 rule 1, 5.7.2):
+/// `already` or `registered`.
+#[napi]
+pub fn ensure_host_registered(bundle: String) -> napi::Result<String, Code> {
+    let bundle = std::path::Path::new(&bundle);
+    let id = cupper_sys::bundle_identifier(bundle)
+        .ok_or_else(|| fail("invalid_argument", "not a bundle with an identifier"))?;
+    let registration =
+        cupper_sys::ensure_registered(bundle, &id).map_err(|err| fail("unexpected", err))?;
+    Ok(match registration {
+        cupper_sys::Registration::Already => "already",
+        cupper_sys::Registration::Registered => "registered",
+    }
+    .into())
+}
+
 /// How to start the host (design 5.7.2, 5.8.5).
 #[napi(object)]
 pub struct HostCommand {
