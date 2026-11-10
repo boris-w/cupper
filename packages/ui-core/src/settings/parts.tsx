@@ -1,11 +1,15 @@
 // The settings page's building blocks (ui-spec 4.7): a section of rows, and a
 // row with its label and description on the left, its control on the right.
 
+import type { SettingsPatch } from "@cupper/protocol";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { useT, type Translate } from "../app/providers";
+import { useHost, useT, type Translate } from "../app/providers";
+import { Switch } from "../components/Switch";
 import { codeOf } from "../composer/send";
 import { useToasts } from "../feedback/toaster";
+import { useStreams } from "../state/provider";
+import { useEntry } from "../state/stream";
 
 /** A section under its heading; `focused` brings it into view and gives it focus. */
 export function Section(props: {
@@ -55,6 +59,42 @@ export function Row(props: {
       {props.children}
     </div>
   );
+}
+
+/** A row with a switch, off and disabled until `checked` is known. */
+export function SwitchRow(props: {
+  label: string;
+  description?: string;
+  checked: boolean | undefined;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <Row label={props.label} description={props.description}>
+      <Switch
+        label={props.label}
+        checked={props.checked ?? false}
+        disabled={props.checked === undefined}
+        onCheckedChange={props.onChange}
+      />
+    </Row>
+  );
+}
+
+/**
+ * The host's settings as the index stream has them, once it has; `update`
+ * changes some of them with `settings/update`, and a toast says when it fails.
+ */
+export function useSettings() {
+  const t = useT();
+  const { client } = useHost();
+  const { show } = useToasts();
+  const { view } = useStreams().index;
+  useEntry(view, "settings");
+  const update = (patch: SettingsPatch) =>
+    void client.command("settings/update", { patch }).catch((error: unknown) => {
+      show({ id: "settings", text: t("settings:update_failed", { code: codeOf(error) }) });
+    });
+  return { settings: view.toJSON().settings?.settings, update };
 }
 
 export const BUTTON =

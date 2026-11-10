@@ -13,6 +13,9 @@ import { AgentsSection } from "./AgentsSection";
 import { ArchivedSection } from "./ArchivedSection";
 import { CliSection } from "./CliSection";
 import { ConnectionsSection } from "./ConnectionsSection";
+import { GeneralSection } from "./GeneralSection";
+import { NotificationsSection } from "./NotificationsSection";
+import { StorageSection } from "./StorageSection";
 
 interface Entry {
   id: string;
@@ -22,9 +25,12 @@ interface Entry {
 
 /** The sections in the navigation's order; a page is one more line here (T147, T248). */
 const SECTIONS: readonly [Entry, ...Entry[]] = [
+  { id: "general", Body: GeneralSection },
+  { id: "notifications", Body: NotificationsSection },
   { id: "archived", Body: ArchivedSection },
   { id: "agents", Body: AgentsSection },
   { id: "connections", Body: ConnectionsSection },
+  { id: "storage", Body: StorageSection },
   { id: "cli", Body: CliSection },
 ];
 

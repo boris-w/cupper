@@ -16,6 +16,7 @@ use crate::gateway::testkit::Peer;
 use crate::ledger::Ledger;
 use crate::store::open_reader;
 use crate::store::testutil::{TempDir, host_writer, query};
+use crate::supervisor::power::{Input, Power};
 
 fn desktop(role: ClientRole, scopes: &[Scope]) -> Principal {
     Principal {
@@ -93,9 +94,11 @@ async fn unit_settings_update_writes_its_keys_and_finds_the_agents_again() {
         &Durations::default(),
     );
     let mut routes = Routes::new(ledger.unwrap());
+    let (power, mut powers) = Power::new();
     let port = SettingsPort {
         settings: settings.clone(),
         rediscover,
+        power,
     };
     let port = Arc::new(port) as Arc<dyn Port>;
     routes.add::<SettingsGet>(Arc::clone(&port));
@@ -107,7 +110,7 @@ async fn unit_settings_update_writes_its_keys_and_finds_the_agents_again() {
     let update = |command: &str, patch| json!({"command_id": command, "patch": patch});
     // An ordinary key, from a window: written, and no agent reads it.
     let ordinary = update("c-1", json!({"notifications.error": false}));
-    let done = Peer::new(window)
+    let done = Peer::new(window.clone())
         .call(&routes, "settings/update", ordinary)
         .await;
     assert_eq!(done.unwrap()["settings"]["notifications.error"], false);
@@ -115,6 +118,14 @@ async fn unit_settings_update_writes_its_keys_and_finds_the_agents_again() {
     // What the index follows for `settings.updated` (T151).
     assert!(changes.has_changed().unwrap());
     assert!(!changes.borrow_and_update().notify_error);
+    // The power assertion follows `host.prevent_idle_sleep` (T147).
+    assert_eq!(powers.try_recv().unwrap().0, Input::Enabled(true));
+    let awake = update("c-4", json!({"host.prevent_idle_sleep": false}));
+    let done = Peer::new(window)
+        .call(&routes, "settings/update", awake)
+        .await;
+    assert_eq!(done.unwrap()["settings"]["host.prevent_idle_sleep"], false);
+    assert_eq!(powers.try_recv().unwrap().0, Input::Enabled(false));
     // A security-related key, from the privileged control connection: the
     // agents are found again before the reply.
     let passthrough = update("c-2", json!({"agents.env_passthrough": ["API_KEY"]}));
@@ -147,6 +158,7 @@ async fn unit_settings_update_writes_its_keys_and_finds_the_agents_again() {
         rows,
         [
             "agents.env_passthrough=[\"API_KEY\"]",
+            "host.prevent_idle_sleep=false",
             "notifications.error=false"
         ]
     );

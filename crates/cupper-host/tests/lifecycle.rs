@@ -32,7 +32,7 @@ use cupper_protocol::error::ErrorReason;
 use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::methods::Empty;
 use cupper_protocol::methods::admin::{
-    AuthElevationGet, AuthElevationRespond, DiagRecordingExport, TestClockAdvance,
+    AuthElevationGet, AuthElevationRespond, DiagRecordingExport, SettingsUpdate, TestClockAdvance,
 };
 use cupper_protocol::methods::handshake::{
     ClientPresence, ClientPresenceParams, HostExit, HostExitParams, HostStatus,
@@ -1603,7 +1603,9 @@ async fn it_runtime_first_prompt_waits_for_the_install() {
 /// the turn ends: `pmset` lists it under the host's pid, and `host.updated`
 /// says so each time it changes. A host killed with SIGKILL leaves none
 /// behind, and the next start says it holds none. A request outside a turn
-/// never comes (5.3), so the core's tests cover a request alone.
+/// never comes (5.3), so the core's tests cover a request alone. With
+/// `host.prevent_idle_sleep` off (T147), from the start on, a turn holds
+/// nothing; the switch takes and releases at once while a turn runs.
 #[tokio::test]
 async fn it_power_assertion_follows_turns_and_requests_and_ends_with_the_host() {
     let dir = TempDir::new("power");
@@ -1615,9 +1617,7 @@ async fn it_power_assertion_follows_turns_and_requests_and_ends_with_the_host() 
     let allow = json!({"type": "selected", "option_id": "allow-once"});
     respond(&client, &session, &asked[0], allow).await.unwrap();
     events(&data_dir, &session, "interaction.resolved", 1).await;
-    let params = json!({"command_id": client::command_id(), "session_id": session});
-    let interrupt = client.request::<SessionInterrupt>(typed(params));
-    interrupt.await.unwrap();
+    interrupt(&client, &session).await;
     events(&data_dir, &session, "turn.completed", 1).await;
     // Held once, from the request to the turn's end.
     awake(&data_dir, pid, &["0", "1", "0"]).await;
@@ -1630,13 +1630,51 @@ async fn it_power_assertion_follows_turns_and_requests_and_ends_with_the_host() 
     assert!(kill.unwrap().success());
     assert_eq!(host.0.wait().unwrap().signal(), Some(9));
     held_by(pid, false).await;
-    let host = Running(spawn_from(
-        Path::new(HOST),
-        &data_dir,
-        fake_agent_config(json!({})),
-    ));
-    drop(connect(&data_dir).await);
+    let start = || {
+        Running(spawn_from(
+            Path::new(HOST),
+            &data_dir,
+            fake_agent_config(json!({})),
+        ))
+    };
+    let mut host = start();
+    let client = connect(&data_dir).await;
     awake(&data_dir, host.0.id(), &["0", "1", "0", "1", "0"]).await;
+
+    keep_awake(&client, false).await;
+    terminate(&host.0);
+    assert_eq!(exit_code(&mut host.0).await, 0);
+    let host = start();
+    let pid = host.0.id();
+    let client = connect(&data_dir).await;
+    let session = create(&client, "wait_cancel").await;
+    events(&data_dir, &session, "turn.started", 1).await;
+    interrupt(&client, &session).await;
+    events(&data_dir, &session, "turn.completed", 1).await;
+    let said = ["0", "1", "0", "1", "0", "0"];
+    awake(&data_dir, pid, &said).await;
+    keep_awake(&client, true).await;
+    send(&client, &session, "wait_cancel").await;
+    awake(&data_dir, pid, &[&said[..], &["1"]].concat()).await;
+    keep_awake(&client, false).await;
+    awake(&data_dir, pid, &[&said[..], &["1", "0"]].concat()).await;
+}
+
+async fn interrupt(client: &client::Client, session: &SessionId) {
+    let params = json!({"command_id": client::command_id(), "session_id": session});
+    client
+        .request::<SessionInterrupt>(typed(params))
+        .await
+        .unwrap();
+}
+
+async fn keep_awake(client: &client::Client, on: bool) {
+    let patch = json!({"host.prevent_idle_sleep": on});
+    let params = json!({"command_id": client::command_id(), "patch": patch});
+    client
+        .request::<SettingsUpdate>(typed(params))
+        .await
+        .unwrap();
 }
 
 /// Waits until `host.updated` has said `said` of the power assertion, and

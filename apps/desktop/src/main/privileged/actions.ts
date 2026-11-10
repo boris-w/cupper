@@ -56,7 +56,8 @@ async function described(cx: Cx, method: string, params: Record<string, unknown>
     const value = description.details[key];
     return typeof value === "string" ? value : undefined;
   };
-  return { command, mode: text("mode"), projectPath: text("project_path") };
+  const { details } = description;
+  return { command, details, mode: text("mode"), projectPath: text("project_path") };
 }
 
 async function title(cx: Cx, sessionId: string): Promise<string> {
@@ -80,6 +81,8 @@ export function run(action: PrivilegedAction, cx: Cx): Promise<PrivilegedResult>
       return addProject(cx);
     case "elevation":
       return elevation(cx, action.elevation_id);
+    case "purge_snapshots":
+      return purgeSnapshots(cx);
     case "install_cli":
       return installTheCli(cx);
     default:
@@ -204,6 +207,17 @@ async function addProject(cx: Cx): Promise<PrivilegedResult> {
   // Nothing in the scan: the host trusted it on its own (`auto_empty`).
   const trusted = scan.state === "trusted" || (await trust(cx, project_id));
   return { status: "confirmed", result: { project_id, trusted } };
+}
+
+/** What the snapshot stores take now, then the purge; the host refuses it while a turn runs. */
+async function purgeSnapshots(cx: Cx): Promise<PrivilegedResult> {
+  const { command, details } = await described(cx, "host/purge_snapshots", {});
+  const bytes = typeof details.snapshot_bytes === "number" ? details.snapshot_bytes : 0;
+  if (!(await asked(cx, box.purgeBox(cx.t, bytes))).yes) {
+    return CANCELLED;
+  }
+  await cx.host.command("host/purge_snapshots", command);
+  return CONFIRMED;
 }
 
 async function elevation(cx: Cx, elevationId: string): Promise<PrivilegedResult> {
