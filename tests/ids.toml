@@ -1136,6 +1136,7 @@ MAN-notification = { parts = ["MAN-notification-spike", "MAN-notification-produc
 [T253]
 milestone = "M1b"
 UNIT-install-cli = "pr"
+UI-settings-cli = "pr"
 
 # App 图标颜色（v1.3.91 新增；不在 M1b 的退出条件里，所以里程碑是 release）
 [T252]

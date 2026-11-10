@@ -598,3 +598,4 @@
 | T147 及以后往设置页加页的任务 | 分页表的形状固定为 `{ id, Body }`，`Body` 接收 `focus`，加一页加一行；新页标题的文案键是 `settings:section_<id>`；命令按钮用 `settings/parts.tsx` 的 `CommandButton`，文案键按 `<name>`、`<name>_busy`、`<name>_failed` 命名 | T248 |
 | T251 | 点击的回调要给通知中心设代理（T250 没设，宿主不在前台时横幅照常出现）；通知的 `userInfo` 带会话 ID 和请求 ID，或者由通知 ID（就是意图 ID `n_…`）反查；测试用的点击入口接在 `test_config.notifier: record` 上 | T250 |
 | 读通知内容属性的代码 | objc2 的 `UNMutableNotificationContent.subtitle` 没设置时返回 nil，绑定却声明为非空，一调用就 panic；产品代码不读它 | T250 |
+| 维护 i18n 的任务（T154 等） | 同一个 JSON 文案文件里重复的键，后写的会悄悄覆盖先写的，i18n 的用例查不出来（T253 在 `settings.json` 里重复过 `cli`，靠 T151 的用例才发现）；可以给 i18n 的检查加一条重复键检测 | T253 |
