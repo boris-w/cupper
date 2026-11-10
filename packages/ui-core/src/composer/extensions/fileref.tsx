@@ -1,9 +1,10 @@
 // File references (design 5.7.4, CP-2): `@` in the text area opens a list of
 // the workspace's files from `files/search`, the matched characters bold by
 // their UTF-16 ranges; ↑↓ pick, Enter or Tab takes one, Esc closes. A file
-// taken, or dropped on the composer, becomes a `file_ref` attachment, its path
-// relative to the workspace. A dropped file's path comes from the shell
-// (`pathForFile`); one outside the workspace is refused with a hint.
+// taken, or dropped on the composer, becomes a `file_ref` attachment, its
+// path relative to the workspace; a dropped image is `image.tsx`'s. A dropped
+// file's path comes from the shell (`pathForFile`); one outside the
+// workspace is refused with a hint.
 
 import type { FileMatch, FilesSearchResult, PromptBlock } from "@cupper/protocol";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -18,6 +19,7 @@ import { useStreams, useUi } from "../../state/provider";
 import { OverlayContext, type ComposerExtension } from "../extensions";
 import { composing } from "../keys";
 import { NEW_DRAFT, useSessionState } from "../send";
+import { isImage } from "./image";
 
 const LIMIT = 20;
 
@@ -146,7 +148,10 @@ function FileRefs({ sessionId }: { sessionId?: string }) {
       if ((event as DragEvent).dataTransfer?.types.includes("Files")) event.preventDefault();
     };
     const drop = (event: Event) => {
-      const files = [...((event as DragEvent).dataTransfer?.files ?? [])];
+      // Images are attachments of their own (`image.tsx`).
+      const files = [...((event as DragEvent).dataTransfer?.files ?? [])].filter(
+        (f) => !isImage(f),
+      );
       if (files.length === 0) return;
       event.preventDefault();
       const paths = files.map((file) => {
