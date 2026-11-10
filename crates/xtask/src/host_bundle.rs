@@ -23,6 +23,9 @@ use crate::runtime_pack::{hash_tree, mismatch};
 /// A build kind of design 5.7.9.
 pub struct Kind {
     pub name: &'static str,
+    /// The kind's display name, which the host takes too: notifications and
+    /// System Settings show the host bundle's own name (design 5.10.1).
+    pub display_name: &'static str,
     pub host_id: &'static str,
     pub host_features: &'static [&'static str],
     pub cli_id: &'static str,
@@ -35,6 +38,7 @@ pub struct Kind {
 pub const KINDS: &[Kind] = &[
     Kind {
         name: "release",
+        display_name: "Cupper",
         host_id: "dev.cupper.app.host",
         host_features: &[],
         cli_id: "dev.cupper.cli",
@@ -43,6 +47,7 @@ pub const KINDS: &[Kind] = &[
     },
     Kind {
         name: "self-use",
+        display_name: "Cupper Local",
         host_id: "dev.cupper.app.local.host",
         host_features: &["dev-auth"],
         cli_id: "dev.cupper.cli.local",
@@ -51,6 +56,7 @@ pub const KINDS: &[Kind] = &[
     },
     Kind {
         name: "e2e",
+        display_name: "Cupper E2E",
         host_id: "dev.cupper.app.e2e.host",
         host_features: &["dev-auth", "test-harness"],
         cli_id: "dev.cupper.cli.e2e",
@@ -59,6 +65,7 @@ pub const KINDS: &[Kind] = &[
     },
     Kind {
         name: "dev",
+        display_name: "cupper Dev",
         host_id: "dev.cupper.app.dev.host",
         host_features: &["dev-auth"],
         cli_id: "dev.cupper.cli.dev",
@@ -180,8 +187,7 @@ pub fn bundle(root: &Path, options: &Options) -> Result<Bundle> {
     }
     fs::create_dir_all(contents.join("MacOS")).context("cannot create MacOS/")?;
     fs::copy(&host, contents.join("MacOS/cupper-host")).context("cannot copy the host")?;
-    fs::write(contents.join("Info.plist"), info_plist(kind.host_id))
-        .context("cannot write Info.plist")?;
+    fs::write(contents.join("Info.plist"), info_plist(kind)).context("cannot write Info.plist")?;
 
     let signing = |identifier| Signing {
         identifier,
@@ -281,18 +287,22 @@ fn copy_tree(from: &Path, to: &Path) -> Result<()> {
 }
 
 /// The host's Info.plist (design 5.10.1): an agent app with no usage
-/// descriptions at all (security #13).
-fn info_plist(identifier: &str) -> String {
+/// descriptions at all (security #13), named as its build kind. The icon
+/// comes with the app's own, before T250 (T150 ruling): the notification
+/// service reads both only when the host first connects to it.
+fn info_plist(kind: &Kind) -> String {
+    let (identifier, name) = (kind.host_id, kind.display_name);
     let version = env!("CARGO_PKG_VERSION");
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleDisplayName</key><string>{name}</string>
 	<key>CFBundleExecutable</key><string>cupper-host</string>
 	<key>CFBundleIdentifier</key><string>{identifier}</string>
 	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-	<key>CFBundleName</key><string>CupperHost</string>
+	<key>CFBundleName</key><string>{name}</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>{version}</string>
 	<key>CFBundleVersion</key><string>{version}</string>
@@ -442,9 +452,11 @@ mod tests {
                 .collect()
         };
         let hosts: Vec<&str> = KINDS.iter().map(|kind| kind.host_id).collect();
+        let names: Vec<&str> = KINDS.iter().map(|kind| kind.display_name).collect();
         let clis: Vec<&str> = KINDS.iter().map(|kind| kind.cli_id).collect();
         assert_eq!(row("| 宿主的 bundle id |"), hosts);
         assert_eq!(row("| CLI 的 identifier |"), clis);
+        assert_eq!(row("| 显示名称 |"), names);
 
         let args = |list: &[&str]| list.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>();
         let parsed = parse(&args(&["--kind", "e2e", "--debug"]), Path::new("/r")).expect("valid");
@@ -454,5 +466,29 @@ mod tests {
         assert!(!parsed.release);
         assert!(parse(&args(&["--kind", "beta"]), Path::new("/r")).is_err());
         assert!(parse(&[], Path::new("/r")).is_err());
+    }
+
+    /// Each kind's host is named as the kind's app, where notifications and
+    /// System Settings show it (design 5.7.9, 5.10.1).
+    #[test]
+    fn unit_host_bundle_identity_names_each_host_as_its_kind() {
+        let dir = TempDir::new("host-plist");
+        for kind in KINDS {
+            let file = dir.path().join(format!("{}.plist", kind.name));
+            fs::write(&file, info_plist(kind)).expect("write");
+            let json = Command::new("plutil")
+                .args(["-convert", "json", "-o", "-"])
+                .arg(&file)
+                .output()
+                .expect("plutil");
+            let plist: Value = serde_json::from_slice(&json.stdout).expect("a well-formed plist");
+            assert_eq!(plist["CFBundleIdentifier"], kind.host_id);
+            assert_eq!(
+                plist["CFBundleDisplayName"], kind.display_name,
+                "{}",
+                kind.name
+            );
+            assert_eq!(plist["CFBundleName"], kind.display_name, "{}", kind.name);
+        }
     }
 }

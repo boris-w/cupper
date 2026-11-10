@@ -45,6 +45,12 @@ export interface LaunchConfig {
   env: Record<string, string>;
   /** Keyed builds: more of the startup payload, asked for once (e2e: `harness_key`, `test_config`). */
   payload?: () => Record<string, unknown>;
+  /**
+   * Before each start: makes sure LaunchServices has the host bundle, whose
+   * notifications are refused otherwise (design 5.2.9, 5.7.2). E2E builds
+   * have none: their notifications are only recorded.
+   */
+  register?: () => void;
   clock?: Clock;
   /** Tests stand in for the socket and the handshake. */
   open?: typeof openConnection;
@@ -91,6 +97,7 @@ export class HostLauncher {
     if (this.installing) {
       throw new HostFailure("updating");
     }
+    this.#config.register?.();
     const clock = this.#config.clock ?? realClock;
     const start = clock.now();
     let exited: Promise<number | undefined> | undefined = this.#spawn().exit.then((e) => e.code);

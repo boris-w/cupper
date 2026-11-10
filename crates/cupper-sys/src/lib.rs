@@ -14,6 +14,7 @@ mod codesign;
 mod env;
 mod exit;
 mod group;
+mod launch_services;
 mod peer;
 mod power;
 mod proc;
@@ -30,6 +31,7 @@ pub use codesign::{
 pub use env::Env;
 pub use exit::ExitWatch;
 pub use group::{ProcessGroup, Signal};
+pub use launch_services::{Registration, bundle_identifier, ensure_registered, registered_apps};
 #[cfg(any(test, feature = "test-util"))]
 pub use peer::send_with_fds;
 pub use peer::{
@@ -43,6 +45,8 @@ pub use proc::{
     ProcessInfo, StartTime, UniqueIds, descendants, has_tty, parent_chain, pid_path, process_info,
     resident_size, unique_ids,
 };
+#[cfg(any(test, feature = "test-util"))]
+pub use runloop::quit_once_running;
 pub use runloop::{RunLoop, RunLoopStop};
 pub use spawn::{Child, Command, Stdio, spawn};
 pub use system::{
@@ -61,6 +65,9 @@ pub enum Error {
     /// A Security framework call returned this `OSStatus`.
     #[error("{call} returned OSStatus {status}")]
     Security { call: &'static str, status: i32 },
+    /// A LaunchServices call returned this `OSStatus`.
+    #[error("{call} returned OSStatus {status}")]
+    LaunchServices { call: &'static str, status: i32 },
     /// An IOKit call returned this `IOReturn`.
     #[error("{call} returned IOReturn {status:#x}")]
     IoKit { call: &'static str, status: i32 },

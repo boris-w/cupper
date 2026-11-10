@@ -128,7 +128,9 @@ pub enum Exit {
     /// `host/exit`.
     Requested { force: bool },
     /// SIGTERM, e.g. from the desktop restarting a host it cannot reach
-    /// (design 5.8.1, Q22): running turns are interrupted.
+    /// (design 5.8.1, Q22), or the quit Apple Event of logout, shutdown and
+    /// Activity Monitor's "Quit" (design 5.2.13): running turns are
+    /// interrupted.
     Terminated,
     /// The store writer died: exit 1, without `last_clean_exit_at`.
     WriterDied,
@@ -156,6 +158,8 @@ pub struct Host {
     audit: mpsc::UnboundedSender<AuditRecord>,
     drain: audit::Drain,
     exits: mpsc::UnboundedReceiver<Exit>,
+    /// For the quit Apple Event, which comes to the main thread.
+    quit: mpsc::UnboundedSender<Exit>,
     terminate: Signal,
     socket: PathBuf,
     power: Power,
@@ -528,7 +532,7 @@ impl Host {
             gateway: Arc::downgrade(&gateway),
             index: index.clone(),
             admission,
-            exits: to_supervisor,
+            exits: to_supervisor.clone(),
             parent: cfg!(feature = "dev-auth").then(std::os::unix::process::parent_id),
             installing,
             audit: audit.clone(),
@@ -536,6 +540,8 @@ impl Host {
         let terminate = signal(SignalKind::terminate())?;
         let (listener, socket) = lock.bind()?;
         let serving = tokio::spawn(Arc::clone(&gateway).serve(listener));
+        #[cfg(not(feature = "test-harness"))]
+        register_bundle();
         Ok(Self {
             clock,
             writer,
@@ -548,6 +554,7 @@ impl Host {
             audit,
             drain: audit::Drain(drain),
             exits,
+            quit: to_supervisor,
             terminate,
             socket,
             power,
@@ -555,6 +562,15 @@ impl Host {
             quiescence,
             _lock: lock,
         })
+    }
+
+    /// What the quit Apple Event calls on the main thread: the orderly exit
+    /// SIGTERM starts (design 5.2.13).
+    pub fn quitter(&self) -> impl Fn() + 'static {
+        let quit = self.quit.clone();
+        move || {
+            let _ = quit.send(Exit::Terminated);
+        }
     }
 
     /// Serves until the orderly exit, which it then runs; the exit code.
@@ -648,6 +664,27 @@ impl Exit {
             Self::Upgrade => "upgrade",
         }
     }
+}
+
+/// Design 5.2.9, rule 1: the desktop registered the host's bundle with
+/// LaunchServices before it started the host; check again, off the startup
+/// path, and only log. Builds with the test harness never touch
+/// LaunchServices: their notifications are only recorded (design 5.9.9), and
+/// their tests run hosts in bundles of their own.
+#[cfg(not(feature = "test-harness"))]
+fn register_bundle() {
+    let bundle = BundleDir::of_this_host().ok().filter(BundleDir::is_app);
+    let identity = cupper_sys::own_signing_identity().ok().flatten();
+    let (Some(contents), Some(identity)) = (bundle, identity) else {
+        return;
+    };
+    tokio::task::spawn_blocking(move || {
+        let app = contents.0.parent().unwrap_or(&contents.0);
+        match cupper_sys::ensure_registered(app, &identity.identifier) {
+            Ok(registration) => tracing::info!(?registration, "the host bundle in LaunchServices"),
+            Err(err) => tracing::warn!("cannot register the host bundle: {err}"),
+        }
+    });
 }
 
 /// Sends `event` into the audit (design 5.8.6).

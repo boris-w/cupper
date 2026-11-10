@@ -108,6 +108,8 @@ interface NativeBase {
   processImage(pid: number): ProcessImage | null;
   /** The cdhash of the signed code at `path`, a bundle or an executable. */
   fileCdhash(path: string): string;
+  /** Registers the host bundle at `bundle` with LaunchServices unless it is (design 5.7.2). */
+  ensureHostRegistered(bundle: string): "already" | "registered";
 }
 
 /** A release build: no startup payload; the host must satisfy the requirement. */

@@ -1,0 +1,67 @@
+# T150 第 0 步：原型两个进程的事件（~/Library/Logs/dev.cupper.spike.sp10.log，时间为 UTC；前台的其他应用已替换为 <another app>）
+
+2026-11-10T02:37:46Z sp10-host[18522] start argv=["status"] ppid=18521 sid=18521 XPC_SERVICE_NAME=0 bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-11-10T02:37:47Z sp10-host[18522] running helpers=[18522] frontmost=<another app>
+2026-11-10T02:37:47Z sp10-host[18522] authorization=2 alert=2 style=1 delivered=[]
+2026-11-10T02:37:58Z sp10[18835] start argv=["spawn", "notify", "t1", "stay"] ppid=1
+2026-11-10T02:37:58Z sp10[18835] spawned helper rc=0 pid=18837
+2026-11-10T02:37:58Z sp10[18835] became active
+2026-11-10T02:37:58Z sp10-host[18837] start argv=["notify", "t1", "stay"] ppid=18835 sid=18837 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-11-10T02:37:58Z sp10-host[18837] requestAuthorization granted=true error=nil
+2026-11-10T02:37:58Z sp10-host[18837] posted t1 error=nil
+2026-11-10T02:37:58Z sp10-host[18837] authorization=2 alert=2 style=1 delivered=["sp10-t1"]
+2026-11-10T02:37:59Z sp10-host[18837] running helpers=[18837] frontmost=dev.cupper.spike.sp10
+2026-11-10T02:38:18Z sp10-host[18837] didReceive sp10-t1 action=com.apple.UNNotificationDefaultActionIdentifier main-thread=true
+2026-11-10T02:38:18Z sp10-host[18837] main app by id=/Applications/SP10.app enclosing=/Applications/SP10.app frontmost=<another app>
+2026-11-10T02:38:18Z sp10[18835] became active
+2026-11-10T02:38:19Z sp10-host[18837] activate() -> true, frontmost=dev.cupper.spike.sp10.host
+2026-11-10T02:38:19Z sp10[18835] became active
+2026-11-10T02:38:20Z sp10-host[18837] openApplication error=nil frontmost=dev.cupper.spike.sp10
+2026-11-10T02:38:23Z sp10-host[18837] exit after the click
+2026-11-10T02:38:29Z sp10[18835] became active
+2026-11-10T02:38:55Z sp10[19973] start argv=["spawn-quit", "notify", "t2", "stay"] ppid=1
+2026-11-10T02:38:55Z sp10[19973] spawned helper rc=0 pid=19978
+2026-11-10T02:38:55Z sp10-host[19978] start argv=["notify", "t2", "stay"] ppid=19973 sid=19978 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-11-10T02:38:55Z sp10-host[19978] requestAuthorization granted=true error=nil
+2026-11-10T02:38:55Z sp10-host[19978] posted t2 error=nil
+2026-11-10T02:38:55Z sp10-host[19978] authorization=2 alert=2 style=1 delivered=["sp10-t2"]
+2026-11-10T02:38:56Z sp10-host[19978] running helpers=[19978] frontmost=<another app>
+2026-11-10T02:41:13Z sp10-host[19978] didReceive sp10-t2 action=com.apple.UNNotificationDefaultActionIdentifier main-thread=true
+2026-11-10T02:41:13Z sp10-host[19978] main app by id=/Applications/SP10.app enclosing=/Applications/SP10.app frontmost=<another app>
+2026-11-10T02:41:13Z sp10-host[19978] open sp10-spike://session/t2 -> pid=22107 error=nil
+2026-11-10T02:41:13Z sp10[22107] opened sp10-spike://session/t2
+2026-11-10T02:41:13Z sp10[22107] start argv=[] ppid=1
+2026-11-10T02:41:13Z sp10[22107] became active
+2026-11-10T02:41:15Z sp10-host[19978] frontmost=dev.cupper.spike.sp10
+2026-11-10T02:41:18Z sp10-host[19978] exit after the click
+2026-11-10T02:41:31Z sp10[22107] became active
+2026-11-10T02:42:00Z sp10[23129] start argv=["spawn", "notify", "t3", "stay"] ppid=1
+2026-11-10T02:42:00Z sp10[23129] spawned helper rc=0 pid=23155
+2026-11-10T02:42:00Z sp10[23129] became active
+2026-11-10T02:42:00Z sp10-host[23155] start argv=["notify", "t3", "stay"] ppid=23129 sid=23155 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-11-10T02:42:00Z sp10-host[23155] requestAuthorization granted=true error=nil
+2026-11-10T02:42:00Z sp10-host[23155] posted t3 error=nil
+2026-11-10T02:42:00Z sp10-host[23155] authorization=2 alert=2 style=1 delivered=["sp10-t3"]
+2026-11-10T02:42:01Z sp10-host[23155] running helpers=[23155] frontmost=dev.cupper.spike.sp10
+2026-11-10T02:42:23Z sp10[23129] became active
+2026-11-10T02:42:27Z sp10-host[23155] didReceive sp10-t3 action=com.apple.UNNotificationDefaultActionIdentifier main-thread=true
+2026-11-10T02:42:27Z sp10-host[23155] main app by id=/Applications/SP10.app enclosing=/Applications/SP10.app frontmost=<another app>
+2026-11-10T02:42:27Z sp10[23129] became active
+2026-11-10T02:42:28Z sp10-host[23155] activate() -> true, frontmost=dev.cupper.spike.sp10.host
+2026-11-10T02:42:28Z sp10[23129] became active
+2026-11-10T02:42:29Z sp10-host[23155] openApplication error=nil frontmost=dev.cupper.spike.sp10
+2026-11-10T02:42:32Z sp10-host[23155] exit after the click
+2026-11-10T02:42:38Z sp10[23129] became active
+2026-11-10T02:42:56Z sp10[24137] start argv=["spawn", "notify", "t3b", "stay"] ppid=1
+2026-11-10T02:42:56Z sp10[24137] spawned helper rc=0 pid=24145
+2026-11-10T02:42:56Z sp10[24137] became active
+2026-11-10T02:42:56Z sp10-host[24145] start argv=["notify", "t3b", "stay"] ppid=24137 sid=24145 XPC_SERVICE_NAME=- bundle=dev.cupper.spike.sp10.host registered=/Applications/SP10.app/Contents/Helpers/SP10Host.app
+2026-11-10T02:42:56Z sp10-host[24145] requestAuthorization granted=true error=nil
+2026-11-10T02:42:56Z sp10-host[24145] posted t3b error=nil
+2026-11-10T02:42:56Z sp10-host[24145] authorization=2 alert=2 style=1 delivered=["sp10-t3b"]
+2026-11-10T02:42:57Z sp10-host[24145] running helpers=[24145] frontmost=dev.cupper.spike.sp10
+2026-11-10T02:43:00Z sp10-host[24145] didReceive sp10-t3b action=com.apple.UNNotificationDefaultActionIdentifier main-thread=true
+2026-11-10T02:43:00Z sp10-host[24145] main app by id=/Applications/SP10.app enclosing=/Applications/SP10.app frontmost=<another app>
+2026-11-10T02:43:00Z sp10[24137] became active
+2026-11-10T02:43:01Z sp10-host[24145] activate() -> true, frontmost=dev.cupper.spike.sp10
+2026-11-10T02:43:05Z sp10-host[24145] exit after the click
