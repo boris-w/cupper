@@ -3,7 +3,7 @@
 // shows verbatim, its invisible characters escaped; the rest is
 // @cupper/i18n's `privileged` text.
 
-import { escapeInvisible } from "@cupper/i18n";
+import { escapeInvisible, formatBytes } from "@cupper/i18n";
 import type {
   AuthElevationGetResult,
   Finding,
@@ -141,6 +141,12 @@ export function trustBox(
     omitted > 0 && t("findings_omitted", { count: omitted }),
   );
   return box(t, t("trust_title"), detail, ["trust", "untrust"]);
+}
+
+/** The snapshot stores' size; turns from before cannot show or revert their changes after. */
+export function purgeBox(t: Translate, bytes: number) {
+  const detail = t("purge_detail", { size: formatBytes(bytes) });
+  return box(t, t("purge_title"), detail, ["purge", "cancel"]);
 }
 
 /** What the host verified, then what the requester says; approve has its own box, unchecked. */

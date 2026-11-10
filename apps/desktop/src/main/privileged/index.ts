@@ -109,6 +109,7 @@ const STRINGS: Record<string, string[]> = {
   trust_project: ["project_id"],
   elevation: ["elevation_id"],
   settings: [],
+  purge_snapshots: [],
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

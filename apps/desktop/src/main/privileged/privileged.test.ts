@@ -202,6 +202,32 @@ describe("UNIT-privileged", () => {
     expect(shown).toHaveLength(1);
   });
 
+  test("purge_snapshots: the size the host gives, cancelled by default; a running turn refuses", async () => {
+    const { host, clock, ask, shown, answers, sent } = await setup();
+    const details = { snapshot_bytes: 3 * 2 ** 30 };
+    host.handle("policy/describe", () => ({ result: { action: "purge_snapshots", details } }));
+    expect(await ask({ kind: "purge_snapshots" })).toEqual({ status: "cancelled" });
+    expect(shown[0]).toMatchObject({
+      message: t("purge_title"),
+      detail: t("purge_detail", { size: "3.0 GB" }),
+      defaultId: 1,
+    });
+    expect(sent("host/purge_snapshots")).toEqual([]);
+    clock.now += 2_000;
+    answers.push({ response: 0 }, { response: 0 });
+    host.handle("host/purge_snapshots", () => hostError("conflict", "turn_running"));
+    expect(await ask({ kind: "purge_snapshots" })).toEqual({
+      status: "failed",
+      error: { code: "conflict", reason: "turn_running" },
+    });
+    host.handle("host/purge_snapshots", () => ({
+      result: { freed_bytes: details.snapshot_bytes },
+    }));
+    expect(await ask({ kind: "purge_snapshots" })).toEqual({ status: "confirmed" });
+    const described = sent("policy/describe").at(-1)?.params as Record<string, unknown>;
+    expect(sent("host/purge_snapshots").at(-1)).toEqual(described);
+  });
+
   test("elevation: verified facts first, the requester's own words after; approve unchecked", async () => {
     const { host, ask, shown, answers, sent } = await setup();
     host.handle("auth/elevation_get", () => ({

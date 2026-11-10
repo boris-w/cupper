@@ -5,6 +5,7 @@
   "allow": "允许",
   "trust": "信任",
   "untrust": "不信任",
+  "purge": "清除",
   "interaction_title": "要批准 agent 的这个选项吗？",
   "interaction_detail": "请求：{{title}}\n选项：{{option}}",
   "effect_session": "本会话里同类操作不再询问。",
@@ -46,5 +47,7 @@
   "elevation_client": "名称：{{name}}",
   "elevation_reason": "理由：{{reason}}",
   "elevation_scopes": "申请的权限：{{scopes}}",
-  "elevation_approve": "同时允许它批准 agent 的请求（approve）"
+  "elevation_approve": "同时允许它批准 agent 的请求（approve）",
+  "purge_title": "要清除快照对象吗？",
+  "purge_detail": "快照对象现在占用 {{size}}。清除后，之前各回合的改动将不能再查看或撤销。"
 }

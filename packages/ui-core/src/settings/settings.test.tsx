@@ -103,6 +103,11 @@ const SETTINGS = {
     },
   },
 };
+/** The worktrees' walk ran out of time. */
+const STORAGE = {
+  ...{ host_db: 52428800, raw_db: 1048576, blobs: 2048, snapshots: 3 * 2 ** 30, worktrees: 900 },
+  ...{ partial: true, measured_at: 1700049600000 },
+};
 const archived = (n: number, title: string) => ({
   summary: { session_id: `s_${n}`, project_id: "p_1", title },
   archived_at: 1700049600000, // noon UTC: the same date in any time zone
@@ -128,6 +133,7 @@ async function setup() {
   for (const method of ["agents/restart", "session/restore", "settings/update"]) {
     mock.handle(method, ({ id, conn }) => void held.push((answer) => conn.reply(id, answer)));
   }
+  mock.handle("host/storage", () => ({ result: STORAGE }));
   mock.handle("session/list_archived", ({ params }) => ({
     result: PAGES[(params as { cursor?: object }).cursor ? 1 : 0],
   }));
@@ -304,5 +310,30 @@ describe("UI-settings-general", () => {
     const error = { code: -32000, message: "no", data: { code: "forbidden" } };
     await act(async () => held[0]?.({ error }));
     expect(screen.getByRole("status").textContent).toBe("设置没有保存（forbidden）");
+  });
+
+  test("storage: each size as text, 未统计完 for a walk cut short; the purge through the shell", async () => {
+    const { controls, mock, ui } = await setup();
+    act(() => ui.getState().navigate(toSettings(ui.getState().route, "storage")));
+    await act(() => new Promise((done) => setTimeout(done)));
+    const region = card("占用空间");
+    expect(within(region).getByText("未统计完")).toBeTruthy();
+    expect(texts(region)).toEqual([
+      ...["会话数据库会话的事件、索引和设置", "50 MB"],
+      ...["原始记录与 agent 往来的原始消息，用于诊断，保留 14 天", "1.0 MB"],
+      ...["附件图片和长文本", "2.0 KB"],
+      ...["快照对象回合前后的文件快照，用来查看和撤销各回合的改动", "3.0 GB", "清除"],
+      ...["worktreecupper 新建的 worktree", "900 B"],
+    ]);
+    const refused = { code: "conflict", reason: "turn_running" };
+    controls.setPrivilegedResult({ status: "failed", error: refused });
+    await act(async () => click("清除", region));
+    expect(controls.privilegedActions).toEqual([{ kind: "purge_snapshots" }]);
+    expect(screen.getByRole("status").textContent).toBe("有回合正在运行，先停下回合再清除");
+    controls.setPrivilegedResult({ status: "confirmed" });
+    await act(async () => click("清除", region));
+    const toasts = screen.getAllByRole("status").map((toast) => toast.textContent);
+    expect(toasts.at(-1)).toBe("已清除快照对象");
+    expect(mock.requests.filter((r) => r.method === "host/storage")).toHaveLength(2);
   });
 });

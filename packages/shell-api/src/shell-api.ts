@@ -201,7 +201,9 @@ export type PrivilegedAction =
   | { kind: "add_project" }
   | { kind: "trust_project"; project_id: ProjectId }
   | { kind: "elevation"; elevation_id: ElevationId }
-  | { kind: "settings"; patch: SettingsPatch };
+  | { kind: "settings"; patch: SettingsPatch }
+  /** `host/purge_snapshots`, after the native dialog says how much it frees. */
+  | { kind: "purge_snapshots" };
 
 export type PrivilegedResult =
   /** `create_session` comes with `{session_id}`, `add_project` with `{project_id}`. */

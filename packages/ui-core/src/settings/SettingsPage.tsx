@@ -13,6 +13,7 @@ import { AgentsSection } from "./AgentsSection";
 import { ArchivedSection } from "./ArchivedSection";
 import { ConnectionsSection } from "./ConnectionsSection";
 import { NotificationsSection } from "./NotificationsSection";
+import { StorageSection } from "./StorageSection";
 
 interface Entry {
   id: string;
@@ -26,6 +27,7 @@ const SECTIONS: readonly [Entry, ...Entry[]] = [
   { id: "archived", Body: ArchivedSection },
   { id: "agents", Body: AgentsSection },
   { id: "connections", Body: ConnectionsSection },
+  { id: "storage", Body: StorageSection },
 ];
 
 export function SettingsPage({ route }: { route: Extract<Route, { page: "settings" }> }) {
