@@ -32,10 +32,14 @@ pub use codesign::{
 pub use env::Env;
 pub use exit::ExitWatch;
 pub use group::{ProcessGroup, Signal};
-pub use launch_services::{Registration, bundle_identifier, ensure_registered, registered_apps};
+pub use launch_services::{
+    Registration, bundle_identifier, ensure_registered, open_app, open_url_with_app,
+    registered_apps,
+};
 pub use notify::{
-    Notice, NotificationAuth, notification_authorization, post_notification, preferred_language,
-    remove_delivered_notifications, request_notification_authorization,
+    Click, Notice, NotificationAuth, NotificationClicks, notification_authorization,
+    on_notification_click, post_notification, preferred_language, remove_delivered_notifications,
+    request_notification_authorization,
 };
 #[cfg(any(test, feature = "test-util"))]
 pub use peer::send_with_fds;

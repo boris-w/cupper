@@ -55,7 +55,7 @@ use crate::driver::probe::login_shell::LoginEnv;
 use crate::driver::runtime::agents::{Agents, Find};
 use crate::driver::runtime::launch::{self, Agent, Launch};
 use crate::driver::runtime::{AGENT_RUNTIME, AgentRuntime, RuntimeDeps};
-use crate::durations::Durations;
+use crate::durations::{Durations, NOTIFIER_SETTLE};
 use crate::exit::HostExit;
 use crate::files::{FileLists, FilesDeps, FilesService};
 use crate::gateway::listen::{HostLock, ListenError};
@@ -65,7 +65,7 @@ use crate::git::{GitDeps, GitService, GitTool, RepoLock};
 use crate::index::{INDEX, IndexDeps, IndexError, IndexHandle};
 use crate::ledger::{Ledger, LedgerError, SWEEPER};
 use crate::manifest;
-use crate::notifier::Notifier;
+use crate::notifier::{Click, Notifier};
 use crate::orchestrator::session::{SessionDeps, SessionManager};
 use crate::quiescence::Quiescence;
 use crate::requester::ProcessRequesters;
@@ -161,6 +161,8 @@ pub struct Host {
     exits: mpsc::UnboundedReceiver<Exit>,
     /// For the quit Apple Event, which comes to the main thread.
     quit: mpsc::UnboundedSender<Exit>,
+    /// For the clicks on notifications, which come to the main thread.
+    clicks: mpsc::UnboundedSender<Click>,
     terminate: Signal,
     socket: PathBuf,
     power: Power,
@@ -292,6 +294,8 @@ impl Host {
             record(&records, &*clock, event);
         }
         let notifier = notifier(&payload);
+        // Clicks on notifications: the system's and the test harness's.
+        let (clicks, mut clicked) = mpsc::unbounded_channel::<Click>();
         // Step 7: the index stream, before the socket.
         quiescence.register(INDEX);
         let index = IndexHandle::start(IndexDeps {
@@ -495,6 +499,8 @@ impl Host {
         .route(&mut routes);
         #[cfg(feature = "test-harness")]
         Arc::new(harness::Harness {
+            notifier: notifier.clone(),
+            clicks: clicks.clone(),
             clock: injected.manual.clone(),
             quiescence: quiescence.clone(),
             maintenance: Arc::new(maintain()),
@@ -540,6 +546,16 @@ impl Host {
         let gateway = Gateway::new(config, clock.clone(), durations.clone(), routes, records);
         control.serve_for(&gateway);
         index.serve_for(&gateway);
+        let (clicked_by, clicked_on, clicked_at) =
+            (notifier.clone(), Arc::clone(&gateway), clock.clone());
+        let settle = durations.get(NOTIFIER_SETTLE);
+        tokio::spawn(async move {
+            while let Some(click) = clicked.recv().await {
+                clicked_by
+                    .click(click, &clicked_on, &*clicked_at, settle)
+                    .await;
+            }
+        });
         if let Some(check) = self_check {
             gateway.check_self_with(check);
         }
@@ -574,6 +590,7 @@ impl Host {
             drain: audit::Drain(drain),
             exits,
             quit: to_supervisor,
+            clicks,
             terminate,
             socket,
             power,
@@ -591,6 +608,12 @@ impl Host {
         move || {
             let _ = quit.send(Exit::Terminated);
         }
+    }
+
+    /// Where the main thread sends the clicks on the host's notifications,
+    /// when it posts through UserNotifications (design 5.2.9).
+    pub fn notification_clicks(&self) -> Option<mpsc::UnboundedSender<Click>> {
+        self.notifier.posts().then(|| self.clicks.clone())
     }
 
     /// Serves until the orderly exit, which it then runs; the exit code.
@@ -879,7 +902,10 @@ fn notifier(payload: &Payload) -> Notifier {
     {
         use crate::startup::test_config::NotifierKind;
         match payload.test_config.notifier {
-            NotifierKind::Record => Notifier::record(crate::notifier::Language::of_system()),
+            NotifierKind::Record => {
+                let language = crate::notifier::Language::of_system();
+                Notifier::record(language, crate::notifier::click::Outer::of_this_host())
+            }
             NotifierKind::System => Notifier::off(),
         }
     }

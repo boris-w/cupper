@@ -58,7 +58,7 @@ impl Fx {
             readers,
             quiescence,
             settings,
-            notifier: Notifier::record(Language::English),
+            notifier: Notifier::record(Language::English, None),
         }
     }
 
