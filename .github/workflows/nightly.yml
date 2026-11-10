@@ -1,6 +1,7 @@
 # The nightly jobs that exist (design 5.1.6, plan 1.8), on main: the
 # differential test of the views, the peer checks on macOS 15 and 26 (Q24,
 # R7), the e2e suite in full, Cupper Local built and checked (T160), the
+# release configuration built unsigned and checked (T161), the
 # compat suite's framework, and the codex app-server methods codex-acp uses
 # against the newest codex (T114). `perf` and e2e's PERF tests only record
 # their numbers in the summary, judged against no budget: a runner is no
@@ -31,6 +32,7 @@ jobs:
           - { job: security-peer, runner: macos-26, timeout: 45 }
           - { job: e2e, runner: macos-15, timeout: 120 }
           - { job: selfuse, runner: macos-15, timeout: 60 }
+          - { job: release-config, runner: macos-15, timeout: 60 }
           - { job: perf, runner: macos-15, timeout: 60 }
           - { job: compat-framework, runner: macos-15, timeout: 60 }
           - { job: codex-drift, runner: ubuntu-24.04, timeout: 30 }

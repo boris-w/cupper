@@ -91,6 +91,10 @@ jobs:
           read -r -a extra <<< "$ARGS"
           # What libtest or Vitest prints when a test ran and passed.
           RAN='test result: ok\. [1-9][0-9]* passed|Tests +[1-9][0-9]* passed'
+          # Whether the log in $1 says so. Vitest colours its output on the
+          # runner (CI is set), with codes between "Tests" and the count: they
+          # go first. Not grep -q: with pipefail, perl cut off would fail it.
+          ran() { perl -pe 's/\e\[[0-9;?]*[A-Za-z]//g' "$1" | grep -E "$RAN" > /dev/null; }
           # One run: every binary, or vitest once; its output in $1.
           run() {
             if [ "$KIND" = cargo ]; then
@@ -117,7 +121,7 @@ jobs:
               local log="$OUT/copy-$1-run-$i.log"
               # A filter that matches no test fails too, so that a typo
               # cannot pass for N runs.
-              if run "$log" && grep -Eq "$RAN" "$log"; then
+              if run "$log" && ran "$log"; then
                 echo "copy $1 run $i ok" >> "$OUT/results.txt"
                 rm -f "$log"
               else

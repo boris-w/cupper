@@ -56,7 +56,7 @@ const CONFLICT: &str = "o=$(git hash-object -w a.txt); \
 
 /// `git/diff` of `scope`, its files shown as `<change> <path>[ <- <old>]
 /// +<added> -<deleted>[ binary][ filter]`.
-async fn diff(f: &Fixture, session: &SessionId, scope: Value) -> (Vec<String>, Value) {
+pub(super) async fn diff(f: &Fixture, session: &SessionId, scope: Value) -> (Vec<String>, Value) {
     let params = json!({"session_id": session, "scope": scope});
     let mut result = f.ok("git/diff", params).await;
     let files = result["files"].take();
@@ -74,7 +74,7 @@ async fn diff(f: &Fixture, session: &SessionId, scope: Value) -> (Vec<String>, V
 }
 
 /// The error `git/diff` of `scope` fails with.
-async fn refused(f: &Fixture, session: &SessionId, scope: Value) -> String {
+pub(super) async fn refused(f: &Fixture, session: &SessionId, scope: Value) -> String {
     let params = json!({"session_id": session, "scope": scope});
     code(f.call(harness(), "git/diff", params).await.unwrap_err())
 }

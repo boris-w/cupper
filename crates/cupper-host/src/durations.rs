@@ -188,6 +188,9 @@ durations! {
     FILE_LIST_TTL = "file_list_ttl", Duration::from_secs(5);
     /// How long `open` may take to hand a workspace to an app (UI-0).
     APP_OPEN = "app_open", Duration::from_secs(30);
+    /// How long `host/storage`, and the size a purge's description gives,
+    /// walk the data directory before they answer with what they counted.
+    STORAGE_WALK = "storage_walk", Duration::from_secs(5);
     /// The registry's own tests: a short coalescing window.
     #[cfg(test)]
     TEST_TICK = "test_tick", Duration::from_millis(40);

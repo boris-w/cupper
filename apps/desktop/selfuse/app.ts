@@ -10,6 +10,10 @@ import { join } from "node:path";
 
 import { expect } from "vitest";
 
+import { plist } from "../src/release-scan";
+
+export { plist };
+
 export const HOST_APP = "Contents/Helpers/CupperHost.app";
 export const HOST = `${HOST_APP}/Contents/MacOS/cupper-host`;
 export const CLI = "Contents/Helpers/cupper";
@@ -35,15 +39,6 @@ export function built(variable: Built): string {
 
 export const data = (name: string) => join(homedir(), "Library/Application Support", name);
 export const logs = (name: string) => join(homedir(), "Library/Logs", name);
-
-/** A plist file as JSON; `-` reads `input`. */
-export function plist(file: string, input?: string): Record<string, unknown> {
-  const args = ["-convert", "json", "-o", "-", "--", file];
-  return JSON.parse(execFileSync("plutil", args, { input, encoding: "utf8" })) as Record<
-    string,
-    unknown
-  >;
-}
 
 /** `codesign --display` of a file or a running pid: its `Key=value` lines, and what `args` print. */
 export function codesign(target: string | number, ...args: string[]) {

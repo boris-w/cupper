@@ -2,13 +2,15 @@
 // a view of what the main document holds. It takes one port, the first the
 // embedding document sends with `init`, and listens to nothing on `window`
 // after that; each message is parsed against the schema, and one that does
-// not fit is dropped. Keys go to the main document, whose shortcuts they are.
+// not fit is dropped. Keys go to the main document, whose shortcuts they are,
+// except in a comment box, which keeps its own.
 
+import type { ReviewComment } from "@cupper/protocol";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 
 import { parse, REVIEW_PROTOCOL, zToReview, type FromReview, type ToReview } from "../protocol";
-import { ReviewDocument, type DocState } from "./ReviewDocument";
+import { ReviewDocument, type DocProps, type DocState } from "./ReviewDocument";
 
 /** Mounts the review document on `#root`; `onPort` gets the port it took (e2e builds). */
 export function mountReviewDocument(onPort?: (port: MessagePort) => void): void {
@@ -29,9 +31,14 @@ export function mountReviewDocument(onPort?: (port: MessagePort) => void): void 
   };
   const setCollapsed = (path: string, collapsed: boolean) =>
     send({ type: "set_collapsed", path, collapsed });
+  const token = () => state.files?.diff_token ?? "";
+  const act: DocProps["act"] = (action, path, hunk_ids) =>
+    send({ type: "hunk_action", diff_token: token(), action, path, hunk_ids });
+  const comment = (draft: ReviewComment) =>
+    send({ type: "draft_comment", diff_token: token(), comment: draft });
   const draw = () => {
     document.documentElement.dataset.theme = state.theme;
-    root.render(createElement(ReviewDocument, { state, need, setCollapsed }));
+    root.render(createElement(ReviewDocument, { state, need, setCollapsed, act, comment }));
   };
 
   const apply = (message: ToReview) => {
@@ -83,6 +90,7 @@ export function mountReviewDocument(onPort?: (port: MessagePort) => void): void 
 
   // The review document has no shortcuts of its own (design 5.7.5, point 2).
   document.addEventListener("keydown", (event) => {
+    if (event.target instanceof HTMLTextAreaElement) return;
     const { key, code, metaKey: meta, shiftKey: shift, altKey: alt, ctrlKey: ctrl } = event;
     send({ type: "key_forward", key, code, meta, shift, alt, ctrl });
   });
