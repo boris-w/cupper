@@ -98,6 +98,8 @@
   "notify_turn_completed_detail": "agent 做完了这一轮",
   "notify_error": "出错时",
   "notify_error_detail": "回合失败或 agent 不可用",
+  "notify_denied": "系统没有允许 Cupper 发送通知",
+  "notify_denied_detail": "在「系统设置」的「通知」里找到 Cupper，打开「允许通知」",
   "storage": "占用空间",
   "storage_partial": "未统计完",
   "storage_host_db": "会话数据库",

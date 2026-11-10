@@ -109,6 +109,13 @@ const STORAGE = {
   ...{ host_db: 52428800, raw_db: 1048576, blobs: 2048, snapshots: 3 * 2 ** 30, worktrees: 900 },
   ...{ partial: true, measured_at: 1700049600000 },
 };
+const host = (auth?: string) => ({
+  type: "host.updated",
+  data: {
+    ...{ version: "0.1.0", weak_auth: false, pending_upgrade: false, power_assertion: false },
+    ...(auth && { notification_auth: auth }),
+  },
+});
 const archived = (n: number, title: string) => ({
   summary: { session_id: `s_${n}`, project_id: "p_1", title },
   archived_at: 1700049600000, // noon UTC: the same date in any time zone
@@ -119,12 +126,13 @@ const PAGES = [
   { sessions: [archived(9, "")] },
 ];
 
-async function setup() {
+/** `auth`: `host.updated`'s `notification_auth`, absent by default. */
+async function setup(auth?: string) {
   const mock = new MockHost([{ method: "initialize", params: {}, result: {} }]);
   mock.handle("stream/subscribe", ({ id, conn, params }) => {
     const { stream } = params as { stream: string };
     conn.reply(id, { result: { stream, mode: "snapshot", at_seq: 1, head_seq: 1, epoch: 1 } });
-    const ops = stream === "index" ? [AGENTS, CLIENTS, PROJECT, SETTINGS] : [];
+    const ops = stream === "index" ? [AGENTS, CLIENTS, PROJECT, SETTINGS, host(auth)] : [];
     const page = { stream, at_seq: 1, epoch: 1, page: 0, last: true, ops };
     conn.send({ jsonrpc: "2.0", method: "stream/snapshot", params: page });
     return undefined;
@@ -340,6 +348,17 @@ describe("UI-settings-general", () => {
     const error = { code: -32000, message: "no", data: { code: "forbidden" } };
     await act(async () => held[0]?.({ error }));
     expect(screen.getByRole("status").textContent).toBe("设置没有保存（forbidden）");
+  });
+
+  test("notifications: where to allow them once macOS has denied them, and only then", async () => {
+    for (const auth of ["denied", "not_determined", "authorized"]) {
+      const { ui } = await setup(auth);
+      act(() => ui.getState().navigate(toSettings(ui.getState().route, "notifications")));
+      const hint =
+        "系统没有允许 Cupper 发送通知在「系统设置」的「通知」里找到 Cupper，打开「允许通知」";
+      expect(texts(card("什么时候通知")).includes(hint), auth).toBe(auth === "denied");
+      cleanup();
+    }
   });
 
   test("storage: each size as text, 未统计完 for a walk cut short; the purge through the shell", async () => {
