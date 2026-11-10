@@ -824,6 +824,7 @@ v1.4 新增。取值来自 ui-spec 第 2、3 节：静态读取作者本机 Code
 | `--color-surface-code` | 代码块、命令输出、终端 | #FFFFFF | #282828〔推算〕 |
 | `--color-surface-panel` | 卡片、面板 | #FFFFFF | #232323〔推算〕 |
 | `--color-surface-elevated` | 菜单、下拉、popover | #FFFFFF | #2D2D2D〔推算〕 |
+| `--color-switch-thumb` | 开关的滑块（两种主题都是白色，同 macOS；暗色下若用 surface-elevated，关着的开关看不见滑块，T147） | #FFFFFF | #FFFFFF |
 | `--color-surface-composer` | 输入框、请求面板 | #FFFFFF | #2D2D2D 或 #363636〔推算，Q37〕 |
 | `--color-fg` | 正文 | #1A1C1F | #DFDFDF〔推算〕 |
 | `--color-fg-secondary` | 次要文字 | 正文 @65%（≈#6A6B6D） | 白 @65%（≈#999999）〔推算〕 |

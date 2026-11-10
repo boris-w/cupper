@@ -112,6 +112,7 @@ const STRINGS: Record<string, string[]> = {
   trust_project: ["project_id"],
   elevation: ["elevation_id"],
   settings: [],
+  purge_snapshots: [],
   install_cli: [],
 };
 

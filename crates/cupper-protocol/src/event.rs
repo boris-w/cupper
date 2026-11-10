@@ -223,7 +223,8 @@ mod tests {
                 "agents.codex.cli_path": "/opt/homebrew/bin/codex", "agents.env_passthrough": ["HTTPS_PROXY"],
                 "worktrees.root": "/w", "notifications.needs_action": true, "notifications.turn_completed": false,
                 "notifications.error": true, "apps.terminal": "Terminal", "apps.editor": "TextEdit",
-                "sessions.default_agent": "codex", "host.idle_exit_minutes": 10, "diagnostics.verbose": false}}}),
+                "sessions.default_agent": "codex", "host.idle_exit_minutes": 10,
+                "host.prevent_idle_sleep": false, "diagnostics.verbose": false}}}),
             json!({"type": "clients.updated", "data": {"clients": [
                 {"conn_id": "c_1", "principal_kind": "desktop_ui", "role": "window", "client_name": "Cupper",
                  "client_version": "0.1.0", "since": 3, "auth": "verified"},

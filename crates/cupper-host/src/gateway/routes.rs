@@ -29,8 +29,8 @@ use cupper_protocol::methods::project::{
 };
 use cupper_protocol::methods::session::{
     SessionArchive, SessionCapabilities, SessionConfirmConfig, SessionCreate, SessionGet,
-    SessionInterrupt, SessionListArchived, SessionMarkRead, SessionQueueResume, SessionRename,
-    SessionRestore, SessionSend, SessionSetConfig,
+    SessionInterrupt, SessionListArchived, SessionMarkRead, SessionQueueEdit, SessionQueueResume,
+    SessionRename, SessionRestore, SessionSend, SessionSetConfig,
 };
 use cupper_protocol::methods::stream::{
     BlobGet, BlobPut, HistoryPage, StreamSubscribe, StreamUnsubscribe,
@@ -170,6 +170,7 @@ impl Routes {
         self.add::<SessionSend>(to());
         self.add::<SessionInterrupt>(to());
         self.add::<SessionQueueResume>(to());
+        self.add::<SessionQueueEdit>(to());
         self.add::<SessionConfirmConfig>(to());
         self.add::<SessionSetConfig>(to());
         self.add::<SessionGet>(to());

@@ -4,7 +4,8 @@
 //! `settings/update` serve them ([`SettingsPort`]). The gateway's policy has
 //! checked an update already: a security-related key takes `privileged`
 //! (design 5.2.5). A change of a CLI path or of `agents.env_passthrough`
-//! finds the agents again, and `agents.updated` shows it. The index writes
+//! finds the agents again, and `agents.updated` shows it; the power
+//! assertion follows `host.prevent_idle_sleep` (T147). The index writes
 //! `settings.updated` from [`SettingsHandle::subscribe`] (T151).
 
 use std::ffi::OsString;
@@ -32,6 +33,7 @@ use crate::driver::runtime::agents::Agents;
 use crate::gateway::{Call, Port, Reply};
 use crate::ledger::Ticket;
 use crate::store::{Durability, WriteError, Writer};
+use crate::supervisor::power::Power;
 
 /// The terminals `apps.terminal` names one of, as `open -a` knows them.
 pub const TERMINALS: &[&str] = &[
@@ -57,8 +59,8 @@ pub const EDITORS: &[&str] = &[
 
 /// The settings nobody changed: CLIs discovered, no more variables for the
 /// adapters, worktrees under [`worktrees_root`], every notification on,
-/// Claude for new sessions, the idle exit after 10 minutes, no detailed
-/// logs. The apps are macOS's own.
+/// Claude for new sessions, the idle exit after 10 minutes, the Mac kept
+/// awake while agents work, no detailed logs. The apps are macOS's own.
 pub fn defaults(home: &Path, data_dir: &Path) -> Settings {
     Settings {
         claude_cli_path: CliPath(None),
@@ -72,6 +74,7 @@ pub fn defaults(home: &Path, data_dir: &Path) -> Settings {
         editor_app: "TextEdit".into(),
         default_agent: AgentKind::Claude,
         idle_exit_minutes: 10,
+        prevent_idle_sleep: true,
         verbose_diagnostics: false,
     }
 }
@@ -264,6 +267,7 @@ pub type Rediscover = Arc<dyn Fn() -> BoxFuture<'static, ()> + Send + Sync>;
 pub struct SettingsPort {
     pub settings: SettingsHandle,
     pub rediscover: Rediscover,
+    pub power: Power,
 }
 
 impl fmt::Debug for SettingsPort {
@@ -274,7 +278,7 @@ impl fmt::Debug for SettingsPort {
 
 impl SettingsPort {
     /// The port, finding `agents` again when an update asks for it.
-    pub fn new(settings: SettingsHandle, agents: Arc<Agents>) -> Self {
+    pub fn new(settings: SettingsHandle, agents: Arc<Agents>, power: Power) -> Self {
         let rediscover: Rediscover = Arc::new(move || {
             let agents = Arc::clone(&agents);
             // A failure shows in `agents.updated`; the settings stand.
@@ -288,6 +292,7 @@ impl SettingsPort {
         Self {
             settings,
             rediscover,
+            power,
         }
     }
 }
@@ -304,6 +309,8 @@ impl Port for SettingsPort {
             let params: SettingsUpdateParams = serde_json::from_value(call.params)
                 .map_err(|err| RpcError::new(INVALID_PARAMS, err.to_string()))?;
             let (settings, agents) = port.settings.update(&params.patch, call.ticket).await?;
+            // The power core takes a value it has as nothing new.
+            port.power.enabled(settings.prevent_idle_sleep);
             if agents {
                 (port.rediscover)().await;
             }

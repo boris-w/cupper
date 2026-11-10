@@ -6,7 +6,8 @@ import { open, violations } from "./serve";
 /**
  * The index the pages show: Claude running; Codex without its CLI and logged
  * out; git without git-lfs; the desktop window and the CLI, the CLI on weak
- * authentication; the project of the archived session `methods.json` lists.
+ * authentication; the project of the archived session `methods.json` lists;
+ * the settings, turn completions not notified.
  */
 const INDEX = [
   {
@@ -69,10 +70,27 @@ const INDEX = [
       trust_state: "trusted",
     },
   },
+  {
+    type: "settings.updated",
+    data: {
+      settings: {
+        ...{ "agents.claude.cli_path": null, "agents.codex.cli_path": null },
+        ...{ "agents.env_passthrough": [], "worktrees.root": "/Users/a/.cupper/worktrees" },
+        ...{ "notifications.needs_action": true, "notifications.turn_completed": false },
+        ...{ "notifications.error": true, "apps.terminal": "Terminal", "apps.editor": "TextEdit" },
+        ...{ "sessions.default_agent": "claude", "host.idle_exit_minutes": 10 },
+        ...{ "host.prevent_idle_sleep": true, "diagnostics.verbose": false },
+      },
+    },
+  },
 ];
 
 /** Each page: its test, a section on it and what that section shows once loaded. */
 const PAGES = [
+  ["general", "UI-settings-general", "电源", "agent 工作时防止休眠"],
+  ["notifications", "UI-settings-general", "什么时候通知", "需要你处理时"],
+  ["appearance", "UI-icon-colour", "图标", "图标颜色"],
+  ["storage", "UI-settings-general", "占用空间", "1.0 MB"],
   ["agents", "UI-settings-agents", "Codex", "没有找到 CLI"],
   ["archived", "UI-settings-archived", "会话", "Fix the build"],
   ["connections", "UI-settings-archived", "本机客户端", "弱认证"],

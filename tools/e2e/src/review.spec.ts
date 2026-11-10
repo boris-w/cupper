@@ -244,3 +244,75 @@ test(
     console.log(`clipboard read back: ${JSON.stringify(await read())}`);
   },
 );
+
+test("E2E-S3: the agent's change reviewed, commented on, staged by hunk and committed", async ({
+  cupper,
+}) => {
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", cupper.repo, ...args], { encoding: "utf8" });
+  // Who commits, as a user's repository would say; and a file with room for two hunks.
+  git("config", "user.name", "cupper-e2e");
+  git("config", "user.email", "e2e@cupper.invalid");
+  git("config", "commit.gpgsign", "false");
+  const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
+  writeFileSync(join(cupper.repo, "notes.txt"), `${lines.join("\n")}\n`);
+  git("add", "notes.txt");
+  git("commit", "--quiet", "--message", "notes");
+  const changed = lines.map((line, i) => (i === 1 || i === 18 ? `${line} changed` : line));
+
+  await cupper.launch();
+  await cupper.connected();
+  const t = await texts(cupper);
+  const script = `write_file notes.txt ${changed.join("\\n")}\\n; say written`;
+  const stream = await session(cupper, script);
+  await untilEvent(cupper, stream, (event) => event.type === "turn.completed");
+  await cupper.window.getByRole("button", { name: script.slice(0, 12) }).click();
+  await cupper.window.getByRole("button", { name: t("shell:toggle_side_panel") }).click();
+  const review = await reviewDocument(cupper);
+  await expect(review.getByText("line 19 changed")).toBeVisible();
+
+  // A comment on a line rides the next message.
+  await review.locator("[data-line]").nth(1).hover();
+  await review.locator("[data-utility-button]").click();
+  const box = review.getByRole("textbox", { name: t("review:doc_comment") });
+  await box.fill("name it better");
+  await box.press("Meta+Enter");
+  const main = cupper.window.getByRole("main");
+  await expect(
+    cupper.window.getByText(t("composer:attachment_comments", { count: 1 })),
+  ).toBeVisible();
+  const composer = cupper.window.locator("[data-composer] textarea");
+  await composer.fill("say noted");
+  await composer.press("Enter");
+  const sent = await untilEvent(cupper, stream, (event) =>
+    JSON.stringify(event.data).includes("name it better"),
+  );
+  expect(JSON.stringify(sent.data)).toContain('"path":"notes.txt"');
+  await expect(main.getByText(t("stream:comments", { count: 1 }))).toBeVisible();
+  // Its turn over (the agent says the comment back with "noted"), the panel shows the repository as it stays.
+  await untilEvent(
+    cupper,
+    stream,
+    (event) => event.type === "turn.completed" && event.seq > sent.seq,
+  );
+
+  // The first hunk only: the file's own 暂存 comes first, then one under each hunk.
+  const stage = review.getByRole("button", { name: t("review:action_stage") });
+  await expect(stage).toHaveCount(3);
+  await stage.nth(1).click();
+  const staged = () => git("diff", "--cached");
+  await expect.poll(staged).toContain("line 2 changed");
+  expect(staged()).not.toContain("line 19 changed");
+
+  await cupper.window.getByRole("button", { name: t("review:git_actions") }).click();
+  await cupper.window.getByRole("menuitem", { name: t("review:git_commit_menu") }).click();
+  await expect(cupper.window.getByRole("menu")).toHaveCount(0);
+  const dialog = cupper.window.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: t("review:git_message") }).fill("one hunk");
+  await dialog.getByRole("button", { name: t("review:git_continue") }).click();
+  await expect.poll(() => git("log", "-1", "--format=%s").trim()).toBe("one hunk");
+  const committed = git("show", "HEAD");
+  expect(committed).toContain("line 2 changed");
+  expect(committed).not.toContain("line 19 changed");
+  expect(git("diff")).toContain("line 19 changed");
+});
