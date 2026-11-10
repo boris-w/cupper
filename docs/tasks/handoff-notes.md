@@ -583,3 +583,6 @@
 | 写消息流跳转用例的任务 | jsdom 里 TanStack Virtual 的 `scrollToIndex` 会一直对齐下去、跑满 CPU，跳转类的用例放 Playwright（截图套件）里测；用程序化滚动模拟用户时，先派发一次 wheel 等用户输入（T245 的规则：只有用户的操作能离开底部） | T245 |
 | T244 | 新会话页能取能力（扩展点带上 agent）之后，图片附件在新会话页也可以查 `prompt.image` 和 `max_image_bytes`；目前新会话页只查类型，其余由宿主在发送时把关 | T145 |
 | 改输入框样式的任务 | 给输入框容器加常驻的定位类样式（如 `relative`）会改变阴影的绘制顺序，盖到相邻的动作条和计划药丸上；加之前先跑一轮 ui-baseline 比对（T145 改为拖入时才定位） | T145 |
+| T242 | `keys.ts` 的 `sendAction()` 已区分 `"send"` 和 `"queue"`，运行中把 `"send"` 映射成 `mode: steer` 即可；"跟进消息默认排队"的对调也在这里加 | T244 |
+| T144 | 新建会话页读 `agents/capabilities` 的查询在 `composer/extensions/slash.tsx` 的 `Cached` 组件，查询键 `["agents/capabilities", agent]`，`agents.updated` 让它失效；显示缓存的模型和权限时共用这个查询 | T244 |
+| T148、T154 | 斜杠菜单没有截图用例；要加时仿照 sidebar.spec 的 `composer-file-ref`，基线由 ui-baseline 生成 | T244 |
