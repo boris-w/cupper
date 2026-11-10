@@ -307,6 +307,7 @@ impl Host {
                 pending_upgrade: false,
                 power_assertion: false,
                 last_exit_abnormal: run.abnormal,
+                notification_auth: None,
             },
             settings: settings.subscribe(),
             requesters: Arc::new(ProcessRequesters::new(

@@ -128,6 +128,7 @@ fn host() -> HostUpdated {
         pending_upgrade: false,
         power_assertion: false,
         last_exit_abnormal: true,
+        notification_auth: None,
     }
 }
 

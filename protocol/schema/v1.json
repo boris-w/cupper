@@ -3697,6 +3697,10 @@
           "description": "The previous run did not exit cleanly; present only when true.",
           "type": "boolean"
         },
+        "notification_auth": {
+          "$ref": "#/$defs/NotificationAuth",
+          "description": "Whether the user lets the host's notifications show (design 5.2.9);\nabsent until the host has asked the system, and in builds that only\nrecord them."
+        },
         "pending_upgrade": {
           "type": "boolean"
         },
@@ -5026,6 +5030,22 @@
         }
       },
       "type": "object"
+    },
+    "NotificationAuth": {
+      "anyOf": [
+        {
+          "enum": [
+            "not_determined",
+            "authorized",
+            "denied"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Open enum: unknown values must be accepted. Known: not_determined authorized denied "
     },
     "NotificationIntent": {
       "description": "`notification.intent`: written when no foreground client watches the\nsession; never part of a snapshot (design 5.2.9).",
