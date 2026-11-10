@@ -2,6 +2,7 @@
   "title": "设置",
   "back": "返回应用",
   "unknown": "未知",
+  "section_notifications": "通知",
   "section_archived": "已归档会话",
   "section_agents": "agent 状态",
   "section_connections": "连接与设备",
@@ -75,5 +76,13 @@
   "weak_auth_detail": "开发构建的降级模式：连接凭启动时的一次性密钥认证，没有校验代码签名",
   "devices": "设备",
   "devices_none": "还没有设备",
-  "devices_later": "以后的版本支持从手机连接"
+  "devices_later": "以后的版本支持从手机连接",
+  "update_failed": "设置没有保存（{{code}}）",
+  "notify_when": "什么时候通知",
+  "notify_needs_action": "需要你处理时",
+  "notify_needs_action_detail": "agent 请求批准或向你提问",
+  "notify_turn_completed": "回合完成时",
+  "notify_turn_completed_detail": "agent 做完了这一轮",
+  "notify_error": "出错时",
+  "notify_error_detail": "回合失败或 agent 不可用"
 }

@@ -82,6 +82,27 @@ const PROJECT = {
     trust_state: "trusted",
   },
 };
+/** Turn completions not notified, the Mac kept awake. */
+const SETTINGS = {
+  type: "settings.updated",
+  data: {
+    settings: {
+      "agents.claude.cli_path": null,
+      "agents.codex.cli_path": null,
+      "agents.env_passthrough": [],
+      "worktrees.root": "/Users/a/.cupper/worktrees",
+      "notifications.needs_action": true,
+      "notifications.turn_completed": false,
+      "notifications.error": true,
+      "apps.terminal": "Terminal",
+      "apps.editor": "TextEdit",
+      "sessions.default_agent": "claude",
+      "host.idle_exit_minutes": 10,
+      "host.prevent_idle_sleep": true,
+      "diagnostics.verbose": false,
+    },
+  },
+};
 const archived = (n: number, title: string) => ({
   summary: { session_id: `s_${n}`, project_id: "p_1", title },
   archived_at: 1700049600000, // noon UTC: the same date in any time zone
@@ -97,14 +118,14 @@ async function setup() {
   mock.handle("stream/subscribe", ({ id, conn, params }) => {
     const { stream } = params as { stream: string };
     conn.reply(id, { result: { stream, mode: "snapshot", at_seq: 1, head_seq: 1, epoch: 1 } });
-    const ops = stream === "index" ? [AGENTS, CLIENTS, PROJECT] : [];
+    const ops = stream === "index" ? [AGENTS, CLIENTS, PROJECT, SETTINGS] : [];
     const page = { stream, at_seq: 1, epoch: 1, page: 0, last: true, ops };
     conn.send({ jsonrpc: "2.0", method: "stream/snapshot", params: page });
     return undefined;
   });
   // The host answers restarts and restores when the test says.
   const held: ((answer: Reply) => void)[] = [];
-  for (const method of ["agents/restart", "session/restore"]) {
+  for (const method of ["agents/restart", "session/restore", "settings/update"]) {
     mock.handle(method, ({ id, conn }) => void held.push((answer) => conn.reply(id, answer)));
   }
   mock.handle("session/list_archived", ({ params }) => ({
@@ -157,7 +178,7 @@ describe("UI-settings-agents", () => {
     const from = { page: "session", sessionId: "s_1" };
     act(() => controls.command({ id: "settings" }));
     expect(ui.getState().route).toEqual({ page: "settings", from });
-    const nav = screen.getByRole("button", { name: "已归档会话" });
+    const nav = screen.getByRole("button", { name: "通知" });
     expect(nav.getAttribute("aria-current")).toBe("page");
     act(() => controls.navigate({ kind: "settings", section: "agents" }));
     expect(ui.getState().route).toEqual({ page: "settings", section: "agents", from });
@@ -217,7 +238,7 @@ describe("UI-settings-agents", () => {
 describe("UI-settings-archived", () => {
   test("a page at a time; a restore is busy until the host answers, then says how it came back", async () => {
     const { mock, held, ui } = await setup();
-    act(() => ui.getState().navigate(toSettings(ui.getState().route)));
+    act(() => ui.getState().navigate(toSettings(ui.getState().route, "archived")));
     await act(() => new Promise((done) => setTimeout(done)));
     click("加载更多");
     await act(() => new Promise((done) => setTimeout(done)));
@@ -256,5 +277,32 @@ describe("UI-settings-archived", () => {
       "弱认证开发构建的降级模式：连接凭启动时的一次性密钥认证，没有校验代码签名",
     ]);
     expect(texts(card("设备"))).toEqual(["还没有设备以后的版本支持从手机连接"]);
+  });
+});
+
+describe("UI-settings-general", () => {
+  test("notifications: the switches as the settings are, each change a settings/update", async () => {
+    const { mock, held, ui } = await setup();
+    act(() => ui.getState().navigate(toSettings(ui.getState().route, "notifications")));
+    const region = card("什么时候通知");
+    expect(texts(region).filter(Boolean)).toEqual([
+      "需要你处理时agent 请求批准或向你提问",
+      "回合完成时agent 做完了这一轮",
+      "出错时回合失败或 agent 不可用",
+    ]);
+    const switches = within(region).getAllByRole("switch");
+    expect(switches.map((one) => one.getAttribute("aria-checked"))).toEqual([
+      "true",
+      "false",
+      "true",
+    ]);
+    fireEvent.click(switches[1] as HTMLElement);
+    expect(mock.requests.at(-1)).toMatchObject({
+      method: "settings/update",
+      params: { patch: { "notifications.turn_completed": true } },
+    });
+    const error = { code: -32000, message: "no", data: { code: "forbidden" } };
+    await act(async () => held[0]?.({ error }));
+    expect(screen.getByRole("status").textContent).toBe("设置没有保存（forbidden）");
   });
 });
