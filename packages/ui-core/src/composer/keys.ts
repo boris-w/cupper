@@ -17,21 +17,25 @@ export interface KeyLike {
 /** Whether an input method composes, the key picking a candidate included (CP-1). */
 export const composing = (event: KeyLike) => Boolean(event.isComposing) || event.keyCode === 229;
 
+/** What the send key and the queue key ask for; while a turn runs, "send" is to steer. */
+export type SendAction = "send" | "queue";
+
 /**
- * Whether a key press in the text area sends. Never while an input method
- * composes (`composing`). ⇧Enter and ⌥Enter keep their newline. M1a has no
- * steer, so ⌘Enter and ⌘⇧Enter, the queue keys, send as well: every send
- * queues.
+ * What a key press in the text area asks for (design 5.7.7): the send key,
+ * Enter or ⌘Enter as the preference says, sends; the queue key, ⌘Enter or
+ * ⌘⇧Enter when ⌘Enter sends, queues. Nothing while an input method composes
+ * (`composing`); ⇧Enter and ⌥Enter keep their newline, and Enter too when
+ * ⌘Enter sends.
  */
-export function sends(event: KeyLike, sendKey: SendKey): boolean {
-  if (event.key !== "Enter" || composing(event)) {
-    return false;
+export function sendAction(event: KeyLike, sendKey: SendKey): SendAction | undefined {
+  if (event.key !== "Enter" || composing(event) || event.altKey) {
+    return undefined;
   }
   const mod = Boolean(event.metaKey || event.ctrlKey);
-  if (sendKey === "mod_enter" || mod) {
-    return mod && !event.altKey;
+  if (sendKey === "mod_enter") {
+    return mod ? (event.shiftKey ? "queue" : "send") : undefined;
   }
-  return !event.shiftKey && !event.altKey;
+  return mod ? "queue" : event.shiftKey ? undefined : "send";
 }
 
 export type EscapeAction = "close_overlay" | "arm" | "interrupt" | "focus" | "none";

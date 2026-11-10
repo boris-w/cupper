@@ -13,7 +13,7 @@ import { ToasterProvider } from "../feedback/toaster";
 import { DEFAULT_PREFS } from "../layout/layout";
 import { StateProvider, UiProvider } from "../state/provider";
 import { createUiStore } from "../state/ui";
-import { escapeAction, sends } from "./keys";
+import { escapeAction, sendAction } from "./keys";
 import { ComposerArea } from "./QueueList";
 
 afterEach(cleanup);
@@ -87,15 +87,23 @@ const type = (area: HTMLElement, text: string) =>
 
 describe("UNIT-composer-ime", () => {
   test("Enter sends unless an input method composes; Shift and Option keep the newline", () => {
-    expect(sends({ key: "Enter" }, "enter")).toBe(true);
-    expect(sends({ key: "Enter", isComposing: true }, "enter")).toBe(false);
-    expect(sends({ key: "Enter", keyCode: 229 }, "enter")).toBe(false);
-    expect(sends({ key: "Enter", shiftKey: true }, "enter")).toBe(false);
-    expect(sends({ key: "Enter", altKey: true }, "enter")).toBe(false);
-    expect(sends({ key: "Enter", metaKey: true }, "enter")).toBe(true);
-    expect(sends({ key: "Enter" }, "mod_enter")).toBe(false);
-    expect(sends({ key: "Enter", metaKey: true, shiftKey: true }, "mod_enter")).toBe(true);
-    expect(sends({ key: "Enter", metaKey: true, isComposing: true }, "mod_enter")).toBe(false);
+    expect(sendAction({ key: "Enter" }, "enter")).toBe("send");
+    expect(sendAction({ key: "Enter", isComposing: true }, "enter")).toBeUndefined();
+    expect(sendAction({ key: "Enter", keyCode: 229 }, "enter")).toBeUndefined();
+    expect(sendAction({ key: "Enter", shiftKey: true }, "enter")).toBeUndefined();
+    expect(sendAction({ key: "Enter", altKey: true }, "enter")).toBeUndefined();
+    expect(sendAction({ key: "a" }, "enter")).toBeUndefined();
+  });
+
+  test("the queue key is ⌘Enter, or ⌘⇧Enter when ⌘Enter sends", () => {
+    expect(sendAction({ key: "Enter", metaKey: true }, "enter")).toBe("queue");
+    expect(sendAction({ key: "Enter", ctrlKey: true }, "enter")).toBe("queue");
+    expect(sendAction({ key: "Enter" }, "mod_enter")).toBeUndefined();
+    expect(sendAction({ key: "Enter", metaKey: true }, "mod_enter")).toBe("send");
+    expect(sendAction({ key: "Enter", metaKey: true, shiftKey: true }, "mod_enter")).toBe("queue");
+    expect(sendAction({ key: "Enter", metaKey: true, altKey: true }, "mod_enter")).toBeUndefined();
+    const composing = { key: "Enter", metaKey: true, isComposing: true };
+    expect(sendAction(composing, "mod_enter")).toBeUndefined();
   });
 
   test("the Enter that picks a candidate stays in the composer; the next one sends", async () => {

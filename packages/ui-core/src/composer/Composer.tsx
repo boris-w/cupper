@@ -23,7 +23,7 @@ import { isComment } from "../review/view";
 import { TierHint } from "./config";
 import { useUi } from "../state/provider";
 import { EXTENSIONS, OverlayContext } from "./extensions";
-import { escapeAction, SEND_KEY_PREF, sends } from "./keys";
+import { escapeAction, SEND_KEY_PREF, sendAction } from "./keys";
 import { thumbnail } from "./thumbnails";
 import { NEW_DRAFT, usePref, useSend, useSessionState, type NewSession } from "./send";
 
@@ -262,7 +262,8 @@ export function Composer(props: {
             if (activity) activity.current.typedAt = Date.now();
             if (event.key !== "Escape") {
               setArmed(false);
-              if (sends(event.nativeEvent, sendKey)) {
+              // No steer yet (T242): either key sends, and every message queues.
+              if (sendAction(event.nativeEvent, sendKey)) {
                 event.preventDefault();
                 submit();
               }
