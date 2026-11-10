@@ -1,7 +1,7 @@
 // The composer's attachments (design 5.7.4, CP-2): `@` and its list by keys,
 // files dropped on the composer as the shell gives their paths, and images;
 // slash commands (CP-3), the send key preference (design 5.7.7), and
-// steering the running turn (CP-6).
+// steering the running turn (CP-6) and a queued message (F3).
 
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -207,4 +207,39 @@ test("E2E-composer-steer-default: a steer the agent fails goes to the queue and 
   await area.press("Enter");
   await expect(cupper.window.getByText(t("composer:queued_instead"))).toBeVisible();
   await expect(cupper.window.locator("[data-queue-id]")).toContainText("refused");
+});
+
+test("E2E-queue-edit: a queued message edited in place and steered in from its row; the menu switches queueing", async ({
+  cupper,
+}) => {
+  const { stream, area } = await turnRunning(cupper, "wait_cancel");
+  const [t, window] = [await texts(cupper), cupper.window];
+  const row = window.locator("[data-queue-id]");
+  const pick = async (item: string) => {
+    await row
+      .first()
+      .getByRole("button", { name: t("composer:queue_menu") })
+      .click();
+    await window.getByRole("menuitem", { name: t(item) }).click();
+  };
+  await area.fill("first draft");
+  await area.press("Meta+Enter");
+  await expect(row).toContainText("first draft");
+
+  await pick("composer:queue_edit");
+  const box = row.getByRole("textbox", { name: t("composer:queue_edit") });
+  await box.fill("rewritten");
+  await box.press("Enter");
+  await expect(row).toContainText("rewritten");
+  await row.getByRole("button", { name: t("composer:steer") }).click();
+  await steered(cupper, stream, "rewritten");
+  await expect(row).toHaveCount(0);
+
+  // Follow-ups queue by default, from the menu: Enter queues now.
+  await area.fill("second");
+  await area.press("Meta+Enter");
+  await pick("composer:queue_on");
+  await area.fill("third");
+  await area.press("Enter");
+  await expect(row).toContainText(["second", "third"]);
 });
