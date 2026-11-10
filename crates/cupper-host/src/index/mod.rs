@@ -199,6 +199,7 @@ impl IndexHandle {
             gateway: Arc::clone(&gateway),
             deps,
             runtime: HashMap::new(),
+            git: GitTools::default(),
         };
         tokio::spawn(actor.run(inbox, participant));
         Ok(Self { mail, gateway })
@@ -319,6 +320,8 @@ struct IndexActor {
     deps: IndexDeps,
     /// What the runtime installer last said of each agent's adapter runtime.
     runtime: HashMap<AgentKind, (RuntimeState, Option<RuntimeFailure>)>,
+    /// The versions of git and git-lfs, for the first `agents.updated` too.
+    git: GitTools,
 }
 
 impl IndexActor {
@@ -391,7 +394,14 @@ impl IndexActor {
                     let _ = done.send(self.remove_project(project).await);
                 }
                 Mail::Agent(status) => self.agent(*status).await,
-                Mail::Git(git) => self.agents(|agents| agents.git = git).await,
+                // Into the agents' list once there is one: an empty list
+                // would say no agent was found.
+                Mail::Git(git) => {
+                    self.git = git.clone();
+                    if read(&self.handle, |view| view.agents.is_some()) {
+                        self.agents(|agents| agents.git = git).await;
+                    }
+                }
                 Mail::Settings => {
                     let settings = self.deps.settings.borrow_and_update().clone();
                     if let Some(body) = read(&self.handle, |view| settings_updated(view, settings))
@@ -760,7 +770,10 @@ impl IndexActor {
     /// `agents.updated` with `change` made, unless that changes nothing.
     async fn agents(&mut self, change: impl FnOnce(&mut AgentsUpdated)) {
         let before = read(&self.handle, |view| view.agents.clone());
-        let mut agents = before.clone().unwrap_or_default();
+        let mut agents = before.clone().unwrap_or_else(|| AgentsUpdated {
+            agents: Vec::new(),
+            git: self.git.clone(),
+        });
         change(&mut agents);
         if before.as_ref() != Some(&agents) {
             self.append(EventBody::AgentsUpdated(agents)).await;

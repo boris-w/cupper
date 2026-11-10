@@ -507,6 +507,12 @@ async fn index_settings_updated_and_the_git_versions_follow_their_sources() {
     let tool = GitTool::new(git, Some(lfs), &[bin], None, None, fx.dir.path()).unwrap();
     index.git(tool.versions(&fx.clock, &Durations::default()).await);
     fx.quiescence.settled().await;
+    // Not before the first agent: an empty list would say none was found.
+    assert_eq!(fx.view().await.0.agents, None);
+    let status = json!({"agent": "claude", "state": "idle", "config_dir": "default",
+        "adapter": {"version": "0.91.0", "runtime": "ready"}, "auth": {"state": "unchecked"}});
+    AgentNotes::agent(&index, serde_json::from_value(status).unwrap());
+    fx.quiescence.settled().await;
     let agents = fx.view().await.0.agents.unwrap();
     let versions = (agents.git.version.as_deref(), agents.git.lfs.as_deref());
     assert_eq!(versions, (Some("2.45.1"), Some("3.6.0")));
