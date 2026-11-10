@@ -581,3 +581,5 @@
 | T113 | codex-acp 2.2.2 的 `userInputToContentBlocks` 处理音频时不区分 `fileId`（同一函数里图片已区分），`session/load` 回放 fileId 形式的音频会显示成 `[@audio](undefined)`；2.6.0 仍未修。升级适配器或用 `write` 重写基线时一并看，重写后 0.165.0–0.167.0 三条记录都会失效 | T246 |
 | 维护 codex-drift 工具时 | `facets` 看不到变体里再嵌一层的 `anyOf`，"改成二选一"会显示成"去掉了必填字段"（T209、T246 都遇到）；不会漏报，但描述会误导 | T246 |
 | 写消息流跳转用例的任务 | jsdom 里 TanStack Virtual 的 `scrollToIndex` 会一直对齐下去、跑满 CPU，跳转类的用例放 Playwright（截图套件）里测；用程序化滚动模拟用户时，先派发一次 wheel 等用户输入（T245 的规则：只有用户的操作能离开底部） | T245 |
+| T244 | 新会话页能取能力（扩展点带上 agent）之后，图片附件在新会话页也可以查 `prompt.image` 和 `max_image_bytes`；目前新会话页只查类型，其余由宿主在发送时把关 | T145 |
+| 改输入框样式的任务 | 给输入框容器加常驻的定位类样式（如 `relative`）会改变阴影的绘制顺序，盖到相邻的动作条和计划药丸上；加之前先跑一轮 ui-baseline 比对（T145 改为拖入时才定位） | T145 |

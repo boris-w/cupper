@@ -1112,13 +1112,23 @@ milestone = "M1b"
 IT-queue-edit = "pr"
 E2E-queue-edit = "nightly"
 
-# 系统通知与 ui/navigate
+# 系统通知 I：宿主主线程与通知身份
 [T150]
 milestone = "M1b"
-MAN-notification-product = "man"
+UNIT-host-bundle-identity = "pr"
+
+# 系统通知 II：弹出通知（v1.3.90 由 T150 拆出）
+[T250]
+milestone = "M1b"
 IT-notifier-record = "pr"
 UNIT-notifier-no-actions = "pr"
-# K5 不通过时改由 T158 产出（替代 T150 的宿主通知部分）
+
+# 系统通知 III：点击与导航（v1.3.90 由 T150 拆出）
+[T251]
+milestone = "M1b"
+IT-notifier-click = "pr"
+MAN-notification-product = "man"
+# K5 不通过时改由 T158 产出（替代 T250、T251 的宿主通知部分）
 E2E-notification-navigate = "nightly"
 MAN-notification = { parts = ["MAN-notification-spike", "MAN-notification-product"] }
 

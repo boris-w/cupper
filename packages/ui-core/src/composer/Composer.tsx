@@ -3,7 +3,7 @@
 // the UI store per session, so the request panel (T083) can take the
 // composer's place and give it back as it was.
 
-import type { PromptBlock } from "@cupper/protocol";
+import type { BlobRef, PromptBlock } from "@cupper/protocol";
 import {
   useCallback,
   useEffect,
@@ -24,6 +24,7 @@ import { TierHint } from "./config";
 import { useUi } from "../state/provider";
 import { EXTENSIONS, OverlayContext } from "./extensions";
 import { escapeAction, SEND_KEY_PREF, sends } from "./keys";
+import { thumbnail } from "./thumbnails";
 import { NEW_DRAFT, usePref, useSend, useSessionState, type NewSession } from "./send";
 
 const NONE: readonly PromptBlock[] = [];
@@ -48,6 +49,8 @@ function Attachments(props: { blocks: readonly PromptBlock[]; remove: (index: nu
         return t("composer:attachment_other");
     }
   };
+  const thumbOf = (block: PromptBlock) =>
+    block.type === "image" ? thumbnail((block as { blob: BlobRef }).blob.hash) : undefined;
   // Attachments have no id; their order is stable while shown.
   const indexed = props.blocks.map((block, index) => ({ block, index }));
   const comments = indexed.flatMap(({ block, index }) =>
@@ -70,7 +73,15 @@ function Attachments(props: { blocks: readonly PromptBlock[]; remove: (index: nu
           .filter(({ block }) => block.type !== "review_comment")
           .map(({ block, index }) => (
             <li key={index} className={CHIP}>
-              {label(block)}
+              {thumbOf(block) ? (
+                <img
+                  src={thumbOf(block)}
+                  alt={label(block)}
+                  className="size-7 rounded-md object-cover"
+                />
+              ) : (
+                label(block)
+              )}
               {remove(index)}
             </li>
           ))}
@@ -231,7 +242,7 @@ export function Composer(props: {
       <div
         data-composer=""
         data-esc-armed={armed || undefined}
-        className="rounded-composer bg-surface-composer shadow-composer"
+        className="rounded-composer bg-surface-composer shadow-composer data-dragging:relative"
       >
         {attachments.length > 0 && (
           <Attachments

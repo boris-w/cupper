@@ -358,16 +358,16 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 - **已读**（U4）：客户端在会话可见且窗口在前台时调用 `session/mark_read`，`up_to_seq` 取已看到的最新 seq，宿主只前移不后退，全局生效。
 - **在场**：每个客户端用 `client/presence` 上报是否在前台、正在看哪个会话。`IndexActor` 判断某个会话"此刻有人在看"时，只采信 `desktop_ui` 的在场（M3 再加上 `remote_device`），沙箱外的命令以只读身份上报在场，压不掉"需要处理"的通知（安全建议 #16）。CLI 的 `session/mark_read` 按 U4 照常推进已读位置，但不影响"需要处理"的通知。
 - **通知意图**：会话进入 `needs_action`、回合结束、出错时，如果此刻没有前台客户端在看这个会话，就写一条 `notification.intent` 事件，同时交给 `notifier` 弹系统通知（按设置开关）。M3 的推送也从这些事件生成。
-- **通知的点击**：通知由宿主 helper 弹出，点击后回调到宿主。宿主经 control 连接给已连接的桌面主进程发 `ui/navigate`，并激活 Cupper；UI 没在运行时，启动它并只把 URL 交给它（`NSWorkspace.open([URL], withApplicationAt:)`，UI 在 `applicationDidFinishLaunching` 之前就拿到这个 URL），不走任何应用都能注册的 `cupper://` 通用路由（安全 #7）。目标 App 按路径找：宿主路径往上三级就是外层 App，再核对它的身份；不按 bundle id 找，因为同一个 bundle id 可能登记着好几份（T101）。导航只切换到对应的会话，不把焦点移到请求面板上。
-- **通知由宿主弹出**（ADR-01）。宿主内置一小份通知文案（中英文，跟随系统语言），这是"宿主不下发文案"原则的唯一例外，因为通知不经过客户端。标题用会话标题（没有时用内置文案），正文只用按原因（需要批准、需要回答、回合完成、回合失败）选的内置文案，不放 agent 的原文：通知在锁屏上也看得到，原文还要另做脱敏（T150 开工前定，2026-11-10）。设置开关一个（`notifications.enabled`，默认开，界面在 T147）。helper 的通知身份由 SP-10（T101）核实：K5 有条件通过，按原设计做，条件是下面六条。
+- **通知的点击**：通知由宿主 helper 弹出，点击后回调到宿主。宿主经 control 连接给已连接的桌面主进程发 `ui/navigate`，并激活 Cupper；UI 没在运行时，启动它并只把 URL 交给它（`NSWorkspace.open([URL], withApplicationAt:)`，UI 在 `applicationDidFinishLaunching` 之前就拿到这个 URL），不走任何应用都能注册的 `cupper://` 通用路由（安全 #7）。目标 App 按路径找：宿主路径往上三级就是外层 App，再核对它的身份；不按 bundle id 找，因为同一个 bundle id 可能登记着好几份（T101）。点击后系统会先把宿主（accessory）放到前台，盖掉宿主在回调里立刻做的激活，所以激活外层 App 要排在系统这一步之后，或者用 `NSWorkspace.openApplication`（T150 第 0 步发现）。URL 的格式是 `<scheme>://session/<session_id>`，带请求时加 `?request=<request_id>`（[5.7.2](07-desktop.md#572-主进程模块) 的 `deeplink`）。导航只切换到对应的会话，不把焦点移到请求面板上。
+- **通知由宿主弹出**（ADR-01）。宿主内置一小份通知文案（中英文，跟随系统语言），这是"宿主不下发文案"原则的唯一例外，因为通知不经过客户端。标题用会话标题（没有时用内置文案），正文只用按原因（需要批准、需要回答、回合完成、回合失败）选的内置文案，不放 agent 的原文：通知在锁屏上也看得到，原文还要另做脱敏（T150 开工前定，2026-11-10）。开关是已有的三个设置键 `notifications.needs_action`、`.turn_completed`、`.error`（[5.2.11](#5211-文件服务与设置)，界面在 T147），回合失败归 `.error`。helper 的通知身份由 SP-10（T101）核实：K5 有条件通过，按原设计做，条件是下面六条。
 - **宿主 helper 的通知身份**（T101 的结论，T150 开工前补，2026-11-10）：
   1. **先在 LaunchServices 登记**：嵌套的 helper 不会随外层 App 自动登记，没登记时 usernoted 拒绝它（`UNErrorDomain 1`），授权框也不弹。UI 拉起宿主之前，经 `LSRegisterURL` 登记宿主的 bundle（[5.7.2](07-desktop.md#572-主进程模块) 的 `hostLauncher`）；宿主启动时也检查，没登记就自己登记。同一进程里刚登记后的头几次通知调用仍可能被拒，被拒的那条只记日志、不重试。
   2. **主线程跑 NSApplication**（[5.2.3](#523-并发模型)）。
-  3. **系统单独拉起的宿主只转交点击**：宿主退出后点通知，系统会经 LaunchServices 自己拉起一个宿主。认法是没有参数、父进程是 launchd、`XPC_SERVICE_NAME` 以 `application.` 开头。它只等点击回调，把目标交给 UI（UI 在就激活并发 `ui/navigate`，不在就按上面的方法启动它、只交一个 URL），然后退出；不加 `flock`、不绑套接字、不开数据库。这一步排在读 stdin 载荷之前（[5.2.13](#5213-进程监护与宿主生命周期) 第 1 步），否则开发和 e2e 构建会读载荷超时退出，点击也就丢了。
+  3. **系统单独拉起的宿主只转交点击**：宿主退出后点通知，系统会经 LaunchServices 自己拉起一个宿主。认法是没有参数、父进程是 launchd、`XPC_SERVICE_NAME` 以 `application.` 开头。它没有 control 连接，所以只等点击回调，一律用上面的方法交一个 URL（UI 在运行时 URL 经 `open-url` 送到，同样只导航），然后退出；不加 `flock`、不绑套接字、不开数据库。这一步排在读 stdin 载荷之前（[5.2.13](#5213-进程监护与宿主生命周期) 第 1 步），否则开发和 e2e 构建会读载荷超时退出，点击也就丢了。
   4. **有序退出时清掉已送达的通知**（`removeAllDeliveredNotifications`）；崩溃留下的通知被点击时靠第 3 条兜底。
   5. **上报授权状态**：用户关掉授权请求就记为拒绝，之后再申请系统也不弹框。宿主把授权状态写进 `host.updated`（附加字段），被拒后不重复申请，界面提示用户去系统设置里打开。
   6. **宿主带自己的名称和图标**：通知和系统设置只用宿主 bundle 自己的显示名称和图标，不取外层 App 的，而且只在第一次登记时取（[5.10.1](10-release.md#5101-包结构)）。
-  - **T150 的第一条验收**（T101 没验证）：正在运行的宿主改跑 NSApplication 之后，"宿主在、UI 已退出时点通知，系统再拉起一个宿主"和"宿主、UI 都在时点通知，弹出 Finder 对话框 …is not open anymore"是否都消失。消除不了时，考虑改由 LaunchServices 拉起宿主（影响 ADR-01、Q21），或者启用 T158。
+  - **T150 的第一条验收**（T101 没验证；2026-11-10 在 T150 第 0 步用原型补验通过，四次点击都没有 -600、没有 Finder 对话框，也没有再拉起宿主，见 `docs/tasks/T150-notifications/results.md`）：正在运行的宿主改跑 NSApplication 之后，"宿主在、UI 已退出时点通知，系统再拉起一个宿主"和"宿主、UI 都在时点通知，弹出 Finder 对话框 …is not open anymore"是否都消失。消除不了时，考虑改由 LaunchServices 拉起宿主（影响 ADR-01、Q21），或者启用 T158。
 - 同时维护 `clients`（连接列表）、`agents`（CLI、适配器、运行时、登录状态、资源占用）、`host`（版本、是否弱认证、是否待升级、防休眠）和提权请求，都写在索引流里。
 
 ## 5.2.10 Git 与 worktree 服务
