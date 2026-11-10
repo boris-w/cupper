@@ -80,6 +80,26 @@ jobs:
           uptime
           busy=$(jobs -p)
           [ -z "$busy" ] || kill $busy
+          # The tests a group's report says ran, each repeat counted; 0
+          # without a report. Both groups pass with no tests, as one of them
+          # may well be empty, so none at all means the spec and the name
+          # match nothing, and fails (T255).
+          ran() {
+            node -e 'const { stats: s } = require(process.argv[1]);
+              console.log(s.expected + s.unexpected + s.flaky)' \
+              "$GITHUB_WORKSPACE/repeat-$1.json" 2> /dev/null || echo 0
+          }
+          ran_rest=$(ran rest)
+          ran_focus=$(ran focus)
+          {
+            echo "### Tests run, each repeat counted"
+            echo "- not tagged @focus: $ran_rest"
+            echo "- tagged @focus: $ran_focus"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ $((ran_rest + ran_focus)) -eq 0 ]; then
+            echo "::error::No test ran: the spec and the test name match none"
+            exit 1
+          fi
           [ "$rest" -eq 0 ] && [ "$focus" -eq 0 ]
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
