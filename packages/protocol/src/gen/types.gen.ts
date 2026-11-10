@@ -1565,6 +1565,12 @@ export type HostUpdated = {
    * The previous run did not exit cleanly; present only when true.
    */
   last_exit_abnormal?: boolean;
+  /**
+   * Whether the user lets the host's notifications show (design 5.2.9);
+   * absent until the host has asked the system, and in builds that only
+   * record them.
+   */
+  notification_auth?: NotificationAuth;
   pending_upgrade: boolean;
   /**
    * The host keeps the Mac awake while turns run.
@@ -2153,6 +2159,11 @@ export type NoticeParams = {
    */
   reason?: string;
 };
+
+/**
+ * Open enum: unknown values must be accepted. Known: not_determined authorized denied
+ */
+export type NotificationAuth = "not_determined" | "authorized" | "denied" | (string & {});
 
 /**
  * `notification.intent`: written when no foreground client watches the

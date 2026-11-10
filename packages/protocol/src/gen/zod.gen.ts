@@ -641,17 +641,6 @@ export const zHostPurgeSnapshotsResult = z.object({
 });
 
 /**
- * `host.updated`.
- */
-export const zHostUpdated = z.object({
-  last_exit_abnormal: z.boolean().optional(),
-  pending_upgrade: z.boolean(),
-  power_assertion: z.boolean(),
-  version: z.string(),
-  weak_auth: z.boolean(),
-});
-
-/**
  * Hunk: `hk_` + 24 hex digits of a content hash.
  */
 export const zHunkId = z.string();
@@ -819,6 +808,26 @@ export const zNoticeCode = z.union([
   ]),
   z.string(),
 ]);
+
+/**
+ * Open enum: unknown values must be accepted. Known: not_determined authorized denied
+ */
+export const zNotificationAuth = z.union([
+  z.enum(["not_determined", "authorized", "denied"]),
+  z.string(),
+]);
+
+/**
+ * `host.updated`.
+ */
+export const zHostUpdated = z.object({
+  last_exit_abnormal: z.boolean().optional(),
+  notification_auth: zNotificationAuth.optional(),
+  pending_upgrade: z.boolean(),
+  power_assertion: z.boolean(),
+  version: z.string(),
+  weak_auth: z.boolean(),
+});
 
 /**
  * Open enum: unknown values must be accepted. Known: terminal editor finder

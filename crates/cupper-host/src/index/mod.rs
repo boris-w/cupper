@@ -13,7 +13,8 @@
 //!   or closed, and on every elevation granted or ended.
 //! - Session status, read marks, presence and notification intents are the
 //!   [`status`] core's, fed by the sessions' [`IndexNotes`], `session/mark_read`
-//!   and `client/presence`. `sessions.last_read_seq` is the one column of
+//!   and `client/presence`. Each intent also goes to the [`Notifier`], and
+//!   `host.updated` shows the authorization it reports. `sessions.last_read_seq` is the one column of
 //!   `sessions` the index writes; the session actors never do.
 //! - `agents.updated` merges what each agent runtime reports ([`AgentNotes`])
 //!   and the versions of git and git-lfs ([`IndexHandle::git`]).
@@ -39,9 +40,9 @@ use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{ConnId, IntentId, ProjectId, SessionId};
 use cupper_protocol::index::{
-    AgentStatus, AgentsUpdated, ClientsUpdated, GitTools, HostUpdated, NotificationIntent,
-    ProjectRemoved, RemovalReason, RuntimeFailure, RuntimeState, SessionRemoved, SessionSummary,
-    SettingsUpdated, TrustState,
+    AgentStatus, AgentsUpdated, ClientsUpdated, GitTools, HostUpdated, IntentReason,
+    NotificationAuth, NotificationIntent, PendingKind, ProjectRemoved, RemovalReason,
+    RuntimeFailure, RuntimeState, SessionRemoved, SessionSummary, SettingsUpdated, TrustState,
 };
 use cupper_protocol::methods::admin::Settings;
 use cupper_protocol::methods::handshake::{ClientPresence, ClientPresenceParams};
@@ -71,6 +72,7 @@ use crate::gateway::{
 };
 use crate::git::GitTool;
 use crate::ledger::{Outcome, Ticket};
+use crate::notifier::{Notifier, Reason};
 use crate::orchestrator::session::{IndexNotes, Note};
 use crate::pure::{Alarm, Core, TimerRequest, TimerTable};
 use crate::quiescence::{ActorKind, Participant, Quiescence};
@@ -103,6 +105,8 @@ pub struct IndexDeps {
     pub host: HostUpdated,
     /// What `settings.updated` follows.
     pub settings: watch::Receiver<Settings>,
+    /// Where notification intents go (design 5.2.9).
+    pub notifier: Notifier,
     /// What examines a CLI that asks for elevation.
     pub requesters: Arc<dyn Requesters>,
     /// The host's audit channel (design 5.8.6).
@@ -140,6 +144,8 @@ enum Mail {
     /// The self-check found the code on disk changed.
     PendingUpgrade,
     PowerAssertion(bool),
+    /// The notifier's authorization (design 5.2.9, rule 5).
+    NotificationAuth(NotificationAuth),
     /// The runtime installer's state of an agent's adapter runtime.
     Runtime(AgentKind, RuntimeState, Option<RuntimeFailure>),
     Checkpoint(oneshot::Sender<()>),
@@ -233,6 +239,11 @@ impl IndexHandle {
     /// `host.updated` says whether the host keeps the Mac awake (design 5.2.13).
     pub fn power_assertion(&self, held: bool) {
         let _ = self.mail.send(Mail::PowerAssertion(held));
+    }
+
+    /// `host.updated` says whether the user lets notifications show.
+    pub fn notification_auth(&self, auth: NotificationAuth) {
+        let _ = self.mail.send(Mail::NotificationAuth(auth));
     }
 
     /// The gateway whose clients `clients.updated` lists; set once it exists.
@@ -430,6 +441,14 @@ impl IndexActor {
                         .await;
                 }
                 Mail::PowerAssertion(_) => {}
+                Mail::NotificationAuth(auth)
+                    if Some(&auth) != self.deps.host.notification_auth.as_ref() =>
+                {
+                    self.deps.host.notification_auth = Some(auth);
+                    self.append(EventBody::HostUpdated(self.deps.host.clone()))
+                        .await;
+                }
+                Mail::NotificationAuth(_) => {}
                 #[cfg(feature = "test-harness")]
                 Mail::Reconcile(done) => {
                     if let Ok(mut tables) = self.deps.readers.read(rows::read).await {
@@ -701,9 +720,10 @@ impl IndexActor {
                     }));
                 }
                 Action::Intent(intent) => {
-                    let id = self.deps.ids.new_id().as_u128();
+                    let intent_id = IntentId::from_uuid(self.deps.ids.new_id().as_u128());
+                    self.notify(&intent_id, &intent.session, &intent.reason);
                     bodies.push(EventBody::NotificationIntent(NotificationIntent {
-                        intent_id: IntentId::from_uuid(id),
+                        intent_id,
                         session_id: intent.session,
                         reason: intent.reason,
                         request_id: intent.request,
@@ -736,6 +756,22 @@ impl IndexActor {
             let _ = self.writer.append(batch).await;
         }
         stored
+    }
+
+    /// The system notification of an intent, with the session's title and,
+    /// for `needs_action`, the kind of its oldest request.
+    fn notify(&self, id: &IntentId, session: &SessionId, reason: &IntentReason) {
+        let summary = self.status.summary(session);
+        let (title, pending) = summary.map_or((String::new(), None), |s| (s.title, s.pending_kind));
+        let reason = match (reason, pending) {
+            (IntentReason::NeedsAction, Some(PendingKind::Input)) => Reason::Question,
+            (IntentReason::NeedsAction, _) => Reason::Approval,
+            (IntentReason::TurnCompleted, _) => Reason::TurnCompleted,
+            (IntentReason::Error, _) => Reason::TurnFailed,
+            (IntentReason::Unknown(_), _) => return,
+        };
+        let settings = self.deps.settings.borrow();
+        self.deps.notifier.notify(&settings, id, reason, &title);
     }
 
     /// Hands each timer due now to its core.

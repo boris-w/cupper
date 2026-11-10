@@ -269,6 +269,11 @@ impl Status {
         self.changed.insert(id);
     }
 
+    /// `session`'s summary as the core has it now.
+    pub fn summary(&self, session: &SessionId) -> Option<SessionSummary> {
+        self.sessions.get(session).map(Entry::summary)
+    }
+
     fn flush(&mut self) -> Vec<Action> {
         self.armed = false;
         let removed = std::mem::take(&mut self.removed);
