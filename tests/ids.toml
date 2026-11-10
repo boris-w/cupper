@@ -1123,10 +1123,14 @@ milestone = "M1b"
 IT-notifier-record = "pr"
 UNIT-notifier-no-actions = "pr"
 
-# 系统通知 III：点击与导航（v1.3.90 由 T150 拆出）
+# 系统通知 III：点击（宿主）（v1.3.90 由 T150 拆出）
 [T251]
 milestone = "M1b"
 IT-notifier-click = "pr"
+
+# 系统通知 IV：导航与深链接（桌面）（v1.3.92 由 T251 拆出）
+[T254]
+milestone = "M1b"
 MAN-notification-product = "man"
 # K5 不通过时改由 T158 产出（替代 T250、T251 的宿主通知部分）
 E2E-notification-navigate = "nightly"

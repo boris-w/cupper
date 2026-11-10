@@ -11,6 +11,7 @@ import type { PrivilegedAction, PrivilegedResult } from "@cupper/shell-api";
 import type { Translate } from "../host/dialogs";
 import { run, type PrivilegedUi } from "./actions";
 import type { PrivilegedHost } from "./host";
+import type { CliPlace } from "./install-cli";
 
 export type { PrivilegedUi } from "./actions";
 export { controlHost, type PrivilegedHost } from "./host";
@@ -24,6 +25,8 @@ export interface PrivilegedDeps {
   host: PrivilegedHost;
   /** `privileged` text by its key. */
   t: Translate;
+  /** The app and the home `install_cli` links between. */
+  cli: CliPlace;
 }
 
 export class Privileged {
@@ -58,8 +61,8 @@ export class Privileged {
     }
     this.#open = true;
     try {
-      const { host, t } = this.#deps;
-      const result = await run(checked, { host, ui, t });
+      const { host, t, cli } = this.#deps;
+      const result = await run(checked, { host, ui, t, cli });
       this.#count(checked.kind, result.status === "cancelled");
       return result;
     } catch (error) {
@@ -110,6 +113,7 @@ const STRINGS: Record<string, string[]> = {
   elevation: ["elevation_id"],
   settings: [],
   purge_snapshots: [],
+  install_cli: [],
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

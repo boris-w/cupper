@@ -8,6 +8,7 @@
   "section_agents": "agent 状态",
   "section_connections": "连接与设备",
   "section_storage": "存储",
+  "section_cli": "命令行工具",
   "checking": "正在检测 agent",
   "restart": "重启",
   "restart_busy": "正在重启",
@@ -116,5 +117,15 @@
   "purge_busy": "正在清除",
   "purge_failed": "清除失败（{{code}}）",
   "purged": "已清除快照对象",
-  "purge_turn_running": "有回合正在运行，先停下回合再清除"
+  "purge_turn_running": "有回合正在运行，先停下回合再清除",
+  "cli_section": "安装",
+  "cli_label": "在终端里使用 cupper",
+  "cli_detail": "在 ~/.local/bin 建一个指向 App 内命令行的符号链接，~/.local/bin 要在 PATH 里。命令行默认只读，写操作要先在这里批准。",
+  "cli_installed": "已安装：{{link}}",
+  "install_cli": "安装",
+  "install_cli_busy": "正在安装",
+  "install_cli_failed": "安装失败（{{code}}）",
+  "install_cli_done": "命令行工具已在 {{link}}",
+  "install_cli_outside_applications": "先把 App 移到「应用程序」文件夹再安装：它现在在 {{path}}",
+  "install_cli_occupied": "{{path}} 已经有别的文件，没有覆盖它"
 }

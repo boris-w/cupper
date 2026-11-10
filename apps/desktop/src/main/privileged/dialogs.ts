@@ -173,3 +173,12 @@ export function elevationBox(t: Translate, request: AuthElevationGetResult) {
     ? { ...options, checkboxLabel: t("elevation_approve"), checkboxChecked: false }
     : options;
 }
+
+/** The link to make and what it points at; it takes `~/.local/bin` on the PATH. */
+export function installCliBox(t: Translate, link: string, target: string) {
+  const detail = lines(
+    t("install_cli_detail", { link: shownPath(link), target: shownPath(target) }),
+    t("install_cli_path"),
+  );
+  return box(t, t("install_cli_title"), detail, ["install", "cancel"]);
+}

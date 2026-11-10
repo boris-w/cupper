@@ -93,6 +93,7 @@ const PAGES = [
   ["agents", "UI-settings-agents", "Codex", "没有找到 CLI"],
   ["archived", "UI-settings-archived", "会话", "Fix the build"],
   ["connections", "UI-settings-archived", "本机客户端", "弱认证"],
+  ["cli", "UI-settings-cli", "安装", "在终端里使用 cupper"],
 ] as const;
 
 for (const theme of ["light", "dark"] as const) {

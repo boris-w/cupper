@@ -11,6 +11,7 @@ import { ROW } from "../sidebar/parts";
 import type { Route } from "../state/ui";
 import { AgentsSection } from "./AgentsSection";
 import { ArchivedSection } from "./ArchivedSection";
+import { CliSection } from "./CliSection";
 import { ConnectionsSection } from "./ConnectionsSection";
 import { GeneralSection } from "./GeneralSection";
 import { NotificationsSection } from "./NotificationsSection";
@@ -30,6 +31,7 @@ const SECTIONS: readonly [Entry, ...Entry[]] = [
   { id: "agents", Body: AgentsSection },
   { id: "connections", Body: ConnectionsSection },
   { id: "storage", Body: StorageSection },
+  { id: "cli", Body: CliSection },
 ];
 
 export function SettingsPage({ route }: { route: Extract<Route, { page: "settings" }> }) {

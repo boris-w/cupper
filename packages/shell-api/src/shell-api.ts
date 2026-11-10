@@ -203,10 +203,15 @@ export type PrivilegedAction =
   | { kind: "elevation"; elevation_id: ElevationId }
   | { kind: "settings"; patch: SettingsPatch }
   /** `host/purge_snapshots`, after the native dialog says how much it frees. */
-  | { kind: "purge_snapshots" };
+  | { kind: "purge_snapshots" }
+  /** Links the app's own CLI into `~/.local/bin` (design 5.10.1, M1b). */
+  | { kind: "install_cli" };
 
 export type PrivilegedResult =
-  /** `create_session` comes with `{session_id}`, `add_project` with `{project_id}`. */
+  /**
+   * `create_session` comes with `{session_id}`, `add_project` with
+   * `{project_id}`, `install_cli` with `{link}`.
+   */
   | { status: "confirmed"; result?: unknown }
   | { status: "cancelled" }
   /** Another confirmation dialog is open. */

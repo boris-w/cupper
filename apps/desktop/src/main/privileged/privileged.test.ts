@@ -3,19 +3,29 @@ import { hostError, MockHost } from "@cupper/host-client/mock";
 import { createI18n } from "@cupper/i18n";
 import type { InputEvidence } from "@cupper/protocol";
 import type { MessageBoxOptions } from "electron";
-import { describe, expect, test } from "vitest";
+import { mkdir, mkdtemp, readlink, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { describe, expect, onTestFinished, test } from "vitest";
 
 import { fixtures, mockConnect } from "../bridge/testing";
 import { PATH_CHARS, shownPath } from "./dialogs";
 import { controlHost, COOLDOWN_RESET_MS, Privileged, type PrivilegedUi } from "./index";
+import type { CliPlace } from "./install-cli";
 
 const ENTER: InputEvidence = { kind: "key", key: "enter" };
 const text = createI18n();
 const t = (key: string, values?: Record<string, unknown>) => text.t(`privileged:${key}`, values);
 const invisible = String.fromCodePoint(0x202e);
 
-/** A Privileged on a client of a mock host; the dialogs answer from `answers`, then cancel. */
-async function setup() {
+/**
+ * A Privileged on a client of a mock host; the dialogs answer from
+ * `answers`, then cancel. `install_cli` links between the places of `cli`.
+ */
+async function setup(
+  cli: CliPlace = { app: "/nowhere/Cupper.app", home: "/nowhere", flavor: "dev" },
+) {
   const host = new MockHost(fixtures);
   const conn = await mockConnect(host);
   const client = new HostClient();
@@ -33,7 +43,12 @@ async function setup() {
     pickDirectory: async () => ui.picked,
   };
   const never = () => new Promise<void>(() => undefined);
-  const privileged = new Privileged({ now: () => clock.now, host: controlHost(client, never), t });
+  const privileged = new Privileged({
+    now: () => clock.now,
+    host: controlHost(client, never),
+    t,
+    cli,
+  });
   const sent = (method: string) =>
     host.requests
       .filter((r) => r.method === method)
@@ -389,5 +404,36 @@ describe("UNIT-privileged-paths", () => {
     }
     expect(shown[0]?.detail?.startsWith(t("elevation_not_bundled"))).toBe(true);
     expect(shown[1]?.detail).not.toContain(t("elevation_not_bundled"));
+  });
+  test("install_cli: the dialog says what links where; a cancel links nothing; a refusal asks nothing", async () => {
+    const home = await realpath(await mkdtemp(join(tmpdir(), "cupper-privileged-cli-")));
+    onTestFinished(() => rm(home, { recursive: true, force: true }));
+    const app = join(home, "Applications", "Cupper Dev.app");
+    await mkdir(join(app, "Contents", "Helpers"), { recursive: true });
+    await writeFile(join(app, "Contents", "Helpers", "cupper"), "");
+    const { ask, shown, answers, clock } = await setup({ app, home, flavor: "dev" });
+    const link = join(home, ".local", "bin", "cupper-dev");
+    const target = join(app, "Contents", "Helpers", "cupper");
+    expect(await ask({ kind: "install_cli" })).toEqual({ status: "cancelled" });
+    expect(shown[0]?.message).toBe(t("install_cli_title"));
+    expect(shown[0]?.detail).toBe(
+      [
+        t("install_cli_detail", { link: shownPath(link), target: shownPath(target) }),
+        t("install_cli_path"),
+      ].join("\n"),
+    );
+    await expect(readlink(link)).rejects.toThrow();
+    clock.now += COOLDOWN_RESET_MS;
+    answers.push({ response: 0 });
+    expect(await ask({ kind: "install_cli" })).toEqual({ status: "confirmed", result: { link } });
+    expect(await readlink(link)).toBe(target);
+    // Installed already: where it is, without a dialog.
+    expect(await ask({ kind: "install_cli" })).toEqual({ status: "confirmed", result: { link } });
+    const outside = await setup({ app: home, home, flavor: "dev" });
+    expect(await outside.ask({ kind: "install_cli" })).toEqual({
+      status: "failed",
+      error: { code: "unavailable", reason: "outside_applications", path: home },
+    });
+    expect([shown.length, outside.shown.length]).toEqual([2, 0]);
   });
 });
