@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
 import { RouterProvider } from "../app/router";
+import { TooltipProvider } from "../components/Tooltip";
 import { ToasterProvider } from "../feedback/toaster";
 import { DEFAULT_PREFS } from "../layout/layout";
 import { StateProvider, UiProvider } from "../state/provider";
@@ -71,7 +72,9 @@ async function setup(
           <HostContext value={{ client, state: client.state, handshake: undefined }}>
             <UiProvider ui={ui}>
               <StateProvider>
-                <RouterProvider>{composer}</RouterProvider>
+                <RouterProvider>
+                  <TooltipProvider>{composer}</TooltipProvider>
+                </RouterProvider>
               </StateProvider>
             </UiProvider>
           </HostContext>
@@ -300,6 +303,80 @@ describe("follow-ups while a turn runs", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("queued messages", () => {
+  const queued = (version: number) => {
+    const content = [
+      { type: "text", text: "fix it" },
+      { type: "file_ref", path: "a.ts" },
+    ];
+    const entry = { queue_id: "q_1", preview: "fix it", content, created_at: 1 };
+    return {
+      type: "queue.updated",
+      data: { version, entries: [{ ...entry, created_by: "pr_desktop" }] },
+    };
+  };
+  const ops = (side = false, supported = true) => [
+    ...[running(), capabilities({ turn: steering(supported, side) }), queued(3)],
+  ];
+  const edits = (requests: (method: string) => unknown[]) =>
+    requests("session/queue_edit").map((params) => (params as { ops: unknown }).ops);
+  const pick = async (item: string) => {
+    screen.getByRole("button", { name: "排队消息菜单" }).focus();
+    await userEvent.keyboard("{Enter}");
+    await act(async () => void fireEvent.click(screen.getByRole("menuitem", { name: item })));
+  };
+
+  test("插话 steers the row's message at the queue's version; one that stayed says so", async () => {
+    const { mock, requests } = await setup("running", ops(true));
+    const stayed = { disposition: "queued", fallback_reason: "steer_pending" };
+    mock.handle("session/queue_edit", () => ({ result: { version: 3, steer: stayed } }));
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "插话" })));
+    expect(requests("session/queue_edit")).toEqual([
+      expect.objectContaining({ expected_version: 3, ops: [{ op: "steer", queue_id: "q_1" }] }),
+    ]);
+    expect(screen.getByText(/当前的工具调用会被丢弃/)).toBeTruthy();
+    expect(screen.getByText("没能插话，消息还在队列里")).toBeTruthy();
+    cleanup();
+
+    await setup("running", ops(false, false));
+    expect(screen.getByRole("button", { name: "插话" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  test("编辑消息 opens the row as a text box: Enter rewrites its text, Esc leaves it; a changed queue says so", async () => {
+    const { mock, requests } = await setup("running", ops());
+    mock.handle("session/queue_edit", () => ({ result: { version: 4 } }));
+    await pick("编辑消息");
+    const box = () => screen.getByRole("textbox", { name: "编辑消息" });
+    expect(box()).toHaveProperty("value", "fix it");
+    // The menu gives the focus away after it closed, a moment later.
+    await waitFor(() => expect(document.activeElement).toBe(box()));
+    fireEvent.change(box(), { target: { value: "fix it all" } });
+    await act(async () => void fireEvent.keyDown(box(), { key: "Enter" }));
+    const content = [
+      { type: "text", text: "fix it all" },
+      { type: "file_ref", path: "a.ts" },
+    ];
+    expect(edits(requests)).toEqual([[{ op: "replace", queue_id: "q_1", content }]]);
+    expect(screen.queryByRole("textbox", { name: "编辑消息" })).toBeNull();
+
+    await pick("编辑消息");
+    fireEvent.keyDown(box(), { key: "Escape" });
+    expect(screen.queryByRole("textbox", { name: "编辑消息" })).toBeNull();
+    mock.handle("session/queue_edit", () => hostError("conflict", "version_mismatch"));
+    await pick("编辑消息");
+    await act(async () => void fireEvent.keyDown(box(), { key: "Enter" }));
+    expect(edits(requests)).toHaveLength(2);
+    expect(screen.getByText("排队消息已经变了，显示的是最新的")).toBeTruthy();
+  });
+
+  test("the menu switches follow-ups to queue by default, and back", async () => {
+    await setup("running", ops());
+    await pick("开启排队");
+    await pick("关闭排队");
+    await pick("开启排队");
   });
 });
 

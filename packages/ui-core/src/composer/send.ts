@@ -69,6 +69,7 @@ export function useSessionSend(sessionId: string) {
   const ui = useUi();
   const t = useT();
   const { show } = useToasts();
+  const once = useHintOnce(sessionId);
   const followUpQueue = usePref(FOLLOW_UP_QUEUE_PREF) === true;
   return useCallback(
     async (content: PromptBlock[], action: SendAction, more: { reply_to?: string } = {}) => {
@@ -77,8 +78,6 @@ export function useSessionSend(sessionId: string) {
       const can = view?.capabilities?.turn.steer;
       const wanted = steers(action, turn !== undefined, followUpQueue);
       const steer = wanted && can?.supported === true;
-      const once = (name: string) =>
-        ui.getState().hint(sessionId, name) && show({ id: name, text: t(`composer:${name}`) });
       if (wanted && !steer) once("queued_instead");
       if (steer && can.side_effects) once("steer_side_effects");
       const mode = steer ? { mode: "steer", expected_turn_id: turn } : { mode: "queue" };
@@ -93,7 +92,20 @@ export function useSessionSend(sessionId: string) {
         if (steer) ui.getState().addSteering(sessionId, -1);
       }
     },
-    [client, streams, ui, t, show, sessionId, followUpQueue],
+    [client, streams, ui, t, show, once, sessionId, followUpQueue],
+  );
+}
+
+/** Shows hint `composer:{name}` the first time it comes in session `sessionId`. */
+export function useHintOnce(sessionId: string) {
+  const ui = useUi();
+  const t = useT();
+  const { show } = useToasts();
+  return useCallback(
+    (name: string) => {
+      if (ui.getState().hint(sessionId, name)) show({ id: name, text: t(`composer:${name}`) });
+    },
+    [ui, show, t, sessionId],
   );
 }
 
