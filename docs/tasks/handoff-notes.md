@@ -515,7 +515,7 @@
 | T161、T180 或安全工程师 | Info.plist 带着 Electron 默认的摄像头、麦克风、蓝牙（两项）、音频采集用途说明，agent 触发这类授权时会显示成 Cupper；要不要在打包时删掉（需要 `afterPack` 钩子）待定，"自用前须知"里已写一律拒绝 | T160（已写入 T161 的 brief） |
 | T161 | 复用 `apps/desktop/src/test-entry-points.ts` 和 `apps/desktop/selfuse/build.test.ts` 里逐个 Mach-O 检查 entitlements、读 fuse 线的做法；`electron-builder.release.yml` 至今没有真正构建过；5.10.2 可补：库不带 entitlements，`chrome_crashpad_handler`、`app_shim_loader`、`ShipIt` 拿 `entitlementsInherit`，helper 的 identifier 是 `<appId>.helper`、`.helper.Renderer`、`.helper.GPU`、`.helper.Plugin` | T160（已写入 T161 的 brief） |
 | 以后改升级流程的任务（5.5.7、T129、T180） | keyed 构建（自用、开发、e2e）里宿主因待升级退出后，旧界面会自动从磁盘拉起新宿主，新旧两版混用；可以考虑收到 `host/shutdown(upgrade)` 后不再拉起，改为提示重启 App | T160 |
-| T147 | 设置页"安装命令行工具"还没做，自用构建的安装说明暂时让用户 `ln -s` | T160 |
+| T253（v1.3.92 前为 T147） | 设置页"安装命令行工具"还没做，自用构建的安装说明暂时让用户 `ln -s`；做完后改 `docs/user/` 里的安装说明 | T160 |
 | T151、T153 | 默认编辑器是 TextEdit（T036 定的），`open -a TextEdit <目录>` 打不开文件夹；改成清单里第一个已安装的编辑器，或由界面引导用户选一个 | T126（已写入 T151 的 brief） |
 | COMPAT 运行或真机验证（T113 等） | 提示里 `file_ref` 映射成的 `resource_link`，`file://` uri 没有百分号编码，路径里有空格、`#`、`%` 时不合法；要不要编码看两个适配器怎么解析 | T126 |
 | 以后改输入框或 `session/send` 的任务 | 图片超限、agent 不收图片、越出工作区的 `file_ref`，现在要到 prompt 时才失败（由 error 条目显示）；可以在 `session/send` 按能力提前校验 | T126 |

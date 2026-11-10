@@ -1132,6 +1132,11 @@ MAN-notification-product = "man"
 E2E-notification-navigate = "nightly"
 MAN-notification = { parts = ["MAN-notification-spike", "MAN-notification-product"] }
 
+# 设置页"安装命令行工具"（v1.3.92 由 T147 拆出）
+[T253]
+milestone = "M1b"
+UNIT-install-cli = "pr"
+
 # App 图标颜色（v1.3.91 新增；不在 M1b 的退出条件里，所以里程碑是 release）
 [T252]
 milestone = "release"
