@@ -20,6 +20,8 @@ extraFiles:
   - from: ../../target/host-bundle/dev/CupperHost.app
     to: Helpers/CupperHost.app
 mac:
+  # The latte icon (build/icon.sh); the host bundle takes the same file (design 5.10.1).
+  icon: build/icon.icns
   # `host-bundle` signed it; signing it again would change its cdhash.
   signIgnore: ["CupperHost\\.app"]
   target: dir

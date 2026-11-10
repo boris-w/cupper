@@ -37,6 +37,8 @@ protocols:
   - name: Cupper Local
     schemes: [cupper-local]
 mac:
+  # The latte icon (build/icon.sh); the host bundle takes the same file (design 5.10.1).
+  icon: build/icon.icns
   # `host-bundle` signed them; signing them again would change the host's
   # cdhash, which the CLI checks.
   signIgnore: ["CupperHost\\.app", "/Helpers/cupper$"]
