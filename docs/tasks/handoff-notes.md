@@ -599,3 +599,5 @@
 | T251 | 点击的回调要给通知中心设代理（T250 没设，宿主不在前台时横幅照常出现）；通知的 `userInfo` 带会话 ID 和请求 ID，或者由通知 ID（就是意图 ID `n_…`）反查；测试用的点击入口接在 `test_config.notifier: record` 上 | T250 |
 | 读通知内容属性的代码 | objc2 的 `UNMutableNotificationContent.subtitle` 没设置时返回 nil，绑定却声明为非空，一调用就 panic；产品代码不读它 | T250 |
 | 维护 i18n 的任务（T154 等） | 同一个 JSON 文案文件里重复的键，后写的会悄悄覆盖先写的，i18n 的用例查不出来（T253 在 `settings.json` 里重复过 `cli`，靠 T151 的用例才发现）；可以给 i18n 的检查加一条重复键检测 | T253 |
+| T180 | 通知点击前只核对外层 App 的 bundle id（宿主路径往上三级的 Info.plist）；有了发布构建的 Team ID 后，还要核对外层 App 的代码签名满足 UI 的要求（同 5.8.1 宿主对 UI 主进程的要求），不满足就不激活、不交 URL | T251 |
+| T254 | 桌面主进程转发 control 上的 `ui/navigate`；`deeplink` 给 e2e、开发构建补注册 scheme，`open-url` 只认 `<scheme>://session/<id>[?request=<id>]`，两个 ID 按协议格式（前缀加 1–64 个 `[A-Za-z0-9_-]`）校验，App 还没启动完收到的 URL 也要处理；E2E 用 `test/notification_click`（harness 连接，`notification_id` 取索引流 `notification.intent` 的 `intent_id`）；MAN-notification-product 一并核对激活的时机（`notifier_settle` 300 ms 够不够）和系统单独拉起的宿主 | T251 |
