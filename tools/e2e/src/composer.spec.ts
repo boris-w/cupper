@@ -7,7 +7,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, test, type Cupper } from "./fixture";
-import { setPref, texts, untilEvent } from "./helpers";
+import { setPref, startingPrefs, texts, untilEvent } from "./helpers";
 import { onScreen } from "./nfr1";
 
 /**
@@ -135,9 +135,10 @@ test("E2E-slash-commands: / lists the agent's commands by search; one taken goes
 test("E2E-send-key-setting: with ⌘Enter to send, Enter is a newline; ⌘⇧Enter queues", async ({
   cupper,
 }) => {
+  // From the first render: a pref set later reaches the composer a moment after.
+  startingPrefs(cupper, { "composer.sendKey": "mod_enter" });
   const stream = await onScreen(cupper, "say ready");
   const window = cupper.window;
-  await setPref(cupper, "composer.sendKey", "mod_enter");
   const area = window.locator("[data-composer] textarea");
   await area.fill("say one");
   await area.press("Enter");
@@ -161,6 +162,19 @@ const steered = (cupper: Cupper, stream: string, text: string) =>
     (e) =>
       e.type === "item.started" && e.data.steered === true && JSON.stringify(e.data).includes(text),
   );
+
+/**
+ * Waits until the window has follow-ups queued by default, as a queued
+ * row's menu says ("关闭排队"); the menu closed again.
+ */
+async function queueingShown(cupper: Cupper) {
+  const [t, window] = [await texts(cupper), cupper.window];
+  const row = window.locator("[data-queue-id]").first();
+  await row.getByRole("button", { name: t("composer:queue_menu") }).click();
+  await expect(window.getByRole("menuitem", { name: t("composer:queue_off") })).toBeVisible();
+  await window.keyboard.press("Escape");
+  await expect(window.getByRole("menu")).toHaveCount(0);
+}
 
 /**
  * A session on screen with a second turn running `script`, sent from the
@@ -190,6 +204,7 @@ test("E2E-composer-steer-default: Enter steers the running turn, ⌘Enter queues
   await expect(queue).toHaveText(["queued one"]);
 
   await setPref(cupper, "composer.followUpQueue", true);
+  await queueingShown(cupper);
   await area.fill("queued two");
   await area.press("Enter");
   await expect(queue).toHaveText(["queued one", "queued two"]);
@@ -222,6 +237,8 @@ test("E2E-queue-edit: a queued message edited in place and steered in from its r
       .getByRole("button", { name: t("composer:queue_menu") })
       .click();
     await window.getByRole("menuitem", { name: t(item) }).click();
+    // Closed, so that it holds the focus no more.
+    await expect(window.getByRole("menu")).toHaveCount(0);
   };
   await area.fill("first draft");
   await area.press("Meta+Enter");
@@ -240,6 +257,7 @@ test("E2E-queue-edit: a queued message edited in place and steered in from its r
   await area.fill("second");
   await area.press("Meta+Enter");
   await pick("composer:queue_on");
+  await queueingShown(cupper);
   await area.fill("third");
   await area.press("Enter");
   await expect(previews).toHaveText(["second", "third"]);

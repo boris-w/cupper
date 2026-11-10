@@ -3,6 +3,7 @@
 // host, the CLI's elevation, and sampling the network.
 
 import { execFileSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -26,7 +27,21 @@ declare global {
   }
 }
 
-/** Sets a preference through the window's shell, as the settings page will (T147). */
+/**
+ * The preferences the app starts with, in userData's prefs.json: before
+ * `launch`, so that the window has them from its first render.
+ */
+export function startingPrefs(cupper: Cupper, prefs: Record<string, unknown>) {
+  const userData = join(cupper.dataDir, "ui");
+  mkdirSync(userData, { recursive: true, mode: 0o700 });
+  writeFileSync(join(userData, "prefs.json"), JSON.stringify(prefs), { mode: 0o600 });
+}
+
+/**
+ * Sets a preference through the window's shell, as the settings page will
+ * (T147). The window takes it a moment later: a test that depends on it
+ * waits for what shows it.
+ */
 export async function setPref(cupper: Cupper, key: string, value: unknown) {
   type Set = (key: string, value: unknown) => Promise<void>;
   await cupper.window.evaluate(
