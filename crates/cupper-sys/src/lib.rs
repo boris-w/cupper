@@ -43,6 +43,8 @@ pub use proc::{
     ProcessInfo, StartTime, UniqueIds, descendants, has_tty, parent_chain, pid_path, process_info,
     resident_size, unique_ids,
 };
+#[cfg(any(test, feature = "test-util"))]
+pub use runloop::quit_once_running;
 pub use runloop::{RunLoop, RunLoopStop};
 pub use spawn::{Child, Command, Stdio, spawn};
 pub use system::{

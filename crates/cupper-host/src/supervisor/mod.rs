@@ -128,7 +128,9 @@ pub enum Exit {
     /// `host/exit`.
     Requested { force: bool },
     /// SIGTERM, e.g. from the desktop restarting a host it cannot reach
-    /// (design 5.8.1, Q22): running turns are interrupted.
+    /// (design 5.8.1, Q22), or the quit Apple Event of logout, shutdown and
+    /// Activity Monitor's "Quit" (design 5.2.13): running turns are
+    /// interrupted.
     Terminated,
     /// The store writer died: exit 1, without `last_clean_exit_at`.
     WriterDied,
@@ -156,6 +158,8 @@ pub struct Host {
     audit: mpsc::UnboundedSender<AuditRecord>,
     drain: audit::Drain,
     exits: mpsc::UnboundedReceiver<Exit>,
+    /// For the quit Apple Event, which comes to the main thread.
+    quit: mpsc::UnboundedSender<Exit>,
     terminate: Signal,
     socket: PathBuf,
     power: Power,
@@ -528,7 +532,7 @@ impl Host {
             gateway: Arc::downgrade(&gateway),
             index: index.clone(),
             admission,
-            exits: to_supervisor,
+            exits: to_supervisor.clone(),
             parent: cfg!(feature = "dev-auth").then(std::os::unix::process::parent_id),
             installing,
             audit: audit.clone(),
@@ -548,6 +552,7 @@ impl Host {
             audit,
             drain: audit::Drain(drain),
             exits,
+            quit: to_supervisor,
             terminate,
             socket,
             power,
@@ -555,6 +560,15 @@ impl Host {
             quiescence,
             _lock: lock,
         })
+    }
+
+    /// What the quit Apple Event calls on the main thread: the orderly exit
+    /// SIGTERM starts (design 5.2.13).
+    pub fn quitter(&self) -> impl Fn() + 'static {
+        let quit = self.quit.clone();
+        move || {
+            let _ = quit.send(Exit::Terminated);
+        }
     }
 
     /// Serves until the orderly exit, which it then runs; the exit code.
