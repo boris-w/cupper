@@ -32,10 +32,12 @@ T250、T251 的任务书到时另写。
 3. **宿主的名称和图标**（`cargo xtask host-bundle`）：
    - Info.plist 写 `CFBundleDisplayName`、`CFBundleName`，取构建种类的显示名称（5.7.9）；
    - 把 App 的 icns 复制进 `CupperHost.app/Contents/Resources`，`CFBundleIconFile` 指向它；
-   - 宿主用主 App 实际用的图标。App 还没有自己的图标，现在用的是 Electron 的默认图标，宿主也取它；不加占位文件，也不改 electron-builder 的图标配置。
-   - 用户 2026-11-10 决定图标先放一放，在 T250 合并前定稿（第一次申请通知授权时系统记下名称和图标）。定稿后改成取 App 自己的 icns，那是 T250 之前的一个小改动。
+   - **本任务只写名称，不写图标**（2026-11-10 裁定）：
+     - App 还没有自己的图标。Electron 的默认图标不在 node_modules 里，取它要么下载、要么入库一份替身，都是以后要扔掉的东西。
+     - 用户决定图标先放一放，T250 合并前定稿；`CFBundleIconFile` 和图标文件到时随 T250 一起加。
+     - 通知中心在 helper 第一次连上通知服务时才读取名称和图标（T101 的 `results.md`），T150 不调用通知接口，所以先不写图标没有风险。
 4. **用例**：
-   - 新增 **UNIT-host-bundle-identity**（已登记）：四种构建的宿主 Info.plist 名称和图标都对。
+   - 新增 **UNIT-host-bundle-identity**（已登记）：四种构建的宿主 Info.plist 名称都对（图标由 T250 补进这个用例）。
    - 宿主现有的用例在 NSApplication 主循环上照常通过。
    - 登记的调用不在本机的用例里真的执行（不改用户的 LaunchServices 数据库），按 sys 层的接口测，或者放到 runner 上。
 
@@ -49,7 +51,6 @@ T250、T251 的任务书到时另写。
 - [x] 第 0 步的补验通过（`results.md`）。
 - [ ] UNIT-host-bundle-identity 通过；宿主的用例在 NSApplication 主循环上全部通过。
 - [ ] 宿主的约束都守住：`unsafe` 只在 cupper-sys；时间只经 `Clock`；子进程只经 `cupper-sys::spawn`。
-- [ ] 宿主的图标和主 App 实际用的图标是同一个。
 - [ ] PR 上 GitHub CI 的 8 个检查都通过，nightly 的 `selfuse`、`release-config` 在分支上通过（由 `main` 触发），汇报里写上链接（守则第 9 条）。
 
 ## 规模
