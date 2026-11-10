@@ -1,5 +1,6 @@
 // The composer's attachments (design 5.7.4, CP-2): `@` and its list by keys,
-// files dropped on the composer as the shell gives their paths, and images.
+// files dropped on the composer as the shell gives their paths, and images;
+// slash commands (CP-3) and the send key preference (design 5.7.7).
 
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -7,6 +8,9 @@ import { join } from "node:path";
 import { expect, test, type Cupper } from "./fixture";
 import { texts, untilEvent } from "./helpers";
 import { onScreen } from "./nfr1";
+
+/** The shell's `prefs.set`, as the page has it. */
+type PrefSet = (key: string, value: unknown) => Promise<void>;
 
 /**
  * Drops files with paths of their own on the composer, as a drag from the
@@ -101,4 +105,56 @@ test("E2E-image-paste: pasted, dropped and picked images go with the next messag
     JSON.stringify(event.data).includes('"type":"image"'),
   );
   expect(JSON.stringify(sent.data).match(/"type":"image"/g)).toHaveLength(3);
+});
+
+test("E2E-slash-commands: / lists the agent's commands by search; one taken goes as text", async ({
+  cupper,
+}) => {
+  await onScreen(cupper, "say ready");
+  const t = await texts(cupper);
+  const window = cupper.window;
+  const area = window.locator("[data-composer] textarea");
+  const menu = window.getByRole("listbox", { name: t("composer:slash_title") });
+
+  await area.fill("/zz");
+  await expect(menu.getByText(t("composer:slash_none"))).toBeVisible();
+  await area.fill("/comp");
+  await expect(menu.getByRole("option")).toHaveText([/^\/compact/]);
+  await area.press("Enter");
+  await expect(area).toHaveValue("/compact ");
+  await area.pressSequentially("keep it short");
+  await area.press("Enter");
+  // The fake agent answers with the text it got.
+  const reply = window.getByText("fake reply to: /compact keep it short");
+  await expect(reply).toBeVisible();
+
+  // The new session page lists the commands the host cached for Claude.
+  await window.getByRole("button", { name: t("sidebar:new_session"), exact: true }).click();
+  await area.fill("/");
+  await expect(menu.getByRole("option", { name: /^\/init/ })).toBeVisible();
+});
+
+test("E2E-send-key-setting: with ⌘Enter to send, Enter is a newline; ⌘⇧Enter queues", async ({
+  cupper,
+}) => {
+  const stream = await onScreen(cupper, "say ready");
+  const window = cupper.window;
+  // Through the shell, as the settings page will (T147).
+  await window.evaluate(async () => {
+    const { shell } = window as unknown as { shell: { prefs: { set: PrefSet } } };
+    await shell.prefs.set("composer.sendKey", "mod_enter");
+  });
+  const area = window.locator("[data-composer] textarea");
+  await area.fill("say one");
+  await area.press("Enter");
+  await expect(area).toHaveValue("say one\n");
+
+  // A turn that runs until stopped, sent with ⌘Enter; behind it, ⌘⇧Enter queues.
+  await area.fill("wait_cancel");
+  await area.press("Meta+Enter");
+  await expect(area).toHaveValue("");
+  await untilEvent(cupper, stream, (e) => e.type === "turn.started" && e.data.turn_no === 2);
+  await area.fill("say later");
+  await area.press("Meta+Shift+Enter");
+  await expect(window.locator("[data-queue-id]")).toContainText("say later");
 });
