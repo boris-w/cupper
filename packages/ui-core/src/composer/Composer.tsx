@@ -24,11 +24,13 @@ import { isComment } from "../review/view";
 import { TierHint } from "./config";
 import { useStreams, useUi } from "../state/provider";
 import { EXTENSIONS, OverlayContext } from "./extensions";
-import { composing, escapeAction, SEND_KEY_PREF, sendAction } from "./keys";
+import { composing, escapeAction, SEND_KEY_PREF, sendAction, type SendAction } from "./keys";
 import { thumbnail } from "./thumbnails";
 import { NEW_DRAFT, usePref, useSend, useSessionState, type NewSession } from "./send";
 
 const NONE: readonly PromptBlock[] = [];
+/** How long a steer waits on its answer before the composer says so. */
+const STEER_LATE_MS = 1_000;
 const ACTION =
   "rounded-lg bg-btn-secondary px-2.5 py-1 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -133,6 +135,18 @@ function lastPrompt(view: SessionView | undefined): string {
   return (content ?? []).flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
 }
 
+/** `on` once it has been on for `ms`; off at once. */
+function useAfter(on: boolean, ms: number) {
+  const [late, setLate] = useState(false);
+  useEffect(() => {
+    setLate(false);
+    if (!on) return;
+    const timer = setTimeout(() => setLate(true), ms);
+    return () => clearTimeout(timer);
+  }, [on, ms]);
+  return late;
+}
+
 /** The composer of a session, or of the new session page when `sessionId` is absent. */
 export function Composer(props: {
   sessionId?: string;
@@ -172,11 +186,16 @@ export function Composer(props: {
   const ready = sessionId !== undefined || projectId !== undefined;
   const empty = draft.trim() === "" && attachments.length === 0;
   const state = empty ? (running ? "stop" : "disabled") : ready ? "send" : "disabled";
-  const submit = () => {
+  const submit = (action: SendAction) => {
     if (state === "send") {
-      return paused ? setConfirming(true) : void send(draft, attachments);
+      return paused ? setConfirming(true) : void send(draft, attachments, action);
     }
   };
+  // A steer whose answer is late says so; the composer goes on meanwhile.
+  const waiting = useAfter(
+    useStore(ui, (state) => (state.steering[key] ?? 0) > 0),
+    STEER_LATE_MS,
+  );
   const confirmSend = async () => {
     setConfirming(false);
     if (await send(draft, attachments)) {
@@ -233,6 +252,11 @@ export function Composer(props: {
     >
       <div ref={setContainer} className="relative" />
       <TierHint sessionId={sessionId} />
+      {waiting && (
+        <p role="status" className="pb-2 text-center text-sm text-fg-tertiary">
+          {t("composer:steer_waiting")}
+        </p>
+      )}
       {armed && (
         <p role="status" className="pb-2 text-center text-sm text-fg-tertiary">
           {t("composer:esc_hint")}
@@ -297,10 +321,10 @@ export function Composer(props: {
                 }
                 return;
               }
-              // No steer yet (T242): either key sends, and every message queues.
-              if (sendAction(event.nativeEvent, sendKey)) {
+              const action = sendAction(event.nativeEvent, sendKey);
+              if (action) {
                 event.preventDefault();
-                submit();
+                submit(action);
               }
               return;
             }
@@ -329,7 +353,7 @@ export function Composer(props: {
             data-send-state={state}
             aria-label={t(state === "stop" ? "composer:stop" : "composer:send")}
             disabled={state === "disabled"}
-            onClick={state === "stop" ? interrupt : submit}
+            onClick={state === "stop" ? interrupt : () => submit("send")}
             className="flex size-7 items-center justify-center rounded-full bg-btn-primary text-btn-primary-fg outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           >
             {state === "stop" ? <StopIcon /> : <ArrowUpIcon />}

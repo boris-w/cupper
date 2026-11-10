@@ -25,17 +25,24 @@ export interface UiState {
   scroll: Partial<Record<string, number>>;
   /** A composer menu something outside it opened (`change_model`: `model`). */
   menu: string | null;
+  /** The one-time hints each session has shown (design 5.7.4); not saved. */
+  hinted: Partial<Record<string, readonly string[]>>;
+  /** How many steers each session waits on the host's answer to. */
+  steering: Partial<Record<string, number>>;
   navigate(route: Route): void;
   openMenu(menu: string | null): void;
   setDraft(sessionId: string, text: string): void;
   setAttachments(sessionId: string, blocks: readonly PromptBlock[]): void;
   setScroll(sessionId: string, top: number): void;
+  /** Marks hint `name` shown in the session; whether it was not yet. */
+  hint(sessionId: string, name: string): boolean;
+  addSteering(sessionId: string, delta: 1 | -1): void;
 }
 
 export type UiStore = StoreApi<UiState>;
 
 export function createUiStore(layout: LayoutState, route: Route = { page: "new" }): UiStore {
-  return createStore<UiState>()((set) => {
+  return createStore<UiState>()((set, get) => {
     const per =
       <K extends "drafts" | "attachments" | "scroll">(field: K) =>
       (sessionId: string, value: NonNullable<UiState[K][string]>) =>
@@ -47,11 +54,23 @@ export function createUiStore(layout: LayoutState, route: Route = { page: "new" 
       attachments: {},
       scroll: {},
       menu: null,
+      hinted: {},
+      steering: {},
       navigate: (next) => set({ route: next }),
       openMenu: (menu) => set({ menu }),
       setDraft: per("drafts"),
       setAttachments: per("attachments"),
       setScroll: per("scroll"),
+      hint: (sessionId, name) => {
+        const shown = get().hinted[sessionId] ?? [];
+        if (shown.includes(name)) return false;
+        set({ hinted: { ...get().hinted, [sessionId]: [...shown, name] } });
+        return true;
+      },
+      addSteering: (sessionId, delta) =>
+        set((state) => ({
+          steering: { ...state.steering, [sessionId]: (state.steering[sessionId] ?? 0) + delta },
+        })),
     };
   });
 }

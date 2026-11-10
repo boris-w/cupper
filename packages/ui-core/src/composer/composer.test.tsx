@@ -14,9 +14,10 @@ import { DEFAULT_PREFS } from "../layout/layout";
 import { StateProvider, UiProvider } from "../state/provider";
 import { createUiStore } from "../state/ui";
 import { Composer } from "./Composer";
-import { escapeAction, sendAction } from "./keys";
+import { escapeAction, FOLLOW_UP_QUEUE_PREF, sendAction, steers } from "./keys";
 import { ComposerArea } from "./QueueList";
 import { DEFAULT_NEW_SESSION, NEW_DRAFT } from "./send";
+import { capabilities, running, steering } from "./test-capabilities";
 
 afterEach(cleanup);
 
@@ -83,32 +84,11 @@ async function setup(
   const area = screen.getByRole("textbox");
   const requests = (method: string) =>
     mock.requests.filter((request) => request.method === method).map((request) => request.params);
-  return { ui, area, requests, mock, conn, controls };
+  return { ui, area, requests, mock, conn, controls, shell };
 }
 
 const type = (area: HTMLElement, text: string) =>
   fireEvent.change(area, { target: { value: text } });
-
-/** A `session.capabilities` event: an agent with images, no commands and no options, but `more`. */
-const capabilities = (more: object) => ({
-  type: "session.capabilities",
-  data: {
-    ...{ agent: "claude", commands: [], config: [] },
-    prompt: { image: true, file_ref: true, max_image_bytes: 1024 * 1024 },
-    session: { resume: true, load_history: false, fork: false },
-    turn: {
-      ...{ queue: true, steer: { supported: false, side_effects: false } },
-      ...{ interrupt: true, interrupt_stops_commands: true },
-    },
-    interactions: { reject_ends_turn: false, question_forms: true, plan_confirm: true },
-    extraction: {
-      ...{ exit_code: true, output_streaming: false, diff: "per_file", thinking: true },
-      ...{ plan: "markdown_only", run_state: "inferred" },
-    },
-    versions: { adapter: "1", cli: "1", cli_compat: "verified" },
-    ...more,
-  },
-});
 
 describe("UNIT-composer-ime", () => {
   test("Enter sends unless an input method composes; Shift and Option keep the newline", () => {
@@ -234,6 +214,92 @@ describe("sending while the queue is paused", () => {
     expect(requests("session/queue_resume")).toEqual([
       expect.objectContaining({ session_id: "s_1" }),
     ]);
+  });
+});
+
+describe("follow-ups while a turn runs", () => {
+  const send = (area: HTMLElement, text: string, key: object = {}) => {
+    type(area, text);
+    return act(async () => void fireEvent.keyDown(area, { key: "Enter", ...key }));
+  };
+  const modes = (requests: (method: string) => unknown[]) =>
+    requests("session/send").map((params) => {
+      const { mode, expected_turn_id } = params as { mode: string; expected_turn_id?: string };
+      return expected_turn_id ? `${mode} ${expected_turn_id}` : mode;
+    });
+  const dismiss = () =>
+    act(async () => void fireEvent.click(screen.getByRole("button", { name: "关闭" })));
+
+  test("steering: the send key while a turn runs, unless swapped; idle, nothing steers", () => {
+    expect(steers("send", true, false)).toBe(true);
+    expect(steers("queue", true, false)).toBe(false);
+    expect(steers("send", true, true)).toBe(false);
+    expect(steers("queue", true, true)).toBe(true);
+    expect(steers("send", false, false)).toBe(false);
+    expect(steers("queue", false, true)).toBe(false);
+  });
+
+  test("the send key and the button steer the running turn, the queue key queues; the preference swaps them", async () => {
+    const ops = [running(), capabilities({ turn: steering(true) })];
+    const { area, requests, shell } = await setup("running", ops);
+    await send(area, "a");
+    await send(area, "b", { metaKey: true });
+    type(area, "c");
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "发送" })));
+    await act(() => shell.prefs.set(FOLLOW_UP_QUEUE_PREF, true));
+    await send(area, "d");
+    await send(area, "e", { metaKey: true });
+    expect(modes(requests)).toEqual(["steer t_1", "queue", "steer t_1", "queue", "steer t_1"]);
+  });
+
+  test("an agent that cannot steer queues and says so once; side effects show on the first steer", async () => {
+    const plain = await setup("running", [running(), capabilities({ turn: steering(false) })]);
+    await send(plain.area, "a");
+    expect(screen.getByText("已转为排队")).toBeTruthy();
+    await dismiss();
+    await send(plain.area, "b");
+    expect(screen.queryByText("已转为排队")).toBeNull();
+    expect(modes(plain.requests)).toEqual(["queue", "queue"]);
+    cleanup();
+
+    const claude = await setup("running", [
+      running(),
+      capabilities({ turn: steering(true, true) }),
+    ]);
+    await send(claude.area, "a");
+    const effects = "插话时，当前的工具调用会被丢弃，正在运行的命令会被移到后台";
+    expect(screen.getByText(effects)).toBeTruthy();
+    await dismiss();
+    await send(claude.area, "b");
+    expect(screen.queryByText(effects)).toBeNull();
+  });
+
+  test("a steer the host queued says so each time; one with no answer yet leaves the composer free", async () => {
+    const { area, mock, ui } = await setup("running", [
+      running(),
+      capabilities({ turn: steering(true) }),
+    ]);
+    mock.handle("session/send", () => ({
+      result: { disposition: "queued", fallback_reason: "agent_error" },
+    }));
+    await send(area, "a");
+    await dismiss();
+    await send(area, "b");
+    expect(screen.getByText("已转为排队")).toBeTruthy();
+
+    mock.handle("session/send", () => undefined);
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    try {
+      await send(area, "c");
+      expect(ui.getState().drafts.s_1).toBe("");
+      type(area, "more");
+      expect(screen.queryByText("插话还在等结果，可以继续输入")).toBeNull();
+      act(() => vi.advanceTimersByTime(1000));
+      expect(screen.getByText("插话还在等结果，可以继续输入")).toBeTruthy();
+      expect(ui.getState().drafts.s_1).toBe("more");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
