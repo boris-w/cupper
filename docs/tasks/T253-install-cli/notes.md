@@ -57,3 +57,30 @@
 主进程返回 `failed`，`error` 为 `{code: "unavailable", reason, path}`，`reason` 取 `outside_applications` 或 `occupied`。界面对认识的 `reason` 给出具体说明，其他失败沿用 `feedbackOf` 的通用提示。
 
 不用 `cancelled` 表示被拒，因为取消会计入冷却。
+
+## 各模块的实际行数
+
+停止线放宽到 290，硬停止线放宽到 340（编排者 2026-11-10）。
+
+| 模块 | 估 | 实际 |
+|---|---|---|
+| ShellAPI | 3 | +7 −2 |
+| 主进程：安装逻辑 `install-cli.ts` | 60 | +76 |
+| 主进程：确认流程（`actions.ts`、`dialogs.ts`、`index.ts`、`main/index.ts`） | 45 | +51 −3 |
+| 主进程文案 | 6 | +5 −1 |
+| UNIT-install-cli | 85 | +134 −4 |
+| 小计（提交 `fecfd4fd`） | 199 | +273 −10 |
+
+UNIT-install-cli 的 134 行分在两个文件里：
+- `install-cli.test.ts` 84 行，覆盖：位置检查（包括 `~/Applications.old` 不算）、链接名、目录会被建出来、已安装的判定（包括经由被链接的目录指过来的情况）、用户的文件、别处的链接、悬空的链接、并发出现的文件。
+- `privileged.test.ts` 50 行，经 `Privileged` 测：确认框的内容、取消后不建链接、确认后建链接、已安装时不弹框、被拒时不弹框。
+
+**界面部分的推算**：
+
+| 模块 | 行 |
+|---|---|
+| `CliSection.tsx`、分页表加一行、文案 | 约 40 |
+| 组件用例（并进 `settings.test.tsx`，复用它的搭建） | 约 30 |
+| 截图规格（分页表加一行） | 1 |
+
+加上已提交的 +273，合计约 345，超过硬停止线 340。
