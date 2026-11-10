@@ -5,7 +5,7 @@
 // window document's data connection through its window bridge (design 5.7.1).
 
 import { mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { createI18n } from "@cupper/i18n";
 import { MAIN_DOCUMENT_CSP, REVIEW_DOCUMENT_CSP } from "@cupper/shell-api";
@@ -155,6 +155,8 @@ async function ready() {
       now: () => Date.now(),
       host: controlHost(host.control.client, (ms) => new Promise((done) => setTimeout(done, ms))),
       t: (key, values) => t(`privileged:${key}`, values),
+      // `Contents/MacOS/<name>` → the app bundle.
+      cli: { app: join(dirname(process.execPath), "..", ".."), home: app.getPath("home"), flavor },
     });
   serveShell({ flavor, prefs, openExternal, ...(privileged ? { privileged } : {}) });
   // The main document and, on an origin of its own, the review document (design 5.7.5).

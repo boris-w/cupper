@@ -44,10 +44,13 @@ open "/Applications/Cupper Local.app"
 
 ## 命令行（可选）
 
-App 里带着 Cupper Local 自己的命令行，它默认连接 Cupper Local 的宿主。放进 PATH 里的某个目录，例如：
+App 里带着 Cupper Local 自己的命令行，它默认连接 Cupper Local 的宿主。在 Cupper Local 的"设置 → 命令行工具"里点"安装"，确认后会建立符号链接 `~/.local/bin/cupper-local`，指向 App 里的命令行：
+
+- App 要先放进"应用程序"文件夹，否则不装。从 DMG 或下载目录直接运行时，链接会指向一个随时会消失的位置。
+- `~/.local/bin` 下已经有同名的文件，而且不是指向这个 App 的命令行时，不会覆盖它，会告诉你它在哪里。
+- `~/.local/bin` 要在 PATH 里，终端才找得到它。装好后试一下：
 
 ```sh
-ln -s "/Applications/Cupper Local.app/Contents/Helpers/cupper" ~/.local/bin/cupper-local
 cupper-local status
 ```
 
@@ -66,7 +69,7 @@ cupper-local status
 
    不要把新版本直接复制到旧版本上面（对已经存在的 App 运行 `ditto` 或 `cp -R`）：那样会原地改写可执行文件，macOS 会杀掉正在运行它的进程。
 4. 打开 Cupper Local。数据库结构有变化时，新版本的宿主先把旧库备份到 `cupper-local/backups/`，再执行迁移。
-5. 之前给过的文件夹访问等授权会再问一次：ad-hoc 签名的每个版本在 macOS 看来都是新程序（须知第 5 节）。用 `ln -s` 装的命令行不用重装。
+5. 之前给过的文件夹访问等授权会再问一次：ad-hoc 签名的每个版本在 macOS 看来都是新程序（须知第 5 节）。在设置页装的命令行不用重装：链接指向"应用程序"文件夹里的 App，替换以后仍然有效。
 
 **忘了退出就替换了：** 旧宿主在下一次有客户端连接（例如运行新版本的命令行）、要启动 agent，或者第一次运行时还在从 App 包里复制运行时，就会发现磁盘上的程序已经不是自己，进入"待升级"：不再开始新会话和新回合，运行中的回合结束后自己退出。新版本的命令行认得出旧宿主不是自己那一版，会拒绝连接（退出码 4）。旧宿主退出后，旧界面会去拉起磁盘上的新宿主，结果可能是接上新宿主、新旧两版混在一起运行，也可能停在"连不上宿主"。不管哪种，这时按 ⌘Q 退出 Cupper Local 再打开就行，不要接着用旧界面。
 
