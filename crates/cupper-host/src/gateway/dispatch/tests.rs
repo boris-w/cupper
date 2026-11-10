@@ -391,7 +391,6 @@ const ALLOWED: &[(&str, Why)] = {
             Builds(HARNESS || cfg!(feature = "dev-auth")),
         ),
         ("host/prepare_upgrade", Until("T183")),
-        ("session/queue_edit", Later(M1b)),
         ("stream/ack", Later(M3)),
         // Build `test-harness` only.
         ("test/clock_advance", Builds(HARNESS)),

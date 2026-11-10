@@ -40,9 +40,10 @@ use cupper_protocol::methods::interaction::{
 use cupper_protocol::methods::session::{
     self as methods, Disposition as Wire, FallbackReason, SessionCapabilities,
     SessionConfirmConfig, SessionConfirmConfigParams, SessionGet, SessionGetResult,
-    SessionInterrupt, SessionInterruptParams, SessionInterruptResult, SessionQueueResume,
-    SessionSend, SessionSendParams, SessionSendResult, SessionSetConfig, SessionSetConfigParams,
-    SessionSetConfigResult,
+    SessionInterrupt, SessionInterruptParams, SessionInterruptResult, SessionQueueEdit,
+    SessionQueueEditParams, SessionQueueEditResult, SessionQueueResume, SessionSend,
+    SessionSendParams, SessionSendResult, SessionSetConfig, SessionSetConfigParams,
+    SessionSetConfigResult, SteerOutcome,
 };
 use cupper_protocol::methods::session::{SessionArchive, SessionRename, SessionRestore};
 use cupper_protocol::rpc::Method;
@@ -77,6 +78,7 @@ use crate::index::{ScanContext, git_of, status_of};
 use crate::ledger::{Outcome, Ticket};
 use crate::orchestrator::interaction::{self, Respond};
 use crate::orchestrator::notice_with;
+use crate::orchestrator::queue::{QueueEditError, QueueOp};
 use crate::orchestrator::tier_guard;
 use crate::orchestrator::turn::{self, Disposition, SendMode, SendRequest, SteerFallback};
 use crate::policy::{self, Confirmable, Facts};
@@ -500,6 +502,7 @@ impl SessionActor {
         let mut chosen = None;
         let input = match call.method {
             SessionSend::NAME => parse(&params).and_then(|p| self.send(p, &principal.id)),
+            SessionQueueEdit::NAME => parse(&params).and_then(queue_edit),
             SessionInterrupt::NAME => parse::<SessionInterruptParams>(&params).map(|p| {
                 let expected_turn = p.expected_turn_id;
                 Input::Machine(turn::Input::Interrupt { expected_turn })
@@ -589,7 +592,8 @@ impl SessionActor {
             }
         };
         let ticket = call.ticket;
-        let deferrable = call.method == SessionSend::NAME;
+        // A steer's reply waits for the agent's answer.
+        let deferrable = matches!(call.method, SessionSend::NAME | SessionQueueEdit::NAME);
         let reopen = matches!(call.method, SessionSend::NAME | SessionQueueResume::NAME);
         let command = Command {
             ticket,
@@ -933,7 +937,9 @@ impl SessionActor {
                 self.deferred = Some(command);
                 None
             }
-            (None, Some(Reply::Turn(turn::Reply::Send(_)))) => self.deferred.take(),
+            (None, Some(Reply::Turn(turn::Reply::Send(_) | turn::Reply::QueueEdit(_)))) => {
+                self.deferred.take()
+            }
             (command, _) => command,
         };
         let turn_ended = events
@@ -1228,22 +1234,10 @@ impl SessionActor {
                         .insert(queue_id.clone(), cause.command_id.clone());
                 }
                 json!(SessionSendResult {
-                    disposition: match sent.disposition {
-                        Disposition::Started => Wire::Started,
-                        Disposition::Queued => Wire::Queued,
-                        Disposition::Steered => Wire::Steered,
-                    },
+                    disposition: wire(sent.disposition),
                     turn_id: sent.turn_id,
                     queue_id: sent.queue_id,
-                    fallback_reason: sent.fallback.map(|fallback| match fallback {
-                        SteerFallback::Unsupported => FallbackReason::Unsupported,
-                        SteerFallback::TurnMismatch => FallbackReason::TurnMismatch,
-                        SteerFallback::NotPrompting => FallbackReason::NotPrompting,
-                        SteerFallback::PromptRequired => FallbackReason::PromptRequired,
-                        SteerFallback::Timeout => FallbackReason::Timeout,
-                        SteerFallback::AgentError => FallbackReason::AgentError,
-                        SteerFallback::SteerPending => FallbackReason::SteerPending,
-                    }),
+                    fallback_reason: sent.fallback.map(reason),
                 })
             }
             turn::Reply::Send(Err(full)) => {
@@ -1256,7 +1250,26 @@ impl SessionActor {
                 return Err(err.with_reason(ErrorReason::TurnMismatch));
             }
             turn::Reply::QueueResume => json!({}),
-            turn::Reply::QueueEdit(_) => return Err(internal("session/queue_edit is M1b")),
+            turn::Reply::QueueEdit(Ok(edited)) => json!(SessionQueueEditResult {
+                version: edited.version,
+                steer: edited.steer.map(|sent| SteerOutcome {
+                    disposition: wire(sent.disposition),
+                    turn_id: sent.turn_id,
+                    fallback_reason: sent.fallback.map(reason),
+                }),
+            }),
+            turn::Reply::QueueEdit(Err(err)) => {
+                let message = err.to_string();
+                return Err(match err {
+                    QueueEditError::VersionMismatch { .. } => {
+                        let err = RpcError::app(ErrorCode::Conflict, message);
+                        err.with_reason(ErrorReason::VersionMismatch)
+                    }
+                    QueueEditError::NotFound(_) => RpcError::app(ErrorCode::NotFound, message),
+                    QueueEditError::SteerNotAlone => RpcError::new(INVALID_PARAMS, message),
+                    QueueEditError::Unsupported => RpcError::app(ErrorCode::Unsupported, message),
+                });
+            }
         };
         Ok(value)
     }
@@ -1822,6 +1835,57 @@ fn skipped(turn_id: TurnId, phase: SnapshotPhase) -> Input {
         excluded: Vec::new(),
         stat: None,
     }))
+}
+
+/// `session/queue_edit`'s ops as the turn machine has them; one this build
+/// does not know is `unsupported`.
+fn queue_edit(p: SessionQueueEditParams) -> Result<Input, RpcError> {
+    let ops = p.ops.into_iter().map(|op| match op {
+        methods::QueueOp::Replace(r) => Ok(QueueOp::Replace {
+            queue_id: r.queue_id,
+            content: r.content,
+        }),
+        methods::QueueOp::Steer(t) => Ok(QueueOp::Steer {
+            queue_id: t.queue_id,
+        }),
+        methods::QueueOp::Remove(t) => Ok(QueueOp::Remove {
+            queue_id: t.queue_id,
+        }),
+        methods::QueueOp::Move(m) => Ok(QueueOp::Move {
+            queue_id: m.queue_id,
+            before: m.before_queue_id,
+        }),
+        methods::QueueOp::Unknown(op) => {
+            let message = format!("no queue op {}", op.tag("op"));
+            Err(RpcError::app(ErrorCode::Unsupported, message))
+        }
+    });
+    let ops = ops.collect::<Result<_, _>>()?;
+    let expected_version = p.expected_version;
+    Ok(Input::Machine(turn::Input::QueueEdit {
+        expected_version,
+        ops,
+    }))
+}
+
+fn wire(disposition: Disposition) -> Wire {
+    match disposition {
+        Disposition::Started => Wire::Started,
+        Disposition::Queued => Wire::Queued,
+        Disposition::Steered => Wire::Steered,
+    }
+}
+
+fn reason(fallback: SteerFallback) -> FallbackReason {
+    match fallback {
+        SteerFallback::Unsupported => FallbackReason::Unsupported,
+        SteerFallback::TurnMismatch => FallbackReason::TurnMismatch,
+        SteerFallback::NotPrompting => FallbackReason::NotPrompting,
+        SteerFallback::PromptRequired => FallbackReason::PromptRequired,
+        SteerFallback::Timeout => FallbackReason::Timeout,
+        SteerFallback::AgentError => FallbackReason::AgentError,
+        SteerFallback::SteerPending => FallbackReason::SteerPending,
+    }
 }
 
 /// Unit tests only: the rescan before an attach in a project waits here
