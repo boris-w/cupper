@@ -7,7 +7,7 @@ import { useEffect, useMemo, type ReactNode } from "react";
 import { useStore } from "zustand";
 
 import { useUi } from "../state/provider";
-import type { Route } from "../state/ui";
+import { toSettings, type Route } from "../state/ui";
 import { useShell } from "./providers";
 
 export type { Route } from "../state/ui";
@@ -23,13 +23,16 @@ export function RouterProvider({ children }: { children: ReactNode }) {
   const ui = useUi();
   useEffect(() => {
     const { navigate } = ui.getState();
+    const settings = (section?: string) => navigate(toSettings(ui.getState().route, section));
     const offCommand = api.onCommand(
-      commandHandler({ new_session: () => navigate({ page: "new" }) }),
+      commandHandler({ new_session: () => navigate({ page: "new" }), settings: () => settings() }),
     );
     // Only navigates: a notification click never focuses the request panel.
     const offNavigate = api.onNavigate((target) => {
       if (isKnownTarget(target) && target.kind === "session") {
         navigate({ page: "session", sessionId: target.session_id });
+      } else if (isKnownTarget(target) && target.kind === "settings") {
+        settings(target.section);
       }
     });
     return () => {

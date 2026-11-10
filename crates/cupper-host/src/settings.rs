@@ -4,13 +4,13 @@
 //! `settings/update` serve them ([`SettingsPort`]). The gateway's policy has
 //! checked an update already: a security-related key takes `privileged`
 //! (design 5.2.5). A change of a CLI path or of `agents.env_passthrough`
-//! finds the agents again, and `agents.updated` shows it; M1a pushes no
-//! other notice of a change (T036 ruling).
+//! finds the agents again, and `agents.updated` shows it. The index writes
+//! `settings.updated` from [`SettingsHandle::subscribe`] (T151).
 
 use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::Arc;
 
 use cupper_protocol::annotations::WirePath;
 use cupper_protocol::domain::AgentKind;
@@ -24,6 +24,7 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use rusqlite::Connection;
 use serde_json::{Map, Value, json};
+use tokio::sync::watch;
 
 use crate::clock::Clock;
 use crate::driver::locate::env_rules::is_variable_name;
@@ -163,7 +164,7 @@ pub struct SettingsHandle {
 
 #[derive(Debug)]
 struct Shared {
-    current: Mutex<Settings>,
+    current: watch::Sender<Settings>,
     /// One update at a time, from the check to the commit.
     update: tokio::sync::Mutex<()>,
     writer: Writer,
@@ -185,7 +186,7 @@ impl SettingsHandle {
         let rows = rows.collect::<rusqlite::Result<Vec<(String, String)>>>()?;
         let current = merged(&defaults(home, data_dir), rows);
         let shared = Shared {
-            current: Mutex::new(current),
+            current: watch::Sender::new(current),
             update: tokio::sync::Mutex::new(()),
             writer,
             clock,
@@ -196,14 +197,12 @@ impl SettingsHandle {
     }
 
     pub fn current(&self) -> Settings {
-        self.lock().clone()
+        self.shared.current.borrow().clone()
     }
 
-    fn lock(&self) -> MutexGuard<'_, Settings> {
-        self.shared
-            .current
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+    /// The settings now, and each change once it is in effect.
+    pub fn subscribe(&self) -> watch::Receiver<Settings> {
+        self.shared.current.subscribe()
     }
 
     /// `settings/update`: the keys of `patch` written, with the command's
@@ -246,7 +245,7 @@ impl SettingsHandle {
         });
         let internal = |err: WriteError| RpcError::app(ErrorCode::Internal, err.to_string());
         write.await.map_err(internal)?;
-        *self.lock() = next.clone();
+        self.shared.current.send_replace(next.clone());
         if let Some(completion) = completion {
             completion.committed();
         }

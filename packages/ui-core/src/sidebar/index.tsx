@@ -3,7 +3,7 @@
 import { useHost, useT } from "../app/providers";
 import { useEntry } from "../state/stream";
 import { useStreams } from "../state/provider";
-import { ElevationBanner, HostStatus, ProjectList } from "./parts";
+import { ElevationBanner, HostStatus, ProjectList, SettingsRow } from "./parts";
 
 export function SidebarHeader() {
   const t = useT();
@@ -28,5 +28,10 @@ export function SidebarList() {
 export function SidebarFooter() {
   const { view } = useStreams().index;
   useEntry(view, "elevations");
-  return <ElevationBanner elevations={Object.values(view.toJSON().elevations)} />;
+  return (
+    <div className="flex flex-col">
+      <ElevationBanner elevations={Object.values(view.toJSON().elevations)} />
+      <SettingsRow />
+    </div>
+  );
 }

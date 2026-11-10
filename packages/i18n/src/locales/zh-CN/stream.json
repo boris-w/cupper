@@ -102,6 +102,7 @@
   "reply_to": "附于对「{{title}}」的拒绝",
   "reply_to_other": "附于一次拒绝",
   "change_model": "换模型",
+  "agent_status": "查看 agent 状态",
   "changes_title": "{{count}} 个文件已更改",
   "changes_undo": "撤销",
   "changes_partial": "有 {{count}} 个文件没有记录下来，不能撤销",

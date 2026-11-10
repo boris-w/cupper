@@ -1,5 +1,6 @@
 //! The index actor on a real `host.db`: the reconciliation at start, the
-//! checkpoint of the orderly exit, and the notification intents;
+//! checkpoint of the orderly exit, the notification intents, and what
+//! follows the settings and the git versions;
 //! IT-elevation-grant through the gateway's dispatch. IT-project-add-trust
 //! runs projects and trust through the host.
 
@@ -31,6 +32,7 @@ struct Fx {
     db: Writer,
     readers: Readers,
     quiescence: Quiescence,
+    settings: watch::Sender<Settings>,
 }
 
 impl Fx {
@@ -46,12 +48,14 @@ impl Fx {
         };
         let (db, _) = Writer::spawn(conn, config, &quiescence).unwrap();
         let readers = Readers::open(&dir.host_db()).unwrap();
+        let settings = watch::Sender::new(crate::settings::defaults(dir.path(), dir.path()));
         Self {
             dir,
             clock,
             db,
             readers,
             quiescence,
+            settings,
         }
     }
 
@@ -84,6 +88,7 @@ impl Fx {
             git: None,
             quiescence: self.quiescence.clone(),
             host: host(),
+            settings: self.settings.subscribe(),
             requesters,
             audit,
         };
@@ -94,7 +99,7 @@ impl Fx {
     async fn view(&self) -> (IndexView, u64) {
         let handle = self.streams().open(&StreamId::Index).await.unwrap();
         handle.read(|view, head| match view {
-            StreamView::Index(view) => (view.clone(), head),
+            StreamView::Index(view) => (IndexView::clone(view), head),
             StreamView::Session(_) => unreachable!(),
         })
     }
@@ -186,6 +191,8 @@ async fn index_start_reconciles_with_the_tables_and_checkpoints_on_stop() {
     assert_eq!(view.projects[&kept].trust_state, TrustState::Untrusted);
     assert_eq!(view.sessions[&session].status, SessionStatus::Unread);
     assert_eq!(view.host, Some(host()));
+    let settings = view.settings.map(|updated| updated.settings);
+    assert_eq!(settings, Some(fx.settings.borrow().clone()));
     assert!(view.elevations.is_empty());
     // Nothing differs any more: the next start writes nothing.
     let again = fx.start().await;
@@ -470,4 +477,43 @@ async fn it_elevation_grant_one_connection_until_it_closes_or_fifteen_minutes() 
         ("c_1".into(), Resolved(second, Granted), write),
     ];
     assert_eq!(steps.collect::<Vec<_>>(), expected);
+}
+
+#[tokio::test]
+async fn index_settings_updated_and_the_git_versions_follow_their_sources() {
+    let fx = Fx::new("index-settings-git");
+    let index = fx.start().await;
+    let head = fx.view().await.1;
+    fx.settings.send_modify(|s| s.notify_error = false);
+    fx.quiescence.settled().await;
+    let (view, at) = fx.view().await;
+    assert!(!view.settings.unwrap().settings.notify_error);
+    assert_eq!(at, head + 1);
+    // The same settings again write nothing.
+    fx.settings.send_modify(|_| {});
+    fx.quiescence.settled().await;
+    assert_eq!(fx.view().await.1, at);
+
+    // A fake git and git-lfs (T094).
+    let bin = fx.dir.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let script = crate::driver::probe::testkit::script;
+    let git = script(&bin, "git", "echo 'git version 2.45.1'");
+    let lfs = script(
+        &bin,
+        "git-lfs",
+        "echo 'git-lfs/3.6.0 (GitHub; darwin arm64)'",
+    );
+    let tool = GitTool::new(git, Some(lfs), &[bin], None, None, fx.dir.path()).unwrap();
+    index.git(tool.versions(&fx.clock, &Durations::default()).await);
+    fx.quiescence.settled().await;
+    // Not before the first agent: an empty list would say none was found.
+    assert_eq!(fx.view().await.0.agents, None);
+    let status = json!({"agent": "claude", "state": "idle", "config_dir": "default",
+        "adapter": {"version": "0.91.0", "runtime": "ready"}, "auth": {"state": "unchecked"}});
+    AgentNotes::agent(&index, serde_json::from_value(status).unwrap());
+    fx.quiescence.settled().await;
+    let agents = fx.view().await.0.agents.unwrap();
+    let versions = (agents.git.version.as_deref(), agents.git.lfs.as_deref());
+    assert_eq!(versions, (Some("2.45.1"), Some("3.6.0")));
 }

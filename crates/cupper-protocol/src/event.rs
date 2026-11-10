@@ -12,6 +12,7 @@ use crate::envelope::{Event, UnknownEvent};
 use crate::index::{
     AgentsUpdated, ClientsUpdated, ElevationRequested, ElevationResolved, HostUpdated,
     NotificationIntent, ProjectRemoved, ProjectUpserted, SessionRemoved, SessionSummary,
+    SettingsUpdated,
 };
 use crate::interaction::{InteractionRequested, InteractionResolved};
 use crate::item::{ItemCompleted, ItemDelta, ItemStarted, ItemUpdated};
@@ -32,6 +33,7 @@ open_union! {
         SessionRemoved(SessionRemoved) => "session.removed",
         AgentsUpdated(AgentsUpdated) => "agents.updated",
         HostUpdated(HostUpdated) => "host.updated",
+        SettingsUpdated(SettingsUpdated) => "settings.updated",
         ClientsUpdated(ClientsUpdated) => "clients.updated",
         ElevationRequested(ElevationRequested) => "elevation.requested",
         ElevationResolved(ElevationResolved) => "elevation.resolved",
@@ -92,6 +94,7 @@ impl EventBody {
             | Self::SessionRemoved(_)
             | Self::AgentsUpdated(_)
             | Self::HostUpdated(_)
+            | Self::SettingsUpdated(_)
             | Self::ClientsUpdated(_)
             | Self::ElevationRequested(_)
             | Self::ElevationResolved(_)
@@ -215,6 +218,11 @@ mod tests {
             json!({"type": "agents.updated", "data": {"agents": [], "git": {}}}),
             json!({"type": "host.updated", "data": {"version": "0.1.0", "weak_auth": false,
                 "pending_upgrade": true, "power_assertion": true, "last_exit_abnormal": true}}),
+            json!({"type": "settings.updated", "data": {"settings": {"agents.claude.cli_path": null,
+                "agents.codex.cli_path": "/opt/homebrew/bin/codex", "agents.env_passthrough": ["HTTPS_PROXY"],
+                "worktrees.root": "/w", "notifications.needs_action": true, "notifications.turn_completed": false,
+                "notifications.error": true, "apps.terminal": "Terminal", "apps.editor": "TextEdit",
+                "sessions.default_agent": "codex", "host.idle_exit_minutes": 10, "diagnostics.verbose": false}}}),
             json!({"type": "clients.updated", "data": {"clients": [
                 {"conn_id": "c_1", "principal_kind": "desktop_ui", "role": "window", "client_name": "Cupper",
                  "client_version": "0.1.0", "since": 3, "auth": "verified"},
@@ -286,7 +294,7 @@ mod tests {
 
     #[test]
     fn unit_proto_events_index_every_type_roundtrips() {
-        covers(samples(), StreamKind::Index, &EventBody::TAGS[..10]);
+        covers(samples(), StreamKind::Index, &EventBody::TAGS[..11]);
     }
 
     #[test]
@@ -330,7 +338,7 @@ mod tests {
         let mut negative = sample(0);
         negative["data"]["position"] = json!(-1);
         cases.push((negative, "invalid value"));
-        let mut prefix = sample(9);
+        let mut prefix = sample(10);
         prefix["data"]["elevation_id"] = json!("r_1");
         cases.push((prefix, "malformed ElevationId"));
         let mut nested = sample(5);
@@ -513,7 +521,7 @@ mod tests {
         covers(
             session_samples(),
             StreamKind::Session,
-            &EventBody::TAGS[10..],
+            &EventBody::TAGS[11..],
         );
     }
 

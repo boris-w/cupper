@@ -1772,6 +1772,22 @@
         {
           "properties": {
             "data": {
+              "$ref": "#/$defs/SettingsUpdated"
+            },
+            "type": {
+              "const": "settings.updated",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
               "$ref": "#/$defs/ClientsUpdated"
             },
             "type": {
@@ -2222,6 +2238,22 @@
             },
             "type": {
               "const": "host.updated",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/SettingsUpdated"
+            },
+            "type": {
+              "const": "settings.updated",
               "type": "string"
             }
           },
@@ -3739,6 +3771,9 @@
           },
           "description": "Unarchived sessions.",
           "type": "object"
+        },
+        "settings": {
+          "$ref": "#/$defs/SettingsUpdated"
         }
       },
       "required": [
@@ -7156,6 +7191,18 @@
       "required": [
         "command_id",
         "patch"
+      ],
+      "type": "object"
+    },
+    "SettingsUpdated": {
+      "description": "`settings.updated`: every setting, as `settings/get` returns them; at\nstart and after each `settings/update` (T151).",
+      "properties": {
+        "settings": {
+          "$ref": "#/$defs/Settings"
+        }
+      },
+      "required": [
+        "settings"
       ],
       "type": "object"
     },

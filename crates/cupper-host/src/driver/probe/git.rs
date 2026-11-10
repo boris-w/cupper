@@ -6,6 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
+use cupper_protocol::index::GitTools;
 use cupper_sys::{Command, Env};
 
 use super::run::run;
@@ -67,6 +68,18 @@ impl GitReport {
             Tool::Unreadable => Some("git_lfs_unreadable"),
         };
         git.into_iter().chain(lfs).collect()
+    }
+
+    /// The versions found, as `agents.updated` shows them.
+    pub fn tools(&self) -> GitTools {
+        let version = |tool| match tool {
+            Tool::Found(v) => Some(format!("{}.{}.{}", v.major, v.minor, v.patch)),
+            Tool::Missing | Tool::NeedsCommandLineTools | Tool::Unreadable => None,
+        };
+        GitTools {
+            version: version(self.git),
+            lfs: version(self.git_lfs),
+        }
     }
 }
 
@@ -145,6 +158,9 @@ mod tests {
             Tool::Found(Version::parse("3.4.0").unwrap())
         );
         assert!(report.problems().is_empty(), "{:?}", report.problems());
+        let tools = report.tools();
+        let versions = (tools.version.as_deref(), tools.lfs.as_deref());
+        assert_eq!(versions, (Some("2.39.5"), Some("3.4.0")));
         let report = detect(&clock, &durations, None, None, &stub, &env).await;
         assert_eq!(report.problems(), ["git_missing", "git_lfs_missing"]);
     }

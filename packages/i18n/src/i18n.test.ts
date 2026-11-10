@@ -13,6 +13,7 @@ describe("createI18n", () => {
       "privileged",
       "request",
       "review",
+      "settings",
       "shell",
       "sidebar",
       "stream",

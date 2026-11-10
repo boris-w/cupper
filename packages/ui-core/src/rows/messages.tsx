@@ -7,10 +7,12 @@ import type { PromptBlock } from "@cupper/protocol";
 import { useState } from "react";
 
 import { useHost, useT } from "../app/providers";
+import { useRouter } from "../app/router";
 import { Alert } from "../components/Alert";
 import { codeOf, useSessionState } from "../composer/send";
 import { useToasts } from "../feedback/toaster";
 import { useUi } from "../state/provider";
+import { toSettings } from "../state/ui";
 import { useStreamActions } from "../stream/actions";
 import { useDuration } from "./basic";
 import { Markdown } from "./markdown";
@@ -86,8 +88,11 @@ const GUIDANCE = [
   "restart_agent",
 ];
 
+/** Steps the agent status on the settings page is for (T151). */
+const SETTINGS = ["upgrade_cli", "install_cli", "restart_agent"];
+
 /** What logs an agent in: cupper does not, the user does in a terminal (AG-2). */
-const LOGIN: Record<string, string> = { claude: "claude", codex: "codex login" };
+export const LOGIN: Record<string, string> = { claude: "claude", codex: "codex login" };
 
 const BUTTON =
   "shrink-0 rounded-md bg-btn-secondary px-2 py-0.5 text-fg hover:bg-hover disabled:opacity-50";
@@ -147,6 +152,22 @@ function ChangeModel() {
   );
 }
 
+/** "查看 agent 状态": the settings page at the session's agent. */
+function AgentStatus() {
+  const t = useT();
+  const { route, navigate } = useRouter();
+  const { agent } = useSessionState(useStreamActions().sessionId);
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(toSettings(route, "agents", agent))}
+      className={BUTTON}
+    >
+      {t("stream:agent_status")}
+    </button>
+  );
+}
+
 /** An error, the agent's own text under it, and what to do about it. */
 function ErrorRow({ row: { error, retry } }: { row: RowOf<"error"> }) {
   const t = useT();
@@ -157,7 +178,9 @@ function ErrorRow({ row: { error, retry } }: { row: RowOf<"error"> }) {
     <Alert
       tone="danger"
       action={
-        (button && <Retry content={button} />) || (guidance === "change_model" && <ChangeModel />)
+        (button && <Retry content={button} />) ||
+        (guidance === "change_model" && <ChangeModel />) ||
+        (guidance && SETTINGS.includes(guidance) && <AgentStatus />)
       }
     >
       <div>{t(key)}</div>

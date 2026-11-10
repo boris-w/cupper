@@ -793,6 +793,10 @@ export type Event = (
       type: "host.updated";
     }
   | {
+      data: SettingsUpdated;
+      type: "settings.updated";
+    }
+  | {
       data: ClientsUpdated;
       type: "clients.updated";
     }
@@ -919,6 +923,10 @@ export type EventBody =
   | {
       data: HostUpdated;
       type: "host.updated";
+    }
+  | {
+      data: SettingsUpdated;
+      type: "settings.updated";
     }
   | {
       data: ClientsUpdated;
@@ -1598,6 +1606,7 @@ export type IndexView = {
   sessions: {
     [key: string]: SessionSummary;
   };
+  settings?: SettingsUpdated;
 };
 
 /**
@@ -3092,6 +3101,14 @@ export type SettingsResult = {
 export type SettingsUpdateParams = {
   command_id: CommandId;
   patch: SettingsPatch;
+};
+
+/**
+ * `settings.updated`: every setting, as `settings/get` returns them; at
+ * start and after each `settings/update` (T151).
+ */
+export type SettingsUpdated = {
+  settings: Settings;
 };
 
 /**

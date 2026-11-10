@@ -8,14 +8,14 @@ use cupper_protocol::view::{IndexView, SessionView, View, ViewError, Window};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StreamView {
-    Index(IndexView),
+    Index(Box<IndexView>),
     Session(Box<SessionView>),
 }
 
 impl StreamView {
     pub fn empty(id: &StreamId) -> Self {
         match id {
-            StreamId::Index => Self::Index(IndexView::default()),
+            StreamId::Index => Self::Index(Box::default()),
             StreamId::Session(_) => Self::Session(Box::default()),
         }
     }

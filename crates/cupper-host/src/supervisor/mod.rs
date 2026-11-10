@@ -29,7 +29,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::Poll;
 
-use cupper_protocol::index::HostUpdated;
+use cupper_protocol::index::{GitTools, HostUpdated};
 use cupper_protocol::methods::admin::{Settings, SettingsGet, SettingsUpdate};
 use cupper_protocol::methods::handshake::{HostShutdown, HostShutdownParams, ShutdownReason};
 use futures::future::BoxFuture;
@@ -308,6 +308,7 @@ impl Host {
                 power_assertion: false,
                 last_exit_abnormal: run.abnormal,
             },
+            settings: settings.subscribe(),
             requesters: Arc::new(ProcessRequesters::new(
                 readers.clone(),
                 &std::env::current_exe().unwrap_or_default(),
@@ -316,6 +317,17 @@ impl Host {
             audit: records.clone(),
         })
         .await?;
+        // The versions of git and git-lfs, for `agents.updated` (T094), found
+        // aside: waits on other processes are idle.
+        let (git_of, clock_of, index_of) = (git.clone(), clock.clone(), index.clone());
+        let durations_of = durations.clone();
+        tokio::spawn(async move {
+            let tools = match git_of {
+                Some(git) => git.versions(&*clock_of, &durations_of).await,
+                None => GitTools::default(),
+            };
+            index_of.git(tools);
+        });
         quiescence.register(runtime::INSTALLER);
         let installing = Arc::new(AtomicBool::new(false));
         if let Some(bundle) = BundleDir::of_this_host().ok().filter(BundleDir::is_app) {

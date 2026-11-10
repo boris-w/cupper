@@ -3,6 +3,7 @@ import { use } from "react";
 import { ComposerArea } from "../composer/QueueList";
 import { SessionBanners } from "../session/SessionBanners";
 import { NewSessionPage } from "../newsession/NewSessionPage";
+import { SettingsPage } from "../settings/SettingsPage";
 import { StreamList } from "../stream/StreamList";
 import { useRouter } from "./router";
 import { SlotsContext } from "./slots";
@@ -24,6 +25,9 @@ export function SessionPage({ sessionId }: { sessionId: string }) {
 /** The main area's page; each session gets fresh component state. */
 export function Page() {
   const { route } = useRouter();
+  if (route.page === "settings") {
+    return <SettingsPage route={route} />;
+  }
   return route.page === "session" ? (
     <SessionPage key={route.sessionId} sessionId={route.sessionId} />
   ) : (
