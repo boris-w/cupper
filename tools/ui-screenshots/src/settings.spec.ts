@@ -89,6 +89,7 @@ const INDEX = [
 const PAGES = [
   ["general", "UI-settings-general", "电源", "agent 工作时防止休眠"],
   ["notifications", "UI-settings-general", "什么时候通知", "需要你处理时"],
+  ["appearance", "UI-icon-colour", "图标", "图标颜色"],
   ["storage", "UI-settings-general", "占用空间", "1.0 MB"],
   ["agents", "UI-settings-agents", "Codex", "没有找到 CLI"],
   ["archived", "UI-settings-archived", "会话", "Fix the build"],

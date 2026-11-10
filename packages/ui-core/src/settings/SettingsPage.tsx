@@ -10,6 +10,7 @@ import { BackIcon } from "../components/icons";
 import { ROW } from "../sidebar/parts";
 import type { Route } from "../state/ui";
 import { AgentsSection } from "./AgentsSection";
+import { AppearanceSection } from "./AppearanceSection";
 import { ArchivedSection } from "./ArchivedSection";
 import { CliSection } from "./CliSection";
 import { ConnectionsSection } from "./ConnectionsSection";
@@ -27,6 +28,7 @@ interface Entry {
 const SECTIONS: readonly [Entry, ...Entry[]] = [
   { id: "general", Body: GeneralSection },
   { id: "notifications", Body: NotificationsSection },
+  { id: "appearance", Body: AppearanceSection },
   { id: "archived", Body: ArchivedSection },
   { id: "agents", Body: AgentsSection },
   { id: "connections", Body: ConnectionsSection },
