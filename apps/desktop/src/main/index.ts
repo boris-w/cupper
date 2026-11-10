@@ -75,6 +75,8 @@ protocol.registerSchemesAsPrivileged([APP_SCHEME_PRIVILEGES]);
 app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
+/** Navigation for the main window, until its document has loaded. */
+let unsent: NavigateTarget[] | undefined;
 /** Once the app goes on to quit: no window opens any more (T225). */
 let quitting = false;
 let host: ReturnType<typeof startHost> | undefined;
@@ -270,6 +272,11 @@ function showMainWindow() {
   const preload = join(import.meta.dirname, "../preload/index.cjs");
   const window = new BrowserWindow(mainWindowOptions(flavor, preload));
   mainWindow = window;
+  const waiting: NavigateTarget[] = (unsent = []);
+  window.webContents.once("did-finish-load", () => {
+    unsent = undefined;
+    waiting.forEach((target) => window.webContents.send(NAVIGATE, target));
+  });
   window.once("ready-to-show", () => (background ? window.showInactive() : window.show()));
   watchInput(window, () => Date.now());
   window.on("closed", () => {
@@ -284,14 +291,19 @@ function showMainWindow() {
   void window.loadURL(MAIN_DOCUMENT_URL);
 }
 
-/** The main window on `target`: only navigation, no focus in the request panel (design 5.7.8). */
+/**
+ * The main window on `target`: only navigation, no focus in the request panel
+ * (design 5.7.8). The window does not come forward here: after a click the
+ * host brings the app forward (design 5.2.9), which `activate` follows.
+ */
 function showSession(target: NavigateTarget) {
-  showMainWindow();
-  const contents = mainWindow?.webContents;
-  if (contents?.isLoading()) {
-    contents.once("did-finish-load", () => contents.send(NAVIGATE, target));
+  if (mainWindow === null) {
+    showMainWindow();
+  }
+  if (unsent) {
+    unsent.push(target);
   } else {
-    contents?.send(NAVIGATE, target);
+    mainWindow?.webContents.send(NAVIGATE, target);
   }
 }
 
