@@ -1,6 +1,6 @@
 # cupper 开发任务拆分（M1a、M1b）
 
-- 版本：v1.3.90
+- 版本：v1.3.91
 - 日期：2026-10-20
 - 状态：v1.0 已确认（2026-10-19，用户确认任务的顺序和粒度，tag `gate/plan`）；v1.1 按用户决定"界面 100% 复刻 Codex"修订（D04）；v1.2 落实安全工程师对请求面板的确认条件（D04 第 2 轮）；v1.3 写进技术验证 T003 的结论（D05），待编排者确认
 - 依据：技术设计 v1.6（[`02-design.md`](02-design.md) 与 [`design/`](design/12-milestones.md)；v1.0 打 tag `gate/design`）；PRD v1.3（[`01-prd.md`](01-prd.md)）；界面复刻程度的用户决定 F1–F6 [`meetings/2026-10-19-ui-fidelity/minutes.md`](meetings/2026-10-19-ui-fidelity/minutes.md)（v1.1，任务书 [`tasks/D04-ui-fidelity-revision/brief.md`](tasks/D04-ui-fidelity-revision/brief.md)）；请求面板的安全确认 [`meetings/2026-10-19-ui-fidelity/security-engineer.md`](meetings/2026-10-19-ui-fidelity/security-engineer.md)（v1.2，任务书 [`brief-r2.md`](tasks/D04-ui-fidelity-revision/brief-r2.md)）；技术验证 T003 的汇报 [`tasks/T003-tech-validation/report.md`](tasks/T003-tech-validation/report.md)（v1.3，任务书 [`tasks/D05-t003-findings/brief.md`](tasks/D05-t003-findings/brief.md)）；ADR-01 至 ADR-11；设计评审纪要 [`meetings/2026-10-16-design-review/minutes.md`](meetings/2026-10-16-design-review/minutes.md)；用户决定 [`meetings/2026-10-16-gate-design-decisions/minutes.md`](meetings/2026-10-16-gate-design-decisions/minutes.md)（含"补充：Apple Developer 账号"）；计划评审意见与第二轮确认 [`meetings/2026-10-16-plan-review/`](meetings/2026-10-16-plan-review/agenda.md)，编排者裁定（[`tasks/P02-plan-revision/brief.md`](tasks/P02-plan-revision/brief.md)、[`brief-r2.md`](tasks/P02-plan-revision/brief-r2.md)）
@@ -490,8 +490,9 @@ v1.1 起以作者本机安装的 Codex 客户端为准，100% 复刻（用户决
 | **T148** | 复刻度修正 | feat | UI-6；桌面 #5 | T131、T238、T132、T245、T144、T145、T244、T147、T149、T251、T153、T248 | 做：作者做第二次 MAN-ui6（与本机 Codex 同尺寸窗口、同一主题全量并排比对），按比对结果修正视觉，可以按 F2 只读查看本机 App 包核对细节；规模按结果定，必要时拆成多个任务 | MAN-ui6-full；修正后的截图 | M | 是：MAN-ui6-full 需要作者并排比对 | T.ui |
 | T149 | 排队消息的编辑与插话 | feat | 5.2.6（排队）、5.3.4（`session/queue_edit`）、5.7.4（排队消息）；CP-6 v1.3、F3 | T140、T242 | 做：宿主 `session/queue_edit` 的 `replace` 和 `steer`（按 `expected_version` 检查；`steer` 回退时放回原位；`remove`、`move` 返回 `unsupported`）；排队消息行的"插话"按钮、菜单（编辑消息、切换"跟进消息默认排队"）、原行展开编辑；队列暂停时发新消息的"发送消息？"弹框（M1 只有"发送"和"取消"）；同步 UNIT-unsupported-set 的允许集合 | 新增 IT-queue-edit（crate 内：版本冲突、改写、插话与回退）、E2E-queue-edit | M | 否 | H.orch、T.ui |
 | T150 | 系统通知 I：宿主主线程与通知身份 | feat | 5.2.3、5.2.9（六条规则的第 1、2、6 条）、5.7.2（`hostLauncher`）、5.10.1 | T099、T101 | 前提：K5 通过（T101 有条件通过；第一条验收已在本任务第 0 步补验通过，2026-11-10）。做：cupper-sys 的主线程改跑 NSApplication（accessory，取代裸 CFRunLoop）与 `LSRegisterURL` 及登记查询；`hostLauncher` 拉起前经 `cupper_native` 登记宿主，宿主启动时也检查；`cargo xtask host-bundle` 写宿主的显示名称（图标随定稿的 App 图标在 T250 一起加：通知中心在 helper 第一次连上通知服务时才读取名称和图标，T101 的 results.md；T150 不调用通知接口，v1.3.90）。v1.3.90 开工前估约 1,690，拆成 T150、T250、T251 | 新增 UNIT-host-bundle-identity（四种构建的宿主 Info.plist 名称；图标由 T250 补进这个用例） | M | 否 | H.sys、D.main、C |
-| T250 | 系统通知 II：弹出通知 | feat | 5.2.9、5.3（`host.updated`）、5.7.8、AP-3 | T150 | 前提：App 图标已定稿（helper 第一次连上通知服务时系统记下名称和图标，之后不再更新；用户 2026-11-10 决定图标先放一放）。做：App 的 icns 入库，四份 electron-builder 配置和 `cargo xtask host-bundle` 都取它（宿主的 `CFBundleIconFile`，UNIT-host-bundle-identity 补上图标）；cupper-sys 的 UserNotifications（申请与查询授权、弹通知且不注册任何 category 和 action、清掉已送达的通知）；宿主 `notifier`（接 `IndexActor` 的通知意图，内置中英文案，标题用会话标题、正文只用按原因选的内置文案；按已有的三个开关 `notifications.needs_action`、`.turn_completed`、`.error`；`test_config.notifier: record`；授权状态写进 `host.updated.notification_auth`，被拒后不重复申请；有序退出时清掉已送达的通知）；通知上不放"批准"按钮（有意与 Codex 不同，5.7.8）（v1.3.90 由 T150 拆出） | IT-notifier-record、UNIT-notifier-no-actions（系统通知没有任何操作按钮） | M | 否 | H.idx、H.sys |
+| T250 | 系统通知 II：弹出通知 | feat | 5.2.9、5.3（`host.updated`）、5.7.8、AP-3 | T150 | 前提：App 图标已定稿（helper 第一次连上通知服务时系统记下名称和图标，之后不再更新；2026-11-10 定稿，默认配色拿铁，母版 `docs/meetings/2026-11-10-app-icon/icon/cupper-latte.png`，v1.3.91）。做：App 的 icns 由母版生成后入库，在 macOS 15 上看一眼图标的形状和大小，四份 electron-builder 配置和 `cargo xtask host-bundle` 都取它（宿主的 `CFBundleIconFile`，UNIT-host-bundle-identity 补上图标）；cupper-sys 的 UserNotifications（申请与查询授权、弹通知且不注册任何 category 和 action、清掉已送达的通知）；宿主 `notifier`（接 `IndexActor` 的通知意图，内置中英文案，标题用会话标题、正文只用按原因选的内置文案；按已有的三个开关 `notifications.needs_action`、`.turn_completed`、`.error`；`test_config.notifier: record`；授权状态写进 `host.updated.notification_auth`，被拒后不重复申请；有序退出时清掉已送达的通知）；通知上不放"批准"按钮（有意与 Codex 不同，5.7.8）（v1.3.90 由 T150 拆出） | IT-notifier-record、UNIT-notifier-no-actions（系统通知没有任何操作按钮） | M | 否 | H.idx、H.sys |
 | T251 | 系统通知 III：点击与导航 | feat | 5.2.9（点击、第 3 条）、5.2.13、5.7.2（`deeplink`）、5.7.8、5.7.9、AP-3 | T250 | 做：点击回调经 control 连接发 `ui/navigate`，等系统把宿主放到前台之后再按路径激活外层 App（宿主路径往上三级并核对身份）；UI 不在时用构建种类的 URL scheme 经 `NSWorkspace.open([URL], withApplicationAt:)` 交一个 URL；系统单独拉起的宿主一律交 URL 后退出（排在读 stdin 载荷之前）；测试构建模拟点击的入口；桌面主进程把 `ui/navigate` 转给渲染进程、`deeplink` 模块按构建种类注册 URL scheme，`open-url` 只认 `<scheme>://session/<session_id>[?request=<request_id>]` 并校验 ID，只导航不聚焦请求面板（v1.3.90 由 T150 拆出） | 新增 IT-notifier-click；E2E-notification-navigate；MAN-notification-product | M | 是：MAN-notification-product 复核 | H.sys、H.idx、D.main、T.ui |
+| T252 | App 图标颜色 | feat | 5.7.2（`appIcon`）、5.7.4（设置页"外观"） | T147、T250 | 做：六套配色的图标母版（`docs/meetings/2026-11-10-app-icon/icon/`，默认拿铁）随 App 打包；prefs 加"图标颜色"一项（默认拿铁，取值不在清单里按默认）；主进程 `appIcon` 模块在建窗口之前按 prefs 调 `app.dock.setIcon`，prefs 变化时立即更新，选回默认时恢复包里的图标；设置 → 外观加"图标颜色"一行（六个小图标单选，cupper 特有），说明里写明只改变 App 运行时 Dock 里的图标，访达、启动台和系统通知里仍是默认图标；文案走 `@cupper/i18n`。不做：App 没运行时的 Dock 图标（要另写 Dock 插件）、改写 App 包上的图标、通知图标跟随、iOS 的图标切换（M3）。不在 M1b 的退出条件里，有空档时派发（v1.3.91 新增，用户 2026-11-10，`docs/meetings/2026-11-10-app-icon/`） | 新增 UNIT-app-icon-pref（取值校验与回退；启动和变更时各设一次 Dock 图标）、UI-icon-colour（外观页的"图标颜色"一行，两种主题） | S | 否 | D.main、T.ui |
 | T151 | 设置页 I：agent 状态 | feat | 5.7.4（设置页）、AG-2、AG-5 | T111、T125、T240、T241、T193 | 做：索引流加 `settings.updated {settings}`、索引视图加可选的 `settings`（附加式，后写覆盖先写，与 `host.updated` 同规则）；`AgentsUpdated.git` 接上 T094 的 git 与 git-lfs 版本检测（v1.3.56 由 T036 移来）；设置页框架（设计 5.7.4 的 Codex 样式：占满主区、左侧导航与"返回应用"、内容区最大 768、设置行与开关的规格；分页做成一张表，T147、T248 往里加）；agent 状态（CLI 路径与版本、已验证范围、登录状态、配置目录校验、运行时、资源占用、重启），错误条目的 `upgrade_cli`、`install_cli`、`restart_agent` 跳到对应的 agent。不做：连接与设备、已归档会话（T248，v1.3.89 开工前拆出） | UI-settings-agents | M | 否 | T.ui |
 | T248 | 设置页 I-b：连接与已归档会话 | feat | 5.7.4（设置页）、PS-3 | T151 | 做：连接与设备（本机客户端列表，M3 的设备显示空状态）；已归档会话（`session/list_archived` 键集分页与"加载更多"，`session/restore` 的进行中状态，结果为 `read_only` 时注明）（v1.3.89 由 T151 拆出） | 新增 UI-settings-archived | S | 否 | T.ui |
 | T152 | 视觉调整：暗色核对结果、半透明侧边栏与窗口外观 | feat | 5.7.4、5.7.7（主题）、5.7.10、PS-1、UI-3、UI-6 | T103、T106 | 做：按 T106 的核对结果修正暗色取值（编排者先更新设计 5.7.10），完成暗色主题（两个文档共用）、跟随系统与覆盖、Shiki 双主题；半透明侧边栏（`vibrancy: 'menu'`，关闭后和系统"降低透明度"时用不透明的回退色）；窗口外观的细节（顶栏、交通灯与侧边栏头部的对齐）；不改动内部组件；一并更新它影响到的已有截图基线（单独提交）。排在 SP-6 的场景 1–4、7、8 之后；同波里先合并它 | UI-layout、UI-theme；MAN-ui6-shell | M | 是：MAN-ui6-shell 需要作者与本机 Codex 并排比对 | T.ui、D.main |
@@ -1083,6 +1084,7 @@ flowchart LR
     T150["T150<br/>通知身份"]
     T250["T250<br/>弹出通知"]
     T251["T251<br/>通知点击"]
+    T252["T252<br/>图标颜色"]
     T151["T151<br/>设置页 I"]
     T248["T248<br/>连接与已归档"]
     T152["T152<br/>暗色与半透明"]
@@ -1190,6 +1192,8 @@ flowchart LR
   T101 --> T150
   T150 --> T250
   T250 --> T251
+  T250 --> T252
+  T147 --> T252
   T111 --> T151
   T125 --> T240
   T240 --> T241
@@ -1313,7 +1317,7 @@ M1a 里，v1.3.5 之后，桌面链（T018、T015、T071、T075、T076、T077）
 | B2 | T103、T112、**T121**、T123、T125、T140、T142、T146、T161、T174 | T103 SP-6（K8）测场景 1–4、7、8，T152 等它 |
 | B3 | T108、T113、**T130**、T145、T244、T149、T242、T243、T151、T152、T155、T172 | T152 先合并，T130、T145、T149、T151 再按新的取值重新生成各自新增的基线（1.5） |
 | B4 | **T131**、**T238**、T132、T144、T147、T153、T157、T232、T233 | T131 与 T139 只做其一（K9） |
-| B5 | **T148**、T170、T171 | T148 开始时作者做 MAN-ui6-full |
+| B5 | **T148**、T170、T171、T252 | T148 开始时作者做 MAN-ui6-full；T252 不在退出条件里，有空档时派发 |
 | B6 | **T154** |  |
 | B7 | **T179** | M1b 退出（K10） |
 | 条件 | T119（K6 不通过）、T139（K9 不通过，代替 T131）、T158（K5 不通过，代替 T250、T251 的宿主部分）、T159（K8 有不达标项）、T162（K7 通过） | 只在触发时派发 |
@@ -1999,6 +2003,7 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 - [ ] T150 系统通知 I：宿主主线程与通知身份
 - [ ] T250 系统通知 II：弹出通知
 - [ ] T251 系统通知 III：点击与导航
+- [ ] T252 App 图标颜色
 - [ ] T151 设置页 I：agent 状态
 - [ ] T248 设置页 I-b：连接与已归档会话
 - [ ] T152 视觉调整：暗色核对结果、半透明侧边栏与窗口外观
@@ -2129,3 +2134,4 @@ v0.1 第 8 节的 P-1 至 P-15，编排者已裁定（[P02 的任务书](tasks/P
 | v1.3.88 | 2026-11-04 | T140 开工前拆分：宿主、驱动和 `cupper send --steer` 留在 T140（宿主侧由 CLI 用上），界面拆到新增的 T242（插话的界面，M，E2E-composer-steer-default 随之移过去，2.7 第 5 条的插话路径也改落在 T242）；T149 补依赖 T242。T140 开工前估约 760 行，再拆出 T243（能力降级：计划与思考，S，IT-degrade-plan、IT-degrade-thinking 随之移过去，T179 补依赖它），T140 停止线 650；T132 的截图在 runner 上两次停在顶部，查出消息流贴底跟随会被非用户的 scroll 事件取消，新增 T245（S，UNIT-stream-follow），T148 补依赖它；T145 开工前估约 700，拆出 T244（斜杠命令、↑ 恢复与发送快捷键，E2E-slash-commands、E2E-send-key-setting 随之移过去；T242 补依赖它，T148 补依赖它），T145 只做图片；插话在途时再来的 `steer` 附加 `FallbackReason::steer_pending`（设计在合并时补）。T132 合并（PR #79）：回合改动卡片与撤销，审查面板加隐藏的 `turn` 范围。T140 合并（PR #82）：Steer 的宿主、驱动和 `cupper send --steer`，附加 `steer_pending`。T243 合并（PR #83）：计划与思考的能力跟着 agent 给出的选项走，只决定入口。T142 合并（PR #80）：`@` 文件引用与拖入文件，ShellAPI 附加 `pathForFile`。T241 合并（PR #81）：`session/restore`（重建或只读）、附加 `session_read_only`、`project/remove` 先问遍再归档 |
 | v1.3.89 | 2026-11-09 | 停了几天后开工。新增 T246：codex 0.167.0（11-06 发布）让 nightly 的 `codex-drift` 每晚失败，要审阅，T179 补依赖它。派发 T245（T132 的执行者）；T127、T172 开工；T131 去掉临时例外后合并。PR #79 的合并（496f82fa）GitHub 一直没识别为已合并，今天推送 main 之后才识别。T131 合并（PR #75）：审查文档在跨源 iframe 里，@pierre/diffs 1.6.4，临时的 `minimumReleaseAgeExclude` 已去掉；许可证门禁改为对 SPDX 标识大小写不敏感。新增 T247：test-repeat 的 vitest 判定被颜色码挡住，T245 的 40 次通过被记成失败。T245 合并（PR #86）：只有用户的操作能让消息流离开底部，T132 截图里的位置固定已去掉。T246 合并（PR #90）：codex 0.167.0 的漂移已审阅，nightly 的 codex-drift 恢复通过。T247 合并（PR #93）：test-repeat 判定前去掉颜色码。T238 合并（PR #88）：审查文档的 hunk 按钮与行内评论，T104 的剪贴板读回闭环（读得太早）。T249 合并（PR #91）：rusqlite 0.41.1，SQLite 3.54.1，宿主代码不变。T161 合并（PR #89）：nightly 的 release-config，与 IT-selfuse-build 共用一份扫描。T172 合并（PR #85）：NFR-2 重发、NFR-9 两种崩溃、6 个会话并行的端到端用例，IT-NFR9-failpoints 三个子编号核对通过。新增 T249：RUSTSEC-2026-0459 让所有 PR 的 `license` 检查失败，宿主的 rusqlite 要升到 0.41.1。T151 开工前估约 640，拆出 T248（连接与已归档会话，S，新增 UI-settings-archived，UI-settings 的合集补上它），T148 补依赖它。T127 合并（PR #87）：`host/storage`、`host/purge_snapshots`，每个仓库一道快照闸 |
 | v1.3.90 | 2026-11-10 | T150 开工前，把 T101 汇报里"设计 5.2.9 要补的规则"六条写进设计：宿主 bundle 先在 LaunchServices 登记（5.7.2 的 `hostLauncher`，宿主启动时也检查）、主线程改跑 NSApplication（5.2.3）、系统单独拉起的宿主只转交点击后退出（5.2.13 第 1 步）、有序退出时清掉通知、`host.updated` 附加 `notification_auth`（03）、宿主带自己的名称和图标（5.10.1）；目标 App 按路径找；T150 的第一条验收写进 5.2.9；Q2 关闭；通知正文只用内置文案、不放 agent 原文，开关沿用已有的三个按原因的设置键；授权被拒的界面提示移到 T147。T244 开工：从 T145 的分支开出（共用弹出层，串行）；设计 5.7.4 补"斜杠命令""↑ 恢复上一条"两条。T145 合并（PR #84）：图片经粘贴、拖入和"+"添加，缩略图只用本地 object URL；输入框只在拖入时定位，免得改变阴影的绘制顺序。T150 第 0 步用 T101 的原型补验第一条验收，用户在场，通过：helper 跑 NSApplication 后四次点击都没有 -600、没有 Finder 对话框，也没有再拉起宿主；Q2 的条件全部满足。T150 开工前估约 1,690，拆成 T150（主线程与通知身份，新增 UNIT-host-bundle-identity）、T250（弹出通知，IT-notifier-record、UNIT-notifier-no-actions 移过去）、T251（点击与导航，新增 IT-notifier-click，E2E-notification-navigate、MAN-notification-product 移过去）；T148、T155、T170 改为依赖 T251。开关沿用已有的三个按原因的设置键，不新增 `notifications.enabled`；系统单独拉起的宿主一律交 URL；URL 格式 `<scheme>://session/<id>[?request=<id>]`（5.2.9、5.7.2 补写）。App 图标做了三轮备选，用户都不满意，决定先放一放：T150 只写宿主的名称，图标随定稿的 App 图标在 T250 一起加（Electron 的默认图标不在 node_modules 里，取它要么下载要么入库一份替身，都是要扔掉的东西；通知中心在 helper 第一次连上通知服务时才读取名称和图标，T150 不调用通知接口）。T244 合并（PR #95）：斜杠命令菜单（与 `@` 列表共用弹出层）、↑ 恢复上一条、`keys.ts` 的发送与排队判定 |
+| v1.3.91 | 2026-11-10 | App 图标定稿（`docs/meetings/2026-11-10-app-icon/`）：杯里的小角色，默认配色拿铁，母版和六套配色放在会议物料里；T250 的前提满足，icns 由母版生成。新增 T252"App 图标颜色"（UNIT-app-icon-pref、UI-icon-colour）：设置 → 外观里选六套配色之一，只改变 App 运行时 Dock 里的图标，访达、启动台和系统通知里仍是默认图标；依赖 T147、T250，排在 B5，不在 M1b 的退出条件里。设计 5.7.2 加 `appIcon` 模块，5.7.4 的外观分区加"图标颜色" |

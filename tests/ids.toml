@@ -1132,6 +1132,12 @@ MAN-notification-product = "man"
 E2E-notification-navigate = "nightly"
 MAN-notification = { parts = ["MAN-notification-spike", "MAN-notification-product"] }
 
+# App 图标颜色（v1.3.91 新增）
+[T252]
+milestone = "M1b"
+UNIT-app-icon-pref = "pr"
+UI-icon-colour = "pr"
+
 # 设置页 I：agent 状态
 [T151]
 milestone = "M1b"
