@@ -25,3 +25,8 @@
 - 写进交接事项：给写 e2e 的任务，偏好经 shell 设置后要等界面体现（或启动前写 `startingPrefs`），点完 Radix 菜单项先等菜单卸载。
 - E2E-reject-with-message 理论上也有偏好的时序问题，余量大，暂不改。
 - 合并时 main 已有 T251，两边都改了 `gateway/dispatch/tests.rs`（自动合并），合并提交上补跑了宿主测试。
+
+## 合并
+
+- 合并提交 72af3877。main 上已有 T251，两边都改了 `gateway/dispatch/tests.rs`，git 自动合并。
+- 在合并提交上：fmt、clippy（`-D warnings`）通过；宿主 lib 测试 536 条（含 dispatch 的允许集合与权限矩阵）通过；ui-core 的 vitest 152 条通过。
