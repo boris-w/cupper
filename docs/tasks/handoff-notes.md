@@ -595,3 +595,4 @@
 | T147 | "跟进消息默认排队"开关写 prefs 的 `composer.followUpQueue`（布尔，默认关）；Claude 插话副作用的说明复用 `composer:steer_side_effects` | T242 |
 | 写插话用例的任务（T149、T171 等） | 等 agent 拿到这一轮的 prompt（页面上出现这一轮的输出）再插话；只等 `turn.started` 时回合可能还在 `Preparing`（拍开始快照），插话会按 `not_prompting` 转为排队 | T242 |
 | 做第一个安全设置行（特权操作 `settings`）的任务 | 普通的 patch 问 `policy/describe` 会回 `invalid_params`（`NotConfirmable`，不带原因），不要拿它当"不用确认"的信号，按设计 5.2.11 的"修改需要"一栏区分；`admin.rs` 里 `policy/describe` 的样例把 `details` 写成 `{key, value}`，宿主实际发的是 `{settings: {key: value}}`，以宿主为准并修正样例 | T147 |
+| T147 及以后往设置页加页的任务 | 分页表的形状固定为 `{ id, Body }`，`Body` 接收 `focus`，加一页加一行；新页标题的文案键是 `settings:section_<id>`；命令按钮用 `settings/parts.tsx` 的 `CommandButton`，文案键按 `<name>`、`<name>_busy`、`<name>_failed` 命名 | T248 |
