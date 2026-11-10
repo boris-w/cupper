@@ -288,8 +288,8 @@ test("E2E-S3: the agent's change reviewed, commented on, staged by hunk and comm
     JSON.stringify(event.data).includes("name it better"),
   );
   expect(JSON.stringify(sent.data)).toContain('"path":"notes.txt"');
-  await expect(main.getByText("noted", { exact: true })).toBeVisible();
-  // Its turn over, the panel shows the repository as it stays.
+  await expect(main.getByText(t("stream:comments", { count: 1 }))).toBeVisible();
+  // Its turn over (the agent says the comment back with "noted"), the panel shows the repository as it stays.
   await untilEvent(
     cupper,
     stream,
