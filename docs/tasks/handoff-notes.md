@@ -602,3 +602,4 @@
 | T180 | 通知点击前只核对外层 App 的 bundle id（宿主路径往上三级的 Info.plist）；有了发布构建的 Team ID 后，还要核对外层 App 的代码签名满足 UI 的要求（同 5.8.1 宿主对 UI 主进程的要求），不满足就不激活、不交 URL | T251 |
 | T254 | 桌面主进程转发 control 上的 `ui/navigate`；`deeplink` 给 e2e、开发构建补注册 scheme，`open-url` 只认 `<scheme>://session/<id>[?request=<id>]`，两个 ID 按协议格式（前缀加 1–64 个 `[A-Za-z0-9_-]`）校验，App 还没启动完收到的 URL 也要处理；E2E 用 `test/notification_click`（harness 连接，`notification_id` 取索引流 `notification.intent` 的 `intent_id`）；MAN-notification-product 一并核对激活的时机（`notifier_settle` 300 ms 够不够）和系统单独拉起的宿主 | T251 |
 | 写 e2e 的任务 | 经 shell 设置偏好后，窗口要晚一点才拿到、React 还要重新渲染；依赖偏好的用例要么启动前写进 prefs.json（helpers 的 `startingPrefs`），要么等界面上体现新偏好的东西出现再继续。点完 Radix 菜单项后先等菜单卸载（role=menu 数量为 0）再输入，否则焦点陷阱会吞掉输入 | T149 |
+| T152、T154 | 外观分区已由 T252 建好（`settings/AppearanceSection.tsx`，在"通知"之后、"已归档会话"之前），主题、半透明侧边栏、语言往里加行；设置页用例的 `setup` 参数是 `{ auth, prefs }`，可以给 shell 预置 prefs | T252 |
