@@ -75,7 +75,7 @@ flowchart LR
 | `lifecycle` | 单实例锁；退出前经 control 连接查 `host/status`，有运行中的回合或待处理的请求时弹原生确认框（NFR-8），确认后发 `host/exit`；关机和 `before-quit-for-update` 时跳过这一步。控制连接不可用时判定会在 `before-quit` 的同一次派发里完成，Electron 要等这个事件返回才记下"正在退出"，所以判定后的 `app.quit()` 延到下一个回合（T225）；进入退出后不再建窗口，退出后才完成的重连直接关掉，也不再拉起宿主 |
 | `updater` | electron-updater 集成，见 [5.10.5](10-release.md#5105-更新流程) |
 | `deeplink` | 按构建种类注册的 URL scheme（[5.7.9](#579-构建种类)），白名单路由，只做导航 |
-| `notifications` | 只在通知的后备方案启用时工作（待定问题 Q2）：在 control 连接上订阅索引流，取出 `notification.intent` 弹系统通知；通知上不放"批准"按钮，点击后只导航 |
+| `notifications` | 不启用：K5 有条件通过（T101），T158 不触发，系统通知由宿主弹（[5.2.9](02-host.md#529-关注度与通知)）；T150 的第一条验收不通过时再议。原定只在通知的后备方案启用时工作（待定问题 Q2）：在 control 连接上订阅索引流，取出 `notification.intent` 弹系统通知；通知上不放"批准"按钮，点击后只导航 |
 | `menu` | macOS 菜单和快捷键：加速键在菜单里注册，经 `onCommand` 送到渲染进程，焦点在审查文档里时同样生效 |
 | `prefs` | 界面偏好，存在 userData（`cupper/ui/`） |
 | `logging` | `main.log` 轮转；渲染进程的错误转写进主进程日志（脱敏）；主进程未处理的异常与 rejection（`uncaughtException`、`unhandledRejection`）连同栈和 `cause` 记进 `main.log`，不弹同步错误框，继续运行（T200：Electron 默认的同步错误框会挡住主线程，窗口就此重连不上；主进程手里的状态很少，会话在宿主里，窗口按游标重新取数据，所以继续运行，不重启） |
