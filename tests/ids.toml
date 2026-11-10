@@ -1098,7 +1098,7 @@ UI-late-output = "pr"
 [T147]
 milestone = "M1b"
 UI-settings-general = "pr"
-UI-settings = { parts = ["UI-settings-agents", "UI-settings-archived", "UI-settings-general"] }
+UI-settings = { parts = ["UI-settings-agents", "UI-settings-archived", "UI-settings-general", "UI-settings-cli"] }
 
 # 复刻度修正
 [T148]
