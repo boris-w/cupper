@@ -246,9 +246,9 @@ describe("UI-settings-archived", () => {
   test("a page at a time; a restore is busy until the host answers, then says how it came back", async () => {
     const { mock, held, ui } = await setup();
     act(() => ui.getState().navigate(toSettings(ui.getState().route, "archived")));
-    await act(() => new Promise((done) => setTimeout(done)));
-    click("加载更多");
-    await act(() => new Promise((done) => setTimeout(done)));
+    // The host's answers come through a message port: wait for them, not a timer.
+    fireEvent.click(await screen.findByRole("button", { name: "加载更多" }));
+    await screen.findByText("未命名会话");
     expect(texts(card("会话"))).toEqual([
       "旧的会话cupper · 归档于 2023/11/15",
       "恢复",
@@ -338,8 +338,7 @@ describe("UI-settings-general", () => {
   test("storage: each size as text, 未统计完 for a walk cut short; the purge through the shell", async () => {
     const { controls, mock, ui } = await setup();
     act(() => ui.getState().navigate(toSettings(ui.getState().route, "storage")));
-    await act(() => new Promise((done) => setTimeout(done)));
-    const region = card("占用空间");
+    const region = await screen.findByRole("region", { name: "占用空间" });
     expect(within(region).getByText("未统计完")).toBeTruthy();
     expect(texts(region)).toEqual([
       ...["会话数据库会话的事件、索引和设置", "50 MB"],
