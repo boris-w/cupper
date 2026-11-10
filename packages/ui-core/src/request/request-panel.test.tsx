@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, onTestFinished, test, vi } fro
 import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
 import { RouterProvider } from "../app/router";
 import { ComposerArea } from "../composer/QueueList";
+import { capabilities, running, steering } from "../composer/test-capabilities";
 import { ToasterProvider } from "../feedback/toaster";
 import { DEFAULT_PREFS } from "../layout/layout";
 import { StateProvider, UiProvider } from "../state/provider";
@@ -440,8 +441,8 @@ describe("UNIT-request-panel", () => {
 
 describe("UNIT-request-followup", () => {
   /** A permission on screen with the keyboard, and the text typed in its free row. */
-  async function rejecting(respond?: () => object) {
-    const run = await setup(respond ? { respond } : {});
+  async function rejecting(respond?: () => object, ops: object[] = []) {
+    const run = await setup({ ops, ...(respond ? { respond } : {}) });
     screen.getByRole("textbox").focus();
     act(() => vi.advanceTimersByTime(2000));
     await run.push(permission());
@@ -470,6 +471,15 @@ describe("UNIT-request-followup", () => {
         reply_to: "r_1",
         content: [{ type: "text", text: "先别跑测试" }],
       }),
+    ]);
+  });
+
+  test("a turn still running takes the follow-up as a steer, as the send key would", async () => {
+    const run = await rejecting(undefined, [running(), capabilities({ turn: steering(true) })]);
+    await run.press("Enter");
+    await settle();
+    expect(run.sent()).toEqual([
+      expect.objectContaining({ mode: "steer", expected_turn_id: "t_1", reply_to: "r_1" }),
     ]);
   });
 
