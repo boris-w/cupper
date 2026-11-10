@@ -3,6 +3,8 @@
 /** The "send shortcut" preference: Enter, or ⌘Enter with Enter for a newline. */
 export type SendKey = "enter" | "mod_enter";
 export const SEND_KEY_PREF = "composer.sendKey";
+/** "Follow-ups queue by default" (design 5.7.4): on, the send key queues and the queue key steers. */
+export const FOLLOW_UP_QUEUE_PREF = "composer.followUpQueue";
 
 export interface KeyLike {
   key: string;
@@ -37,6 +39,14 @@ export function sendAction(event: KeyLike, sendKey: SendKey): SendAction | undef
   }
   return mod ? "queue" : event.shiftKey ? undefined : "send";
 }
+
+/**
+ * Whether a message asks to steer the running turn rather than queue behind
+ * it: the send key does, or the queue key with follow-ups queued by default.
+ * Idle, nothing steers; a message starts a turn.
+ */
+export const steers = (action: SendAction, running: boolean, followUpQueue: boolean) =>
+  running && (action === "send") !== followUpQueue;
 
 export type EscapeAction = "close_overlay" | "arm" | "interrupt" | "focus" | "none";
 
