@@ -489,6 +489,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 | `apps.terminal` / `apps.editor` | UI-0 用哪个应用打开工作区（从内置的应用清单里选） | `write` |
 | `sessions.default_agent` | 新建会话默认 agent | `write` |
 | `host.idle_exit_minutes` | 空闲退出时间 | `write` |
+| `host.prevent_idle_sleep` | 防休眠（[5.2.13](#5213-进程监护与宿主生命周期)），默认开；存下的数据里没有这个键时按开读（T147） | `write` |
 | `diagnostics.verbose` | 详细日志（可能包含消息内容），默认关 | `privileged` |
 
 只属于界面的偏好（发送快捷键、主题覆盖、面板尺寸、语言覆盖）由桌面主进程存在 App 自己的 userData 里，不是会话数据，不经过宿主。
