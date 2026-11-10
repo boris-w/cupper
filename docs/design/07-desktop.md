@@ -65,7 +65,7 @@ flowchart LR
 
 | 模块 | 职责 |
 |---|---|
-| `hostLauncher` | 经 `cupper_native` 调用 `cupper-sys::spawn` 拉起 `Contents/Helpers/CupperHost.app/Contents/MacOS/cupper-host`：`POSIX_SPAWN_SETSID`、`POSIX_SPAWN_CLOEXEC_DEFAULT`、环境变量白名单，与拉起适配器用同一套参数（桌面建议 #18）；开发和 e2e 构建经 stdin 写入启动载荷后立即关闭（[5.8.1](08-security.md#581-认证握手固定令牌)），把载荷留在内存里，宿主被杀后重新拉起时原样再传，发布构建不写载荷；连接重试总预算 500 ms；预算用完时，只要自己拉起的宿主还活着，就继续等它开始监听或退出，最长 10 s（新装的宿主二进制第一次执行要等系统检查，T075 实测约 2 s，T075 之后的裁定）；按退出码处理：3 改为直接连接，4 弹出"数据来自更新的版本"，5 提示数据目录不可用，6 提示迁移失败并给出备份位置；安装更新的空窗期间不自动拉起（[5.10.5](10-release.md#5105-更新流程)） |
+| `hostLauncher` | 拉起之前经 `cupper_native` 确保 `CupperHost.app` 已在 LaunchServices 登记（`LSRegisterURL`；嵌套的 helper 不随外层 App 自动登记，没登记就弹不了通知，[5.2.9](02-host.md#529-关注度与通知)，T150 起）。经 `cupper_native` 调用 `cupper-sys::spawn` 拉起 `Contents/Helpers/CupperHost.app/Contents/MacOS/cupper-host`：`POSIX_SPAWN_SETSID`、`POSIX_SPAWN_CLOEXEC_DEFAULT`、环境变量白名单，与拉起适配器用同一套参数（桌面建议 #18）；开发和 e2e 构建经 stdin 写入启动载荷后立即关闭（[5.8.1](08-security.md#581-认证握手固定令牌)），把载荷留在内存里，宿主被杀后重新拉起时原样再传，发布构建不写载荷；连接重试总预算 500 ms；预算用完时，只要自己拉起的宿主还活着，就继续等它开始监听或退出，最长 10 s（新装的宿主二进制第一次执行要等系统检查，T075 实测约 2 s，T075 之后的裁定）；按退出码处理：3 改为直接连接，4 弹出"数据来自更新的版本"，5 提示数据目录不可用，6 提示迁移失败并给出备份位置；安装更新的空窗期间不自动拉起（[5.10.5](10-release.md#5105-更新流程)） |
 | `hostConnection` | 用原生扩展建立并校验连接；扩展留着宿主的套接字，读一律经 `recv_closing_fds` 并在每次读后比对宿主的令牌，通过后才转给主进程，主进程拿到的是 socketpair 的一端，再用 `new net.Socket({fd})` 包装（T073：Node 的普通 `read(2)` 会把宿主传来的 fd 装进主进程，不能直接把宿主的 fd 交出去；代价是每条连接两个转发线程，由 T076 的测量闸门评估）；处理 `host/hello` 和 `initialize`；退化模式下校验 `host_proof`；发布构建遇到 `weak_auth: true` 拒绝连接。原生扩展的两个转发线程每次读之前先等可读（`cupper_sys::wait_readable`，即 `poll`）：macOS 上阻塞读偶尔会睡过对端的 `shutdown`，宿主的半关闭要等它关 fd 才传到窗口（T207） |
 | `controlClient` | control 连接上的 JSON-RPC 客户端 |
 | `windowBridge` | 每个窗口一个：数据连接的生命周期、入方向的字节块转发、出方向的解析与白名单、真实输入检查、流控 |
@@ -75,7 +75,7 @@ flowchart LR
 | `lifecycle` | 单实例锁；退出前经 control 连接查 `host/status`，有运行中的回合或待处理的请求时弹原生确认框（NFR-8），确认后发 `host/exit`；关机和 `before-quit-for-update` 时跳过这一步。控制连接不可用时判定会在 `before-quit` 的同一次派发里完成，Electron 要等这个事件返回才记下"正在退出"，所以判定后的 `app.quit()` 延到下一个回合（T225）；进入退出后不再建窗口，退出后才完成的重连直接关掉，也不再拉起宿主 |
 | `updater` | electron-updater 集成，见 [5.10.5](10-release.md#5105-更新流程) |
 | `deeplink` | 按构建种类注册的 URL scheme（[5.7.9](#579-构建种类)），白名单路由，只做导航 |
-| `notifications` | 只在通知的后备方案启用时工作（待定问题 Q2）：在 control 连接上订阅索引流，取出 `notification.intent` 弹系统通知；通知上不放"批准"按钮，点击后只导航 |
+| `notifications` | 不启用：K5 有条件通过（T101），T158 不触发，系统通知由宿主弹（[5.2.9](02-host.md#529-关注度与通知)）；T150 的第一条验收不通过时再议。原定只在通知的后备方案启用时工作（待定问题 Q2）：在 control 连接上订阅索引流，取出 `notification.intent` 弹系统通知；通知上不放"批准"按钮，点击后只导航 |
 | `menu` | macOS 菜单和快捷键：加速键在菜单里注册，经 `onCommand` 送到渲染进程，焦点在审查文档里时同样生效 |
 | `prefs` | 界面偏好，存在 userData（`cupper/ui/`） |
 | `logging` | `main.log` 轮转；渲染进程的错误转写进主进程日志（脱敏）；主进程未处理的异常与 rejection（`uncaughtException`、`unhandledRejection`）连同栈和 `cause` 记进 `main.log`，不弹同步错误框，继续运行（T200：Electron 默认的同步错误框会挡住主线程，窗口就此重连不上；主进程手里的状态很少，会话在宿主里，窗口按游标重新取数据，所以继续运行，不重启） |
@@ -342,6 +342,11 @@ v1.4 按用户决定 F1–F6（`docs/meetings/2026-10-19-ui-fidelity/minutes.md`
   - 内容：图片缩略图、`@` 引用的文件、审查评论。
   - 审查评论（GT-2 v1.3）：显示"{n} 条评论"，展开后列出每条评论的文件、行号和正文，可以逐条删除。
   - 附件随下一条消息一起发出，评论作为 `review_comment` 内容块（[5.3.4](03-protocol-v1.md#534-方法清单)）。
+- **斜杠命令**（CP-3；外观按 ui-spec 的"斜杠命令"，T244 前补，2026-11-10）：
+  - 在文字开头输入 `/` 弹出菜单，与 `@` 列表共用弹出层。标题"斜杠命令"；`/` 之后输入的文字就是搜索词，没有匹配时写"没有命令"；菜单最高 320 或 10 行。
+  - 每行是 `/{name}` 和说明，有 `input_hint` 时一并显示。选中后把 `/{搜索词}` 换成 `/{name} `，发送时原样作为文本发出，由 agent 自己解释。
+  - 命令来自能力描述的 `commands`：会话里随 `session.capabilities` 更新，新建会话页取 `agents/capabilities` 的缓存。没有命令时不弹出。Codex 的"技能"分组 cupper 不做。
+- **↑ 恢复上一条**（CP-1；Codex 是否有见 Q39，结论只影响细节）：输入框为空（没有文字，也没有附件）、没有浮层时按 ↑，填入这个会话里用户最近发出的一条消息的文字，光标放在末尾。文字取自会话视图，所以重启后也有；附件、图片和评论不恢复。新建会话页没有可恢复的内容。
 - **Esc 的处理顺序**（按 Codex）：
   1. 先关闭输入框里的浮层（`@` 和 `/` 的菜单）。
   2. 回合运行中按第一次 Esc，进入"再按一次 Esc 停止"状态，输入框上方给出提示；再按一次才发 `session/interrupt`。中间按了别的键或输入框失焦，就退出这个状态。
