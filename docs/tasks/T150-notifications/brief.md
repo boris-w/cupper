@@ -32,8 +32,8 @@ T250、T251 的任务书到时另写。
 3. **宿主的名称和图标**（`cargo xtask host-bundle`）：
    - Info.plist 写 `CFBundleDisplayName`、`CFBundleName`，取构建种类的显示名称（5.7.9）；
    - 把 App 的 icns 复制进 `CupperHost.app/Contents/Resources`，`CFBundleIconFile` 指向它；
-   - 四份 electron-builder 配置也用同一个 icns 作主 App 的图标。
-   - **图标文件**：用户要从编排者给的备选里选一个。选定之前先用占位文件把路径接通；选定后由编排者交给你替换。这一步之前本任务不合并。
+   - 宿主用主 App 实际用的图标。App 还没有自己的图标，现在用的是 Electron 的默认图标，宿主也取它；不加占位文件，也不改 electron-builder 的图标配置。
+   - 用户 2026-11-10 决定图标先放一放，在 T250 合并前定稿（第一次申请通知授权时系统记下名称和图标）。定稿后改成取 App 自己的 icns，那是 T250 之前的一个小改动。
 4. **用例**：
    - 新增 **UNIT-host-bundle-identity**（已登记）：四种构建的宿主 Info.plist 名称和图标都对。
    - 宿主现有的用例在 NSApplication 主循环上照常通过。
@@ -49,7 +49,7 @@ T250、T251 的任务书到时另写。
 - [x] 第 0 步的补验通过（`results.md`）。
 - [ ] UNIT-host-bundle-identity 通过；宿主的用例在 NSApplication 主循环上全部通过。
 - [ ] 宿主的约束都守住：`unsafe` 只在 cupper-sys；时间只经 `Clock`；子进程只经 `cupper-sys::spawn`。
-- [ ] 主 App 和宿主都换上用户选定的图标。
+- [ ] 宿主的图标和主 App 实际用的图标是同一个。
 - [ ] PR 上 GitHub CI 的 8 个检查都通过，nightly 的 `selfuse`、`release-config` 在分支上通过（由 `main` 触发），汇报里写上链接（守则第 9 条）。
 
 ## 规模
