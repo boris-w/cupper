@@ -103,7 +103,9 @@ export function QueueRow(props: {
           className="field-sizing-content min-w-0 flex-1 resize-none bg-transparent outline-none"
         />
       ) : (
-        <span className="min-w-0 flex-1 truncate">{entry.preview.split("\n", 1)[0]}</span>
+        <span data-queue-preview="" className="min-w-0 flex-1 truncate">
+          {entry.preview.split("\n", 1)[0]}
+        </span>
       )}
       {(
         [

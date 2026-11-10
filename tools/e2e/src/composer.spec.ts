@@ -150,7 +150,7 @@ test("E2E-send-key-setting: with ⌘Enter to send, Enter is a newline; ⌘⇧Ent
   await untilEvent(cupper, stream, (e) => e.type === "turn.started" && e.data.turn_no === 2);
   await area.fill("say later");
   await area.press("Meta+Shift+Enter");
-  await expect(window.locator("[data-queue-id]")).toContainText("say later");
+  await expect(window.locator("[data-queue-preview]")).toHaveText("say later");
 });
 
 /** The running turn's user message mentioning `text` that went in as a steer. */
@@ -181,18 +181,18 @@ test("E2E-composer-steer-default: Enter steers the running turn, ⌘Enter queues
 }) => {
   // The persona takes a steer while its prompt runs.
   const { stream, area } = await turnRunning(cupper, "wait_cancel");
-  const queue = cupper.window.locator("[data-queue-id]");
+  const queue = cupper.window.locator("[data-queue-preview]");
   await area.fill("steer one");
   await area.press("Enter");
   await steered(cupper, stream, "steer one");
   await area.fill("queued one");
   await area.press("Meta+Enter");
-  await expect(queue).toContainText(["queued one"]);
+  await expect(queue).toHaveText(["queued one"]);
 
   await setPref(cupper, "composer.followUpQueue", true);
   await area.fill("queued two");
   await area.press("Enter");
-  await expect(queue).toContainText(["queued one", "queued two"]);
+  await expect(queue).toHaveText(["queued one", "queued two"]);
   await area.fill("steer two");
   await area.press("Meta+Enter");
   await steered(cupper, stream, "steer two");
@@ -206,7 +206,7 @@ test("E2E-composer-steer-default: a steer the agent fails goes to the queue and 
   await area.fill("refused");
   await area.press("Enter");
   await expect(cupper.window.getByText(t("composer:queued_instead"))).toBeVisible();
-  await expect(cupper.window.locator("[data-queue-id]")).toContainText("refused");
+  await expect(cupper.window.locator("[data-queue-preview]")).toHaveText("refused");
 });
 
 test("E2E-queue-edit: a queued message edited in place and steered in from its row; the menu switches queueing", async ({
@@ -215,6 +215,7 @@ test("E2E-queue-edit: a queued message edited in place and steered in from its r
   const { stream, area } = await turnRunning(cupper, "wait_cancel");
   const [t, window] = [await texts(cupper), cupper.window];
   const row = window.locator("[data-queue-id]");
+  const previews = row.locator("[data-queue-preview]");
   const pick = async (item: string) => {
     await row
       .first()
@@ -224,13 +225,13 @@ test("E2E-queue-edit: a queued message edited in place and steered in from its r
   };
   await area.fill("first draft");
   await area.press("Meta+Enter");
-  await expect(row).toContainText("first draft");
+  await expect(previews).toHaveText("first draft");
 
   await pick("composer:queue_edit");
   const box = row.getByRole("textbox", { name: t("composer:queue_edit") });
   await box.fill("rewritten");
   await box.press("Enter");
-  await expect(row).toContainText("rewritten");
+  await expect(previews).toHaveText("rewritten");
   await row.getByRole("button", { name: t("composer:steer") }).click();
   await steered(cupper, stream, "rewritten");
   await expect(row).toHaveCount(0);
@@ -241,5 +242,5 @@ test("E2E-queue-edit: a queued message edited in place and steered in from its r
   await pick("composer:queue_on");
   await area.fill("third");
   await area.press("Enter");
-  await expect(row).toContainText(["second", "third"]);
+  await expect(previews).toHaveText(["second", "third"]);
 });
