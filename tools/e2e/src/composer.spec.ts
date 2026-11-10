@@ -1,16 +1,14 @@
 // The composer's attachments (design 5.7.4, CP-2): `@` and its list by keys,
 // files dropped on the composer as the shell gives their paths, and images;
-// slash commands (CP-3) and the send key preference (design 5.7.7).
+// slash commands (CP-3), the send key preference (design 5.7.7), and
+// steering the running turn (CP-6).
 
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, test, type Cupper } from "./fixture";
-import { texts, untilEvent } from "./helpers";
+import { setPref, texts, untilEvent } from "./helpers";
 import { onScreen } from "./nfr1";
-
-/** The shell's `prefs.set`, as the page has it. */
-type PrefSet = (key: string, value: unknown) => Promise<void>;
 
 /**
  * Drops files with paths of their own on the composer, as a drag from the
@@ -139,11 +137,7 @@ test("E2E-send-key-setting: with ⌘Enter to send, Enter is a newline; ⌘⇧Ent
 }) => {
   const stream = await onScreen(cupper, "say ready");
   const window = cupper.window;
-  // Through the shell, as the settings page will (T147).
-  await window.evaluate(async () => {
-    const { shell } = window as unknown as { shell: { prefs: { set: PrefSet } } };
-    await shell.prefs.set("composer.sendKey", "mod_enter");
-  });
+  await setPref(cupper, "composer.sendKey", "mod_enter");
   const area = window.locator("[data-composer] textarea");
   await area.fill("say one");
   await area.press("Enter");
@@ -157,4 +151,56 @@ test("E2E-send-key-setting: with ⌘Enter to send, Enter is a newline; ⌘⇧Ent
   await area.fill("say later");
   await area.press("Meta+Shift+Enter");
   await expect(window.locator("[data-queue-id]")).toContainText("say later");
+});
+
+/** The running turn's user message mentioning `text` that went in as a steer. */
+const steered = (cupper: Cupper, stream: string, text: string) =>
+  untilEvent(
+    cupper,
+    stream,
+    (e) =>
+      e.type === "item.started" && e.data.steered === true && JSON.stringify(e.data).includes(text),
+  );
+
+/** A session on screen with a second turn running `script`, sent from the composer. */
+async function turnRunning(cupper: Cupper, script: string) {
+  const stream = await onScreen(cupper, "say ready");
+  const area = cupper.window.locator("[data-composer] textarea");
+  await area.fill(script);
+  await area.press("Enter");
+  await untilEvent(cupper, stream, (e) => e.type === "turn.started" && e.data.turn_no === 2);
+  return { stream, area };
+}
+
+test("E2E-composer-steer-default: Enter steers the running turn, ⌘Enter queues; the preference swaps them", async ({
+  cupper,
+}) => {
+  // The persona takes a steer while its prompt runs.
+  const { stream, area } = await turnRunning(cupper, "wait_cancel");
+  const queue = cupper.window.locator("[data-queue-id]");
+  await area.fill("steer one");
+  await area.press("Enter");
+  await steered(cupper, stream, "steer one");
+  await area.fill("queued one");
+  await area.press("Meta+Enter");
+  await expect(queue).toContainText(["queued one"]);
+
+  await setPref(cupper, "composer.followUpQueue", true);
+  await area.fill("queued two");
+  await area.press("Enter");
+  await expect(queue).toContainText(["queued one", "queued two"]);
+  await area.fill("steer two");
+  await area.press("Meta+Enter");
+  await steered(cupper, stream, "steer two");
+});
+
+test("E2E-composer-steer-default: a steer the agent fails goes to the queue and says so", async ({
+  cupper,
+}) => {
+  const { area } = await turnRunning(cupper, "steer_error; wait_cancel");
+  const t = await texts(cupper);
+  await area.fill("refused");
+  await area.press("Enter");
+  await expect(cupper.window.getByText(t("composer:queued_instead"))).toBeVisible();
+  await expect(cupper.window.locator("[data-queue-id]")).toContainText("refused");
 });

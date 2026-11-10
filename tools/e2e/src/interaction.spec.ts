@@ -4,7 +4,7 @@
 // clicks need the window's focus: every test here is `@focus`.
 
 import { expect, test, type Cupper } from "./fixture";
-import { events, texts, untilEvent } from "./helpers";
+import { events, setPref, texts, untilEvent } from "./helpers";
 import { activatePanel, focusWindow, panelReady, press, requestPanel, type } from "./input";
 
 /** Starts a Claude session on `script` from the CLI, opens it, and focuses the window. */
@@ -194,6 +194,22 @@ test(
 const mentioning = (cupper: Cupper, stream: string, type: string, text: string) =>
   untilEvent(cupper, stream, (e) => e.type === type && JSON.stringify(e.data).includes(text));
 
+/** Rejects the request on the panel with `message` in its free row (RP-12), by real input. */
+async function rejectWith(cupper: Cupper, message: string) {
+  const t = await texts(cupper);
+  const panel = requestPanel(cupper);
+  // The free row is number 4, after the options: its number only focuses it.
+  await activatePanel(cupper);
+  await press(cupper, "4");
+  const row = panel.getByRole("textbox", { name: t("request:message", { agent: "Claude" }) });
+  await expect(row).toBeFocused();
+  await type(cupper, message);
+  // Enter right after typing is no real input (rule 3): it only says to click.
+  await press(cupper, "Enter");
+  await expect(panel.getByText(t("request:click_submit"))).toBeVisible();
+  await panel.getByRole("button", { name: t("request:submit") }).click();
+}
+
 test(
   "E2E-reject-with-message: the rejection first, then the message, queued and tied to it",
   { tag: ["@focus", "@smoke"] },
@@ -204,30 +220,33 @@ test(
       cupper,
       "permission r0; permission r1; say done",
     );
-    const t = await texts(cupper);
-    const panel = requestPanel(cupper);
+    // Follow-ups queue by default here; E2E-composer-steer-default steers one.
+    await setPref(cupper, "composer.followUpQueue", true);
     const id = await request(cupper, stream, 0);
-
-    // The free row is number 4, after the options: its number only focuses it.
-    await activatePanel(cupper);
-    await press(cupper, "4");
-    const row = panel.getByRole("textbox", { name: t("request:message", { agent: "Claude" }) });
-    await expect(row).toBeFocused();
-    await type(cupper, "nope");
-    // Enter right after typing is no real input (rule 3): it only says to click.
-    await press(cupper, "Enter");
-    await expect(panel.getByText(t("request:click_submit"))).toBeVisible();
-    await panel.getByRole("button", { name: t("request:submit") }).click();
+    await rejectWith(cupper, "nope");
 
     expect(await outcome(cupper, stream, id)).toEqual(selected("reject"));
     const resolved = await mentioning(cupper, stream, "interaction.resolved", id);
-    // Queued while the turn still runs (M1a queues), then sent as its own turn.
+    // Queued while the turn still runs, then sent as its own turn.
     const queued = await mentioning(cupper, stream, "queue.updated", `"reply_to":"${id}"`);
     await cupper.cli.ok(["approve", sessionId, await request(cupper, stream, 1)]);
     const sent = await mentioning(cupper, stream, "item.started", `"reply_to":"${id}"`);
     expect(resolved.seq).toBeLessThan(queued.seq);
     expect(sent.data).toMatchObject({ kind: "user_message", content: [{ text: "nope" }] });
     await expect(cupper.window.getByText("fake reply to: nope")).toBeVisible();
+  },
+);
+
+test(
+  "E2E-composer-steer-default: a rejection's message steers the turn that goes on",
+  { tag: ["@focus"] },
+  async ({ cupper }) => {
+    const { stream } = await session(cupper, "permission r0; permission r1; say done");
+    const id = await request(cupper, stream, 0);
+    await rejectWith(cupper, "nope");
+    expect(await outcome(cupper, stream, id)).toEqual(selected("reject"));
+    const sent = await mentioning(cupper, stream, "item.started", `"reply_to":"${id}"`);
+    expect(sent.data).toMatchObject({ steered: true, content: [{ text: "nope" }] });
   },
 );
 

@@ -26,6 +26,18 @@ declare global {
   }
 }
 
+/** Sets a preference through the window's shell, as the settings page will (T147). */
+export async function setPref(cupper: Cupper, key: string, value: unknown) {
+  type Set = (key: string, value: unknown) => Promise<void>;
+  await cupper.window.evaluate(
+    async ([key, value]) => {
+      const { shell } = window as unknown as { shell: { prefs: { set: Set } } };
+      await shell.prefs.set(key, value);
+    },
+    [key, value] as const,
+  );
+}
+
 /** The app's text in the app's language, as its dialogs and sidebar show it. */
 export async function texts(cupper: Cupper) {
   const locale = await cupper.app.evaluate(({ app }) => app.getPreferredSystemLanguages()[0]);
