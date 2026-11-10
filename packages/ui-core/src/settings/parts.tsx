@@ -1,9 +1,11 @@
 // The settings page's building blocks (ui-spec 4.7): a section of rows, and a
 // row with its label and description on the left, its control on the right.
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import type { Translate } from "../app/providers";
+import { useT, type Translate } from "../app/providers";
+import { codeOf } from "../composer/send";
+import { useToasts } from "../feedback/toaster";
 
 /** A section under its heading; `focused` brings it into view and gives it focus. */
 export function Section(props: {
@@ -52,6 +54,33 @@ export function Row(props: {
       {props.value && <span className="shrink-0 text-fg-secondary">{props.value}</span>}
       {props.children}
     </div>
+  );
+}
+
+export const BUTTON =
+  "shrink-0 rounded-lg bg-btn-secondary px-2.5 py-1 text-sm outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+
+/**
+ * A command's button, `settings:<name>`: `<name>_busy` until the host
+ * answers; a toast says `<name>_failed`, or the text `run` resolves to.
+ */
+export function CommandButton({ name, run }: { name: string; run: () => Promise<unknown> }) {
+  const t = useT();
+  const { show } = useToasts();
+  const [busy, setBusy] = useState(false);
+  const click = () => {
+    setBusy(true);
+    run()
+      .then((text) => typeof text === "string" && show({ id: name, text }))
+      .catch((error: unknown) =>
+        show({ id: name, text: t(`settings:${name}_failed`, { code: codeOf(error) }) }),
+      )
+      .finally(() => setBusy(false));
+  };
+  return (
+    <button type="button" disabled={busy} onClick={click} className={BUTTON}>
+      {t(`settings:${name}${busy ? "_busy" : ""}`)}
+    </button>
   );
 }
 

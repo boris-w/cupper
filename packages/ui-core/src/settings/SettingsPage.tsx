@@ -10,6 +10,8 @@ import { BackIcon } from "../components/icons";
 import { ROW } from "../sidebar/parts";
 import type { Route } from "../state/ui";
 import { AgentsSection } from "./AgentsSection";
+import { ArchivedSection } from "./ArchivedSection";
+import { ConnectionsSection } from "./ConnectionsSection";
 
 interface Entry {
   id: string;
@@ -18,7 +20,11 @@ interface Entry {
 }
 
 /** The sections in the navigation's order; a page is one more line here (T147, T248). */
-const SECTIONS: readonly [Entry, ...Entry[]] = [{ id: "agents", Body: AgentsSection }];
+const SECTIONS: readonly [Entry, ...Entry[]] = [
+  { id: "archived", Body: ArchivedSection },
+  { id: "agents", Body: AgentsSection },
+  { id: "connections", Body: ConnectionsSection },
+];
 
 export function SettingsPage({ route }: { route: Extract<Route, { page: "settings" }> }) {
   const t = useT();
