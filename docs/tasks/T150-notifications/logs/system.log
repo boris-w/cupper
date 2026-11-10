@@ -1,0 +1,43 @@
+# T150 第 0 步：系统日志摘录（log show，本机时间 UTC+8）。只留与原型进程有关的 usernoted、CoreServicesUIAgent、launchservicesd、launchd 行，以及每次点击后 0.1 秒内 CoreServicesUIAgent 的 open 行；其他应用的 pid 换成 <other>，去掉了 asn
+
+2026-11-10 10:37:58.620 Df launchd[1:d8a10fd] [gui/501/application.dev.cupper.spike.sp10.154258536.154258597 [18835]:] Successfully spawned sp10[18835] because launch job demand
+2026-11-10 10:37:58.624 Df CoreServicesUIAgent[51140:d8a6da0] [com.apple.processmanager:front-35286506] LAUNCH: 0x0-0xe7016f3 dev.cupper.spike.sp10 starting stopped process.
+2026-11-10 10:37:58.668 Df launchservicesd[377:d8aa929] [com.apple.processmanager:front-35286506] SETFRONT: pid=18835 foreground=1 oldFrontPid=<other>
+2026-11-10 10:38:18.037 Df usernoted[652:d8aa3a9] [com.apple.unc:application] Received response <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"ED8E-5273" req:"sp10-t1" uuid:"B29EBC76" source:"4640392B" <response action: contents actIdent:  foreground: true text: nil> >
+2026-11-10 10:38:18.039 Df usernoted[652:d8aa3a9] [com.apple.unc:application] Bringing app dev.cupper.spike.sp10.host front for response with URL: file:///Applications/SP10.app/Contents/Helpers/SP10Host.app/
+2026-11-10 10:38:18.041 Df CoreServicesUIAgent[51140:d8aa8ed] [com.apple.launchservices:open] Found application <private> to open application <private>
+2026-11-10 10:38:18.041 Df launchservicesd[377:d8aadd4] [com.apple.processmanager:front-35286506] SETFRONT: pid=18835 foreground=1 oldFrontPid=<other>
+2026-11-10 10:38:18.056 Df launchservicesd[377:d8aadd4] [com.apple.processmanager:front-35286506] SETFRONT: pid=18837 foreground=0 oldFrontPid=18835
+2026-11-10 10:38:19.114 Df launchservicesd[377:d8aa764] [com.apple.processmanager:front-35286506] SETFRONT: pid=18835 foreground=1 oldFrontPid=18837
+2026-11-10 10:38:29.392 Df launchservicesd[377:d8aab44] [com.apple.processmanager:front-35286506] SETFRONT: pid=18835 foreground=1 oldFrontPid=<other>
+2026-11-10 10:38:54.878 Df launchd[1:d8aaff6] [gui/501/application.dev.cupper.spike.sp10.154258536.154258597 [19973]:] Successfully spawned sp10[19973] because launch job demand
+2026-11-10 10:38:54.880 Df CoreServicesUIAgent[51140:d8aa8ed] [com.apple.processmanager:front-35286506] LAUNCH: 0x0-0xe7076f9 dev.cupper.spike.sp10 starting stopped process.
+2026-11-10 10:38:54.953 Df launchservicesd[377:d8ab79e] [com.apple.processmanager:front-35286506] SETFRONT: pid=19973 foreground=1 oldFrontPid=<other>
+2026-11-10 10:41:13.084 Df usernoted[652:d8acac9] [com.apple.unc:application] Received response <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"03A3-C8D4" req:"sp10-t2" uuid:"FFE86B41" source:"4640392B" <response action: contents actIdent:  foreground: true text: nil> >
+2026-11-10 10:41:13.089 Df usernoted[652:d8acac9] [com.apple.unc:application] Bringing app dev.cupper.spike.sp10.host front for response with URL: file:///Applications/SP10.app/Contents/Helpers/SP10Host.app/
+2026-11-10 10:41:13.091 Df CoreServicesUIAgent[51140:d8ad138] [com.apple.launchservices:open] Found application <private> to open application <private>
+2026-11-10 10:41:13.098 Df launchservicesd[377:d8acfe3] [com.apple.processmanager:front-35286506] SETFRONT: pid=19978 foreground=0 oldFrontPid=<other>
+2026-11-10 10:41:13.105 Df CoreServicesUIAgent[51140:d8ad265] [com.apple.launchservices:open] Opening URL <private> with application <FSNode> { isDir = y, path = <private> }
+2026-11-10 10:41:13.125 Df launchd[1:d8aabf7] [gui/501/application.dev.cupper.spike.sp10.154258536.154258597 [22107]:] Successfully spawned sp10[22107] because launch job demand
+2026-11-10 10:41:13.130 Df CoreServicesUIAgent[51140:d8ad265] [com.apple.processmanager:front-35286506] LAUNCH: 0x0-0xe716708 dev.cupper.spike.sp10 starting stopped process.
+2026-11-10 10:41:13.209 Df launchservicesd[377:d8ad8db] [com.apple.processmanager:front-35286506] SETFRONT: pid=22107 foreground=1 oldFrontPid=19978
+2026-11-10 10:41:31.789 Df launchservicesd[377:d8ad48b] [com.apple.processmanager:front-35286506] SETFRONT: pid=22107 foreground=1 oldFrontPid=<other>
+2026-11-10 10:42:00.109 Df launchd[1:d8acfee] [gui/501/application.dev.cupper.spike.sp10.154258536.154258597 [23129]:] Successfully spawned sp10[23129] because launch job demand
+2026-11-10 10:42:00.112 Df CoreServicesUIAgent[51140:d8ad83b] [com.apple.processmanager:front-35286506] LAUNCH: 0x0-0xe71870a dev.cupper.spike.sp10 starting stopped process.
+2026-11-10 10:42:00.158 Df launchservicesd[377:d8add9f] [com.apple.processmanager:front-35286506] SETFRONT: pid=23129 foreground=1 oldFrontPid=<other>
+2026-11-10 10:42:23.163 Df launchservicesd[377:d8aebee] [com.apple.processmanager:front-35286506] SETFRONT: pid=23129 foreground=1 oldFrontPid=<other>
+2026-11-10 10:42:27.272 Df usernoted[652:d8adf0e] [com.apple.unc:application] Received response <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"B8DC-B072" req:"sp10-t3" uuid:"588B8816" source:"4640392B" <response action: contents actIdent:  foreground: true text: nil> >
+2026-11-10 10:42:27.274 Df usernoted[652:d8adf0e] [com.apple.unc:application] Bringing app dev.cupper.spike.sp10.host front for response with URL: file:///Applications/SP10.app/Contents/Helpers/SP10Host.app/
+2026-11-10 10:42:27.275 Df launchservicesd[377:d8aeb7b] [com.apple.processmanager:front-35286506] SETFRONT: pid=23129 foreground=1 oldFrontPid=<other>
+2026-11-10 10:42:27.275 Df CoreServicesUIAgent[51140:d8ada2f] [com.apple.launchservices:open] Found application <private> to open application <private>
+2026-11-10 10:42:27.292 Df launchservicesd[377:d8aeb7b] [com.apple.processmanager:front-35286506] SETFRONT: pid=23155 foreground=0 oldFrontPid=23129
+2026-11-10 10:42:28.350 Df launchservicesd[377:d8aebf8] [com.apple.processmanager:front-35286506] SETFRONT: pid=23129 foreground=1 oldFrontPid=23155
+2026-11-10 10:42:38.312 Df launchservicesd[377:d8aebf8] [com.apple.processmanager:front-35286506] SETFRONT: pid=23129 foreground=1 oldFrontPid=<other>
+2026-11-10 10:42:56.393 Df launchd[1:d8af41f] [gui/501/application.dev.cupper.spike.sp10.154258536.154258597 [24137]:] Successfully spawned sp10[24137] because launch job demand
+2026-11-10 10:42:56.397 Df CoreServicesUIAgent[51140:d8af40d] [com.apple.processmanager:front-35286506] LAUNCH: 0x0-0xe720712 dev.cupper.spike.sp10 starting stopped process.
+2026-11-10 10:42:56.444 Df launchservicesd[377:d8af03e] [com.apple.processmanager:front-35286506] SETFRONT: pid=24137 foreground=1 oldFrontPid=<other>
+2026-11-10 10:43:00.678 Df usernoted[652:d8aed5d] [com.apple.unc:application] Received response <NotificationRecord app:"dev.cupper.spike.sp10.host" ident:"5AE4-9E0D" req:"sp10-t3b" uuid:"64A065BC" source:"4640392B" <response action: contents actIdent:  foreground: true text: nil> >
+2026-11-10 10:43:00.679 Df usernoted[652:d8aed5d] [com.apple.unc:application] Bringing app dev.cupper.spike.sp10.host front for response with URL: file:///Applications/SP10.app/Contents/Helpers/SP10Host.app/
+2026-11-10 10:43:00.680 Df CoreServicesUIAgent[51140:d8af115] [com.apple.launchservices:open] Found application <private> to open application <private>
+2026-11-10 10:43:00.685 Df launchservicesd[377:d8af4ce] [com.apple.processmanager:front-35286506] SETFRONT: pid=24145 foreground=0 oldFrontPid=<other>
+2026-11-10 10:43:00.691 Df launchservicesd[377:d8af482] [com.apple.processmanager:front-35286506] SETFRONT: pid=24137 foreground=1 oldFrontPid=24145
