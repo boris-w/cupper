@@ -24,7 +24,7 @@
 | 7 | 照第 3 步让一个请求在**窗口不在看那个会话时**到达，收到通知后先不点；在终端只结束界面：`pkill -9 -x "Cupper Local"`（宿主因为有待处理的请求留着），再点那条通知 | Cupper Local 被启动并直接打开这个会话；没有对话框；宿主只有一个（`pgrep -x cupper-host` 只有一行） |
 | 8 | 照第 7 步再留一条通知在通知中心，这次界面和宿主都结束：`pkill -9 -x "Cupper Local"; pkill -9 -x cupper-host`，再点那条通知 | 系统拉起一个宿主，它把会话交给 Cupper Local 后自己退出：Cupper Local 被启动并打开这个会话；之后宿主由界面正常拉起，只有一个 |
 | 9 | 第 4、5 步时注意 Cupper Local 来到前台的过程 | 每次都停在前台，没有先闪到前台又被别的窗口盖住；不稳定时记下几次里有几次（`notifier_settle` 300 ms 够不够） |
-| 10 | Cupper Local 开着、没有运行中的回合时，注销 macOS 用户再登录 | `host.log` 的最后几行是有序退出（`orderly exit`，原因 `terminated`），`host.db` 的 `meta.last_clean_exit_at` 是注销的时间；再打开时不提示"上次异常退出" |
+| 10 | 注销时的有序退出 | 不在人工检查范围：由 `crates/cupper-sys/tests/runloop.rs` 覆盖（用户决定，2026-11-10）。那个用例在主循环运行后给自己发注销时的那种退出 Apple Event，断言事件交给宿主走有序退出，而不是 AppKit 直接 `exit(0)` |
 | 11 | 正常退出 Cupper Local（⌘Q） | 通知中心里 Cupper Local 的通知都清掉了 |
 
 ## 收尾
