@@ -65,6 +65,7 @@ use crate::git::{GitDeps, GitService, GitTool, RepoLock};
 use crate::index::{INDEX, IndexDeps, IndexError, IndexHandle};
 use crate::ledger::{Ledger, LedgerError, SWEEPER};
 use crate::manifest;
+use crate::notifier::Notifier;
 use crate::orchestrator::session::{SessionDeps, SessionManager};
 use crate::quiescence::Quiescence;
 use crate::requester::ProcessRequesters;
@@ -163,6 +164,7 @@ pub struct Host {
     terminate: Signal,
     socket: PathBuf,
     power: Power,
+    notifier: Notifier,
     /// The barrier's registry, for the test that every kind is in it.
     #[cfg(all(test, feature = "test-harness"))]
     quiescence: Quiescence,
@@ -290,6 +292,7 @@ impl Host {
         {
             record(&records, &*clock, event);
         }
+        let notifier = notifier(&payload);
         // Step 7: the index stream, before the socket.
         quiescence.register(INDEX);
         let index = IndexHandle::start(IndexDeps {
@@ -308,6 +311,7 @@ impl Host {
                 pending_upgrade: false,
                 power_assertion: false,
                 last_exit_abnormal: run.abnormal,
+                notification_auth: None,
             },
             settings: settings.subscribe(),
             requesters: Arc::new(ProcessRequesters::new(
@@ -316,8 +320,11 @@ impl Host {
                 cupper_sys::own_signing_identity().ok().flatten(),
             )),
             audit: records.clone(),
+            notifier: notifier.clone(),
         })
         .await?;
+        let reported = index.clone();
+        notifier.authorize(move |auth| reported.notification_auth(auth));
         // The versions of git and git-lfs, for `agents.updated` (T094), found
         // aside: waits on other processes are idle.
         let (git_of, clock_of, index_of) = (git.clone(), clock.clone(), index.clone());
@@ -572,6 +579,7 @@ impl Host {
             terminate,
             socket,
             power,
+            notifier,
             #[cfg(all(test, feature = "test-harness"))]
             quiescence,
             _lock: lock,
@@ -661,6 +669,7 @@ impl Host {
             code = HostExit::Error;
         }
         self.power.exit().await;
+        self.notifier.clear();
         let _ = std::fs::remove_file(&self.socket);
         code
     }
@@ -862,6 +871,24 @@ fn test_rss(payload: &Payload, agent: Agent) -> Option<u64> {
     {
         let _ = (payload, agent);
         None
+    }
+}
+
+/// This build's notifier (design 5.2.9, 5.9.9): one with the test harness
+/// never posts, so it records or is off as `test_config` says.
+fn notifier(payload: &Payload) -> Notifier {
+    #[cfg(feature = "test-harness")]
+    {
+        use crate::startup::test_config::NotifierKind;
+        match payload.test_config.notifier {
+            NotifierKind::Record => Notifier::record(crate::notifier::Language::of_system()),
+            NotifierKind::System => Notifier::off(),
+        }
+    }
+    #[cfg(not(feature = "test-harness"))]
+    {
+        let _ = payload;
+        Notifier::system(BundleDir::of_this_host().is_ok_and(|bundle| bundle.is_app()))
     }
 }
 

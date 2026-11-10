@@ -35,6 +35,11 @@ pub struct Kind {
     pub hardened_runtime: bool,
 }
 
+/// The app's icon, which the host takes too: notifications and System
+/// Settings show the host bundle's own icon (design 5.10.1). The four
+/// electron-builder configs name it as `mac.icon`; `icon.sh` beside it makes it.
+pub const APP_ICON: &str = "apps/desktop/build/icon.icns";
+
 pub const KINDS: &[Kind] = &[
     Kind {
         name: "release",
@@ -188,6 +193,8 @@ pub fn bundle(root: &Path, options: &Options) -> Result<Bundle> {
     fs::create_dir_all(contents.join("MacOS")).context("cannot create MacOS/")?;
     fs::copy(&host, contents.join("MacOS/cupper-host")).context("cannot copy the host")?;
     fs::write(contents.join("Info.plist"), info_plist(kind)).context("cannot write Info.plist")?;
+    fs::copy(root.join(APP_ICON), contents.join("Resources/icon.icns"))
+        .context("cannot copy the icon")?;
 
     let signing = |identifier| Signing {
         identifier,
@@ -287,9 +294,8 @@ fn copy_tree(from: &Path, to: &Path) -> Result<()> {
 }
 
 /// The host's Info.plist (design 5.10.1): an agent app with no usage
-/// descriptions at all (security #13), named as its build kind. The icon
-/// comes with the app's own, before T250 (T150 ruling): the notification
-/// service reads both only when the host first connects to it.
+/// descriptions at all (security #13), with the name of its build kind and
+/// the app's icon.
 fn info_plist(kind: &Kind) -> String {
     let (identifier, name) = (kind.host_id, kind.display_name);
     let version = env!("CARGO_PKG_VERSION");
@@ -300,6 +306,7 @@ fn info_plist(kind: &Kind) -> String {
 <dict>
 	<key>CFBundleDisplayName</key><string>{name}</string>
 	<key>CFBundleExecutable</key><string>cupper-host</string>
+	<key>CFBundleIconFile</key><string>icon</string>
 	<key>CFBundleIdentifier</key><string>{identifier}</string>
 	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 	<key>CFBundleName</key><string>{name}</string>
@@ -372,6 +379,7 @@ mod tests {
             "Helpers/node",
             "Info.plist",
             "MacOS/cupper-host",
+            "Resources/icon.icns",
             "Resources/runtime/bundle-claude-acp.mjs",
             "Resources/runtime/locks/claude-agent-acp.json",
             "_CodeSignature/CodeResources",
@@ -468,8 +476,8 @@ mod tests {
         assert!(parse(&[], Path::new("/r")).is_err());
     }
 
-    /// Each kind's host is named as the kind's app, where notifications and
-    /// System Settings show it (design 5.7.9, 5.10.1).
+    /// Each kind's host has the name of the kind's app and the app's icon,
+    /// which notifications and System Settings show (design 5.7.9, 5.10.1).
     #[test]
     fn unit_host_bundle_identity_names_each_host_as_its_kind() {
         let dir = TempDir::new("host-plist");
@@ -489,6 +497,19 @@ mod tests {
                 kind.name
             );
             assert_eq!(plist["CFBundleName"], kind.display_name, "{}", kind.name);
+            assert_eq!(plist["CFBundleIconFile"], "icon");
+            let config = match kind.name {
+                "self-use" => "local",
+                name => name,
+            };
+            let config = format!("../../apps/desktop/electron-builder.{config}.yml");
+            let config = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(config))
+                .expect("the kind's electron-builder config");
+            let icon = config
+                .lines()
+                .find_map(|line| line.strip_prefix("  icon: "))
+                .expect("mac.icon");
+            assert_eq!(format!("apps/desktop/{icon}"), APP_ICON, "{}", kind.name);
         }
     }
 }

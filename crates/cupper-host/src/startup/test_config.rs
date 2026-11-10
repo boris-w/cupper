@@ -63,11 +63,11 @@ pub enum ClockKind {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NotifierKind {
-    /// System notifications.
+    /// What release builds post, which a test build never does: off.
     #[default]
     System,
-    /// Notifications go to the test's receiver; UserNotifications is never
-    /// called, so no permission prompt takes the focus.
+    /// Notifications are recorded; UserNotifications is never called, so no
+    /// permission prompt takes the focus.
     Record,
 }
 

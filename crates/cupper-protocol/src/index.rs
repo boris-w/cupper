@@ -259,6 +259,22 @@ pub struct HostUpdated {
     /// The previous run did not exit cleanly; present only when true.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub last_exit_abnormal: bool,
+    /// Whether the user lets the host's notifications show (design 5.2.9);
+    /// absent until the host has asked the system, and in builds that only
+    /// record them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notification_auth: Option<NotificationAuth>,
+}
+
+open_enum! {
+    pub enum NotificationAuth {
+        /// The user has not been asked yet.
+        NotDetermined => "not_determined",
+        Authorized => "authorized",
+        /// Turned down or turned off: the system asks no more, System
+        /// Settings is the way back.
+        Denied => "denied",
+    }
 }
 
 /// `settings.updated`: every setting, as `settings/get` returns them; at
