@@ -604,3 +604,6 @@
 | 写 e2e 的任务 | 经 shell 设置偏好后，窗口要晚一点才拿到、React 还要重新渲染；依赖偏好的用例要么启动前写进 prefs.json（helpers 的 `startingPrefs`），要么等界面上体现新偏好的东西出现再继续。点完 Radix 菜单项后先等菜单卸载（role=menu 数量为 0）再输入，否则焦点陷阱会吞掉输入 | T149 |
 | T152、T154 | 外观分区已由 T252 建好（`settings/AppearanceSection.tsx`，在"通知"之后、"已归档会话"之前），主题、半透明侧边栏、语言往里加行；设置页用例的 `setup` 参数是 `{ auth, prefs }`，可以给 shell 预置 prefs | T252 |
 | T148 | 其他滚动区域仍是系统默认滚动条（侧边栏、设置页、审查文档、文件树、提交弹窗的输出、请求面板、`@`/`/` 弹出列表、工具输出）；Codex 对所有元素统一设细滚动条（`scrollbar-width: thin`、滑块正文色 30%、悬停换 border-strong），复刻度修正时考虑统一，用 T256 的 `--color-scrollbar-thumb` | T256 |
+| T148 | 适配器退出时，出错卡片直接列出 stderr 的尾部（十几行 `[session/create] <redacted> phase=…`），对用户太长、太技术；考虑默认折叠，展开再看 | T254 |
+| 写用户文档的任务（T157 等） | macOS 26 上通知授权请求是通知样式的横幅，要点横幅上的"允许"按钮（或"选项"里的允许）；点横幅本身系统按"不允许"处理，之后只能去系统设置里打开 | T254 |
+| 在本机跑 e2e 的人 | T254 起 e2e 版 App 带 `cupper-e2e` 的 URL scheme，本机一启动 LaunchServices 就会记下它；影响不大，但 e2e 尽量在 runner 上跑 | T254 |
