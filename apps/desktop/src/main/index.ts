@@ -27,7 +27,7 @@ import { isReleaseLike } from "../shared/flavor";
 import { COMMAND_CHANNEL, HOST_OPEN, NAVIGATE } from "../shared/ipc";
 import { WindowBridges } from "./bridge/bridges";
 import { startHost } from "./host";
-import { deepLink, Navigation, SCHEMES, sessionTarget } from "./deeplink";
+import { deepLink, SCHEMES, sessionTarget, WindowNavigation } from "./deeplink";
 import { catchUncaught } from "./errors";
 import { confirmQuit, confirmRestart, tellRestartRefused, type Translate } from "./host/dialogs";
 import { QuitGuard, type QuitHost } from "./host/lifecycle";
@@ -75,15 +75,13 @@ protocol.registerSchemesAsPrivileged([APP_SCHEME_PRIVILEGES]);
 app.enableSandbox();
 
 let mainWindow: BrowserWindow | null = null;
-/** Navigation for the main window, until its document has loaded. */
-let unsent: NavigateTarget[] | undefined;
 /** Once the app goes on to quit: no window opens any more (T225). */
 let quitting = false;
 let host: ReturnType<typeof startHost> | undefined;
 let i18n: ReturnType<typeof createI18n> | undefined;
 const t: Translate = (key, values) => (i18n ??= createI18n()).t(key, values);
 const quit = new QuitGuard(quitHost, (status) => confirmQuit(t, status));
-const navigation = new Navigation(showSession);
+const navigation = new WindowNavigation((target) => mainWindow?.webContents.send(NAVIGATE, target));
 
 if (app.requestSingleInstanceLock()) {
   start();
@@ -118,7 +116,7 @@ function start() {
     event.preventDefault();
     const target = deepLink(url, SCHEMES[flavor]);
     if (target) {
-      navigation.go(target);
+      showSession(target);
     } else {
       log.warn("ignored a link");
     }
@@ -153,7 +151,7 @@ function start() {
       const to = (params ?? {}) as { session_id?: unknown; request_id?: unknown };
       const target = method === "ui/navigate" && sessionTarget(to.session_id, to.request_id);
       if (target) {
-        navigation.go(target);
+        showSession(target);
       }
     });
     host.control.client.onState((state) => {
@@ -206,7 +204,6 @@ async function ready() {
     serveWindows(host);
   }
   showMainWindow();
-  navigation.ready();
 }
 
 /** Each window document's data connection, through its windowBridge (design 5.7.1). */
@@ -241,7 +238,13 @@ function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
       return { bridge, window: port2 };
     },
   });
-  ipcMain.handle(HOST_OPEN, (event) => bridges.open(event.sender, event.senderFrame));
+  ipcMain.handle(HOST_OPEN, async (event) => {
+    const handshake = await bridges.open(event.sender, event.senderFrame);
+    if (event.sender === mainWindow?.webContents) {
+      navigation.connected();
+    }
+    return handshake;
+  });
   control.client.onState((state) => void (state.status === "ready" && bridges.reload()));
   if (__CUPPER_FLAVOR__ === "e2e") {
     // For the e2e tests' `electronApp.evaluate`: a window loses its
@@ -272,15 +275,18 @@ function showMainWindow() {
   const preload = join(import.meta.dirname, "../preload/index.cjs");
   const window = new BrowserWindow(mainWindowOptions(flavor, preload));
   mainWindow = window;
-  const waiting: NavigateTarget[] = (unsent = []);
-  window.webContents.once("did-finish-load", () => {
-    unsent = undefined;
-    waiting.forEach((target) => window.webContents.send(NAVIGATE, target));
+  navigation.reloading();
+  window.webContents.on("did-finish-load", () => navigation.loaded());
+  window.webContents.on("did-start-navigation", (details) => {
+    if (details.isMainFrame && !details.isSameDocument) {
+      navigation.reloading();
+    }
   });
   window.once("ready-to-show", () => (background ? window.showInactive() : window.show()));
   watchInput(window, () => Date.now());
   window.on("closed", () => {
     mainWindow = null;
+    navigation.reloading();
   });
   window.webContents.on("preload-error", (_event, _path, error) => {
     log.error("preload failed", { error: error.message });
@@ -300,11 +306,7 @@ function showSession(target: NavigateTarget) {
   if (mainWindow === null) {
     showMainWindow();
   }
-  if (unsent) {
-    unsent.push(target);
-  } else {
-    mainWindow?.webContents.send(NAVIGATE, target);
-  }
+  navigation.go(target);
 }
 
 /** `host/status` and `host/exit` on the control connection, each given a few seconds. */

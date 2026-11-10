@@ -1,10 +1,10 @@
 // deeplink (design 5.7.2, 5.7.8): only the one route of this build kind's
-// scheme, with well-formed IDs, navigates; and nothing goes before the app
-// is ready.
+// scheme, with well-formed IDs, navigates; the window gets the target once
+// it has a document, and again after each reload until it connects.
 
 import { describe, expect, test } from "vitest";
 
-import { deepLink, Navigation, SCHEMES, sessionTarget } from "./deeplink";
+import { deepLink, SCHEMES, sessionTarget, WindowNavigation } from "./deeplink";
 
 const session = { kind: "session", session_id: "s_0190a3b4" } as const;
 
@@ -47,18 +47,28 @@ describe("deeplink", () => {
     expect(sessionTarget(undefined)).toBeNull();
   });
 
-  test("targets wait until the app is ready, then go in order", () => {
-    const delivered: unknown[] = [];
-    const navigation = new Navigation((target) => delivered.push(target));
-    navigation.go(session);
-    navigation.go({ ...session, request_id: "r_1" });
-    expect(delivered).toEqual([]);
-    navigation.ready();
-    navigation.go({ kind: "session", session_id: "s_2" });
-    expect(delivered).toEqual([
-      session,
-      { ...session, request_id: "r_1" },
-      { kind: "session", session_id: "s_2" },
-    ]);
+  test("a window gets the target on each load until a document has its connection", () => {
+    const sent: unknown[] = [];
+    const window = new WindowNavigation((target) => sent.push(target));
+    window.go(session);
+    expect(sent).toEqual([]);
+    window.loaded();
+    // The host restarts: the connection failed, and the window loads again.
+    window.reloading();
+    window.loaded();
+    expect(sent).toEqual([session, session]);
+    window.connected();
+    window.reloading();
+    window.loaded();
+    expect(sent).toHaveLength(2);
+    // A newer target replaces an older one; a connection before the load counts once it is sent.
+    window.go({ kind: "session", session_id: "s_old" });
+    window.reloading();
+    window.go(session);
+    window.connected();
+    window.loaded();
+    window.reloading();
+    window.loaded();
+    expect(sent).toEqual([session, session, { kind: "session", session_id: "s_old" }, session]);
   });
 });

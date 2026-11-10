@@ -51,29 +51,54 @@ export function deepLink(url: string, scheme: string): NavigateTarget | null {
 }
 
 /**
- * Hands each target to `deliver` once the app is ready; the ones that come
- * before, such as a link that started the app, wait for it.
+ * The main window's latest target, sent to each document the window loads
+ * until one of them has its data connection. One that comes before the app
+ * has a window, as a link that started it, waits for the first; a reload, as
+ * after restarting the host (T215), starts the route anew, and would drop a
+ * target the document before it took. A newer target replaces an older one.
  */
-export class Navigation {
-  readonly #deliver: (target: NavigateTarget) => void;
-  #waiting: NavigateTarget[] | undefined = [];
+export class WindowNavigation {
+  readonly #send: (target: NavigateTarget) => void;
+  #target: NavigateTarget | undefined;
+  /** Of the current document: loaded, sent the target, has its connection. */
+  #loaded = false;
+  #sent = false;
+  #connected = false;
 
-  constructor(deliver: (target: NavigateTarget) => void) {
-    this.#deliver = deliver;
+  constructor(send: (target: NavigateTarget) => void) {
+    this.#send = send;
   }
 
   go(target: NavigateTarget): void {
-    if (this.#waiting) {
-      this.#waiting.push(target);
-    } else {
-      this.#deliver(target);
-    }
+    this.#target = target;
+    this.#sent = false;
+    this.#deliver();
   }
 
-  /** The app is ready: the waiting targets go, in order, and later ones at once. */
-  ready(): void {
-    const waiting = this.#waiting ?? [];
-    this.#waiting = undefined;
-    waiting.forEach((target) => this.#deliver(target));
+  /** The window's document finished loading, a reload's included. */
+  loaded(): void {
+    this.#loaded = true;
+    this.#deliver();
+  }
+
+  /** The current document opened its data connection. */
+  connected(): void {
+    this.#connected = true;
+    this.#deliver();
+  }
+
+  /** The window starts loading a document again, or is gone. */
+  reloading(): void {
+    this.#loaded = this.#sent = this.#connected = false;
+  }
+
+  #deliver() {
+    if (this.#target && this.#loaded && !this.#sent) {
+      this.#send(this.#target);
+      this.#sent = true;
+    }
+    if (this.#sent && this.#connected) {
+      this.#target = undefined;
+    }
   }
 }
