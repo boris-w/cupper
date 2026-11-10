@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { HostClient } from "@cupper/host-client";
 import { MockHost, type Reply } from "@cupper/host-client/mock";
-import type { Handshake } from "@cupper/shell-api";
+import { ICON_COLOUR_PREF, ICON_COLOURS, type Handshake } from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -126,8 +126,14 @@ const PAGES = [
   { sessions: [archived(9, "")] },
 ];
 
-/** `auth`: `host.updated`'s `notification_auth`, absent by default. */
-async function setup(auth?: string) {
+/**
+ * `auth`: `host.updated`'s `notification_auth`, absent by default; `prefs`:
+ * what the shell holds.
+ */
+async function setup({
+  auth,
+  prefs = {},
+}: { auth?: string; prefs?: Record<string, unknown> } = {}) {
   const mock = new MockHost([{ method: "initialize", params: {}, result: {} }]);
   mock.handle("stream/subscribe", ({ id, conn, params }) => {
     const { stream } = params as { stream: string };
@@ -150,7 +156,7 @@ async function setup(auth?: string) {
   const conn = mock.connect();
   conn.initialized = true;
   client.attach(conn.port(), {} as Handshake);
-  const { shell, controls } = createBrowserShell();
+  const { shell, controls } = createBrowserShell({ info: { prefs } });
   const ui = createUiStore(
     { prefs: DEFAULT_PREFS, overlayOpen: false },
     { page: "session", sessionId: "s_1" },
@@ -352,7 +358,7 @@ describe("UI-settings-general", () => {
 
   test("notifications: where to allow them once macOS has denied them, and only then", async () => {
     for (const auth of ["denied", "not_determined", "authorized"]) {
-      const { ui } = await setup(auth);
+      const { ui } = await setup({ auth });
       act(() => ui.getState().navigate(toSettings(ui.getState().route, "notifications")));
       const hint =
         "系统没有允许 Cupper 发送通知在「系统设置」的「通知」里找到 Cupper，打开「允许通知」";
@@ -409,5 +415,19 @@ describe("UI-settings-cli", () => {
     expect(await install()).toBe(`命令行工具已在 ${link}`);
     expect(texts(card("安装"))[0]).toBe(`在终端里使用 cupper已安装：${link}`);
     expect(controls.privilegedActions).toEqual(Array(4).fill({ kind: "install_cli" }));
+  });
+});
+
+describe("UI-icon-colour", () => {
+  test("six colours, one chosen; a pick goes to the preference; a value this build does not know is latte", async () => {
+    const { ui } = await setup({ prefs: { [ICON_COLOUR_PREF]: "teal" } });
+    act(() => ui.getState().navigate(toSettings(ui.getState().route, "appearance")));
+    const radios = within(card("图标")).getAllByRole<HTMLInputElement>("radio");
+    const chosen = () => radios.filter((radio) => radio.checked).map((radio) => radio.value);
+    expect(radios.map((radio) => radio.value)).toEqual([...ICON_COLOURS]);
+    expect(chosen()).toEqual(["latte"]);
+    await act(async () => fireEvent.click(screen.getByRole("radio", { name: "夜色" })));
+    expect(chosen()).toEqual(["night"]);
+    expect(texts(card("图标"))[0]).toContain("只改变 cupper 运行时 Dock 里的图标");
   });
 });

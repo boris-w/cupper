@@ -4,6 +4,7 @@
   "unknown": "未知",
   "section_general": "通用",
   "section_notifications": "通知",
+  "section_appearance": "外观",
   "section_archived": "已归档会话",
   "section_agents": "agent 状态",
   "section_connections": "连接与设备",
@@ -127,5 +128,14 @@
   "install_cli_failed": "安装失败（{{code}}）",
   "install_cli_done": "命令行工具已在 {{link}}",
   "install_cli_outside_applications": "先把 App 移到「应用程序」文件夹再安装：它现在在 {{path}}",
-  "install_cli_occupied": "{{path}} 已经有别的文件，没有覆盖它"
+  "install_cli_occupied": "{{path}} 已经有别的文件，没有覆盖它",
+  "icon": "图标",
+  "icon_colour": "图标颜色",
+  "icon_colour_detail": "只改变 cupper 运行时 Dock 里的图标；访达、启动台和系统通知里仍是拿铁色的默认图标。",
+  "icon_colour_latte": "拿铁",
+  "icon_colour_mocha": "摩卡",
+  "icon_colour_sky": "晴空",
+  "icon_colour_matcha": "抹茶",
+  "icon_colour_ink": "墨色",
+  "icon_colour_night": "夜色"
 }

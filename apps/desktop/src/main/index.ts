@@ -8,7 +8,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { createI18n } from "@cupper/i18n";
-import { MAIN_DOCUMENT_CSP, REVIEW_DOCUMENT_CSP } from "@cupper/shell-api";
+import { DEFAULT_ICON_COLOUR, MAIN_DOCUMENT_CSP, REVIEW_DOCUMENT_CSP } from "@cupper/shell-api";
 import {
   app,
   autoUpdater,
@@ -16,6 +16,7 @@ import {
   ipcMain,
   Menu,
   MessageChannelMain,
+  nativeImage,
   powerMonitor,
   protocol,
   session,
@@ -23,6 +24,7 @@ import {
 } from "electron";
 
 import { isReleaseLike } from "../shared/flavor";
+import { followIconColour } from "./app-icon";
 import { COMMAND_CHANNEL, HOST_OPEN } from "../shared/ipc";
 import { WindowBridges } from "./bridge/bridges";
 import { startHost } from "./host";
@@ -149,6 +151,18 @@ function start() {
 async function ready() {
   restrictPermissions(session.defaultSession);
   const prefs = await Prefs.open(join(dirs.userData, "prefs.json"));
+  // Before the first window (design 5.7.2). The name comes from the list,
+  // never from the preference, so it cannot leave `Resources/app-icons/`.
+  if (app.dock) {
+    followIconColour({
+      prefs,
+      dock: app.dock,
+      image: (colour) =>
+        colour === DEFAULT_ICON_COLOUR
+          ? nativeImage.createEmpty()
+          : nativeImage.createFromPath(join(process.resourcesPath, "app-icons", `${colour}.png`)),
+    });
+  }
   const privileged =
     host &&
     new Privileged({
