@@ -4,7 +4,7 @@
 import { useShell, useT } from "../app/providers";
 import { ChevronDownIcon } from "../components/icons";
 import { Menu, MenuItem } from "../components/Menu";
-import { SEND_KEY_PREF, type SendKey } from "../composer/keys";
+import { FOLLOW_UP_QUEUE_PREF, SEND_KEY_PREF, type SendKey } from "../composer/keys";
 import { usePref } from "../composer/send";
 import { BUTTON, Row, Section, SwitchRow, useSettings } from "./parts";
 
@@ -15,6 +15,7 @@ export function GeneralSection() {
   const { api } = useShell();
   const { settings, update } = useSettings();
   const sendKey: SendKey = usePref(SEND_KEY_PREF) === "mod_enter" ? "mod_enter" : "enter";
+  const followUpQueue = usePref(FOLLOW_UP_QUEUE_PREF) === true;
   const trigger = (
     <button type="button" className={`${BUTTON} flex items-center gap-1`}>
       {t(`settings:send_key_${sendKey}`)}
@@ -38,6 +39,12 @@ export function GeneralSection() {
             ))}
           </Menu>
         </Row>
+        <SwitchRow
+          label={t("settings:follow_up_queue")}
+          description={t("settings:follow_up_queue_detail")}
+          checked={followUpQueue}
+          onChange={(on) => void api.prefs.set(FOLLOW_UP_QUEUE_PREF, on)}
+        />
       </Section>
       <Section title={t("settings:power")}>
         <SwitchRow

@@ -86,6 +86,8 @@
   "send_key_enter_detail": "Shift + Enter 换行，Command + Enter 排队",
   "send_key_mod_enter": "Command + Enter",
   "send_key_mod_enter_detail": "Enter 换行，Command + Shift + Enter 排队",
+  "follow_up_queue": "跟进消息默认排队",
+  "follow_up_queue_detail": "关闭时，agent 运行中发送的消息会插话；打开后改为排队，排队的按键用来插话。Claude 插话时，当前的工具调用会被丢弃，正在运行的命令会被移到后台",
   "power": "电源",
   "prevent_idle_sleep": "agent 工作时防止休眠",
   "prevent_idle_sleep_detail": "有回合在运行或请求在等你处理时，Mac 不会因闲置而睡眠",

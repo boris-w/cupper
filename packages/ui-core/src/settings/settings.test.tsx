@@ -288,10 +288,10 @@ describe("UI-settings-archived", () => {
 });
 
 describe("UI-settings-general", () => {
-  test("general: the send key a UI preference, keeping the Mac awake a host setting", async () => {
+  test("general: the composer's keys UI preferences, keeping the Mac awake a host setting", async () => {
     const { mock, ui } = await setup();
     act(() => ui.getState().navigate(toSettings(ui.getState().route, "general")));
-    const composer = () => texts(card("输入框")).filter(Boolean);
+    const composer = () => texts(card("输入框")).filter(Boolean).slice(0, 2);
     expect(composer()).toEqual(["发送消息Shift + Enter 换行，Command + Enter 排队", "Enter"]);
     screen.getByRole("button", { name: "Enter" }).focus();
     await userEvent.keyboard("{Enter}");
@@ -301,6 +301,13 @@ describe("UI-settings-general", () => {
       "发送消息Enter 换行，Command + Shift + Enter 排队",
       "Command + Enter",
     ]);
+    // Queueing by default is a UI preference too; its description says what
+    // Claude's steering does.
+    const queue = within(card("输入框")).getByRole("switch", { name: "跟进消息默认排队" });
+    expect(card("输入框").textContent).toContain("正在运行的命令会被移到后台");
+    expect(queue.getAttribute("aria-checked")).toBe("false");
+    await act(async () => void fireEvent.click(queue));
+    expect(queue.getAttribute("aria-checked")).toBe("true");
     const awake = within(card("电源")).getByRole("switch");
     expect(awake.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(awake);
