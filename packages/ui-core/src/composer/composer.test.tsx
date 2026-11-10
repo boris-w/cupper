@@ -16,7 +16,7 @@ import { createUiStore } from "../state/ui";
 import { Composer } from "./Composer";
 import { escapeAction, sendAction } from "./keys";
 import { ComposerArea } from "./QueueList";
-import { DEFAULT_NEW_SESSION } from "./send";
+import { DEFAULT_NEW_SESSION, NEW_DRAFT } from "./send";
 
 afterEach(cleanup);
 
@@ -487,6 +487,52 @@ describe("slash commands", () => {
     await input(screen.getByRole("textbox"), "/");
     expect(await screen.findByRole("listbox", { name: "斜杠命令" })).toBeTruthy();
     expect(page.requests("agents/capabilities")).toEqual([{ agent: "claude" }]);
+  });
+});
+
+describe("↑ puts back the last message", () => {
+  const turn = (n: number, content: object[]) => [
+    {
+      type: "turn.started",
+      data: { turn_id: `t_${n}`, turn_no: n, started_at: n, origin: "user" },
+    },
+    {
+      type: "item.started",
+      data: {
+        ...{ item_id: `i_${n}`, turn_id: `t_${n}`, started_at: n, kind: "user_message" },
+        ...{ content, steered: false },
+      },
+    },
+  ];
+  const text = (text: string) => ({ type: "text", text });
+  const history = [...turn(1, [text("first")]), ...turn(2, [text("fix it"), text("and docs")])];
+  const commands = capabilities({ commands: [{ name: "init", description: "d" }] });
+
+  test("into an empty composer, caret at the end; not over text, attachments, a menu or an IME", async () => {
+    const { area, ui } = await setup("idle", [...history, commands]);
+    const draft = () => ui.getState().drafts.s_1 ?? "";
+    const up = (init = {}) =>
+      act(async () => void fireEvent.keyDown(area, { key: "ArrowUp", ...init }));
+    await up({ isComposing: true });
+    await up({ shiftKey: true });
+    act(() => ui.getState().setAttachments("s_1", [{ type: "file_ref", path: "a.ts" }]));
+    await up();
+    expect(draft()).toBe("");
+    act(() => ui.getState().setAttachments("s_1", []));
+    await up();
+    expect(draft()).toBe("fix it\nand docs");
+    expect((area as HTMLTextAreaElement).selectionStart).toBe(draft().length);
+
+    await act(async () => void fireEvent.input(area, { target: { value: "/" } }));
+    expect(screen.getByRole("listbox", { name: "斜杠命令" })).toBeTruthy();
+    await up();
+    expect(draft()).toBe("/");
+  });
+
+  test("the new session page has nothing to put back", async () => {
+    const { ui } = await setup("idle", history, <Composer create={DEFAULT_NEW_SESSION} />);
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "ArrowUp" });
+    expect(ui.getState().drafts[NEW_DRAFT] ?? "").toBe("");
   });
 });
 
