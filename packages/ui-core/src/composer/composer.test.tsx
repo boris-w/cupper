@@ -244,7 +244,7 @@ describe("follow-ups while a turn runs", () => {
 
   test("the send key and the button steer the running turn, the queue key queues; the preference swaps them", async () => {
     const ops = [running(), capabilities({ turn: steering(true) })];
-    const { area, requests, shell } = await setup("running", ops);
+    const { area, requests, shell, ui } = await setup("running", ops);
     await send(area, "a");
     await send(area, "b", { metaKey: true });
     type(area, "c");
@@ -253,6 +253,8 @@ describe("follow-ups while a turn runs", () => {
     await send(area, "d");
     await send(area, "e", { metaKey: true });
     expect(modes(requests)).toEqual(["steer t_1", "queue", "steer t_1", "queue", "steer t_1"]);
+    // Each a message the user sent: the stream goes back to its end (T256).
+    expect(ui.getState().sent.s_1).toBe(5);
   });
 
   test("an agent that cannot steer queues and says so once; side effects show on the first steer", async () => {
@@ -330,7 +332,7 @@ describe("queued messages", () => {
   };
 
   test("插话 steers the row's message at the queue's version; one that stayed says so", async () => {
-    const { mock, requests } = await setup("running", ops(true));
+    const { mock, requests, ui } = await setup("running", ops(true));
     const stayed = { disposition: "queued", fallback_reason: "steer_pending" };
     mock.handle("session/queue_edit", () => ({ result: { version: 3, steer: stayed } }));
     await act(async () => void fireEvent.click(screen.getByRole("button", { name: "插话" })));
@@ -339,6 +341,7 @@ describe("queued messages", () => {
     ]);
     expect(screen.getByText(/当前的工具调用会被丢弃/)).toBeTruthy();
     expect(screen.getByText("没能插话，消息还在队列里")).toBeTruthy();
+    expect(ui.getState().sent.s_1).toBe(1);
     cleanup();
 
     await setup("running", ops(false, false));

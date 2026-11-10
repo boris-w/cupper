@@ -52,6 +52,8 @@
   --color-btn-secondary: light-dark(rgb(26 28 31 / 4.9%), rgb(255 255 255 / 5.2%));
   --color-hover: light-dark(rgb(26 28 31 / 5.3%), rgb(255 255 255 / 7.8%));
   --color-active: light-dark(rgb(26 28 31 / 19.6%), rgb(255 255 255 / 10%));
+  /* The scrollbar's thumb (T256), as Codex mixes it: the text colour at 30%. */
+  --color-scrollbar-thumb: color-mix(in oklab, var(--color-fg) 30%, transparent);
   /* White in both themes, as macOS has it (T147). */
   --color-switch-thumb: light-dark(#ffffff, #ffffff);
   --color-btn-primary: light-dark(#1a1c1f, #dfdfdf);

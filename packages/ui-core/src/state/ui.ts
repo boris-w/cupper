@@ -42,6 +42,8 @@ export interface UiState {
   hinted: Partial<Record<string, readonly string[]>>;
   /** How many steers each session waits on the host's answer to. */
   steering: Partial<Record<string, number>>;
+  /** How many messages the user sent in each session from here: the stream goes back to its end on each (T256). */
+  sent: Partial<Record<string, number>>;
   navigate(route: Route): void;
   openMenu(menu: string | null): void;
   setDraft(sessionId: string, text: string): void;
@@ -50,6 +52,7 @@ export interface UiState {
   /** Marks hint `name` shown in the session; whether it was not yet. */
   hint(sessionId: string, name: string): boolean;
   addSteering(sessionId: string, delta: 1 | -1): void;
+  markSent(sessionId: string): void;
 }
 
 export type UiStore = StoreApi<UiState>;
@@ -69,6 +72,7 @@ export function createUiStore(layout: LayoutState, route: Route = { page: "new" 
       menu: null,
       hinted: {},
       steering: {},
+      sent: {},
       navigate: (next) => set({ route: next }),
       openMenu: (menu) => set({ menu }),
       setDraft: per("drafts"),
@@ -80,6 +84,10 @@ export function createUiStore(layout: LayoutState, route: Route = { page: "new" 
         set({ hinted: { ...get().hinted, [sessionId]: [...shown, name] } });
         return true;
       },
+      markSent: (sessionId) =>
+        set((state) => ({
+          sent: { ...state.sent, [sessionId]: (state.sent[sessionId] ?? 0) + 1 },
+        })),
       addSteering: (sessionId, delta) =>
         set((state) => ({
           steering: { ...state.steering, [sessionId]: (state.steering[sessionId] ?? 0) + delta },

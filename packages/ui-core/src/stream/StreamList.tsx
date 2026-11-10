@@ -1,8 +1,10 @@
 // The message stream (design 5.7.6): the session view flattened into rows,
 // virtualized row by row. Earlier history comes in front on request, without
 // moving what is on screen; while at the bottom the list follows the stream,
-// and once scrolled up it stops and offers a way back down. A running turn's
-// plan has a pill there that scrolls to it.
+// and once scrolled up it stops and offers a way back down; a message the user
+// sends brings it back down too. A running turn's plan has a pill there that
+// scrolls to it. The list spans the session area, its scrollbar at the area's
+// edge, and its rows keep to the content column.
 
 import type { SessionView } from "@cupper/host-client";
 import type { HistoryCursor } from "@cupper/protocol";
@@ -15,13 +17,14 @@ import {
   useState,
   type PointerEvent,
 } from "react";
+import { useStore } from "zustand";
 
 import { useHost } from "../app/providers";
 import { flatten, type History } from "../rows/flatten";
 import { RowView } from "../rows/registry";
 import { streamRows, type StreamRow } from "../rows/stream";
 import "../rows";
-import { useStreams } from "../state/provider";
+import { useStreams, useUi } from "../state/provider";
 import { useEntry, type StreamStore } from "../state/stream";
 import { StreamActions } from "./actions";
 import { ComposerOverlays, runningPlan } from "./ComposerOverlays";
@@ -85,6 +88,8 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
   const scroller = useRef<HTMLDivElement>(null);
   const keeper = useRef(new ScrollKeeper()).current;
   const [stuck, setStuck] = useState(true);
+  const sent = useStore(useUi(), (state) => state.sent[sessionId] ?? 0);
+  const seen = useRef(sent);
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scroller.current,
@@ -163,10 +168,16 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
     return () => observer.disconnect();
   }, [keeper]);
   const toBottom = () => {
-    keeper.stuck = true;
+    keeper.follow();
     setStuck(true);
     virtualizer.scrollToOffset(total);
   };
+  // A message the user sent: back to the end, following it; a turn the host started moves nothing.
+  useEffect(() => {
+    if (sent === seen.current) return;
+    seen.current = sent;
+    toBottom();
+  });
   const toggleTurn = (turnId: string) =>
     setOpen((shown) => {
       const next = new Set(shown);
@@ -210,23 +221,26 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
           className="h-full overflow-y-auto [overflow-anchor:none]"
           data-stream-list
         >
-          <div className="relative w-full" style={{ height: total }}>
-            {virtualizer.getVirtualItems().map((item) => {
-              const row = rows[item.index];
-              return (
-                row && (
-                  <div
-                    key={item.key}
-                    data-index={item.index}
-                    ref={virtualizer.measureElement}
-                    className="absolute top-0 left-0 w-full pt-(--layout-item-gap)"
-                    style={{ transform: `translateY(${item.start}px)` }}
-                  >
-                    <RowView registry={streamRows} row={row} />
-                  </div>
-                )
-              );
-            })}
+          {/* The content column; below its last row, room so that the composer's shadow covers nothing. */}
+          <div className="mx-auto max-w-(--layout-thread-max-w) px-(--layout-thread-gutter) pb-(--layout-item-gap)">
+            <div className="relative w-full" style={{ height: total }}>
+              {virtualizer.getVirtualItems().map((item) => {
+                const row = rows[item.index];
+                return (
+                  row && (
+                    <div
+                      key={item.key}
+                      data-index={item.index}
+                      ref={virtualizer.measureElement}
+                      className="absolute top-0 left-0 w-full pt-(--layout-item-gap)"
+                      style={{ transform: `translateY(${item.start}px)` }}
+                    >
+                      <RowView registry={streamRows} row={row} />
+                    </div>
+                  )
+                );
+              })}
+            </div>
           </div>
         </div>
         <ComposerOverlays plan={plan} onPlan={toPlan} away={!stuck} onBottom={toBottom} />
