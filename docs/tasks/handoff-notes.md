@@ -515,7 +515,7 @@
 | T161、T180 或安全工程师 | Info.plist 带着 Electron 默认的摄像头、麦克风、蓝牙（两项）、音频采集用途说明，agent 触发这类授权时会显示成 Cupper；要不要在打包时删掉（需要 `afterPack` 钩子）待定，"自用前须知"里已写一律拒绝 | T160（已写入 T161 的 brief） |
 | T161 | 复用 `apps/desktop/src/test-entry-points.ts` 和 `apps/desktop/selfuse/build.test.ts` 里逐个 Mach-O 检查 entitlements、读 fuse 线的做法；`electron-builder.release.yml` 至今没有真正构建过；5.10.2 可补：库不带 entitlements，`chrome_crashpad_handler`、`app_shim_loader`、`ShipIt` 拿 `entitlementsInherit`，helper 的 identifier 是 `<appId>.helper`、`.helper.Renderer`、`.helper.GPU`、`.helper.Plugin` | T160（已写入 T161 的 brief） |
 | 以后改升级流程的任务（5.5.7、T129、T180） | keyed 构建（自用、开发、e2e）里宿主因待升级退出后，旧界面会自动从磁盘拉起新宿主，新旧两版混用；可以考虑收到 `host/shutdown(upgrade)` 后不再拉起，改为提示重启 App | T160 |
-| T147 | 设置页"安装命令行工具"还没做，自用构建的安装说明暂时让用户 `ln -s` | T160 |
+| T253（v1.3.92 前为 T147） | 设置页"安装命令行工具"还没做，自用构建的安装说明暂时让用户 `ln -s`；做完后改 `docs/user/` 里的安装说明 | T160 |
 | T151、T153 | 默认编辑器是 TextEdit（T036 定的），`open -a TextEdit <目录>` 打不开文件夹；改成清单里第一个已安装的编辑器，或由界面引导用户选一个 | T126（已写入 T151 的 brief） |
 | COMPAT 运行或真机验证（T113 等） | 提示里 `file_ref` 映射成的 `resource_link`，`file://` uri 没有百分号编码，路径里有空格、`#`、`%` 时不合法；要不要编码看两个适配器怎么解析 | T126 |
 | 以后改输入框或 `session/send` 的任务 | 图片超限、agent 不收图片、越出工作区的 `file_ref`，现在要到 prompt 时才失败（由 error 条目显示）；可以在 `session/send` 按能力提前校验 | T126 |
@@ -591,3 +591,8 @@
 | 改宿主 `RunLoop` 的任务 | CoreFoundation 把回调相同、`info` 为空的两个源当成同一个；`RunLoop` 丢弃时要移除自己的停止源和退出处理，否则后建的循环停不下来（T150 的测试里卡住过） | T150 |
 | 写或改 shuttle 用例的任务 | shuttle 的线程栈默认 60 KiB；视图或状态变大后，debug 构建里迭代器链的帧会越过它。macOS 上表现为没有任何输出的 SIGBUS（signal 10）。排查用 lldb 看 sp 是否落在协程栈下方的保护页里；修法是用 `Runner::new(DfsScheduler::new(None, false), config)` 加 `config.stack_size` 显式给栈并注明原因（PROP-stream-seq 现在 256 KiB，实测 96 KiB 就够） | T151 |
 | 本机 `cargo clean` 之后跑宿主用例的人 | 宿主的部分 lib 用例和 lifecycle 集成测试要先构建假 agent（`cargo build -p cupper-fake-agent`）和 CLI 的 e2e 构建（`cargo build -p cupper-cli --features test-harness`）；CI 的 rust 作业会自己构建 | T151 |
+| T149 | 排队消息行上的"插话"可以复用 `composer/send.ts` 的 `useSessionSend` 里的提示（"已转为排队"、副作用只提示一次）和回退逻辑 | T242 |
+| T147 | "跟进消息默认排队"开关写 prefs 的 `composer.followUpQueue`（布尔，默认关）；Claude 插话副作用的说明复用 `composer:steer_side_effects` | T242 |
+| 写插话用例的任务（T149、T171 等） | 等 agent 拿到这一轮的 prompt（页面上出现这一轮的输出）再插话；只等 `turn.started` 时回合可能还在 `Preparing`（拍开始快照），插话会按 `not_prompting` 转为排队 | T242 |
+| 做第一个安全设置行（特权操作 `settings`）的任务 | 普通的 patch 问 `policy/describe` 会回 `invalid_params`（`NotConfirmable`，不带原因），不要拿它当"不用确认"的信号，按设计 5.2.11 的"修改需要"一栏区分；`admin.rs` 里 `policy/describe` 的样例把 `details` 写成 `{key, value}`，宿主实际发的是 `{settings: {key: value}}`，以宿主为准并修正样例 | T147 |
+| T147 及以后往设置页加页的任务 | 分页表的形状固定为 `{ id, Body }`，`Body` 接收 `focus`，加一页加一行；新页标题的文案键是 `settings:section_<id>`；命令按钮用 `settings/parts.tsx` 的 `CommandButton`，文案键按 `<name>`、`<name>_busy`、`<name>_failed` 命名 | T248 |
