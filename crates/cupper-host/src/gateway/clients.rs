@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use cupper_protocol::annotations::TimestampMs;
-use cupper_protocol::domain::PrincipalKind;
+use cupper_protocol::domain::{ClientRole, PrincipalKind};
 use cupper_protocol::ids::ConnId;
 use cupper_protocol::index::{ClientAuth, ClientInfo};
 
@@ -50,6 +50,21 @@ impl Clients {
         self.lock()
             .values()
             .map(|client| Arc::clone(&client.outbox))
+            .collect()
+    }
+
+    /// The desktop UI's control connections (design 5.7.1).
+    pub(super) fn control_outboxes(&self) -> Vec<Arc<Outbox>> {
+        let control = |client: &&Client| {
+            let principal = &client.opened.principal;
+            principal.kind == PrincipalKind::DesktopUi
+                && principal.role == Some(ClientRole::Control)
+        };
+        let clients = self.lock();
+        clients
+            .values()
+            .filter(control)
+            .map(|c| Arc::clone(&c.outbox))
             .collect()
     }
 

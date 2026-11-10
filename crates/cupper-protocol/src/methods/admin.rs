@@ -13,7 +13,7 @@ use super::Empty;
 use super::catalog::Catalog;
 use crate::annotations::{DurationMs, TimestampMs, WirePath};
 use crate::domain::{AgentKind, BlobRef};
-use crate::ids::{CommandId, ElevationId, SessionId};
+use crate::ids::{CommandId, ElevationId, IntentId, SessionId};
 use crate::open_enum;
 use crate::rpc::Scope;
 
@@ -393,6 +393,25 @@ pub struct SeedProfile {
     pub large_turn_items: Option<u32>,
 }
 
+method! {
+    /// `test/notification_click`: a click on a notification the host only
+    /// recorded (`test_config.notifier: record`), handled as a real one
+    /// (design 5.2.9, 5.9.9).
+    request TestNotificationClick = "test/notification_click" (TestNotificationClickParams) -> Empty {
+        scope: Test,
+        idempotency: None,
+        milestone: M1b,
+        errors: [NotFound],
+        builds: [TestHarness],
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct TestNotificationClickParams {
+    /// The notification's identifier: its intent's.
+    pub notification_id: IntentId,
+}
+
 open_enum! {
     pub enum SeedMix {
         /// As in the SP-1 recordings.
@@ -412,6 +431,7 @@ pub fn register(c: &mut Catalog, g: &mut SchemaGenerator) {
     c.request::<TestClockAdvance>(g);
     c.request::<TestRunMaintenance>(g);
     c.request::<TestSeed>(g);
+    c.request::<TestNotificationClick>(g);
 }
 
 #[cfg(test)]
@@ -468,6 +488,7 @@ pub(super) mod tests {
             request::<DiagRecordingExport>(json!({"session_id": "s_1"}), blob("application/jsonl")),
             request::<TestClockAdvance>(json!({"ms": 3000}), json!({})),
             request::<TestRunMaintenance>(json!({"task": "orphan_blobs"}), json!({})),
+            request::<TestNotificationClick>(json!({"notification_id": "n_1"}), json!({})),
             request::<TestSeed>(
                 json!({"profile": {"sessions": 200, "turns": 20, "items_per_turn": 50,
                     "mix": "sp1", "large_turn_items": 2000}}),

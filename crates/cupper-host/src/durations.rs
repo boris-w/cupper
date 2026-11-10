@@ -147,6 +147,13 @@ durations! {
     ELEVATION_DENIALS = "elevation_denials", Duration::from_secs(600);
     /// How long elevation requests stay silenced after two denials.
     ELEVATION_QUIET = "elevation_quiet", Duration::from_secs(600);
+    /// After a click on a notification, how long the host waits before it
+    /// brings the app forward: the system brings the host forward first, over
+    /// anything the host does at once (T150 step 0, design 5.2.9).
+    NOTIFIER_SETTLE = "notifier_settle", Duration::from_millis(300);
+    /// How long a host the system started for a click waits for the click
+    /// (design 5.2.9 rule 3).
+    NOTIFIER_FORWARD = "notifier_forward", Duration::from_secs(10);
     /// How long the host stays without clients and work before it exits
     /// (design 5.2.13).
     SUPERVISOR_IDLE = "supervisor_idle", Duration::from_secs(600);

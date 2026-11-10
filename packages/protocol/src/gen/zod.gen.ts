@@ -1444,6 +1444,10 @@ export const zTestClockAdvanceParams = z.object({
   ms: zDurationMs,
 });
 
+export const zTestNotificationClickParams = z.object({
+  notification_id: zIntentId,
+});
+
 export const zTestRunMaintenanceParams = z.object({
   task: zMaintenanceTask,
 });

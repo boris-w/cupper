@@ -571,6 +571,7 @@
   },
   { "method": "test/clock_advance", "params": { "ms": 3000 }, "result": {} },
   { "method": "test/run_maintenance", "params": { "task": "orphan_blobs" }, "result": {} },
+  { "method": "test/notification_click", "params": { "notification_id": "n_1" }, "result": {} },
   {
     "method": "test/seed",
     "params": {

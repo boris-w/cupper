@@ -243,7 +243,12 @@ mod tests {
         ),
         (
             "test/*",
-            &["test/clock_advance", "test/run_maintenance", "test/seed"],
+            &[
+                "test/clock_advance",
+                "test/run_maintenance",
+                "test/seed",
+                "test/notification_click",
+            ],
             [N, N, N, N, N, Build, N],
         ),
         (
@@ -483,7 +488,11 @@ mod tests {
             assert_eq!(entry(name)[X_MILESTONE], "M1b", "{name}");
         }
         for name in admin::tests::samples() {
-            let milestone = if name == "diag/export" { "M2" } else { "M1a" };
+            let milestone = match name {
+                "diag/export" => "M2",
+                "test/notification_click" => "M1b",
+                _ => "M1a",
+            };
             assert_eq!(entry(name)[X_MILESTONE], milestone, "{name}");
         }
         let errors = |name: &str| entry(name)[X_ERRORS].clone();
@@ -528,6 +537,7 @@ mod tests {
             ("test/clock_advance", &harness),
             ("test/run_maintenance", &harness),
             ("test/seed", &harness),
+            ("test/notification_click", &harness),
         ]);
         assert_eq!(builds, expected);
     }

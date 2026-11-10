@@ -63,6 +63,7 @@ export const METHODS: Readonly<Record<string, MethodInfo>> = {
   "stream/subscribe": { scope: "read", idempotent: "natural" },
   "stream/unsubscribe": { scope: "read", idempotent: "natural" },
   "test/clock_advance": { scope: "test", idempotent: "none" },
+  "test/notification_click": { scope: "test", idempotent: "none" },
   "test/run_maintenance": { scope: "test", idempotent: "none" },
   "test/seed": { scope: "test", idempotent: "none" },
   "workspace/open": { scope: "ui_local", idempotent: "natural" },

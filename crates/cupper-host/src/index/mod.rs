@@ -38,7 +38,7 @@ use cupper_protocol::domain::AgentKind;
 use cupper_protocol::envelope::Cause;
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::{ConnId, IntentId, ProjectId, SessionId};
+use cupper_protocol::ids::{ConnId, IntentId, ProjectId, RequestId, SessionId};
 use cupper_protocol::index::{
     AgentStatus, AgentsUpdated, ClientsUpdated, GitTools, HostUpdated, IntentReason,
     NotificationAuth, NotificationIntent, PendingKind, ProjectRemoved, RemovalReason,
@@ -721,7 +721,8 @@ impl IndexActor {
                 }
                 Action::Intent(intent) => {
                     let intent_id = IntentId::from_uuid(self.deps.ids.new_id().as_u128());
-                    self.notify(&intent_id, &intent.session, &intent.reason);
+                    let to = (&intent.session, intent.request.as_ref());
+                    self.notify(&intent_id, to, &intent.reason);
                     bodies.push(EventBody::NotificationIntent(NotificationIntent {
                         intent_id,
                         session_id: intent.session,
@@ -760,8 +761,8 @@ impl IndexActor {
 
     /// The system notification of an intent, with the session's title and,
     /// for `needs_action`, the kind of its oldest request.
-    fn notify(&self, id: &IntentId, session: &SessionId, reason: &IntentReason) {
-        let summary = self.status.summary(session);
+    fn notify(&self, id: &IntentId, to: (&SessionId, Option<&RequestId>), reason: &IntentReason) {
+        let summary = self.status.summary(to.0);
         let (title, pending) = summary.map_or((String::new(), None), |s| (s.title, s.pending_kind));
         let reason = match (reason, pending) {
             (IntentReason::NeedsAction, Some(PendingKind::Input)) => Reason::Question,
@@ -771,7 +772,7 @@ impl IndexActor {
             (IntentReason::Unknown(_), _) => return,
         };
         let settings = self.deps.settings.borrow();
-        self.deps.notifier.notify(&settings, id, reason, &title);
+        self.deps.notifier.notify(&settings, id, reason, &title, to);
     }
 
     /// Hands each timer due now to its core.

@@ -7590,6 +7590,18 @@
       ],
       "type": "object"
     },
+    "TestNotificationClickParams": {
+      "properties": {
+        "notification_id": {
+          "$ref": "#/$defs/IntentId",
+          "description": "The notification's identifier: its intent's."
+        }
+      },
+      "required": [
+        "notification_id"
+      ],
+      "type": "object"
+    },
     "TestRunMaintenanceParams": {
       "properties": {
         "task": {
@@ -9547,6 +9559,23 @@
         "x-errors": [],
         "x-idempotent": "none",
         "x-milestone": "M1a",
+        "x-scope": "test"
+      },
+      "test/notification_click": {
+        "params": {
+          "$ref": "#/$defs/TestNotificationClickParams"
+        },
+        "result": {
+          "$ref": "#/$defs/Empty"
+        },
+        "x-builds": [
+          "test-harness"
+        ],
+        "x-errors": [
+          "not_found"
+        ],
+        "x-idempotent": "none",
+        "x-milestone": "M1b",
         "x-scope": "test"
       },
       "test/run_maintenance": {

@@ -20,9 +20,9 @@ libc = "0.2.191"
 # (ADR-11).
 block2 = "=0.6.2"
 objc2 = "=0.6.5"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSApplication", "NSEvent", "NSGraphicsContext", "NSResponder", "NSRunningApplication", "NSWorkspace"] }
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSAppleEventDescriptor", "NSAppleEventManager", "NSArray", "NSBundle", "NSEnumerator", "NSError", "NSGeometry", "NSLocale", "NSNotification", "NSString", "NSURL"] }
-objc2-user-notifications = { version = "=0.3.2", default-features = false, features = ["std", "block2", "UNNotificationContent", "UNNotificationRequest", "UNNotificationSettings", "UNNotificationSound", "UNNotificationTrigger", "UNUserNotificationCenter"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSApplication", "NSEvent", "NSGraphicsContext", "NSResponder", "NSRunningApplication", "NSWorkspace"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSAppleEventDescriptor", "NSAppleEventManager", "NSArray", "NSBundle", "NSDictionary", "NSEnumerator", "NSError", "NSGeometry", "NSLocale", "NSNotification", "NSString", "NSURL"] }
+objc2-user-notifications = { version = "=0.3.2", default-features = false, features = ["std", "block2", "UNNotification", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationSettings", "UNNotificationSound", "UNNotificationTrigger", "UNUserNotificationCenter"] }
 thiserror = "2.0.21"
 
 # The main loop runs on the main thread, which libtest's threads are not;
