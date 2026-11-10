@@ -586,3 +586,6 @@
 | T242 | `keys.ts` 的 `sendAction()` 已区分 `"send"` 和 `"queue"`，运行中把 `"send"` 映射成 `mode: steer` 即可；"跟进消息默认排队"的对调也在这里加 | T244 |
 | T144 | 新建会话页读 `agents/capabilities` 的查询在 `composer/extensions/slash.tsx` 的 `Cached` 组件，查询键 `["agents/capabilities", agent]`，`agents.updated` 让它失效；显示缓存的模型和权限时共用这个查询 | T244 |
 | T148、T154 | 斜杠菜单没有截图用例；要加时仿照 sidebar.spec 的 `composer-file-ref`，基线由 ui-baseline 生成 | T244 |
+| T250 | 图标的四处一起加：拿铁母版生成的 icns 入库、四份 electron-builder 配置的 `mac.icon`、`host-bundle` 写宿主的 `CFBundleIconFile`、UNIT-host-bundle-identity 补图标断言；UserNotifications 的 sys 接口挂在 T150 的主循环上（一个进程只建一个能收退出事件的 `RunLoop`，宿主已经只建一个） | T150 |
+| T251（MAN-notification-product） | 注销、关机时 loginwindow 给宿主发退出事件这一点没有实测（不能注销作者的机器）；用例只证明事件来了会走有序退出。复核时在自用构建上注销一次，看宿主的最后一行日志和 `last_clean_exit_at` | T150 |
+| 改宿主 `RunLoop` 的任务 | CoreFoundation 把回调相同、`info` 为空的两个源当成同一个；`RunLoop` 丢弃时要移除自己的停止源和退出处理，否则后建的循环停不下来（T150 的测试里卡住过） | T150 |

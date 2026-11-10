@@ -527,11 +527,13 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 **空闲退出**（非后台模式）：没有客户端连接、没有进行中的回合、没有待处理请求、没有排队消息、安装器空闲，持续 10 分钟（可设置）后有序退出。
 
-**有序退出**（`host/exit`、SIGTERM、空闲、升级）：停止 accept → 向所有连接发 `host/shutdown` 通知 → 如果是强制退出，运行中的回合标为 `interrupted` → 按 ADR-09 的顺序关闭适配器（逐个 `session/close` → 关闭 stdin → 等进程组退出 3 s → SIGTERM → 2 s → SIGKILL）→ 写检查点、清空写线程队列、写 `meta.last_clean_exit_at` → 释放电源断言 → 清掉已送达的通知（[5.2.9](#529-关注度与通知)） → 删除套接字 → 释放锁。
+**有序退出**（`host/exit`、SIGTERM、退出的 Apple Event、空闲、升级）：停止 accept → 向所有连接发 `host/shutdown` 通知 → 如果是强制退出，运行中的回合标为 `interrupted` → 按 ADR-09 的顺序关闭适配器（逐个 `session/close` → 关闭 stdin → 等进程组退出 3 s → SIGTERM → 2 s → SIGKILL）→ 写检查点、清空写线程队列、写 `meta.last_clean_exit_at` → 释放电源断言 → 清掉已送达的通知（[5.2.9](#529-关注度与通知)） → 删除套接字 → 释放锁。
 
 **防休眠**（NFR-13，M1 为 P1）：有进行中的回合或待处理的交互请求时，持有 `PreventUserIdleSystemSleep` 断言，没有时立即释放。T156 的实现：每个会话 actor 在处理完每个输入后报"运行中的回合 + 待处理请求"的计数，会话离开内存时归还；`Supervisor` 的纯核心按总数决定取得或释放，断言由监护 actor 持有，`host.updated.power_assertion` 如实反映；有序退出时释放，之后不再取得；断言名是固定的 `cupper: agents at work`。设置页"通用"里的开关（5.7.4）还没接，T147 接入时用设置键 `host.prevent_idle_sleep`（默认开），关掉时立即释放。
 
 **资源采样**：每 30 秒采样一次各适配器进程组的常驻内存，写进 `agents` 状态（NFR-11、ADR-09 的设置页显示），并交给驱动层的回收策略（[5.6.8](06-agent-driver.md#568-资源回收)）。
+
+**退出的 Apple Event**（T150）：主线程跑 NSApplication 后，LaunchServices 把宿主当成 App，注销、关机和活动监视器的"退出"会给它发退出事件，AppKit 默认当场 `exit(0)`。宿主在 `applicationWillFinishLaunching:` 里接管这个事件（在 `run()` 之前装的处理会被 AppKit 换掉），交给和 SIGTERM 相同的有序退出（`Exit::Terminated`）。
 
 **退出码**：0 正常；3 已有实例；4 数据来自更新的版本；5 数据目录不可用；6 迁移失败（界面给出备份位置和诊断包入口）；1 其他错误（含启动载荷读取超时或格式错误）。
 
