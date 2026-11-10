@@ -162,13 +162,17 @@ const steered = (cupper: Cupper, stream: string, text: string) =>
       e.type === "item.started" && e.data.steered === true && JSON.stringify(e.data).includes(text),
   );
 
-/** A session on screen with a second turn running `script`, sent from the composer. */
+/**
+ * A session on screen with a second turn running `script`, sent from the
+ * composer. Its first words are on screen: the agent has the prompt, so the
+ * host takes a steer (a turn still preparing queues one, `not_prompting`).
+ */
 async function turnRunning(cupper: Cupper, script: string) {
   const stream = await onScreen(cupper, "say ready");
   const area = cupper.window.locator("[data-composer] textarea");
-  await area.fill(script);
+  await area.fill(`say turn two; ${script}`);
   await area.press("Enter");
-  await untilEvent(cupper, stream, (e) => e.type === "turn.started" && e.data.turn_no === 2);
+  await expect(cupper.window.getByText("turn two", { exact: true })).toBeVisible();
   return { stream, area };
 }
 
