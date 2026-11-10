@@ -138,7 +138,8 @@ type PrivilegedAction =
   | { kind: 'trust_project'; project_id: string }
   | { kind: 'elevation'; elevation_id: string }
   | { kind: 'settings'; patch: SettingsPatch }
-  | { kind: 'purge_snapshots' };              // 设置页"存储"的清除快照对象（T127 宿主、T147 界面）
+  | { kind: 'purge_snapshots' }               // 设置页"存储"的清除快照对象（T127 宿主、T147 界面）
+  | { kind: 'install_cli' };                  // 设置页"命令行工具"：主进程在 ~/.local/bin 建指向 Contents/Helpers/cupper 的链接，不经宿主；App 不在"应用程序"文件夹或同名文件被占用时回 failed（unavailable），不计入冷却（T253）
 type PrivilegedResult =
   | { status: 'confirmed'; result?: unknown }  // create_session 带 session_id，add_project 带 project_id
   | { status: 'cancelled' } | { status: 'busy' } | { status: 'cooldown'; retry_after_ms: number }
