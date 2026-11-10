@@ -14,6 +14,7 @@ pub mod git;
 pub mod index;
 pub mod ledger;
 pub mod manifest;
+pub mod notifier;
 pub mod orchestrator;
 #[cfg(any(test, feature = "test-harness"))]
 pub mod perf;
