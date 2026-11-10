@@ -258,3 +258,29 @@ describe("UI-settings-archived", () => {
     expect(texts(card("设备"))).toEqual(["还没有设备以后的版本支持从手机连接"]);
   });
 });
+
+describe("UNIT-install-cli", () => {
+  test("the page asks the shell to install, then says where the link is, or why there is none", async () => {
+    const { controls, ui } = await setup();
+    act(() => ui.getState().navigate(toSettings(ui.getState().route, "cli")));
+    const toast = () => screen.queryByRole("status")?.textContent;
+    const install = async () => {
+      await act(async () => click("安装", card("安装")));
+      return toast();
+    };
+    // Cancelled in the dialog: nothing to say.
+    expect(await install()).toBeUndefined();
+    controls.setPrivilegedResult({
+      status: "failed",
+      error: { code: "unavailable", reason: "occupied", path: "/Users/me/.local/bin/cupper-dev" },
+    });
+    expect(await install()).toBe("/Users/me/.local/bin/cupper-dev 已经有别的文件，没有覆盖它");
+    controls.setPrivilegedResult({ status: "busy" });
+    expect(await install()).toBe("已有一个确认框打开，请先处理它");
+    const link = "/Users/me/.local/bin/cupper-dev";
+    controls.setPrivilegedResult({ status: "confirmed", result: { link } });
+    expect(await install()).toBe(`命令行工具已在 ${link}`);
+    expect(texts(card("安装"))[0]).toBe(`在终端里使用 cupper已安装：${link}`);
+    expect(controls.privilegedActions).toEqual(Array(4).fill({ kind: "install_cli" }));
+  });
+});

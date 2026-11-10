@@ -11,6 +11,7 @@ import { ROW } from "../sidebar/parts";
 import type { Route } from "../state/ui";
 import { AgentsSection } from "./AgentsSection";
 import { ArchivedSection } from "./ArchivedSection";
+import { CliSection } from "./CliSection";
 import { ConnectionsSection } from "./ConnectionsSection";
 
 interface Entry {
@@ -24,6 +25,7 @@ const SECTIONS: readonly [Entry, ...Entry[]] = [
   { id: "archived", Body: ArchivedSection },
   { id: "agents", Body: AgentsSection },
   { id: "connections", Body: ConnectionsSection },
+  { id: "cli", Body: CliSection },
 ];
 
 export function SettingsPage({ route }: { route: Extract<Route, { page: "settings" }> }) {
