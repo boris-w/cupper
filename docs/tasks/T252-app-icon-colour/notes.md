@@ -41,3 +41,29 @@
 用 `nativeImage.createEmpty()`。Electron 把空图像交给 `NSApplication.applicationIconImage` 时，取到的 `NSImage` 是 nil，系统就用回包里的图标。
 
 这是按 Electron 的实现推断的，本机没有实测：实测要启动 App，而启动会抢焦点。需要在自用构建上用眼睛确认一次。
+
+## 各模块的实际行数
+
+| 模块 | 估 | 实际 |
+|---|---|---|
+| 共用的清单（shell-api） | 25 | +26 |
+| 主进程 `appIcon` | 55 | 约 +69 −2 |
+| 生成图片 | 12 | +11 |
+| UNIT-app-icon-pref | 45 | +50 |
+| 设置 → 外观 | 65 | +72 −1 |
+| UI-icon-colour | 30 | +26 −5 |
+| 合计 | 232 | +254 −8 |
+
+- 主进程 `appIcon` 的 69 行：`app-icon.ts` 32 行，`main/index.ts` 15 行，四份 electron-builder 配置共 12 行，release-config 和自用构建用例里各加一条资源检查，共 12 行。
+- 设置 → 外观的 72 行：`AppearanceSection.tsx` 58 行，分页表 2 行，文案 12 行。
+- UI-icon-colour 的 26 行：组件用例约 25 行；为了让用例能给 shell 预置 prefs，`setup` 的参数改成对象，T147 那一处调用跟着改了。截图规格 1 行。
+
+## 包体增量
+
+| 内容 | 位置 | 大小 |
+|---|---|---|
+| Dock 图标 5 张（1024 PNG） | `Resources/app-icons/` | 699,378 字节，约 683 KiB |
+| 设置页的小图标 6 张（80 px PNG） | 渲染层的 `assets/`，从 `app://cupper/assets/` 加载 | 34,794 字节，约 34 KiB |
+| 合计 | | 约 717 KiB |
+
+PNG 已经压缩过，打成 DMG 或 zip 后基本不会再变小。
