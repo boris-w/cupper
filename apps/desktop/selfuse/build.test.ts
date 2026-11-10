@@ -1,15 +1,14 @@
 // IT-selfuse-build (T160): the Cupper Local that `cargo xtask ci selfuse`
-// built is the self-use build of design 5.7.9, file by file.
+// built is the self-use build of design 5.7.9, file by file; its
+// configuration takes release-config's scan (T161).
 
 import { execFileSync } from "node:child_process";
-import { closeSync, openSync, readdirSync, readFileSync, readSync, realpathSync } from "node:fs";
+import { closeSync, openSync, readdirSync, readSync, realpathSync } from "node:fs";
 import { join, relative } from "node:path";
 
-import { FuseV1Options as Fuse, getCurrentFuseWire } from "@electron/fuses";
-import { FuseState } from "@electron/fuses/dist/constants.js";
 import { describe, expect, it } from "vitest";
 
-import { TEST_ENTRY_POINTS } from "../src/test-entry-points";
+import { scanApp } from "../src/release-scan";
 import { built, cdhash, CLI, codesign, field, helper, HOST, HOST_APP, plist } from "./app";
 
 const JIT = "com.apple.security.cs.allow-jit";
@@ -85,7 +84,6 @@ describe("IT-selfuse-build", () => {
       CFBundleURLTypes: [{ CFBundleURLSchemes: ["cupper-local"] }],
       LSMinimumSystemVersion: "15.0",
     });
-    expect(info).toHaveProperty("ElectronAsarIntegrity");
     expect(info).not.toHaveProperty("NSAppleEventsUsageDescription");
   });
 
@@ -99,27 +97,8 @@ describe("IT-selfuse-build", () => {
     expect(each((file) => signature(app, file))).toEqual(each(expected));
   });
 
-  it("burns the fuses of design 5.7.8, cookie encryption off", async () => {
-    const { ENABLE: on, DISABLE: off } = FuseState;
-    expect(await getCurrentFuseWire(app)).toEqual({
-      version: "1",
-      [Fuse.RunAsNode]: off,
-      [Fuse.EnableCookieEncryption]: off,
-      [Fuse.EnableNodeOptionsEnvironmentVariable]: off,
-      [Fuse.EnableNodeCliInspectArguments]: off,
-      [Fuse.EnableEmbeddedAsarIntegrityValidation]: on,
-      [Fuse.OnlyLoadAppFromAsar]: on,
-      [Fuse.LoadBrowserProcessSpecificV8Snapshot]: off,
-      [Fuse.GrantFileProtocolExtraPrivileges]: off,
-      // WasmTrapHandlers, which design 5.7.8 and @electron/fuses 1.8 leave
-      // out: as Electron ships it.
-      8: on,
-    });
-  });
-
-  it("holds no test entry point", () => {
-    const asar = readFileSync(join(app, "Contents/Resources/app.asar")).toString("latin1");
-    expect(TEST_ENTRY_POINTS.filter((name) => asar.includes(name))).toEqual([]);
+  it("burns the fuses, cookie encryption off, and packs the asar as release-config scans it", async () => {
+    expect(await scanApp(app, "self-use")).toEqual([]);
   });
 
   it("--build-info: a self-use host and CLI, the CLI with this host's cdhash", () => {

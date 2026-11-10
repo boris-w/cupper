@@ -5,7 +5,15 @@
     "outDir": "dist/tsc",
     "types": ["node"]
   },
-  "include": ["src", "selfuse", "vite.config.ts", "vitest.config.ts", "vitest.selfuse.config.ts"],
+  "include": [
+    "src",
+    "selfuse",
+    "release",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "vitest.selfuse.config.ts",
+    "vitest.release.config.ts"
+  ],
   "references": [
     { "path": "../../crates/cupper-desktop-native" },
     { "path": "../../packages/host-client" },

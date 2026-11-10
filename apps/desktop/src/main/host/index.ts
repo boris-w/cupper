@@ -68,13 +68,23 @@ export interface RestartDialogs {
 export function startHost({ flavor, dataDir, version, e2eRoot, log }: HostSetup) {
   const contents = join(dirname(process.execPath), "..");
   const native = loadNative(join(process.resourcesPath, "native", "cupper_native.node"), flavor);
-  const program = join(contents, "Helpers", "CupperHost.app", "Contents", "MacOS", "cupper-host");
+  const bundle = join(contents, "Helpers", "CupperHost.app");
+  const program = join(bundle, "Contents", "MacOS", "cupper-host");
+  const register = () => {
+    try {
+      const outcome = native.native.ensureHostRegistered(bundle);
+      log.info("host bundle in LaunchServices", { outcome });
+    } catch (error) {
+      log.warn("cannot register the host bundle", { error: String(error) });
+    }
+  };
   const launcher = new HostLauncher({
     native,
     program,
     dataDir,
     env: hostEnv(process.env),
     ...(e2eRoot === undefined ? {} : { payload: () => e2ePayload(e2eRoot) }),
+    ...(flavor === "e2e" ? {} : { register }),
   });
   const options = {
     role: "control" as const,

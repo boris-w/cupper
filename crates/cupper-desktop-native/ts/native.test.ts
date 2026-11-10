@@ -158,6 +158,13 @@ describe("UNIT-native", () => {
     );
   });
 
+  // Only what fails before LaunchServices: a test never registers a bundle.
+  test("registers nothing that is not a bundle with an identifier", () => {
+    expect(() => native.ensureHostRegistered(join(tempDir(), "None.app"))).toThrow(
+      expect.objectContaining({ code: "invalid_argument" }),
+    );
+  });
+
   test("a wrong or missing host_proof disconnects", async () => {
     const key = new native.HostKey();
     const { socket } = await startFixture(key);

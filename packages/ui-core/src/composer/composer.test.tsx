@@ -5,7 +5,7 @@ import type { Handshake } from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
 import { RouterProvider } from "../app/router";
@@ -13,8 +13,10 @@ import { ToasterProvider } from "../feedback/toaster";
 import { DEFAULT_PREFS } from "../layout/layout";
 import { StateProvider, UiProvider } from "../state/provider";
 import { createUiStore } from "../state/ui";
-import { escapeAction, sends } from "./keys";
+import { Composer } from "./Composer";
+import { escapeAction, sendAction } from "./keys";
 import { ComposerArea } from "./QueueList";
+import { DEFAULT_NEW_SESSION, NEW_DRAFT } from "./send";
 
 afterEach(cleanup);
 
@@ -28,7 +30,11 @@ const summary = (status: string) => ({
 });
 
 /** A composer on session s_1, its host a MockHost that answers every command. */
-async function setup(status = "idle", session: object[] = []) {
+async function setup(
+  status = "idle",
+  session: object[] = [],
+  composer = <ComposerArea sessionId="s_1" />,
+) {
   const mock = new MockHost([{ method: "initialize", params: {}, result: {} }]);
   mock.handle("stream/subscribe", ({ id, conn, params }) => {
     const { stream } = params as { stream: string };
@@ -64,9 +70,7 @@ async function setup(status = "idle", session: object[] = []) {
           <HostContext value={{ client, state: client.state, handshake: undefined }}>
             <UiProvider ui={ui}>
               <StateProvider>
-                <RouterProvider>
-                  <ComposerArea sessionId="s_1" />
-                </RouterProvider>
+                <RouterProvider>{composer}</RouterProvider>
               </StateProvider>
             </UiProvider>
           </HostContext>
@@ -85,17 +89,46 @@ async function setup(status = "idle", session: object[] = []) {
 const type = (area: HTMLElement, text: string) =>
   fireEvent.change(area, { target: { value: text } });
 
+/** A `session.capabilities` event: an agent with images, no commands and no options, but `more`. */
+const capabilities = (more: object) => ({
+  type: "session.capabilities",
+  data: {
+    ...{ agent: "claude", commands: [], config: [] },
+    prompt: { image: true, file_ref: true, max_image_bytes: 1024 * 1024 },
+    session: { resume: true, load_history: false, fork: false },
+    turn: {
+      ...{ queue: true, steer: { supported: false, side_effects: false } },
+      ...{ interrupt: true, interrupt_stops_commands: true },
+    },
+    interactions: { reject_ends_turn: false, question_forms: true, plan_confirm: true },
+    extraction: {
+      ...{ exit_code: true, output_streaming: false, diff: "per_file", thinking: true },
+      ...{ plan: "markdown_only", run_state: "inferred" },
+    },
+    versions: { adapter: "1", cli: "1", cli_compat: "verified" },
+    ...more,
+  },
+});
+
 describe("UNIT-composer-ime", () => {
   test("Enter sends unless an input method composes; Shift and Option keep the newline", () => {
-    expect(sends({ key: "Enter" }, "enter")).toBe(true);
-    expect(sends({ key: "Enter", isComposing: true }, "enter")).toBe(false);
-    expect(sends({ key: "Enter", keyCode: 229 }, "enter")).toBe(false);
-    expect(sends({ key: "Enter", shiftKey: true }, "enter")).toBe(false);
-    expect(sends({ key: "Enter", altKey: true }, "enter")).toBe(false);
-    expect(sends({ key: "Enter", metaKey: true }, "enter")).toBe(true);
-    expect(sends({ key: "Enter" }, "mod_enter")).toBe(false);
-    expect(sends({ key: "Enter", metaKey: true, shiftKey: true }, "mod_enter")).toBe(true);
-    expect(sends({ key: "Enter", metaKey: true, isComposing: true }, "mod_enter")).toBe(false);
+    expect(sendAction({ key: "Enter" }, "enter")).toBe("send");
+    expect(sendAction({ key: "Enter", isComposing: true }, "enter")).toBeUndefined();
+    expect(sendAction({ key: "Enter", keyCode: 229 }, "enter")).toBeUndefined();
+    expect(sendAction({ key: "Enter", shiftKey: true }, "enter")).toBeUndefined();
+    expect(sendAction({ key: "Enter", altKey: true }, "enter")).toBeUndefined();
+    expect(sendAction({ key: "a" }, "enter")).toBeUndefined();
+  });
+
+  test("the queue key is ⌘Enter, or ⌘⇧Enter when ⌘Enter sends", () => {
+    expect(sendAction({ key: "Enter", metaKey: true }, "enter")).toBe("queue");
+    expect(sendAction({ key: "Enter", ctrlKey: true }, "enter")).toBe("queue");
+    expect(sendAction({ key: "Enter" }, "mod_enter")).toBeUndefined();
+    expect(sendAction({ key: "Enter", metaKey: true }, "mod_enter")).toBe("send");
+    expect(sendAction({ key: "Enter", metaKey: true, shiftKey: true }, "mod_enter")).toBe("queue");
+    expect(sendAction({ key: "Enter", metaKey: true, altKey: true }, "mod_enter")).toBeUndefined();
+    const composing = { key: "Enter", metaKey: true, isComposing: true };
+    expect(sendAction(composing, "mod_enter")).toBeUndefined();
   });
 
   test("the Enter that picks a candidate stays in the composer; the next one sends", async () => {
@@ -254,36 +287,17 @@ describe("UNIT-composer-config", () => {
     current,
     values,
   });
-  const caps = {
-    type: "session.capabilities",
-    data: {
-      ...{
-        agent: "claude",
-        commands: [],
-        session: { resume: true, load_history: false, fork: false },
-      },
-      versions: { adapter: "1", cli: "1", cli_compat: "verified" },
-      prompt: { image: true, file_ref: true, max_image_bytes: 1 },
-      turn: {
-        ...{ queue: true, steer: { supported: false, side_effects: false } },
-        ...{ interrupt: true, interrupt_stops_commands: true },
-      },
-      interactions: { reject_ends_turn: false, question_forms: true, plan_confirm: true },
-      extraction: {
-        ...{ exit_code: true, output_streaming: false, diff: "per_file", thinking: true },
-        ...{ plan: "markdown_only", run_state: "inferred" },
-      },
-      config: [
-        option("permission_mode", "default", [
-          value("default", "Default"),
-          value("acceptEdits", "Accept edits", "elevated"),
-          value("bypassPermissions", "Bypass", "full_access"),
-        ]),
-        option("model", "opus", [value("opus", "Opus"), value("sonnet", "Sonnet")]),
-        option("reasoning_effort", "high", [value("high", "High"), value("max", "Max")]),
-      ],
-    },
-  };
+  const caps = capabilities({
+    config: [
+      option("permission_mode", "default", [
+        value("default", "Default"),
+        value("acceptEdits", "Accept edits", "elevated"),
+        value("bypassPermissions", "Bypass", "full_access"),
+      ]),
+      option("model", "opus", [value("opus", "Opus"), value("sonnet", "Sonnet")]),
+      option("reasoning_effort", "high", [value("high", "High"), value("max", "Max")]),
+    ],
+  });
   const configured = (mode: string) => ({
     type: "session.configured",
     data: {
@@ -414,5 +428,202 @@ describe("file references", () => {
     await act(async () => void fireEvent.drop(box, { dataTransfer: { files, types: ["Files"] } }));
     expect(ui.getState().attachments.s_1).toEqual([{ type: "file_ref", path: "src/a.ts" }]);
     expect(screen.getByText("只能引用工作区里的文件")).toBeTruthy();
+  });
+});
+
+describe("slash commands", () => {
+  const commands = [
+    { name: "compact", description: "Summarize", input_hint: "<how>" },
+    { name: "context", description: "Context usage" },
+    { name: "init", description: "Write CLAUDE.md" },
+  ];
+  const caps = (list: object[]) => capabilities({ commands: list });
+  const input = (area: HTMLElement, value: string) =>
+    act(async () => void fireEvent.input(area, { target: { value } }));
+  const menu = () => screen.queryByRole("listbox", { name: "斜杠命令" });
+
+  test("/ at the start lists the commands its name search finds; ↓ and Enter take one", async () => {
+    const { area, requests, ui } = await setup("idle", [caps(commands)]);
+    await input(area, "/co");
+    const options = within(menu() as HTMLElement).getAllByRole("option");
+    expect(options.map((o) => o.textContent)).toEqual([
+      "/compact<how>Summarize",
+      "/contextContext usage",
+    ]);
+    fireEvent.keyDown(area, { key: "ArrowDown" });
+    await act(async () => void fireEvent.keyDown(area, { key: "Enter" }));
+    expect(ui.getState().drafts.s_1).toBe("/context ");
+    expect(menu()).toBeNull();
+    expect(requests("session/send")).toEqual([]);
+
+    await input(area, "/it");
+    expect(within(menu() as HTMLElement).getAllByRole("option")[0]?.textContent).toMatch(/^\/init/);
+    await input(area, "/zz");
+    expect(within(menu() as HTMLElement).getByText("没有命令")).toBeTruthy();
+    await input(area, "see /co");
+    expect(menu()).toBeNull();
+  });
+
+  test("Esc closes the menu first; a running turn arms on the next Esc", async () => {
+    await setup("running", [caps(commands)]);
+    const area = screen.getByRole("textbox");
+    await input(area, "/");
+    fireEvent.keyDown(area, { key: "Escape" });
+    expect(menu()).toBeNull();
+    expect(screen.queryByText("再按一次 Esc 停止")).toBeNull();
+    fireEvent.keyDown(area, { key: "Escape" });
+    expect(screen.getByText("再按一次 Esc 停止")).toBeTruthy();
+  });
+
+  test("without commands nothing opens; the new session page has the agent's cached ones", async () => {
+    const { area } = await setup("idle", [caps([])]);
+    await input(area, "/");
+    expect(menu()).toBeNull();
+    cleanup();
+
+    const cached = { captured_at: 1, capabilities: caps(commands).data };
+    const page = await setup("idle", [], <Composer create={DEFAULT_NEW_SESSION} />);
+    page.mock.handle("agents/capabilities", () => ({ result: { cached } }));
+    await input(screen.getByRole("textbox"), "/");
+    expect(await screen.findByRole("listbox", { name: "斜杠命令" })).toBeTruthy();
+    expect(page.requests("agents/capabilities")).toEqual([{ agent: "claude" }]);
+  });
+});
+
+describe("↑ puts back the last message", () => {
+  const turn = (n: number, content: object[]) => [
+    {
+      type: "turn.started",
+      data: { turn_id: `t_${n}`, turn_no: n, started_at: n, origin: "user" },
+    },
+    {
+      type: "item.started",
+      data: {
+        ...{ item_id: `i_${n}`, turn_id: `t_${n}`, started_at: n, kind: "user_message" },
+        ...{ content, steered: false },
+      },
+    },
+  ];
+  const text = (text: string) => ({ type: "text", text });
+  const history = [...turn(1, [text("first")]), ...turn(2, [text("fix it"), text("and docs")])];
+  const commands = capabilities({ commands: [{ name: "init", description: "d" }] });
+
+  test("into an empty composer, caret at the end; not over text, attachments, a menu or an IME", async () => {
+    const { area, ui } = await setup("idle", [...history, commands]);
+    const draft = () => ui.getState().drafts.s_1 ?? "";
+    const up = (init = {}) =>
+      act(async () => void fireEvent.keyDown(area, { key: "ArrowUp", ...init }));
+    await up({ isComposing: true });
+    await up({ shiftKey: true });
+    act(() => ui.getState().setAttachments("s_1", [{ type: "file_ref", path: "a.ts" }]));
+    await up();
+    expect(draft()).toBe("");
+    act(() => ui.getState().setAttachments("s_1", []));
+    await up();
+    expect(draft()).toBe("fix it\nand docs");
+    expect((area as HTMLTextAreaElement).selectionStart).toBe(draft().length);
+
+    await act(async () => void fireEvent.input(area, { target: { value: "/" } }));
+    expect(screen.getByRole("listbox", { name: "斜杠命令" })).toBeTruthy();
+    await up();
+    expect(draft()).toBe("/");
+  });
+
+  test("the new session page has nothing to put back", async () => {
+    const { ui } = await setup("idle", history, <Composer create={DEFAULT_NEW_SESSION} />);
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "ArrowUp" });
+    expect(ui.getState().drafts[NEW_DRAFT] ?? "").toBe("");
+  });
+});
+
+describe("images", () => {
+  const caps = (image: boolean) =>
+    capabilities({ prompt: { image, file_ref: true, max_image_bytes: 1024 * 1024 } });
+  const png = (name = "shot.png", size = 4) =>
+    new File([new Uint8Array(size)], name, { type: "image/png" });
+  let urls = 0;
+  beforeEach(() => {
+    urls = 0;
+    URL.createObjectURL = vi.fn(() => `blob:t/${++urls}`);
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  test("a pasted or picked image goes up as a blob and attaches with its thumbnail", async () => {
+    const { area, mock, ui, requests } = await setup("idle", [caps(true)]);
+    mock.handle("blob/put", () => ({ result: {} }));
+    await act(async () => void fireEvent.paste(area, { clipboardData: { files: [png()] } }));
+    await waitFor(() => expect(ui.getState().attachments.s_1).toHaveLength(1));
+    const [put] = requests("blob/put");
+    expect(put).toEqual({ hash: expect.any(String), size: 4, media_type: "image/png" });
+    expect(ui.getState().attachments.s_1).toEqual([{ type: "image", blob: put }]);
+    expect(screen.getByRole("img", { name: "图片" }).getAttribute("src")).toBe("blob:t/1");
+
+    const picker = document.querySelector<HTMLInputElement>("input[type=file]");
+    const picked = [
+      png("a.webp", 2),
+      new File([new Uint8Array(3)], "b.gif", { type: "image/gif" }),
+    ];
+    await act(
+      async () => void fireEvent.change(picker as HTMLElement, { target: { files: picked } }),
+    );
+    await waitFor(() => expect(ui.getState().attachments.s_1).toHaveLength(3));
+
+    // Removed, an image lets its thumbnail go.
+    await act(
+      async () =>
+        void fireEvent.click(screen.getAllByRole("button", { name: "移除" })[0] as HTMLElement),
+    );
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:t/1");
+    // Gone, the composer lets the others go.
+    cleanup();
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(3);
+  });
+
+  test("another type, a size past the agent's, an agent without images, a failed upload: each says so", async () => {
+    const { area, mock, ui } = await setup("idle", [caps(true)]);
+    mock.handle("blob/put", () => hostError("too_large"));
+    const bmp = new File([new Uint8Array(2)], "a.bmp", { type: "image/bmp" });
+    await act(async () => void fireEvent.paste(area, { clipboardData: { files: [bmp] } }));
+    expect(screen.getByText("只能添加 PNG、JPEG、GIF 或 WebP 图片")).toBeTruthy();
+    const big = png("big.png", 1024 * 1024 + 1);
+    await act(async () => void fireEvent.paste(area, { clipboardData: { files: [big] } }));
+    expect(screen.getByText("图片不能超过 1 MB")).toBeTruthy();
+    await act(async () => void fireEvent.paste(area, { clipboardData: { files: [png()] } }));
+    await waitFor(() => expect(screen.getByText("图片没有上传成功（too_large）")).toBeTruthy());
+    expect(ui.getState().attachments.s_1).toBeUndefined();
+  });
+
+  test("an agent without images refuses one; a dropped image attaches, a dropped file is a reference", async () => {
+    const configured = {
+      type: "session.configured",
+      data: {
+        ...{ agent: "claude", project_config: "loaded", read_only: false, config: {} },
+        workspace: { kind: "local", path: "/p" },
+      },
+    };
+    const first = await setup("idle", [caps(false)]);
+    await act(async () => void fireEvent.paste(first.area, { clipboardData: { files: [png()] } }));
+    expect(screen.getByText("这个 agent 不接受图片")).toBeTruthy();
+    cleanup();
+
+    const { area, mock, ui, controls } = await setup("idle", [caps(true), configured]);
+    mock.handle("blob/put", () => ({ result: {} }));
+    controls.setFilePath("a.ts", "/p/src/a.ts");
+    const files = [png(), new File([], "a.ts")];
+    const box = area.closest("[data-composer]") as HTMLElement;
+    // The overlay, while files are over the composer, which is positioned for it only then.
+    await act(async () => void fireEvent.dragEnter(box, { dataTransfer: { types: ["Files"] } }));
+    expect(screen.getByText("拖放到这里添加")).toBeTruthy();
+    expect(box.hasAttribute("data-dragging")).toBe(true);
+    await act(async () => void fireEvent.drop(box, { dataTransfer: { files, types: ["Files"] } }));
+    expect(screen.queryByText("拖放到这里添加")).toBeNull();
+    expect(box.hasAttribute("data-dragging")).toBe(false);
+    await waitFor(() => expect(ui.getState().attachments.s_1).toHaveLength(2));
+    expect(
+      ui
+        .getState()
+        .attachments.s_1?.map((b) => b.type)
+        .toSorted(),
+    ).toEqual(["file_ref", "image"]);
   });
 });

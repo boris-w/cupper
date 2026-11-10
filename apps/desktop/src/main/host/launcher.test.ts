@@ -32,6 +32,8 @@ function fakeHost(keyed: boolean) {
     listening: false,
     time: 0,
     spawns: [] as { args: string[]; key: unknown; payload: unknown }[],
+    /** How many hosts had started at each registration. */
+    registered: [] as number[],
     dials: [] as unknown[],
     exits: [] as Promise<{ code?: number }>[],
     payloads: 0,
@@ -72,6 +74,7 @@ function fakeHost(keyed: boolean) {
       state.payloads += 1;
       return { harness_key: "a".repeat(64), test_config: {} };
     },
+    register: () => state.registered.push(state.spawns.length),
     clock: {
       now: () => state.time,
       sleep: (ms) => {
@@ -113,6 +116,20 @@ describe("UNIT-launcher", () => {
     expect(two?.key).toBe(one?.key);
     expect(state.payloads).toBe(1);
     expect(new Set(state.dials)).toEqual(new Set([one?.key]));
+  });
+
+  test("the host bundle is registered before each start, and not for a running host", async () => {
+    const { state, launcher } = fakeHost(true);
+    state.listening = true;
+    await launcher.open(OPTIONS);
+    expect(state.registered).toEqual([]);
+    state.listening = false;
+    const opened = launcher.open(OPTIONS);
+    await Promise.resolve();
+    state.listening = true;
+    await opened;
+    expect(state.registered).toEqual([0]);
+    expect(state.spawns).toHaveLength(1);
   });
 
   test("quitting while it dials starts no host (T225)", async () => {

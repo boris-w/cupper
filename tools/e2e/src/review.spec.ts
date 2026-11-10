@@ -1,5 +1,6 @@
 // The review document in the window (design 5.7.5, 5.7.8): its own origin,
-// its one port, markup as text, and what it says checked by the main document.
+// its one port, markup as text, and what it says checked by the main document;
+// its comments, its reverts and its copies.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -9,12 +10,17 @@ import type { Frame } from "@playwright/test";
 
 import { expect, test, type Cupper } from "./fixture";
 import { texts, untilEvent } from "./helpers";
+import { focusWindow } from "./input";
 import { openSession, session } from "./nfr1";
 
 declare global {
   interface Window {
     /** e2e builds only (`apps/desktop/src/renderer/review.ts`). */
-    __cupperReview: { send(message: unknown): void; token(): string };
+    __cupperReview: {
+      send(message: unknown): void;
+      token(): string;
+      copy(text: string): Promise<string>;
+    };
     __violations: string[];
   }
 }
@@ -149,5 +155,92 @@ test(
 
     expect(await cupper.window.evaluate(() => window.__violations)).toEqual([]);
     expect(await review.evaluate(() => window.__violations)).toEqual([]);
+  },
+);
+
+/** A session on screen with README.md changed, the side panel open on it; its stream and the review document. */
+async function reviewing(cupper: Cupper) {
+  await cupper.launch();
+  await cupper.connected();
+  const stream = await session(cupper, "say ready");
+  await untilEvent(cupper, stream, (event) => event.type === "turn.completed");
+  await openSession(cupper, "say ready");
+  writeFileSync(join(cupper.repo, "README.md"), "e2e\nchanged\n");
+  const t = await texts(cupper);
+  await cupper.window.getByRole("button", { name: t("shell:toggle_side_panel") }).click();
+  const review = await reviewDocument(cupper);
+  await expect(review.locator("[data-line]").first()).toBeVisible();
+  return { t, stream, review };
+}
+
+test("E2E-review-comment: a draft from the review document goes with the next message", async ({
+  cupper,
+}) => {
+  const { t, stream, review } = await reviewing(cupper);
+  await review.locator("[data-line]").nth(1).hover();
+  await review.locator("[data-utility-button]").click();
+  const box = review.getByRole("textbox", { name: t("review:doc_comment") });
+  await box.fill("why this line");
+  await box.press("Meta+Enter");
+  await expect(review.getByText("why this line")).toBeVisible();
+  await expect(
+    cupper.window.getByText(t("composer:attachment_comments", { count: 1 })),
+  ).toBeVisible();
+
+  const composer = cupper.window.locator("[data-composer] textarea");
+  await composer.fill("say noted");
+  await composer.press("Enter");
+  const shown = t("stream:comments", { count: 1 });
+  await expect(cupper.window.getByRole("main").getByText(shown)).toBeVisible();
+  // As the host stored it: the comment's block, with its file.
+  const sent = await untilEvent(cupper, stream, (event) =>
+    JSON.stringify(event.data).includes("why this line"),
+  );
+  expect(JSON.stringify(sent.data)).toContain('"path":"README.md"');
+});
+
+test("E2E-SEC-revert-confirm: the review document's revert takes no focus and one waits at a time; the button's focuses 确认", async ({
+  cupper,
+}) => {
+  const { t, review } = await reviewing(cupper);
+  const revert = review.getByRole("button", { name: t("review:action_revert") });
+  await revert.first().click();
+  const named = t("review:revert_title_path", { path: "README.md" });
+  const confirm = cupper.window.getByRole("alertdialog");
+  await expect(confirm).toHaveAccessibleName(named);
+  expect(await confirm.evaluate((el) => el.contains(document.activeElement))).toBe(false);
+  // A hunk's revert while one waits: ignored.
+  await revert.nth(1).click();
+  await expect(confirm).toHaveCount(1);
+  await expect(confirm).toHaveAccessibleName(named);
+  await expect(confirm).toHaveAttribute("data-ready", "true");
+  await confirm.getByRole("button", { name: t("review:cancel") }).click();
+  await expect(confirm).toHaveCount(0);
+
+  await cupper.window.getByRole("button", { name: t("review:revert_all") }).click();
+  await expect(confirm).toHaveAccessibleName(t("review:revert_title"));
+  await expect(confirm.getByRole("button", { name: t("review:confirm") })).toBeFocused();
+  await expect(confirm).toHaveAttribute("data-ready", "true");
+  await confirm.getByRole("button", { name: t("review:cancel") }).click();
+  expect(readFileSync(join(cupper.repo, "README.md"), "utf8")).toBe("e2e\nchanged\n");
+});
+
+// The system clipboard is the user's: only the runner's is written (T104).
+test(
+  "E2E-review-comment: a copy in the review document reaches the clipboard, with the focus there only",
+  { tag: "@focus" },
+  async ({ cupper }) => {
+    test.skip(process.env.GITHUB_ACTIONS !== "true", "writes the system clipboard: runner only");
+    const { review } = await reviewing(cupper);
+    await focusWindow(cupper);
+    await cupper.window.locator("[data-composer] textarea").focus();
+    expect(await review.evaluate(() => window.__cupperReview.copy("t238 refused"))).toBe(
+      "NotAllowedError",
+    );
+    await review.locator("[data-line]").first().click();
+    expect(await review.evaluate(() => window.__cupperReview.copy("t238 copied"))).toBe("ok");
+    const read = () => cupper.app.evaluate(({ clipboard }) => clipboard.readText());
+    await expect.poll(read).toBe("t238 copied");
+    console.log(`clipboard read back: ${JSON.stringify(await read())}`);
   },
 );

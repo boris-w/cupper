@@ -3,7 +3,8 @@
 // the UI store per session, so the request panel (T083) can take the
 // composer's place and give it back as it was.
 
-import type { PromptBlock } from "@cupper/protocol";
+import type { SessionView } from "@cupper/host-client";
+import type { BlobRef, ItemView, PromptBlock } from "@cupper/protocol";
 import {
   useCallback,
   useEffect,
@@ -21,9 +22,10 @@ import { ArrowUpIcon, CloseIcon, StopIcon } from "../components/icons";
 import type { ComposerActivity } from "../request/RequestPanel";
 import { isComment } from "../review/view";
 import { TierHint } from "./config";
-import { useUi } from "../state/provider";
+import { useStreams, useUi } from "../state/provider";
 import { EXTENSIONS, OverlayContext } from "./extensions";
-import { escapeAction, SEND_KEY_PREF, sends } from "./keys";
+import { composing, escapeAction, SEND_KEY_PREF, sendAction } from "./keys";
+import { thumbnail } from "./thumbnails";
 import { NEW_DRAFT, usePref, useSend, useSessionState, type NewSession } from "./send";
 
 const NONE: readonly PromptBlock[] = [];
@@ -48,6 +50,8 @@ function Attachments(props: { blocks: readonly PromptBlock[]; remove: (index: nu
         return t("composer:attachment_other");
     }
   };
+  const thumbOf = (block: PromptBlock) =>
+    block.type === "image" ? thumbnail((block as { blob: BlobRef }).blob.hash) : undefined;
   // Attachments have no id; their order is stable while shown.
   const indexed = props.blocks.map((block, index) => ({ block, index }));
   const comments = indexed.flatMap(({ block, index }) =>
@@ -70,7 +74,15 @@ function Attachments(props: { blocks: readonly PromptBlock[]; remove: (index: nu
           .filter(({ block }) => block.type !== "review_comment")
           .map(({ block, index }) => (
             <li key={index} className={CHIP}>
-              {label(block)}
+              {thumbOf(block) ? (
+                <img
+                  src={thumbOf(block)}
+                  alt={label(block)}
+                  className="size-7 rounded-md object-cover"
+                />
+              ) : (
+                label(block)
+              )}
               {remove(index)}
             </li>
           ))}
@@ -109,6 +121,18 @@ function Attachments(props: { blocks: readonly PromptBlock[]; remove: (index: nu
 
 const CHIP = "flex items-center gap-1 rounded-lg border border-border py-0.5 pr-0.5 pl-2 text-sm";
 
+/** The text of the user's latest message in the session, which ↑ puts back (design 5.7.4). */
+function lastPrompt(view: SessionView | undefined): string {
+  if (!view) return "";
+  const { turns, tail, items } = view.toJSON();
+  const prompt = [...turns.flatMap((turn) => turn.entries), ...tail]
+    .map((entry) => ("item" in entry ? items[entry.item]?.item : undefined))
+    .findLast((item) => item?.kind === "user_message");
+  const content = (prompt as Extract<ItemView["item"], { kind: "user_message" }> | undefined)
+    ?.content;
+  return (content ?? []).flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
+}
+
 /** The composer of a session, or of the new session page when `sessionId` is absent. */
 export function Composer(props: {
   sessionId?: string;
@@ -121,6 +145,7 @@ export function Composer(props: {
   const { sessionId, paused = false, activity, create } = props;
   const t = useT();
   const ui = useUi();
+  const streams = useStreams();
   const { route } = useRouter();
   const key = sessionId ?? NEW_DRAFT;
   const draft = useStore(ui, (state) => state.drafts[key] ?? "");
@@ -138,6 +163,7 @@ export function Composer(props: {
   const closeOverlay = useRef<(() => void) | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const [areaNode, setAreaNode] = useState<HTMLTextAreaElement | null>(null);
+  const toEnd = useRef(false);
   const areaRef = useCallback((node: HTMLTextAreaElement | null) => {
     area.current = node;
     setAreaNode(node);
@@ -161,6 +187,13 @@ export function Composer(props: {
     setConfirming(false);
     area.current?.focus();
   };
+
+  // A message put back by ↑ leaves the caret at its end.
+  useLayoutEffect(() => {
+    if (!toEnd.current) return;
+    toEnd.current = false;
+    area.current?.setSelectionRange(draft.length, draft.length);
+  });
 
   // RP-3 reads where the page's focus was as the panel takes this place, the
   // window in front or not; a panel that had it gives it back.
@@ -231,7 +264,7 @@ export function Composer(props: {
       <div
         data-composer=""
         data-esc-armed={armed || undefined}
-        className="rounded-composer bg-surface-composer shadow-composer"
+        className="rounded-composer bg-surface-composer shadow-composer data-dragging:relative"
       >
         {attachments.length > 0 && (
           <Attachments
@@ -251,7 +284,21 @@ export function Composer(props: {
             if (activity) activity.current.typedAt = Date.now();
             if (event.key !== "Escape") {
               setArmed(false);
-              if (sends(event.nativeEvent, sendKey)) {
+              // ↑ in an empty composer, no overlay open, puts back the last message's text.
+              const plain = !(event.shiftKey || event.altKey || event.metaKey || event.ctrlKey);
+              const bare =
+                draft === "" && attachments.length === 0 && !confirming && !closeOverlay.current;
+              if (event.key === "ArrowUp" && plain && bare && !composing(event.nativeEvent)) {
+                const text = lastPrompt(sessionId ? streams.session(sessionId)?.view : undefined);
+                if (text) {
+                  event.preventDefault();
+                  toEnd.current = true;
+                  ui.getState().setDraft(key, text);
+                }
+                return;
+              }
+              // No steer yet (T242): either key sends, and every message queues.
+              if (sendAction(event.nativeEvent, sendKey)) {
                 event.preventDefault();
                 submit();
               }
@@ -271,11 +318,11 @@ export function Composer(props: {
         />
         <div className="flex items-center gap-1 p-2 text-sm">
           {EXTENSIONS.filter((item) => item.side === "left").map(({ Component }, index) => (
-            <Component key={index} sessionId={sessionId} />
+            <Component key={index} sessionId={sessionId} agent={create?.agent ?? agent} />
           ))}
           <div className="flex-1" />
           {EXTENSIONS.filter((item) => item.side === "right").map(({ Component }, index) => (
-            <Component key={index} sessionId={sessionId} />
+            <Component key={index} sessionId={sessionId} agent={create?.agent ?? agent} />
           ))}
           <button
             type="button"

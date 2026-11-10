@@ -17,7 +17,7 @@
 | `interaction` 交互代理 | 审批和提问对象：分类、选项生效范围、摘要、`actionable_by`、先到先得、撤回与失效 | 由会话 actor 调用 | driver 的选项对照表 | `Interaction`、`OptionEffect` | 会话 actor 内的组件 |
 | `store` 事件存储 | 写线程、读连接池、流（seq、视图、扇出）、检查点、回合快照、blob、原始帧、迁移 | `Streams::append` / `subscribe` / `read_page`；`BlobStore` | SQLite | `StreamState`、`WriteOp` | 1 个写线程 + 每流一把锁 |
 | `attention` 关注度与通知 | 索引流的唯一写者：会话状态、未读、通知意图、客户端列表、agent 和宿主状态 | `IndexHandle` | store、notifier | `IndexView` | 1 个 actor |
-| `notifier` 系统通知 | 用 UserNotifications 弹通知；点击后经 control 连接发 `ui/navigate`，并按 bundle id 激活 Cupper（[5.2.9](#529-关注度与通知)） | channel | cupper-sys | — | 主线程 run loop |
+| `notifier` 系统通知 | 用 UserNotifications 弹通知；点击后经 control 连接发 `ui/navigate`，并激活 Cupper（[5.2.9](#529-关注度与通知)） | channel | cupper-sys | — | 主线程 NSApplication |
 | `driver` 驱动层 | 适配器进程、ACP 连接、线路分接、提取层、能力缓存、CLI 发现 | `AgentRuntimeHandle` | runtime、supervisor | 见 [5.6](06-agent-driver.md) | 每种 agent 一个 actor |
 | `git` Git 与 worktree | 快照、diff、hunk 操作、提交、推送、worktree 生命周期 | async 函数 | git 命令行 | `RepoLock`、`DiffCache` | 子进程 + 每仓库锁 |
 | `files` 文件服务 | `@` 引用的模糊搜索 | async 函数 | ignore、nucleo-matcher | `FileIndex` | 按需构建、短期缓存 |
@@ -59,7 +59,7 @@ flowchart TB
 
 | 线程 | 数量 | 用途 |
 |---|---|---|
-| 主线程 | 1 | 运行 `CFRunLoop`，承载 UserNotifications 的代理回调和 IOKit 通知。tokio 运行时不在主线程上 |
+| 主线程 | 1 | 运行 `NSApplication`（accessory：不进 Dock、不开窗口），承载 UserNotifications 的代理回调和 IOKit 通知。tokio 运行时不在主线程上。T101 实测：系统单独拉起的宿主只跑裸 `CFRunLoop` 收不到点击，改跑 NSApplication 才收得到（[5.2.9](#529-关注度与通知)），所以 T150 起取代裸 `CFRunLoop`，`cupper-sys::runloop` 随之改 |
 | tokio 工作线程 | min(4, 核数) | 所有 actor、连接、子进程 I/O |
 | 存储写线程 | 1 | `host.db` 唯一的写连接，组提交 |
 | 原始帧写线程 | 1 | `raw.db` 唯一的写连接，批量写入原始帧、裁剪和 `VACUUM`（T027 起与 `host.db` 的写线程分开，避免 `raw.db` 的裁剪挡住事件追加） |
@@ -358,8 +358,16 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 - **已读**（U4）：客户端在会话可见且窗口在前台时调用 `session/mark_read`，`up_to_seq` 取已看到的最新 seq，宿主只前移不后退，全局生效。
 - **在场**：每个客户端用 `client/presence` 上报是否在前台、正在看哪个会话。`IndexActor` 判断某个会话"此刻有人在看"时，只采信 `desktop_ui` 的在场（M3 再加上 `remote_device`），沙箱外的命令以只读身份上报在场，压不掉"需要处理"的通知（安全建议 #16）。CLI 的 `session/mark_read` 按 U4 照常推进已读位置，但不影响"需要处理"的通知。
 - **通知意图**：会话进入 `needs_action`、回合结束、出错时，如果此刻没有前台客户端在看这个会话，就写一条 `notification.intent` 事件，同时交给 `notifier` 弹系统通知（按设置开关）。M3 的推送也从这些事件生成。
-- **通知的点击**：通知由宿主 helper 弹出，点击后回调到宿主。宿主经 control 连接给已连接的桌面主进程发 `ui/navigate`，并经 LaunchServices 按 bundle id 激活 Cupper；UI 没在运行时，按 bundle id 启动它并只把 URL 交给它，不走任何应用都能注册的 `cupper://` 通用路由（安全 #7）。导航只切换到对应的会话，不把焦点移到请求面板上。
-- **通知由宿主弹出**（ADR-01）。宿主内置一小份通知文案（中英文，跟随系统语言），这是"宿主不下发文案"原则的唯一例外，因为通知不经过客户端。helper 的通知身份要由 SP-10 在 M1b 前核实，不行就退回"UI 在时由 UI 弹"（技术选型讨论会的后备方案），见待定问题 Q2。
+- **通知的点击**：通知由宿主 helper 弹出，点击后回调到宿主。宿主经 control 连接给已连接的桌面主进程发 `ui/navigate`，并激活 Cupper；UI 没在运行时，启动它并只把 URL 交给它（`NSWorkspace.open([URL], withApplicationAt:)`，UI 在 `applicationDidFinishLaunching` 之前就拿到这个 URL），不走任何应用都能注册的 `cupper://` 通用路由（安全 #7）。目标 App 按路径找：宿主路径往上三级就是外层 App，再核对它的身份；不按 bundle id 找，因为同一个 bundle id 可能登记着好几份（T101）。点击后系统会先把宿主（accessory）放到前台，盖掉宿主在回调里立刻做的激活，所以激活外层 App 要排在系统这一步之后，或者用 `NSWorkspace.openApplication`（T150 第 0 步发现）。URL 的格式是 `<scheme>://session/<session_id>`，带请求时加 `?request=<request_id>`（[5.7.2](07-desktop.md#572-主进程模块) 的 `deeplink`）。导航只切换到对应的会话，不把焦点移到请求面板上。
+- **通知由宿主弹出**（ADR-01）。宿主内置一小份通知文案（中英文，跟随系统语言），这是"宿主不下发文案"原则的唯一例外，因为通知不经过客户端。标题用会话标题（没有时用内置文案），正文只用按原因（需要批准、需要回答、回合完成、回合失败）选的内置文案，不放 agent 的原文：通知在锁屏上也看得到，原文还要另做脱敏（T150 开工前定，2026-11-10）。开关是已有的三个设置键 `notifications.needs_action`、`.turn_completed`、`.error`（[5.2.11](#5211-文件服务与设置)，界面在 T147），回合失败归 `.error`。helper 的通知身份由 SP-10（T101）核实：K5 有条件通过，按原设计做，条件是下面六条。
+- **宿主 helper 的通知身份**（T101 的结论，T150 开工前补，2026-11-10）：
+  1. **先在 LaunchServices 登记**：嵌套的 helper 不会随外层 App 自动登记，没登记时 usernoted 拒绝它（`UNErrorDomain 1`），授权框也不弹。UI 拉起宿主之前，经 `LSRegisterURL` 登记宿主的 bundle（[5.7.2](07-desktop.md#572-主进程模块) 的 `hostLauncher`）；宿主启动时也检查，没登记就自己登记。同一进程里刚登记后的头几次通知调用仍可能被拒，被拒的那条只记日志、不重试。
+  2. **主线程跑 NSApplication**（[5.2.3](#523-并发模型)）。
+  3. **系统单独拉起的宿主只转交点击**：宿主退出后点通知，系统会经 LaunchServices 自己拉起一个宿主。认法是没有参数、父进程是 launchd、`XPC_SERVICE_NAME` 以 `application.` 开头。它没有 control 连接，所以只等点击回调，一律用上面的方法交一个 URL（UI 在运行时 URL 经 `open-url` 送到，同样只导航），然后退出；不加 `flock`、不绑套接字、不开数据库。这一步排在读 stdin 载荷之前（[5.2.13](#5213-进程监护与宿主生命周期) 第 1 步），否则开发和 e2e 构建会读载荷超时退出，点击也就丢了。
+  4. **有序退出时清掉已送达的通知**（`removeAllDeliveredNotifications`）；崩溃留下的通知被点击时靠第 3 条兜底。
+  5. **上报授权状态**：用户关掉授权请求就记为拒绝，之后再申请系统也不弹框。宿主把授权状态写进 `host.updated`（附加字段），被拒后不重复申请，界面提示用户去系统设置里打开。
+  6. **宿主带自己的名称和图标**：通知和系统设置只用宿主 bundle 自己的显示名称和图标，不取外层 App 的，而且只在第一次登记时取（[5.10.1](10-release.md#5101-包结构)）。
+  - **T150 的第一条验收**（T101 没验证；2026-11-10 在 T150 第 0 步用原型补验通过，四次点击都没有 -600、没有 Finder 对话框，也没有再拉起宿主，见 `docs/tasks/T150-notifications/results.md`）：正在运行的宿主改跑 NSApplication 之后，"宿主在、UI 已退出时点通知，系统再拉起一个宿主"和"宿主、UI 都在时点通知，弹出 Finder 对话框 …is not open anymore"是否都消失。消除不了时，考虑改由 LaunchServices 拉起宿主（影响 ADR-01、Q21），或者启用 T158。
 - 同时维护 `clients`（连接列表）、`agents`（CLI、适配器、运行时、登录状态、资源占用）、`host`（版本、是否弱认证、是否待升级、防休眠）和提权请求，都写在索引流里。
 
 ## 5.2.10 Git 与 worktree 服务
@@ -504,7 +512,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 **启动顺序**（目标：前 9 步合计不超过 50 ms，SP-4a 实测 p95 为 4.6 ms，不含签名校验）
 
-1. 解析参数：`--data-dir`（默认 `~/Library/Application Support/cupper`）；`--build-info`（输出版本和启用的编译特性后退出，发布流水线据此断言）；`--self-test`。`dev-auth`、`test-harness` 构建读取 stdin 上的启动载荷（`dev_key`、`harness_key`、`test_config`，格式、超时和编译期门控见 [5.8.1](08-security.md#581-认证握手固定令牌)）；之后（发布构建一开始就）把 stdio 指向 `/dev/null`。
+1. 先认出系统单独拉起、只为转交通知点击的宿主（[5.2.9](#529-关注度与通知) 的第 3 条），它转交后退出，不走下面的步骤。解析参数：`--data-dir`（默认 `~/Library/Application Support/cupper`）；`--build-info`（输出版本和启用的编译特性后退出，发布流水线据此断言）；`--self-test`。`dev-auth`、`test-harness` 构建读取 stdin 上的启动载荷（`dev_key`、`harness_key`、`test_config`，格式、超时和编译期门控见 [5.8.1](08-security.md#581-认证握手固定令牌)）；之后（发布构建一开始就）把 stdio 指向 `/dev/null`。
 2. 初始化日志（轮转、脱敏，见 [5.11](11-diagnostics.md)）。
 3. 数据目录和子目录建成 0700，并检查属主。
 4. 对 `host.lock` 加 `flock`；已被占用就以退出码 3 退出（UI 改为直接连接）。
@@ -519,11 +527,13 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 
 **空闲退出**（非后台模式）：没有客户端连接、没有进行中的回合、没有待处理请求、没有排队消息、安装器空闲，持续 10 分钟（可设置）后有序退出。
 
-**有序退出**（`host/exit`、SIGTERM、空闲、升级）：停止 accept → 向所有连接发 `host/shutdown` 通知 → 如果是强制退出，运行中的回合标为 `interrupted` → 按 ADR-09 的顺序关闭适配器（逐个 `session/close` → 关闭 stdin → 等进程组退出 3 s → SIGTERM → 2 s → SIGKILL）→ 写检查点、清空写线程队列、写 `meta.last_clean_exit_at` → 释放电源断言 → 删除套接字 → 释放锁。
+**有序退出**（`host/exit`、SIGTERM、退出的 Apple Event、空闲、升级）：停止 accept → 向所有连接发 `host/shutdown` 通知 → 如果是强制退出，运行中的回合标为 `interrupted` → 按 ADR-09 的顺序关闭适配器（逐个 `session/close` → 关闭 stdin → 等进程组退出 3 s → SIGTERM → 2 s → SIGKILL）→ 写检查点、清空写线程队列、写 `meta.last_clean_exit_at` → 释放电源断言 → 清掉已送达的通知（[5.2.9](#529-关注度与通知)） → 删除套接字 → 释放锁。
 
 **防休眠**（NFR-13，M1 为 P1）：有进行中的回合或待处理的交互请求时，持有 `PreventUserIdleSystemSleep` 断言，没有时立即释放。T156 的实现：每个会话 actor 在处理完每个输入后报"运行中的回合 + 待处理请求"的计数，会话离开内存时归还；`Supervisor` 的纯核心按总数决定取得或释放，断言由监护 actor 持有，`host.updated.power_assertion` 如实反映；有序退出时释放，之后不再取得；断言名是固定的 `cupper: agents at work`。设置页"通用"里的开关（5.7.4）还没接，T147 接入时用设置键 `host.prevent_idle_sleep`（默认开），关掉时立即释放。
 
 **资源采样**：每 30 秒采样一次各适配器进程组的常驻内存，写进 `agents` 状态（NFR-11、ADR-09 的设置页显示），并交给驱动层的回收策略（[5.6.8](06-agent-driver.md#568-资源回收)）。
+
+**退出的 Apple Event**（T150）：主线程跑 NSApplication 后，LaunchServices 把宿主当成 App，注销、关机和活动监视器的"退出"会给它发退出事件，AppKit 默认当场 `exit(0)`。宿主在 `applicationWillFinishLaunching:` 里接管这个事件（在 `run()` 之前装的处理会被 AppKit 换掉），交给和 SIGTERM 相同的有序退出（`Exit::Terminated`）。
 
 **退出码**：0 正常；3 已有实例；4 数据来自更新的版本；5 数据目录不可用；6 迁移失败（界面给出备份位置和诊断包入口）；1 其他错误（含启动载荷读取超时或格式错误）。
 

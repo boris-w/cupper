@@ -8,7 +8,7 @@
 SP10.app                         dev.cupper.spike.sp10，名称 SP10 Spike，蓝色 M 图标，注册 sp10-spike:
   Contents/MacOS/sp10            主 App（app/main.swift）：一个窗口，列出收到的 URL；经 posix_spawn 拉起 helper
   Contents/Helpers/SP10Host.app  dev.cupper.spike.sp10.host，LSUIElement
-    Contents/MacOS/sp10-host     helper（host/main.swift）：同宿主一样主线程跑 CFRunLoop；只有系统不带参数启动它时改跑 NSApplication（s2c）
+    Contents/MacOS/sp10-host     helper（host/main.swift）：主线程跑 NSApplication（accessory），同设计 5.2.3 改过的宿主
 ```
 
 `build.sh own`：helper 有自己的显示名称 SP10 Notifier 和橙色 H 图标，名称、图标都与主 App 不同，所以看得出系统用的是哪个 bundle 的。`build.sh bare`：helper 的 Info.plist 照 T005 现在给宿主写的那样，只有 `CFBundleName`，没有图标。两种都是 ad-hoc 签名、开 hardened runtime（自用构建的签法）。
@@ -23,6 +23,8 @@ SP10.app                         dev.cupper.spike.sp10，名称 SP10 Spike，蓝
 - helper：`notify <id> stay|exit`（申请授权、弹通知，然后等点击或 1 秒后退出）、`open-main <id> [scheme]`（2 秒后不经点击直接走点击后的路径，等拉起它的主 App 先退出）、`status`（授权状态和已送达的通知）、`clear`（先移除已送达的通知）。
 
 helper 收到点击后：主 App 在运行就先 `NSRunningApplication.activate()`，1 秒后还不在前台再 `NSWorkspace.openApplication`；不在运行就用 `NSWorkspace.open([URL], withApplicationAt:)` 只把 `sp10-spike://session/<id>` 交给按 bundle id 找到的那个 App。处理完 5 秒后退出。系统不带参数启动 helper 时，它等 30 秒，期间收到点击照上面处理。
+
+T101 实测时 helper 只在系统不带参数启动它时跑 NSApplication，其余时候跑 CFRunLoop（s2b 收不到点击即由此而来）。T150 第 0 步起所有模式都跑 NSApplication，用来验证正在运行的 helper 改跑 NSApplication 后，-600 对话框和第二个 helper 是否消失；启动约 1 秒后 helper 记下 LaunchServices 看到的运行中的 helper（`running helpers=`）。
 
 helper 启动时发现自己没在 LaunchServices 登记（嵌套的 helper 系统不会自动登记，通知服务因此认不出它），就先调用 `LSRegisterURL` 登记自己。
 
