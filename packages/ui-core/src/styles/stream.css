@@ -168,3 +168,17 @@
 .fade-y {
   mask-image: linear-gradient(transparent, #000 12px, #000 calc(100% - 12px), transparent);
 }
+
+/* The stream's scrollbar (T256): thin, at the session area's edge, its thumb
+   shown while the pointer is on the list, which scrolling takes. */
+[data-stream-list]::-webkit-scrollbar {
+  width: var(--layout-scrollbar-w);
+}
+[data-stream-list]::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--radius-full);
+  background-clip: padding-box;
+}
+[data-stream-list]:hover::-webkit-scrollbar-thumb {
+  background-color: var(--color-scrollbar-thumb);
+}

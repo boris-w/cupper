@@ -3,7 +3,8 @@
 // moving what is on screen; while at the bottom the list follows the stream,
 // and once scrolled up it stops and offers a way back down; a message the user
 // sends brings it back down too. A running turn's plan has a pill there that
-// scrolls to it.
+// scrolls to it. The list spans the session area, its scrollbar at the area's
+// edge, and its rows keep to the content column.
 
 import type { SessionView } from "@cupper/host-client";
 import type { HistoryCursor } from "@cupper/protocol";
@@ -220,23 +221,26 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
           className="h-full overflow-y-auto [overflow-anchor:none]"
           data-stream-list
         >
-          <div className="relative w-full" style={{ height: total }}>
-            {virtualizer.getVirtualItems().map((item) => {
-              const row = rows[item.index];
-              return (
-                row && (
-                  <div
-                    key={item.key}
-                    data-index={item.index}
-                    ref={virtualizer.measureElement}
-                    className="absolute top-0 left-0 w-full pt-(--layout-item-gap)"
-                    style={{ transform: `translateY(${item.start}px)` }}
-                  >
-                    <RowView registry={streamRows} row={row} />
-                  </div>
-                )
-              );
-            })}
+          {/* The content column; below its last row, room so that the composer's shadow covers nothing. */}
+          <div className="mx-auto max-w-(--layout-thread-max-w) px-(--layout-thread-gutter) pb-(--layout-item-gap)">
+            <div className="relative w-full" style={{ height: total }}>
+              {virtualizer.getVirtualItems().map((item) => {
+                const row = rows[item.index];
+                return (
+                  row && (
+                    <div
+                      key={item.key}
+                      data-index={item.index}
+                      ref={virtualizer.measureElement}
+                      className="absolute top-0 left-0 w-full pt-(--layout-item-gap)"
+                      style={{ transform: `translateY(${item.start}px)` }}
+                    >
+                      <RowView registry={streamRows} row={row} />
+                    </div>
+                  )
+                );
+              })}
+            </div>
           </div>
         </div>
         <ComposerOverlays plan={plan} onPlan={toPlan} away={!stuck} onBottom={toBottom} />
