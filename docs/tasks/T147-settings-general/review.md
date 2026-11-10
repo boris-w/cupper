@@ -21,3 +21,8 @@
 
 - 设计 5.7.10 补 `--color-switch-thumb`（合并时由编排者补）。
 - 合并时 main 已有 T251，两边都改了协议 `admin.rs`、`supervisor/mod.rs` 和生成物（自动合并）；合并提交上重新生成并补跑了检查，见下文"合并"。
+
+## 合并
+
+- 合并提交 62b3359f。main 上已有 T251，两边都改了 `admin.rs`、`supervisor/mod.rs`、生成的类型与 schema、方法样例，git 自动合并。
+- 在合并提交上：`pnpm gen` 重新生成后没有差异；fmt、clippy（`-D warnings`）通过；宿主 lib 测试 534 条通过；`cargo xtask ci protocol` 192 条通过（schema-compat、shell-api-m1a 都过）。
