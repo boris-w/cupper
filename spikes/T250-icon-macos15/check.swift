@@ -13,9 +13,13 @@ let resources = probe.appendingPathComponent("Contents/Resources")
 try! files.createDirectory(at: resources, withIntermediateDirectories: true)
 try! files.copyItem(
     atPath: CommandLine.arguments[1], toPath: resources.appendingPathComponent("icon.icns").path)
+// An app with no executable gets Finder's "prohibited" badge (first run).
+let macos = probe.appendingPathComponent("Contents/MacOS")
+try! files.createDirectory(at: macos, withIntermediateDirectories: true)
+try! files.copyItem(atPath: "/usr/bin/true", toPath: macos.appendingPathComponent("probe").path)
 let plist: NSDictionary = [
     "CFBundleIdentifier": "dev.cupper.spike.icon", "CFBundleName": "Cupper Probe",
-    "CFBundleIconFile": "icon", "CFBundlePackageType": "APPL",
+    "CFBundleIconFile": "icon", "CFBundlePackageType": "APPL", "CFBundleExecutable": "probe",
 ]
 plist.write(to: probe.appendingPathComponent("Contents/Info.plist"), atomically: true)
 
