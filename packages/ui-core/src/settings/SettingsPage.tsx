@@ -12,6 +12,7 @@ import type { Route } from "../state/ui";
 import { AgentsSection } from "./AgentsSection";
 import { ArchivedSection } from "./ArchivedSection";
 import { ConnectionsSection } from "./ConnectionsSection";
+import { GeneralSection } from "./GeneralSection";
 import { NotificationsSection } from "./NotificationsSection";
 import { StorageSection } from "./StorageSection";
 
@@ -23,6 +24,7 @@ interface Entry {
 
 /** The sections in the navigation's order; a page is one more line here (T147, T248). */
 const SECTIONS: readonly [Entry, ...Entry[]] = [
+  { id: "general", Body: GeneralSection },
   { id: "notifications", Body: NotificationsSection },
   { id: "archived", Body: ArchivedSection },
   { id: "agents", Body: AgentsSection },

@@ -4,6 +4,7 @@ import { MockHost, type Reply } from "@cupper/host-client/mock";
 import type { Handshake } from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
@@ -184,7 +185,7 @@ describe("UI-settings-agents", () => {
     const from = { page: "session", sessionId: "s_1" };
     act(() => controls.command({ id: "settings" }));
     expect(ui.getState().route).toEqual({ page: "settings", from });
-    const nav = screen.getByRole("button", { name: "通知" });
+    const nav = screen.getByRole("button", { name: "通用" });
     expect(nav.getAttribute("aria-current")).toBe("page");
     act(() => controls.navigate({ kind: "settings", section: "agents" }));
     expect(ui.getState().route).toEqual({ page: "settings", section: "agents", from });
@@ -287,6 +288,28 @@ describe("UI-settings-archived", () => {
 });
 
 describe("UI-settings-general", () => {
+  test("general: the send key a UI preference, keeping the Mac awake a host setting", async () => {
+    const { mock, ui } = await setup();
+    act(() => ui.getState().navigate(toSettings(ui.getState().route, "general")));
+    const composer = () => texts(card("输入框")).filter(Boolean);
+    expect(composer()).toEqual(["发送消息Shift + Enter 换行，Command + Enter 排队", "Enter"]);
+    screen.getByRole("button", { name: "Enter" }).focus();
+    await userEvent.keyboard("{Enter}");
+    const other = screen.getByRole("menuitemradio", { name: "Command + Enter" });
+    await act(async () => void fireEvent.click(other));
+    expect(composer()).toEqual([
+      "发送消息Enter 换行，Command + Shift + Enter 排队",
+      "Command + Enter",
+    ]);
+    const awake = within(card("电源")).getByRole("switch");
+    expect(awake.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(awake);
+    expect(mock.requests.at(-1)).toMatchObject({
+      method: "settings/update",
+      params: { patch: { "host.prevent_idle_sleep": false } },
+    });
+  });
+
   test("notifications: the switches as the settings are, each change a settings/update", async () => {
     const { mock, held, ui } = await setup();
     act(() => ui.getState().navigate(toSettings(ui.getState().route, "notifications")));
