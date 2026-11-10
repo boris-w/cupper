@@ -25,6 +25,10 @@ extraResources:
 extraFiles:
   - from: ../../target/host-bundle/e2e/CupperHost.app
     to: Helpers/CupperHost.app
+# The deep links of design 5.7.2, as every build kind has (5.7.9).
+protocols:
+  - name: Cupper E2E
+    schemes: [cupper-e2e]
 mac:
   # The latte icon (build/icon.sh); the host bundle takes the same file (design 5.10.1).
   icon: build/icon.icns

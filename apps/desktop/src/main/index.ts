@@ -1,14 +1,20 @@
 // The main process (design 5.7.2): the app, its window, the hardening
 // baseline (design 5.7.8), the control connection to the host, started
 // before the app is ready (design 5.5.1), the quit check (NFR-8) and, in
-// keyed builds, restarting a host it cannot verify (design 5.8.1), and each
-// window document's data connection through its window bridge (design 5.7.1).
+// keyed builds, restarting a host it cannot verify (design 5.8.1), each
+// window document's data connection through its window bridge (design 5.7.1),
+// and navigation from the host's `ui/navigate` and from deep links (5.7.2).
 
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { createI18n } from "@cupper/i18n";
-import { DEFAULT_ICON_COLOUR, MAIN_DOCUMENT_CSP, REVIEW_DOCUMENT_CSP } from "@cupper/shell-api";
+import {
+  DEFAULT_ICON_COLOUR,
+  MAIN_DOCUMENT_CSP,
+  REVIEW_DOCUMENT_CSP,
+  type NavigateTarget,
+} from "@cupper/shell-api";
 import {
   app,
   autoUpdater,
@@ -25,9 +31,10 @@ import {
 
 import { isReleaseLike } from "../shared/flavor";
 import { followIconColour } from "./app-icon";
-import { COMMAND_CHANNEL, HOST_OPEN } from "../shared/ipc";
+import { COMMAND_CHANNEL, HOST_OPEN, NAVIGATE } from "../shared/ipc";
 import { WindowBridges } from "./bridge/bridges";
 import { startHost } from "./host";
+import { deepLink, SCHEMES, sessionTarget, WindowNavigation } from "./deeplink";
 import { catchUncaught } from "./errors";
 import { confirmQuit, confirmRestart, tellRestartRefused, type Translate } from "./host/dialogs";
 import { QuitGuard, type QuitHost } from "./host/lifecycle";
@@ -81,6 +88,7 @@ let host: ReturnType<typeof startHost> | undefined;
 let i18n: ReturnType<typeof createI18n> | undefined;
 const t: Translate = (key, values) => (i18n ??= createI18n()).t(key, values);
 const quit = new QuitGuard(quitHost, (status) => confirmQuit(t, status));
+const navigation = new WindowNavigation((target) => mainWindow?.webContents.send(NAVIGATE, target));
 
 if (app.requestSingleInstanceLock()) {
   start();
@@ -109,6 +117,17 @@ function start() {
   app.on("web-contents-created", (_event, contents) => hardenWebContents(contents, openExternal));
   // Another launch only brings the window forward (design 5.7.8).
   app.on("second-instance", showMainWindow);
+  // A link that may start the app (design 5.7.2, 5.2.9): listened for before
+  // it finishes launching, gone to once a window can show.
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    const target = deepLink(url, SCHEMES[flavor]);
+    if (target) {
+      showSession(target);
+    } else {
+      log.warn("ignored a link");
+    }
+  });
   app.on("activate", showMainWindow);
   // Closing the last window leaves the app running, as on macOS (design 5.7.1).
   app.on("window-all-closed", () => undefined);
@@ -134,6 +153,14 @@ function start() {
     const e2eRoot = __CUPPER_FLAVOR__ === "e2e" ? process.env.CUPPER_E2E_DIR : undefined;
     const version = app.getVersion();
     host = startHost({ flavor, dataDir: dirs.data, version, e2eRoot, log });
+    // A click on one of the host's notifications (design 5.2.9).
+    host.control.client.onNotification((method, params) => {
+      const to = (params ?? {}) as { session_id?: unknown; request_id?: unknown };
+      const target = method === "ui/navigate" && sessionTarget(to.session_id, to.request_id);
+      if (target) {
+        showSession(target);
+      }
+    });
     host.control.client.onState((state) => {
       const unverified =
         state.status === "failed" && ["unauthenticated", "host_unverified"].includes(state.reason);
@@ -230,7 +257,13 @@ function serveWindows({ control, openWindow }: NonNullable<typeof host>) {
       return { bridge, window: port2 };
     },
   });
-  ipcMain.handle(HOST_OPEN, (event) => bridges.open(event.sender, event.senderFrame));
+  ipcMain.handle(HOST_OPEN, async (event) => {
+    const handshake = await bridges.open(event.sender, event.senderFrame);
+    if (event.sender === mainWindow?.webContents) {
+      navigation.connected();
+    }
+    return handshake;
+  });
   control.client.onState((state) => void (state.status === "ready" && bridges.reload()));
   if (__CUPPER_FLAVOR__ === "e2e") {
     // For the e2e tests' `electronApp.evaluate`: a window loses its
@@ -261,10 +294,18 @@ function showMainWindow() {
   const preload = join(import.meta.dirname, "../preload/index.cjs");
   const window = new BrowserWindow(mainWindowOptions(flavor, preload));
   mainWindow = window;
+  navigation.reloading();
+  window.webContents.on("did-finish-load", () => navigation.loaded());
+  window.webContents.on("did-start-navigation", (details) => {
+    if (details.isMainFrame && !details.isSameDocument) {
+      navigation.reloading();
+    }
+  });
   window.once("ready-to-show", () => (background ? window.showInactive() : window.show()));
   watchInput(window, () => Date.now());
   window.on("closed", () => {
     mainWindow = null;
+    navigation.reloading();
   });
   window.webContents.on("preload-error", (_event, _path, error) => {
     log.error("preload failed", { error: error.message });
@@ -273,6 +314,18 @@ function showMainWindow() {
     log.error("renderer gone", { reason: details.reason, exitCode: details.exitCode });
   });
   void window.loadURL(MAIN_DOCUMENT_URL);
+}
+
+/**
+ * The main window on `target`: only navigation, no focus in the request panel
+ * (design 5.7.8). The window does not come forward here: after a click the
+ * host brings the app forward (design 5.2.9), which `activate` follows.
+ */
+function showSession(target: NavigateTarget) {
+  if (mainWindow === null) {
+    showMainWindow();
+  }
+  navigation.go(target);
 }
 
 /** `host/status` and `host/exit` on the control connection, each given a few seconds. */
