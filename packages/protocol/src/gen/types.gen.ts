@@ -3269,6 +3269,13 @@ export type TestClockAdvanceParams = {
   ms: DurationMs;
 };
 
+export type TestNotificationClickParams = {
+  /**
+   * The notification's identifier: its intent's.
+   */
+  notification_id: IntentId;
+};
+
 export type TestRunMaintenanceParams = {
   task: MaintenanceTask;
 };
