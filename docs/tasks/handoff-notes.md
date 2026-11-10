@@ -591,3 +591,6 @@
 | 改宿主 `RunLoop` 的任务 | CoreFoundation 把回调相同、`info` 为空的两个源当成同一个；`RunLoop` 丢弃时要移除自己的停止源和退出处理，否则后建的循环停不下来（T150 的测试里卡住过） | T150 |
 | 写或改 shuttle 用例的任务 | shuttle 的线程栈默认 60 KiB；视图或状态变大后，debug 构建里迭代器链的帧会越过它。macOS 上表现为没有任何输出的 SIGBUS（signal 10）。排查用 lldb 看 sp 是否落在协程栈下方的保护页里；修法是用 `Runner::new(DfsScheduler::new(None, false), config)` 加 `config.stack_size` 显式给栈并注明原因（PROP-stream-seq 现在 256 KiB，实测 96 KiB 就够） | T151 |
 | 本机 `cargo clean` 之后跑宿主用例的人 | 宿主的部分 lib 用例和 lifecycle 集成测试要先构建假 agent（`cargo build -p cupper-fake-agent`）和 CLI 的 e2e 构建（`cargo build -p cupper-cli --features test-harness`）；CI 的 rust 作业会自己构建 | T151 |
+| T149 | 排队消息行上的"插话"可以复用 `composer/send.ts` 的 `useSessionSend` 里的提示（"已转为排队"、副作用只提示一次）和回退逻辑 | T242 |
+| T147 | "跟进消息默认排队"开关写 prefs 的 `composer.followUpQueue`（布尔，默认关）；Claude 插话副作用的说明复用 `composer:steer_side_effects` | T242 |
+| 写插话用例的任务（T149、T171 等） | 等 agent 拿到这一轮的 prompt（页面上出现这一轮的输出）再插话；只等 `turn.started` 时回合可能还在 `Preparing`（拍开始快照），插话会按 `not_prompting` 转为排队 | T242 |
