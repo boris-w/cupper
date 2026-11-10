@@ -540,6 +540,8 @@ impl Host {
         let terminate = signal(SignalKind::terminate())?;
         let (listener, socket) = lock.bind()?;
         let serving = tokio::spawn(Arc::clone(&gateway).serve(listener));
+        #[cfg(not(feature = "test-harness"))]
+        register_bundle();
         Ok(Self {
             clock,
             writer,
@@ -662,6 +664,27 @@ impl Exit {
             Self::Upgrade => "upgrade",
         }
     }
+}
+
+/// Design 5.2.9, rule 1: the desktop registered the host's bundle with
+/// LaunchServices before it started the host; check again, off the startup
+/// path, and only log. Builds with the test harness never touch
+/// LaunchServices: their notifications are only recorded (design 5.9.9), and
+/// their tests run hosts in bundles of their own.
+#[cfg(not(feature = "test-harness"))]
+fn register_bundle() {
+    let bundle = BundleDir::of_this_host().ok().filter(BundleDir::is_app);
+    let identity = cupper_sys::own_signing_identity().ok().flatten();
+    let (Some(contents), Some(identity)) = (bundle, identity) else {
+        return;
+    };
+    tokio::task::spawn_blocking(move || {
+        let app = contents.0.parent().unwrap_or(&contents.0);
+        match cupper_sys::ensure_registered(app, &identity.identifier) {
+            Ok(registration) => tracing::info!(?registration, "the host bundle in LaunchServices"),
+            Err(err) => tracing::warn!("cannot register the host bundle: {err}"),
+        }
+    });
 }
 
 /// Sends `event` into the audit (design 5.8.6).

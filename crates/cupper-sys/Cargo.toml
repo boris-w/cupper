@@ -14,11 +14,12 @@ test-util = []
 [dependencies]
 core-foundation = "0.10.1"
 libc = "0.2.191"
-# AppKit's loop on the host's main thread (design 5.2.3). Exact releases (design 5.1.7); MIT, and
+# AppKit's loop on the host's main thread and LaunchServices through
+# NSWorkspace (design 5.2.3, 5.2.9). Exact releases (design 5.1.7); MIT, and
 # Zlib OR Apache-2.0 OR MIT for the framework crates (ADR-11).
 objc2 = "=0.6.5"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSApplication", "NSEvent", "NSGraphicsContext", "NSResponder", "NSRunningApplication"] }
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSAppleEventDescriptor", "NSAppleEventManager", "NSGeometry", "NSNotification"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSApplication", "NSEvent", "NSGraphicsContext", "NSResponder", "NSRunningApplication", "NSWorkspace"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSAppleEventDescriptor", "NSAppleEventManager", "NSArray", "NSBundle", "NSEnumerator", "NSGeometry", "NSNotification", "NSString", "NSURL"] }
 thiserror = "2.0.21"
 
 # The main loop runs on the main thread, which libtest's threads are not;
