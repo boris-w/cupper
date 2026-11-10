@@ -262,3 +262,38 @@ test("E2E-queue-edit: a queued message edited in place and steered in from its r
   await area.press("Enter");
   await expect(previews).toHaveText(["second", "third"]);
 });
+
+test("E2E-S4: a running turn takes a steer by Enter, a queued message by ⌘Enter, edited in its row, and stops on the second Esc", async ({
+  cupper,
+}) => {
+  const { stream, area } = await turnRunning(cupper, "wait_cancel");
+  const [t, window] = [await texts(cupper), cupper.window];
+  await area.fill("comments in Chinese");
+  await area.press("Enter");
+  await steered(cupper, stream, "comments in Chinese");
+
+  await area.fill("list the files after");
+  await area.press("Meta+Enter");
+  const preview = window.locator("[data-queue-preview]");
+  await expect(preview).toHaveText("list the files after");
+  const row = window.locator("[data-queue-id]");
+  await row.getByRole("button", { name: t("composer:queue_menu") }).click();
+  await window.getByRole("menuitem", { name: t("composer:queue_edit") }).click();
+  await expect(window.getByRole("menu")).toHaveCount(0);
+  const box = row.getByRole("textbox", { name: t("composer:queue_edit") });
+  await box.fill("list the changed files");
+  await box.press("Enter");
+  await expect(preview).toHaveText("list the changed files");
+
+  // The first Esc only arms; the second stops the turn, and the queue keeps its message.
+  await area.press("Escape");
+  await expect(window.getByText(t("composer:esc_hint"))).toBeVisible();
+  await area.press("Escape");
+  await untilEvent(
+    cupper,
+    stream,
+    (e) => e.type === "turn.completed" && e.data.status === "cancelled",
+  );
+  const kept = window.locator("[data-queue-paused] [data-queue-preview]");
+  await expect(kept).toHaveText("list the changed files");
+});
