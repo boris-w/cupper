@@ -91,7 +91,18 @@ async function setup() {
     act(() => new Promise((done) => requestAnimationFrame(() => done(undefined))));
   await frame();
   const pages = () => mock.requests.filter((r) => r.method === "history/page").map((r) => r.params);
-  return { frame, pages };
+  let seq = 2;
+  /** Live events of the session, as the host sends them after the snapshot. */
+  const push = async (bodies: object[]) => {
+    const events = bodies.map((body) => ({ seq: seq++, v: 1, ts: 1, ...body }));
+    conn.send({
+      jsonrpc: "2.0",
+      method: "stream/events",
+      params: { stream: "session/s_1", events },
+    });
+    await frame();
+  };
+  return { frame, pages, ui, push };
 }
 
 describe("UNIT-stream-anchor", () => {
@@ -241,6 +252,45 @@ describe("UNIT-stream-follow", () => {
       away(() => fireEvent.pointerDown(list)),
       "the scrollbar",
     ).toBe(true);
+  });
+
+  test("scrolled up, a message the user sends brings it back to the end, following it", async () => {
+    const { ui } = await setup();
+    const list = document.querySelector("[data-stream-list]") as HTMLElement;
+    let height = 1000;
+    Object.defineProperties(list, {
+      scrollHeight: { get: () => height },
+      clientHeight: { value: 200 },
+    });
+    fireEvent.wheel(list);
+    list.scrollTop = 100;
+    fireEvent.scroll(list);
+    expect(screen.getByRole("button", { name: "回到底部" })).toBeTruthy();
+    act(() => ui.getState().markSent("s_1"));
+    expect(screen.queryByRole("button", { name: "回到底部" })).toBeNull();
+    height = 1400;
+    await act(() => new Promise((done) => setTimeout(done, 300)));
+    expect(list.scrollTop).toBe(1400);
+  });
+
+  test("scrolled up, a turn the host starts moves nothing", async () => {
+    const { push } = await setup();
+    const list = document.querySelector("[data-stream-list]") as HTMLElement;
+    let height = 1000;
+    Object.defineProperties(list, {
+      scrollHeight: { get: () => height },
+      clientHeight: { value: 200 },
+    });
+    fireEvent.wheel(list);
+    list.scrollTop = 100;
+    fireEvent.scroll(list);
+    // The queue's next message, as the host takes it.
+    height = 1400;
+    await push(turn(4, "排队的那条"));
+    expect(screen.getByText("排队的那条")).toBeTruthy();
+    await act(() => new Promise((done) => setTimeout(done, 300)));
+    expect(list.scrollTop).toBe(100);
+    expect(screen.getByRole("button", { name: "回到底部" })).toBeTruthy();
   });
 
   test("at the bottom, a list of another size goes back to the bottom", async () => {

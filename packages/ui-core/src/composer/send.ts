@@ -81,6 +81,7 @@ export function useSessionSend(sessionId: string) {
       if (wanted && !steer) once("queued_instead");
       if (steer && can.side_effects) once("steer_side_effects");
       const mode = steer ? { mode: "steer", expected_turn_id: turn } : { mode: "queue" };
+      ui.getState().markSent(sessionId);
       if (steer) ui.getState().addSteering(sessionId, 1);
       try {
         const sent = await client.command<SessionSendResult>("session/send", {

@@ -12,6 +12,7 @@ import { MoreIcon } from "../components/icons";
 import { Menu, MenuItem } from "../components/Menu";
 import { Tooltip } from "../components/Tooltip";
 import { useToasts } from "../feedback/toaster";
+import { useUi } from "../state/provider";
 import { composing, FOLLOW_UP_QUEUE_PREF } from "./keys";
 import { codeOf, useHintOnce, usePref } from "./send";
 
@@ -54,6 +55,7 @@ export function QueueRow(props: {
   const { show } = useToasts();
   const once = useHintOnce(sessionId);
   const edit = useQueueEdit(sessionId);
+  const ui = useUi();
   const followUpQueue = usePref(FOLLOW_UP_QUEUE_PREF) === true;
   const [editing, setEditing] = useState(false);
   // Opened from the menu, the editor takes the focus the menu would give back.
@@ -64,6 +66,7 @@ export function QueueRow(props: {
 
   const steer = async () => {
     if (props.sideEffects) once("steer_side_effects");
+    ui.getState().markSent(sessionId);
     setBusy(true);
     const edited = await edit(version, [{ op: "steer", queue_id: queueId }]);
     setBusy(false);
