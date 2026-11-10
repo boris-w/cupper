@@ -1142,6 +1142,16 @@ milestone = "M1b"
 UNIT-install-cli = "pr"
 UI-settings-cli = "pr"
 
+# 界面上报在场（v1.3.92 新增，T254 复核发现）
+[T257]
+milestone = "M1b"
+E2E-presence-suppresses-notification = "nightly"
+
+# 通知授权状态的重新查询（v1.3.92 新增，T254 复核发现）
+[T258]
+milestone = "M1b"
+IT-notifier-auth-recheck = "pr"
+
 # App 图标颜色（v1.3.91 新增；不在 M1b 的退出条件里，所以里程碑是 release）
 [T252]
 milestone = "release"
