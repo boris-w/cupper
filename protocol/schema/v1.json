@@ -7088,6 +7088,11 @@
           "minimum": 0,
           "type": "integer"
         },
+        "host.prevent_idle_sleep": {
+          "default": true,
+          "description": "Keeps the Mac awake while agents work (design 5.2.13); absent from\nwhat hosts before T147 wrote.",
+          "type": "boolean"
+        },
         "notifications.error": {
           "type": "boolean"
         },
@@ -7148,6 +7153,9 @@
           "maximum": 4294967295,
           "minimum": 0,
           "type": "integer"
+        },
+        "host.prevent_idle_sleep": {
+          "type": "boolean"
         },
         "notifications.error": {
           "type": "boolean"

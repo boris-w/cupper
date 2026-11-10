@@ -170,6 +170,7 @@
           "apps.terminal": "Terminal",
           "diagnostics.verbose": false,
           "host.idle_exit_minutes": 10,
+          "host.prevent_idle_sleep": false,
           "notifications.error": true,
           "notifications.needs_action": true,
           "notifications.turn_completed": false,

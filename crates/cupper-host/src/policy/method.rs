@@ -78,6 +78,7 @@ pub(super) fn security_settings(patch: &SettingsPatch) -> Map<String, Value> {
         editor_app: _,
         default_agent: _,
         idle_exit_minutes: _,
+        prevent_idle_sleep: _,
     } = patch;
     let mut keys = Map::new();
     put(&mut keys, "agents.claude.cli_path", claude_cli_path);
@@ -174,7 +175,7 @@ mod tests {
             "notifications.needs_action": true, "notifications.turn_completed": true,
             "notifications.error": true, "apps.terminal": "t", "apps.editor": "e",
             "sessions.default_agent": "claude", "host.idle_exit_minutes": 5,
-            "diagnostics.verbose": false}))
+            "host.prevent_idle_sleep": true, "diagnostics.verbose": false}))
         .unwrap();
         let full: SettingsPatch =
             serde_json::from_value(serde_json::to_value(all).unwrap()).unwrap();

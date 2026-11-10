@@ -274,6 +274,7 @@ impl Host {
         let home = PathBuf::from(found.host.get("HOME").cloned().unwrap_or_default());
         let settings =
             SettingsHandle::load(&reader, writer.clone(), clock.clone(), &home, &data_dir)?;
+        power.enabled(settings.current().prevent_idle_sleep);
         // The audit records of the gateway, the sessions, the index and the
         // host itself.
         let (records, audit) = mpsc::unbounded_channel();
@@ -511,7 +512,8 @@ impl Host {
         routes.sessions(Arc::new(sessions));
         let agents = Arc::new(agents);
         agents.route(&mut routes);
-        let settings = Arc::new(SettingsPort::new(settings, Arc::clone(&agents))) as Arc<dyn Port>;
+        let settings = SettingsPort::new(settings, Arc::clone(&agents), power.clone());
+        let settings = Arc::new(settings) as Arc<dyn Port>;
         routes.add::<SettingsGet>(Arc::clone(&settings));
         routes.add::<SettingsUpdate>(settings);
         routes.index(Arc::new(index.clone()));

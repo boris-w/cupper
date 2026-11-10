@@ -3065,6 +3065,11 @@ export type Settings = {
    */
   "diagnostics.verbose": boolean;
   "host.idle_exit_minutes": number;
+  /**
+   * Keeps the Mac awake while agents work (design 5.2.13); absent from
+   * what hosts before T147 wrote.
+   */
+  "host.prevent_idle_sleep"?: boolean;
   "notifications.error": boolean;
   "notifications.needs_action": boolean;
   "notifications.turn_completed": boolean;
@@ -3084,6 +3089,7 @@ export type SettingsPatch = {
   "apps.terminal"?: string;
   "diagnostics.verbose"?: boolean;
   "host.idle_exit_minutes"?: number;
+  "host.prevent_idle_sleep"?: boolean;
   "notifications.error"?: boolean;
   "notifications.needs_action"?: boolean;
   "notifications.turn_completed"?: boolean;

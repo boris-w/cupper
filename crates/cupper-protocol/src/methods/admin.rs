@@ -49,15 +49,21 @@ pub struct SettingsResult {
     pub settings: Settings,
 }
 
-/// Declares [`Settings`] and [`SettingsPatch`] from one list of keys.
+/// Declares [`Settings`] and [`SettingsPatch`] from one list of keys. A key
+/// added later names the function of its value where stored settings lack
+/// it (`= "yes"`).
 macro_rules! settings {
-    ($($(#[doc = $doc:literal])* $key:literal => $field:ident: $ty:ty,)+) => {
+    ($($(#[doc = $doc:literal])* $key:literal => $field:ident: $ty:ty $(= $default:literal)?,)+) => {
         /// The host's settings by their keys in design 5.2.11, every key
         /// present. Changing `agents.*.cli_path`, `agents.env_passthrough`
         /// or `diagnostics.verbose` takes `privileged` (design 5.2.5).
         #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
         pub struct Settings {
-            $($(#[doc = $doc])* #[serde(rename = $key)] pub $field: $ty,)+
+            $(
+                $(#[doc = $doc])*
+                #[serde(rename = $key $(, default = $default)?)]
+                pub $field: $ty,
+            )+
         }
 
         /// The keys to change, each with its new value; `null` clears a
@@ -107,8 +113,15 @@ settings! {
     "apps.editor" => editor_app: String,
     "sessions.default_agent" => default_agent: AgentKind,
     "host.idle_exit_minutes" => idle_exit_minutes: u32,
+    /// Keeps the Mac awake while agents work (design 5.2.13); absent from
+    /// what hosts before T147 wrote.
+    "host.prevent_idle_sleep" => prevent_idle_sleep: bool = "yes",
     /// Detailed logs, which may contain message text.
     "diagnostics.verbose" => verbose_diagnostics: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// A key in the patch is `Some`, even with `null`.
@@ -429,7 +442,8 @@ pub(super) mod tests {
             "worktrees.root": "~/.cupper/worktrees", "notifications.needs_action": true,
             "notifications.turn_completed": true, "notifications.error": true,
             "apps.terminal": "terminal", "apps.editor": "vscode", "sessions.default_agent": "claude",
-            "host.idle_exit_minutes": 30, "diagnostics.verbose": false}});
+            "host.idle_exit_minutes": 30, "host.prevent_idle_sleep": true,
+            "diagnostics.verbose": false}});
         let blob = |media_type| json!({"blob": {"hash": "ab".repeat(32), "size": 9000, "media_type": media_type}});
         vec![
             request::<SettingsGet>(json!({}), settings.clone()),
@@ -488,6 +502,18 @@ pub(super) mod tests {
         assert_eq!(patch(json!({})).unwrap(), SettingsPatch::default());
         // Only a key whose value may be `null` can be cleared.
         assert!(patch(json!({"notifications.error": null})).is_err());
+        // Settings from before T147, as old `settings.updated` events hold
+        // them, keep the Mac awake.
+        let old = json!({"agents.claude.cli_path": null, "agents.codex.cli_path": null,
+            "agents.env_passthrough": [], "worktrees.root": "/w", "notifications.needs_action": true,
+            "notifications.turn_completed": true, "notifications.error": true,
+            "apps.terminal": "Terminal", "apps.editor": "TextEdit", "sessions.default_agent": "claude",
+            "host.idle_exit_minutes": 10, "diagnostics.verbose": false});
+        assert!(
+            serde_json::from_value::<Settings>(old)
+                .unwrap()
+                .prevent_idle_sleep
+        );
 
         open_values::<ElevationAnswer>(ElevationAnswer::KNOWN);
         open_values::<ConfirmAction>(ConfirmAction::KNOWN);

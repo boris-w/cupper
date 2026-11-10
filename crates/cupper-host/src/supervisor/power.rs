@@ -1,6 +1,7 @@
 //! Keeping the Mac awake (design 5.2.13, NFR-13): while a turn runs or a
 //! request waits for the user, the host holds a `PreventUserIdleSystemSleep`
-//! assertion, and releases it once neither is left. Each session counts its
+//! assertion, and releases it once neither is left, or once the user turns
+//! `host.prevent_idle_sleep` off (T147). Each session counts its
 //! turn and its pending requests into a [`Share`] as they start and end; the
 //! supervisor's actor carries out what [`PowerCore`] decides, and
 //! `host.updated` says whether it holds. The orderly exit releases it for
@@ -24,6 +25,8 @@ pub const NAME: &str = "cupper: agents at work";
 pub enum Input {
     /// A session's running turns and pending requests went from `from` to `to`.
     Changed { from: u32, to: u32 },
+    /// `host.prevent_idle_sleep`, at start and on each settings update.
+    Enabled(bool),
     /// The orderly exit: released for good.
     Exit,
 }
@@ -34,16 +37,18 @@ pub enum Action {
     Release,
 }
 
-/// The running turns and pending requests of all sessions.
+/// The running turns and pending requests of all sessions, and whether the
+/// user turned the setting off.
 #[derive(Debug, Default)]
 pub struct PowerCore {
     count: u64,
+    disabled: bool,
     exited: bool,
 }
 
 impl PowerCore {
     fn holds(&self) -> bool {
-        self.count > 0 && !self.exited
+        self.count > 0 && !self.disabled && !self.exited
     }
 }
 
@@ -58,6 +63,7 @@ impl Core for PowerCore {
             Input::Changed { from, to } => {
                 self.count = self.count.saturating_sub(from.into()) + u64::from(to);
             }
+            Input::Enabled(enabled) => self.disabled = !enabled,
             Input::Exit => self.exited = true,
         }
         match (held, self.holds()) {
@@ -82,7 +88,7 @@ pub struct Power(mpsc::UnboundedSender<Mail>);
 
 /// An input for the supervisor's actor, and who waits for it to be done.
 #[derive(Debug)]
-pub struct Mail(Input, Option<oneshot::Sender<()>>);
+pub struct Mail(pub Input, Option<oneshot::Sender<()>>);
 
 impl Power {
     pub fn new() -> (Self, mpsc::UnboundedReceiver<Mail>) {
@@ -94,6 +100,11 @@ impl Power {
     pub fn share(&self) -> Share {
         let power = self.clone();
         Share { count: 0, power }
+    }
+
+    /// `host.prevent_idle_sleep`: off releases at once (design 5.2.13).
+    pub fn enabled(&self, enabled: bool) {
+        let _ = self.0.send(Mail(Input::Enabled(enabled), None));
     }
 
     /// Releases the assertion for good, in the orderly exit (design 5.2.13).
@@ -185,6 +196,22 @@ mod tests {
         // nothing does nothing.
         let steps = [changed(0, 0), changed(0, 1), changed(1, 0)];
         assert_eq!(run(&steps), [none(), vec![Take], vec![Release]]);
+    }
+
+    #[test]
+    fn power_core_holds_only_while_the_setting_is_on() {
+        use Action::*;
+        let none = Vec::new;
+        let (on, off) = (Input::Enabled(true), Input::Enabled(false));
+        // Off before the turn: nothing held; on while it runs: held at once.
+        let steps = [off, changed(0, 1), on, on];
+        assert_eq!(run(&steps), [none(), none(), vec![Take], none()]);
+        // Off while it runs: released at once; on after it: nothing.
+        let steps = [changed(0, 1), off, off, changed(1, 0), on];
+        assert_eq!(
+            run(&steps),
+            [vec![Take], vec![Release], none(), none(), none()]
+        );
     }
 
     #[test]
