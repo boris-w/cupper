@@ -148,7 +148,7 @@ function FileRefs({ sessionId }: { sessionId?: string }) {
         ? t("composer:file_none")
         : undefined;
   return createPortal(
-    <div role="listbox" aria-label={t("composer:file_ref")} className={POPOVER}>
+    <div role="listbox" aria-label={t("composer:file_ref")} className={`${POPOVER} max-h-72`}>
       {note && <p className="px-2.5 py-1.5 text-fg-tertiary">{note}</p>}
       {results.map((match, i) => (
         <div

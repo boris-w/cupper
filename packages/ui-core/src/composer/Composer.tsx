@@ -283,11 +283,11 @@ export function Composer(props: {
         />
         <div className="flex items-center gap-1 p-2 text-sm">
           {EXTENSIONS.filter((item) => item.side === "left").map(({ Component }, index) => (
-            <Component key={index} sessionId={sessionId} />
+            <Component key={index} sessionId={sessionId} agent={create?.agent ?? agent} />
           ))}
           <div className="flex-1" />
           {EXTENSIONS.filter((item) => item.side === "right").map(({ Component }, index) => (
-            <Component key={index} sessionId={sessionId} />
+            <Component key={index} sessionId={sessionId} agent={create?.agent ?? agent} />
           ))}
           <button
             type="button"

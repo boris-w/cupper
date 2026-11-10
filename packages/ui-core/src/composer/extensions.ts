@@ -9,7 +9,8 @@ export interface ComposerExtension {
   /** Left: attachments, permissions; right: model and effort, before the send button. */
   side: "left" | "right";
   order: number;
-  Component: ComponentType<{ sessionId?: string }>;
+  /** `agent`: the session's, or on the new session page the one picked. */
+  Component: ComponentType<{ sessionId?: string; agent: string }>;
 }
 
 const found = import.meta.glob<ComposerExtension>("./extensions/*.tsx", {

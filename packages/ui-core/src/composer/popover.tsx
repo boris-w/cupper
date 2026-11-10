@@ -8,9 +8,9 @@ import { use, useEffect, useRef, useState } from "react";
 import { OverlayContext } from "./extensions";
 import { composing } from "./keys";
 
-/** The list's frame, above the composer. */
+/** The list's frame, above the composer; each list sets its height. */
 export const POPOVER =
-  "absolute inset-x-0 bottom-2 z-20 max-h-72 overflow-y-auto rounded-2xl bg-surface-elevated p-1 text-sm shadow-card";
+  "absolute inset-x-0 bottom-2 z-20 overflow-y-auto rounded-2xl bg-surface-elevated p-1 text-sm shadow-card";
 /** A row of the list; `aria-selected` marks the picked one. */
 export const OPTION = "truncate rounded-lg px-2.5 py-1.5 text-fg-secondary aria-selected:bg-hover";
 
