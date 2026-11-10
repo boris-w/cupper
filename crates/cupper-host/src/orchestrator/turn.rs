@@ -105,7 +105,18 @@ pub struct TurnMachine {
 #[derive(Debug)]
 struct Steering {
     turn_id: TurnId,
-    send: SendRequest,
+    from: SteerFrom,
+}
+
+/// What a steer carries: a message sent with `mode: steer`, or a queued
+/// message (`session/queue_edit`), which stays in the queue until it goes in.
+#[derive(Debug)]
+enum SteerFrom {
+    Send(SendRequest),
+    Queued {
+        queue_id: QueueId,
+        content: PromptContent,
+    },
 }
 
 #[derive(Debug)]
@@ -117,8 +128,14 @@ struct Late {
 #[derive(Debug)]
 struct SteerTurn {
     message: Message,
-    /// The `send` still waits for its reply.
-    reply: bool,
+    /// The command that still waits for its reply, if one does.
+    reply: Option<Waiting>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Waiting {
+    Send,
+    QueueEdit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -356,13 +373,24 @@ pub enum SteerFallback {
 #[derive(Debug, Clone, PartialEq)]
 pub struct QueueEdited {
     pub version: u64,
-    /// Set when the edit was a steer, which stays in the queue.
-    pub steer_fallback: Option<SteerFallback>,
+    /// What became of a steer: `Steered` into a turn, or `Queued` with the
+    /// reason, the message in place.
+    pub steer: Option<Sent>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[error("the interrupt names a turn that is not running")]
 pub struct TurnMismatch;
+
+/// A queued message's steer that did not go in: it stays where it is.
+fn stayed(fallback: Option<SteerFallback>) -> Sent {
+    Sent {
+        disposition: Disposition::Queued,
+        turn_id: None,
+        queue_id: None,
+        fallback,
+    }
+}
 
 struct Outcome {
     status: TurnStatus,
@@ -525,22 +553,59 @@ impl TurnMachine {
             }
             return self.start_sent(send, None, now, out);
         }
+        let named = send.expected_turn.as_ref() == self.turn.as_ref().map(|turn| &turn.id);
         let fallback = match send.mode {
             SendMode::Queue => None,
-            SendMode::Steer => match self.unsteerable(&send) {
-                None => return self.steer(send, now, out),
+            SendMode::Steer => match self.unsteerable(named) {
+                None => return self.steer(SteerFrom::Send(send), now, out),
                 reason => reason,
             },
         };
         self.enqueue(send, fallback, now, out);
     }
 
-    /// Why `send` cannot steer the running turn now, if it cannot.
-    fn unsteerable(&self, send: &SendRequest) -> Option<SteerFallback> {
+    /// `session/queue_edit`: a replace at once. A steer of a queued message
+    /// follows `send`'s rules but names no turn; its reply comes with the
+    /// agent's answer, and the message stays in place until it goes in.
+    fn queue_edit(
+        &mut self,
+        expected_version: u64,
+        ops: &[QueueOp],
+        now: Now,
+        out: &mut Vec<Action>,
+    ) {
+        let edited = match self.queue.edit(expected_version, ops) {
+            Ok(update) => update,
+            Err(err) => return out.push(Action::Reply(Reply::QueueEdit(Err(err)))),
+        };
+        out.extend(edited.map(|update| Action::Event(EventBody::QueueUpdated(update))));
+        let [QueueOp::Steer { queue_id }] = ops else {
+            return self.edited(None, out);
+        };
+        match (self.unsteerable(true), self.queue.entry(queue_id)) {
+            (None, Some(entry)) => {
+                let (queue_id, content) = (queue_id.clone(), entry.content.clone());
+                self.steer(SteerFrom::Queued { queue_id, content }, now, out);
+            }
+            (fallback, _) => self.edited(Some(stayed(fallback)), out),
+        }
+    }
+
+    fn edited(&self, steer: Option<Sent>, out: &mut Vec<Action>) {
+        let version = self.queue.version();
+        out.push(Action::Reply(Reply::QueueEdit(Ok(QueueEdited {
+            version,
+            steer,
+        }))));
+    }
+
+    /// Why a steer cannot go into the running turn now, if it cannot;
+    /// `named`: whether it names that turn.
+    fn unsteerable(&self, named: bool) -> Option<SteerFallback> {
         let turn = self.turn.as_ref();
         if self.steerable == Some(false) {
             Some(SteerFallback::Unsupported)
-        } else if send.expected_turn.as_ref() != turn.map(|turn| &turn.id) {
+        } else if !named {
             Some(SteerFallback::TurnMismatch)
         } else if !matches!(turn.map(|turn| &turn.phase), Some(Phase::Prompting(_))) {
             Some(SteerFallback::NotPrompting)
@@ -553,58 +618,114 @@ impl TurnMachine {
 
     /// Sends the steer; its reply comes with the agent's answer, or with
     /// its deadline.
-    fn steer(&mut self, send: SendRequest, now: Now, out: &mut Vec<Action>) {
+    fn steer(&mut self, from: SteerFrom, now: Now, out: &mut Vec<Action>) {
         let (Some(turn), Link::Attached { session, .. }) = (&self.turn, &self.link) else {
-            return drop(self.enqueue(send, Some(SteerFallback::NotPrompting), now, out));
+            return drop(self.not_steered(from, SteerFallback::NotPrompting, now, out));
         };
-        let (session, content) = (session.clone(), send.content.clone());
+        let content = match &from {
+            SteerFrom::Send(send) => send.content.clone(),
+            SteerFrom::Queued { content, .. } => content.clone(),
+        };
+        let session = session.clone();
         out.push(Action::Driver(DriverCommand::Steer { session, content }));
         out.push(Action::Timer(TimerRequest::Set {
             key: TurnTimer::Steer(turn.id.clone()),
             at: now.mono + self.steer_for,
         }));
         let turn_id = turn.id.clone();
-        self.steering = Some(Steering { turn_id, send });
+        self.steering = Some(Steering { turn_id, from });
+    }
+
+    /// A steer that did not go in: a sent message is queued, a queued one
+    /// stays where it is; the reply says why. Returns the sent message's
+    /// queue entry.
+    fn not_steered(
+        &mut self,
+        from: SteerFrom,
+        fallback: SteerFallback,
+        now: Now,
+        out: &mut Vec<Action>,
+    ) -> Option<QueueId> {
+        match from {
+            SteerFrom::Send(send) => self.enqueue(send, Some(fallback), now, out),
+            SteerFrom::Queued { queue_id, .. } => {
+                self.edited(Some(stayed(Some(fallback))), out);
+                Some(queue_id)
+            }
+        }
     }
 
     /// The agent's answer to the steer in flight, `None` for a failure; or
     /// to one given up on, whose message may still be in the queue.
     fn steered(&mut self, outcome: Option<SteerOutcome>, now: Now, out: &mut Vec<Action>) {
-        let Some(Steering { turn_id, send }) = self.steering.take() else {
+        let Some(Steering { turn_id, from }) = self.steering.take() else {
             return self.steered_late(outcome, now, out);
         };
         out.push(Action::Timer(TimerRequest::Cancel(TurnTimer::Steer(
             turn_id.clone(),
         ))));
-        let message = Message {
-            content: send.content.clone(),
-            queue_id: None,
-            reply_to: send.reply_to.clone(),
-        };
         let fallback = match outcome {
-            Some(SteerOutcome::Injected) => {
-                self.user_message(&turn_id, &message, true, now, out);
-                out.push(Action::Reply(Reply::Send(Ok(Sent {
-                    disposition: Disposition::Steered,
-                    turn_id: Some(turn_id),
-                    queue_id: None,
-                    fallback: None,
-                }))));
-                None
-            }
-            Some(SteerOutcome::StartedNewTurn) => {
-                let reply = true;
-                self.steer_turn = Some(SteerTurn { message, reply });
-                None
-            }
+            Some(SteerOutcome::Injected | SteerOutcome::StartedNewTurn) => None,
             Some(SteerOutcome::PromptRequired) => Some(SteerFallback::PromptRequired),
             Some(SteerOutcome::Unsupported) => Some(SteerFallback::Unsupported),
             None => Some(SteerFallback::AgentError),
         };
-        if fallback.is_some() {
-            self.enqueue(send, fallback, now, out);
+        if let Some(fallback) = fallback {
+            self.not_steered(from, fallback, now, out);
+            return self.try_complete(now, out);
+        }
+        // In: a queued message leaves the queue now.
+        let (message, waiting) = match from {
+            SteerFrom::Send(send) => {
+                let (content, reply_to) = (send.content, send.reply_to);
+                (
+                    Message {
+                        content,
+                        queue_id: None,
+                        reply_to,
+                    },
+                    Waiting::Send,
+                )
+            }
+            SteerFrom::Queued { queue_id, content } => {
+                let taken = self.queue.take(&queue_id);
+                let reply_to = taken.and_then(|(entry, update)| {
+                    out.push(Action::Event(EventBody::QueueUpdated(update)));
+                    entry.reply_to
+                });
+                let queue_id = Some(queue_id);
+                (
+                    Message {
+                        content,
+                        queue_id,
+                        reply_to,
+                    },
+                    Waiting::QueueEdit,
+                )
+            }
+        };
+        if outcome == Some(SteerOutcome::Injected) {
+            self.user_message(&turn_id, &message, true, now, out);
+            self.reply_steered(waiting, turn_id, out);
+        } else {
+            let reply = Some(waiting);
+            self.steer_turn = Some(SteerTurn { message, reply });
         }
         self.try_complete(now, out);
+    }
+
+    /// The reply to the command whose message went into `turn_id`.
+    fn reply_steered(&self, waiting: Waiting, turn_id: TurnId, out: &mut Vec<Action>) {
+        let sent = Sent {
+            disposition: Disposition::Steered,
+            turn_id: Some(turn_id),
+            queue_id: None,
+            fallback: None,
+        };
+        match waiting {
+            Waiting::Send => out.push(Action::Reply(Reply::Send(Ok(sent)))),
+            Waiting::QueueEdit => self.edited(Some(sent), out),
+        }
     }
 
     /// A late `Injected` or `StartedNewTurn` takes the message out of the
@@ -636,8 +757,10 @@ impl TurnMachine {
         if outcome == Some(SteerOutcome::Injected) {
             return self.user_message(&late.turn_id, &message, true, now, out);
         }
-        let reply = false;
-        self.steer_turn = Some(SteerTurn { message, reply });
+        self.steer_turn = Some(SteerTurn {
+            message,
+            reply: None,
+        });
         self.start_steer_turn(now, out);
     }
 
@@ -646,7 +769,7 @@ impl TurnMachine {
         let Some(steering) = self.steering.take_if(|s| s.turn_id == turn_id) else {
             return;
         };
-        let queued = self.enqueue(steering.send, Some(SteerFallback::Timeout), now, out);
+        let queued = self.not_steered(steering.from, SteerFallback::Timeout, now, out);
         self.late = queued.map(|queue_id| Late { turn_id, queue_id });
         self.try_complete(now, out);
     }
@@ -660,13 +783,8 @@ impl TurnMachine {
             return;
         };
         let turn_id = self.start(TurnOrigin::SteerNewTurn, Some(message), now, out);
-        if reply {
-            out.push(Action::Reply(Reply::Send(Ok(Sent {
-                disposition: Disposition::Steered,
-                turn_id: Some(turn_id),
-                queue_id: None,
-                fallback: None,
-            }))));
+        if let Some(waiting) = reply {
+            self.reply_steered(waiting, turn_id, out);
         }
     }
 
@@ -1246,17 +1364,7 @@ impl Core for TurnMachine {
             Input::QueueEdit {
                 expected_version,
                 ops,
-            } => {
-                let steer = matches!(ops.as_slice(), [QueueOp::Steer { .. }]);
-                let edited = self.queue.edit(expected_version, &ops).map(|update| {
-                    out.extend(update.map(|u| Action::Event(EventBody::QueueUpdated(u))));
-                    QueueEdited {
-                        version: self.queue.version(),
-                        steer_fallback: steer.then_some(SteerFallback::Unsupported),
-                    }
-                });
-                out.push(Action::Reply(Reply::QueueEdit(edited)));
-            }
+            } => self.queue_edit(expected_version, &ops, now, &mut out),
             Input::Attached(result) => self.attached(result, now, &mut out),
             Input::Snapshot(snapshot) => self.snapshot(snapshot, now, &mut out),
             Input::Driver(DriverEvent::PromptDone {
@@ -1685,5 +1793,112 @@ mod tests {
             reclaimed: false,
         }));
         assert_eq!(sent(&exited).1, Some(SteerFallback::AgentError));
+    }
+
+    /// The version and id of the entry `actions` queued last.
+    fn queued_entry(actions: &[Action]) -> (u64, QueueId) {
+        let update = actions.iter().rev().find_map(|action| match action {
+            Action::Event(EventBody::QueueUpdated(update)) => Some(update),
+            _ => None,
+        });
+        let update = update.expect("a queue.updated");
+        let entry = update.entries.last().expect("an entry");
+        (update.version, entry.queue_id.clone())
+    }
+
+    fn steer_queued(version: u64, queue_id: &QueueId) -> Input {
+        let ops = vec![QueueOp::Steer {
+            queue_id: queue_id.clone(),
+        }];
+        Input::QueueEdit {
+            expected_version: version,
+            ops,
+        }
+    }
+
+    /// The queue edit's steer among `actions`: its disposition, reason and turn.
+    fn edited(actions: &[Action]) -> (Disposition, Option<SteerFallback>, Option<TurnId>) {
+        let steer = actions.iter().find_map(|action| match action {
+            Action::Reply(Reply::QueueEdit(Ok(QueueEdited { steer, .. }))) => steer.clone(),
+            _ => None,
+        });
+        let steer = steer.expect("a queue edit's steer");
+        (steer.disposition, steer.fallback, steer.turn_id)
+    }
+
+    #[test]
+    fn turn_machine_queue_steer_takes_the_message_out_once_it_went_in() {
+        let mut m = machine();
+        let turn = prompting(&mut m);
+        let (version, queue_id) = queued_entry(&m.input(send("q", SendMode::Queue)));
+        let out = m.input(steer_queued(version, &queue_id));
+        // In flight: the message is still queued, the reply waits.
+        assert_eq!(kinds(&out), ["steer", "timer"]);
+        let pending = m.input(steer_queued(version, &queue_id));
+        let stays = (Disposition::Queued, Some(SteerFallback::SteerPending), None);
+        assert_eq!((kinds(&pending), edited(&pending)), (vec!["reply"], stays));
+        assert_eq!(
+            sent(&m.input(steer("s", &turn))).1,
+            Some(SteerFallback::SteerPending)
+        );
+
+        let injected = m.input(answer(SteerOutcome::Injected));
+        assert_eq!(
+            kinds(&injected),
+            [
+                "untimer",
+                "queue.updated",
+                "item.started",
+                "item.completed",
+                "reply"
+            ]
+        );
+        assert!(steered_into(&injected, &turn));
+        assert_eq!(edited(&injected), (Disposition::Steered, None, Some(turn)));
+        let after = injected.iter().find_map(|action| match action {
+            Action::Event(EventBody::QueueUpdated(update)) => Some(update),
+            _ => None,
+        });
+        let after = after.expect("a queue.updated");
+        assert!(after.entries.iter().all(|entry| entry.queue_id != queue_id));
+    }
+
+    #[test]
+    fn turn_machine_queue_steer_that_does_not_go_in_leaves_the_message_in_place() {
+        let mut m = machine();
+        let turn = started(&m.input(send("a", SendMode::Queue)));
+        m.input(attached_steering(1));
+        let (version, queue_id) = queued_entry(&m.input(send("q", SendMode::Queue)));
+        // Preparing: no steer goes out.
+        let early = m.input(steer_queued(version, &queue_id));
+        let not_prompting = (Disposition::Queued, Some(SteerFallback::NotPrompting), None);
+        assert_eq!(
+            (kinds(&early), edited(&early)),
+            (vec!["reply"], not_prompting)
+        );
+        m.input(snapshot(&turn, SnapshotPhase::Start));
+
+        m.input(steer_queued(version, &queue_id));
+        let failed = m.input(Input::Driver(DriverEvent::SteerFailed(agent_error())));
+        let agent_error = (Disposition::Queued, Some(SteerFallback::AgentError), None);
+        assert_eq!(
+            (kinds(&failed), edited(&failed)),
+            (vec!["untimer", "reply"], agent_error)
+        );
+
+        // Past its deadline it stays too; a late `Injected` still takes it out.
+        m.input(steer_queued(version, &queue_id));
+        let expired = m.input(Input::Expired(TurnTimer::Steer(turn.clone())));
+        let timeout = (Disposition::Queued, Some(SteerFallback::Timeout), None);
+        assert_eq!(
+            (kinds(&expired), edited(&expired)),
+            (vec!["reply"], timeout)
+        );
+        let late = m.input(answer(SteerOutcome::Injected));
+        assert_eq!(
+            kinds(&late),
+            ["queue.updated", "item.started", "item.completed"]
+        );
+        assert!(steered_into(&late, &turn));
     }
 }
