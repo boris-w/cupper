@@ -15,7 +15,7 @@ Cupper.app/Contents/
 │   ├── cupper                  cupper-cli（dev.cupper.cli）
 │   └── CupperHost.app/         会话宿主（ADR-01）
 │       └── Contents/
-│           ├── Info.plist      dev.cupper.app.host；LSUIElement；同样不写上述用途说明
+│           ├── Info.plist      dev.cupper.app.host；LSUIElement；CFBundleDisplayName、CFBundleName 写构建种类的显示名称（5.7.9），CFBundleIconFile 指向 Resources 里的图标；同样不写上述用途说明
 │           ├── MacOS/cupper-host        运行时清单在编译期内嵌
 │           ├── Helpers/node             已用 cupper 身份重签的 Node（dev.cupper.runtime.node），随 App 一起公证
 │           └── Resources/runtime/
@@ -35,6 +35,7 @@ Cupper.app/Contents/
 - 只出 arm64 构建（Q6，已定（2026-10-16））。以后需要 x64 时只多一个构建目标，不涉及兼容代码。
 - **CLI 放在 `Contents/Helpers/cupper`**：按 Apple 的 bundle 布局，可执行代码不放 `Resources`（桌面建议 #16）。设置页提供"安装命令行工具"，在用户选择的目录里建符号链接。
 - **Node 作为普通 Mach-O 放在 `CupperHost.app/Contents/Helpers/node`**（U-R3，已定（2026-10-16），见 `docs/meetings/2026-10-16-gate-design-decisions/minutes.md`；即原待定问题 Q3 的后备方案）：随 App 一起公证，公证覆盖到 Node；安装时复制到运行时目录并核对 cdhash，不再需要解 tar.xz。代价是下载包大一些，安装后多占约 100 MB（估计，未核实）。
+- **宿主带自己的名称和图标**（T101，T150 落实）：通知、授权框和系统设置只用宿主 bundle 自己的显示名称和图标，不取外层 App 的，所以把 UI 的 icns 复制进 `CupperHost.app/Contents/Resources`。这两项只在第一次登记时取，之后改了也不变，因此第一个会申请通知授权的构建（自用构建）就要写对。宿主的 Info.plist 不写 `CFBundleURLTypes`。
 - **App 里不出现** `@anthropic-ai/claude-agent-sdk` 的任何部分和 Claude Code 二进制（ADR-11 红线）；claude-agent-acp 在用户机器上从 npm 安装并打包（ADR-08）。
 - codex-acp 是 Apache-2.0，按 ADR-11 可以随 App 分发，所以直接随包携带，Codex 不需要联网安装（Q4 定案，纪要 D2）。
 
