@@ -20,3 +20,10 @@
 在停止线 300 以内，开工。
 
 界面这边已经满足"导航不聚焦请求面板"：会话页按会话 ID 重新挂载（`key={route.sessionId}`），新挂载时 RP-3 记的"焦点在输入框里"是 false，所以面板出现时是 `manual`。E2E 会验证这一点。
+
+## 做的时候的几点
+
+- **preload 要先存下导航**：主进程在文档加载完之后才发，但界面要等 `init()` 回来才渲染，`RouterProvider` 订阅 `onNavigate` 可能更晚；先到的目标留给第一个订阅者。ShellAPI 的接口不变。
+- **`ui/navigate` 的参数用和深链接同一个校验**：宿主可信，但主进程不靠这一点。
+- **E2E 没在本机跑**：要先构建 e2e 版 App，它现在带 `cupper-e2e` 的 URL scheme，本机启动时 LaunchServices 会记下它；守则不改本机的登记，所以只在 runner 上跑。E2E-notification-navigate 登记为 nightly，PR 的 e2e 作业只跑 `@smoke`，由 nightly 和 e2e-repeat 覆盖。
+- **规模**：`cargo xtask size` +265 −5（停止线 300）：`apps/desktop` +208（`deeplink.ts`、单元测试、`index.ts`、preload、两份配置），`tools/e2e` +57。
