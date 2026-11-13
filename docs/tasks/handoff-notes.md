@@ -609,3 +609,9 @@
 | 在本机跑 e2e 的人 | T254 起 e2e 版 App 带 `cupper-e2e` 的 URL scheme，本机一启动 LaunchServices 就会记下它；影响不大，但 e2e 尽量在 runner 上跑 | T254 |
 | T107 | `apps/desktop/src/main/window.ts` 的 `dropVisibilityListenersOnClose` 是为 Electron 44 自带的可见性监听加的（窗口销毁后的遮挡变化会让它抛 "Object has been destroyed"）。升到 45 时查 electron/electron#53971 有没有回合到所用的 45.x：回合了就删掉这个函数、调用处、单元测试和注释 | T260 |
 | 要连跑 UNIT-views-differential 的人 | test-repeat 的 vitest 模式不会生成 `CUPPER_VIEW_CASES`，差分测试在里面只会跳过，workflow 把跳过算作失败；连跑要派 nightly `job=differential` | T260 |
+| T153 | 菜单里有 `next_needs_action`（Command+Alt+A），ui-core 的命令处理里没有它；T103 的场景 7 因此测不了"下一个需要处理的会话" | T103 |
+| T155 | 测量助手在 `tools/e2e/src/perf.ts`（T103 从 gate.spec 搬出），场景脚本可参考 `spikes/T103-sp6-render/`（seed 的请求 id、程序滚动要先发 wheel 事件、`fs_usage` 以 root 运行要用 `sudo -n pkill` 停）；`cupper:ready` 由 T262 补上 | T103 |
+| T155 | 热启动在 e2e 构建上测不了：`dev_key` 只认拉起宿主的进程，App 退出后宿主孤立退出（5.8.1），要等 Q35 或发布构建；场景 8 在 Playwright 下页面一直是 `visible`，检测不到遮挡 | T103 |
+| T155 | 超出预算的场景顺带录 Chromium trace（主进程 `contentTracing`，写进 `results/`）；Electron 的 `percentCPUUsage` 口径要先核实（T103 里主进程约 0.6，偏低） | T103 |
+| T155 或 T206 的后续 | T206 的秒级停顿在单份负载下没有复现（场景 3 最长事件间隔 114 ms，fullfsync 最长 26 ms）；要验证就用 e2e-repeat 一次 3 份并开 `fs_usage` | T103 |
+| T159 | 剖析时先看每帧的 JS 时间是不是随消息长度增长（T220 的推测：几 MB 不换行的消息被 streamdown 整块反复渲染）；T103 场景 2 的 1.3 MB 消息流式 100 s，帧时间 p95 281 ms、输出延迟 p95 1.25 s、渲染进程 591 MB | T103 |
