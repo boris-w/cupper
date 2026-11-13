@@ -1,9 +1,11 @@
-// SP-6 scenario 1 (T103; design 5.9.6, 5.9.7): 30 cold and 30 warm starts
-// with 200 sessions seeded, one of them of 1,000 items. Cold: the app and
-// the host both stopped, the host started by the app; warm: the host left
-// running, the app alone ended and started again. The system's file caches
-// are not cleared. The very first start of the build, with the system's
-// check of a new executable, counts apart.
+// SP-6 scenario 1 (T103; design 5.9.6, 5.9.7): 30 cold starts with 200
+// sessions seeded, one of them of 1,000 items: the app and the host both
+// stopped, the host started by the app. The system's file caches are not
+// cleared. The very first start of the build, with the system's check of a
+// new executable, counts apart. Warm starts cannot be had on an e2e build:
+// its host takes `dev_key` only from the process that started it, and once
+// that app is gone it ends (design 5.8.1); the first warm start waited out
+// its 120 s (spike-run 43410584669).
 //
 // The product has no `cupper:ready` mark and opens on the new session page,
 // never on the last session (a deviation from 5.9.6, in the report): ready
@@ -47,46 +49,27 @@ const gone = (pid: number) => {
   }
 };
 
-/** Ends the app without its quit steps, which would stop the host too (`app.exit`). */
-async function endAppOnly(cupper: Cupper) {
-  const closed = cupper.app.waitForEvent("close");
-  await cupper.app.evaluate(({ app }) => void setImmediate(() => app.exit(0)));
-  await closed;
-}
-
-test("SP-6 scenario 1: cold and warm starts to ready", async ({ cupper }) => {
+test("SP-6 scenario 1: cold starts to ready", async ({ cupper }) => {
   const first = await start(cupper);
   const made = await session(cupper, "say hi");
   await untilEvent(cupper, made, (event) => event.type === "turn.completed");
   const [big] = await seed(cupper, { sessions: 1, turns: 20, items_per_turn: 50 });
   for (let n = 0; n < 4; n++) await seed(cupper, { sessions: 50, turns: 2, items_per_turn: 10 });
   expect(big).toBeDefined();
-  const runs: Record<"cold" | "warm", { ready: number[]; open: number[] }> = {
-    cold: { ready: [], open: [] },
-    warm: { ready: [], open: [] },
-  };
+  const runs: { ready: number[]; open: number[] } = { ready: [], open: [] };
   let host = first.host;
-  for (const kind of ["cold", "warm"] as const) {
-    for (let n = 0; n < RUNS; n++) {
-      if (kind === "cold") {
-        await cupper.quitWithoutAsking();
-        await expect.poll(() => gone(host), { timeout: 30_000 }).toBe(true);
-      } else {
-        await endAppOnly(cupper);
-      }
-      const started = await start(cupper);
-      if (kind === "warm") expect(started.host, "the same host").toBe(host);
-      host = started.host;
-      runs[kind].ready.push(started.ms);
-      runs[kind].open.push(await openTimed(cupper, big as string));
-    }
+  for (let n = 0; n < RUNS; n++) {
+    await cupper.quitWithoutAsking();
+    await expect.poll(() => gone(host), { timeout: 30_000 }).toBe(true);
+    const started = await start(cupper);
+    host = started.host;
+    runs.ready.push(started.ms);
+    runs.open.push(await openTimed(cupper, big as string));
   }
   record("1-startup", {
     first_start_ms: first.ms,
-    cold_ready: stats(runs.cold.ready),
-    warm_ready: stats(runs.warm.ready),
-    cold_open_1000: stats(runs.cold.open),
-    warm_open_1000: stats(runs.warm.open),
+    cold_ready: stats(runs.ready),
+    cold_open_1000: stats(runs.open),
     samples: runs,
   });
 });

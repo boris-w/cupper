@@ -23,7 +23,8 @@ export SP6_RESULTS="$here/results"
 { sysctl -n machdep.cpu.brand_string hw.ncpu hw.memsize; sw_vers; } > "$here/results/machine.txt"
 status=0
 for n in "$@"; do
+  # A folder of its own: a Playwright run empties its output folder first.
   pnpm --dir "$repo/tools/e2e" exec playwright test -c "$here/playwright.config.ts" \
-    "$here/$(spec "$n").spec.ts" || status=1
+    --output "$here/results/test-results-$n" "$here/$(spec "$n").spec.ts" || status=1
 done
 exit "$status"
