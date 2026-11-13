@@ -30,13 +30,13 @@ export class ScrollKeeper {
     if (this.#intent === Infinity) this.#intent = now;
   }
 
-  /** The app jumped away from the bottom (a row, the plan): stop following. */
   /** The user went back to the end, by the ↓ button or by sending: follow it again (T256). */
   follow(): void {
     this.stuck = true;
     this.#intent = -Infinity;
   }
 
+  /** The app jumped away from the bottom (a row, the plan): stop following. */
   leave(): void {
     this.stuck = false;
   }
