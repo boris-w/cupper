@@ -48,8 +48,9 @@ export async function putBlob(
  * Under Playwright, Chromium keeps the page visible and its frames running
  * even covered, minimized or hidden (T078), so the frames are stopped by
  * hand: what a hidden page loses that the store cares about (design 5.7.1).
+ * SP-6's scenario 8 keeps the frames, to see what Chromium itself does.
  */
-export async function cover(cupper: Cupper) {
+export async function cover(cupper: Cupper, { stopFrames = true } = {}) {
   const bounds = await (
     await cupper.app.browserWindow(cupper.window)
   ).evaluate((w) => w.getBounds());
@@ -64,6 +65,7 @@ export async function cover(cupper: Cupper) {
     });
     cover.showInactive();
   }, bounds);
+  if (!stopFrames) return;
   await cupper.window.evaluate(() => {
     window.requestAnimationFrame = () => 0;
   });
