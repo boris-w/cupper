@@ -8,6 +8,7 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 import type { Cupper } from "../../tools/e2e/src/fixture";
 import { harness } from "../../tools/e2e/src/perf";
@@ -105,6 +106,22 @@ export async function seed(
   peer.socket.end();
   if (reply.error) throw new Error(`test/seed: ${JSON.stringify(reply.error)}`);
   return (await sessionIds(cupper)).filter((id) => !before.has(id));
+}
+
+/** The events of `stream` in `host.db`: seq, type, the host's wall clock time and data. */
+export function stored(cupper: Cupper, stream: string) {
+  const db = new DatabaseSync(join(cupper.dataDir, "host.db"), { readOnly: true });
+  try {
+    const rows = db
+      .prepare("SELECT json FROM events WHERE stream = ? ORDER BY seq")
+      .all(stream) as { json: string }[];
+    return rows.map(
+      ({ json }) =>
+        JSON.parse(json) as { seq: number; type: string; ts: number; data: Record<string, unknown> },
+    );
+  } finally {
+    db.close();
+  }
 }
 
 /** Every session's id, as the CLI lists them. */
