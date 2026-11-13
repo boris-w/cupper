@@ -744,6 +744,12 @@ impl IndexActor {
                         written.map_err(|err| RpcError::app(ErrorCode::Internal, err.to_string()));
                 }
                 Action::Timer(request) => self.timers.apply(timer(request, Timer::Status)),
+                Action::Foreground => {
+                    let mail = self.mail.clone();
+                    self.deps.notifier.recheck(move |auth| {
+                        let _ = mail.send(Mail::NotificationAuth(auth));
+                    });
+                }
             }
         }
         self.alarm.follow(&self.timers);

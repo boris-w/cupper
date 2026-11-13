@@ -414,6 +414,48 @@ async fn it_notifier_record_copy_settings_presence_and_authorization() {
     assert_eq!(auth, Some(NotificationAuth::Authorized));
 }
 
+/// IT-notifier-auth-recheck (design 5.2.9, rule 5): the authorization the
+/// notifier reported at start is read again when a desktop UI comes from the
+/// background to the foreground, as back from System Settings, and
+/// `host.updated` follows; not for a CLI, a desktop UI in the background, or
+/// one already in front that only shows another session.
+#[tokio::test]
+async fn it_notifier_auth_recheck_when_a_desktop_ui_comes_to_the_foreground() {
+    let fx = Fx::new("auth-recheck");
+    fx.notifier.set_auth(NotificationAuth::Denied);
+    let index = fx.start().await;
+    let reported = index.clone();
+    fx.notifier
+        .authorize(move |auth| reported.notification_auth(auth));
+    let [one, two] = [1, 2].map(SessionId::from_uuid);
+    let auth = || async {
+        fx.flush().await;
+        fx.view()
+            .await
+            .0
+            .host
+            .and_then(|host| host.notification_auth)
+    };
+    assert_eq!(auth().await, Some(NotificationAuth::Denied));
+
+    // The user allows notifications in System Settings.
+    fx.notifier.set_auth(NotificationAuth::Authorized);
+    presence(&index, 2, PrincipalKind::Cli, (true, &one)).await;
+    presence(&index, 1, PrincipalKind::DesktopUi, (false, &one)).await;
+    assert_eq!(
+        auth().await,
+        Some(NotificationAuth::Denied),
+        "not yet read again"
+    );
+    presence(&index, 1, PrincipalKind::DesktopUi, (true, &one)).await;
+    assert_eq!(auth().await, Some(NotificationAuth::Authorized));
+
+    // Already in front, another session: not read again.
+    fx.notifier.set_auth(NotificationAuth::Denied);
+    presence(&index, 1, PrincipalKind::DesktopUi, (true, &two)).await;
+    assert_eq!(auth().await, Some(NotificationAuth::Authorized));
+}
+
 /// IT-orch-trust-gating's other half: a session's rescan reaches the index,
 /// which records a trusted project whose configuration changed as `stale`.
 #[tokio::test]

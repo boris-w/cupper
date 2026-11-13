@@ -78,6 +78,15 @@ fn copy(reason: Reason, language: Language) -> (&'static str, &'static str) {
     }
 }
 
+/// The protocol's name for the system's authorization.
+fn protocol(auth: cupper_sys::NotificationAuth) -> NotificationAuth {
+    match auth {
+        cupper_sys::NotificationAuth::NotDetermined => NotificationAuth::NotDetermined,
+        cupper_sys::NotificationAuth::Denied => NotificationAuth::Denied,
+        cupper_sys::NotificationAuth::Authorized => NotificationAuth::Authorized,
+    }
+}
+
 /// Whether the settings let `reason` notify: a failed turn is an error.
 fn enabled(settings: &Settings, reason: Reason) -> bool {
     match reason {
@@ -90,7 +99,12 @@ fn enabled(settings: &Settings, reason: Reason) -> bool {
 #[derive(Debug)]
 enum Backend {
     System,
-    Record(Mutex<Vec<Notice>>, Mutex<Vec<Handed>>),
+    /// What would be posted, handed to the app, and the authorization.
+    Record(
+        Mutex<Vec<Notice>>,
+        Mutex<Vec<Handed>>,
+        Mutex<NotificationAuth>,
+    ),
     Off,
 }
 
@@ -111,7 +125,8 @@ impl Notifier {
 
     /// Records what it would post and hand to the app (test-harness builds).
     pub fn record(language: Language, outer: Option<Outer>) -> Self {
-        let backend = Backend::Record(Mutex::default(), Mutex::default());
+        let authorized = Mutex::new(NotificationAuth::Authorized);
+        let backend = Backend::Record(Mutex::default(), Mutex::default(), authorized);
         Self(Arc::new((backend, language, outer)))
     }
 
@@ -158,7 +173,7 @@ impl Notifier {
                     tracing::warn!("the system took no notification: {err}");
                 }
             }),
-            Backend::Record(notices, _) => notices
+            Backend::Record(notices, ..) => notices
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .push(notice),
@@ -170,11 +185,6 @@ impl Notifier {
     /// asked, and reports it (design 5.2.9, rule 5). A user who turned it
     /// down is not asked again; the system would not ask anyway (T101).
     pub fn authorize(&self, report: impl FnOnce(NotificationAuth) + Send + 'static) {
-        let protocol = |auth| match auth {
-            cupper_sys::NotificationAuth::NotDetermined => NotificationAuth::NotDetermined,
-            cupper_sys::NotificationAuth::Denied => NotificationAuth::Denied,
-            cupper_sys::NotificationAuth::Authorized => NotificationAuth::Authorized,
-        };
         match &self.0.0 {
             Backend::System => cupper_sys::notification_authorization(move |auth| {
                 if auth != cupper_sys::NotificationAuth::NotDetermined {
@@ -182,8 +192,29 @@ impl Notifier {
                 }
                 cupper_sys::request_notification_authorization(move |auth| report(protocol(auth)));
             }),
-            Backend::Record(..) => report(NotificationAuth::Authorized),
+            _ => self.recheck(report),
+        }
+    }
+
+    /// Reads the authorization again and reports it, never asking: a desktop
+    /// UI came to the foreground, as back from System Settings (design 5.2.9).
+    pub fn recheck(&self, report: impl FnOnce(NotificationAuth) + Send + 'static) {
+        match &self.0.0 {
+            Backend::System => {
+                cupper_sys::notification_authorization(move |auth| report(protocol(auth)))
+            }
+            Backend::Record(.., auth) => {
+                report(auth.lock().unwrap_or_else(PoisonError::into_inner).clone())
+            }
             Backend::Off => {}
+        }
+    }
+
+    /// A recording notifier's authorization, as the user sets it.
+    #[cfg(test)]
+    pub fn set_auth(&self, to: NotificationAuth) {
+        if let Backend::Record(.., auth) = &self.0.0 {
+            *auth.lock().unwrap() = to;
         }
     }
 
@@ -243,7 +274,7 @@ impl Notifier {
             (Backend::System, Handed::Opened { url, app }) => {
                 cupper_sys::open_url_with_app(&url, &app, done)
             }
-            (Backend::Record(_, handed_all), handed) => handed_all
+            (Backend::Record(_, handed_all, _), handed) => handed_all
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .push(handed),
@@ -254,7 +285,7 @@ impl Notifier {
     /// The click on recorded notification `id`, as the system would report
     /// it (`test/notification_click`).
     pub fn recorded_click(&self, id: &IntentId) -> Option<Click> {
-        let Backend::Record(notices, _) = &self.0.0 else {
+        let Backend::Record(notices, ..) = &self.0.0 else {
             return None;
         };
         let notices = notices.lock().unwrap_or_else(PoisonError::into_inner);
@@ -271,7 +302,7 @@ impl Notifier {
     #[cfg(test)]
     pub fn recorded(&self) -> Vec<Notice> {
         match &self.0.0 {
-            Backend::Record(notices, _) => notices.lock().unwrap().clone(),
+            Backend::Record(notices, ..) => notices.lock().unwrap().clone(),
             _ => Vec::new(),
         }
     }
@@ -279,7 +310,7 @@ impl Notifier {
     #[cfg(test)]
     pub fn handed(&self) -> Vec<Handed> {
         match &self.0.0 {
-            Backend::Record(_, handed) => handed.lock().unwrap().clone(),
+            Backend::Record(_, handed, _) => handed.lock().unwrap().clone(),
             _ => Vec::new(),
         }
     }

@@ -8,14 +8,16 @@
 //!   else `idle`.
 //! - The read mark only moves forward, and never past the last turn end the
 //!   index knows: unread and error look at nothing else.
-//! - Presence counts only from `desktop_ui` (security #16).
+//! - Presence counts only from `desktop_ui` (security #16). A desktop UI
+//!   coming to the foreground, as from System Settings, has the notifier
+//!   check its authorization again (design 5.2.9, rule 5).
 //! - Changes gather for [`COALESCE`] from the first one, then every changed
 //!   summary is written at once. An intent is decided when its change comes
 //!   in and written with them, unless by then a foreground `desktop_ui`
 //!   watches the session, or, for `needs_action`, nothing is pending any
 //!   more.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::time::Duration;
 
 use cupper_protocol::annotations::TimestampMs;
@@ -64,6 +66,9 @@ pub(super) enum Action {
     Intent(Intent),
     /// Store the session's read mark (`sessions.last_read_seq`).
     Read(SessionId, u64),
+    /// A desktop UI came from the background to the foreground: check the
+    /// notification authorization again.
+    Foreground,
     Timer(TimerRequest<Flush>),
 }
 
@@ -207,6 +212,8 @@ pub(super) struct Status {
     sessions: BTreeMap<SessionId, Entry>,
     /// The session each foreground `desktop_ui` connection shows.
     watching: HashMap<ConnId, SessionId>,
+    /// The `desktop_ui` connections in the foreground, a session shown or not.
+    foreground: HashSet<ConnId>,
     changed: BTreeSet<SessionId>,
     intents: Vec<Intent>,
     /// Archived since the last flush.
@@ -329,11 +336,23 @@ impl Core for Status {
                 kind,
                 foreground,
                 session,
-            } => match session.filter(|_| foreground && kind == PrincipalKind::DesktopUi) {
-                Some(session) => drop(self.watching.insert(conn, session)),
-                None => drop(self.watching.remove(&conn)),
-            },
-            Input::Closed(conn) => drop(self.watching.remove(&conn)),
+            } => {
+                let desktop = kind == PrincipalKind::DesktopUi;
+                // Only the move to the foreground; another session in front is not one.
+                if desktop && foreground && self.foreground.insert(conn.clone()) {
+                    actions.push(Action::Foreground);
+                } else if !foreground {
+                    self.foreground.remove(&conn);
+                }
+                match session.filter(|_| foreground && desktop) {
+                    Some(session) => drop(self.watching.insert(conn, session)),
+                    None => drop(self.watching.remove(&conn)),
+                }
+            }
+            Input::Closed(conn) => {
+                self.foreground.remove(&conn);
+                drop(self.watching.remove(&conn));
+            }
             Input::Flush => return self.flush(),
         }
         let due = !self.changed.is_empty() || !self.intents.is_empty() || !self.removed.is_empty();
