@@ -13,6 +13,9 @@
 // input, timed from just before the launch; the 1,000-item session opened
 // by its link to its first rows is timed apart after each start.
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { expect, test, type Cupper } from "../../tools/e2e/src/fixture";
 import { untilEvent } from "../../tools/e2e/src/helpers";
 import { session } from "../../tools/e2e/src/nfr1";
@@ -37,7 +40,28 @@ async function start(cupper: Cupper) {
   );
   const ms = ((await ready.jsonValue()) as number) - started;
   const { pid } = await cupper.connected();
-  return { ms: Math.round(ms), host: pid as number };
+  return { ms: Math.round(ms), host: pid as number, phases: phases(cupper, started) };
+}
+
+/**
+ * Where a start spent its time, from the logs, in ms after `since`: the main
+ * process up, the host up (its first log line), the control connection ready.
+ */
+function phases(cupper: Cupper, since: number) {
+  const first = (file: string, test: (entry: Record<string, unknown>) => boolean) => {
+    const lines = readFileSync(file, "utf8").split("\n").filter(Boolean);
+    const entries = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+    const at = entries
+      .map((entry) => ({ entry, at: Date.parse(String(entry.time)) }))
+      .find(({ entry, at }) => at >= since && test(entry))?.at;
+    return at === undefined ? null : at - since;
+  };
+  const main = join(cupper.root, "logs", "main.log");
+  return {
+    main: first(main, (e) => e.msg === "started"),
+    host: first(join(cupper.dataDir, "logs", "host.log"), (e) => e.message === "the host started"),
+    connected: first(main, (e) => e.msg === "host connection" && e.status === "ready"),
+  };
 }
 
 const gone = (pid: number) => {
@@ -56,7 +80,11 @@ test("SP-6 scenario 1: cold starts to ready", async ({ cupper }) => {
   const [big] = await seed(cupper, { sessions: 1, turns: 20, items_per_turn: 50 });
   for (let n = 0; n < 4; n++) await seed(cupper, { sessions: 50, turns: 2, items_per_turn: 10 });
   expect(big).toBeDefined();
-  const runs: { ready: number[]; open: number[] } = { ready: [], open: [] };
+  const runs: { ready: number[]; open: number[]; phases: unknown[] } = {
+    ready: [],
+    open: [],
+    phases: [],
+  };
   let host = first.host;
   for (let n = 0; n < RUNS; n++) {
     await cupper.quitWithoutAsking();
@@ -64,6 +92,7 @@ test("SP-6 scenario 1: cold starts to ready", async ({ cupper }) => {
     const started = await start(cupper);
     host = started.host;
     runs.ready.push(started.ms);
+    runs.phases.push(started.phases);
     runs.open.push(await openTimed(cupper, big as string));
   }
   record("1-startup", {
