@@ -3,7 +3,8 @@
  * the newest codex on npm changed the app-server methods that the pinned
  * codex-acp uses, against testdata/codex-drift/baseline.json. A drift fails
  * once per codex version: reviewed, it goes into testdata/codex-drift/reviewed.json,
- * and passes while it stays the same.
+ * and passes while it stays the same. A version without a record of its own
+ * passes on another's whose drift is the very same (T261).
  *
  *     node tools/codex-drift/src/main.ts fetch <dir>  # npm: the newest codex, and what it takes to compare
  *     node tools/codex-drift/src/main.ts check <dir>  # offline: compare it with the baseline
@@ -20,7 +21,15 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { compare, FILES, render, reviewed, summarize, type Review, type Summary } from "./drift.ts";
+import {
+  compare,
+  FILES,
+  render,
+  reviewFor,
+  summarize,
+  type Review,
+  type Summary,
+} from "./drift.ts";
 
 interface Pin {
   url: string;
@@ -168,8 +177,12 @@ console.log(
 );
 for (const line of drift.length ? drift : ["no change"]) console.log(`  ${line}`);
 const review = reviews[fetched.version];
-if (drift.length && reviewed(drift, base.codex, review)) {
-  console.log(`reviewed on ${review.reviewed} (${review.task}): ${review.verdict}`);
+const found = reviewFor(drift, base.codex, fetched.version, reviews);
+if (drift.length && found) {
+  const same = found.version === fetched.version ? "" : `the same as codex ${found.version}'s, `;
+  console.log(
+    `${same}reviewed on ${found.review.reviewed} (${found.review.task}): ${found.review.verdict}`,
+  );
 } else if (drift.length) {
   const again = `not the drift reviewed on ${review?.reviewed} (${review?.task}): review it again`;
   console.log(review ? again : "not reviewed yet: once it is, record it with `review`");
