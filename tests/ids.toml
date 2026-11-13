@@ -1375,3 +1375,9 @@ id = "MAN-notification-product"
 date = "2026-11-10"
 record = "docs/tasks/T254-notifications-navigate/man-notification-product.md"
 versions = { cupper = "1643e8e3", macos = "26.4" }
+
+[[evidence]]
+id = "MAN-keyboard"
+date = "2026-11-13"
+record = "docs/tasks/T107-electron-45/man-keyboard.md"
+versions = { electron = "45.2.3" }
