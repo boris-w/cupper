@@ -50,7 +50,7 @@ import { enforceSwitchAllowlist } from "./security/switches";
 import { guardOf, watchInput } from "./input";
 import { controlHost, Privileged } from "./privileged";
 import { serveShell } from "./shell";
-import { dropVisibilityListenersOnClose, MAIN_DOCUMENT_URL, mainWindowOptions } from "./window";
+import { MAIN_DOCUMENT_URL, mainWindowOptions } from "./window";
 
 const flavor = __CUPPER_FLAVOR__;
 
@@ -293,7 +293,6 @@ function showMainWindow() {
   }
   const preload = join(import.meta.dirname, "../preload/index.cjs");
   const window = new BrowserWindow(mainWindowOptions(flavor, preload));
-  dropVisibilityListenersOnClose(window);
   mainWindow = window;
   navigation.reloading();
   window.webContents.on("did-finish-load", () => navigation.loaded());

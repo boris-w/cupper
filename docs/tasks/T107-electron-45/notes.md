@@ -77,3 +77,14 @@
   - 5.7.8、5.7.9 里提到 44 的几句（第 9 个 fuse、`input-event` 的类型定义、GPU helper）；
   - 13 的 Q26（可以补"45.2.3 上复测相同，T107"）。
 - `apps/desktop/selfuse/coexist.test.ts` 的注释改成了 "Electron 45 runs the GPU process in the plain helper"。是否属实由 nightly 的 selfuse 那一项实测。
+
+## 7. 删掉 T260 的 `dropVisibilityListenersOnClose`（2026-11-13）
+
+- T260 在 44 上加了这个函数：窗口 `closed` 时去掉 show/hide/minimize/maximize/restore 的监听，因为 Electron 自带的 JS 监听在窗口销毁后被 macOS 的遮挡变化触发时，会调 `this.isVisible()` 而抛 "Object has been destroyed"。
+- 上游 electron/electron#53971 删掉了这个 JS 监听，回合到 45-x-y 的是 electron/electron#54048（merge commit 197080b8），v45.2.3 已经包含（`gh api compare`：ahead 258、behind 0）。
+- 在 45.2.3 的产物里核对：本机 Electron 缓存里的 `electron-v45.2.3-darwin-arm64.zip`（sha256 与 `electron/checksums.json` 一致），解出 `Electron Framework`，检索内置的 JS：
+  - `visibilityChanged`：44.9.0 有 1 处，45.2.3 为 0；
+  - `-window-visibility-change`（那个监听发给 webContents 的内部事件）：44.9.0 有 1 处，45.2.3 为 0；
+  - `windowDidChangeOcclusionState` 两版都在：遮挡变化照旧发 show/hide，只是已经没有会在销毁后出错的 JS 监听了。
+- 所以按"不留技术债"删掉：`window.ts` 里的函数和它的常量、`index.ts` 的调用、`hardening.test.ts` 的那条用例。三个文件与 T260 之前逐字相同。
+- 同一次回合还从沙箱 preload 里去掉了 `Buffer`、`setImmediate`、`events`、`timers`、`url`，第 3 节的表里已经记过。这次按当前代码重新构建（`vite build --mode release`）后核对：`dist/preload/index.cjs` 只有 `require("electron")`，没有 `Buffer`、`setImmediate`、`clearImmediate`。
