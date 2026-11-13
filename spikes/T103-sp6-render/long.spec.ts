@@ -26,15 +26,22 @@ async function memory(cupper: Cupper) {
   return { renderer_mb: Math.round((tab ?? 0) / 1024), heap_mb: Math.round((heap ?? 0) / 2 ** 20) };
 }
 
-/** From the top of the list to its bottom, `step` px a frame. */
+/**
+ * From the top of the list to its bottom, `step` px a frame. Each move comes
+ * after a wheel event: only the user leaves the bottom, a move within 500 ms
+ * of their wheel (T245); any other the list undoes.
+ */
 const scrollDown = (cupper: Cupper, step: number) =>
   cupper.window.evaluate(async (step) => {
     const list = document.querySelector<HTMLElement>("[data-stream-list]");
     if (!list) return;
+    const wheel = (deltaY: number) => list.dispatchEvent(new WheelEvent("wheel", { deltaY, bubbles: true }));
+    wheel(-1);
     list.scrollTop = 0;
-    await new Promise((done) => setTimeout(done, 500));
+    await new Promise((done) => setTimeout(done, 300));
     await new Promise<void>((done) => {
       const tick = () => {
+        wheel(step);
         list.scrollTop += step;
         if (list.scrollTop + list.clientHeight >= list.scrollHeight - 1) done();
         else requestAnimationFrame(tick);
@@ -72,7 +79,10 @@ async function measure(cupper: Cupper, name: string, id: string) {
   const list = cupper.window.locator("[data-stream-list]");
   const moved: (number | null)[] = [];
   for (let page = 0; page < PAGES; page++) {
-    await list.evaluate((el) => (el.scrollTop = 0));
+    await list.evaluate((el) => {
+      el.dispatchEvent(new WheelEvent("wheel", { deltaY: -1, bubbles: true }));
+      el.scrollTop = 0;
+    });
     // At the top, the list renders the history control in a frame or two.
     const button = list.getByRole("button", { name: more });
     const shown = await button.waitFor({ timeout: 5000 }).then(() => true, () => false);
