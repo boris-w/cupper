@@ -607,3 +607,5 @@
 | T148 | 适配器退出时，出错卡片直接列出 stderr 的尾部（十几行 `[session/create] <redacted> phase=…`），对用户太长、太技术；考虑默认折叠，展开再看 | T254 |
 | 写用户文档的任务（T157 等） | macOS 26 上通知授权请求是通知样式的横幅，要点横幅上的"允许"按钮（或"选项"里的允许）；点横幅本身系统按"不允许"处理，之后只能去系统设置里打开 | T254 |
 | 在本机跑 e2e 的人 | T254 起 e2e 版 App 带 `cupper-e2e` 的 URL scheme，本机一启动 LaunchServices 就会记下它；影响不大，但 e2e 尽量在 runner 上跑 | T254 |
+| T107 | `apps/desktop/src/main/window.ts` 的 `dropVisibilityListenersOnClose` 是为 Electron 44 自带的可见性监听加的（窗口销毁后的遮挡变化会让它抛 "Object has been destroyed"）。升到 45 时查 electron/electron#53971 有没有回合到所用的 45.x：回合了就删掉这个函数、调用处、单元测试和注释 | T260 |
+| 要连跑 UNIT-views-differential 的人 | test-repeat 的 vitest 模式不会生成 `CUPPER_VIEW_CASES`，差分测试在里面只会跳过，workflow 把跳过算作失败；连跑要派 nightly `job=differential` | T260 |
