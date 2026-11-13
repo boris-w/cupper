@@ -14,17 +14,28 @@ import { useStore } from "zustand";
 import { useUi } from "../state/provider";
 import { useHost } from "./providers";
 
-/** Whether the window has the focus, following it. */
+/**
+ * Whether the window has the focus, in any of its frames, following it. A
+ * `blur` comes too when the focus goes into one of the window's frames, such
+ * as the review document: the window is still in front, and
+ * `document.hasFocus()` stays true while a frame of it has the focus. So a
+ * blur is checked with it, once the move is done.
+ */
 export function useFocused(): boolean {
   const [focused, setFocused] = useState(() => document.hasFocus());
   useEffect(() => {
-    const on = () => setFocused(true);
-    const off = () => setFocused(false);
-    window.addEventListener("focus", on);
-    window.addEventListener("blur", off);
+    let later: ReturnType<typeof setTimeout> | undefined;
+    const check = () => setFocused(document.hasFocus());
+    const blurred = () => {
+      clearTimeout(later);
+      later = setTimeout(check, 0);
+    };
+    window.addEventListener("focus", check);
+    window.addEventListener("blur", blurred);
     return () => {
-      window.removeEventListener("focus", on);
-      window.removeEventListener("blur", off);
+      clearTimeout(later);
+      window.removeEventListener("focus", check);
+      window.removeEventListener("blur", blurred);
     };
   }, []);
   return focused;

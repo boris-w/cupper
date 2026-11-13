@@ -4,13 +4,14 @@
 // `ui/navigate`, and the window shows that session. The request waiting there
 // shows its panel, which takes no focus: navigation never moves it there.
 // Needs no window focus. E2E-presence-suppresses-notification (design 5.2.9):
-// what the window in front shows is not notified of; it needs the focus.
+// what the window in front shows is not notified of, the focus in the review
+// document's frame included; it needs the focus.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, test, type Cupper } from "./fixture";
-import { events, untilEvent } from "./helpers";
+import { events, texts, untilEvent } from "./helpers";
 import { focusWindow, requestPanel } from "./input";
 import { dial, initialize, keyProof } from "./raw";
 
@@ -64,7 +65,9 @@ test(
     await cupper.launch();
     await cupper.connected();
     const project = ["--agent", "claude", "--project", cupper.repo];
-    const watched = await cupper.cli.ok(["new", ...project, "say watched"]);
+    // A change, for the review document to show.
+    const script = "say watched; write_file README.md changed\\n";
+    const watched = await cupper.cli.ok(["new", ...project, script]);
     const session_id = String(watched.session_id);
     await cupper.cli.ok(["new", ...project, "say other"]);
     const index = () => events(cupper, "index");
@@ -85,6 +88,18 @@ test(
     await cupper.window.getByRole("button", { name: /say watched/ }).click();
     await focusWindow(cupper);
     await expect.poll(() => cupper.window.evaluate(() => document.hasFocus())).toBe(true);
+    // The focus in the review document, a frame of the window: still in front.
+    const t = await texts(cupper);
+    await cupper.window.getByRole("button", { name: t("shell:toggle_side_panel") }).click();
+    const review = () =>
+      cupper.window.frames().find((frame) => frame.url() === "app://cupper-review/review.html");
+    await expect.poll(() => review() !== undefined).toBe(true);
+    await review()
+      ?.getByRole("button", { name: t("review:doc_fold") })
+      .first()
+      .click();
+    await expect.poll(() => review()?.evaluate(() => document.hasFocus())).toBe(true);
+    expect(await cupper.window.evaluate(() => document.activeElement?.tagName)).toBe("IFRAME");
 
     // Watched in front: its next turn ends, written with no intent. It runs
     // past the index's 100 ms of gathering, so that "running" is written too.
