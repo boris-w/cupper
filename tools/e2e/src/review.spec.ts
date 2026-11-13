@@ -169,7 +169,10 @@ async function reviewing(cupper: Cupper) {
   const t = await texts(cupper);
   await cupper.window.getByRole("button", { name: t("shell:toggle_side_panel") }).click();
   const review = await reviewDocument(cupper);
-  await expect(review.locator("[data-line]").first()).toBeVisible();
+  // pierre draws the lines as plain text, then again once highlighted, which
+  // replaces them, and the "+" of a line hovered before (T260). Highlighted,
+  // their tokens have colours.
+  await expect(review.locator("[data-line] span[style]").first()).toBeVisible();
   return { t, stream, review };
 }
 
