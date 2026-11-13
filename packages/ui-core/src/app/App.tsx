@@ -9,6 +9,7 @@ import { LayoutStore } from "../layout/store";
 import { Shell } from "../shell/Shell";
 import { StateProvider, UiProvider } from "../state/provider";
 import { Page } from "./pages";
+import { Presence } from "./presence";
 import { SlotsContext, type Slots } from "./slots";
 import { HostProvider, I18nProvider, ShellProvider, ThemeProvider } from "./providers";
 import { RouterProvider, type Route } from "./router";
@@ -34,6 +35,7 @@ export function App({ api, info, slots = {}, initialRoute, onClient }: AppProps)
             <HostProvider onClient={onClient}>
               <UiProvider ui={store.ui}>
                 <StateProvider>
+                  <Presence />
                   <RouterProvider>
                     <SlotsContext value={slots}>
                       <TooltipProvider>
