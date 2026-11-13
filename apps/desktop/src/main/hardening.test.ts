@@ -12,12 +12,7 @@ import { APP_SCHEME_PRIVILEGES, appProtocolHandler } from "./security/app-protoc
 import { hardenWebContents } from "./security/navigation";
 import { restrictPermissions } from "./security/permissions";
 import { enforceSwitchAllowlist } from "./security/switches";
-import {
-  dropVisibilityListenersOnClose,
-  mainWindowOptions,
-  REVIEW_DOCUMENT_URL,
-  webPreferences,
-} from "./window";
+import { mainWindowOptions, REVIEW_DOCUMENT_URL, webPreferences } from "./window";
 
 const FLAVORS: Flavor[] = ["release", "local", "e2e", "dev"];
 
@@ -61,20 +56,6 @@ describe("UNIT-main-hardening", () => {
       });
       expect(options.webPreferences).toEqual(webPreferences("release", "p"));
       expect(options.acceptFirstMouse).toBeUndefined();
-    });
-
-    it("lose their visibility listeners once closed: a late show or hide finds none (T260)", () => {
-      const window = new EventEmitter();
-      const destroyed = () => {
-        throw new TypeError("Object has been destroyed");
-      };
-      window.on("hide", destroyed).on("show", destroyed);
-      dropVisibilityListenersOnClose(window);
-      window.emit("closed");
-      expect(() => {
-        window.emit("hide");
-        window.emit("show");
-      }).not.toThrow();
     });
   });
 

@@ -1,5 +1,3 @@
-import type { EventEmitter } from "node:events";
-
 import type { BrowserWindowConstructorOptions, WebPreferences } from "electron";
 
 import { isReleaseLike, type Flavor } from "../shared/flavor";
@@ -48,22 +46,4 @@ export function mainWindowOptions(
     show: false,
     webPreferences: webPreferences(flavor, preload),
   };
-}
-
-/** The window events Electron 44 follows itself to tell the page whether the window is visible. */
-const VISIBILITY_EVENTS = ["show", "hide", "minimize", "maximize", "restore"] as const;
-
-/**
- * Once `window` is destroyed, macOS may still report a change of its
- * occlusion, which Electron emits as `show` or `hide`. Electron's own
- * listener for these events then asks the destroyed window whether it is
- * visible, and throws "Object has been destroyed" (T260). So when the window
- * closes, the listeners of these events go: nothing needs them after it.
- * Electron's main branch no longer has that listener
- * (https://github.com/electron/electron/pull/53971); 44 does.
- */
-export function dropVisibilityListenersOnClose(window: EventEmitter): void {
-  window.once("closed", () =>
-    VISIBILITY_EVENTS.forEach((event) => window.removeAllListeners(event)),
-  );
 }
