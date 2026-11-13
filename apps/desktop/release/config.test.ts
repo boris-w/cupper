@@ -4,7 +4,7 @@
 // runs on any Mac.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { readdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -35,6 +35,11 @@ describe("release-config", () => {
     const native = { exports: {} as { buildInfo(): Record<string, unknown> } };
     process.dlopen(native, join(app, "Contents/Resources/native/cupper_native.node"));
     expect(buildInfoViolations(native.exports.buildInfo(), [])).toEqual([]);
+  });
+
+  it("has the Dock icons of the other colours in Resources (appIcon, T252)", () => {
+    const icons = readdirSync(join(app, "Contents/Resources/app-icons")).sort();
+    expect(icons).toEqual(["ink.png", "matcha.png", "mocha.png", "night.png", "sky.png"]);
   });
 });
 

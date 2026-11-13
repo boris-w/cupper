@@ -65,7 +65,7 @@ flowchart LR
 
 | 模块 | 职责 |
 |---|---|
-| `hostLauncher` | 经 `cupper_native` 调用 `cupper-sys::spawn` 拉起 `Contents/Helpers/CupperHost.app/Contents/MacOS/cupper-host`：`POSIX_SPAWN_SETSID`、`POSIX_SPAWN_CLOEXEC_DEFAULT`、环境变量白名单，与拉起适配器用同一套参数（桌面建议 #18）；开发和 e2e 构建经 stdin 写入启动载荷后立即关闭（[5.8.1](08-security.md#581-认证握手固定令牌)），把载荷留在内存里，宿主被杀后重新拉起时原样再传，发布构建不写载荷；连接重试总预算 500 ms；预算用完时，只要自己拉起的宿主还活着，就继续等它开始监听或退出，最长 10 s（新装的宿主二进制第一次执行要等系统检查，T075 实测约 2 s，T075 之后的裁定）；按退出码处理：3 改为直接连接，4 弹出"数据来自更新的版本"，5 提示数据目录不可用，6 提示迁移失败并给出备份位置；安装更新的空窗期间不自动拉起（[5.10.5](10-release.md#5105-更新流程)） |
+| `hostLauncher` | 拉起之前经 `cupper_native` 确保 `CupperHost.app` 已在 LaunchServices 登记（`LSRegisterURL`；嵌套的 helper 不随外层 App 自动登记，没登记就弹不了通知，[5.2.9](02-host.md#529-关注度与通知)，T150 起）。经 `cupper_native` 调用 `cupper-sys::spawn` 拉起 `Contents/Helpers/CupperHost.app/Contents/MacOS/cupper-host`：`POSIX_SPAWN_SETSID`、`POSIX_SPAWN_CLOEXEC_DEFAULT`、环境变量白名单，与拉起适配器用同一套参数（桌面建议 #18）；开发和 e2e 构建经 stdin 写入启动载荷后立即关闭（[5.8.1](08-security.md#581-认证握手固定令牌)），把载荷留在内存里，宿主被杀后重新拉起时原样再传，发布构建不写载荷；连接重试总预算 500 ms；预算用完时，只要自己拉起的宿主还活着，就继续等它开始监听或退出，最长 10 s（新装的宿主二进制第一次执行要等系统检查，T075 实测约 2 s，T075 之后的裁定）；按退出码处理：3 改为直接连接，4 弹出"数据来自更新的版本"，5 提示数据目录不可用，6 提示迁移失败并给出备份位置；安装更新的空窗期间不自动拉起（[5.10.5](10-release.md#5105-更新流程)） |
 | `hostConnection` | 用原生扩展建立并校验连接；扩展留着宿主的套接字，读一律经 `recv_closing_fds` 并在每次读后比对宿主的令牌，通过后才转给主进程，主进程拿到的是 socketpair 的一端，再用 `new net.Socket({fd})` 包装（T073：Node 的普通 `read(2)` 会把宿主传来的 fd 装进主进程，不能直接把宿主的 fd 交出去；代价是每条连接两个转发线程，由 T076 的测量闸门评估）；处理 `host/hello` 和 `initialize`；退化模式下校验 `host_proof`；发布构建遇到 `weak_auth: true` 拒绝连接。原生扩展的两个转发线程每次读之前先等可读（`cupper_sys::wait_readable`，即 `poll`）：macOS 上阻塞读偶尔会睡过对端的 `shutdown`，宿主的半关闭要等它关 fd 才传到窗口（T207） |
 | `controlClient` | control 连接上的 JSON-RPC 客户端 |
 | `windowBridge` | 每个窗口一个：数据连接的生命周期、入方向的字节块转发、出方向的解析与白名单、真实输入检查、流控 |
@@ -74,10 +74,11 @@ flowchart LR
 | `security` | 注册 `app` 协议（`standard`、`secure`、`supportFetchAPI`、`codeCache`）并为 `cupper`、`cupper-review` 两个主机分别下发 CSP 响应头；路径规范化后检查前缀，防目录穿越；加固 webContents；发布构建按白名单检查命令行开关 |
 | `lifecycle` | 单实例锁；退出前经 control 连接查 `host/status`，有运行中的回合或待处理的请求时弹原生确认框（NFR-8），确认后发 `host/exit`；关机和 `before-quit-for-update` 时跳过这一步。控制连接不可用时判定会在 `before-quit` 的同一次派发里完成，Electron 要等这个事件返回才记下"正在退出"，所以判定后的 `app.quit()` 延到下一个回合（T225）；进入退出后不再建窗口，退出后才完成的重连直接关掉，也不再拉起宿主 |
 | `updater` | electron-updater 集成，见 [5.10.5](10-release.md#5105-更新流程) |
-| `deeplink` | 按构建种类注册的 URL scheme（[5.7.9](#579-构建种类)），白名单路由，只做导航 |
-| `notifications` | 只在通知的后备方案启用时工作（待定问题 Q2）：在 control 连接上订阅索引流，取出 `notification.intent` 弹系统通知；通知上不放"批准"按钮，点击后只导航 |
+| `deeplink` | 按构建种类注册的 URL scheme（[5.7.9](#579-构建种类)），白名单路由，只做导航。M1 只有一种路由：`<scheme>://session/<session_id>`，可带 `?request=<request_id>`，两个 ID 都要符合格式，否则忽略（T251，2026-11-10）；App 还没启动完就收到的 URL 也要处理。主窗口记着最近一个导航目标（含 control 上的 `ui/navigate`），在窗口的数据连接建立之前每加载一次文档（包括重新加载）都重发一次，连上之后才算送达；否则带深链接启动、又要重启宿主时（T215 会重新加载窗口），导航会丢（T254 的真实复核查出）。导航不把窗口带到前台，激活由宿主负责 |
+| `notifications` | 不启用：K5 有条件通过（T101），T158 不触发，系统通知由宿主弹（[5.2.9](02-host.md#529-关注度与通知)）；T150 的第一条验收不通过时再议。原定只在通知的后备方案启用时工作（待定问题 Q2）：在 control 连接上订阅索引流，取出 `notification.intent` 弹系统通知；通知上不放"批准"按钮，点击后只导航 |
 | `menu` | macOS 菜单和快捷键：加速键在菜单里注册，经 `onCommand` 送到渲染进程，焦点在审查文档里时同样生效 |
 | `prefs` | 界面偏好，存在 userData（`cupper/ui/`） |
+| `appIcon` | 按 prefs 里的"图标颜色"设置 Dock 图标（`app.dock.setIcon`）：建窗口之前设一次，prefs 变化时更新；取值不在六套配色里按默认（拿铁），选回默认时恢复包里的图标。只影响 App 运行时 Dock 里的图标：访达、启动台来自 App 包，系统通知来自宿主 bundle，都不随设置变（T252，`docs/meetings/2026-11-10-app-icon/`） |
 | `logging` | `main.log` 轮转；渲染进程的错误转写进主进程日志（脱敏）；主进程未处理的异常与 rejection（`uncaughtException`、`unhandledRejection`）连同栈和 `cause` 记进 `main.log`，不弹同步错误框，继续运行（T200：Electron 默认的同步错误框会挡住主线程，窗口就此重连不上；主进程手里的状态很少，会话在宿主里，窗口按游标重新取数据，所以继续运行，不重启） |
 
 主进程的代码在调用时才经 `dialog.showMessageBox` 取函数，不在模块加载时解构保存，这样 e2e 才能在主进程里替换它（测试确认，写进 [5.1.7](01-repo-build-ci.md#517-代码约束gatedesign-通过后写进-claudemd)）。e2e 的替身也接管 `dialog.showErrorBox`：被调用或 `main.log` 里出现未认领的未处理异常时，用例失败（T200）。
@@ -137,7 +138,8 @@ type PrivilegedAction =
   | { kind: 'trust_project'; project_id: string }
   | { kind: 'elevation'; elevation_id: string }
   | { kind: 'settings'; patch: SettingsPatch }
-  | { kind: 'purge_snapshots' };              // 设置页"存储"的清除快照对象（T127 宿主、T147 界面）
+  | { kind: 'purge_snapshots' }               // 设置页"存储"的清除快照对象（T127 宿主、T147 界面）
+  | { kind: 'install_cli' };                  // 设置页"命令行工具"：主进程在 ~/.local/bin 建指向 Contents/Helpers/cupper 的链接，不经宿主；App 不在"应用程序"文件夹或同名文件被占用时回 failed（unavailable），不计入冷却（T253）
 type PrivilegedResult =
   | { status: 'confirmed'; result?: unknown }  // create_session 带 session_id，add_project 带 project_id
   | { status: 'cancelled' } | { status: 'busy' } | { status: 'cooldown'; retry_after_ms: number }
@@ -342,6 +344,11 @@ v1.4 按用户决定 F1–F6（`docs/meetings/2026-10-19-ui-fidelity/minutes.md`
   - 内容：图片缩略图、`@` 引用的文件、审查评论。
   - 审查评论（GT-2 v1.3）：显示"{n} 条评论"，展开后列出每条评论的文件、行号和正文，可以逐条删除。
   - 附件随下一条消息一起发出，评论作为 `review_comment` 内容块（[5.3.4](03-protocol-v1.md#534-方法清单)）。
+- **斜杠命令**（CP-3；外观按 ui-spec 的"斜杠命令"，T244 前补，2026-11-10）：
+  - 在文字开头输入 `/` 弹出菜单，与 `@` 列表共用弹出层。标题"斜杠命令"；`/` 之后输入的文字就是搜索词，没有匹配时写"没有命令"；菜单最高 320 或 10 行。
+  - 每行是 `/{name}` 和说明，有 `input_hint` 时一并显示。选中后把 `/{搜索词}` 换成 `/{name} `，发送时原样作为文本发出，由 agent 自己解释。
+  - 命令来自能力描述的 `commands`：会话里随 `session.capabilities` 更新，新建会话页取 `agents/capabilities` 的缓存。没有命令时不弹出。Codex 的"技能"分组 cupper 不做。
+- **↑ 恢复上一条**（CP-1；Codex 是否有见 Q39，结论只影响细节）：输入框为空（没有文字，也没有附件）、没有浮层时按 ↑，填入这个会话里用户最近发出的一条消息的文字，光标放在末尾。文字取自会话视图，所以重启后也有；附件、图片和评论不恢复。新建会话页没有可恢复的内容。
 - **Esc 的处理顺序**（按 Codex）：
   1. 先关闭输入框里的浮层（`@` 和 `/` 的菜单）。
   2. 回合运行中按第一次 Esc，进入"再按一次 Esc 停止"状态，输入框上方给出提示；再按一次才发 `session/interrupt`。中间按了别的键或输入框失焦，就退出这个状态。
@@ -423,7 +430,7 @@ v1.4 按用户决定 F1–F6（`docs/meetings/2026-10-19-ui-fidelity/minutes.md`
   - 分区：
     - 通用：默认权限、发送快捷键、跟进消息默认排队、语言、防休眠等；
     - 通知；
-    - 外观：主题、半透明侧边栏；
+    - 外观：主题、半透明侧边栏、图标颜色（cupper 特有：六套配色，默认拿铁；说明里写明只改变 App 运行时 Dock 里的图标，T252）；
     - 已归档会话；
     - agent 状态（cupper 特有）：CLI 路径与版本、适配器版本、登录状态、运行时、配置目录的校验结果、资源占用、重启；
     - 连接与设备：已连接的客户端、弱认证说明；
@@ -545,7 +552,7 @@ v1.4 按用户决定 F1–F6（`docs/meetings/2026-10-19-ui-fidelity/minutes.md`
 | 订阅策略 | 索引流常驻；当前会话加最近 3 个会话（LRU）保持订阅；其余会话退订，并丢弃视图，但保留它们的草稿和滚动位置（这两样是界面状态，不在视图里）。从通知或"下一个需要处理的会话"跳过去的会话通常不在 LRU 里，走缓存未命中的路径（桌面 #3） |
 | 命令 | 命令客户端生成 UUIDv7 的 `command_id`；连接断开时保留未完成的命令，重连后用同一个 `command_id` 重发（NFR-2）。需要真实输入的命令，免输入重发的条件见 [5.7.8](#578-安全加固的落点) |
 | 查询 | TanStack Query 管理请求-响应类的数据（`git/*`、`files/search`、`agents/capabilities`、`session/list_archived`）；收到相关事件时失效（例如 `turn.completed` 使该会话的 diff 失效） |
-| 界面状态 | zustand：选中的会话、面板开合与尺寸、每个会话的输入草稿、附件和滚动位置、评论草稿；侧边栏和侧边面板的宽度、文件树开合、发送快捷键、跟进行为、半透明侧边栏存 prefs（不跨设备同步） |
+| 界面状态 | zustand：选中的会话、面板开合与尺寸、每个会话的输入草稿、附件和滚动位置、评论草稿；侧边栏和侧边面板的宽度、文件树开合、发送快捷键、跟进行为、半透明侧边栏、图标颜色存 prefs（不跨设备同步） |
 | 长会话 | **按行虚拟化**（桌面 #12）：把回合标题、活动组摘要、消息、请求记录、改动卡片、提示拍平成一个行列表，活动组折叠时只占一行。内存里只有快照窗口加已翻页的历史。两条滚动规则：向前插入历史后视口不跳动（以视口顶部的行为锚点）；流式增长时贴底，用户向上滚动后停止贴底并显示 ↓ 按钮。Shiki 懒加载（JavaScript 正则引擎，不用 WASM），代码块完成后再高亮，结果按语言和文本缓存，超过 5 万字符的代码块不高亮（T143）；diff 的高亮在审查文档的 Worker 里 |
 | 校验 | 开发和测试构建对每条消息做 zod 校验；生产构建只校验非 delta 的事件（技术选型讨论会桌面工程师意见） |
 
@@ -817,6 +824,8 @@ v1.4 新增。取值来自 ui-spec 第 2、3 节：静态读取作者本机 Code
 | `--color-surface-code` | 代码块、命令输出、终端 | #FFFFFF | #282828〔推算〕 |
 | `--color-surface-panel` | 卡片、面板 | #FFFFFF | #232323〔推算〕 |
 | `--color-surface-elevated` | 菜单、下拉、popover | #FFFFFF | #2D2D2D〔推算〕 |
+| `--color-scrollbar-thumb` | 滚动条的滑块：正文色的 30%（`color-mix(in oklab, var(--color-fg) 30%, transparent)`），悬停或按住时换成 `--color-border-strong`；滚动条只用标准属性 `scrollbar-width: thin`，显隐交给系统，同 Codex（T256） | 正文色 30% | 正文色 30% |
+| `--color-switch-thumb` | 开关的滑块（两种主题都是白色，同 macOS；暗色下若用 surface-elevated，关着的开关看不见滑块，T147） | #FFFFFF | #FFFFFF |
 | `--color-surface-composer` | 输入框、请求面板 | #FFFFFF | #2D2D2D 或 #363636〔推算，Q37〕 |
 | `--color-fg` | 正文 | #1A1C1F | #DFDFDF〔推算〕 |
 | `--color-fg-secondary` | 次要文字 | 正文 @65%（≈#6A6B6D） | 白 @65%（≈#999999）〔推算〕 |

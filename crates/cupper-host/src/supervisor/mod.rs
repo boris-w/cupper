@@ -29,7 +29,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::Poll;
 
-use cupper_protocol::index::HostUpdated;
+use cupper_protocol::index::{GitTools, HostUpdated};
 use cupper_protocol::methods::admin::{Settings, SettingsGet, SettingsUpdate};
 use cupper_protocol::methods::handshake::{HostShutdown, HostShutdownParams, ShutdownReason};
 use futures::future::BoxFuture;
@@ -55,7 +55,7 @@ use crate::driver::probe::login_shell::LoginEnv;
 use crate::driver::runtime::agents::{Agents, Find};
 use crate::driver::runtime::launch::{self, Agent, Launch};
 use crate::driver::runtime::{AGENT_RUNTIME, AgentRuntime, RuntimeDeps};
-use crate::durations::Durations;
+use crate::durations::{Durations, NOTIFIER_SETTLE};
 use crate::exit::HostExit;
 use crate::files::{FileLists, FilesDeps, FilesService};
 use crate::gateway::listen::{HostLock, ListenError};
@@ -65,6 +65,7 @@ use crate::git::{GitDeps, GitService, GitTool, RepoLock};
 use crate::index::{INDEX, IndexDeps, IndexError, IndexHandle};
 use crate::ledger::{Ledger, LedgerError, SWEEPER};
 use crate::manifest;
+use crate::notifier::{Click, Notifier};
 use crate::orchestrator::session::{SessionDeps, SessionManager};
 use crate::quiescence::Quiescence;
 use crate::requester::ProcessRequesters;
@@ -128,7 +129,9 @@ pub enum Exit {
     /// `host/exit`.
     Requested { force: bool },
     /// SIGTERM, e.g. from the desktop restarting a host it cannot reach
-    /// (design 5.8.1, Q22): running turns are interrupted.
+    /// (design 5.8.1, Q22), or the quit Apple Event of logout, shutdown and
+    /// Activity Monitor's "Quit" (design 5.2.13): running turns are
+    /// interrupted.
     Terminated,
     /// The store writer died: exit 1, without `last_clean_exit_at`.
     WriterDied,
@@ -156,9 +159,14 @@ pub struct Host {
     audit: mpsc::UnboundedSender<AuditRecord>,
     drain: audit::Drain,
     exits: mpsc::UnboundedReceiver<Exit>,
+    /// For the quit Apple Event, which comes to the main thread.
+    quit: mpsc::UnboundedSender<Exit>,
+    /// For the clicks on notifications, which come to the main thread.
+    clicks: mpsc::UnboundedSender<Click>,
     terminate: Signal,
     socket: PathBuf,
     power: Power,
+    notifier: Notifier,
     /// The barrier's registry, for the test that every kind is in it.
     #[cfg(all(test, feature = "test-harness"))]
     quiescence: Quiescence,
@@ -270,6 +278,7 @@ impl Host {
         let home = PathBuf::from(found.host.get("HOME").cloned().unwrap_or_default());
         let settings =
             SettingsHandle::load(&reader, writer.clone(), clock.clone(), &home, &data_dir)?;
+        power.enabled(settings.current().prevent_idle_sleep);
         // The audit records of the gateway, the sessions, the index and the
         // host itself.
         let (records, audit) = mpsc::unbounded_channel();
@@ -285,6 +294,9 @@ impl Host {
         {
             record(&records, &*clock, event);
         }
+        let notifier = notifier(&payload);
+        // Clicks on notifications: the system's and the test harness's.
+        let (clicks, mut clicked) = mpsc::unbounded_channel::<Click>();
         // Step 7: the index stream, before the socket.
         quiescence.register(INDEX);
         let index = IndexHandle::start(IndexDeps {
@@ -303,15 +315,31 @@ impl Host {
                 pending_upgrade: false,
                 power_assertion: false,
                 last_exit_abnormal: run.abnormal,
+                notification_auth: None,
             },
+            settings: settings.subscribe(),
             requesters: Arc::new(ProcessRequesters::new(
                 readers.clone(),
                 &std::env::current_exe().unwrap_or_default(),
                 cupper_sys::own_signing_identity().ok().flatten(),
             )),
             audit: records.clone(),
+            notifier: notifier.clone(),
         })
         .await?;
+        let reported = index.clone();
+        notifier.authorize(move |auth| reported.notification_auth(auth));
+        // The versions of git and git-lfs, for `agents.updated` (T094), found
+        // aside: waits on other processes are idle.
+        let (git_of, clock_of, index_of) = (git.clone(), clock.clone(), index.clone());
+        let durations_of = durations.clone();
+        tokio::spawn(async move {
+            let tools = match git_of {
+                Some(git) => git.versions(&*clock_of, &durations_of).await,
+                None => GitTools::default(),
+            };
+            index_of.git(tools);
+        });
         quiescence.register(runtime::INSTALLER);
         let installing = Arc::new(AtomicBool::new(false));
         if let Some(bundle) = BundleDir::of_this_host().ok().filter(BundleDir::is_app) {
@@ -472,6 +500,8 @@ impl Host {
         .route(&mut routes);
         #[cfg(feature = "test-harness")]
         Arc::new(harness::Harness {
+            notifier: notifier.clone(),
+            clicks: clicks.clone(),
             clock: injected.manual.clone(),
             quiescence: quiescence.clone(),
             maintenance: Arc::new(maintain()),
@@ -495,7 +525,8 @@ impl Host {
         routes.sessions(Arc::new(sessions));
         let agents = Arc::new(agents);
         agents.route(&mut routes);
-        let settings = Arc::new(SettingsPort::new(settings, Arc::clone(&agents))) as Arc<dyn Port>;
+        let settings = SettingsPort::new(settings, Arc::clone(&agents), power.clone());
+        let settings = Arc::new(settings) as Arc<dyn Port>;
         routes.add::<SettingsGet>(Arc::clone(&settings));
         routes.add::<SettingsUpdate>(settings);
         routes.index(Arc::new(index.clone()));
@@ -517,6 +548,16 @@ impl Host {
         let gateway = Gateway::new(config, clock.clone(), durations.clone(), routes, records);
         control.serve_for(&gateway);
         index.serve_for(&gateway);
+        let (clicked_by, clicked_on, clicked_at) =
+            (notifier.clone(), Arc::clone(&gateway), clock.clone());
+        let settle = durations.get(NOTIFIER_SETTLE);
+        tokio::spawn(async move {
+            while let Some(click) = clicked.recv().await {
+                clicked_by
+                    .click(click, &clicked_on, &*clicked_at, settle)
+                    .await;
+            }
+        });
         if let Some(check) = self_check {
             gateway.check_self_with(check);
         }
@@ -528,7 +569,7 @@ impl Host {
             gateway: Arc::downgrade(&gateway),
             index: index.clone(),
             admission,
-            exits: to_supervisor,
+            exits: to_supervisor.clone(),
             parent: cfg!(feature = "dev-auth").then(std::os::unix::process::parent_id),
             installing,
             audit: audit.clone(),
@@ -536,6 +577,8 @@ impl Host {
         let terminate = signal(SignalKind::terminate())?;
         let (listener, socket) = lock.bind()?;
         let serving = tokio::spawn(Arc::clone(&gateway).serve(listener));
+        #[cfg(not(feature = "test-harness"))]
+        register_bundle();
         Ok(Self {
             clock,
             writer,
@@ -548,13 +591,31 @@ impl Host {
             audit,
             drain: audit::Drain(drain),
             exits,
+            quit: to_supervisor,
+            clicks,
             terminate,
             socket,
             power,
+            notifier,
             #[cfg(all(test, feature = "test-harness"))]
             quiescence,
             _lock: lock,
         })
+    }
+
+    /// What the quit Apple Event calls on the main thread: the orderly exit
+    /// SIGTERM starts (design 5.2.13).
+    pub fn quitter(&self) -> impl Fn() + 'static {
+        let quit = self.quit.clone();
+        move || {
+            let _ = quit.send(Exit::Terminated);
+        }
+    }
+
+    /// Where the main thread sends the clicks on the host's notifications,
+    /// when it posts through UserNotifications (design 5.2.9).
+    pub fn notification_clicks(&self) -> Option<mpsc::UnboundedSender<Click>> {
+        self.notifier.posts().then(|| self.clicks.clone())
     }
 
     /// Serves until the orderly exit, which it then runs; the exit code.
@@ -631,6 +692,7 @@ impl Host {
             code = HostExit::Error;
         }
         self.power.exit().await;
+        self.notifier.clear();
         let _ = std::fs::remove_file(&self.socket);
         code
     }
@@ -648,6 +710,27 @@ impl Exit {
             Self::Upgrade => "upgrade",
         }
     }
+}
+
+/// Design 5.2.9, rule 1: the desktop registered the host's bundle with
+/// LaunchServices before it started the host; check again, off the startup
+/// path, and only log. Builds with the test harness never touch
+/// LaunchServices: their notifications are only recorded (design 5.9.9), and
+/// their tests run hosts in bundles of their own.
+#[cfg(not(feature = "test-harness"))]
+fn register_bundle() {
+    let bundle = BundleDir::of_this_host().ok().filter(BundleDir::is_app);
+    let identity = cupper_sys::own_signing_identity().ok().flatten();
+    let (Some(contents), Some(identity)) = (bundle, identity) else {
+        return;
+    };
+    tokio::task::spawn_blocking(move || {
+        let app = contents.0.parent().unwrap_or(&contents.0);
+        match cupper_sys::ensure_registered(app, &identity.identifier) {
+            Ok(registration) => tracing::info!(?registration, "the host bundle in LaunchServices"),
+            Err(err) => tracing::warn!("cannot register the host bundle: {err}"),
+        }
+    });
 }
 
 /// Sends `event` into the audit (design 5.8.6).
@@ -811,6 +894,27 @@ fn test_rss(payload: &Payload, agent: Agent) -> Option<u64> {
     {
         let _ = (payload, agent);
         None
+    }
+}
+
+/// This build's notifier (design 5.2.9, 5.9.9): one with the test harness
+/// never posts, so it records or is off as `test_config` says.
+fn notifier(payload: &Payload) -> Notifier {
+    #[cfg(feature = "test-harness")]
+    {
+        use crate::startup::test_config::NotifierKind;
+        match payload.test_config.notifier {
+            NotifierKind::Record => {
+                let language = crate::notifier::Language::of_system();
+                Notifier::record(language, crate::notifier::click::Outer::of_this_host())
+            }
+            NotifierKind::System => Notifier::off(),
+        }
+    }
+    #[cfg(not(feature = "test-harness"))]
+    {
+        let _ = payload;
+        Notifier::system(BundleDir::of_this_host().is_ok_and(|bundle| bundle.is_app()))
     }
 }
 

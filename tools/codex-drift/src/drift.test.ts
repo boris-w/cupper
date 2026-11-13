@@ -1,6 +1,15 @@
 import { describe, expect, test } from "vitest";
 
-import { compare, FILES, render, reviewed, summarize, type Node, type Schemas } from "./drift.ts";
+import {
+  compare,
+  FILES,
+  render,
+  reviewed,
+  reviewFor,
+  summarize,
+  type Node,
+  type Schemas,
+} from "./drift.ts";
 
 const ref = (name: string) => ({ $ref: `#/definitions/${name}` });
 const TurnParams = (properties: string[]): Node =>
@@ -129,6 +138,36 @@ describe("UNIT-codex-drift", () => {
     expect(reviewed(drift, "0.163.0")).toBe(false);
     expect(reviewed(drift, "0.165.0", review)).toBe(false);
     expect(reviewed([...drift, "thread/list: gone"], "0.163.0", review)).toBe(false);
+  });
+
+  test("a version without a record passes on another's with the very same drift, named, against the same baseline", () => {
+    const drift = [
+      "turn/start: params changed",
+      "  TurnStartParams changed +property parentTurnId",
+    ];
+    const review = (lines: string[], baseline = "0.163.0") => ({
+      baseline,
+      reviewed: "2026-11-09",
+      task: "T113",
+      verdict: "ok",
+      drift: lines,
+    });
+    const reviews = { "0.166.0": review(drift.slice(0, 1)), "0.167.0": review(drift) };
+    expect(reviewFor(drift, "0.163.0", "0.167.1", reviews)).toEqual({
+      version: "0.167.0",
+      review: reviews["0.167.0"],
+    });
+    // A line more or one less, or a record against another baseline: not reviewed.
+    expect(
+      reviewFor([...drift, "thread/list: gone"], "0.163.0", "0.167.1", reviews),
+    ).toBeUndefined();
+    expect(reviewFor(drift.slice(1), "0.163.0", "0.167.1", reviews)).toBeUndefined();
+    expect(
+      reviewFor(drift, "0.163.0", "0.167.1", { "0.167.0": review(drift, "0.165.0") }),
+    ).toBeUndefined();
+    // A version's own record alone counts, even when another's matches.
+    expect(reviewFor(drift.slice(0, 1), "0.163.0", "0.167.0", reviews)).toBeUndefined();
+    expect(reviewFor(drift, "0.163.0", "0.167.0", reviews)?.version).toBe("0.167.0");
   });
 
   test("a method the adapter uses that the baseline does not have", () => {

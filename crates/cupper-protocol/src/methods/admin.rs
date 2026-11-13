@@ -13,7 +13,7 @@ use super::Empty;
 use super::catalog::Catalog;
 use crate::annotations::{DurationMs, TimestampMs, WirePath};
 use crate::domain::{AgentKind, BlobRef};
-use crate::ids::{CommandId, ElevationId, SessionId};
+use crate::ids::{CommandId, ElevationId, IntentId, SessionId};
 use crate::open_enum;
 use crate::rpc::Scope;
 
@@ -49,15 +49,21 @@ pub struct SettingsResult {
     pub settings: Settings,
 }
 
-/// Declares [`Settings`] and [`SettingsPatch`] from one list of keys.
+/// Declares [`Settings`] and [`SettingsPatch`] from one list of keys. A key
+/// added later names the function of its value where stored settings lack
+/// it (`= "yes"`).
 macro_rules! settings {
-    ($($(#[doc = $doc:literal])* $key:literal => $field:ident: $ty:ty,)+) => {
+    ($($(#[doc = $doc:literal])* $key:literal => $field:ident: $ty:ty $(= $default:literal)?,)+) => {
         /// The host's settings by their keys in design 5.2.11, every key
         /// present. Changing `agents.*.cli_path`, `agents.env_passthrough`
         /// or `diagnostics.verbose` takes `privileged` (design 5.2.5).
         #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
         pub struct Settings {
-            $($(#[doc = $doc])* #[serde(rename = $key)] pub $field: $ty,)+
+            $(
+                $(#[doc = $doc])*
+                #[serde(rename = $key $(, default = $default)?)]
+                pub $field: $ty,
+            )+
         }
 
         /// The keys to change, each with its new value; `null` clears a
@@ -107,8 +113,15 @@ settings! {
     "apps.editor" => editor_app: String,
     "sessions.default_agent" => default_agent: AgentKind,
     "host.idle_exit_minutes" => idle_exit_minutes: u32,
+    /// Keeps the Mac awake while agents work (design 5.2.13); absent from
+    /// what hosts before T147 wrote.
+    "host.prevent_idle_sleep" => prevent_idle_sleep: bool = "yes",
     /// Detailed logs, which may contain message text.
     "diagnostics.verbose" => verbose_diagnostics: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// A key in the patch is `Some`, even with `null`.
@@ -393,6 +406,25 @@ pub struct SeedProfile {
     pub large_turn_items: Option<u32>,
 }
 
+method! {
+    /// `test/notification_click`: a click on a notification the host only
+    /// recorded (`test_config.notifier: record`), handled as a real one
+    /// (design 5.2.9, 5.9.9).
+    request TestNotificationClick = "test/notification_click" (TestNotificationClickParams) -> Empty {
+        scope: Test,
+        idempotency: None,
+        milestone: M1b,
+        errors: [NotFound],
+        builds: [TestHarness],
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct TestNotificationClickParams {
+    /// The notification's identifier: its intent's.
+    pub notification_id: IntentId,
+}
+
 open_enum! {
     pub enum SeedMix {
         /// As in the SP-1 recordings.
@@ -412,6 +444,7 @@ pub fn register(c: &mut Catalog, g: &mut SchemaGenerator) {
     c.request::<TestClockAdvance>(g);
     c.request::<TestRunMaintenance>(g);
     c.request::<TestSeed>(g);
+    c.request::<TestNotificationClick>(g);
 }
 
 #[cfg(test)]
@@ -429,7 +462,8 @@ pub(super) mod tests {
             "worktrees.root": "~/.cupper/worktrees", "notifications.needs_action": true,
             "notifications.turn_completed": true, "notifications.error": true,
             "apps.terminal": "terminal", "apps.editor": "vscode", "sessions.default_agent": "claude",
-            "host.idle_exit_minutes": 30, "diagnostics.verbose": false}});
+            "host.idle_exit_minutes": 30, "host.prevent_idle_sleep": true,
+            "diagnostics.verbose": false}});
         let blob = |media_type| json!({"blob": {"hash": "ab".repeat(32), "size": 9000, "media_type": media_type}});
         vec![
             request::<SettingsGet>(json!({}), settings.clone()),
@@ -468,6 +502,7 @@ pub(super) mod tests {
             request::<DiagRecordingExport>(json!({"session_id": "s_1"}), blob("application/jsonl")),
             request::<TestClockAdvance>(json!({"ms": 3000}), json!({})),
             request::<TestRunMaintenance>(json!({"task": "orphan_blobs"}), json!({})),
+            request::<TestNotificationClick>(json!({"notification_id": "n_1"}), json!({})),
             request::<TestSeed>(
                 json!({"profile": {"sessions": 200, "turns": 20, "items_per_turn": 50,
                     "mix": "sp1", "large_turn_items": 2000}}),
@@ -488,6 +523,18 @@ pub(super) mod tests {
         assert_eq!(patch(json!({})).unwrap(), SettingsPatch::default());
         // Only a key whose value may be `null` can be cleared.
         assert!(patch(json!({"notifications.error": null})).is_err());
+        // Settings from before T147, as old `settings.updated` events hold
+        // them, keep the Mac awake.
+        let old = json!({"agents.claude.cli_path": null, "agents.codex.cli_path": null,
+            "agents.env_passthrough": [], "worktrees.root": "/w", "notifications.needs_action": true,
+            "notifications.turn_completed": true, "notifications.error": true,
+            "apps.terminal": "Terminal", "apps.editor": "TextEdit", "sessions.default_agent": "claude",
+            "host.idle_exit_minutes": 10, "diagnostics.verbose": false});
+        assert!(
+            serde_json::from_value::<Settings>(old)
+                .unwrap()
+                .prevent_idle_sleep
+        );
 
         open_values::<ElevationAnswer>(ElevationAnswer::KNOWN);
         open_values::<ConfirmAction>(ConfirmAction::KNOWN);

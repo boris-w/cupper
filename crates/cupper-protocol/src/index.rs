@@ -9,6 +9,7 @@ use crate::annotations::{TimestampMs, WirePath};
 use crate::capabilities::CliCompat;
 use crate::domain::{AgentKind, ClientRole, FailureCode, PrincipalKind};
 use crate::ids::{ConnId, ElevationId, IntentId, ProjectId, RequestId, SessionId};
+use crate::methods::admin::Settings;
 use crate::open_enum;
 use crate::rpc::Scope;
 
@@ -122,14 +123,14 @@ open_enum! {
 }
 
 /// `agents.updated`: detection results and resource samples.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct AgentsUpdated {
     pub agents: Vec<AgentStatus>,
     pub git: GitTools,
 }
 
 /// The git tools found on the login shell's PATH.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct GitTools {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
@@ -258,6 +259,29 @@ pub struct HostUpdated {
     /// The previous run did not exit cleanly; present only when true.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub last_exit_abnormal: bool,
+    /// Whether the user lets the host's notifications show (design 5.2.9);
+    /// absent until the host has asked the system, and in builds that only
+    /// record them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notification_auth: Option<NotificationAuth>,
+}
+
+open_enum! {
+    pub enum NotificationAuth {
+        /// The user has not been asked yet.
+        NotDetermined => "not_determined",
+        Authorized => "authorized",
+        /// Turned down or turned off: the system asks no more, System
+        /// Settings is the way back.
+        Denied => "denied",
+    }
+}
+
+/// `settings.updated`: every setting, as `settings/get` returns them; at
+/// start and after each `settings/update` (T151).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct SettingsUpdated {
+    pub settings: Settings,
 }
 
 /// `clients.updated`: on connect, disconnect and elevation.

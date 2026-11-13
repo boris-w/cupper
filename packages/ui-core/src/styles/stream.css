@@ -168,3 +168,15 @@
 .fade-y {
   mask-image: linear-gradient(transparent, #000 12px, #000 calc(100% - 12px), transparent);
 }
+
+/* The stream's scrollbar (T256), as Codex has its thread's: thin, its track
+   clear, its thumb lighter under the pointer. Whether it overlays the rows
+   and when it shows are the platform's (macOS: while scrolling, or always). */
+[data-stream-list] {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+}
+[data-stream-list]:hover,
+[data-stream-list]:active {
+  scrollbar-color: var(--color-border-strong) transparent;
+}

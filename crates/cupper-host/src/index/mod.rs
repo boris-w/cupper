@@ -13,9 +13,12 @@
 //!   or closed, and on every elevation granted or ended.
 //! - Session status, read marks, presence and notification intents are the
 //!   [`status`] core's, fed by the sessions' [`IndexNotes`], `session/mark_read`
-//!   and `client/presence`. `sessions.last_read_seq` is the one column of
+//!   and `client/presence`. Each intent also goes to the [`Notifier`], and
+//!   `host.updated` shows the authorization it reports. `sessions.last_read_seq` is the one column of
 //!   `sessions` the index writes; the session actors never do.
-//! - `agents.updated` merges what each agent runtime reports ([`AgentNotes`]).
+//! - `agents.updated` merges what each agent runtime reports ([`AgentNotes`])
+//!   and the versions of git and git-lfs ([`IndexHandle::git`]).
+//! - `settings.updated` follows the settings at start and on each change.
 //! - Elevation (design 5.8.4) is in [`elevations`].
 //! - The status core's timers and elevation's share one table and one alarm:
 //!   the actor waits in one place (design 5.2.16).
@@ -35,12 +38,13 @@ use cupper_protocol::domain::AgentKind;
 use cupper_protocol::envelope::Cause;
 use cupper_protocol::error::{ErrorCode, ErrorReason, INVALID_PARAMS, RpcError};
 use cupper_protocol::event::EventBody;
-use cupper_protocol::ids::{ConnId, IntentId, ProjectId, SessionId};
+use cupper_protocol::ids::{ConnId, IntentId, ProjectId, RequestId, SessionId};
 use cupper_protocol::index::{
-    AgentStatus, AgentsUpdated, ClientsUpdated, GitTools, HostUpdated, NotificationIntent,
-    ProjectRemoved, RemovalReason, RuntimeFailure, RuntimeState, SessionRemoved, SessionSummary,
-    TrustState,
+    AgentStatus, AgentsUpdated, ClientsUpdated, GitTools, HostUpdated, IntentReason,
+    NotificationAuth, NotificationIntent, PendingKind, ProjectRemoved, RemovalReason,
+    RuntimeFailure, RuntimeState, SessionRemoved, SessionSummary, SettingsUpdated, TrustState,
 };
+use cupper_protocol::methods::admin::Settings;
 use cupper_protocol::methods::handshake::{ClientPresence, ClientPresenceParams};
 use cupper_protocol::methods::project::{
     ProjectAdd, ProjectAddParams, ProjectTrust, ProjectTrustParams,
@@ -53,7 +57,7 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 
 use self::elevations::{Asking, Elevations};
 use self::projects::{Context, Prepared};
@@ -68,6 +72,7 @@ use crate::gateway::{
 };
 use crate::git::GitTool;
 use crate::ledger::{Outcome, Ticket};
+use crate::notifier::{Notifier, Reason};
 use crate::orchestrator::session::{IndexNotes, Note};
 use crate::pure::{Alarm, Core, TimerRequest, TimerTable};
 use crate::quiescence::{ActorKind, Participant, Quiescence};
@@ -98,6 +103,10 @@ pub struct IndexDeps {
     pub quiescence: Quiescence,
     /// `host.updated` of this run.
     pub host: HostUpdated,
+    /// What `settings.updated` follows.
+    pub settings: watch::Receiver<Settings>,
+    /// Where notification intents go (design 5.2.9).
+    pub notifier: Notifier,
     /// What examines a CLI that asks for elevation.
     pub requesters: Arc<dyn Requesters>,
     /// The host's audit channel (design 5.8.6).
@@ -131,9 +140,12 @@ enum Mail {
     /// `project/remove`, its sessions archived.
     ProjectRemoved(ProjectId, oneshot::Sender<Result<(), RpcError>>),
     Agent(Box<AgentStatus>),
+    Git(GitTools),
     /// The self-check found the code on disk changed.
     PendingUpgrade,
     PowerAssertion(bool),
+    /// The notifier's authorization (design 5.2.9, rule 5).
+    NotificationAuth(NotificationAuth),
     /// The runtime installer's state of an agent's adapter runtime.
     Runtime(AgentKind, RuntimeState, Option<RuntimeFailure>),
     Checkpoint(oneshot::Sender<()>),
@@ -142,6 +154,8 @@ enum Mail {
     Reconcile(oneshot::Sender<()>),
     /// The alarm rang; nobody sends it.
     Rung,
+    /// The settings changed; nobody sends it either.
+    Settings,
 }
 
 /// A timer of the status core or of elevation, in the actor's one table.
@@ -161,13 +175,15 @@ struct Done {
 impl IndexHandle {
     /// Startup step 7 (design 5.2.13): loads the index stream, brings it to
     /// what the tables say, and starts the actor. Call within the runtime.
-    pub async fn start(deps: IndexDeps) -> Result<Self, IndexError> {
+    pub async fn start(mut deps: IndexDeps) -> Result<Self, IndexError> {
         let handle = deps.streams.open(&StreamId::Index).await?;
         let mut writer = handle.writer()?;
         let mut tables = deps.readers.read(rows::read).await?;
         let mut status = Status::default();
         let mut bodies = reconciled(&handle, &mut tables, &mut status, &deps.host);
         bodies.extend(read(&handle, elevations::left_over));
+        let settings = deps.settings.borrow_and_update().clone();
+        bodies.extend(read(&handle, |view| settings_updated(view, settings)));
         writer
             .append(Batch {
                 bodies,
@@ -189,6 +205,7 @@ impl IndexHandle {
             gateway: Arc::clone(&gateway),
             deps,
             runtime: HashMap::new(),
+            git: GitTools::default(),
         };
         tokio::spawn(actor.run(inbox, participant));
         Ok(Self { mail, gateway })
@@ -209,6 +226,11 @@ impl IndexHandle {
         let _ = self.mail.send(Mail::Runtime(agent, state, failure));
     }
 
+    /// The versions of git and git-lfs into `agents.updated` (T094).
+    pub fn git(&self, tools: GitTools) {
+        let _ = self.mail.send(Mail::Git(tools));
+    }
+
     /// `host.updated` says an upgrade waits (design 5.2.13).
     pub fn pending_upgrade(&self) {
         let _ = self.mail.send(Mail::PendingUpgrade);
@@ -217,6 +239,11 @@ impl IndexHandle {
     /// `host.updated` says whether the host keeps the Mac awake (design 5.2.13).
     pub fn power_assertion(&self, held: bool) {
         let _ = self.mail.send(Mail::PowerAssertion(held));
+    }
+
+    /// `host.updated` says whether the user lets notifications show.
+    pub fn notification_auth(&self, auth: NotificationAuth) {
+        let _ = self.mail.send(Mail::NotificationAuth(auth));
     }
 
     /// The gateway whose clients `clients.updated` lists; set once it exists.
@@ -304,6 +331,8 @@ struct IndexActor {
     deps: IndexDeps,
     /// What the runtime installer last said of each agent's adapter runtime.
     runtime: HashMap<AgentKind, (RuntimeState, Option<RuntimeFailure>)>,
+    /// The versions of git and git-lfs, for the first `agents.updated` too.
+    git: GitTools,
 }
 
 impl IndexActor {
@@ -313,6 +342,8 @@ impl IndexActor {
                 tokio::select! {
                     mail = inbox.recv() => mail,
                     () = self.alarm.rung() => Some(Mail::Rung),
+                    // Gone with the settings at the end.
+                    Ok(()) = self.deps.settings.changed() => Some(Mail::Settings),
                 }
             });
             let Some(mail) = next.await else {
@@ -374,6 +405,21 @@ impl IndexActor {
                     let _ = done.send(self.remove_project(project).await);
                 }
                 Mail::Agent(status) => self.agent(*status).await,
+                // Into the agents' list once there is one: an empty list
+                // would say no agent was found.
+                Mail::Git(git) => {
+                    self.git = git.clone();
+                    if read(&self.handle, |view| view.agents.is_some()) {
+                        self.agents(|agents| agents.git = git).await;
+                    }
+                }
+                Mail::Settings => {
+                    let settings = self.deps.settings.borrow_and_update().clone();
+                    if let Some(body) = read(&self.handle, |view| settings_updated(view, settings))
+                    {
+                        self.append(body).await;
+                    }
+                }
                 Mail::Runtime(agent, state, failure) => {
                     self.runtime.insert(agent.clone(), (state, failure));
                     let status = |view: &IndexView| {
@@ -395,6 +441,14 @@ impl IndexActor {
                         .await;
                 }
                 Mail::PowerAssertion(_) => {}
+                Mail::NotificationAuth(auth)
+                    if Some(&auth) != self.deps.host.notification_auth.as_ref() =>
+                {
+                    self.deps.host.notification_auth = Some(auth);
+                    self.append(EventBody::HostUpdated(self.deps.host.clone()))
+                        .await;
+                }
+                Mail::NotificationAuth(_) => {}
                 #[cfg(feature = "test-harness")]
                 Mail::Reconcile(done) => {
                     if let Ok(mut tables) = self.deps.readers.read(rows::read).await {
@@ -666,9 +720,11 @@ impl IndexActor {
                     }));
                 }
                 Action::Intent(intent) => {
-                    let id = self.deps.ids.new_id().as_u128();
+                    let intent_id = IntentId::from_uuid(self.deps.ids.new_id().as_u128());
+                    let to = (&intent.session, intent.request.as_ref());
+                    self.notify(&intent_id, to, &intent.reason);
                     bodies.push(EventBody::NotificationIntent(NotificationIntent {
-                        intent_id: IntentId::from_uuid(id),
+                        intent_id,
                         session_id: intent.session,
                         reason: intent.reason,
                         request_id: intent.request,
@@ -688,6 +744,12 @@ impl IndexActor {
                         written.map_err(|err| RpcError::app(ErrorCode::Internal, err.to_string()));
                 }
                 Action::Timer(request) => self.timers.apply(timer(request, Timer::Status)),
+                Action::Foreground => {
+                    let mail = self.mail.clone();
+                    self.deps.notifier.recheck(move |auth| {
+                        let _ = mail.send(Mail::NotificationAuth(auth));
+                    });
+                }
             }
         }
         self.alarm.follow(&self.timers);
@@ -701,6 +763,22 @@ impl IndexActor {
             let _ = self.writer.append(batch).await;
         }
         stored
+    }
+
+    /// The system notification of an intent, with the session's title and,
+    /// for `needs_action`, the kind of its oldest request.
+    fn notify(&self, id: &IntentId, to: (&SessionId, Option<&RequestId>), reason: &IntentReason) {
+        let summary = self.status.summary(to.0);
+        let (title, pending) = summary.map_or((String::new(), None), |s| (s.title, s.pending_kind));
+        let reason = match (reason, pending) {
+            (IntentReason::NeedsAction, Some(PendingKind::Input)) => Reason::Question,
+            (IntentReason::NeedsAction, _) => Reason::Approval,
+            (IntentReason::TurnCompleted, _) => Reason::TurnCompleted,
+            (IntentReason::Error, _) => Reason::TurnFailed,
+            (IntentReason::Unknown(_), _) => return,
+        };
+        let settings = self.deps.settings.borrow();
+        self.deps.notifier.notify(&settings, id, reason, &title, to);
     }
 
     /// Hands each timer due now to its core.
@@ -723,20 +801,26 @@ impl IndexActor {
             status.adapter.runtime = state.clone();
             status.adapter.failure = failure.clone();
         }
-        let agents = read(&self.handle, |view| view.agents.clone());
-        let mut agents = agents.unwrap_or_else(|| AgentsUpdated {
-            agents: Vec::new(),
-            git: GitTools {
-                version: None,
-                lfs: None,
+        self.agents(
+            |agents| match agents.agents.iter_mut().find(|a| a.agent == status.agent) {
+                Some(known) => *known = status,
+                None => agents.agents.push(status),
             },
+        )
+        .await;
+    }
+
+    /// `agents.updated` with `change` made, unless that changes nothing.
+    async fn agents(&mut self, change: impl FnOnce(&mut AgentsUpdated)) {
+        let before = read(&self.handle, |view| view.agents.clone());
+        let mut agents = before.clone().unwrap_or_else(|| AgentsUpdated {
+            agents: Vec::new(),
+            git: self.git.clone(),
         });
-        match agents.agents.iter_mut().find(|a| a.agent == status.agent) {
-            Some(known) if *known == status => return,
-            Some(known) => *known = status,
-            None => agents.agents.push(status),
+        change(&mut agents);
+        if before.as_ref() != Some(&agents) {
+            self.append(EventBody::AgentsUpdated(agents)).await;
         }
-        self.append(EventBody::AgentsUpdated(agents)).await;
     }
 
     /// A session rescanned its project (design 5.2.6): a trusted project
@@ -836,6 +920,12 @@ fn reconciled(
         bodies.extend(sessions.into_iter().map(EventBody::SessionUpserted));
         bodies
     })
+}
+
+/// `settings.updated`, unless the view has these settings already.
+fn settings_updated(view: &IndexView, settings: Settings) -> Option<EventBody> {
+    let updated = SettingsUpdated { settings };
+    (view.settings.as_ref() != Some(&updated)).then_some(EventBody::SettingsUpdated(updated))
 }
 
 fn read<T>(handle: &StreamHandle, read: impl FnOnce(&IndexView) -> T) -> T {

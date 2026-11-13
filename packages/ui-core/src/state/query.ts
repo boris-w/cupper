@@ -7,8 +7,8 @@
 // for a session's, so that one event invalidates all of the session's.
 
 import type { ClientState, HostClient } from "@cupper/host-client";
-import type { EventBody, SessionListArchivedResult } from "@cupper/protocol";
-import { QueryClient, useQuery, type QueryKey } from "@tanstack/react-query";
+import type { ArchivedCursor, EventBody, SessionListArchivedResult } from "@cupper/protocol";
+import { QueryClient, useInfiniteQuery, type QueryKey } from "@tanstack/react-query";
 
 import { useHost } from "../app/providers";
 
@@ -52,11 +52,14 @@ export function invalidation(query: QueryClient, client: HostClient) {
   return { onEvent, off: offState };
 }
 
-/** The example query: the first page of archived sessions. */
+/** The archived sessions, the latest first, a page at a time after the last one's cursor. */
 export function useArchivedSessions() {
   const { client } = useHost();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ARCHIVED,
-    queryFn: () => client.request<SessionListArchivedResult>("session/list_archived", {}),
+    queryFn: ({ pageParam: cursor }) =>
+      client.request<SessionListArchivedResult>("session/list_archived", cursor && { cursor }),
+    initialPageParam: undefined as ArchivedCursor | undefined,
+    getNextPageParam: (page) => page.next,
   });
 }

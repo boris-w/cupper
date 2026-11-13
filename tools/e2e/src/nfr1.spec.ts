@@ -38,13 +38,14 @@ test(
     await cupper.cli.ok(["send", s, "wait_cancel"]);
     seq = await next(cupper, stream, "turn.started", seq);
     await cupper.cli.ok(["send", s, "say queued"]);
-    await expect(main.locator("[data-queue-id]")).toHaveText("say queued");
+    await expect(main.locator("[data-queue-id] [data-queue-preview]")).toHaveText("say queued");
     // Its reply may be lost to the turn's end (T059): the window tells. The
     // queue pauses until the next message (design 5.2.4).
     await cupper.cli.run(["interrupt", s]);
     const stopped = await pattern(cupper, "stream:turn_cancelled", "duration");
     await expect(main.getByText(stopped)).toBeVisible();
-    await expect(main.locator("[data-queue-paused] [data-queue-id]")).toHaveText("say queued");
+    const paused = main.locator("[data-queue-paused] [data-queue-id] [data-queue-preview]");
+    await expect(paused).toHaveText("say queued");
     // Approved and answered: the panel goes; the record line says how it ended.
     const approved = await pattern(cupper, "request:record_approved", "title");
     const answered = t("request:record_asked", { count: 1 });
@@ -226,7 +227,11 @@ test(
     const main = cupper.window.locator("main");
     // The window's first turn, at the top of the list.
     await expect(main.getByText("say t23", { exact: true })).toBeVisible();
-    await main.locator("[data-stream-list]").evaluate((list) => (list.scrollTop = 0));
+    // The user's wheel, then the top: only the user takes the list from its end (T245).
+    await main.locator("[data-stream-list]").evaluate((list) => {
+      list.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -1000 }));
+      list.scrollTop = 0;
+    });
     const anchor = main.getByText("say t4", { exact: true });
     await expect(anchor).toBeVisible();
     await expect(main.getByText("say t3", { exact: true })).toHaveCount(0);

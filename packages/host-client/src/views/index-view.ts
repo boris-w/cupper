@@ -4,9 +4,10 @@ import { missing, otherStream, StreamView } from "./view";
 
 /**
  * The index stream's view: projects, session summaries, agents, the host,
- * connected clients and pending elevations. A later `host`, `agents` or
- * `clients` update replaces the earlier one; removing what is not there is
- * an error; `notification.intent` is a one-off signal, never in the view.
+ * its settings, connected clients and pending elevations. A later `host`,
+ * `agents`, `settings` or `clients` update replaces the earlier one; removing
+ * what is not there is an error; `notification.intent` is a one-off signal,
+ * never in the view.
  */
 export class IndexView extends StreamView<IndexViewJson> {
   protected empty(): IndexViewJson {
@@ -19,6 +20,8 @@ export class IndexView extends StreamView<IndexViewJson> {
         return this.#set("host", body.data);
       case "agents.updated":
         return this.#set("agents", body.data);
+      case "settings.updated":
+        return this.#set("settings", body.data);
       case "clients.updated":
         return this.#set("clients", body.data);
       case "project.upserted":
@@ -40,7 +43,10 @@ export class IndexView extends StreamView<IndexViewJson> {
     }
   }
 
-  #set<K extends "host" | "agents" | "clients">(key: K, value: IndexViewJson[K]): void {
+  #set<K extends "host" | "agents" | "settings" | "clients">(
+    key: K,
+    value: IndexViewJson[K],
+  ): void {
     this.state[key] = value;
     this.versions.touch(key);
   }

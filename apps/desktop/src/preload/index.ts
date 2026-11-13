@@ -7,6 +7,7 @@
 import {
   SHELL_GLOBAL,
   type Handshake,
+  type NavigateTarget,
   type PrivilegedResult,
   type ShellAPI,
   type ShellInfo,
@@ -66,6 +67,19 @@ async function openHost() {
   }
 }
 
+/**
+ * Navigation the main process sent before the document listened, as from a
+ * click or a link that started the app: the first listener gets it.
+ */
+const unheard: NavigateTarget[] = [];
+const navigated = new Set<(target: NavigateTarget) => void>();
+ipcRenderer.on(NAVIGATE, (_event, target: NavigateTarget) => {
+  if (navigated.size === 0) {
+    unheard.push(target);
+  }
+  navigated.forEach((cb) => cb(target));
+});
+
 /** Calls `cb` with what the main process sends on `channel`, until unsubscribed. */
 function on<Args extends unknown[]>(channel: string, cb: (...args: Args) => void): Unsubscribe {
   const listener = (_event: IpcRendererEvent, ...args: unknown[]) => cb(...(args as Args));
@@ -79,7 +93,11 @@ const shell: ShellAPI = {
   requestPrivileged: (action) =>
     ipcRenderer.invoke(PRIVILEGED, action) as Promise<PrivilegedResult>,
   onCommand: (cb) => on(COMMAND_CHANNEL, cb),
-  onNavigate: (cb) => on(NAVIGATE, cb),
+  onNavigate: (cb) => {
+    navigated.add(cb);
+    unheard.splice(0).forEach(cb);
+    return () => void navigated.delete(cb);
+  },
   openExternal: (url) => ipcRenderer.send(OPEN_EXTERNAL, url),
   pickDirectory: () => ipcRenderer.invoke(PICK_DIRECTORY) as Promise<string | null>,
   // Electron's own path for a File the user dropped; one a page made has none.

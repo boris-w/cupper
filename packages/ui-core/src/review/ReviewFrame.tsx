@@ -23,7 +23,17 @@ import {
 import { ACTIONS, type ReviewViewProps } from "./view";
 
 /** The review document's words, which come from the main document's language. */
-const STRINGS = ["doc_binary", "doc_mode", "doc_fold", "doc_unfold", "doc_loading"];
+const STRINGS = [
+  ...["doc_binary", "doc_mode", "doc_fold", "doc_unfold", "doc_loading"],
+  ...[
+    "doc_comment",
+    "doc_comment_save",
+    "cancel",
+    "action_stage",
+    "action_unstage",
+    "action_revert",
+  ],
+];
 
 /** A file's hunks in the diff of `diffToken` (T130's query key). */
 export const fileDiffKey = (sessionId: string, diffToken: string, path: string) =>
@@ -113,9 +123,16 @@ export function ReviewFrame({ view }: { view?: ReviewViewProps }) {
 
   const sendFiles = () => {
     if (!latest.current) return send({ type: "clear" });
-    const { diff, collapsed, view, wrap } = latest.current;
+    const { diff, collapsed, view, wrap, scope, drafts } = latest.current;
     const files = { diff_token: diff.diff_token, files: diff.files, collapsed: [...collapsed] };
-    send({ type: "files", ...files, view, wrap });
+    send({
+      type: "files",
+      ...files,
+      view,
+      wrap,
+      actions: [...ACTIONS[scope]],
+      drafts: [...drafts],
+    });
   };
 
   // A channel for each load of the review document, which takes the first port only.
@@ -141,10 +158,10 @@ export function ReviewFrame({ view }: { view?: ReviewViewProps }) {
     [api],
   );
   useEffect(() => () => port.current?.close(), []);
-  const { diff, collapsed, view: shown, wrap, focus } = view ?? {};
+  const { diff, collapsed, view: shown, wrap, scope, drafts, focus } = view ?? {};
   useEffect(() => fetched.current.clear(), [diff?.diff_token]);
   // Again whenever what `files` carries changed.
-  useEffect(sendFiles, [diff, collapsed, shown, wrap]);
+  useEffect(sendFiles, [diff, collapsed, shown, wrap, scope, drafts]);
   useEffect(() => {
     if (focus) send({ type: "scroll_to", path: focus.path, line: focus.line });
   }, [focus]);

@@ -1,12 +1,14 @@
 // The three columns of design 5.7.4: the sidebar, the session area under its
 // title bar, and the side panel. The widths come from `computeLayout`; they
-// reach the DOM as inline `width`, never as CSS custom properties.
+// reach the DOM as inline `width`, never as CSS custom properties. The
+// settings page has the window to itself, its navigation in the sidebar's place.
 
 import { commandHandler } from "@cupper/shell-api";
 import { use, useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { SlotsContext } from "../app/slots";
 import { useHost, useShell, useT } from "../app/providers";
+import { useRouter } from "../app/router";
 import { ChevronDownIcon, MoreIcon, PaneIcon } from "../components/icons";
 import { Menu } from "../components/Menu";
 import { ToolbarButton } from "../components/ToolbarButton";
@@ -56,6 +58,7 @@ function Frame({ store, children }: { store: LayoutStore; children: ReactNode })
   const { prefs, overlayOpen } = useSyncExternalStore(store.subscribe, store.getState);
   const layout = computeLayout(view, prefs, overlayOpen);
   const narrow = layout.sidebar.mode === "overlay";
+  const app = useRouter().route.page !== "settings";
 
   useEffect(() => {
     if (!narrow) {
@@ -83,7 +86,7 @@ function Frame({ store, children }: { store: LayoutStore; children: ReactNode })
   // The side panel stays once it opened, or once the window was first idle:
   // hidden, not unmounted, so that the review document and its Worker are
   // ready when it opens (design 5.7.5, point 1).
-  const shown = layout.sidePanel.visible;
+  const shown = layout.sidePanel.visible && app;
   const [resident, setResident] = useState(shown);
   if (shown && !resident) setResident(true);
   useEffect(() => {
@@ -91,11 +94,12 @@ function Frame({ store, children }: { store: LayoutStore; children: ReactNode })
     return () => cancelIdleCallback(idle);
   }, []);
 
-  const docked = layout.sidebar.visible && !narrow;
+  const sidebar = layout.sidebar.visible && app;
+  const docked = sidebar && !narrow;
   return (
     <div className="flex h-full">
       <ConnectionToast state={state} />
-      <div className="fixed top-2 left-(--layout-traffic-lights-w) z-30">
+      <div hidden={!app} className="fixed top-2 left-(--layout-traffic-lights-w) z-30">
         <ToolbarButton
           label={t("shell:toggle_sidebar")}
           shortcut="⌘B"
@@ -105,12 +109,13 @@ function Frame({ store, children }: { store: LayoutStore; children: ReactNode })
           <PaneIcon side="left" />
         </ToolbarButton>
       </div>
-      {layout.sidebar.visible && narrow && (
+      {sidebar && narrow && (
         <div className="fixed inset-0 z-10 bg-scrim" onClick={() => store.setOverlay(false)} />
       )}
-      {layout.sidebar.visible && <Sidebar layout={layout} store={store} />}
+      {sidebar && <Sidebar layout={layout} store={store} />}
       <div className="flex min-w-0 flex-1 flex-col">
         <TitleBar
+          hidden={!app}
           inset={!docked}
           sidePanelOpen={prefs.sidePanelOpen}
           onSidePanel={() => store.toggleSidePanel()}
@@ -160,11 +165,17 @@ function Frame({ store, children }: { store: LayoutStore; children: ReactNode })
 }
 
 /** The 44 high title bar; `inset` leaves room for the traffic lights and the sidebar toggle. */
-function TitleBar(props: { inset: boolean; sidePanelOpen: boolean; onSidePanel: () => void }) {
+function TitleBar(props: {
+  hidden: boolean;
+  inset: boolean;
+  sidePanelOpen: boolean;
+  onSidePanel: () => void;
+}) {
   const t = useT();
   const { handshake } = useHost();
   return (
     <header
+      hidden={props.hidden}
       className={`app-drag flex h-(--layout-titlebar-h) shrink-0 items-center gap-1 pr-2 ${props.inset ? "pl-[calc(var(--layout-traffic-lights-w)+var(--spacing)*10)]" : "pl-2"}`}
     >
       <div className="min-w-0 flex-1" />

@@ -3,7 +3,7 @@
 // shows verbatim, its invisible characters escaped; the rest is
 // @cupper/i18n's `privileged` text.
 
-import { escapeInvisible } from "@cupper/i18n";
+import { escapeInvisible, formatBytes } from "@cupper/i18n";
 import type {
   AuthElevationGetResult,
   Finding,
@@ -143,6 +143,12 @@ export function trustBox(
   return box(t, t("trust_title"), detail, ["trust", "untrust"]);
 }
 
+/** The snapshot stores' size; turns from before cannot show or revert their changes after. */
+export function purgeBox(t: Translate, bytes: number) {
+  const detail = t("purge_detail", { size: formatBytes(bytes) });
+  return box(t, t("purge_title"), detail, ["purge", "cancel"]);
+}
+
 /** What the host verified, then what the requester says; approve has its own box, unchecked. */
 export function elevationBox(t: Translate, request: AuthElevationGetResult) {
   const { verified, self_reported: said, scopes } = request;
@@ -166,4 +172,13 @@ export function elevationBox(t: Translate, request: AuthElevationGetResult) {
   return scopes.includes("approve")
     ? { ...options, checkboxLabel: t("elevation_approve"), checkboxChecked: false }
     : options;
+}
+
+/** The link to make and what it points at; it takes `~/.local/bin` on the PATH. */
+export function installCliBox(t: Translate, link: string, target: string) {
+  const detail = lines(
+    t("install_cli_detail", { link: shownPath(link), target: shownPath(target) }),
+    t("install_cli_path"),
+  );
+  return box(t, t("install_cli_title"), detail, ["install", "cancel"]);
 }

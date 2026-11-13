@@ -1,5 +1,5 @@
 //! The index stream's view: projects, session summaries, agents, the host,
-//! connected clients and pending elevation requests. It has no window: a
+//! its settings, connected clients and pending elevation requests. It has no window: a
 //! snapshot carries all of it.
 
 use std::collections::BTreeMap;
@@ -11,7 +11,8 @@ use super::{View, ViewError};
 use crate::event::EventBody;
 use crate::ids::{ElevationId, ProjectId, SessionId};
 use crate::index::{
-    AgentsUpdated, ClientsUpdated, ElevationRequested, HostUpdated, ProjectUpserted, SessionSummary,
+    AgentsUpdated, ClientsUpdated, ElevationRequested, HostUpdated, ProjectUpserted,
+    SessionSummary, SettingsUpdated,
 };
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -20,6 +21,8 @@ pub struct IndexView {
     pub host: Option<HostUpdated>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agents: Option<AgentsUpdated>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<SettingsUpdated>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clients: Option<ClientsUpdated>,
     pub projects: BTreeMap<ProjectId, ProjectUpserted>,
@@ -30,7 +33,7 @@ pub struct IndexView {
 }
 
 impl View for IndexView {
-    /// A later `host`, `agents` or `clients` update replaces the earlier one;
+    /// A later `host`, `agents`, `settings` or `clients` update replaces the earlier one;
     /// removing what is not there is an error. `notification.intent` is a
     /// one-off signal and never part of the view.
     fn apply(&mut self, body: &EventBody) -> Result<(), ViewError> {
@@ -46,6 +49,7 @@ impl View for IndexView {
         match body {
             B::HostUpdated(h) => self.host = Some(h.clone()),
             B::AgentsUpdated(a) => self.agents = Some(a.clone()),
+            B::SettingsUpdated(s) => self.settings = Some(s.clone()),
             B::ClientsUpdated(c) => self.clients = Some(c.clone()),
             B::ProjectUpserted(p) => {
                 self.projects.insert(p.project_id.clone(), p.clone());
@@ -84,6 +88,7 @@ impl View for IndexView {
         let singles = [
             self.host.clone().map(EventBody::HostUpdated),
             self.agents.clone().map(EventBody::AgentsUpdated),
+            self.settings.clone().map(EventBody::SettingsUpdated),
             self.clients.clone().map(EventBody::ClientsUpdated),
         ];
         let projects = self
@@ -122,10 +127,10 @@ mod tests {
             .value
     }
 
-    /// An index event of type `kind % 10` about the entity numbered `n`.
+    /// An index event of type `kind % 11` about the entity numbered `n`.
     fn event(kind: u8, n: u8) -> EventBody {
         let (p, s, e) = (format!("p_{n}"), format!("s_{n}"), format!("e_{n}"));
-        body(match kind % 10 {
+        body(match kind % 11 {
             0 => {
                 json!({"type": "project.upserted", "data": {"project_id": p, "name": format!("Project \"{n}\""),
                 "path": format!("/w/{n}"), "is_git": n.is_multiple_of(2), "added_at": n, "position": n, "trust_state": "trusted"}})
@@ -160,6 +165,14 @@ mod tests {
             8 => {
                 json!({"type": "elevation.resolved", "data": {"elevation_id": e, "decision": "denied"}})
             }
+            9 => {
+                json!({"type": "settings.updated", "data": {"settings": {"agents.claude.cli_path": null,
+                "agents.codex.cli_path": format!("/bin/codex-{n}"), "agents.env_passthrough": [],
+                "worktrees.root": "/w", "notifications.needs_action": true, "notifications.turn_completed": true,
+                "notifications.error": n % 2 == 1, "apps.terminal": "Terminal", "apps.editor": "TextEdit",
+                "sessions.default_agent": "claude", "host.idle_exit_minutes": 10,
+                "host.prevent_idle_sleep": true, "diagnostics.verbose": false}}})
+            }
             _ => {
                 json!({"type": "notification.intent", "data": {"intent_id": format!("n_{n}"), "session_id": s,
                 "reason": "turn_completed"}})
@@ -178,7 +191,9 @@ mod tests {
             (7, 2),
             (4, 1),
             (4, 2),
+            (10, 1),
             (9, 1),
+            (9, 2),
         ] {
             view.apply(&event(kind, n)).unwrap();
         }
@@ -194,6 +209,8 @@ mod tests {
         assert_eq!(ids(&json, "sessions"), ["s_1"]);
         assert_eq!(ids(&json, "elevations"), ["e_2"]);
         assert_eq!(json["host"]["version"], "0.2.0", "the later update wins");
+        let codex = &json["settings"]["settings"]["agents.codex.cli_path"];
+        assert_eq!(codex, "/bin/codex-2", "the later settings win");
         assert!(json.get("agents").is_none(), "absent until reported");
 
         // Removing what is gone, or a session-stream event, is an error;
@@ -221,7 +238,7 @@ mod tests {
         /// pages of any size.
         #[test]
         fn prop_view_coalesce_index_snapshot_pages_rebuild_the_view(
-            steps in prop::collection::vec((0u8..10, 0u8..6), 0..60),
+            steps in prop::collection::vec((0u8..11, 0u8..6), 0..60),
             page_bytes in 1usize..2_000,
         ) {
             let mut view = IndexView::default();

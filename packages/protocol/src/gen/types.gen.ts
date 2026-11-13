@@ -793,6 +793,10 @@ export type Event = (
       type: "host.updated";
     }
   | {
+      data: SettingsUpdated;
+      type: "settings.updated";
+    }
+  | {
       data: ClientsUpdated;
       type: "clients.updated";
     }
@@ -919,6 +923,10 @@ export type EventBody =
   | {
       data: HostUpdated;
       type: "host.updated";
+    }
+  | {
+      data: SettingsUpdated;
+      type: "settings.updated";
     }
   | {
       data: ClientsUpdated;
@@ -1557,6 +1565,12 @@ export type HostUpdated = {
    * The previous run did not exit cleanly; present only when true.
    */
   last_exit_abnormal?: boolean;
+  /**
+   * Whether the user lets the host's notifications show (design 5.2.9);
+   * absent until the host has asked the system, and in builds that only
+   * record them.
+   */
+  notification_auth?: NotificationAuth;
   pending_upgrade: boolean;
   /**
    * The host keeps the Mac awake while turns run.
@@ -1598,6 +1612,7 @@ export type IndexView = {
   sessions: {
     [key: string]: SessionSummary;
   };
+  settings?: SettingsUpdated;
 };
 
 /**
@@ -2144,6 +2159,11 @@ export type NoticeParams = {
    */
   reason?: string;
 };
+
+/**
+ * Open enum: unknown values must be accepted. Known: not_determined authorized denied
+ */
+export type NotificationAuth = "not_determined" | "authorized" | "denied" | (string & {});
 
 /**
  * `notification.intent`: written when no foreground client watches the
@@ -3056,6 +3076,11 @@ export type Settings = {
    */
   "diagnostics.verbose": boolean;
   "host.idle_exit_minutes": number;
+  /**
+   * Keeps the Mac awake while agents work (design 5.2.13); absent from
+   * what hosts before T147 wrote.
+   */
+  "host.prevent_idle_sleep"?: boolean;
   "notifications.error": boolean;
   "notifications.needs_action": boolean;
   "notifications.turn_completed": boolean;
@@ -3075,6 +3100,7 @@ export type SettingsPatch = {
   "apps.terminal"?: string;
   "diagnostics.verbose"?: boolean;
   "host.idle_exit_minutes"?: number;
+  "host.prevent_idle_sleep"?: boolean;
   "notifications.error"?: boolean;
   "notifications.needs_action"?: boolean;
   "notifications.turn_completed"?: boolean;
@@ -3092,6 +3118,14 @@ export type SettingsResult = {
 export type SettingsUpdateParams = {
   command_id: CommandId;
   patch: SettingsPatch;
+};
+
+/**
+ * `settings.updated`: every setting, as `settings/get` returns them; at
+ * start and after each `settings/update` (T151).
+ */
+export type SettingsUpdated = {
+  settings: Settings;
 };
 
 /**
@@ -3239,6 +3273,13 @@ export type SubscribeMode = "replay" | "snapshot" | (string & {});
 
 export type TestClockAdvanceParams = {
   ms: DurationMs;
+};
+
+export type TestNotificationClickParams = {
+  /**
+   * The notification's identifier: its intent's.
+   */
+  notification_id: IntentId;
 };
 
 export type TestRunMaintenanceParams = {

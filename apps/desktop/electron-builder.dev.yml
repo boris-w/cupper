@@ -16,10 +16,19 @@ npmRebuild: false
 extraResources:
   - from: ../../target/host-bundle/build/release/libcupper_native.dylib
     to: native/cupper_native.node
+  # The Dock icons of the other colours (appIcon, T252); latte is the bundle's icon.
+  - from: build/app-icons
+    to: app-icons
 extraFiles:
   - from: ../../target/host-bundle/dev/CupperHost.app
     to: Helpers/CupperHost.app
+# The deep links of design 5.7.2, as every build kind has (5.7.9).
+protocols:
+  - name: cupper Dev
+    schemes: [cupper-dev]
 mac:
+  # The latte icon (build/icon.sh); the host bundle takes the same file (design 5.10.1).
+  icon: build/icon.icns
   # `host-bundle` signed it; signing it again would change its cdhash.
   signIgnore: ["CupperHost\\.app"]
   target: dir

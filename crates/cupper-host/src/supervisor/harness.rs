@@ -1,6 +1,7 @@
 //! The test interface of `test-harness` builds (design 5.2.16, 5.9.9):
-//! `test/clock_advance`, `test/run_maintenance` and `test/seed`, with scope
-//! `test`, which only the `test_harness` principal has.
+//! `test/clock_advance`, `test/run_maintenance`, `test/seed` and
+//! `test/notification_click`, with scope `test`, which only the
+//! `test_harness` principal has.
 //!
 //! `test/clock_advance` moves the manual clock deadline by deadline and,
 //! after each, waits for the whole host to settle (rulings before T047). It
@@ -12,24 +13,28 @@ use std::time::Duration;
 
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
 use cupper_protocol::methods::admin::{
-    MaintenanceTask, TestClockAdvance, TestClockAdvanceParams, TestRunMaintenance,
-    TestRunMaintenanceParams, TestSeed,
+    MaintenanceTask, TestClockAdvance, TestClockAdvanceParams, TestNotificationClick,
+    TestNotificationClickParams, TestRunMaintenance, TestRunMaintenanceParams, TestSeed,
 };
 use cupper_protocol::rpc::Method;
 use futures::FutureExt;
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
 use super::seed::Seeder;
 use crate::clock::{Clock, ManualClock};
 use crate::gateway::{Call, Port, Reply, Routes};
 use crate::ledger::{Ledger, Outcome};
+use crate::notifier::{Click, Notifier};
 use crate::quiescence::Quiescence;
 use crate::store::retention::{Cleanup, Maintenance};
 
 #[derive(Debug)]
 pub(super) struct Harness {
+    /// Whose recorded notifications a test clicks, and where the click goes.
+    pub notifier: Notifier,
+    pub clicks: mpsc::UnboundedSender<Click>,
     /// `None` on the system clock, which nothing advances.
     pub clock: Option<ManualClock>,
     pub quiescence: Quiescence,
@@ -43,6 +48,7 @@ impl Harness {
         routes.add::<TestClockAdvance>(Arc::clone(self) as Arc<dyn Port>);
         routes.add::<TestRunMaintenance>(Arc::clone(self) as Arc<dyn Port>);
         routes.add::<TestSeed>(Arc::clone(self) as Arc<dyn Port>);
+        routes.add::<TestNotificationClick>(Arc::clone(self) as Arc<dyn Port>);
     }
 }
 
@@ -67,6 +73,12 @@ impl Port for Harness {
                 let (maintenance, ledger) = (Arc::clone(&self.maintenance), self.ledger.clone());
                 let params = parse::<TestRunMaintenanceParams>(&call);
                 async move { maintain(&maintenance, &ledger, params?.task).await }.boxed()
+            }
+            TestNotificationClick::NAME => {
+                let click = parse::<TestNotificationClickParams>(&call)
+                    .and_then(|params| clicked(&self.notifier, &params));
+                let sent = click.map(|click| drop(self.clicks.send(click)));
+                futures::future::ready(sent.map(|()| json!({}))).boxed()
             }
             _ => self.seeder.seed(call.params),
         };
@@ -118,4 +130,10 @@ async fn maintain(maintenance: &Maintenance, ledger: &Ledger, task: MaintenanceT
 
 fn parse<T: DeserializeOwned>(call: &Call) -> Result<T, RpcError> {
     T::deserialize(&call.params).map_err(|err| RpcError::new(INVALID_PARAMS, err.to_string()))
+}
+
+/// The click on a notification the notifier recorded, as the system reports it.
+fn clicked(notifier: &Notifier, params: &TestNotificationClickParams) -> Result<Click, RpcError> {
+    let click = notifier.recorded_click(&params.notification_id);
+    click.ok_or_else(|| RpcError::app(ErrorCode::NotFound, "no such recorded notification"))
 }

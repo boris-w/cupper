@@ -1,6 +1,7 @@
-// SP-10 helper (dev.cupper.spike.sp10.host), shaped like the product host: the main thread in a
-// CFRunLoop, NSApplication only when the system starts it. Modes: notify <session> stay|exit,
-// open-main <session> [scheme], status, clear, and no arguments (as the system starts it).
+// SP-10 helper (dev.cupper.spike.sp10.host), shaped like the product host: the main thread runs
+// NSApplication as an accessory app (design 5.2.3, since T150; T101 ran a bare CFRunLoop unless the
+// system started it). Modes: notify <session> stay|exit, open-main <session> [scheme], status,
+// clear, and no arguments (as the system starts it).
 import AppKit
 import UserNotifications
 
@@ -107,7 +108,15 @@ case ("status", 1), ("clear", 1):
     after(1) { settings { exit(0) } }
 default: break
 }
-// A timer keeps the run loop from returning at once and bounds the helper's life.
+// A timer bounds the helper's life.
 Timer.scheduledTimer(withTimeInterval: lifetime, repeats: false) { _ in log("exit: timeout"); exit(0) }
-// Started by the system: a bare run loop never got the click (step s2b), so try AppKit's.
-if args.isEmpty { NSApplication.shared.run() } else { CFRunLoopRun() }
+// Whether LaunchServices now knows this process as a running app (T150 step 0: the -600 dialog and
+// the second helper came from a helper it did not know).
+after(1) {
+    let pids = NSRunningApplication.runningApplications(withBundleIdentifier: hostID).map(\.processIdentifier)
+    log("running helpers=\(pids) frontmost=\(frontmost())")
+}
+// AppKit's loop in every mode: a bare run loop never got the click when the system started the
+// helper (T101 s2b), and T150 checks whether it also ends the -600 dialog and the second helper.
+NSApplication.shared.setActivationPolicy(.accessory)
+NSApplication.shared.run()

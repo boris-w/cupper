@@ -176,6 +176,7 @@ impl View for SessionView {
             | B::SessionRemoved(_)
             | B::AgentsUpdated(_)
             | B::HostUpdated(_)
+            | B::SettingsUpdated(_)
             | B::ClientsUpdated(_)
             | B::ElevationRequested(_)
             | B::ElevationResolved(_)

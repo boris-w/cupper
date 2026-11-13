@@ -155,6 +155,33 @@
     }
   },
   {
+    "name": "settings.updated",
+    "expect": "known",
+    "event": {
+      "seq": 75,
+      "v": 1,
+      "ts": 1700000000075,
+      "data": {
+        "settings": {
+          "agents.claude.cli_path": null,
+          "agents.codex.cli_path": "/opt/homebrew/bin/codex",
+          "agents.env_passthrough": ["HTTPS_PROXY"],
+          "apps.editor": "TextEdit",
+          "apps.terminal": "Terminal",
+          "diagnostics.verbose": false,
+          "host.idle_exit_minutes": 10,
+          "host.prevent_idle_sleep": false,
+          "notifications.error": true,
+          "notifications.needs_action": true,
+          "notifications.turn_completed": false,
+          "sessions.default_agent": "claude",
+          "worktrees.root": "/Users/a/.cupper/worktrees"
+        }
+      },
+      "type": "settings.updated"
+    }
+  },
+  {
     "name": "clients.updated",
     "expect": "known",
     "event": {

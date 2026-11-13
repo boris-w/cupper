@@ -19,11 +19,13 @@ import {
   FolderIcon,
   MoreIcon,
   PlusIcon,
+  SettingsIcon,
   Spinner,
 } from "../components/icons";
 import { Menu } from "../components/Menu";
 import { Tooltip } from "../components/Tooltip";
 import { usePrivileged } from "../feedback/privileged";
+import { toSettings } from "../state/ui";
 
 /** Sessions a project shows before "展开显示". */
 export const SHOWN_SESSIONS = 5;
@@ -59,7 +61,7 @@ export function HostStatus({ state, host }: { state: ClientState; host?: HostUpd
   );
 }
 
-const ROW =
+export const ROW =
   "flex h-(--layout-row-h) w-full items-center gap-2 rounded-row px-(--layout-row-px) text-left";
 
 function RowButton({ label, ...props }: ComponentProps<"button"> & { label: string }) {
@@ -219,6 +221,22 @@ function SessionRow({ session, selected }: { session: SessionSummary; selected: 
         {tag && <span className="shrink-0 text-xs text-fg-tertiary">{tag}</span>}
       </button>
     </Tooltip>
+  );
+}
+
+/** "设置", at the sidebar's foot (design 5.7.5). */
+export function SettingsRow() {
+  const t = useT();
+  const { route, navigate } = useRouter();
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(toSettings(route))}
+      className={`${ROW} mx-2 mb-2 w-auto text-base hover:bg-hover`}
+    >
+      <SettingsIcon />
+      {t("sidebar:settings")}
+    </button>
   );
 }
 

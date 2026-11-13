@@ -236,7 +236,7 @@
 | `session.upserted` | 否 | `SessionSummary {session_id, project_id, agent, title, title_source, workspace_kind, branch?, status, unread, pending_interactions, pending_kind?, last_activity_at, error_code?, read_only}`；`pending_interactions` 是待处理请求的数量；`pending_kind`（v1.4）是最早一个待处理请求的类别：`permission`、`plan_confirm` 为 `approval`，`question`、`auth_url` 为 `input`，侧边栏据此显示"等待批准"或"需要用户输入" | 状态、标题、分支、未读变化（`IndexActor` 合并 100 ms 内的连续变化） |
 | `session.removed` | 否 | `{session_id, reason: archived}` | 归档 |
 | `agents.updated` | 否 | `{agents: [AgentStatus]}`：每个 agent 的 CLI（路径、版本、与已验证范围的关系）、适配器（版本、运行时状态）、登录状态（只有类型，不含邮箱和组织）、资源占用、配置目录的校验结果；另含 git 版本和 git-lfs | 检测结果或采样变化 |
-| `host.updated` | 否 | `{version, weak_auth, pending_upgrade, power_assertion, last_exit_abnormal?}` | 变化时 |
+| `host.updated` | 否 | `{version, weak_auth, pending_upgrade, power_assertion, last_exit_abnormal?, notification_auth?}`；`notification_auth` 取 `not_determined`、`authorized`、`denied`（T150 附加，[5.2.9](02-host.md#529-关注度与通知)） | 变化时 |
 | `clients.updated` | 否 | `{clients: [{conn_id, principal_kind, role?, client_name, client_version, since, auth: verified\|weak\|peer, elevated?: {scopes, expires_at}}]}` | 连接、断开、提权 |
 | `elevation.requested` | 否 | `{elevation_id, client_name, scopes, requested_at}` | CLI 申请提权 |
 | `elevation.resolved` | 否 | `{elevation_id, decision: granted\|denied\|expired}` | 用户决定或超时 |

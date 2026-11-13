@@ -1,5 +1,6 @@
 //! The index actor on a real `host.db`: the reconciliation at start, the
-//! checkpoint of the orderly exit, and the notification intents;
+//! checkpoint of the orderly exit, the notification intents and
+//! IT-notifier-record, and what follows the settings and the git versions;
 //! IT-elevation-grant through the gateway's dispatch. IT-project-add-trust
 //! runs projects and trust through the host.
 
@@ -21,6 +22,7 @@ use crate::clock::ManualClock;
 use crate::elevation::Examined;
 use crate::gateway::{AuditEvent, Routes};
 use crate::ledger::Ledger;
+use crate::notifier::{Language, Notice};
 use crate::store::streams::StreamsConfig;
 use crate::store::testutil::TempDir;
 use crate::store::{Database, MIGRATIONS, WRITER, Writer, WriterConfig, migrate, open_writer};
@@ -31,6 +33,8 @@ struct Fx {
     db: Writer,
     readers: Readers,
     quiescence: Quiescence,
+    settings: watch::Sender<Settings>,
+    notifier: Notifier,
 }
 
 impl Fx {
@@ -46,12 +50,15 @@ impl Fx {
         };
         let (db, _) = Writer::spawn(conn, config, &quiescence).unwrap();
         let readers = Readers::open(&dir.host_db()).unwrap();
+        let settings = watch::Sender::new(crate::settings::defaults(dir.path(), dir.path()));
         Self {
             dir,
             clock,
             db,
             readers,
             quiescence,
+            settings,
+            notifier: Notifier::record(Language::English, None),
         }
     }
 
@@ -84,8 +91,10 @@ impl Fx {
             git: None,
             quiescence: self.quiescence.clone(),
             host: host(),
+            settings: self.settings.subscribe(),
             requesters,
             audit,
+            notifier: self.notifier.clone(),
         };
         IndexHandle::start(deps).await.unwrap()
     }
@@ -94,7 +103,7 @@ impl Fx {
     async fn view(&self) -> (IndexView, u64) {
         let handle = self.streams().open(&StreamId::Index).await.unwrap();
         handle.read(|view, head| match view {
-            StreamView::Index(view) => (view.clone(), head),
+            StreamView::Index(view) => (IndexView::clone(view), head),
             StreamView::Session(_) => unreachable!(),
         })
     }
@@ -123,6 +132,7 @@ fn host() -> HostUpdated {
         pending_upgrade: false,
         power_assertion: false,
         last_exit_abnormal: true,
+        notification_auth: None,
     }
 }
 
@@ -186,6 +196,8 @@ async fn index_start_reconciles_with_the_tables_and_checkpoints_on_stop() {
     assert_eq!(view.projects[&kept].trust_state, TrustState::Untrusted);
     assert_eq!(view.sessions[&session].status, SessionStatus::Unread);
     assert_eq!(view.host, Some(host()));
+    let settings = view.settings.map(|updated| updated.settings);
+    assert_eq!(settings, Some(fx.settings.borrow().clone()));
     assert!(view.elevations.is_empty());
     // Nothing differs any more: the next start writes nothing.
     let again = fx.start().await;
@@ -307,6 +319,141 @@ async fn unit_index_intent_only_when_no_desktop_ui_in_front_watches() {
     let status = |id| view.sessions[id].status.clone();
     assert_eq!(status(&claimed), SessionStatus::NeedsAction);
     assert_eq!(status(&alone), SessionStatus::Unread);
+}
+
+/// IT-notifier-record (design 5.2.9): each intent reaches the notifier with
+/// the session's title, or the reason's own when it has none, and the
+/// reason's body; a reason whose setting is off notifies of nothing, though
+/// its intent is written; so does a session that a desktop UI in front
+/// watches. The authorization the notifier reports goes into `host.updated`.
+#[tokio::test]
+async fn it_notifier_record_copy_settings_presence_and_authorization() {
+    let fx = Fx::new("notifier-record");
+    let index = fx.start().await;
+    let sessions = [1, 2, 3, 4, 5, 6].map(SessionId::from_uuid);
+    let [approval, question, done, failed, untitled, watched] = &sessions;
+    for session in &sessions {
+        let title = if session == untitled {
+            ""
+        } else {
+            "Fix the build"
+        };
+        index.created(SessionSummary {
+            title: title.into(),
+            ..summary(session)
+        });
+    }
+    presence(&index, 1, PrincipalKind::DesktopUi, (true, watched)).await;
+    let input = Some((PendingKind::Input, RequestId::from_uuid(8)));
+    let turn = |status| vec![Note::TurnStarted, ended(status)];
+    let all = |index: &IndexHandle| {
+        index.note(approval, 5, vec![pending(1)]);
+        index.note(
+            question,
+            5,
+            vec![Note::Pending {
+                count: 1,
+                oldest: input.clone(),
+            }],
+        );
+        index.note(done, 5, turn(TurnStatus::Completed));
+        index.note(failed, 5, turn(TurnStatus::Failed));
+        index.note(untitled, 5, turn(TurnStatus::Completed));
+        index.note(watched, 5, turn(TurnStatus::Completed));
+    };
+    all(&index);
+    fx.flush().await;
+    let shown = |notices: Vec<Notice>| {
+        let shown = notices
+            .into_iter()
+            .map(|notice| (notice.title, notice.body));
+        shown.collect::<Vec<_>>()
+    };
+    let titled = |body: &str| ("Fix the build".to_owned(), body.to_owned());
+    assert_eq!(
+        shown(fx.notifier.recorded()),
+        [
+            titled("Approve or decline to proceed."),
+            titled("Answer a question to proceed."),
+            titled("The agent finished a turn."),
+            titled("The turn ended with an error."),
+            (
+                "Turn complete".to_owned(),
+                "The agent finished a turn.".to_owned()
+            ),
+        ]
+    );
+    let intents = "SELECT json_extract(json, '$.data.intent_id') FROM events
+                   WHERE stream = 'index' AND type = 'notification.intent' ORDER BY seq";
+    let ids: Vec<String> = fx.notifier.recorded().into_iter().map(|n| n.id).collect();
+    assert_eq!(fx.sql(intents).await, ids);
+
+    fx.settings.send_modify(|settings| {
+        settings.notify_needs_action = false;
+        settings.notify_turn_completed = false;
+        settings.notify_error = false;
+    });
+    for session in [approval, question] {
+        index.note(session, 6, vec![pending(0)]);
+    }
+    all(&index);
+    fx.flush().await;
+    assert_eq!(
+        fx.notifier.recorded().len(),
+        5,
+        "no more with the settings off"
+    );
+    assert_eq!(fx.sql(intents).await.len(), 10);
+
+    let reported = index.clone();
+    fx.notifier
+        .authorize(move |auth| reported.notification_auth(auth));
+    fx.flush().await;
+    let (view, _) = fx.view().await;
+    let auth = view.host.and_then(|host| host.notification_auth);
+    assert_eq!(auth, Some(NotificationAuth::Authorized));
+}
+
+/// IT-notifier-auth-recheck (design 5.2.9, rule 5): the authorization the
+/// notifier reported at start is read again when a desktop UI comes from the
+/// background to the foreground, as back from System Settings, and
+/// `host.updated` follows; not for a CLI, a desktop UI in the background, or
+/// one already in front that only shows another session.
+#[tokio::test]
+async fn it_notifier_auth_recheck_when_a_desktop_ui_comes_to_the_foreground() {
+    let fx = Fx::new("auth-recheck");
+    fx.notifier.set_auth(NotificationAuth::Denied);
+    let index = fx.start().await;
+    let reported = index.clone();
+    fx.notifier
+        .authorize(move |auth| reported.notification_auth(auth));
+    let [one, two] = [1, 2].map(SessionId::from_uuid);
+    let auth = || async {
+        fx.flush().await;
+        fx.view()
+            .await
+            .0
+            .host
+            .and_then(|host| host.notification_auth)
+    };
+    assert_eq!(auth().await, Some(NotificationAuth::Denied));
+
+    // The user allows notifications in System Settings.
+    fx.notifier.set_auth(NotificationAuth::Authorized);
+    presence(&index, 2, PrincipalKind::Cli, (true, &one)).await;
+    presence(&index, 1, PrincipalKind::DesktopUi, (false, &one)).await;
+    assert_eq!(
+        auth().await,
+        Some(NotificationAuth::Denied),
+        "not yet read again"
+    );
+    presence(&index, 1, PrincipalKind::DesktopUi, (true, &one)).await;
+    assert_eq!(auth().await, Some(NotificationAuth::Authorized));
+
+    // Already in front, another session: not read again.
+    fx.notifier.set_auth(NotificationAuth::Denied);
+    presence(&index, 1, PrincipalKind::DesktopUi, (true, &two)).await;
+    assert_eq!(auth().await, Some(NotificationAuth::Authorized));
 }
 
 /// IT-orch-trust-gating's other half: a session's rescan reaches the index,
@@ -470,4 +617,43 @@ async fn it_elevation_grant_one_connection_until_it_closes_or_fifteen_minutes() 
         ("c_1".into(), Resolved(second, Granted), write),
     ];
     assert_eq!(steps.collect::<Vec<_>>(), expected);
+}
+
+#[tokio::test]
+async fn index_settings_updated_and_the_git_versions_follow_their_sources() {
+    let fx = Fx::new("index-settings-git");
+    let index = fx.start().await;
+    let head = fx.view().await.1;
+    fx.settings.send_modify(|s| s.notify_error = false);
+    fx.quiescence.settled().await;
+    let (view, at) = fx.view().await;
+    assert!(!view.settings.unwrap().settings.notify_error);
+    assert_eq!(at, head + 1);
+    // The same settings again write nothing.
+    fx.settings.send_modify(|_| {});
+    fx.quiescence.settled().await;
+    assert_eq!(fx.view().await.1, at);
+
+    // A fake git and git-lfs (T094).
+    let bin = fx.dir.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let script = crate::driver::probe::testkit::script;
+    let git = script(&bin, "git", "echo 'git version 2.45.1'");
+    let lfs = script(
+        &bin,
+        "git-lfs",
+        "echo 'git-lfs/3.6.0 (GitHub; darwin arm64)'",
+    );
+    let tool = GitTool::new(git, Some(lfs), &[bin], None, None, fx.dir.path()).unwrap();
+    index.git(tool.versions(&fx.clock, &Durations::default()).await);
+    fx.quiescence.settled().await;
+    // Not before the first agent: an empty list would say none was found.
+    assert_eq!(fx.view().await.0.agents, None);
+    let status = json!({"agent": "claude", "state": "idle", "config_dir": "default",
+        "adapter": {"version": "0.91.0", "runtime": "ready"}, "auth": {"state": "unchecked"}});
+    AgentNotes::agent(&index, serde_json::from_value(status).unwrap());
+    fx.quiescence.settled().await;
+    let agents = fx.view().await.0.agents.unwrap();
+    let versions = (agents.git.version.as_deref(), agents.git.lfs.as_deref());
+    assert_eq!(versions, (Some("2.45.1"), Some("3.6.0")));
 }

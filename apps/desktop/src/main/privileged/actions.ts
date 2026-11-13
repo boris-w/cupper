@@ -20,6 +20,7 @@ import type { MessageBoxOptions } from "electron";
 import type { Translate } from "../host/dialogs";
 import * as box from "./dialogs";
 import type { PrivilegedHost } from "./host";
+import { installCli, planCli, type CliPlace, type CliPlan } from "./install-cli";
 
 /** The dialogs, taken from `dialog` when called (design 5.7.2). */
 export interface PrivilegedUi {
@@ -31,6 +32,8 @@ interface Cx {
   host: PrivilegedHost;
   ui: PrivilegedUi;
   t: Translate;
+  /** Where `install_cli` links the CLI from and to. */
+  cli: CliPlace;
 }
 
 const CONFIRMED: PrivilegedResult = { status: "confirmed" };
@@ -53,7 +56,8 @@ async function described(cx: Cx, method: string, params: Record<string, unknown>
     const value = description.details[key];
     return typeof value === "string" ? value : undefined;
   };
-  return { command, mode: text("mode"), projectPath: text("project_path") };
+  const { details } = description;
+  return { command, details, mode: text("mode"), projectPath: text("project_path") };
 }
 
 async function title(cx: Cx, sessionId: string): Promise<string> {
@@ -77,6 +81,10 @@ export function run(action: PrivilegedAction, cx: Cx): Promise<PrivilegedResult>
       return addProject(cx);
     case "elevation":
       return elevation(cx, action.elevation_id);
+    case "purge_snapshots":
+      return purgeSnapshots(cx);
+    case "install_cli":
+      return installTheCli(cx);
     default:
       // `settings/update` has no handler on the host before T036.
       return Promise.resolve(failed("unsupported"));
@@ -201,6 +209,17 @@ async function addProject(cx: Cx): Promise<PrivilegedResult> {
   return { status: "confirmed", result: { project_id, trusted } };
 }
 
+/** What the snapshot stores take now, then the purge; the host refuses it while a turn runs. */
+async function purgeSnapshots(cx: Cx): Promise<PrivilegedResult> {
+  const { command, details } = await described(cx, "host/purge_snapshots", {});
+  const bytes = typeof details.snapshot_bytes === "number" ? details.snapshot_bytes : 0;
+  if (!(await asked(cx, box.purgeBox(cx.t, bytes))).yes) {
+    return CANCELLED;
+  }
+  await cx.host.command("host/purge_snapshots", command);
+  return CONFIRMED;
+}
+
 async function elevation(cx: Cx, elevationId: string): Promise<PrivilegedResult> {
   const request = await cx.host.request<AuthElevationGetResult>("auth/elevation_get", {
     elevation_id: elevationId,
@@ -210,4 +229,32 @@ async function elevation(cx: Cx, elevationId: string): Promise<PrivilegedResult>
   const decision = answer.yes ? "grant" : "deny";
   await cx.host.command("auth/elevation_respond", { elevation_id: elevationId, decision, scopes });
   return answer.yes ? CONFIRMED : CANCELLED;
+}
+
+/** Why the CLI was not linked, and where (`reason` is the plan's state). */
+const refused = ({ state, path }: Extract<CliPlan, { path: string }>): PrivilegedResult => ({
+  status: "failed",
+  error: { code: "unavailable", reason: state, path },
+});
+
+/**
+ * Links the CLI once the user confirms where (design 5.10.1). Installed
+ * already, it says where without asking; an app outside the Applications
+ * folders, or a file of the user's under the link's name, is refused.
+ */
+async function installTheCli(cx: Cx): Promise<PrivilegedResult> {
+  const plan = await planCli(cx.cli);
+  if (plan.state === "installed") {
+    return { status: "confirmed", result: { link: plan.link } };
+  }
+  if (plan.state !== "ready") {
+    return refused(plan);
+  }
+  if (!(await asked(cx, box.installCliBox(cx.t, plan.link, plan.target))).yes) {
+    return CANCELLED;
+  }
+  const done = await installCli(plan);
+  return done.state === "installed"
+    ? { status: "confirmed", result: { link: done.link } }
+    : refused(done);
 }

@@ -178,6 +178,17 @@ impl Gateway {
         }
     }
 
+    /// Queues `N` on the desktop UI's control connections, such as
+    /// `ui/navigate` (design 5.3); whether there was one.
+    pub fn notify_controls<N: HostNotification>(&self, params: &N::Params) -> bool {
+        let outboxes = self.clients.control_outboxes();
+        let frame = wire::notification::<N>(params);
+        for outbox in &outboxes {
+            outbox.push_frame(frame.clone());
+        }
+        !outboxes.is_empty()
+    }
+
     /// Ends every connection once what is queued on it has gone out, or its
     /// close grace has passed, and returns when all have ended. Stop
     /// [`serve`](Self::serve) first.

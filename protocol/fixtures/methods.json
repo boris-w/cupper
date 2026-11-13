@@ -472,6 +472,7 @@
         "apps.terminal": "terminal",
         "diagnostics.verbose": false,
         "host.idle_exit_minutes": 30,
+        "host.prevent_idle_sleep": true,
         "notifications.error": true,
         "notifications.needs_action": true,
         "notifications.turn_completed": true,
@@ -495,6 +496,7 @@
         "apps.terminal": "terminal",
         "diagnostics.verbose": false,
         "host.idle_exit_minutes": 30,
+        "host.prevent_idle_sleep": true,
         "notifications.error": true,
         "notifications.needs_action": true,
         "notifications.turn_completed": true,
@@ -571,6 +573,7 @@
   },
   { "method": "test/clock_advance", "params": { "ms": 3000 }, "result": {} },
   { "method": "test/run_maintenance", "params": { "task": "orphan_blobs" }, "result": {} },
+  { "method": "test/notification_click", "params": { "notification_id": "n_1" }, "result": {} },
   {
     "method": "test/seed",
     "params": {

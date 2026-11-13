@@ -144,7 +144,7 @@ macro_rules! each_method {
                 admin::SettingsGet, admin::SettingsUpdate, admin::AuthElevate,
                 admin::AuthElevationGet, admin::AuthElevationRespond, admin::PolicyDescribe,
                 admin::DiagExport, admin::DiagRecordingExport, admin::TestClockAdvance,
-                admin::TestRunMaintenance, admin::TestSeed,
+                admin::TestRunMaintenance, admin::TestSeed, admin::TestNotificationClick,
                 project::ProjectAdd, project::ProjectTrust, project::ProjectTrustInfo,
                 project::ProjectRemove, project::AgentsCapabilities, project::AgentsRefresh,
                 project::AgentsRestart,

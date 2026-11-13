@@ -60,7 +60,7 @@ const MATRIX: &[(&str, &str)] = &[
     ("auth/elevation_respond", "CNNNNYN"),
     ("diag/recording_export", "BBNNNYN"),
     (
-        "test/clock_advance test/run_maintenance test/seed",
+        "test/clock_advance test/run_maintenance test/seed test/notification_click",
         "NNNNNBN",
     ),
     ("project/add project/remove", "YYNYNYS"),

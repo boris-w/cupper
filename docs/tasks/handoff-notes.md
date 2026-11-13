@@ -448,7 +448,7 @@
 | T113 | 真实配置下，模型会绕开 apply_patch 改用用户配置的 MCP 工具写文件（被 read-only 沙箱拒绝），所以剧本的 prompt 要点名使用哪个工具。所有 MCP 调用是否都受沙箱约束，交安全工程师确认。另外加一个 Codex 版的"关闭时有命令正在运行" | T102 |
 | T113 | 2026-10-28 的最新版本：codex-acp 2.3.0（换用 ACP TS SDK 2.0，依赖 `@openai/codex ^0.164.0`），codex CLI 0.165.0（超出已验证上限 0.163.0）。升级适配器之前重跑 Q8、Q31。复用 T102 的 `config-hash.ts` 时，换成真正的 TOML 解析 | T102 |
 | T150 | 第一条验收（T101 没验证的缺口）：宿主改跑 NSApplication 之后，"宿主在、UI 已退出时重复拉起宿主"和 Finder 的"…is not open anymore"对话框是否消失。测法见 T101 汇报的遗留第 1 条；消除不了时，考虑改由 LaunchServices 拉起宿主（影响 ADR-01、Q21），或者启用 T158 | T101 |
-| T150 | 写任务书之前，编排者把 T101 汇报里"设计 5.2.9 要补的规则"6 条补进设计：宿主 bundle 先在 LaunchServices 登记（`LSRegisterURL`，在宿主进程启动之前）、主线程改跑 NSApplication、系统单独拉起的宿主只转交点击后退出（排在读 stdin 载荷之前）、有序退出时清掉通知、上报授权状态、宿主带图标和显示名称 | T101 |
+| T150 | 写任务书之前，编排者把 T101 汇报里"设计 5.2.9 要补的规则"6 条补进设计：宿主 bundle 先在 LaunchServices 登记（`LSRegisterURL`，在宿主进程启动之前）、主线程改跑 NSApplication、系统单独拉起的宿主只转交点击后退出（排在读 stdin 载荷之前）、有序退出时清掉通知、上报授权状态、宿主带图标和显示名称 | T101（已写入设计 5.2.3、5.2.9、5.2.13、5.7.2、5.10.1，2026-11-10） |
 | T150 | Info.plist：`CFBundleDisplayName`、`CFBundleName` 写构建种类的显示名称，图标复制进 `CupperHost.app/Contents/Resources`；交 URL 用 `NSWorkspace.open([URL], withApplicationAt:)`，目标 App 按宿主路径往上三级找再核对身份（同一个 bundle id 可能登记着好几份）；授权被拒后界面提示去系统设置打开；没测的有 macOS 14 和 15、Developer ID 签名、从 DMG 拖入时嵌套 helper 的登记 | T101 |
 | T160 | 自用构建是第一个申请通知授权的构建，系统只在第一次登记时取名称和图标：宿主的 `CFBundleDisplayName`、`CFBundleName` 和图标要在第一次申请授权之前写对 | T101 |
 | T160 | Vite 保留了 `local` 这个 mode 名（与 `.env.local` 冲突），`vite build --mode local` 直接报错，自用构建现在构建不出来；T105 在临时副本里改成用 `self-use` 映射到 local | T105（进行中的发现） |
@@ -515,7 +515,7 @@
 | T161、T180 或安全工程师 | Info.plist 带着 Electron 默认的摄像头、麦克风、蓝牙（两项）、音频采集用途说明，agent 触发这类授权时会显示成 Cupper；要不要在打包时删掉（需要 `afterPack` 钩子）待定，"自用前须知"里已写一律拒绝 | T160（已写入 T161 的 brief） |
 | T161 | 复用 `apps/desktop/src/test-entry-points.ts` 和 `apps/desktop/selfuse/build.test.ts` 里逐个 Mach-O 检查 entitlements、读 fuse 线的做法；`electron-builder.release.yml` 至今没有真正构建过；5.10.2 可补：库不带 entitlements，`chrome_crashpad_handler`、`app_shim_loader`、`ShipIt` 拿 `entitlementsInherit`，helper 的 identifier 是 `<appId>.helper`、`.helper.Renderer`、`.helper.GPU`、`.helper.Plugin` | T160（已写入 T161 的 brief） |
 | 以后改升级流程的任务（5.5.7、T129、T180） | keyed 构建（自用、开发、e2e）里宿主因待升级退出后，旧界面会自动从磁盘拉起新宿主，新旧两版混用；可以考虑收到 `host/shutdown(upgrade)` 后不再拉起，改为提示重启 App | T160 |
-| T147 | 设置页"安装命令行工具"还没做，自用构建的安装说明暂时让用户 `ln -s` | T160 |
+| T253（v1.3.92 前为 T147） | 设置页"安装命令行工具"还没做，自用构建的安装说明暂时让用户 `ln -s`；做完后改 `docs/user/` 里的安装说明 | T160 |
 | T151、T153 | 默认编辑器是 TextEdit（T036 定的），`open -a TextEdit <目录>` 打不开文件夹；改成清单里第一个已安装的编辑器，或由界面引导用户选一个 | T126（已写入 T151 的 brief） |
 | COMPAT 运行或真机验证（T113 等） | 提示里 `file_ref` 映射成的 `resource_link`，`file://` uri 没有百分号编码，路径里有空格、`#`、`%` 时不合法；要不要编码看两个适配器怎么解析 | T126 |
 | 以后改输入框或 `session/send` 的任务 | 图片超限、agent 不收图片、越出工作区的 `file_ref`，现在要到 prompt 时才失败（由 error 条目显示）；可以在 `session/send` 按能力提前校验 | T126 |
@@ -576,3 +576,36 @@
 | T021 的后续或维护者 | `trace-ids status` 报 IT-sys-peer-macos15 "ran only in pr, not in its suite nightly"（与 T172 无关，T172 核对时发现） | T172 |
 | T180 | release-config 只为不签名的每晚构建对 Electron Framework 补 ad-hoc 签名（写 fuse 使它的签名失效）；用 Developer ID 签名时 electron-builder 会重签 framework，发布流水线不需要这一步 | T161 |
 | T180 或安全评审 | `Cupper.app` 的 Info.plist 带着 Electron 默认的 5 项用途说明（音频采集、蓝牙两项、摄像头、麦克风），release-config 每晚列出、不判失败；删不删、怎么删（`afterPack` 钩子）待定 | T161 |
+| 无障碍或复刻度修正（T148 等） | 审查文档里 pierre 自带的行号"+"没有可访问名称（库在 shadow DOM 里渲染）；要补就用 `renderGutterUtility` 自己渲染带 `aria-label` 的按钮，代价是自己处理拖选多行。长 hunk 的按钮在末行下面，pierre 支持自定义分隔符后可以挪到分隔符里 | T238 |
+| T145、T151 | T238 合并后各自 merge main，核对重叠的 `stream-changes-review` 和 review-commit 三张基线 | T238 |
+| T113 | codex-acp 2.2.2 的 `userInputToContentBlocks` 处理音频时不区分 `fileId`（同一函数里图片已区分），`session/load` 回放 fileId 形式的音频会显示成 `[@audio](undefined)`；2.6.0 仍未修。升级适配器或用 `write` 重写基线时一并看，重写后 0.165.0–0.167.0 三条记录都会失效 | T246 |
+| 维护 codex-drift 工具时 | `facets` 看不到变体里再嵌一层的 `anyOf`，"改成二选一"会显示成"去掉了必填字段"（T209、T246 都遇到）；不会漏报，但描述会误导 | T246 |
+| 写消息流跳转用例的任务 | jsdom 里 TanStack Virtual 的 `scrollToIndex` 会一直对齐下去、跑满 CPU，跳转类的用例放 Playwright（截图套件）里测；用程序化滚动模拟用户时，先派发一次 wheel 等用户输入（T245 的规则：只有用户的操作能离开底部） | T245 |
+| T244 | 新会话页能取能力（扩展点带上 agent）之后，图片附件在新会话页也可以查 `prompt.image` 和 `max_image_bytes`；目前新会话页只查类型，其余由宿主在发送时把关 | T145 |
+| 改输入框样式的任务 | 给输入框容器加常驻的定位类样式（如 `relative`）会改变阴影的绘制顺序，盖到相邻的动作条和计划药丸上；加之前先跑一轮 ui-baseline 比对（T145 改为拖入时才定位） | T145 |
+| T242 | `keys.ts` 的 `sendAction()` 已区分 `"send"` 和 `"queue"`，运行中把 `"send"` 映射成 `mode: steer` 即可；"跟进消息默认排队"的对调也在这里加 | T244 |
+| T144 | 新建会话页读 `agents/capabilities` 的查询在 `composer/extensions/slash.tsx` 的 `Cached` 组件，查询键 `["agents/capabilities", agent]`，`agents.updated` 让它失效；显示缓存的模型和权限时共用这个查询 | T244 |
+| T148、T154 | 斜杠菜单没有截图用例；要加时仿照 sidebar.spec 的 `composer-file-ref`，基线由 ui-baseline 生成 | T244 |
+| T250 | 图标的四处一起加：拿铁母版生成的 icns 入库、四份 electron-builder 配置的 `mac.icon`、`host-bundle` 写宿主的 `CFBundleIconFile`、UNIT-host-bundle-identity 补图标断言；UserNotifications 的 sys 接口挂在 T150 的主循环上（一个进程只建一个能收退出事件的 `RunLoop`，宿主已经只建一个） | T150 |
+| T254（MAN-notification-product，v1.3.92 前为 T251） | 注销、关机时 loginwindow 给宿主发退出事件这一点没有实测。用户决定（2026-11-10）不做真机验证，以 `cupper-sys/tests/runloop.rs` 的用例为准（事件来了走有序退出，而不是 AppKit 直接 `exit(0)`） | T150（已结）|
+| 改宿主 `RunLoop` 的任务 | CoreFoundation 把回调相同、`info` 为空的两个源当成同一个；`RunLoop` 丢弃时要移除自己的停止源和退出处理，否则后建的循环停不下来（T150 的测试里卡住过） | T150 |
+| 写或改 shuttle 用例的任务 | shuttle 的线程栈默认 60 KiB；视图或状态变大后，debug 构建里迭代器链的帧会越过它。macOS 上表现为没有任何输出的 SIGBUS（signal 10）。排查用 lldb 看 sp 是否落在协程栈下方的保护页里；修法是用 `Runner::new(DfsScheduler::new(None, false), config)` 加 `config.stack_size` 显式给栈并注明原因（PROP-stream-seq 现在 256 KiB，实测 96 KiB 就够） | T151 |
+| 本机 `cargo clean` 之后跑宿主用例的人 | 宿主的部分 lib 用例和 lifecycle 集成测试要先构建假 agent（`cargo build -p cupper-fake-agent`）和 CLI 的 e2e 构建（`cargo build -p cupper-cli --features test-harness`）；CI 的 rust 作业会自己构建 | T151 |
+| T149 | 排队消息行上的"插话"可以复用 `composer/send.ts` 的 `useSessionSend` 里的提示（"已转为排队"、副作用只提示一次）和回退逻辑 | T242 |
+| T147 | "跟进消息默认排队"开关写 prefs 的 `composer.followUpQueue`（布尔，默认关）；Claude 插话副作用的说明复用 `composer:steer_side_effects` | T242 |
+| 写插话用例的任务（T149、T171 等） | 等 agent 拿到这一轮的 prompt（页面上出现这一轮的输出）再插话；只等 `turn.started` 时回合可能还在 `Preparing`（拍开始快照），插话会按 `not_prompting` 转为排队 | T242 |
+| 做第一个安全设置行（特权操作 `settings`）的任务 | 普通的 patch 问 `policy/describe` 会回 `invalid_params`（`NotConfirmable`，不带原因），不要拿它当"不用确认"的信号，按设计 5.2.11 的"修改需要"一栏区分；`admin.rs` 里 `policy/describe` 的样例把 `details` 写成 `{key, value}`，宿主实际发的是 `{settings: {key: value}}`，以宿主为准并修正样例 | T147 |
+| T147 及以后往设置页加页的任务 | 分页表的形状固定为 `{ id, Body }`，`Body` 接收 `focus`，加一页加一行；新页标题的文案键是 `settings:section_<id>`；命令按钮用 `settings/parts.tsx` 的 `CommandButton`，文案键按 `<name>`、`<name>_busy`、`<name>_failed` 命名 | T248 |
+| T251 | 点击的回调要给通知中心设代理（T250 没设，宿主不在前台时横幅照常出现）；通知的 `userInfo` 带会话 ID 和请求 ID，或者由通知 ID（就是意图 ID `n_…`）反查；测试用的点击入口接在 `test_config.notifier: record` 上 | T250 |
+| 读通知内容属性的代码 | objc2 的 `UNMutableNotificationContent.subtitle` 没设置时返回 nil，绑定却声明为非空，一调用就 panic；产品代码不读它 | T250 |
+| 维护 i18n 的任务（T154 等） | 同一个 JSON 文案文件里重复的键，后写的会悄悄覆盖先写的，i18n 的用例查不出来（T253 在 `settings.json` 里重复过 `cli`，靠 T151 的用例才发现）；可以给 i18n 的检查加一条重复键检测 | T253 |
+| T180 | 通知点击前只核对外层 App 的 bundle id（宿主路径往上三级的 Info.plist）；有了发布构建的 Team ID 后，还要核对外层 App 的代码签名满足 UI 的要求（同 5.8.1 宿主对 UI 主进程的要求），不满足就不激活、不交 URL | T251 |
+| T254 | 桌面主进程转发 control 上的 `ui/navigate`；`deeplink` 给 e2e、开发构建补注册 scheme，`open-url` 只认 `<scheme>://session/<id>[?request=<id>]`，两个 ID 按协议格式（前缀加 1–64 个 `[A-Za-z0-9_-]`）校验，App 还没启动完收到的 URL 也要处理；E2E 用 `test/notification_click`（harness 连接，`notification_id` 取索引流 `notification.intent` 的 `intent_id`）；MAN-notification-product 一并核对激活的时机（`notifier_settle` 300 ms 够不够）和系统单独拉起的宿主 | T251 |
+| 写 e2e 的任务 | 经 shell 设置偏好后，窗口要晚一点才拿到、React 还要重新渲染；依赖偏好的用例要么启动前写进 prefs.json（helpers 的 `startingPrefs`），要么等界面上体现新偏好的东西出现再继续。点完 Radix 菜单项后先等菜单卸载（role=menu 数量为 0）再输入，否则焦点陷阱会吞掉输入 | T149 |
+| T152、T154 | 外观分区已由 T252 建好（`settings/AppearanceSection.tsx`，在"通知"之后、"已归档会话"之前），主题、半透明侧边栏、语言往里加行；设置页用例的 `setup` 参数是 `{ auth, prefs }`，可以给 shell 预置 prefs | T252 |
+| T148 | 其他滚动区域仍是系统默认滚动条（侧边栏、设置页、审查文档、文件树、提交弹窗的输出、请求面板、`@`/`/` 弹出列表、工具输出）；Codex 对所有元素统一设细滚动条（`scrollbar-width: thin`、滑块正文色 30%、悬停换 border-strong），复刻度修正时考虑统一，用 T256 的 `--color-scrollbar-thumb` | T256 |
+| T148 | 适配器退出时，出错卡片直接列出 stderr 的尾部（十几行 `[session/create] <redacted> phase=…`），对用户太长、太技术；考虑默认折叠，展开再看 | T254 |
+| 写用户文档的任务（T157 等） | macOS 26 上通知授权请求是通知样式的横幅，要点横幅上的"允许"按钮（或"选项"里的允许）；点横幅本身系统按"不允许"处理，之后只能去系统设置里打开 | T254 |
+| 在本机跑 e2e 的人 | T254 起 e2e 版 App 带 `cupper-e2e` 的 URL scheme，本机一启动 LaunchServices 就会记下它；影响不大，但 e2e 尽量在 runner 上跑 | T254 |
+| T107 | `apps/desktop/src/main/window.ts` 的 `dropVisibilityListenersOnClose` 是为 Electron 44 自带的可见性监听加的（窗口销毁后的遮挡变化会让它抛 "Object has been destroyed"）。升到 45 时查 electron/electron#53971 有没有回合到所用的 45.x：回合了就删掉这个函数、调用处、单元测试和注释 | T260 |
+| 要连跑 UNIT-views-differential 的人 | test-repeat 的 vitest 模式不会生成 `CUPPER_VIEW_CASES`，差分测试在里面只会跳过，workflow 把跳过算作失败；连跑要派 nightly `job=differential` | T260 |

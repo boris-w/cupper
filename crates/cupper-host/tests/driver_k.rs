@@ -13,13 +13,14 @@ use std::process::Command;
 use common::*;
 use cupper_cli::client::ClientError;
 use cupper_cli::client::{self, Client};
+use cupper_host::clock::SystemClock;
 use cupper_host::driver::runtime::launch;
 use cupper_host::gateway::testkit::TempDir;
 use cupper_protocol::error::{APP_ERROR, INVALID_PARAMS};
 use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::methods::session::{
-    SessionCapabilities, SessionCapabilitiesParams, SessionCreate, SessionInterrupt, SessionSend,
-    SessionSetConfig,
+    SessionCapabilities, SessionCapabilitiesParams, SessionCreate, SessionInterrupt,
+    SessionQueueEdit, SessionSend, SessionSetConfig,
 };
 use serde_json::{Value, json};
 
@@ -133,6 +134,24 @@ async fn steer(client: &Client, session: &SessionId, text: &str, turn: &Value) -
 async fn turn(data_dir: &Path, session: &SessionId, n: usize) -> Value {
     let started = events(data_dir, session, "turn.started", n).await;
     started[n - 1]["turn_id"].clone()
+}
+
+/// `session/queue_edit` of `ops` at `version`; the result as JSON.
+async fn queue_edit(
+    client: &Client,
+    session: &SessionId,
+    version: &Value,
+    ops: Value,
+) -> Result<Value, ClientError> {
+    let params = json!({"command_id": client::command_id(), "session_id": session,
+        "expected_version": version, "ops": ops});
+    let edited = client.request::<SessionQueueEdit>(typed(params)).await;
+    edited.map(|result| json!(result))
+}
+
+/// The session's `n`-th `queue.updated`, once there is one.
+async fn queue(data_dir: &Path, session: &SessionId, n: usize) -> Value {
+    events(data_dir, session, "queue.updated", n).await[n - 1].clone()
 }
 
 /// How many `_session/steering` requests the agent got.
@@ -715,4 +734,95 @@ async fn it_degrade_steering_unsupported_is_queued() {
     assert_eq!(reason, (&json!("queued"), &json!("unsupported")));
     assert_eq!(steerings(&path), 0);
     interrupt(&client, &session).await;
+}
+
+/// IT-queue-edit: a queued message is rewritten at the queue's version, and
+/// steered into the running turn, leaving the queue as it goes in; another
+/// version is `conflict/version_mismatch`, remove and move `unsupported`.
+#[tokio::test(flavor = "multi_thread")]
+async fn it_queue_edit_rewrites_and_steers_a_queued_message() {
+    let dir = TempDir::new("queue-edit");
+    let (data_dir, _host, client, path) = host(&dir, &[], json!({})).await;
+    let session = create(&client, "say running; wait_cancel").await;
+    said(&data_dir, &session, "running").await;
+    let running = turn(&data_dir, &session, 1).await;
+    send(&client, &session, "first").await;
+    let queued = queue(&data_dir, &session, 1).await;
+    let (version, id) = (&queued["version"], &queued["entries"][0]["queue_id"]);
+    let replace = json!([{"op": "replace", "queue_id": id,
+        "content": [{"type": "text", "text": "rewritten"}]}]);
+    let stale = json!(version.as_u64().unwrap() + 1);
+    let answered = queue_edit(&client, &session, &stale, replace.clone()).await;
+    assert_eq!(
+        refused(answered),
+        ("conflict".into(), "version_mismatch".into())
+    );
+    for op in [
+        json!({"op": "remove", "queue_id": id}),
+        json!({"op": "move", "queue_id": id}),
+    ] {
+        let answered = queue_edit(&client, &session, version, json!([op])).await;
+        assert_eq!(refused(answered).0, "unsupported");
+    }
+
+    let replaced = queue_edit(&client, &session, version, replace)
+        .await
+        .unwrap();
+    let rewritten = queue(&data_dir, &session, 2).await;
+    assert_eq!(rewritten["entries"][0]["preview"], "rewritten");
+    assert_eq!(replaced["version"], rewritten["version"]);
+    let steer = json!([{"op": "steer", "queue_id": id}]);
+    let steered = queue_edit(&client, &session, &rewritten["version"], steer)
+        .await
+        .unwrap();
+    let want = json!({"disposition": "steered", "turn_id": running});
+    assert_eq!(steered["steer"], want);
+    assert_eq!(sent(&path, "_session/steering", "rewritten"), 1);
+    assert_eq!(queue(&data_dir, &session, 3).await["entries"], json!([]));
+    let message = &items(&data_dir, &session, "user_message", 2).await[1];
+    let went = (
+        &message["steered"],
+        &message["queue_id"],
+        &message["turn_id"],
+    );
+    assert_eq!(went, (&json!(true), id, &running));
+    interrupt(&client, &session).await;
+}
+
+/// IT-queue-edit: a queued message's steer that cannot go in leaves it where
+/// it is: one while another steer waits (`steer_pending`), one after the
+/// turn was interrupted (`not_prompting`).
+#[tokio::test(flavor = "multi_thread")]
+async fn it_queue_edit_a_steer_that_falls_back_leaves_the_message_in_place() {
+    let dir = TempDir::new("queue-edit-fallback");
+    let config = json!({"durations": {"steer_timeout_ms": 1000}});
+    let (data_dir, _host, client, path) = host(&dir, &[], config).await;
+    let session = create(&client, "steer_hang; say running; wait_cancel").await;
+    said(&data_dir, &session, "running").await;
+    send(&client, &session, "one").await;
+    send(&client, &session, "two").await;
+    let queued = queue(&data_dir, &session, 2).await;
+    let (version, entries) = (&queued["version"], queued["entries"].clone());
+    let steer = |n: usize| json!([{"op": "steer", "queue_id": entries[n]["queue_id"]}]);
+    let other = connect(&data_dir).await;
+    let (hung, pending) = tokio::join!(queue_edit(&client, &session, version, steer(0)), async {
+        let clock = SystemClock::new();
+        while steerings(&path) == 0 {
+            wait(&clock).await;
+        }
+        queue_edit(&other, &session, version, steer(1)).await
+    });
+    let reason = |edited: Value| edited["steer"].clone();
+    let timeout = json!({"disposition": "queued", "fallback_reason": "timeout"});
+    assert_eq!(reason(hung.unwrap()), timeout);
+    let steer_pending = json!({"disposition": "queued", "fallback_reason": "steer_pending"});
+    assert_eq!(reason(pending.unwrap()), steer_pending);
+
+    interrupt(&client, &session).await;
+    events(&data_dir, &session, "turn.completed", 1).await;
+    let paused = queue(&data_dir, &session, 3).await;
+    let late = queue_edit(&client, &session, &paused["version"], steer(0)).await;
+    let not_prompting = json!({"disposition": "queued", "fallback_reason": "not_prompting"});
+    assert_eq!(reason(late.unwrap()), not_prompting);
+    assert_eq!(queue(&data_dir, &session, 3).await["entries"], entries);
 }

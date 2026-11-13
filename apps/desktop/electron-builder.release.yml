@@ -24,6 +24,9 @@ npmRebuild: false
 extraResources:
   - from: ../../target/host-bundle/build/release/libcupper_native.dylib
     to: native/cupper_native.node
+  # The Dock icons of the other colours (appIcon, T252); latte is the bundle's icon.
+  - from: build/app-icons
+    to: app-icons
 extraFiles:
   - from: ../../target/host-bundle/release/CupperHost.app
     to: Helpers/CupperHost.app
@@ -33,6 +36,8 @@ protocols:
   - name: Cupper
     schemes: [cupper]
 mac:
+  # The latte icon (build/icon.sh); the host bundle takes the same file (design 5.10.1).
+  icon: build/icon.icns
   # `host-bundle` signed them; signing them again would change the host's
   # cdhash, which the CLI checks.
   signIgnore: ["CupperHost\\.app", "/Helpers/cupper$"]

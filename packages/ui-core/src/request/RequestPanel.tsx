@@ -16,7 +16,8 @@ import {
 
 import { escapeInvisible } from "@cupper/i18n";
 
-import { useHost, useT } from "../app/providers";
+import { useT } from "../app/providers";
+import { useSessionSend } from "../composer/send";
 import { useToasts } from "../feedback/toaster";
 import { usePrivileged } from "../feedback/privileged";
 import { useUi } from "../state/provider";
@@ -111,7 +112,7 @@ export function RequestPanel(props: {
     };
   }, [props.activity]);
 
-  const { client } = useHost();
+  const toSession = useSessionSend(sessionId);
   const { show } = useToasts();
   const answer = (outcome: InteractionOutcome) =>
     void respond(requested, outcome).then((how) => {
@@ -131,9 +132,10 @@ export function RequestPanel(props: {
       ? { type: "dismissed" as const }
       : skipOutcome(request);
   const click = (fn: () => void) => () => downWhileReady.current && fn();
-  // RP-12: the rejection first; the follow-up only once it went, queued and
-  // tied to the request. Otherwise the text goes back to the composer, after
-  // a draft already there with a blank line between.
+  // RP-12: the rejection first; the follow-up only once it went, tied to the
+  // request, steering or queued as the composer's send key would. Otherwise
+  // the text goes back to the composer, after a draft already there with a
+  // blank line between.
   const keepInComposer = (message: string) => {
     const draft = ui.getState().drafts[sessionId];
     ui.getState().setDraft(sessionId, draft ? `${draft}\n\n${message}` : message);
@@ -142,14 +144,8 @@ export function RequestPanel(props: {
     const how = await respond(requested, reject);
     if (how === "sent") {
       props.onAnswered(requested.request_id);
-      const content = [{ type: "text", text: message }];
-      const params = {
-        session_id: sessionId,
-        mode: "queue",
-        content,
-        reply_to: requested.request_id,
-      };
-      await client.command("session/send", params).catch(() => {
+      const content = [{ type: "text" as const, text: message }];
+      await toSession(content, "send", { reply_to: requested.request_id }).catch(() => {
         keepInComposer(message);
         show({ id: "follow-up", text: t("composer:send_failed", { code: "follow_up" }) });
       });

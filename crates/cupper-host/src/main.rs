@@ -1,8 +1,9 @@
 //! `cupper-host`, the session host process (design 5.2). It runs steps 1 and 2
-//! of the startup sequence (design 5.2.13): the command line, `--build-info`
+//! of the startup sequence (design 5.2.13): a host the system started for a
+//! click on a notification, which only forwards it, the command line, `--build-info`
 //! and `--self-test`, in `dev-auth` builds the launcher (design 5.8.1), and
 //! the stdin payload; then `host.log`, and stdio goes to `/dev/null`. The supervisor runs the other steps on the tokio
-//! workers, while the main thread runs its `CFRunLoop` until the host exits
+//! workers, while the main thread runs AppKit's loop until the host exits
 //! (design 5.2.3).
 
 use std::process::ExitCode;
@@ -16,6 +17,15 @@ use cupper_host::supervisor::{Host, Start};
 use cupper_sys::{RunLoop, RunLoopStop};
 
 fn main() -> ExitCode {
+    // Before the payload, which such a host never gets (design 5.2.9 rule 3).
+    #[cfg(not(feature = "test-harness"))]
+    if cupper_host::notifier::click::started_for_a_click(
+        std::env::args_os().len() == 1,
+        std::os::unix::process::parent_id(),
+        std::env::var_os("XPC_SERVICE_NAME").as_deref(),
+    ) {
+        return cupper_host::notifier::click::forward().into();
+    }
     let data_dir = match Command::parse(std::env::args_os().skip(1), std::env::var_os("HOME")) {
         Ok(Command::Run { data_dir }) => data_dir,
         Ok(Command::BuildInfo) => {
@@ -71,7 +81,13 @@ fn main() -> ExitCode {
         Err(err) => return logged(&err, err.exit()),
     };
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "the host started");
-    let main_loop = RunLoop::current();
+    let main_loop = RunLoop::on_main_thread(host.quitter()).expect("main runs on the main thread");
+    // Before AppKit finishes launching (design 5.2.9).
+    let _clicks = host.notification_clicks().map(|clicks| {
+        cupper_sys::on_notification_click(move |click| {
+            let _ = clicks.send(click);
+        })
+    });
     let stop = StopOnDrop(main_loop.stopper());
     let running = runtime.spawn(async move {
         let _stop = stop;
@@ -101,7 +117,7 @@ fn self_test(data_dir: &std::path::Path) -> ExitCode {
     }
 }
 
-/// Stops the main thread's run loop as the host exits, a panic included.
+/// Stops the main thread's loop as the host exits, a panic included.
 struct StopOnDrop(RunLoopStop);
 
 impl Drop for StopOnDrop {

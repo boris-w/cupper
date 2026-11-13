@@ -17,6 +17,8 @@ export function Menu(props: {
   /** Opened and closed from outside, too. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** As the menu closes, before it gives the focus back; `preventDefault` keeps it where it is. */
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   // Closed by a key, the menu gives the focus back to its trigger; closed by
   // the pointer, it does not, or the trigger's tooltip and focus ring would
@@ -33,6 +35,7 @@ export function Menu(props: {
           onCloseAutoFocus={(event) => {
             if (pointer.current) event.preventDefault();
             pointer.current = false;
+            props.onCloseAutoFocus?.(event);
           }}
           align={props.align ?? "end"}
           sideOffset={4}

@@ -1,9 +1,9 @@
-// Queued messages above the composer (design 5.7.4): a preview each, and the
-// paused queue with "继续" (`session/queue_resume`). Steer and editing are
-// M1b (T140, T149).
+// Queued messages above the composer (design 5.7.4): a row each
+// (`QueueRow`: steer, edit), and the paused queue with "继续"
+// (`session/queue_resume`).
 
 import type { SessionView } from "@cupper/host-client";
-import type { PromptBlock, QueueUpdated } from "@cupper/protocol";
+import type { QueueUpdated } from "@cupper/protocol";
 
 import { useEffect, useRef } from "react";
 
@@ -13,17 +13,24 @@ import { RequestPanel, type ComposerActivity } from "../request/RequestPanel";
 import { useStreams } from "../state/provider";
 import { useEntry } from "../state/stream";
 import { Composer } from "./Composer";
+import { QueueRow } from "./QueueRow";
 import { useSend, useSessionState } from "./send";
 
-const count = (content: PromptBlock[], type: string) =>
-  content.filter((block) => block.type === type).length;
-
-function Queue({ queue, resume }: { queue: QueueUpdated | null | undefined; resume: () => void }) {
+function Queue(props: {
+  sessionId: string;
+  view: SessionView;
+  queue: QueueUpdated | null | undefined;
+  resume: () => void;
+}) {
+  const { queue, resume, view } = props;
   const t = useT();
   if (!queue || (queue.entries.length === 0 && !queue.paused)) {
     return null;
   }
   const reason = queue.paused?.reason;
+  const { turns, capabilities } = view.toJSON();
+  const running = turns.some((turn) => !turn.completed);
+  const steer = capabilities?.turn.steer;
   const row = "flex items-center gap-2 rounded-lg bg-composer-bar px-3 py-1.5";
   return (
     <div
@@ -47,24 +54,14 @@ function Queue({ queue, resume }: { queue: QueueUpdated | null | undefined; resu
         </div>
       )}
       {queue.entries.map((entry) => (
-        <div key={entry.queue_id} data-queue-id={entry.queue_id} className={row}>
-          <span className="min-w-0 flex-1 truncate">{entry.preview.split("\n", 1)[0]}</span>
-          {(
-            [
-              ["image", "composer:queue_images"],
-              ["review_comment", "composer:queue_comments"],
-            ] as const
-          ).map(([type, label]) => {
-            const n = count(entry.content, type);
-            return (
-              n > 0 && (
-                <span key={type} className="text-fg-tertiary">
-                  {t(label, { count: n })}
-                </span>
-              )
-            );
-          })}
-        </div>
+        <QueueRow
+          key={entry.queue_id}
+          sessionId={props.sessionId}
+          entry={entry}
+          version={queue.version}
+          steerable={running && steer?.supported === true}
+          sideEffects={steer?.side_effects === true}
+        />
       ))}
     </div>
   );
@@ -107,7 +104,7 @@ function SessionArea({ sessionId, view }: { sessionId: string; view: SessionView
   const name = t(`sidebar:agent_${agent}`, { defaultValue: agent });
   return (
     <>
-      <Queue queue={queue} resume={resume} />
+      <Queue sessionId={sessionId} view={view} queue={queue} resume={resume} />
       {first ? (
         <RequestPanel
           key={first.request_id}

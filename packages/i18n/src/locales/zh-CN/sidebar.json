@@ -29,5 +29,6 @@
   "host_upgrade": "会话宿主有待安装的升级",
   "elevation": "命令行工具申请权限",
   "elevation_more": "另有 {{count}} 条申请",
-  "review": "查看"
+  "review": "查看",
+  "settings": "设置"
 }

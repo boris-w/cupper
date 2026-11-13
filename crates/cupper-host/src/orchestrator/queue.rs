@@ -90,6 +90,11 @@ impl QueueCore {
         Some((entry, self.updated()))
     }
 
+    /// The entry `queue_id`, if it is queued.
+    pub fn entry(&self, queue_id: &QueueId) -> Option<&QueueEntry> {
+        self.entries.iter().find(|e| e.queue_id == *queue_id)
+    }
+
     /// Takes the entry `queue_id` out, wherever it is.
     pub fn take(&mut self, queue_id: &QueueId) -> Option<(QueueEntry, QueueUpdated)> {
         let at = self.entries.iter().position(|e| e.queue_id == *queue_id)?;

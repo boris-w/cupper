@@ -1098,7 +1098,7 @@ UI-late-output = "pr"
 [T147]
 milestone = "M1b"
 UI-settings-general = "pr"
-UI-settings = { parts = ["UI-settings-agents", "UI-settings-archived", "UI-settings-general"] }
+UI-settings = { parts = ["UI-settings-agents", "UI-settings-archived", "UI-settings-general", "UI-settings-cli"] }
 
 # 复刻度修正
 [T148]
@@ -1112,15 +1112,51 @@ milestone = "M1b"
 IT-queue-edit = "pr"
 E2E-queue-edit = "nightly"
 
-# 系统通知与 ui/navigate
+# 系统通知 I：宿主主线程与通知身份
 [T150]
 milestone = "M1b"
-MAN-notification-product = "man"
+UNIT-host-bundle-identity = "pr"
+
+# 系统通知 II：弹出通知（v1.3.90 由 T150 拆出）
+[T250]
+milestone = "M1b"
 IT-notifier-record = "pr"
 UNIT-notifier-no-actions = "pr"
-# K5 不通过时改由 T158 产出（替代 T150 的宿主通知部分）
+
+# 系统通知 III：点击（宿主）（v1.3.90 由 T150 拆出）
+[T251]
+milestone = "M1b"
+IT-notifier-click = "pr"
+
+# 系统通知 IV：导航与深链接（桌面）（v1.3.92 由 T251 拆出）
+[T254]
+milestone = "M1b"
+MAN-notification-product = "man"
+# K5 不通过时改由 T158 产出（替代 T250、T251 的宿主通知部分）
 E2E-notification-navigate = "nightly"
 MAN-notification = { parts = ["MAN-notification-spike", "MAN-notification-product"] }
+
+# 设置页"安装命令行工具"（v1.3.92 由 T147 拆出）
+[T253]
+milestone = "M1b"
+UNIT-install-cli = "pr"
+UI-settings-cli = "pr"
+
+# 界面上报在场（v1.3.92 新增，T254 复核发现）
+[T257]
+milestone = "M1b"
+E2E-presence-suppresses-notification = "nightly"
+
+# 通知授权状态的重新查询（v1.3.92 新增，T254 复核发现）
+[T258]
+milestone = "M1b"
+IT-notifier-auth-recheck = "pr"
+
+# App 图标颜色（v1.3.91 新增；不在 M1b 的退出条件里，所以里程碑是 release）
+[T252]
+milestone = "release"
+UNIT-app-icon-pref = "pr"
+UI-icon-colour = "pr"
 
 # 设置页 I：agent 状态
 [T151]
@@ -1333,3 +1369,9 @@ id = "MAN-keyboard"
 date = "2026-11-02"
 record = "docs/tasks/T099-m1a-exit/man-keyboard.md"
 versions = { electron = "44.9.0" }
+
+[[evidence]]
+id = "MAN-notification-product"
+date = "2026-11-10"
+record = "docs/tasks/T254-notifications-navigate/man-notification-product.md"
+versions = { cupper = "1643e8e3", macos = "26.4" }

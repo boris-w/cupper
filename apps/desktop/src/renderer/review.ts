@@ -1,12 +1,17 @@
 // The review document (design 5.7.5), served from app://cupper-review/. No
 // preload runs here: it has no ShellAPI and no host. In e2e builds only,
 // `window.__cupperReview` sends on the port the document took, as a review
-// document gone wrong would, and gives the diff token it was last sent
-// (E2E-SEC-review-iso). Other builds lack it.
+// document gone wrong would, gives the diff token it was last sent
+// (E2E-SEC-review-iso), and copies a text, to see where it lands
+// (E2E-review-comment). Other builds lack it.
 
 import "@cupper/ui-core/styles.css";
 
 import { mountReviewDocument } from "@cupper/ui-core/review-document";
+
+interface Clipboard {
+  writeText(text: string): Promise<void>;
+}
 
 const hooks: Parameters<typeof mountReviewDocument>[0] = (port) => {
   let token: unknown;
@@ -17,6 +22,14 @@ const hooks: Parameters<typeof mountReviewDocument>[0] = (port) => {
     },
   );
   const send = (message: unknown) => port.postMessage(message);
-  Object.assign(globalThis, { __cupperReview: { send, token: () => token } });
+  // This project's types are Node's: the page's clipboard, as the page has it.
+  const { clipboard } = (globalThis as unknown as { navigator: { clipboard: Clipboard } })
+    .navigator;
+  const copy = (text: string) =>
+    clipboard.writeText(text).then(
+      () => "ok",
+      (error: unknown) => (error as Error).name,
+    );
+  Object.assign(globalThis, { __cupperReview: { send, token: () => token, copy } });
 };
 mountReviewDocument(__CUPPER_FLAVOR__ === "e2e" ? hooks : undefined);

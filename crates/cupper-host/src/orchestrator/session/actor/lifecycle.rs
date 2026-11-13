@@ -11,8 +11,8 @@ use cupper_protocol::index::WorkspaceKind;
 use cupper_protocol::methods::interaction::InteractionRespond;
 use cupper_protocol::methods::session::{
     ArchiveWorktree, RestoreMode, SessionArchive, SessionArchiveParams, SessionArchiveResult,
-    SessionConfirmConfig, SessionInterrupt, SessionQueueResume, SessionRenameParams,
-    SessionRestoreResult, SessionSend, SessionSetConfig, WorktreeOutcome,
+    SessionConfirmConfig, SessionInterrupt, SessionQueueEdit, SessionQueueResume,
+    SessionRenameParams, SessionRestoreResult, SessionSend, SessionSetConfig, WorktreeOutcome,
 };
 use cupper_protocol::rpc::Method;
 use serde_json::json;
@@ -27,10 +27,11 @@ use crate::orchestrator::turn;
 
 /// The calls that change a session, which an archived or read-only one
 /// refuses.
-const WRITES: [&str; 6] = [
+const WRITES: [&str; 7] = [
     SessionSend::NAME,
     SessionInterrupt::NAME,
     SessionQueueResume::NAME,
+    SessionQueueEdit::NAME,
     SessionConfirmConfig::NAME,
     SessionSetConfig::NAME,
     InteractionRespond::NAME,

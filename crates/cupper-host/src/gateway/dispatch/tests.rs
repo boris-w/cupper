@@ -172,11 +172,14 @@ impl Fixture {
         routes.add::<DiagRecordingExport>(Arc::clone(&self.index) as Arc<dyn Port>);
         // As the host's test interface (T047) in `test-harness` builds.
         if cfg!(feature = "test-harness") {
-            use cupper_protocol::methods::admin::{TestClockAdvance, TestRunMaintenance, TestSeed};
+            use cupper_protocol::methods::admin::{
+                TestClockAdvance, TestNotificationClick, TestRunMaintenance, TestSeed,
+            };
             let port = || Arc::clone(&self.index) as Arc<dyn Port>;
             routes.add::<TestClockAdvance>(port());
             routes.add::<TestRunMaintenance>(port());
             routes.add::<TestSeed>(port());
+            routes.add::<TestNotificationClick>(port());
         }
         routes
     }
@@ -391,10 +394,10 @@ const ALLOWED: &[(&str, Why)] = {
             Builds(HARNESS || cfg!(feature = "dev-auth")),
         ),
         ("host/prepare_upgrade", Until("T183")),
-        ("session/queue_edit", Later(M1b)),
         ("stream/ack", Later(M3)),
         // Build `test-harness` only.
         ("test/clock_advance", Builds(HARNESS)),
+        ("test/notification_click", Builds(HARNESS)),
         ("test/run_maintenance", Builds(HARNESS)),
         ("test/seed", Builds(HARNESS)),
     ]

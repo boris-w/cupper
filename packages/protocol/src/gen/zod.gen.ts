@@ -641,17 +641,6 @@ export const zHostPurgeSnapshotsResult = z.object({
 });
 
 /**
- * `host.updated`.
- */
-export const zHostUpdated = z.object({
-  last_exit_abnormal: z.boolean().optional(),
-  pending_upgrade: z.boolean(),
-  power_assertion: z.boolean(),
-  version: z.string(),
-  weak_auth: z.boolean(),
-});
-
-/**
  * Hunk: `hk_` + 24 hex digits of a content hash.
  */
 export const zHunkId = z.string();
@@ -819,6 +808,26 @@ export const zNoticeCode = z.union([
   ]),
   z.string(),
 ]);
+
+/**
+ * Open enum: unknown values must be accepted. Known: not_determined authorized denied
+ */
+export const zNotificationAuth = z.union([
+  z.enum(["not_determined", "authorized", "denied"]),
+  z.string(),
+]);
+
+/**
+ * `host.updated`.
+ */
+export const zHostUpdated = z.object({
+  last_exit_abnormal: z.boolean().optional(),
+  notification_auth: zNotificationAuth.optional(),
+  pending_upgrade: z.boolean(),
+  power_assertion: z.boolean(),
+  version: z.string(),
+  weak_auth: z.boolean(),
+});
 
 /**
  * Open enum: unknown values must be accepted. Known: terminal editor finder
@@ -1433,6 +1442,10 @@ export const zStreamSubscribeResult = z.object({
 
 export const zTestClockAdvanceParams = z.object({
   ms: zDurationMs,
+});
+
+export const zTestNotificationClickParams = z.object({
+  notification_id: zIntentId,
 });
 
 export const zTestRunMaintenanceParams = z.object({
@@ -2370,6 +2383,7 @@ export const zSettings = z.object({
   "apps.terminal": z.string(),
   "diagnostics.verbose": z.boolean(),
   "host.idle_exit_minutes": z.int().gte(0).lte(4294967295),
+  "host.prevent_idle_sleep": z.boolean().optional().default(true),
   "notifications.error": z.boolean(),
   "notifications.needs_action": z.boolean(),
   "notifications.turn_completed": z.boolean(),
@@ -2389,6 +2403,7 @@ export const zSettingsPatch = z.object({
   "apps.terminal": z.string().optional(),
   "diagnostics.verbose": z.boolean().optional(),
   "host.idle_exit_minutes": z.int().gte(0).lte(4294967295).optional(),
+  "host.prevent_idle_sleep": z.boolean().optional(),
   "notifications.error": z.boolean().optional(),
   "notifications.needs_action": z.boolean().optional(),
   "notifications.turn_completed": z.boolean().optional(),
@@ -2406,6 +2421,14 @@ export const zSettingsResult = z.object({
 export const zSettingsUpdateParams = z.object({
   command_id: zCommandId,
   patch: zSettingsPatch,
+});
+
+/**
+ * `settings.updated`: every setting, as `settings/get` returns them; at
+ * start and after each `settings/update` (T151).
+ */
+export const zSettingsUpdated = z.object({
+  settings: zSettings,
 });
 
 /**
@@ -2686,6 +2709,7 @@ export const zIndexView = z.object({
   host: zHostUpdated.optional(),
   projects: z.record(z.string(), zProjectUpserted),
   sessions: z.record(z.string(), zSessionSummary),
+  settings: zSettingsUpdated.optional(),
 });
 
 export const zSessionListArchivedResult = z.object({
@@ -2774,6 +2798,10 @@ export const zEvent = z.intersection(
     z.object({
       data: zHostUpdated,
       type: z.literal("host.updated"),
+    }),
+    z.object({
+      data: zSettingsUpdated,
+      type: z.literal("settings.updated"),
     }),
     z.object({
       data: zClientsUpdated,
@@ -2895,6 +2923,10 @@ export const zEventBody = z.union([
   z.object({
     data: zHostUpdated,
     type: z.literal("host.updated"),
+  }),
+  z.object({
+    data: zSettingsUpdated,
+    type: z.literal("settings.updated"),
   }),
   z.object({
     data: zClientsUpdated,
