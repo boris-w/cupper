@@ -4,10 +4,11 @@
 // position are UI state and stay. Opening a session that is not held, as
 // from a notification, is a cache miss: it subscribes and shows loading.
 
-import { IndexView, SessionView, type HostClient } from "@cupper/host-client";
+import { IndexView, SessionView, type HostClient, type StreamSink } from "@cupper/host-client";
 import type { EventBody } from "@cupper/protocol";
 import type { Unsubscribe } from "@cupper/shell-api";
 
+import { startup } from "../app/startup";
 import { StreamStore, type Frames } from "./stream";
 
 /** Sessions kept besides the one on screen. */
@@ -35,7 +36,18 @@ export class Subscriptions {
 
   /** Subscribes the index; after `close`, the session on screen too. */
   start(): void {
-    this.#offIndex ??= this.client.subscribe(this.index.stream, this.index);
+    const index = this.index;
+    // Its snapshot applied, the start's mark (T262).
+    const sink: StreamSink = {
+      reset: () => index.reset(),
+      apply: (body, event) => index.apply(body, event),
+      live: () => {
+        index.live();
+        startup.indexApplied();
+      },
+      failed: (error) => index.failed(error),
+    };
+    this.#offIndex ??= this.client.subscribe(index.stream, sink);
     this.show(this.#current);
   }
 
