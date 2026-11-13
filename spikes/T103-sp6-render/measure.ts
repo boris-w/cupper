@@ -101,8 +101,10 @@ export async function seed(
 ) {
   const before = new Set(await sessionIds(cupper));
   const { peer } = await harness(cupper);
-  peer.send({ jsonrpc: "2.0", id: 1, method: "test/seed", params: { profile: { ...profile, mix: "sp1" } } });
-  const reply = await peer.next((m) => m.id === 1 && !("method" in m), 15 * 60_000);
+  // Not id 1: `initialize`'s response, with that id, stays among the messages.
+  const params = { profile: { ...profile, mix: "sp1" } };
+  peer.send({ jsonrpc: "2.0", id: 99, method: "test/seed", params });
+  const reply = await peer.next((m) => m.id === 99 && !("method" in m), 15 * 60_000);
   peer.socket.end();
   if (reply.error) throw new Error(`test/seed: ${JSON.stringify(reply.error)}`);
   return (await sessionIds(cupper)).filter((id) => !before.has(id));
