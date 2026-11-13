@@ -76,7 +76,7 @@
   - 5.10.6（`10-release.md` 的起始版本）；
   - 5.7.8、5.7.9 里提到 44 的几句（第 9 个 fuse、`input-event` 的类型定义、GPU helper）；
   - 13 的 Q26（可以补"45.2.3 上复测相同，T107"）。
-- `apps/desktop/selfuse/coexist.test.ts` 的注释改成了 "Electron 45 runs the GPU process in the plain helper"。是否属实由 nightly 的 selfuse 那一项实测。
+- `apps/desktop/selfuse/coexist.test.ts` 那句注释，第一次改成了 "Electron 45 runs the GPU process in the plain helper"。但断言用的是 `arrayContaining`，只核对了普通 helper 和 Renderer helper 在跑，并没有证实 GPU helper 不启动。按 `main` 的决定（2026-11-09），注释改为只写断言实际核对的内容，不写版本，也不写 GPU 进程怎么跑；断言本身不动。
 
 ## 7. 删掉 T260 的 `dropVisibilityListenersOnClose`（2026-11-13）
 
