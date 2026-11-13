@@ -9,6 +9,7 @@
 // set the long gaps against `host.db`'s `checkpoint_fullfsync`.
 
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { randomBytes } from "node:crypto";
 import { createWriteStream, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -30,9 +31,12 @@ function watchFsyncs(pid: number, name: string) {
   fsUsage.stdout.on("data", (chunk: Buffer) => {
     for (const line of chunk.toString().split("\n")) if (/fsync/i.test(line)) out.write(`${line}\n`);
   });
-  fsUsage.on("error", () => undefined);
-  return () => {
+  fsUsage.stderr.on("data", (chunk: Buffer) => out.write(`fs_usage: ${chunk.toString()}`));
+  const exited = once(fsUsage, "close").catch(() => undefined);
+  // Stopped and gone before the next run's, which the kernel's trace would refuse.
+  return async () => {
     fsUsage.kill("SIGINT");
+    await Promise.race([exited, new Promise((done) => setTimeout(done, 10_000))]);
     out.end();
   };
 }
@@ -70,7 +74,7 @@ async function run(cupper: Cupper, streams: number) {
   await sleep(SECONDS * 1000 - (Date.now() - started));
   const frames = await stopFrames(cupper);
   const ended = Date.now();
-  stopFsyncs();
+  await stopFsyncs();
   const reset = (await cupper.window.evaluate(() => window.__cupperGate.resets())) - resets;
 
   // T206: how long each stream went without an event while the host wrote them.

@@ -1,17 +1,18 @@
 // SP-6 scenario 4 (T103; design 5.9.6, 5.9.7): sessions of 1,000 and 5,000
 // items and one with a single turn of 2,000, seeded with the SP-1 mix. Each
-// is opened by its link (timed to its first rows), scrolled from the top of
-// what the window holds to the bottom, 120 px a frame (the frame times), and
-// then paged back through its history: before each page the first row on
-// screen is noted, and after it its top must not move more than 1 px. The
-// renderer's memory after opening and after paging.
+// is opened by its link (timed to its first rows) and paged back through its
+// history: before each page the first row on screen is noted, and after it
+// its top must not move more than 1 px. Then the whole of what came in is
+// scrolled from the top to the bottom, 120 px a frame (the frame times). The
+// renderer's memory after opening and after the scroll.
 
 import { expect, test, type Cupper } from "../../tools/e2e/src/fixture";
 import { texts, untilEvent } from "../../tools/e2e/src/helpers";
 import { session } from "../../tools/e2e/src/nfr1";
 import { openTimed, record, seed, startFrames, stopFrames } from "./measure";
 
-const PAGES = 5;
+/** At most, for a session whose history would not end. */
+const PAGES = 60;
 type Paging = Window & { __sp6Anchor?: { row: Element; top: number } };
 
 /** The renderer's working set and its JS heap, in MB. */
@@ -67,22 +68,25 @@ async function measure(cupper: Cupper, name: string, id: string) {
   const t = await texts(cupper);
   const first = await openTimed(cupper, id);
   const opened = await memory(cupper);
-  await startFrames(cupper);
-  await scrollDown(cupper, 120);
-  const scroll = await stopFrames(cupper);
   const more = t("stream:history_more");
   const list = cupper.window.locator("[data-stream-list]");
   const moved: (number | null)[] = [];
   for (let page = 0; page < PAGES; page++) {
     await list.evaluate((el) => (el.scrollTop = 0));
+    // At the top, the list renders the history control in a frame or two.
     const button = list.getByRole("button", { name: more });
-    if ((await button.count()) === 0) break;
+    const shown = await button.waitFor({ timeout: 5000 }).then(() => true, () => false);
+    if (!shown) break;
     await noteAnchor(cupper, more);
     await button.click();
     await expect(list.getByRole("button", { name: t("stream:history_loading") })).toHaveCount(0);
     moved.push(await anchorMoved(cupper));
   }
-  record("4-long", { session: name, first_render_ms: first, scroll, anchor_moved_px: moved, opened, paged: await memory(cupper) });
+  await startFrames(cupper);
+  await scrollDown(cupper, 120);
+  const scroll = await stopFrames(cupper);
+  const scrolled = await memory(cupper);
+  record("4-long", { session: name, first_render_ms: first, pages: moved.length, anchor_moved_px: moved, scroll, opened, scrolled });
 }
 
 test("SP-6 scenario 4: long sessions opened, scrolled and paged back", async ({ cupper }) => {
