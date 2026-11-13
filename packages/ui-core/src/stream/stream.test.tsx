@@ -14,15 +14,21 @@ import { ScrollKeeper } from "./scroll";
 import { StreamList } from "./StreamList";
 import { installResizeObserver, observed } from "./test-resize";
 
-afterEach(cleanup);
+/** A row's height as laid out: 40 px unless a test lays it out otherwise. */
+let rowHeight: (row: HTMLElement) => number = () => 40;
 
-// jsdom lays nothing out: the list is 800 px high, a row 40.
+afterEach(() => {
+  cleanup();
+  rowHeight = () => 40;
+});
+
+// jsdom lays nothing out: the list is 800 px high, a row `rowHeight`.
 beforeAll(() => {
   installResizeObserver();
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     configurable: true,
     get(this: HTMLElement) {
-      return this.dataset.streamList === undefined ? 40 : 800;
+      return this.dataset.streamList === undefined ? rowHeight(this) : 800;
     },
   });
 });
@@ -146,6 +152,32 @@ describe("UNIT-stream-anchor", () => {
     expect(pages()).toEqual([{ session_id: "s_1", cursor: { turn_no: 2 } }]);
     expect(screen.getByText("第一个")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "加载更早的历史" }), "turn 1 is in").toBeNull();
+  });
+
+  test("rows put in front lay out other than estimated: the held row stays where it was (T263)", async () => {
+    // Turn 1's message lays out 70 px high, not the 44 estimated.
+    rowHeight = (row) => (row.textContent?.includes("第一个") ? 70 : 40);
+    const { frame } = await setup();
+    const list = document.querySelector("[data-stream-list]") as HTMLElement;
+    Object.defineProperties(list, { scrollHeight: { value: 1000 }, clientHeight: { value: 200 } });
+    // Scrolled to the top by the user; the page comes in after the
+    // virtualizer's end of scrolling, 150 ms on, so it measures the rows as
+    // they render, with the list still at the top.
+    fireEvent.wheel(list);
+    list.scrollTop = 0;
+    fireEvent.scroll(list);
+    await act(() => new Promise((done) => setTimeout(done, 300)));
+    const top = (text: string) => {
+      const row = screen.getByText(text).closest<HTMLElement>("[data-index]");
+      return Number(/translateY\((.+)px\)/.exec(row?.style.transform ?? "")?.[1]) - list.scrollTop;
+    };
+    const held = top("第二个");
+    await act(
+      async () => void fireEvent.click(screen.getByRole("button", { name: "加载更早的历史" })),
+    );
+    await frame();
+    expect(screen.getByText("第一个")).toBeTruthy();
+    expect(top("第二个")).toBe(held);
   });
 
   test("a scroll whose event has not come yet is not undone by a render before it (T208)", async () => {

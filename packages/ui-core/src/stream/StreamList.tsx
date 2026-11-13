@@ -103,10 +103,14 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
     },
   });
   const total = virtualizer.getTotalSize();
+  // Where row `key` is now, by the rows measured until now. Not by
+  // `measurementsCache`: that is as of the render, without the rows that came
+  // in at the top and were measured as they mounted, which the virtualizer
+  // keeps nothing in place for; the held row would be off by what they differ
+  // from the estimate (T263). The held row was on screen, so it was measured.
   const locate = (key: string) => {
-    const index = rows.findIndex((row) => row.key === key);
-    const start = virtualizer.measurementsCache[index]?.start;
-    return start === undefined ? undefined : { index, start };
+    const item = virtualizer.takeSnapshot().find((measured) => measured.key === key);
+    return item && { index: item.index, start: item.start };
   };
 
   useLayoutEffect(() => {
