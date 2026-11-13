@@ -672,7 +672,7 @@ M1a 的消息流、store、订阅策略、HostPort 生命周期都按这里的�
 规则：
 
 1. **识别用的事件**：
-   - 键盘用 `before-input-event`，只认 `type: keyDown`；它带 `key`、`isComposing`、`isAutoRepeat`、modifiers。不用 `input-event` 识别键盘：Electron 44 的类型定义里它只有 `type` 和 `modifiers`（运行时其实带了键码，待定问题 Q26 确认，留作后备）。
+   - 键盘用 `before-input-event`，只认 `type: keyDown`；它带 `key`、`isComposing`、`isAutoRepeat`、modifiers。不用 `input-event` 识别键盘：Electron 44 的类型定义里它只有 `type` 和 `modifiers`（运行时其实带了键码，Q26 在 44.9.0 和 45.2.3 上都确认过，留作后备）。
    - 鼠标用 `input-event` 里同一按钮的 `mouseDown` 接 `mouseUp`，间隔不超过 1 s，记在 `mouseUp` 的时刻。
    - **只记录主框架获得焦点时的输入**：键盘事件发生时 `webContents.focusedFrame` 必须是主框架；鼠标在 `mouseUp` 时检查同一件事。焦点在审查文档里时的按键和点击一律不记。
    - 主进程为每个窗口记录 `lastInput {kind, key?, digit?, at, consumed}`。
@@ -906,7 +906,7 @@ v1.4 新增。取值来自 ui-spec 第 2、3 节：静态读取作者本机 Code
 | 设置行 | 上下 12、左右 16，标签和控件间距 24；分节间距 40 |
 | 警告框 | 内边距 12 × 8，最大宽为会话列的 77% |
 
-**圆角**：Chromium 139 以上，Codex 把圆角统一放大 1.25 倍并改用 superellipse 形状。cupper 随 Electron 44（Chromium 高于 139），所以直接取放大后的值；`corner-shape: superellipse(1.5)` 作为渐进增强。
+**圆角**：Chromium 139 以上，Codex 把圆角统一放大 1.25 倍并改用 superellipse 形状。cupper 随 Electron 45（Chromium 156），所以直接取放大后的值；`corner-shape: superellipse(1.5)` 作为渐进增强。
 
 | token | 值 | 用在哪里 |
 |---|---|---|

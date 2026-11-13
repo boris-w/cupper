@@ -94,7 +94,7 @@ cupper/
 | Node（开发与工具） | `.node-version` | 24 LTS（T001 定为 24.13.0） |
 | pnpm | `packageManager` 字段 | 12.x（T001 定为 12.14.0：本机版本，也是当前 latest；12 的依赖脚本白名单键为 `allowBuilds`，与 10.x 的配置格式不兼容） |
 | TypeScript | 根 `package.json` 精确版本 | 6.0.x（T001 定为 6.0.3：typescript-eslint 8.71 要求低于 6.1） |
-| Electron | `apps/desktop/package.json` 精确版本 | 44.x 的最新补丁版本（2026-10-19 时是 44.9.0，T074 开工时复核；见 [5.10.6](10-release.md#5106-electron-版本)） |
+| Electron | `apps/desktop/package.json` 精确版本 | 当前 45.2.3（T107，2026-11-13）；起始为 44.x 的最新补丁版本（2026-10-19 时是 44.9.0，T074 开工时复核）；见 [5.10.6](10-release.md#5106-electron-版本)） |
 | electron-builder / electron-updater | 精确版本 | 26.x / 6.8.x |
 | 适配器、Node 运行时 | `runtime/manifest.json` | claude-agent-acp 0.91.0、codex-acp 2.2.2、Node 24.22.0（SP-1、SP-2 实测版本，T003 复核不变）。claude-agent-acp 在 M1a 保持 0.91.0，升级放到 T066 的兼容运行；升到 0.93 及以上之前，先处理待定问题 Q42（`/remote-control`） |
 
@@ -106,7 +106,7 @@ cupper/
 
 | 命令 | 作用 |
 |---|---|
-| `pnpm i` | 安装 TS 依赖。CI 用 `--frozen-lockfile`；保留 pnpm 10 默认不运行依赖脚本的行为，只有白名单里的包可以运行（`allowBuilds`，T074 时为空：Electron 44 已经没有安装脚本，二进制由 electron-builder 打包时下载；`esbuild` 等需要时再放行） |
+| `pnpm i` | 安装 TS 依赖。CI 用 `--frozen-lockfile`；保留 pnpm 10 默认不运行依赖脚本的行为，只有白名单里的包可以运行（`allowBuilds`，T074 时为空：Electron 44 起已经没有安装脚本，二进制由 electron-builder 打包时下载；`esbuild` 等需要时再放行） |
 | `pnpm dev` | 以 `dev-auth` 特性构建 debug 宿主和 CLI，启动 Vite（渲染进程热重载）和 Electron 开发构建（名称 "cupper Dev"，独立的 bundle id 和数据目录）；重启 Electron 时一并重启宿主（Q22 的局限） |
 | `pnpm gen` | `cargo run -p cupper-protocol --bin export-schema` 导出 `protocol/schema/v1.json`，再运行 `tools/gen-protocol-ts` 生成 `packages/protocol`；在 macOS 和 Linux 上都能运行 |
 | `pnpm lint` | `cargo fmt --check`、`cargo clippy -D warnings`、ESLint、Prettier 检查、`tsc -b` |

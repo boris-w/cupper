@@ -12,7 +12,7 @@ macOS 桌面 agent 客户端：复刻 Codex 桌面版的界面，经 ACP 驱动�
 | 事件与存储 | 宿主自己的事件日志（SQLite WAL）是唯一的历史来源 | ADR-06 |
 | Agent 接入 | 宿主经 ACP 驱动 claude-agent-acp 和 codex-acp，每种 agent 一个适配器进程；Node 运行时随 App 带、用 cupper 身份重签 | ADR-07、08、09 |
 | Git | 只用 git 命令行；自动调用分快照、仓库、用户三档 | ADR-10 |
-| 桌面 UI | Electron 44 + React 19 + TypeScript；electron-builder + electron-updater | ADR-03 |
+| 桌面 UI | Electron 45 + React 19 + TypeScript；electron-builder + electron-updater | ADR-03 |
 | 许可证 | Apache-2.0；Anthropic 的 SDK 和 Claude Code 二进制绝不进入仓库和产物 | ADR-11 |
 
 ## 目录结构与常用命令
