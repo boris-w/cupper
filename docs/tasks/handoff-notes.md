@@ -468,7 +468,7 @@
 | T113 | `tools/sanitize` 对 Codex 的 MCP 服务器名改成了"先取名字再全局替换"，来源有四处，其中 OAuth 报错文本是 T204 新发现的；Codex 的报错里如果再见到带服务器名的新写法，要补进工具。Claude 的 MCP 服务器名仍只靠 `mcp__` 规则、`*mcp_servers` 数组和敏感词清单，"Some MCP servers are still connecting: <名字>" 这类文本只有清单兜底，要不要也按取名处理在本任务里定 | T204 |
 | 以后改 `cargo xtask size` 的任务 | 它把 `spikes/` 下的录制也算进规模，改 spike 录制的任务都会被多算（T204 多算了 107 行）；把 `spikes/*/recordings/` 加进排除列表 | T204 |
 | 以后改宿主生命周期的任务 | `host/exit` 以外、和退出撞上的请求，应答仍可能在连接关闭时被丢弃（T205 只按 5.2.13 修了 host/exit）。它们能按 `command_id` 重试拿到结果；要让所有在路上的应答都在关闭前送出，设计要先定等待的上限，以及手动时钟下宽限期不会自己到期时怎么办 | T205 |
-| T103（SP-6）、M1b 的性能任务 | runner 上 3 份并行的负载下，宿主的会话流每轮会停顿几秒（最长 12.4 s，中位数 1.9 s），coalescer 的 40 ms 窗口被拉长到约 2 倍。执行者推断与 `host.db` 带 `checkpoint_fullfsync` 的 WAL 检查点有关，没有验证。这关系到 NFR-1 的流延迟，在参考机型上一并量 | T206 |
+| T103（SP-6）、M1b 的性能任务 | runner 上 3 份并行的负载下，宿主的会话流每轮会停顿几秒（最长 12.4 s，中位数 1.9 s），coalescer 的 40 ms 窗口被拉长到约 2 倍。执行者推断与 `host.db` 带 `checkpoint_fullfsync` 的 WAL 检查点有关，没有验证。这关系到 NFR-1 的流延迟，在参考机型上一并量 | T206（已写入 brief） |
 | 以后改 `tools/codex-drift` 的任务 | 摘要（`facets`）只看定义本身和第一层 `oneOf`/`anyOf`/`allOf`，看不到变体里再嵌的一层，0.165.0 的 `imageGeneration` 因此被描述成"去掉了 `result`"。哈希照样能发现变化，不会漏报 | T209 |
 | T111 | 运行时接 Codex 时用 `CodexSession::new`、`update`、`permission`、`set_config`、`prompt_done`，`codex::agent_error`，`codex::capabilities::{capabilities, config_options}`；`CodexSession::config()` 给 SetConfig 用；`prompt_done` 返回 `Err` 时发 `PromptFailed`。第二种 agent 要一个自己的 `ActorKind`（T055 的交接，T110 转来） | T110 |
 | T112 | K17：Codex 文本形式的错误，宿主现在让回合以 `failed` 结束并带 `error_code`（如 `model_unsupported`），但还不写 `error` 条目 | T110 |
@@ -498,7 +498,7 @@
 | T221、T222 | `unstaged` 里 git-crypt 这类过滤器的文件：没改动也会显示为"已变化"（快照里是占位 blob，index 里是密文）；可以在工作区内容与 index 的 stat 一致时保留 index 条目 | T120 |
 | T124 | `git/diff` 对回合范围一律加 `mixed_changes`；worktree 模式出现后，按 GT-1 只在本地模式下加 | T120 |
 | T147 | 设置页"通用"的防休眠开关：设置键 `host.prevent_idle_sleep: bool`（默认 true，write 即可），宿主启动时读初值，`SettingsPort` 在它变化时调 `Power::enabled(bool)`；`PowerCore` 加输入 `Enabled(bool)`，持有条件改成"计数 > 0、已启用、未退出"，约 15 行加测试（T156 的建议） | T156 |
-| T103（SP-6） | 洪流下渲染进程很慢：屏幕上几 MB、没有换行的一段文字很可能被 streamdown 整块反复渲染（推测）；runner 上 6 路洪流时开始测量前只有 4–36 帧/s，压力报告的测量段会被拉长（两份压力用例同时跑时中位 71.5 s），p99 可比性有限 | T220 |
+| T103（SP-6） | 洪流下渲染进程很慢：屏幕上几 MB、没有换行的一段文字很可能被 streamdown 整块反复渲染（推测）；runner 上 6 路洪流时开始测量前只有 4–36 帧/s，压力报告的测量段会被拉长（两份压力用例同时跑时中位 71.5 s），p99 可比性有限 | T220（已写入 brief） |
 | 以后写 `ManualClock` 用例的任务 | 听到运行时某一步中途发出的事件就立刻 `tick`，可能推到一个已经取消、但闹钟还没换掉的截止时间（T224 的第二个原因）；先做一次往返（例如 `status()`）等那一步做完。在 `Alarm`/`TimerTable` 取消定时器时立刻撤掉时钟上的登记是产品代码，另议 | T224 |
 | 以后要区分新旧实例上会话的用例 | 假 agent 的会话 ID 每个进程都从 `fake-0-1` 数起，新实例的第一个会话和旧会话同 ID；可以让 `--segment-file` 或进程号参与生成 ID | T224 |
 | T121 | 暂存时按 `diff_token` 取出 `Diffed`，用 `diff::patch` 重新生成文件的补丁，再用 `diff::units` 按 `hunk_id` 找单位；缓存没有 `hunk_id` 到路径的索引，目标是 `{hunk_ids}` 时要么由 T121 加索引，要么逐个文件重新生成补丁去找 | T221 |
