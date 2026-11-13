@@ -35,3 +35,13 @@
 ## 实际规模
 
 `cargo xtask size`：+182 −3。
+
+## 评审后的修正：焦点进入审查文档的 iframe
+
+- 问题：审查文档是独立 origin 的 iframe，焦点进去时顶层 window 会收到 `blur`。原来的 `useFocused` 一收到 blur 就置 false，于是用户在会话里写评论时上报了 `foreground: false`。
+- 实测（本机无头 Chromium，临时脚本，没有入库）：父页面 `127.0.0.1`、iframe `localhost`，两者是不同的站点，所以是跨进程的 iframe。把焦点放进 iframe 的输入框后：父页面收到 `blur`；在 blur 事件里和下一个 task 里，父文档的 `document.hasFocus()` 都是 true；焦点回到父页面时收到 `focus`。Electron 的渲染进程是同一个 Chromium，规则相同。
+- 修法：`focus` 时按 `document.hasFocus()` 设；`blur` 之后在下一个 task 里再用 `document.hasFocus()` 复核。窗口真正失焦时它是 false，焦点只是移进本窗口的 frame 时是 true。
+- 用例：
+  - 单元测试补了"blur 之后 hasFocus 仍为 true 时不上报 false"，以及 hasFocus 为 false 时照常上报。
+  - E2E 在看着会话、取得焦点之后，打开侧边面板，点审查文档里文件的"收起"，确认焦点在 iframe 里（iframe 的 `hasFocus` 为 true，主文档的 `activeElement` 是 iframe），然后才发那条被看着的消息，断言照旧没有通知意图。为了让审查文档里有内容，第一回合让假 agent 改一下 README.md。
+- 规模：这次修正之后是 +221 −3，超过停止线 200，编排者已允许（硬停止线 260）。
