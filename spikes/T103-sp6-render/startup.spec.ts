@@ -7,11 +7,13 @@
 // that app is gone it ends (design 5.8.1); the first warm start waited out
 // its 120 s (spike-run 43410584669).
 //
-// The product has no `cupper:ready` mark and opens on the new session page,
-// never on the last session (a deviation from 5.9.6, in the report): ready
-// is the first frame in which the index view is in and the composer takes
-// input, timed from just before the launch; the 1,000-item session opened
-// by its link to its first rows is timed apart after each start.
+// Ready is the renderer's `cupper:ready` (T262): the index applied and the
+// composer on screen. The app opens on the new session page, never on the
+// last session (Q45), so the 1,000-item session opened by its link to its
+// first rows is timed apart after each start. Each start is split, from
+// just before the launch: the main process, the host and the control
+// connection (their logs), then the page's navigation start and DOM ready,
+// the window's connection, the index and ready (the renderer's marks).
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -24,23 +26,33 @@ import { openTimed, record, seed, stats } from "./measure";
 // SP6_RUNS: fewer, for a short local smoke run.
 const RUNS = Number(process.env.SP6_RUNS ?? 30);
 
-/** Launches the app; from just before it to the first frame ready, and the host's pid. */
+/**
+ * Launches the app; from just before it to the renderer's `cupper:ready`
+ * (T262), the host's pid, and the renderer's own stretch: the page's
+ * navigation start and its DOM ready, then its marks, all on the wall clock.
+ */
 async function start(cupper: Cupper) {
   const started = Date.now();
   await cupper.launch();
-  const ready = await cupper.window.waitForFunction(
-    () => {
-      const views = window.__cupperTest.views() as Record<string, { complete?: boolean }>;
-      const composer = document.querySelector<HTMLTextAreaElement>("[data-composer] textarea");
-      const usable = views.index?.complete && composer && !composer.disabled;
-      return usable ? performance.timeOrigin + performance.now() : undefined;
-    },
-    null,
-    { polling: "raf", timeout: 120_000 },
-  );
-  const ms = ((await ready.jsonValue()) as number) - started;
+  await cupper.window.waitForFunction(() => performance.getEntriesByName("cupper:ready").length > 0, null, {
+    timeout: 120_000,
+  });
+  const page = await cupper.window.evaluate(() => {
+    const at = (ms: number | undefined) => (ms === undefined ? null : performance.timeOrigin + ms);
+    const mark = (name: string) => at(performance.getEntriesByName(name)[0]?.startTime);
+    const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    return {
+      page: performance.timeOrigin,
+      dom: at(navigation?.domContentLoadedEventEnd),
+      window: mark("cupper:connected"),
+      index: mark("cupper:index"),
+      ready: mark("cupper:ready"),
+    };
+  });
+  const since = (at: number | null) => (at === null ? null : Math.round(at - started));
   const { pid } = await cupper.connected();
-  return { ms: Math.round(ms), host: pid as number, phases: phases(cupper, started) };
+  const renderer = Object.fromEntries(Object.entries(page).map(([k, v]) => [k, since(v)]));
+  return { ms: since(page.ready) ?? NaN, host: pid as number, phases: { ...phases(cupper, started), ...renderer } };
 }
 
 /**
@@ -60,7 +72,7 @@ function phases(cupper: Cupper, since: number) {
   return {
     main: first(main, (e) => e.msg === "started"),
     host: first(join(cupper.dataDir, "logs", "host.log"), (e) => e.message === "the host started"),
-    connected: first(main, (e) => e.msg === "host connection" && e.status === "ready"),
+    control: first(main, (e) => e.msg === "host connection" && e.status === "ready"),
   };
 }
 
