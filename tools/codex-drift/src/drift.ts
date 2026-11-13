@@ -199,3 +199,23 @@ export interface Review {
 /** Whether `review` holds this very drift against this very baseline. */
 export const reviewed = (drift: string[], baseline: string, review?: Review): review is Review =>
   review?.baseline === baseline && JSON.stringify(review.drift) === JSON.stringify(drift);
+
+/**
+ * The review that holds codex `version`'s drift, and whose it is: its own
+ * record, which alone counts once there is one; without one, the latest of
+ * another version's whose drift against the same baseline is the very same,
+ * as a patch release that left the protocol alone has (T261).
+ */
+export function reviewFor(
+  drift: string[],
+  baseline: string,
+  version: string,
+  reviews: Record<string, Review>,
+): { version: string; review: Review } | undefined {
+  const own = reviews[version];
+  if (own) return reviewed(drift, baseline, own) ? { version, review: own } : undefined;
+  const same = Object.entries(reviews)
+    .reverse()
+    .find(([, review]) => reviewed(drift, baseline, review));
+  return same && { version: same[0], review: same[1] };
+}
