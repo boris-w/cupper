@@ -33,9 +33,10 @@ function watchFsyncs(pid: number, name: string) {
   });
   fsUsage.stderr.on("data", (chunk: Buffer) => out.write(`fs_usage: ${chunk.toString()}`));
   const exited = once(fsUsage, "close").catch(() => undefined);
-  // Stopped and gone before the next run's, which the kernel's trace would refuse.
+  // Stopped and gone before the next run's, which the kernel's trace would
+  // refuse ("Resource busy"): fs_usage runs as root, past a signal to sudo.
   return async () => {
-    fsUsage.kill("SIGINT");
+    spawn("sudo", ["-n", "pkill", "-INT", "-x", "fs_usage"]).on("error", () => undefined);
     await Promise.race([exited, new Promise((done) => setTimeout(done, 10_000))]);
     out.end();
   };
