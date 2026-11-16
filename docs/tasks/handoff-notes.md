@@ -617,3 +617,5 @@
 | T159 | 剖析时先看每帧的 JS 时间是不是随消息长度增长（T220 的推测：几 MB 不换行的消息被 streamdown 整块反复渲染）；T103 场景 2 的 1.3 MB 消息流式 100 s，帧时间 p95 281 ms、输出延迟 p95 1.25 s、渲染进程 591 MB | T103（已写入 brief） |
 | T113 | codex 0.169.0 给 `agentMessage` 加了 `moderation`（回放历史时的展示指示：`action`、`blockType` 等）；2.2.2 实时和 `session/load` 回放都不读，被标记的回答照常显示原文。升级适配器时要定 cupper 是否执行这些指示 | T264 |
 | T113 | `inferenceHookDenied`（0.169.0）和 0.168.0 的 `modelNotFound`、`policyCapacityUnavailable` 都被 2.2.2 归为笼统的 `provider_error`；需要更细的错误类别时补进适配器的映射表 | T264 |
+| T159 | T155 的 PERF-ui-stream 在流式消息前加了一段代码块后，渲染进程内存到 1,037 MB（T103 时 591 MB，预算 600），洪流期间渲染进程 CPU p50 约 102% 单核（跑满一个核）；nightly 43798070645 | T155 |
+| T153 | PERF-ui-switch 还缺"下一个需要处理的会话"一项，T153 接上 `next_needs_action` 后在 PERF-ui-switch 里补上 | T155 |
