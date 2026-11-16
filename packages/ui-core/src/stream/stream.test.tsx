@@ -154,30 +154,89 @@ describe("UNIT-stream-anchor", () => {
     expect(screen.queryByRole("button", { name: "加载更早的历史" }), "turn 1 is in").toBeNull();
   });
 
-  test("rows put in front lay out other than estimated: the held row stays where it was (T263)", async () => {
-    // Turn 1's message lays out 70 px high, not the 44 estimated.
-    rowHeight = (row) => (row.textContent?.includes("第一个") ? 70 : 40);
-    const { frame } = await setup();
-    const list = document.querySelector("[data-stream-list]") as HTMLElement;
-    Object.defineProperties(list, { scrollHeight: { value: 1000 }, clientHeight: { value: 200 } });
-    // Scrolled to the top by the user; the page comes in after the
-    // virtualizer's end of scrolling, 150 ms on, so it measures the rows as
-    // they render, with the list still at the top.
-    fireEvent.wheel(list);
-    list.scrollTop = 0;
-    fireEvent.scroll(list);
-    await act(() => new Promise((done) => setTimeout(done, 300)));
-    const top = (text: string) => {
-      const row = screen.getByText(text).closest<HTMLElement>("[data-index]");
-      return Number(/translateY\((.+)px\)/.exec(row?.style.transform ?? "")?.[1]) - list.scrollTop;
+  test("a held row is put back each time it moves, until the user scrolls or the app jumps (T263)", () => {
+    const at = (start: number) => () => ({ index: 4, start });
+    const held = () => {
+      const keeper = new ScrollKeeper();
+      keeper.put(0);
+      keeper.hold("turn:t_2", 1, 300, 280);
+      expect(keeper.restore(at(950))).toBe(930);
+      keeper.put(930);
+      return keeper;
     };
-    const held = top("第二个");
-    await act(
-      async () => void fireEvent.click(screen.getByRole("button", { name: "加载更早的历史" })),
-    );
-    await frame();
-    expect(screen.getByText("第一个")).toBeTruthy();
-    expect(top("第二个")).toBe(held);
+    const keeper = held();
+    expect(keeper.restore(at(950)), "where it should be").toBeUndefined();
+    expect(keeper.restore(at(976)), "the rows in front measured").toBe(956);
+    keeper.put(956);
+    keeper.scrolled(956, 2000, 200, 0);
+    expect(keeper.restore(at(990)), "after its own scroll").toBe(970);
+    const lets = {
+      "the user's wheel": (k: ScrollKeeper) => k.intend(0),
+      "a jump to a row": (k: ScrollKeeper) => k.leave(),
+      "back to the bottom": (k: ScrollKeeper) => k.follow(),
+      "a scroll it did not make": (k: ScrollKeeper) => k.scrolled(500, 2000, 200, 0),
+    };
+    for (const [why, go] of Object.entries(lets)) {
+      const keeper = held();
+      go(keeper);
+      expect(keeper.restore(at(976)), why).toBeUndefined();
+    }
+  });
+
+  describe("rows put in front lay out other than estimated: the held row stays where it was (T263)", () => {
+    /** Turn 1's message lays out 70 px high, not the 44 estimated; the user scrolled to the top. */
+    async function scrolledUp() {
+      rowHeight = (row) => (row.textContent?.includes("第一个") ? 70 : 40);
+      const { frame } = await setup();
+      const list = document.querySelector("[data-stream-list]") as HTMLElement;
+      Object.defineProperties(list, {
+        scrollHeight: { value: 1000 },
+        clientHeight: { value: 200 },
+      });
+      list.scrollTop = 100;
+      fireEvent.scroll(list);
+      fireEvent.wheel(list);
+      list.scrollTop = 0;
+      fireEvent.scroll(list);
+      /** How far row `text` is below the top of the viewport. */
+      const top = (text: string) => {
+        const row = screen.getByText(text).closest<HTMLElement>("[data-index]");
+        return (
+          Number(/translateY\((.+)px\)/.exec(row?.style.transform ?? "")?.[1]) - list.scrollTop
+        );
+      };
+      const page = () =>
+        act(
+          async () => void fireEvent.click(screen.getByRole("button", { name: "加载更早的历史" })),
+        );
+      return { frame, top, page };
+    }
+
+    test("measured as they render, after the virtualizer's end of scrolling", async () => {
+      const { frame, top, page } = await scrolledUp();
+      // 150 ms after the last scroll the virtualizer measures rows as they
+      // render, with the list still at the top: it keeps nothing in place.
+      await act(() => new Promise((done) => setTimeout(done, 300)));
+      const held = top("第二个");
+      await page();
+      await frame();
+      expect(screen.getByText("第一个")).toBeTruthy();
+      expect(top("第二个")).toBe(held);
+    });
+
+    test("measured once put back, before the virtualizer has seen that scroll", async () => {
+      const { frame, top, page } = await scrolledUp();
+      const held = top("第二个");
+      const before = observed.length;
+      // Still scrolling: the rows are measured as their ResizeObserver says.
+      await page();
+      expect(screen.getByText("第一个")).toBeTruthy();
+      act(() =>
+        observed.slice(before).forEach(({ target, resize }) => target.isConnected && resize()),
+      );
+      await frame();
+      expect(top("第二个")).toBe(held);
+    });
   });
 
   test("a scroll whose event has not come yet is not undone by a render before it (T208)", async () => {
