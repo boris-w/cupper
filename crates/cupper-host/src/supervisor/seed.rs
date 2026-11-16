@@ -7,13 +7,14 @@
 //! The `sp1` mix follows the 48 SP-1 recordings (computed once, T047 notes):
 //! of the items an agent sends in a turn, 43% are messages of about 67
 //! characters, 42% tool calls and 15% thoughts of about 44 characters.
+//! `sp1_code` puts a short Rust block in every fifth of those messages.
 
 use std::sync::Arc;
 
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
 use cupper_protocol::event::EventBody;
 use cupper_protocol::ids::{ItemId, ProjectId, SessionId, TurnId};
-use cupper_protocol::methods::admin::{SeedProfile, TestSeedParams};
+use cupper_protocol::methods::admin::{SeedMix, SeedProfile, TestSeedParams};
 use cupper_protocol::sync::StreamId;
 use futures::FutureExt;
 use futures::future::BoxFuture;
@@ -49,6 +50,9 @@ const MIX: [&str; 20] = [
     "agent_message",
 ];
 
+/// The agent message of `sp1_code` with its code block.
+const CODE_MESSAGE: &str = "The change:\n\n```rust\nfn step(n: u32) -> u32 {\n    let next = n + 1;\n    next * 2\n}\n```\n";
+
 #[derive(Debug, Clone)]
 pub(super) struct Seeder {
     pub streams: Streams,
@@ -83,6 +87,9 @@ impl Seeder {
         });
         let (project, path) = first.await.map_err(|_| "no project: add one first")?;
         let project: ProjectId = project.parse().map_err(|_| "a bad project id")?;
+        if !matches!(profile.mix, SeedMix::Sp1 | SeedMix::Sp1Code) {
+            return Err("a mix this host does not know".into());
+        }
         for n in 0..profile.sessions {
             let large = (n == 0).then_some(profile.large_turn_items).flatten();
             self.session(&project, &path, profile, large).await?;
@@ -123,7 +130,7 @@ impl Seeder {
         appended(writer.append(batch).await)?;
         let sizes = (0..profile.turns).map(|_| profile.items_per_turn);
         for (no, items) in (1..).zip(sizes.chain(large)) {
-            let bodies = self.turn(no, items)?;
+            let bodies = self.turn(no, items, profile.mix == SeedMix::Sp1Code)?;
             let (first, last) = (writer.head() + 1, writer.head() + bodies.len() as u64);
             let (turn, session) = (bodies_turn(&bodies), id.to_string());
             let batch = Batch {
@@ -150,8 +157,9 @@ impl Seeder {
         Ok(())
     }
 
-    /// Turn `no`: the user's message, `items` items of the mix, and its end.
-    fn turn(&self, no: u32, items: u32) -> Result<Vec<EventBody>, String> {
+    /// Turn `no`: the user's message, `items` items of the mix, and its end;
+    /// with `code`, every fifth agent message carries a code block.
+    fn turn(&self, no: u32, items: u32, code: bool) -> Result<Vec<EventBody>, String> {
         let now = self.clock.now_wall_ms();
         let new_id = || self.ids.new_id().as_u128();
         let turn = TurnId::from_uuid(new_id()).to_string();
@@ -164,11 +172,19 @@ impl Seeder {
         message["steered"] = json!(false);
         events.push(json!({"type": "item.started", "data": message}));
         let mut last_message = None;
+        let mut messages = 0;
         for (n, kind) in (0..items).zip(MIX.iter().cycle()) {
             let item = ItemId::from_uuid(new_id()).to_string();
             let mut data = started(&item, kind);
             let text = match *kind {
-                "agent_message" => "Seeded answer text, about as long as an SP-1 message is. ",
+                "agent_message" => {
+                    messages += 1;
+                    if code && messages % 5 == 0 {
+                        CODE_MESSAGE
+                    } else {
+                        "Seeded answer text, about as long as an SP-1 message is. "
+                    }
+                }
                 "thought" => "Seeded thought, about as long as SP-1's.",
                 _ => {
                     data["tool_kind"] = json!("execute");

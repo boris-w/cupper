@@ -740,6 +740,18 @@ async fn it_seed_writes_sessions_the_normal_way() {
     assert!(ops > 4_000, "{ops}");
     let listed = "SELECT CAST(count(*) AS TEXT) FROM events WHERE stream = 'index' AND type = 'session.upserted'";
     assert_eq!(count(listed), ["3"]);
+    // `sp1_code`: a code block in every fifth agent message.
+    let code = SeedProfile {
+        sessions: 1,
+        turns: 2,
+        items_per_turn: 20,
+        mix: SeedMix::Sp1Code,
+        large_turn_items: None,
+    };
+    let params = TestSeedParams { profile: code };
+    client.request::<TestSeed>(params).await.unwrap();
+    let blocks = "SELECT CAST(count(*) AS TEXT) FROM events WHERE type = 'item.delta' AND json LIKE '%```rust%'";
+    assert_eq!(count(blocks), ["2"]);
     terminate(&host);
     assert_eq!(exit_code(&mut host).await, 0);
 }

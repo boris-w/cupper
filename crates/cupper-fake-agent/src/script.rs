@@ -4,7 +4,7 @@
 //!
 //! | command | effect |
 //! |---|---|
-//! | `say <text>` / `think <text>` | one message / thought chunk |
+//! | `say <text>` / `think <text>` | one message / thought chunk (`say`: `\n` is a newline) |
 //! | `flood <n> <len>` / `flood_mixed <n> <len>` | `n` chunks of `len` chars at full speed (mixed: every other one a thought) |
 //! | `flood_rate <per_s> <s> <len>` | chunks of `len` chars at a fixed rate for `s` seconds |
 //! | `big <bytes>` | one message chunk of `bytes` chars |
@@ -269,7 +269,7 @@ impl Script {
             return Ok(Flow::Next);
         }
         match name {
-            "say" => self.say(rest)?,
+            "say" => self.say(&rest.replace("\\n", "\n"))?,
             "think" => self.update(chunk("agent_thought_chunk", rest))?,
             "flood" | "flood_mixed" => {
                 for i in 0..num(0) {
