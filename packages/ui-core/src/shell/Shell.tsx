@@ -27,6 +27,7 @@ import { SidebarFooter, SidebarHeader, SidebarList } from "../sidebar";
 import { computeLayout, ratioOf, type Layout, type Viewport } from "../layout/layout";
 import { ReviewPanel } from "../review/ReviewPanel";
 import { createReviewStore, OpenReview, ReviewContext, type ReviewTarget } from "../review/state";
+import { SessionActionsProvider } from "../session/actions";
 import type { LayoutStore } from "../layout/store";
 import { Splitter } from "./Splitter";
 
@@ -54,7 +55,9 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
   return (
     <ReviewContext value={review}>
       <OpenReview value={openReview}>
-        <Frame store={store}>{children}</Frame>
+        <SessionActionsProvider>
+          <Frame store={store}>{children}</Frame>
+        </SessionActionsProvider>
       </OpenReview>
     </ReviewContext>
   );
