@@ -1,8 +1,10 @@
 //! `release-config` (nightly, T161): builds the release configuration
 //! without a Developer ID and checks the app it built (`apps/desktop/release`):
 //! the fuses, the asar archive, Info.plist, the test entry points,
-//! `--build-info`, and E2E-SEC-switches; then `runtime-pack --verify`.
-//! Cupper Local gets the same scan in `selfuse`, which builds it anyway.
+//! `--build-info`, and E2E-SEC-switches; then `runtime-pack --verify`, and
+//! the license gate's second layer over the app, its notices included (T182).
+//! Cupper Local gets the same configuration scan in `selfuse`, which builds
+//! it anyway.
 
 use anyhow::Result;
 
@@ -42,5 +44,9 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     let mut verify = ctx.cargo();
     verify.args(["xtask", "runtime-pack", "--verify"]);
     let verified = ctx.check("runtime-verify", &mut verify);
-    tested.and(verified)
+    let mut scan = ctx.command("node");
+    scan.args(["tools/license-gate/src/main.ts", "scan"])
+        .arg(ctx.root.join(APP));
+    let scanned = ctx.check("license-gate-l2", &mut scan);
+    tested.and(verified).and(scanned)
 }
