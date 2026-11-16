@@ -14,6 +14,7 @@ import { MAX_TOASTS, ToasterProvider, useToasts, type Toasts } from "../feedback
 import { DEFAULT_PREFS } from "../layout/layout";
 import { UiProvider } from "../state/provider";
 import { createUiStore } from "../state/ui";
+import { SessionTitle } from "../shell/SessionTitle";
 import { ElevationBanner, ProjectList } from "./parts";
 
 afterEach(cleanup);
@@ -163,5 +164,23 @@ describe("UNIT-ui-sidebar", () => {
       { kind: "add_project" },
       { kind: "elevation", elevation_id: "e_1" },
     ]);
+  });
+});
+
+describe("UI-session-title", () => {
+  test("the title, 新会话 until there is one; a worktree's branch; the agent's mark", async () => {
+    const title = (summary?: SessionSummary) => (
+      <div data-testid="title">
+        <SessionTitle summary={summary} />
+      </div>
+    );
+    const { rerender } = await setup(title(session(1, "idle", { workspace_kind: "local" })));
+    const shown = () => screen.getByTestId("title").textContent;
+    expect(shown()).toBe("会话 1Claude");
+    const worktree = { workspace_kind: "worktree", branch: "cupper/fix-login" } as const;
+    rerender(title(session(2, "idle", { ...worktree, title: "", agent: "codex" })));
+    expect(shown()).toBe("新会话· cupper/fix-loginCodex");
+    rerender(title());
+    expect(shown()).toBe("");
   });
 });
