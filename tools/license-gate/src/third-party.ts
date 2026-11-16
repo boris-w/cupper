@@ -112,7 +112,9 @@ const SHIPPED = ["cupper-host", "cupper-cli", "cupper-desktop-native"];
 /**
  * cargo-about's JSON of each shipped crate, for the app's one target and
  * with the license allowlist of `deny.toml`; offline, so that the texts are
- * those of the crates as packaged and the same on every machine.
+ * those of the crates as packaged and the same on every machine. Offline,
+ * cargo reads the manifest of every crate in the lockfile, of any platform:
+ * they are fetched first.
  */
 export function cargoAbout(root: string, accepted: string[]): About[] {
   const dir = mkdtempSync(join(tmpdir(), "license-gate-"));
@@ -129,6 +131,10 @@ export function cargoAbout(root: string, accepted: string[]): About[] {
         private: { ignore: true },
       }),
     );
+    execFileSync("cargo", ["fetch", "--locked"], {
+      cwd: root,
+      stdio: ["ignore", "ignore", "inherit"],
+    });
     return SHIPPED.map((crate) => {
       const args = ["about", "generate", "--format", "json", "--frozen", "-c", config];
       const manifest = ["-m", `crates/${crate}/Cargo.toml`];
