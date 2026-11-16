@@ -175,6 +175,8 @@
           "notifications.needs_action": true,
           "notifications.turn_completed": false,
           "sessions.default_agent": "claude",
+          "sessions.default_permission.claude": null,
+          "sessions.default_permission.codex": null,
           "worktrees.root": "/Users/a/.cupper/worktrees"
         }
       },

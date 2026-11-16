@@ -477,6 +477,8 @@
         "notifications.needs_action": true,
         "notifications.turn_completed": true,
         "sessions.default_agent": "claude",
+        "sessions.default_permission.claude": null,
+        "sessions.default_permission.codex": null,
         "worktrees.root": "~/.cupper/worktrees"
       }
     }
@@ -501,6 +503,8 @@
         "notifications.needs_action": true,
         "notifications.turn_completed": true,
         "sessions.default_agent": "claude",
+        "sessions.default_permission.claude": null,
+        "sessions.default_permission.codex": null,
         "worktrees.root": "~/.cupper/worktrees"
       }
     }

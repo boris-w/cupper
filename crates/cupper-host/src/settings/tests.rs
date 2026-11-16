@@ -58,6 +58,7 @@ fn unit_settings_rows_over_the_defaults_and_the_checks() {
         json!({"host.idle_exit_minutes": 0}),
         json!({"apps.editor": ""}),
         json!({"apps.terminal": "Calculator"}),
+        json!({"sessions.default_permission.codex": ""}),
     ];
     for value in refused {
         assert!(apply(&read, &patch(value.clone())).is_err(), "{value}");
@@ -65,6 +66,17 @@ fn unit_settings_rows_over_the_defaults_and_the_checks() {
     let (next, set) = apply(&read, &patch(json!({"notifications.error": true}))).unwrap();
     assert!(next.notify_error);
     assert_eq!(Value::Object(set), json!({"notifications.error": true}));
+    // A default permission is set to a mode and cleared with `null` (Q44).
+    assert_eq!(read.default_permission_claude.0, None);
+    let auto = json!({"sessions.default_permission.claude": "auto"});
+    let (set_auto, _) = apply(&read, &patch(auto)).unwrap();
+    assert_eq!(
+        set_auto.default_permission_claude.0.as_deref(),
+        Some("auto")
+    );
+    let cleared = json!({"sessions.default_permission.claude": null});
+    let (back, _) = apply(&set_auto, &patch(cleared)).unwrap();
+    assert_eq!(back.default_permission_claude.0, None);
 }
 
 #[tokio::test]

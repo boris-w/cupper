@@ -79,6 +79,10 @@ const INDEX = [
         ...{ "notifications.needs_action": true, "notifications.turn_completed": false },
         ...{ "notifications.error": true, "apps.terminal": "Terminal", "apps.editor": "TextEdit" },
         ...{ "sessions.default_agent": "claude", "host.idle_exit_minutes": 10 },
+        ...{
+          "sessions.default_permission.claude": null,
+          "sessions.default_permission.codex": null,
+        },
         ...{ "host.prevent_idle_sleep": true, "diagnostics.verbose": false },
       },
     },

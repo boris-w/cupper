@@ -104,6 +104,8 @@ const SETTINGS = {
       "apps.terminal": "Terminal",
       "apps.editor": "TextEdit",
       "sessions.default_agent": "claude",
+      "sessions.default_permission.claude": null,
+      "sessions.default_permission.codex": null,
       "host.idle_exit_minutes": 10,
       "host.prevent_idle_sleep": true,
       "diagnostics.verbose": false,

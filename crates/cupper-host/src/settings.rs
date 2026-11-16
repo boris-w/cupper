@@ -17,8 +17,8 @@ use cupper_protocol::annotations::WirePath;
 use cupper_protocol::domain::AgentKind;
 use cupper_protocol::error::{ErrorCode, INVALID_PARAMS, RpcError};
 use cupper_protocol::methods::admin::{
-    CliPath, Settings, SettingsGet, SettingsPatch, SettingsResult, SettingsUpdate,
-    SettingsUpdateParams,
+    CliPath, DefaultPermission, Settings, SettingsGet, SettingsPatch, SettingsResult,
+    SettingsUpdate, SettingsUpdateParams,
 };
 use cupper_protocol::rpc::Method;
 use futures::FutureExt;
@@ -59,8 +59,9 @@ pub const EDITORS: &[&str] = &[
 
 /// The settings nobody changed: CLIs discovered, no more variables for the
 /// adapters, worktrees under [`worktrees_root`], every notification on,
-/// Claude for new sessions, the idle exit after 10 minutes, the Mac kept
-/// awake while agents work, no detailed logs. The apps are macOS's own.
+/// Claude for new sessions, each with the CLI's permission mode, the idle
+/// exit after 10 minutes, the Mac kept awake while agents work, no detailed
+/// logs. The apps are macOS's own.
 pub fn defaults(home: &Path, data_dir: &Path) -> Settings {
     Settings {
         claude_cli_path: CliPath(None),
@@ -73,6 +74,8 @@ pub fn defaults(home: &Path, data_dir: &Path) -> Settings {
         terminal_app: "Terminal".into(),
         editor_app: "TextEdit".into(),
         default_agent: AgentKind::Claude,
+        default_permission_claude: DefaultPermission(None),
+        default_permission_codex: DefaultPermission(None),
         idle_exit_minutes: 10,
         prevent_idle_sleep: true,
         verbose_diagnostics: false,
@@ -147,6 +150,13 @@ pub fn apply(
     }
     if let Some(name) = next.env_passthrough.iter().find(|n| !is_variable_name(n)) {
         return Err(format!("{name} is not an environment variable name"));
+    }
+    let modes = [
+        &next.default_permission_claude,
+        &next.default_permission_codex,
+    ];
+    if modes.into_iter().any(|mode| mode.0.as_deref() == Some("")) {
+        return Err("a default permission is a mode, or null".into());
     }
     if next.idle_exit_minutes == 0 {
         return Err("host.idle_exit_minutes must be at least 1".into());

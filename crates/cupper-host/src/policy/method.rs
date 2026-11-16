@@ -77,6 +77,8 @@ pub(super) fn security_settings(patch: &SettingsPatch) -> Map<String, Value> {
         terminal_app: _,
         editor_app: _,
         default_agent: _,
+        default_permission_claude: _,
+        default_permission_codex: _,
         idle_exit_minutes: _,
         prevent_idle_sleep: _,
     } = patch;
@@ -174,7 +176,8 @@ mod tests {
             "agents.env_passthrough": [], "worktrees.root": "/w",
             "notifications.needs_action": true, "notifications.turn_completed": true,
             "notifications.error": true, "apps.terminal": "t", "apps.editor": "e",
-            "sessions.default_agent": "claude", "host.idle_exit_minutes": 5,
+            "sessions.default_agent": "claude", "sessions.default_permission.claude": "auto",
+            "sessions.default_permission.codex": null, "host.idle_exit_minutes": 5,
             "host.prevent_idle_sleep": true, "diagnostics.verbose": false}))
         .unwrap();
         let full: SettingsPatch =

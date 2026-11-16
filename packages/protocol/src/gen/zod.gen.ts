@@ -209,6 +209,11 @@ export const zCost = z.object({
 });
 
 /**
+ * A permission mode, or `null`: the CLI's configuration (Q44).
+ */
+export const zDefaultPermission = z.string().nullable();
+
+/**
  * Open enum: unknown values must be accepted. Known: text output
  */
 export const zDeltaField = z.union([z.enum(["text", "output"]), z.string()]);
@@ -2388,6 +2393,8 @@ export const zSettings = z.object({
   "notifications.needs_action": z.boolean(),
   "notifications.turn_completed": z.boolean(),
   "sessions.default_agent": zAgentKind,
+  "sessions.default_permission.claude": zDefaultPermission,
+  "sessions.default_permission.codex": zDefaultPermission,
   "worktrees.root": zWirePath,
 });
 
@@ -2408,6 +2415,8 @@ export const zSettingsPatch = z.object({
   "notifications.needs_action": z.boolean().optional(),
   "notifications.turn_completed": z.boolean().optional(),
   "sessions.default_agent": zAgentKind.optional(),
+  "sessions.default_permission.claude": zDefaultPermission.optional(),
+  "sessions.default_permission.codex": zDefaultPermission.optional(),
   "worktrees.root": zWirePath.optional(),
 });
 

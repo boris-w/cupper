@@ -1068,6 +1068,13 @@
       ],
       "type": "object"
     },
+    "DefaultPermission": {
+      "description": "A permission mode, or `null`: the CLI's configuration (Q44).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "DeltaField": {
       "anyOf": [
         {
@@ -7126,6 +7133,12 @@
         "sessions.default_agent": {
           "$ref": "#/$defs/AgentKind"
         },
+        "sessions.default_permission.claude": {
+          "$ref": "#/$defs/DefaultPermission"
+        },
+        "sessions.default_permission.codex": {
+          "$ref": "#/$defs/DefaultPermission"
+        },
         "worktrees.root": {
           "$ref": "#/$defs/WirePath"
         }
@@ -7141,6 +7154,8 @@
         "apps.terminal",
         "apps.editor",
         "sessions.default_agent",
+        "sessions.default_permission.claude",
+        "sessions.default_permission.codex",
         "host.idle_exit_minutes",
         "diagnostics.verbose"
       ],
@@ -7189,6 +7204,12 @@
         },
         "sessions.default_agent": {
           "$ref": "#/$defs/AgentKind"
+        },
+        "sessions.default_permission.claude": {
+          "$ref": "#/$defs/DefaultPermission"
+        },
+        "sessions.default_permission.codex": {
+          "$ref": "#/$defs/DefaultPermission"
         },
         "worktrees.root": {
           "$ref": "#/$defs/WirePath"
