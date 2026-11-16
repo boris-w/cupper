@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { HostClient } from "@cupper/host-client";
 import { MockHost, type Reply } from "@cupper/host-client/mock";
-import { ICON_COLOUR_PREF, ICON_COLOURS, type Handshake } from "@cupper/shell-api";
+import {
+  ICON_COLOUR_PREF,
+  ICON_COLOURS,
+  THEME_CHOICES,
+  THEME_PREF,
+  type Handshake,
+} from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -429,5 +435,22 @@ describe("UI-icon-colour", () => {
     await act(async () => fireEvent.click(screen.getByRole("radio", { name: "夜色" })));
     expect(chosen()).toEqual(["night"]);
     expect(texts(card("图标"))[0]).toContain("只改变 cupper 运行时 Dock 里的图标");
+  });
+});
+
+describe("UI-theme: the appearance section", () => {
+  test("the theme follows the system unless pinned; the sidebar is translucent unless turned off", async () => {
+    const { ui } = await setup({ prefs: { [THEME_PREF]: "sepia" } });
+    act(() => ui.getState().navigate(toSettings(ui.getState().route, "appearance")));
+    const radios = within(card("界面")).getAllByRole<HTMLInputElement>("radio");
+    const chosen = () => radios.filter((radio) => radio.checked).map((radio) => radio.value);
+    expect(radios.map((radio) => radio.value)).toEqual([...THEME_CHOICES]);
+    expect(chosen(), "a value this build does not know").toEqual(["system"]);
+    await act(async () => fireEvent.click(screen.getByRole("radio", { name: "深色" })));
+    expect(chosen()).toEqual(["dark"]);
+    const translucent = screen.getByRole("switch", { name: "半透明侧边栏" });
+    expect(translucent.getAttribute("aria-checked")).toBe("true");
+    await act(async () => fireEvent.click(translucent));
+    expect(translucent.getAttribute("aria-checked")).toBe("false");
   });
 });
