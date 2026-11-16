@@ -3,7 +3,7 @@
 ## 第一步：剖析的做法（2026-11-16）
 
 - **trace 怎么录**：都加在 T103 的 spike 里，只在设了 `SP6_TRACE=1` 时生效；不设时场景照旧，数值可以和 T103 对照。
-  - `trace.ts`：主进程用 `contentTracing` 录。类别是 devtools.timeline（含 disabled-by-default 的 timeline 和 frame）、toplevel、v8、v8.execute、`disabled-by-default-v8.cpu_profiler`（V8 的采样）。
+  - `trace.ts`：窗口的 DevTools 协议会话用 `Tracing` 录，输出 JSON，和 Performance 面板的做法相同。第一次用的是主进程的 `contentTracing`（43797367278），但 Electron 45 写出的是 Perfetto 的 protobuf，汇总脚本读不了。类别是 devtools.timeline（含 disabled-by-default 的 timeline 和 frame）、toplevel、v8、v8.execute、`disabled-by-default-v8.cpu_profiler`（V8 的采样）。
   - 每段起止由渲染进程用 `console.timeStamp("sp6:<label>:start|end")` 标出。本机试过，`performance.mark` 在 trace 里没有出现。
   - 场景 2：从开始打字算起，第 10、35、60、85 s 各录 4 s，并记下每段起止时消息的长度。
   - 场景 3：只录 4 路。1–4.5 s 只有流；10–14 s 含重新同步。
