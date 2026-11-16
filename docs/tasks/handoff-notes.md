@@ -34,7 +34,7 @@
 | T090 | Chromium 会往 `~/Library/Preferences/dev.cupper.app.e2e.plist` 写系统默认值，这个文件不在 `CUPPER_E2E_DIR` 下，每轮测试后清理一次 | T074 |
 | T150 或做深链接的任务 | 各构建的 URL scheme（`cupper-e2e://` 等）还没有注册，和深链接的处理函数一起加 | T074 |
 | T152 | 窗口外观：菜单缩放后，交通灯的 y 坐标不会按 `(44 × 缩放 − 14) / 2` 重新计算；vibrancy 还没设 | T074（已写入 brief） |
-| T153、T154 | 菜单顶层标题和角色项（撤销、复制、退出等）是 Electron 自带的英文，需要给 `@cupper/i18n` 加 `menu` 命名空间；菜单分组是 T074 暂定的，按 Codex 定稿 | T074 |
+| T153、T154 | 菜单顶层标题和角色项（撤销、复制、退出等）是 Electron 自带的英文，需要给 `@cupper/i18n` 加 `menu` 命名空间；菜单分组是 T074 暂定的，按 Codex 定稿 | T074（已写入 T153 的 brief） |
 | T160、T180 | Electron 自带的 Info.plist 有 5 条用途说明（相机、麦克风、两条蓝牙、音频采集），electron-builder 的 `extendInfo` 删不掉。自用构建和发布构建要在打包后删除，例如用 `afterPack` 钩子（设计 5.10.1、5.10.2） | T074 |
 | T161 | Electron 44 有第 9 个 fuse，@electron/fuses 1.8.0 不认识，读出来是 `undefined`，逐项断言时要处理 | T074（已写入 T161 的 brief） |
 | T012 | `stream/events`、`stream/snapshot`、`history/page` 的参数若整体用派生的 `Deserialize`，一个残缺事件就会让整条通知解析失败。参数类型要让客户端能逐个事件调用 `Event::decode`、`EventBody::decode`（宽容模式） | T011（已写入 brief） |
@@ -292,7 +292,7 @@
 | T080 | ui-core 的路由是一个小状态路由，形状 `Route = {page:"new", projectId?} \| {page:"session", sessionId}`，`RouterProvider` 持有、`useRouter()` 给出 `{route, navigate}`，没有 URL；布局状态在 `layout/store.ts`，偏好键 `layout.sidebarOpen`、`layout.sidebarWidth`、`layout.sidePanelOpen`、`layout.sidePanelRatio`。接管状态时：连续快速按手柄键，主进程回传的旧 prefs 值会让宽度短暂跳回，按序号丢弃过期回传。`ui-core` 禁止 import `electron`、`node:*` 的 ESLint 规则还没加 | T084 |
 | T081、T086、T083 | ui-core 的插槽：`sidebarHeader`、`sidebarList`、`sidebarFooter`（T081）；`newSessionComposer`、`sessionComposer`（T086、T083）。默认的侧边栏头部是"Cupper"加宿主状态点，T081 替换。token 写法：颜色是 `light-dark()`，`data-theme` 固定主题；Tailwind `@theme static`，只有 `tokens.css` 定义过的 token 能生成工具类；用户状态（宽度等）只经 `style={{...}}` 写入 | T084 |
 | T152 | 侧边面板开合的 spring 动画（0.5 s，bounce 0.1）没有做 | T084（已写入 brief） |
-| T153 | 顶栏的"打开"和"⋯"目前是占位按钮（T128 换成工具栏按钮并能挂菜单），菜单内容归本任务 | T084 |
+| T153 | 顶栏的"打开"和"⋯"目前是占位按钮（T128 换成工具栏按钮并能挂菜单），菜单内容归本任务 | T084（已写入 T153 的 brief） |
 | T106 | 侧边面板的默认宽度按 ui-spec 2.4 的公式 `max(320, min(窗口高×1.6, 主区宽−500), min(640, 主区宽−352))`，默认窗口下得 640，主区只剩 352；公式在 ui-spec 里标为【推测】，请核对 | T084 |
 | T134 | 取真实输入证据用 `guardOf(event.sender)?.take()`（`apps/desktop/src/main/input/`）；证据的 `key` 为 `escape` 时由本任务拒绝，Esc 不能触发特权操作。窗口桥只对幂等方式为 `command` 的方法消耗输入，读请求和通知不消耗 | T077 |
 | T078 | 窗口桥为了认出宿主的回应（`command_id` 重发表），入方向每个字节在主进程里多一次复制（`FrameDecoder` 的拼接），JSON 只在重发表非空时解析；测量主进程事件循环延迟时一并评估 | T077 |
@@ -307,7 +307,7 @@
 | T135 | 提权框加"申请方不是本 App 自带的命令行工具"：在 `apps/desktop/src/main/privileged/dialogs.ts` 的 `elevationBox` 里按 `VerifiedRequester.bundled_cli` 加一行醒目提示，文案放 `privileged` 命名空间；信任项目、新建会话的确认框要显示项目路径（`project/trust_info`、`policy/describe` 的 `details` 现在都只有 `project_id`） | T134 |
 | 所有写中文文案的任务 | 截图夹具的中文字体是 GB2312 符号区加一级汉字的子集，T118 的 `fonts.test.ts` 检查全部 locale 文件；`⚠` 这类符号不在子集里，会让检查失败（T134 合并时遇到，改成了"【注意】"）。需要子集外的字时按 `tools/ui-screenshots` 的 notes 重做子集 | T134 合并 |
 | T082、T083 | 行类型注册表在 `packages/ui-core/src/rows/registry.tsx`：`RowRegistry<R extends {kind: string}>` 的 `register`、`resolve`，`<RowView registry row>` 按 kind 画出组件；同一个 kind 注册两次抛错；不认识的 kind 只显示一句占位（不渲染行里的数据）。可以各建一个实例或共用一个，在模块加载时注册 | T128 |
-| T153 | 顶栏"打开"和"⋯"已是挂着空菜单的工具栏按钮（`<Menu trigger={<ToolbarButton …/>}>`），菜单项归本任务 | T128 |
+| T153 | 顶栏"打开"和"⋯"已是挂着空菜单的工具栏按钮（`<Menu trigger={<ToolbarButton …/>}>`），菜单项归本任务 | T128（已写入 T153 的 brief） |
 | T106、T152 | 待核对：侧边面板被自动收起时，开关仍显示为按下（跟随用户意图）；开关滑块用 `--color-surface-elevated`，暗色下偏深；tooltip 阴影在 ui-spec 3.6 有、5.7.10 没有 token | T128 |
 | T135 | `VerifiedRequester.bundled_cli` 已加（T133）：提权框按它醒目标出"申请方不是本 App 自带的命令行工具"。开发和测试构建是 ad-hoc 签名，`bundled_cli` 恒为否；签名构建出来后实测一次为真的情况 | T133 |
 | T090、T092 | CLI 提权的 e2e 可以照用 IT-elevate 的做法：探针 `cupper-elevate-probe`（`cupper-cli` 下，需要 `test-harness` 特性，参数 `--data-dir`、`--out`、`--setsid`，按 JSON 行写下每一步结果）；假 agent 的 `spawn <program> [args...]` 在自己的会话和进程组里拉起程序；未决和结束的申请可以从 `host.db` 里索引流的 `elevation.*` 事件轮询 | T133 |
@@ -317,7 +317,7 @@
 | 所有界面任务（及评审） | ESLint 安全、样式、import、文案规则已生效（T136）。JSX 文案和 `aria-label`、`title`、`alt`、`placeholder`、`label` 等属性的字面量走 `t()`，只放行不含文字字母的文本和产品名、agent 名；其他例外要带理由的行内禁用注释。静态检查拦不下的写法（`style` 的值、拼进 `className` 的 agent 文本、别处取到的 `<style>`、`window` 的别名、自定义组件用别的属性名接收文案）列在 `docs/tasks/T136-ui-security-rules/notes.md`，评审照它看 | T136 |
 | 界面任务的截图用例 | 截图页的索引流夹具（T081）：mock 宿主对每个订阅回 snapshot 模式，再发一页 `stream/snapshot`，索引流的 op 来自夹具、其他流为空；会话流的夹具照此加 | T081 |
 | T152 | 截图比对用 Playwright 默认的逐像素阈值 0.2，悬停底色（正文色 5.3%）这类细微差异比不出来；要不要调严，随视觉修正一并决定 | T081（已写入 brief） |
-| T153 | 侧边栏项目行悬停时的"+"旁有一个空菜单、会话行还没有菜单按钮和右键菜单，菜单项归本任务（`ui-core/src/sidebar/`） | T081 |
+| T153 | 侧边栏项目行悬停时的"+"旁有一个空菜单、会话行还没有菜单按钮和右键菜单，菜单项归本任务（`ui-core/src/sidebar/`） | T081（已写入 T153 的 brief） |
 | 界面任务的截图用例 | 截图页的夹具 `streams`（T137，由 T081 的 `index` 推广）：按流名给 snapshot 的 op，例如 `index`、`session/s_7`；同一份夹具要被多个用例共用时放在同一个 spec 文件里（从别的 spec 文件 import 会让 Playwright 重复注册测试） | T137 |
 | T106、T152 | 待核对的文案：会话页"未信任"警告框的说明在 1280 宽时折成两行；`stale` 的项目在侧边栏同样标"未信任"，要不要单独起名（例如"需重新信任"） | T137 |
 | T063 | ① `tests/lifecycle.rs` 的进程级用例在 `terminate(&host)` 之前失败时，拉起的 `cupper-host` 连同假 agent 一直运行（`std::process::Child` 在 drop 时不结束子进程），本机曾积下十几个 ppid 为 1 的宿主；宿主进程也用 drop 守卫结束，做法参照 T008 修复 1 的 `Groups` 守卫（按组号加启动时间记录、drop 时只杀仍是原组的、记录写临时目录以便测试进程被杀后下次清理）。② 本地单独跑 IT-elevate 要先 `cargo build -p cupper-cli --features test-harness --bin cupper-elevate-probe`（CI 会自动做），探针缺失时让用例直接报出原因 | T008 修复 1 |
@@ -356,7 +356,7 @@
 | T169 | 会话层的 `privileged.executed`（T163 的遗留）：网关只在应答成功后记 scope 为 `privileged` 的方法（`gateway/dispatch.rs` 的 `privileged()`），看不到会话事实。经 `session/create`、`session/set_config` 切到 `full_access`，经 `interaction/respond` 选写入权限规则的特权选项，由会话 actor 的 `tier_change`、`policy::respond` 判定，要在判定通过处发出，格式照 `supervisor/audit.rs` 的 `formal()`；只记代码和取值，不写文案 | T163 |
 | 以后接入仓库档调用的任务（T061、T121 等） | `git.unsafe_repo_config` 目前只在 `index::projects::locate`（命令类别 `rev_parse`）发出。仓库档的其他调用接进来时照它的做法：拿 `GitError::refusal()` 的原因和工作区内的文件或键（不含值），经 `ScanContext` 的审计发送端发出 | T163 |
 | 所有宿主任务 | 不要在 tokio 工作线程上同步调用慢的系统接口：Security 框架（签名、cdhash）、读整个大文件算哈希等一律放进 `spawn_blocking`，原处 `await` 结论，失败与 join 失败按拒绝处理。T138、T163 已把 `admit` 的 `verify`、审计的 `read_peer`、网关与适配器启动前的自检、运行时的 sha256 校验挪过去；`Host::start` 在开始服务之前的一次性调用除外 | T163 |
-| T144 | 新建会话页（T085）在 `packages/ui-core/src/newsession/NewSessionPage.tsx`：agent 下拉现在只列 Claude，可用状态取自索引视图的 `AgentStatus`（不是 `agents/capabilities`，后者只有缓存的能力描述），原因码由导出的纯函数 `unavailable(status)` 推出（`cli_missing`、`not_logged_in`、`runtime_failed`，其余算 `unavailable`）；选中的 agent 和工作区经 `Composer` 的 `create` 属性传给 `useSend`（`composer/send.ts` 的 `NewSession`、`DEFAULT_NEW_SESSION`）。M1a 在 agent 不可用时仍允许发送、由宿主按语义码报错；按 AG-4"不支持的功能不出现"，是否直接禁止发送由本任务一并定 | T085 |
+| T144 | 新建会话页（T085）在 `packages/ui-core/src/newsession/NewSessionPage.tsx`：agent 下拉现在只列 Claude，可用状态取自索引视图的 `AgentStatus`（不是 `agents/capabilities`，后者只有缓存的能力描述），原因码由导出的纯函数 `unavailable(status)` 推出（`cli_missing`、`not_logged_in`、`runtime_failed`，其余算 `unavailable`）；选中的 agent 和工作区经 `Composer` 的 `create` 属性传给 `useSend`（`composer/send.ts` 的 `NewSession`、`DEFAULT_NEW_SESSION`）。M1a 在 agent 不可用时仍允许发送、由宿主按语义码报错；按 AG-4"不支持的功能不出现"，是否直接禁止发送由本任务一并定 | T085（已写入 T144 的 brief） |
 | T093 | E2E-new-session-agent-claude：新建会话页的标题里项目名就是选择器，菜单末尾是"添加项目"（走 `privileged({kind: "add_project"})`，主进程弹 `showOpenDialog`，替换见 T167）；动作条有"Claude ⌄"和"本地"；没有项目时 `data-send-state` 为 `disabled` | T085 |
 | ui-core 里写组件测试、用 MockHost 回放索引的任务 | 只对 `index` 流回放索引的 ops：否则新建的会话流也会收到这些 ops，视图报错后反复重新订阅，vitest 会耗尽内存（T085 的 `newsession/new-session.test.tsx`） | T085 |
 | 读 blob 的界面任务（T145 等） | host-client 的 `getBlob(ref)`（`client.ts`，挨着 `putBlob`）按 `offset` 收集分片，缺口、片数、总长、哈希任一不符就报错；`state/blob.ts` 的 `useBlobText(blob)` 给出 `idle`、`loading`、`loaded`、`failed` 和 `load()`，以计数器保证只有最近一次下载生效、卸载后丢弃结果。协议没有取消 `blob/get` 的方法，大输出要按范围读（`blob/get` 的 offset、length）时另行设计 | T168（已写入 T145 的 brief） |
@@ -489,7 +489,7 @@
 | 以后查 e2e 偶发失败的任务 | Radix 的菜单、对话框关掉后，FocusScope 用 `setTimeout(0)` 把焦点还给触发按钮。e2e 用例在关掉菜单后立即移焦点的，焦点可能被拿回去：先 `await expect(<触发按钮>).toBeFocused()` 再移。T217 只修了 E2E-SEC-panel-arming 一处 | T217 |
 | M1b B2 之前（T103 SP-6、T108 浸泡、K8） | SP-6 的场景、8 小时浸泡和 K8 的判定原定在作者机器上压测（设计 5.9.7"判定以作者的机器为准"、计划第 6 节第 15、16 行）。2026-11-02 用户决定不在自己的电脑上跑压测（`docs/meetings/2026-11-02-perf-local/`、`2026-11-02-m1a-sync/` D1），两者冲突，派 T103 之前要请用户再定；R8 的描述随之改。**2026-11-03 已定**：改在 GitHub runner 上跑，只记录，浸泡约 5 小时（`docs/meetings/2026-11-03-sp6-runner/`，计划 v1.3.86） | T219 |
 | 以后看性能趋势的任务 | 托管 runner 上的 PERF 数值只在 nightly 摘要的 `perf` 列表里，构件按保留期过期、不入库。要长期看趋势，需要定期把这些行汇总入库（格式与 `history.jsonl` 相同，机型泛称是 "Apple Virtual Machine 1 (Apple M1 (Virtual))"，不能和真机的历史混在一起判） | T219 |
-| T144、T151 或补 i18n 的界面任务 | `stream` 命名空间没有 `error_project_untrusted` 的文案，Codex 在未信任项目里的错误现在显示为"其他错误"；新建会话页和设置页会看到 Codex 的状态（没装 CLI 时为 `unavailable`） | T111（已写入 T151 的 brief） |
+| T144、T151 或补 i18n 的界面任务 | `stream` 命名空间没有 `error_project_untrusted` 的文案，Codex 在未信任项目里的错误现在显示为"其他错误"；新建会话页和设置页会看到 Codex 的状态（没装 CLI 时为 `unavailable`） | T111（已写入 T151 的 brief）（已写入 T144 的 brief） |
 | T113 或维护者手动 | 长时间运行下 Codex 的 MCP 进程数和内存（T102 交接），核对 5.6.8 的回收阈值和 NFR-11 的估算，要用真实 Codex | T111 |
 | 以后在本机跑宿主集成测试的任务 | lifecycle 里的 `it_cli_commands_*`、`it_elevate_lineage_*` 要先 `cargo build -p cupper-cli --features test-harness`（CI 的 `cli-e2e` 一步会做），否则本机会失败 | T111 |
 | 以后改快照档或项目登记的任务 | 项目是仓库的子目录时（monorepo），`Layout::read` 要求工作区目录里就有 `.git`，回合快照记成 `skipped/not_a_repo`，`git/diff` 也拿不到结果；T061 起就是这样 | T120 |
@@ -504,7 +504,7 @@
 | T121 | 暂存时按 `diff_token` 取出 `Diffed`，用 `diff::patch` 重新生成文件的补丁，再用 `diff::units` 按 `hunk_id` 找单位；缓存没有 `hunk_id` 到路径的索引，目标是 `{hunk_ids}` 时要么由 T121 加索引，要么逐个文件重新生成补丁去找 | T221 |
 | T148 | "回到底部"按钮（T082 起）用的 `bg-bg` 没有对应 token，背景是透明的，应为 `bg-surface` 一类；尺寸是 32，设计是 28 | T143 |
 | T152 或以后统一更新截图基线的任务 | 截图页的字体栈要整套固定：无衬线和等宽都要接上夹具里的中文子集，否则代码里的中文会退到系统字体，基线随 runner 的 macOS 小版本变（T143 只改了等宽）；基线只由 `ui-baseline` workflow 生成 | T143 |
-| T141、T151、T153 | 错误条目的恢复指引：`change_model` 的入口在 T141（模型选择器），`upgrade_cli`、`install_cli`、`restart_agent` 在 T151（设置页 agent 状态、`agents/restart`），`run_login_in_terminal` 的"打开终端"在 T153；T143 现在只给文字和可复制的命令 | T143（已写入 T151 的 brief） |
+| T141、T151、T153 | 错误条目的恢复指引：`change_model` 的入口在 T141（模型选择器），`upgrade_cli`、`install_cli`、`restart_agent` 在 T151（设置页 agent 状态、`agents/restart`），`run_login_in_terminal` 的"打开终端"在 T153；T143 现在只给文字和可复制的命令 | T143（已写入 T151 的 brief）（已写入 T153 的 brief） |
 | 以后改桌面退出流程的任务 | 退出判定之前就开始的重连所拉起的宿主，连接会被关掉，进程本身靠宿主自己的规则退出：开发、自用构建按孤立规则约 1 s，发布构建要等 10 分钟空闲（T214 已记）；退出中收到 `second-instance` 不建窗口，只由 `quitting` 标记守住，没有专门的用例 | T225 |
 | T125 | `git::status::in_progress(git_dir)` 可以直接用于 ADR-10 的第 3 条规则（有进行中的合并、rebase 等时不删 worktree） | T222 |
 | 界面要频繁查 `git/status` 的任务（审查面板等） | 一次 status 要两次仓库档调用，每次前后各遍历一遍工作区（指纹），加上快照档的 refresh；带大 `node_modules` 的仓库会慢到秒级，频繁轮询之前要缓存（T120 汇报第 5 条同一件事） | T222 |
@@ -516,7 +516,7 @@
 | T161 | 复用 `apps/desktop/src/test-entry-points.ts` 和 `apps/desktop/selfuse/build.test.ts` 里逐个 Mach-O 检查 entitlements、读 fuse 线的做法；`electron-builder.release.yml` 至今没有真正构建过；5.10.2 可补：库不带 entitlements，`chrome_crashpad_handler`、`app_shim_loader`、`ShipIt` 拿 `entitlementsInherit`，helper 的 identifier 是 `<appId>.helper`、`.helper.Renderer`、`.helper.GPU`、`.helper.Plugin` | T160（已写入 T161 的 brief） |
 | 以后改升级流程的任务（5.5.7、T129、T180） | keyed 构建（自用、开发、e2e）里宿主因待升级退出后，旧界面会自动从磁盘拉起新宿主，新旧两版混用；可以考虑收到 `host/shutdown(upgrade)` 后不再拉起，改为提示重启 App | T160 |
 | T253（v1.3.92 前为 T147） | 设置页"安装命令行工具"还没做，自用构建的安装说明暂时让用户 `ln -s`；做完后改 `docs/user/` 里的安装说明 | T160 |
-| T151、T153 | 默认编辑器是 TextEdit（T036 定的），`open -a TextEdit <目录>` 打不开文件夹；改成清单里第一个已安装的编辑器，或由界面引导用户选一个 | T126（已写入 T151 的 brief） |
+| T151、T153 | 默认编辑器是 TextEdit（T036 定的），`open -a TextEdit <目录>` 打不开文件夹；改成清单里第一个已安装的编辑器，或由界面引导用户选一个 | T126（已写入 T151 的 brief）（已写入 T153 的 brief） |
 | COMPAT 运行或真机验证（T113 等） | 提示里 `file_ref` 映射成的 `resource_link`，`file://` uri 没有百分号编码，路径里有空格、`#`、`%` 时不合法；要不要编码看两个适配器怎么解析 | T126 |
 | 以后改输入框或 `session/send` 的任务 | 图片超限、agent 不收图片、越出工作区的 `file_ref`，现在要到 prompt 时才失败（由 error 条目显示）；可以在 `session/send` 按能力提前校验 | T126 |
 | M3 远程客户端或改合并窗口的任务（5.3.3、5.2.4） | 合并窗口（`coalesce_ms` 不为 0）里不按流分组：别的流的事件插进来，同一个 item 的 delta 就不能跨帧合并，多会话时帧数可能翻倍；只影响开了窗口、同时订阅索引和会话的客户端，桌面端和 CLI 默认不开。可以先按流分组再合并，前提是协议不保证跨流的到达顺序（先在 5.3.3 确认） | T227 |
@@ -526,18 +526,18 @@
 | T113 | 录到含重连的场景后：判断重试插在一段消息中间时消息被拆成两条（合并器开新条目会结束正在写的消息）是否需要处理；按 K18 补 GOLD-A | T230 |
 | T235、T127 | 快照档的 git-lfs 存储在 cupper 私有的 GIT_DIR 里（`<数据目录>/git/<仓库>/ws/<工作区>/lfs/objects/`）；经仓库档暂存的 LFS 指针，对象要等用户提交时 git-lfs 的 clean 重新算一遍才进用户仓库，工作区改过就不会进。T127 清除快照对象时不能删掉用户仓库还引用的 LFS 对象，T235 之前尤其如此 | T229 |
 | T130 | `Menu.tsx` 里 T231 加了受控的 `open`/`onOpenChange`、`MenuLabel`、`CheckIcon`；merge main 时 `CheckIcon`、`MenuLabel` 各留一个，统一用 T130 的 `checked`/`radio`，并改写 `composer/config.tsx` 的 `Choices`（UNIT-composer-config 按 role 找 `menuitem` 的地方随之改）；不改 `MenuItem` 自身的间距 | T231 |
-| T144 | 新建会话页还没有权限按钮和模型选择器：两个扩展拿不到会话流时不显示；第一条消息前显示缓存的能力时，一并接上 `composer/config.tsx` 的 `useOption`、`useSetOption` | T231 |
+| T144 | 新建会话页还没有权限按钮和模型选择器：两个扩展拿不到会话流时不显示；第一条消息前显示缓存的能力时，一并接上 `composer/config.tsx` 的 `useOption`、`useSetOption` | T231（已写入 T144 的 brief） |
 | T148、T154 | 模型选择器的按钮直接显示 agent 给的名字，Claude 下是"Default (recommended) High"，偏长；要不要截断或用短名，在复刻度审阅里定 | T231 |
 | 以后改请求面板或错误条目的任务 | 错误条目的"换模型"打开的是输入框里的模型菜单；请求面板替换了输入框，或会话没有模型选项时，点了没有反应 | T231 |
 | T233 | 提交与推送的界面指引按语义码给：`signing_failed` 给改用 pinentry-mac 的指引；`auth_failed` 提示检查 ssh agent（只在 shell 配置里 export 的 `SSH_AUTH_SOCK` 从 GUI 启动时看不到）或凭据；没有上游时直接 `git/push` 回的是不带 reason 的 `git_error`（"has no upstream branch"），所以 `git/status` 没有 `upstream` 时默认带 `set_upstream`。失败的 git 输出在 `data.stderr`（末尾 2 KiB，已脱敏） | T123 |
 | 以后改用户档的任务 | 用户档不加任何 `-c`（`core.quotepath` 也不加），新加的固定覆盖只能进仓库档和快照档的 `overrides()`；失败分类读 `LC_ALL=C` 下的英文措辞，表驱动用例在 `git/user.rs` | T123 |
-| T144、T125 | 会话工作区是某个仓库的子目录时，`Layout::read` 找不到 `.git`，快照记为 `skipped/not_a_repo`，diff 不可用（与 5.2.11"git 仓库的子目录按非 git 目录处理"一致）；新建会话页或项目添加如果允许选仓库的子目录，要给出提示 | T234 |
+| T144、T125 | 会话工作区是某个仓库的子目录时，`Layout::read` 找不到 `.git`，快照记为 `skipped/not_a_repo`，diff 不可用（与 5.2.11"git 仓库的子目录按非 git 目录处理"一致）；新建会话页或项目添加如果允许选仓库的子目录，要给出提示 | T234（已写入 T144 的 brief） |
 | 以后改快照档的任务 | 快照档的 git 在工作区顶层运行（`SnapshotTier::prepare` 设 `current_dir`），不能改回 cupper 的目录，原因见 5.2.10"工作目录"；IT-git-racy-unstaged 用 `set_times` 加 `core.trustctime=false` 构造同一秒 | T234 |
 | T131 | diff 视图接口在 `packages/ui-core/src/review/view.ts`（`ReviewViewProps`、`ACTIONS`、`ViewTarget`），约定见 T130 汇报"给 T131 的 diff 视图接口"一节：删掉 `ReviewPanel.tsx` 里的占位 `FileList`，`Slots.reviewView` 留给测试替身；取 hunk 的查询键 `["session", id, "git/file_diff", diff_token, path]`；`auto` 视图"窄"的阈值由 T131 定；换掉占位后 review 的 8 张基线要重新生成（现在的基线里有占位的 `−0`） | T130 |
 | T232 | 点击文件跳转用 `store.set({ focus: { path, line, seq: (focus?.seq ?? 0) + 1 } })`；文件行和 hunk 的操作按 `ACTIONS[scope]` 显示。顺带修共用组件：菜单关闭后焦点回到 `ToolbarButton`，它的 tooltip 和焦点环随之出现，用鼠标选完也是这样；鼠标关闭时不让 tooltip 因此打开，键盘关闭照常还焦点（截图用例现在靠先点一下空白处绕开） | T130 |
 | 以后加菜单的任务 | 菜单里可勾选的项用 `MenuItem` 的 `checked`（加 `radio` 表示单选），勾在条目末尾；不要自己画勾，也不要改 `MenuItem` 自身的间距（会挪动所有现有菜单，UI-new-session 的基线会变） | T130、T231 |
 | 改 `cargo xtask size` 的任务 | 它只按文件名排除 `Cargo.lock`、`pnpm-lock.yaml`，spike 自带的 npm `package-lock.json` 会被算进行数（T104 的 1,197 行）；排除名单可以加上 `package-lock.json` | T104 |
-| T144 | worktree 准备失败时会话状态是 `idle`，不进 `error`：界面凭工作区视图的 `Failed{code, reason}` 和以 `workspace_failed` 暂停的队列（第一条消息在里面）显示失败；`filter_unsupported` 的提示文案在 5.2.10；`base_ref` 不在创建时校验，从 `git/branches` 里选，避免 add 才失败；`branch_hint` 只能是单段 | T124 |
+| T144 | worktree 准备失败时会话状态是 `idle`，不进 `error`：界面凭工作区视图的 `Failed{code, reason}` 和以 `workspace_failed` 暂停的队列（第一条消息在里面）显示失败；`filter_unsupported` 的提示文案在 5.2.10；`base_ref` 不在创建时校验，从 `git/branches` 里选，避免 add 才失败；`branch_hint` 只能是单段 | T124（已写入 T144 的 brief） |
 | T236 | 载入时停在 Preparing、`initial_prompt_json` 不为空的会话还不会恢复：复用已登记的 worktree，分支已在时不带 `-b` 再 add；在途标记是 FULL 落盘的 `workspace.preparing`；`Worktrees::plan`、`add` 在 `git/worktree.rs`；故障点 `worktree.adding`、`worktree.added` | T124 |
 | 改 CI 或 setup 动作的任务 | setup 动作恢复的 downloads 缓存可能没有 `target/git-lfs/git-lfs`（先存下这个 key 的作业不跑 `xtask git-lfs`，key 存下后不再更新）；只有 rust 作业和 test-repeat（T235 之后）自己下载。按作业分键或在 setup 里补下载都行（T197 记过同一件事） | T235 |
 | T131 | 见 `docs/tasks/T104-review-iframe/report-q29.md` 第 6 节：`navigation.ts` 只放行一次 `app://cupper-review/index.html`；Virtualizer 必须就是滚动容器（外面套滚动 div 会全量进 DOM，约 800 MB）；`sendInputEvent` 走 inputGuard 但送不进进程外 iframe，DevTools 的 `Input.dispatchKeyEvent` 能送进 iframe 但不经 inputGuard，菜单加速键只能用真实按键验证；剪贴板写入后读回没对上，要用 e2e 带等待地核实；空闲时预加载 iframe、预热 Worker、只加载 diff 里出现的语言；@pierre/diffs 锁 1.6.4，worker 入口 `@pierre/diffs/worker/worker.js`。原型在 `spikes/T104-review-iframe/`，产品代码不依赖它 | T104 |
@@ -545,19 +545,19 @@
 | T131 | T232 的占位 `FileList` 在 `focus` 变化时滚到对应文件，这段随占位一起删掉，审查文档视图要自己响应 `focus`（`scroll_to`）；文件树是面板左侧一栏，固定宽 240，面板窄时怎么收起由 T131 一并定 | T232 |
 | T233 | 审查面板头部已有"显示文件"按钮（在"⋯"左边）；"Git 操作"菜单放在头部时避开它；菜单经指针关闭时不再把焦点送回触发按钮（`Menu.tsx`） | T232 |
 | T125 | `git/worktree.rs` 里有 `worktree list --porcelain` 的解析（`listed`，判断是否登记、是否锁上），归档、恢复时可以复用；`workspace.failed{not_found}`（worktree 目录被人删掉）的会话怎样恢复（重建 worktree 或转为只读）由 T125 定；恢复时第一条输入是 `Input::Restored`，闸门按 `restored.gate` 重设，另发 Gate 会被覆盖 | T236 |
-| T144 | `workspace.failed` 还有 `not_found`（worktree 目录被删，git 里的记录还在）：提示用户，并告诉他可以自己 `git worktree prune` | T236 |
+| T144 | `workspace.failed` 还有 `not_found`（worktree 目录被删，git 里的记录还在）：提示用户，并告诉他可以自己 `git worktree prune` | T236（已写入 T144 的 brief） |
 | T131 | T233 合并后，review 的 8 张、review-tree 的 4 张、review-commit 的 3 张基线在 T131 merge main、换掉占位视图之后都要重新生成；审查面板头部现在有"Git 操作"（`review/GitActions.tsx`）和"显示文件"两个按钮；review 的单测用 `review/test-harness.tsx` | T233 |
 | T148 | 提交弹窗里的单选框和复选框用的是浏览器默认的系统强调色，没有接设计 token，可以用 `accent-color` 统一 | T233 |
 | T240 | `session/archive` 直接用 `git/cleanup.rs` 的 `check` 得到 blockers；删除前先 `worktree unlock`（加了锁的 worktree 不加 `-f -f` 删不掉）；`remove_case_only_dirty` 只在 `case_only_dirty` 为真且没有别的 blocker 时才加 `--force`；恢复 not_found 会话时用 `listed` 判断分支是否在别的 worktree 里检出；`listed` 现在返回锁的原因（`Option<Option<String>>`） | T125 |
 | T240、以后的性能任务 | `worktree/check` 的被忽略文件按文件计数，`node_modules` 这类大目录要全量列出，可能逼近只读命令 30 s 的超时；超时时应当只把这一项提示标为未知，不让整个检查失败（或改成 `--directory` 按目录计数） | T125 |
 | 以后改 `worktree/check` 的任务 | 仅大小写冲突不处理 Unicode 规范化：NFC 与 NFD 写法不同的同名路径不认作冲突；区分大小写的文件系统那一支没有实测（本机和 runner 都是不区分大小写的 APFS） | T125 |
-| T144、T238 | `lfs_object_missing`：还原（审查面板、T132 的撤销）和新建 worktree 时宿主不下载本地没有的 LFS 对象，界面提示"在终端里运行 `git lfs fetch`" | T237 |
+| T144、T238 | `lfs_object_missing`：还原（审查面板、T132 的撤销）和新建 worktree 时宿主不下载本地没有的 LFS 对象，界面提示"在终端里运行 `git lfs fetch`" | T237（已写入 T144 的 brief） |
 | 以后改 git LFS 的任务 | worktree 预检只看用户存储和 cupper 私有存储，没看 alternates 的 LFS 目录（可能误拒，少见）；超大仓库的 `ls-tree` 输出可能超过 64 MB 的 stdout 上限，worktree add 会失败；`.lfsconfig` 里写 `lfs.extension.*` 虽不会被执行，但会让 clean 失败，agent 可以借此让快照记为 `git_failed`（只是让功能失效）；revert 退出码 128 时可能已写了部分文件，仍按"没有改动"处理（原有行为） | T237 |
 | T132 | 改动卡片的行类型加进 `rows/flatten.ts` 的 `ALWAYS`，放在最终回答之后；列表有 `jumpTo(itemId)`（先展开条目所在回合再滚过去） | T146 |
 | T148 | 以工具调用收尾的回合 `final_item_ids` 为空，折叠后只显示标题（工具之前的说明一起收起）；跳到某条目后没有短暂高亮；这两处和本机 Codex 比对后再定 | T146 |
 | 以后改请求记录行的任务 | T165 交接里的"已询问 n 个问题"可以展开看回答，还没做 | T146 |
-| T153、M2 候选 | `project/remove` 先问遍所有会话再逐个归档，问完到归档之间仍有很小的窗口：某个会话恰好开始回合时，排在它前面的会话可能已经归档。界面收到 `conflict/turn_running` 时提示重试；彻底消除要让会话在被问时进入"不接新回合"的状态 | T241 |
-| T153 | worktree 会话恢复时复用新建的 `add`，actor 要等 1 秒 refresh；恢复入口要显示进行中的状态 | T241 |
+| T153、M2 候选 | `project/remove` 先问遍所有会话再逐个归档，问完到归档之间仍有很小的窗口：某个会话恰好开始回合时，排在它前面的会话可能已经归档。界面收到 `conflict/turn_running` 时提示重试；彻底消除要让会话在被问时进入"不接新回合"的状态 | T241（已写入 T153 的 brief） |
+| T153 | worktree 会话恢复时复用新建的 `add`，actor 要等 1 秒 refresh；恢复入口要显示进行中的状态 | T241（已写入 T153 的 brief） |
 | T145 | 与 T142 共用 `@` 的弹出层：拖入的图片目前按文件引用处理，要区分出来作为图片附件；设计里"拖放时显示覆盖层"归 T145；斜杠命令照 T142 的做法，从 `OverlayContext.area` 取文字区、加原生 keydown 监听，开头先判断 `keys.ts` 的 `composing()` | T142（已写入 T145 的 brief） |
 | 支持经符号链接的工作区时 | 拖入文件按字符串前缀判断是否在工作区内，经符号链接或大小写不同的路径会被误判为在外面（只多一次提示）；要支持就由宿主做真实路径的比较，需要附加协议 | T142 |
 | T242、T244、T151 及按能力隐藏入口的界面任务 | `interactions.plan_confirm`、`extraction.thinking` 由选项推断（T243），只用来决定入口；收到的计划确认请求和思考条目照样显示，不按这两个字段隐藏（5.3.7） | T243（已写入 T151 的 brief） |
@@ -584,7 +584,7 @@
 | T244 | 新会话页能取能力（扩展点带上 agent）之后，图片附件在新会话页也可以查 `prompt.image` 和 `max_image_bytes`；目前新会话页只查类型，其余由宿主在发送时把关 | T145 |
 | 改输入框样式的任务 | 给输入框容器加常驻的定位类样式（如 `relative`）会改变阴影的绘制顺序，盖到相邻的动作条和计划药丸上；加之前先跑一轮 ui-baseline 比对（T145 改为拖入时才定位） | T145 |
 | T242 | `keys.ts` 的 `sendAction()` 已区分 `"send"` 和 `"queue"`，运行中把 `"send"` 映射成 `mode: steer` 即可；"跟进消息默认排队"的对调也在这里加 | T244 |
-| T144 | 新建会话页读 `agents/capabilities` 的查询在 `composer/extensions/slash.tsx` 的 `Cached` 组件，查询键 `["agents/capabilities", agent]`，`agents.updated` 让它失效；显示缓存的模型和权限时共用这个查询 | T244 |
+| T144 | 新建会话页读 `agents/capabilities` 的查询在 `composer/extensions/slash.tsx` 的 `Cached` 组件，查询键 `["agents/capabilities", agent]`，`agents.updated` 让它失效；显示缓存的模型和权限时共用这个查询 | T244（已写入 T144 的 brief） |
 | T148、T154 | 斜杠菜单没有截图用例；要加时仿照 sidebar.spec 的 `composer-file-ref`，基线由 ui-baseline 生成 | T244 |
 | T250 | 图标的四处一起加：拿铁母版生成的 icns 入库、四份 electron-builder 配置的 `mac.icon`、`host-bundle` 写宿主的 `CFBundleIconFile`、UNIT-host-bundle-identity 补图标断言；UserNotifications 的 sys 接口挂在 T150 的主循环上（一个进程只建一个能收退出事件的 `RunLoop`，宿主已经只建一个） | T150 |
 | T254（MAN-notification-product，v1.3.92 前为 T251） | 注销、关机时 loginwindow 给宿主发退出事件这一点没有实测。用户决定（2026-11-10）不做真机验证，以 `cupper-sys/tests/runloop.rs` 的用例为准（事件来了走有序退出，而不是 AppKit 直接 `exit(0)`） | T150（已结）|
@@ -609,7 +609,7 @@
 | 在本机跑 e2e 的人 | T254 起 e2e 版 App 带 `cupper-e2e` 的 URL scheme，本机一启动 LaunchServices 就会记下它；影响不大，但 e2e 尽量在 runner 上跑 | T254 |
 | T107 | `apps/desktop/src/main/window.ts` 的 `dropVisibilityListenersOnClose` 是为 Electron 44 自带的可见性监听加的（窗口销毁后的遮挡变化会让它抛 "Object has been destroyed"）。升到 45 时查 electron/electron#53971 有没有回合到所用的 45.x：回合了就删掉这个函数、调用处、单元测试和注释 | T260 |
 | 要连跑 UNIT-views-differential 的人 | test-repeat 的 vitest 模式不会生成 `CUPPER_VIEW_CASES`，差分测试在里面只会跳过，workflow 把跳过算作失败；连跑要派 nightly `job=differential` | T260 |
-| T153 | 菜单里有 `next_needs_action`（Command+Alt+A），ui-core 的命令处理里没有它；T103 的场景 7 因此测不了"下一个需要处理的会话" | T103 |
+| T153 | 菜单里有 `next_needs_action`（Command+Alt+A），ui-core 的命令处理里没有它；T103 的场景 7 因此测不了"下一个需要处理的会话" | T103（已写入 T153 的 brief） |
 | T155 | 测量助手在 `tools/e2e/src/perf.ts`（T103 从 gate.spec 搬出），场景脚本可参考 `spikes/T103-sp6-render/`（seed 的请求 id、程序滚动要先发 wheel 事件、`fs_usage` 以 root 运行要用 `sudo -n pkill` 停）；`cupper:ready` 由 T262 补上；冷启动从 `cupper:ready` 计时（`performance.timeOrigin + startTime` 与启动前的时刻相减），不用 Playwright 的 launch 返回或页面内轮询，runner 上它们会被拉长几十秒（T262） | T103、T262（已写入 brief） |
 | T155 | 热启动在 e2e 构建上测不了：`dev_key` 只认拉起宿主的进程，App 退出后宿主孤立退出（5.8.1），要等 Q35 或发布构建；场景 8 在 Playwright 下页面一直是 `visible`，检测不到遮挡 | T103（已写入 brief） |
 | T155 | 超出预算的场景顺带录 Chromium trace（主进程 `contentTracing`，写进 `results/`）；Electron 的 `percentCPUUsage` 口径要先核实（T103 里主进程约 0.6，偏低） | T103（已写入 brief） |
@@ -618,11 +618,11 @@
 | T113 | codex 0.169.0 给 `agentMessage` 加了 `moderation`（回放历史时的展示指示：`action`、`blockType` 等）；2.2.2 实时和 `session/load` 回放都不读，被标记的回答照常显示原文。升级适配器时要定 cupper 是否执行这些指示 | T264 |
 | T113 | `inferenceHookDenied`（0.169.0）和 0.168.0 的 `modelNotFound`、`policyCapacityUnavailable` 都被 2.2.2 归为笼统的 `provider_error`；需要更细的错误类别时补进适配器的映射表 | T264 |
 | T159 | T155 的 PERF-ui-stream 在流式消息前加了一段代码块后，渲染进程内存到 1,037 MB（T103 时 591 MB，预算 600），洪流期间渲染进程 CPU p50 约 102% 单核（跑满一个核）；nightly 43798070645 | T155 |
-| T153 | PERF-ui-switch 还缺"下一个需要处理的会话"一项，T153 接上 `next_needs_action` 后在 PERF-ui-switch 里补上 | T155 |
+| T153 | PERF-ui-switch 还缺"下一个需要处理的会话"一项，T153 接上 `next_needs_action` 后在 PERF-ui-switch 里补上 | T155（已写入 T153 的 brief） |
 | T181 | 许可证门禁第二层（T182）先只扫 .app 和 zip；release-config 不出 DMG。T181 出 DMG 时把 DMG 接进第二层的扫描（`hdiutil` 挂载后扫） | T182 |
 | T152 | 按 T106 更正后的设计改实现：暗色输入框底色 #363636（拖放时 #2D2D2D，`--color-surface-composer`）；侧边栏拖动范围 188–468（`--layout-sidebar-w`）；回到底部按钮 32、运行中宽 40 显示三个点、离输入框 24、离底部超过 112 时出现（5.7.4）；暗色 token 的取值不变 | T106（已写入 brief） |
 | T148 | Codex 26.1111 起输入框为空时发送按钮也是实色（26.1013 是禁用灰），核对后跟进 5.7.4、5.7.10 的"发送按钮禁用态"；Q40 剩下的斜杠菜单外观、分栏与统一 diff 自动切换的像素阈值，需要作者补截图（斜杠菜单打开时；不同窗口宽度下的 diff） | T106 |
-| T153 | Codex 的会话行悬停时，行尾显示固定和归档按钮，并在行右侧弹出悬停卡片：标题与相对时间、项目（底色 surface-elevated）；cupper 是否做由 T153 定，做的话相对时间要宿主在 `SessionSummary` 里已有的时间戳 | T106 |
+| T153 | Codex 的会话行悬停时，行尾显示固定和归档按钮，并在行右侧弹出悬停卡片：标题与相对时间、项目（底色 surface-elevated）；cupper 是否做由 T153 定，做的话相对时间要宿主在 `SessionSummary` 里已有的时间戳 | T106（已写入 T153 的 brief） |
 | 静态核对 Codex 的任务 | ChatGPT.app 26.1111 里 ChatGPT 和 Codex 的界面合在一起，同类组件常有两套实现；以 `codex.*`、`localConversation.*`、`ComposerLayoutRoot` 这类名字为准 | T106 |
 | T181 | 发布流水线：对 zip 运行 `license-gate scan`（zip 支持已有）、出 DMG 后挂载扫描；流水线要装 cargo-about 0.9.3（`--features cli`），`build:release` 依赖它生成 THIRD_PARTY_NOTICES.txt | T182 |
 | 维护者 | claude-agent-acp 升级、锁文件里的 SDK 变了以后 PR 上的 `check` 会失败：在 runner 上用 spike-run 重跑 `license-gate fingerprints`（T182 的参数：`dir=spikes/T103-sp6-render`，command 先 `cd ../..`），只提交新的哈希清单 | T182 |
