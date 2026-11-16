@@ -104,3 +104,38 @@ T182 时每个模块都低估了约一半，这次按 prettier 折行后的实�
 2. Q45 中上次的项目已不存在时，"不预选"是指显示"我们要构建什么？"、不选任何项目（这时标题里也要有项目选择），还是退回现在的做法、选列表里第一个项目？
 3. 顶栏的会话标题、agent 标识和分支名，是在本任务做，还是交给 T153 或 T148？
 4. 新建会话页上选的模型、权限、推理强度，会话建好后清掉（我的做法），还是在下一次新建时保留？
+
+## 编排者的决定（2026-11-16）
+
+- 选方案 A：本任务做模块 2、3、6 和两个 e2e 用例，停止线 650、硬线 750；模块 1、4、5、7（Q44、Q45、顶栏）拆成 T266，在 T144 合并后做。
+- 所选 agent 不可用时禁止发送，原因写在动作条上。
+- Q45 归 T266；上次的项目已不存在时，退回列表里的第一个项目。
+- 会话建好后清掉页面上的模型、权限和推理强度。
+- `project_untrusted` 的文案在本任务补上。
+- 默认权限的预选留给 T266，本任务只留一个入口。
+
+## 交给 T266 的入口
+
+- 新建会话页的选项都经 `composer/config.tsx` 的 `useNewOptions(agent)`：
+  - `get(id)` 取 `pick(config, id, chosen?.[id])`：用户这次选的值，其次是缓存里 agent 自己的当前值（即 CLI 配置）。
+  - `chosen` 是 `session/create` 的 `config`，`NewSessionPage` 由它算出 `config` 和 `fullAccess`。
+- T266 的默认权限接在这里：
+  - `permission_mode` 的值改为"用户的选择，其次 `sessions.default_permission.<agent>`（在缓存的能力里时）"；
+  - 同一个值进 `chosen`，`session/create` 就会带上它；是完全访问时，同样经原生确认。
+- 用户的选择存在 UI store 的 `chosen[agent]`（`choose`、`clearChosen`），会话建好后清空。
+- 能力缓存的查询是 `useCached(agent)`（键 `["agents/capabilities", agent]`）。缓存为空（首次使用，设计 5.6.7）时，它用 `agents/refresh` 探测一次（键 `["agents/refresh", agent]`，每个连接一次），然后重读。设置页的默认权限一行也可以用它。
+
+## 写的过程
+
+- **模块 2（能力的来源）**：+123。
+  - `WithOptions` 让会话页和新建会话页走同一套按钮；
+  - 原来的 `useOption` 换成 `Options.get`；
+  - 斜杠命令改用共用的 `useCached`，不再等输入 `/` 才查询。
+- **模块 3（动作条与发送）**：+299，其中测试约 150。
+  - agent 下拉的两项用 radio 菜单项；
+  - 动作条在 agent 后面写不可用的原因；
+  - worktree 没取到起始分支前也禁止发送；
+  - 完全访问时，经特权操作 `create_session` 发送，`command_id` 用 host-client 的 `uuidv7`；用户取消的话，草稿留在原处。
+- **模块 6（失败提示）**：+48。会话页的工作区横幅、队列暂停原因、`project_untrusted` 的文案。
+- **首次使用时的探测**：+28。写 e2e 时发现，缓存为空时新建会话页永远显示不出能力：查询的 `staleTime` 是 `Infinity`，宿主在 Attach 后写缓存，但不发 `agents.updated`。设计 5.6.7 规定缓存为空时由 `agents/refresh` 探测，所以在 `useCached` 里接上了。
+- 截图基线会变：新建会话页的动作条多了工作位置按钮、不可用的原因，agent 菜单项变成 radio。共 8 张 `new-session-*`，要由 ui-baseline 重新生成。
