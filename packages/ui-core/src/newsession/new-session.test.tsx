@@ -5,6 +5,7 @@ import type { Handshake } from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
@@ -14,6 +15,7 @@ import { DEFAULT_PREFS } from "../layout/layout";
 import { StateProvider, UiProvider } from "../state/provider";
 import { createUiStore } from "../state/ui";
 import { capabilities } from "../composer/test-capabilities";
+import { LAST_PROJECT_PREF, useRememberProject } from "../composer/send";
 import { NewSessionPage } from "./NewSessionPage";
 
 afterEach(cleanup);
@@ -68,8 +70,8 @@ const settings = (codex: string | null) => ({
   },
 });
 
-/** The new session page on an index of `ops`. */
-async function setup(ops: object[]) {
+/** The new session page on an index of `ops`, the shell holding `prefs`; then `page`. */
+async function setup(ops: object[], prefs = {}, page: ReactNode = <NewSessionPage />) {
   const mock = new MockHost([{ method: "initialize", params: {}, result: {} }]);
   mock.handle("stream/subscribe", ({ id, conn, params }) => {
     const { stream } = params as { stream: string };
@@ -101,18 +103,17 @@ async function setup(ops: object[]) {
   const conn = mock.connect();
   conn.initialized = true;
   client.attach(conn.port(), {} as Handshake);
-  const { shell, controls } = createBrowserShell();
+  const { shell, controls } = createBrowserShell({ info: { prefs } });
   const ui = createUiStore({ prefs: DEFAULT_PREFS, overlayOpen: false }, { page: "new" });
+  const info = await shell.init();
   render(
-    <ShellProvider api={shell} info={await shell.init()}>
+    <ShellProvider api={shell} info={info}>
       <I18nProvider locale="zh-CN">
         <ToasterProvider>
           <HostContext value={{ client, state: client.state, handshake: undefined }}>
             <UiProvider ui={ui}>
               <StateProvider>
-                <RouterProvider>
-                  <NewSessionPage />
-                </RouterProvider>
+                <RouterProvider>{page}</RouterProvider>
               </StateProvider>
             </UiProvider>
           </HostContext>
@@ -123,7 +124,7 @@ async function setup(ops: object[]) {
   await act(() => new Promise((done) => requestAnimationFrame(() => done(undefined))));
   const creates = () =>
     mock.requests.filter((r) => r.method === "session/create").map((r) => r.params);
-  return { ui, controls, creates, mock, user: userEvent.setup() };
+  return { ui, controls, creates, mock, shell, user: userEvent.setup() };
 }
 
 const open = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
@@ -208,6 +209,26 @@ describe("UI-new-session", () => {
     expect(full.controls.privilegedActions).toEqual([
       expect.objectContaining({ kind: "create_session" }),
     ]);
+  });
+
+  test("Q45: a session's page keeps its project; the new page picks it, or the first once it is gone", async () => {
+    const summary = {
+      type: "session.upserted",
+      data: {
+        ...{ session_id: "s_1", project_id: "p_2", agent: "claude", title: "t", status: "idle" },
+        ...{ title_source: "prompt", workspace_kind: "local", last_activity_at: 1 },
+        ...{ pending_interactions: 0, read_only: false, unread: false },
+      },
+    };
+    const Visit = () => (useRememberProject("s_1"), null);
+    const { shell } = await setup([...PROJECTS, summary], {}, <Visit />);
+    expect((await shell.init()).prefs[LAST_PROJECT_PREF]).toBe("p_2");
+    cleanup();
+    await setup(PROJECTS, { [LAST_PROJECT_PREF]: "p_2" });
+    expect(screen.getByRole("heading").textContent).toBe("你想在notes中构建什么？");
+    cleanup();
+    await setup(PROJECTS, { [LAST_PROJECT_PREF]: "p_removed" });
+    expect(screen.getByRole("heading").textContent).toBe("你想在cupper中构建什么？");
   });
 
   test("full access is created through the native confirmation; cancelled, the draft stays", async () => {

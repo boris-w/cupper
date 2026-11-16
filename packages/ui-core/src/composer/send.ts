@@ -36,10 +36,19 @@ export function codeOf(error: unknown): string {
   return error instanceof ConnectionLost ? "connection_lost" : "unexpected";
 }
 
-/** The session's agent and whether a turn runs, from the index; the new page's defaults. */
+/** The UI preference holding the project of the session last visited (Q45). */
+export const LAST_PROJECT_PREF = "newSession.lastProject";
+
+/**
+ * The session's agent and whether a turn runs, from the index; the new
+ * page's defaults. The new page's project, unless the route names one, is
+ * that of the session last visited, or the first while that one is gone
+ * (Q45).
+ */
 export function useSessionState(sessionId?: string) {
   const { view } = useStreams().index;
   useEntry(view, "view");
+  const last = usePref(LAST_PROJECT_PREF);
   const { sessions, projects } = view.toJSON();
   const summary = sessionId === undefined ? undefined : sessions[sessionId];
   const status = summary?.status;
@@ -47,8 +56,19 @@ export function useSessionState(sessionId?: string) {
   return {
     agent: summary?.agent ?? "claude",
     running: status === "running" || status === "needs_action",
-    firstProject: first?.project_id,
+    newProject: typeof last === "string" && projects[last] ? last : first?.project_id,
   };
+}
+
+/** Keeps session `sessionId`'s project as the one the new session page picks (Q45). */
+export function useRememberProject(sessionId: string) {
+  const { api } = useShell();
+  const { view } = useStreams().index;
+  useEntry(view, "view");
+  const projectId = view.toJSON().sessions[sessionId]?.project_id;
+  useEffect(() => {
+    if (projectId !== undefined) void api.prefs.set(LAST_PROJECT_PREF, projectId);
+  }, [api, projectId]);
 }
 
 /** What a new session is created with (design 5.7.4); fixed once it exists. */

@@ -46,11 +46,11 @@ function FileRefs({ sessionId }: { sessionId?: string }) {
   const { area, container } = use(OverlayContext);
   const key = sessionId ?? NEW_DRAFT;
   const draft = useStore(ui, (state) => state.drafts[key] ?? "");
-  const { firstProject } = useSessionState(sessionId);
+  const { newProject } = useSessionState(sessionId);
   const { sessions, projects } = streams.index.view.toJSON();
   const projectId = sessionId
     ? sessions[sessionId]?.project_id
-    : (route.page === "new" && route.projectId) || firstProject;
+    : (route.page === "new" && route.projectId) || newProject;
   const project = projectId === undefined ? undefined : projects[projectId];
   const [caret, setCaret] = useCaret();
   const [closedAt, setClosedAt] = useState<number>();
