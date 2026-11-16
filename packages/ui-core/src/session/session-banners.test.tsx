@@ -8,7 +8,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { I18nProvider, ShellProvider } from "../app/providers";
 import { ToasterProvider } from "../feedback/toaster";
 import { ElevationBanner } from "../sidebar/parts";
-import { ConfirmBanner, UntrustedBanner } from "./SessionBanners";
+import { ConfirmBanner, UntrustedBanner, WorkspaceBanner } from "./SessionBanners";
 
 afterEach(cleanup);
 
@@ -60,6 +60,22 @@ describe("UNIT-ui-session-banners", () => {
     rerender(box(confirmation("new_reason")));
     expect(alerts()).toEqual(["会话的权限配置需要确认（new_reason）。确认"]);
     rerender(box(null));
+    expect(alerts()).toEqual([]);
+  });
+
+  test("a worktree that could not be made says why, and what the user can do", async () => {
+    const failed = (code: string, reason?: string) => (
+      <WorkspaceBanner workspace={{ state: "failed", code, reason }} />
+    );
+    const { rerender } = await setup(failed("git_error", "filter_unsupported"));
+    expect(alerts()).toEqual([expect.stringContaining("自定义过滤器") as string]);
+    rerender(failed("git_error", "lfs_object_missing"));
+    expect(alerts()).toEqual([expect.stringContaining("git lfs fetch") as string]);
+    rerender(failed("not_found"));
+    expect(alerts()).toEqual([expect.stringContaining("git worktree prune") as string]);
+    rerender(failed("git_error", "lock_held"));
+    expect(alerts()).toEqual(["worktree 没有建成（git_error）。"]);
+    rerender(<WorkspaceBanner workspace={{ state: "ready", path: "/w" }} />);
     expect(alerts()).toEqual([]);
   });
 
