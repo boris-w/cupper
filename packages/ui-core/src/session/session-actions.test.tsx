@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import type { Route } from "../app/router";
 import { mountOnHost } from "../review/test-harness";
+import { TitleBar } from "../shell/Shell";
 import { ProjectList } from "../sidebar/parts";
 import { useSessionActions } from "./actions";
 
@@ -234,6 +235,47 @@ describe("the sidebar's menus", () => {
     await settle();
     expect(toasts()).toEqual(["有回合正在运行，先停下回合再试"]);
     expect(ui.getState().route).toEqual({ page: "session", sessionId: "s_1" });
+  });
+});
+
+describe("the title bar's menus", () => {
+  const bar = <TitleBar hidden={false} inset={false} sidePanelOpen onSidePanel={() => undefined} />;
+  const open = (name: string) =>
+    fireEvent.keyDown(screen.getByRole("button", { name }), { key: "Enter" });
+  const item = (name: string) => fireEvent.click(screen.getByRole("menuitem", { name }));
+
+  test("打开 hands the workspace to an app; ⋯ renames, archives, copies its path", async () => {
+    const copied: string[] = [];
+    const clipboard = { writeText: async (text: string) => void copied.push(text) };
+    Object.defineProperty(navigator, "clipboard", { value: clipboard, configurable: true });
+    const { calls } = await setup(bar, {
+      "workspace/open": { result: {} },
+      "session/get": { result: { workspace: { kind: "local", path: "/w/cupper" } } },
+    });
+    open("打开");
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
+      "终端",
+      "编辑器",
+      "访达",
+    ]);
+    item("访达");
+    open("会话菜单");
+    const items = screen.getAllByRole("menuitem").map((i) => i.textContent);
+    expect(items).toEqual(["重命名", "归档", "复制工作目录"]);
+    item("复制工作目录");
+    await settle();
+    expect(calls("workspace/open")).toEqual([{ session_id: "s_1", target: "finder" }]);
+    expect(copied).toEqual(["/w/cupper"]);
+    expect(toasts()).toEqual(["已复制工作目录"]);
+    open("会话菜单");
+    item("重命名");
+    expect(dialog()).not.toBeNull();
+  });
+
+  test("off a session page, neither shows", async () => {
+    await setup(bar, {}, { page: "new" });
+    expect(screen.queryByRole("button", { name: "打开" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "会话菜单" })).toBeNull();
   });
 });
 
