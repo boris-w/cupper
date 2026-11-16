@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import { describe, expect, test } from "vitest";
-import type * as z from "zod";
+import * as z from "zod";
 
 import * as schemas from "./gen/zod.gen";
 import {
@@ -73,6 +73,31 @@ describe("UNIT-ts-fixtures", () => {
     const { type, data } = event;
     const body = zEventBody.parse(data === undefined ? { type } : { type, data });
     expect(isKnownEvent(body)).toBe(kind === "known");
+  });
+
+  // T159: the known members are picked by `type`. Whatever the event, the
+  // outcome is that of the union that tried them one by one before.
+  test("events parse as before their members were picked by type", () => {
+    const before = (union: z.ZodUnion) => {
+      const [picked, fallback] = union.options as [z.ZodDiscriminatedUnion, z.ZodType];
+      return z.union([...picked.options, fallback]);
+    };
+    const { left, right } = zEvent.def as unknown as { left: z.ZodUnion; right: z.ZodType };
+    const outcome = (parsed: z.ZodSafeParseResult<unknown>) =>
+      parsed.success ? { data: parsed.data } : "fails";
+    const seen = new Set<string>();
+    for (const { expect: kind, event } of events) {
+      const { type, data } = event;
+      const body = data === undefined ? { type } : { type, data };
+      expect(outcome(zEventBody.safeParse(body)), `${kind}: ${JSON.stringify(body)}`).toEqual(
+        outcome(before(zEventBody).safeParse(body)),
+      );
+      expect(outcome(zEvent.safeParse(event)), `${kind}: ${JSON.stringify(event)}`).toEqual(
+        outcome(z.intersection(before(left), right).safeParse(event)),
+      );
+      seen.add(kind);
+    }
+    expect([...seen].sort()).toEqual(["degraded", "invalid", "known", "unknown"]);
   });
 
   test.each(methods)("method: $method", ({ method, params, result }) => {

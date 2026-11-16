@@ -13,7 +13,9 @@
  *   `.loose()`; a record such as `UnknownMember` keeps them already. Below the event, a fallback takes
  *   only tags the union does not know, as `open_union!` does in Rust (design
  *   5.3.11), so a known member with malformed data fails the union instead
- *   of passing as unknown; the event then degrades as a whole.
+ *   of passing as unknown; the event then degrades as a whole. The event's
+ *   and its body's known members are picked by `type` (`z.discriminatedUnion`),
+ *   as zod would otherwise parse them one by one until one fits (T159).
  * - `events.gen.ts`: the known event types as literals, and a guard that
  *   narrows an event to them only when its data matches its type.
  * - `methods.gen.ts`: the method catalog of `x-methods`, each request's and
@@ -112,12 +114,25 @@ export function postprocess(
     }
   }
   for (const { def, tag, known, fallback } of unions) {
-    if (EVENTS.includes(def)) {
-      continue;
-    }
     const [statement] = new RegExp(`^export const z${def} = [^]*?;$`, "m").exec(zod) ?? [];
     if (statement === undefined) {
       throw new Error(`z${def} is not in zod.gen.ts`);
+    }
+    if (EVENTS.includes(def)) {
+      // The known members picked by their tag, one parsed per event rather
+      // than each in turn (T159); anything else, the fallback, as before.
+      const opened = replaceOnce(
+        statement,
+        /z\.union\(\[/,
+        `z.union([z.discriminatedUnion(${JSON.stringify(tag)}, [`,
+      );
+      const picked = replaceOnce(
+        opened,
+        new RegExp(`\\bz${fallback}(?=\\s*\\])`),
+        `]), z${fallback}`,
+      );
+      zod = zod.replace(statement, picked);
+      continue;
     }
     const unknownTag = `(member) => typeof member.${tag} === "string" && !${JSON.stringify(known)}.includes(member.${tag})`;
     const refined = replaceOnce(
@@ -181,7 +196,8 @@ function openObjects(defs: Record<string, Node>): string[] {
 }
 
 /** The definitions of the event and its body: their fallback takes any type,
- * and `isKnownEvent` tells a malformed known type apart. */
+ * and `isKnownEvent` tells a malformed known type apart. Their known members
+ * are a discriminated union inside the open one. */
 const EVENTS = ["Event", "EventBody"];
 
 /** An open union: a definition whose `anyOf` has members tagged by `tag`,

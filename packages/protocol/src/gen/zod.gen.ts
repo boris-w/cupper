@@ -2775,6 +2775,134 @@ export const zWorkspaceReady = z.object({
 
 export const zEvent = z.intersection(
   z.union([
+    z.discriminatedUnion("type", [
+      z.object({
+        data: zProjectUpserted,
+        type: z.literal("project.upserted"),
+      }),
+      z.object({
+        data: zProjectRemoved,
+        type: z.literal("project.removed"),
+      }),
+      z.object({
+        data: zSessionSummary,
+        type: z.literal("session.upserted"),
+      }),
+      z.object({
+        data: zSessionRemoved,
+        type: z.literal("session.removed"),
+      }),
+      z.object({
+        data: zAgentsUpdated,
+        type: z.literal("agents.updated"),
+      }),
+      z.object({
+        data: zHostUpdated,
+        type: z.literal("host.updated"),
+      }),
+      z.object({
+        data: zSettingsUpdated,
+        type: z.literal("settings.updated"),
+      }),
+      z.object({
+        data: zClientsUpdated,
+        type: z.literal("clients.updated"),
+      }),
+      z.object({
+        data: zElevationRequested,
+        type: z.literal("elevation.requested"),
+      }),
+      z.object({
+        data: zElevationResolved,
+        type: z.literal("elevation.resolved"),
+      }),
+      z.object({
+        data: zNotificationIntent,
+        type: z.literal("notification.intent"),
+      }),
+      z.object({
+        data: zSessionConfigured,
+        type: z.literal("session.configured"),
+      }),
+      z.object({
+        data: zSessionCapabilities,
+        type: z.literal("session.capabilities"),
+      }),
+      z.object({
+        data: zWorkspacePreparing,
+        type: z.literal("workspace.preparing"),
+      }),
+      z.object({
+        data: zWorkspaceReady,
+        type: z.literal("workspace.ready"),
+      }),
+      z.object({
+        data: zWorkspaceFailed,
+        type: z.literal("workspace.failed"),
+      }),
+      z.object({
+        data: zTurnStarted,
+        type: z.literal("turn.started"),
+      }),
+      z.object({
+        data: zTurnCompleted,
+        type: z.literal("turn.completed"),
+      }),
+      z.object({
+        data: zItemStarted,
+        type: z.literal("item.started"),
+      }),
+      z.object({
+        data: zItemDelta,
+        type: z.literal("item.delta"),
+      }),
+      z.object({
+        data: zItemUpdated,
+        type: z.literal("item.updated"),
+      }),
+      z.object({
+        data: zItemCompleted,
+        type: z.literal("item.completed"),
+      }),
+      z.object({
+        data: zInteractionRequested,
+        type: z.literal("interaction.requested"),
+      }),
+      z.object({
+        data: zInteractionResolved,
+        type: z.literal("interaction.resolved"),
+      }),
+      z.object({
+        data: zQueueUpdated,
+        type: z.literal("queue.updated"),
+      }),
+      z.object({
+        data: zSnapshotRecorded,
+        type: z.literal("snapshot.recorded"),
+      }),
+      z.object({
+        data: zUsageUpdated,
+        type: z.literal("usage.updated"),
+      }),
+    ]),
+    zUnknownEvent,
+  ]),
+  z.object({
+    cause: zCause.optional(),
+    fallback: zFallback.optional(),
+    from: z.int().gte(0).lte(9007199254740991).optional(),
+    seq: z.int().gte(0).lte(9007199254740991),
+    ts: zTimestampMs,
+    v: z.int().gte(0).lte(4294967295),
+  }),
+);
+
+/**
+ * The `type` and `data` of an event. A snapshot or a history page is a
+ * list of these, applied the same way as live events (ADR-06).
+ */
+export const zEventBody = z.union([
+  z.discriminatedUnion("type", [
     z.object({
       data: zProjectUpserted,
       type: z.literal("project.upserted"),
@@ -2883,131 +3011,7 @@ export const zEvent = z.intersection(
       data: zUsageUpdated,
       type: z.literal("usage.updated"),
     }),
-    zUnknownEvent,
   ]),
-  z.object({
-    cause: zCause.optional(),
-    fallback: zFallback.optional(),
-    from: z.int().gte(0).lte(9007199254740991).optional(),
-    seq: z.int().gte(0).lte(9007199254740991),
-    ts: zTimestampMs,
-    v: z.int().gte(0).lte(4294967295),
-  }),
-);
-
-/**
- * The `type` and `data` of an event. A snapshot or a history page is a
- * list of these, applied the same way as live events (ADR-06).
- */
-export const zEventBody = z.union([
-  z.object({
-    data: zProjectUpserted,
-    type: z.literal("project.upserted"),
-  }),
-  z.object({
-    data: zProjectRemoved,
-    type: z.literal("project.removed"),
-  }),
-  z.object({
-    data: zSessionSummary,
-    type: z.literal("session.upserted"),
-  }),
-  z.object({
-    data: zSessionRemoved,
-    type: z.literal("session.removed"),
-  }),
-  z.object({
-    data: zAgentsUpdated,
-    type: z.literal("agents.updated"),
-  }),
-  z.object({
-    data: zHostUpdated,
-    type: z.literal("host.updated"),
-  }),
-  z.object({
-    data: zSettingsUpdated,
-    type: z.literal("settings.updated"),
-  }),
-  z.object({
-    data: zClientsUpdated,
-    type: z.literal("clients.updated"),
-  }),
-  z.object({
-    data: zElevationRequested,
-    type: z.literal("elevation.requested"),
-  }),
-  z.object({
-    data: zElevationResolved,
-    type: z.literal("elevation.resolved"),
-  }),
-  z.object({
-    data: zNotificationIntent,
-    type: z.literal("notification.intent"),
-  }),
-  z.object({
-    data: zSessionConfigured,
-    type: z.literal("session.configured"),
-  }),
-  z.object({
-    data: zSessionCapabilities,
-    type: z.literal("session.capabilities"),
-  }),
-  z.object({
-    data: zWorkspacePreparing,
-    type: z.literal("workspace.preparing"),
-  }),
-  z.object({
-    data: zWorkspaceReady,
-    type: z.literal("workspace.ready"),
-  }),
-  z.object({
-    data: zWorkspaceFailed,
-    type: z.literal("workspace.failed"),
-  }),
-  z.object({
-    data: zTurnStarted,
-    type: z.literal("turn.started"),
-  }),
-  z.object({
-    data: zTurnCompleted,
-    type: z.literal("turn.completed"),
-  }),
-  z.object({
-    data: zItemStarted,
-    type: z.literal("item.started"),
-  }),
-  z.object({
-    data: zItemDelta,
-    type: z.literal("item.delta"),
-  }),
-  z.object({
-    data: zItemUpdated,
-    type: z.literal("item.updated"),
-  }),
-  z.object({
-    data: zItemCompleted,
-    type: z.literal("item.completed"),
-  }),
-  z.object({
-    data: zInteractionRequested,
-    type: z.literal("interaction.requested"),
-  }),
-  z.object({
-    data: zInteractionResolved,
-    type: z.literal("interaction.resolved"),
-  }),
-  z.object({
-    data: zQueueUpdated,
-    type: z.literal("queue.updated"),
-  }),
-  z.object({
-    data: zSnapshotRecorded,
-    type: z.literal("snapshot.recorded"),
-  }),
-  z.object({
-    data: zUsageUpdated,
-    type: z.literal("usage.updated"),
-  }),
   zUnknownEvent,
 ]);
 
