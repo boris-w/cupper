@@ -23,6 +23,7 @@ import {
   Menu,
   MessageChannelMain,
   nativeImage,
+  nativeTheme,
   powerMonitor,
   protocol,
   session,
@@ -31,6 +32,7 @@ import {
 
 import { isReleaseLike } from "../shared/flavor";
 import { followIconColour } from "./app-icon";
+import { followTheme } from "./appearance";
 import { COMMAND_CHANNEL, HOST_OPEN, NAVIGATE } from "../shared/ipc";
 import { WindowBridges } from "./bridge/bridges";
 import { startHost } from "./host";
@@ -178,6 +180,8 @@ function start() {
 async function ready() {
   restrictPermissions(session.defaultSession);
   const prefs = await Prefs.open(join(dirs.userData, "prefs.json"));
+  // The theme too, before the first window paints (design 5.7.7).
+  followTheme({ prefs, theme: nativeTheme });
   // Before the first window (design 5.7.2). The name comes from the list,
   // never from the preference, so it cannot leave `Resources/app-icons/`.
   if (app.dock) {

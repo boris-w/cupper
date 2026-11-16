@@ -25,6 +25,14 @@ export {
   iconColour,
   type IconColour,
 } from "./app-icon";
+export {
+  THEME_CHOICES,
+  THEME_PREF,
+  themeChoice,
+  TRANSLUCENT_SIDEBAR_PREF,
+  translucentSidebar,
+  type ThemeChoice,
+} from "./appearance";
 export { commandHandler, type CommandHandlers } from "./commands";
 export { MAIN_DOCUMENT_CSP, mainDocumentCsp, REVIEW_DOCUMENT_CSP, reviewDocumentCsp } from "./csp";
 export { isExternalUrl } from "./links";
