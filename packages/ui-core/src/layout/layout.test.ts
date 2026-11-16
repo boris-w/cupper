@@ -23,11 +23,11 @@ describe("UNIT-ui-shell-resize", () => {
     expect(layout.sidePanel).toMatchObject({ visible: true, width: 640, min: 320, max: 640 });
   });
 
-  test("the sidebar stays 240–520 wide and leaves the main area 240", () => {
+  test("the sidebar stays 188–468 wide and leaves the main area 240", () => {
     const wide = { ...DEFAULT_PREFS, sidebarWidth: 900 };
-    expect(computeLayout(view(1280), wide, false).sidebar.width).toBe(520);
+    expect(computeLayout(view(1280), wide, false).sidebar.width).toBe(468);
     expect(computeLayout(view(700), wide, false).sidebar.width).toBe(700 - 240);
-    expect(computeLayout(view(1280), { ...wide, sidebarWidth: 10 }, false).sidebar.width).toBe(240);
+    expect(computeLayout(view(1280), { ...wide, sidebarWidth: 10 }, false).sidebar.width).toBe(188);
   });
 
   test("a window narrower than 768 floats the sidebar, which follows the overlay state only", () => {
