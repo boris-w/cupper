@@ -619,3 +619,8 @@
 | T113 | `inferenceHookDenied`（0.169.0）和 0.168.0 的 `modelNotFound`、`policyCapacityUnavailable` 都被 2.2.2 归为笼统的 `provider_error`；需要更细的错误类别时补进适配器的映射表 | T264 |
 | T159 | T155 的 PERF-ui-stream 在流式消息前加了一段代码块后，渲染进程内存到 1,037 MB（T103 时 591 MB，预算 600），洪流期间渲染进程 CPU p50 约 102% 单核（跑满一个核）；nightly 43798070645 | T155 |
 | T153 | PERF-ui-switch 还缺"下一个需要处理的会话"一项，T153 接上 `next_needs_action` 后在 PERF-ui-switch 里补上 | T155 |
+| T181 | 许可证门禁第二层（T182）先只扫 .app 和 zip；release-config 不出 DMG。T181 出 DMG 时把 DMG 接进第二层的扫描（`hdiutil` 挂载后扫） | T182 |
+| T152 | 按 T106 更正后的设计改实现：暗色输入框底色 #363636（拖放时 #2D2D2D，`--color-surface-composer`）；侧边栏拖动范围 188–468（`--layout-sidebar-w`）；回到底部按钮 32、运行中宽 40 显示三个点、离输入框 24、离底部超过 112 时出现（5.7.4）；暗色 token 的取值不变 | T106 |
+| T148 | Codex 26.1111 起输入框为空时发送按钮也是实色（26.1013 是禁用灰），核对后跟进 5.7.4、5.7.10 的"发送按钮禁用态"；Q40 剩下的斜杠菜单外观、分栏与统一 diff 自动切换的像素阈值，需要作者补截图（斜杠菜单打开时；不同窗口宽度下的 diff） | T106 |
+| T153 | Codex 的会话行悬停时，行尾显示固定和归档按钮，并在行右侧弹出悬停卡片：标题与相对时间、项目（底色 surface-elevated）；cupper 是否做由 T153 定，做的话相对时间要宿主在 `SessionSummary` 里已有的时间戳 | T106 |
+| 静态核对 Codex 的任务 | ChatGPT.app 26.1111 里 ChatGPT 和 Codex 的界面合在一起，同类组件常有两套实现；以 `codex.*`、`localConversation.*`、`ComposerLayoutRoot` 这类名字为准 | T106 |
