@@ -5,6 +5,7 @@ import type { Handshake } from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
@@ -14,6 +15,7 @@ import { DEFAULT_PREFS } from "../layout/layout";
 import { StateProvider, UiProvider } from "../state/provider";
 import { createUiStore } from "../state/ui";
 import { capabilities } from "../composer/test-capabilities";
+import { LAST_PROJECT_PREF, useRememberProject } from "../composer/send";
 import { NewSessionPage } from "./NewSessionPage";
 
 afterEach(cleanup);
@@ -52,9 +54,24 @@ const CACHED = {
   }).data,
 };
 const BRANCHES = { current: "main", local: ["main", "dev"], remote: ["origin/main"] };
+/** The host's settings, Codex's default permission `codex`. */
+const settings = (codex: string | null) => ({
+  type: "settings.updated",
+  data: {
+    settings: {
+      ...{ "agents.claude.cli_path": null, "agents.codex.cli_path": null },
+      ...{ "agents.env_passthrough": [], "worktrees.root": "/w", "diagnostics.verbose": false },
+      ...{ "notifications.needs_action": true, "notifications.turn_completed": true },
+      ...{ "notifications.error": true, "apps.terminal": "Terminal", "apps.editor": "TextEdit" },
+      ...{ "sessions.default_agent": "claude", "sessions.default_permission.claude": null },
+      ...{ "sessions.default_permission.codex": codex, "host.idle_exit_minutes": 10 },
+      "host.prevent_idle_sleep": true,
+    },
+  },
+});
 
-/** The new session page on an index of `ops`. */
-async function setup(ops: object[]) {
+/** The new session page on an index of `ops`, the shell holding `prefs`; then `page`. */
+async function setup(ops: object[], prefs = {}, page: ReactNode = <NewSessionPage />) {
   const mock = new MockHost([{ method: "initialize", params: {}, result: {} }]);
   mock.handle("stream/subscribe", ({ id, conn, params }) => {
     const { stream } = params as { stream: string };
@@ -86,18 +103,17 @@ async function setup(ops: object[]) {
   const conn = mock.connect();
   conn.initialized = true;
   client.attach(conn.port(), {} as Handshake);
-  const { shell, controls } = createBrowserShell();
+  const { shell, controls } = createBrowserShell({ info: { prefs } });
   const ui = createUiStore({ prefs: DEFAULT_PREFS, overlayOpen: false }, { page: "new" });
+  const info = await shell.init();
   render(
-    <ShellProvider api={shell} info={await shell.init()}>
+    <ShellProvider api={shell} info={info}>
       <I18nProvider locale="zh-CN">
         <ToasterProvider>
           <HostContext value={{ client, state: client.state, handshake: undefined }}>
             <UiProvider ui={ui}>
               <StateProvider>
-                <RouterProvider>
-                  <NewSessionPage />
-                </RouterProvider>
+                <RouterProvider>{page}</RouterProvider>
               </StateProvider>
             </UiProvider>
           </HostContext>
@@ -115,7 +131,7 @@ async function setup(ops: object[]) {
       method: "stream/events",
       params: { stream: "index", events: [{ seq: ++seq, v: 1, ts: 1, ...body }] },
     });
-  return { ui, controls, creates, mock, event, user: userEvent.setup() };
+  return { ui, controls, creates, mock, shell, event, user: userEvent.setup() };
 }
 
 const open = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
@@ -171,6 +187,55 @@ describe("UI-new-session", () => {
     expect(await screen.findByRole("button", { name: "权限" })).toBeTruthy();
     const asked = mock.requests.map((r) => r.method).filter((m) => m.startsWith("agents/"));
     expect(asked).toEqual(["agents/capabilities", "agents/refresh", "agents/capabilities"]);
+  });
+
+  test("Q44: the default permission is preselected and sent; one the agent lost is not", async () => {
+    const send = async (user: ReturnType<typeof userEvent.setup>) => {
+      await open(user, "选择 agent");
+      await user.click(screen.getByRole("menuitemradio", { name: "Codex" }));
+      const mode = (await screen.findByRole("button", { name: "权限" })).textContent;
+      const area = screen.getByRole("textbox");
+      fireEvent.change(area, { target: { value: "开始吧" } });
+      await act(async () => void fireEvent.keyDown(area, { key: "Enter" }));
+      return mode;
+    };
+    const auto = await setup([...PROJECTS, NO_CLI, settings("auto")]);
+    expect(await send(auto.user)).toBe("Auto");
+    expect(auto.creates()).toEqual([
+      expect.objectContaining({ agent: "codex", config: { permission_mode: "auto" } }),
+    ]);
+    cleanup();
+    const gone = await setup([...PROJECTS, NO_CLI, settings("gone")]);
+    expect(await send(gone.user)).toBe("Read only");
+    expect(gone.creates()).toEqual([expect.objectContaining({ agent: "codex", config: {} })]);
+    cleanup();
+    // Full access by default still asks each time.
+    const full = await setup([...PROJECTS, NO_CLI, settings("full-access")]);
+    await send(full.user);
+    expect(full.creates()).toEqual([]);
+    expect(full.controls.privilegedActions).toEqual([
+      expect.objectContaining({ kind: "create_session" }),
+    ]);
+  });
+
+  test("Q45: a session's page keeps its project; the new page picks it, or the first once it is gone", async () => {
+    const summary = {
+      type: "session.upserted",
+      data: {
+        ...{ session_id: "s_1", project_id: "p_2", agent: "claude", title: "t", status: "idle" },
+        ...{ title_source: "prompt", workspace_kind: "local", last_activity_at: 1 },
+        ...{ pending_interactions: 0, read_only: false, unread: false },
+      },
+    };
+    const Visit = () => (useRememberProject("s_1"), null);
+    const { shell } = await setup([...PROJECTS, summary], {}, <Visit />);
+    expect((await shell.init()).prefs[LAST_PROJECT_PREF]).toBe("p_2");
+    cleanup();
+    await setup(PROJECTS, { [LAST_PROJECT_PREF]: "p_2" });
+    expect(screen.getByRole("heading").textContent).toBe("你想在notes中构建什么？");
+    cleanup();
+    await setup(PROJECTS, { [LAST_PROJECT_PREF]: "p_removed" });
+    expect(screen.getByRole("heading").textContent).toBe("你想在cupper中构建什么？");
   });
 
   test("the cache is read again when the host counts a change of it", async () => {

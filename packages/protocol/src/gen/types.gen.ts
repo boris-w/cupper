@@ -438,6 +438,11 @@ export type Cost = {
 };
 
 /**
+ * A permission mode, or `null`: the CLI's configuration (Q44).
+ */
+export type DefaultPermission = string | null;
+
+/**
  * Open enum: unknown values must be accepted. Known: text output
  */
 export type DeltaField = "text" | "output" | (string & {});
@@ -3091,6 +3096,8 @@ export type Settings = {
   "notifications.needs_action": boolean;
   "notifications.turn_completed": boolean;
   "sessions.default_agent": AgentKind;
+  "sessions.default_permission.claude": DefaultPermission;
+  "sessions.default_permission.codex": DefaultPermission;
   "worktrees.root": WirePath;
 };
 
@@ -3111,6 +3118,8 @@ export type SettingsPatch = {
   "notifications.needs_action"?: boolean;
   "notifications.turn_completed"?: boolean;
   "sessions.default_agent"?: AgentKind;
+  "sessions.default_permission.claude"?: DefaultPermission;
+  "sessions.default_permission.codex"?: DefaultPermission;
   "worktrees.root"?: WirePath;
 };
 

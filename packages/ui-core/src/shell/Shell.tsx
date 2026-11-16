@@ -37,6 +37,9 @@ import {
   type OpenTarget,
 } from "../session/actions";
 import type { LayoutStore } from "../layout/store";
+import { useStreams } from "../state/provider";
+import { useEntry } from "../state/stream";
+import { SessionTitle } from "./SessionTitle";
 import { SessionShortcuts } from "./shortcuts";
 import { Splitter } from "./Splitter";
 
@@ -240,6 +243,9 @@ export function TitleBar(props: {
   const { show } = useToasts();
   const actions = useSessionActions();
   const { route } = useRouter();
+  const index = useStreams().index.view;
+  useEntry(index, "view");
+  const summary = route.page === "session" ? index.toJSON().sessions[route.sessionId] : undefined;
   const session = route.page === "session" ? route.sessionId : undefined;
   const copyPath = (id: string) =>
     client
@@ -254,7 +260,9 @@ export function TitleBar(props: {
       hidden={props.hidden}
       className={`app-drag flex h-(--layout-titlebar-h) shrink-0 items-center gap-1 pr-2 ${props.inset ? "pl-[calc(var(--layout-traffic-lights-w)+var(--spacing)*10)]" : "pl-2"}`}
     >
-      <div className="min-w-0 flex-1" />
+      <div className="min-w-0 flex-1">
+        <SessionTitle summary={summary} />
+      </div>
       {handshake?.host.weak_auth && (
         <ToolbarButton label={t("shell:weak_auth_detail")}>
           <span className="text-warning">{t("shell:weak_auth")}</span>

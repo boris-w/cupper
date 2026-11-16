@@ -165,10 +165,8 @@ export function Composer(props: {
   const key = sessionId ?? NEW_DRAFT;
   const draft = useStore(ui, (state) => state.drafts[key] ?? "");
   const attachments = useStore(ui, (state) => state.attachments[key] ?? NONE);
-  const { agent, running, firstProject } = useSessionState(sessionId);
-  const projectId = sessionId
-    ? undefined
-    : (route.page === "new" && route.projectId) || firstProject;
+  const { agent, running, newProject } = useSessionState(sessionId);
+  const projectId = sessionId ? undefined : (route.page === "new" && route.projectId) || newProject;
   const { send, interrupt, resume } = useSend(sessionId, projectId, create);
   const sendKey = usePref(SEND_KEY_PREF) === "mod_enter" ? "mod_enter" : "enter";
   const [armed, setArmed] = useState(false);

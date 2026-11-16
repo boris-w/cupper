@@ -99,6 +99,26 @@ impl JsonSchema for CliPath {
     }
 }
 
+/// The permission mode the new session page picks for an agent (Q44): one
+/// of its capabilities' modes, or `null` to follow the CLI's configuration.
+/// Always present in [`Settings`]; in a [`SettingsPatch`], `null` clears it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct DefaultPermission(pub Option<String>);
+
+impl JsonSchema for DefaultPermission {
+    fn schema_name() -> Cow<'static, str> {
+        "DefaultPermission".into()
+    }
+
+    fn json_schema(g: &mut SchemaGenerator) -> Schema {
+        let mut schema = g.subschema_for::<Option<String>>();
+        let doc = "A permission mode, or `null`: the CLI's configuration (Q44).";
+        schema.insert("description".into(), doc.into());
+        schema
+    }
+}
+
 settings! {
     "agents.claude.cli_path" => claude_cli_path: CliPath,
     "agents.codex.cli_path" => codex_cli_path: CliPath,
@@ -112,6 +132,8 @@ settings! {
     "apps.terminal" => terminal_app: String,
     "apps.editor" => editor_app: String,
     "sessions.default_agent" => default_agent: AgentKind,
+    "sessions.default_permission.claude" => default_permission_claude: DefaultPermission,
+    "sessions.default_permission.codex" => default_permission_codex: DefaultPermission,
     "host.idle_exit_minutes" => idle_exit_minutes: u32,
     /// Keeps the Mac awake while agents work (design 5.2.13); absent from
     /// what hosts before T147 wrote.
@@ -465,6 +487,7 @@ pub(super) mod tests {
             "worktrees.root": "~/.cupper/worktrees", "notifications.needs_action": true,
             "notifications.turn_completed": true, "notifications.error": true,
             "apps.terminal": "terminal", "apps.editor": "vscode", "sessions.default_agent": "claude",
+            "sessions.default_permission.claude": null, "sessions.default_permission.codex": "auto",
             "host.idle_exit_minutes": 30, "host.prevent_idle_sleep": true,
             "diagnostics.verbose": false}});
         let blob = |media_type| json!({"blob": {"hash": "ab".repeat(32), "size": 9000, "media_type": media_type}});

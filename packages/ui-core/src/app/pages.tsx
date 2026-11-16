@@ -1,6 +1,7 @@
 import { use } from "react";
 
 import { ComposerArea } from "../composer/QueueList";
+import { useRememberProject } from "../composer/send";
 import { SessionBanners } from "../session/SessionBanners";
 import { NewSessionPage } from "../newsession/NewSessionPage";
 import { SettingsPage } from "../settings/SettingsPage";
@@ -17,6 +18,7 @@ const COLUMN = "mx-auto w-full max-w-(--layout-thread-max-w) px-(--layout-thread
  */
 export function SessionPage({ sessionId }: { sessionId: string }) {
   const { sessionComposer } = use(SlotsContext);
+  useRememberProject(sessionId);
   return (
     <div className="flex h-full w-full flex-col">
       <div className={COLUMN}>

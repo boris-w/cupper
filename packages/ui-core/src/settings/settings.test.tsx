@@ -9,7 +9,7 @@ import {
   type Handshake,
 } from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test } from "vitest";
 
@@ -20,6 +20,7 @@ import { DEFAULT_PREFS } from "../layout/layout";
 import { SettingsRow } from "../sidebar/parts";
 import { StateProvider, UiProvider } from "../state/provider";
 import { createUiStore, toSettings } from "../state/ui";
+import { capabilities } from "../composer/test-capabilities";
 import { SettingsPage } from "./SettingsPage";
 
 afterEach(cleanup);
@@ -104,11 +105,28 @@ const SETTINGS = {
       "apps.terminal": "Terminal",
       "apps.editor": "TextEdit",
       "sessions.default_agent": "claude",
+      "sessions.default_permission.claude": null,
+      "sessions.default_permission.codex": null,
       "host.idle_exit_minutes": 10,
       "host.prevent_idle_sleep": true,
       "diagnostics.verbose": false,
     },
   },
+};
+/** Claude's cached capabilities: its permission modes. */
+const CLAUDE_MODES = {
+  captured_at: 1,
+  capabilities: capabilities({
+    config: [
+      {
+        ...{ id: "permission_mode", agent_option_id: "mode", current: "default" },
+        values: [
+          { value: "default", name: "Manual", risk: "normal" },
+          { value: "acceptEdits", name: "Accept edits", risk: "elevated" },
+        ],
+      },
+    ],
+  }).data,
 };
 /** The worktrees' walk ran out of time. */
 const STORAGE = {
@@ -139,12 +157,18 @@ const PAGES = [
 async function setup({
   auth,
   prefs = {},
-}: { auth?: string; prefs?: Record<string, unknown> } = {}) {
+  defaults = {},
+}: {
+  auth?: string;
+  prefs?: Record<string, unknown>;
+  defaults?: Record<string, string>;
+} = {}) {
   const mock = new MockHost([{ method: "initialize", params: {}, result: {} }]);
+  const settings = { ...SETTINGS, data: { settings: { ...SETTINGS.data.settings, ...defaults } } };
   mock.handle("stream/subscribe", ({ id, conn, params }) => {
     const { stream } = params as { stream: string };
     conn.reply(id, { result: { stream, mode: "snapshot", at_seq: 1, head_seq: 1, epoch: 1 } });
-    const ops = stream === "index" ? [AGENTS, CLIENTS, PROJECT, SETTINGS, host(auth)] : [];
+    const ops = stream === "index" ? [AGENTS, CLIENTS, PROJECT, settings, host(auth)] : [];
     const page = { stream, at_seq: 1, epoch: 1, page: 0, last: true, ops };
     conn.send({ jsonrpc: "2.0", method: "stream/snapshot", params: page });
     return undefined;
@@ -155,6 +179,10 @@ async function setup({
     mock.handle(method, ({ id, conn }) => void held.push((answer) => conn.reply(id, answer)));
   }
   mock.handle("host/storage", () => ({ result: STORAGE }));
+  // Claude's modes are cached; Codex's are not.
+  mock.handle("agents/capabilities", ({ params }) => ({
+    result: (params as { agent: string }).agent === "claude" ? { cached: CLAUDE_MODES } : {},
+  }));
   mock.handle("session/list_archived", ({ params }) => ({
     result: PAGES[(params as { cursor?: object }).cursor ? 1 : 0],
   }));
@@ -335,6 +363,35 @@ describe("UI-settings-general", () => {
       method: "settings/update",
       params: { patch: { "host.prevent_idle_sleep": false } },
     });
+  });
+
+  test("Q44: each agent's default permission of its cached modes; a lost one follows the CLI", async () => {
+    const { mock, ui } = await setup({
+      defaults: { "sessions.default_permission.claude": "gone" },
+    });
+    act(() => ui.getState().navigate(toSettings(ui.getState().route, "general")));
+    const rows = () => texts(card("新会话")).filter(Boolean);
+    await waitFor(() =>
+      expect(rows()).toEqual([
+        "Claude 的默认权限存下的模式 gone 已不在 Claude 的可选模式里，按沿用 CLI 配置处理",
+        "沿用 CLI 配置",
+        "Codex 的默认权限还没有 Codex 的能力信息，新建一个会话后才有可选的模式",
+        "沿用 CLI 配置",
+      ]),
+    );
+    within(card("新会话")).getAllByRole("button")[0]?.focus();
+    await userEvent.keyboard("{Enter}");
+    const modes = screen.getAllByRole("menuitemradio").map((item) => item.textContent);
+    expect(modes).toEqual(["沿用 CLI 配置", "Manual", "Accept edits"]);
+    await act(
+      async () => void fireEvent.click(screen.getByRole("menuitemradio", { name: "Accept edits" })),
+    );
+    expect(mock.requests.at(-1)).toMatchObject({
+      method: "settings/update",
+      params: { patch: { "sessions.default_permission.claude": "acceptEdits" } },
+    });
+    // The settings page starts no adapter: Codex's empty cache stays empty.
+    expect(mock.requests.filter((r) => r.method === "agents/refresh")).toEqual([]);
   });
 
   test("notifications: the switches as the settings are, each change a settings/update", async () => {

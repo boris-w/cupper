@@ -15,7 +15,7 @@ import { ChevronDownIcon } from "../components/icons";
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from "../components/Menu";
 import { Composer } from "../composer/Composer";
 import { fullAccess, useNewOptions } from "../composer/config";
-import type { NewSession } from "../composer/send";
+import { useSessionState, type NewSession } from "../composer/send";
 import { usePrivileged } from "../feedback/privileged";
 import { useStreams } from "../state/provider";
 import { useEntry } from "../state/stream";
@@ -195,7 +195,8 @@ export function NewSessionPage() {
   useEntry(index, "view");
   const { projects, agents } = index.toJSON();
   const sorted = Object.values(projects).toSorted((a, b) => a.position - b.position);
-  const projectId = (route.page === "new" && route.projectId) || sorted[0]?.project_id;
+  const { newProject } = useSessionState();
+  const projectId = (route.page === "new" && route.projectId) || newProject;
   const project = projectId === undefined ? undefined : projects[projectId];
   const [agent, setAgent] = useState("claude");
   const [wantWorktree, setWorktree] = useState(false);

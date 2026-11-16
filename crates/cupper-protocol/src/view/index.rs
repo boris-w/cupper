@@ -170,7 +170,8 @@ mod tests {
                 "agents.codex.cli_path": format!("/bin/codex-{n}"), "agents.env_passthrough": [],
                 "worktrees.root": "/w", "notifications.needs_action": true, "notifications.turn_completed": true,
                 "notifications.error": n % 2 == 1, "apps.terminal": "Terminal", "apps.editor": "TextEdit",
-                "sessions.default_agent": "claude", "host.idle_exit_minutes": 10,
+                "sessions.default_agent": "claude", "sessions.default_permission.claude": "auto",
+                "sessions.default_permission.codex": null, "host.idle_exit_minutes": 10,
                 "host.prevent_idle_sleep": true, "diagnostics.verbose": false}}})
             }
             _ => {
