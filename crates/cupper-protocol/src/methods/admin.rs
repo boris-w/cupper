@@ -429,6 +429,9 @@ open_enum! {
     pub enum SeedMix {
         /// As in the SP-1 recordings.
         Sp1 => "sp1",
+        /// As `sp1`, with a short code block in every fifth agent message,
+        /// for highlighting under load (SP-6, T155).
+        Sp1Code => "sp1_code",
     }
 }
 

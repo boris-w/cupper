@@ -2676,9 +2676,9 @@ export type Scope =
   "read" | "write" | "approve" | "privileged" | "ui_local" | "test" | (string & {});
 
 /**
- * Open enum: unknown values must be accepted. Known: sp1
+ * Open enum: unknown values must be accepted. Known: sp1 sp1_code
  */
-export type SeedMix = "sp1" | (string & {});
+export type SeedMix = "sp1" | "sp1_code" | (string & {});
 
 export type SeedProfile = {
   items_per_turn: number;

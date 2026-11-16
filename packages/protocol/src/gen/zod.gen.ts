@@ -1173,9 +1173,9 @@ export const zInitializeResult = z.object({
 });
 
 /**
- * Open enum: unknown values must be accepted. Known: sp1
+ * Open enum: unknown values must be accepted. Known: sp1 sp1_code
  */
-export const zSeedMix = z.union([z.enum(["sp1"]), z.string()]);
+export const zSeedMix = z.union([z.enum(["sp1", "sp1_code"]), z.string()]);
 
 export const zSeedProfile = z.object({
   items_per_turn: z.int().gte(0).lte(4294967295),

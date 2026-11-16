@@ -6263,7 +6263,8 @@
       "anyOf": [
         {
           "enum": [
-            "sp1"
+            "sp1",
+            "sp1_code"
           ],
           "type": "string"
         },
@@ -6271,7 +6272,7 @@
           "type": "string"
         }
       ],
-      "description": "Open enum: unknown values must be accepted. Known: sp1 "
+      "description": "Open enum: unknown values must be accepted. Known: sp1 sp1_code "
     },
     "SeedProfile": {
       "properties": {
