@@ -1178,9 +1178,13 @@ MAN-ui6-shell = "man"
 # 会话管理界面、快捷键与"打开"按钮
 [T153]
 milestone = "M1b"
-E2E-archive-cleanup = "nightly"
 E2E-next-needs-action = "nightly"
 E2E-shortcuts = "nightly"
+
+# 会话管理界面：菜单、弹窗与悬停卡片（由 T153 拆出）
+[T265]
+milestone = "M1b"
+E2E-archive-cleanup = "nightly"
 E2E-workspace-open = "nightly"
 
 # 中英文与截图基线

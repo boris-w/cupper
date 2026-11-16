@@ -292,7 +292,7 @@
 | T080 | ui-core 的路由是一个小状态路由，形状 `Route = {page:"new", projectId?} \| {page:"session", sessionId}`，`RouterProvider` 持有、`useRouter()` 给出 `{route, navigate}`，没有 URL；布局状态在 `layout/store.ts`，偏好键 `layout.sidebarOpen`、`layout.sidebarWidth`、`layout.sidePanelOpen`、`layout.sidePanelRatio`。接管状态时：连续快速按手柄键，主进程回传的旧 prefs 值会让宽度短暂跳回，按序号丢弃过期回传。`ui-core` 禁止 import `electron`、`node:*` 的 ESLint 规则还没加 | T084 |
 | T081、T086、T083 | ui-core 的插槽：`sidebarHeader`、`sidebarList`、`sidebarFooter`（T081）；`newSessionComposer`、`sessionComposer`（T086、T083）。默认的侧边栏头部是"Cupper"加宿主状态点，T081 替换。token 写法：颜色是 `light-dark()`，`data-theme` 固定主题；Tailwind `@theme static`，只有 `tokens.css` 定义过的 token 能生成工具类；用户状态（宽度等）只经 `style={{...}}` 写入 | T084 |
 | T152 | 侧边面板开合的 spring 动画（0.5 s，bounce 0.1）没有做 | T084（已写入 brief） |
-| T153 | 顶栏的"打开"和"⋯"目前是占位按钮（T128 换成工具栏按钮并能挂菜单），菜单内容归本任务 | T084（已写入 T153 的 brief） |
+| T153 | 顶栏的"打开"和"⋯"目前是占位按钮（T128 换成工具栏按钮并能挂菜单），菜单内容归本任务 | T084（已写入 T265 的 brief） |
 | T106 | 侧边面板的默认宽度按 ui-spec 2.4 的公式 `max(320, min(窗口高×1.6, 主区宽−500), min(640, 主区宽−352))`，默认窗口下得 640，主区只剩 352；公式在 ui-spec 里标为【推测】，请核对 | T084 |
 | T134 | 取真实输入证据用 `guardOf(event.sender)?.take()`（`apps/desktop/src/main/input/`）；证据的 `key` 为 `escape` 时由本任务拒绝，Esc 不能触发特权操作。窗口桥只对幂等方式为 `command` 的方法消耗输入，读请求和通知不消耗 | T077 |
 | T078 | 窗口桥为了认出宿主的回应（`command_id` 重发表），入方向每个字节在主进程里多一次复制（`FrameDecoder` 的拼接），JSON 只在重发表非空时解析；测量主进程事件循环延迟时一并评估 | T077 |
@@ -307,7 +307,7 @@
 | T135 | 提权框加"申请方不是本 App 自带的命令行工具"：在 `apps/desktop/src/main/privileged/dialogs.ts` 的 `elevationBox` 里按 `VerifiedRequester.bundled_cli` 加一行醒目提示，文案放 `privileged` 命名空间；信任项目、新建会话的确认框要显示项目路径（`project/trust_info`、`policy/describe` 的 `details` 现在都只有 `project_id`） | T134 |
 | 所有写中文文案的任务 | 截图夹具的中文字体是 GB2312 符号区加一级汉字的子集，T118 的 `fonts.test.ts` 检查全部 locale 文件；`⚠` 这类符号不在子集里，会让检查失败（T134 合并时遇到，改成了"【注意】"）。需要子集外的字时按 `tools/ui-screenshots` 的 notes 重做子集 | T134 合并 |
 | T082、T083 | 行类型注册表在 `packages/ui-core/src/rows/registry.tsx`：`RowRegistry<R extends {kind: string}>` 的 `register`、`resolve`，`<RowView registry row>` 按 kind 画出组件；同一个 kind 注册两次抛错；不认识的 kind 只显示一句占位（不渲染行里的数据）。可以各建一个实例或共用一个，在模块加载时注册 | T128 |
-| T153 | 顶栏"打开"和"⋯"已是挂着空菜单的工具栏按钮（`<Menu trigger={<ToolbarButton …/>}>`），菜单项归本任务 | T128（已写入 T153 的 brief） |
+| T153 | 顶栏"打开"和"⋯"已是挂着空菜单的工具栏按钮（`<Menu trigger={<ToolbarButton …/>}>`），菜单项归本任务 | T128（已写入 T265 的 brief） |
 | T106、T152 | 待核对：侧边面板被自动收起时，开关仍显示为按下（跟随用户意图）；开关滑块用 `--color-surface-elevated`，暗色下偏深；tooltip 阴影在 ui-spec 3.6 有、5.7.10 没有 token | T128 |
 | T135 | `VerifiedRequester.bundled_cli` 已加（T133）：提权框按它醒目标出"申请方不是本 App 自带的命令行工具"。开发和测试构建是 ad-hoc 签名，`bundled_cli` 恒为否；签名构建出来后实测一次为真的情况 | T133 |
 | T090、T092 | CLI 提权的 e2e 可以照用 IT-elevate 的做法：探针 `cupper-elevate-probe`（`cupper-cli` 下，需要 `test-harness` 特性，参数 `--data-dir`、`--out`、`--setsid`，按 JSON 行写下每一步结果）；假 agent 的 `spawn <program> [args...]` 在自己的会话和进程组里拉起程序；未决和结束的申请可以从 `host.db` 里索引流的 `elevation.*` 事件轮询 | T133 |
@@ -317,7 +317,7 @@
 | 所有界面任务（及评审） | ESLint 安全、样式、import、文案规则已生效（T136）。JSX 文案和 `aria-label`、`title`、`alt`、`placeholder`、`label` 等属性的字面量走 `t()`，只放行不含文字字母的文本和产品名、agent 名；其他例外要带理由的行内禁用注释。静态检查拦不下的写法（`style` 的值、拼进 `className` 的 agent 文本、别处取到的 `<style>`、`window` 的别名、自定义组件用别的属性名接收文案）列在 `docs/tasks/T136-ui-security-rules/notes.md`，评审照它看 | T136 |
 | 界面任务的截图用例 | 截图页的索引流夹具（T081）：mock 宿主对每个订阅回 snapshot 模式，再发一页 `stream/snapshot`，索引流的 op 来自夹具、其他流为空；会话流的夹具照此加 | T081 |
 | T152 | 截图比对用 Playwright 默认的逐像素阈值 0.2，悬停底色（正文色 5.3%）这类细微差异比不出来；要不要调严，随视觉修正一并决定 | T081（已写入 brief） |
-| T153 | 侧边栏项目行悬停时的"+"旁有一个空菜单、会话行还没有菜单按钮和右键菜单，菜单项归本任务（`ui-core/src/sidebar/`） | T081（已写入 T153 的 brief） |
+| T153 | 侧边栏项目行悬停时的"+"旁有一个空菜单、会话行还没有菜单按钮和右键菜单，菜单项归本任务（`ui-core/src/sidebar/`） | T081（已写入 T265 的 brief） |
 | 界面任务的截图用例 | 截图页的夹具 `streams`（T137，由 T081 的 `index` 推广）：按流名给 snapshot 的 op，例如 `index`、`session/s_7`；同一份夹具要被多个用例共用时放在同一个 spec 文件里（从别的 spec 文件 import 会让 Playwright 重复注册测试） | T137 |
 | T106、T152 | 待核对的文案：会话页"未信任"警告框的说明在 1280 宽时折成两行；`stale` 的项目在侧边栏同样标"未信任"，要不要单独起名（例如"需重新信任"） | T137 |
 | T063 | ① `tests/lifecycle.rs` 的进程级用例在 `terminate(&host)` 之前失败时，拉起的 `cupper-host` 连同假 agent 一直运行（`std::process::Child` 在 drop 时不结束子进程），本机曾积下十几个 ppid 为 1 的宿主；宿主进程也用 drop 守卫结束，做法参照 T008 修复 1 的 `Groups` 守卫（按组号加启动时间记录、drop 时只杀仍是原组的、记录写临时目录以便测试进程被杀后下次清理）。② 本地单独跑 IT-elevate 要先 `cargo build -p cupper-cli --features test-harness --bin cupper-elevate-probe`（CI 会自动做），探针缺失时让用例直接报出原因 | T008 修复 1 |
@@ -504,7 +504,7 @@
 | T121 | 暂存时按 `diff_token` 取出 `Diffed`，用 `diff::patch` 重新生成文件的补丁，再用 `diff::units` 按 `hunk_id` 找单位；缓存没有 `hunk_id` 到路径的索引，目标是 `{hunk_ids}` 时要么由 T121 加索引，要么逐个文件重新生成补丁去找 | T221 |
 | T148 | "回到底部"按钮（T082 起）用的 `bg-bg` 没有对应 token，背景是透明的，应为 `bg-surface` 一类；尺寸是 32，设计是 28 | T143 |
 | T152 或以后统一更新截图基线的任务 | 截图页的字体栈要整套固定：无衬线和等宽都要接上夹具里的中文子集，否则代码里的中文会退到系统字体，基线随 runner 的 macOS 小版本变（T143 只改了等宽）；基线只由 `ui-baseline` workflow 生成 | T143 |
-| T141、T151、T153 | 错误条目的恢复指引：`change_model` 的入口在 T141（模型选择器），`upgrade_cli`、`install_cli`、`restart_agent` 在 T151（设置页 agent 状态、`agents/restart`），`run_login_in_terminal` 的"打开终端"在 T153；T143 现在只给文字和可复制的命令 | T143（已写入 T151 的 brief）（已写入 T153 的 brief） |
+| T141、T151、T153 | 错误条目的恢复指引：`change_model` 的入口在 T141（模型选择器），`upgrade_cli`、`install_cli`、`restart_agent` 在 T151（设置页 agent 状态、`agents/restart`），`run_login_in_terminal` 的"打开终端"在 T153；T143 现在只给文字和可复制的命令 | T143（已写入 T151 的 brief）（已写入 T265 的 brief） |
 | 以后改桌面退出流程的任务 | 退出判定之前就开始的重连所拉起的宿主，连接会被关掉，进程本身靠宿主自己的规则退出：开发、自用构建按孤立规则约 1 s，发布构建要等 10 分钟空闲（T214 已记）；退出中收到 `second-instance` 不建窗口，只由 `quitting` 标记守住，没有专门的用例 | T225 |
 | T125 | `git::status::in_progress(git_dir)` 可以直接用于 ADR-10 的第 3 条规则（有进行中的合并、rebase 等时不删 worktree） | T222 |
 | 界面要频繁查 `git/status` 的任务（审查面板等） | 一次 status 要两次仓库档调用，每次前后各遍历一遍工作区（指纹），加上快照档的 refresh；带大 `node_modules` 的仓库会慢到秒级，频繁轮询之前要缓存（T120 汇报第 5 条同一件事） | T222 |
@@ -516,7 +516,7 @@
 | T161 | 复用 `apps/desktop/src/test-entry-points.ts` 和 `apps/desktop/selfuse/build.test.ts` 里逐个 Mach-O 检查 entitlements、读 fuse 线的做法；`electron-builder.release.yml` 至今没有真正构建过；5.10.2 可补：库不带 entitlements，`chrome_crashpad_handler`、`app_shim_loader`、`ShipIt` 拿 `entitlementsInherit`，helper 的 identifier 是 `<appId>.helper`、`.helper.Renderer`、`.helper.GPU`、`.helper.Plugin` | T160（已写入 T161 的 brief） |
 | 以后改升级流程的任务（5.5.7、T129、T180） | keyed 构建（自用、开发、e2e）里宿主因待升级退出后，旧界面会自动从磁盘拉起新宿主，新旧两版混用；可以考虑收到 `host/shutdown(upgrade)` 后不再拉起，改为提示重启 App | T160 |
 | T253（v1.3.92 前为 T147） | 设置页"安装命令行工具"还没做，自用构建的安装说明暂时让用户 `ln -s`；做完后改 `docs/user/` 里的安装说明 | T160 |
-| T151、T153 | 默认编辑器是 TextEdit（T036 定的），`open -a TextEdit <目录>` 打不开文件夹；改成清单里第一个已安装的编辑器，或由界面引导用户选一个 | T126（已写入 T151 的 brief）（已写入 T153 的 brief） |
+| T151、T153 | 默认编辑器是 TextEdit（T036 定的），`open -a TextEdit <目录>` 打不开文件夹；改成清单里第一个已安装的编辑器，或由界面引导用户选一个 | T126（已写入 T151 的 brief）（已写入 T265 的 brief） |
 | COMPAT 运行或真机验证（T113 等） | 提示里 `file_ref` 映射成的 `resource_link`，`file://` uri 没有百分号编码，路径里有空格、`#`、`%` 时不合法；要不要编码看两个适配器怎么解析 | T126 |
 | 以后改输入框或 `session/send` 的任务 | 图片超限、agent 不收图片、越出工作区的 `file_ref`，现在要到 prompt 时才失败（由 error 条目显示）；可以在 `session/send` 按能力提前校验 | T126 |
 | M3 远程客户端或改合并窗口的任务（5.3.3、5.2.4） | 合并窗口（`coalesce_ms` 不为 0）里不按流分组：别的流的事件插进来，同一个 item 的 delta 就不能跨帧合并，多会话时帧数可能翻倍；只影响开了窗口、同时订阅索引和会话的客户端，桌面端和 CLI 默认不开。可以先按流分组再合并，前提是协议不保证跨流的到达顺序（先在 5.3.3 确认） | T227 |
@@ -556,8 +556,8 @@
 | T132 | 改动卡片的行类型加进 `rows/flatten.ts` 的 `ALWAYS`，放在最终回答之后；列表有 `jumpTo(itemId)`（先展开条目所在回合再滚过去） | T146 |
 | T148 | 以工具调用收尾的回合 `final_item_ids` 为空，折叠后只显示标题（工具之前的说明一起收起）；跳到某条目后没有短暂高亮；这两处和本机 Codex 比对后再定 | T146 |
 | 以后改请求记录行的任务 | T165 交接里的"已询问 n 个问题"可以展开看回答，还没做 | T146 |
-| T153、M2 候选 | `project/remove` 先问遍所有会话再逐个归档，问完到归档之间仍有很小的窗口：某个会话恰好开始回合时，排在它前面的会话可能已经归档。界面收到 `conflict/turn_running` 时提示重试；彻底消除要让会话在被问时进入"不接新回合"的状态 | T241（已写入 T153 的 brief） |
-| T153 | worktree 会话恢复时复用新建的 `add`，actor 要等 1 秒 refresh；恢复入口要显示进行中的状态 | T241（已写入 T153 的 brief） |
+| T153、M2 候选 | `project/remove` 先问遍所有会话再逐个归档，问完到归档之间仍有很小的窗口：某个会话恰好开始回合时，排在它前面的会话可能已经归档。界面收到 `conflict/turn_running` 时提示重试；彻底消除要让会话在被问时进入"不接新回合"的状态 | T241（已写入 T265 的 brief） |
+| T153 | worktree 会话恢复时复用新建的 `add`，actor 要等 1 秒 refresh；恢复入口要显示进行中的状态 | T241（已写入 T265 的 brief） |
 | T145 | 与 T142 共用 `@` 的弹出层：拖入的图片目前按文件引用处理，要区分出来作为图片附件；设计里"拖放时显示覆盖层"归 T145；斜杠命令照 T142 的做法，从 `OverlayContext.area` 取文字区、加原生 keydown 监听，开头先判断 `keys.ts` 的 `composing()` | T142（已写入 T145 的 brief） |
 | 支持经符号链接的工作区时 | 拖入文件按字符串前缀判断是否在工作区内，经符号链接或大小写不同的路径会被误判为在外面（只多一次提示）；要支持就由宿主做真实路径的比较，需要附加协议 | T142 |
 | T242、T244、T151 及按能力隐藏入口的界面任务 | `interactions.plan_confirm`、`extraction.thinking` 由选项推断（T243），只用来决定入口；收到的计划确认请求和思考条目照样显示，不按这两个字段隐藏（5.3.7） | T243（已写入 T151 的 brief） |
@@ -622,7 +622,7 @@
 | T181 | 许可证门禁第二层（T182）先只扫 .app 和 zip；release-config 不出 DMG。T181 出 DMG 时把 DMG 接进第二层的扫描（`hdiutil` 挂载后扫） | T182 |
 | T152 | 按 T106 更正后的设计改实现：暗色输入框底色 #363636（拖放时 #2D2D2D，`--color-surface-composer`）；侧边栏拖动范围 188–468（`--layout-sidebar-w`）；回到底部按钮 32、运行中宽 40 显示三个点、离输入框 24、离底部超过 112 时出现（5.7.4）；暗色 token 的取值不变 | T106（已写入 brief） |
 | T148 | Codex 26.1111 起输入框为空时发送按钮也是实色（26.1013 是禁用灰），核对后跟进 5.7.4、5.7.10 的"发送按钮禁用态"；Q40 剩下的斜杠菜单外观、分栏与统一 diff 自动切换的像素阈值，需要作者补截图（斜杠菜单打开时；不同窗口宽度下的 diff） | T106 |
-| T153 | Codex 的会话行悬停时，行尾显示固定和归档按钮，并在行右侧弹出悬停卡片：标题与相对时间、项目（底色 surface-elevated）；cupper 是否做由 T153 定，做的话相对时间要宿主在 `SessionSummary` 里已有的时间戳 | T106（已写入 T153 的 brief） |
+| T153 | Codex 的会话行悬停时，行尾显示固定和归档按钮，并在行右侧弹出悬停卡片：标题与相对时间、项目（底色 surface-elevated）；cupper 是否做由 T153 定，做的话相对时间要宿主在 `SessionSummary` 里已有的时间戳 | T106（已写入 T265 的 brief） |
 | 静态核对 Codex 的任务 | ChatGPT.app 26.1111 里 ChatGPT 和 Codex 的界面合在一起，同类组件常有两套实现；以 `codex.*`、`localConversation.*`、`ComposerLayoutRoot` 这类名字为准 | T106 |
 | T181 | 发布流水线：对 zip 运行 `license-gate scan`（zip 支持已有）、出 DMG 后挂载扫描；流水线要装 cargo-about 0.9.3（`--features cli`），`build:release` 依赖它生成 THIRD_PARTY_NOTICES.txt | T182 |
 | 维护者 | claude-agent-acp 升级、锁文件里的 SDK 变了以后 PR 上的 `check` 会失败：在 runner 上用 spike-run 重跑 `license-gate fingerprints`（T182 的参数：`dir=spikes/T103-sp6-render`，command 先 `cd ../..`），只提交新的哈希清单 | T182 |
