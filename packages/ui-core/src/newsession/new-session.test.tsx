@@ -52,6 +52,21 @@ const CACHED = {
   }).data,
 };
 const BRANCHES = { current: "main", local: ["main", "dev"], remote: ["origin/main"] };
+/** The host's settings, Codex's default permission `codex`. */
+const settings = (codex: string | null) => ({
+  type: "settings.updated",
+  data: {
+    settings: {
+      ...{ "agents.claude.cli_path": null, "agents.codex.cli_path": null },
+      ...{ "agents.env_passthrough": [], "worktrees.root": "/w", "diagnostics.verbose": false },
+      ...{ "notifications.needs_action": true, "notifications.turn_completed": true },
+      ...{ "notifications.error": true, "apps.terminal": "Terminal", "apps.editor": "TextEdit" },
+      ...{ "sessions.default_agent": "claude", "sessions.default_permission.claude": null },
+      ...{ "sessions.default_permission.codex": codex, "host.idle_exit_minutes": 10 },
+      "host.prevent_idle_sleep": true,
+    },
+  },
+});
 
 /** The new session page on an index of `ops`. */
 async function setup(ops: object[]) {
@@ -164,6 +179,35 @@ describe("UI-new-session", () => {
     expect(await screen.findByRole("button", { name: "权限" })).toBeTruthy();
     const asked = mock.requests.map((r) => r.method).filter((m) => m.startsWith("agents/"));
     expect(asked).toEqual(["agents/capabilities", "agents/refresh", "agents/capabilities"]);
+  });
+
+  test("Q44: the default permission is preselected and sent; one the agent lost is not", async () => {
+    const send = async (user: ReturnType<typeof userEvent.setup>) => {
+      await open(user, "选择 agent");
+      await user.click(screen.getByRole("menuitemradio", { name: "Codex" }));
+      const mode = (await screen.findByRole("button", { name: "权限" })).textContent;
+      const area = screen.getByRole("textbox");
+      fireEvent.change(area, { target: { value: "开始吧" } });
+      await act(async () => void fireEvent.keyDown(area, { key: "Enter" }));
+      return mode;
+    };
+    const auto = await setup([...PROJECTS, NO_CLI, settings("auto")]);
+    expect(await send(auto.user)).toBe("Auto");
+    expect(auto.creates()).toEqual([
+      expect.objectContaining({ agent: "codex", config: { permission_mode: "auto" } }),
+    ]);
+    cleanup();
+    const gone = await setup([...PROJECTS, NO_CLI, settings("gone")]);
+    expect(await send(gone.user)).toBe("Read only");
+    expect(gone.creates()).toEqual([expect.objectContaining({ agent: "codex", config: {} })]);
+    cleanup();
+    // Full access by default still asks each time.
+    const full = await setup([...PROJECTS, NO_CLI, settings("full-access")]);
+    await send(full.user);
+    expect(full.creates()).toEqual([]);
+    expect(full.controls.privilegedActions).toEqual([
+      expect.objectContaining({ kind: "create_session" }),
+    ]);
   });
 
   test("full access is created through the native confirmation; cancelled, the draft stays", async () => {

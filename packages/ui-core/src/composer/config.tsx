@@ -65,9 +65,10 @@ function pick(config: readonly ConfigOption[] | undefined, id: string, value?: s
 /**
  * The agent's capabilities as the host cached them; `agents.updated` makes
  * them stale. An empty cache (first use, design 5.6.7) has `agents/refresh`
- * probe the agent once per connection, and is read again after.
+ * probe the agent once per connection, and is read again after, unless
+ * `probe` is false: the settings page starts no adapter.
  */
-export function useCached(agent: string) {
+export function useCached(agent: string, probe = true) {
   const { client } = useHost();
   const queries = useQueryClient();
   const key = ["agents/capabilities", agent];
@@ -82,26 +83,45 @@ export function useCached(agent: string) {
       await queries.invalidateQueries({ queryKey: key });
       return null;
     },
-    enabled: data !== undefined && data.cached === undefined,
+    enabled: probe && data !== undefined && data.cached === undefined,
   });
   return data?.cached?.capabilities;
 }
 
+/** The settings key of `agent`'s default permission (Q44). */
+export const permissionKey = (agent: string) => `sessions.default_permission.${agent}`;
+
+/** `agent`'s default permission as the host's settings hold it; `undefined` follows the CLI. */
+export function useDefaultPermission(agent: string) {
+  const { view } = useStreams().index;
+  useEntry(view, "settings");
+  const settings: Record<string, unknown> = view.toJSON().settings?.settings ?? {};
+  const mode = settings[permissionKey(agent)];
+  return typeof mode === "string" ? mode : undefined;
+}
+
 /**
  * The new session page's options: the cached ones of `agent`, each at the
- * user's choice, else at the agent's own value. `chosen` is what
- * `session/create` takes (T266 adds the default permission under it).
+ * user's choice, else the default permission (Q44) where the agent has it,
+ * else the agent's own value. `chosen` is what `session/create` takes: a
+ * default the agent has goes with it, full access as any other choice.
  */
 export function useNewOptions(agent: string) {
   const ui = useUi();
   const config = useCached(agent)?.config;
-  const chosen = useStore(ui, (state) => state.chosen[agent]);
-  const get = (id: string) => pick(config, id, chosen?.[id]);
+  const preset = useDefaultPermission(agent);
+  const choices = useStore(ui, (state) => state.chosen[agent]);
+  const chosen: Partial<Record<string, string>> = {
+    ...(preset && { permission_mode: preset }),
+    ...choices,
+  };
+  const get = (id: string) => pick(config, id, chosen[id]);
   const set = (option: ConfigOption, value: ConfigValue) =>
     ui.getState().choose(agent, option.id, value.value);
-  const picked = Object.keys(chosen ?? {}).flatMap((id) => {
+  // A value the agent no longer has is no choice: the agent's own goes on.
+  const picked = Object.keys(chosen).flatMap((id) => {
     const { value } = get(id);
-    return value ? [[id, value] as const] : [];
+    return value && value.value === chosen[id] ? [[id, value] as const] : [];
   });
   return { get, set, chosen: Object.fromEntries(picked) };
 }
