@@ -135,21 +135,24 @@ export async function sessionIds(cupper: Cupper): Promise<string[]> {
 /**
  * Opens session `id` through its link (design 5.7.2), as a click on a
  * notification does, and times it: from the link in the main process to
- * the first frame with rows that were not on screen before.
+ * the first frame with rows that were not on screen before. `label`: marks
+ * the stretch `sp6:<label>:start` to `sp6:<label>:end` for a trace (T159).
  */
-export async function openTimed(cupper: Cupper, id: string): Promise<number> {
-  await cupper.window.evaluate(() => {
+export async function openTimed(cupper: Cupper, id: string, label?: string): Promise<number> {
+  await cupper.window.evaluate((label) => {
     const rows = () => document.querySelectorAll<HTMLElement>("[data-stream-list] [data-index]");
     rows().forEach((row) => (row.dataset.sp6Old = ""));
     const page = window as Sp6Window;
     page.__sp6Screen = undefined;
+    if (label) console.timeStamp(`sp6:${label}:start`);
     const look = () => {
       if ([...rows()].some((row) => row.dataset.sp6Old === undefined)) {
         page.__sp6Screen = performance.timeOrigin + performance.now();
+        if (label) console.timeStamp(`sp6:${label}:end`);
       } else requestAnimationFrame(look);
     };
     requestAnimationFrame(look);
-  });
+  }, label);
   const sent = await cupper.app.evaluate(({ app }, url) => {
     const at = Date.now();
     app.emit("open-url", { preventDefault: () => undefined }, url);

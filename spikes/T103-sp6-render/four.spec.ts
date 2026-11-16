@@ -19,6 +19,7 @@ import { untilEvent } from "../../tools/e2e/src/helpers";
 import { id, openSession, session } from "../../tools/e2e/src/nfr1";
 import { harness, putBlob } from "../../tools/e2e/src/perf";
 import { RESULTS, record, seed, startFrames, stats, stopFrames, stored } from "./measure";
+import { mark, startTrace, stopTrace, TRACING } from "./trace";
 
 const SECONDS = 20;
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
@@ -68,11 +69,26 @@ async function run(cupper: Cupper, streams: number) {
   const stopFsyncs = watchFsyncs(pid as number, `3-streams-${streams}`);
   await startFrames(cupper);
   const started = Date.now();
-  await sleep(5000);
+  // With SP6_TRACE=1 (T159): the streams alone from 1 s to 4.5 s, and the resync from 10 s for 4 s.
+  const until = (ms: number) => sleep(ms - (Date.now() - started));
+  const traced = async (label: string, from: number, to: number, during?: () => Promise<unknown>) => {
+    await until(from);
+    await startTrace(cupper);
+    await mark(cupper, label, "start");
+    const result = await during?.();
+    await until(to);
+    await mark(cupper, label, "end");
+    await stopTrace(cupper, `3-${label}`);
+    return result;
+  };
+  if (TRACING) await traced(`streams-${streams}`, 1000, 4500);
+  await until(5000);
   const got = await cupper.window.evaluate((hash) => window.__cupperGate.getBlob(hash), blob);
-  await sleep(10_000 - (Date.now() - started));
-  const resync = await cupper.window.evaluate((s) => window.__cupperGate.resync(s), `session/${seeded}`);
-  await sleep(SECONDS * 1000 - (Date.now() - started));
+  const resyncing = () => cupper.window.evaluate((s) => window.__cupperGate.resync(s), `session/${seeded}`);
+  const resync = TRACING
+    ? await traced(`resync-${streams}`, 10_000, 14_000, resyncing)
+    : await until(10_000).then(resyncing);
+  await until(SECONDS * 1000);
   const frames = await stopFrames(cupper);
   const ended = Date.now();
   await stopFsyncs();
@@ -93,7 +109,8 @@ async function run(cupper: Cupper, streams: number) {
 
 test.describe.configure({ mode: "serial", timeout: 15 * 60_000 });
 
-for (const streams of [4, 6]) {
+// Traced (T159), only four: the six of the stress report would double the recordings.
+for (const streams of TRACING ? [4] : [4, 6]) {
   test(`SP-6 scenario 3: ${streams} streams, a blob and a resync`, async ({ cupper }) => {
     await run(cupper, streams);
   });

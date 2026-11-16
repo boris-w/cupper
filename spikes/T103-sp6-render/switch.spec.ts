@@ -12,8 +12,11 @@ import { expect, test } from "../../tools/e2e/src/fixture";
 import { untilEvent } from "../../tools/e2e/src/helpers";
 import { session } from "../../tools/e2e/src/nfr1";
 import { openTimed, record, seed, stats } from "./measure";
+import { startTrace, stopTrace, TRACING } from "./trace";
 
 const RUNS = Number(process.env.SP6_RUNS ?? 30);
+/** With SP6_TRACE=1 (T159): the first switches of each kind recorded, each one a stretch (`away#n`, `cached#n`). */
+const TRACED = 8;
 
 test("SP-6 scenario 7: switching to sessions in and out of the LRU", async ({ cupper }) => {
   test.setTimeout(30 * 60_000);
@@ -24,11 +27,22 @@ test("SP-6 scenario 7: switching to sessions in and out of the LRU", async ({ cu
   const pool = await seed(cupper, { sessions: 8, turns: 5, items_per_turn: 50 });
   expect(pool).toHaveLength(8);
   const away: number[] = [];
-  for (let n = 0; n < RUNS; n++) away.push(await openTimed(cupper, pool[n % pool.length] as string));
+  // Eight of them first, so that the traced ones are past the LRU too.
+  for (let n = 0; n < RUNS; n++) {
+    const traced = TRACING && n >= pool.length && n < pool.length + TRACED;
+    if (traced && n === pool.length) await startTrace(cupper);
+    away.push(await openTimed(cupper, pool[n % pool.length] as string, traced ? `away#${n}` : undefined));
+    if (traced && n === pool.length + TRACED - 1) await stopTrace(cupper, "7-switch-away");
+  }
   const [a, b] = pool as [string, string];
   await openTimed(cupper, a);
   await openTimed(cupper, b);
   const cached: number[] = [];
-  for (let n = 0; n < RUNS; n++) cached.push(await openTimed(cupper, n % 2 === 0 ? a : b));
+  for (let n = 0; n < RUNS; n++) {
+    const traced = TRACING && n < TRACED;
+    if (traced && n === 0) await startTrace(cupper);
+    cached.push(await openTimed(cupper, n % 2 === 0 ? a : b, traced ? `cached#${n}` : undefined));
+    if (traced && n === TRACED - 1) await stopTrace(cupper, "7-switch-cached");
+  }
   record("7-switch", { not_in_lru: stats(away), in_lru: stats(cached), samples: { away, cached } });
 });

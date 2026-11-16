@@ -18,9 +18,13 @@ import { untilEvent } from "../../tools/e2e/src/helpers";
 import { focusWindow } from "../../tools/e2e/src/input";
 import { id, openSession, session } from "../../tools/e2e/src/nfr1";
 import { record, sampleUsage, startFrames, stats, stopFrames, stored } from "./measure";
+import { mark, startTrace, stopTrace, TRACING } from "./trace";
 
 const SECONDS = 120;
 const KEYS_EVERY_MS = 200;
+/** With SP6_TRACE=1 (T159): a recording of `TRACE_MS` at each of these seconds into the keys, as the message grows. */
+const TRACE_AT = [10, 35, 60, 85];
+const TRACE_MS = 4000;
 type Shown = Window & { __sp6Text?: [number, number][]; __sp6Keys?: [number, number][] };
 
 /** Each frame, how long the run of letters in the last row is, with the frame's time. */
@@ -82,8 +86,26 @@ test("SP-6 scenario 2: one session's flood while typing", { tag: "@focus" }, asy
   await Promise.all([startFrames(cupper), watchText(cupper), watchKeys(cupper)]);
   const usage = sampleUsage(cupper, pid as number);
   const sent: number[] = [];
-  const end = Date.now() + (SECONDS - 20) * 1000;
+  const begun = Date.now();
+  const end = begun + (SECONDS - 20) * 1000;
+  // The message's length on screen, for each traced stretch (T159).
+  const chars = () => cupper.window.evaluate(() => (window as Shown).__sp6Text?.at(-1)?.[1] ?? 0);
+  const traced: { label: string; chars: number[] }[] = [];
+  const pending = TRACING ? [...TRACE_AT] : [];
+  let tracing: { label: string; until: number; chars: number } | undefined;
   while (Date.now() < end) {
+    const at = (pending[0] ?? Infinity) * 1000;
+    if (!tracing && Date.now() - begun >= at) {
+      const label = `flood-${pending.shift()}s`;
+      await startTrace(cupper);
+      await mark(cupper, label, "start");
+      tracing = { label, until: Date.now() + TRACE_MS, chars: await chars() };
+    } else if (tracing && Date.now() >= tracing.until) {
+      await mark(cupper, tracing.label, "end");
+      traced.push({ label: tracing.label, chars: [tracing.chars, await chars()] });
+      await stopTrace(cupper, `2-${tracing.label}`);
+      tracing = undefined;
+    }
     sent.push(await key(cupper));
     await cupper.window.waitForTimeout(KEYS_EVERY_MS);
   }
@@ -122,5 +144,6 @@ test("SP-6 scenario 2: one session's flood while typing", { tag: "@focus" }, asy
     flood_chars_shown: text.at(-1)?.[1] ?? 0,
     flood_chars_written: total,
     usage: cpu,
+    ...(TRACING ? { traced } : {}),
   });
 });
