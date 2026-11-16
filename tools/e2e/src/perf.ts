@@ -164,7 +164,13 @@ export async function sampleUsage(cupper: Cupper, hostPid: number) {
         .getAppMetrics()
         .map((m) => ({ type: m.type, cpu: m.cpu.percentCPUUsage, kb: m.memory.workingSetSize })),
     );
-    for (const m of metrics) add(m.type, m.cpu * cores, m.kb / 1024);
+    // A type's processes together: the main document's and the review document's renderers.
+    const types = new Map<string, { cpu: number; kb: number }>();
+    for (const m of metrics) {
+      const sum = types.get(m.type) ?? { cpu: 0, kb: 0 };
+      types.set(m.type, { cpu: sum.cpu + m.cpu, kb: sum.kb + m.kb });
+    }
+    for (const [type, sum] of types) add(type, sum.cpu * cores, sum.kb / 1024);
     const now = { at: Date.now(), cpu: cpuSeconds(hostPid) };
     const rss = Number(
       execFileSync("ps", ["-o", "rss=", "-p", String(hostPid)], { encoding: "utf8" }),
