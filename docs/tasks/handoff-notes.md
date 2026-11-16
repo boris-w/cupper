@@ -626,3 +626,5 @@
 | 静态核对 Codex 的任务 | ChatGPT.app 26.1111 里 ChatGPT 和 Codex 的界面合在一起，同类组件常有两套实现；以 `codex.*`、`localConversation.*`、`ComposerLayoutRoot` 这类名字为准 | T106 |
 | T181 | 发布流水线：对 zip 运行 `license-gate scan`（zip 支持已有）、出 DMG 后挂载扫描；流水线要装 cargo-about 0.9.3（`--features cli`），`build:release` 依赖它生成 THIRD_PARTY_NOTICES.txt | T182 |
 | 维护者 | claude-agent-acp 升级、锁文件里的 SDK 变了以后 PR 上的 `check` 会失败：在 runner 上用 spike-run 重跑 `license-gate fingerprints`（T182 的参数：`dir=spikes/T103-sp6-render`，command 先 `cd ../..`），只提交新的哈希清单 | T182 |
+| T148 | MAN-ui6-shell（T152）由作者以后用 main 的构建做，检查表 `docs/tasks/T152-visual/man-ui6-shell.md`；发现的不一致归 T148。要确认的：半透明侧边栏与顶栏观感、顶栏与会话区之间的细线、"降低透明度"的媒体查询是否生效（不生效改走 `nativeTheme.prefersReducedTransparency`）、侧边面板 spring 的手感 | T152 |
+| 改动阈值内取值的任务 | ui-baseline 有 `all` 输入（T152）：取值变化在 0.2 的像素阈值以内时，`changed` 不重写基线，要用 `all=true` 重跑，再只提交确实因改动而变的图 | T152 |
