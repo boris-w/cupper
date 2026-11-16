@@ -6,11 +6,12 @@
 // document; an image is a link to it and never loads. The look is static CSS
 // (`.md` in styles/stream.css, design 5.7.10). A code block is highlighted
 // once its fence closes (design 5.7.6), never again while the text streams.
+// While it streams, a long block is parsed and laid out in pieces (blocks.ts).
 
 import { harden } from "rehype-harden";
 import rehypeSanitize, { defaultSchema, type Options as Schema } from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
-import { isValidElement, type ReactNode } from "react";
+import { isValidElement, useState, type ReactNode } from "react";
 import {
   Streamdown,
   useIsCodeFenceIncomplete,
@@ -19,6 +20,7 @@ import {
 } from "streamdown";
 
 import { useShell } from "../app/providers";
+import { streamingBlocks } from "./blocks";
 import { language, LANGUAGE_CLASSES, useHighlight } from "./highlight";
 
 type PluggableList = NonNullable<StreamdownProps["rehypePlugins"]>;
@@ -121,12 +123,14 @@ const components: Components = {
   img: ({ src, alt }) => <Link href={typeof src === "string" ? src : undefined}>{alt || src}</Link>,
 };
 
-/** Agent Markdown, `streaming` while it grows. */
+/** Agent Markdown, `streaming` while it grows: in pieces then, whole once done. */
 export function Markdown({ text, streaming }: { text: string; streaming: boolean }) {
+  const [blocks] = useState(streamingBlocks);
   return (
     <Streamdown
       className="md"
       mode={streaming ? "streaming" : "static"}
+      parseMarkdownIntoBlocksFn={streaming ? blocks : undefined}
       isAnimating={streaming}
       remarkPlugins={remarkPlugins}
       rehypePlugins={rehypePlugins}
