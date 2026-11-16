@@ -4,12 +4,20 @@
 // position are UI state and stay. Opening a session that is not held, as
 // from a notification, is a cache miss: it subscribes and shows loading.
 
-import { IndexView, SessionView, type HostClient, type StreamSink } from "@cupper/host-client";
+import { IndexView, SessionView, type HostClient } from "@cupper/host-client";
 import type { EventBody } from "@cupper/protocol";
 import type { Unsubscribe } from "@cupper/shell-api";
 
 import { startup } from "../app/startup";
 import { StreamStore, type Frames } from "./stream";
+
+/** The index's store, which marks the start once its snapshot is applied (T262). */
+class IndexStore extends StreamStore<IndexView> {
+  override live(): void {
+    super.live();
+    startup.indexApplied();
+  }
+}
 
 /** Sessions kept besides the one on screen. */
 export const RECENT = 3;
@@ -31,23 +39,12 @@ export class Subscriptions {
     private readonly frames: Frames,
     private readonly onEvent?: (stream: string, body: EventBody) => void,
   ) {
-    this.index = this.#store("index", new IndexView(client.validation));
+    this.index = new IndexStore("index", new IndexView(client.validation), frames, onEvent);
   }
 
   /** Subscribes the index; after `close`, the session on screen too. */
   start(): void {
-    const index = this.index;
-    // Its snapshot applied, the start's mark (T262).
-    const sink: StreamSink = {
-      reset: () => index.reset(),
-      apply: (body, event) => index.apply(body, event),
-      live: () => {
-        index.live();
-        startup.indexApplied();
-      },
-      failed: (error) => index.failed(error),
-    };
-    this.#offIndex ??= this.client.subscribe(index.stream, sink);
+    this.#offIndex ??= this.client.subscribe(this.index.stream, this.index);
     this.show(this.#current);
   }
 
@@ -93,7 +90,7 @@ export class Subscriptions {
     return { store, off: this.client.subscribe(stream, store) };
   }
 
-  #store<V extends IndexView | SessionView>(stream: string, view: V): StreamStore<V> {
+  #store(stream: string, view: SessionView): StreamStore<SessionView> {
     return new StreamStore(stream, view, this.frames, this.onEvent);
   }
 }
