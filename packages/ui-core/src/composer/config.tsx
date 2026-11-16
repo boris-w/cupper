@@ -8,7 +8,7 @@
 
 import type { SessionView } from "@cupper/host-client";
 import type { AgentsCapabilitiesResult, ConfigOption, ConfigValue } from "@cupper/protocol";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, type ComponentProps, type ReactNode } from "react";
 import { useStore } from "zustand";
 
@@ -62,12 +62,27 @@ function pick(config: readonly ConfigOption[] | undefined, id: string, value?: s
   return { option, value: option?.values.find((v) => v.value === now) };
 }
 
-/** The agent's capabilities as the host cached them; `agents.updated` makes them stale. */
+/**
+ * The agent's capabilities as the host cached them; `agents.updated` makes
+ * them stale. An empty cache (first use, design 5.6.7) has `agents/refresh`
+ * probe the agent once per connection, and is read again after.
+ */
 export function useCached(agent: string) {
   const { client } = useHost();
+  const queries = useQueryClient();
+  const key = ["agents/capabilities", agent];
   const { data } = useQuery({
-    queryKey: ["agents/capabilities", agent],
+    queryKey: key,
     queryFn: () => client.request<AgentsCapabilitiesResult>("agents/capabilities", { agent }),
+  });
+  useQuery({
+    queryKey: ["agents/refresh", agent],
+    queryFn: async () => {
+      await client.command("agents/refresh", { agent });
+      await queries.invalidateQueries({ queryKey: key });
+      return null;
+    },
+    enabled: data !== undefined && data.cached === undefined,
   });
   return data?.cached?.capabilities;
 }

@@ -72,8 +72,14 @@ async function setup(ops: object[]) {
     return undefined;
   });
   mock.handle("session/create", () => ({ result: { session_id: "s_9" } }));
+  // Claude's cache fills once `agents/refresh` probed it.
+  let probed = false;
+  mock.handle("agents/refresh", () => {
+    probed = true;
+    return { result: { status: {} } };
+  });
   mock.handle("agents/capabilities", ({ params }) => ({
-    result: (params as { agent: string }).agent === "codex" ? { cached: CACHED } : {},
+    result: (params as { agent: string }).agent === "codex" || probed ? { cached: CACHED } : {},
   }));
   mock.handle("git/branches", () => ({ result: BRANCHES }));
   const client = new HostClient();
@@ -151,6 +157,13 @@ describe("UI-new-session", () => {
     });
     expect(ui.getState().chosen).toEqual({});
     expect(ui.getState().route).toEqual({ page: "session", sessionId: "s_9" });
+  });
+
+  test("an empty cache is probed once, then read again", async () => {
+    const { mock } = await setup(PROJECTS);
+    expect(await screen.findByRole("button", { name: "权限" })).toBeTruthy();
+    const asked = mock.requests.map((r) => r.method).filter((m) => m.startsWith("agents/"));
+    expect(asked).toEqual(["agents/capabilities", "agents/refresh", "agents/capabilities"]);
   });
 
   test("full access is created through the native confirmation; cancelled, the draft stays", async () => {
