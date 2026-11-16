@@ -10,6 +10,7 @@ describe("createI18n", () => {
       "command",
       "composer",
       "host",
+      "menu",
       "privileged",
       "request",
       "review",

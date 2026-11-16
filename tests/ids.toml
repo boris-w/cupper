@@ -1181,8 +1181,8 @@ milestone = "M1b"
 E2E-next-needs-action = "nightly"
 E2E-shortcuts = "nightly"
 
-# 会话管理界面：菜单、弹窗与悬停卡片（由 T153 拆出）
-[T265]
+# 会话的悬停卡片、打开的替身与会话管理的端到端用例（由 T265 拆出）
+[T267]
 milestone = "M1b"
 E2E-archive-cleanup = "nightly"
 E2E-workspace-open = "nightly"

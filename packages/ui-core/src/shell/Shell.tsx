@@ -37,6 +37,7 @@ import {
   type OpenTarget,
 } from "../session/actions";
 import type { LayoutStore } from "../layout/store";
+import { SessionShortcuts } from "./shortcuts";
 import { Splitter } from "./Splitter";
 
 function useViewport(): Viewport {
@@ -64,6 +65,7 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
     <ReviewContext value={review}>
       <OpenReview value={openReview}>
         <SessionActionsProvider>
+          <SessionShortcuts />
           <Frame store={store}>{children}</Frame>
         </SessionActionsProvider>
       </OpenReview>
