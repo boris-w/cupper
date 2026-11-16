@@ -1,7 +1,8 @@
 // The three columns of design 5.7.4 as pure functions: the window size and the
 // layout preferences in, every width out. The components only draw the result.
 
-export const SIDEBAR = { default: 288, min: 240, max: 520 } as const;
+/** Codex's 340 and 240–520 take in its 52 wide navigation rail, which cupper does not have (T106). */
+export const SIDEBAR = { default: 288, min: 188, max: 468 } as const;
 /** The main area keeps this much beside the docked sidebar. */
 export const MAIN_MIN = 240;
 export const SIDE_PANEL_MIN = 320;
@@ -61,7 +62,7 @@ export interface Layout {
 
 export const clamp = (value: number, { min, max }: Bounds) => Math.min(max, Math.max(min, value));
 
-/** The sidebar stays 240–520 wide and leaves the main area 240. */
+/** The sidebar stays 188–468 wide and leaves the main area 240. */
 export function sidebarBounds(windowWidth: number): Bounds {
   return {
     min: SIDEBAR.min,

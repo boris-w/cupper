@@ -30,6 +30,9 @@ import { StreamActions } from "./actions";
 import { ComposerOverlays, runningPlan } from "./ComposerOverlays";
 import { ScrollKeeper } from "./scroll";
 
+/** How far from the end the way back to the bottom shows. */
+const FAR_PX = 112;
+
 /** The keys that scroll the list it has the focus in. */
 const SCROLL_KEYS = new Set(["PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown", " "]);
 
@@ -88,6 +91,8 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
   const scroller = useRef<HTMLDivElement>(null);
   const keeper = useRef(new ScrollKeeper()).current;
   const [stuck, setStuck] = useState(true);
+  // More than 112 from the end: only then the way back shows (design 5.7.4).
+  const [far, setFar] = useState(false);
   const sent = useStore(useUi(), (state) => state.sent[sessionId] ?? 0);
   const seen = useRef(sent);
   const virtualizer = useVirtualizer({
@@ -144,6 +149,7 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
     if (element) {
       const { scrollTop, scrollHeight, clientHeight } = element;
       setStuck(keeper.scrolled(scrollTop, scrollHeight, clientHeight, performance.now()));
+      setFar(scrollHeight - scrollTop - clientHeight > FAR_PX);
     }
   };
   const intend = () => keeper.intend(performance.now());
@@ -243,7 +249,13 @@ function Rows({ sessionId, store }: { sessionId: string; store: StreamStore<Sess
             </div>
           </div>
         </div>
-        <ComposerOverlays plan={plan} onPlan={toPlan} away={!stuck} onBottom={toBottom} />
+        <ComposerOverlays
+          plan={plan}
+          onPlan={toPlan}
+          away={!stuck && far}
+          running={rows.some((row) => row.kind === "turn_header" && row.status === "running")}
+          onBottom={toBottom}
+        />
       </div>
     </StreamActions>
   );

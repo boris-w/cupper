@@ -3,7 +3,14 @@
 
 import { connectShell, HostClient, type ClientState } from "@cupper/host-client";
 import { createI18n } from "@cupper/i18n";
-import type { Handshake, ShellAPI, ShellInfo, Theme } from "@cupper/shell-api";
+import {
+  TRANSLUCENT_SIDEBAR_PREF,
+  translucentSidebar,
+  type Handshake,
+  type ShellAPI,
+  type ShellInfo,
+  type Theme,
+} from "@cupper/shell-api";
 import {
   createContext,
   use,
@@ -123,14 +130,30 @@ export const useT = () => required(use(I18nContext), "I18nProvider");
 
 /**
  * The theme the shell reports: the system's, unless the settings pin one.
- * `data-theme` on the root sets the tokens' `color-scheme`.
+ * `data-theme` on the root sets the tokens' `color-scheme`. `data-translucent`
+ * lets the window's material through the sidebar and the title bar (design
+ * 5.7.4): only in the app, whose window has it, and while the setting is on.
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const { api, info } = useShell();
   useLayoutEffect(() => {
-    const apply = (theme: Theme) => (document.documentElement.dataset.theme = theme);
+    const root = document.documentElement;
+    const apply = (theme: Theme) => (root.dataset.theme = theme);
+    const translucent = (value: unknown) =>
+      root.toggleAttribute(
+        "data-translucent",
+        info.shell === "electron" && translucentSidebar(value),
+      );
     apply(info.theme);
-    return api.system.onThemeChange(apply);
+    translucent(info.prefs[TRANSLUCENT_SIDEBAR_PREF]);
+    const offTheme = api.system.onThemeChange(apply);
+    const offPrefs = api.prefs.onChange(
+      (key, value) => key === TRANSLUCENT_SIDEBAR_PREF && translucent(value),
+    );
+    return () => {
+      offTheme();
+      offPrefs();
+    };
   }, [api, info]);
   return children;
 }

@@ -23,6 +23,7 @@ import {
   Menu,
   MessageChannelMain,
   nativeImage,
+  nativeTheme,
   powerMonitor,
   protocol,
   session,
@@ -31,6 +32,7 @@ import {
 
 import { isReleaseLike } from "../shared/flavor";
 import { followIconColour } from "./app-icon";
+import { followTheme } from "./appearance";
 import { COMMAND_CHANNEL, HOST_OPEN, NAVIGATE } from "../shared/ipc";
 import { WindowBridges } from "./bridge/bridges";
 import { startHost } from "./host";
@@ -51,6 +53,7 @@ import { guardOf, watchInput } from "./input";
 import { controlHost, Privileged } from "./privileged";
 import { serveShell } from "./shell";
 import { MAIN_DOCUMENT_URL, mainWindowOptions } from "./window";
+import { placeLights, zoom } from "./zoom";
 
 const flavor = __CUPPER_FLAVOR__;
 
@@ -178,6 +181,8 @@ function start() {
 async function ready() {
   restrictPermissions(session.defaultSession);
   const prefs = await Prefs.open(join(dirs.userData, "prefs.json"));
+  // The theme too, before the first window paints (design 5.7.7).
+  followTheme({ prefs, theme: nativeTheme });
   // Before the first window (design 5.7.2). The name comes from the list,
   // never from the preference, so it cannot leave `Resources/app-icons/`.
   if (app.dock) {
@@ -217,6 +222,11 @@ async function ready() {
     label: (id, n) => text.t(id, { ns: "command", n }),
     onCommand: (cmd) => BrowserWindow.getFocusedWindow()?.webContents.send(COMMAND_CHANNEL, cmd),
     devTools: flavor === "dev",
+    zoomLabel: (step) => text.t(`zoom_${step}`, { ns: "command" }),
+    onZoom: (step) => {
+      const window = BrowserWindow.getFocusedWindow();
+      if (window) zoom(window, step);
+    },
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   if (host) {
@@ -295,7 +305,11 @@ function showMainWindow() {
   const window = new BrowserWindow(mainWindowOptions(flavor, preload));
   mainWindow = window;
   navigation.reloading();
-  window.webContents.on("did-finish-load", () => navigation.loaded());
+  window.webContents.on("did-finish-load", () => {
+    navigation.loaded();
+    // Chromium keeps the zoom of the page: the traffic lights at it from the start.
+    placeLights(window);
+  });
   window.webContents.on("did-start-navigation", (details) => {
     if (details.isMainFrame && !details.isSameDocument) {
       navigation.reloading();

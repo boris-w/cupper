@@ -16,12 +16,32 @@
   }
   body {
     overflow: hidden;
-    background: var(--color-surface);
+    background: var(--page-surface, var(--color-surface));
     color: var(--color-fg);
     font-size: var(--text-base);
     line-height: var(--text-base--line-height);
     font-weight: var(--font-weight-normal);
     -webkit-font-smoothing: antialiased;
+  }
+}
+
+/*
+ * The translucent sidebar (design 5.7.4): with `data-translucent` the page
+ * leaves the sidebar and the title bar to the window's material; the session
+ * area paints its own surface. With "reduce transparency" on, the system's
+ * setting, the sidebar is opaque all the same.
+ */
+:root {
+  --sidebar-surface: var(--color-surface-sidebar);
+}
+:root[data-translucent] {
+  --sidebar-surface: transparent;
+  --page-surface: transparent;
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-translucent] {
+    --sidebar-surface: var(--color-surface-sidebar);
+    --page-surface: var(--color-surface);
   }
 }
 

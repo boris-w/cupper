@@ -45,7 +45,7 @@ export function SettingsPage({ route }: { route: Extract<Route, { page: "setting
     <div className="flex h-full">
       <nav
         aria-label={t("settings:title")}
-        className="flex w-(--layout-sidebar-w) shrink-0 flex-col bg-surface-sidebar px-2 text-base"
+        className="flex w-(--layout-sidebar-w) shrink-0 flex-col bg-(--sidebar-surface) px-2 text-base"
       >
         <div className="app-drag h-(--layout-titlebar-h) shrink-0" />
         <button
@@ -68,7 +68,7 @@ export function SettingsPage({ route }: { route: Extract<Route, { page: "setting
           </button>
         ))}
       </nav>
-      <div className="min-w-0 flex-1 overflow-y-auto">
+      <div className="min-w-0 flex-1 overflow-y-auto bg-surface">
         <div className="app-drag h-(--layout-titlebar-h)" />
         <div className="mx-auto flex w-full max-w-192 min-w-[min(100%,320px)] flex-col gap-10 px-4 pb-10">
           <h1 className="text-heading-sm font-medium">{t(`settings:section_${section.id}`)}</h1>

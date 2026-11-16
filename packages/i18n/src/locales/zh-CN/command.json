@@ -15,5 +15,8 @@
   "archive": "归档会话",
   "rename": "重命名会话",
   "model_picker": "模型和推理强度",
-  "open_in_terminal": "在外部终端打开工作区"
+  "open_in_terminal": "在外部终端打开工作区",
+  "zoom_reset": "实际大小",
+  "zoom_in": "放大",
+  "zoom_out": "缩小"
 }

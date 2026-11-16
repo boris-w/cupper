@@ -761,6 +761,8 @@ describe("images", () => {
     await act(async () => void fireEvent.dragEnter(box, { dataTransfer: { types: ["Files"] } }));
     expect(screen.getByText("拖放到这里添加")).toBeTruthy();
     expect(box.hasAttribute("data-dragging")).toBe(true);
+    // Its surface the elevated one while dragged over, as Codex has it (T106).
+    expect(box.className).toContain("data-dragging:bg-surface-elevated");
     await act(async () => void fireEvent.drop(box, { dataTransfer: { files, types: ["Files"] } }));
     expect(screen.queryByText("拖放到这里添加")).toBeNull();
     expect(box.hasAttribute("data-dragging")).toBe(false);

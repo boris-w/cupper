@@ -136,7 +136,7 @@ function Images({ sessionId }: { sessionId?: string }) {
       {over &&
         box &&
         createPortal(
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-composer border-2 border-dashed border-border-strong bg-surface-composer/90 text-sm text-fg-secondary">
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-composer border-2 border-dashed border-border-strong bg-surface-elevated/90 text-sm text-fg-secondary">
             {t("composer:image_drop")}
           </div>,
           box,
