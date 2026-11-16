@@ -79,7 +79,7 @@ test(
     await window.getByRole("menuitem", { name: "other" }).click();
     await expect(heading).toHaveText(/other/);
     await window.getByRole("button", { name: t("composer:pick_agent") }).click();
-    await window.getByRole("menuitem", { name: t("sidebar:agent_claude") }).click();
+    await window.getByRole("menuitemradio", { name: t("sidebar:agent_claude") }).click();
     await expect(window.getByText(t("composer:workspace_local"), { exact: true })).toBeVisible();
 
     const composer = window.locator("[data-composer] textarea");

@@ -1,21 +1,26 @@
 // The new session page (design 5.7.4): the heading names the project, and the
-// name picks it; under the composer, the action bar picks the agent (AG-3)
-// and shows where the session works. M1a: Claude only, on the local copy.
+// name picks it; under the composer, the action bar picks the agent (AG-3),
+// where the session works, and a new worktree's base. An agent that cannot
+// run sends nothing, and the bar says why (AG-4).
 
 import { escapeInvisible } from "@cupper/i18n";
-import type { AgentStatus, ProjectUpserted } from "@cupper/protocol";
-import { use, useMemo, useState } from "react";
+import type { AgentStatus, GitBranchesResult, ProjectUpserted } from "@cupper/protocol";
+import { useQuery } from "@tanstack/react-query";
+import { use, useState } from "react";
 
 import { SlotsContext } from "../app/slots";
-import { useT } from "../app/providers";
+import { useHost, useT } from "../app/providers";
 import { useRouter } from "../app/router";
 import { ChevronDownIcon } from "../components/icons";
-import { Menu, MenuItem, MenuSeparator } from "../components/Menu";
+import { Menu, MenuItem, MenuLabel, MenuSeparator } from "../components/Menu";
 import { Composer } from "../composer/Composer";
-import { DEFAULT_NEW_SESSION } from "../composer/send";
+import { fullAccess, useNewOptions } from "../composer/config";
+import type { NewSession } from "../composer/send";
 import { usePrivileged } from "../feedback/privileged";
 import { useStreams } from "../state/provider";
 import { useEntry } from "../state/stream";
+
+const AGENTS = ["claude", "codex"];
 
 const PICKER =
   "inline-flex items-center gap-1 rounded-lg px-1.5 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring";
@@ -71,13 +76,17 @@ function ProjectPicker({
   );
 }
 
-function ActionBar(props: {
+function AgentPicker(props: {
   agent: string;
   setAgent: (agent: string) => void;
-  status?: AgentStatus;
+  statuses: AgentStatus[];
 }) {
   const t = useT();
-  const reason = unavailable(props.status);
+  const reason = (agent: string) => unavailable(props.statuses.find((s) => s.agent === agent));
+  const why = (agent: string, className: string) => {
+    const code = reason(agent);
+    return code && <span className={className}>{t(`composer:agent_${code}`)}</span>;
+  };
   const trigger = (
     <button type="button" aria-label={t("composer:pick_agent")} className={PICKER}>
       {t(`sidebar:agent_${props.agent}`)}
@@ -85,15 +94,94 @@ function ActionBar(props: {
     </button>
   );
   return (
-    <div className="mt-2 flex items-center gap-3 rounded-xl bg-composer-bar px-2 py-1 text-sm text-fg-secondary">
+    <span className="flex items-center gap-1">
       <Menu trigger={trigger} align="start">
-        <MenuItem onSelect={() => props.setAgent("claude")}>
-          {t("sidebar:agent_claude")}
-          {reason && <span className="ml-2 text-fg-tertiary">{t(`composer:agent_${reason}`)}</span>}
-        </MenuItem>
+        {AGENTS.map((agent) => (
+          <MenuItem
+            key={agent}
+            radio
+            checked={agent === props.agent}
+            onSelect={() => props.setAgent(agent)}
+          >
+            {t(`sidebar:agent_${agent}`)}
+            {why(agent, "ml-2 text-fg-tertiary")}
+          </MenuItem>
+        ))}
       </Menu>
-      <span>{t("composer:workspace_local")}</span>
-    </div>
+      {why(props.agent, "text-fg-tertiary")}
+    </span>
+  );
+}
+
+/** Local, or a new worktree, which a project that is no repository's top cannot have (T234). */
+function WorkspacePicker(props: {
+  worktree: boolean;
+  setWorktree: (worktree: boolean) => void;
+  project?: ProjectUpserted;
+}) {
+  const t = useT();
+  const trigger = (
+    <button type="button" aria-label={t("composer:pick_workspace")} className={PICKER}>
+      {t(props.worktree ? "composer:workspace_worktree" : "composer:workspace_local")}
+      <ChevronDownIcon />
+    </button>
+  );
+  return (
+    <Menu trigger={trigger} align="start">
+      <MenuItem radio checked={!props.worktree} onSelect={() => props.setWorktree(false)}>
+        {t("composer:workspace_local")}
+      </MenuItem>
+      <MenuItem
+        radio
+        checked={props.worktree}
+        disabled={!props.project?.is_git}
+        onSelect={() => props.setWorktree(true)}
+      >
+        <span className="flex flex-col">
+          {t("composer:workspace_worktree")}
+          {!props.project?.is_git && (
+            <span className="text-xs text-fg-tertiary">{t("composer:worktree_not_git")}</span>
+          )}
+        </span>
+      </MenuItem>
+    </Menu>
+  );
+}
+
+/** The new worktree's base, of the repository's branches (T124: picked, never typed). */
+function BranchPicker(props: {
+  branches: GitBranchesResult;
+  base: string;
+  setBase: (base: string) => void;
+}) {
+  const t = useT();
+  const trigger = (
+    <button type="button" aria-label={t("composer:pick_branch")} className={PICKER}>
+      {escapeInvisible(props.base)}
+      <ChevronDownIcon />
+    </button>
+  );
+  const group = (title: string, branches: string[]) =>
+    branches.length > 0 && (
+      <>
+        <MenuLabel>{title}</MenuLabel>
+        {branches.map((branch) => (
+          <MenuItem
+            key={branch}
+            radio
+            checked={branch === props.base}
+            onSelect={() => props.setBase(branch)}
+          >
+            {escapeInvisible(branch)}
+          </MenuItem>
+        ))}
+      </>
+    );
+  return (
+    <Menu trigger={trigger} align="start">
+      {group(t("composer:branches_local"), props.branches.local)}
+      {group(t("composer:branches_remote"), props.branches.remote)}
+    </Menu>
   );
 }
 
@@ -101,6 +189,7 @@ function ActionBar(props: {
 export function NewSessionPage() {
   const { newSessionComposer } = use(SlotsContext);
   const t = useT();
+  const { client } = useHost();
   const { route } = useRouter();
   const index = useStreams().index.view;
   useEntry(index, "view");
@@ -108,8 +197,29 @@ export function NewSessionPage() {
   const sorted = Object.values(projects).toSorted((a, b) => a.position - b.position);
   const projectId = (route.page === "new" && route.projectId) || sorted[0]?.project_id;
   const project = projectId === undefined ? undefined : projects[projectId];
-  const [agent, setAgent] = useState(DEFAULT_NEW_SESSION.agent);
-  const create = useMemo(() => ({ ...DEFAULT_NEW_SESSION, agent }), [agent]);
+  const [agent, setAgent] = useState("claude");
+  const [wantWorktree, setWorktree] = useState(false);
+  const worktree = wantWorktree && project?.is_git === true;
+  const [base, setBase] = useState<{ projectId?: string; branch: string }>();
+  const { data: branches } = useQuery({
+    queryKey: ["git/branches", projectId],
+    queryFn: () => client.request<GitBranchesResult>("git/branches", { project_id: projectId }),
+    enabled: worktree,
+  });
+  const baseRef =
+    (base?.projectId === projectId ? base?.branch : undefined) ??
+    branches?.current ??
+    branches?.local[0];
+  const statuses = agents?.agents ?? [];
+  const { chosen } = useNewOptions(agent);
+  const create: NewSession = {
+    agent,
+    workspace: worktree && baseRef ? { kind: "worktree", base_ref: baseRef } : { kind: "local" },
+    config: Object.fromEntries(Object.entries(chosen).map(([id, value]) => [id, value.value])),
+    fullAccess: fullAccess(chosen.permission_mode),
+    blocked:
+      unavailable(statuses.find((s) => s.agent === agent)) !== undefined || (worktree && !baseRef),
+  };
   return (
     <div className="mx-auto w-full max-w-(--layout-thread-max-w) px-(--layout-thread-gutter) pt-[calc(var(--layout-home-composer-anchor)-var(--layout-titlebar-h)-6rem)]">
       <h1 className="mb-8 flex h-16 items-center justify-center gap-1.5 text-heading-app font-medium">
@@ -124,11 +234,17 @@ export function NewSessionPage() {
         )}
       </h1>
       {newSessionComposer ?? <Composer create={create} />}
-      <ActionBar
-        agent={agent}
-        setAgent={setAgent}
-        status={agents?.agents.find((a) => a.agent === agent)}
-      />
+      <div className="mt-2 flex items-center gap-3 rounded-xl bg-composer-bar px-2 py-1 text-sm text-fg-secondary">
+        <AgentPicker agent={agent} setAgent={setAgent} statuses={statuses} />
+        <WorkspacePicker worktree={worktree} setWorktree={setWorktree} project={project} />
+        {worktree && branches && baseRef && (
+          <BranchPicker
+            branches={branches}
+            base={baseRef}
+            setBase={(branch) => setBase({ projectId, branch })}
+          />
+        )}
+      </div>
     </div>
   );
 }

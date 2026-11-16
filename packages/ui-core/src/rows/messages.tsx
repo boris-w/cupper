@@ -75,6 +75,7 @@ const ERRORS = [
   "cli_missing",
   "runtime_failed",
   "host_restarted",
+  "project_untrusted",
 ];
 
 /** Recovery steps with a text; `none`, and a step this build does not know, add nothing. */

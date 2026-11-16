@@ -1,9 +1,10 @@
 // The warning boxes above a session (design 5.7.4, 5.7.5): a project whose
-// configuration is not loaded, and a session configuration to confirm. Each
-// goes away when the streams say so, never ahead of them.
+// configuration is not loaded, a session configuration to confirm, and a
+// worktree that could not be made. Each goes away when the streams say so,
+// never ahead of them.
 
 import type { SessionView } from "@cupper/host-client";
-import type { ConfirmationRequired, ProjectUpserted } from "@cupper/protocol";
+import type { ConfirmationRequired, ProjectUpserted, WorkspaceView } from "@cupper/protocol";
 
 import { useT } from "../app/providers";
 import { Alert } from "../components/Alert";
@@ -63,13 +64,27 @@ export function ConfirmBanner(props: {
   );
 }
 
-function ConfirmFromStream({ sessionId, view }: { sessionId: string; view: SessionView }) {
+/** The worktree could not be made (T124, T236, T237); the session stays idle, its first message queued. */
+export function WorkspaceBanner({ workspace }: { workspace?: WorkspaceView }) {
+  const t = useT();
+  if (workspace?.state !== "failed") {
+    return null;
+  }
+  const { code, reason } = workspace;
+  const known = ["filter_unsupported", "lfs_object_missing"];
+  const key =
+    code === "not_found" ? "not_found" : reason && known.includes(reason) ? reason : "other";
+  return <Alert>{t(`stream:workspace_${key}`, { code })}</Alert>;
+}
+
+function FromStream({ sessionId, view }: { sessionId: string; view: SessionView }) {
   useEntry(view, "session");
+  const { configured, workspace } = view.toJSON();
   return (
-    <ConfirmBanner
-      sessionId={sessionId}
-      confirmation={view.toJSON().configured?.confirmation_required}
-    />
+    <>
+      <ConfirmBanner sessionId={sessionId} confirmation={configured?.confirmation_required} />
+      <WorkspaceBanner workspace={workspace} />
+    </>
   );
 }
 
@@ -83,7 +98,7 @@ export function SessionBanners({ sessionId }: { sessionId: string }) {
   return (
     <div className="flex flex-col items-start gap-(--layout-item-gap-grouped) pt-(--layout-item-gap)">
       <UntrustedBanner project={projectId === undefined ? undefined : projects[projectId]} />
-      {session && <ConfirmFromStream sessionId={sessionId} view={session} />}
+      {session && <FromStream sessionId={sessionId} view={session} />}
     </div>
   );
 }

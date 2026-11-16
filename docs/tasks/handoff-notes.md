@@ -628,3 +628,5 @@
 | 维护者 | claude-agent-acp 升级、锁文件里的 SDK 变了以后 PR 上的 `check` 会失败：在 runner 上用 spike-run 重跑 `license-gate fingerprints`（T182 的参数：`dir=spikes/T103-sp6-render`，command 先 `cd ../..`），只提交新的哈希清单 | T182 |
 | T148 | MAN-ui6-shell（T152）由作者以后用 main 的构建做，检查表 `docs/tasks/T152-visual/man-ui6-shell.md`；发现的不一致归 T148。要确认的：半透明侧边栏与顶栏观感、顶栏与会话区之间的细线、"降低透明度"的媒体查询是否生效（不生效改走 `nativeTheme.prefersReducedTransparency`）、侧边面板 spring 的手感 | T152 |
 | 改动阈值内取值的任务 | ui-baseline 有 `all` 输入（T152）：取值变化在 0.2 的像素阈值以内时，`changed` 不重写基线，要用 `all=true` 重跑，再只提交确实因改动而变的图 | T152 |
+| T148 | 会话页还没有 worktree 准备中的进度（`worktree add`、checkout），T144 只做了失败横幅；与 Codex 并排比对时看要不要补 | T144 |
+| T266 | 默认权限接在 `useNewOptions(agent)` 的 `permission_mode` 解析上，取值顺序"用户的选择 → 默认权限（在缓存的能力里时）→ agent 自己的值"，同一个值进 `chosen`，完全访问照样走 `create_session` 原生确认；详见 `docs/tasks/T144-new-session/notes.md`"交给 T266 的入口" | T144 |
