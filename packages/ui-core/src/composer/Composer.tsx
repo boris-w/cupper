@@ -17,6 +17,7 @@ import { useStore } from "zustand";
 
 import { useT } from "../app/providers";
 import { useRouter } from "../app/router";
+import { startup } from "../app/startup";
 import { Alert } from "../components/Alert";
 import { ArrowUpIcon, CloseIcon, StopIcon } from "../components/icons";
 import type { ComposerActivity } from "../request/RequestPanel";
@@ -206,6 +207,9 @@ export function Composer(props: {
     setConfirming(false);
     area.current?.focus();
   };
+
+  // On screen, the composer takes input: half of the start's `cupper:ready` (T262).
+  useLayoutEffect(() => startup.composerMounted(), []);
 
   // A message put back by ↑ leaves the caret at its end.
   useLayoutEffect(() => {

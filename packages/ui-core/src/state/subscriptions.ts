@@ -8,7 +8,16 @@ import { IndexView, SessionView, type HostClient } from "@cupper/host-client";
 import type { EventBody } from "@cupper/protocol";
 import type { Unsubscribe } from "@cupper/shell-api";
 
+import { startup } from "../app/startup";
 import { StreamStore, type Frames } from "./stream";
+
+/** The index's store, which marks the start once its snapshot is applied (T262). */
+class IndexStore extends StreamStore<IndexView> {
+  override live(): void {
+    super.live();
+    startup.indexApplied();
+  }
+}
 
 /** Sessions kept besides the one on screen. */
 export const RECENT = 3;
@@ -30,7 +39,7 @@ export class Subscriptions {
     private readonly frames: Frames,
     private readonly onEvent?: (stream: string, body: EventBody) => void,
   ) {
-    this.index = this.#store("index", new IndexView(client.validation));
+    this.index = new IndexStore("index", new IndexView(client.validation), frames, onEvent);
   }
 
   /** Subscribes the index; after `close`, the session on screen too. */
@@ -81,7 +90,7 @@ export class Subscriptions {
     return { store, off: this.client.subscribe(stream, store) };
   }
 
-  #store<V extends IndexView | SessionView>(stream: string, view: V): StreamStore<V> {
+  #store(stream: string, view: SessionView): StreamStore<SessionView> {
     return new StreamStore(stream, view, this.frames, this.onEvent);
   }
 }

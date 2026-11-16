@@ -15,6 +15,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { startup } from "./startup";
+
 /** A context's value, or an error that names the missing provider. */
 export function required<T>(value: T | null, name: string): T {
   if (value === null) {
@@ -79,6 +81,7 @@ export function HostProvider({
   });
   useEffect(() => {
     const offState = client.onState((state) => {
+      if (state.status === "ready") startup.connected();
       setValue({ client, state, handshake: client.handshake });
     });
     let offShell: (() => void) | undefined;
