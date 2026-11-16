@@ -12,6 +12,8 @@ protocol/released/
 runtime/manifest.json
 runtime/locks/
 runtime/licenses/
+# Written by `license-gate fingerprints`.
+tools/license-gate/fingerprints.json
 # Written by the Rust views (`UPDATE_GOLDEN=1`, `cupper-protocol` `view::parity`).
 protocol/fixtures/views.json
 # Written by `tools/codex-drift` (`write`).

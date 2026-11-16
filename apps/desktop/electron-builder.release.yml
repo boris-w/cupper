@@ -27,6 +27,9 @@ extraResources:
   # The Dock icons of the other colours (appIcon, T252); latte is the bundle's icon.
   - from: build/app-icons
     to: app-icons
+  # Written by `license-gate notices` in `build:release` (ADR-11, T182).
+  - from: ../../target/notices/THIRD_PARTY_NOTICES.txt
+    to: THIRD_PARTY_NOTICES.txt
 extraFiles:
   - from: ../../target/host-bundle/release/CupperHost.app
     to: Helpers/CupperHost.app

@@ -78,3 +78,30 @@
 - 指纹清单和补全的许可证文本按数据算，不计入行数（像 `runtime/licenses/` 那样）：约 −75，降到 495 左右。
 - nightly 仍然只出 `.app`，不做 DMG 的挂载：约 −10。DMG 留给 T181 在发布流水线里接，但那样这条路径在 T181 之前没有跑过。
 - Mach-O 不解析 CodeDirectory，只在签名区里搜 identifier 和 team 的字节：约 −10，代价是报错信息不够具体。
+
+## 实现后的行数（2026-11-16，超过硬线，停下报告）
+
+编排者批复：指纹清单用 TS 命令、在 runner 上生成；release-config 不改，只扫 `.app`，zip 由扫描支持、由单元测试覆盖，DMG 留给 T181；数据不计入行数；`license` 装 cargo-about 并生成一次声明；规模按停止线 550、硬线 650 算。
+
+写完以后按 `cargo xtask size` 的口径统计：代码 842 行，另有补全的许可证文本 42 行（数据）。超过硬线 650。原因是每个模块都低估了，而且没有在每写完一个模块时就统计（守则第 8 条）。
+
+| 模块 | 估算 | 实际 |
+|---|---|---|
+| 指纹清单：`fingerprints.ts` 104、`notices.ts` 中共用的下载和校验 +32、`main.ts` 中的部分约 15 | 55 | 约 150 |
+| 扫描：`scan.ts` 176、`main.ts` 中的部分约 10 | 130 | 约 186 |
+| 声明生成：`third-party.ts` 146、`main.ts` 中的部分约 35 | 105 | 约 181 |
+| `main.ts` 共用部分：用法说明、命令分派、读 metafile 的代码抽成 `entries()` | 30 | 约 47 |
+| 接入：xtask、action、build:release、electron-builder、.prettierignore | 35 | 26 |
+| 用例：`scan.test.ts` 163、`third-party.test.ts` 88 | 140 | 251 |
+
+### 本机核对过的事实（只跑单元测试和冒烟，不是测量）
+
+- 两个用例和原有用例共 12 个，全部通过；eslint、tsc、prettier、xtask 的 clippy、trace-ids 都通过。
+- 签名解析：
+  - 本机已安装的 Claude Code（2.1.296）读出 `com.anthropic.claude-code`、`Q6L2SF6YDW`，与 `codesign -dv` 一致；
+  - `/usr/bin/true` 是 universal 二进制，两个切片都读出 `com.apple.true`；
+  - 把它的副本用 `codesign -s - -i com.anthropic.claude-code` 重签后，读出伪造的 identifier；
+  - 本机 e2e 包里的主程序、Electron Framework、重签过的 Node 都读出各自的 identifier。
+- 用本机 e2e 包冒烟扫描，SDK 哈希清单临时置空：只报出"没有 THIRD_PARTY_NOTICES.txt"，没有误报。宿主带的锁文件按哈希放行。
+- `notices` 在本机生成约 620 KB、12,339 行。cargo-about 0.9.3 要加 `--features cli` 才会装出命令。离线（`--frozen`）对三个 crate 各跑一次，每次约 2.4 秒。
+- 两份补全的许可证文本取自上游仓库默认分支：`theKashey/react-remove-scroll-bar` 的 `LICENSE`，`rsms/js-lru` 的 `LICENSE.txt`。

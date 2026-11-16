@@ -25,6 +25,11 @@ runs:
       if: inputs.job == 'license'
       shell: bash
       run: cargo install --locked cargo-deny@0.20.2
+    # THIRD_PARTY_NOTICES.txt's Rust crates (T182).
+    - name: cargo-about
+      if: inputs.job == 'license' || inputs.job == 'release-config'
+      shell: bash
+      run: cargo install --locked --features cli cargo-about@0.9.3
     - name: cargo xtask ci ${{ inputs.job }}
       shell: bash
       env:

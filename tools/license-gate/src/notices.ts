@@ -13,33 +13,52 @@ import { join } from "node:path";
 
 import { inlined, type Inlined } from "./runtime.ts";
 
-const LICENSE_FILE = /^(licen[cs]e|copying)([.-].*)?$/i;
+/** The license file of a package directory, by its name. */
+export const licenseFile = (dir: string) =>
+  readdirSync(dir).find((name) => /^(licen[cs]e|copying)([.-].*)?$/i.test(name));
 
-async function licenseText(p: Inlined): Promise<string> {
-  const response = await fetch(p.resolved);
+/** npm's Subresource Integrity of `bytes`, as lockfiles record it. */
+export const sri = (bytes: Buffer) =>
+  `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
+
+/**
+ * What `read` makes of the package at `resolved`: its tarball, checked
+ * against `integrity`, unpacked in a temporary directory that is removed
+ * however `read` ends.
+ */
+export async function fetchPackage<T>(
+  resolved: string,
+  integrity: string,
+  read: (dir: string) => T,
+): Promise<T> {
+  const response = await fetch(resolved);
   if (!response.ok) {
-    throw new Error(`${p.resolved}: HTTP ${response.status}`);
+    throw new Error(`${resolved}: HTTP ${response.status}`);
   }
   const bytes = Buffer.from(await response.arrayBuffer());
-  const integrity = `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
-  if (integrity !== p.integrity) {
-    throw new Error(`${p.name}@${p.version}: the tarball does not match the lockfile's integrity`);
+  if (sri(bytes) !== integrity) {
+    throw new Error(`${resolved}: the tarball does not match the lockfile's integrity`);
   }
   const dir = mkdtempSync(join(tmpdir(), "license-gate-"));
   try {
     writeFileSync(join(dir, "package.tgz"), bytes);
     execFileSync("tar", ["-xzf", "package.tgz"], { cwd: dir });
+    rmSync(join(dir, "package.tgz"));
     // npm packs into `package/`, but a tarball may name its top directory otherwise.
-    const top = readdirSync(dir).find((name) => name !== "package.tgz") ?? "";
-    const file = readdirSync(join(dir, top)).find((name) => LICENSE_FILE.test(name));
-    if (file === undefined) {
-      throw new Error(`${p.name}@${p.version}: no license file in its tarball`);
-    }
-    return readFileSync(join(dir, top, file), "utf8");
+    return read(join(dir, readdirSync(dir)[0] ?? ""));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+const licenseText = (p: Inlined) =>
+  fetchPackage(p.resolved, p.integrity, (dir) => {
+    const file = licenseFile(dir);
+    if (file === undefined) {
+      throw new Error(`${p.name}@${p.version}: no license file in its tarball`);
+    }
+    return readFileSync(join(dir, file), "utf8");
+  });
 
 /** The notices file for codex-acp `version`, from its tag's `package-lock.json`. */
 export async function codexNotices(lockText: string, version: string): Promise<string> {

@@ -1,7 +1,8 @@
 //! `license` (ADR-11, design 5.1.6): `cargo deny` over the Rust dependency
 //! graph, then the first layer of `tools/license-gate` over the app's JS
 //! entries, whose metafiles a release build of the app writes, and over the
-//! runtime components.
+//! runtime components; and THIRD_PARTY_NOTICES.txt written as the release
+//! build writes it, which fails on a package without a license text (T182).
 //!
 //! `cargo deny` fetches the advisory database first, as a step of its own,
 //! and checks offline: a network error is retried, and when every try fails
@@ -43,7 +44,10 @@ pub fn run(ctx: &mut JobCtx) -> Result<()> {
     ctx.check("metafile", &mut build)?;
     let mut gate = ctx.command("node");
     gate.args(["tools/license-gate/src/main.ts", "check"]);
-    ctx.check("license-gate", &mut gate)
+    ctx.check("license-gate", &mut gate)?;
+    let mut notices = ctx.command("node");
+    notices.args(["tools/license-gate/src/main.ts", "notices"]);
+    ctx.check("notices", &mut notices)
 }
 
 fn advisory_db(ctx: &mut JobCtx) -> Result<()> {
