@@ -1,18 +1,15 @@
 // The permission button (design 5.7.4, CP-4): a shield and the mode's short
 // name; its menu lists the agent's modes, with what each looser one means.
 
-import type { SessionView } from "@cupper/host-client";
-
 import { useT } from "../../app/providers";
 import { ChevronDownIcon, ShieldIcon } from "../../components/icons";
 import { Menu } from "../../components/Menu";
-import { BarButton, Choices, fullAccess, useOption, useSetOption, WithSession } from "../config";
+import { BarButton, Choices, fullAccess, WithOptions, type Options } from "../config";
 import type { ComposerExtension } from "../extensions";
 
-function Permission({ view, sessionId }: { view: SessionView; sessionId: string }) {
+function Permission({ options }: { options: Options }) {
   const t = useT();
-  const { option, value } = useOption(view, "permission_mode");
-  const set = useSetOption(sessionId);
+  const { option, value } = options.get("permission_mode");
   if (!option) {
     return null;
   }
@@ -37,7 +34,7 @@ function Permission({ view, sessionId }: { view: SessionView; sessionId: string 
         title={t("composer:permission_title")}
         option={option}
         value={value}
-        pick={(picked) => void set(option, picked)}
+        pick={(picked) => options.set(option, picked)}
         hint={hint}
       />
     </Menu>
@@ -47,9 +44,7 @@ function Permission({ view, sessionId }: { view: SessionView; sessionId: string 
 export default {
   side: "left",
   order: 20,
-  Component: ({ sessionId }) => (
-    <WithSession sessionId={sessionId}>
-      {(view, id) => <Permission view={view} sessionId={id} />}
-    </WithSession>
+  Component: (props) => (
+    <WithOptions {...props}>{(options) => <Permission options={options} />}</WithOptions>
   ),
 } satisfies ComposerExtension;

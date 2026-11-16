@@ -4,11 +4,17 @@
 // creates the session. Text that would not fit the request in one frame goes
 // up as a blob first and is sent as a `text_blob` (design 5.3.4).
 
-import { ConnectionLost, MAX_FRAME_BYTES, RpcFailure } from "@cupper/host-client";
-import type { PromptBlock, SessionSendResult } from "@cupper/protocol";
+import { ConnectionLost, MAX_FRAME_BYTES, RpcFailure, uuidv7 } from "@cupper/host-client";
+import type {
+  PromptBlock,
+  SessionCreateParams,
+  SessionCreateResult,
+  SessionSendResult,
+} from "@cupper/protocol";
 import { useCallback, useEffect, useState } from "react";
 
 import { useHost, useShell, useT } from "../app/providers";
+import { usePrivileged } from "../feedback/privileged";
 import { useToasts } from "../feedback/toaster";
 import { useStreams, useUi } from "../state/provider";
 import { useEntry } from "../state/stream";
@@ -48,7 +54,13 @@ export function useSessionState(sessionId?: string) {
 /** What a new session is created with (design 5.7.4); fixed once it exists. */
 export interface NewSession {
   agent: string;
-  workspace: { kind: string };
+  workspace: { kind: "local" } | { kind: "worktree"; base_ref: string };
+  /** Values of `session/create`'s `config`, as the user chose them. */
+  config?: Record<string, string>;
+  /** The permission chosen is full access: created through the native confirmation (design 5.8.2). */
+  fullAccess?: boolean;
+  /** Nothing goes: the agent cannot run, or the worktree has no base yet. */
+  blocked?: boolean;
 }
 
 export const DEFAULT_NEW_SESSION: NewSession = { agent: "claude", workspace: { kind: "local" } };
@@ -120,6 +132,7 @@ export function useSend(
   const ui = useUi();
   const t = useT();
   const { show } = useToasts();
+  const privileged = usePrivileged();
   const fail = useCallback(
     (error: unknown) =>
       show({ id: "send", text: t("composer:send_failed", { code: codeOf(error) }) }),
@@ -141,10 +154,17 @@ export function useSend(
       const state = ui.getState();
       state.setDraft(key, "");
       state.setAttachments(key, []);
+      const { agent, workspace, config = {} } = create;
       const params = (blocks: PromptBlock[]) =>
         sessionId !== undefined
           ? { session_id: sessionId, mode: "queue", content: blocks }
-          : { ...create, project_id: projectId, message: blocks };
+          : { agent, workspace, project_id: projectId, message: blocks, config };
+      const putBack = () => {
+        if (!ui.getState().drafts[key]) {
+          ui.getState().setDraft(key, text);
+          ui.getState().setAttachments(key, attachments);
+        }
+      };
       try {
         let fitted = content;
         if (utf8(JSON.stringify(params(content))).length > budget && text.trim()) {
@@ -153,24 +173,25 @@ export function useSend(
         }
         if (sessionId !== undefined) {
           await toSession(fitted, action);
-        } else {
-          const created = await client.command<{ session_id: string }>(
-            "session/create",
-            params(fitted),
-          );
-          ui.getState().navigate({ page: "session", sessionId: created.session_id });
+          return true;
         }
+        const created = create.fullAccess
+          ? await confirmed(privileged, params(fitted) as Omit<SessionCreateParams, "command_id">)
+          : await client.command<SessionCreateResult>("session/create", params(fitted));
+        if (created === undefined) {
+          putBack();
+          return false;
+        }
+        ui.getState().clearChosen();
+        ui.getState().navigate({ page: "session", sessionId: created.session_id });
         return true;
       } catch (error) {
-        if (!ui.getState().drafts[key]) {
-          ui.getState().setDraft(key, text);
-          ui.getState().setAttachments(key, attachments);
-        }
+        putBack();
         fail(error);
         return false;
       }
     },
-    [client, ui, key, sessionId, projectId, fail, budget, create, toSession],
+    [client, ui, key, sessionId, projectId, fail, budget, create, toSession, privileged],
   );
 
   const command = useCallback(
@@ -182,6 +203,18 @@ export function useSend(
     interrupt: () => command("session/interrupt"),
     resume: () => command("session/queue_resume"),
   };
+}
+
+/** A session created with full access once the user confirmed it natively; else `undefined`. */
+async function confirmed(
+  privileged: ReturnType<typeof usePrivileged>,
+  params: Omit<SessionCreateParams, "command_id">,
+): Promise<SessionCreateResult | undefined> {
+  const done = await privileged({
+    kind: "create_session",
+    params: { command_id: uuidv7(), ...params },
+  });
+  return done.status === "confirmed" ? (done.result as SessionCreateResult) : undefined;
 }
 
 /** A UI preference from the shell, following later changes. */

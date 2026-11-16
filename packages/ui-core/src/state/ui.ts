@@ -44,6 +44,8 @@ export interface UiState {
   steering: Partial<Record<string, number>>;
   /** How many messages the user sent in each session from here: the stream goes back to its end on each (T256). */
   sent: Partial<Record<string, number>>;
+  /** The new session page's choices of options, by agent and option; cleared once a session is created. */
+  chosen: Partial<Record<string, Partial<Record<string, string>>>>;
   /** The projects whose sessions the sidebar shows all of ("展开显示"); not saved. */
   expanded: Partial<Record<string, boolean>>;
   /** The sessions visited, the last first (⌃Tab, design 5.7.7); not saved. */
@@ -67,6 +69,8 @@ export interface UiState {
   hint(sessionId: string, name: string): boolean;
   addSteering(sessionId: string, delta: 1 | -1): void;
   markSent(sessionId: string): void;
+  choose(agent: string, option: string, value: string): void;
+  clearChosen(): void;
 }
 
 export type UiStore = StoreApi<UiState>;
@@ -87,6 +91,7 @@ export function createUiStore(layout: LayoutState, route: Route = { page: "new" 
       hinted: {},
       steering: {},
       sent: {},
+      chosen: {},
       expanded: {},
       recent: route.page === "session" ? [route.sessionId] : [],
       cycle: null,
@@ -133,6 +138,11 @@ export function createUiStore(layout: LayoutState, route: Route = { page: "new" 
         set((state) => ({
           sent: { ...state.sent, [sessionId]: (state.sent[sessionId] ?? 0) + 1 },
         })),
+      choose: (agent, option, value) =>
+        set((state) => ({
+          chosen: { ...state.chosen, [agent]: { ...state.chosen[agent], [option]: value } },
+        })),
+      clearChosen: () => set({ chosen: {} }),
       addSteering: (sessionId, delta) =>
         set((state) => ({
           steering: { ...state.steering, [sessionId]: (state.steering[sessionId] ?? 0) + delta },

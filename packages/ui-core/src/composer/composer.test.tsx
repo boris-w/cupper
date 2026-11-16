@@ -36,8 +36,10 @@ async function setup(
   status = "idle",
   session: object[] = [],
   composer = <ComposerArea sessionId="s_1" />,
+  cached?: object,
 ) {
   const mock = new MockHost([{ method: "initialize", params: {}, result: {} }]);
+  mock.handle("agents/capabilities", () => ({ result: { cached } }));
   mock.handle("stream/subscribe", ({ id, conn, params }) => {
     const { stream } = params as { stream: string };
     conn.reply(id, { result: { stream, mode: "snapshot", at_seq: 1, head_seq: 1, epoch: 1 } });
@@ -628,8 +630,7 @@ describe("slash commands", () => {
     cleanup();
 
     const cached = { captured_at: 1, capabilities: caps(commands).data };
-    const page = await setup("idle", [], <Composer create={DEFAULT_NEW_SESSION} />);
-    page.mock.handle("agents/capabilities", () => ({ result: { cached } }));
+    const page = await setup("idle", [], <Composer create={DEFAULT_NEW_SESSION} />, cached);
     await input(screen.getByRole("textbox"), "/");
     expect(await screen.findByRole("listbox", { name: "斜杠命令" })).toBeTruthy();
     expect(page.requests("agents/capabilities")).toEqual([{ agent: "claude" }]);
