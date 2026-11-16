@@ -33,7 +33,7 @@
 | T080（第一个渲染进程任务） | 渲染进程和 preload 的 ESLint 安全规则（5.7.8：禁止 `innerHTML`、`dangerouslySetInnerHTML`、`eval` 等，以及 Trusted Types 策略只能在 `policies.ts` 里创建）还没有加，和 ui-core 一起加 | T074 |
 | T090 | Chromium 会往 `~/Library/Preferences/dev.cupper.app.e2e.plist` 写系统默认值，这个文件不在 `CUPPER_E2E_DIR` 下，每轮测试后清理一次 | T074 |
 | T150 或做深链接的任务 | 各构建的 URL scheme（`cupper-e2e://` 等）还没有注册，和深链接的处理函数一起加 | T074 |
-| T152 | 窗口外观：菜单缩放后，交通灯的 y 坐标不会按 `(44 × 缩放 − 14) / 2` 重新计算；vibrancy 还没设 | T074 |
+| T152 | 窗口外观：菜单缩放后，交通灯的 y 坐标不会按 `(44 × 缩放 − 14) / 2` 重新计算；vibrancy 还没设 | T074（已写入 brief） |
 | T153、T154 | 菜单顶层标题和角色项（撤销、复制、退出等）是 Electron 自带的英文，需要给 `@cupper/i18n` 加 `menu` 命名空间；菜单分组是 T074 暂定的，按 Codex 定稿 | T074 |
 | T160、T180 | Electron 自带的 Info.plist 有 5 条用途说明（相机、麦克风、两条蓝牙、音频采集），electron-builder 的 `extendInfo` 删不掉。自用构建和发布构建要在打包后删除，例如用 `afterPack` 钩子（设计 5.10.1、5.10.2） | T074 |
 | T161 | Electron 44 有第 9 个 fuse，@electron/fuses 1.8.0 不认识，读出来是 `undefined`，逐项断言时要处理 | T074（已写入 T161 的 brief） |
@@ -291,7 +291,7 @@
 | T068 | 缺陷（T109 起）：`orchestrator/session/actor.rs` 的 `rescan` 用 `tokio::spawn` 另起任务，没有持有静止屏障的 `Hold`；任务里有数据库读取、git 子进程和 `spawn_blocking`，违反 T047 的规则（另起的 task 要持有 `Hold` 直到交回结果）。进程级信任用例里 `test/clock_advance` 可能在重扫完成前就返回。按 1.2 的上限就地修 | T100 合并时发现 |
 | T080 | ui-core 的路由是一个小状态路由，形状 `Route = {page:"new", projectId?} \| {page:"session", sessionId}`，`RouterProvider` 持有、`useRouter()` 给出 `{route, navigate}`，没有 URL；布局状态在 `layout/store.ts`，偏好键 `layout.sidebarOpen`、`layout.sidebarWidth`、`layout.sidePanelOpen`、`layout.sidePanelRatio`。接管状态时：连续快速按手柄键，主进程回传的旧 prefs 值会让宽度短暂跳回，按序号丢弃过期回传。`ui-core` 禁止 import `electron`、`node:*` 的 ESLint 规则还没加 | T084 |
 | T081、T086、T083 | ui-core 的插槽：`sidebarHeader`、`sidebarList`、`sidebarFooter`（T081）；`newSessionComposer`、`sessionComposer`（T086、T083）。默认的侧边栏头部是"Cupper"加宿主状态点，T081 替换。token 写法：颜色是 `light-dark()`，`data-theme` 固定主题；Tailwind `@theme static`，只有 `tokens.css` 定义过的 token 能生成工具类；用户状态（宽度等）只经 `style={{...}}` 写入 | T084 |
-| T152 | 侧边面板开合的 spring 动画（0.5 s，bounce 0.1）没有做 | T084 |
+| T152 | 侧边面板开合的 spring 动画（0.5 s，bounce 0.1）没有做 | T084（已写入 brief） |
 | T153 | 顶栏的"打开"和"⋯"目前是占位按钮（T128 换成工具栏按钮并能挂菜单），菜单内容归本任务 | T084 |
 | T106 | 侧边面板的默认宽度按 ui-spec 2.4 的公式 `max(320, min(窗口高×1.6, 主区宽−500), min(640, 主区宽−352))`，默认窗口下得 640，主区只剩 352；公式在 ui-spec 里标为【推测】，请核对 | T084 |
 | T134 | 取真实输入证据用 `guardOf(event.sender)?.take()`（`apps/desktop/src/main/input/`）；证据的 `key` 为 `escape` 时由本任务拒绝，Esc 不能触发特权操作。窗口桥只对幂等方式为 `command` 的方法消耗输入，读请求和通知不消耗 | T077 |
@@ -316,7 +316,7 @@
 | 第一个用 `new Worker` 的任务（审查文档、Shiki 等） | Worker 的脚本 URL 必须经 `ui-core/src/security/policies.ts` 的 `workerScriptUrl(url)` 取（只放行 `app://cupper/assets/` 下的同源脚本）；不能另建 Trusted Types 策略 | T136 |
 | 所有界面任务（及评审） | ESLint 安全、样式、import、文案规则已生效（T136）。JSX 文案和 `aria-label`、`title`、`alt`、`placeholder`、`label` 等属性的字面量走 `t()`，只放行不含文字字母的文本和产品名、agent 名；其他例外要带理由的行内禁用注释。静态检查拦不下的写法（`style` 的值、拼进 `className` 的 agent 文本、别处取到的 `<style>`、`window` 的别名、自定义组件用别的属性名接收文案）列在 `docs/tasks/T136-ui-security-rules/notes.md`，评审照它看 | T136 |
 | 界面任务的截图用例 | 截图页的索引流夹具（T081）：mock 宿主对每个订阅回 snapshot 模式，再发一页 `stream/snapshot`，索引流的 op 来自夹具、其他流为空；会话流的夹具照此加 | T081 |
-| T152 | 截图比对用 Playwright 默认的逐像素阈值 0.2，悬停底色（正文色 5.3%）这类细微差异比不出来；要不要调严，随视觉修正一并决定 | T081 |
+| T152 | 截图比对用 Playwright 默认的逐像素阈值 0.2，悬停底色（正文色 5.3%）这类细微差异比不出来；要不要调严，随视觉修正一并决定 | T081（已写入 brief） |
 | T153 | 侧边栏项目行悬停时的"+"旁有一个空菜单、会话行还没有菜单按钮和右键菜单，菜单项归本任务（`ui-core/src/sidebar/`） | T081 |
 | 界面任务的截图用例 | 截图页的夹具 `streams`（T137，由 T081 的 `index` 推广）：按流名给 snapshot 的 op，例如 `index`、`session/s_7`；同一份夹具要被多个用例共用时放在同一个 spec 文件里（从别的 spec 文件 import 会让 Playwright 重复注册测试） | T137 |
 | T106、T152 | 待核对的文案：会话页"未信任"警告框的说明在 1280 宽时折成两行；`stale` 的项目在侧边栏同样标"未信任"，要不要单独起名（例如"需重新信任"） | T137 |
@@ -602,7 +602,7 @@
 | T180 | 通知点击前只核对外层 App 的 bundle id（宿主路径往上三级的 Info.plist）；有了发布构建的 Team ID 后，还要核对外层 App 的代码签名满足 UI 的要求（同 5.8.1 宿主对 UI 主进程的要求），不满足就不激活、不交 URL | T251 |
 | T254 | 桌面主进程转发 control 上的 `ui/navigate`；`deeplink` 给 e2e、开发构建补注册 scheme，`open-url` 只认 `<scheme>://session/<id>[?request=<id>]`，两个 ID 按协议格式（前缀加 1–64 个 `[A-Za-z0-9_-]`）校验，App 还没启动完收到的 URL 也要处理；E2E 用 `test/notification_click`（harness 连接，`notification_id` 取索引流 `notification.intent` 的 `intent_id`）；MAN-notification-product 一并核对激活的时机（`notifier_settle` 300 ms 够不够）和系统单独拉起的宿主 | T251 |
 | 写 e2e 的任务 | 经 shell 设置偏好后，窗口要晚一点才拿到、React 还要重新渲染；依赖偏好的用例要么启动前写进 prefs.json（helpers 的 `startingPrefs`），要么等界面上体现新偏好的东西出现再继续。点完 Radix 菜单项后先等菜单卸载（role=menu 数量为 0）再输入，否则焦点陷阱会吞掉输入 | T149 |
-| T152、T154 | 外观分区已由 T252 建好（`settings/AppearanceSection.tsx`，在"通知"之后、"已归档会话"之前），主题、半透明侧边栏、语言往里加行；设置页用例的 `setup` 参数是 `{ auth, prefs }`，可以给 shell 预置 prefs | T252 |
+| T152、T154 | 外观分区已由 T252 建好（`settings/AppearanceSection.tsx`，在"通知"之后、"已归档会话"之前），主题、半透明侧边栏、语言往里加行；设置页用例的 `setup` 参数是 `{ auth, prefs }`，可以给 shell 预置 prefs | T252（T152 已写入 brief） |
 | T148 | 其他滚动区域仍是系统默认滚动条（侧边栏、设置页、审查文档、文件树、提交弹窗的输出、请求面板、`@`/`/` 弹出列表、工具输出）；Codex 对所有元素统一设细滚动条（`scrollbar-width: thin`、滑块正文色 30%、悬停换 border-strong），复刻度修正时考虑统一，用 T256 的 `--color-scrollbar-thumb` | T256 |
 | T148 | 适配器退出时，出错卡片直接列出 stderr 的尾部（十几行 `[session/create] <redacted> phase=…`），对用户太长、太技术；考虑默认折叠，展开再看 | T254 |
 | 写用户文档的任务（T157 等） | macOS 26 上通知授权请求是通知样式的横幅，要点横幅上的"允许"按钮（或"选项"里的允许）；点横幅本身系统按"不允许"处理，之后只能去系统设置里打开 | T254 |
@@ -620,7 +620,7 @@
 | T159 | T155 的 PERF-ui-stream 在流式消息前加了一段代码块后，渲染进程内存到 1,037 MB（T103 时 591 MB，预算 600），洪流期间渲染进程 CPU p50 约 102% 单核（跑满一个核）；nightly 43798070645 | T155 |
 | T153 | PERF-ui-switch 还缺"下一个需要处理的会话"一项，T153 接上 `next_needs_action` 后在 PERF-ui-switch 里补上 | T155 |
 | T181 | 许可证门禁第二层（T182）先只扫 .app 和 zip；release-config 不出 DMG。T181 出 DMG 时把 DMG 接进第二层的扫描（`hdiutil` 挂载后扫） | T182 |
-| T152 | 按 T106 更正后的设计改实现：暗色输入框底色 #363636（拖放时 #2D2D2D，`--color-surface-composer`）；侧边栏拖动范围 188–468（`--layout-sidebar-w`）；回到底部按钮 32、运行中宽 40 显示三个点、离输入框 24、离底部超过 112 时出现（5.7.4）；暗色 token 的取值不变 | T106 |
+| T152 | 按 T106 更正后的设计改实现：暗色输入框底色 #363636（拖放时 #2D2D2D，`--color-surface-composer`）；侧边栏拖动范围 188–468（`--layout-sidebar-w`）；回到底部按钮 32、运行中宽 40 显示三个点、离输入框 24、离底部超过 112 时出现（5.7.4）；暗色 token 的取值不变 | T106（已写入 brief） |
 | T148 | Codex 26.1111 起输入框为空时发送按钮也是实色（26.1013 是禁用灰），核对后跟进 5.7.4、5.7.10 的"发送按钮禁用态"；Q40 剩下的斜杠菜单外观、分栏与统一 diff 自动切换的像素阈值，需要作者补截图（斜杠菜单打开时；不同窗口宽度下的 diff） | T106 |
 | T153 | Codex 的会话行悬停时，行尾显示固定和归档按钮，并在行右侧弹出悬停卡片：标题与相对时间、项目（底色 surface-elevated）；cupper 是否做由 T153 定，做的话相对时间要宿主在 `SessionSummary` 里已有的时间戳 | T106 |
 | 静态核对 Codex 的任务 | ChatGPT.app 26.1111 里 ChatGPT 和 Codex 的界面合在一起，同类组件常有两套实现；以 `codex.*`、`localConversation.*`、`ComposerLayoutRoot` 这类名字为准 | T106 |
