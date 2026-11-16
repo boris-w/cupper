@@ -53,6 +53,7 @@ import { guardOf, watchInput } from "./input";
 import { controlHost, Privileged } from "./privileged";
 import { serveShell } from "./shell";
 import { MAIN_DOCUMENT_URL, mainWindowOptions } from "./window";
+import { placeLights, zoom } from "./zoom";
 
 const flavor = __CUPPER_FLAVOR__;
 
@@ -221,6 +222,11 @@ async function ready() {
     label: (id, n) => text.t(id, { ns: "command", n }),
     onCommand: (cmd) => BrowserWindow.getFocusedWindow()?.webContents.send(COMMAND_CHANNEL, cmd),
     devTools: flavor === "dev",
+    zoomLabel: (step) => text.t(`zoom_${step}`, { ns: "command" }),
+    onZoom: (step) => {
+      const window = BrowserWindow.getFocusedWindow();
+      if (window) zoom(window, step);
+    },
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   if (host) {
@@ -299,7 +305,11 @@ function showMainWindow() {
   const window = new BrowserWindow(mainWindowOptions(flavor, preload));
   mainWindow = window;
   navigation.reloading();
-  window.webContents.on("did-finish-load", () => navigation.loaded());
+  window.webContents.on("did-finish-load", () => {
+    navigation.loaded();
+    // Chromium keeps the zoom of the page: the traffic lights at it from the start.
+    placeLights(window);
+  });
   window.webContents.on("did-start-navigation", (details) => {
     if (details.isMainFrame && !details.isSameDocument) {
       navigation.reloading();

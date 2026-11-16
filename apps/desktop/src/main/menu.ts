@@ -1,6 +1,8 @@
 import type { KnownCommandId, ShellCommand } from "@cupper/shell-api";
 import type { MenuItemConstructorOptions } from "electron";
 
+import type { ZoomStep } from "./zoom";
+
 export interface MenuOptions {
   /** Text from the `command` namespace of `@cupper/i18n`, keyed by command ID. */
   label: (id: KnownCommandId, n?: number) => string;
@@ -8,6 +10,10 @@ export interface MenuOptions {
   onCommand: (cmd: ShellCommand) => void;
   /** Adds "Toggle Developer Tools" to the View menu; dev builds only. */
   devTools: boolean;
+  /** The zoom items' text, from the `command` namespace too. */
+  zoomLabel: (step: ZoomStep) => string;
+  /** Zooms the focused window a step (zoom.ts). */
+  onZoom: (step: ZoomStep) => void;
 }
 
 /**
@@ -18,12 +24,16 @@ export interface MenuOptions {
  * accelerators of hidden items. There is no Services menu (design 5.7.8).
  *
  * The roles keep Electron's own titles and items. They are English until
- * `@cupper/i18n` has text for them.
+ * `@cupper/i18n` has text for them. The zoom items are the roles' own, keys
+ * included (⌘0, ⌘+ and ⌘=, ⌘−), but the menu zooms itself, so that the
+ * traffic lights follow the title bar (zoom.ts).
  */
 export function menuTemplate({
   label,
   onCommand,
   devTools,
+  zoomLabel,
+  onZoom,
 }: MenuOptions): MenuItemConstructorOptions[] {
   const command = (
     id: KnownCommandId,
@@ -35,6 +45,13 @@ export function menuTemplate({
       accelerator,
       visible: index === 0,
       click: () => onCommand(arg === undefined ? { id } : { id, arg }),
+    }));
+  const zoom = (step: ZoomStep, keys: string[]): MenuItemConstructorOptions[] =>
+    keys.map((accelerator, index) => ({
+      label: zoomLabel(step),
+      accelerator,
+      visible: index === 0,
+      click: () => onZoom(step),
     }));
   const separator: MenuItemConstructorOptions = { type: "separator" };
   const sessions = [1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((n) =>
@@ -80,9 +97,9 @@ export function menuTemplate({
         ...command("toggle_file_tree", ["Command+Shift+E"]),
         ...command("open_review_tab", ["Control+Shift+G"]),
         separator,
-        { role: "resetZoom" },
-        { role: "zoomIn" },
-        { role: "zoomOut" },
+        ...zoom("reset", ["CommandOrControl+0"]),
+        ...zoom("in", ["CommandOrControl+Plus", "CommandOrControl+="]),
+        ...zoom("out", ["CommandOrControl+-"]),
         separator,
         { role: "togglefullscreen" },
         ...(devTools ? [separator, { role: "toggleDevTools" } as const] : []),
