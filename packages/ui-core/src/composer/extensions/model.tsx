@@ -1,23 +1,21 @@
 // "{模型} {强度} ⌄" (design 5.7.4): the model and the reasoning effort in one
 // button, each a group of its menu. An error's "换模型" opens it too.
 
-import type { SessionView } from "@cupper/host-client";
 import { useStore } from "zustand";
 
 import { useT } from "../../app/providers";
 import { ChevronDownIcon } from "../../components/icons";
 import { Menu, MenuSeparator } from "../../components/Menu";
 import { useUi } from "../../state/provider";
-import { BarButton, Choices, useOption, useSetOption, WithSession } from "../config";
+import { BarButton, Choices, WithOptions, type Options } from "../config";
 import type { ComposerExtension } from "../extensions";
 
-function Model({ view, sessionId }: { view: SessionView; sessionId: string }) {
+function Model({ options }: { options: Options }) {
   const t = useT();
   const ui = useUi();
   const open = useStore(ui, (state) => state.menu === "model");
-  const model = useOption(view, "model");
-  const effort = useOption(view, "reasoning_effort");
-  const set = useSetOption(sessionId);
+  const model = options.get("model");
+  const effort = options.get("reasoning_effort");
   if (!model.option && !effort.option) {
     return null;
   }
@@ -38,7 +36,7 @@ function Model({ view, sessionId }: { view: SessionView; sessionId: string }) {
           title={t("composer:model_title")}
           option={model.option}
           value={model.value}
-          pick={(picked) => model.option && void set(model.option, picked)}
+          pick={(picked) => model.option && options.set(model.option, picked)}
         />
       )}
       {model.option && effort.option && <MenuSeparator />}
@@ -47,7 +45,7 @@ function Model({ view, sessionId }: { view: SessionView; sessionId: string }) {
           title={t("composer:effort_title")}
           option={effort.option}
           value={effort.value}
-          pick={(picked) => effort.option && void set(effort.option, picked)}
+          pick={(picked) => effort.option && options.set(effort.option, picked)}
         />
       )}
     </Menu>
@@ -57,9 +55,7 @@ function Model({ view, sessionId }: { view: SessionView; sessionId: string }) {
 export default {
   side: "right",
   order: 20,
-  Component: ({ sessionId }) => (
-    <WithSession sessionId={sessionId}>
-      {(view, id) => <Model view={view} sessionId={id} />}
-    </WithSession>
+  Component: (props) => (
+    <WithOptions {...props}>{(options) => <Model options={options} />}</WithOptions>
   ),
 } satisfies ComposerExtension;

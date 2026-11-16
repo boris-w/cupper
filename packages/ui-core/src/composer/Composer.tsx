@@ -255,7 +255,7 @@ export function Composer(props: {
       value={{ container, area: areaNode, setClose: (close) => (closeOverlay.current = close) }}
     >
       <div ref={setContainer} className="relative" />
-      <TierHint sessionId={sessionId} />
+      <TierHint sessionId={sessionId} agent={create?.agent ?? agent} />
       {waiting && (
         <p role="status" className="pb-2 text-center text-sm text-fg-tertiary">
           {t("composer:steer_waiting")}

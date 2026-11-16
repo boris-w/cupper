@@ -5,17 +5,16 @@
 // commands come from the session's capabilities, or on the new session page
 // from the host's cache for the agent picked; with none, nothing opens.
 
-import type { AgentsCapabilitiesResult, SlashCommand } from "@cupper/protocol";
+import type { SlashCommand } from "@cupper/protocol";
 import type { SessionView } from "@cupper/host-client";
-import { useQuery } from "@tanstack/react-query";
 import { use, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useStore } from "zustand";
 
-import { useHost, useT } from "../../app/providers";
+import { useT } from "../../app/providers";
 import { useUi } from "../../state/provider";
 import { useEntry } from "../../state/stream";
-import { WithSession } from "../config";
+import { useCached, WithSession } from "../config";
 import { OverlayContext, type ComposerExtension } from "../extensions";
 import { OPTION, POPOVER, useCaret, usePopoverKeys } from "../popover";
 import { NEW_DRAFT } from "../send";
@@ -110,17 +109,9 @@ function Live({ view, sessionId }: { view: SessionView; sessionId: string }) {
   return <Menu sessionId={sessionId} commands={view.toJSON().capabilities?.commands ?? NONE} />;
 }
 
-/** The new session page's: the host's cached capabilities of the agent picked, once `/` is typed. */
+/** The new session page's: the host's cached capabilities of the agent picked. */
 function Cached({ agent }: { agent: string }) {
-  const { client } = useHost();
-  const ui = useUi();
-  const typed = useStore(ui, (state) => state.drafts[NEW_DRAFT]?.startsWith("/") ?? false);
-  const { data } = useQuery({
-    queryKey: ["agents/capabilities", agent],
-    queryFn: () => client.request<AgentsCapabilitiesResult>("agents/capabilities", { agent }),
-    enabled: typed,
-  });
-  return <Menu commands={data?.cached?.capabilities.commands ?? NONE} />;
+  return <Menu commands={useCached(agent)?.commands ?? NONE} />;
 }
 
 function SlashCommands({ sessionId, agent }: { sessionId?: string; agent: string }) {

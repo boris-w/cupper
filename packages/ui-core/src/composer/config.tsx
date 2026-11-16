@@ -2,18 +2,22 @@
 // agent's capabilities offer, the value now, and setting one. A looser
 // permission mode follows the tier rules (design 5.8.2): full access only
 // through the native confirmation the main process shows, `elevated` with a
-// hint (U6).
+// hint (U6). Before the first message, on the new session page, the options
+// are those the host cached for the agent picked (AG-4), and setting one
+// only chooses what the session is created with.
 
 import type { SessionView } from "@cupper/host-client";
-import type { ConfigOption, ConfigValue } from "@cupper/protocol";
+import type { AgentsCapabilitiesResult, ConfigOption, ConfigValue } from "@cupper/protocol";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, type ComponentProps, type ReactNode } from "react";
+import { useStore } from "zustand";
 
 import { useHost, useT } from "../app/providers";
 import { Alert } from "../components/Alert";
 import { MenuItem, MenuLabel } from "../components/Menu";
 import { usePrivileged } from "../feedback/privileged";
 import { useToasts } from "../feedback/toaster";
-import { useStreams } from "../state/provider";
+import { useStreams, useUi } from "../state/provider";
 import { useEntry } from "../state/stream";
 import { codeOf } from "./send";
 
@@ -44,13 +48,85 @@ export function WithSession(props: {
   return view && props.sessionId !== undefined ? props.children(view, props.sessionId) : null;
 }
 
-/** The session's option `id`, if the agent has it, and its value now. */
-export function useOption(view: SessionView, id: string) {
-  useEntry(view, "session");
-  const { capabilities, configured } = view.toJSON();
-  const option = capabilities?.config.find((o) => o.id === id);
-  const current = configured?.config[id] ?? option?.current;
-  return { option, value: option?.values.find((v) => v.value === current) };
+/** The options the composer shows, and setting one. */
+export interface Options {
+  /** Option `id`, if the agent has it, and its value now. */
+  get(id: string): { option?: ConfigOption; value?: ConfigValue };
+  set(option: ConfigOption, value: ConfigValue): void;
+}
+
+/** Option `id` of `config` at `value`, else at the agent's own value. */
+function pick(config: readonly ConfigOption[] | undefined, id: string, value?: string) {
+  const option = config?.find((o) => o.id === id);
+  const now = option?.values.find((v) => v.value === value) ? value : option?.current;
+  return { option, value: option?.values.find((v) => v.value === now) };
+}
+
+/** The agent's capabilities as the host cached them; `agents.updated` makes them stale. */
+export function useCached(agent: string) {
+  const { client } = useHost();
+  const { data } = useQuery({
+    queryKey: ["agents/capabilities", agent],
+    queryFn: () => client.request<AgentsCapabilitiesResult>("agents/capabilities", { agent }),
+  });
+  return data?.cached?.capabilities;
+}
+
+/**
+ * The new session page's options: the cached ones of `agent`, each at the
+ * user's choice, else at the agent's own value. `chosen` is what
+ * `session/create` takes (T266 adds the default permission under it).
+ */
+export function useNewOptions(agent: string) {
+  const ui = useUi();
+  const config = useCached(agent)?.config;
+  const chosen = useStore(ui, (state) => state.chosen[agent]);
+  const get = (id: string) => pick(config, id, chosen?.[id]);
+  const set = (option: ConfigOption, value: ConfigValue) =>
+    ui.getState().choose(agent, option.id, value.value);
+  const picked = Object.keys(chosen ?? {}).flatMap((id) => {
+    const { value } = get(id);
+    return value ? [[id, value] as const] : [];
+  });
+  return { get, set, chosen: Object.fromEntries(picked) };
+}
+
+/** Renders `children` with the options of session `sessionId`, or of the new session page. */
+export function WithOptions(props: {
+  sessionId?: string;
+  agent: string;
+  children: (options: Options) => ReactNode;
+}) {
+  if (props.sessionId === undefined) {
+    return <NewOptions agent={props.agent}>{props.children}</NewOptions>;
+  }
+  return (
+    <WithSession sessionId={props.sessionId}>
+      {(view, id) => (
+        <SessionOptions view={view} sessionId={id}>
+          {props.children}
+        </SessionOptions>
+      )}
+    </WithSession>
+  );
+}
+
+function NewOptions(props: { agent: string; children: (options: Options) => ReactNode }) {
+  return props.children(useNewOptions(props.agent));
+}
+
+function SessionOptions(props: {
+  view: SessionView;
+  sessionId: string;
+  children: (options: Options) => ReactNode;
+}) {
+  useEntry(props.view, "session");
+  const set = useSetOption(props.sessionId);
+  const { capabilities, configured } = props.view.toJSON();
+  return props.children({
+    get: (id) => pick(capabilities?.config, id, configured?.config[id]),
+    set: (option, value) => void set(option, value),
+  });
 }
 
 /** Sets an option: full access through the shell, anything else as a command. */
@@ -102,13 +178,13 @@ export function Choices(props: {
 }
 
 /** Above the composer: full access is on, or the low-interruption tier. */
-export function TierHint({ sessionId }: { sessionId?: string }) {
-  return <WithSession sessionId={sessionId}>{(view) => <TierHintOf view={view} />}</WithSession>;
+export function TierHint(props: { sessionId?: string; agent: string }) {
+  return <WithOptions {...props}>{(options) => <TierHintOf options={options} />}</WithOptions>;
 }
 
-function TierHintOf({ view }: { view: SessionView }) {
+function TierHintOf({ options }: { options: Options }) {
   const t = useT();
-  const { value } = useOption(view, "permission_mode");
+  const { value } = options.get("permission_mode");
   if (fullAccess(value)) {
     return (
       <div className="pb-2">
