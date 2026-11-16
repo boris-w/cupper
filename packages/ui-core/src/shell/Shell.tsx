@@ -3,6 +3,7 @@
 // reach the DOM as inline `width`, never as CSS custom properties. The
 // settings page has the window to itself, its navigation in the sidebar's place.
 
+import type { SessionGetResult } from "@cupper/protocol";
 import { commandHandler } from "@cupper/shell-api";
 import {
   use,
@@ -20,13 +21,21 @@ import { SlotsContext } from "../app/slots";
 import { useHost, useShell, useT } from "../app/providers";
 import { useRouter } from "../app/router";
 import { ChevronDownIcon, MoreIcon, PaneIcon } from "../components/icons";
-import { Menu } from "../components/Menu";
+import { Menu, MenuItem } from "../components/Menu";
 import { ToolbarButton } from "../components/ToolbarButton";
 import { ConnectionToast } from "../feedback/ConnectionToast";
+import { useToasts } from "../feedback/toaster";
 import { SidebarFooter, SidebarHeader, SidebarList } from "../sidebar";
 import { computeLayout, ratioOf, type Layout, type Viewport } from "../layout/layout";
 import { ReviewPanel } from "../review/ReviewPanel";
 import { createReviewStore, OpenReview, ReviewContext, type ReviewTarget } from "../review/state";
+import {
+  failureText,
+  SessionActionsProvider,
+  SessionItems,
+  useSessionActions,
+  type OpenTarget,
+} from "../session/actions";
 import type { LayoutStore } from "../layout/store";
 import { SessionShortcuts } from "./shortcuts";
 import { Splitter } from "./Splitter";
@@ -55,8 +64,10 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
   return (
     <ReviewContext value={review}>
       <OpenReview value={openReview}>
-        <SessionShortcuts />
-        <Frame store={store}>{children}</Frame>
+        <SessionActionsProvider>
+          <SessionShortcuts />
+          <Frame store={store}>{children}</Frame>
+        </SessionActionsProvider>
       </OpenReview>
     </ReviewContext>
   );
@@ -212,15 +223,32 @@ function useSpring(panel: RefObject<HTMLElement | null>, open: boolean, width: n
   return closing;
 }
 
-/** The 44 high title bar; `inset` leaves room for the traffic lights and the sidebar toggle. */
-function TitleBar(props: {
+const TARGETS: OpenTarget[] = ["terminal", "editor", "finder"];
+
+/**
+ * The 44 high title bar; `inset` leaves room for the traffic lights and the
+ * sidebar toggle. "打开" and "⋯" act on the session shown, and only show then.
+ */
+export function TitleBar(props: {
   hidden: boolean;
   inset: boolean;
   sidePanelOpen: boolean;
   onSidePanel: () => void;
 }) {
   const t = useT();
-  const { handshake } = useHost();
+  const { client, handshake } = useHost();
+  const { show } = useToasts();
+  const actions = useSessionActions();
+  const { route } = useRouter();
+  const session = route.page === "session" ? route.sessionId : undefined;
+  const copyPath = (id: string) =>
+    client
+      .request<SessionGetResult>("session/get", { session_id: id })
+      .then(({ workspace }) => navigator.clipboard.writeText(workspace.path))
+      .then(
+        () => show({ id: "session", text: t("shell:path_copied") }),
+        (error: unknown) => show({ id: "session", text: failureText(t, error) }),
+      );
   return (
     <header
       hidden={props.hidden}
@@ -232,15 +260,22 @@ function TitleBar(props: {
           <span className="text-warning">{t("shell:weak_auth")}</span>
         </ToolbarButton>
       )}
-      {/* The menus' items come with T153. */}
-      <Menu
-        trigger={
-          <ToolbarButton label={t("shell:open")}>
-            {t("shell:open")}
-            <ChevronDownIcon />
-          </ToolbarButton>
-        }
-      />
+      {session && (
+        <Menu
+          trigger={
+            <ToolbarButton label={t("shell:open")}>
+              {t("shell:open")}
+              <ChevronDownIcon />
+            </ToolbarButton>
+          }
+        >
+          {TARGETS.map((target) => (
+            <MenuItem key={target} onSelect={() => actions.open(session, target)}>
+              {t(`shell:open_${target}`)}
+            </MenuItem>
+          ))}
+        </Menu>
+      )}
       <ToolbarButton
         label={t("shell:toggle_side_panel")}
         shortcut="⌥⌘B"
@@ -249,13 +284,18 @@ function TitleBar(props: {
       >
         <PaneIcon side="right" />
       </ToolbarButton>
-      <Menu
-        trigger={
-          <ToolbarButton label={t("shell:session_menu")}>
-            <MoreIcon />
-          </ToolbarButton>
-        }
-      />
+      {session && (
+        <Menu
+          trigger={
+            <ToolbarButton label={t("shell:session_menu")}>
+              <MoreIcon />
+            </ToolbarButton>
+          }
+        >
+          <SessionItems item={MenuItem} sessionId={session} />
+          <MenuItem onSelect={() => void copyPath(session)}>{t("shell:copy_path")}</MenuItem>
+        </Menu>
+      )}
     </header>
   );
 }

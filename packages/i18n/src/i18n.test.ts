@@ -17,6 +17,7 @@ describe("createI18n", () => {
       "settings",
       "shell",
       "sidebar",
+      "session",
       "stream",
       "update",
     ]);

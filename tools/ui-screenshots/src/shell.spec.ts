@@ -39,7 +39,9 @@ test("UI-csp-zero: no violation under the main document's CSP", async ({ page })
   await page.getByRole("button", { name: "切换侧边面板" }).click();
   await page.getByRole("button", { name: "切换侧边栏" }).click();
   await page.evaluate(() => window.cupperShell.setTheme("dark"));
-  // Radix's menus and tooltips render into portals and insert their own styles.
+  // A session page, whose title bar has "⋯": Radix's menus and tooltips
+  // render into portals and insert their own styles.
+  await page.evaluate(() => window.cupperShell.navigate({ kind: "session", session_id: "s_1" }));
   await page.getByRole("button", { name: "会话菜单" }).click();
   await expect(page.getByRole("menu")).toBeVisible();
   await page.keyboard.press("Escape");
