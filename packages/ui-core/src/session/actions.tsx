@@ -60,9 +60,10 @@ function failureCode(error: unknown): string {
   return reason ?? code ?? "unexpected";
 }
 
+/** A failure with its own guidance, else its code. */
 export function failureText(t: Translate, error: unknown): string {
   const code = failureCode(error);
-  return code === "turn_running" ? t("session:turn_running") : t("session:failed", { code });
+  return t(`session:failed_${code}`, { defaultValue: t("session:failed", { code }) });
 }
 
 export const titleOf = (t: Translate, session: SessionSummary) =>

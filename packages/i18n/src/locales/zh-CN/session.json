@@ -25,6 +25,7 @@
   "blocker_unpushed_commits": "有还没推送的提交",
   "blocker_initialized_submodules": "有已初始化的子模块",
   "blocker_other": "其他原因（{{code}}）",
-  "turn_running": "有回合正在运行，先停下回合再试",
-  "failed": "操作没有完成（{{code}}）"
+  "failed": "操作没有完成（{{code}}）",
+  "failed_turn_running": "有回合正在运行，先停下回合再试",
+  "failed_app_not_found": "找不到用来打开的应用"
 }

@@ -181,11 +181,13 @@ describe("session actions", () => {
     expect(calls("workspace/open")).toEqual([]);
   });
 
-  test("⌘⌥T opens the workspace in the terminal", async () => {
-    const { controls, calls } = await setup(null, { "workspace/open": { result: {} } });
+  test("⌘⌥T opens the workspace in the terminal; an app not there says so", async () => {
+    const missing = { "workspace/open": hostError("unavailable", "app_not_found") };
+    const { controls, calls } = await setup(null, missing);
     act(() => controls.command({ id: "open_in_terminal" }));
     await settle();
     expect(calls("workspace/open")).toEqual([{ session_id: "s_1", target: "terminal" }]);
+    expect(toasts()).toEqual(["找不到用来打开的应用"]);
   });
 });
 
