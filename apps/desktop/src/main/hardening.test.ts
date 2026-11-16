@@ -52,6 +52,7 @@ describe("UNIT-main-hardening", () => {
         minHeight: 600,
         titleBarStyle: "hiddenInset",
         trafficLightPosition: { x: 16, y: 15 },
+        vibrancy: "menu",
         show: false,
       });
       expect(options.webPreferences).toEqual(webPreferences("release", "p"));

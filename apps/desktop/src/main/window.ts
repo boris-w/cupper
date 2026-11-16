@@ -28,9 +28,11 @@ export function webPreferences(flavor: Flavor, preload: string): WebPreferences 
 /**
  * The main window (design 5.7.4, after Codex). The content runs up to the top
  * edge, and the traffic lights sit at x = 16, centred in the 44 px title bar:
- * (44 - 14) / 2 = 15. The window stays hidden until its first paint, so it
- * never flashes white. `acceptFirstMouse` keeps its default, false: the click
- * that activates the window does not reach the page.
+ * (44 - 14) / 2 = 15. Behind the page is the `menu` material, which the page
+ * lets through its sidebar and title bar while the translucent sidebar is on;
+ * the window's own background is clear. The window stays hidden until its
+ * first paint, so it never flashes white. `acceptFirstMouse` keeps its
+ * default, false: the click that activates the window does not reach the page.
  */
 export function mainWindowOptions(
   flavor: Flavor,
@@ -43,6 +45,8 @@ export function mainWindowOptions(
     minHeight: 600,
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 16, y: 15 },
+    vibrancy: "menu",
+    backgroundColor: "#00000000",
     show: false,
     webPreferences: webPreferences(flavor, preload),
   };

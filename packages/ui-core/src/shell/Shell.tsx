@@ -120,7 +120,7 @@ function Frame({ store, children }: { store: LayoutStore; children: ReactNode })
           sidePanelOpen={prefs.sidePanelOpen}
           onSidePanel={() => store.toggleSidePanel()}
         />
-        <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto bg-surface">{children}</main>
       </div>
       {resident && (
         <aside
@@ -220,7 +220,7 @@ function Sidebar({ layout, store }: { layout: Layout; store: LayoutStore }) {
     <aside
       aria-label={t("shell:sidebar")}
       style={{ width: layout.sidebar.width }}
-      className={`flex shrink-0 flex-col bg-surface-sidebar ${overlay ? "app-no-drag fixed inset-y-0 left-0 z-20 shadow-card" : "relative"}`}
+      className={`flex shrink-0 flex-col ${overlay ? "app-no-drag fixed inset-y-0 left-0 z-20 bg-surface-sidebar shadow-card" : "relative bg-(--sidebar-surface)"}`}
     >
       <div className="app-drag h-(--layout-titlebar-h) shrink-0" />
       <div className="flex h-8 shrink-0 items-center px-4">
