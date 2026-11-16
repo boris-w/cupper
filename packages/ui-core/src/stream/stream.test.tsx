@@ -345,6 +345,24 @@ describe("UNIT-stream-follow", () => {
     ).toBe(true);
   });
 
+  test("the way back shows past 112 from the end; while a turn runs, with three dots", async () => {
+    await setup();
+    const list = document.querySelector("[data-stream-list]") as HTMLElement;
+    Object.defineProperties(list, { scrollHeight: { value: 1000 }, clientHeight: { value: 200 } });
+    const scrollTo = (top: number) => {
+      fireEvent.wheel(list);
+      list.scrollTop = top;
+      fireEvent.scroll(list);
+    };
+    scrollTo(700);
+    expect(screen.queryByRole("button", { name: "回到底部" }), "100 from the end").toBeNull();
+    scrollTo(600);
+    const down = screen.getByRole("button", { name: "回到底部" });
+    // The session's turns run: 40 wide with the dots, the arrow back on hover (design 5.7.4).
+    expect(down.hasAttribute("data-running")).toBe(true);
+    expect(down.querySelectorAll("[data-dots] > span")).toHaveLength(3);
+  });
+
   test("scrolled up, a message the user sends brings it back to the end, following it", async () => {
     const { ui } = await setup();
     const list = document.querySelector("[data-stream-list]") as HTMLElement;
