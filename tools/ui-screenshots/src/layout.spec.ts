@@ -82,6 +82,35 @@ test("UI-layout: the way back to the bottom, 32 round, 24 above the composer; 40
   await expect.poll(async () => (await down.boundingBox())?.width).toBe(32);
 });
 
+test("UI-layout: the side panel opens on Codex's spring, and closes without one under reduced motion", async ({
+  page,
+}) => {
+  type Springs = Window & { springs: { frames: Keyframe[]; options: KeyframeAnimationOptions }[] };
+  await page.addInitScript(() => {
+    const animate = Element.prototype.animate;
+    (window as unknown as Springs).springs = [];
+    Element.prototype.animate = function (frames, options) {
+      (window as unknown as Springs).springs.push({ frames, options } as never);
+      return animate.call(this, frames, options);
+    };
+  });
+  await open(page);
+  const springs = () => page.evaluate(() => (window as unknown as Springs).springs);
+  const toggle = page.getByRole("button", { name: "切换侧边面板" });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await toggle.click();
+  const [opening] = await springs();
+  expect(opening?.frames.map((frame) => frame.width)).toEqual(["0px", "640px"]);
+  expect(opening?.options).toMatchObject({
+    duration: 500,
+    easing: expect.stringMatching(/^linear\(/),
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await toggle.click();
+  expect((await springs())[1]?.options.duration).toBe(0);
+  await expect(page.getByRole("complementary", { name: "侧边面板" })).toBeHidden();
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`UI-theme ${theme}: a running turn scrolled up`, async ({ page }) => {
     await session(page, theme);

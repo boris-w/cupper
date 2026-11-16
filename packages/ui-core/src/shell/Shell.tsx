@@ -4,7 +4,17 @@
 // settings page has the window to itself, its navigation in the sidebar's place.
 
 import { commandHandler } from "@cupper/shell-api";
-import { use, useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  use,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+  type RefObject,
+} from "react";
 
 import { SlotsContext } from "../app/slots";
 import { useHost, useShell, useT } from "../app/providers";
@@ -93,6 +103,8 @@ function Frame({ store, children }: { store: LayoutStore; children: ReactNode })
     const idle = requestIdleCallback(() => setResident(true));
     return () => cancelIdleCallback(idle);
   }, []);
+  const panel = useRef<HTMLElement>(null);
+  const closing = useSpring(panel, shown, layout.sidePanel.width);
 
   const sidebar = layout.sidebar.visible && app;
   const docked = sidebar && !narrow;
@@ -124,7 +136,8 @@ function Frame({ store, children }: { store: LayoutStore; children: ReactNode })
       </div>
       {resident && (
         <aside
-          hidden={!shown}
+          ref={panel}
+          hidden={!shown && !closing}
           aria-label={t("shell:side_panel")}
           style={{ width: layout.sidePanel.width }}
           className="relative flex shrink-0 flex-col border-l border-border bg-surface"
@@ -162,6 +175,39 @@ function Frame({ store, children }: { store: LayoutStore; children: ReactNode })
       )}
     </div>
   );
+}
+
+/** Codex's spring for the side panel (T084): 0.5 s, bounce 0.1, sampled for `linear()`. */
+const SPRING =
+  "linear(0, 0.1, 0.296, 0.494, 0.659, 0.783, 0.868, 0.925, 0.96, 0.98, 0.992, 0.998, 1)";
+
+/**
+ * Opens and closes `panel` on a spring, its width from 0 to `width` and
+ * back; the session area beside it follows. Whether it is still closing,
+ * and so stays shown until the spring ends. No spring with reduced motion.
+ */
+function useSpring(panel: RefObject<HTMLElement | null>, open: boolean, width: number): boolean {
+  const [closing, setClosing] = useState(false);
+  const was = useRef(open);
+  useLayoutEffect(() => {
+    const element = panel.current;
+    if (was.current === open || !element?.animate) {
+      was.current = open;
+      return undefined;
+    }
+    was.current = open;
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const frames = [{ width: "0px" }, { width: `${width}px` }];
+    const spring = element.animate(open ? frames : frames.toReversed(), {
+      duration: still ? 0 : 500,
+      easing: SPRING,
+    });
+    setClosing(!open);
+    spring.onfinish = () => setClosing(false);
+    return () => spring.cancel();
+    // Only a change of `open` springs; a new width while dragged does not.
+  }, [open, panel]);
+  return closing;
 }
 
 /** The 44 high title bar; `inset` leaves room for the traffic lights and the sidebar toggle. */
