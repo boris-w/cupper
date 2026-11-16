@@ -292,7 +292,7 @@ export function Composer(props: {
       <div
         data-composer=""
         data-esc-armed={armed || undefined}
-        className="rounded-composer bg-surface-composer shadow-composer data-dragging:relative"
+        className="rounded-composer bg-surface-composer shadow-composer data-dragging:relative data-dragging:bg-surface-elevated"
       >
         {attachments.length > 0 && (
           <Attachments

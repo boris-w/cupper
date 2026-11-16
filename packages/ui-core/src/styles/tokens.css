@@ -5,7 +5,7 @@
  *
  * Every colour is a `light-dark()` pair, so each value is written once: the
  * theme follows the system through `color-scheme`, and `data-theme` on the
- * root pins it. Dark values marked 〔推算〕 in the design wait for T106.
+ * root pins it. The dark values are those T106 checked against Codex.
  * Nothing here takes a value from outside: no agent string reaches a token.
  */
 
@@ -36,7 +36,8 @@
   --color-surface-code: light-dark(#ffffff, #282828);
   --color-surface-panel: light-dark(#ffffff, #232323);
   --color-surface-elevated: light-dark(#ffffff, #2d2d2d);
-  --color-surface-composer: light-dark(#ffffff, #2d2d2d);
+  /* While files are dragged over it, the composer takes --color-surface-elevated (T106). */
+  --color-surface-composer: light-dark(#ffffff, #363636);
   --color-fg: light-dark(#1a1c1f, #dfdfdf);
   --color-fg-secondary: light-dark(rgb(26 28 31 / 65%), rgb(255 255 255 / 65%));
   --color-fg-tertiary: light-dark(rgb(26 28 31 / 49.5%), rgb(255 255 255 / 49.8%));
