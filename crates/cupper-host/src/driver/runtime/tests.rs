@@ -8,8 +8,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::pin::pin;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use super::*;
 use crate::clock::{Clock, ManualClock, MonoTime, SystemClock};
@@ -313,8 +313,38 @@ impl AgentNotes for Deaf {
     fn agent(&self, _: AgentStatus) {}
 }
 
+/// An index that keeps the statuses it hears.
+#[derive(Debug, Default)]
+struct Heard(Mutex<Vec<AgentStatus>>);
+
+impl AgentNotes for Heard {
+    fn agent(&self, status: AgentStatus) {
+        self.0.lock().unwrap().push(status);
+    }
+}
+
+impl Heard {
+    /// The counts of capability changes heard, each once.
+    fn revs(&self) -> Vec<u32> {
+        let mut revs: Vec<u32> = self
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|s| s.capabilities_rev)
+            .collect();
+        revs.dedup();
+        revs
+    }
+}
+
 /// A runtime of the fake agent, on `dir`'s stores; probes in `dir/probe`.
 fn runtime(dir: &TempDir) -> AgentRuntime {
+    noting(dir, Arc::new(Deaf))
+}
+
+/// A runtime of the fake agent whose statuses go to `notes`.
+fn noting(dir: &TempDir, notes: Arc<dyn AgentNotes>) -> AgentRuntime {
     let clock = ManualClock::new();
     let (writer, _writer) = host_writer(dir, &clock);
     let quiescence = Quiescence::new();
@@ -353,7 +383,7 @@ fn runtime(dir: &TempDir) -> AgentRuntime {
         quiescence,
         probe_dir: dir.path().join("probe"),
         durations: Durations::default(),
-        notes: Arc::new(Deaf),
+        notes,
         rss: None,
     })
 }
@@ -907,7 +937,8 @@ async fn it_runtime_first_prompt_waits_a_stop_ends_it_a_failure_is_named() {
 /// The fake agent's command list comes once to the session, after the
 /// attach or with it; each turn's start repeats it without an event. A
 /// different list comes, and so does the old one when it returns; the
-/// capability cache follows.
+/// capability cache follows, and the status counts each change of it once:
+/// not the repeats, nor a second session's attach with the same (T268).
 #[tokio::test(flavor = "multi_thread")]
 async fn unit_commands_dedup_the_same_list_is_not_sent_again() {
     let dir = TempDir::new("dedup");
@@ -920,7 +951,8 @@ async fn unit_commands_dedup_the_same_list_is_not_sent_again() {
     };
     writer.submit(Durability::Normal, stale).await.unwrap();
     drop((writer, thread));
-    let runtime = runtime(&dir);
+    let index = Arc::new(Heard::default());
+    let runtime = noting(&dir, Arc::clone(&index) as Arc<dyn AgentNotes>);
     let (info, mut heard) = attach(&runtime, dir.path()).await;
     let changed = |events: Vec<DriverEvent>| -> Vec<usize> {
         let lists = events.into_iter().filter_map(|event| match event {
@@ -941,6 +973,9 @@ async fn unit_commands_dedup_the_same_list_is_not_sent_again() {
         changed(prompt(&runtime, &info.session, (2, "say b"), &mut heard).await),
         [] as [usize; 0]
     );
+    // Cached at the attach, and again when the list came after it.
+    let counted = if attached == persona { 1 } else { 2 };
+    assert_eq!(index.revs(), (1..=counted).collect::<Vec<_>>());
     let other = r#"raw {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"${session}","update":{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"x","description":"y"}]}}}"#;
     assert_eq!(
         changed(prompt(&runtime, &info.session, (3, other), &mut heard).await),
@@ -950,6 +985,9 @@ async fn unit_commands_dedup_the_same_list_is_not_sent_again() {
         changed(prompt(&runtime, &info.session, (4, "say c"), &mut heard).await),
         [persona]
     );
+    let (second, mut heard) = attach(&runtime, dir.path()).await;
+    prompt(&runtime, &second.session, (5, "say d"), &mut heard).await;
+    assert_eq!(index.revs(), (1..=counted + 2).collect::<Vec<_>>());
     runtime.stop(true).await;
     let rows: Vec<(String, String)> = query(
         &dir.host_db(),

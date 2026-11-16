@@ -153,6 +153,11 @@ pub struct AgentStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rss_bytes: Option<u64>,
     pub config_dir: ConfigDirState,
+    /// How many times the cached capabilities changed in this run of the
+    /// host; absent until they first do. A new count, or new versions, is
+    /// the new-session page's cue to read them again (T268).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capabilities_rev: Option<u32>,
 }
 
 open_enum! {
