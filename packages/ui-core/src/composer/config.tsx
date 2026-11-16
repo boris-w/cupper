@@ -63,10 +63,11 @@ function pick(config: readonly ConfigOption[] | undefined, id: string, value?: s
 }
 
 /**
- * The agent's capabilities as the host cached them; `agents.updated` makes
- * them stale. An empty cache (first use, design 5.6.7) has `agents/refresh`
- * probe the agent once per connection, and is read again after, unless
- * `probe` is false: the settings page starts no adapter.
+ * The agent's capabilities as the host cached them; new versions or a new
+ * count of changes in `agents.updated` make them stale (T268). An empty cache
+ * (first use, design 5.6.7) has `agents/refresh` probe the agent once per
+ * connection, and is read again after, unless `probe` is false: the settings
+ * page starts no adapter.
  */
 export function useCached(agent: string, probe = true) {
   const { client } = useHost();

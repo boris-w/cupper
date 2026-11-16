@@ -77,9 +77,10 @@ pub fn status(launch: &Launch, running: Running, auth: &AuthStatus) -> AgentStat
             failure: None,
         },
         auth: auth.clone(),
-        // The runtime's latest sample, which it adds.
+        // The runtime's latest sample and count, which it adds.
         rss_bytes: None,
         config_dir: launch.config_dir.clone(),
+        capabilities_rev: None,
     }
 }
 

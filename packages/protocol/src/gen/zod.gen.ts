@@ -2023,6 +2023,7 @@ export const zAgentStatus = z.object({
   adapter: zAdapterStatus,
   agent: zAgentKind,
   auth: zAuthStatus,
+  capabilities_rev: z.int().gte(0).lte(4294967295).optional(),
   cli: zCliStatus.optional(),
   config_dir: zConfigDirState,
   rss_bytes: z.int().gte(0).lte(9007199254740991).optional(),

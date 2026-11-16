@@ -171,6 +171,7 @@ ACP 的 `configOptions` 按 `category` 映射到 cupper 的配置项，具体取
 - **来源**：`initialize` 的响应（会话能力、`_meta.steering.supported`、`_meta.claudeCode.promptQueueing`；T003 实测 `steering.supported` 在响应顶层的 `_meta` 里，不在 `agentCapabilities._meta` 下）；`session/new` 或 `session/resume` 的响应（`configOptions`）；随后 2–5 ms 到达的 `available_commands_update`（Claude 在每个回合开始时还会再推一次）。
 - **存放**：`agent_capabilities` 表，每种 agent 一行；适配器版本或 CLI 版本变化时作废。每次有会话 `Attach` 成功都刷新。
 - **新建会话页**（AG-4、ADR-09）：调用 `agents/capabilities` 取缓存，第一条消息发出之前就能显示模型、推理强度、权限模式和斜杠命令。
+- **变化的通知**（T268）：会话接上、命令列表变化、探测都会刷新缓存；内容和运行时手里的上一份不同时，`AgentStatus.capabilities_rev` 加一，经 `agents.updated` 体现，内容相同就不变，也不发事件。宿主每次启动后，第一次刷新算一次变化。缓存先交给写线程，索引随后追加事件，同一个写线程按顺序提交，所以收到事件时缓存已经落盘。界面只在某种 agent 的适配器版本、CLI 版本或 `capabilities_rev` 变化时让它的 `agents/capabilities` 查询失效，资源采样不会引起重读。
 - **缓存为空时**（首次使用）：`agents/refresh` 做一次探测：先把 `<数据目录>/probe/<agent>/` 删掉重建为空目录（0700，[5.2.6](02-host.md#项目信任)），在里面 `session/new`，读取配置和命令（等 `available_commands_update` 最多 200 ms），然后 `session/close`。Claude 的代价约 0.8 秒；Codex 的探测会拉起用户的 MCP 且不释放，所以探测后把 Codex 适配器标为"空闲时回收"。只建会话不发 prompt，两边都不会留下会话记录（SP-1）。
 
 ## 5.6.8 资源回收

@@ -25,6 +25,12 @@ export type AgentStatus = {
   agent: AgentKind;
   auth: AuthStatus;
   /**
+   * How many times the cached capabilities changed in this run of the
+   * host; absent until they first do. A new count, or new versions, is
+   * the new-session page's cue to read them again (T268).
+   */
+  capabilities_rev?: number;
+  /**
    * Absent when no CLI was found.
    */
   cli?: CliStatus;
