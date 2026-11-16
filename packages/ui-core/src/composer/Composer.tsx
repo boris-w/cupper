@@ -184,7 +184,7 @@ export function Composer(props: {
     setAreaNode(node);
   }, []);
 
-  const ready = sessionId !== undefined || projectId !== undefined;
+  const ready = sessionId !== undefined || (projectId !== undefined && !create?.blocked);
   const empty = draft.trim() === "" && attachments.length === 0;
   const state = empty ? (running ? "stop" : "disabled") : ready ? "send" : "disabled";
   const submit = (action: SendAction) => {
@@ -245,7 +245,7 @@ export function Composer(props: {
   }, [running, armed]);
 
   const placeholder = !sessionId
-    ? t(ready ? "composer:placeholder_new" : "composer:no_project")
+    ? t(projectId === undefined ? "composer:no_project" : "composer:placeholder_new")
     : running
       ? t("composer:placeholder_running")
       : t("composer:placeholder", { agent: t(`sidebar:agent_${agent}`, { defaultValue: agent }) });
