@@ -83,9 +83,9 @@ function AgentPicker(props: {
 }) {
   const t = useT();
   const reason = (agent: string) => unavailable(props.statuses.find((s) => s.agent === agent));
-  const why = (agent: string) => {
+  const why = (agent: string, className: string) => {
     const code = reason(agent);
-    return code && <span className="ml-2 text-fg-tertiary">{t(`composer:agent_${code}`)}</span>;
+    return code && <span className={className}>{t(`composer:agent_${code}`)}</span>;
   };
   const trigger = (
     <button type="button" aria-label={t("composer:pick_agent")} className={PICKER}>
@@ -94,7 +94,7 @@ function AgentPicker(props: {
     </button>
   );
   return (
-    <>
+    <span className="flex items-center gap-1">
       <Menu trigger={trigger} align="start">
         {AGENTS.map((agent) => (
           <MenuItem
@@ -104,12 +104,12 @@ function AgentPicker(props: {
             onSelect={() => props.setAgent(agent)}
           >
             {t(`sidebar:agent_${agent}`)}
-            {why(agent)}
+            {why(agent, "ml-2 text-fg-tertiary")}
           </MenuItem>
         ))}
       </Menu>
-      {why(props.agent)}
-    </>
+      {why(props.agent, "text-fg-tertiary")}
+    </span>
   );
 }
 
