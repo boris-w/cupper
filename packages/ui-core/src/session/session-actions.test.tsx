@@ -1,20 +1,12 @@
 // @vitest-environment jsdom
-import { HostClient } from "@cupper/host-client";
-import { hostError, MockHost, type Reply } from "@cupper/host-client/mock";
-import type { Handshake } from "@cupper/shell-api";
-import { createBrowserShell } from "@cupper/shell-api/browser-mock";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { hostError, type MockHost, type Reply } from "@cupper/host-client/mock";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
-import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
-import { RouterProvider, type Route } from "../app/router";
-import { TooltipProvider } from "../components/Tooltip";
-import { ToasterProvider } from "../feedback/toaster";
-import { DEFAULT_PREFS } from "../layout/layout";
-import { StateProvider, UiProvider } from "../state/provider";
-import { createUiStore } from "../state/ui";
-import { SessionActionsProvider, useSessionActions } from "./actions";
+import type { Route } from "../app/router";
+import { mountOnHost } from "../review/test-harness";
+import { useSessionActions } from "./actions";
 
 // jsdom has no modal dialogs.
 beforeAll(() => {
@@ -42,52 +34,16 @@ const summary = (n: number, workspace_kind: string, title: string) => ({
 /** s_1 works in the project, s_2 in a worktree. */
 const INDEX = [PROJECT, summary(1, "local", "修登录"), summary(2, "worktree", "加缓存")];
 
-/**
- * `node` with the session actions, on a host whose index is `INDEX` and whose
- * answers `replies` gives; the window shows `route`.
- */
+/** `node` on a host whose index is `INDEX` and whose answers `replies` gives; the window shows `route`. */
 export async function setup(
   node: ReactNode = null,
   replies: Record<string, Reply> = {},
-  route: Route = { page: "session", sessionId: "s_1" },
+  route?: Route,
 ) {
-  const mock = new MockHost([{ method: "initialize", params: {}, result: {} }]);
-  mock.handle("stream/subscribe", ({ id, conn, params }) => {
-    const { stream } = params as { stream: string };
-    conn.reply(id, { result: { stream, mode: "snapshot", at_seq: 1, head_seq: 1, epoch: 1 } });
-    const ops = stream === "index" ? INDEX : [];
-    const page = { stream, at_seq: 1, epoch: 1, page: 0, last: true, ops };
-    conn.send({ jsonrpc: "2.0", method: "stream/snapshot", params: page });
-    return undefined;
-  });
-  for (const [method, reply] of Object.entries(replies)) {
-    mock.handle(method, () => reply);
-  }
-  const client = new HostClient();
-  const conn = mock.connect();
-  conn.initialized = true;
-  client.attach(conn.port(), {} as Handshake);
-  const { shell, controls } = createBrowserShell();
-  const ui = createUiStore({ prefs: DEFAULT_PREFS, overlayOpen: false }, route);
-  render(
-    <ShellProvider api={shell} info={await shell.init()}>
-      <I18nProvider locale="zh-CN">
-        <ToasterProvider>
-          <HostContext value={{ client, state: client.state, handshake: undefined }}>
-            <UiProvider ui={ui}>
-              <StateProvider>
-                <RouterProvider>
-                  <TooltipProvider>
-                    <SessionActionsProvider>{node}</SessionActionsProvider>
-                  </TooltipProvider>
-                </RouterProvider>
-              </StateProvider>
-            </UiProvider>
-          </HostContext>
-        </ToasterProvider>
-      </I18nProvider>
-    </ShellProvider>,
-  );
+  const handle = (mock: MockHost) => {
+    for (const [method, reply] of Object.entries(replies)) mock.handle(method, () => reply);
+  };
+  const { mock, ui, controls } = await mountOnHost(node, handle, { index: INDEX, route });
   await settle();
   const calls = (method: string) =>
     mock.requests.filter((r) => r.method === method).map((r) => r.params);
