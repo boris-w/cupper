@@ -624,3 +624,5 @@
 | T148 | Codex 26.1111 起输入框为空时发送按钮也是实色（26.1013 是禁用灰），核对后跟进 5.7.4、5.7.10 的"发送按钮禁用态"；Q40 剩下的斜杠菜单外观、分栏与统一 diff 自动切换的像素阈值，需要作者补截图（斜杠菜单打开时；不同窗口宽度下的 diff） | T106 |
 | T153 | Codex 的会话行悬停时，行尾显示固定和归档按钮，并在行右侧弹出悬停卡片：标题与相对时间、项目（底色 surface-elevated）；cupper 是否做由 T153 定，做的话相对时间要宿主在 `SessionSummary` 里已有的时间戳 | T106 |
 | 静态核对 Codex 的任务 | ChatGPT.app 26.1111 里 ChatGPT 和 Codex 的界面合在一起，同类组件常有两套实现；以 `codex.*`、`localConversation.*`、`ComposerLayoutRoot` 这类名字为准 | T106 |
+| T181 | 发布流水线：对 zip 运行 `license-gate scan`（zip 支持已有）、出 DMG 后挂载扫描；流水线要装 cargo-about 0.9.3（`--features cli`），`build:release` 依赖它生成 THIRD_PARTY_NOTICES.txt | T182 |
+| 维护者 | claude-agent-acp 升级、锁文件里的 SDK 变了以后 PR 上的 `check` 会失败：在 runner 上用 spike-run 重跑 `license-gate fingerprints`（T182 的参数：`dir=spikes/T103-sp6-render`，command 先 `cd ../..`），只提交新的哈希清单 | T182 |
