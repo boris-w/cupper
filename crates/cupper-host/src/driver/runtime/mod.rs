@@ -283,6 +283,8 @@ struct Actor {
     commands: Vec<SlashCommand>,
     /// What the capability cache holds.
     cached: Option<SessionCapabilities>,
+    /// How many times `cached` changed, for `AgentStatus` (T268).
+    capabilities_rev: u32,
     auth: AuthStatus,
     participant: Participant,
     /// Prompts, `session/new` and `session/resume` sent and not answered.
@@ -355,6 +357,7 @@ impl AgentRuntime {
             resources,
             commands: Vec::new(),
             cached: None,
+            capabilities_rev: 0,
             auth: AuthStatus {
                 state: AuthState::Unchecked,
                 kind: None,
@@ -706,6 +709,7 @@ impl Actor {
         };
         let mut status = status::status(&self.deps.launch, running, &self.auth);
         status.rss_bytes = self.resources.borrow().map(|r| r.rss_bytes);
+        status.capabilities_rev = (self.capabilities_rev > 0).then_some(self.capabilities_rev);
         if self.restarts.next_start().is_none() {
             status.state = AgentState::Crashed;
         }
@@ -1092,11 +1096,16 @@ impl Actor {
         self.cache(caps);
     }
 
-    /// Refreshes the capability cache.
+    /// Refreshes the capability cache; a change of its content counts, and
+    /// the index hears of it after the write, on the same writer (T268).
     fn cache(&mut self, caps: SessionCapabilities) {
         let at = self.deps.cx.clock.now_wall_ms();
         drop(cache::write(&self.deps.cx.writer, &caps.agent, at, &caps));
-        self.cached = Some(caps);
+        if self.cached.as_ref() != Some(&caps) {
+            self.cached = Some(caps);
+            self.capabilities_rev += 1;
+            self.notify();
+        }
     }
 
     /// A session's command list: the agent's latest, and the session's if it
