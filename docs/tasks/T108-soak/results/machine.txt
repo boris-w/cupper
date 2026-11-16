@@ -1,0 +1,7 @@
+Apple M1 (Virtual)
+3
+7516192768
+ProductName:		macOS
+ProductVersion:		15.8.2
+BuildVersion:		24H232
+build: 6 min; soak: 300 min
