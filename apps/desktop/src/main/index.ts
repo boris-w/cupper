@@ -221,8 +221,8 @@ async function ready() {
   const template = menuTemplate({
     label: (id, n) => text.t(id, { ns: "command", n }),
     onCommand: (cmd) => BrowserWindow.getFocusedWindow()?.webContents.send(COMMAND_CHANNEL, cmd),
+    text: (key) => text.t(key, { ns: "menu", app: app.name }),
     devTools: flavor === "dev",
-    zoomLabel: (step) => text.t(`zoom_${step}`, { ns: "command" }),
     onZoom: (step) => {
       const window = BrowserWindow.getFocusedWindow();
       if (window) zoom(window, step);

@@ -28,6 +28,7 @@ import { computeLayout, ratioOf, type Layout, type Viewport } from "../layout/la
 import { ReviewPanel } from "../review/ReviewPanel";
 import { createReviewStore, OpenReview, ReviewContext, type ReviewTarget } from "../review/state";
 import type { LayoutStore } from "../layout/store";
+import { SessionShortcuts } from "./shortcuts";
 import { Splitter } from "./Splitter";
 
 function useViewport(): Viewport {
@@ -54,6 +55,7 @@ export function Shell({ store, children }: { store: LayoutStore; children: React
   return (
     <ReviewContext value={review}>
       <OpenReview value={openReview}>
+        <SessionShortcuts />
         <Frame store={store}>{children}</Frame>
       </OpenReview>
     </ReviewContext>

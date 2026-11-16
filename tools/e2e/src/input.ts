@@ -2,7 +2,8 @@
 // keyboard never reaches `before-input-event`, so the input guard would not
 // count it. Keys go through `webContents.sendInputEvent` instead, which the
 // guard sees like the user's. Also the request panel's helpers (T083): wait
-// until it takes keys, activate it with Tab, answer with a digit.
+// until it takes keys, activate it with Tab, answer with a digit; and the
+// menu's accelerators (T153).
 
 import type { Locator } from "@playwright/test";
 
@@ -70,6 +71,26 @@ export async function click(cupper: Cupper, target: Locator) {
       w.webContents.sendInputEvent({ type, ...at, button: "left", clickCount: 1 });
     }
   }, at);
+}
+
+/**
+ * Runs the menu item that holds `accelerator`, as its keys do: the item sends
+ * its command to the focused window, so the test is tagged `@focus`. Matching
+ * the keys to the item is the system's (design 5.7.7).
+ */
+export async function shortcut(cupper: Cupper, accelerator: string) {
+  const found = await cupper.app.evaluate(({ Menu }, accelerator) => {
+    const items = [...(Menu.getApplicationMenu()?.items ?? [])];
+    for (let item = items.pop(); item; item = items.pop()) {
+      if (item.accelerator === accelerator) {
+        item.click();
+        return true;
+      }
+      items.push(...(item.submenu?.items ?? []));
+    }
+    return false;
+  }, accelerator);
+  expect(found, `a menu item holds ${accelerator}`).toBe(true);
 }
 
 /** Types `text` key by key. */
