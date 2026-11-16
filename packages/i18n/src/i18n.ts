@@ -11,6 +11,7 @@ import menu from "./locales/zh-CN/menu.json" with { type: "json" };
 import privileged from "./locales/zh-CN/privileged.json" with { type: "json" };
 import request from "./locales/zh-CN/request.json" with { type: "json" };
 import review from "./locales/zh-CN/review.json" with { type: "json" };
+import session from "./locales/zh-CN/session.json" with { type: "json" };
 import settings from "./locales/zh-CN/settings.json" with { type: "json" };
 import shell from "./locales/zh-CN/shell.json" with { type: "json" };
 import sidebar from "./locales/zh-CN/sidebar.json" with { type: "json" };
@@ -22,7 +23,7 @@ export const DEFAULT_LOCALE = "zh-CN";
 const resources = {
   "zh-CN": {
     ...{ command, composer, host, menu, privileged, request, review, settings, shell },
-    ...{ sidebar, stream, update },
+    ...{ sidebar, session, stream, update },
   },
 };
 

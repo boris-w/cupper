@@ -9,10 +9,10 @@ import type {
   ProjectUpserted,
   SessionSummary,
 } from "@cupper/protocol";
-import type { ComponentProps, ReactNode } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import { useStore } from "zustand";
 
-import { useT } from "../app/providers";
+import { useHost, useT } from "../app/providers";
 import { useRouter } from "../app/router";
 import {
   ComposeIcon,
@@ -23,9 +23,12 @@ import {
   SettingsIcon,
   Spinner,
 } from "../components/icons";
-import { Menu } from "../components/Menu";
+import { DANGER, Dialog } from "../components/Dialog";
+import { ContextMenu, ContextMenuItem, Menu, MenuItem } from "../components/Menu";
 import { Tooltip } from "../components/Tooltip";
 import { usePrivileged } from "../feedback/privileged";
+import { useToasts } from "../feedback/toaster";
+import { failureText, SessionItems } from "../session/actions";
 import { useUi } from "../state/provider";
 import { toSettings } from "../state/ui";
 import { byActivity, byPosition, SHOWN_SESSIONS } from "./order";
@@ -126,6 +129,7 @@ function ProjectGroup(props: {
   const { navigate } = useRouter();
   const ui = useUi();
   const expanded = useStore(ui, (state) => state.expanded[project.project_id] === true);
+  const [removing, setRemoving] = useState(false);
   const shown = expanded ? sessions : sessions.slice(0, SHOWN_SESSIONS);
   return (
     <section aria-label={project.name}>
@@ -138,7 +142,6 @@ function ProjectGroup(props: {
             {t("sidebar:untrusted")}
           </span>
         )}
-        {/* The menu's items come with T153. */}
         <span className="absolute right-(--layout-row-px) flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-data-[state=open]:opacity-100">
           <RowButton
             label={t("sidebar:new_session_in", { project: project.name })}
@@ -152,9 +155,18 @@ function ProjectGroup(props: {
                 <MoreIcon />
               </RowButton>
             }
-          />
+          >
+            <MenuItem onSelect={() => setRemoving(true)}>{t("sidebar:remove_project")}</MenuItem>
+          </Menu>
         </span>
       </div>
+      {removing && (
+        <RemoveProject
+          project={project}
+          current={sessions.some(({ session_id }) => session_id === props.current)}
+          onClose={() => setRemoving(false)}
+        />
+      )}
       {shown.map((session) => (
         <SessionRow
           key={session.session_id}
@@ -198,9 +210,53 @@ function Lead({ session }: { session: SessionSummary }) {
   }
 }
 
+/**
+ * "移除项目" (design 5.7.4): the host archives its sessions and keeps their
+ * worktrees and the project's files. A turn running refuses it, and the toast
+ * says to try again. `current`: the window shows one of its sessions, and
+ * leaves it.
+ */
+function RemoveProject(props: { project: ProjectUpserted; current: boolean; onClose(): void }) {
+  const t = useT();
+  const { client } = useHost();
+  const { show } = useToasts();
+  const { navigate } = useRouter();
+  const [busy, setBusy] = useState(false);
+  const { project_id, name } = props.project;
+  const remove = () => {
+    setBusy(true);
+    client
+      .command("project/remove", { project_id })
+      .then(
+        () => {
+          if (props.current) navigate({ page: "new" });
+          show({ id: "session", text: t("sidebar:project_removed", { name }) });
+        },
+        (error: unknown) => show({ id: "session", text: failureText(t, error) }),
+      )
+      .finally(props.onClose);
+  };
+  return (
+    <Dialog
+      title={t("sidebar:remove_project_title", { name })}
+      busy={busy}
+      onClose={props.onClose}
+      actions={
+        <button type="button" onClick={remove} className={DANGER}>
+          {t("sidebar:remove_project")}
+        </button>
+      }
+    >
+      <p className="text-fg-secondary">{t("sidebar:remove_project_body")}</p>
+    </Dialog>
+  );
+}
+
+/** A session; its menu, the same on a right-click, takes the label's place on hover. */
 function SessionRow({ session, selected }: { session: SessionSummary; selected: boolean }) {
   const t = useT();
   const { navigate } = useRouter();
+  const id = session.session_id;
   const tag =
     session.status !== "needs_action"
       ? undefined
@@ -208,20 +264,39 @@ function SessionRow({ session, selected }: { session: SessionSummary; selected: 
           session.pending_kind === "approval" ? "sidebar:awaiting_approval" : "sidebar:needs_input",
         );
   return (
-    <Tooltip content={t(`sidebar:agent_${session.agent}`, { defaultValue: session.agent })}>
-      <button
-        type="button"
-        aria-current={selected ? "page" : undefined}
-        onClick={() => navigate({ page: "session", sessionId: session.session_id })}
-        className={`${ROW} hover:bg-hover ${selected ? "bg-hover" : ""}`}
-      >
-        <span className="flex size-4 shrink-0 items-center justify-center">
-          <Lead session={session} />
+    <ContextMenu items={<SessionItems item={ContextMenuItem} sessionId={id} />}>
+      <div className={`group relative rounded-row hover:bg-hover ${selected ? "bg-hover" : ""}`}>
+        <Tooltip content={t(`sidebar:agent_${session.agent}`, { defaultValue: session.agent })}>
+          <button
+            type="button"
+            aria-current={selected ? "page" : undefined}
+            onClick={() => navigate({ page: "session", sessionId: id })}
+            className={ROW}
+          >
+            <span className="flex size-4 shrink-0 items-center justify-center">
+              <Lead session={session} />
+            </span>
+            <span className="min-w-0 flex-1 truncate">{session.title}</span>
+            {tag && (
+              <span className="shrink-0 text-xs text-fg-tertiary group-focus-within:invisible group-hover:invisible group-has-[[data-state=open]]:invisible">
+                {tag}
+              </span>
+            )}
+          </button>
+        </Tooltip>
+        <span className="absolute inset-y-0 right-(--layout-row-px) flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-data-[state=open]:opacity-100">
+          <Menu
+            trigger={
+              <RowButton label={t("sidebar:session_menu")}>
+                <MoreIcon />
+              </RowButton>
+            }
+          >
+            <SessionItems item={MenuItem} sessionId={id} />
+          </Menu>
         </span>
-        <span className="min-w-0 flex-1 truncate">{session.title}</span>
-        {tag && <span className="shrink-0 text-xs text-fg-tertiary">{tag}</span>}
-      </button>
-    </Tooltip>
+      </div>
+    </ContextMenu>
   );
 }
 
