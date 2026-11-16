@@ -630,3 +630,4 @@
 | 改动阈值内取值的任务 | ui-baseline 有 `all` 输入（T152）：取值变化在 0.2 的像素阈值以内时，`changed` 不重写基线，要用 `all=true` 重跑，再只提交确实因改动而变的图 | T152 |
 | T148 | 会话页还没有 worktree 准备中的进度（`worktree add`、checkout），T144 只做了失败横幅；与 Codex 并排比对时看要不要补 | T144 |
 | T266 | 默认权限接在 `useNewOptions(agent)` 的 `permission_mode` 解析上，取值顺序"用户的选择 → 默认权限（在缓存的能力里时）→ agent 自己的值"，同一个值进 `chosen`，完全访问照样走 `create_session` 原生确认；详见 `docs/tasks/T144-new-session/notes.md`"交给 T266 的入口" | T144 |
+| 以后的性能任务或 T179 前 | T108 的浸泡里主文档渲染进程的 working set 5 小时涨 21 MB（JS 堆不涨，增速逐小时放慢但没停），宿主前三小时涨 11 MB 后停住（推测 SQLite 页缓存）。都在 5.9.6 上限内；要确认是否泄漏，复用 `spikes/T108-soak`（`SOAK_MINUTES` 等可调），加切换会话或 `memory-infra` trace | T108 |
