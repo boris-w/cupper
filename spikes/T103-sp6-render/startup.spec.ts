@@ -37,13 +37,18 @@ async function start(cupper: Cupper) {
   await cupper.window.waitForFunction(() => performance.getEntriesByName("cupper:ready").length > 0, null, {
     timeout: 120_000,
   });
+  // When the test saw it: Playwright polls in the page's animation frames,
+  // which a window not yet shown does not have.
+  const polled = Date.now() - started;
   const page = await cupper.window.evaluate(() => {
     const at = (ms: number | undefined) => (ms === undefined ? null : performance.timeOrigin + ms);
     const mark = (name: string) => at(performance.getEntriesByName(name)[0]?.startTime);
     const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    const paint = performance.getEntriesByName("first-contentful-paint")[0]?.startTime;
     return {
       page: performance.timeOrigin,
       dom: at(navigation?.domContentLoadedEventEnd),
+      paint: at(paint),
       window: mark("cupper:connected"),
       index: mark("cupper:index"),
       ready: mark("cupper:ready"),
@@ -52,7 +57,8 @@ async function start(cupper: Cupper) {
   const since = (at: number | null) => (at === null ? null : Math.round(at - started));
   const { pid } = await cupper.connected();
   const renderer = Object.fromEntries(Object.entries(page).map(([k, v]) => [k, since(v)]));
-  return { ms: since(page.ready) ?? NaN, host: pid as number, phases: { ...phases(cupper, started), ...renderer } };
+  const all = { ...phases(cupper, started), ...renderer, polled };
+  return { ms: since(page.ready) ?? NaN, host: pid as number, phases: all };
 }
 
 /**
