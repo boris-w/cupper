@@ -105,3 +105,12 @@
 - 用本机 e2e 包冒烟扫描，SDK 哈希清单临时置空：只报出"没有 THIRD_PARTY_NOTICES.txt"，没有误报。宿主带的锁文件按哈希放行。
 - `notices` 在本机生成约 620 KB、12,339 行。cargo-about 0.9.3 要加 `--features cli` 才会装出命令。离线（`--frozen`）对三个 crate 各跑一次，每次约 2.4 秒。
 - 两份补全的许可证文本取自上游仓库默认分支：`theKashey/react-remove-scroll-bar` 的 `LICENSE`，`rsms/js-lru` 的 `LICENSE.txt`。
+
+## 指纹清单的首次生成（2026-11-16，spike-run 43809511708）
+
+- 在 runner 上运行 `license-gate fingerprints`，锁文件钉住的是 `@anthropic-ai/claude-agent-sdk@0.3.300`。写入清单的是 15 个 ≥ 512 字节文件的 SRI，只有哈希。
+- 三个候选特征串都找到了，而且都出现在 SDK 的 JS 代码里，全部保留：
+  - `@anthropic-ai/claude-agent-sdk`：README.md、package.json、sdk.mjs、core.mjs 等 8 个文件；
+  - `Anthropic PBC. All rights reserved`：LICENSE.md、sdk.mjs、core.mjs、bridge.mjs 等 7 个文件；
+  - `Claude Code process exited with code`：core.mjs、sdk.mjs。
+- 清单从 artifact 下载到新建的空目录，核对版本和 integrity 与锁文件一致后入库。本机 `check` 通过。
