@@ -34,21 +34,32 @@ const RUNS = Number(process.env.SP6_RUNS ?? 30);
 async function start(cupper: Cupper) {
   const started = Date.now();
   await cupper.launch();
+  // Playwright's own: until it has the app and its window.
+  const launched = Date.now() - started;
   await cupper.window.waitForFunction(() => performance.getEntriesByName("cupper:ready").length > 0, null, {
     timeout: 120_000,
   });
   // When the test saw it: Playwright polls in the page's animation frames,
   // which a window not yet shown does not have.
   const polled = Date.now() - started;
-  const page = await cupper.window.evaluate(() => {
+  const page = await cupper.window.evaluate(async () => {
     const at = (ms: number | undefined) => (ms === undefined ? null : performance.timeOrigin + ms);
     const mark = (name: string) => at(performance.getEntriesByName(name)[0]?.startTime);
     const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
     const paint = performance.getEntriesByName("first-contentful-paint")[0]?.startTime;
+    // The main thread's long tasks so far (Chromium keeps them for an observer that asks).
+    const long = await new Promise<PerformanceEntry[]>((done) => {
+      const observer = new PerformanceObserver((list) => done(list.getEntries()));
+      observer.observe({ type: "longtask", buffered: true });
+      setTimeout(() => done([]), 200);
+    });
+    const lastLong = long.at(-1);
     return {
       page: performance.timeOrigin,
       dom: at(navigation?.domContentLoadedEventEnd),
       paint: at(paint),
+      long_ms: long.reduce((sum, task) => sum + task.duration, 0),
+      long_end: at(lastLong && lastLong.startTime + lastLong.duration),
       window: mark("cupper:connected"),
       index: mark("cupper:index"),
       ready: mark("cupper:ready"),
@@ -56,8 +67,9 @@ async function start(cupper: Cupper) {
   });
   const since = (at: number | null) => (at === null ? null : Math.round(at - started));
   const { pid } = await cupper.connected();
-  const renderer = Object.fromEntries(Object.entries(page).map(([k, v]) => [k, since(v)]));
-  const all = { ...phases(cupper, started), ...renderer, polled };
+  const { long_ms: longMs, ...times } = page;
+  const renderer = Object.fromEntries(Object.entries(times).map(([k, v]) => [k, since(v)]));
+  const all = { ...phases(cupper, started), ...renderer, long_ms: Math.round(longMs), launched, polled };
   return { ms: since(page.ready) ?? NaN, host: pid as number, phases: all };
 }
 
