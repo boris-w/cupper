@@ -7,6 +7,7 @@ import { createInstance, type i18n } from "i18next";
 import command from "./locales/zh-CN/command.json" with { type: "json" };
 import composer from "./locales/zh-CN/composer.json" with { type: "json" };
 import host from "./locales/zh-CN/host.json" with { type: "json" };
+import menu from "./locales/zh-CN/menu.json" with { type: "json" };
 import privileged from "./locales/zh-CN/privileged.json" with { type: "json" };
 import request from "./locales/zh-CN/request.json" with { type: "json" };
 import review from "./locales/zh-CN/review.json" with { type: "json" };
@@ -20,8 +21,8 @@ export const DEFAULT_LOCALE = "zh-CN";
 
 const resources = {
   "zh-CN": {
-    ...{ command, composer, host, privileged, request, review, settings, shell, sidebar },
-    ...{ stream, update },
+    ...{ command, composer, host, menu, privileged, request, review, settings, shell },
+    ...{ sidebar, stream, update },
   },
 };
 
