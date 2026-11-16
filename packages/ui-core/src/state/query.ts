@@ -7,7 +7,13 @@
 // for a session's, so that one event invalidates all of the session's.
 
 import type { ClientState, HostClient } from "@cupper/host-client";
-import type { ArchivedCursor, EventBody, SessionListArchivedResult } from "@cupper/protocol";
+import {
+  isKnownEvent,
+  type AgentStatus,
+  type ArchivedCursor,
+  type EventBody,
+  type SessionListArchivedResult,
+} from "@cupper/protocol";
 import { QueryClient, useInfiniteQuery, type QueryKey } from "@tanstack/react-query";
 
 import { useHost } from "../app/providers";
@@ -31,24 +37,42 @@ export function staleKeys(stream: string, body: EventBody): QueryKey[] {
     case "session.upserted":
     case "session.removed":
       return [ARCHIVED];
-    case "agents.updated":
-      return [["agents/capabilities"]];
     default:
       return [];
   }
 }
 
-/** Invalidates by the streams' events, and everything on each new connection. */
+/** What an agent's cached capabilities follow: its versions and the host's count of changes (T268). */
+const cacheOf = ({ adapter, cli, capabilities_rev }: AgentStatus) =>
+  JSON.stringify([adapter.version, cli?.version, capabilities_rev]);
+
+/**
+ * Invalidates by the streams' events, and everything on each new connection.
+ * `agents.updated` makes stale only the capabilities of an agent whose cache
+ * may have changed, not at each resource sample.
+ */
 export function invalidation(query: QueryClient, client: HostClient) {
   let ready = client.state.status === "ready";
+  /** Each agent's `cacheOf` as the live events last said; unknown on a new connection. */
+  let caches = new Map<string, string>();
   const offState = client.onState((state: ClientState) => {
     if (state.status === "ready" && !ready) {
+      caches = new Map();
       void query.invalidateQueries();
     }
     ready = state.status === "ready";
   });
-  const onEvent = (stream: string, body: EventBody) =>
-    staleKeys(stream, body).forEach((queryKey) => void query.invalidateQueries({ queryKey }));
+  const invalidate = (queryKey: QueryKey) => void query.invalidateQueries({ queryKey });
+  const onEvent = (stream: string, body: EventBody) => {
+    staleKeys(stream, body).forEach(invalidate);
+    if (body.type === "agents.updated" && isKnownEvent(body)) {
+      for (const agent of body.data.agents) {
+        const cache = cacheOf(agent);
+        if (caches.get(agent.agent) !== cache) invalidate(["agents/capabilities", agent.agent]);
+        caches.set(agent.agent, cache);
+      }
+    }
+  };
   return { onEvent, off: offState };
 }
 

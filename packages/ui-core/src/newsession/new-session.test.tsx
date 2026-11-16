@@ -5,7 +5,7 @@ import type { Handshake } from "@cupper/shell-api";
 import { createBrowserShell } from "@cupper/shell-api/browser-mock";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { HostContext, I18nProvider, ShellProvider } from "../app/providers";
 import { RouterProvider } from "../app/router";
@@ -108,7 +108,14 @@ async function setup(ops: object[]) {
   await act(() => new Promise((done) => requestAnimationFrame(() => done(undefined))));
   const creates = () =>
     mock.requests.filter((r) => r.method === "session/create").map((r) => r.params);
-  return { ui, controls, creates, mock, user: userEvent.setup() };
+  let seq = 1;
+  const event = (body: object) =>
+    conn.send({
+      jsonrpc: "2.0",
+      method: "stream/events",
+      params: { stream: "index", events: [{ seq: ++seq, v: 1, ts: 1, ...body }] },
+    });
+  return { ui, controls, creates, mock, event, user: userEvent.setup() };
 }
 
 const open = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
@@ -164,6 +171,19 @@ describe("UI-new-session", () => {
     expect(await screen.findByRole("button", { name: "权限" })).toBeTruthy();
     const asked = mock.requests.map((r) => r.method).filter((m) => m.startsWith("agents/"));
     expect(asked).toEqual(["agents/capabilities", "agents/refresh", "agents/capabilities"]);
+  });
+
+  test("the cache is read again when the host counts a change of it", async () => {
+    const { mock, event } = await setup(PROJECTS);
+    expect(await screen.findByRole("button", { name: "权限" })).toBeTruthy();
+    const reads = () => mock.requests.filter((r) => r.method === "agents/capabilities").length;
+    const before = reads();
+    const claude = (capabilities_rev: number) =>
+      agents({ ...agent("claude", "running"), capabilities_rev });
+    event(claude(1));
+    await vi.waitFor(() => expect(reads()).toBe(before + 1));
+    event(claude(2));
+    await vi.waitFor(() => expect(reads()).toBe(before + 2));
   });
 
   test("full access is created through the native confirmation; cancelled, the draft stays", async () => {
