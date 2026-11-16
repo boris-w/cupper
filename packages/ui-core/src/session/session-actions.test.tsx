@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import type { Route } from "../app/router";
 import { mountOnHost } from "../review/test-harness";
+import { ProjectList } from "../sidebar/parts";
 import { useSessionActions } from "./actions";
 
 // jsdom has no modal dialogs.
@@ -154,7 +155,7 @@ describe("session actions", () => {
     expect(toasts()).toEqual(["已归档「加缓存」，worktree 没有删除：有还没推送的提交"]);
   });
 
-  test("a refusal says why; Esc or 取消 archives nothing", async () => {
+  test("a refusal says why; Esc closes a dialog", async () => {
     const { controls, ui } = await setup(null, {
       "session/archive": hostError("conflict", "turn_running"),
     });
@@ -184,6 +185,55 @@ describe("session actions", () => {
     act(() => controls.command({ id: "open_in_terminal" }));
     await settle();
     expect(calls("workspace/open")).toEqual([{ session_id: "s_1", target: "terminal" }]);
+  });
+});
+
+describe("the sidebar's menus", () => {
+  const list = () => {
+    const [project, ...sessions] = INDEX.map(({ data }) => data);
+    return <ProjectList projects={[project] as never} sessions={sessions as never} />;
+  };
+  const row = (name: string) => screen.getByRole("button", { name });
+  const item = (name: string) => fireEvent.click(screen.getByRole("menuitem", { name }));
+
+  test("a session row's menu and its right-click menu rename and archive it", async () => {
+    const { calls } = await setup(list(), { "session/archive": ARCHIVED });
+    const menus = screen.getAllByRole("button", { name: "会话菜单" });
+    fireEvent.keyDown(menus[1] as HTMLElement, { key: "Enter" });
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["重命名", "归档"]);
+    item("重命名");
+    expect(screen.getByRole("textbox", { name: "会话标题" })).toHaveProperty("value", "加缓存");
+    click("取消");
+    fireEvent.contextMenu(row("修登录"));
+    item("归档");
+    await settle();
+    expect(calls("session/archive")).toEqual([
+      expect.objectContaining({ session_id: "s_1", worktree: "keep" }),
+    ]);
+  });
+
+  test("removing a project asks first; the window leaves its session", async () => {
+    const { ui, calls } = await setup(list(), { "project/remove": { result: {} } });
+    fireEvent.keyDown(row("项目菜单"), { key: "Enter" });
+    item("移除项目");
+    expect(dialog()?.textContent).toContain("移除项目「cupper」？");
+    click("移除项目");
+    await settle();
+    expect(calls("project/remove")).toEqual([expect.objectContaining({ project_id: "p_1" })]);
+    expect(dialog()).toBeNull();
+    expect(ui.getState().route).toEqual({ page: "new" });
+    expect(toasts()).toEqual(["已移除项目「cupper」"]);
+  });
+
+  test("a turn running keeps the project: the toast says to try again", async () => {
+    const refused = { "project/remove": hostError("conflict", "turn_running") };
+    const { ui } = await setup(list(), refused);
+    fireEvent.keyDown(row("项目菜单"), { key: "Enter" });
+    item("移除项目");
+    click("移除项目");
+    await settle();
+    expect(toasts()).toEqual(["有回合正在运行，先停下回合再试"]);
+    expect(ui.getState().route).toEqual({ page: "session", sessionId: "s_1" });
   });
 });
 

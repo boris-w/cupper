@@ -34,8 +34,27 @@ const Actions = createContext<SessionActions | null>(null);
 
 export const useSessionActions = () => required(use(Actions), "SessionActionsProvider");
 
+/**
+ * Rename and archive as a menu's items, `Item` its kind of item: the sidebar
+ * row's menu and right-click menu, the title bar's "⋯" (design 5.7.4).
+ */
+export function SessionItems(props: {
+  item: (props: { onSelect(): void; children: ReactNode }) => ReactNode;
+  sessionId: string;
+}) {
+  const { item: Item, sessionId } = props;
+  const t = useT();
+  const actions = useSessionActions();
+  return (
+    <>
+      <Item onSelect={() => actions.rename(sessionId)}>{t("session:rename")}</Item>
+      <Item onSelect={() => actions.archive(sessionId)}>{t("session:archive")}</Item>
+    </>
+  );
+}
+
 /** The reason, else the code, of a failed call. */
-export function failureCode(error: unknown): string {
+function failureCode(error: unknown): string {
   const data = error instanceof RpcFailure ? error.error.data : undefined;
   const { code, reason } = (data ?? {}) as { code?: string; reason?: string };
   return reason ?? code ?? "unexpected";
