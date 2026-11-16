@@ -5,8 +5,12 @@
 // keeps (design 5.7.6), so none is in the LRU; two back and forth are both in
 // it. Then the jump from a notification (design 5.2.9): sessions whose agent
 // asks for permission while the window shows another session, whose recorded
-// notification `test/notification_click` clicks, timed from the click.
-// "The next session that needs action" has no handler yet (T153).
+// notification `test/notification_click` clicks, timed from the click. Last,
+// "the next session that needs action" (⌘⌥A, T153) from one of those sessions
+// to the next, round them all: after a first round each was last seen ten
+// switches before, so none is in the LRU. The command goes to the window as
+// the menu sends it, timed from the main process; the menu itself would need
+// the window's focus.
 
 import { expect, test } from "./fixture";
 import { untilEvent } from "./helpers";
@@ -18,7 +22,7 @@ const RUNS = 30;
 const CLICKS = 10;
 
 test(
-  "PERF-ui-switch: sessions in and out of the LRU, and from a notification",
+  "PERF-ui-switch: sessions in and out of the LRU, from a notification, and the next that needs action",
   { tag: "@perf" },
   async ({ cupper }) => {
     test.setTimeout(30 * 60_000);
@@ -66,8 +70,20 @@ test(
         }),
       );
     }
+    const command = (id: string) =>
+      cupper.app.evaluate(({ BrowserWindow }, id) => {
+        const at = Date.now();
+        BrowserWindow.getAllWindows()[0]?.webContents.send("shell:command", { id });
+        return at;
+      }, id);
+    const next: number[] = [];
+    for (let n = 0; n < CLICKS + RUNS; n++) {
+      const ms = await screenTimed(cupper, () => command("next_needs_action"));
+      if (n >= CLICKS) next.push(ms);
+    }
     perfSamples("ui_switch_not_in_lru", "ms", away);
     perfSamples("ui_switch_in_lru", "ms", cached);
     perfSamples("ui_switch_from_notification", "ms", clicked);
+    perfSamples("ui_switch_next_needs_action", "ms", next);
   },
 );

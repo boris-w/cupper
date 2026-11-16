@@ -9,7 +9,8 @@ import type {
   ProjectUpserted,
   SessionSummary,
 } from "@cupper/protocol";
-import { useState, type ComponentProps, type ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
+import { useStore } from "zustand";
 
 import { useT } from "../app/providers";
 import { useRouter } from "../app/router";
@@ -25,10 +26,9 @@ import {
 import { Menu } from "../components/Menu";
 import { Tooltip } from "../components/Tooltip";
 import { usePrivileged } from "../feedback/privileged";
+import { useUi } from "../state/provider";
 import { toSettings } from "../state/ui";
-
-/** Sessions a project shows before "展开显示". */
-export const SHOWN_SESSIONS = 5;
+import { byActivity, byPosition, SHOWN_SESSIONS } from "./order";
 
 const DOT: Record<string, string> = {
   ready: "bg-status-connected",
@@ -83,8 +83,8 @@ export function ProjectList(props: { projects: ProjectUpserted[]; sessions: Sess
   const { route, navigate } = useRouter();
   const privileged = usePrivileged();
   const current = route.page === "session" ? route.sessionId : undefined;
-  const projects = props.projects.toSorted((a, b) => a.position - b.position);
-  const sessions = props.sessions.toSorted((a, b) => b.last_activity_at - a.last_activity_at);
+  const projects = props.projects.toSorted(byPosition);
+  const sessions = props.sessions.toSorted(byActivity);
   return (
     <nav aria-label={t("shell:sidebar")} className="flex flex-col px-2 text-base">
       <button
@@ -124,7 +124,8 @@ function ProjectGroup(props: {
   const { project, sessions } = props;
   const t = useT();
   const { navigate } = useRouter();
-  const [expanded, setExpanded] = useState(false);
+  const ui = useUi();
+  const expanded = useStore(ui, (state) => state.expanded[project.project_id] === true);
   const shown = expanded ? sessions : sessions.slice(0, SHOWN_SESSIONS);
   return (
     <section aria-label={project.name}>
@@ -164,7 +165,7 @@ function ProjectGroup(props: {
       {sessions.length > SHOWN_SESSIONS && (
         <button
           type="button"
-          onClick={() => setExpanded(!expanded)}
+          onClick={() => ui.getState().expand(project.project_id, !expanded)}
           className={`${ROW} pl-8 text-sm text-fg-tertiary hover:bg-hover`}
         >
           {t(expanded ? "sidebar:show_less" : "sidebar:show_more")}

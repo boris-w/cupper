@@ -1,3 +1,4 @@
+import { createI18n } from "@cupper/i18n";
 import type { KnownCommandId } from "@cupper/shell-api";
 import type { MenuItemConstructorOptions } from "electron";
 import { describe, expect, it, vi } from "vitest";
@@ -29,14 +30,14 @@ function items(devTools = false) {
   const onZoom = vi.fn();
   const template = menuTemplate({
     label: (id, n) => `${id}${n ?? ""}`,
+    text: (key) => key,
     onCommand,
     devTools,
-    zoomLabel: (step) => `zoom_${step}`,
     onZoom,
   });
   const flat = (list: MenuItemConstructorOptions[]): MenuItemConstructorOptions[] =>
     list.flatMap((item) => [item, ...(Array.isArray(item.submenu) ? flat(item.submenu) : [])]);
-  return { all: flat(template), onCommand, onZoom };
+  return { template, all: flat(template), onCommand, onZoom };
 }
 
 describe("menu", () => {
@@ -75,6 +76,39 @@ describe("menu", () => {
     expect(
       all.some((item) => String(item.role).toLowerCase().includes("zoom") && item.role !== "zoom"),
     ).toBe(false);
+  });
+
+  it("groups the menus as Codex's, with cupper's text for every title and role", () => {
+    const { template, all } = items(true);
+    expect(template.map((menu) => menu.role ?? menu.label)).toEqual([
+      "appMenu",
+      "file",
+      "editMenu",
+      "view",
+      "windowMenu",
+    ]);
+    const text = createI18n();
+    const command = (item: MenuItemConstructorOptions) =>
+      COMMANDS.some((id) => String(item.label).startsWith(id));
+    const titled = all.filter(
+      (item) => item.type !== "separator" && item.role !== "appMenu" && !command(item),
+    );
+    expect(titled.length).toBeGreaterThan(30);
+    for (const item of titled) {
+      expect(text.exists(String(item.label), { ns: "menu" }), String(item.label)).toBe(true);
+    }
+  });
+
+  it("keeps the commands Codex leaves off its menus as hidden accelerators", () => {
+    const { all } = items();
+    for (const id of ["rename", "archive", "model_picker", "session_n"]) {
+      const own = all.filter((item) => String(item.label).startsWith(id));
+      expect(own.length, id).toBeGreaterThan(0);
+      expect(
+        own.every((item) => item.visible === false),
+        id,
+      ).toBe(true);
+    }
   });
 
   it("has no Services menu, and DevTools only when asked", () => {
