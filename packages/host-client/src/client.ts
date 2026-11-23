@@ -122,6 +122,11 @@ export class HostClient {
     return { ...this.#counters };
   }
 
+  /** The seq `stream`'s view has reached, once its snapshot is in; for read marks (U4). */
+  seq(stream: string): number | undefined {
+    return this.#streams.get(stream)?.cursor?.seq;
+  }
+
   /**
    * Follows `stream` into `sink` until the returned function is called; see
    * `StreamSync` for the rules. After a reconnect it resumes from its cursor.

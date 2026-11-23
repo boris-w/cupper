@@ -355,7 +355,7 @@ Codex 的 `threadStatus` 变成 idle 不会让挂着的请求失效或被收起�
 | `idle` 空闲 | 其他 |
 
 - **待处理请求的类别**（v1.4）：`SessionSummary.pending_kind` 取最早一个待处理请求的类别（`approval` 或 `input`），侧边栏据此显示"等待批准"或"需要用户输入"（[5.7.4](07-desktop.md#574-窗口与布局)）。
-- **已读**（U4）：客户端在会话可见且窗口在前台时调用 `session/mark_read`，`up_to_seq` 取已看到的最新 seq，宿主只前移不后退，全局生效。
+- **已读**（U4）：客户端在会话可见且窗口在前台时调用 `session/mark_read`，`up_to_seq` 取已看到的最新 seq，宿主只前移不后退，全局生效。桌面界面接在下面"在场"的判断上（窗口在前台、会话页显示这个会话）：会话来到前台时报一次，之后随会话流前移最多每秒一次，离开前台或换到别的页面时把这期间看到的补报一次；seq 取 host-client 里这条流的游标（T170）。
 - **在场**：每个客户端用 `client/presence` 上报是否在前台、正在看哪个会话。`IndexActor` 判断某个会话"此刻有人在看"时，只采信 `desktop_ui` 的在场（M3 再加上 `remote_device`），沙箱外的命令以只读身份上报在场，压不掉"需要处理"的通知（安全建议 #16）。桌面界面经窗口自己的数据连接上报：焦点或页面变化时报一次，同一条连接上同样的内容不重发，每条新连接上补报一次；只在会话页带 `session_id`；焦点在本窗口的子 frame（如审查文档的 iframe）里也算在前台（T257）。CLI 的 `session/mark_read` 按 U4 照常推进已读位置，但不影响"需要处理"的通知。
 - **通知意图**：会话进入 `needs_action`、回合结束、出错时，如果此刻没有前台客户端在看这个会话，就写一条 `notification.intent` 事件，同时交给 `notifier` 弹系统通知（按设置开关）。M3 的推送也从这些事件生成。
 - **通知的点击**：通知由宿主 helper 弹出，点击后回调到宿主。宿主经 control 连接给已连接的桌面主进程发 `ui/navigate`，并激活 Cupper；UI 没在运行时，启动它并只把 URL 交给它（`NSWorkspace.open([URL], withApplicationAt:)`，UI 在 `applicationDidFinishLaunching` 之前就拿到这个 URL），不走任何应用都能注册的 `cupper://` 通用路由（安全 #7）。目标 App 按路径找：宿主路径往上三级就是外层 App，再核对它的身份；不按 bundle id 找，因为同一个 bundle id 可能登记着好几份（T101）。点击后系统会先把宿主（accessory）放到前台，盖掉宿主在回调里立刻做的激活，所以激活外层 App 要排在系统这一步之后，或者用 `NSWorkspace.openApplication`（T150 第 0 步发现）。T251 的实现：发出 `ui/navigate` 后等 `notifier_settle`（300 ms）再 `openApplication`；外层 App 先核对 bundle id（等于宿主签名标识去掉 `.host`），签名要求随 T180 的 Team ID 再加；`userInfo` 带会话 ID 和请求 ID。URL 的格式是 `<scheme>://session/<session_id>`，带请求时加 `?request=<request_id>`（[5.7.2](07-desktop.md#572-主进程模块) 的 `deeplink`）。导航只切换到对应的会话，不把焦点移到请求面板上。
