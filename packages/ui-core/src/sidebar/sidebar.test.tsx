@@ -128,6 +128,27 @@ describe("UNIT-ui-sidebar", () => {
     }
   });
 
+  test("a row's hover card: the title and when, the project and agent, why it failed or waits", async () => {
+    const minutes = (n: number) => Date.now() - n * 60_000;
+    const sessions = [
+      session(1, "error", { error_code: "process_exited", last_activity_at: minutes(5) }),
+      session(2, "needs_action", { pending_kind: "approval", last_activity_at: minutes(24 * 60) }),
+      session(3, "idle", { agent: "codex", title: "\u202Egnp.exe", last_activity_at: minutes(0) }),
+    ];
+    await setup(<ProjectList projects={[project("p_1", "cupper")]} sessions={sessions} />);
+    const card = (row: RegExp) => {
+      const button = screen.getByRole("button", { name: row });
+      fireEvent.focus(button);
+      const text = screen.getByRole("tooltip").textContent;
+      fireEvent.blur(button);
+      return text;
+    };
+    expect(card(/会话 1/)).toBe("会话 15分钟前cupperClaudeagent 进程已退出");
+    expect(card(/会话 2/)).toBe("会话 2昨天cupperClaude等待批准");
+    // A title's invisible characters show as escapes, in the row and the card.
+    expect(card(/202E/)).toBe("\\u{202E}gnp.exe现在cupperCodex");
+  });
+
   test("a project shows five sessions until expanded; rows open a session or a new one", async () => {
     const sessions = [1, 2, 3, 4, 5, 6].map((n) => session(n));
     const { ui } = await setup(
@@ -180,6 +201,8 @@ describe("UI-session-title", () => {
     const worktree = { workspace_kind: "worktree", branch: "cupper/fix-login" } as const;
     rerender(title(session(2, "idle", { ...worktree, title: "", agent: "codex" })));
     expect(shown()).toBe("新会话· cupper/fix-loginCodex");
+    rerender(title(session(3, "idle", { title: "\u202Egnp.exe" })));
+    expect(shown()).toBe("\\u{202E}gnp.exeClaude");
     rerender(title());
     expect(shown()).toBe("");
   });
