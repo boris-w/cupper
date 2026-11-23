@@ -32,7 +32,8 @@
   --layout-toast-top: 40px;
 
   --color-surface: light-dark(#ffffff, #181818);
-  --color-surface-sidebar: light-dark(#f6f6f6, #141414);
+  /* The window's frame around the panels when it is not translucent (Codex's title bar, T106, T148). */
+  --color-surface-chrome: light-dark(#f2f2f2, #2e2e2e);
   --color-surface-code: light-dark(#ffffff, #282828);
   --color-surface-panel: light-dark(#ffffff, #232323);
   --color-surface-elevated: light-dark(#ffffff, #2d2d2d);
@@ -122,6 +123,7 @@
   --radius-xl: 15px;
   --radius-2xl: 20px;
   --radius-row: 10px;
+  --radius-panel: 12px;
   --radius-composer: 22px;
   --radius-bubble: 22px;
   --radius-full: 9999px;

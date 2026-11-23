@@ -126,6 +126,10 @@ describe("UNIT-ui-sidebar", () => {
     for (const text of ["等待批准", "需要用户输入", "未信任"]) {
       expect(screen.getAllByText(text)).toHaveLength(1);
     }
+    // At the row's end, after the title, as Codex's (T148).
+    const running = screen.getByRole("img", { name: "运行中" });
+    const title = screen.getByText("会话 1");
+    expect(title.compareDocumentPosition(running) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   test("a row's hover card: the title and when, the project and agent, why it failed or waits", async () => {
@@ -143,7 +147,7 @@ describe("UNIT-ui-sidebar", () => {
       fireEvent.blur(button);
       return text;
     };
-    expect(card(/会话 1/)).toBe("会话 15分钟前cupperClaudeagent 进程已退出");
+    expect(card(/会话 1/)).toBe("会话 15 分钟前cupperClaudeagent 进程已退出");
     expect(card(/会话 2/)).toBe("会话 2昨天cupperClaude等待批准");
     // A title's invisible characters show as escapes, in the row and the card.
     expect(card(/202E/)).toBe("\\u{202E}gnp.exe现在cupperCodex");

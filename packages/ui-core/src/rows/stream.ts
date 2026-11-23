@@ -105,6 +105,10 @@ export type StreamRow =
       turnNo: number;
       snapshot: SnapshotRecorded;
     }
+  /** Before a turn that starts an hour or more after the one before, or (the first) before now. */
+  | { kind: "time_divider"; key: string; at: number }
+  /** Under a completed turn's final answer: copy it, and when the turn ended; `last` stays shown. */
+  | { kind: "turn_footer"; key: string; text: string; endedAt: number; last: boolean }
   /** An interaction request's place in the stream (T165). */
   | { kind: "request"; key: string; requestId: string; request?: RequestView }
   /** An item of a kind, or an event of a type, this build does not know. */

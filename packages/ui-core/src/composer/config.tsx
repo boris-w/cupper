@@ -15,15 +15,20 @@ import { useStore } from "zustand";
 import { useHost, useT } from "../app/providers";
 import { Alert } from "../components/Alert";
 import { MenuItem, MenuLabel } from "../components/Menu";
+import { Tooltip } from "../components/Tooltip";
 import { usePrivileged } from "../feedback/privileged";
 import { useToasts } from "../feedback/toaster";
 import { useStreams, useUi } from "../state/provider";
 import { useEntry } from "../state/stream";
 import { codeOf } from "./send";
 
-/** A button of the bottom bar (design 5.7.4): 28 high, 13 px; a menu's trigger. */
-export function BarButton({ label, ...props }: ComponentProps<"button"> & { label: string }) {
-  return (
+/** A button of the bottom bar (design 5.7.4): 28 high, 13 px; a menu's trigger; `tooltip`, if any, on hover. */
+export function BarButton({
+  label,
+  tooltip,
+  ...props
+}: ComponentProps<"button"> & { label: string; tooltip?: string }) {
+  const button = (
     <button
       type="button"
       aria-label={label}
@@ -31,6 +36,7 @@ export function BarButton({ label, ...props }: ComponentProps<"button"> & { labe
       className="flex h-7 items-center gap-1 rounded-full px-2 text-sm text-fg-secondary outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-btn-secondary"
     />
   );
+  return tooltip === undefined ? button : <Tooltip content={tooltip}>{button}</Tooltip>;
 }
 
 /** A value that is neither `normal` nor `elevated` counts as full access. */

@@ -48,7 +48,9 @@ describe("UI-turn-changes", () => {
         mock.handle("git/revert", () => ({ result: {} }));
       },
     );
-    expect(await screen.findByText("README.md")).toBeTruthy();
+    // One file, as Codex shows it: its name and counts, "查看变更" beside "撤销".
+    expect(await screen.findByText("已编辑 README.md")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "查看变更" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "撤销" }));
     const confirm = await screen.findByRole("button", { name: "确认" });
     // Armed after 500 ms; then a key on "确认", where the focus is.

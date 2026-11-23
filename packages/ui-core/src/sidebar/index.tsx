@@ -11,7 +11,7 @@ export function SidebarHeader() {
   const { view } = useStreams().index;
   useEntry(view, "host");
   return (
-    <div className="flex items-center gap-2 text-base font-medium">
+    <div className="flex items-center gap-2 text-heading-sm font-semibold">
       {t("shell:product")}
       <HostStatus state={state} host={view.toJSON().host} />
     </div>

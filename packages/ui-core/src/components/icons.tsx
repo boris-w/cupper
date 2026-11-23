@@ -38,6 +38,15 @@ export function FolderIcon() {
   );
 }
 
+/** An open folder: a project whose sessions show, as Codex draws it. */
+export function FolderOpenIcon() {
+  return (
+    <svg {...svg} stroke="currentColor" strokeLinejoin="round">
+      <path d="M1.5 12V4.5a1 1 0 0 1 1-1h3.6l1.5 1.5h4.4a1 1 0 0 1 1 1V7M1.5 12l1.8-4.3a1 1 0 0 1 .9-.7h9.8a.6.6 0 0 1 .55.83L12.8 12.2a1 1 0 0 1-.9.8H2.5a1 1 0 0 1-1-1z" />
+    </svg>
+  );
+}
+
 /** A pen on a page: a new session. */
 export function ComposeIcon() {
   return (
@@ -158,6 +167,16 @@ export function CheckIcon() {
   );
 }
 
+/** Two sheets, one over the other: copy. */
+export function CopyIcon() {
+  return (
+    <svg {...svg} stroke="currentColor" strokeLinejoin="round">
+      <rect x="5.5" y="5.5" width="8" height="8" rx="2" />
+      <path d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5" />
+    </svg>
+  );
+}
+
 export function MinusIcon() {
   return (
     <svg {...svg} stroke="currentColor" strokeLinecap="round">
@@ -192,6 +211,16 @@ export function UndoIcon() {
     <svg {...svg} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
       <path d="M5.5 3.5L2.5 6.5l3 3" />
       <path d="M2.5 6.5h7a3.5 3.5 0 0 1 0 7h-3" />
+    </svg>
+  );
+}
+
+/** A sheet with a plus over a minus: a file's changes. */
+export function DiffIcon() {
+  return (
+    <svg {...svg} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="1.5" width="11" height="13" rx="2.5" />
+      <path d="M8 4.5v4M6 6.5h4M6 11h4" />
     </svg>
   );
 }

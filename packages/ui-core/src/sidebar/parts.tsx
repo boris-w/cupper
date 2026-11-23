@@ -19,6 +19,7 @@ import {
   ComposeIcon,
   ErrorIcon,
   FolderIcon,
+  FolderOpenIcon,
   MoreIcon,
   PlusIcon,
   SettingsIcon,
@@ -100,7 +101,7 @@ export function ProjectList(props: { projects: ProjectUpserted[]; sessions: Sess
         <ComposeIcon />
         {t("sidebar:new_session")}
       </button>
-      <div className={`${ROW} mt-3 justify-between text-sm text-fg-tertiary`}>
+      <div className={`${ROW} mt-3 justify-between text-fg-tertiary`}>
         {t("sidebar:projects")}
         <RowButton
           label={t("sidebar:add_project")}
@@ -136,7 +137,7 @@ function ProjectGroup(props: {
   return (
     <section aria-label={project.name}>
       <div className={`${ROW} group relative hover:bg-hover`}>
-        <FolderIcon />
+        {sessions.length > 0 ? <FolderOpenIcon /> : <FolderIcon />}
         <span className="min-w-0 flex-1 truncate">{project.name}</span>
         {/* At the row's end like a session's label; the actions take its place on hover. */}
         {project.trust_state !== "trusted" && (
@@ -194,8 +195,8 @@ function ProjectGroup(props: {
 const errorText = (t: Translate, session: SessionSummary) =>
   t(`sidebar:error_${session.error_code ?? "other"}`, { defaultValue: t("sidebar:error_other") });
 
-/** The state at the start of a session row (design 5.7.4): a spinner, an error, the unread dot. */
-function Lead({ session }: { session: SessionSummary }) {
+/** A session row's state at its end, as Codex's (design 5.7.4): a spinner, an error, the unread dot. */
+function Status({ session }: { session: SessionSummary }) {
   const t = useT();
   const mark = (label: string, className: string, icon?: ReactNode) => (
     <span role="img" aria-label={label} className={className}>
@@ -314,15 +315,13 @@ function SessionRow(props: { session: SessionSummary; project: string; selected:
             onClick={() => navigate({ page: "session", sessionId: id })}
             className={ROW}
           >
-            <span className="flex size-4 shrink-0 items-center justify-center">
-              <Lead session={session} />
-            </span>
+            {/* No icon at the start: the title lines up with the project's name. */}
+            <span className="size-4 shrink-0" />
             <span className="min-w-0 flex-1 truncate">{escapeInvisible(session.title)}</span>
-            {tag && (
-              <span className="shrink-0 text-xs text-fg-tertiary group-focus-within:invisible group-hover:invisible group-has-[[data-state=open]]:invisible">
-                {tag}
-              </span>
-            )}
+            {/* The state at the end; the actions take its place on hover. */}
+            <span className="flex shrink-0 items-center text-xs text-fg-tertiary group-focus-within:invisible group-hover:invisible group-has-[[data-state=open]]:invisible">
+              {tag ?? <Status session={session} />}
+            </span>
           </button>
         </HoverCard>
         <span className="absolute inset-y-0 right-(--layout-row-px) flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-data-[state=open]:opacity-100">

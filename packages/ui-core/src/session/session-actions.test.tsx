@@ -241,7 +241,15 @@ describe("the sidebar's menus", () => {
 });
 
 describe("the title bar's menus", () => {
-  const bar = <TitleBar hidden={false} inset={false} sidePanelOpen onSidePanel={() => undefined} />;
+  const bar = (
+    <TitleBar
+      hidden={false}
+      sidebarOpen
+      onSidebar={() => undefined}
+      sidePanelOpen
+      onSidePanel={() => undefined}
+    />
+  );
   const open = (name: string) =>
     fireEvent.keyDown(screen.getByRole("button", { name }), { key: "Enter" });
   const item = (name: string) => fireEvent.click(screen.getByRole("menuitem", { name }));

@@ -24,11 +24,14 @@ test("E2E-error-guidance: a failed turn shows its error and what to do", async (
   const login = await failed("auth_none", "not_logged_in");
   await expect(login).toContainText(t("stream:guidance_run_login_in_terminal"));
   await expect(login.locator("code")).toHaveText("claude");
-  await expect(login.getByRole("button")).toHaveText([t("stream:copy_command")]);
+  await expect(login.getByRole("button", { name: t("stream:copy_command") })).toBeVisible();
+  await expect(login.getByRole("button", { name: t("stream:retry") })).toHaveCount(0);
 
-  // The adapter exits under the turn: the end of its stderr, and a retry.
-  // The pause lets the host read the line before the exit.
+  // The adapter exits under the turn: a retry, and the end of its stderr once
+  // asked for (T272). The pause lets the host read the line before the exit.
   const exited = await failed("stderr e2e-boom; sleep 100; exit 3", "adapter_exited");
+  await expect(exited.getByRole("button", { name: t("stream:retry") })).toBeVisible();
+  await expect(exited).not.toContainText("e2e-boom");
+  await exited.getByRole("button", { name: t("stream:error_details_show") }).click();
   await expect(exited).toContainText("e2e-boom");
-  await expect(exited.getByRole("button")).toHaveText([t("stream:retry")]);
 });

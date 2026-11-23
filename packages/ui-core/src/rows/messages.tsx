@@ -169,9 +169,10 @@ function AgentStatus() {
   );
 }
 
-/** An error, the agent's own text under it, and what to do about it. */
+/** An error, what to do about it, and the agent's own text, such as stderr's tail, on demand. */
 function ErrorRow({ row: { error, retry } }: { row: RowOf<"error"> }) {
   const t = useT();
+  const [details, setDetails] = useState(false);
   const key = ERRORS.includes(error.code) ? `stream:error_${error.code}` : "stream:error_other";
   const guidance = GUIDANCE.includes(error.guidance) ? error.guidance : undefined;
   const button = guidance === "retry" && retry;
@@ -186,7 +187,19 @@ function ErrorRow({ row: { error, retry } }: { row: RowOf<"error"> }) {
     >
       <div>{t(key)}</div>
       {error.raw && (
-        <div className="mt-1 break-words text-fg-tertiary">{escapeInvisible(error.raw)}</div>
+        <button
+          type="button"
+          aria-expanded={details}
+          onClick={() => setDetails(!details)}
+          className="mt-1 text-fg-tertiary underline-offset-2 hover:underline"
+        >
+          {t(details ? "stream:error_details_hide" : "stream:error_details_show")}
+        </button>
+      )}
+      {error.raw && details && (
+        <div className="mt-1 break-words whitespace-pre-wrap text-fg-tertiary">
+          {escapeInvisible(error.raw)}
+        </div>
       )}
       {guidance && !button && (
         <div data-guidance={guidance} className="mt-1 text-fg-secondary">

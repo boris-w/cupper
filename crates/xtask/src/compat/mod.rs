@@ -24,13 +24,16 @@ use crate::clock::Stopwatch;
 use crate::runtime_pack;
 use report::{Mode, Named, Outcome, Report};
 
-pub const USAGE: &str = "usage: cargo xtask compat (--fake | --real [--model <model>]) [--dry-run]
-         [--only <scenario>]... [--out <dir>] [--write [--words <file>]]
+pub const USAGE: &str =
+    "usage: cargo xtask compat (--fake | --real [--model <model>]) [--agent <agent>]
+         [--dry-run] [--only <scenario>]... [--out <dir>] [--write [--words <file>]]
 
   --fake     the fake agent plays the CLI: no quota
   --real     the real CLI, with the user's own configuration: uses quota;
-             the configuration is compared before and after
-  --model    the model of a real run (haiku)
+             Claude's configuration is compared before and after, Codex's
+             is not read: compare ~/.codex with a backup of it
+  --model    the model of a real run (Claude: haiku; Codex: the user's own)
+  --agent    claude (the default) or codex
   --dry-run  the plan and the self-constraints' verdicts; nothing starts
   --only     a scenario to run; all by default
   --out      where the report and the recordings go (target/compat, emptied first)
@@ -47,6 +50,7 @@ const SESSIONS: &str = "cli-sessions.txt";
 
 #[derive(Debug, Default, PartialEq)]
 struct Options {
+    agent: String,
     real: bool,
     model: Option<String>,
     dry_run: bool,
@@ -85,7 +89,11 @@ pub fn main(args: &[String]) -> ExitCode {
 }
 
 fn parse(args: &[String]) -> Result<Options> {
-    let (mut options, mut fake) = (Options::default(), false);
+    let mut options = Options {
+        agent: "claude".into(),
+        ..Options::default()
+    };
+    let mut fake = false;
     let mut rest = args.iter();
     while let Some(arg) = rest.next() {
         let mut value = || {
@@ -96,6 +104,7 @@ fn parse(args: &[String]) -> Result<Options> {
             "--fake" => fake = true,
             "--real" => options.real = true,
             "--model" => options.model = Some(value()?.clone()),
+            "--agent" => options.agent = value()?.clone(),
             "--dry-run" => options.dry_run = true,
             "--only" => options.only.push(value()?.clone()),
             "--out" => options.out = Some(value()?.into()),
@@ -120,6 +129,10 @@ fn parse(args: &[String]) -> Result<Options> {
             !options.write && options.words.is_some(),
             "`--words` goes with `--write`",
         ),
+        (
+            !["claude", "codex"].contains(&options.agent.as_str()),
+            "`--agent` is claude or codex",
+        ),
         (options.write && options.dry_run, "a dry run writes nothing"),
         (
             partial,
@@ -135,10 +148,11 @@ fn parse(args: &[String]) -> Result<Options> {
 /// Whether every scenario passed, or did what it can, and the real
 /// configuration stayed as it was.
 fn run(root: &Path, options: &Options) -> Result<bool> {
-    let out = options
-        .out
-        .clone()
-        .unwrap_or_else(|| root.join("target/compat"));
+    // The runner runs in its crate's directory.
+    let out = match &options.out {
+        Some(out) => std::path::absolute(out)?,
+        None => root.join("target/compat"),
+    };
     let words = options
         .write
         .then(|| record::words(root, options.words.as_deref()));
@@ -159,7 +173,8 @@ fn run(root: &Path, options: &Options) -> Result<bool> {
         ensure!(status.success(), "`xtask {args}` failed");
         Ok(())
     };
-    let model = options.model.clone().unwrap_or_else(|| "haiku".into());
+    let claude = options.agent == "claude";
+    let model = (options.model.clone()).or_else(|| claude.then(|| "haiku".into()));
     let real = json!({"host": root.join(HOST), "model": model});
     let real = options.real.then_some(real);
     // A dry run starts nothing, so it needs neither the host nor the fake agent.
@@ -179,12 +194,13 @@ fn run(root: &Path, options: &Options) -> Result<bool> {
         }
     }
     let home = PathBuf::from(std::env::var_os("HOME").context("HOME")?);
-    let before = (options.real && !options.dry_run).then(|| config::snapshot(&home));
+    // Codex's configuration is never read, not even for a digest (T274).
+    let before = (options.real && claude && !options.dry_run).then(|| config::snapshot(&home));
     let before = before.transpose()?;
     let plan = out.join("plan.json");
     let attempts = if options.real { 3 } else { 1 };
-    let plan_json = json!({"only": options.only, "attempts": attempts, "out": out,
-        "dry_run": options.dry_run, "real": real});
+    let plan_json = json!({"agent": options.agent, "only": options.only, "attempts": attempts,
+        "out": out, "dry_run": options.dry_run, "real": real});
     fs::write(&plan, plan_json.to_string())?;
     let mut runner = cargo();
     runner.args([
@@ -209,8 +225,11 @@ fn run(root: &Path, options: &Options) -> Result<bool> {
         .status()?;
     ensure!(status.success(), "the runner failed");
     if options.dry_run {
-        let hashed = options.real.then(config::names);
-        let hashed = hashed.unwrap_or_else(|| "none".into());
+        let hashed = match (options.real, claude) {
+            (true, true) => config::names(),
+            (true, false) => "none: ~/.codex is not read; compare it with a backup".into(),
+            (false, _) => "none".into(),
+        };
         println!("configuration compared before and after: {hashed}");
         return Ok(true);
     }
@@ -234,8 +253,8 @@ fn run(root: &Path, options: &Options) -> Result<bool> {
         } else {
             Mode::Fake
         },
-        agent: "claude".into(),
-        model: options.real.then_some(model),
+        agent: options.agent.clone(),
+        model: model.filter(|_| options.real),
         adapter: run.adapter,
         cli: run.cli,
         duration_ms: watch.elapsed_ms(),
@@ -292,11 +311,14 @@ mod tests {
         let options = parse(&args("--fake --only cancel --only plan --write --words w")).unwrap();
         assert_eq!(options.only, ["cancel", "plan"]);
         assert_eq!((options.write, options.words), (true, Some("w".into())));
+        assert_eq!(options.agent, "claude");
         let real = parse(&args("--real --model sonnet --dry-run --only plan")).unwrap();
         assert_eq!(
             (real.real, real.model, real.dry_run),
             (true, Some("sonnet".into()), true)
         );
+        let codex = parse(&args("--real --agent codex")).unwrap();
+        assert_eq!((codex.agent, codex.model), ("codex".into(), None));
         assert!(parse(&args("--real --write")).is_ok());
         for bad in [
             "--only cancel",
@@ -306,6 +328,8 @@ mod tests {
             "--fake --only",
             "--fake --dry-run --write",
             "--real --write --only plan",
+            "--fake --agent gemini",
+            "--fake --agent",
         ] {
             assert!(parse(&args(bad)).is_err(), "{bad}");
         }

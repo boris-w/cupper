@@ -33,15 +33,19 @@ beforeAll(() => {
   });
 });
 
-/** Turn `n` and its message `text`, as event bodies. */
+/** Turn `n` and its message `text`, as event bodies; started now, with no time above them. */
+const NOW = Date.now();
 const turn = (n: number, text: string) => [
-  { type: "turn.started", data: { turn_id: `t_${n}`, turn_no: n, started_at: n, origin: "user" } },
+  {
+    type: "turn.started",
+    data: { turn_id: `t_${n}`, turn_no: n, started_at: NOW + n, origin: "user" },
+  },
   {
     type: "item.started",
     data: {
       item_id: `i_${n}`,
       turn_id: `t_${n}`,
-      started_at: n,
+      started_at: NOW + n,
       kind: "user_message",
       content: [{ type: "text", text }],
       steered: false,

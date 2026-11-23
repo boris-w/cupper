@@ -1,7 +1,7 @@
 //! The compat suite's runner (design 5.9.5), which `cargo xtask compat`
 //! starts: an ignored test that reads its plan from `CUPPER_COMPAT_PLAN`,
 //! plays each scenario on a host of its own, with the fake agent or the real
-//! CLI, and writes what happened, with the session's recording, under the
+//! CLI of the plan's agent, and writes what happened, with the session's recording, under the
 //! plan's `out`. xtask makes the report from it. The real mode's
 //! self-constraints are checked before and while a scenario plays.
 
@@ -16,10 +16,13 @@ use std::time::Duration;
 
 use cupper_cli::client::{self, Client};
 use cupper_host::clock::{Clock, SystemClock};
+use cupper_host::driver::runtime::launch;
 use cupper_host::gateway::testkit::TempDir;
 use cupper_protocol::ids::{ProjectId, SessionId};
 use cupper_protocol::methods::admin::DiagRecordingExport;
-use cupper_protocol::methods::session::{SessionCreate, SessionInterrupt, SessionSend};
+use cupper_protocol::methods::session::{
+    SessionCreate, SessionInterrupt, SessionSend, SessionSetConfig,
+};
 use cupper_protocol::recording::{Recording, Usage};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -35,6 +38,8 @@ const PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Plan {
+    /// `claude` or `codex`.
+    agent: String,
     /// The scenarios to play, by ID; every one when empty.
     only: Vec<String>,
     /// How many times a scenario is played while it stays inconclusive.
@@ -51,7 +56,8 @@ struct Plan {
 struct Real {
     /// The e2e build's `CupperHost.app`, which installs the runtime.
     host: PathBuf,
-    model: String,
+    /// None: the user's own (Codex, T113).
+    model: Option<String>,
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -59,6 +65,8 @@ struct Real {
 async fn compat_driver() {
     let plan = std::env::var("CUPPER_COMPAT_PLAN").expect("CUPPER_COMPAT_PLAN: the plan's path");
     let plan: Plan = serde_json::from_str(&std::fs::read_to_string(plan).unwrap()).unwrap();
+    let agent = plan.agent.as_str();
+    assert!(["claude", "codex"].contains(&agent), "no agent {agent}");
     for id in &plan.only {
         assert!(SCENARIOS.iter().any(|s| s.id == id), "no scenario {id}");
     }
@@ -66,12 +74,12 @@ async fn compat_driver() {
     if plan.dry_run {
         let temp = own_temp(TempDir::new("compat-probe").path());
         println!("temporary repositories in the user's own temporary directory: {temp}");
-        for s in SCENARIOS.iter().filter(chosen) {
+        for s in SCENARIOS.iter().filter(chosen).map(|s| s.of(agent)) {
             let files: Vec<_> = s.files.iter().map(|(path, _)| *path).collect();
-            let refused = s.refused("claude").unwrap_or_else(|| "nothing".into());
+            let refused = s.refused(agent).unwrap_or_else(|| "nothing".into());
             let skip = s.skip.unwrap_or("no");
             println!(
-                "  {:<16} mode {:<8} files {files:?}; skipped: {skip}; refused: {refused}",
+                "  {:<16} mode {:<15} files {files:?}; skipped: {skip}; refused: {refused}",
                 s.id, s.mode
             );
         }
@@ -88,7 +96,8 @@ async fn compat_driver() {
             let dir = TempDir::new(&format!("compat-{}", scenario.id));
             let real = std::fs::canonicalize(dir.path()).unwrap();
             roots.extend([dir.path().to_owned(), real]);
-            let run = play(scenario, dir, plan.out.clone(), plan.real.clone());
+            let (out, real) = (plan.out.clone(), plan.real.clone());
+            let run = play(scenario.of(agent), plan.agent.clone(), dir, out, real);
             let played = match tokio::spawn(run).await {
                 Ok(played) => played,
                 Err(err) => ended("fail", &format!("the runner panicked: {}", panicked(err))),
@@ -114,8 +123,15 @@ async fn compat_driver() {
     let recorded = results.iter().find_map(|r| r["recording"].as_str());
     let header = match (&plan.real, recorded) {
         (Some(_), Some(path)) => std::fs::read_to_string(plan.out.join(path)).unwrap(),
-        (Some(_), None) => r#"{"adapter":"unknown","adapter_version":"unknown","cli":"claude","cli_version":"unknown"}"#.into(),
-        (None, _) => r#"{"adapter":"cupper-fake-agent","adapter_version":"0.0.0","cli":"claude","cli_version":"fake"}"#.into(),
+        (real, _) => {
+            let (adapter, version, cli) = match real {
+                Some(_) => ("unknown", "unknown", "unknown".into()),
+                None => ("cupper-fake-agent", "0.0.0", fake_version(agent)),
+            };
+            json!({"adapter": adapter, "adapter_version": version, "cli": agent,
+                "cli_version": cli})
+            .to_string()
+        }
     };
     let h: Value = header.lines().next().unwrap().parse().unwrap();
     let run = json!({"adapter": {"name": h["adapter"], "version": h["adapter_version"]},
@@ -123,6 +139,15 @@ async fn compat_driver() {
         "cli_sessions": sessions, "scenarios": results});
     let text = serde_json::to_string_pretty(&run).unwrap();
     std::fs::write(plan.out.join("run.json"), text).unwrap();
+}
+
+/// The fake agent's CLI version: its Codex persona's recordings go beside
+/// Claude's (`xtask compat --write`).
+fn fake_version(agent: &str) -> String {
+    match agent {
+        "claude" => "fake".into(),
+        other => format!("fake-{other}"),
+    }
 }
 
 fn panicked(err: tokio::task::JoinError) -> String {
@@ -161,7 +186,8 @@ fn start_host(program: &Path, data_dir: &Path, config: &Value, real: bool) -> Ch
 }
 
 async fn play(
-    scenario: &'static Scenario,
+    scenario: Scenario,
+    agent: String,
     dir: TempDir,
     out: PathBuf,
     real: Option<Real>,
@@ -172,7 +198,7 @@ async fn play(
     if let (Some(why), None) = (scenario.real_only, &real) {
         return ended("real_only", why);
     }
-    if let Some(refused) = scenario.refused("claude") {
+    if let Some(refused) = scenario.refused(&agent) {
         return ended("fail", &format!("refused: {refused}"));
     }
     let repo = dir.path().join("repo");
@@ -211,18 +237,32 @@ async fn play(
             assert!(init.status.success(), "git init");
             (real.host.clone(), json!({"notifier": "record"}))
         }
-        None => (PathBuf::from(HOST), fake_agent_config(json!({}))),
+        None => {
+            let persona: &[&str] = if agent == "codex" {
+                &["--persona", "codex"]
+            } else {
+                &[]
+            };
+            let fake = json!({"program": launch::fake_agent(), "args": persona});
+            let config = json!({"agents": {agent.as_str(): fake}});
+            (PathBuf::from(HOST), fake_agent_config(config))
+        }
     };
     let host = Running(start_host(&program, &data_dir, &config, real.is_some()));
     let client = connect_blobs(&data_dir).await;
     let patience = Duration::from_secs(if real.is_some() { 300 } else { 30 });
     if real.is_some()
-        && let Err(ended) = installed(&data_dir, patience).await
+        && let Err(ended) = installed(&data_dir, &agent, patience).await
     {
         return ended;
     }
-    let model = real.as_ref().map(|r| scenario.model.unwrap_or(&r.model));
-    let session = create(&client, scenario, real.is_some(), model).await;
+    let model = real
+        .as_ref()
+        .and_then(|r| scenario.model.or(r.model.as_deref()));
+    let session = match create(&client, &scenario, &agent, real.is_some(), model).await {
+        Ok(session) => session,
+        Err(reason) => return turned_away(&scenario, &reason, &project, host).await,
+    };
     let mut user = User {
         data_dir,
         session,
@@ -236,6 +276,7 @@ async fn play(
         real: real.is_some(),
         model: model.map(str::to_owned),
         scenario,
+        agent,
         patience,
         sent: 1,
         markers: Vec::new(),
@@ -248,7 +289,7 @@ async fn play(
         // The agent did not do what the scenario needs (design 5.9.5).
         return ended("inconclusive", &waited);
     }
-    let recording = user.export(scenario, &project, &out, real.is_none()).await;
+    let recording = user.export(&project, &out, real.is_none()).await;
     let host = user.host.0.id();
     let procs = tree(host);
     let below = procs.iter().any(|(_, ppid)| *ppid != host);
@@ -297,10 +338,34 @@ async fn play(
         "checks": checks, "recording": recording, "cli_sessions": sessions})
 }
 
+/// A session `session/create` refused for `reason`: what the scenario
+/// expects, once its other checks hold and the host stops.
+async fn turned_away(scenario: &Scenario, reason: &str, project: &Path, host: Running) -> Value {
+    let expected = |c: &Check| matches!(c, Check::Refused(r) if *r == reason);
+    if !scenario.checks.iter().any(expected) {
+        return ended("fail", &format!("no session: {reason}"));
+    }
+    let met = |c: &Check| expected(c) || matches!(c, Check::NoFile(p) if !project.join(p).exists());
+    let checks: Vec<_> = (scenario.checks.iter())
+        .map(|c| json!({"check": c.name(), "passed": met(c)}))
+        .collect();
+    let mut host = host;
+    terminate(&host.0);
+    let code = exit_code(&mut host.0).await;
+    let unmet = scenario.checks.iter().find(|c| !met(c));
+    let detail = match (code, unmet) {
+        (0, None) => None,
+        (0, Some(check)) => Some(format!("not met: {}", check.name())),
+        (code, _) => Some(format!("the host exited with {code}")),
+    };
+    let outcome = if detail.is_none() { "pass" } else { "fail" };
+    json!({"outcome": outcome, "detail": detail, "checks": checks, "recording": null})
+}
+
 /// Until the host has installed the runtime, as a user waits for the first
 /// install to end before prompting (design 5.2.12): the suite checks the
 /// CLI, not a prompt sent while the runtime installs.
-async fn installed(data_dir: &Path, patience: Duration) -> Result<(), Value> {
+async fn installed(data_dir: &Path, agent: &str, patience: Duration) -> Result<(), Value> {
     let sql = "SELECT json_extract(json, '$.data.agents') FROM events
                WHERE stream = 'index' AND type = 'agents.updated' ORDER BY seq DESC LIMIT 1";
     let clock = SystemClock::new();
@@ -309,8 +374,8 @@ async fn installed(data_dir: &Path, patience: Duration) -> Result<(), Value> {
         let agents = query(&data_dir.join("host.db"), sql);
         let agents = agents.first().and_then(|a| serde_json::from_str(a).ok());
         let agents: Vec<Value> = agents.unwrap_or_default();
-        let claude = agents.iter().find(|agent| agent["agent"] == "claude");
-        match claude.and_then(|agent| agent["adapter"]["runtime"].as_str()) {
+        let found = agents.iter().find(|found| found["agent"] == agent);
+        match found.and_then(|found| found["adapter"]["runtime"].as_str()) {
             Some("ready") => return Ok(()),
             Some("failed") => return Err(ended("fail", "the runtime did not install")),
             _ if clock.now_mono() >= give_up => {
@@ -337,13 +402,15 @@ async fn connect_blobs(data_dir: &Path) -> Client {
     connect_with(data_dir, options).await
 }
 
-/// `session/create` in the scenario's permission mode, always given.
+/// `session/create` in the scenario's permission mode, always given; why
+/// the host refused it.
 async fn create(
     client: &Client,
     scenario: &Scenario,
+    agent: &str,
     real: bool,
     model: Option<&str>,
-) -> SessionId {
+) -> Result<SessionId, String> {
     let text = if real {
         scenario.prompt
     } else {
@@ -352,12 +419,14 @@ async fn create(
     // The run's model at its lowest effort; a scenario's own model keeps its
     // effort, since it is there to think.
     let effort = (real && scenario.model.is_none()).then_some("low");
-    let params = json!({"command_id": client::command_id(), "agent": "claude",
+    let params = json!({"command_id": client::command_id(), "agent": agent,
         "project_id": ProjectId::from_uuid(1), "workspace": {"kind": "local"},
         "config": {"permission_mode": scenario.mode, "model": model, "reasoning_effort": effort},
         "message": [{"type": "text", "text": text}]});
-    let created = client.request::<SessionCreate>(typed(params));
-    created.await.unwrap().session_id
+    let created = client.request::<SessionCreate>(typed(params)).await;
+    created
+        .map(|created| created.session_id)
+        .map_err(|err| refused::<()>(Err(err)).1)
 }
 
 struct User {
@@ -375,7 +444,8 @@ struct User {
     config: Value,
     real: bool,
     model: Option<String>,
-    scenario: &'static Scenario,
+    scenario: Scenario,
+    agent: String,
     /// How long a wait lasts: real turns take longer.
     patience: Duration,
     /// The prompts sent so far.
@@ -455,6 +525,19 @@ impl User {
                         .await;
                 }
                 Step::Send { real, fake } => self.send_next(real, fake).await?,
+                Step::Started => {
+                    let tool = |e: &[Value]| {
+                        (of(e, "item.started").any(|d| d["kind"] == "tool_call")).then_some(())
+                    };
+                    self.wait("a tool call", tool).await?;
+                }
+                Step::Plan => {
+                    self.settle().await?;
+                    let params = json!({"command_id": client::command_id(),
+                        "session_id": self.session, "option": "plan_mode", "value": "plan"});
+                    let set = self.client.request::<SessionSetConfig>(typed(params));
+                    set.await.unwrap();
+                }
                 Step::Image { real, fake } => self.image(real, fake).await?,
                 Step::KillCli => self.kill_cli().await?,
                 Step::RestartHost => {
@@ -468,9 +551,15 @@ impl User {
                 Step::Resumes(times) => {
                     self.settle().await?;
                     self.counts.push(tree(self.host.0.id()).len());
+                    // Codex's app-server dies instead of the session (K7).
+                    let crash = if self.agent == "codex" {
+                        "restartable"
+                    } else {
+                        "crash_cli"
+                    };
                     for _ in 0..*times {
                         self.kill_cli().await?;
-                        self.send_next("Reply with the single word: again", "crash_cli")
+                        self.send_next("Reply with the single word: again", crash)
                             .await?;
                         self.send_next("", "whoami").await?;
                         self.settle().await?;
@@ -538,7 +627,7 @@ impl User {
             let name = output("/bin/ps", &["-o", "comm=", "-p", &pid.to_string()]);
             if String::from_utf8_lossy(&name.stdout)
                 .trim()
-                .ends_with("claude")
+                .ends_with(&self.agent)
             {
                 output("/bin/kill", &["-KILL", &pid.to_string()]);
             }
@@ -592,15 +681,9 @@ impl User {
         self.settle().await?;
         let mut all = vec![self.session.clone()];
         for _ in 1..sessions {
-            all.push(
-                create(
-                    &self.client,
-                    self.scenario,
-                    self.real,
-                    self.model.as_deref(),
-                )
-                .await,
-            );
+            let (scenario, model) = (&self.scenario, self.model.as_deref());
+            let created = create(&self.client, scenario, &self.agent, self.real, model);
+            all.push(created.await.expect("another session"));
         }
         let nonce = &client::command_id().to_string()[..8];
         for round in 1..=rounds {
@@ -671,6 +754,7 @@ impl User {
             }),
             Check::Sent(method) => sent(method).next().is_some(),
             Check::Observe(path) => repo.join(path).exists(),
+            Check::Refused(_) => false,
             _ => holds(check, &events, repo),
         }
     }
@@ -722,7 +806,8 @@ impl User {
 
     /// Exports the session's recording, its header and paths rewritten for
     /// `testdata/` (T116, T065); its path under `out`.
-    async fn export(&self, scenario: &Scenario, repo: &Path, out: &Path, fake: bool) -> String {
+    async fn export(&self, repo: &Path, out: &Path, fake: bool) -> String {
+        let scenario = &self.scenario;
         let params = typed(json!({"session_id": self.session}));
         let exported = self.client.request::<DiagRecordingExport>(params);
         let hash = exported.await.unwrap().blob.hash.to_string();
@@ -744,7 +829,7 @@ impl User {
         if fake {
             header.adapter = "cupper-fake-agent".into();
             header.adapter_version = "0.0.0".into();
-            header.cli_version = "fake".into();
+            header.cli_version = fake_version(&self.agent);
         }
         let name = format!("recordings/{}.jsonl", scenario.id);
         std::fs::write(out.join(&name), recording.to_jsonl()).unwrap();
@@ -923,6 +1008,8 @@ mod tests {
     fn unit_compat_guards_every_scenario_starts_in_an_allowed_mode_and_picks_once() {
         for scenario in SCENARIOS {
             assert_eq!(scenario.refused("claude"), None, "{}", scenario.id);
+            let codex = scenario.of("codex");
+            assert_eq!(codex.refused("codex"), None, "{}", scenario.id);
         }
         let base = || Scenario {
             mode: "default",
@@ -972,6 +1059,37 @@ mod tests {
             ..base()
         };
         assert!(refused(always, "claude"));
+    }
+
+    /// Claude plays a scenario as written; Codex its version, on the user's
+    /// model, with the rest kept; their fake recordings lie apart.
+    #[test]
+    fn unit_compat_guards_each_agent_plays_its_own_version() {
+        let thinking = SCENARIOS.iter().find(|s| s.id == "thinking").unwrap();
+        let claude = thinking.of("claude");
+        assert_eq!((claude.mode, claude.model), ("default", Some("sonnet")));
+        let codex = thinking.of("codex");
+        assert_eq!((codex.mode, codex.model), ("read-only", None));
+        assert_eq!(
+            (codex.prompt, codex.script),
+            (thinking.prompt, thinking.script)
+        );
+        let plan = SCENARIOS
+            .iter()
+            .find(|s| s.id == "plan")
+            .unwrap()
+            .of("codex");
+        assert!(matches!(plan.steps, [Step::Plan, ..]));
+        assert!(matches!(plan.checks.last(), Some(Check::Turn("completed"))));
+        let untrusted = SCENARIOS.iter().find(|s| s.id == "untrusted-project");
+        let untrusted = untrusted.unwrap().of("codex");
+        assert!(untrusted.untrusted);
+        assert!(matches!(
+            untrusted.checks,
+            [Check::Refused("project_untrusted"), ..]
+        ));
+        assert_eq!(fake_version("claude"), "fake");
+        assert_eq!(fake_version("codex"), "fake-codex");
     }
 
     #[test]

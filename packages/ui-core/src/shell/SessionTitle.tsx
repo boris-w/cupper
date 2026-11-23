@@ -1,11 +1,12 @@
-// The title bar's session (design 5.7.4): its title, "新会话" until it has
-// one, and a worktree's branch after it; beside them, the agent's mark
-// (AG-3, cupper's own: Codex has none).
+// The title bar's session (design 5.7.4): a folder, as Codex has, then its
+// title, "新会话" until it has one, and a worktree's branch after it; beside
+// them, the agent's mark (AG-3, cupper's own: Codex has none).
 
 import { escapeInvisible } from "@cupper/i18n";
 import type { SessionSummary } from "@cupper/protocol";
 
 import { useT } from "../app/providers";
+import { FolderIcon } from "../components/icons";
 
 /** The agent's short name in a frame: the title bar's and the sidebar card's. */
 export function AgentMark({ agent }: { agent: string }) {
@@ -25,6 +26,9 @@ export function SessionTitle({ summary }: { summary?: SessionSummary }) {
   const branch = summary.workspace_kind === "worktree" ? summary.branch : undefined;
   return (
     <div className="flex min-w-0 items-center gap-2 text-sm">
+      <span className="shrink-0 text-icon-secondary">
+        <FolderIcon />
+      </span>
       <span className="truncate font-medium">
         {escapeInvisible(summary.title) || t("sidebar:new_session")}
       </span>

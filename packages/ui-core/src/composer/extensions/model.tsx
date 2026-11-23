@@ -1,5 +1,7 @@
 // "{模型} {强度} ⌄" (design 5.7.4): the model and the reasoning effort in one
-// button, each a group of its menu. An error's "换模型" opens it too.
+// button, each a group of its menu. An error's "换模型" opens it too. The
+// agent's names stay as they are: a long one is cut short, whole in the
+// tooltip (T272).
 
 import { useStore } from "zustand";
 
@@ -25,8 +27,8 @@ function Model({ options }: { options: Options }) {
       open={open}
       onOpenChange={(opened) => ui.getState().openMenu(opened ? "model" : null)}
       trigger={
-        <BarButton label={t("composer:model")}>
-          {label}
+        <BarButton label={t("composer:model")} tooltip={label}>
+          <span className="max-w-48 truncate">{label}</span>
           <ChevronDownIcon />
         </BarButton>
       }
