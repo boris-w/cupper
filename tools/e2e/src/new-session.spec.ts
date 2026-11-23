@@ -117,11 +117,14 @@ test.describe("with Codex too", () => {
       await expect(unread("tests.txt")).toHaveCount(0);
       await expect(unread("fix.txt")).toBeVisible();
 
-      // Each row says its agent on hover; the top row first, as what it shows may cover the one above.
+      // Each row says its agent on hover; the top row first, as what it shows
+      // may cover the one above. The pointer leaves the row it clicked first:
+      // a hover where it already is moves nothing, and shows nothing.
       const agents: [string, string][] = [
         ["tests.txt", "codex"],
         ["fix.txt", "claude"],
       ];
+      await window.getByRole("main").hover();
       for (const [title, agent] of agents) {
         const names = window.getByText(t(`sidebar:agent_${agent}`), { exact: true });
         const before = await names.count();
