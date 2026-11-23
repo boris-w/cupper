@@ -340,7 +340,7 @@ export function Composer(props: {
               interrupt();
             }
           }}
-          className="field-sizing-content block max-h-[25dvh] min-h-10 w-full resize-none bg-transparent px-3 pt-3 text-chat outline-none placeholder:text-fg/50"
+          className="field-sizing-content block max-h-[25dvh] min-h-13.5 w-full resize-none bg-transparent px-3 pt-3 text-chat outline-none placeholder:text-fg/50"
         />
         <div className="flex items-center gap-1 p-2 text-sm">
           {EXTENSIONS.filter((item) => item.side === "left").map(({ Component }, index) => (
@@ -356,7 +356,7 @@ export function Composer(props: {
             aria-label={t(state === "stop" ? "composer:stop" : "composer:send")}
             disabled={state === "disabled"}
             onClick={state === "stop" ? interrupt : () => submit("send")}
-            className="flex size-7 items-center justify-center rounded-full bg-btn-primary text-btn-primary-fg outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            className="flex size-7 items-center justify-center rounded-full bg-btn-primary text-btn-primary-fg outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {state === "stop" ? <StopIcon /> : <ArrowUpIcon />}
           </button>
