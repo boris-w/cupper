@@ -54,7 +54,7 @@ const MARKDOWN = [
     data: {
       turn_id: "t_1",
       status: "completed",
-      ended_at: 2,
+      ended_at: STARTED + 8000,
       duration_ms: 8000,
       final_item_ids: ["i_2"],
     },
@@ -103,7 +103,8 @@ const CODE = [
 /** The final answer is the messages after the last tool call (design 5.3.5), as the host fills it. */
 const completed = (turn_id: string, status = "completed", final_item_ids: string[] = []) => ({
   type: "turn.completed",
-  data: { turn_id, status, ended_at: 2, duration_ms: 8000, final_item_ids },
+  // Ended as it ran: no time between turns, and the answer's time is the clock's day (T272).
+  data: { turn_id, status, ended_at: STARTED + 8000, duration_ms: 8000, final_item_ids },
 });
 
 const HIGHLIGHT = [
