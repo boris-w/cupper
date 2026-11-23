@@ -42,37 +42,40 @@ export function SettingsPage({ route }: { route: Extract<Route, { page: "setting
   const section = SECTIONS.find(({ id }) => id === route.section) ?? SECTIONS[0];
   const { Body } = section;
   return (
-    <div className="flex h-full">
-      <nav
-        aria-label={t("settings:title")}
-        className="flex w-(--layout-sidebar-w) shrink-0 flex-col bg-(--sidebar-surface) px-2 text-base"
-      >
-        <div className="app-drag h-(--layout-titlebar-h) shrink-0" />
-        <button
-          type="button"
-          onClick={() => navigate(route.from)}
-          className={`${ROW} mb-2 text-fg-secondary hover:bg-hover`}
+    // The shell's frame (design 5.7.4): a bar to move the window by, then the
+    // navigation and the section as the sidebar and the session area.
+    <div className="flex h-full flex-col">
+      <div className="app-drag h-(--layout-titlebar-h) shrink-0" />
+      <div className="flex min-h-0 flex-1">
+        <nav
+          aria-label={t("settings:title")}
+          className="flex w-(--layout-sidebar-w) shrink-0 flex-col rounded-l-(--radius-panel) bg-(--sidebar-surface) px-2 pt-2 text-base"
         >
-          <BackIcon />
-          {t("settings:back")}
-        </button>
-        {SECTIONS.map(({ id }) => (
           <button
-            key={id}
             type="button"
-            aria-current={id === section.id ? "page" : undefined}
-            onClick={() => navigate({ ...route, section: id, focus: undefined })}
-            className={`${ROW} hover:bg-hover aria-[current=page]:bg-hover`}
+            onClick={() => navigate(route.from)}
+            className={`${ROW} mb-2 text-fg-secondary hover:bg-hover`}
           >
-            {t(`settings:section_${id}`)}
+            <BackIcon />
+            {t("settings:back")}
           </button>
-        ))}
-      </nav>
-      <div className="min-w-0 flex-1 overflow-y-auto bg-surface">
-        <div className="app-drag h-(--layout-titlebar-h)" />
-        <div className="mx-auto flex w-full max-w-192 min-w-[min(100%,320px)] flex-col gap-10 px-4 pb-10">
-          <h1 className="text-heading-sm font-medium">{t(`settings:section_${section.id}`)}</h1>
-          <Body focus={route.focus} />
+          {SECTIONS.map(({ id }) => (
+            <button
+              key={id}
+              type="button"
+              aria-current={id === section.id ? "page" : undefined}
+              onClick={() => navigate({ ...route, section: id, focus: undefined })}
+              className={`${ROW} hover:bg-hover aria-[current=page]:bg-hover`}
+            >
+              {t(`settings:section_${id}`)}
+            </button>
+          ))}
+        </nav>
+        <div className="min-w-0 flex-1 overflow-y-auto rounded-r-(--radius-panel) bg-surface">
+          <div className="mx-auto flex w-full max-w-192 min-w-[min(100%,320px)] flex-col gap-10 px-4 pt-2 pb-10">
+            <h1 className="text-heading-sm font-medium">{t(`settings:section_${section.id}`)}</h1>
+            <Body focus={route.focus} />
+          </div>
         </div>
       </div>
     </div>

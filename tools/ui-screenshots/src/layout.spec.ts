@@ -125,12 +125,16 @@ test("UI-theme: T106's dark values, and the light ones back on a change of theme
   page,
 }) => {
   await session(page, "dark");
-  expect(await background(page, "body")).toBe("rgb(24, 24, 24)");
+  // The session area on the window's frame, opaque here (T148).
+  const area = "main >> xpath=..";
+  expect(await background(page, area)).toBe("rgb(24, 24, 24)");
+  expect(await background(page, "body")).toBe("rgb(46, 46, 46)");
   expect(await background(page, "[data-composer]")).toBe("rgb(54, 54, 54)");
   expect(await page.locator("body").evaluate((el) => getComputedStyle(el).color)).toBe(
     "rgb(223, 223, 223)",
   );
   await page.evaluate(() => window.cupperShell.setTheme("light"));
   await expect.poll(() => background(page, "[data-composer]")).toBe("rgb(255, 255, 255)");
-  expect(await background(page, "body")).toBe("rgb(255, 255, 255)");
+  expect(await background(page, area)).toBe("rgb(255, 255, 255)");
+  expect(await background(page, "body")).toBe("rgb(242, 242, 242)");
 });

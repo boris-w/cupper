@@ -12,8 +12,8 @@
 //!   The frames after it go out once the virtual clock, which only the test
 //!   moves (`test/clock_advance`), reaches their recorded `t` from that match.
 //! - When the host has not sent the next frame by its recorded time, the
-//!   test acts as the user: `session/create` (with the model and effort the
-//!   host passed on) or `session/send` with the next prompt's text,
+//!   test acts as the user: `session/create` (for the recording's CLI, with
+//!   the model and effort the host passed on) or `session/send` with the next prompt's text,
 //!   `interaction/respond` with the recorded option,
 //!   `session/interrupt` for `session/cancel`. Nothing else is a user's.
 //! - The host handles each frame the adapter writes before the next one goes
@@ -149,6 +149,8 @@ struct Run {
     host: JoinHandle<cupper_host::exit::HostExit>,
     agents: mpsc::UnboundedReceiver<InProcessAgent>,
     player: Option<Player>,
+    /// The agent of the recording's CLI.
+    agent: String,
     mapping: Mapping,
     /// The virtual clock, in ms from the start: only the test moves it.
     now: u64,
@@ -180,6 +182,7 @@ impl Run {
             host,
             agents,
             player: None,
+            agent: String::new(),
             mapping: Mapping::default(),
             now: 0,
             syncs: 0,
@@ -235,6 +238,7 @@ impl Run {
 
     /// Plays the recording's segments, one adapter instance each.
     async fn replay(&mut self, recording: &Recording) {
+        self.agent.clone_from(&recording.header.cli);
         for frames in recording.segments() {
             let mut anchor = (self.now, frames[0].t);
             for (at, frame) in frames.iter().enumerate() {
@@ -342,7 +346,7 @@ impl Run {
                 let message = json!([{"type": "text", "text": text}]);
                 match session {
                     None => {
-                        let params = json!({"command_id": id, "agent": "claude",
+                        let params = json!({"command_id": id, "agent": self.agent,
                             "project_id": ProjectId::from_uuid(1),
                             "workspace": {"kind": "local"}, "message": message,
                             "config": config_of(frames)});
@@ -427,8 +431,8 @@ fn spawn_as<M: Method + Send + 'static>(
 }
 
 /// What the session was created with, as the host passed it on in `frames`:
-/// a config option's first value (`xtask compat` gives a real run's model
-/// and effort).
+/// a config option's first value (`xtask compat` gives the permission mode,
+/// and a real run's model and effort).
 fn config_of(frames: &[Frame]) -> Value {
     let mut config = serde_json::Map::new();
     for frame in frames {
@@ -438,8 +442,10 @@ fn config_of(frames: &[Frame]) -> Value {
         let params = &message["params"];
         let field = match params["configId"].as_str() {
             _ if message["method"] != "session/set_config_option" => continue,
+            Some("mode") => "permission_mode",
             Some("model") => "model",
-            Some("effort") => "reasoning_effort",
+            // Claude's and Codex's.
+            Some("effort" | "reasoning_effort") => "reasoning_effort",
             _ => continue,
         };
         config.entry(field).or_insert(params["value"].clone());
@@ -535,6 +541,7 @@ gold_b! {
     gold_b_fake_normal_turn => "cupper-fake-agent/0.0.0/fake/normal-turn",
     gold_b_fake_approval => "cupper-fake-agent/0.0.0/fake/approval",
     gold_b_fake_cancel => "cupper-fake-agent/0.0.0/fake/cancel",
+    gold_b_fake_codex_cancel => "cupper-fake-agent/0.0.0/fake-codex/cancel",
     gold_b_claude_normal_turn => "claude-agent-acp/0.91.0/2.1.296/normal-turn",
     gold_b_claude_approval => "claude-agent-acp/0.91.0/2.1.296/approval",
     gold_b_claude_cancel => "claude-agent-acp/0.91.0/2.1.296/cancel",
