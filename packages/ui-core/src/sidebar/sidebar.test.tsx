@@ -201,8 +201,10 @@ describe("UI-session-title", () => {
     const worktree = { workspace_kind: "worktree", branch: "cupper/fix-login" } as const;
     rerender(title(session(2, "idle", { ...worktree, title: "", agent: "codex" })));
     expect(shown()).toBe("新会话· cupper/fix-loginCodex");
-    rerender(title(session(3, "idle", { title: "\u202Egnp.exe" })));
-    expect(shown()).toBe("\\u{202E}gnp.exeClaude");
+    rerender(
+      title(session(3, "idle", { title: "\u202Egnp.exe", ...worktree, branch: "a\u200Bb" })),
+    );
+    expect(shown()).toBe("\\u{202E}gnp.exe· a\\u{200B}bClaude");
     rerender(title());
     expect(shown()).toBe("");
   });

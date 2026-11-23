@@ -28,7 +28,7 @@ export function SessionTitle({ summary }: { summary?: SessionSummary }) {
       <span className="truncate font-medium">
         {escapeInvisible(summary.title) || t("sidebar:new_session")}
       </span>
-      {branch && <span className="truncate text-fg-tertiary">· {branch}</span>}
+      {branch && <span className="truncate text-fg-tertiary">· {escapeInvisible(branch)}</span>}
       <AgentMark agent={summary.agent} />
     </div>
   );
