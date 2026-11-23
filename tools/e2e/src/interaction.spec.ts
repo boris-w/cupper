@@ -1,11 +1,13 @@
 // The request panel on the real app (design 5.7.4, 5.7.8; T083, T165): each
 // key and click goes through the main process's input guard as real input,
 // and what the host recorded as the answer is what the tests check. Keys and
-// clicks need the window's focus: every test here is `@focus`.
+// clicks need the window's focus: every test here is `@focus`, but for
+// E2E-S2's notes of a window not in front (PRD S2, T170).
 
 import { expect, test, type Cupper } from "./fixture";
 import { events, setPref, texts, untilEvent } from "./helpers";
 import { activatePanel, focusWindow, panelReady, press, requestPanel, type } from "./input";
+import { asked, pattern } from "./nfr1";
 
 /** Starts a Claude session on `script` from the CLI, opens it, and focuses the window. */
 async function session(cupper: Cupper, script: string) {
@@ -296,3 +298,66 @@ test(
     );
   },
 );
+
+test(
+  "E2E-S2: an approval by Enter, a rejection by Esc, a question answered; the agent goes on",
+  { tag: "@focus" },
+  async ({ cupper }) => {
+    const script = "permission k1; permission k2; question Name?; say done";
+    const { stream } = await session(cupper, script);
+    const t = await texts(cupper);
+    const panel = requestPanel(cupper);
+    const record = (id: string) => cupper.window.locator(`[data-request-record="${id}"]`);
+
+    const approved = await request(cupper, stream, 0);
+    await activatePanel(cupper);
+    await press(cupper, "Enter");
+    expect(await outcome(cupper, stream, approved)).toEqual(selected("allow-once"));
+    await expect(record(approved)).toHaveText(
+      await pattern(cupper, "request:record_approved", "title"),
+    );
+    const rejected = await request(cupper, stream, 1);
+    await activatePanel(cupper);
+    await press(cupper, "Escape");
+    expect(await outcome(cupper, stream, rejected)).toEqual(selected("reject"));
+    await expect(record(rejected)).toHaveText(t("request:record_rejected"));
+    // The question, answered as typed; the agent says it and ends its turn.
+    await request(cupper, stream, 2);
+    await panel.getByRole("textbox", { name: t("request:custom") }).click();
+    await type(cupper, "Ada");
+    await panel.getByRole("button", { name: t("request:submit") }).click();
+    await expect(cupper.window.getByText("answer:Ada")).toBeVisible();
+    await untilEvent(cupper, stream, (e) => e.type === "turn.completed");
+  },
+);
+
+test("E2E-S2: the window not in front, the session it shows notes its request and its turn's end", async ({
+  cupper,
+}) => {
+  await cupper.launch();
+  await cupper.connected();
+  const project = ["--agent", "claude", "--project", cupper.repo];
+  const { session_id } = await cupper.cli.ok(["new", ...project, "say ready"]);
+  const [id, stream] = [String(session_id), `session/${String(session_id)}`];
+  const noted = (reason: string, after = 0) =>
+    untilEvent(
+      cupper,
+      "index",
+      (e) =>
+        e.type === "notification.intent" &&
+        e.data.session_id === id &&
+        e.data.reason === reason &&
+        e.seq > after,
+    );
+  const first = await noted("turn_completed");
+  // Shown, but not in front: a test without @focus keeps the app behind.
+  await cupper.window.getByRole("button", { name: /say ready/ }).click();
+  await expect(cupper.window.getByText("ready", { exact: true })).toBeVisible();
+  await cupper.cli.ok(["send", id, "permission k1; say done"]);
+  const request = await asked(cupper, stream);
+  expect((await noted("needs_action", first.seq)).data.request_id).toBe(request);
+  await expect(requestPanel(cupper)).toBeVisible();
+  await cupper.cli.ok(["approve", id, request]);
+  await noted("turn_completed", first.seq);
+  expect(await cupper.window.evaluate(() => document.hasFocus())).toBe(false);
+});
