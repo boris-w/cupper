@@ -639,3 +639,5 @@
 | T267 | 会话标题在顶栏（`shell/SessionTitle.tsx`）和侧边栏会话行都原样显示，没有像项目名那样经 `escapeInvisible`；悬停卡片也显示标题，三处一起改，防标题冒充 | T266（已写入 brief） |
 | T148 | 悬停卡片的相对时间用 Intl 的中文写法（"5分钟前""昨天"），Codex 是"N 个月前"，差一个空格，比对后定；顶栏标题旁的分支名没有经 `escapeInvisible`，分支名里有来自用户输入的部分，一并转义 | T267 |
 | T113 | codex 0.170.0、0.171.0（T269）：codex-acp 2.2.2 不处理 `agentMessage.moderation` 的 `hide`、`block`，被隐藏或拦下的回答在实时和 `session/load` 回放时照常显示原文，升级适配器时定 cupper 是否执行；`CodexErrorInfo.bioPolicy` 应和 `cyberPolicy` 一样归为策略拒绝（0.168.0、0.169.0 新增的 `modelNotFound`、`policyCapacityUnavailable`、`inferenceHookDenied` 也还落在 `provider_error`） | T269 |
+| 以后做审查文档的任务 | pierre 在 hunk 到达、高亮完成后重建文件头；按下鼠标后、松开前文件头被换掉时，click 不触发（T270 的 presence 用例就挂在这里）。真实用户正好在这一刻点"收起"也会丢这一下，影响小，评估要不要处理 | T270 |
+| 维护 e2e 工具的任务 | e2e 配置 `retries: 0`，失败时不留 trace，T270 只能靠 error-context 的快照推断原因；考虑 `trace: "retain-on-failure"`，注意产物体积和 testdata-scan | T270 |
