@@ -1,7 +1,7 @@
 # MAN-S1：并行开发
 
 - 场景：PRD S1。在项目 A 里同时开两个会话：Claude Code 修一个 bug，Codex 补测试；两个会话各在自己的 worktree 里运行，互不干扰；侧边栏看得出哪个在运行、哪个在等我。
-- 对应需求：CP-5、AG-3、PS-2、PS-3、PS-4、PS-8、GT-5。假 agent 的自动化版本是 E2E-S1（T170）。
+- 对应需求：CP-5、AG-3、PS-2、PS-3、PS-4、PS-8、GT-5。假 agent 的自动化版本是 E2E-S1（T170）：按本表顺序走第 1 至 5 步的主要部分（两种 agent 各在新建的 worktree 里、侧边栏状态、⌘⌥A、完成未读与点开变为已读、改动各在自己的 worktree 里、主工作区干净）。第 3 步的审批由 CLI 回答；分支名、第 6 至 8 步（重启、归档与恢复）不在其中。
 - 共同约定见 [README.md](README.md) 第 4 节，记录格式见第 1 节。两种 agent 本来就在同一个场景里，所以只走一遍：A 用 Claude，B 用 Codex。
 
 ## 准备

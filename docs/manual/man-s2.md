@@ -1,7 +1,7 @@
 # MAN-S2：审批与提问
 
 - 场景：PRD S2。agent 要执行越界命令时出现审批，按 Enter 批准、Esc 拒绝，范围选项由 agent 给出；agent 要我做选择或确认计划时出现提问；窗口不在前台时收到系统通知。
-- 对应需求：AP-1 至 AP-5，以及设计 5.7.8 的请求面板规则（RP-1 至 RP-12）。假 agent 的自动化版本是 E2E-S2（T170）；按键的细节另由 MAN-keyboard 覆盖。
+- 对应需求：AP-1 至 AP-5，以及设计 5.7.8 的请求面板规则（RP-1 至 RP-12）。假 agent 的自动化版本是 E2E-S2（T170）：按本表顺序走第 2、3、6、7 步的主要部分（Enter 批准、Esc 拒绝、记录行的结果，提问回答后 agent 继续；窗口不在前台时请求和回合结束各记一条通知意图，只记录不弹通知，也不点通知）。第 1、4、5、8 步各有自己的用例（E2E-approve-enter-esc、E2E-persistent-option-native、E2E-reject-with-message、E2E-NFR1-3）；按键的细节另由 MAN-keyboard 覆盖。
 - 共同约定见 [README.md](README.md) 第 4 节。每一步 Claude、Codex 各走一遍，结果分两列。
 
 ## 准备
