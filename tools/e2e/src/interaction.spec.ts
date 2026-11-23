@@ -350,7 +350,12 @@ test("E2E-S2: the window not in front, the session it shows notes its request an
         e.seq > after,
     );
   const first = await noted("turn_completed");
-  // Shown, but not in front: a test without @focus keeps the app behind.
+  // Not in front: a test without @focus keeps the app behind, and with
+  // Playwright's focus emulation off the page knows it (as PERF-ui-occluded).
+  const cdp = await cupper.window.context().newCDPSession(cupper.window);
+  await cdp.send("Emulation.setFocusEmulationEnabled", { enabled: false });
+  await expect.poll(() => cupper.window.evaluate(() => document.hasFocus())).toBe(false);
+  // Shown after: the window told the host it is behind before it subscribed to the session.
   await cupper.window.getByRole("button", { name: /say ready/ }).click();
   await expect(cupper.window.getByText("ready", { exact: true })).toBeVisible();
   await cupper.cli.ok(["send", id, "permission k1; say done"]);
@@ -359,5 +364,4 @@ test("E2E-S2: the window not in front, the session it shows notes its request an
   await expect(requestPanel(cupper)).toBeVisible();
   await cupper.cli.ok(["approve", id, request]);
   await noted("turn_completed", first.seq);
-  expect(await cupper.window.evaluate(() => document.hasFocus())).toBe(false);
 });
