@@ -126,6 +126,10 @@ describe("UNIT-ui-sidebar", () => {
     for (const text of ["等待批准", "需要用户输入", "未信任"]) {
       expect(screen.getAllByText(text)).toHaveLength(1);
     }
+    // At the row's end, after the title, as Codex's (T148).
+    const running = screen.getByRole("img", { name: "运行中" });
+    const title = screen.getByText("会话 1");
+    expect(title.compareDocumentPosition(running) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   test("a row's hover card: the title and when, the project and agent, why it failed or waits", async () => {
