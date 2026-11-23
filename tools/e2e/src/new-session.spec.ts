@@ -80,6 +80,10 @@ test.describe("with Codex too", () => {
         };
         await pick(t("composer:pick_agent"), agent);
         await pick(t("composer:pick_workspace"), t("composer:workspace_worktree"));
+        // A worktree waits for its base: sending is blocked until the branches came.
+        await expect(window.getByRole("button", { name: t("composer:pick_branch") })).toHaveText(
+          "main",
+        );
         const composer = window.locator("[data-composer] textarea");
         await composer.fill(script);
         await composer.press("Enter");
