@@ -648,3 +648,4 @@
 | 以后改宿主日志的任务 | host.log 里 `stream.subscribed` 的 detail 字段按长字符串整段脱敏，会话流的流名（含会话 ID）变成 `<redacted>`，统计时只能靠排除法区分会话流和 index；要按流的种类统计，detail 里记下流的种类，或者让流名免于脱敏 | T174 |
 | 以后的复刻度任务 | 两轮之间的时间分隔只按轮次判断（上一轮结束 1 小时以上后才开始的一轮，或第一轮开始时距现在超过 1 小时）；Codex 另有"两条 agent 消息之间隔 10 分钟也显示"的规则，T272 没做 | T272 |
 | T113 | T274 的汇报（`docs/tasks/T274-compat-codex/report.md`）"给 T113"两节：Codex 的"CLI 崩溃"是 app-server 被杀，适配器重启，没有 `session_resumed`，`KillCli` 后下一个 prompt 应以 restartable 失败、再下一个正常完成，要实测；六条真实运行要核实的假设（提问只在计划模式、revise_plan 后回合结束方式、hooks 的开关与格式、只读命令不经审批、apply_patch 在 read-only 下请求审批、low 档的思考摘要） | T274 |
+| 以后的复刻度任务 | 工具栏按钮按下时有灰底，侧边栏开着时侧边栏开关下面一直有一块灰底；Codex 的侧边栏开关没有，只对它去掉按下底色即可（约 2 行） | T148 |
