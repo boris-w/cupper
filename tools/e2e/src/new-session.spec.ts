@@ -117,17 +117,16 @@ test.describe("with Codex too", () => {
       await expect(unread("tests.txt")).toHaveCount(0);
       await expect(unread("fix.txt")).toBeVisible();
 
-      // Each row says its agent on hover.
+      // Each row says its agent on hover; the top row first, as what it shows may cover the one above.
       const agents: [string, string][] = [
-        ["fix.txt", "claude"],
         ["tests.txt", "codex"],
+        ["fix.txt", "claude"],
       ];
       for (const [title, agent] of agents) {
         const names = window.getByText(t(`sidebar:agent_${agent}`), { exact: true });
         const before = await names.count();
         await row(title).hover();
         await expect.poll(() => names.count(), `${agent} on hover`).toBeGreaterThan(before);
-        await window.getByRole("main").hover();
       }
       // Each change in its own worktree; the main working tree is clean.
       const worktree = async (stream: string) =>
