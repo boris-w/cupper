@@ -1,8 +1,9 @@
 // A finished turn's change card (design 5.7.4, GT-3, F3): "{n} 个文件已更改
 // +a −b" by the end snapshot, a line per file of the turn's diff, each opening
 // the review panel on it, and "撤销", which reverts the turn after the main
-// document's confirmation (RP-11). A snapshot that is not whole says why,
-// and offers no undo. Paths are text.
+// document's confirmation (RP-11). One file, as Codex shows it: "已编辑
+// {name}" and its counts by an icon, "查看变更" opening it (T272). A
+// snapshot that is not whole says why, and offers no undo. Paths are text.
 
 import { RpcFailure } from "@cupper/host-client";
 import { escapeInvisible } from "@cupper/i18n";
@@ -10,6 +11,7 @@ import { use, useState } from "react";
 
 import { useT } from "../app/providers";
 import { Alert } from "../components/Alert";
+import { DiffIcon, UndoIcon } from "../components/icons";
 import { useActions } from "../review/actions";
 import { RevertConfirm } from "../review/RevertConfirm";
 import { OpenReview, useDiff } from "../review/state";
@@ -50,13 +52,32 @@ function TurnChangesRow({ row }: { row: RowOf<"turn_changes"> }) {
     actions.askRevert({ source: "button", diffToken, target: { all: true }, hunk: false });
   };
 
+  const files = diff.data?.files ?? [];
+  const single = recorded && files.length === 1 ? files[0] : undefined;
+  const name = escapeInvisible(single?.path.split("/").at(-1) ?? "");
   return (
     <div
-      className="rounded-lg border border-border text-sm hover:border-border-strong"
+      className="rounded-lg border-[0.5px] border-border-strong bg-surface-panel text-chat"
       data-turn-changes
     >
       <div className="flex items-center gap-2 px-3 py-2">
-        {recorded ? (
+        {single ? (
+          <>
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-btn-secondary text-fg-secondary">
+              <DiffIcon />
+            </span>
+            <span className="min-w-0 flex-1" title={escapeInvisible(single.path)}>
+              <span className="block truncate">
+                {t(`stream:changes_file_${single.change}`, {
+                  name,
+                  defaultValue: t("stream:changes_file_update", { name }),
+                })}
+              </span>
+              <span className="text-diff-add">+{single.additions}</span>{" "}
+              <span className="text-diff-del">−{single.deletions}</span>
+            </span>
+          </>
+        ) : recorded ? (
           <span className="min-w-0 flex-1">
             {t("stream:changes_title", { count: stat?.files ?? 0 })}{" "}
             <span className="text-diff-add">+{stat?.added ?? 0}</span>{" "}
@@ -70,9 +91,19 @@ function TurnChangesRow({ row }: { row: RowOf<"turn_changes"> }) {
             type="button"
             disabled={!diff.data || actions.busy || fetching}
             onClick={() => void undo()}
-            className="shrink-0 rounded-md px-2 py-0.5 text-fg-secondary outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            className="flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-fg-secondary outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           >
             {t("stream:changes_undo")}
+            <UndoIcon />
+          </button>
+        )}
+        {single && (
+          <button
+            type="button"
+            onClick={() => open(single.path)}
+            className="shrink-0 rounded-lg border-[0.5px] border-border-strong px-2.5 py-1 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t("stream:changes_view")}
           </button>
         )}
       </div>
@@ -88,9 +119,9 @@ function TurnChangesRow({ row }: { row: RowOf<"turn_changes"> }) {
             : t("stream:changes_reason_other", { reason: reason ?? status })}
         </p>
       )}
-      {diff.data && diff.data.files.length > 0 && (
+      {!single && files.length > 0 && (
         <ul className="border-t border-border py-1">
-          {diff.data.files.map((file) => (
+          {files.map((file) => (
             <li key={file.path}>
               <button
                 type="button"

@@ -23,7 +23,7 @@ test(
     await cupper.window.getByRole("button", { name: script.slice(0, 12) }).click();
 
     const card = cupper.window.locator("[data-turn-changes]");
-    await expect(card).toContainText(t("stream:changes_title", { count: 1 }));
+    await expect(card).toContainText(t("stream:changes_file_update", { name: "README.md" }));
     await expect(card.getByText("README.md")).toBeVisible();
     expect(readme()).toBe("changed\n");
 

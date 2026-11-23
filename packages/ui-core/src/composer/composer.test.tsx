@@ -499,6 +499,17 @@ describe("UNIT-composer-config", () => {
     await waitFor(() => expect(screen.getByText("没有改成（agent_error）")).toBeTruthy());
   });
 
+  test("a long model name is cut short, whole in the tooltip; never rewritten", async () => {
+    const long = "Default (recommended) · Opus 4.8 with 1M context";
+    const named = capabilities({ config: [option("model", "d", [value("d", long)])] });
+    await setup("idle", [named, configured("default")]);
+    const button = screen.getByRole("button", { name: "模型与推理强度" });
+    expect(button.textContent).toBe(long);
+    expect(button.querySelector(".truncate")?.textContent).toBe(long);
+    fireEvent.focus(button);
+    expect((await screen.findByRole("tooltip")).textContent).toBe(long);
+  });
+
   test("above the composer: full access is on, or the low-interruption mode", async () => {
     await setup("idle", [caps, configured("bypassPermissions")]);
     expect(screen.getByText("完全访问权限已开启")).toBeTruthy();
