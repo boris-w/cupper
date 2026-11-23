@@ -8,6 +8,7 @@ import { expect, test, type Cupper } from "./fixture";
 import { events, setPref, texts, untilEvent } from "./helpers";
 import { activatePanel, focusWindow, panelReady, press, requestPanel, type } from "./input";
 import { asked, pattern } from "./nfr1";
+import { openLink } from "./perf";
 
 /** Starts a Claude session on `script` from the CLI, opens it, and focuses the window. */
 async function session(cupper: Cupper, script: string) {
@@ -355,9 +356,10 @@ test("E2E-S2: the window not in front, the session it shows notes its request an
   const cdp = await cupper.window.context().newCDPSession(cupper.window);
   await cdp.send("Emulation.setFocusEmulationEnabled", { enabled: false });
   await expect.poll(() => cupper.window.evaluate(() => document.hasFocus())).toBe(false);
-  // Shown after: the window told the host it is behind before it subscribed to the session.
-  await cupper.window.getByRole("button", { name: /say ready/ }).click();
+  // Shown after, by its link: after a click there the host took the window for in front.
+  await openLink(cupper, id);
   await expect(cupper.window.getByText("ready", { exact: true })).toBeVisible();
+  expect(await cupper.window.evaluate(() => document.hasFocus())).toBe(false);
   await cupper.cli.ok(["send", id, "permission k1; say done"]);
   const request = await asked(cupper, stream);
   expect((await noted("needs_action", first.seq)).data.request_id).toBe(request);
