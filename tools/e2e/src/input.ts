@@ -110,16 +110,33 @@ export async function panelReady(cupper: Cupper) {
 
 /**
  * Tabs into a panel that did not take the focus by itself (RP-3), until it
- * is active; then waits out the second in which the guard counts no digit
- * after another key (its rule 3: Tab is such a key).
+ * is active, along the page's focus order from where the focus is: the
+ * sidebar, the title bar and the stream come first, however many stops they
+ * have (T270). Once round that order without reaching the panel, it names
+ * each stop it went through. Then waits out the second in which the guard
+ * counts no digit after another key (its rule 3: Tab is such a key).
  */
 export async function activatePanel(cupper: Cupper) {
   const panel = requestPanel(cupper);
-  for (let tabs = 0; (await panel.getAttribute("data-activation")) !== "auto"; tabs++) {
-    if (tabs === 10) {
-      throw new Error("ten tabs did not reach the request panel");
-    }
+  const stops: string[] = [];
+  await cupper.window.evaluate(() => {
+    (window as { tabbed?: WeakSet<Element> }).tabbed = new WeakSet();
+  });
+  while ((await panel.getAttribute("data-activation")) !== "auto") {
     await press(cupper, "Tab");
+    // Where the Tab went, and whether the focus was there before.
+    const { stop, again } = await cupper.window.evaluate(() => {
+      const at = document.activeElement ?? document.body;
+      const tabbed = (window as { tabbed?: WeakSet<Element> }).tabbed ?? new WeakSet();
+      const again = tabbed.has(at);
+      tabbed.add(at);
+      const name = at.getAttribute("aria-label") ?? at.textContent?.trim().slice(0, 24);
+      return { stop: name || at.tagName.toLowerCase(), again };
+    });
+    stops.push(stop);
+    if (again) {
+      throw new Error(`round the page without reaching the request panel: ${stops.join(" → ")}`);
+    }
   }
   await cupper.window.waitForTimeout(1100);
 }
