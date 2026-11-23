@@ -4,7 +4,9 @@
 // starts an activity group with the tool calls right after it that share its
 // `group_id`; a group of one is a plain tool row. A completed turn folds to
 // its header unless open (design 5.7.4), and still shows its final answer and
-// the rows of `ALWAYS`.
+// the rows of `ALWAYS`, then the footer under its answer. As Codex does, a
+// turn an hour or more after the one before, or the first one an hour before
+// now, has the time above it.
 
 import type { Placeholder, SessionView } from "@cupper/host-client";
 import type { Entry, ItemView, PromptBlock, SnapshotRecorded } from "@cupper/protocol";
@@ -31,6 +33,9 @@ function hasChanges({ status, stat, reason }: SnapshotRecorded): boolean {
   return !(status === "skipped" && reason === "not_a_repo");
 }
 
+/** The gap from the turn before, or from now for the first, that shows the time. */
+export const DIVIDER_MS = 3_600_000;
+
 /** Steered messages show in a folded turn; the others open it, above its header. */
 const opening = (row: StreamRow) => row.kind === "user_message" && !row.steered;
 
@@ -39,12 +44,18 @@ export function flatten(
   unknown: Placeholder[],
   history: History,
   open: ReadonlySet<string> = new Set(),
+  now = Date.now(),
 ): StreamRow[] {
   const rows: StreamRow[] =
     history === "none" ? [] : [{ kind: "history", key: "history", state: history }];
   for (const [n, turn] of view.turns.entries()) {
     const { turn_id, turn_no, started_at } = turn.started;
     const completed = turn.completed ?? undefined;
+    const before = view.turns[n - 1];
+    const since = before ? (before.completed?.ended_at ?? before.started.started_at) : now;
+    if (Math.abs(since - started_at) >= DIVIDER_MS) {
+      rows.push({ kind: "time_divider", key: `time:${turn_id}`, at: started_at });
+    }
     const folds = completed?.status === "completed";
     const folded = folds && !open.has(turn_id);
     const body: StreamRow[] = [];
@@ -73,6 +84,14 @@ export function flatten(
       ...(folds ? { folded } : {}),
     });
     rows.push(...work.filter(shown));
+    const answer = work.flatMap((row) =>
+      row.kind === "agent_message" && final.has(row.itemId) ? [row.text] : [],
+    );
+    if (folds && completed && answer.length > 0) {
+      const last = n === view.turns.length - 1;
+      const footer = { text: answer.join("\n\n"), endedAt: completed.ended_at, last };
+      rows.push({ kind: "turn_footer", key: `footer:${turn_id}`, ...footer });
+    }
   }
   entries(view, view.tail, rows, false);
   unknown.forEach(({ body }, n) =>

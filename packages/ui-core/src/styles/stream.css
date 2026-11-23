@@ -40,8 +40,10 @@
 .md ol {
   list-style: decimal;
 }
+/* Without streamdown's py-1: items a line apart, as Codex has them (T272). */
 .md li {
   padding-left: 5.25px;
+  padding-block: 0;
 }
 .md strong {
   font-weight: var(--font-weight-semibold);

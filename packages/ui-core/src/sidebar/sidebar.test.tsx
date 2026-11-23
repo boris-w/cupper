@@ -143,7 +143,7 @@ describe("UNIT-ui-sidebar", () => {
       fireEvent.blur(button);
       return text;
     };
-    expect(card(/会话 1/)).toBe("会话 15分钟前cupperClaudeagent 进程已退出");
+    expect(card(/会话 1/)).toBe("会话 15 分钟前cupperClaudeagent 进程已退出");
     expect(card(/会话 2/)).toBe("会话 2昨天cupperClaude等待批准");
     // A title's invisible characters show as escapes, in the row and the card.
     expect(card(/202E/)).toBe("\\u{202E}gnp.exe现在cupperCodex");

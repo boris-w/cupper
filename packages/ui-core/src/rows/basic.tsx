@@ -1,13 +1,14 @@
 // The rows T082 draws (design 5.7.4): "load earlier history", the turn
 // header with its outcome, the user's message, and the placeholder of what
-// this build cannot show.
+// this build cannot show; the time between turns and the footer under a
+// turn's answer, as Codex has them (T272).
 
-import { escapeInvisible } from "@cupper/i18n";
+import { escapeInvisible, formatDivider, formatStamp } from "@cupper/i18n";
 import type { BlobRef, PromptBlock } from "@cupper/protocol";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { useT } from "../app/providers";
-import { ChevronDownIcon } from "../components/icons";
+import { useShell, useT } from "../app/providers";
+import { ChevronDownIcon, CopyIcon } from "../components/icons";
 import { useBlobText } from "../state/blob";
 import { useStreamActions } from "../stream/actions";
 import { UnsupportedRow } from "./registry";
@@ -52,7 +53,7 @@ function useElapsed(since: number, live: boolean): number {
   return Math.max(0, now - since);
 }
 
-/** "用时 {时长}" over a completed turn, which it folds (design 5.7.4); the others' outcome. */
+/** "用时 {时长} ›" over a completed turn, which it folds (design 5.7.4); the others' outcome. */
 function TurnHeaderRow({ row }: { row: RowOf<"turn_header"> }) {
   const t = useT();
   const { toggleTurn } = useStreamActions();
@@ -78,12 +79,12 @@ function TurnHeaderRow({ row }: { row: RowOf<"turn_header"> }) {
       onClick={() => toggleTurn(row.turnId)}
       className={`${line} text-left outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-ring`}
     >
+      {text}
       <span
         className={`shrink-0 transition-transform duration-150 [&>svg]:size-3.5 ${row.folded ? "-rotate-90" : ""}`}
       >
         <ChevronDownIcon />
       </span>
-      {text}
     </button>
   );
 }
@@ -130,13 +131,50 @@ function UserMessageRow({ row }: { row: RowOf<"user_message"> }) {
           </button>
         )}
       </div>
-      <button
-        type="button"
-        onClick={() => void navigator.clipboard.writeText(text)}
-        className="mt-1 text-xs text-fg-tertiary opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-      >
-        {t("stream:copy")}
-      </button>
+      <CopyButton
+        text={text}
+        className="mt-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+      />
+    </div>
+  );
+}
+
+/** Copies `text`; an icon, named "复制". */
+function CopyButton({ text, className = "" }: { text: string; className?: string }) {
+  const t = useT();
+  return (
+    <button
+      type="button"
+      aria-label={t("stream:copy")}
+      onClick={() => void navigator.clipboard.writeText(text)}
+      className={`rounded-md p-1 text-fg-tertiary outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring ${className}`}
+    >
+      <CopyIcon />
+    </button>
+  );
+}
+
+/** "今天 14:05", centred, above a turn after a long gap. */
+function TimeDividerRow({ row }: { row: RowOf<"time_divider"> }) {
+  const { info } = useShell();
+  const { day, time } = formatDivider(row.at, Date.now(), info.locale);
+  return (
+    <div role="separator" className="flex justify-center py-4 text-sm text-fg-tertiary select-none">
+      <time dateTime={new Date(row.at).toISOString()}>
+        <span className="font-medium">{day}</span> {time}
+      </time>
+    </div>
+  );
+}
+
+/** Under a completed turn's answer: copy it, and when the turn ended; the last turn's always shows. */
+function TurnFooterRow({ row }: { row: RowOf<"turn_footer"> }) {
+  const { info } = useShell();
+  const shown = row.last ? "" : "opacity-0 hover:opacity-100 focus-within:opacity-100";
+  return (
+    <div className={`flex items-center gap-2 text-sm text-fg-tertiary ${shown}`}>
+      <CopyButton text={row.text} />
+      <span>{formatStamp(row.endedAt, Date.now(), info.locale)}</span>
     </div>
   );
 }
@@ -182,4 +220,6 @@ function TextBlob({ blob, open }: { blob: BlobRef; open: boolean }) {
 registerRow("history", HistoryRow);
 registerRow("turn_header", TurnHeaderRow);
 registerRow("user_message", UserMessageRow);
+registerRow("time_divider", TimeDividerRow);
+registerRow("turn_footer", TurnFooterRow);
 registerRow("unknown", UnsupportedRow);

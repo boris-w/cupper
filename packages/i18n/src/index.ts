@@ -1,4 +1,4 @@
 export { escapeInvisible } from "./escape";
 export { createI18n, DEFAULT_LOCALE, NAMESPACES, type Namespace } from "./i18n";
 export { formatBytes } from "./size";
-export { formatRelative } from "./time";
+export { formatDivider, formatRelative, formatStamp } from "./time";

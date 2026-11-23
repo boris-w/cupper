@@ -63,8 +63,8 @@ function ToolLine({ tool }: { tool: ToolData }) {
   const expandable = tool.call.tool_kind === "execute" && output !== "";
   const { late } = tool;
   return (
-    <div className="text-chat-sm">
-      <div className="flex min-w-0 items-center gap-2 text-fg-tertiary/80">
+    <div className="text-chat">
+      <div className="flex min-w-0 items-center gap-2 text-fg-secondary">
         <button
           type="button"
           disabled={!expandable}
@@ -125,12 +125,12 @@ function ActivityGroupRow({ row: { tools, running } }: { row: RowOf<"activity_gr
   const t = useT();
   const [open, setOpen] = useState(false);
   return (
-    <div className="group text-chat-sm">
+    <div className="group text-chat">
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="flex min-w-0 items-center gap-1 text-left text-fg-tertiary/80"
+        className="flex min-w-0 items-center gap-1 text-left text-fg-secondary"
       >
         <span className={`truncate ${running ? "shimmer" : ""}`}>
           {groupText(
@@ -167,8 +167,8 @@ function LateOutputRow({ row }: { row: RowOf<"late_tool_output"> }) {
     row.output.output?.type === "text" ? (row.output.output as { text: string }).text : "";
   const output = row.text || inline || (tail ?? "");
   return (
-    <div className="text-chat-sm">
-      <div className="flex min-w-0 items-center gap-2 text-fg-tertiary/80">
+    <div className="text-chat">
+      <div className="flex min-w-0 items-center gap-2 text-fg-secondary">
         <button
           type="button"
           aria-expanded={open}

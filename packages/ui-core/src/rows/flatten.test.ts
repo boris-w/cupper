@@ -64,7 +64,7 @@ const VIEW = {
 describe("UNIT-stream-rows", () => {
   test("turns, their entries, the tail and the unknown, one row each", () => {
     const unknown = [{ body: { type: "future.event", data: {} } }] as Placeholder[];
-    const rows = flatten(VIEW, unknown, "more");
+    const rows = flatten(VIEW, unknown, "more", new Set(), 0);
     expect(rows.map((row) => row.key)).toEqual([
       "history",
       "item:u",
@@ -100,7 +100,7 @@ describe("UNIT-stream-rows", () => {
   });
 
   test("each row carries what it shows", () => {
-    const rows = flatten(VIEW, [], "none");
+    const rows = flatten(VIEW, [], "none", new Set(), 0);
     const of = (key: string) => rows.find((row) => row.key === key);
     expect(of("turn:t_7")).toMatchObject({ status: "cancelled", turnNo: 7, durationMs: 4000 });
     // A cancelled turn stays open, as a running one does.
@@ -167,19 +167,19 @@ describe("UNIT-stream-rows", () => {
       late_by_ref: { c0: "l" },
     } as unknown as ViewJson;
     const keys = (rows: StreamRow[]) => rows.map((row) => row.key);
-    const folded = flatten(view, [], "none");
+    const folded = flatten(view, [], "none", new Set(), 0);
     expect(keys(folded)).toEqual([
       ...["turn:t_8", "item:c0", "item:u", "turn:t_9"],
-      ...["item:st", "item:p", "item:l", "item:f", "request:r2", "changes:t_9"],
+      ...["item:st", "item:p", "item:l", "item:f", "request:r2", "changes:t_9", "footer:t_9"],
     ]);
     expect(folded.find((row) => row.key === "turn:t_9")).toMatchObject({ folded: true });
-    expect(folded.at(-1)).toMatchObject({ kind: "turn_changes", turnId: "t_9", turnNo: 9 });
+    expect(folded.at(-2)).toMatchObject({ kind: "turn_changes", turnId: "t_9", turnNo: 9 });
     // The call whose output came late carries its final exit code.
     expect(folded[1]).toMatchObject({ kind: "tool", late: { itemId: "l", exitCode: 0 } });
-    const open = flatten(view, [], "none", new Set(["t_9"]));
+    const open = flatten(view, [], "none", new Set(["t_9"]), 0);
     expect(keys(open)).toEqual([
       ...["turn:t_8", "item:c0", "item:u", "turn:t_9", "item:th", "item:c1", "item:st", "item:p"],
-      ...["item:l", "item:m", "item:c2", "item:f", "request:r2", "changes:t_9"],
+      ...["item:l", "item:m", "item:c2", "item:f", "request:r2", "changes:t_9", "footer:t_9"],
     ]);
     expect(open.find((row) => row.key === "turn:t_9")).toMatchObject({ folded: false });
     // Without a final answer, the folded turn shows its header and what always shows.
@@ -194,8 +194,41 @@ describe("UNIT-stream-rows", () => {
         },
       ],
     };
-    expect(keys(flatten(silent as ViewJson, [], "none"))).toEqual([
+    expect(keys(flatten(silent as ViewJson, [], "none", new Set(), 0))).toEqual([
       ...["item:u", "turn:t_9", "item:st", "item:p", "item:l", "request:r2", "changes:t_9"],
     ]);
+  });
+
+  test("the time above a turn an hour after the one before, or the first an hour before now; the footer under an answer", () => {
+    const hour = 3_600_000;
+    const turn = (id: string, started_at: number, final_item_ids: string[]) => ({
+      started: { turn_id: id, turn_no: 1, started_at, origin: "user" },
+      completed: { turn_id: id, status: "completed", duration_ms: 1, ended_at: started_at + 1 },
+      entries: entries(...final_item_ids),
+      snapshots: [],
+    });
+    const done = (t: ReturnType<typeof turn>, final_item_ids: string[]) => ({
+      ...t,
+      completed: { ...t.completed, final_item_ids },
+    });
+    const view = {
+      ...{ tail: [], requests: {}, detached: [], late_by_ref: {} },
+      turns: [
+        done(turn("t_1", 0, ["a"]), ["a"]),
+        done(turn("t_2", hour, ["b"]), ["b"]),
+        done(turn("t_3", 3 * hour, []), []),
+      ],
+      items: { a: item("a", "agent_message"), b: item("b", "agent_message") },
+    } as unknown as ViewJson;
+    const rows = flatten(view, [], "none", new Set(), 3 * hour + 2);
+    expect(rows.map((row) => row.key)).toEqual([
+      ...["time:t_1", "turn:t_1", "item:a", "footer:t_1", "turn:t_2", "item:b", "footer:t_2"],
+      ...["time:t_3", "turn:t_3"],
+    ]);
+    expect(rows.find((row) => row.key === "footer:t_2")).toMatchObject({
+      ...{ text: "b text", endedAt: hour + 1, last: false },
+    });
+    // The first turn within the hour before now has no time above it.
+    expect(flatten(view, [], "none", new Set(), hour - 1)[0]?.key).toBe("turn:t_1");
   });
 });

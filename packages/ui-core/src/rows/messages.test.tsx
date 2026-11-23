@@ -136,11 +136,15 @@ describe("UNIT-md-injection", () => {
       "lookup",
       "运行了 2 条命令，读取了 1 个文件",
       "已思考 1 分 5 秒",
+      "显示详情",
     ]);
     await userEvent.click(screen.getAllByRole("button")[0] as HTMLElement);
     await userEvent.click(screen.getByText("已思考 1 分 5 秒"));
     expect(screen.getByText("退出码 1")).toBeTruthy();
     expect(screen.getByText("plan\\u{200B}")).toBeTruthy();
+    // The agent's own text, such as stderr's tail, folds until asked for (T272).
+    expect(screen.queryByText("<b>x</b>")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "显示详情" }));
     expect(screen.getByText("<b>x</b>")).toBeTruthy();
     inert(container);
   });
