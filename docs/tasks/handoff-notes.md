@@ -638,3 +638,4 @@
 | T154 | 设置页"默认权限"那一行，能力缓存存在但里面没有权限模式时，提示写的是"还没有 {agent} 的能力信息"，不准确；改成"还没有 {agent} 的可选权限模式"一类，做英文时一并改（截图样例里 Claude 的缓存只有 model 选项，正好是这种情况） | T266 |
 | T267 | 会话标题在顶栏（`shell/SessionTitle.tsx`）和侧边栏会话行都原样显示，没有像项目名那样经 `escapeInvisible`；悬停卡片也显示标题，三处一起改，防标题冒充 | T266（已写入 brief） |
 | T148 | 悬停卡片的相对时间用 Intl 的中文写法（"5分钟前""昨天"），Codex 是"N 个月前"，差一个空格，比对后定；顶栏标题旁的分支名没有经 `escapeInvisible`，分支名里有来自用户输入的部分，一并转义 | T267 |
+| T113 | codex 0.170.0、0.171.0（T269）：codex-acp 2.2.2 不处理 `agentMessage.moderation` 的 `hide`、`block`，被隐藏或拦下的回答在实时和 `session/load` 回放时照常显示原文，升级适配器时定 cupper 是否执行；`CodexErrorInfo.bioPolicy` 应和 `cyberPolicy` 一样归为策略拒绝（0.168.0、0.169.0 新增的 `modelNotFound`、`policyCapacityUnavailable`、`inferenceHookDenied` 也还落在 `provider_error`） | T269 |
