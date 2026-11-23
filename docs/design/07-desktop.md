@@ -188,21 +188,22 @@ v1.4 按用户决定 F1–F6（`docs/meetings/2026-10-19-ui-fidelity/minutes.md`
 **窗口与顶栏**
 
 - 窗口默认 1280 × 820，最小 480 × 600。`titleBarStyle: 'hiddenInset'`，内容一直画到窗口顶部；交通灯放在 x = 16，在 44 高的顶栏里垂直居中（`trafficLightPosition`）。
+- **外框**（同 Codex，T148）：顶栏是横贯整窗的 44 高横条；侧边栏和主区都从顶栏下方开始，合成一块内容区，侧边栏的左侧两角和主区的右侧两角是 `--radius-panel`（12，同 Codex 的 `radius-xl-base`，不放大）。cupper 没有导航栏，侧边栏左上角的圆角落在窗口左边缘上。
 - 顶栏从左到右：
-  - 交通灯；后退、前进（P1，位置预留）；侧边栏开关。
-  - 会话区上方是会话标题。worktree 会话在标题后显示分支名。
+  - 左段与侧边栏同宽：交通灯（留位）、后退和前进（P1，位置预留）、侧边栏开关；右端一条 16 高的 `--color-border` 竖线。侧边栏收起或浮起时，左段只留交通灯和开关。
+  - 会话区上方是会话标题：前面一个文件夹图标（`--color-icon-secondary`，同 Codex），worktree 会话在标题后显示分支名。
   - **agent 标识**（AG-3，cupper 特有，Codex 没有）：标题旁一个小标签，写 agent 的短名（"Claude""Codex"），12 号 tertiary 色，1px `--color-border` 描边，圆角 `--radius-xs`。侧边栏的会话行保持 Codex 的样式，不加 agent 图标，悬停的 tooltip 里写 agent 名。
   - 右侧一组按钮：
     - 弱认证标记（cupper 特有，ADR-05）；
     - "打开"（终端、编辑器、Finder，UI-0）；
-    - 侧边面板开关；
-    - "⋯"会话菜单：重命名、归档、复制工作目录。Codex 菜单里的 Fork、Continue in、侧边会话、新窗口是 P1。
+    - "⋯"会话菜单：重命名、归档、复制工作目录。Codex 菜单里的 Fork、Continue in、侧边会话、新窗口是 P1；
+    - 侧边面板开关，在最右（同 Codex）。
   - Codex 的分享、底部面板、摘要卡片、新建标签页按钮是 P1，不显示。
 - 工具栏按钮：
   - 高 28，左右内边距 8，圆角 `--radius-lg`；
   - 平时透明底、tertiary 色，悬停用 `--color-hover`，处于打开状态时用 `--color-btn-secondary` 底；
   - tooltip 延迟出现，带快捷键。
-- 窗口背景透明，macOS 上用 `vibrancy: 'menu'`，侧边栏透出半透明材质（F3）。以下两种情况改为不透明的 `--color-surface-sidebar`：设置 → 外观里关掉"半透明侧边栏"；系统开启了"降低透明度"。
+- 窗口背景透明，macOS 上用 `vibrancy: 'menu'`（F3）：顶栏和内容区外的边框透出半透明材质；侧边栏在材质上叠一层 65% 的 `--color-surface`（同 Codex 侧边栏的 `color-mix(in oklab, var(--color-surface) 65%, transparent)`）；主区是不透明的 `--color-surface`。以下两种情况，材质换成不透明的 `--color-surface-chrome`，侧边栏照样叠 65% 的 surface：设置 → 外观里关掉"半透明侧边栏"；系统开启了"降低透明度"。
 
 **三栏与尺寸**（PS-1）
 
@@ -223,7 +224,7 @@ v1.4 按用户决定 F1–F6（`docs/meetings/2026-10-19-ui-fidelity/minutes.md`
   - 开合用 spring 动画，0.5 s，bounce 0.1。
 - **P1 的部分**（F3）：摘要卡片（输出内容、来源、计划）、底部面板（终端抽屉，UI-1）、标签拖到其他位置、全宽视图。
 - **窄窗口**（F3）：
-  - 窗口宽度小于 768 时，侧边栏改为浮在内容上的浮层，点外部或按 Esc 收起；
+  - 窗口宽度小于 768 时，侧边栏改为浮在内容上的浮层（顶栏下方，`--color-surface` 底，右侧两角 `--radius-panel`，卡片阴影，同 Codex 的浮动左栏），点外部或按 Esc 收起；
   - 主区放不下"会话区 352 + 侧边面板 320"时，侧边面板自动收起，窗口变宽后恢复到收起前的状态。
 
 **侧边栏**
@@ -822,7 +823,7 @@ v1.4 新增。取值来自 ui-spec 第 2、3 节：静态读取作者本机 Code
 | token | 用途 | 亮色 | 暗色 |
 |---|---|---|---|
 | `--color-surface` | 主背景（会话区、面板） | #FFFFFF | #181818 |
-| `--color-surface-sidebar` | 侧边栏（不透明模式） | #F6F6F6 | #141414〔推算〕 |
+| `--color-surface-chrome` | 顶栏和内容区外框（不透明模式，代替半透明材质）；侧边栏在它上面叠 65% 的 surface，约 #FBFBFB / #202020（T148，由 T106 实测的标题栏色去掉暖色得来） | #F2F2F2 | #2E2E2E |
 | `--color-surface-code` | 代码块、命令输出、终端 | #FFFFFF | #282828〔推算〕 |
 | `--color-surface-panel` | 卡片、面板 | #FFFFFF | #232323 |
 | `--color-surface-elevated` | 菜单、下拉、popover | #FFFFFF | #2D2D2D |
@@ -854,7 +855,7 @@ v1.4 新增。取值来自 ui-spec 第 2、3 节：静态读取作者本机 Code
 | `--color-danger-soft` / `--color-warning-soft` | 错误、警告浅底 | #FFD9D9 / #FFE7D9 | #4D100E / #4A2206〔推算〕 |
 | `--color-status-connected` / `-disconnected` / `-error` | 宿主状态点 | 成功色 / 三级文字色 / 错误色；连接中为强调色的转圈 | 同左 |
 
-半透明侧边栏（`vibrancy: 'menu'`）下没有固定色，随桌面背景变化：在作者的桌面上，亮色列表区约 #F8F8F8–#FAFAFA，暗色约 #212121，暗色选中行比列表区亮约 17（白 @7%–8%，T106）。
+半透明（`vibrancy: 'menu'`）下没有固定色，随桌面背景变化：在作者的桌面上，Codex 亮色的标题栏约 #F2F1F0、列表区约 #F8F8F8–#FAFAFA，暗色的标题栏约 #353331、列表区约 #212121，暗色选中行比列表区亮约 17（白 @7%–8%，T106）。列表区是 65% 的 surface 叠在材质上（T148）。
 
 **代码高亮**（Shiki，只取这七个语法类别的颜色，运算符和标点用正文色；T143 用固定的 `hl-*` class 加这里的 token 实现，不用 Shiki 的双主题输出，类别与 TextMate scope 的对应在 `packages/ui-core/src/rows/highlight.ts`）
 
@@ -919,6 +920,7 @@ v1.4 新增。取值来自 ui-spec 第 2、3 节：静态读取作者本机 Code
 | `--radius-xl` | 15 | 菜单、弹窗、popover |
 | `--radius-2xl` | 20 | tooltip、浮起的卡片 |
 | `--radius-row` | 10（不放大） | 侧边栏和设置导航的行 |
+| `--radius-panel` | 12（不放大） | 顶栏下方的侧边栏和主区，窄窗口的浮动侧边栏（T148） |
 | `--radius-composer` | 22（不放大） | 输入框、请求面板 |
 | `--radius-bubble` | 22 | 用户气泡 |
 | `--radius-full` | 9999 | 发送按钮、权限按钮、药丸、回到底部按钮 |

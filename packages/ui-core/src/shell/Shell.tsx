@@ -125,70 +125,68 @@ function Frame({ store, children }: { store: LayoutStore; children: ReactNode })
   const sidebar = layout.sidebar.visible && app;
   const docked = sidebar && !narrow;
   return (
-    <div className="flex h-full">
+    <div className="flex h-full flex-col">
       <ConnectionToast state={state} />
-      <div hidden={!app} className="fixed top-2 left-(--layout-traffic-lights-w) z-30">
-        <ToolbarButton
-          label={t("shell:toggle_sidebar")}
-          shortcut="⌘B"
-          pressed={layout.sidebar.visible}
-          onClick={() => store.toggleSidebar(narrow)}
-        >
-          <PaneIcon side="left" />
-        </ToolbarButton>
-      </div>
       {sidebar && narrow && (
         <div className="fixed inset-0 z-10 bg-scrim" onClick={() => store.setOverlay(false)} />
       )}
-      {sidebar && <Sidebar layout={layout} store={store} />}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TitleBar
-          hidden={!app}
-          inset={!docked}
-          sidePanelOpen={prefs.sidePanelOpen}
-          onSidePanel={() => store.toggleSidePanel()}
-        />
-        <main className="min-h-0 flex-1 overflow-y-auto bg-surface">{children}</main>
-      </div>
-      {resident && (
-        <aside
-          ref={panel}
-          hidden={!shown && !closing}
-          aria-label={t("shell:side_panel")}
-          style={{ width: layout.sidePanel.width }}
-          className="relative flex shrink-0 flex-col border-l border-border bg-surface"
+      <TitleBar
+        hidden={!app}
+        sidebarWidth={docked ? layout.sidebar.width : undefined}
+        sidebarOpen={layout.sidebar.visible}
+        onSidebar={() => store.toggleSidebar(narrow)}
+        sidePanelOpen={prefs.sidePanelOpen}
+        onSidePanel={() => store.toggleSidePanel()}
+      />
+      {/* Below the title bar, the sidebar and the session area make one block
+          with rounded corners on the window's material (Codex's shell, T148). */}
+      <div className="flex min-h-0 flex-1">
+        {sidebar && <Sidebar layout={layout} store={store} />}
+        <div
+          className={`flex min-w-0 flex-1 overflow-hidden ${app ? "rounded-r-(--radius-panel) bg-surface" : ""} ${app && !docked ? "rounded-l-(--radius-panel)" : ""}`}
         >
-          <div
-            role="tablist"
-            className="app-drag flex h-(--layout-toolbar-h) shrink-0 items-center gap-1 pl-2"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected
-              className="app-no-drag h-8 min-w-22.5 rounded-lg border border-border bg-surface-elevated pr-1 pl-2.5 text-left text-sm"
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">{children}</main>
+          {resident && (
+            <aside
+              ref={panel}
+              hidden={!shown && !closing}
+              aria-label={t("shell:side_panel")}
+              style={{ width: layout.sidePanel.width }}
+              className="relative flex shrink-0 flex-col border-l border-border"
             >
-              {t("shell:tab_changes")}
-            </button>
-          </div>
-          <div role="tabpanel" className="min-h-0 flex-1">
-            <ReviewPanel
-              fileTree={prefs.fileTreeOpen}
-              onFileTree={() => store.toggleFileTree()}
-              active={shown}
-            />
-          </div>
-          <Splitter
-            label={t("shell:resize_side_panel")}
-            edge="left"
-            width={layout.sidePanel.width}
-            bounds={layout.sidePanel}
-            onResize={(width, done) =>
-              store.set("sidePanelRatio", ratioOf(width, layout.sidePanel), done)
-            }
-          />
-        </aside>
-      )}
+              <div
+                role="tablist"
+                className="flex h-(--layout-toolbar-h) shrink-0 items-center gap-1 pl-2"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected
+                  className="h-8 min-w-22.5 rounded-lg border border-border bg-surface-elevated pr-1 pl-2.5 text-left text-sm"
+                >
+                  {t("shell:tab_changes")}
+                </button>
+              </div>
+              <div role="tabpanel" className="min-h-0 flex-1">
+                <ReviewPanel
+                  fileTree={prefs.fileTreeOpen}
+                  onFileTree={() => store.toggleFileTree()}
+                  active={shown}
+                />
+              </div>
+              <Splitter
+                label={t("shell:resize_side_panel")}
+                edge="left"
+                width={layout.sidePanel.width}
+                bounds={layout.sidePanel}
+                onResize={(width, done) =>
+                  store.set("sidePanelRatio", ratioOf(width, layout.sidePanel), done)
+                }
+              />
+            </aside>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -234,7 +232,10 @@ const TARGETS: OpenTarget[] = ["terminal", "editor", "finder"];
  */
 export function TitleBar(props: {
   hidden: boolean;
-  inset: boolean;
+  /** The docked sidebar's width: the bar's start, over it, holds the traffic lights and the toggle. */
+  sidebarWidth?: number;
+  sidebarOpen: boolean;
+  onSidebar: () => void;
   sidePanelOpen: boolean;
   onSidePanel: () => void;
 }) {
@@ -258,9 +259,23 @@ export function TitleBar(props: {
   return (
     <header
       hidden={props.hidden}
-      className={`app-drag flex h-(--layout-titlebar-h) shrink-0 items-center gap-1 pr-2 ${props.inset ? "pl-[calc(var(--layout-traffic-lights-w)+var(--spacing)*10)]" : "pl-2"}`}
+      className="app-drag flex h-(--layout-titlebar-h) shrink-0 items-center gap-1 pr-2"
     >
-      <div className="min-w-0 flex-1">
+      <div
+        style={{ width: props.sidebarWidth }}
+        className="flex h-full shrink-0 items-center pl-(--layout-traffic-lights-w)"
+      >
+        <ToolbarButton
+          label={t("shell:toggle_sidebar")}
+          shortcut="⌘B"
+          pressed={props.sidebarOpen}
+          onClick={props.onSidebar}
+        >
+          <PaneIcon side="left" />
+        </ToolbarButton>
+        {props.sidebarWidth !== undefined && <span className="ml-auto h-4 w-px bg-border" />}
+      </div>
+      <div className="min-w-0 flex-1 pl-3">
         <SessionTitle summary={summary} />
       </div>
       {handshake?.host.weak_auth && (
@@ -284,14 +299,6 @@ export function TitleBar(props: {
           ))}
         </Menu>
       )}
-      <ToolbarButton
-        label={t("shell:toggle_side_panel")}
-        shortcut="⌥⌘B"
-        pressed={props.sidePanelOpen}
-        onClick={props.onSidePanel}
-      >
-        <PaneIcon side="right" />
-      </ToolbarButton>
       {session && (
         <Menu
           trigger={
@@ -304,6 +311,14 @@ export function TitleBar(props: {
           <MenuItem onSelect={() => void copyPath(session)}>{t("shell:copy_path")}</MenuItem>
         </Menu>
       )}
+      <ToolbarButton
+        label={t("shell:toggle_side_panel")}
+        shortcut="⌥⌘B"
+        pressed={props.sidePanelOpen}
+        onClick={props.onSidePanel}
+      >
+        <PaneIcon side="right" />
+      </ToolbarButton>
     </header>
   );
 }
@@ -316,9 +331,8 @@ function Sidebar({ layout, store }: { layout: Layout; store: LayoutStore }) {
     <aside
       aria-label={t("shell:sidebar")}
       style={{ width: layout.sidebar.width }}
-      className={`flex shrink-0 flex-col ${overlay ? "app-no-drag fixed inset-y-0 left-0 z-20 bg-surface-sidebar shadow-card" : "relative bg-(--sidebar-surface)"}`}
+      className={`flex shrink-0 flex-col ${overlay ? "app-no-drag fixed bottom-0 left-0 top-(--layout-titlebar-h) z-20 rounded-r-(--radius-panel) bg-surface shadow-card" : "relative rounded-l-(--radius-panel) bg-(--sidebar-surface)"}`}
     >
-      <div className="app-drag h-(--layout-titlebar-h) shrink-0" />
       <div className="flex h-8 shrink-0 items-center px-4">
         {slots.sidebarHeader ?? <SidebarHeader />}
       </div>
