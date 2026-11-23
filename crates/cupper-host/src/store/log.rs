@@ -281,7 +281,9 @@ fn kind_of(body: &Value) -> String {
 mod tests {
     use std::time::Duration;
 
+    use cupper_protocol::sync::{LogExtent, Resume, ResyncReason, SubscribeMode, subscribe_mode};
     use cupper_protocol::view::View;
+    use proptest::prelude::*;
 
     use super::*;
     use crate::store::testutil::{end, host_db, item, project, published, turn};
@@ -361,5 +363,51 @@ mod tests {
             Some((7, VIEW_VERSION, "[]".into()))
         );
         assert_eq!(checkpoint(&conn, "session/s_1").unwrap(), None);
+    }
+
+    proptest! {
+        /// PROP-retention-boundary (design 5.13 Q16): whatever the events'
+        /// times and the retention, pruning keeps a contiguous tail with the
+        /// latest `events` and every young event in it; a cursor right at
+        /// the kept log's start still replays, one before it snapshots as
+        /// `cursor_expired`, and one past the head as `cursor_ahead`.
+        #[test]
+        fn prop_retention_boundary_cursors_at_the_kept_log_s_edges(
+            ts in prop::collection::vec(0u64..200, 1..60),
+            events in 0u64..20,
+            age_ms in 0u64..100,
+            now in 0u64..300,
+        ) {
+            let conn = host_db();
+            let head = ts.len() as u64;
+            let log: Vec<_> = (1..=head)
+                .zip(&ts)
+                .map(|(seq, &at)| published(seq, at, project(seq)))
+                .collect();
+            insert_events(&conn, "index", &log).unwrap();
+            let retention = Retention { events, age: Duration::from_millis(age_ms) };
+            let cut = prune(&conn, "index", head, &retention, now).unwrap();
+            let first = first_seq(&conn, "index").unwrap().unwrap_or(head + 1);
+            prop_assert_eq!(cut.map_or(1, |cut| cut + 1), first);
+            let count = "SELECT count(*) FROM events WHERE stream = 'index'";
+            let kept: u64 = conn.query_row(count, [], |row| row.get(0)).unwrap();
+            prop_assert_eq!(kept, head + 1 - first, "contiguous up to the head");
+            prop_assert!(first <= head.saturating_sub(events) + 1, "the latest `events` are kept");
+            let young = (1..=head).zip(&ts).filter(|&(_, &at)| at >= now.saturating_sub(age_ms));
+            for (seq, _) in young {
+                prop_assert!(seq >= first, "young event {} kept", seq);
+            }
+
+            let extent = LogExtent { epoch: 1, head_seq: head, first_seq: first };
+            let mode = |after_seq| subscribe_mode(Some(Resume { epoch: 1, after_seq }), &extent);
+            prop_assert_eq!(mode(first - 1), (SubscribeMode::Replay, None));
+            prop_assert_eq!(mode(head), (SubscribeMode::Replay, None));
+            if first >= 2 {
+                let expired = (SubscribeMode::Snapshot, Some(ResyncReason::CursorExpired));
+                prop_assert_eq!(mode(first - 2), expired);
+            }
+            let ahead = (SubscribeMode::Snapshot, Some(ResyncReason::CursorAhead));
+            prop_assert_eq!(mode(head + 1), ahead);
+        }
     }
 }
