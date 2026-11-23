@@ -73,10 +73,10 @@ versions = { cupper = "1a2b3c4", macos = "26.4", claude = "2.1.300", "claude-age
 |---|---|---|---|---|
 | MAN-S1 至 MAN-S4 | [man-s1.md](man-s1.md) 至 [man-s4.md](man-s4.md) | T179 | `cupper`、`macos`、`claude`、`claude-agent-acp`、`codex`、`codex-acp`，都是 `any`（本任务已登记） | 两种 agent 写在同一条证据里 |
 | MAN-keyboard | T099 的 `man-keyboard.md`；重做时按 T107 的 `man-keyboard.md` 写的差异（发请求延时 45 秒） | T099、T107 | `electron = "major"`（已有） | Electron 大版本变了就要重做 |
-| MAN-ime | SP-6 场景 6（5.9.7） | T108 | `electron = "any"`、`macos = "any"` | 输入法名称写进"环境"一栏 |
+| MAN-ime | SP-6 场景 6（5.9.7） | T108 | `electron = "any"`、`macos = "any"` | 输入法名称写进"环境"一栏；2026-11-23 取消 |
 | MAN-notification | `-spike`（已有证据）加 `-product` | T101、T150 | `-product`：`macos = "any"`、`cupper = "any"` | `-spike` 的证据没写版本，按当时的规则仍然有效 |
 | MAN-tcc | SP-10 | M2 | `macos = "any"` | 不在 M1 |
-| MAN-ui6 | `-shell` 加 `-full`，与本机 Codex 并排比对 | T152、T148 | `cupper = "any"`、`macos = "any"` | 对照用的 Codex 客户端版本写进"环境"一栏，不作为组件 |
+| MAN-ui6 | `-shell` 加 `-full`，与本机 Codex 并排比对 | T152、T148 | `cupper = "any"`、`macos = "any"` | 对照用的 Codex 客户端版本写进"环境"一栏，不作为组件；2026-11-23 取消 |
 | MAN-compat | `-claude`（已有证据）加 `-codex`，即兼容套件的报告 | T066、T113 | `-codex`：`codex = "any"`、`codex-acp = "any"` | 记录就是报告的摘要；`-claude` 的证据没写版本，仍然有效 |
 | MAN-upgrade | 发布任务的升级演练 | T183 | `cupper = "any"` | 新旧两个版本号都写进记录，`cupper` 写新版本 |
 | MAN-node-notarize | 首次 Developer ID 构建 | T180 | `cupper = "any"`、`macos = "any"` | 计时结果写在"逐项结果"里 |

@@ -827,7 +827,7 @@ MAN-notification-spike = "man"
 # SP-6 场景 5、6：浸泡与输入法
 [T108]
 milestone = "M1b"
-MAN-ime = "man"
+MAN-ime = { suite = "man", status = "na", reason = "体验类人工验收不再作为闸门（用户 2026-11-23，docs/meetings/2026-11-23-manual-acceptance/）" }
 
 # Codex 提取层、选项对照表与 A 层金样例
 [T110]
@@ -1103,7 +1103,7 @@ UI-settings = { parts = ["UI-settings-agents", "UI-settings-archived", "UI-setti
 # 复刻度修正
 [T148]
 milestone = "M1b"
-MAN-ui6-full = "man"
+MAN-ui6-full = { suite = "man", status = "na", reason = "体验类人工验收不再作为闸门（用户 2026-11-23，docs/meetings/2026-11-23-manual-acceptance/）" }
 MAN-ui6 = { parts = ["MAN-ui6-shell", "MAN-ui6-full"] }
 
 # 排队消息的编辑与插话
@@ -1173,7 +1173,7 @@ UI-settings-archived = "pr"
 milestone = "M1b"
 UI-layout = "pr"
 UI-theme = "pr"
-MAN-ui6-shell = "man"
+MAN-ui6-shell = { suite = "man", status = "na", reason = "体验类人工验收不再作为闸门（用户 2026-11-23，docs/meetings/2026-11-23-manual-acceptance/）" }
 
 # 会话管理界面、快捷键与"打开"按钮
 [T153]

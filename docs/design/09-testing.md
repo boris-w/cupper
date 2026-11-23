@@ -321,10 +321,10 @@ flowchart LR
 |---|---|---|
 | MAN-S1、MAN-S2、MAN-S3、MAN-S4 | S1–S4 × Claude 和 Codex 两种 agent 的逐步检查表：步骤、通过条件、CLI 和适配器的版本、日期 | 作者，M1b 退出前 |
 | MAN-keyboard | 实体键盘：Enter 批准、Esc 拒绝、数字键选择并提交、用输入法选词时不触发（[5.7.8](07-desktop.md#578-安全加固的落点)） | 作者，M1a 一次，之后每次升级 Electron 大版本 |
-| MAN-ime | SP-6 场景 6：流式输出期间用拼音输入 | 作者，SP-6 |
+| MAN-ime | SP-6 场景 6：流式输出期间用拼音输入；2026-11-23 取消（体验类人工验收不再作为闸门） | — |
 | MAN-notification | AP-3 的系统通知、helper 的通知身份和点击跳转（Q2、SP-10） | 作者，M1b 开始前 |
 | MAN-tcc | Q21：宿主由 UI 拉起时的 TCC 归属；适配器的 disclaim（SP-10） | 作者，SP-10 |
-| MAN-ui6 | UI-6（v1.3）：与作者本机的 Codex 同尺寸窗口、同一主题并排比对 | 作者，M1b |
+| MAN-ui6 | UI-6（v1.3）：与本机的 Codex 同尺寸窗口、同一主题比对；2026-11-23 起改由 T148 的执行者比对，不再是作者的验收项 | — |
 | MAN-upgrade | 升级演练：首次正式发布前一次，之后每个改动了 schema 或运行时的版本一次；含两项负面测试（其他 Team 签名的包被拒、被篡改的 zip 被拒）和安装空窗的处理 | 维护者，发布前 |
 | MAN-node-notarize | U-R3：随 App 公证的 Node 首次执行的耗时 | 维护者，第一次有 Developer ID 的发布构建 |
 | MAN-compat | 兼容矩阵（[5.9.5](#595-兼容矩阵)），产出报告 | 维护者，按 5.9.5 的时机 |
