@@ -94,8 +94,13 @@ test(
     const review = () =>
       cupper.window.frames().find((frame) => frame.url() === "app://cupper-review/review.html");
     await expect.poll(() => review() !== undefined).toBe(true);
-    await review()
-      ?.getByRole("button", { name: t("review:doc_fold") })
+    // pierre makes the file's header again once its hunks come and once they
+    // are highlighted: a click on the header before may go unseen (T260, T270).
+    const doc = review();
+    if (!doc) throw new Error("the review document went away");
+    await expect(doc.locator("[data-line] span[style]").first()).toBeVisible();
+    await doc
+      .getByRole("button", { name: t("review:doc_fold") })
       .first()
       .click();
     await expect.poll(() => review()?.evaluate(() => document.hasFocus())).toBe(true);
