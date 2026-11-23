@@ -3,6 +3,7 @@
 // only ever text nodes.
 
 import type { ClientState } from "@cupper/host-client";
+import { escapeInvisible, formatRelative } from "@cupper/i18n";
 import type {
   ElevationRequested,
   HostUpdated,
@@ -12,7 +13,7 @@ import type {
 import { useState, type ComponentProps, type ReactNode } from "react";
 import { useStore } from "zustand";
 
-import { useHost, useT } from "../app/providers";
+import { useHost, useShell, useT, type Translate } from "../app/providers";
 import { useRouter } from "../app/router";
 import {
   ComposeIcon,
@@ -25,10 +26,11 @@ import {
 } from "../components/icons";
 import { DANGER, Dialog } from "../components/Dialog";
 import { ContextMenu, ContextMenuItem, Menu, MenuItem } from "../components/Menu";
-import { Tooltip } from "../components/Tooltip";
+import { HoverCard, Tooltip } from "../components/Tooltip";
 import { usePrivileged } from "../feedback/privileged";
 import { useToasts } from "../feedback/toaster";
 import { failureText, SessionItems } from "../session/actions";
+import { AgentMark } from "../shell/SessionTitle";
 import { useUi } from "../state/provider";
 import { toSettings } from "../state/ui";
 import { byActivity, byPosition, SHOWN_SESSIONS } from "./order";
@@ -171,6 +173,7 @@ function ProjectGroup(props: {
         <SessionRow
           key={session.session_id}
           session={session}
+          project={project.name}
           selected={session.session_id === props.current}
         />
       ))}
@@ -187,6 +190,10 @@ function ProjectGroup(props: {
   );
 }
 
+/** Why a session failed, by its code. */
+const errorText = (t: Translate, session: SessionSummary) =>
+  t(`sidebar:error_${session.error_code ?? "other"}`, { defaultValue: t("sidebar:error_other") });
+
 /** The state at the start of a session row (design 5.7.4): a spinner, an error, the unread dot. */
 function Lead({ session }: { session: SessionSummary }) {
   const t = useT();
@@ -198,16 +205,49 @@ function Lead({ session }: { session: SessionSummary }) {
   switch (session.status) {
     case "running":
       return mark(t("sidebar:running"), "text-fg-tertiary", <Spinner className="size-3.5" />);
-    case "error": {
-      const fallback = t("sidebar:error_other");
-      const text = t(`sidebar:error_${session.error_code ?? "other"}`, { defaultValue: fallback });
-      return <Tooltip content={text}>{mark(text, "text-danger", <ErrorIcon />)}</Tooltip>;
-    }
+    case "error":
+      return mark(errorText(t, session), "text-danger", <ErrorIcon />);
     case "unread":
       return mark(t("sidebar:unread"), "size-2 rounded-full bg-accent");
     default:
       return null;
   }
+}
+
+/**
+ * A session row's hover card (T106): the title and how long ago the session
+ * was last active, an unread dot; its project and agent (AG-3); why it failed
+ * or what it waits for, `tag`.
+ */
+function SessionCard(props: { session: SessionSummary; project: string; tag?: string }) {
+  const { session, tag } = props;
+  const t = useT();
+  const { info } = useShell();
+  const failed = session.status === "error";
+  return (
+    <>
+      <div className="flex items-baseline gap-3">
+        <span className="min-w-0 flex-1 font-medium break-words">
+          {escapeInvisible(session.title)}
+        </span>
+        <span className="flex shrink-0 items-center gap-1 text-xs text-fg-tertiary">
+          {formatRelative(session.last_activity_at, Date.now(), info.locale)}
+          {session.unread && <span className="size-1.5 rounded-full bg-accent" />}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 text-fg-secondary">
+        <FolderIcon />
+        <span className="min-w-0 flex-1 truncate">{escapeInvisible(props.project)}</span>
+        <AgentMark agent={session.agent} />
+      </div>
+      {(failed || tag) && (
+        <div className={`flex items-center gap-2 ${failed ? "text-danger" : "text-fg-secondary"}`}>
+          {failed && <ErrorIcon />}
+          {failed ? errorText(t, session) : tag}
+        </div>
+      )}
+    </>
+  );
 }
 
 /**
@@ -253,7 +293,8 @@ function RemoveProject(props: { project: ProjectUpserted; current: boolean; onCl
 }
 
 /** A session; its menu, the same on a right-click, takes the label's place on hover. */
-function SessionRow({ session, selected }: { session: SessionSummary; selected: boolean }) {
+function SessionRow(props: { session: SessionSummary; project: string; selected: boolean }) {
+  const { session, selected } = props;
   const t = useT();
   const { navigate } = useRouter();
   const id = session.session_id;
@@ -266,7 +307,7 @@ function SessionRow({ session, selected }: { session: SessionSummary; selected: 
   return (
     <ContextMenu items={<SessionItems item={ContextMenuItem} sessionId={id} />}>
       <div className={`group relative rounded-row hover:bg-hover ${selected ? "bg-hover" : ""}`}>
-        <Tooltip content={t(`sidebar:agent_${session.agent}`, { defaultValue: session.agent })}>
+        <HoverCard content={<SessionCard session={session} project={props.project} tag={tag} />}>
           <button
             type="button"
             aria-current={selected ? "page" : undefined}
@@ -276,14 +317,14 @@ function SessionRow({ session, selected }: { session: SessionSummary; selected: 
             <span className="flex size-4 shrink-0 items-center justify-center">
               <Lead session={session} />
             </span>
-            <span className="min-w-0 flex-1 truncate">{session.title}</span>
+            <span className="min-w-0 flex-1 truncate">{escapeInvisible(session.title)}</span>
             {tag && (
               <span className="shrink-0 text-xs text-fg-tertiary group-focus-within:invisible group-hover:invisible group-has-[[data-state=open]]:invisible">
                 {tag}
               </span>
             )}
           </button>
-        </Tooltip>
+        </HoverCard>
         <span className="absolute inset-y-0 right-(--layout-row-px) flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 has-data-[state=open]:opacity-100">
           <Menu
             trigger={

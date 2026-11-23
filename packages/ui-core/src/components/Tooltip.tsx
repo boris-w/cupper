@@ -23,3 +23,25 @@ export function Tooltip(props: { content: ReactNode; shortcut?: string; children
     </RadixTooltip.Root>
   );
 }
+
+/**
+ * A card beside `children` on hover or focus, such as a session row's (T106):
+ * 20rem wide, the elevated surface; like a tooltip it has nothing to focus.
+ */
+export function HoverCard(props: { content: ReactNode; children: ReactElement }) {
+  return (
+    <RadixTooltip.Root>
+      <RadixTooltip.Trigger asChild>{props.children}</RadixTooltip.Trigger>
+      <RadixTooltip.Portal>
+        <RadixTooltip.Content
+          side="right"
+          align="start"
+          sideOffset={8}
+          className="z-50 flex w-80 max-w-[calc(100vw-16px)] flex-col gap-1 rounded-xl bg-surface-elevated px-(--layout-row-px) py-1.5 text-sm shadow-menu"
+        >
+          {props.content}
+        </RadixTooltip.Content>
+      </RadixTooltip.Portal>
+    </RadixTooltip.Root>
+  );
+}
