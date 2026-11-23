@@ -479,7 +479,7 @@ impl Host {
             durations: durations.clone(),
             settings: settings.clone(),
             lists,
-            opener: "/usr/bin/open".into(),
+            opener: opener(&data_dir),
         })
         .route(&mut routes);
         GitService::new(GitDeps {
@@ -894,6 +894,19 @@ fn test_rss(payload: &Payload, agent: Agent) -> Option<u64> {
     {
         let _ = (payload, agent);
         None
+    }
+}
+
+/// What `workspace/open` runs (design 5.9.9): `open`, or in a build with the
+/// test harness the stand-in `<data dir>/opener` a test writes, so that such a
+/// build never opens an app.
+fn opener(data_dir: &Path) -> PathBuf {
+    #[cfg(feature = "test-harness")]
+    return data_dir.join("opener");
+    #[cfg(not(feature = "test-harness"))]
+    {
+        let _ = data_dir;
+        PathBuf::from("/usr/bin/open")
     }
 }
 

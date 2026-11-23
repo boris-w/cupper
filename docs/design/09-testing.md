@@ -285,6 +285,7 @@ flowchart LR
 | 登录 shell 的环境（PATH、`CLAUDE_CONFIG_DIR`、`CODEX_HOME` 等） | `test_config.login_env` | test-harness | 运行登录 shell |
 | CLI 发现的绝对常见位置（`/opt/homebrew/bin`、`/usr/local/bin` 等；`~/` 下的位置跟随 `HOME`） | `test_config.cli_root`：代替 `/`，测试目录在 `$TMPDIR` 下，发现不信任那里，所以测试只能经 `cli_path` 或 `test_config.agents` 引入 CLI（T203） | test-harness | `/` |
 | 系统通知 | `test_config.notifier: record`：写到测试接收端，不调用 UserNotifications，避免授权弹窗抢走焦点 | test-harness | 系统通知 |
+| "打开"（`workspace/open` 拉起的程序，T267） | 一律执行 `<数据目录>/opener`，参数与 `/usr/bin/open` 相同：e2e 夹具写一个 sh 脚本，把收到的参数追加到同目录的日志；脚本不存在时调用失败。这种构建从不打开任何 App | test-harness | `/usr/bin/open` |
 | 时钟和全部时长 | `test_config.clock`、`test_config.durations`；`test/clock_advance`（[5.2.16](02-host.md#5216-时间与可测性)） | test-harness | `SystemClock` 和设计值 |
 | 合成数据集（冷启动、长会话、SP-6 的夹具） | `test/seed {profile}`：经正常的写入路径灌入，profile 规定会话数、回合数、条目类型的比例、文本长度、单个超大回合（[5.2.16](02-host.md#5216-时间与可测性)） | test-harness | 不灌入 |
 | 定速负载 | 假 agent 的 `flood_rate`（[5.9.2](#592-假-agent)） | 假 agent | — |
