@@ -916,8 +916,8 @@ v1.4 新增。取值来自 ui-spec 第 2、3 节：静态读取作者本机 Code
 | `--radius-sm` | 7.5 | — |
 | `--radius-md` | 10 | 小按钮、文件树行 |
 | `--radius-lg` | 12.5 | 工具栏按钮、标签、命令输出框、改动卡片、警告框 |
-| `--radius-xl` | 15 | 菜单、弹窗、popover |
-| `--radius-2xl` | 20 | tooltip、浮起的卡片 |
+| `--radius-xl` | 15 | 弹窗、popover、菜单条目 |
+| `--radius-2xl` | 20 | 菜单（Codex 的 `--menu-radius`，T276）、tooltip、浮起的卡片 |
 | `--radius-row` | 10（不放大） | 侧边栏和设置导航的行 |
 | `--radius-composer` | 22（不放大） | 输入框、请求面板 |
 | `--radius-bubble` | 22 | 用户气泡 |

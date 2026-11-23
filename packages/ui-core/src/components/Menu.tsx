@@ -4,9 +4,13 @@ import { useRef, type ReactElement, type ReactNode } from "react";
 
 import { CheckIcon } from "./icons";
 
-const CONTENT = "z-50 min-w-40 rounded-xl bg-surface-elevated p-1 text-sm shadow-menu";
+const CONTENT = "z-50 min-w-40 rounded-2xl bg-surface-elevated p-1 text-sm shadow-menu";
 const ITEM =
   "flex items-center rounded-xl px-2 py-1.25 outline-none data-disabled:text-fg-tertiary data-highlighted:bg-hover";
+
+/** The trigger of the menu opened last: where a dialog one of its items opened gives the focus back. */
+let opened: HTMLElement | null = null;
+export const lastMenuTrigger = () => opened;
 
 /** A menu on `trigger`, such as a ToolbarButton (ui-spec 3.4–3.6); `children` are its items. */
 export function Menu(props: {
@@ -24,9 +28,16 @@ export function Menu(props: {
   // the pointer, it does not, or the trigger's tooltip and focus ring would
   // show after a click.
   const pointer = useRef(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const onOpenChange = (open: boolean) => {
+    if (open) opened = trigger.current;
+    props.onOpenChange?.(open);
+  };
   return (
-    <RadixMenu.Root open={props.open} onOpenChange={props.onOpenChange}>
-      <RadixMenu.Trigger asChild>{props.trigger}</RadixMenu.Trigger>
+    <RadixMenu.Root open={props.open} onOpenChange={onOpenChange}>
+      <RadixMenu.Trigger asChild ref={trigger}>
+        {props.trigger}
+      </RadixMenu.Trigger>
       <RadixMenu.Portal>
         <RadixMenu.Content
           onPointerDown={() => (pointer.current = true)}

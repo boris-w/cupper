@@ -274,6 +274,20 @@ describe("the title bar's menus", () => {
     expect(dialog()).not.toBeNull();
   });
 
+  test("a dialog from ⋯ closed by a key gives the focus back to ⋯, by the pointer not", async () => {
+    await setup(bar);
+    const more = screen.getByRole("button", { name: "会话菜单" });
+    for (const key of [true, false]) {
+      open("会话菜单");
+      item("重命名");
+      if (!key) fireEvent.pointerDown(dialog() as HTMLElement);
+      fireEvent(dialog() as HTMLElement, new Event("cancel", { cancelable: true }));
+      expect(dialog()).toBeNull();
+      expect(document.activeElement === more).toBe(key);
+      more.blur();
+    }
+  });
+
   test("off a session page, neither shows", async () => {
     await setup(bar, {}, { page: "new" });
     expect(screen.queryByRole("button", { name: "打开" })).toBeNull();
