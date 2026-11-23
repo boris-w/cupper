@@ -641,3 +641,4 @@
 | T113 | codex 0.170.0、0.171.0（T269）：codex-acp 2.2.2 不处理 `agentMessage.moderation` 的 `hide`、`block`，被隐藏或拦下的回答在实时和 `session/load` 回放时照常显示原文，升级适配器时定 cupper 是否执行；`CodexErrorInfo.bioPolicy` 应和 `cyberPolicy` 一样归为策略拒绝（0.168.0、0.169.0 新增的 `modelNotFound`、`policyCapacityUnavailable`、`inferenceHookDenied` 也还落在 `provider_error`） | T269 |
 | 以后做审查文档的任务 | pierre 在 hunk 到达、高亮完成后重建文件头；按下鼠标后、松开前文件头被换掉时，click 不触发（T270 的 presence 用例就挂在这里）。真实用户正好在这一刻点"收起"也会丢这一下，影响小，评估要不要处理 | T270 |
 | 维护 e2e 工具的任务 | e2e 配置 `retries: 0`，失败时不留 trace，T270 只能靠 error-context 的快照推断原因；考虑 `trace: "retain-on-failure"`，注意产物体积和 testdata-scan | T270 |
+| 写 e2e 的任务 | 新建会话页选"新建 worktree"后，分支列表回来之前不允许发送，Enter 什么都不发：先等"选择起始分支"显示出来再发送（E2E-new-session-before-first-message 的写法）。不标 `@focus` 的用例里 Playwright 默认开着焦点模拟，页面认为自己有焦点、向宿主报"在前台"；要测"不在前台"，照 PERF-ui-occluded 关掉焦点模拟，并用会话链接打开会话，不在页面里点击。悬停断言注意：指针已停在目标上时 `hover` 不产生移动，Radix 的 tooltip 和悬停卡片都不会打开 | T170 |
