@@ -44,7 +44,7 @@ pub struct FilesDeps {
     pub settings: SettingsHandle,
     /// The sessions drop a workspace's list when a turn ends.
     pub lists: FileLists,
-    /// `/usr/bin/open`; a stand-in in tests.
+    /// `/usr/bin/open`; a stand-in in tests and in builds with the test harness.
     pub opener: PathBuf,
 }
 
