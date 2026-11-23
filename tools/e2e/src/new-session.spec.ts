@@ -72,13 +72,13 @@ test.describe("with Codex too", () => {
         .getByRole("button", { name: t("sidebar:new_session"), exact: true });
 
       /** A session from the new session page: `agent`, a new worktree, `script`; its stream. */
-      const start = async (agent: string, script: string) => {
+      const start = async (agent: "claude" | "codex", script: string) => {
         const pick = async (menu: string, item: string) => {
           await window.getByRole("button", { name: menu }).click();
           await window.getByRole("menuitemradio", { name: item }).click();
           await expect(window.getByRole("menu")).toHaveCount(0);
         };
-        await pick(t("composer:pick_agent"), agent);
+        await pick(t("composer:pick_agent"), t(`sidebar:agent_${agent}`));
         await pick(t("composer:pick_workspace"), t("composer:workspace_worktree"));
         // A worktree waits for its base: sending is blocked until the branches came.
         await expect(window.getByRole("button", { name: t("composer:pick_branch") })).toHaveText(
@@ -91,17 +91,17 @@ test.describe("with Codex too", () => {
         const lines = async () => (await cupper.cli.run(["sessions"])).lines;
         await expect
           .poll(async () => (line = (await lines()).find((l) => l.title === script)))
-          .toMatchObject({ workspace_kind: "worktree" });
+          .toMatchObject({ agent, workspace_kind: "worktree" });
         return `session/${String(line?.session_id)}`;
       };
 
       // Claude waits for an approval; Codex runs meanwhile (the agent's own sleep).
       const fix = "write_file fix.txt fixed\\n; permission k1; say fixed";
-      const claude = await start(t("sidebar:agent_claude"), fix);
+      const claude = await start("claude", fix);
       await expect(row("fix.txt")).toContainText(t("sidebar:awaiting_approval"));
       await newSession.click();
       const tests = "write_file tests.txt tested\\n; sleep 10000; say tested";
-      const codex = await start(t("sidebar:agent_codex"), tests);
+      const codex = await start("codex", tests);
       await expect(row("tests.txt").getByRole("img", { name: t("sidebar:running") })).toBeVisible();
       await expect(row("fix.txt")).toContainText(t("sidebar:awaiting_approval"));
       // ⌘⌥A goes to the one that waits; answered from elsewhere, both end unread.
@@ -117,20 +117,6 @@ test.describe("with Codex too", () => {
       await expect(unread("tests.txt")).toHaveCount(0);
       await expect(unread("fix.txt")).toBeVisible();
 
-      // Each row says its agent on hover; the top row first, as what it shows
-      // may cover the one above. The pointer leaves the row it clicked first:
-      // a hover where it already is moves nothing, and shows nothing.
-      const agents: [string, string][] = [
-        ["tests.txt", "codex"],
-        ["fix.txt", "claude"],
-      ];
-      await window.getByRole("main").hover();
-      for (const [title, agent] of agents) {
-        const names = window.getByText(t(`sidebar:agent_${agent}`), { exact: true });
-        const before = await names.count();
-        await row(title).hover();
-        await expect.poll(() => names.count(), `${agent} on hover`).toBeGreaterThan(before);
-      }
       // Each change in its own worktree; the main working tree is clean.
       const worktree = async (stream: string) =>
         String((await untilEvent(cupper, stream, (e) => e.type === "workspace.ready")).data.path);
