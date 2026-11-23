@@ -23,13 +23,15 @@ pub struct Report {
     pub commit: String,
     pub mode: Mode,
     pub agent: String,
-    /// The model the scenarios ran on; none for the fake agent.
+    /// The model the scenarios ran on; none for the fake agent, or for the
+    /// user's own (Codex).
     pub model: Option<String>,
     pub adapter: Named,
     pub cli: Named,
     pub duration_ms: u64,
     pub scenarios: Vec<Scenario>,
-    /// The real configuration, compared before and after the run.
+    /// The real configuration, compared before and after the run: Claude's
+    /// only.
     pub config_files: Vec<ConfigCheck>,
     /// What the run left in the CLI's state, to clean up: its sessions and
     /// the temporary repositories' project entries.
@@ -147,8 +149,8 @@ pub fn problems(report: &Report) -> Vec<String> {
     if fake && !(report.model.is_none() && report.config_files.is_empty()) {
         fail("a fake run has neither a model nor configuration files".into());
     }
-    if !fake && report.config_files.is_empty() {
-        fail("a real run hashes the configuration files".into());
+    if !fake && (report.agent == "claude") == report.config_files.is_empty() {
+        fail("a real run hashes Claude's configuration files, and only Claude's".into());
     }
     if !fake
         && report
@@ -236,10 +238,19 @@ mod tests {
         real.mode = Mode::RealConfig;
         real.scenarios[1].outcome = Outcome::RealOnly;
         let real_problems = [
-            "a real run hashes the configuration files",
+            "a real run hashes Claude's configuration files, and only Claude's",
             "a real run plays every scenario",
         ];
         assert_eq!(problems(&real), real_problems);
+        let mut codex = report();
+        codex.mode = Mode::RealConfig;
+        codex.agent = "codex".into();
+        assert_eq!(problems(&codex), Vec::<String>::new());
+        codex.config_files = vec![ConfigCheck {
+            name: "~/.codex/config.toml".into(),
+            changed: false,
+        }];
+        assert_eq!(problems(&codex).len(), 1, "Codex's are not read");
         let mut skipped = report();
         skipped.scenarios[1].outcome = Outcome::NotApplicable;
         assert_eq!(problems(&skipped), Vec::<String>::new());

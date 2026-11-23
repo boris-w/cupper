@@ -184,7 +184,7 @@
       "type": "string"
     },
     "config_files": {
-      "description": "The real configuration, compared before and after the run.",
+      "description": "The real configuration, compared before and after the run: Claude's\nonly.",
       "items": {
         "$ref": "#/$defs/ConfigCheck"
       },
@@ -199,7 +199,7 @@
       "$ref": "#/$defs/Mode"
     },
     "model": {
-      "description": "The model the scenarios ran on; none for the fake agent.",
+      "description": "The model the scenarios ran on; none for the fake agent, or for the\nuser's own (Codex).",
       "type": [
         "string",
         "null"
