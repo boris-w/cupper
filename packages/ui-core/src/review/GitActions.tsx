@@ -7,10 +7,11 @@
 import { RpcFailure } from "@cupper/host-client";
 import type { GitDiffResult, GitStatusResult } from "@cupper/protocol";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useId, useRef, useState } from "react";
+import { useState } from "react";
 
 import { useHost, useT } from "../app/providers";
 import { Alert } from "../components/Alert";
+import { Dialog, PRIMARY } from "../components/Dialog";
 import { ChevronDownIcon } from "../components/icons";
 import { Menu, MenuItem } from "../components/Menu";
 import { ToolbarButton } from "../components/ToolbarButton";
@@ -54,12 +55,11 @@ export function GitActions({ sessionId, active = true }: { sessionId: string; ac
   const t = useT();
   const status = useStatus(sessionId, active).data;
   const [step, setStep] = useState<Step>();
-  const trigger = useRef<HTMLButtonElement>(null);
   return (
     <>
       <Menu
         trigger={
-          <ToolbarButton ref={trigger} label={t("review:git_actions")}>
+          <ToolbarButton label={t("review:git_actions")}>
             {t("review:git_actions")}
             <ChevronDownIcon />
           </ToolbarButton>
@@ -77,11 +77,7 @@ export function GitActions({ sessionId, active = true }: { sessionId: string; ac
           sessionId={sessionId}
           status={status}
           initial={step}
-          close={(byKey) => {
-            setStep(undefined);
-            // As the menus do: a key gives the focus back, the pointer does not.
-            if (byKey) trigger.current?.focus();
-          }}
+          close={() => setStep(undefined)}
         />
       )}
     </>
@@ -92,15 +88,12 @@ function CommitDialog(props: {
   sessionId: string;
   status: GitStatusResult;
   initial: Step;
-  close(byKey: boolean): void;
+  close(): void;
 }) {
   const t = useT();
   const { client } = useHost();
   const query = useQueryClient();
   const { show } = useToasts();
-  const title = useId();
-  const dialog = useRef<HTMLDialogElement>(null);
-  const pointer = useRef(false);
   const [step, setStep] = useState(props.initial);
   const [message, setMessage] = useState("");
   const [unstaged, setUnstaged] = useState(false);
@@ -110,11 +103,7 @@ function CommitDialog(props: {
   const commits = step !== "push";
   const changed = status.repo_config_changed ?? [];
 
-  useEffect(() => dialog.current?.showModal(), []);
-  const close = () => {
-    dialog.current?.close();
-    props.close(!pointer.current);
-  };
+  const close = props.close;
 
   const run = async () => {
     setBusy(true);
@@ -157,108 +146,78 @@ function CommitDialog(props: {
   };
 
   return (
-    <dialog
-      ref={dialog}
-      aria-labelledby={title}
-      onPointerDown={() => (pointer.current = true)}
-      onKeyDown={() => (pointer.current = false)}
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!busy) close();
-      }}
-      className="m-auto w-105 rounded-2xl bg-surface-elevated p-5 text-sm text-fg shadow-menu backdrop:bg-backdrop"
+    <Dialog
+      title={t("review:git_title")}
+      description={
+        status.branch
+          ? t("review:git_commit_to", { branch: status.branch })
+          : t("review:git_detached")
+      }
+      note={t("review:git_runs_hooks")}
+      busy={busy}
+      onClose={close}
+      onSubmit={() => void run()}
+      actions={
+        <button type="submit" disabled={commits && message.trim() === ""} className={PRIMARY}>
+          {t("review:git_continue")}
+        </button>
+      }
     >
-      <form
-        className="flex flex-col gap-3 [&_[role]]:max-w-none"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void run();
-        }}
-      >
-        <div>
-          <h2 id={title} className="text-base font-medium">
-            {t("review:git_title")}
-          </h2>
-          <p className="text-fg-secondary">
-            {status.branch
-              ? t("review:git_commit_to", { branch: status.branch })
-              : t("review:git_detached")}
-          </p>
-        </div>
-        {changed.length > 0 && (
-          <Alert>{t("review:git_config_changed", { paths: changed.join("、") })}</Alert>
-        )}
-        <textarea
-          aria-label={t("review:git_message")}
-          placeholder={t("review:git_message")}
-          value={message}
+      {changed.length > 0 && (
+        <Alert>{t("review:git_config_changed", { paths: changed.join("、") })}</Alert>
+      )}
+      <textarea
+        aria-label={t("review:git_message")}
+        placeholder={t("review:git_message")}
+        value={message}
+        disabled={!commits}
+        autoFocus
+        onChange={(event) => setMessage(event.target.value)}
+        className="h-20 resize-none rounded-lg border border-border bg-surface px-2.5 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+      />
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={unstaged}
           disabled={!commits}
-          autoFocus
-          onChange={(event) => setMessage(event.target.value)}
-          className="h-20 resize-none rounded-lg border border-border bg-surface px-2.5 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          onChange={(event) => setUnstaged(event.target.checked)}
         />
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={unstaged}
-            disabled={!commits}
-            onChange={(event) => setUnstaged(event.target.checked)}
-          />
-          {t("review:git_include_unstaged")}
-        </label>
-        <fieldset className="flex flex-col gap-1.5">
-          <legend className="mb-1.5 text-fg-secondary">{t("review:git_next")}</legend>
-          {STEPS.map((option) => (
-            <label key={option} className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="next"
-                checked={step === option}
-                disabled={option !== "commit" && status.branch === undefined}
-                onChange={() => setStep(option)}
-              />
-              {t(`review:git_step_${option}`)}
-            </label>
-          ))}
-        </fieldset>
-        {step !== "commit" && !status.upstream && status.branch && (
-          <p className="text-fg-tertiary">{t("review:git_set_upstream")}</p>
-        )}
-        {failure && (
-          <Alert tone="danger">
-            {t(failure.key, { code: failure.code })}
-            {failure.staged && ` ${t("review:git_left_staged")}`}
-            {failure.stderr && (
-              <details className="mt-1">
-                <summary className="cursor-default text-fg-secondary">
-                  {t("review:git_output")}
-                </summary>
-                <pre className="mt-1 max-h-40 overflow-auto font-mono text-xs whitespace-pre-wrap">
-                  {failure.stderr}
-                </pre>
-              </details>
-            )}
-          </Alert>
-        )}
-        <div className="flex items-center gap-2">
-          <span className="mr-auto text-fg-tertiary">{t("review:git_runs_hooks")}</span>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={close}
-            className="h-8 rounded-full bg-btn-secondary px-3.5 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {t("review:cancel")}
-          </button>
-          <button
-            type="submit"
-            disabled={busy || (commits && message.trim() === "")}
-            className="h-8 rounded-full bg-btn-primary px-3.5 text-btn-primary-fg outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          >
-            {t("review:git_continue")}
-          </button>
-        </div>
-      </form>
-    </dialog>
+        {t("review:git_include_unstaged")}
+      </label>
+      <fieldset className="flex flex-col gap-1.5">
+        <legend className="mb-1.5 text-fg-secondary">{t("review:git_next")}</legend>
+        {STEPS.map((option) => (
+          <label key={option} className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="next"
+              checked={step === option}
+              disabled={option !== "commit" && status.branch === undefined}
+              onChange={() => setStep(option)}
+            />
+            {t(`review:git_step_${option}`)}
+          </label>
+        ))}
+      </fieldset>
+      {step !== "commit" && !status.upstream && status.branch && (
+        <p className="text-fg-tertiary">{t("review:git_set_upstream")}</p>
+      )}
+      {failure && (
+        <Alert tone="danger">
+          {t(failure.key, { code: failure.code })}
+          {failure.staged && ` ${t("review:git_left_staged")}`}
+          {failure.stderr && (
+            <details className="mt-1">
+              <summary className="cursor-default text-fg-secondary">
+                {t("review:git_output")}
+              </summary>
+              <pre className="mt-1 max-h-40 overflow-auto font-mono text-xs whitespace-pre-wrap">
+                {failure.stderr}
+              </pre>
+            </details>
+          )}
+        </Alert>
+      )}
+    </Dialog>
   );
 }
