@@ -38,6 +38,15 @@ export function FolderIcon() {
   );
 }
 
+/** An open folder: a project whose sessions show, as Codex draws it. */
+export function FolderOpenIcon() {
+  return (
+    <svg {...svg} stroke="currentColor" strokeLinejoin="round">
+      <path d="M1.5 12V4.5a1 1 0 0 1 1-1h3.6l1.5 1.5h4.4a1 1 0 0 1 1 1V7M1.5 12l1.8-4.3a1 1 0 0 1 .9-.7h9.8a.6.6 0 0 1 .55.83L12.8 12.2a1 1 0 0 1-.9.8H2.5a1 1 0 0 1-1-1z" />
+    </svg>
+  );
+}
+
 /** A pen on a page: a new session. */
 export function ComposeIcon() {
   return (

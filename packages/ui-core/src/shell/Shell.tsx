@@ -333,7 +333,7 @@ function Sidebar({ layout, store }: { layout: Layout; store: LayoutStore }) {
       style={{ width: layout.sidebar.width }}
       className={`flex shrink-0 flex-col ${overlay ? "app-no-drag fixed bottom-0 left-0 top-(--layout-titlebar-h) z-20 rounded-r-(--radius-panel) bg-surface shadow-card" : "relative rounded-l-(--radius-panel) bg-(--sidebar-surface)"}`}
     >
-      <div className="flex h-8 shrink-0 items-center px-4">
+      <div className="mt-1 mb-2 flex h-10 shrink-0 items-center px-4">
         {slots.sidebarHeader ?? <SidebarHeader />}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">{slots.sidebarList ?? <SidebarList />}</div>
