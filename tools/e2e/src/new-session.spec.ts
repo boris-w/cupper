@@ -1,10 +1,17 @@
 // The new session page on the real app (design 5.7.4; AG-3, AG-4, CP-5;
 // T144): the agent picked from both, and before the first message the
 // options the host cached for it, probed on first use; what was picked is
-// what the session is created with.
+// what the session is created with. E2E-S1 (PRD S1, T170): a Claude and a
+// Codex session at once, each in a worktree of its own.
+
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 import { expect, test } from "./fixture";
 import { events, texts, untilEvent } from "./helpers";
+import { focusWindow, shortcut } from "./input";
+import { asked } from "./nfr1";
 import { BUILT } from "./paths";
 
 test.describe("with Codex too", () => {
@@ -42,6 +49,95 @@ test.describe("with Codex too", () => {
       await expect
         .poll(async () => (await sessions()).find((line) => line.title === "say from codex"))
         .toMatchObject({ agent: "codex", workspace_kind: "local" });
+    },
+  );
+
+  test(
+    "E2E-S1: Claude and Codex at once, each in its worktree; the sidebar, ⌘⌥A and the read marks follow",
+    { tag: "@focus" },
+    async ({ cupper }) => {
+      await cupper.launch();
+      await cupper.connected();
+      const t = await texts(cupper);
+      const window = cupper.window;
+      await focusWindow(cupper);
+      // The project, added from the sidebar; the new session page takes it.
+      await window.getByRole("button", { name: t("sidebar:add_project") }).click();
+      await cupper.dialogs.choose((await cupper.dialogs.next()).index, [cupper.repo]);
+      const project = window.getByRole("region", { name: "repo" });
+      await expect(window.getByRole("heading", { level: 1 })).toHaveText(/repo/);
+      const row = (title: string) => project.getByRole("button", { name: new RegExp(title) });
+      const newSession = window
+        .getByRole("navigation", { name: t("shell:sidebar") })
+        .getByRole("button", { name: t("sidebar:new_session"), exact: true });
+
+      /** A session from the new session page: `agent`, a new worktree, `script`; its stream. */
+      const start = async (agent: string, script: string) => {
+        const pick = async (menu: string, item: string) => {
+          await window.getByRole("button", { name: menu }).click();
+          await window.getByRole("menuitemradio", { name: item }).click();
+          await expect(window.getByRole("menu")).toHaveCount(0);
+        };
+        await pick(t("composer:pick_agent"), agent);
+        await pick(t("composer:pick_workspace"), t("composer:workspace_worktree"));
+        const composer = window.locator("[data-composer] textarea");
+        await composer.fill(script);
+        await composer.press("Enter");
+        let line: { session_id?: unknown } | undefined;
+        const lines = async () => (await cupper.cli.run(["sessions"])).lines;
+        await expect
+          .poll(async () => (line = (await lines()).find((l) => l.title === script)))
+          .toMatchObject({ workspace_kind: "worktree" });
+        return `session/${String(line?.session_id)}`;
+      };
+
+      // Claude waits for an approval; Codex runs meanwhile (the agent's own sleep).
+      const fix = "write_file fix.txt fixed\\n; permission k1; say fixed";
+      const claude = await start(t("sidebar:agent_claude"), fix);
+      await expect(row("fix.txt")).toContainText(t("sidebar:awaiting_approval"));
+      await newSession.click();
+      const tests = "write_file tests.txt tested\\n; sleep 10000; say tested";
+      const codex = await start(t("sidebar:agent_codex"), tests);
+      await expect(row("tests.txt").getByRole("img", { name: t("sidebar:running") })).toBeVisible();
+      await expect(row("fix.txt")).toContainText(t("sidebar:awaiting_approval"));
+      // ⌘⌥A goes to the one that waits; answered from elsewhere, both end unread.
+      await shortcut(cupper, "Command+Alt+A");
+      await expect(row("fix.txt")).toHaveAttribute("aria-current", "page");
+      await newSession.click();
+      await cupper.cli.ok(["approve", claude.replace("session/", ""), await asked(cupper, claude)]);
+      const unread = (title: string) => row(title).getByRole("img", { name: t("sidebar:unread") });
+      await expect(unread("fix.txt")).toBeVisible();
+      await expect(unread("tests.txt")).toBeVisible();
+      // Opened in front, Codex's is read; Claude's stays unread.
+      await row("tests.txt").click();
+      await expect(unread("tests.txt")).toHaveCount(0);
+      await expect(unread("fix.txt")).toBeVisible();
+
+      // Each row says its agent on hover.
+      const agents: [string, string][] = [
+        ["fix.txt", "claude"],
+        ["tests.txt", "codex"],
+      ];
+      for (const [title, agent] of agents) {
+        const names = window.getByText(t(`sidebar:agent_${agent}`), { exact: true });
+        const before = await names.count();
+        await row(title).hover();
+        await expect.poll(() => names.count(), `${agent} on hover`).toBeGreaterThan(before);
+        await window.getByRole("main").hover();
+      }
+      // Each change in its own worktree; the main working tree is clean.
+      const worktree = async (stream: string) =>
+        String((await untilEvent(cupper, stream, (e) => e.type === "workspace.ready")).data.path);
+      const [fixed, tested] = [await worktree(claude), await worktree(codex)];
+      expect([fixed, tested].map((dir) => existsSync(join(dir, "fix.txt")))).toEqual([true, false]);
+      expect([fixed, tested].map((dir) => existsSync(join(dir, "tests.txt")))).toEqual([
+        false,
+        true,
+      ]);
+      const status = execFileSync("git", ["-C", cupper.repo, "status", "--porcelain"], {
+        encoding: "utf8",
+      });
+      expect(status).toBe("");
     },
   );
 });
