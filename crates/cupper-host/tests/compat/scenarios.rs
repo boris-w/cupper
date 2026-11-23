@@ -4,7 +4,9 @@
 //! `id`s never change: T188 and the COMPAT IDs name scenarios by them.
 //! Claude Code runs a read-only command (`echo`, `ls`, `sleep`) without
 //! asking, so a real prompt whose request is answered runs one that writes.
+//! Each scenario has a Codex version ([`Codex`], T274).
 
+#[derive(Clone, Copy)]
 pub struct Scenario {
     pub id: &'static str,
     pub title: &'static str,
@@ -31,7 +33,32 @@ pub struct Scenario {
     pub script: &'static str,
     pub steps: &'static [Step],
     pub checks: &'static [Check],
+    pub codex: Codex,
 }
+
+/// What a scenario's Codex version changes; `None` keeps Claude's. Codex
+/// runs on the user's own model (T113). Its prompts name the tool to use:
+/// on the user's configuration the model otherwise takes one of their MCP
+/// tools (T102).
+#[derive(Clone, Copy)]
+pub struct Codex {
+    pub mode: &'static str,
+    pub prompt: Option<&'static str>,
+    pub script: Option<&'static str>,
+    pub files: Option<&'static [(&'static str, &'static str)]>,
+    pub steps: Option<&'static [Step]>,
+    pub checks: Option<&'static [Check]>,
+}
+
+/// `read-only` asks before Codex writes, as Claude's `default` does.
+const READ_ONLY: Codex = Codex {
+    mode: "read-only",
+    prompt: None,
+    script: None,
+    files: None,
+    steps: None,
+    checks: None,
+};
 
 /// The permission modes a session may start in without `loosens`.
 const MODES: &[(&str, &[&str])] = &[
@@ -40,6 +67,24 @@ const MODES: &[(&str, &[&str])] = &[
 ];
 
 impl Scenario {
+    /// The version `agent` plays.
+    pub fn of(&self, agent: &str) -> Scenario {
+        let codex = &self.codex;
+        match agent {
+            "codex" => Scenario {
+                mode: codex.mode,
+                model: None,
+                prompt: codex.prompt.unwrap_or(self.prompt),
+                script: codex.script.unwrap_or(self.script),
+                files: codex.files.unwrap_or(self.files),
+                steps: codex.steps.unwrap_or(self.steps),
+                checks: codex.checks.unwrap_or(self.checks),
+                ..*self
+            },
+            _ => *self,
+        }
+    }
+
     /// What in it the self-constraints refuse, for `agent`.
     pub fn refused(&self, agent: &str) -> Option<String> {
         let modes = MODES.iter().find(|(name, _)| *name == agent);
@@ -68,6 +113,11 @@ pub enum Step {
     Answer(&'static str),
     Pause(u64),
     Interrupt,
+    /// Waits for a tool call to start.
+    Started,
+    /// Turns Codex's plan mode (its collaboration mode) on, once the turn
+    /// before has ended.
+    Plan,
     /// Sends the next prompt once the turn before has ended.
     Send {
         real: &'static str,
@@ -78,8 +128,8 @@ pub enum Step {
         real: &'static str,
         fake: &'static str,
     },
-    /// Kills the real CLI (`claude`) under the adapter; the fake agent's
-    /// script crashes it instead.
+    /// Kills the real CLI (`claude`, `codex`) under the adapter; the fake
+    /// agent's script crashes it instead.
     KillCli,
     /// Stops the host and starts it again on the same data.
     RestartHost,
@@ -134,6 +184,8 @@ pub enum Check {
     Sent(&'static str),
     /// Whether this file of the repository exists, reported, not judged.
     Observe(&'static str),
+    /// `session/create` was refused for this reason.
+    Refused(&'static str),
 }
 
 const DONE: Check = Check::Turn("completed");
@@ -143,7 +195,7 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "new-session",
         title: "a new session and its capabilities",
         mode: "default",
-        prompt: "Reply with the single word: ready",
+        prompt: READY,
         script: "say ready",
         checks: &[Check::Capabilities, Check::Item("agent_message"), DONE],
         ..BASE
@@ -157,6 +209,13 @@ pub const SCENARIOS: &[Scenario] = &[
         prompt: "Read the file notes.txt and summarize it in one sentence.",
         script: "say hello; think pondering; tool t1 read Read notes; tool_done t1 20; say done",
         checks: &[Check::Tool("read"), Check::Item("agent_message"), DONE],
+        codex: Codex {
+            prompt: Some(
+                "Read the file notes.txt with the shell command `cat notes.txt`, then \
+                 summarize it in one sentence.",
+            ),
+            ..READ_ONLY
+        },
         ..BASE
     },
     Scenario {
@@ -168,6 +227,16 @@ pub const SCENARIOS: &[Scenario] = &[
         script: "permission t1 execute; terminal t1 2 1; say done",
         steps: &[Step::Choose("allow_once")],
         checks: &[Check::Tool("execute"), Check::ExitCode, DONE],
+        // Codex runs a command that only reads without asking.
+        codex: Codex {
+            prompt: Some(
+                "Run the shell command `ls missing-dir` once, then tell me its exit code. \
+                 Run no other command.",
+            ),
+            script: Some("terminal t1 1 1; say done"),
+            steps: Some(&[]),
+            ..READ_ONLY
+        },
         ..BASE
     },
     Scenario {
@@ -179,6 +248,15 @@ pub const SCENARIOS: &[Scenario] = &[
         script: "tool t1 execute Run tests; permission t1; say finished",
         steps: &[Step::Choose("allow_once")],
         checks: &[Check::Request("permission", "resolved"), DONE],
+        // Codex asks before apply_patch in `read-only` (T102).
+        codex: Codex {
+            prompt: Some(
+                "Use apply_patch, and no other tool, to add the file approved.txt with the \
+                 line ok, then say done.",
+            ),
+            script: Some("tool t1 edit Add approved.txt; permission t1 edit; say finished"),
+            ..READ_ONLY
+        },
         ..BASE
     },
     Scenario {
@@ -193,6 +271,20 @@ pub const SCENARIOS: &[Scenario] = &[
             Check::NoFile("rejected.txt"),
             DONE,
         ],
+        // Codex's rejection ends the turn (K2).
+        codex: Codex {
+            prompt: Some(
+                "Use apply_patch, and no other tool, to add the file rejected.txt with the \
+                 line no. If I decline, stop: try nothing else.",
+            ),
+            script: Some("tool t1 edit Add rejected.txt; permission t1 edit; say finished"),
+            checks: Some(&[
+                Check::Request("permission", "resolved"),
+                Check::NoFile("rejected.txt"),
+                Check::Turn("cancelled"),
+            ]),
+            ..READ_ONLY
+        },
         ..BASE
     },
     Scenario {
@@ -204,13 +296,28 @@ pub const SCENARIOS: &[Scenario] = &[
         script: "question colour?",
         steps: &[Step::Answer("blue")],
         checks: &[Check::Request("question", "resolved"), DONE],
+        // Codex has its tool for questions in plan mode only.
+        codex: Codex {
+            prompt: Some(READY),
+            script: Some("say ready"),
+            steps: Some(&[
+                Step::Plan,
+                Step::Send {
+                    real: "Use the request_user_input tool to ask me whether I prefer red or \
+                           blue, then tell me my answer.",
+                    fake: "form colour=red|blue",
+                },
+                Step::Answer("blue"),
+            ]),
+            ..READ_ONLY
+        },
         ..BASE
     },
     Scenario {
         id: "plan",
         title: "a plan, sent back to planning",
         mode: "plan",
-        prompt: "Plan how to add a file hello.txt that says hello. Do not change anything.",
+        prompt: PLAN,
         script: "plan_update # Plan\\n- one step; plan_confirm; say after",
         steps: &[Step::Choose("reject_once")],
         // Claude's plan comes in the request; rejecting it ends the turn.
@@ -220,6 +327,26 @@ pub const SCENARIOS: &[Scenario] = &[
             Check::NoFile("hello.txt"),
             Check::Turn("cancelled"),
         ],
+        // Codex's comes after its plan; `revise_plan` ends the turn (Q25).
+        codex: Codex {
+            prompt: Some(READY),
+            script: Some("say ready"),
+            steps: Some(&[
+                Step::Plan,
+                Step::Send {
+                    real: PLAN,
+                    fake: "plan_update # Plan\\n- one step; plan_confirm",
+                },
+                Step::Choose("reject_once"),
+            ]),
+            checks: Some(&[
+                Check::PlanText,
+                Check::Request("plan_confirm", "resolved"),
+                Check::NoFile("hello.txt"),
+                DONE,
+            ]),
+            ..READ_ONLY
+        },
         ..BASE
     },
     Scenario {
@@ -235,6 +362,13 @@ pub const SCENARIOS: &[Scenario] = &[
             Step::Interrupt,
         ],
         checks: &[Check::Turn("cancelled")],
+        // Codex runs `sleep` without asking (GOLD-B-codex-s07).
+        codex: Codex {
+            prompt: Some("Run the shell command `sleep 60` and nothing else, then say done."),
+            script: Some("tool t1 execute Run sleep; wait_cancel"),
+            steps: Some(&[Step::Started, Step::Pause(1000), Step::Interrupt]),
+            ..READ_ONLY
+        },
         ..BASE
     },
     Scenario {
@@ -248,6 +382,14 @@ pub const SCENARIOS: &[Scenario] = &[
             Check::Request("permission", "cancelled"),
             Check::Turn("cancelled"),
         ],
+        codex: Codex {
+            prompt: Some(
+                "Use apply_patch, and no other tool, to add the file asked.txt with the line \
+                 ok, then say done.",
+            ),
+            script: Some("tool t1 edit Add asked.txt; permission t1 edit; say finished"),
+            ..READ_ONLY
+        },
         ..BASE
     },
     Scenario {
@@ -291,6 +433,23 @@ pub const SCENARIOS: &[Scenario] = &[
             },
         ],
         checks: &[Check::Notice("session_resumed"), DONE],
+        // Codex's adapter starts the app-server again for the next prompt,
+        // the one before failing (K7).
+        codex: Codex {
+            steps: Some(&[
+                Step::KillCli,
+                Step::Send {
+                    real: "Reply with the single word: two",
+                    fake: "restartable",
+                },
+                Step::Send {
+                    real: "Reply with the single word: three",
+                    fake: "whoami",
+                },
+            ]),
+            checks: Some(&[Check::Item("error"), DONE]),
+            ..READ_ONLY
+        },
         ..BASE
     },
     Scenario {
@@ -313,7 +472,7 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "image",
         title: "a prompt with an image",
         mode: "default",
-        prompt: "Reply with the single word: ready",
+        prompt: READY,
         script: "say ready",
         steps: &[Step::Image {
             real: "What colour is the attached image? Reply with one word.",
@@ -326,7 +485,7 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "concurrent-two",
         title: "two sessions prompting at once on one adapter (Q8)",
         mode: "default",
-        prompt: "Reply with the single word: ready",
+        prompt: READY,
         script: "say ready",
         steps: &[Step::Concurrent {
             sessions: 2,
@@ -340,7 +499,7 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "six-sessions",
         title: "six sessions at once on one adapter",
         mode: "default",
-        prompt: "Reply with the single word: ready",
+        prompt: READY,
         script: "say ready",
         steps: &[Step::Concurrent {
             sessions: 6,
@@ -361,6 +520,17 @@ pub const SCENARIOS: &[Scenario] = &[
             </dev/null >/dev/null 2>&1; spawn /bin/sh run.sh; wait_cancel",
         steps: &[Step::Choose("allow_once"), Step::Pause(3000), Step::Leave],
         checks: &[Check::Running],
+        // Codex runs `sleep` without asking, in a session of its own (T102).
+        codex: Codex {
+            prompt: Some("Run the shell command `sleep 300` and nothing else."),
+            script: Some(
+                "tool t1 execute Run sleep; \
+                 write_file run.sh exec /usr/bin/perl -MPOSIX -e 'setsid(), exec(\"/bin/sleep\", \"300\")' \
+                 </dev/null >/dev/null 2>&1; spawn /bin/sh run.sh; wait_cancel",
+            ),
+            steps: Some(&[Step::Started, Step::Pause(3000), Step::Leave]),
+            ..READ_ONLY
+        },
         ..BASE
     },
     Scenario {
@@ -396,13 +566,27 @@ pub const SCENARIOS: &[Scenario] = &[
             Check::Lacks("env.txt", "CUPPER_COMPAT_ENV"),
             DONE,
         ],
+        // codex-acp cannot leave the project's configuration out: no session
+        // (IT-codex-untrusted).
+        codex: Codex {
+            files: Some(&[(
+                ".codex/config.toml",
+                "[mcp_servers.compat]\ncommand = \"/usr/bin/touch\"\nargs = [\"mcp-ran\"]\n",
+            )]),
+            steps: Some(&[]),
+            checks: Some(&[
+                Check::Refused("project_untrusted"),
+                Check::NoFile("mcp-ran"),
+            ]),
+            ..READ_ONLY
+        },
         ..BASE
     },
     Scenario {
         id: "hooks-reload",
         title: "hooks written in the middle of a turn (Q28)",
         mode: "default",
-        real_only: Some("the fake agent reads no `.claude/settings.json`"),
+        real_only: Some("the fake agent reads no configuration"),
         // A hook of its own shows that the project's hooks run at all; the
         // new one is written once the prompt has gone, before its commands.
         files: &[(".claude/settings.json", INITIAL)],
@@ -419,13 +603,26 @@ pub const SCENARIOS: &[Scenario] = &[
             Check::Observe("hook-reloaded"),
             DONE,
         ],
+        // Codex writes in the workspace without asking.
+        codex: Codex {
+            mode: "workspace-write",
+            files: Some(&[
+                (".codex/config.toml", HOOKS),
+                (".codex/hooks.json", INITIAL),
+            ]),
+            steps: Some(&[
+                Step::Pause(3000),
+                Step::WriteFile(".codex/hooks.json", RELOADED_ANY),
+            ]),
+            ..READ_ONLY
+        },
         ..BASE
     },
     Scenario {
         id: "config-scope",
         title: "configuration above the project and outside the git root (Q34)",
         mode: "default",
-        real_only: Some("the fake agent reads no `.claude/settings.json`"),
+        real_only: Some("the fake agent reads no configuration"),
         project: Some("sub"),
         // The project's own hook shows that hooks run at all.
         files: &[
@@ -433,16 +630,30 @@ pub const SCENARIOS: &[Scenario] = &[
             (".claude/settings.json", ROOT),
             ("sub/.claude/settings.json", OWN),
         ],
-        prompt: "Reply with the single word: ready",
+        prompt: READY,
         checks: &[
             Check::Observe("sub/own-ran"),
             Check::Observe("root-ran"),
             Check::Observe("outside-ran"),
             DONE,
         ],
+        codex: Codex {
+            files: Some(&[
+                ("../.codex/config.toml", HOOKS),
+                ("../.codex/hooks.json", OUTSIDE),
+                (".codex/config.toml", HOOKS),
+                (".codex/hooks.json", ROOT),
+                ("sub/.codex/config.toml", HOOKS),
+                ("sub/.codex/hooks.json", OWN),
+            ]),
+            ..READ_ONLY
+        },
         ..BASE
     },
 ];
+
+const READY: &str = "Reply with the single word: ready";
+const PLAN: &str = "Plan how to add a file hello.txt that says hello. Do not change anything.";
 
 /// Hooks and settings that leave a marker file when they take effect; the
 /// hooks run in the project's directory.
@@ -453,6 +664,10 @@ const INITIAL: &str = r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "co
     "command": "touch hook-initial"}]}]}}"#;
 const RELOADED: &str = r#"{"hooks": {"PreToolUse": [{"matcher": "Bash",
     "hooks": [{"type": "command", "command": "touch hook-reloaded"}]}]}}"#;
+/// Codex's hooks, in `hooks.json` beside its `config.toml`, as Claude's.
+const HOOKS: &str = "[features]\ncodex_hooks = true\n";
+const RELOADED_ANY: &str = r#"{"hooks": {"PreToolUse": [{"hooks": [{"type": "command",
+    "command": "touch hook-reloaded"}]}]}}"#;
 const ROOT: &str = r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
     "command": "touch ../root-ran"}]}]}}"#;
 const OWN: &str = r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
@@ -476,6 +691,7 @@ const BASE: Scenario = Scenario {
     script: "",
     steps: &[],
     checks: &[],
+    codex: READ_ONLY,
 };
 
 impl Check {
@@ -499,6 +715,7 @@ impl Check {
             Self::ImageSent => "the image went to the agent".into(),
             Self::Sent(method) => format!("the host sent {method}"),
             Self::Observe(path) => format!("{path} exists"),
+            Self::Refused(reason) => format!("no session: {reason}"),
         }
     }
 }

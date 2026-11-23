@@ -2,7 +2,8 @@
 //! as T003's `config-hash.ts` compared it: the settings files whole, and of
 //! `~/.claude.json`, which the CLI rewrites as it goes, only the fields that
 //! grant permissions or start programs. Only digests are kept; the report
-//! names what changed, never a value or a path. Credentials are not read.
+//! names what changed, never a value or a path. Credentials are not read,
+//! nor is anything of Codex's: its user compares `~/.codex` with a backup.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -14,7 +15,7 @@ use sha2::{Digest, Sha256};
 use super::report::ConfigCheck;
 
 /// Compared whole, under the home directory.
-const FILES: &str = ".claude/settings.json .claude/settings.local.json .codex/config.toml";
+const FILES: &str = ".claude/settings.json .claude/settings.local.json";
 /// Compared by field: the top-level ones, besides any whose name looks like
 /// one of `PERMISSION`, and those of each project entry.
 const STATE: &str = ".claude.json";
