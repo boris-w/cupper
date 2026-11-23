@@ -631,9 +631,9 @@
 | T148 | 会话页还没有 worktree 准备中的进度（`worktree add`、checkout），T144 只做了失败横幅；与 Codex 并排比对时看要不要补 | T144 |
 | T266 | 默认权限接在 `useNewOptions(agent)` 的 `permission_mode` 解析上，取值顺序"用户的选择 → 默认权限（在缓存的能力里时）→ agent 自己的值"，同一个值进 `chosen`，完全访问照样走 `create_session` 原生确认；详见 `docs/tasks/T144-new-session/notes.md`"交给 T266 的入口" | T144（已写入 brief） |
 | 以后的性能任务或 T179 前 | T108 的浸泡里主文档渲染进程的 working set 5 小时涨 21 MB（JS 堆不涨，增速逐小时放慢但没停），宿主前三小时涨 11 MB 后停住（推测 SQLite 页缓存）。都在 5.9.6 上限内；要确认是否泄漏，复用 `spikes/T108-soak`（`SOAK_MINUTES` 等可调），加切换会话或 `memory-infra` trace | T108 |
-| T267 | 悬停卡片要替换会话行上写 agent 名的 Tooltip（`sidebar/parts.tsx` 的 `SessionRow`）；Codex 的卡片宽约 20rem，第一行标题与相对时间（右侧可带未读点），下面是项目行（图标加名字），状态行（如系统错误）在下；E2E 里顺带覆盖 ⌘⇧A；`opener` 替身的形态（e2e 构建里 `workspace/open` 一律执行 `<数据目录>/opener`，夹具写 sh 脚本把参数追加到日志）合并时补进设计 5.9.9 | T265 |
+| T267 | 悬停卡片要替换会话行上写 agent 名的 Tooltip（`sidebar/parts.tsx` 的 `SessionRow`）；Codex 的卡片宽约 20rem，第一行标题与相对时间（右侧可带未读点），下面是项目行（图标加名字），状态行（如系统错误）在下；E2E 里顺带覆盖 ⌘⇧A；`opener` 替身的形态（e2e 构建里 `workspace/open` 一律执行 `<数据目录>/opener`，夹具写 sh 脚本把参数追加到日志）合并时补进设计 5.9.9 | T265（已写入 brief） |
 | T148 | 从菜单项打开的弹窗关闭后焦点回到 body（打开前的菜单项已不存在）；会话行获得焦点时"等待批准"一类标签也隐藏，是否照 Codex 调整；`review/GitActions` 的提交弹窗可以换成共用的 `components/Dialog` | T265 |
 | T154 | T265 新增 `session` 命名空间，`sidebar`、`shell` 也加了几个键，做英文时一并覆盖 | T265 |
 | 以后的界面任务 | 顶栏"打开"还没有选终端、编辑器的设置项，默认编辑器 TextEdit 打不开文件夹（T151 的交接）；现在找不到应用时只提示"找不到用来打开的应用"。项目行"在 Finder 中显示"没有宿主方法（`workspace/open` 只认会话） | T265 |
 | T154 | 设置页"默认权限"那一行，能力缓存存在但里面没有权限模式时，提示写的是"还没有 {agent} 的能力信息"，不准确；改成"还没有 {agent} 的可选权限模式"一类，做英文时一并改（截图样例里 Claude 的缓存只有 model 选项，正好是这种情况） | T266 |
-| T267 | 会话标题在顶栏（`shell/SessionTitle.tsx`）和侧边栏会话行都原样显示，没有像项目名那样经 `escapeInvisible`；悬停卡片也显示标题，三处一起改，防标题冒充 | T266 |
+| T267 | 会话标题在顶栏（`shell/SessionTitle.tsx`）和侧边栏会话行都原样显示，没有像项目名那样经 `escapeInvisible`；悬停卡片也显示标题，三处一起改，防标题冒充 | T266（已写入 brief） |
